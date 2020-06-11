@@ -117,6 +117,18 @@ WASM_API_EXTERN own wasmtime_error_t* wasmtime_linker_instantiate(
     own wasm_trap_t **trap
 );
 
+WASM_API_EXTERN own wasmtime_error_t* wasmtime_linker_module(
+    const wasmtime_linker_t *linker,
+    const wasm_name_t *name,
+    const wasm_module_t *module
+);
+
+WASM_API_EXTERN own wasmtime_error_t* wasmtime_linker_get_default(
+    const wasmtime_linker_t *linker,
+    const wasm_name_t *name,
+    own wasm_func_t **func
+);
+
 ///////////////////////////////////////////////////////////////////////////////
 //
 // wasmtime_caller_t extension, binding the `Caller` type in the Rust API
@@ -232,6 +244,7 @@ WASM_API_EXTERN own wasmtime_error_t *wasmtime_global_set(
 // instance is returned), or an instance can be returned (meaning no error or
 // trap is returned).
 WASM_API_EXTERN own wasmtime_error_t *wasmtime_instance_new(
+    wasm_store_t *store,
     const wasm_module_t *module,
     const wasm_extern_t* const imports[],
     size_t num_imports,
@@ -252,6 +265,32 @@ WASM_API_EXTERN own wasmtime_error_t *wasmtime_module_new(
 WASM_API_EXTERN own wasmtime_error_t *wasmtime_module_validate(
     wasm_store_t *store,
     const wasm_byte_vec_t *binary
+);
+
+
+// Similar to `wasm_table_*`, except these explicitly operate on funcref tables
+// and work with `wasm_func_t` values instead of `wasm_ref_t`.
+WASM_API_EXTERN own wasmtime_error_t *wasmtime_funcref_table_new(
+    wasm_store_t *store,
+    const wasm_tabletype_t *element_ty,
+    wasm_func_t *init,
+    own wasm_table_t **table
+);
+WASM_API_EXTERN bool wasmtime_funcref_table_get(
+    const wasm_table_t *table,
+    wasm_table_size_t index,
+    own wasm_func_t **func
+);
+WASM_API_EXTERN own wasmtime_error_t *wasmtime_funcref_table_set(
+    wasm_table_t *table,
+    wasm_table_size_t index,
+    const wasm_func_t *value
+);
+WASM_API_EXTERN wasmtime_error_t *wasmtime_funcref_table_grow(
+    wasm_table_t *table,
+    wasm_table_size_t delta,
+    const wasm_func_t *init,
+    wasm_table_size_t *prev_size
 );
 
 #undef own

@@ -1,9 +1,9 @@
-use crate::entry::{Entry, EntryRights};
-use crate::handle::Handle;
+use crate::entry::Entry;
+use crate::handle::{Handle, HandleRights};
 use crate::wasi::{types, Errno, Result};
 use std::path::{Component, Path};
 use std::str;
-use wiggle::{GuestBorrows, GuestPtr};
+use wiggle::GuestPtr;
 
 pub(crate) use crate::sys::path::{from_host, open_rights};
 
@@ -12,28 +12,24 @@ pub(crate) use crate::sys::path::{from_host, open_rights};
 /// This is a workaround for not having Capsicum support in the OS.
 pub(crate) fn get(
     entry: &Entry,
-    required_rights: &EntryRights,
+    required_rights: &HandleRights,
     dirflags: types::Lookupflags,
-    path: &GuestPtr<'_, str>,
+    path_ptr: &GuestPtr<'_, str>,
     needs_final_component: bool,
 ) -> Result<(Box<dyn Handle>, String)> {
     const MAX_SYMLINK_EXPANSIONS: usize = 128;
 
     // Extract path as &str from guest's memory.
-    let path = unsafe {
-        let mut bc = GuestBorrows::new();
-        let raw = path.as_raw(&mut bc)?;
-        &*raw
-    };
+    let path = path_ptr.as_str()?;
 
-    log::trace!("     | (path_ptr,path_len)='{}'", path);
+    log::trace!("     | (path_ptr,path_len)='{}'", &*path);
 
     if path.contains('\0') {
         // if contains NUL, return Ilseq
         return Err(Errno::Ilseq);
     }
 
-    if entry.file_type != types::Filetype::Directory {
+    if entry.get_file_type() != types::Filetype::Directory {
         // if `dirfd` doesn't refer to a directory, return `Notdir`.
         return Err(Errno::Notdir);
     }

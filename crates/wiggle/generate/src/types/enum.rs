@@ -112,3 +112,9 @@ pub(super) fn define_enum(names: &Names, name: &witx::Id, e: &witx::EnumDatatype
         }
     }
 }
+
+impl super::WiggleType for witx::EnumDatatype {
+    fn impls_display(&self) -> bool {
+        true
+    }
+}

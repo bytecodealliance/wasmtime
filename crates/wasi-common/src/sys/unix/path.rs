@@ -1,8 +1,10 @@
-use super::oshandle::OsFile;
-use crate::entry::EntryRights;
-use crate::sys::oshandle::OsHandle;
+use crate::handle::{Handle, HandleRights};
+use crate::sys::osdir::OsDir;
+use crate::sys::AsFile;
 use crate::wasi::{types, Errno, Result};
+use std::convert::{TryFrom, TryInto};
 use std::ffi::OsStr;
+use std::fs::File;
 use std::os::unix::prelude::{AsRawFd, FromRawFd, OsStrExt};
 use std::str;
 use yanix::file::OFlag;
@@ -19,10 +21,10 @@ pub(crate) fn from_host<S: AsRef<OsStr>>(s: S) -> Result<String> {
 }
 
 pub(crate) fn open_rights(
-    input_rights: &EntryRights,
+    input_rights: &HandleRights,
     oflags: types::Oflags,
     fs_flags: types::Fdflags,
-) -> EntryRights {
+) -> HandleRights {
     // which rights are needed on the dirfd?
     let mut needed_base = types::Rights::PATH_OPEN;
     let mut needed_inheriting = input_rights.base | input_rights.inheriting;
@@ -45,10 +47,10 @@ pub(crate) fn open_rights(
         needed_inheriting |= types::Rights::FD_SYNC;
     }
 
-    EntryRights::new(needed_base, needed_inheriting)
+    HandleRights::new(needed_base, needed_inheriting)
 }
 
-pub(crate) fn readlinkat(dirfd: &OsFile, path: &str) -> Result<String> {
+pub(crate) fn readlinkat(dirfd: &OsDir, path: &str) -> Result<String> {
     use std::os::unix::prelude::AsRawFd;
     use yanix::file::readlinkat;
 
@@ -59,16 +61,16 @@ pub(crate) fn readlinkat(dirfd: &OsFile, path: &str) -> Result<String> {
     Ok(path)
 }
 
-pub(crate) fn create_directory(base: &OsFile, path: &str) -> Result<()> {
+pub(crate) fn create_directory(base: &OsDir, path: &str) -> Result<()> {
     use yanix::file::{mkdirat, Mode};
     unsafe { mkdirat(base.as_raw_fd(), path, Mode::from_bits_truncate(0o777))? };
     Ok(())
 }
 
 pub(crate) fn link(
-    old_dirfd: &OsFile,
+    old_dirfd: &OsDir,
     old_path: &str,
-    new_dirfd: &OsFile,
+    new_dirfd: &OsDir,
     new_path: &str,
     follow_symlinks: bool,
 ) -> Result<()> {
@@ -91,13 +93,13 @@ pub(crate) fn link(
 }
 
 pub(crate) fn open(
-    dirfd: &OsFile,
+    dirfd: &OsDir,
     path: &str,
     read: bool,
     write: bool,
     oflags: types::Oflags,
     fs_flags: types::Fdflags,
-) -> Result<OsHandle> {
+) -> Result<Box<dyn Handle>> {
     use yanix::file::{fstatat, openat, AtFlag, FileType, Mode, OFlag};
 
     let mut nix_all_oflags = if read && write {
@@ -181,10 +183,12 @@ pub(crate) fn open(
     log::debug!("path_open (host) new_fd = {:?}", new_fd);
 
     // Determine the type of the new file descriptor and which rights contradict with this type
-    Ok(OsHandle::from(unsafe { OsFile::from_raw_fd(new_fd) }))
+    let file = unsafe { File::from_raw_fd(new_fd) };
+    let handle = <Box<dyn Handle>>::try_from(file)?;
+    Ok(handle)
 }
 
-pub(crate) fn readlink(dirfd: &OsFile, path: &str, buf: &mut [u8]) -> Result<usize> {
+pub(crate) fn readlink(dirfd: &OsDir, path: &str, buf: &mut [u8]) -> Result<usize> {
     use std::cmp::min;
     use yanix::file::readlinkat;
     let read_link = unsafe { readlinkat(dirfd.as_raw_fd(), path)? };
@@ -196,8 +200,62 @@ pub(crate) fn readlink(dirfd: &OsFile, path: &str, buf: &mut [u8]) -> Result<usi
     Ok(copy_len)
 }
 
-pub(crate) fn remove_directory(dirfd: &OsFile, path: &str) -> Result<()> {
+pub(crate) fn remove_directory(dirfd: &OsDir, path: &str) -> Result<()> {
     use yanix::file::{unlinkat, AtFlag};
     unsafe { unlinkat(dirfd.as_raw_fd(), path, AtFlag::REMOVEDIR)? };
+    Ok(())
+}
+
+pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str, follow: bool) -> Result<types::Filestat> {
+    use yanix::file::{fstatat, AtFlag};
+    let flags = if follow {
+        AtFlag::empty()
+    } else {
+        AtFlag::SYMLINK_NOFOLLOW
+    };
+    let stat = unsafe { fstatat(dirfd.as_raw_fd(), path, flags)? };
+    let stat = stat.try_into()?;
+    Ok(stat)
+}
+
+pub(crate) fn filestat_set_times_at(
+    dirfd: &OsDir,
+    path: &str,
+    atim: types::Timestamp,
+    mtim: types::Timestamp,
+    fst_flags: types::Fstflags,
+    follow: bool,
+) -> Result<()> {
+    use std::time::{Duration, UNIX_EPOCH};
+    use yanix::filetime::*;
+
+    let set_atim = fst_flags.contains(&types::Fstflags::ATIM);
+    let set_atim_now = fst_flags.contains(&types::Fstflags::ATIM_NOW);
+    let set_mtim = fst_flags.contains(&types::Fstflags::MTIM);
+    let set_mtim_now = fst_flags.contains(&types::Fstflags::MTIM_NOW);
+
+    if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
+        return Err(Errno::Inval);
+    }
+
+    let atim = if set_atim {
+        let time = UNIX_EPOCH + Duration::from_nanos(atim);
+        FileTime::FileTime(filetime::FileTime::from_system_time(time))
+    } else if set_atim_now {
+        FileTime::Now
+    } else {
+        FileTime::Omit
+    };
+    let mtim = if set_mtim {
+        let time = UNIX_EPOCH + Duration::from_nanos(mtim);
+        FileTime::FileTime(filetime::FileTime::from_system_time(time))
+    } else if set_mtim_now {
+        FileTime::Now
+    } else {
+        FileTime::Omit
+    };
+
+    utimensat(&*dirfd.as_file()?, path, atim, mtim, !follow)?;
+
     Ok(())
 }

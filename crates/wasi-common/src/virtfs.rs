@@ -1,5 +1,4 @@
-use crate::entry::EntryRights;
-use crate::handle::Handle;
+use crate::handle::{Handle, HandleRights};
 use crate::wasi::{self, types, Errno, Result, RightsExt};
 use log::trace;
 use std::any::Any;
@@ -12,12 +11,16 @@ use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+/// An entry in a virtual filesystem
 pub enum VirtualDirEntry {
+    /// The contents of a child directory
     Directory(HashMap<String, VirtualDirEntry>),
+    /// A file
     File(Box<dyn FileContents>),
 }
 
 impl VirtualDirEntry {
+    /// Construct an empty directory
     pub fn empty_directory() -> Self {
         Self::Directory(HashMap::new())
     }
@@ -134,6 +137,7 @@ impl VecFileContents {
 /// a filesystem wherein a file descriptor is one view into a possibly-shared underlying collection
 /// of data and permissions on a filesystem.
 pub struct InMemoryFile {
+    rights: Cell<HandleRights>,
     cursor: Cell<types::Filesize>,
     parent: Rc<RefCell<Option<Box<dyn Handle>>>>,
     fd_flags: Cell<types::Fdflags>,
@@ -142,16 +146,17 @@ pub struct InMemoryFile {
 
 impl InMemoryFile {
     pub fn memory_backed() -> Self {
-        Self {
-            cursor: Cell::new(0),
-            parent: Rc::new(RefCell::new(None)),
-            fd_flags: Cell::new(types::Fdflags::empty()),
-            data: Rc::new(RefCell::new(Box::new(VecFileContents::new()))),
-        }
+        Self::new(Box::new(VecFileContents::new()))
     }
 
     pub fn new(contents: Box<dyn FileContents>) -> Self {
+        let rights = HandleRights::new(
+            types::Rights::regular_file_base(),
+            types::Rights::regular_file_inheriting(),
+        );
+        let rights = Cell::new(rights);
         Self {
+            rights,
             cursor: Cell::new(0),
             fd_flags: Cell::new(types::Fdflags::empty()),
             parent: Rc::new(RefCell::new(None)),
@@ -172,20 +177,21 @@ impl Handle for InMemoryFile {
     }
     fn try_clone(&self) -> io::Result<Box<dyn Handle>> {
         Ok(Box::new(Self {
+            rights: self.rights.clone(),
             cursor: Cell::new(0),
             fd_flags: self.fd_flags.clone(),
             parent: Rc::clone(&self.parent),
             data: Rc::clone(&self.data),
         }))
     }
-    fn get_file_type(&self) -> io::Result<types::Filetype> {
-        Ok(types::Filetype::RegularFile)
+    fn get_file_type(&self) -> types::Filetype {
+        types::Filetype::RegularFile
     }
-    fn get_rights(&self) -> io::Result<EntryRights> {
-        Ok(EntryRights::new(
-            types::Rights::regular_file_base(),
-            types::Rights::regular_file_inheriting(),
-        ))
+    fn get_rights(&self) -> HandleRights {
+        self.rights.get()
+    }
+    fn set_rights(&self, rights: HandleRights) {
+        self.rights.set(rights)
     }
     // FdOps
     fn advise(
@@ -227,7 +233,7 @@ impl Handle for InMemoryFile {
             atim: 0,
             ctim: 0,
             mtim: 0,
-            filetype: self.get_file_type()?,
+            filetype: self.get_file_type(),
         };
         Ok(stat)
     }
@@ -280,11 +286,7 @@ impl Handle for InMemoryFile {
 
         Ok(self.cursor.get())
     }
-    fn write_vectored(&self, iovs: &[io::IoSlice], isatty: bool) -> Result<usize> {
-        if isatty {
-            unimplemented!("writes to virtual tty");
-        }
-
+    fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
         trace!("write_vectored(iovs={:?})", iovs);
         let mut data = self.data.borrow_mut();
 
@@ -402,6 +404,7 @@ impl Handle for InMemoryFile {
 
 /// A clonable read/write directory.
 pub struct VirtualDir {
+    rights: Cell<HandleRights>,
     writable: bool,
     // All copies of this `VirtualDir` must share `parent`, and changes in one copy's `parent`
     // must be reflected in all handles, so they share `Rc` of an underlying `parent`.
@@ -411,7 +414,13 @@ pub struct VirtualDir {
 
 impl VirtualDir {
     pub fn new(writable: bool) -> Self {
+        let rights = HandleRights::new(
+            types::Rights::directory_base(),
+            types::Rights::directory_inheriting(),
+        );
+        let rights = Cell::new(rights);
         Self {
+            rights,
             writable,
             parent: Rc::new(RefCell::new(None)),
             entries: Rc::new(RefCell::new(HashMap::new())),
@@ -468,19 +477,20 @@ impl Handle for VirtualDir {
     }
     fn try_clone(&self) -> io::Result<Box<dyn Handle>> {
         Ok(Box::new(Self {
+            rights: self.rights.clone(),
             writable: self.writable,
             parent: Rc::clone(&self.parent),
             entries: Rc::clone(&self.entries),
         }))
     }
-    fn get_file_type(&self) -> io::Result<types::Filetype> {
-        Ok(types::Filetype::Directory)
+    fn get_file_type(&self) -> types::Filetype {
+        types::Filetype::Directory
     }
-    fn get_rights(&self) -> io::Result<EntryRights> {
-        Ok(EntryRights::new(
-            types::Rights::directory_base(),
-            types::Rights::directory_inheriting(),
-        ))
+    fn get_rights(&self) -> HandleRights {
+        self.rights.get()
+    }
+    fn set_rights(&self, rights: HandleRights) {
+        self.rights.set(rights)
     }
     // FdOps
     fn filestat_get(&self) -> Result<types::Filestat> {
@@ -492,7 +502,7 @@ impl Handle for VirtualDir {
             atim: 0,
             ctim: 0,
             mtim: 0,
-            filetype: self.get_file_type()?,
+            filetype: self.get_file_type(),
         };
         Ok(stat)
     }
@@ -555,7 +565,7 @@ impl Handle for VirtualDir {
                 let dirent = || -> Result<types::Dirent> {
                     let dirent = types::Dirent {
                         d_namlen: name.len().try_into()?,
-                        d_type: file.get_file_type()?,
+                        d_type: file.get_file_type(),
                         d_ino: 0,
                         d_next: self.start as u64,
                     };
@@ -593,6 +603,36 @@ impl Handle for VirtualDir {
                 }
             }
         }
+    }
+    fn filestat_get_at(&self, path: &str, _follow: bool) -> Result<types::Filestat> {
+        let stat = self
+            .openat(
+                path,
+                false,
+                false,
+                types::Oflags::empty(),
+                types::Fdflags::empty(),
+            )?
+            .filestat_get()?;
+        Ok(stat)
+    }
+    fn filestat_set_times_at(
+        &self,
+        path: &str,
+        atim: types::Timestamp,
+        mtim: types::Timestamp,
+        fst_flags: types::Fstflags,
+        _follow: bool,
+    ) -> Result<()> {
+        self.openat(
+            path,
+            false,
+            false,
+            types::Oflags::empty(),
+            types::Fdflags::empty(),
+        )?
+        .filestat_set_times(atim, mtim, fst_flags)?;
+        Ok(())
     }
     fn openat(
         &self,
@@ -639,7 +679,7 @@ impl Handle for VirtualDir {
                 }
 
                 if oflags.contains(&types::Oflags::DIRECTORY)
-                    && e.get().get_file_type()? != types::Filetype::Directory
+                    && e.get().get_file_type() != types::Filetype::Directory
                 {
                     log::trace!(
                         "VirtualDir::openat was passed oflags DIRECTORY, but {:?} is a file.",
@@ -683,7 +723,7 @@ impl Handle for VirtualDir {
         match entries.entry(Path::new(trimmed_path).to_path_buf()) {
             Entry::Occupied(e) => {
                 // first, does this name a directory?
-                if e.get().get_file_type()? != types::Filetype::Directory {
+                if e.get().get_file_type() != types::Filetype::Directory {
                     return Err(Errno::Notdir);
                 }
 
@@ -731,7 +771,7 @@ impl Handle for VirtualDir {
         match entries.entry(Path::new(trimmed_path).to_path_buf()) {
             Entry::Occupied(e) => {
                 // Directories must be removed through `remove_directory`, not `unlink_file`.
-                if e.get().get_file_type()? == types::Filetype::Directory {
+                if e.get().get_file_type() == types::Filetype::Directory {
                     return Err(Errno::Isdir);
                 }
 

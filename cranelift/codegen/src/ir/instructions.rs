@@ -11,9 +11,7 @@ use core::fmt::{self, Display, Formatter};
 use core::ops::{Deref, DerefMut};
 use core::str::FromStr;
 
-use crate::ir;
-use crate::ir::types;
-use crate::ir::{Block, FuncRef, JumpTable, SigRef, Type, Value};
+use crate::ir::{self, trapcode::TrapCode, types, Block, FuncRef, JumpTable, SigRef, Type, Value};
 use crate::isa;
 
 use crate::bitset::BitSet;
@@ -257,6 +255,30 @@ impl InstructionData {
         }
     }
 
+    /// If this is a trapping instruction, get its trap code. Otherwise, return
+    /// `None`.
+    pub fn trap_code(&self) -> Option<TrapCode> {
+        match *self {
+            Self::CondTrap { code, .. }
+            | Self::FloatCondTrap { code, .. }
+            | Self::IntCondTrap { code, .. }
+            | Self::Trap { code, .. } => Some(code),
+            _ => None,
+        }
+    }
+
+    /// If this is a trapping instruction, get an exclusive reference to its
+    /// trap code. Otherwise, return `None`.
+    pub fn trap_code_mut(&mut self) -> Option<&mut TrapCode> {
+        match self {
+            Self::CondTrap { code, .. }
+            | Self::FloatCondTrap { code, .. }
+            | Self::IntCondTrap { code, .. }
+            | Self::Trap { code, .. } => Some(code),
+            _ => None,
+        }
+    }
+
     /// Return information about a call instruction.
     ///
     /// Any instruction that can call another function reveals its call signature here.
@@ -272,6 +294,39 @@ impl InstructionData {
                 debug_assert!(!self.opcode().is_call());
                 CallInfo::NotACall
             }
+        }
+    }
+
+    #[inline]
+    pub(crate) fn sign_extend_immediates(&mut self, ctrl_typevar: Type) {
+        if ctrl_typevar.is_invalid() {
+            return;
+        }
+
+        let bit_width = ctrl_typevar.bits();
+
+        match self {
+            Self::BinaryImm64 {
+                opcode,
+                arg: _,
+                imm,
+            } => {
+                if matches!(opcode, Opcode::SdivImm | Opcode::SremImm) {
+                    imm.sign_extend_from_width(bit_width);
+                }
+            }
+            Self::IntCompareImm {
+                opcode,
+                arg: _,
+                cond,
+                imm,
+            } => {
+                debug_assert_eq!(*opcode, Opcode::IcmpImm);
+                if cond.unsigned() != *cond {
+                    imm.sign_extend_from_width(bit_width);
+                }
+            }
+            _ => {}
         }
     }
 }

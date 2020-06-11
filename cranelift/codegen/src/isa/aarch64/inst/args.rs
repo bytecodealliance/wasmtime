@@ -3,14 +3,14 @@
 // Some variants are never constructed, but we still want them as options in the future.
 #![allow(dead_code)]
 
-use crate::binemit::CodeOffset;
 use crate::ir::Type;
 use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::lower::ty_bits;
+use crate::machinst::MachLabel;
 
 use regalloc::{RealRegUniverse, Reg, Writable};
 
-use core::convert::{Into, TryFrom};
+use core::convert::Into;
 use std::string::String;
 
 /// A shift operator for a register or immediate.
@@ -112,7 +112,9 @@ pub enum MemLabel {
 /// A memory argument to load/store, encapsulating the possible addressing modes.
 #[derive(Clone, Debug)]
 pub enum MemArg {
-    Label(MemLabel),
+    //
+    // Real ARM64 addressing modes:
+    //
     /// "post-indexed" mode as per AArch64 docs: postincrement reg after address computation.
     PostIndexed(Writable<Reg>, SImm9),
     /// "pre-indexed" mode as per AArch64 docs: preincrement reg before address computation.
@@ -137,11 +139,35 @@ pub enum MemArg {
     /// Scaled (by size of a type) unsigned 12-bit immediate offset from reg.
     UnsignedOffset(Reg, UImm12Scaled),
 
-    /// Offset from the stack pointer. Lowered into a real amode at emission.
-    SPOffset(i64),
+    //
+    // virtual addressing modes that are lowered at emission time:
+    //
+    /// Reference to a "label": e.g., a symbol.
+    Label(MemLabel),
 
-    /// Offset from the frame pointer. Lowered into a real amode at emission.
-    FPOffset(i64),
+    /// Arbitrary offset from a register. Converted to generation of large
+    /// offsets with multiple instructions as necessary during code emission.
+    RegOffset(Reg, i64, Type),
+
+    /// Offset from the stack pointer.
+    SPOffset(i64, Type),
+
+    /// Offset from the frame pointer.
+    FPOffset(i64, Type),
+
+    /// Offset from the "nominal stack pointer", which is where the real SP is
+    /// just after stack and spill slots are allocated in the function prologue.
+    /// At emission time, this is converted to `SPOffset` with a fixup added to
+    /// the offset constant. The fixup is a running value that is tracked as
+    /// emission iterates through instructions in linear order, and can be
+    /// adjusted up and down with [Inst::VirtualSPOffsetAdj].
+    ///
+    /// The standard ABI is in charge of handling this (by emitting the
+    /// adjustment meta-instructions). It maintains the invariant that "nominal
+    /// SP" is where the actual SP is after the function prologue and before
+    /// clobber pushes. See the diagram in the documentation for
+    /// [crate::isa::aarch64::abi](the ABI module) for more details.
+    NominalSPOffset(i64, Type),
 }
 
 impl MemArg {
@@ -150,17 +176,6 @@ impl MemArg {
         // Use UnsignedOffset rather than Unscaled to use ldr rather than ldur.
         // This also does not use PostIndexed / PreIndexed as they update the register.
         MemArg::UnsignedOffset(reg, UImm12Scaled::zero(I64))
-    }
-
-    /// Memory reference using an address in a register and an offset, if possible.
-    pub fn reg_maybe_offset(reg: Reg, offset: i64, value_type: Type) -> Option<MemArg> {
-        if let Some(simm9) = SImm9::maybe_from_i64(offset) {
-            Some(MemArg::Unscaled(reg, simm9))
-        } else if let Some(uimm12s) = UImm12Scaled::maybe_from_i64(offset, value_type) {
-            Some(MemArg::UnsignedOffset(reg, uimm12s))
-        } else {
-            None
-        }
     }
 
     /// Memory reference using the sum of two registers as an address.
@@ -281,78 +296,44 @@ impl CondBrKind {
 
 /// A branch target. Either unresolved (basic-block index) or resolved (offset
 /// from end of current instruction).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BranchTarget {
-    /// An unresolved reference to a BlockIndex, as passed into
+    /// An unresolved reference to a Label, as passed into
     /// `lower_branch_group()`.
-    Block(BlockIndex),
-    /// A resolved reference to another instruction, after
-    /// `Inst::with_block_offsets()`.
-    ResolvedOffset(isize),
+    Label(MachLabel),
+    /// A fixed PC offset.
+    ResolvedOffset(i32),
 }
 
 impl BranchTarget {
-    /// Lower the branch target given offsets of each block.
-    pub fn lower(&mut self, targets: &[CodeOffset], my_offset: CodeOffset) {
+    /// Return the target's label, if it is a label-based target.
+    pub fn as_label(self) -> Option<MachLabel> {
         match self {
-            &mut BranchTarget::Block(bix) => {
-                let bix = usize::try_from(bix).unwrap();
-                assert!(bix < targets.len());
-                let block_offset_in_func = targets[bix];
-                let branch_offset = (block_offset_in_func as isize) - (my_offset as isize);
-                *self = BranchTarget::ResolvedOffset(branch_offset);
-            }
-            &mut BranchTarget::ResolvedOffset(..) => {}
-        }
-    }
-
-    /// Get the block index.
-    pub fn as_block_index(&self) -> Option<BlockIndex> {
-        match self {
-            &BranchTarget::Block(bix) => Some(bix),
+            BranchTarget::Label(l) => Some(l),
             _ => None,
         }
     }
 
-    /// Get the offset as 4-byte words. Returns `0` if not
-    /// yet resolved (in that case, we're only computing
-    /// size and the offset doesn't matter).
-    pub fn as_offset_words(&self) -> isize {
-        match self {
-            &BranchTarget::ResolvedOffset(off) => off >> 2,
+    /// Return the target's offset, if specified, or zero if label-based.
+    pub fn as_offset19_or_zero(self) -> u32 {
+        let off = match self {
+            BranchTarget::ResolvedOffset(off) => off >> 2,
             _ => 0,
-        }
+        };
+        assert!(off <= 0x3ffff);
+        assert!(off >= -0x40000);
+        (off as u32) & 0x7ffff
     }
 
-    /// Get the offset as a 26-bit offset suitable for a 26-bit jump, or `None` if overflow.
-    pub fn as_off26(&self) -> Option<u32> {
-        let off = self.as_offset_words();
-        if (off < (1 << 25)) && (off >= -(1 << 25)) {
-            Some((off as u32) & ((1 << 26) - 1))
-        } else {
-            None
-        }
-    }
-
-    /// Get the offset as a 19-bit offset, or `None` if overflow.
-    pub fn as_off19(&self) -> Option<u32> {
-        let off = self.as_offset_words();
-        if (off < (1 << 18)) && (off >= -(1 << 18)) {
-            Some((off as u32) & ((1 << 19) - 1))
-        } else {
-            None
-        }
-    }
-
-    /// Map the block index given a transform map.
-    pub fn map(&mut self, block_index_map: &[BlockIndex]) {
-        match self {
-            &mut BranchTarget::Block(ref mut bix) => {
-                let n = block_index_map[usize::try_from(*bix).unwrap()];
-                *bix = n;
-            }
-            &mut BranchTarget::ResolvedOffset(_) => {}
-        }
+    /// Return the target's offset, if specified, or zero if label-based.
+    pub fn as_offset26_or_zero(self) -> u32 {
+        let off = match self {
+            BranchTarget::ResolvedOffset(off) => off >> 2,
+            _ => 0,
+        };
+        assert!(off <= 0x1ffffff);
+        assert!(off >= -0x2000000);
+        (off as u32) & 0x3ffffff
     }
 }
 
@@ -443,8 +424,11 @@ impl ShowWithRRU for MemArg {
                 simm9.show_rru(mb_rru)
             ),
             // Eliminated by `mem_finalize()`.
-            &MemArg::SPOffset(..) | &MemArg::FPOffset(..) => {
-                panic!("Unexpected stack-offset mem-arg mode!")
+            &MemArg::SPOffset(..)
+            | &MemArg::FPOffset(..)
+            | &MemArg::NominalSPOffset(..)
+            | &MemArg::RegOffset(..) => {
+                panic!("Unexpected pseudo mem-arg mode (stack-offset or generic reg-offset)!")
             }
         }
     }
@@ -485,18 +469,21 @@ impl ShowWithRRU for Cond {
 impl ShowWithRRU for BranchTarget {
     fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
         match self {
-            &BranchTarget::Block(block) => format!("block{}", block),
+            &BranchTarget::Label(label) => format!("label{:?}", label.get()),
             &BranchTarget::ResolvedOffset(off) => format!("{}", off),
         }
     }
 }
 
 /// Type used to communicate the operand size of a machine instruction, as AArch64 has 32- and
-/// 64-bit variants of many instructions (and integer registers).
+/// 64-bit variants of many instructions (and integer and floating-point registers) and 128-bit
+/// variants of vector instructions.
+/// TODO: Create a separate type for SIMD & floating-point operands.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InstSize {
     Size32,
     Size64,
+    Size128,
 }
 
 impl InstSize {
@@ -519,11 +506,13 @@ impl InstSize {
     /// Convert from a needed width to the smallest size that fits.
     pub fn from_bits<I: Into<usize>>(bits: I) -> InstSize {
         let bits: usize = bits.into();
-        assert!(bits <= 64);
+        assert!(bits <= 128);
         if bits <= 32 {
             InstSize::Size32
-        } else {
+        } else if bits <= 64 {
             InstSize::Size64
+        } else {
+            InstSize::Size128
         }
     }
 
@@ -532,11 +521,12 @@ impl InstSize {
         Self::from_bits(ty_bits(ty))
     }
 
-    /// Convert to I32 or I64.
+    /// Convert to I32, I64, or I128.
     pub fn to_ty(self) -> Type {
         match self {
             InstSize::Size32 => I32,
             InstSize::Size64 => I64,
+            InstSize::Size128 => I128,
         }
     }
 
@@ -544,6 +534,9 @@ impl InstSize {
         match self {
             InstSize::Size32 => 0,
             InstSize::Size64 => 1,
+            _ => {
+                panic!("Unexpected size");
+            }
         }
     }
 }

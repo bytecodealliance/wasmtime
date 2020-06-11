@@ -1,5 +1,6 @@
 //! AArch64 ISA definitions: registers.
 
+use crate::ir::types::*;
 use crate::isa::aarch64::inst::InstSize;
 use crate::machinst::*;
 use crate::settings;
@@ -20,23 +21,21 @@ pub const PINNED_REG: u8 = 21;
 const XREG_INDICES: [u8; 31] = [
     // X0 - X7
     32, 33, 34, 35, 36, 37, 38, 39,
-    // X8 - X14
-    40, 41, 42, 43, 44, 45, 46,
-    // X15
-    59,
+    // X8 - X15
+    40, 41, 42, 43, 44, 45, 46, 47,
     // X16, X17
-    47, 48,
+    58, 59,
     // X18
     60,
     // X19, X20
-    49, 50,
+    48, 49,
     // X21, put aside because it's the pinned register.
-    58,
+    57,
     // X22 - X28
-    51, 52, 53, 54, 55, 56, 57,
-    // X29
+    50, 51, 52, 53, 54, 55, 56,
+    // X29 (FP)
     61,
-    // X30
+    // X30 (LR)
     62,
 ];
 
@@ -125,19 +124,36 @@ pub fn writable_fp_reg() -> Writable<Reg> {
     Writable::from_reg(fp_reg())
 }
 
-/// Get a reference to the "spill temp" register. This register is used to
-/// compute the address of a spill slot when a direct offset addressing mode from
-/// FP is not sufficient (+/- 2^11 words). We exclude this register from regalloc
-/// and reserve it for this purpose for simplicity; otherwise we need a
-/// multi-stage analysis where we first determine how many spill slots we have,
-/// then perhaps remove the reg from the pool and recompute regalloc.
+/// Get a reference to the first temporary, sometimes "spill temporary", register. This register is
+/// used to compute the address of a spill slot when a direct offset addressing mode from FP is not
+/// sufficient (+/- 2^11 words). We exclude this register from regalloc and reserve it for this
+/// purpose for simplicity; otherwise we need a multi-stage analysis where we first determine how
+/// many spill slots we have, then perhaps remove the reg from the pool and recompute regalloc.
+///
+/// We use x16 for this (aka IP0 in the AArch64 ABI) because it's a scratch register but is
+/// slightly special (used for linker veneers). We're free to use it as long as we don't expect it
+/// to live through call instructions.
 pub fn spilltmp_reg() -> Reg {
-    xreg(15)
+    xreg(16)
 }
 
 /// Get a writable reference to the spilltmp reg.
 pub fn writable_spilltmp_reg() -> Writable<Reg> {
     Writable::from_reg(spilltmp_reg())
+}
+
+/// Get a reference to the second temp register. We need this in some edge cases
+/// where we need both the spilltmp and another temporary.
+///
+/// We use x17 (aka IP1), the other "interprocedural"/linker-veneer scratch reg that is
+/// free to use otherwise.
+pub fn tmp2_reg() -> Reg {
+    xreg(17)
+}
+
+/// Get a writable reference to the tmp2 reg.
+pub fn writable_tmp2_reg() -> Writable<Reg> {
+    Writable::from_reg(tmp2_reg())
 }
 
 /// Create the register universe for AArch64.
@@ -173,7 +189,7 @@ pub fn create_reg_universe(flags: &settings::Flags) -> RealRegUniverse {
 
     for i in 0u8..32u8 {
         // See above for excluded registers.
-        if i == 15 || i == 18 || i == 29 || i == 30 || i == 31 || i == PINNED_REG {
+        if i == 16 || i == 17 || i == 18 || i == 29 || i == 30 || i == 31 || i == PINNED_REG {
             continue;
         }
         let reg = Reg::new_real(
@@ -191,7 +207,7 @@ pub fn create_reg_universe(flags: &settings::Flags) -> RealRegUniverse {
     allocable_by_class[RegClass::I64.rc_to_usize()] = Some(RegClassInfo {
         first: x_reg_base as usize,
         last: x_reg_last as usize,
-        suggested_scratch: Some(XREG_INDICES[13] as usize),
+        suggested_scratch: Some(XREG_INDICES[19] as usize),
     });
     allocable_by_class[RegClass::V128.rc_to_usize()] = Some(RegClassInfo {
         first: v_reg_base as usize,
@@ -211,7 +227,8 @@ pub fn create_reg_universe(flags: &settings::Flags) -> RealRegUniverse {
         regs.len()
     };
 
-    regs.push((xreg(15).to_real_reg(), "x15".to_string()));
+    regs.push((xreg(16).to_real_reg(), "x16".to_string()));
+    regs.push((xreg(17).to_real_reg(), "x17".to_string()));
     regs.push((xreg(18).to_real_reg(), "x18".to_string()));
     regs.push((fp_reg().to_real_reg(), "fp".to_string()));
     regs.push((link_reg().to_real_reg(), "lr".to_string()));
@@ -259,13 +276,17 @@ pub fn show_ireg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, size: InstSiz
     s
 }
 
-/// Show a vector register when its use as a 32-bit or 64-bit float is known.
+/// Show a vector register.
 pub fn show_freg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, size: InstSize) -> String {
     let mut s = reg.show_rru(mb_rru);
     if reg.get_class() != RegClass::V128 {
         return s;
     }
-    let prefix = if size.is32() { "s" } else { "d" };
+    let prefix = match size {
+        InstSize::Size32 => "s",
+        InstSize::Size64 => "d",
+        InstSize::Size128 => "q",
+    };
     s.replace_range(0..1, prefix);
     s
 }
@@ -289,5 +310,46 @@ pub fn show_vreg_scalar(reg: Reg, mb_rru: Option<&RealRegUniverse>) -> String {
             s.push('d');
         }
     }
+    s
+}
+
+/// Show a vector register.
+pub fn show_vreg_vector(reg: Reg, mb_rru: Option<&RealRegUniverse>, ty: Type) -> String {
+    assert_eq!(RegClass::V128, reg.get_class());
+    let mut s = reg.show_rru(mb_rru);
+
+    match ty {
+        F32X2 => s.push_str(".2s"),
+        F32X4 => s.push_str(".4s"),
+        F64X2 => s.push_str(".2d"),
+        I8X8 => s.push_str(".8b"),
+        I8X16 => s.push_str(".16b"),
+        I16X4 => s.push_str(".4h"),
+        I16X8 => s.push_str(".8h"),
+        I32X2 => s.push_str(".2s"),
+        I32X4 => s.push_str(".4s"),
+        I64X2 => s.push_str(".2d"),
+        _ => unimplemented!(),
+    }
+
+    s
+}
+
+/// Show an indexed vector element.
+pub fn show_vreg_element(reg: Reg, mb_rru: Option<&RealRegUniverse>, idx: u8, ty: Type) -> String {
+    assert_eq!(RegClass::V128, reg.get_class());
+    let mut s = reg.show_rru(mb_rru);
+
+    let suffix = match ty {
+        I8 => "b",
+        I16 => "h",
+        I32 => "s",
+        I64 => "d",
+        F32 => "s",
+        F64 => "d",
+        _ => unimplemented!(),
+    };
+
+    s.push_str(&format!(".{}[{}]", suffix, idx));
     s
 }

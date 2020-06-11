@@ -37,9 +37,7 @@ pub(crate) fn fuzz_default_config(
     init_fuzzing();
     let mut config = wasmtime::Config::new();
     config
-        .cranelift_debug_verifier(true)
         .cranelift_nan_canonicalization(true)
-        .wasm_multi_value(true)
         .wasm_bulk_memory(true)
         .strategy(strategy)?;
     Ok(config)

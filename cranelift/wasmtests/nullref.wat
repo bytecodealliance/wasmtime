@@ -1,11 +1,11 @@
 (module
-	(func (result nullref)
-		ref.null
+	(func (result externref)
+		(ref.null extern)
 	)
 
-	(func (result nullref)
-		(block (result nullref)
-			ref.null
+	(func (result externref)
+		(block (result externref)
+			(ref.null extern)
 		)
 	)
 )

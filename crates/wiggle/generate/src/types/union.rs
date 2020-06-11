@@ -108,3 +108,9 @@ pub(super) fn define_union(names: &Names, name: &witx::Id, u: &witx::UnionDataty
         }
     }
 }
+
+impl super::WiggleType for witx::UnionDatatype {
+    fn impls_display(&self) -> bool {
+        false
+    }
+}

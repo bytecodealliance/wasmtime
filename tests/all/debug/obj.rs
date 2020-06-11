@@ -1,5 +1,6 @@
 use anyhow::{Context as _, Result};
 use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 use target_lexicon::Triple;
 use wasmtime::Strategy;
@@ -18,17 +19,12 @@ pub fn compile_cranelift(
         false,
         wasmtime::OptLevel::None,
         true,
-        output
-            .as_ref()
-            .file_name()
-            .unwrap()
-            .to_string_lossy()
-            .to_string(),
         &CacheConfig::new_cache_disabled(),
     )?;
 
-    let file = File::create(output).context("failed to create object file")?;
-    obj.write(file).context("failed to write object file")?;
+    let mut file = File::create(output).context("failed to create object file")?;
+    file.write_all(&obj.write()?)
+        .context("failed to write object file")?;
 
     Ok(())
 }

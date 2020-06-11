@@ -5,7 +5,7 @@
 
 // To execute this example you'll need to run two commands:
 //
-//      cargo build -p example-fib-wasm --target wasm32-unknown-unknown
+//      cargo build -p example-fib-debug-wasm --target wasm32-unknown-unknown
 //      cargo run --example fib-debug
 
 use anyhow::Result;
@@ -17,8 +17,8 @@ fn main() -> Result<()> {
     // debugged in GDB.
     let engine = Engine::new(Config::new().debug_info(true));
     let store = Store::new(&engine);
-    let module = Module::from_file(&store, "target/wasm32-unknown-unknown/debug/fib.wasm")?;
-    let instance = Instance::new(&module, &[])?;
+    let module = Module::from_file(&engine, "target/wasm32-unknown-unknown/debug/fib.wasm")?;
+    let instance = Instance::new(&store, &module, &[])?;
 
     // Invoke `fib` export
     let fib = instance

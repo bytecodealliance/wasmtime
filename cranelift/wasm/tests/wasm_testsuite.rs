@@ -83,7 +83,9 @@ fn read_module(path: &Path) -> Vec<u8> {
         }
         Some(ext) => match ext.to_str() {
             Some("wasm") => read_file(path).expect("error reading wasm file"),
-            Some("wat") => wat::parse_file(path).expect("failed to parse wat"),
+            Some("wat") => wat::parse_file(path)
+                .map_err(|e| e.to_string())
+                .expect("failed to parse wat"),
             None | Some(&_) => panic!("the file extension for {:?} is not wasm or wat", path),
         },
     }

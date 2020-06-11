@@ -1,4 +1,5 @@
 //! The WASI embedding API definitions for Wasmtime.
+use crate::host_ref::HostRef;
 use crate::{wasm_extern_t, wasm_importtype_t, wasm_store_t, wasm_trap_t, ExternHost};
 use anyhow::Result;
 use std::collections::HashMap;
@@ -12,7 +13,7 @@ use wasi_common::{
     old::snapshot_0::WasiCtxBuilder as WasiSnapshot0CtxBuilder, preopen_dir,
     WasiCtxBuilder as WasiPreview1CtxBuilder,
 };
-use wasmtime::{HostRef, Linker, Store, Trap};
+use wasmtime::{Linker, Store, Trap};
 use wasmtime_wasi::{old::snapshot_0::Wasi as WasiSnapshot0, Wasi as WasiPreview1};
 
 unsafe fn cstr_to_path<'a>(path: *const c_char) -> Option<&'a Path> {
@@ -200,63 +201,77 @@ enum WasiInstance {
     Snapshot0(WasiSnapshot0),
 }
 
-macro_rules! config_to_builder {
-    ($builder:ident, $config:ident) => {{
-        let mut builder = $builder::new();
-
-        if $config.inherit_args {
-            builder.inherit_args();
-        } else if !$config.args.is_empty() {
-            builder.args($config.args);
-        }
-
-        if $config.inherit_env {
-            builder.inherit_env();
-        } else if !$config.env.is_empty() {
-            builder.envs($config.env);
-        }
-
-        if $config.inherit_stdin {
-            builder.inherit_stdin();
-        } else if let Some(file) = $config.stdin {
-            builder.stdin(file);
-        }
-
-        if $config.inherit_stdout {
-            builder.inherit_stdout();
-        } else if let Some(file) = $config.stdout {
-            builder.stdout(file);
-        }
-
-        if $config.inherit_stderr {
-            builder.inherit_stderr();
-        } else if let Some(file) = $config.stderr {
-            builder.stderr(file);
-        }
-
-        for preopen in $config.preopens {
-            builder.preopened_dir(preopen.0, preopen.1);
-        }
-
-        builder
-    }};
-}
-
-fn create_snapshot0_instance(store: &Store, config: wasi_config_t) -> Result<WasiInstance, String> {
+fn create_snapshot0_instance(store: &Store, config: wasi_config_t) -> Result<WasiInstance> {
+    let mut builder = WasiSnapshot0CtxBuilder::new();
+    if config.inherit_args {
+        builder.inherit_args();
+    } else if !config.args.is_empty() {
+        builder.args(config.args);
+    }
+    if config.inherit_env {
+        builder.inherit_env();
+    } else if !config.env.is_empty() {
+        builder.envs(config.env);
+    }
+    if config.inherit_stdin {
+        builder.inherit_stdin();
+    } else if let Some(file) = config.stdin {
+        builder.stdin(file);
+    }
+    if config.inherit_stdout {
+        builder.inherit_stdout();
+    } else if let Some(file) = config.stdout {
+        builder.stdout(file);
+    }
+    if config.inherit_stderr {
+        builder.inherit_stderr();
+    } else if let Some(file) = config.stderr {
+        builder.stderr(file);
+    }
+    for preopen in config.preopens {
+        builder.preopened_dir(preopen.0, preopen.1);
+    }
     Ok(WasiInstance::Snapshot0(WasiSnapshot0::new(
         store,
-        config_to_builder!(WasiSnapshot0CtxBuilder, config)
-            .build()
-            .map_err(|e| e.to_string())?,
+        builder.build()?,
     )))
 }
 
-fn create_preview1_instance(store: &Store, config: wasi_config_t) -> Result<WasiInstance, String> {
+fn create_preview1_instance(store: &Store, config: wasi_config_t) -> Result<WasiInstance> {
+    use std::convert::TryFrom;
+    use wasi_common::OsFile;
+    let mut builder = WasiPreview1CtxBuilder::new();
+    if config.inherit_args {
+        builder.inherit_args();
+    } else if !config.args.is_empty() {
+        builder.args(config.args);
+    }
+    if config.inherit_env {
+        builder.inherit_env();
+    } else if !config.env.is_empty() {
+        builder.envs(config.env);
+    }
+    if config.inherit_stdin {
+        builder.inherit_stdin();
+    } else if let Some(file) = config.stdin {
+        builder.stdin(OsFile::try_from(file)?);
+    }
+    if config.inherit_stdout {
+        builder.inherit_stdout();
+    } else if let Some(file) = config.stdout {
+        builder.stdout(OsFile::try_from(file)?);
+    }
+    if config.inherit_stderr {
+        builder.inherit_stderr();
+    } else if let Some(file) = config.stderr {
+        builder.stderr(OsFile::try_from(file)?);
+    }
+    for preopen in config.preopens {
+        builder.preopened_dir(preopen.0, preopen.1);
+    }
     Ok(WasiInstance::Preview1(WasiPreview1::new(
         store,
-        config_to_builder!(WasiPreview1CtxBuilder, config)
-            .build()
-            .map_err(|e| e.to_string())?,
+        builder.build()?,
     )))
 }
 
@@ -282,11 +297,13 @@ pub unsafe extern "C" fn wasi_instance_new(
     config: Box<wasi_config_t>,
     trap: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasi_instance_t>> {
-    let store = &store.store.borrow();
+    let store = &store.store;
 
     let result = match CStr::from_ptr(name).to_str().unwrap_or("") {
-        "wasi_snapshot_preview1" => create_preview1_instance(store, *config),
-        "wasi_unstable" => create_snapshot0_instance(store, *config),
+        "wasi_snapshot_preview1" => {
+            create_preview1_instance(store, *config).map_err(|e| e.to_string())
+        }
+        "wasi_unstable" => create_snapshot0_instance(store, *config).map_err(|e| e.to_string()),
         _ => Err("unsupported WASI version".into()),
     };
 
@@ -297,7 +314,7 @@ pub unsafe extern "C" fn wasi_instance_new(
         })),
         Err(e) => {
             *trap = Box::into_raw(Box::new(wasm_trap_t {
-                trap: HostRef::new(Trap::new(e)),
+                trap: HostRef::new(store, Trap::new(e)),
             }));
 
             None
@@ -335,13 +352,14 @@ pub extern "C" fn wasi_instance_bind_import<'a>(
     if &export.ty() != import.ty.func()? {
         return None;
     }
+    let store = export.store();
 
     let entry = instance
         .export_cache
         .entry(name.to_string())
         .or_insert_with(|| {
             Box::new(wasm_extern_t {
-                which: ExternHost::Func(HostRef::new(export.clone())),
+                which: ExternHost::Func(HostRef::new(store, export.clone())),
             })
         });
     Some(entry)

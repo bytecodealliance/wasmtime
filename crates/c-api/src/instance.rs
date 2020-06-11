@@ -1,9 +1,10 @@
+use crate::host_ref::HostRef;
 use crate::{wasm_extern_t, wasm_extern_vec_t, wasm_module_t, wasm_trap_t};
 use crate::{wasm_store_t, wasmtime_error_t, ExternHost};
 use anyhow::Result;
 use std::cell::RefCell;
 use std::ptr;
-use wasmtime::{Extern, HostRef, Instance, Store, Trap};
+use wasmtime::{Extern, Instance, Store, Trap};
 
 #[repr(C)]
 #[derive(Clone)]
@@ -16,14 +17,15 @@ wasmtime_c_api_macros::declare_ref!(wasm_instance_t);
 
 impl wasm_instance_t {
     pub(crate) fn new(instance: Instance) -> wasm_instance_t {
+        let store = instance.store().clone();
         wasm_instance_t {
-            instance: HostRef::new(instance),
+            instance: HostRef::new(&store, instance),
             exports_cache: RefCell::new(None),
         }
     }
 
-    fn anyref(&self) -> wasmtime::AnyRef {
-        self.instance.anyref()
+    fn externref(&self) -> wasmtime::ExternRef {
+        self.instance.clone().into()
     }
 }
 
@@ -34,19 +36,10 @@ pub unsafe extern "C" fn wasm_instance_new(
     imports: *const Box<wasm_extern_t>,
     result: Option<&mut *mut wasm_trap_t>,
 ) -> Option<Box<wasm_instance_t>> {
-    let store = &store.store.borrow();
-    let module = &wasm_module.module.borrow();
-    if !Store::same(&store, module.store()) {
-        if let Some(result) = result {
-            let trap = Trap::new("wasm_store_t must match store in wasm_module_t");
-            let trap = Box::new(wasm_trap_t::new(trap));
-            *result = Box::into_raw(trap);
-        }
-        return None;
-    }
     let mut instance = ptr::null_mut();
     let mut trap = ptr::null_mut();
     let err = wasmtime_instance_new(
+        store,
         wasm_module,
         imports,
         wasm_module.imports.len(),
@@ -58,7 +51,7 @@ pub unsafe extern "C" fn wasm_instance_new(
             assert!(trap.is_null());
             assert!(instance.is_null());
             if let Some(result) = result {
-                *result = Box::into_raw(err.to_trap());
+                *result = Box::into_raw(err.to_trap(&store.store));
             }
             None
         }
@@ -81,6 +74,7 @@ pub unsafe extern "C" fn wasm_instance_new(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_instance_new(
+    store: &wasm_store_t,
     module: &wasm_module_t,
     imports: *const Box<wasm_extern_t>,
     num_imports: usize,
@@ -88,6 +82,7 @@ pub unsafe extern "C" fn wasmtime_instance_new(
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
     _wasmtime_instance_new(
+        store,
         module,
         std::slice::from_raw_parts(imports, num_imports),
         instance_ptr,
@@ -96,11 +91,13 @@ pub unsafe extern "C" fn wasmtime_instance_new(
 }
 
 fn _wasmtime_instance_new(
+    store: &wasm_store_t,
     module: &wasm_module_t,
     imports: &[Box<wasm_extern_t>],
     instance_ptr: &mut *mut wasm_instance_t,
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
+    let store = &store.store;
     let imports = imports
         .iter()
         .map(|import| match &import.which {
@@ -111,10 +108,16 @@ fn _wasmtime_instance_new(
         })
         .collect::<Vec<_>>();
     let module = &module.module.borrow();
-    handle_instantiate(Instance::new(module, &imports), instance_ptr, trap_ptr)
+    handle_instantiate(
+        store,
+        Instance::new(store, module, &imports),
+        instance_ptr,
+        trap_ptr,
+    )
 }
 
 pub fn handle_instantiate(
+    store: &Store,
     instance: Result<Instance>,
     instance_ptr: &mut *mut wasm_instance_t,
     trap_ptr: &mut *mut wasm_trap_t,
@@ -130,7 +133,7 @@ pub fn handle_instantiate(
         }
         Err(e) => match e.downcast::<Trap>() {
             Ok(trap) => {
-                write(trap_ptr, wasm_trap_t::new(trap));
+                write(trap_ptr, wasm_trap_t::new(store, trap));
                 None
             }
             Err(e) => Some(Box::new(e.into())),
@@ -146,10 +149,10 @@ pub extern "C" fn wasm_instance_exports(instance: &wasm_instance_t, out: &mut wa
         instance
             .exports()
             .map(|e| match e.into_extern() {
-                Extern::Func(f) => ExternHost::Func(HostRef::new(f)),
-                Extern::Global(f) => ExternHost::Global(HostRef::new(f)),
-                Extern::Memory(f) => ExternHost::Memory(HostRef::new(f)),
-                Extern::Table(f) => ExternHost::Table(HostRef::new(f)),
+                Extern::Func(f) => ExternHost::Func(HostRef::new(instance.store(), f)),
+                Extern::Global(f) => ExternHost::Global(HostRef::new(instance.store(), f)),
+                Extern::Memory(f) => ExternHost::Memory(HostRef::new(instance.store(), f)),
+                Extern::Table(f) => ExternHost::Table(HostRef::new(instance.store(), f)),
             })
             .collect()
     });

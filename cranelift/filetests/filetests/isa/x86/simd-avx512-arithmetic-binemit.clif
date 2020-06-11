@@ -6,7 +6,7 @@ function %imul_i64x2() {
 block0:
     [-, %xmm1]    v0 = vconst.i64x2 [1 2]
     [-, %xmm2]    v1 = vconst.i64x2 [2 2]
-    [-, %xmm14]   v2 = imul v0, v1 ; bin: 62 72 f5 08 40 f2
+    [-, %xmm14]   v2 = x86_pmullq v0, v1 ; bin: 62 72 f5 08 40 f2
     ; 62, mandatory EVEX prefix
     ; 72 = 0111 0010, R is set (MSB in %xmm14) while X, B, and R' are unset (note these are all inverted); mm is set to 0F38
     ; f5 = 1111 0101, W is set (64-bit op), vvvv set to 1 (inverted), bit 2 always set, pp set to 01

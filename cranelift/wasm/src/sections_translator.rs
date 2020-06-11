@@ -23,7 +23,7 @@ use std::boxed::Box;
 use std::vec::Vec;
 use wasmparser::{
     self, CodeSectionReader, Data, DataKind, DataSectionReader, Element, ElementItem, ElementItems,
-    ElementKind, ElementSectionReader, Export, ExportSectionReader, ExternalKind, FuncType,
+    ElementKind, ElementSectionReader, Export, ExportSectionReader, ExternalKind,
     FunctionSectionReader, GlobalSectionReader, GlobalType, ImportSectionEntryType,
     ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader, Naming, NamingReader,
     Operator, TableSectionReader, Type, TypeSectionReader,
@@ -40,34 +40,22 @@ pub fn parse_type_section(
     environ.reserve_signatures(count)?;
 
     for entry in types {
-        match entry? {
-            FuncType {
-                form: wasmparser::Type::Func,
-                params,
-                returns,
-            } => {
-                let mut sig =
-                    Signature::new(ModuleEnvironment::target_config(environ).default_call_conv);
-                sig.params.extend(params.iter().map(|ty| {
-                    let cret_arg: ir::Type = type_to_type(*ty, environ)
-                        .expect("only numeric types are supported in function signatures");
-                    AbiParam::new(cret_arg)
-                }));
-                sig.returns.extend(returns.iter().map(|ty| {
-                    let cret_arg: ir::Type = type_to_type(*ty, environ)
-                        .expect("only numeric types are supported in function signatures");
-                    AbiParam::new(cret_arg)
-                }));
-                environ.declare_signature(sig)?;
-                module_translation_state.wasm_types.push((params, returns));
-            }
-            ty => {
-                return Err(wasm_unsupported!(
-                    "unsupported type in type section: {:?}",
-                    ty
-                ))
-            }
-        }
+        let wasm_func_ty = entry?;
+        let mut sig = Signature::new(ModuleEnvironment::target_config(environ).default_call_conv);
+        sig.params.extend(wasm_func_ty.params.iter().map(|ty| {
+            let cret_arg: ir::Type = type_to_type(*ty, environ)
+                .expect("only numeric types are supported in function signatures");
+            AbiParam::new(cret_arg)
+        }));
+        sig.returns.extend(wasm_func_ty.returns.iter().map(|ty| {
+            let cret_arg: ir::Type = type_to_type(*ty, environ)
+                .expect("only numeric types are supported in function signatures");
+            AbiParam::new(cret_arg)
+        }));
+        environ.declare_signature(&wasm_func_ty, sig)?;
+        module_translation_state
+            .wasm_types
+            .push((wasm_func_ty.params, wasm_func_ty.returns));
     }
     Ok(())
 }
@@ -224,7 +212,7 @@ pub fn parse_global_section(
             Operator::V128Const { value } => {
                 GlobalInit::V128Const(V128Imm::from(value.bytes().to_vec().as_slice()))
             }
-            Operator::RefNull => GlobalInit::RefNullConst,
+            Operator::RefNull { ty: _ } => GlobalInit::RefNullConst,
             Operator::RefFunc { function_index } => {
                 GlobalInit::RefFunc(FuncIndex::from_u32(function_index))
             }
@@ -294,7 +282,7 @@ fn read_elems(items: &ElementItems) -> WasmResult<Box<[FuncIndex]>> {
     let mut elems = Vec::with_capacity(usize::try_from(items_reader.get_count()).unwrap());
     for item in items_reader {
         let elem = match item? {
-            ElementItem::Null => FuncIndex::reserved_value(),
+            ElementItem::Null(_ty) => FuncIndex::reserved_value(),
             ElementItem::Func(index) => FuncIndex::from_u32(index),
         };
         elems.push(elem);
@@ -311,7 +299,7 @@ pub fn parse_element_section<'data>(
 
     for (index, entry) in elements.into_iter().enumerate() {
         let Element { kind, items, ty } = entry?;
-        if ty != Type::AnyFunc {
+        if ty != Type::FuncRef {
             return Err(wasm_unsupported!(
                 "unsupported table element type: {:?}",
                 ty

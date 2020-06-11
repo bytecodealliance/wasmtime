@@ -46,6 +46,15 @@ pub fn define_struct(args: TokenStream) -> TokenStream {
             linker_add.push(quote! {
                 linker.define(#module_name, #name, self.#name_ident.clone())?;
             });
+            // `proc_exit` is special; it's essentially an unwinding primitive,
+            // so we implement it in the runtime rather than use the implementation
+            // in wasi-common.
+            if name == "proc_exit" {
+                ctor_externs.push(quote! {
+                    let #name_ident = wasmtime::Func::wrap(store, crate::wasi_proc_exit);
+                });
+                continue;
+            }
 
             let mut shim_arg_decls = Vec::new();
             let mut params = Vec::new();
@@ -200,6 +209,7 @@ pub fn define_struct(args: TokenStream) -> TokenStream {
                             let memory = match caller.get_export("memory") {
                                 Some(wasmtime::Extern::Memory(m)) => m,
                                 _ => {
+                                    log::warn!("callee does not export a memory as \"memory\"");
                                     let e = wasi_common::old::snapshot_0::wasi::__WASI_ERRNO_INVAL;
                                     #handle_early_error
                                 }
@@ -291,6 +301,15 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
             linker_add.push(quote! {
                 linker.define(#module_name, #name, self.#name_ident.clone())?;
             });
+            // `proc_exit` is special; it's essentially an unwinding primitive,
+            // so we implement it in the runtime rather than use the implementation
+            // in wasi-common.
+            if name == "proc_exit" {
+                ctor_externs.push(quote! {
+                    let #name_ident = wasmtime::Func::wrap(store, crate::wasi_proc_exit);
+                });
+                continue;
+            }
 
             let mut shim_arg_decls = Vec::new();
             let mut params = Vec::new();
@@ -445,11 +464,18 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
                             let mem = match caller.get_export("memory") {
                                 Some(wasmtime::Extern::Memory(m)) => m,
                                 _ => {
+                                    log::warn!("callee does not export a memory as \"memory\"");
                                     let e = wasi_common::wasi::Errno::Inval;
                                     #handle_early_error
                                 }
                             };
-                            let mem: WasiMemory = mem.into();
+                            // Wiggle does not expose any methods for
+                            // functions to re-enter the WebAssembly module,
+                            // or expose the memory via non-wiggle mechanisms.
+                            // Therefore, creating a new BorrowChecker at the
+                            // root of each function invocation is correct.
+                            let bc = wiggle::BorrowChecker::new();
+                            let mem = WasiMemory { mem, bc };
                             wasi_common::wasi::#module_id::#name_ident(
                                 &mut my_cx.borrow_mut(),
                                 &mem,
@@ -466,17 +492,17 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
         /// Lightweight `wasmtime::Memory` wrapper so that we can
         /// implement `wiggle::GuestMemory` trait on it which is
         /// now required to interface with `wasi-common`.
-        struct WasiMemory(wasmtime::Memory);
-
-        impl From<wasmtime::Memory> for WasiMemory {
-            fn from(mem: wasmtime::Memory) -> Self {
-                Self(mem)
-            }
+        struct WasiMemory {
+            mem: wasmtime::Memory,
+            bc: wiggle::BorrowChecker,
         }
 
         unsafe impl wiggle::GuestMemory for WasiMemory {
             fn base(&self) -> (*mut u8, u32) {
-                (self.0.data_ptr(), self.0.data_size() as _)
+                (self.mem.data_ptr(), self.mem.data_size() as _)
+            }
+            fn borrow_checker(&self) -> &wiggle::BorrowChecker {
+                &self.bc
             }
         }
 

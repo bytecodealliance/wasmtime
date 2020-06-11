@@ -15,7 +15,7 @@ fn same_import_names_still_distinct() -> anyhow::Result<()> {
     "#;
 
     let store = Store::default();
-    let module = Module::new(&store, WAT)?;
+    let module = Module::new(store.engine(), WAT)?;
 
     let imports = [
         Func::new(
@@ -41,7 +41,7 @@ fn same_import_names_still_distinct() -> anyhow::Result<()> {
         )
         .into(),
     ];
-    let instance = Instance::new(&module, &imports)?;
+    let instance = Instance::new(&store, &module, &imports)?;
 
     let func = instance.get_func("foo").unwrap();
     let results = func.call(&[])?;

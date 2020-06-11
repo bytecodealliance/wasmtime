@@ -4,7 +4,7 @@ description = "Fuzzing infrastructure for Wasmtime"
 edition = "2018"
 name = "wasmtime-fuzzing"
 publish = false
-version = "0.16.0"
+version = "0.17.0"
 
 [dependencies]
 anyhow = "1.0.22"
@@ -13,10 +13,10 @@ binaryen = { version = "0.10.0", optional = true }
 env_logger = "0.7.1"
 log = "0.4.8"
 rayon = "1.2.1"
-wasmparser = "0.51.2"
-wasmprinter = "0.2.1"
-wasmtime = { path = "../api" }
+wasmparser = "0.57.0"
+wasmprinter = "0.2.5"
+wasmtime = { path = "../wasmtime" }
 wasmtime-wast = { path = "../wast" }
 
 [dev-dependencies]
-wat = "1.0.10"
+wat = "1.0.18"

@@ -283,7 +283,7 @@ pub(crate) fn define(
     Packed Shuffle Doublewords -- copies data from either memory or lanes in an extended
     register and re-orders the data according to the passed immediate byte.
     "#,
-            &formats.extract_lane,
+            &formats.binary_imm8,
         )
         .operands_in(vec![a, i]) // TODO allow copying from memory here (need more permissive type than TxN)
         .operands_out(vec![a]),
@@ -314,7 +314,7 @@ pub(crate) fn define(
         The lane index, ``Idx``, is an immediate value, not an SSA value. It
         must indicate a valid lane index for the type of ``x``.
         "#,
-            &formats.extract_lane,
+            &formats.binary_imm8,
         )
         .operands_in(vec![x, Idx])
         .operands_out(vec![a]),
@@ -342,9 +342,9 @@ pub(crate) fn define(
         The lane index, ``Idx``, is an immediate value, not an SSA value. It
         must indicate a valid lane index for the type of ``x``.
         "#,
-            &formats.insert_lane,
+            &formats.ternary_imm8,
         )
-        .operands_in(vec![x, Idx, y])
+        .operands_in(vec![x, y, Idx])
         .operands_out(vec![a]),
     );
 
@@ -369,9 +369,9 @@ pub(crate) fn define(
         extracted from and which it is inserted to. This is similar to x86_pinsr but inserts
         floats, which are already stored in an XMM register.
         "#,
-            &formats.insert_lane,
+            &formats.ternary_imm8,
         )
-        .operands_in(vec![x, Idx, y])
+        .operands_in(vec![x, y, Idx])
         .operands_out(vec![a]),
     );
 
@@ -475,10 +475,11 @@ pub(crate) fn define(
             .includes_scalars(false)
             .build(),
     );
-    let I64x2 = &TypeVar::new(
-        "I64x2",
-        "A SIMD vector type containing one large integer (the upper lane is concatenated with \
-         the lower lane to form the integer)",
+    let I128 = &TypeVar::new(
+        "I128",
+        "A SIMD vector type containing one large integer (due to Cranelift type constraints, \
+        this uses the Cranelift I64X2 type but should be understood as one large value, i.e., the \
+        upper lane is concatenated with the lower lane to form the integer)",
         TypeSetBuilder::new()
             .ints(64..64)
             .simd_lanes(2..2)
@@ -487,7 +488,7 @@ pub(crate) fn define(
     );
 
     let x = &Operand::new("x", IxN).with_doc("Vector value to shift");
-    let y = &Operand::new("y", I64x2).with_doc("Number of bits to shift");
+    let y = &Operand::new("y", I128).with_doc("Number of bits to shift");
     let a = &Operand::new("a", IxN);
 
     ig.push(
@@ -525,6 +526,47 @@ pub(crate) fn define(
         Shift Packed Data Right Arithmetic -- This implements the behavior of the shared
         instruction ``sshr`` but alters the shift operand to live in an XMM register as expected by
         the PSRA* family of instructions.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    let I64x2 = &TypeVar::new(
+        "I64x2",
+        "A SIMD vector type containing two 64-bit integers",
+        TypeSetBuilder::new()
+            .ints(64..64)
+            .simd_lanes(2..2)
+            .includes_scalars(false)
+            .build(),
+    );
+
+    let x = &Operand::new("x", I64x2);
+    let y = &Operand::new("y", I64x2);
+    let a = &Operand::new("a", I64x2);
+    ig.push(
+        Inst::new(
+            "x86_pmullq",
+            r#"
+        Multiply Packed Integers -- Multiply two 64x2 integers and receive a 64x2 result with
+        lane-wise wrapping if the result overflows. This instruction is necessary to add distinct
+        encodings for CPUs with newer vector features.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "x86_pmuludq",
+            r#"
+        Multiply Packed Integers -- Using only the bottom 32 bits in each lane, multiply two 64x2
+        unsigned integers and receive a 64x2 result. This instruction avoids the need for handling
+        overflow as in `x86_pmullq`.
         "#,
             &formats.binary,
         )

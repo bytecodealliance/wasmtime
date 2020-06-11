@@ -1,4 +1,4 @@
-test vcode
+test compile
 target aarch64
 
 function %f() -> b8 {
@@ -197,6 +197,19 @@ block0:
 ; nextln: mov fp, sp
 ; nextln: movn x0, #57611, LSL #16
 ; nextln: movk x0, #4841, LSL #48
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f() -> i32 {
+block0:
+  v0 = iconst.i32 -1
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: orr x0, xzr, #4294967295
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret

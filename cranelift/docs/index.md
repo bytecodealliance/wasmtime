@@ -16,7 +16,7 @@
 
 ## Cranelift crate documentation:
 
- - [cranelift](https://docs.rs/cranelift-codegen)
+ - [cranelift](https://docs.rs/cranelift)
     This is an umbrella crate that re-exports the codegen and frontend crates,
     to make them easier to use.
 

@@ -1,3 +1,5 @@
+use wasmtime::Trap;
+
 pub mod old;
 
 pub use wasi_common::{WasiCtx, WasiCtxBuilder};
@@ -11,4 +13,18 @@ pub fn is_wasi_module(name: &str) -> bool {
     // we're figuring out how to support multiple revisions, this should do the
     // trick.
     name.starts_with("wasi")
+}
+
+/// Implement the WASI `proc_exit` function. This function is implemented here
+/// instead of in wasi-common so that we can use the runtime to perform an
+/// unwind rather than exiting the host process.
+fn wasi_proc_exit(status: i32) -> Result<(), Trap> {
+    // Check that the status is within WASI's range.
+    if status >= 0 && status < 126 {
+        Err(Trap::i32_exit(status))
+    } else {
+        Err(Trap::new(
+            "exit with invalid exit status outside of [0..126)",
+        ))
+    }
 }

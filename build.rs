@@ -178,34 +178,38 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             _ => (),
         },
         "Cranelift" => match (testsuite, testname) {
-            // All simd tests are known to fail on aarch64 for now, it's going
+            ("simd", "simd_address") => return false,
+            ("simd", "simd_i8x16_cmp") => return false,
+            ("simd", "simd_i16x8_cmp") => return false,
+            ("simd", "simd_i32x4_cmp") => return false,
+            ("simd", "simd_load_extend") => return false,
+            ("simd", "simd_load_splat") => return false,
+            ("simd", "simd_store") => return false,
+            // Most simd tests are known to fail on aarch64 for now, it's going
             // to be a big chunk of work to implement them all there!
             ("simd", _) if target.contains("aarch64") => return true,
 
-            ("simd", "simd_bit_shift") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16Shl
-            ("simd", "simd_conversions") => return true, // FIXME Unsupported feature: proposed SIMD operator I16x8NarrowI32x4S
+            ("simd", "simd_conversions") => return true, // FIXME Unsupported feature: proposed SIMD operator I32x4TruncSatF32x4S
             ("simd", "simd_f32x4") => return true, // FIXME expected V128(F32x4([CanonicalNan, CanonicalNan, Value(Float32 { bits: 0 }), Value(Float32 { bits: 0 })])), got V128(18428729675200069632)
             ("simd", "simd_f64x2") => return true, // FIXME expected V128(F64x2([Value(Float64 { bits: 9221120237041090560 }), Value(Float64 { bits: 0 })])), got V128(0)
             ("simd", "simd_f64x2_arith") => return true, // FIXME expected V128(F64x2([Value(Float64 { bits: 9221120237041090560 }), Value(Float64 { bits: 13835058055282163712 })])), got V128(255211775190703847615975447847722024960)
-            ("simd", "simd_i64x2_arith") => return true, // FIXME Unsupported feature: proposed SIMD operator I64x2Mul
-            ("simd", "simd_lane") => return true, // FIXME invalid u8 number: constant out of range: (v8x16.shuffle -1 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14...
-            ("simd", "simd_load") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16Shl
-            ("simd", "simd_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator I8x16ShrS
+            ("simd", "simd_load") => return true, // FIXME Unsupported feature: proposed SIMD operator I32x4TruncSatF32x4S
+            ("simd", "simd_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator I32x4TruncSatF32x4S
+
+            // not parsed in wasmparser yet
+            ("simd", "simd_i32x4_arith2") => return true,
+            ("simd", "simd_i16x8_arith2") => return true,
+            ("simd", "simd_i8x16_arith2") => return true,
+
+            // waiting for the upstream spec to get updated with new binary
+            // encodings of operations and for that to propagate to the
+            // testsuite repo.
+            ("simd", "simd_const") => return true,
 
             // Still working on implementing these. See #929.
             ("reference_types", "table_copy_on_imported_tables") => return false,
+            ("reference_types", "externref_id_function") => return false,
             ("reference_types", _) => return true,
-
-            ("misc_testsuite", "export_large_signature")
-            | ("spec_testsuite", "call")
-            | ("multi_value", "call")
-            | ("multi_value", "func") => {
-                // FIXME These involves functions with very large stack frames that Cranelift currently
-                // cannot compile using the fastcall (Windows) calling convention.
-                // See https://github.com/bytecodealliance/wasmtime/pull/1216.
-                #[cfg(windows)]
-                return true;
-            }
 
             _ => {}
         },

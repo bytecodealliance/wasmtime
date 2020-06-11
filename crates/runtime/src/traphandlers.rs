@@ -158,19 +158,15 @@ cfg_if::cfg_if! {
                 if #[cfg(all(target_os = "linux", target_arch = "x86_64"))] {
                     let cx = &*(cx as *const libc::ucontext_t);
                     cx.uc_mcontext.gregs[libc::REG_RIP as usize] as *const u8
+                } else if #[cfg(all(target_os = "linux", target_arch = "x86"))] {
+                    let cx = &*(cx as *const libc::ucontext_t);
+                    cx.uc_mcontext.gregs[libc::REG_EIP as usize] as *const u8
                 } else if #[cfg(all(target_os = "linux", target_arch = "aarch64"))] {
-                    // libc doesn't seem to support Linux/aarch64 at the moment?
-                    extern "C" {
-                        fn GetPcFromUContext(cx: *mut libc::c_void) -> *const u8;
-                    }
-                    GetPcFromUContext(cx)
+                    let cx = &*(cx as *const libc::ucontext_t);
+                    cx.uc_mcontext.pc as *const u8
                 } else if #[cfg(target_os = "macos")] {
-                    // FIXME(rust-lang/libc#1702) - once that lands and is
-                    // released we should inline the definition here
-                    extern "C" {
-                        fn GetPcFromUContext(cx: *mut libc::c_void) -> *const u8;
-                    }
-                    GetPcFromUContext(cx)
+                    let cx = &*(cx as *const libc::ucontext_t);
+                    (*cx.uc_mcontext).__ss.__rip as *const u8
                 } else {
                     compile_error!("unsupported platform");
                 }
@@ -228,10 +224,16 @@ cfg_if::cfg_if! {
                     Some(info) => info,
                     None => return EXCEPTION_CONTINUE_SEARCH,
                 };
-                let jmp_buf = info.handle_trap(
-                    (*(*exception_info).ContextRecord).Rip as *const u8,
-                    |handler| handler(exception_info),
-                );
+                cfg_if::cfg_if! {
+                    if #[cfg(target_arch = "x86_64")] {
+                        let ip = (*(*exception_info).ContextRecord).Rip as *const u8;
+                    } else if #[cfg(target_arch = "x86")] {
+                        let ip = (*(*exception_info).ContextRecord).Eip as *const u8;
+                    } else {
+                        compile_error!("unsupported platform");
+                    }
+                }
+                let jmp_buf = info.handle_trap(ip, |handler| handler(exception_info));
                 if jmp_buf.is_null() {
                     EXCEPTION_CONTINUE_SEARCH
                 } else if jmp_buf as usize == 1 {
@@ -587,11 +589,6 @@ impl<'a> CallThreadState<'a> {
             return ptr::null();
         }
 
-        // If this fault wasn't in wasm code, then it's not our problem
-        if !(self.is_wasm_code)(pc as usize) {
-            return ptr::null();
-        }
-
         // First up see if any instance registered has a custom trap handler,
         // in which case run them all. If anything handles the trap then we
         // return that the trap was handled.
@@ -599,6 +596,11 @@ impl<'a> CallThreadState<'a> {
             if call_handler(handler) {
                 return 1 as *const _;
             }
+        }
+
+        // If this fault wasn't in wasm code, then it's not our problem
+        if !(self.is_wasm_code)(pc as usize) {
+            return ptr::null();
         }
 
         // TODO: stack overflow can happen at any random time (i.e. in malloc()

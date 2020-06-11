@@ -13,6 +13,7 @@ use crate::isa::encoding::base_size;
 use crate::isa::encoding::{Encoding, RecipeSizing};
 use crate::isa::RegUnit;
 use crate::isa::{self, TargetIsa};
+use crate::legalizer::expand_as_libcall;
 use crate::predicates;
 use crate::regalloc::RegDiversions;
 
@@ -243,6 +244,20 @@ fn size_with_inferred_rex_for_inreg0_inreg1(
     // No need to check for REX.W in `needs_rex` because `infer_rex().w()` is not allowed.
     let needs_rex = test_input(0, inst, divert, func, is_extended_reg)
         || test_input(1, inst, divert, func, is_extended_reg);
+    sizing.base_size + if needs_rex { 1 } else { 0 }
+}
+
+/// Infers whether a dynamic REX prefix will be emitted, based on second and third operand.
+fn size_with_inferred_rex_for_inreg1_inreg2(
+    sizing: &RecipeSizing,
+    _enc: Encoding,
+    inst: Inst,
+    divert: &RegDiversions,
+    func: &Function,
+) -> u8 {
+    // No need to check for REX.W in `needs_rex` because `infer_rex().w()` is not allowed.
+    let needs_rex = test_input(1, inst, divert, func, is_extended_reg)
+        || test_input(2, inst, divert, func, is_extended_reg);
     sizing.base_size + if needs_rex { 1 } else { 0 }
 }
 
@@ -1181,10 +1196,10 @@ fn convert_extractlane(
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
-    if let ir::InstructionData::ExtractLane {
+    if let ir::InstructionData::BinaryImm8 {
         opcode: ir::Opcode::Extractlane,
         arg,
-        lane,
+        imm: lane,
     } = pos.func.dfg[inst]
     {
         // NOTE: the following legalization assumes that the upper bits of the XMM register do
@@ -1237,10 +1252,10 @@ fn convert_insertlane(
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
-    if let ir::InstructionData::InsertLane {
+    if let ir::InstructionData::TernaryImm8 {
         opcode: ir::Opcode::Insertlane,
         args: [vector, replacement],
-        lane,
+        imm: lane,
     } = pos.func.dfg[inst]
     {
         let value_type = pos.func.dfg.value_type(vector);
@@ -1255,7 +1270,7 @@ fn convert_insertlane(
                     pos.func
                         .dfg
                         .replace(inst)
-                        .x86_insertps(vector, immediate, replacement)
+                        .x86_insertps(vector, replacement, immediate)
                 }
                 F64X2 => {
                     let replacement_as_vector = pos.ins().raw_bitcast(F64X2, replacement); // only necessary due to SSA types
@@ -1283,7 +1298,7 @@ fn convert_insertlane(
             pos.func
                 .dfg
                 .replace(inst)
-                .x86_pinsr(vector, lane, replacement);
+                .x86_pinsr(vector, replacement, lane);
         }
     }
 }
@@ -1315,6 +1330,39 @@ fn convert_ineg(
         pos.func.dfg.replace(inst).isub(zero_value, arg);
     } else {
         unreachable!()
+    }
+}
+
+fn expand_dword_to_xmm<'f>(
+    pos: &mut FuncCursor<'_>,
+    arg: ir::Value,
+    arg_type: ir::Type,
+) -> ir::Value {
+    if arg_type == I64 {
+        let (arg_lo, arg_hi) = pos.ins().isplit(arg);
+        let arg = pos.ins().scalar_to_vector(I32X4, arg_lo);
+        let arg = pos.ins().insertlane(arg, arg_hi, 1);
+        let arg = pos.ins().raw_bitcast(I64X2, arg);
+        arg
+    } else {
+        pos.ins().bitcast(I64X2, arg)
+    }
+}
+
+fn contract_dword_from_xmm<'f>(
+    pos: &mut FuncCursor<'f>,
+    inst: ir::Inst,
+    ret: ir::Value,
+    ret_type: ir::Type,
+) {
+    if ret_type == I64 {
+        let ret = pos.ins().raw_bitcast(I32X4, ret);
+        let ret_lo = pos.ins().extractlane(ret, 0);
+        let ret_hi = pos.ins().extractlane(ret, 1);
+        pos.func.dfg.replace(inst).iconcat(ret_lo, ret_hi);
+    } else {
+        let ret = pos.ins().extractlane(ret, 0);
+        pos.func.dfg.replace(inst).ireduce(ret_type, ret);
     }
 }
 
@@ -1379,7 +1427,24 @@ fn convert_ushr(
         } else if arg0_type.is_vector() {
             // x86 has encodings for these shifts.
             pos.func.dfg.replace(inst).x86_psrl(arg0, shift_index);
+        } else if arg0_type == I64 {
+            // 64 bit shifts need to be legalized on x86_32.
+            let x86_isa = isa
+                .as_any()
+                .downcast_ref::<isa::x86::Isa>()
+                .expect("the target ISA must be x86 at this point");
+            if x86_isa.isa_flags.has_sse41() {
+                // if we have pinstrq/pextrq (SSE 4.1), legalize to that
+                let value = expand_dword_to_xmm(&mut pos, arg0, arg0_type);
+                let amount = expand_dword_to_xmm(&mut pos, arg1, arg1_type);
+                let shifted = pos.ins().x86_psrl(value, amount);
+                contract_dword_from_xmm(&mut pos, inst, shifted, arg0_type);
+            } else {
+                // otherwise legalize to libcall
+                expand_as_libcall(inst, func, isa);
+            }
         } else {
+            // Everything else should be already legal.
             unreachable!()
         }
     }
@@ -1446,8 +1511,72 @@ fn convert_ishl(
         } else if arg0_type.is_vector() {
             // x86 has encodings for these shifts.
             pos.func.dfg.replace(inst).x86_psll(arg0, shift_index);
+        } else if arg0_type == I64 {
+            // 64 bit shifts need to be legalized on x86_32.
+            let x86_isa = isa
+                .as_any()
+                .downcast_ref::<isa::x86::Isa>()
+                .expect("the target ISA must be x86 at this point");
+            if x86_isa.isa_flags.has_sse41() {
+                // if we have pinstrq/pextrq (SSE 4.1), legalize to that
+                let value = expand_dword_to_xmm(&mut pos, arg0, arg0_type);
+                let amount = expand_dword_to_xmm(&mut pos, arg1, arg1_type);
+                let shifted = pos.ins().x86_psll(value, amount);
+                contract_dword_from_xmm(&mut pos, inst, shifted, arg0_type);
+            } else {
+                // otherwise legalize to libcall
+                expand_as_libcall(inst, func, isa);
+            }
         } else {
+            // Everything else should be already legal.
             unreachable!()
+        }
+    }
+}
+
+/// Convert an imul.i64x2 to a valid code sequence on x86, first with AVX512 and then with SSE2.
+fn convert_i64x2_imul(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    _cfg: &mut ControlFlowGraph,
+    isa: &dyn TargetIsa,
+) {
+    let mut pos = FuncCursor::new(func).at_inst(inst);
+    pos.use_srcloc(inst);
+
+    if let ir::InstructionData::Binary {
+        opcode: ir::Opcode::Imul,
+        args: [arg0, arg1],
+    } = pos.func.dfg[inst]
+    {
+        let ty = pos.func.dfg.ctrl_typevar(inst);
+        if ty == I64X2 {
+            let x86_isa = isa
+                .as_any()
+                .downcast_ref::<isa::x86::Isa>()
+                .expect("the target ISA must be x86 at this point");
+            if x86_isa.isa_flags.use_avx512dq_simd() || x86_isa.isa_flags.use_avx512vl_simd() {
+                // If we have certain AVX512 features, we can lower this instruction simply.
+                pos.func.dfg.replace(inst).x86_pmullq(arg0, arg1);
+            } else {
+                // Otherwise, we default to a very lengthy SSE2-compatible sequence. It splits each
+                // 64-bit lane into 32-bit high and low sections using shifting and then performs
+                // the following arithmetic per lane: with arg0 = concat(high0, low0) and arg1 =
+                // concat(high1, low1), calculate (high0 * low1) + (high1 * low0) + (low0 * low1).
+                let high0 = pos.ins().ushr_imm(arg0, 32);
+                let mul0 = pos.ins().x86_pmuludq(high0, arg1);
+                let high1 = pos.ins().ushr_imm(arg1, 32);
+                let mul1 = pos.ins().x86_pmuludq(high1, arg0);
+                let addhigh = pos.ins().iadd(mul0, mul1);
+                let high = pos.ins().ishl_imm(addhigh, 32);
+                let low = pos.ins().x86_pmuludq(arg0, arg1);
+                pos.func.dfg.replace(inst).iadd(low, high);
+            }
+        } else {
+            unreachable!(
+                "{} should be encodable; it cannot be legalized by convert_i64x2_imul",
+                pos.func.dfg.display_inst(inst, None)
+            );
         }
     }
 }

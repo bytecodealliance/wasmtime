@@ -1,8 +1,9 @@
-use anyhow::{bail, Context};
+use anyhow::Context;
+use std::convert::TryFrom;
 use std::fs::File;
 use std::path::Path;
-use wasi_common::VirtualDirEntry;
-use wasmtime::{Instance, Module, Store};
+use wasi_common::{OsOther, VirtualDirEntry};
+use wasmtime::{Linker, Module, Store};
 
 #[derive(Clone, Copy, Debug)]
 pub enum PreopenType {
@@ -46,38 +47,23 @@ pub fn instantiate(
     // where `stdin` is never ready to be read. In some CI systems, however,
     // stdin is closed which causes tests to fail.
     let (reader, _writer) = os_pipe::pipe()?;
-    builder.stdin(reader_to_file(reader));
+    let file = reader_to_file(reader);
+    let handle = OsOther::try_from(file).context("failed to create OsOther from PipeReader")?;
+    builder.stdin(handle);
     let snapshot1 = wasmtime_wasi::Wasi::new(&store, builder.build()?);
-    let module = Module::new(&store, &data).context("failed to create wasm module")?;
-    let imports = module
-        .imports()
-        .map(|i| {
-            let field_name = i.name();
-            if let Some(export) = snapshot1.get_export(field_name) {
-                Ok(export.clone().into())
-            } else {
-                bail!(
-                    "import {} was not found in module {}",
-                    field_name,
-                    i.module()
-                )
-            }
-        })
-        .collect::<Result<Vec<_>, _>>()?;
 
-    let instance = Instance::new(&module, &imports).context(format!(
-        "error while instantiating Wasm module '{}'",
-        bin_name,
-    ))?;
+    let mut linker = Linker::new(&store);
 
-    instance
-        .get_export("_start")
-        .context("expected a _start export")?
-        .into_func()
-        .context("expected export to be a func")?
-        .call(&[])?;
+    snapshot1.add_to_linker(&mut linker)?;
 
-    Ok(())
+    let module = Module::new(store.engine(), &data).context("failed to create wasm module")?;
+
+    linker
+        .module("", &module)
+        .and_then(|m| m.get_default(""))
+        .and_then(|f| f.get0::<()>())
+        .and_then(|f| f().map_err(Into::into))
+        .context(format!("error while testing Wasm module '{}'", bin_name,))
 }
 
 #[cfg(unix)]

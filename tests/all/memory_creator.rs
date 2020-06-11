@@ -143,14 +143,14 @@ mod not_for_windows {
     fn host_memory() -> anyhow::Result<()> {
         let (store, mem_creator) = config();
         let module = Module::new(
-            &store,
+            store.engine(),
             r#"
             (module
                 (memory (export "memory") 1)
             )
         "#,
         )?;
-        Instance::new(&module, &[])?;
+        Instance::new(&store, &module, &[])?;
 
         assert_eq!(*mem_creator.num_created_memories.lock().unwrap(), 1);
 
@@ -161,7 +161,7 @@ mod not_for_windows {
     fn host_memory_grow() -> anyhow::Result<()> {
         let (store, mem_creator) = config();
         let module = Module::new(
-            &store,
+            store.engine(),
             r#"
             (module
                 (func $f (drop (memory.grow (i32.const 1))))
@@ -171,8 +171,8 @@ mod not_for_windows {
         "#,
         )?;
 
-        let instance1 = Instance::new(&module, &[])?;
-        let instance2 = Instance::new(&module, &[])?;
+        let instance1 = Instance::new(&store, &module, &[])?;
+        let instance2 = Instance::new(&store, &module, &[])?;
 
         assert_eq!(*mem_creator.num_created_memories.lock().unwrap(), 2);
 

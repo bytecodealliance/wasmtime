@@ -1,6 +1,5 @@
-use regalloc::{Reg, RegClass};
-
 use crate::isa::x64::inst::*;
+use regalloc::Reg;
 
 fn low8willSXto64(x: u32) -> bool {
     let xs = (x as i32) as i64;
@@ -42,7 +41,6 @@ fn mkSIB(shift: u8, encIndex: u8, encBase: u8) -> u8 {
 #[inline(always)]
 fn iregEnc(reg: Reg) -> u8 {
     debug_assert!(reg.is_real());
-    debug_assert!(reg.get_class() == RegClass::I64);
     reg.get_hw_encoding()
 }
 
@@ -57,10 +55,16 @@ const F_RETAIN_REDUNDANT_REX: u32 = 1;
 /// indicating a 64-bit operation.
 const F_CLEAR_REX_W: u32 = 2;
 
-/// Add an 0x66 (operand-size override) prefix.  This is necessary to indicate
-/// a 16-bit operation.  Normally this will be used together with F_CLEAR_REX_W.
-const F_PREFIX_66: u32 = 4;
-
+/// For specifying the legacy prefixes (or `PfxNone` if no prefix required) to
+/// be used at the start an instruction. A select prefix may be required for
+/// various operations, including instructions that operate on GPR, SSE, and Vex
+/// registers.
+enum LegacyPrefix {
+    PfxNone,
+    Pfx66,
+    PfxF2,
+    PfxF3,
+}
 /// This is the core 'emit' function for instructions that reference memory.
 ///
 /// For an instruction that has as operands a register `encG` and a memory
@@ -80,8 +84,9 @@ const F_PREFIX_66: u32 = 4;
 /// deleted if it is redundant (0x40).  Note that for a 64-bit operation, the
 /// REX prefix will normally never be redundant, since REX.W must be 1 to
 /// indicate a 64-bit operation.
-fn emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE<O: MachSectionOutput>(
-    sink: &mut O,
+fn emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE(
+    sink: &mut MachBuffer<Inst>,
+    prefix: LegacyPrefix,
     opcodes: u32,
     mut numOpcodes: usize,
     encG: u8,
@@ -91,13 +96,15 @@ fn emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE<O: MachSectionOutput>(
     // General comment for this function: the registers in `memE` must be
     // 64-bit integer registers, because they are part of an address
     // expression.  But `encG` can be derived from a register of any class.
-    let prefix66 = (flags & F_PREFIX_66) != 0;
     let clearRexW = (flags & F_CLEAR_REX_W) != 0;
     let retainRedundant = (flags & F_RETAIN_REDUNDANT_REX) != 0;
-    // The operand-size override, if requested.  This indicates a 16-bit
-    // operation.
-    if prefix66 {
-        sink.put1(0x66);
+
+    // Lower the prefix if applicable.
+    match prefix {
+        LegacyPrefix::Pfx66 => sink.put1(0x66),
+        LegacyPrefix::PfxF2 => sink.put1(0xF2),
+        LegacyPrefix::PfxF3 => sink.put1(0xF3),
+        LegacyPrefix::PfxNone => (),
     }
     match memE {
         Addr::IR { simm32, base: regE } => {
@@ -199,8 +206,9 @@ fn emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE<O: MachSectionOutput>(
 /// emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE, except it is for the case
 /// where the E operand is a register rather than memory.  Hence it is much
 /// simpler.
-fn emit_REX_OPCODES_MODRM_encG_encE<O: MachSectionOutput>(
-    sink: &mut O,
+fn emit_REX_OPCODES_MODRM_encG_encE(
+    sink: &mut MachBuffer<Inst>,
+    prefix: LegacyPrefix,
     opcodes: u32,
     mut numOpcodes: usize,
     encG: u8,
@@ -211,22 +219,28 @@ fn emit_REX_OPCODES_MODRM_encG_encE<O: MachSectionOutput>(
     // don't even have to be from the same class.  For example, for an
     // integer-to-FP conversion insn, one might be RegClass::I64 and the other
     // RegClass::V128.
-    let prefix66 = (flags & F_PREFIX_66) != 0;
     let clearRexW = (flags & F_CLEAR_REX_W) != 0;
     let retainRedundant = (flags & F_RETAIN_REDUNDANT_REX) != 0;
+
     // The operand-size override
-    if prefix66 {
-        sink.put1(0x66);
+    match prefix {
+        LegacyPrefix::Pfx66 => sink.put1(0x66),
+        LegacyPrefix::PfxF2 => sink.put1(0xF2),
+        LegacyPrefix::PfxF3 => sink.put1(0xF3),
+        LegacyPrefix::PfxNone => (),
     }
+
     // The rex byte
     let w = if clearRexW { 0 } else { 1 };
     let r = (encG >> 3) & 1;
     let x = 0;
     let b = (encE >> 3) & 1;
     let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
+
     if rex != 0x40 || retainRedundant {
         sink.put1(rex);
     }
+
     // All other prefixes and opcodes
     while numOpcodes > 0 {
         numOpcodes -= 1;
@@ -240,8 +254,9 @@ fn emit_REX_OPCODES_MODRM_encG_encE<O: MachSectionOutput>(
 // These are merely wrappers for the above two functions that facilitate passing
 // actual `Reg`s rather than their encodings.
 
-fn emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE<O: MachSectionOutput>(
-    sink: &mut O,
+fn emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
+    sink: &mut MachBuffer<Inst>,
+    prefix: LegacyPrefix,
     opcodes: u32,
     numOpcodes: usize,
     regG: Reg,
@@ -250,11 +265,12 @@ fn emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE<O: MachSectionOutput>(
 ) {
     // JRS FIXME 2020Feb07: this should really just be `regEnc` not `iregEnc`
     let encG = iregEnc(regG);
-    emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE(sink, opcodes, numOpcodes, encG, memE, flags);
+    emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE(sink, prefix, opcodes, numOpcodes, encG, memE, flags);
 }
 
-fn emit_REX_OPCODES_MODRM_regG_regE<O: MachSectionOutput>(
-    sink: &mut O,
+fn emit_REX_OPCODES_MODRM_regG_regE(
+    sink: &mut MachBuffer<Inst>,
+    prefix: LegacyPrefix,
     opcodes: u32,
     numOpcodes: usize,
     regG: Reg,
@@ -264,11 +280,11 @@ fn emit_REX_OPCODES_MODRM_regG_regE<O: MachSectionOutput>(
     // JRS FIXME 2020Feb07: these should really just be `regEnc` not `iregEnc`
     let encG = iregEnc(regG);
     let encE = iregEnc(regE);
-    emit_REX_OPCODES_MODRM_encG_encE(sink, opcodes, numOpcodes, encG, encE, flags);
+    emit_REX_OPCODES_MODRM_encG_encE(sink, prefix, opcodes, numOpcodes, encG, encE, flags);
 }
 
 /// Write a suitable number of bits from an imm64 to the sink.
-fn emit_simm<O: MachSectionOutput>(sink: &mut O, size: u8, simm32: u32) {
+fn emit_simm(sink: &mut MachBuffer<Inst>, size: u8, simm32: u32) {
     match size {
         8 | 4 => sink.put4(simm32),
         2 => sink.put2(simm32 as u16),
@@ -329,7 +345,7 @@ fn emit_simm<O: MachSectionOutput>(sink: &mut O, size: u8, simm32: u32) {
 ///
 /// * there's a shorter encoding for shl/shr/sar by a 1-bit immediate.  (Do we
 ///   care?)
-pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
+pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
     match inst {
         Inst::Nop { len: 0 } => {}
         Inst::Alu_RMI_R {
@@ -346,6 +362,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     RMI::R { reg: regE } => {
                         emit_REX_OPCODES_MODRM_regG_regE(
                             sink,
+                            LegacyPrefix::PfxNone,
                             0x0FAF,
                             2,
                             regG.to_reg(),
@@ -356,6 +373,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     RMI::M { addr } => {
                         emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                             sink,
+                            LegacyPrefix::PfxNone,
                             0x0FAF,
                             2,
                             regG.to_reg(),
@@ -369,6 +387,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                         // Yes, really, regG twice.
                         emit_REX_OPCODES_MODRM_regG_regE(
                             sink,
+                            LegacyPrefix::PfxNone,
                             opcode,
                             1,
                             regG.to_reg(),
@@ -402,6 +421,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                         // gold standard.
                         emit_REX_OPCODES_MODRM_regG_regE(
                             sink,
+                            LegacyPrefix::PfxNone,
                             opcode_R,
                             1,
                             *regE,
@@ -415,6 +435,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                         // Whereas here we revert to the "normal" G-E ordering.
                         emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                             sink,
+                            LegacyPrefix::PfxNone,
                             opcode_M,
                             1,
                             regG.to_reg(),
@@ -427,7 +448,15 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                         let opcode = if useImm8 { 0x83 } else { 0x81 };
                         // And also here we use the "normal" G-E ordering.
                         let encG = iregEnc(regG.to_reg());
-                        emit_REX_OPCODES_MODRM_encG_encE(sink, opcode, 1, subopcode_I, encG, flags);
+                        emit_REX_OPCODES_MODRM_encG_encE(
+                            sink,
+                            LegacyPrefix::PfxNone,
+                            opcode,
+                            1,
+                            subopcode_I,
+                            encG,
+                            flags,
+                        );
                         emit_simm(sink, if useImm8 { 1 } else { 4 }, *simm32);
                     }
                 }
@@ -455,7 +484,15 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
         }
         Inst::Mov_R_R { is_64, src, dst } => {
             let flags = if *is_64 { F_NONE } else { F_CLEAR_REX_W };
-            emit_REX_OPCODES_MODRM_regG_regE(sink, 0x89, 1, *src, dst.to_reg(), flags);
+            emit_REX_OPCODES_MODRM_regG_regE(
+                sink,
+                LegacyPrefix::PfxNone,
+                0x89,
+                1,
+                *src,
+                dst.to_reg(),
+                flags,
+            );
         }
         Inst::MovZX_M_R { extMode, addr, dst } => {
             match extMode {
@@ -463,6 +500,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     // MOVZBL is (REX.W==0) 0F B6 /r
                     emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0x0FB6,
                         2,
                         dst.to_reg(),
@@ -478,6 +516,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     // the upper half of the destination anyway.
                     emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0x0FB6,
                         2,
                         dst.to_reg(),
@@ -489,6 +528,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     // MOVZWL is (REX.W==0) 0F B7 /r
                     emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0x0FB7,
                         2,
                         dst.to_reg(),
@@ -500,6 +540,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     // MOVZWQ is (REX.W==1) 0F B7 /r
                     emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0x0FB7,
                         2,
                         dst.to_reg(),
@@ -513,6 +554,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     // MOV r/m32, r32 is (REX.W==0) 8B /r
                     emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0x8B,
                         1,
                         dst.to_reg(),
@@ -522,15 +564,22 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                 }
             }
         }
-        Inst::Mov64_M_R { addr, dst } => {
-            emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(sink, 0x8B, 1, dst.to_reg(), addr, F_NONE)
-        }
+        Inst::Mov64_M_R { addr, dst } => emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
+            sink,
+            LegacyPrefix::PfxNone,
+            0x8B,
+            1,
+            dst.to_reg(),
+            addr,
+            F_NONE,
+        ),
         Inst::MovSX_M_R { extMode, addr, dst } => {
             match extMode {
                 ExtMode::BL => {
                     // MOVSBL is (REX.W==0) 0F BE /r
                     emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0x0FBE,
                         2,
                         dst.to_reg(),
@@ -542,6 +591,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     // MOVSBQ is (REX.W==1) 0F BE /r
                     emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0x0FBE,
                         2,
                         dst.to_reg(),
@@ -553,6 +603,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     // MOVSWL is (REX.W==0) 0F BF /r
                     emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0x0FBF,
                         2,
                         dst.to_reg(),
@@ -564,6 +615,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     // MOVSWQ is (REX.W==1) 0F BF /r
                     emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0x0FBF,
                         2,
                         dst.to_reg(),
@@ -575,6 +627,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     // MOVSLQ is (REX.W==1) 63 /r
                     emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0x63,
                         1,
                         dst.to_reg(),
@@ -599,6 +652,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     // MOV r8, r/m8 is (REX.W==0) 88 /r
                     emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0x88,
                         1,
                         *src,
@@ -610,17 +664,19 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     // MOV r16, r/m16 is 66 (REX.W==0) 89 /r
                     emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                         sink,
+                        LegacyPrefix::Pfx66,
                         0x89,
                         1,
                         *src,
                         addr,
-                        F_CLEAR_REX_W | F_PREFIX_66,
+                        F_CLEAR_REX_W,
                     )
                 }
                 4 => {
                     // MOV r32, r/m32 is (REX.W==0) 89 /r
                     emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0x89,
                         1,
                         *src,
@@ -630,7 +686,15 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                 }
                 8 => {
                     // MOV r64, r/m64 is (REX.W==1) 89 /r
-                    emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(sink, 0x89, 1, *src, addr, F_NONE)
+                    emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
+                        sink,
+                        LegacyPrefix::PfxNone,
+                        0x89,
+                        1,
+                        *src,
+                        addr,
+                        F_NONE,
+                    )
                 }
                 _ => panic!("x64::Inst::Mov_R_M::emit: unreachable"),
             }
@@ -653,6 +717,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     // SHL/SHR/SAR %cl, reg64 is (REX.W==1) D3 /subopcode
                     emit_REX_OPCODES_MODRM_encG_encE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0xD3,
                         1,
                         subopcode,
@@ -667,6 +732,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     // bother with that nicety here.
                     emit_REX_OPCODES_MODRM_encG_encE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0xC1,
                         1,
                         subopcode,
@@ -683,6 +749,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
             dst: regG,
         } => {
             let mut retainRedundantRex = 0;
+            let mut prefix = LegacyPrefix::PfxNone;
             if *size == 1 {
                 // Here, a redundant REX prefix changes the meaning of the
                 // instruction.
@@ -691,10 +758,12 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     retainRedundantRex = F_RETAIN_REDUNDANT_REX;
                 }
             }
+            if *size == 2 {
+                prefix = LegacyPrefix::Pfx66;
+            }
             let mut flags = match size {
                 8 => F_NONE,
-                4 => F_CLEAR_REX_W,
-                2 => F_CLEAR_REX_W | F_PREFIX_66,
+                4 | 2 => F_CLEAR_REX_W,
                 1 => F_CLEAR_REX_W | retainRedundantRex,
                 _ => panic!("x64::Inst::Cmp_RMI_R::emit: unreachable"),
             };
@@ -710,12 +779,14 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                         }
                     }
                     // Same comment re swapped args as for Alu_RMI_R.
-                    emit_REX_OPCODES_MODRM_regG_regE(sink, opcode, 1, *regE, *regG, flags);
+                    emit_REX_OPCODES_MODRM_regG_regE(sink, prefix, opcode, 1, *regE, *regG, flags);
                 }
                 RMI::M { addr } => {
                     let opcode = if *size == 1 { 0x3A } else { 0x3B };
                     // Whereas here we revert to the "normal" G-E ordering.
-                    emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(sink, opcode, 1, *regG, addr, flags);
+                    emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
+                        sink, prefix, opcode, 1, *regG, addr, flags,
+                    );
                 }
                 RMI::I { simm32 } => {
                     // FIXME JRS 2020Feb11: there are shorter encodings for
@@ -731,7 +802,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     // And also here we use the "normal" G-E ordering.
                     let encG = iregEnc(*regG);
                     emit_REX_OPCODES_MODRM_encG_encE(
-                        sink, opcode, 1, 7, /*subopcode*/
+                        sink, prefix, opcode, 1, 7, /*subopcode*/
                         encG, flags,
                     );
                     emit_simm(sink, if useImm8 { 1 } else { *size }, *simm32);
@@ -751,6 +822,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                 RMI::M { addr } => {
                     emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0xFF,
                         1,
                         6, /*subopcode*/
@@ -787,6 +859,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                     let regEnc = iregEnc(*reg);
                     emit_REX_OPCODES_MODRM_encG_encE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0xFF,
                         1,
                         2, /*subopcode*/
@@ -797,6 +870,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                 RM::M { addr } => {
                     emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0xFF,
                         1,
                         2, /*subopcode*/
@@ -808,61 +882,66 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
         }
         Inst::Ret {} => sink.put1(0xC3),
 
-        Inst::JmpKnown {
-            dest: BranchTarget::Block(..),
-        } => {
-            // Computation of block offsets/sizes.
-            sink.put1(0);
-            sink.put4(0);
-        }
-        Inst::JmpKnown {
-            dest: BranchTarget::ResolvedOffset(_bix, offset),
-        } if *offset >= -0x7FFF_FF00 && *offset <= 0x7FFF_FF00 => {
-            // And now for real
-            let mut offs_i32 = *offset as i32;
-            offs_i32 -= 5;
-            let offs_u32 = offs_i32 as u32;
+        Inst::JmpKnown { dest } => {
+            let disp = dest.as_offset32_or_zero() - 5;
+            let disp = disp as u32;
+            let br_start = sink.cur_offset();
+            let br_disp_off = br_start + 1;
+            let br_end = br_start + 5;
+            if let Some(l) = dest.as_label() {
+                sink.use_label_at_offset(br_disp_off, l, LabelUse::Rel32);
+                sink.add_uncond_branch(br_start, br_end, l);
+            }
             sink.put1(0xE9);
-            sink.put4(offs_u32);
+            sink.put4(disp);
         }
-        //
-        // ** Inst::JmpCondSymm   XXXX should never happen
-        //
-        Inst::JmpCond {
-            cc: _,
-            target: BranchTarget::Block(..),
-        } => {
-            // This case occurs when we are computing block offsets / sizes,
-            // prior to lowering block-index targets to concrete-offset targets.
-            // Only the size matters, so let's emit 6 bytes, as below.
-            sink.put1(0);
-            sink.put1(0);
-            sink.put4(0);
-        }
-        Inst::JmpCond {
+        Inst::JmpCondSymm {
             cc,
-            target: BranchTarget::ResolvedOffset(_bix, offset),
-        } if *offset >= -0x7FFF_FF00 && *offset <= 0x7FFF_FF00 => {
+            taken,
+            not_taken,
+        } => {
+            // Conditional part.
+
             // This insn is 6 bytes long.  Currently `offset` is relative to
             // the start of this insn, but the Intel encoding requires it to
             // be relative to the start of the next instruction.  Hence the
             // adjustment.
-            let mut offs_i32 = *offset as i32;
-            offs_i32 -= 6;
-            let offs_u32 = offs_i32 as u32;
+            let taken_disp = taken.as_offset32_or_zero() - 6;
+            let taken_disp = taken_disp as u32;
+            let cond_start = sink.cur_offset();
+            let cond_disp_off = cond_start + 2;
+            let cond_end = cond_start + 6;
+            if let Some(l) = taken.as_label() {
+                sink.use_label_at_offset(cond_disp_off, l, LabelUse::Rel32);
+                let inverted: [u8; 6] =
+                    [0x0F, 0x80 + (cc.invert().get_enc()), 0xFA, 0xFF, 0xFF, 0xFF];
+                sink.add_cond_branch(cond_start, cond_end, l, &inverted[..]);
+            }
             sink.put1(0x0F);
             sink.put1(0x80 + cc.get_enc());
-            sink.put4(offs_u32);
+            sink.put4(taken_disp);
+
+            // Unconditional part.
+
+            let nt_disp = not_taken.as_offset32_or_zero() - 5;
+            let nt_disp = nt_disp as u32;
+            let uncond_start = sink.cur_offset();
+            let uncond_disp_off = uncond_start + 1;
+            let uncond_end = uncond_start + 5;
+            if let Some(l) = not_taken.as_label() {
+                sink.use_label_at_offset(uncond_disp_off, l, LabelUse::Rel32);
+                sink.add_uncond_branch(uncond_start, uncond_end, l);
+            }
+            sink.put1(0xE9);
+            sink.put4(nt_disp);
         }
-        //
-        // ** Inst::JmpCondCompound   XXXX should never happen
-        //
         Inst::JmpUnknown { target } => {
             match target {
                 RM::R { reg } => {
                     let regEnc = iregEnc(*reg);
                     emit_REX_OPCODES_MODRM_encG_encE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0xFF,
                         1,
                         4, /*subopcode*/
@@ -873,6 +952,7 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                 RM::M { addr } => {
                     emit_REX_OPCODES_MODRM_SIB_IMM_encG_memE(
                         sink,
+                        LegacyPrefix::PfxNone,
                         0xFF,
                         1,
                         4, /*subopcode*/
@@ -882,7 +962,56 @@ pub(crate) fn emit<O: MachSectionOutput>(inst: &Inst, sink: &mut O) {
                 }
             }
         }
-
+        Inst::XMM_R_R { op, src, dst } => {
+            let flags = F_CLEAR_REX_W;
+            let opcode = match op {
+                SSE_Op::SSE_Movss => 0x0F10,
+                SSE_Op::SSE2_Movsd => 0x0F10,
+                _ => unimplemented!("XMM_R_R opcode"),
+            };
+            let prefix = match op {
+                SSE_Op::SSE_Movss => LegacyPrefix::PfxF3,
+                SSE_Op::SSE2_Movsd => LegacyPrefix::PfxF2,
+                _ => unimplemented!("XMM_R_R opcode"),
+            };
+            emit_REX_OPCODES_MODRM_regG_regE(sink, prefix, opcode, 2, dst.to_reg(), *src, flags);
+        }
+        Inst::XMM_RM_R {
+            op,
+            src: srcE,
+            dst: regG,
+        } => {
+            let flags = F_CLEAR_REX_W;
+            let opcode = match op {
+                SSE_Op::SSE_Addss => 0x0F58,
+                SSE_Op::SSE_Subss => 0x0F5C,
+                _ => unimplemented!("XMM_RM_R opcode"),
+            };
+            match srcE {
+                RM::R { reg: regE } => {
+                    emit_REX_OPCODES_MODRM_regG_regE(
+                        sink,
+                        LegacyPrefix::PfxF3,
+                        opcode,
+                        2,
+                        regG.to_reg(),
+                        *regE,
+                        flags,
+                    );
+                }
+                RM::M { addr } => {
+                    emit_REX_OPCODES_MODRM_SIB_IMM_regG_memE(
+                        sink,
+                        LegacyPrefix::PfxF3,
+                        opcode,
+                        2,
+                        regG.to_reg(),
+                        addr,
+                        flags,
+                    );
+                }
+            }
+        }
         _ => panic!("x64_emit: unhandled: {} ", inst.show_rru(None)),
     }
 }

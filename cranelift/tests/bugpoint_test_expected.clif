@@ -5,49 +5,31 @@ function u0:0() system_v {
 block0:
     v0 = iconst.i64 0
     v105 = iconst.i64 0
-    trap user0
-
-block101:
     v829 = iconst.i64 0
     v935 -> v829
     v962 -> v829
     v992 -> v829
     v1036 -> v829
     v1049 -> v829
-    trap user0
-
-block102:
     v842 = iconst.i64 0
     v976 -> v842
     v989 -> v842
     v1038 -> v842
     v1061 -> v842
-    trap user0
-
-block105:
     v883 = iconst.i64 0
     v934 -> v883
     v961 -> v883
     v991 -> v883
     v1005 -> v883
     v1048 -> v883
-    trap user0
-
-block114:
     v951 = iconst.i64 0
     v988 -> v951
-    trap user0
-
-block117:
     v987 = iconst.i64 0
-    call fn0(v0, v105, v1052, v883, v829, v987, v951, v842)
-    trap user0
-
-block120:
     v1052 = iconst.i16 0
     v960 -> v1052
     v990 -> v1052
     v1051 -> v1052
     v1055 -> v1052
+    call fn0(v0, v105, v1052, v883, v829, v987, v951, v842)
     trap user0
 }

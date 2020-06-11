@@ -12,6 +12,15 @@ pub trait ABIBody {
     /// The instruction type for the ISA associated with this ABI.
     type I: VCodeInst;
 
+    /// Does the ABI-body code need a temp reg? One will be provided to `init()`
+    /// as the `maybe_tmp` arg if so.
+    fn temp_needed(&self) -> bool;
+
+    /// Initialize. This is called after the ABIBody is constructed because it
+    /// may be provided with a temp vreg, which can only be allocated once the
+    /// lowering context exists.
+    fn init(&mut self, maybe_tmp: Option<Writable<Reg>>);
+
     /// Get the settings controlling this function's compilation.
     fn flags(&self) -> &settings::Flags;
 
@@ -33,6 +42,13 @@ pub trait ABIBody {
     /// Generate an instruction which copies an argument to a destination
     /// register.
     fn gen_copy_arg_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Self::I;
+
+    /// Generate any setup instruction needed to save values to the
+    /// return-value area. This is usually used when were are multiple return
+    /// values or an otherwise large return value that must be passed on the
+    /// stack; typically the ABI specifies an extra hidden argument that is a
+    /// pointer to that memory.
+    fn gen_retval_area_setup(&self) -> Option<Self::I>;
 
     /// Generate an instruction which copies a source register to a return value slot.
     fn gen_copy_reg_to_retval(
@@ -98,7 +114,10 @@ pub trait ABIBody {
     fn gen_epilogue(&self) -> Vec<Self::I>;
 
     /// Returns the full frame size for the given function, after prologue emission has run. This
-    /// comprises the spill space, incoming argument space, alignment padding, etc.
+    /// comprises the spill slots and stack-storage slots (but not storage for clobbered callee-save
+    /// registers, arguments pushed at callsites within this function, or other ephemeral pushes).
+    /// This is used for ABI variants where the client generates prologue/epilogue code, as in
+    /// Baldrdash (SpiderMonkey integration).
     fn frame_size(&self) -> u32;
 
     /// Get the spill-slot size.
@@ -132,24 +151,29 @@ pub trait ABICall {
     /// Get the number of arguments expected.
     fn num_args(&self) -> usize;
 
-    /// Copy an argument value from a source register, prior to the call.
-    fn gen_copy_reg_to_arg<C: LowerCtx<I = Self::I>>(
+    /// Emit a copy of an argument value from a source register, prior to the call.
+    fn emit_copy_reg_to_arg<C: LowerCtx<I = Self::I>>(
         &self,
         ctx: &mut C,
         idx: usize,
         from_reg: Reg,
-    ) -> Vec<Self::I>;
+    );
 
-    /// Copy a return value into a destination register, after the call returns.
-    fn gen_copy_retval_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Self::I;
+    /// Emit a copy a return value into a destination register, after the call returns.
+    fn emit_copy_retval_to_reg<C: LowerCtx<I = Self::I>>(
+        &self,
+        ctx: &mut C,
+        idx: usize,
+        into_reg: Writable<Reg>,
+    );
 
-    /// Pre-adjust the stack, prior to argument copies and call.
-    fn gen_stack_pre_adjust(&self) -> Vec<Self::I>;
+    /// Emit code to pre-adjust the stack, prior to argument copies and call.
+    fn emit_stack_pre_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C);
 
-    /// Post-adjust the satck, after call return and return-value copies.
-    fn gen_stack_post_adjust(&self) -> Vec<Self::I>;
+    /// Emit code to post-adjust the satck, after call return and return-value copies.
+    fn emit_stack_post_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C);
 
-    /// Generate the call itself.
+    /// Emit the call itself.
     ///
     /// The returned instruction should have proper use- and def-sets according
     /// to the argument registers, return-value registers, and clobbered
@@ -159,5 +183,8 @@ pub trait ABICall {
     /// registers are also logically defs, but should never be read; their
     /// values are "defined" (to the regalloc) but "undefined" in every other
     /// sense.)
-    fn gen_call(&self) -> Vec<Self::I>;
+    ///
+    /// This function should only be called once, as it is allowed to re-use
+    /// parts of the ABICall object in emitting instructions.
+    fn emit_call<C: LowerCtx<I = Self::I>>(&mut self, ctx: &mut C);
 }

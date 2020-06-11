@@ -53,12 +53,11 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
             use #root::wasmtime::{Config, Extern, Engine, Store, Instance, Module};
             use #root::anyhow::{bail, format_err};
 
-            let engine = Engine::new(Config::new().wasm_multi_value(true));
-            let store = Store::new(&engine);
+            let store = Store::default();
 
             let data = #root::wasmtime_interface_types::ModuleData::new(bytes.as_ref())?;
 
-            let module = Module::new(&store, bytes.as_ref())?;
+            let module = Module::new(&engine, bytes.as_ref())?;
 
             let mut imports: Vec<Extern> = Vec::new();
             if let Some(module_name) = data.find_wasi_module_name() {
@@ -76,7 +75,7 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
                 }
             }
             let instance =
-                Instance::new(&module, &imports).map_err(|t| format_err!("instantiation trap: {:?}", t))?;
+                Instance::new(&store, &module, &imports).map_err(|t| format_err!("instantiation trap: {:?}", t))?;
 
             Ok(#name { instance, data })
         }

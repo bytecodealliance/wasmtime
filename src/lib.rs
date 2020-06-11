@@ -114,7 +114,7 @@ struct CommonOptions {
 
     /// Enable support for multi-value functions
     #[structopt(long)]
-    enable_multi_value: bool,
+    enable_multi_value: Option<bool>,
 
     /// Enable support for Wasm threads
     #[structopt(long)]
@@ -153,6 +153,10 @@ struct CommonOptions {
     )]
     opt_level: wasmtime::OptLevel,
 
+    /// Other Cranelift flags to be passed down to Cranelift.
+    #[structopt(long, parse(try_from_str = parse_cranelift_flag))]
+    cranelift_flags: Vec<CraneliftFlag>,
+
     /// Maximum size in bytes of wasm memory before it becomes dynamically
     /// relocatable instead of up-front-reserved.
     #[structopt(long)]
@@ -165,22 +169,36 @@ struct CommonOptions {
     /// Byte size of the guard region after dynamic memories are allocated.
     #[structopt(long)]
     dynamic_memory_guard_size: Option<u64>,
+
+    /// Enable Cranelift's internal debug verifier (expensive)
+    #[structopt(long)]
+    enable_cranelift_debug_verifier: bool,
+
+    /// Enable Cranelift's internal NaN canonicalization
+    #[structopt(long)]
+    enable_cranelift_nan_canonicalization: bool,
 }
 
 impl CommonOptions {
     fn config(&self) -> Result<Config> {
         let mut config = Config::new();
         config
-            .cranelift_debug_verifier(cfg!(debug_assertions))
+            .cranelift_debug_verifier(self.enable_cranelift_debug_verifier)
             .debug_info(self.debug_info)
             .wasm_bulk_memory(self.enable_bulk_memory || self.enable_all)
             .wasm_simd(self.enable_simd || self.enable_all)
             .wasm_reference_types(self.enable_reference_types || self.enable_all)
-            .wasm_multi_value(self.enable_multi_value || self.enable_all)
+            .wasm_multi_value(self.enable_multi_value.unwrap_or(true) || self.enable_all)
             .wasm_threads(self.enable_threads || self.enable_all)
             .cranelift_opt_level(self.opt_level())
             .strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?
-            .profiler(pick_profiling_strategy(self.jitdump, self.vtune)?)?;
+            .profiler(pick_profiling_strategy(self.jitdump, self.vtune)?)?
+            .cranelift_nan_canonicalization(self.enable_cranelift_nan_canonicalization);
+        for CraneliftFlag { name, value } in &self.cranelift_flags {
+            unsafe {
+                config.cranelift_other_flag(name, value)?;
+            }
+        }
         if !self.disable_cache {
             match &self.config {
                 Some(path) => {
@@ -222,4 +240,24 @@ fn parse_opt_level(opt_level: &str) -> Result<wasmtime::OptLevel> {
             other
         ),
     }
+}
+
+struct CraneliftFlag {
+    name: String,
+    value: String,
+}
+
+fn parse_cranelift_flag(name_and_value: &str) -> Result<CraneliftFlag> {
+    let mut split = name_and_value.splitn(2, '=');
+    let name = if let Some(name) = split.next() {
+        name.to_string()
+    } else {
+        bail!("missing name in cranelift flag");
+    };
+    let value = if let Some(value) = split.next() {
+        value.to_string()
+    } else {
+        bail!("missing value in cranelift flag");
+    };
+    Ok(CraneliftFlag { name, value })
 }

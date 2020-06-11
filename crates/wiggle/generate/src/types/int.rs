@@ -92,3 +92,9 @@ pub(super) fn define_int(names: &Names, name: &witx::Id, i: &witx::IntDatatype) 
 
     }
 }
+
+impl super::WiggleType for witx::IntDatatype {
+    fn impls_display(&self) -> bool {
+        true
+    }
+}

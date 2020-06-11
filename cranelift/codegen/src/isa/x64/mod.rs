@@ -5,6 +5,7 @@ use alloc::boxed::Box;
 use regalloc::RealRegUniverse;
 use target_lexicon::Triple;
 
+use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
 use crate::isa::Builder as IsaBuilder;
 use crate::machinst::pretty_print::ShowWithRRU;
@@ -22,12 +23,18 @@ mod lower;
 pub(crate) struct X64Backend {
     triple: Triple,
     flags: Flags,
+    reg_universe: RealRegUniverse,
 }
 
 impl X64Backend {
     /// Create a new X64 backend with the given (shared) flags.
     fn new_with_flags(triple: Triple, flags: Flags) -> Self {
-        Self { triple, flags }
+        let reg_universe = create_reg_universe_systemv(&flags);
+        Self {
+            triple,
+            flags,
+            reg_universe,
+        }
     }
 
     fn compile_vcode(&self, func: &Function, flags: Flags) -> CodegenResult<VCode<inst::Inst>> {
@@ -46,7 +53,8 @@ impl MachBackend for X64Backend {
     ) -> CodegenResult<MachCompileResult> {
         let flags = self.flags();
         let vcode = self.compile_vcode(func, flags.clone())?;
-        let sections = vcode.emit();
+        let buffer = vcode.emit();
+        let buffer = buffer.finish();
         let frame_size = vcode.frame_size();
 
         let disasm = if want_disasm {
@@ -56,7 +64,7 @@ impl MachBackend for X64Backend {
         };
 
         Ok(MachCompileResult {
-            sections,
+            buffer,
             frame_size,
             disasm,
         })
@@ -74,8 +82,20 @@ impl MachBackend for X64Backend {
         self.triple.clone()
     }
 
-    fn reg_universe(&self) -> RealRegUniverse {
-        create_reg_universe_systemv(&self.flags)
+    fn reg_universe(&self) -> &RealRegUniverse {
+        &self.reg_universe
+    }
+
+    fn unsigned_add_overflow_condition(&self) -> IntCC {
+        // Unsigned `>=`; this corresponds to the carry flag set on x86, which happens on
+        // overflow of an add.
+        IntCC::UnsignedGreaterThanOrEqual
+    }
+
+    fn unsigned_sub_overflow_condition(&self) -> IntCC {
+        // unsigned `>=`; this corresponds to the carry flag set on x86, which happens on
+        // underflow of a subtract (carry is borrow for subtract).
+        IntCC::UnsignedGreaterThanOrEqual
     }
 }
 

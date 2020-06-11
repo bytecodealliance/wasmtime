@@ -6,9 +6,9 @@ function u0:0(i8) -> i8 fast {
 block0(v0: i8):
     v1 = iconst.i8 0
     v2 = isub v1, v0
-    ; check: v3 = uextend.i32 v0
-    ; nextln: v5 = iconst.i32 0
-    ; nextln = isub v5, v3
-    ; nextln = ireduce.i8 v4
+    ; check:  uextend.i32
+    ; nextln: iconst.i32
+    ; nextln: isub
+    ; nextln: ireduce.i8
     return v2
 }

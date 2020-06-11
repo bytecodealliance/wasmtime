@@ -1,14 +1,17 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
+use crate::error_transform::ErrorTransform;
 use crate::lifetimes::anon_lifetime;
 use crate::module_trait::passed_by_reference;
 use crate::names::Names;
+use crate::types::WiggleType;
 
 pub fn define_func(
     names: &Names,
+    module: &witx::Module,
     func: &witx::InterfaceFunc,
-    trait_name: TokenStream,
+    errxform: &ErrorTransform,
 ) -> TokenStream {
     let funcname = func.name.as_str();
 
@@ -24,7 +27,8 @@ pub fn define_func(
     });
 
     let abi_args = quote!(
-            ctx: &#ctx_type, memory: &dyn #rt::GuestMemory,
+            ctx: &#ctx_type,
+            memory: &dyn #rt::GuestMemory,
             #(#params),*
     );
     let abi_ret = if let Some(ret) = &coretype.ret {
@@ -42,15 +46,23 @@ pub fn define_func(
         quote!(())
     };
 
-    let err_type = coretype.ret.map(|ret| ret.param.tref);
-    let ret_err = err_type
-        .clone()
-        .map(|_res| {
+    let err_type = coretype.ret.clone().map(|ret| ret.param.tref);
+    let ret_err = coretype
+        .ret
+        .map(|ret| {
+            let name = names.func_param(&ret.param.name);
+            let conversion = if let Some(user_err) = errxform.for_abi_error(&ret.param.tref) {
+                let method = names.user_error_conversion_method(&user_err);
+                quote!(UserErrorConversion::#method(ctx, e))
+            } else {
+                quote!(e)
+            };
             quote! {
-                #[cfg(feature = "trace_log")]
-                {
-                    log::trace!("     | errno={}", e);
-                }
+                let e = #conversion;
+                #rt::tracing::event!(
+                    #rt::tracing::Level::TRACE,
+                    #name = #rt::tracing::field::debug(&e),
+                );
                 return #abi_ret::from(e);
             }
         })
@@ -66,7 +78,7 @@ pub fn define_func(
             let err_method = names.guest_error_conversion_method(&tref);
             quote! {
                 let e = #rt::GuestError::InFunc { funcname: #funcname, location: #location, err: Box::new(e.into()) };
-                let err: #err_typename = GuestErrorConversion::#err_method(ctx, e); // XXX replace with conversion method on trait!
+                let err: #err_typename = GuestErrorConversion::#err_method(ctx, e);
                 return #abi_ret::from(err);
             }
         } else {
@@ -89,6 +101,23 @@ pub fn define_func(
         }
     });
 
+    let log_marshalled_args = if func.params.len() > 0 {
+        let rt = names.runtime_mod();
+        let args = func.params.iter().map(|param| {
+            let name = names.func_param(&param.name);
+            if param.impls_display() {
+                quote!( #name = #rt::tracing::field::display(&#name) )
+            } else {
+                quote!( #name = #rt::tracing::field::debug(&#name) )
+            }
+        });
+        quote! {
+            #rt::tracing::event!(#rt::tracing::Level::TRACE, #(#args),*);
+        }
+    } else {
+        quote!()
+    };
+
     let (trait_rets, trait_bindings) = if func.results.len() < 2 {
         (quote!({}), quote!(_))
     } else {
@@ -99,29 +128,16 @@ pub fn define_func(
             .map(|result| names.func_param(&result.name))
             .collect();
         let bindings = quote!((#(#trait_rets),*));
-        let names: Vec<_> = func
-            .results
-            .iter()
-            .skip(1)
-            .map(|result| {
-                let name = names.func_param(&result.name);
-                let fmt = match &*result.tref.type_() {
-                    witx::Type::Builtin(_)
-                    | witx::Type::Enum(_)
-                    | witx::Type::Flags(_)
-                    | witx::Type::Handle(_)
-                    | witx::Type::Int(_) => "{}",
-                    _ => "{:?}",
-                };
-                format!("{}={}", name.to_string(), fmt)
-            })
-            .collect();
-        let trace_fmt = format!("     | result=({})", names.join(","));
-        let rets = quote! {
-            #[cfg(feature = "trace_log")]
-            {
-                log::trace!(#trace_fmt, #(#trait_rets),*);
+        let trace_rets = func.results.iter().skip(1).map(|result| {
+            let name = names.func_param(&result.name);
+            if result.tref.impls_display() {
+                quote!(#name = #rt::tracing::field::display(&#name))
+            } else {
+                quote!(#name = #rt::tracing::field::debug(&#name))
             }
+        });
+        let rets = quote! {
+            #rt::tracing::event!(#rt::tracing::Level::TRACE, #(#trace_rets),*);
             (#(#trait_rets),*)
         };
         (rets, bindings)
@@ -141,37 +157,32 @@ pub fn define_func(
         let err_typename = names.type_ref(&err_type, anon_lifetime());
         quote! {
             let success:#err_typename = #rt::GuestErrorType::success();
-            #[cfg(feature = "trace_log")]
-            {
-                log::trace!("     | errno={}", success);
-            }
+            #rt::tracing::event!(
+                #rt::tracing::Level::TRACE,
+                success=#rt::tracing::field::display(&success)
+            );
             #abi_ret::from(success)
         }
     } else {
         quote!()
     };
 
-    let (placeholders, args): (Vec<_>, Vec<_>) = func
-        .params
-        .iter()
-        .map(|param| {
-            let name = names.func_param(&param.name);
-            let fmt = if passed_by_reference(&*param.tref.type_()) {
-                "{:?}"
-            } else {
-                "{}"
-            };
-            (format!("{}={}", name.to_string(), fmt), quote!(#name))
-        })
-        .unzip();
-    let trace_fmt = format!("{}({})", ident.to_string(), placeholders.join(","));
+    let trait_name = names.trait_name(&module.name);
+    let mod_name = &module.name.as_str();
+    let func_name = &func.name.as_str();
+
     quote!(pub fn #ident(#abi_args) -> #abi_ret {
+        let _span = #rt::tracing::span!(
+            #rt::tracing::Level::TRACE,
+            "wiggle abi",
+            module = #mod_name,
+            function = #func_name
+        );
+        let _enter = _span.enter();
+
         #(#marshal_args)*
         #(#marshal_rets_pre)*
-        #[cfg(feature = "trace_log")]
-        {
-            log::trace!(#trace_fmt, #(#args),*);
-        }
+        #log_marshalled_args
         let #trait_bindings  = match #trait_name::#ident(ctx, #(#trait_args),*) {
             Ok(#trait_bindings) => { #trait_rets },
             Err(e) => { #ret_err },

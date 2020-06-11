@@ -756,10 +756,10 @@ impl<'a> Verifier<'a> {
             | UnaryIeee64 { .. }
             | UnaryBool { .. }
             | Binary { .. }
-            | BinaryImm { .. }
+            | BinaryImm8 { .. }
+            | BinaryImm64 { .. }
             | Ternary { .. }
-            | InsertLane { .. }
-            | ExtractLane { .. }
+            | TernaryImm8 { .. }
             | Shuffle { .. }
             | IntCompare { .. }
             | IntCompareImm { .. }
@@ -1912,20 +1912,20 @@ impl<'a> Verifier<'a> {
                     Ok(())
                 }
             }
-            ir::InstructionData::ExtractLane {
+            ir::InstructionData::BinaryImm8 {
                 opcode: ir::instructions::Opcode::Extractlane,
-                lane,
+                imm: lane,
                 arg,
                 ..
             }
-            | ir::InstructionData::InsertLane {
+            | ir::InstructionData::TernaryImm8 {
                 opcode: ir::instructions::Opcode::Insertlane,
-                lane,
+                imm: lane,
                 args: [arg, _],
                 ..
             } => {
                 // We must be specific about the opcodes above because other instructions are using
-                // the ExtractLane/InsertLane formats.
+                // the same formats.
                 let ty = self.func.dfg.value_type(arg);
                 if u16::from(lane) >= ty.lane_count() {
                     errors.fatal((

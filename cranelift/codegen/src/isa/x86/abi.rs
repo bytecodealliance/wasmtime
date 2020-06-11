@@ -6,7 +6,6 @@ use super::settings as isa_settings;
 use crate::abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};
 use crate::cursor::{Cursor, CursorPosition, EncCursor};
 use crate::ir;
-use crate::ir::entities::StackSlot;
 use crate::ir::immediates::Imm64;
 use crate::ir::stackslot::{StackOffset, StackSize};
 use crate::ir::types;
@@ -19,7 +18,6 @@ use crate::regalloc::RegisterSet;
 use crate::result::CodegenResult;
 use crate::stack_layout::layout_stack;
 use alloc::borrow::Cow;
-use alloc::vec::Vec;
 use core::i32;
 use target_lexicon::{PointerWidth, Triple};
 
@@ -44,7 +42,7 @@ static RET_GPRS_WIN_FASTCALL_X64: [RU; 1] = [RU::rax];
 ///
 /// [2] https://blogs.msdn.microsoft.com/oldnewthing/20110302-00/?p=11333 "Although the x64 calling
 /// convention reserves spill space for parameters, you don’t have to use them as such"
-const WIN_SHADOW_STACK_SPACE: i32 = 32;
+const WIN_SHADOW_STACK_SPACE: StackSize = 32;
 
 /// Stack alignment requirement for functions.
 ///
@@ -72,6 +70,7 @@ struct Args {
     shared_flags: shared_settings::Flags,
     #[allow(dead_code)]
     isa_flags: isa_settings::Flags,
+    assigning_returns: bool,
 }
 
 impl Args {
@@ -82,12 +81,13 @@ impl Args {
         call_conv: CallConv,
         shared_flags: &shared_settings::Flags,
         isa_flags: &isa_settings::Flags,
+        assigning_returns: bool,
     ) -> Self {
         let offset = if call_conv.extends_windows_fastcall() {
             WIN_SHADOW_STACK_SPACE
         } else {
             0
-        } as u32;
+        };
 
         Self {
             pointer_bytes: bits / 8,
@@ -101,6 +101,7 @@ impl Args {
             call_conv,
             shared_flags: shared_flags.clone(),
             isa_flags: isa_flags.clone(),
+            assigning_returns,
         }
     }
 }
@@ -108,6 +109,17 @@ impl Args {
 impl ArgAssigner for Args {
     fn assign(&mut self, arg: &AbiParam) -> ArgAction {
         let ty = arg.value_type;
+
+        if ty.bits() > u16::from(self.pointer_bits) {
+            if !self.assigning_returns && self.call_conv.extends_windows_fastcall() {
+                // "Any argument that doesn't fit in 8 bytes, or isn't
+                // 1, 2, 4, or 8 bytes, must be passed by reference"
+                return ValueConversion::Pointer(self.pointer_type).into();
+            } else if !ty.is_vector() && !ty.is_float() {
+                // On SystemV large integers and booleans are broken down to fit in a register.
+                return ValueConversion::IntSplit.into();
+            }
+        }
 
         // Vectors should stay in vector registers unless SIMD is not enabled--then they are split
         if ty.is_vector() {
@@ -117,11 +129,6 @@ impl ArgAssigner for Args {
                 return ArgumentLoc::Reg(reg).into();
             }
             return ValueConversion::VectorSplit.into();
-        }
-
-        // Large integers and booleans are broken down to fit in a register.
-        if !ty.is_float() && ty.bits() > u16::from(self.pointer_bits) {
-            return ValueConversion::IntSplit.into();
         }
 
         // Small integers are extended to the size of a pointer register.
@@ -205,7 +212,7 @@ pub fn legalize_signature(
         PointerWidth::U16 => panic!(),
         PointerWidth::U32 => {
             bits = 32;
-            args = Args::new(bits, &[], 0, sig.call_conv, shared_flags, isa_flags);
+            args = Args::new(bits, &[], 0, sig.call_conv, shared_flags, isa_flags, false);
         }
         PointerWidth::U64 => {
             bits = 64;
@@ -217,6 +224,7 @@ pub fn legalize_signature(
                     sig.call_conv,
                     shared_flags,
                     isa_flags,
+                    false,
                 )
             } else {
                 Args::new(
@@ -226,6 +234,7 @@ pub fn legalize_signature(
                     sig.call_conv,
                     shared_flags,
                     isa_flags,
+                    false,
                 )
             };
         }
@@ -245,26 +254,20 @@ pub fn legalize_signature(
         sig.call_conv,
         shared_flags,
         isa_flags,
+        true,
     );
 
-    let sig_is_multi_return = sig.is_multi_return();
-
-    // If this is a multi-value return and we don't have enough available return
-    // registers to fit all of the return values, we need to backtrack and start
+    // If we don't have enough available return registers
+    // to fit all of the return values, we need to backtrack and start
     // assigning locations all over again with a different strategy. In order to
     // do that, we need a copy of the original assigner for the returns.
-    let backup_rets_for_struct_return = if sig_is_multi_return {
-        Some(rets.clone())
-    } else {
-        None
-    };
+    let mut backup_rets = rets.clone();
 
     if let Some(new_returns) = legalize_args(&sig.returns, &mut rets) {
-        if sig.is_multi_return()
-            && new_returns
-                .iter()
-                .filter(|r| r.purpose == ArgumentPurpose::Normal)
-                .any(|r| !r.location.is_reg())
+        if new_returns
+            .iter()
+            .filter(|r| r.purpose == ArgumentPurpose::Normal)
+            .any(|r| !r.location.is_reg())
         {
             // The return values couldn't all fit into available return
             // registers. Introduce the use of a struct-return parameter.
@@ -276,6 +279,7 @@ pub fn legalize_signature(
                 purpose: ArgumentPurpose::StructReturn,
                 extension: ArgumentExtension::None,
                 location: ArgumentLoc::Unassigned,
+                legalized_to_pointer: false,
             };
             match args.assign(&ret_ptr_param) {
                 ArgAction::Assign(ArgumentLoc::Reg(reg)) => {
@@ -285,8 +289,6 @@ pub fn legalize_signature(
                 _ => unreachable!("return pointer should always get a register assignment"),
             }
 
-            let mut backup_rets = backup_rets_for_struct_return.unwrap();
-
             // We're using the first return register for the return pointer (like
             // sys v does).
             let mut ret_ptr_return = AbiParam {
@@ -294,6 +296,7 @@ pub fn legalize_signature(
                 purpose: ArgumentPurpose::StructReturn,
                 extension: ArgumentExtension::None,
                 location: ArgumentLoc::Unassigned,
+                legalized_to_pointer: false,
             };
             match backup_rets.assign(&ret_ptr_return) {
                 ArgAction::Assign(ArgumentLoc::Reg(reg)) => {
@@ -501,7 +504,7 @@ fn baldrdash_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> 
 
     let word_size = StackSize::from(isa.pointer_bytes());
     let shadow_store_size = if func.signature.call_conv.extends_windows_fastcall() {
-        WIN_SHADOW_STACK_SPACE as u32
+        WIN_SHADOW_STACK_SPACE
     } else {
         0
     };
@@ -525,50 +528,60 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
         panic!("TODO: windows-fastcall: x86-32 not implemented yet");
     }
 
-    let csrs = callee_saved_regs_used(isa, func);
-
     // The reserved stack area is composed of:
-    //   return address + frame pointer + all callee-saved registers + shadow space
+    //   return address + frame pointer + all callee-saved registers
     //
     // Pushing the return address is an implicit function of the `call`
     // instruction. Each of the others we will then push explicitly. Then we
     // will adjust the stack pointer to make room for the rest of the required
     // space for this frame.
-    let word_size = isa.pointer_bytes() as usize;
-    let num_fprs = csrs.iter(FPR).len();
-    let csr_stack_size = ((csrs.iter(GPR).len() + 2) * word_size) as i32;
+    let csrs = callee_saved_regs_used(isa, func);
+    let gpsr_stack_size = ((csrs.iter(GPR).len() + 2) * isa.pointer_bytes() as usize) as u32;
+    let fpsr_stack_size = (csrs.iter(FPR).len() * types::F64X2.bytes() as usize) as u32;
+    let mut csr_stack_size = gpsr_stack_size + fpsr_stack_size;
 
-    // Only create an FPR stack slot if we're going to save FPRs.
-    let fpr_slot = if num_fprs > 0 {
-        // Create a stack slot for FPRs to be preserved in. This is an `ExplicitSlot` because it
-        // seems to most closely map to it as a `StackSlotKind`: FPR preserve/restore should be
-        // through `stack_load` and `stack_store` (see later comment about issue #1198). Even
-        // though in a certain light FPR preserve/restore is "spilling" an argument, regalloc
-        // implies that `SpillSlot` may be eligible for certain optimizations, and we know with
-        // certainty that this space may not be reused in the function, nor moved around.
-        Some(func.create_stack_slot(ir::StackSlotData {
-            kind: ir::StackSlotKind::ExplicitSlot,
-            size: (num_fprs * types::F64X2.bytes() as usize) as u32,
-            offset: None,
-        }))
-    } else {
-        None
-    };
+    // FPRs must be saved with 16-byte alignment; because they follow the GPRs on the stack, align if needed
+    if fpsr_stack_size > 0 {
+        csr_stack_size = (csr_stack_size + 15) & !15;
+    }
 
-    // TODO: eventually use the 32 bytes (shadow store) as spill slot. This currently doesn't work
-    //       since cranelift does not support spill slots before incoming args
     func.create_stack_slot(ir::StackSlotData {
         kind: ir::StackSlotKind::IncomingArg,
-        size: csr_stack_size as u32,
-        offset: Some(-(WIN_SHADOW_STACK_SPACE + csr_stack_size)),
+        size: csr_stack_size,
+        offset: Some(-(csr_stack_size as StackOffset)),
     });
 
     let is_leaf = func.is_leaf();
+
+    // If not a leaf function, allocate an explicit stack slot at the end of the space for the callee's shadow space
+    if !is_leaf {
+        // TODO: eventually use the caller-provided shadow store as spill slot space when laying out the stack
+        func.create_stack_slot(ir::StackSlotData {
+            kind: ir::StackSlotKind::ExplicitSlot,
+            size: WIN_SHADOW_STACK_SPACE,
+            offset: None,
+        });
+    }
+
     let total_stack_size = layout_stack(&mut func.stack_slots, is_leaf, STACK_ALIGNMENT)? as i32;
-    let local_stack_size = i64::from(total_stack_size - csr_stack_size);
+
+    // Subtract the GPR saved register size from the local size because pushes are used for the saves
+    let local_stack_size = i64::from(total_stack_size - gpsr_stack_size as i32);
 
     // Add CSRs to function signature
     let reg_type = isa.pointer_type();
+    let sp_arg_index = if fpsr_stack_size > 0 {
+        let sp_arg = ir::AbiParam::special_reg(
+            reg_type,
+            ir::ArgumentPurpose::CalleeSaved,
+            RU::rsp as RegUnit,
+        );
+        let index = func.signature.params.len();
+        func.signature.params.push(sp_arg);
+        Some(index)
+    } else {
+        None
+    };
     let fp_arg = ir::AbiParam::special_reg(
         reg_type,
         ir::ArgumentPurpose::FramePointer,
@@ -601,19 +614,13 @@ fn fastcall_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
         local_stack_size,
         reg_type,
         &csrs,
-        fpr_slot.as_ref(),
+        sp_arg_index.is_some(),
         isa,
     );
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
-    insert_common_epilogues(
-        &mut pos,
-        local_stack_size,
-        reg_type,
-        &csrs,
-        fpr_slot.as_ref(),
-    );
+    insert_common_epilogues(&mut pos, local_stack_size, reg_type, &csrs, sp_arg_index);
 
     Ok(())
 }
@@ -649,6 +656,20 @@ fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
 
     // Add CSRs to function signature
     let reg_type = ir::Type::int(u16::from(pointer_width.bits())).unwrap();
+    // On X86-32 all parameters, including vmctx, are passed on stack, and we need
+    // to extract vmctx from the stack before we can save the frame pointer.
+    let sp_arg_index = if isa.pointer_bits() == 32 {
+        let sp_arg = ir::AbiParam::special_reg(
+            reg_type,
+            ir::ArgumentPurpose::CalleeSaved,
+            RU::rsp as RegUnit,
+        );
+        let index = func.signature.params.len();
+        func.signature.params.push(sp_arg);
+        Some(index)
+    } else {
+        None
+    };
     let fp_arg = ir::AbiParam::special_reg(
         reg_type,
         ir::ArgumentPurpose::FramePointer,
@@ -666,11 +687,18 @@ fn system_v_prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> C
     // Set up the cursor and insert the prologue
     let entry_block = func.layout.entry_block().expect("missing entry block");
     let mut pos = EncCursor::new(func, isa).at_first_insertion_point(entry_block);
-    insert_common_prologue(&mut pos, local_stack_size, reg_type, &csrs, None, isa);
+    insert_common_prologue(
+        &mut pos,
+        local_stack_size,
+        reg_type,
+        &csrs,
+        sp_arg_index.is_some(),
+        isa,
+    );
 
     // Reset the cursor and insert the epilogue
     let mut pos = pos.at_position(CursorPosition::Nowhere);
-    insert_common_epilogues(&mut pos, local_stack_size, reg_type, &csrs, None);
+    insert_common_epilogues(&mut pos, local_stack_size, reg_type, &csrs, sp_arg_index);
 
     Ok(())
 }
@@ -682,9 +710,18 @@ fn insert_common_prologue(
     stack_size: i64,
     reg_type: ir::types::Type,
     csrs: &RegisterSet,
-    fpr_slot: Option<&StackSlot>,
+    has_sp_param: bool,
     isa: &dyn TargetIsa,
 ) {
+    let sp = if has_sp_param {
+        let block = pos.current_block().expect("missing block under cursor");
+        let sp = pos.func.dfg.append_block_param(block, reg_type);
+        pos.func.locations[sp] = ir::ValueLoc::Reg(RU::rsp as RegUnit);
+        Some(sp)
+    } else {
+        None
+    };
+
     // If this is a leaf function with zero stack, then there's no need to
     // insert a stack check since it can't overflow anything and
     // forward-progress is guarantee so long as loop are handled anyway.
@@ -707,7 +744,7 @@ fn insert_common_prologue(
             None => pos
                 .func
                 .stack_limit
-                .map(|gv| interpret_gv(pos, gv, scratch)),
+                .map(|gv| interpret_gv(pos, gv, sp, scratch)),
         };
         if let Some(stack_limit_arg) = stack_limit_arg {
             insert_stack_check(pos, stack_size, stack_limit_arg);
@@ -780,38 +817,27 @@ fn insert_common_prologue(
         }
     }
 
-    // Now that RSP is prepared for the function, we can use stack slots:
+    // With the stack pointer adjusted, save any callee-saved floating point registers via offset
+    // FPR saves are at the highest addresses of the local frame allocation, immediately following the GPR pushes
     let mut last_fpr_save = None;
-    if let Some(fpr_slot) = fpr_slot {
-        debug_assert!(csrs.iter(FPR).len() != 0);
 
-        // `stack_store` is not directly encodable in x86_64 at the moment, so we'll need a base
-        // address. We are well after postopt could run, so load the CSR region base once here,
-        // instead of hoping that the addr/store will be combined later.
-        // See also: https://github.com/bytecodealliance/wasmtime/pull/1198
-        let stack_addr = pos.ins().stack_addr(types::I64, *fpr_slot, 0);
+    for (i, reg) in csrs.iter(FPR).enumerate() {
+        // Append param to entry block
+        let csr_arg = pos.func.dfg.append_block_param(block, types::F64X2);
 
-        // Use r11 as fastcall allows it to be clobbered, and it won't have a meaningful value at
-        // function entry.
-        pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::r11 as u16);
+        // Since regalloc has already run, we must assign a location.
+        pos.func.locations[csr_arg] = ir::ValueLoc::Reg(reg);
 
-        let mut fpr_offset = 0;
+        // Offset to where the register is saved relative to RSP, accounting for FPR save alignment
+        let offset = ((i + 1) * types::F64X2.bytes() as usize) as i64
+            + (stack_size % types::F64X2.bytes() as i64);
 
-        for reg in csrs.iter(FPR) {
-            // Append param to entry Block
-            let csr_arg = pos.func.dfg.append_block_param(block, types::F64X2);
-
-            // Since regalloc has already run, we must assign a location.
-            pos.func.locations[csr_arg] = ir::ValueLoc::Reg(reg);
-
-            last_fpr_save =
-                Some(
-                    pos.ins()
-                        .store(ir::MemFlags::trusted(), csr_arg, stack_addr, fpr_offset),
-                );
-
-            fpr_offset += types::F64X2.bytes() as i32;
-        }
+        last_fpr_save = Some(pos.ins().store(
+            ir::MemFlags::trusted(),
+            csr_arg,
+            sp.expect("FPR save requires SP param"),
+            (stack_size - offset) as i32,
+        ));
     }
 
     pos.func.prologue_end = Some(
@@ -834,19 +860,55 @@ fn insert_common_prologue(
 /// compared to the stack pointer, but currently it serves enough functionality
 /// to get this implemented in `wasmtime` itself. This'll likely get expanded a
 /// bit over time!
-fn interpret_gv(pos: &mut EncCursor, gv: ir::GlobalValue, scratch: ir::ValueLoc) -> ir::Value {
+fn interpret_gv(
+    pos: &mut EncCursor,
+    gv: ir::GlobalValue,
+    sp: Option<ir::Value>,
+    scratch: ir::ValueLoc,
+) -> ir::Value {
     match pos.func.global_values[gv] {
-        ir::GlobalValueData::VMContext => pos
-            .func
-            .special_param(ir::ArgumentPurpose::VMContext)
-            .expect("no vmcontext parameter found"),
+        ir::GlobalValueData::VMContext => {
+            let vmctx_index = pos
+                .func
+                .signature
+                .special_param_index(ir::ArgumentPurpose::VMContext)
+                .expect("no vmcontext parameter found");
+            match pos.func.signature.params[vmctx_index] {
+                AbiParam {
+                    location: ArgumentLoc::Reg(_),
+                    ..
+                } => {
+                    let entry = pos.func.layout.entry_block().unwrap();
+                    pos.func.dfg.block_params(entry)[vmctx_index]
+                }
+                AbiParam {
+                    location: ArgumentLoc::Stack(offset),
+                    value_type,
+                    ..
+                } => {
+                    let offset =
+                        offset + i32::from(pos.isa.pointer_bytes() * (1 + vmctx_index as u8));
+                    // The following access can be marked `trusted` because it is a load of an argument. We
+                    // know it is safe because it was safe to write it in preparing this function call.
+                    let ret =
+                        pos.ins()
+                            .load(value_type, ir::MemFlags::trusted(), sp.unwrap(), offset);
+                    pos.func.locations[ret] = scratch;
+                    return ret;
+                }
+                AbiParam {
+                    location: ArgumentLoc::Unassigned,
+                    ..
+                } => unreachable!(),
+            }
+        }
         ir::GlobalValueData::Load {
             base,
             offset,
             global_type,
             readonly: _,
         } => {
-            let base = interpret_gv(pos, base, scratch);
+            let base = interpret_gv(pos, base, sp, scratch);
             let ret = pos
                 .ins()
                 .load(global_type, ir::MemFlags::trusted(), base, offset);
@@ -911,13 +973,13 @@ fn insert_common_epilogues(
     stack_size: i64,
     reg_type: ir::types::Type,
     csrs: &RegisterSet,
-    fpr_slot: Option<&StackSlot>,
+    sp_arg_index: Option<usize>,
 ) {
     while let Some(block) = pos.next_block() {
         pos.goto_last_inst(block);
         if let Some(inst) = pos.current_inst() {
             if pos.func.dfg[inst].opcode().is_return() {
-                insert_common_epilogue(inst, stack_size, pos, reg_type, csrs, fpr_slot);
+                insert_common_epilogue(inst, stack_size, pos, reg_type, csrs, sp_arg_index);
             }
         }
     }
@@ -931,56 +993,8 @@ fn insert_common_epilogue(
     pos: &mut EncCursor,
     reg_type: ir::types::Type,
     csrs: &RegisterSet,
-    fpr_slot: Option<&StackSlot>,
+    sp_arg_index: Option<usize>,
 ) {
-    // Even though instructions to restore FPRs are inserted first, we have to append them after
-    // restored GPRs to satisfy parameter order in the return.
-    let mut restored_fpr_values = Vec::new();
-
-    // Restore FPRs before we move RSP and invalidate stack slots.
-    let mut first_fpr_load = None;
-    if let Some(fpr_slot) = fpr_slot {
-        debug_assert!(csrs.iter(FPR).len() != 0);
-
-        // `stack_load` is not directly encodable in x86_64 at the moment, so we'll need a base
-        // address. We are well after postopt could run, so load the CSR region base once here,
-        // instead of hoping that the addr/store will be combined later.
-        //
-        // See also: https://github.com/bytecodealliance/wasmtime/pull/1198
-        let stack_addr = pos.ins().stack_addr(types::I64, *fpr_slot, 0);
-
-        first_fpr_load.get_or_insert(pos.current_inst().expect("current inst"));
-
-        // Use r11 as fastcall allows it to be clobbered, and it won't have a meaningful value at
-        // function exit.
-        pos.func.locations[stack_addr] = ir::ValueLoc::Reg(RU::r11 as u16);
-
-        let mut fpr_offset = 0;
-
-        for reg in csrs.iter(FPR) {
-            let value = pos.ins().load(
-                types::F64X2,
-                ir::MemFlags::trusted(),
-                stack_addr,
-                fpr_offset,
-            );
-            fpr_offset += types::F64X2.bytes() as i32;
-
-            // Unlike GPRs before, we don't need to step back after reach restoration because FPR
-            // restoration is order-insensitive. Furthermore: we want GPR restoration to begin
-            // after FPR restoration, so that stack adjustments occur after we're done relying on
-            // StackSlot validity.
-
-            pos.func.locations[value] = ir::ValueLoc::Reg(reg);
-            restored_fpr_values.push(value);
-        }
-    }
-
-    let mut sp_adjust_inst = None;
-    if stack_size > 0 {
-        sp_adjust_inst = Some(pos.ins().adjust_sp_up_imm(Imm64::new(stack_size)));
-    }
-
     // Insert the pop of the frame pointer
     let fp_pop = pos.ins().x86_pop(reg_type);
     let fp_pop_inst = pos.prev_inst().unwrap();
@@ -991,13 +1005,47 @@ fn insert_common_epilogue(
     let mut first_csr_pop_inst = None;
     for reg in csrs.iter(GPR) {
         let csr_pop = pos.ins().x86_pop(reg_type);
-        first_csr_pop_inst = Some(pos.prev_inst().unwrap());
+        first_csr_pop_inst = pos.prev_inst();
+        assert!(first_csr_pop_inst.is_some());
         pos.func.locations[csr_pop] = ir::ValueLoc::Reg(reg);
         pos.func.dfg.append_inst_arg(inst, csr_pop);
     }
 
-    for value in restored_fpr_values.into_iter() {
-        pos.func.dfg.append_inst_arg(inst, value);
+    // Insert the adjustment of SP
+    let mut sp_adjust_inst = None;
+    if stack_size > 0 {
+        pos.ins().adjust_sp_up_imm(Imm64::new(stack_size));
+        sp_adjust_inst = pos.prev_inst();
+        assert!(sp_adjust_inst.is_some());
+    }
+
+    let mut first_fpr_load = None;
+    if let Some(index) = sp_arg_index {
+        let sp = pos
+            .func
+            .dfg
+            .block_params(pos.func.layout.entry_block().unwrap())[index];
+
+        // Insert the FPR loads (unlike the GPRs, which are stack pops, these are in-order loads)
+        for (i, reg) in csrs.iter(FPR).enumerate() {
+            // Offset to where the register is saved relative to RSP, accounting for FPR save alignment
+            let offset = ((i + 1) * types::F64X2.bytes() as usize) as i64
+                + (stack_size % types::F64X2.bytes() as i64);
+
+            let value = pos.ins().load(
+                types::F64X2,
+                ir::MemFlags::trusted(),
+                sp,
+                (stack_size - offset) as i32,
+            );
+
+            first_fpr_load.get_or_insert(pos.current_inst().expect("current inst"));
+
+            pos.func.locations[value] = ir::ValueLoc::Reg(reg);
+            pos.func.dfg.append_inst_arg(inst, value);
+        }
+    } else {
+        assert!(csrs.iter(FPR).len() == 0);
     }
 
     pos.func.epilogues_start.push(

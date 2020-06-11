@@ -262,7 +262,7 @@ fn generate_vars(
             var.set(gimli::DW_AT_name, write::AttributeValue::StringRef(name_id));
             var.set(
                 gimli::DW_AT_type,
-                write::AttributeValue::ThisUnitEntryRef(type_die_id),
+                write::AttributeValue::UnitRef(type_die_id),
             );
             var.set(
                 gimli::DW_AT_location,

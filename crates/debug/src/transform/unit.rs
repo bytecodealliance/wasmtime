@@ -132,7 +132,7 @@ where
     // Build DW_TAG_pointer_type for `WebAssemblyPtrWrapper<T>*`:
     //  .. DW_AT_type = <wrapper_die>
     add_tag!(parent_id, gimli::DW_TAG_pointer_type => wrapper_ptr_type as wrapper_ptr_type_id {
-        gimli::DW_AT_type = write::AttributeValue::ThisUnitEntryRef(wrapper_die_id)
+        gimli::DW_AT_type = write::AttributeValue::UnitRef(wrapper_die_id)
     });
 
     let base_type_id = pointer_type_entry.attr_value(gimli::DW_AT_type)?;
@@ -166,7 +166,7 @@ where
     //  .. DW_AT_location = 0
     add_tag!(wrapper_die_id, gimli::DW_TAG_member => m_die as m_die_id {
         gimli::DW_AT_name = write::AttributeValue::StringRef(out_strings.add("__ptr")),
-        gimli::DW_AT_type = write::AttributeValue::ThisUnitEntryRef(wp_die_id),
+        gimli::DW_AT_type = write::AttributeValue::UnitRef(wp_die_id),
         gimli::DW_AT_data_member_location = write::AttributeValue::Data1(0)
     });
 
@@ -180,10 +180,10 @@ where
     add_tag!(wrapper_die_id, gimli::DW_TAG_subprogram => deref_op_die as deref_op_die_id {
         gimli::DW_AT_linkage_name = write::AttributeValue::StringRef(out_strings.add("resolve_vmctx_memory_ptr")),
         gimli::DW_AT_name = write::AttributeValue::StringRef(out_strings.add("ptr")),
-        gimli::DW_AT_type = write::AttributeValue::ThisUnitEntryRef(ptr_type_id)
+        gimli::DW_AT_type = write::AttributeValue::UnitRef(ptr_type_id)
     });
     add_tag!(deref_op_die_id, gimli::DW_TAG_formal_parameter => deref_op_this_param as deref_op_this_param_id {
-        gimli::DW_AT_type = write::AttributeValue::ThisUnitEntryRef(wrapper_ptr_type_id),
+        gimli::DW_AT_type = write::AttributeValue::UnitRef(wrapper_ptr_type_id),
         gimli::DW_AT_artificial = write::AttributeValue::Flag(true)
     });
 
@@ -197,10 +197,10 @@ where
     add_tag!(wrapper_die_id, gimli::DW_TAG_subprogram => deref_op_die as deref_op_die_id {
         gimli::DW_AT_linkage_name = write::AttributeValue::StringRef(out_strings.add("resolve_vmctx_memory_ptr")),
         gimli::DW_AT_name = write::AttributeValue::StringRef(out_strings.add("operator*")),
-        gimli::DW_AT_type = write::AttributeValue::ThisUnitEntryRef(ref_type_id)
+        gimli::DW_AT_type = write::AttributeValue::UnitRef(ref_type_id)
     });
     add_tag!(deref_op_die_id, gimli::DW_TAG_formal_parameter => deref_op_this_param as deref_op_this_param_id {
-        gimli::DW_AT_type = write::AttributeValue::ThisUnitEntryRef(wrapper_ptr_type_id),
+        gimli::DW_AT_type = write::AttributeValue::UnitRef(wrapper_ptr_type_id),
         gimli::DW_AT_artificial = write::AttributeValue::Flag(true)
     });
 
@@ -214,10 +214,10 @@ where
     add_tag!(wrapper_die_id, gimli::DW_TAG_subprogram => deref_op_die as deref_op_die_id {
         gimli::DW_AT_linkage_name = write::AttributeValue::StringRef(out_strings.add("resolve_vmctx_memory_ptr")),
         gimli::DW_AT_name = write::AttributeValue::StringRef(out_strings.add("operator->")),
-        gimli::DW_AT_type = write::AttributeValue::ThisUnitEntryRef(ptr_type_id)
+        gimli::DW_AT_type = write::AttributeValue::UnitRef(ptr_type_id)
     });
     add_tag!(deref_op_die_id, gimli::DW_TAG_formal_parameter => deref_op_this_param as deref_op_this_param_id {
-        gimli::DW_AT_type = write::AttributeValue::ThisUnitEntryRef(wrapper_ptr_type_id),
+        gimli::DW_AT_type = write::AttributeValue::UnitRef(wrapper_ptr_type_id),
         gimli::DW_AT_artificial = write::AttributeValue::Flag(true)
     });
 

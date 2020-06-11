@@ -61,10 +61,7 @@ wasm_trap_t* closure_callback(
 int main(int argc, const char* argv[]) {
   // Initialize.
   printf("Initializing...\n");
-  wasm_config_t *config = wasm_config_new();
-  assert(config != NULL);
-  wasmtime_config_wasm_multi_value_set(config, true);
-  wasm_engine_t* engine = wasm_engine_new_with_config(config);
+  wasm_engine_t* engine = wasm_engine_new();
   wasm_store_t* store = wasm_store_new(engine);
 
   // Load our input file to parse it next
@@ -118,7 +115,7 @@ int main(int argc, const char* argv[]) {
   const wasm_extern_t* imports[] = {wasm_func_as_extern(callback_func)};
   wasm_instance_t* instance = NULL;
   wasm_trap_t* trap = NULL;
-  error = wasmtime_instance_new(module, imports, 1, &instance, &trap);
+  error = wasmtime_instance_new(store, module, imports, 1, &instance, &trap);
   if (!instance)
     exit_with_error("failed to instantiate", error, trap);
 

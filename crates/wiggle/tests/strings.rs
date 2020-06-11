@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use wiggle::{GuestBorrows, GuestMemory, GuestPtr};
+use wiggle::{GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, MemAreas, WasiCtx};
 
 wiggle::from_witx!({
@@ -11,12 +11,9 @@ impl_errno!(types::Errno, types::GuestErrorConversion);
 
 impl<'a> strings::Strings for WasiCtx<'a> {
     fn hello_string(&self, a_string: &GuestPtr<str>) -> Result<u32, types::Errno> {
-        let mut bc = GuestBorrows::new();
-        let s = a_string.as_raw(&mut bc).expect("should be valid string");
-        unsafe {
-            println!("a_string='{}'", &*s);
-            Ok((*s).len() as u32)
-        }
+        let s = a_string.as_str().expect("should be valid string");
+        println!("a_string='{}'", &*s);
+        Ok(s.len() as u32)
     }
 
     fn multi_string(
@@ -25,18 +22,15 @@ impl<'a> strings::Strings for WasiCtx<'a> {
         b: &GuestPtr<str>,
         c: &GuestPtr<str>,
     ) -> Result<u32, types::Errno> {
-        let mut bc = GuestBorrows::new();
-        let sa = a.as_raw(&mut bc).expect("A should be valid string");
-        let sb = b.as_raw(&mut bc).expect("B should be valid string");
-        let sc = c.as_raw(&mut bc).expect("C should be valid string");
-        unsafe {
-            let total_len = (&*sa).len() + (&*sb).len() + (&*sc).len();
-            println!(
-                "len={}, a='{}', b='{}', c='{}'",
-                total_len, &*sa, &*sb, &*sc
-            );
-            Ok(total_len as u32)
-        }
+        let sa = a.as_str().expect("A should be valid string");
+        let sb = b.as_str().expect("B should be valid string");
+        let sc = c.as_str().expect("C should be valid string");
+        let total_len = sa.len() + sb.len() + sc.len();
+        println!(
+            "len={}, a='{}', b='{}', c='{}'",
+            total_len, &*sa, &*sb, &*sc
+        );
+        Ok(total_len as u32)
     }
 }
 

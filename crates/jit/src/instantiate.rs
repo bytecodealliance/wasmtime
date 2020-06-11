@@ -3,28 +3,28 @@
 //! `CompiledModule` to allow compiling and instantiating to be done as separate
 //! steps.
 
-use crate::compiler::Compiler;
+use crate::code_memory::CodeMemory;
+use crate::compiler::{Compilation, Compiler};
 use crate::imports::resolve_imports;
 use crate::link::link_module;
 use crate::resolver::Resolver;
 use std::any::Any;
 use std::collections::HashMap;
-use std::io::Write;
-use std::rc::Rc;
 use std::sync::Arc;
 use thiserror::Error;
-use wasmtime_debug::read_debuginfo;
+use wasmtime_debug::{read_debuginfo, write_debugsections_image, DwarfSection};
 use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
+use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
 use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleAddressMap,
-    ModuleEnvironment, Traps,
+    ModuleEnvironment, ModuleTranslation, Traps,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::VMInterrupts;
 use wasmtime_runtime::{
     GdbJitImageRegistration, InstanceHandle, InstantiationError, RuntimeMemoryCreator,
-    SignatureRegistry, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
+    SignatureRegistry, VMFunctionBody, VMTrampoline,
 };
 
 /// An error condition while setting up a wasm instance, be it validation,
@@ -49,23 +49,33 @@ pub enum SetupError {
     DebugInfo(#[from] anyhow::Error),
 }
 
-/// This is similar to `CompiledModule`, but references the data initializers
-/// from the wasm buffer rather than holding its own copy.
-struct RawCompiledModule<'data> {
-    module: Module,
-    finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
-    trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
-    data_initializers: Box<[DataInitializer<'data>]>,
-    signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
+struct FinishedFunctions(BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>);
+
+unsafe impl Send for FinishedFunctions {}
+unsafe impl Sync for FinishedFunctions {}
+
+/// Container for data needed for an Instance function to exist.
+pub struct ModuleCode {
+    code_memory: CodeMemory,
+    #[allow(dead_code)]
     dbg_jit_registration: Option<GdbJitImageRegistration>,
+}
+
+/// A compiled wasm module, ready to be instantiated.
+pub struct CompiledModule {
+    module: Arc<Module>,
+    code: Arc<ModuleCode>,
+    finished_functions: FinishedFunctions,
+    trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
+    data_initializers: Box<[OwnedDataInitializer]>,
     traps: Traps,
     address_transform: ModuleAddressMap,
 }
 
-impl<'data> RawCompiledModule<'data> {
-    /// Create a new `RawCompiledModule` by compiling the wasm module in `data` and instatiating it.
-    fn new(
-        compiler: &mut Compiler,
+impl CompiledModule {
+    /// Compile a data buffer into a `CompiledModule`, which may then be instantiated.
+    pub fn new<'data>(
+        compiler: &Compiler,
         data: &'data [u8],
         profiler: &dyn ProfilingAgent,
     ) -> Result<Self, SetupError> {
@@ -81,116 +91,66 @@ impl<'data> RawCompiledModule<'data> {
             debug_data = Some(read_debuginfo(&data)?);
         }
 
-        let compilation = compiler.compile(&translation, debug_data)?;
+        let Compilation {
+            mut code_memory,
+            finished_functions,
+            code_range,
+            trampolines,
+            jt_offsets,
+            dwarf_sections,
+            traps,
+            address_transform,
+        } = compiler.compile(&translation, debug_data)?;
 
-        link_module(&translation.module, &compilation);
+        let ModuleTranslation {
+            module,
+            data_initializers,
+            ..
+        } = translation;
 
-        // Compute indices into the shared signature table.
-        let signatures = {
-            let signature_registry = compiler.signatures();
-            translation
-                .module
-                .local
-                .signatures
-                .values()
-                .map(|sig| signature_registry.register(sig))
-                .collect::<PrimaryMap<_, _>>()
-        };
+        link_module(&mut code_memory, &module, &finished_functions, &jt_offsets);
 
         // Make all code compiled thus far executable.
-        compiler.publish_compiled_code();
+        code_memory.publish(compiler.isa());
 
-        // Initialize profiler and load the wasm module
-        profiler.module_load(
-            &translation.module,
-            &compilation.finished_functions,
-            compilation.dbg_image.as_deref(),
-        );
+        let data_initializers = data_initializers
+            .into_iter()
+            .map(OwnedDataInitializer::new)
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
 
-        let dbg_jit_registration = if let Some(img) = compilation.dbg_image {
-            let mut bytes = Vec::new();
-            bytes.write_all(&img).expect("all written");
+        // Register GDB JIT images; initialize profiler and load the wasm module.
+        let dbg_jit_registration = if !dwarf_sections.is_empty() {
+            let bytes = create_dbg_image(
+                dwarf_sections,
+                compiler.isa(),
+                code_range,
+                &finished_functions,
+            )?;
+
+            profiler.module_load(&module, &finished_functions, Some(&bytes));
+
             let reg = GdbJitImageRegistration::register(bytes);
             Some(reg)
         } else {
+            profiler.module_load(&module, &finished_functions, None);
             None
         };
 
+        let finished_functions = FinishedFunctions(finished_functions.into_boxed_slice());
+
         Ok(Self {
-            module: translation.module,
-            finished_functions: compilation.finished_functions.into_boxed_slice(),
-            trampolines: compilation.trampolines,
-            data_initializers: translation.data_initializers.into_boxed_slice(),
-            signatures: signatures.into_boxed_slice(),
-            dbg_jit_registration,
-            traps: compilation.traps,
-            address_transform: compilation.address_transform,
-        })
-    }
-}
-
-/// A compiled wasm module, ready to be instantiated.
-pub struct CompiledModule {
-    module: Arc<Module>,
-    finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
-    trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
-    data_initializers: Box<[OwnedDataInitializer]>,
-    signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
-    dbg_jit_registration: Option<Rc<GdbJitImageRegistration>>,
-    traps: Traps,
-    address_transform: ModuleAddressMap,
-    interrupts: Arc<VMInterrupts>,
-}
-
-impl CompiledModule {
-    /// Compile a data buffer into a `CompiledModule`, which may then be instantiated.
-    pub fn new<'data>(
-        compiler: &mut Compiler,
-        data: &'data [u8],
-        profiler: &dyn ProfilingAgent,
-    ) -> Result<Self, SetupError> {
-        let raw = RawCompiledModule::<'data>::new(compiler, data, profiler)?;
-
-        Ok(Self::from_parts(
-            raw.module,
-            raw.finished_functions,
-            raw.trampolines,
-            raw.data_initializers
-                .iter()
-                .map(OwnedDataInitializer::new)
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
-            raw.signatures.clone(),
-            raw.dbg_jit_registration,
-            raw.traps,
-            raw.address_transform,
-            compiler.interrupts().clone(),
-        ))
-    }
-
-    /// Construct a `CompiledModule` from component parts.
-    pub fn from_parts(
-        module: Module,
-        finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
-        trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
-        data_initializers: Box<[OwnedDataInitializer]>,
-        signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
-        dbg_jit_registration: Option<GdbJitImageRegistration>,
-        traps: Traps,
-        address_transform: ModuleAddressMap,
-        interrupts: Arc<VMInterrupts>,
-    ) -> Self {
-        Self {
             module: Arc::new(module),
+            code: Arc::new(ModuleCode {
+                code_memory,
+                dbg_jit_registration,
+            }),
             finished_functions,
             trampolines,
             data_initializers,
-            signatures,
-            dbg_jit_registration: dbg_jit_registration.map(Rc::new),
             traps,
             address_transform,
-            interrupts,
-        }
+        })
     }
 
     /// Crate an `Instance` from this `CompiledModule`.
@@ -205,21 +165,41 @@ impl CompiledModule {
     pub unsafe fn instantiate(
         &self,
         resolver: &mut dyn Resolver,
-        sig_registry: &SignatureRegistry,
+        signature_registry: &mut SignatureRegistry,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
+        interrupts: Arc<VMInterrupts>,
         host_state: Box<dyn Any>,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let imports = resolve_imports(&self.module, &sig_registry, resolver)?;
+        // Compute indices into the shared signature table.
+        let signatures = {
+            self.module
+                .local
+                .signatures
+                .values()
+                .map(|(wasm_sig, native)| {
+                    signature_registry.register(wasm_sig.clone(), native.clone())
+                })
+                .collect::<PrimaryMap<_, _>>()
+        };
+
+        let mut trampolines = HashMap::new();
+        for (i, trampoline) in self.trampolines.iter() {
+            trampolines.insert(signatures[i], trampoline.clone());
+        }
+
+        let finished_functions = self.finished_functions.0.clone();
+
+        let imports = resolve_imports(&self.module, signature_registry, resolver)?;
         InstanceHandle::new(
-            Arc::clone(&self.module),
-            self.finished_functions.clone(),
-            self.trampolines.clone(),
+            self.module.clone(),
+            self.code.clone(),
+            finished_functions,
+            trampolines,
             imports,
             mem_creator,
-            self.signatures.clone(),
-            self.dbg_jit_registration.as_ref().map(|r| Rc::clone(&r)),
+            signatures.into_boxed_slice(),
             host_state,
-            self.interrupts.clone(),
+            interrupts,
         )
     }
 
@@ -239,19 +219,14 @@ impl CompiledModule {
         &self.module
     }
 
-    /// Return a reference-counting pointer to a module.
-    pub fn module_mut(&mut self) -> &mut Arc<Module> {
-        &mut self.module
-    }
-
-    /// Return a reference to a module.
-    pub fn module_ref(&self) -> &Module {
-        &self.module
+    /// Return a reference to a mutable module (if possible).
+    pub fn module_mut(&mut self) -> Option<&mut Module> {
+        Arc::get_mut(&mut self.module)
     }
 
     /// Returns the map of all finished JIT functions compiled for this module
     pub fn finished_functions(&self) -> &BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]> {
-        &self.finished_functions
+        &self.finished_functions.0
     }
 
     /// Returns the a map for all traps in this module.
@@ -262,6 +237,16 @@ impl CompiledModule {
     /// Returns a map of compiled addresses back to original bytecode offsets.
     pub fn address_transform(&self) -> &ModuleAddressMap {
         &self.address_transform
+    }
+
+    /// Returns all ranges convered by JIT code.
+    pub fn jit_code_ranges<'a>(&'a self) -> impl Iterator<Item = (usize, usize)> + 'a {
+        self.code.code_memory.published_ranges()
+    }
+
+    /// Returns module's JIT code.
+    pub fn code(&self) -> &Arc<ModuleCode> {
+        &self.code
     }
 }
 
@@ -276,10 +261,24 @@ pub struct OwnedDataInitializer {
 }
 
 impl OwnedDataInitializer {
-    fn new(borrowed: &DataInitializer<'_>) -> Self {
+    fn new(borrowed: DataInitializer<'_>) -> Self {
         Self {
             location: borrowed.location.clone(),
             data: borrowed.data.to_vec().into_boxed_slice(),
         }
     }
+}
+
+fn create_dbg_image(
+    dwarf_sections: Vec<DwarfSection>,
+    isa: &dyn TargetIsa,
+    code_range: (*const u8, usize),
+    finished_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+) -> Result<Vec<u8>, SetupError> {
+    let funcs = finished_functions
+        .values()
+        .map(|allocated: &*mut [VMFunctionBody]| (*allocated) as *const u8)
+        .collect::<Vec<_>>();
+    write_debugsections_image(isa, dwarf_sections, code_range, &funcs)
+        .map_err(SetupError::DebugInfo)
 }

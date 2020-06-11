@@ -36,5 +36,9 @@ mod virtfs;
 pub mod wasi;
 
 pub use ctx::{WasiCtx, WasiCtxBuilder, WasiCtxBuilderError};
+pub use handle::{Handle, HandleRights};
+pub use sys::osdir::OsDir;
+pub use sys::osfile::OsFile;
+pub use sys::osother::{OsOther, OsOtherExt};
 pub use sys::preopen_dir;
 pub use virtfs::{FileContents, VirtualDirEntry};

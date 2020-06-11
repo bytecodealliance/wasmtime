@@ -1,6 +1,6 @@
-use super::super::oshandle::OsHandle;
+use crate::entry::EntryHandle;
 use crate::poll::{ClockEventData, FdEventData};
-use crate::sys::oshandle::AsFile;
+use crate::sys::AsFile;
 use crate::wasi::{types, Errno, Result};
 use std::io;
 use std::{convert::TryInto, os::unix::prelude::AsRawFd};
@@ -16,7 +16,7 @@ pub(crate) fn oneoff(
         return Ok(());
     }
 
-    let mut poll_fds: Vec<_> = fd_events
+    let poll_fds: Result<Vec<_>> = fd_events
         .iter()
         .map(|event| {
             let mut flags = PollFlags::empty();
@@ -28,14 +28,11 @@ pub(crate) fn oneoff(
                 // events we filtered before. If we get something else here, the code has a serious bug.
                 _ => unreachable!(),
             };
-            let handle = event
-                .handle
-                .as_any()
-                .downcast_ref::<OsHandle>()
-                .expect("can poll FdEvent for OS resources only");
-            unsafe { PollFd::new(handle.as_raw_fd(), flags) }
+            let file = event.handle.as_file()?;
+            unsafe { Ok(PollFd::new(file.as_raw_fd(), flags)) }
         })
         .collect();
+    let mut poll_fds = poll_fds?;
 
     let poll_timeout = timeout.map_or(-1, |timeout| {
         let delay = timeout.delay / 1_000_000; // poll syscall requires delay to expressed in milliseconds
@@ -80,18 +77,17 @@ fn handle_fd_event(
     ready_events: impl Iterator<Item = (FdEventData, yanix::poll::PollFd)>,
     events: &mut Vec<types::Event>,
 ) -> Result<()> {
-    fn query_nbytes(handle: &OsHandle) -> Result<u64> {
-        // fionread may overflow for large files, so use another way for regular files.
-        if let OsHandle::OsFile(file) = handle {
-            let meta = file.as_file().metadata()?;
-            if meta.file_type().is_file() {
-                use yanix::file::tell;
-                let len = meta.len();
-                let host_offset = unsafe { tell(file.as_raw_fd())? };
-                return Ok(len - host_offset);
-            }
+    fn query_nbytes(handle: EntryHandle) -> Result<u64> {
+        let file = handle.as_file()?;
+        if handle.get_file_type() == types::Filetype::RegularFile {
+            // fionread may overflow for large files, so use another way for regular files.
+            use yanix::file::tell;
+            let meta = file.metadata()?;
+            let len = meta.len();
+            let host_offset = unsafe { tell(file.as_raw_fd())? };
+            return Ok(len - host_offset);
         }
-        unsafe { Ok(fionread(handle.as_raw_fd())?.into()) }
+        Ok(unsafe { fionread(file.as_raw_fd())?.into() })
     }
 
     for (fd_event, poll_fd) in ready_events {
@@ -106,12 +102,7 @@ fn handle_fd_event(
         log::debug!("poll_oneoff_handle_fd_event revents = {:?}", revents);
 
         let nbytes = if fd_event.r#type == types::Eventtype::FdRead {
-            let handle = fd_event
-                .handle
-                .as_any()
-                .downcast_ref::<OsHandle>()
-                .expect("can poll FdEvent for OS resources only");
-            query_nbytes(handle)?
+            query_nbytes(fd_event.handle)?
         } else {
             0
         };

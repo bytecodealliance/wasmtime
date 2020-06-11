@@ -16,7 +16,7 @@ block0:
     return v0
 }
 
-; sameln: [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0]
+; sameln: [FF, FF, 0, 0, FF, FF, 0, 0, FF, FF, 0, 0, FF, FF, FF, FF]
 
 
 ; Since both jump tables and constants are emitted after the function body, it is important that they do not interfere.

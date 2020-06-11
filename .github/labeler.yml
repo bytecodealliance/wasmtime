@@ -20,6 +20,18 @@
 "cranelift":
   - "cranelift/**"
 
+"cranelift:area:aarch64":
+  - "cranelift/codegen/src/machinst/**"
+  - "cranelift/codegen/src/isa/aarch64/**"
+
+"cranelift:area:peepmatic":
+  - "cranelift/peepmatic/**"
+  - "cranelift/codegen/src/peepmatic.rs"
+
+"cranelift:area:x64":
+  - "cranelift/codegen/src/machinst/**"
+  - "cranelift/codegen/src/isa/x64/**"
+
 "cranelift:docs":
   - "cranelift/docs/**"
 
@@ -35,10 +47,6 @@
 "cranelift:wasm":
   - "cranelift/wasm/**"
   - "cranelift/wasmtests/**"
-  
-"cranelift:area:aarch64":
-  - "cranelift/codegen/src/machinst/*"
-  - "cranelift/codegen/src/isa/aarch64/*"
 
 "fuzzing":
   - "crates/fuzzing/**"
@@ -53,7 +61,7 @@
   - "crates/wiggle/**"
 
 "wasmtime:api":
-  - "crates/api/**"
+  - "crates/wasmtime/**"
 
 "wasmtime:c-api":
   - "crates/c-api/**"

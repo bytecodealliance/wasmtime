@@ -95,10 +95,13 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR env var"),
     );
 
-    let doc = witx::load(&config.witx.paths).expect("loading witx");
+    let doc = config.load_document();
     let names = wiggle_generate::Names::new(&config.ctx.name, quote!(wiggle));
 
-    let code = wiggle_generate::generate(&doc, &names);
+    let error_transform = wiggle_generate::ErrorTransform::new(&config.errors, &doc)
+        .expect("validating error transform");
+
+    let code = wiggle_generate::generate(&doc, &names, &error_transform);
     let metadata = if cfg!(feature = "wiggle_metadata") {
         wiggle_generate::generate_metadata(&doc, &names)
     } else {

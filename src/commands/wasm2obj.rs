@@ -5,6 +5,7 @@ use crate::{init_file_per_thread_logger, pick_compilation_strategy, CommonOption
 use anyhow::{anyhow, Context as _, Result};
 use std::{
     fs::File,
+    io::Write,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -75,13 +76,13 @@ impl WasmToObjCommand {
             self.common.enable_simd,
             self.common.opt_level(),
             self.common.debug_info,
-            self.output.clone(),
             &cache_config,
         )?;
 
-        // FIXME: Make the format a parameter.
-        let file = File::create(Path::new(&self.output)).context("failed to create object file")?;
-        obj.write(file).context("failed to write object file")?;
+        let mut file =
+            File::create(Path::new(&self.output)).context("failed to create object file")?;
+        file.write_all(&obj.write()?)
+            .context("failed to write object file")?;
 
         Ok(())
     }

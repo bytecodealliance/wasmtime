@@ -23,6 +23,7 @@ use cranelift_codegen::ir::{
 use cranelift_codegen::isa::{self, CallConv, Encoding, RegUnit, TargetIsa};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_codegen::{settings, timing};
+use smallvec::SmallVec;
 use std::mem;
 use std::str::FromStr;
 use std::{u16, u32};
@@ -1074,9 +1075,8 @@ impl<'a> Parser<'a> {
             if lane_size < 1 {
                 panic!("The boolean lane must have a byte size greater than zero.");
             }
-            let mut buffer = vec![0; lane_size as usize];
-            buffer[0] = if value { 1 } else { 0 };
-            buffer
+            let value = if value { 0xFF } else { 0 };
+            vec![value; lane_size as usize]
         }
 
         if !ty.is_vector() {
@@ -2223,9 +2223,9 @@ impl<'a> Parser<'a> {
     //
     // inst-results ::= Value(v) { "," Value(v) }
     //
-    fn parse_inst_results(&mut self) -> ParseResult<Vec<Value>> {
+    fn parse_inst_results(&mut self) -> ParseResult<SmallVec<[Value; 1]>> {
         // Result value numbers.
-        let mut results = Vec::new();
+        let mut results = SmallVec::new();
 
         // instruction  ::=  * [inst-results "="] Opcode(opc) ["." Type] ...
         // inst-results ::= * Value(v) { "," Value(v) }
@@ -2752,11 +2752,17 @@ impl<'a> Parser<'a> {
                     args: [lhs, rhs],
                 }
             }
-            InstructionFormat::BinaryImm => {
+            InstructionFormat::BinaryImm8 => {
+                let arg = self.match_value("expected SSA value first operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let imm = self.match_uimm8("expected unsigned 8-bit immediate")?;
+                InstructionData::BinaryImm8 { opcode, arg, imm }
+            }
+            InstructionFormat::BinaryImm64 => {
                 let lhs = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_imm64("expected immediate integer second operand")?;
-                InstructionData::BinaryImm {
+                InstructionData::BinaryImm64 {
                     opcode,
                     arg: lhs,
                     imm: rhs,
@@ -2887,23 +2893,17 @@ impl<'a> Parser<'a> {
                 ctx.check_jt(table, self.loc)?;
                 InstructionData::IndirectJump { opcode, arg, table }
             }
-            InstructionFormat::InsertLane => {
+            InstructionFormat::TernaryImm8 => {
                 let lhs = self.match_value("expected SSA value first operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let lane = self.match_uimm8("expected lane number")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
                 let rhs = self.match_value("expected SSA value last operand")?;
-                InstructionData::InsertLane {
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let imm = self.match_uimm8("expected 8-bit immediate")?;
+                InstructionData::TernaryImm8 {
                     opcode,
-                    lane,
+                    imm,
                     args: [lhs, rhs],
                 }
-            }
-            InstructionFormat::ExtractLane => {
-                let arg = self.match_value("expected SSA value last operand")?;
-                self.match_token(Token::Comma, "expected ',' between operands")?;
-                let lane = self.match_uimm8("expected lane number")?;
-                InstructionData::ExtractLane { opcode, lane, arg }
             }
             InstructionFormat::Shuffle => {
                 let a = self.match_value("expected SSA value first operand")?;
@@ -3823,7 +3823,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             c.into_vec(),
-            [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
+            [0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0]
         )
     }
 

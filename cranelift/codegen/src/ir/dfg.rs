@@ -234,11 +234,7 @@ impl DataFlowGraph {
 
     /// Get the type of a value.
     pub fn value_type(&self, v: Value) -> Type {
-        match self.values[v] {
-            ValueData::Inst { ty, .. }
-            | ValueData::Param { ty, .. }
-            | ValueData::Alias { ty, .. } => ty,
-        }
+        self.values[v].ty()
     }
 
     /// Get the definition of a value.
@@ -383,9 +379,14 @@ pub enum ValueDef {
 impl ValueDef {
     /// Unwrap the instruction where the value was defined, or panic.
     pub fn unwrap_inst(&self) -> Inst {
+        self.inst().expect("Value is not an instruction result")
+    }
+
+    /// Get the instruction where the value was defined, if any.
+    pub fn inst(&self) -> Option<Inst> {
         match *self {
-            Self::Result(inst, _) => inst,
-            _ => panic!("Value is not an instruction result"),
+            Self::Result(inst, _) => Some(inst),
+            _ => None,
         }
     }
 
@@ -426,6 +427,16 @@ enum ValueData {
     /// An alias value can't be linked as an instruction result or block parameter. It is used as a
     /// placeholder when the original instruction or block has been rewritten or modified.
     Alias { ty: Type, original: Value },
+}
+
+impl ValueData {
+    fn ty(&self) -> Type {
+        match *self {
+            ValueData::Inst { ty, .. }
+            | ValueData::Param { ty, .. }
+            | ValueData::Alias { ty, .. } => ty,
+        }
+    }
 }
 
 /// Instructions.

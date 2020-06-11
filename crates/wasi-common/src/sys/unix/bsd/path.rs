@@ -1,8 +1,8 @@
-use super::osfile::OsFile;
+use crate::sys::osdir::OsDir;
 use crate::wasi::{Errno, Result};
 use std::os::unix::prelude::AsRawFd;
 
-pub(crate) fn unlink_file(dirfd: &OsFile, path: &str) -> Result<()> {
+pub(crate) fn unlink_file(dirfd: &OsDir, path: &str) -> Result<()> {
     use yanix::file::{unlinkat, AtFlag};
     match unsafe { unlinkat(dirfd.as_raw_fd(), path, AtFlag::empty()) } {
         Err(err) => {
@@ -35,7 +35,7 @@ pub(crate) fn unlink_file(dirfd: &OsFile, path: &str) -> Result<()> {
     }
 }
 
-pub(crate) fn symlink(old_path: &str, new_dirfd: &OsFile, new_path: &str) -> Result<()> {
+pub(crate) fn symlink(old_path: &str, new_dirfd: &OsDir, new_path: &str) -> Result<()> {
     use yanix::file::{fstatat, symlinkat, AtFlag};
 
     log::debug!("path_symlink old_path = {:?}", old_path);
@@ -69,9 +69,9 @@ pub(crate) fn symlink(old_path: &str, new_dirfd: &OsFile, new_path: &str) -> Res
 }
 
 pub(crate) fn rename(
-    old_dirfd: &OsFile,
+    old_dirfd: &OsDir,
     old_path: &str,
-    new_dirfd: &OsFile,
+    new_dirfd: &OsDir,
     new_path: &str,
 ) -> Result<()> {
     use yanix::file::{fstatat, renameat, AtFlag};

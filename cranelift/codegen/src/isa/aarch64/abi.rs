@@ -1,19 +1,112 @@
 //! Implementation of the standard AArch64 ABI.
+//!
+//! We implement the standard AArch64 ABI, as documented by ARM. This ABI
+//! specifies how arguments are passed (in registers or on the stack, as
+//! appropriate), which registers are caller- and callee-saved, and how a
+//! particular part of the stack frame (the FP/LR pair) must be linked through
+//! the active stack frames.
+//!
+//! Note, however, that the exact stack layout is up to us. We settled on the
+//! below design based on several requirements. In particular, we need to be
+//! able to generate instructions (or instruction sequences) to access
+//! arguments, stack slots, and spill slots before we know how many spill slots
+//! or clobber-saves there will be, because of our pass structure. We also
+//! prefer positive offsets to negative offsets because of an asymmetry in
+//! AArch64 addressing modes (positive offsets have a larger possible range
+//! without a long-form sequence to synthesize an arbitrary offset). Finally, it
+//! is not allowed to access memory below the current SP value.
+//!
+//! As a result, we keep the FP/LR pair just below stack args so that we can
+//! access these args at known offsets from FP, and we access on-stack storage
+//! using positive offsets from SP. In order to allow codegen for the latter
+//! before knowing how many clobber-saves we have, and also allow it while SP is
+//! being adjusted to set up a call, we implement a "nominal SP" tracking
+//! feature by which a fixup (distance between actual SP and a "nominal" SP) is
+//! known at each instruction. See the documentation for
+//! [MemArg::NominalSPOffset] for more on this.
+//!
+//! The stack looks like:
+//!
+//! ```plain
+//!   (high address)
+//!
+//!                              +---------------------------+
+//!                              |          ...              |
+//!                              | stack args                |
+//!                              | (accessed via FP)         |
+//!                              +---------------------------+
+//! SP at function entry ----->  | LR (pushed by prologue)   |
+//!                              +---------------------------+
+//! FP after prologue -------->  | FP (pushed by prologue)   |
+//!                              +---------------------------+
+//!                              |          ...              |
+//!                              | spill slots               |
+//!                              | (accessed via nominal-SP) |
+//!                              |          ...              |
+//!                              | stack slots               |
+//!                              | (accessed via nominal-SP) |
+//! nominal SP --------------->  | (alloc'd by prologue)     |
+//!                              +---------------------------+
+//!                              |          ...              |
+//!                              | clobbered callee-saves    |
+//! SP at end of prologue ---->  | (pushed by prologue)      |
+//!                              +---------------------------+
+//!                              |          ...              |
+//!                              | args for call             |
+//! SP before making a call -->  | (pushed at callsite)      |
+//!                              +---------------------------+
+//!
+//!   (low address)
+//! ```
+//!
+//! # Multi-value Returns
+//!
+//! Note that we support multi-value returns by adopting the SpiderMonkey Wasm
+//! ABI internally. Because we do not support linking with externally-compiled
+//! multi-value-returning functions (yet), this choice is arbitrary and we are
+//! free to make it as we please. Wasmtime generates trampolines to enter
+//! toplevel multi-value-returning functions, so this does not concern the
+//! Wasmtime embedding.
+//!
+//! For details of the multi-value return ABI, see:
+//!
+//! https://searchfox.org/mozilla-central/rev/bc3600def806859c31b2c7ac06e3d69271052a89/js/src/wasm/WasmStubs.h#134
+//!
+//! In brief:
+//! - Return values are processed in *reverse* order.
+//! - The first return value in this order (so the last return) goes into the
+//!   ordinary return register, X0.
+//! - Any further returns go in a struct-return area, allocated upwards (in
+//!   address order) during the reverse traversal.
+//! - This struct-return area is provided by the caller, and a pointer to its
+//!   start is passed as an invisible last (extra) argument. Normally the caller
+//!   will allocate this area on the stack. When we generate calls, we place it
+//!   just above the on-stack argument area.
+//! - So, for example, a function returning 4 i64's (v0, v1, v2, v3), with no
+//!   formal arguments, would:
+//!   - Accept a pointer P to the struct return area in x0 on entry.
+//!   - Return v3 in x0.
+//!   - Return v2 in memory at [P].
+//!   - Return v1 in memory at [P+8].
+//!   - Return v0 in memory at [P+16].
 
 use crate::ir;
 use crate::ir::types;
 use crate::ir::types::*;
 use crate::ir::{ArgumentExtension, StackSlot};
 use crate::isa;
-use crate::isa::aarch64::{self, inst::*};
+use crate::isa::aarch64::{inst::*, lower::ty_bits};
 use crate::machinst::*;
 use crate::settings;
+use crate::{CodegenError, CodegenResult};
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use regalloc::{RealReg, Reg, RegClass, Set, SpillSlot, Writable};
 
-use log::debug;
+use core::mem;
+use log::{debug, trace};
 
 /// A location for an argument or return value.
 #[derive(Clone, Copy, Debug)]
@@ -26,11 +119,26 @@ enum ABIArg {
 
 /// AArch64 ABI information shared between body (callee) and caller.
 struct ABISig {
+    /// Argument locations (regs or stack slots). Stack offsets are relative to
+    /// SP on entry to function.
     args: Vec<ABIArg>,
+    /// Return-value locations. Stack offsets are relative to the return-area
+    /// pointer.
     rets: Vec<ABIArg>,
+    /// Space on stack used to store arguments.
     stack_arg_space: i64,
+    /// Space on stack used to store return values.
+    stack_ret_space: i64,
+    /// Index in `args` of the stack-return-value-area argument.
+    stack_ret_arg: Option<usize>,
+    /// Calling convention used.
     call_conv: isa::CallConv,
 }
+
+/// This is the limit for the size of argument and return-value areas on the
+/// stack. We place a reasonable limit here to avoid integer overflow issues
+/// with 32-bit arithmetic: for now, 128 MB.
+static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
 
 // Spidermonkey specific ABI convention.
 
@@ -94,19 +202,50 @@ fn try_fill_baldrdash_reg(call_conv: isa::CallConv, param: &ir::AbiParam) -> Opt
     }
 }
 
+/// Are we computing information about arguments or return values? Much of the
+/// handling is factored out into common routines; this enum allows us to
+/// distinguish which case we're handling.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ArgsOrRets {
+    Args,
+    Rets,
+}
+
 /// Process a list of parameters or return values and allocate them to X-regs,
 /// V-regs, and stack slots.
 ///
-/// Returns the list of argument locations, and the stack-space used (rounded up
-/// to a 16-byte-aligned boundary).
-fn compute_arg_locs(call_conv: isa::CallConv, params: &[ir::AbiParam]) -> (Vec<ABIArg>, i64) {
+/// Returns the list of argument locations, the stack-space used (rounded up
+/// to a 16-byte-aligned boundary), and if `add_ret_area_ptr` was passed, the
+/// index of the extra synthetic arg that was added.
+fn compute_arg_locs(
+    call_conv: isa::CallConv,
+    params: &[ir::AbiParam],
+    args_or_rets: ArgsOrRets,
+    add_ret_area_ptr: bool,
+) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
+    let is_baldrdash = call_conv.extends_baldrdash();
+
     // See AArch64 ABI (https://c9x.me/compile/bib/abi-arm64.pdf), sections 5.4.
     let mut next_xreg = 0;
     let mut next_vreg = 0;
     let mut next_stack: u64 = 0;
     let mut ret = vec![];
 
-    for param in params {
+    let max_reg_vals = match (args_or_rets, is_baldrdash) {
+        (ArgsOrRets::Args, _) => 8,     // x0-x7, v0-v7
+        (ArgsOrRets::Rets, false) => 8, // x0-x7, v0-v7
+        (ArgsOrRets::Rets, true) => 1,  // x0 or v0
+    };
+
+    for i in 0..params.len() {
+        // Process returns backward, according to the SpiderMonkey ABI (which we
+        // adopt internally if `is_baldrdash` is set).
+        let param = match (args_or_rets, is_baldrdash) {
+            (ArgsOrRets::Args, _) => &params[i],
+            (ArgsOrRets::Rets, false) => &params[i],
+            (ArgsOrRets::Rets, true) => &params[params.len() - 1 - i],
+        };
+
         // Validate "purpose".
         match &param.purpose {
             &ir::ArgumentPurpose::VMContext
@@ -119,59 +258,105 @@ fn compute_arg_locs(call_conv: isa::CallConv, params: &[ir::AbiParam]) -> (Vec<A
             ),
         }
 
-        if in_int_reg(param.value_type) {
-            if let Some(param) = try_fill_baldrdash_reg(call_conv, param) {
-                ret.push(param);
-            } else if next_xreg < 8 {
-                ret.push(ABIArg::Reg(xreg(next_xreg).to_real_reg(), param.value_type));
-                next_xreg += 1;
+        let intreg = in_int_reg(param.value_type);
+        let vecreg = in_vec_reg(param.value_type);
+        debug_assert!(intreg || vecreg);
+        debug_assert!(!(intreg && vecreg));
+
+        let next_reg = if intreg {
+            &mut next_xreg
+        } else {
+            &mut next_vreg
+        };
+
+        if let Some(param) = try_fill_baldrdash_reg(call_conv, param) {
+            assert!(intreg);
+            ret.push(param);
+        } else if *next_reg < max_reg_vals {
+            let reg = if intreg {
+                xreg(*next_reg)
             } else {
-                ret.push(ABIArg::Stack(next_stack as i64, param.value_type));
-                next_stack += 8;
-            }
-        } else if in_vec_reg(param.value_type) {
-            if next_vreg < 8 {
-                ret.push(ABIArg::Reg(vreg(next_vreg).to_real_reg(), param.value_type));
-                next_vreg += 1;
-            } else {
-                let size: u64 = match param.value_type {
-                    F32 | F64 => 8,
-                    _ => panic!("Unsupported vector-reg argument type"),
-                };
-                // Align.
-                debug_assert!(size.is_power_of_two());
-                next_stack = (next_stack + size - 1) & !(size - 1);
-                ret.push(ABIArg::Stack(next_stack as i64, param.value_type));
-                next_stack += size;
-            }
+                vreg(*next_reg)
+            };
+            ret.push(ABIArg::Reg(reg.to_real_reg(), param.value_type));
+            *next_reg += 1;
+        } else {
+            // Compute size. Every arg takes a minimum slot of 8 bytes. (16-byte
+            // stack alignment happens separately after all args.)
+            let size = (ty_bits(param.value_type) / 8) as u64;
+            let size = std::cmp::max(size, 8);
+            // Align.
+            debug_assert!(size.is_power_of_two());
+            next_stack = (next_stack + size - 1) & !(size - 1);
+            ret.push(ABIArg::Stack(next_stack as i64, param.value_type));
+            next_stack += size;
         }
     }
 
+    if args_or_rets == ArgsOrRets::Rets && is_baldrdash {
+        ret.reverse();
+    }
+
+    let extra_arg = if add_ret_area_ptr {
+        debug_assert!(args_or_rets == ArgsOrRets::Args);
+        if next_xreg < max_reg_vals {
+            ret.push(ABIArg::Reg(xreg(next_xreg).to_real_reg(), I64));
+        } else {
+            ret.push(ABIArg::Stack(next_stack as i64, I64));
+            next_stack += 8;
+        }
+        Some(ret.len() - 1)
+    } else {
+        None
+    };
+
     next_stack = (next_stack + 15) & !15;
 
-    (ret, next_stack as i64)
+    // To avoid overflow issues, limit the arg/return size to something
+    // reasonable -- here, 128 MB.
+    if next_stack > STACK_ARG_RET_SIZE_LIMIT {
+        return Err(CodegenError::ImplLimitExceeded);
+    }
+
+    Ok((ret, next_stack as i64, extra_arg))
 }
 
 impl ABISig {
-    fn from_func_sig(sig: &ir::Signature) -> ABISig {
-        // Compute args and retvals from signature.
-        // TODO: pass in arg-mode or ret-mode. (Does not matter
-        // for the types of arguments/return values that we support.)
-        let (args, stack_arg_space) = compute_arg_locs(sig.call_conv, &sig.params);
-        let (rets, _) = compute_arg_locs(sig.call_conv, &sig.returns);
+    fn from_func_sig(sig: &ir::Signature) -> CodegenResult<ABISig> {
+        // Compute args and retvals from signature. Handle retvals first,
+        // because we may need to add a return-area arg to the args.
+        let (rets, stack_ret_space, _) = compute_arg_locs(
+            sig.call_conv,
+            &sig.returns,
+            ArgsOrRets::Rets,
+            /* extra ret-area ptr = */ false,
+        )?;
+        let need_stack_return_area = stack_ret_space > 0;
+        let (args, stack_arg_space, stack_ret_arg) = compute_arg_locs(
+            sig.call_conv,
+            &sig.params,
+            ArgsOrRets::Args,
+            need_stack_return_area,
+        )?;
 
-        // Verify that there are no return values on the stack.
-        debug_assert!(rets.iter().all(|a| match a {
-            &ABIArg::Stack(..) => false,
-            _ => true,
-        }));
-
-        ABISig {
+        trace!(
+            "ABISig: sig {:?} => args = {:?} rets = {:?} arg stack = {} ret stack = {} stack_ret_arg = {:?}",
+            sig,
             args,
             rets,
             stack_arg_space,
+            stack_ret_space,
+            stack_ret_arg
+        );
+
+        Ok(ABISig {
+            args,
+            rets,
+            stack_arg_space,
+            stack_ret_space,
+            stack_ret_arg,
             call_conv: sig.call_conv,
-        }
+        })
     }
 }
 
@@ -188,7 +373,9 @@ pub struct AArch64ABIBody {
     /// Total number of spillslots, from regalloc.
     spillslots: Option<usize>,
     /// Total frame size.
-    frame_size: Option<u32>,
+    total_frame_size: Option<u32>,
+    /// The register holding the return-area pointer, if needed.
+    ret_area_ptr: Option<Writable<Reg>>,
     /// Calling convention this function expects.
     call_conv: isa::CallConv,
     /// The settings controlling this function's compilation.
@@ -220,6 +407,14 @@ fn in_int_reg(ty: ir::Type) -> bool {
 fn in_vec_reg(ty: ir::Type) -> bool {
     match ty {
         types::F32 | types::F64 => true,
+        types::B8X16
+        | types::I8X16
+        | types::B16X8
+        | types::I16X8
+        | types::B32X4
+        | types::I32X4
+        | types::B64X2
+        | types::I64X2 => true,
         _ => false,
     }
 }
@@ -270,15 +465,7 @@ fn gen_stack_limit(f: &ir::Function, abi: &ABISig, gv: ir::GlobalValue) -> (Reg,
             } => {
                 let base = generate_gv(f, abi, base, insts);
                 let into_reg = writable_spilltmp_reg();
-                let mem = if let Some(offset) =
-                    UImm12Scaled::maybe_from_i64(offset.into(), ir::types::I8)
-                {
-                    MemArg::UnsignedOffset(base, offset)
-                } else {
-                    let offset: i64 = offset.into();
-                    insts.extend(Inst::load_constant(into_reg, offset as u64));
-                    MemArg::RegReg(base, into_reg.to_reg())
-                };
+                let mem = MemArg::RegOffset(base, offset.into(), I64);
                 insts.push(Inst::ULoad64 {
                     rd: into_reg,
                     mem,
@@ -305,10 +492,10 @@ fn get_special_purpose_param_register(
 
 impl AArch64ABIBody {
     /// Create a new body ABI instance.
-    pub fn new(f: &ir::Function, flags: settings::Flags) -> Self {
+    pub fn new(f: &ir::Function, flags: settings::Flags) -> CodegenResult<Self> {
         debug!("AArch64 ABI: func signature {:?}", f.signature);
 
-        let sig = ABISig::from_func_sig(&f.signature);
+        let sig = ABISig::from_func_sig(&f.signature)?;
 
         let call_conv = f.signature.call_conv;
         // Only these calling conventions are supported.
@@ -341,23 +528,24 @@ impl AArch64ABIBody {
                 .map(|reg| (reg, Vec::new()))
                 .or_else(|| f.stack_limit.map(|gv| gen_stack_limit(f, &sig, gv)));
 
-        Self {
+        Ok(Self {
             sig,
             stackslots,
             stackslots_size: stack_offset,
             clobbered: Set::empty(),
             spillslots: None,
-            frame_size: None,
+            total_frame_size: None,
+            ret_area_ptr: None,
             call_conv,
             flags,
             is_leaf: f.is_leaf(),
             stack_limit,
-        }
+        })
     }
 
-    /// Returns the size of a function call frame (including return address and FP) for this
-    /// function's body.
-    fn frame_size(&self) -> i64 {
+    /// Returns the offset from FP to the argument area, i.e., jumping over the saved FP, return
+    /// address, and maybe other standard elements depending on ABI (e.g. Wasm TLS reg).
+    fn fp_to_arg_offset(&self) -> i64 {
         if self.call_conv.extends_baldrdash() {
             let num_words = self.flags.baldrdash_prologue_words() as i64;
             debug_assert!(num_words > 0, "baldrdash must set baldrdash_prologue_words");
@@ -383,8 +571,8 @@ impl AArch64ABIBody {
     /// happening so late in the pipeline (e.g. after register allocation). This
     /// means that we need to do manual register allocation here and also be
     /// careful to not clobber any callee-saved or argument registers. For now
-    /// this routine makes do with the `writable_spilltmp_reg` as one temporary
-    /// register, and a second register of `x16` which is caller-saved. This
+    /// this routine makes do with the `spilltmp_reg` as one temporary
+    /// register, and a second register of `tmp2` which is caller-saved. This
     /// should be fine for us since no spills should happen in this sequence of
     /// instructions, so our register won't get accidentally clobbered.
     ///
@@ -413,9 +601,9 @@ impl AArch64ABIBody {
         // Note though that `stack_limit`'s register may be the same as
         // `scratch`. If our stack size doesn't fit into an immediate this
         // means we need a second scratch register for loading the stack size
-        // into a register. We use `x16` here since it's caller-saved and we're
-        // in the function prologue and nothing else is allocated to it yet.
+        // into a register.
         let scratch = writable_spilltmp_reg();
+        let scratch2 = writable_tmp2_reg();
         let stack_size = u64::from(stack_size);
         if let Some(imm12) = Imm12::maybe_from_u64(stack_size) {
             insts.push(Inst::AluRRImm12 {
@@ -425,16 +613,12 @@ impl AArch64ABIBody {
                 imm12,
             });
         } else {
-            let scratch2 = 16;
-            insts.extend(Inst::load_constant(
-                Writable::from_reg(xreg(scratch2)),
-                stack_size.into(),
-            ));
+            insts.extend(Inst::load_constant(scratch2, stack_size.into()));
             insts.push(Inst::AluRRRExtend {
                 alu_op: ALUOp::Add64,
                 rd: scratch,
                 rn: stack_limit,
-                rm: xreg(scratch2),
+                rm: scratch2.to_reg(),
                 extendop: ExtendOp::UXTX,
             });
         }
@@ -447,7 +631,7 @@ impl AArch64ABIBody {
                 rn: stack_reg(),
                 rm: stack_limit,
             });
-            insts.push(Inst::CondBrLowered {
+            insts.push(Inst::OneWayCondBr {
                 target: BranchTarget::ResolvedOffset(8),
                 // Here `Hs` == "higher or same" when interpreting the two
                 // operands as unsigned integers.
@@ -460,18 +644,24 @@ impl AArch64ABIBody {
     }
 }
 
-fn load_stack_from_fp(fp_offset: i64, into_reg: Writable<Reg>, ty: Type) -> Inst {
-    let mem = MemArg::FPOffset(fp_offset);
+fn load_stack(mem: MemArg, into_reg: Writable<Reg>, ty: Type) -> Inst {
     match ty {
-        types::B1
-        | types::B8
-        | types::I8
-        | types::B16
-        | types::I16
-        | types::B32
-        | types::I32
-        | types::B64
-        | types::I64 => Inst::ULoad64 {
+        types::B1 | types::B8 | types::I8 => Inst::ULoad8 {
+            rd: into_reg,
+            mem,
+            srcloc: None,
+        },
+        types::B16 | types::I16 => Inst::ULoad16 {
+            rd: into_reg,
+            mem,
+            srcloc: None,
+        },
+        types::B32 | types::I32 => Inst::ULoad32 {
+            rd: into_reg,
+            mem,
+            srcloc: None,
+        },
+        types::B64 | types::I64 => Inst::ULoad64 {
             rd: into_reg,
             mem,
             srcloc: None,
@@ -486,25 +676,28 @@ fn load_stack_from_fp(fp_offset: i64, into_reg: Writable<Reg>, ty: Type) -> Inst
             mem,
             srcloc: None,
         },
-        _ => unimplemented!("load_stack_from_fp({})", ty),
+        _ => unimplemented!("load_stack({})", ty),
     }
 }
 
 fn store_stack(mem: MemArg, from_reg: Reg, ty: Type) -> Inst {
-    debug_assert!(match &mem {
-        MemArg::SPOffset(off) => SImm9::maybe_from_i64(*off).is_some(),
-        _ => true,
-    });
     match ty {
-        types::B1
-        | types::B8
-        | types::I8
-        | types::B16
-        | types::I16
-        | types::B32
-        | types::I32
-        | types::B64
-        | types::I64 => Inst::Store64 {
+        types::B1 | types::B8 | types::I8 => Inst::Store8 {
+            rd: from_reg,
+            mem,
+            srcloc: None,
+        },
+        types::B16 | types::I16 => Inst::Store16 {
+            rd: from_reg,
+            mem,
+            srcloc: None,
+        },
+        types::B32 | types::I32 => Inst::Store32 {
+            rd: from_reg,
+            mem,
+            srcloc: None,
+        },
+        types::B64 | types::I64 => Inst::Store64 {
             rd: from_reg,
             mem,
             srcloc: None,
@@ -520,50 +713,6 @@ fn store_stack(mem: MemArg, from_reg: Reg, ty: Type) -> Inst {
             srcloc: None,
         },
         _ => unimplemented!("store_stack({})", ty),
-    }
-}
-
-fn store_stack_fp(fp_offset: i64, from_reg: Reg, ty: Type) -> Inst {
-    store_stack(MemArg::FPOffset(fp_offset), from_reg, ty)
-}
-
-fn store_stack_sp<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    sp_offset: i64,
-    from_reg: Reg,
-    ty: Type,
-) -> Vec<Inst> {
-    if SImm9::maybe_from_i64(sp_offset).is_some() {
-        vec![store_stack(MemArg::SPOffset(sp_offset), from_reg, ty)]
-    } else {
-        // mem_finalize will try to generate an add, but in an addition, x31 is the zero register,
-        // not sp! So we have to synthesize the full add here.
-        let tmp1 = ctx.tmp(RegClass::I64, I64);
-        let tmp2 = ctx.tmp(RegClass::I64, I64);
-        let mut result = Vec::new();
-        // tmp1 := sp
-        result.push(Inst::Mov {
-            rd: tmp1,
-            rm: stack_reg(),
-        });
-        // tmp2 := offset
-        for inst in Inst::load_constant(tmp2, sp_offset as u64) {
-            result.push(inst);
-        }
-        // tmp1 := add tmp1, tmp2
-        result.push(Inst::AluRRR {
-            alu_op: ALUOp::Add64,
-            rd: tmp1,
-            rn: tmp1.to_reg(),
-            rm: tmp2.to_reg(),
-        });
-        // Actual store.
-        result.push(store_stack(
-            MemArg::Unscaled(tmp1.to_reg(), SImm9::maybe_from_i64(0).unwrap()),
-            from_reg,
-            ty,
-        ));
-        result
     }
 }
 
@@ -647,25 +796,36 @@ fn is_caller_save(call_conv: isa::CallConv, r: RealReg) -> bool {
     }
 }
 
-fn get_caller_saves_set(call_conv: isa::CallConv) -> Set<Writable<Reg>> {
-    let mut set = Set::empty();
+fn get_caller_saves(call_conv: isa::CallConv) -> Vec<Writable<Reg>> {
+    let mut caller_saved = Vec::new();
     for i in 0..29 {
         let x = writable_xreg(i);
         if is_caller_save(call_conv, x.to_reg().to_real_reg()) {
-            set.insert(x);
+            caller_saved.push(x);
         }
     }
     for i in 0..32 {
         let v = writable_vreg(i);
         if is_caller_save(call_conv, v.to_reg().to_real_reg()) {
-            set.insert(v);
+            caller_saved.push(v);
         }
     }
-    set
+    caller_saved
 }
 
 impl ABIBody for AArch64ABIBody {
     type I = Inst;
+
+    fn temp_needed(&self) -> bool {
+        self.sig.stack_ret_arg.is_some()
+    }
+
+    fn init(&mut self, maybe_tmp: Option<Writable<Reg>>) {
+        if self.sig.stack_ret_arg.is_some() {
+            assert!(maybe_tmp.is_some());
+            self.ret_area_ptr = maybe_tmp;
+        }
+    }
 
     fn flags(&self) -> &settings::Flags {
         &self.flags
@@ -706,7 +866,26 @@ impl ABIBody for AArch64ABIBody {
     fn gen_copy_arg_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Inst {
         match &self.sig.args[idx] {
             &ABIArg::Reg(r, ty) => Inst::gen_move(into_reg, r.to_reg(), ty),
-            &ABIArg::Stack(off, ty) => load_stack_from_fp(off + self.frame_size(), into_reg, ty),
+            &ABIArg::Stack(off, ty) => load_stack(
+                MemArg::FPOffset(self.fp_to_arg_offset() + off, ty),
+                into_reg,
+                ty,
+            ),
+        }
+    }
+
+    fn gen_retval_area_setup(&self) -> Option<Inst> {
+        if let Some(i) = self.sig.stack_ret_arg {
+            let inst = self.gen_copy_arg_to_reg(i, self.ret_area_ptr.unwrap());
+            trace!(
+                "gen_retval_area_setup: inst {:?}; ptr reg is {:?}",
+                inst,
+                self.ret_area_ptr.unwrap().to_reg()
+            );
+            Some(inst)
+        } else {
+            trace!("gen_retval_area_setup: not needed");
+            None
         }
     }
 
@@ -719,7 +898,7 @@ impl ABIBody for AArch64ABIBody {
         let mut ret = Vec::new();
         match &self.sig.rets[idx] {
             &ABIArg::Reg(r, ty) => {
-                let from_bits = aarch64::lower::ty_bits(ty) as u8;
+                let from_bits = ty_bits(ty) as u8;
                 let dest_reg = Writable::from_reg(r.to_reg());
                 match (ext, from_bits) {
                     (ArgumentExtension::Uext, n) if n < 64 => {
@@ -744,7 +923,7 @@ impl ABIBody for AArch64ABIBody {
                 };
             }
             &ABIArg::Stack(off, ty) => {
-                let from_bits = aarch64::lower::ty_bits(ty) as u8;
+                let from_bits = ty_bits(ty) as u8;
                 // Trash the from_reg; it should be its last use.
                 match (ext, from_bits) {
                     (ArgumentExtension::Uext, n) if n < 64 => {
@@ -767,11 +946,8 @@ impl ABIBody for AArch64ABIBody {
                     }
                     _ => {}
                 };
-                ret.push(store_stack_fp(
-                    off + self.frame_size(),
-                    from_reg.to_reg(),
-                    ty,
-                ))
+                let mem = MemArg::RegOffset(self.ret_area_ptr.unwrap().to_reg(), off, ty);
+                ret.push(store_stack(mem, from_reg.to_reg(), ty))
             }
         }
         ret
@@ -793,6 +969,7 @@ impl ABIBody for AArch64ABIBody {
         self.clobbered = clobbered;
     }
 
+    /// Load from a stackslot.
     fn load_stackslot(
         &self,
         slot: StackSlot,
@@ -800,47 +977,54 @@ impl ABIBody for AArch64ABIBody {
         ty: Type,
         into_reg: Writable<Reg>,
     ) -> Inst {
-        // Offset from beginning of stackslot area, which is at FP - stackslots_size.
+        // Offset from beginning of stackslot area, which is at nominal-SP (see
+        // [MemArg::NominalSPOffset] for more details on nominal-SP tracking).
         let stack_off = self.stackslots[slot.as_u32() as usize] as i64;
-        let fp_off: i64 = -(self.stackslots_size as i64) + stack_off + (offset as i64);
-        load_stack_from_fp(fp_off, into_reg, ty)
+        let sp_off: i64 = stack_off + (offset as i64);
+        trace!("load_stackslot: slot {} -> sp_off {}", slot, sp_off);
+        load_stack(MemArg::NominalSPOffset(sp_off, ty), into_reg, ty)
     }
 
+    /// Store to a stackslot.
     fn store_stackslot(&self, slot: StackSlot, offset: u32, ty: Type, from_reg: Reg) -> Inst {
-        // Offset from beginning of stackslot area, which is at FP - stackslots_size.
+        // Offset from beginning of stackslot area, which is at nominal-SP (see
+        // [MemArg::NominalSPOffset] for more details on nominal-SP tracking).
         let stack_off = self.stackslots[slot.as_u32() as usize] as i64;
-        let fp_off: i64 = -(self.stackslots_size as i64) + stack_off + (offset as i64);
-        store_stack_fp(fp_off, from_reg, ty)
+        let sp_off: i64 = stack_off + (offset as i64);
+        trace!("store_stackslot: slot {} -> sp_off {}", slot, sp_off);
+        store_stack(MemArg::NominalSPOffset(sp_off, ty), from_reg, ty)
     }
 
+    /// Produce an instruction that computes a stackslot address.
     fn stackslot_addr(&self, slot: StackSlot, offset: u32, into_reg: Writable<Reg>) -> Inst {
-        // Offset from beginning of stackslot area, which is at FP - stackslots_size.
+        // Offset from beginning of stackslot area, which is at nominal-SP (see
+        // [MemArg::NominalSPOffset] for more details on nominal-SP tracking).
         let stack_off = self.stackslots[slot.as_u32() as usize] as i64;
-        let fp_off: i64 = -(self.stackslots_size as i64) + stack_off + (offset as i64);
+        let sp_off: i64 = stack_off + (offset as i64);
         Inst::LoadAddr {
             rd: into_reg,
-            mem: MemArg::FPOffset(fp_off),
+            mem: MemArg::NominalSPOffset(sp_off, I8),
         }
     }
 
-    // Load from a spillslot.
+    /// Load from a spillslot.
     fn load_spillslot(&self, slot: SpillSlot, ty: Type, into_reg: Writable<Reg>) -> Inst {
-        // Note that when spills/fills are generated, we don't yet know how many
-        // spillslots there will be, so we allocate *downward* from the beginning
-        // of the stackslot area. Hence: FP - stackslot_size - 8*spillslot -
-        // sizeof(ty).
+        // Offset from beginning of spillslot area, which is at nominal-SP + stackslots_size.
         let islot = slot.get() as i64;
-        let ty_size = self.get_spillslot_size(into_reg.to_reg().get_class(), ty) * 8;
-        let fp_off: i64 = -(self.stackslots_size as i64) - (8 * islot) - ty_size as i64;
-        load_stack_from_fp(fp_off, into_reg, ty)
+        let spill_off = islot * 8;
+        let sp_off = self.stackslots_size as i64 + spill_off;
+        trace!("load_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
+        load_stack(MemArg::NominalSPOffset(sp_off, ty), into_reg, ty)
     }
 
-    // Store to a spillslot.
+    /// Store to a spillslot.
     fn store_spillslot(&self, slot: SpillSlot, ty: Type, from_reg: Reg) -> Inst {
+        // Offset from beginning of spillslot area, which is at nominal-SP + stackslots_size.
         let islot = slot.get() as i64;
-        let ty_size = self.get_spillslot_size(from_reg.get_class(), ty) * 8;
-        let fp_off: i64 = -(self.stackslots_size as i64) - (8 * islot) - ty_size as i64;
-        store_stack_fp(fp_off, from_reg, ty)
+        let spill_off = islot * 8;
+        let sp_off = self.stackslots_size as i64 + spill_off;
+        trace!("store_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
+        store_stack(MemArg::NominalSPOffset(sp_off, ty), from_reg, ty)
     }
 
     fn gen_prologue(&mut self) -> Vec<Inst> {
@@ -916,9 +1100,18 @@ impl ABIBody for AArch64ABIBody {
             }
         }
 
+        // N.B.: "nominal SP", which we use to refer to stackslots
+        // and spillslots, is *here* (the value of SP at this program point).
+        // If we push any clobbers below, we emit a virtual-SP adjustment
+        // meta-instruction so that the nominal-SP references behave as if SP
+        // were still at this point. See documentation for
+        // [crate::isa::aarch64::abi](this module) for more details on
+        // stackframe layout and nominal-SP maintenance.
+
         // Save clobbered registers.
         let (clobbered_int, clobbered_vec) =
             get_callee_saves(self.call_conv, self.clobbered.to_vec());
+        let mut clobber_size = 0;
         for reg_pair in clobbered_int.chunks(2) {
             let (r1, r2) = if reg_pair.len() == 2 {
                 // .to_reg().to_reg(): Writable<RealReg> --> RealReg --> Reg
@@ -939,6 +1132,7 @@ impl ABIBody for AArch64ABIBody {
                     SImm7Scaled::maybe_from_i64(-16, types::I64).unwrap(),
                 ),
             });
+            clobber_size += 16;
         }
         let vec_save_bytes = clobbered_vec.len() * 16;
         if vec_save_bytes != 0 {
@@ -948,6 +1142,7 @@ impl ABIBody for AArch64ABIBody {
                 rn: stack_reg(),
                 imm12: Imm12::maybe_from_u64(vec_save_bytes as u64).unwrap(),
             });
+            clobber_size += vec_save_bytes;
         }
         for (i, reg) in clobbered_vec.iter().enumerate() {
             insts.push(Inst::FpuStore128 {
@@ -957,7 +1152,13 @@ impl ABIBody for AArch64ABIBody {
             });
         }
 
-        self.frame_size = Some(total_stacksize);
+        if clobber_size > 0 {
+            insts.push(Inst::VirtualSPOffsetAdj {
+                offset: clobber_size as i64,
+            });
+        }
+
+        self.total_frame_size = Some(total_stacksize);
         insts
     }
 
@@ -1009,6 +1210,12 @@ impl ABIBody for AArch64ABIBody {
             });
         }
 
+        // N.B.: we do *not* emit a nominal-SP adjustment here, because (i) there will be no
+        // references to nominal-SP offsets before the return below, and (ii) the instruction
+        // emission tracks running SP offset linearly (in straight-line order), not according to
+        // the CFG, so early returns in the middle of function bodies would cause an incorrect
+        // offset for the rest of the body.
+
         if !self.call_conv.extends_baldrdash() {
             // The MOV (alias of ORR) interprets x31 as XZR, so use an ADD here.
             // MOV to SP is an alias of ADD.
@@ -1037,7 +1244,7 @@ impl ABIBody for AArch64ABIBody {
     }
 
     fn frame_size(&self) -> u32 {
-        self.frame_size
+        self.total_frame_size
             .expect("frame size not computed before prologue generation")
     }
 
@@ -1061,35 +1268,35 @@ impl ABIBody for AArch64ABIBody {
 }
 
 enum CallDest {
-    ExtName(ir::ExternalName),
+    ExtName(ir::ExternalName, RelocDistance),
     Reg(Reg),
 }
 
 /// AArch64 ABI object for a function call.
 pub struct AArch64ABICall {
     sig: ABISig,
-    uses: Set<Reg>,
-    defs: Set<Writable<Reg>>,
+    uses: Vec<Reg>,
+    defs: Vec<Writable<Reg>>,
     dest: CallDest,
     loc: ir::SourceLoc,
     opcode: ir::Opcode,
 }
 
-fn abisig_to_uses_and_defs(sig: &ABISig) -> (Set<Reg>, Set<Writable<Reg>>) {
+fn abisig_to_uses_and_defs(sig: &ABISig) -> (Vec<Reg>, Vec<Writable<Reg>>) {
     // Compute uses: all arg regs.
-    let mut uses = Set::empty();
+    let mut uses = Vec::new();
     for arg in &sig.args {
         match arg {
-            &ABIArg::Reg(reg, _) => uses.insert(reg.to_reg()),
+            &ABIArg::Reg(reg, _) => uses.push(reg.to_reg()),
             _ => {}
         }
     }
 
     // Compute defs: all retval regs, and all caller-save (clobbered) regs.
-    let mut defs = get_caller_saves_set(sig.call_conv);
+    let mut defs = get_caller_saves(sig.call_conv);
     for ret in &sig.rets {
         match ret {
-            &ABIArg::Reg(reg, _) => defs.insert(Writable::from_reg(reg.to_reg())),
+            &ABIArg::Reg(reg, _) => defs.push(Writable::from_reg(reg.to_reg())),
             _ => {}
         }
     }
@@ -1102,18 +1309,19 @@ impl AArch64ABICall {
     pub fn from_func(
         sig: &ir::Signature,
         extname: &ir::ExternalName,
+        dist: RelocDistance,
         loc: ir::SourceLoc,
-    ) -> AArch64ABICall {
-        let sig = ABISig::from_func_sig(sig);
+    ) -> CodegenResult<AArch64ABICall> {
+        let sig = ABISig::from_func_sig(sig)?;
         let (uses, defs) = abisig_to_uses_and_defs(&sig);
-        AArch64ABICall {
+        Ok(AArch64ABICall {
             sig,
             uses,
             defs,
-            dest: CallDest::ExtName(extname.clone()),
+            dest: CallDest::ExtName(extname.clone(), dist),
             loc,
             opcode: ir::Opcode::Call,
-        }
+        })
     }
 
     /// Create a callsite ABI object for a call to a function pointer with the
@@ -1123,46 +1331,54 @@ impl AArch64ABICall {
         ptr: Reg,
         loc: ir::SourceLoc,
         opcode: ir::Opcode,
-    ) -> AArch64ABICall {
-        let sig = ABISig::from_func_sig(sig);
+    ) -> CodegenResult<AArch64ABICall> {
+        let sig = ABISig::from_func_sig(sig)?;
         let (uses, defs) = abisig_to_uses_and_defs(&sig);
-        AArch64ABICall {
+        Ok(AArch64ABICall {
             sig,
             uses,
             defs,
             dest: CallDest::Reg(ptr),
             loc,
             opcode,
-        }
+        })
     }
 }
 
-fn adjust_stack(amt: u64, is_sub: bool) -> Vec<Inst> {
-    if amt > 0 {
-        let alu_op = if is_sub { ALUOp::Sub64 } else { ALUOp::Add64 };
-        if let Some(imm12) = Imm12::maybe_from_u64(amt) {
-            vec![Inst::AluRRImm12 {
-                alu_op,
-                rd: writable_stack_reg(),
-                rn: stack_reg(),
-                imm12,
-            }]
-        } else {
-            let const_load = Inst::LoadConst64 {
-                rd: writable_spilltmp_reg(),
-                const_data: amt,
-            };
-            let adj = Inst::AluRRRExtend {
-                alu_op,
-                rd: writable_stack_reg(),
-                rn: stack_reg(),
-                rm: spilltmp_reg(),
-                extendop: ExtendOp::UXTX,
-            };
-            vec![const_load, adj]
-        }
+fn adjust_stack<C: LowerCtx<I = Inst>>(ctx: &mut C, amount: u64, is_sub: bool) {
+    if amount == 0 {
+        return;
+    }
+
+    let sp_adjustment = if is_sub {
+        amount as i64
     } else {
-        vec![]
+        -(amount as i64)
+    };
+    ctx.emit(Inst::VirtualSPOffsetAdj {
+        offset: sp_adjustment,
+    });
+
+    let alu_op = if is_sub { ALUOp::Sub64 } else { ALUOp::Add64 };
+    if let Some(imm12) = Imm12::maybe_from_u64(amount) {
+        ctx.emit(Inst::AluRRImm12 {
+            alu_op,
+            rd: writable_stack_reg(),
+            rn: stack_reg(),
+            imm12,
+        })
+    } else {
+        ctx.emit(Inst::LoadConst64 {
+            rd: writable_spilltmp_reg(),
+            const_data: amount,
+        });
+        ctx.emit(Inst::AluRRRExtend {
+            alu_op,
+            rd: writable_stack_reg(),
+            rn: stack_reg(),
+            rm: spilltmp_reg(),
+            extendop: ExtendOp::UXTX,
+        });
     }
 }
 
@@ -1170,57 +1386,110 @@ impl ABICall for AArch64ABICall {
     type I = Inst;
 
     fn num_args(&self) -> usize {
-        self.sig.args.len()
+        if self.sig.stack_ret_arg.is_some() {
+            self.sig.args.len() - 1
+        } else {
+            self.sig.args.len()
+        }
     }
 
-    fn gen_stack_pre_adjust(&self) -> Vec<Inst> {
-        adjust_stack(self.sig.stack_arg_space as u64, /* is_sub = */ true)
+    fn emit_stack_pre_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
+        let off = self.sig.stack_arg_space + self.sig.stack_ret_space;
+        adjust_stack(ctx, off as u64, /* is_sub = */ true)
     }
 
-    fn gen_stack_post_adjust(&self) -> Vec<Inst> {
-        adjust_stack(self.sig.stack_arg_space as u64, /* is_sub = */ false)
+    fn emit_stack_post_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
+        let off = self.sig.stack_arg_space + self.sig.stack_ret_space;
+        adjust_stack(ctx, off as u64, /* is_sub = */ false)
     }
 
-    fn gen_copy_reg_to_arg<C: LowerCtx<I = Self::I>>(
+    fn emit_copy_reg_to_arg<C: LowerCtx<I = Self::I>>(
         &self,
         ctx: &mut C,
         idx: usize,
         from_reg: Reg,
-    ) -> Vec<Inst> {
+    ) {
         match &self.sig.args[idx] {
-            &ABIArg::Reg(reg, ty) => vec![Inst::gen_move(
+            &ABIArg::Reg(reg, ty) => ctx.emit(Inst::gen_move(
                 Writable::from_reg(reg.to_reg()),
                 from_reg,
                 ty,
-            )],
-            &ABIArg::Stack(off, ty) => store_stack_sp(ctx, off, from_reg, ty),
+            )),
+            &ABIArg::Stack(off, ty) => {
+                ctx.emit(store_stack(MemArg::SPOffset(off, ty), from_reg, ty))
+            }
         }
     }
 
-    fn gen_copy_retval_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Inst {
+    fn emit_copy_retval_to_reg<C: LowerCtx<I = Self::I>>(
+        &self,
+        ctx: &mut C,
+        idx: usize,
+        into_reg: Writable<Reg>,
+    ) {
         match &self.sig.rets[idx] {
-            &ABIArg::Reg(reg, ty) => Inst::gen_move(into_reg, reg.to_reg(), ty),
-            _ => unimplemented!(),
+            &ABIArg::Reg(reg, ty) => ctx.emit(Inst::gen_move(into_reg, reg.to_reg(), ty)),
+            &ABIArg::Stack(off, ty) => {
+                let ret_area_base = self.sig.stack_arg_space;
+                ctx.emit(load_stack(
+                    MemArg::SPOffset(off + ret_area_base, ty),
+                    into_reg,
+                    ty,
+                ));
+            }
         }
     }
 
-    fn gen_call(&self) -> Vec<Inst> {
-        let (uses, defs) = (self.uses.clone(), self.defs.clone());
+    fn emit_call<C: LowerCtx<I = Self::I>>(&mut self, ctx: &mut C) {
+        let (uses, defs) = (
+            mem::replace(&mut self.uses, Default::default()),
+            mem::replace(&mut self.defs, Default::default()),
+        );
+        if let Some(i) = self.sig.stack_ret_arg {
+            let rd = ctx.alloc_tmp(RegClass::I64, I64);
+            let ret_area_base = self.sig.stack_arg_space;
+            ctx.emit(Inst::LoadAddr {
+                rd,
+                mem: MemArg::SPOffset(ret_area_base, I8),
+            });
+            self.emit_copy_reg_to_arg(ctx, i, rd.to_reg());
+        }
         match &self.dest {
-            &CallDest::ExtName(ref name) => vec![Inst::Call {
-                dest: name.clone(),
-                uses,
-                defs,
-                loc: self.loc,
-                opcode: self.opcode,
-            }],
-            &CallDest::Reg(reg) => vec![Inst::CallInd {
-                rn: reg,
-                uses,
-                defs,
-                loc: self.loc,
-                opcode: self.opcode,
-            }],
+            &CallDest::ExtName(ref name, RelocDistance::Near) => ctx.emit(Inst::Call {
+                info: Box::new(CallInfo {
+                    dest: name.clone(),
+                    uses,
+                    defs,
+                    loc: self.loc,
+                    opcode: self.opcode,
+                }),
+            }),
+            &CallDest::ExtName(ref name, RelocDistance::Far) => {
+                ctx.emit(Inst::LoadExtName {
+                    rd: writable_spilltmp_reg(),
+                    name: Box::new(name.clone()),
+                    offset: 0,
+                    srcloc: self.loc,
+                });
+                ctx.emit(Inst::CallInd {
+                    info: Box::new(CallIndInfo {
+                        rn: spilltmp_reg(),
+                        uses,
+                        defs,
+                        loc: self.loc,
+                        opcode: self.opcode,
+                    }),
+                });
+            }
+            &CallDest::Reg(reg) => ctx.emit(Inst::CallInd {
+                info: Box::new(CallIndInfo {
+                    rn: reg,
+                    uses,
+                    defs,
+                    loc: self.loc,
+                    opcode: self.opcode,
+                }),
+            }),
         }
     }
 }

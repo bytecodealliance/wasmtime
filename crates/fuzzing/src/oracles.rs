@@ -56,7 +56,7 @@ pub fn instantiate_with_config(wasm: &[u8], config: Config) {
     let store = Store::new(&engine);
 
     log_wasm(wasm);
-    let module = match Module::new(&store, wasm) {
+    let module = match Module::new(&engine, wasm) {
         Ok(module) => module,
         Err(_) => return,
     };
@@ -65,7 +65,7 @@ pub fn instantiate_with_config(wasm: &[u8], config: Config) {
         Ok(imps) => imps,
         Err(_) => {
             // There are some value types that we can't synthesize a
-            // dummy value for (e.g. anyrefs) and for modules that
+            // dummy value for (e.g. externrefs) and for modules that
             // import things of these types we skip instantiation.
             return;
         }
@@ -75,7 +75,7 @@ pub fn instantiate_with_config(wasm: &[u8], config: Config) {
     // aren't caught during validation or compilation. For example, an imported
     // table might not have room for an element segment that we want to
     // initialize into it.
-    let _result = Instance::new(&module, &imports);
+    let _result = Instance::new(&store, &module, &imports);
 }
 
 /// Compile the Wasm buffer, and implicitly fail if we have an unexpected
@@ -88,9 +88,8 @@ pub fn compile(wasm: &[u8], strategy: Strategy) {
     crate::init_fuzzing();
 
     let engine = Engine::new(&crate::fuzz_default_config(strategy).unwrap());
-    let store = Store::new(&engine);
     log_wasm(wasm);
-    let _ = Module::new(&store, wasm);
+    let _ = Module::new(&engine, wasm);
 }
 
 /// Instantiate the given Wasm module with each `Config` and call all of its
@@ -128,7 +127,7 @@ pub fn differential_execution(
         let engine = Engine::new(config);
         let store = Store::new(&engine);
 
-        let module = match Module::new(&store, &ttf.wasm) {
+        let module = match Module::new(&engine, &ttf.wasm) {
             Ok(module) => module,
             // The module might rely on some feature that our config didn't
             // enable or something like that.
@@ -147,7 +146,7 @@ pub fn differential_execution(
             Ok(imps) => imps,
             Err(e) => {
                 // There are some value types that we can't synthesize a
-                // dummy value for (e.g. anyrefs) and for modules that
+                // dummy value for (e.g. externrefs) and for modules that
                 // import things of these types we skip instantiation.
                 eprintln!("Warning: failed to synthesize dummy imports: {}", e);
                 continue;
@@ -158,7 +157,7 @@ pub fn differential_execution(
         // aren't caught during validation or compilation. For example, an imported
         // table might not have room for an element segment that we want to
         // initialize into it.
-        let instance = match Instance::new(&module, &imports) {
+        let instance = match Instance::new(&store, &module, &imports) {
             Ok(instance) => instance,
             Err(e) => {
                 eprintln!(
@@ -244,9 +243,8 @@ pub fn differential_execution(
                                 fail()
                             }
                         }
-                        (Val::AnyRef(_), Val::AnyRef(_)) | (Val::FuncRef(_), Val::FuncRef(_)) => {
-                            continue
-                        }
+                        (Val::ExternRef(_), Val::ExternRef(_))
+                        | (Val::FuncRef(_), Val::FuncRef(_)) => continue,
                         _ => fail(),
                     }
                 }
@@ -275,9 +273,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
             ApiCall::ConfigNew => {
                 log::trace!("creating config");
                 assert!(config.is_none());
-                let mut cfg = Config::new();
-                cfg.cranelift_debug_verifier(true);
-                config = Some(cfg);
+                config = Some(crate::fuzz_default_config(wasmtime::Strategy::Cranelift).unwrap());
             }
 
             ApiCall::ConfigDebugInfo(b) => {
@@ -305,7 +301,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
             ApiCall::ModuleNew { id, wasm } => {
                 log::debug!("creating module: {}", id);
                 log_wasm(&wasm.wasm);
-                let module = match Module::new(store.as_ref().unwrap(), &wasm.wasm) {
+                let module = match Module::new(engine.as_ref().unwrap(), &wasm.wasm) {
                     Ok(m) => m,
                     Err(_) => continue,
                 };
@@ -325,11 +321,13 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                     None => continue,
                 };
 
-                let imports = match dummy_imports(store.as_ref().unwrap(), module.imports()) {
+                let store = store.as_ref().unwrap();
+
+                let imports = match dummy_imports(store, module.imports()) {
                     Ok(imps) => imps,
                     Err(_) => {
                         // There are some value types that we can't synthesize a
-                        // dummy value for (e.g. anyrefs) and for modules that
+                        // dummy value for (e.g. externrefs) and for modules that
                         // import things of these types we skip instantiation.
                         continue;
                     }
@@ -339,7 +337,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 // aren't caught during validation or compilation. For example, an imported
                 // table might not have room for an element segment that we want to
                 // initialize into it.
-                if let Ok(instance) = Instance::new(&module, &imports) {
+                if let Ok(instance) = Instance::new(store, &module, &imports) {
                     instances.insert(id, instance);
                 }
             }

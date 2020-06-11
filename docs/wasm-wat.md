@@ -37,7 +37,8 @@ You can also see how this works in the Rust API like so:
 use wasmtime::*;
 
 # fn main() -> anyhow::Result<()> {
-let store = Store::default();
+let engine = Engine::default();
+let store = Store::new(&engine);
 let wat = r#"
   (module
     (func (export "add") (param i32 i32) (result i32)
@@ -45,8 +46,8 @@ let wat = r#"
       local.get 1
       i32.add))
 "#;
-let module = Module::new(&store, wat)?;
-let instance = Instance::new(&module, &[])?;
+let module = Module::new(&engine, wat)?;
+let instance = Instance::new(&store, &module, &[])?;
 let add = instance.get_func("add").unwrap();
 let add = add.get2::<i32, i32, i32>()?;
 println!("1 + 2 = {}", add(1, 2)?);

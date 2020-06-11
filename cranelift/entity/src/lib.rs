@@ -85,6 +85,10 @@ macro_rules! entity_impl {
             fn reserved_value() -> $entity {
                 $entity($crate::__core::u32::MAX)
             }
+
+            fn is_reserved_value(&self) -> bool {
+                self.0 == $crate::__core::u32::MAX
+            }
         }
 
         impl $entity {

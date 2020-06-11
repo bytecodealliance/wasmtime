@@ -63,19 +63,19 @@ fn mutability() -> anyhow::Result<()> {
 fn use_after_drop() -> anyhow::Result<()> {
     let store = Store::default();
     let module = Module::new(
-        &store,
+        store.engine(),
         r#"
             (module
                 (global (export "foo") (mut i32) (i32.const 100)))
         "#,
     )?;
-    let instance = Instance::new(&module, &[])?;
+    let instance = Instance::new(&store, &module, &[])?;
     let g = instance.get_global("foo").unwrap();
     assert_eq!(g.get().i32(), Some(100));
     g.set(101.into())?;
     drop(instance);
     assert_eq!(g.get().i32(), Some(101));
-    Instance::new(&module, &[])?;
+    Instance::new(&store, &module, &[])?;
     assert_eq!(g.get().i32(), Some(101));
     drop(module);
     assert_eq!(g.get().i32(), Some(101));

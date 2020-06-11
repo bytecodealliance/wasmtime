@@ -3,54 +3,99 @@
 //! machine code, except for register allocation.
 
 use crate::entity::SecondaryMap;
-use crate::inst_predicates::has_side_effect;
+use crate::fx::{FxHashMap, FxHashSet};
+use crate::inst_predicates::{has_side_effect_or_load, is_constant_64bit};
 use crate::ir::instructions::BranchInfo;
+use crate::ir::types::I64;
 use crate::ir::{
-    ArgumentExtension, Block, ExternalName, Function, GlobalValueData, Inst, InstructionData,
-    MemFlags, Opcode, Signature, SourceLoc, Type, Value, ValueDef,
+    ArgumentExtension, Block, Constant, ConstantData, ExternalName, Function, GlobalValueData,
+    Inst, InstructionData, MemFlags, Opcode, Signature, SourceLoc, Type, Value, ValueDef,
 };
-use crate::machinst::{ABIBody, BlockIndex, VCode, VCodeBuilder, VCodeInst};
-use crate::{num_uses::NumUses, CodegenResult};
+use crate::machinst::{
+    ABIBody, BlockIndex, BlockLoweringOrder, LoweredBlock, MachLabel, VCode, VCodeBuilder,
+    VCodeInst,
+};
+use crate::CodegenResult;
 
-use regalloc::{Reg, RegClass, Set, VirtualReg, Writable};
+use regalloc::{Reg, RegClass, VirtualReg, Writable};
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use log::debug;
 use smallvec::SmallVec;
-use std::collections::VecDeque;
 
-/// A context that machine-specific lowering code can use to emit lowered instructions. This is the
-/// view of the machine-independent per-function lowering context that is seen by the machine
-/// backend.
+/// An "instruction color" partitions CLIF instructions by side-effecting ops.
+/// All instructions with the same "color" are guaranteed not to be separated by
+/// any side-effecting op (for this purpose, loads are also considered
+/// side-effecting, to avoid subtle questions w.r.t. the memory model), and
+/// furthermore, it is guaranteed that for any two instructions A and B such
+/// that color(A) == color(B), either A dominates B and B postdominates A, or
+/// vice-versa. (For now, in practice, only ops in the same basic block can ever
+/// have the same color, trivially providing the second condition.) Intuitively,
+/// this means that the ops of the same color must always execute "together", as
+/// part of one atomic contiguous section of the dynamic execution trace, and
+/// they can be freely permuted (modulo true dataflow dependencies) without
+/// affecting program behavior.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct InstColor(u32);
+impl InstColor {
+    fn new(n: u32) -> InstColor {
+        InstColor(n)
+    }
+
+    /// Get an arbitrary index representing this color. The index is unique
+    /// *within a single function compilation*, but indices may be reused across
+    /// functions.
+    pub fn get(self) -> u32 {
+        self.0
+    }
+}
+
+/// A context that machine-specific lowering code can use to emit lowered
+/// instructions. This is the view of the machine-independent per-function
+/// lowering context that is seen by the machine backend.
 pub trait LowerCtx {
     /// The instruction type for which this lowering framework is instantiated.
-    type I;
+    type I: VCodeInst;
+
+    // Function-level queries:
+
+    /// Get the `ABIBody`.
+    fn abi(&mut self) -> &dyn ABIBody<I = Self::I>;
+    /// Get the (virtual) register that receives the return value. A return
+    /// instruction should lower into a sequence that fills this register. (Why
+    /// not allow the backend to specify its own result register for the return?
+    /// Because there may be multiple return points.)
+    fn retval(&self, idx: usize) -> Writable<Reg>;
+
+    // General instruction queries:
 
     /// Get the instdata for a given IR instruction.
     fn data(&self, ir_inst: Inst) -> &InstructionData;
     /// Get the controlling type for a polymorphic IR instruction.
     fn ty(&self, ir_inst: Inst) -> Type;
-    /// Get the `ABIBody`.
-    fn abi(&mut self) -> &dyn ABIBody<I = Self::I>;
-    /// Emit a machine instruction.
-    fn emit(&mut self, mach_inst: Self::I);
-    /// Indicate that an IR instruction has been merged, and so one of its
-    /// uses is gone (replaced by uses of the instruction's inputs). This
-    /// helps the lowering algorithm to perform on-the-fly DCE, skipping over
-    /// unused instructions (such as immediates incorporated directly).
-    fn merged(&mut self, from_inst: Inst);
-    /// Get the producing instruction, if any, and output number, for the `idx`th input to the
-    /// given IR instruction
-    fn input_inst(&self, ir_inst: Inst, idx: usize) -> Option<(Inst, usize)>;
-    /// Map a Value to its associated writable (probably virtual) Reg.
-    fn value_to_writable_reg(&self, val: Value) -> Writable<Reg>;
-    /// Map a Value to its associated (probably virtual) Reg.
-    fn value_to_reg(&self, val: Value) -> Reg;
-    /// Get the `idx`th input to the given IR instruction as a virtual register.
-    fn input(&self, ir_inst: Inst, idx: usize) -> Reg;
-    /// Get the `idx`th output of the given IR instruction as a virtual register.
-    fn output(&self, ir_inst: Inst, idx: usize) -> Writable<Reg>;
+    /// Get the target for a call instruction, as an `ExternalName`. Returns a tuple
+    /// providing this name and the "relocation distance", i.e., whether the backend
+    /// can assume the target will be "nearby" (within some small offset) or an
+    /// arbitrary address. (This comes from the `colocated` bit in the CLIF.)
+    fn call_target<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance)>;
+    /// Get the signature for a call or call-indirect instruction.
+    fn call_sig<'b>(&'b self, ir_inst: Inst) -> Option<&'b Signature>;
+    /// Get the symbol name, relocation distance estimate, and offset for a
+    /// symbol_value instruction.
+    fn symbol_value<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance, i64)>;
+    /// Returns the memory flags of a given memory access.
+    fn memflags(&self, ir_inst: Inst) -> Option<MemFlags>;
+    /// Get the source location for a given instruction.
+    fn srcloc(&self, ir_inst: Inst) -> SourceLoc;
+    /// Get the side-effect color of the given instruction (specifically, at the
+    /// program point just prior to the instruction). The "color" changes at
+    /// every side-effecting op; the backend should not try to merge across
+    /// side-effect colors unless the op being merged is known to be pure.
+    fn inst_color(&self, ir_inst: Inst) -> InstColor;
+
+    // Instruction input/output queries:
+
     /// Get the number of inputs to the given IR instruction.
     fn num_inputs(&self, ir_inst: Inst) -> usize;
     /// Get the number of outputs to the given IR instruction.
@@ -59,24 +104,70 @@ pub trait LowerCtx {
     fn input_ty(&self, ir_inst: Inst, idx: usize) -> Type;
     /// Get the type for an instruction's output.
     fn output_ty(&self, ir_inst: Inst, idx: usize) -> Type;
+    /// Get the value of a constant instruction (`iconst`, etc.) as a 64-bit
+    /// value, if possible.
+    fn get_constant(&self, ir_inst: Inst) -> Option<u64>;
+    /// Get the input in any combination of three forms:
+    ///
+    /// - An instruction, if the same color as this instruction or if the
+    ///   producing instruction has no side effects (thus in both cases
+    ///   mergeable);
+    /// - A constant, if the value is a constant;
+    /// - A register.
+    ///
+    /// The instruction input may be available in some or all of these
+    /// forms. More than one is possible: e.g., it may be produced by an
+    /// instruction in the same block, but may also have been forced into a
+    /// register already by an earlier op. It will *always* be available
+    /// in a register, at least.
+    ///
+    /// If the backend uses the register, rather than one of the other
+    /// forms (constant or merging of the producing op), it must call
+    /// `use_input_reg()` to ensure the producing inst is actually lowered
+    /// as well. Failing to do so may result in the instruction that generates
+    /// this value never being generated, thus resulting in incorrect execution.
+    /// For correctness, backends should thus wrap `get_input()` and
+    /// `use_input_regs()` with helpers that return a register only after
+    /// ensuring it is marked as used.
+    fn get_input(&self, ir_inst: Inst, idx: usize) -> LowerInput;
+    /// Get the `idx`th output register of the given IR instruction. When
+    /// `backend.lower_inst_to_regs(ctx, inst)` is called, it is expected that
+    /// the backend will write results to these output register(s).
+    fn get_output(&self, ir_inst: Inst, idx: usize) -> Writable<Reg>;
+
+    // Codegen primitives: allocate temps, emit instructions, set result registers,
+    // ask for an input to be gen'd into a register.
+
     /// Get a new temp.
-    fn tmp(&mut self, rc: RegClass, ty: Type) -> Writable<Reg>;
-    /// Get the number of block params.
-    fn num_bb_params(&self, bb: Block) -> usize;
-    /// Get the register for a block param.
-    fn bb_param(&self, bb: Block, idx: usize) -> Reg;
-    /// Get the register for a return value.
-    fn retval(&self, idx: usize) -> Writable<Reg>;
-    /// Get the target for a call instruction, as an `ExternalName`.
-    fn call_target<'b>(&'b self, ir_inst: Inst) -> Option<&'b ExternalName>;
-    /// Get the signature for a call or call-indirect instruction.
-    fn call_sig<'b>(&'b self, ir_inst: Inst) -> Option<&'b Signature>;
-    /// Get the symbol name and offset for a symbol_value instruction.
-    fn symbol_value<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, i64)>;
-    /// Returns the memory flags of a given memory access.
-    fn memflags(&self, ir_inst: Inst) -> Option<MemFlags>;
-    /// Get the source location for a given instruction.
-    fn srcloc(&self, ir_inst: Inst) -> SourceLoc;
+    fn alloc_tmp(&mut self, rc: RegClass, ty: Type) -> Writable<Reg>;
+    /// Emit a machine instruction.
+    fn emit(&mut self, mach_inst: Self::I);
+    /// Indicate that the given input uses the register returned by
+    /// `get_input()`. Codegen may not happen otherwise for the producing
+    /// instruction if it has no side effects and no uses.
+    fn use_input_reg(&mut self, input: LowerInput);
+    /// Is the given register output needed after the given instruction? Allows
+    /// instructions with multiple outputs to make fine-grained decisions on
+    /// which outputs to actually generate.
+    fn is_reg_needed(&self, ir_inst: Inst, reg: Reg) -> bool;
+    /// Retrieve constant data given a handle.
+    fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData;
+}
+
+/// A representation of all of the ways in which an instruction input is
+/// available: as a producing instruction (in the same color-partition), as a
+/// constant, and/or in an existing register. See [LowerCtx::get_input] for more
+/// details.
+#[derive(Clone, Copy, Debug)]
+pub struct LowerInput {
+    /// The value is live in a register. This option is always available. Call
+    /// [LowerCtx::use_input_reg()] if the register is used.
+    pub reg: Reg,
+    /// An instruction produces this value; the instruction's result index that
+    /// produces this value is given.
+    pub inst: Option<(Inst, usize)>,
+    /// The value is a known constant.
+    pub constant: Option<u64>,
 }
 
 /// A machine backend.
@@ -84,20 +175,31 @@ pub trait LowerBackend {
     /// The machine instruction type.
     type MInst: VCodeInst;
 
-    /// Lower a single instruction. Instructions are lowered in reverse order.
-    /// This function need not handle branches; those are always passed to
-    /// `lower_branch_group` below.
-    fn lower<C: LowerCtx<I = Self::MInst>>(&self, ctx: &mut C, inst: Inst);
+    /// Lower a single instruction.
+    ///
+    /// For a branch, this function should not generate the actual branch
+    /// instruction. However, it must force any values it needs for the branch
+    /// edge (block-param actuals) into registers, because the actual branch
+    /// generation (`lower_branch_group()`) happens *after* any possible merged
+    /// out-edge.
+    fn lower<C: LowerCtx<I = Self::MInst>>(&self, ctx: &mut C, inst: Inst) -> CodegenResult<()>;
 
-    /// Lower a block-terminating group of branches (which together can be seen as one
-    /// N-way branch), given a vcode BlockIndex for each target.
+    /// Lower a block-terminating group of branches (which together can be seen
+    /// as one N-way branch), given a vcode MachLabel for each target.
     fn lower_branch_group<C: LowerCtx<I = Self::MInst>>(
         &self,
         ctx: &mut C,
         insts: &[Inst],
-        targets: &[BlockIndex],
-        fallthrough: Option<BlockIndex>,
-    );
+        targets: &[MachLabel],
+        fallthrough: Option<MachLabel>,
+    ) -> CodegenResult<()>;
+
+    /// A bit of a hack: give a fixed register that always holds the result of a
+    /// `get_pinned_reg` instruction, if known.  This allows elision of moves
+    /// into the associated vreg, instead using the real reg directly.
+    fn maybe_pinned_reg(&self) -> Option<Reg> {
+        None
+    }
 }
 
 /// Machine-independent lowering driver / machine-instruction container. Maintains a correspondence
@@ -109,17 +211,54 @@ pub struct Lower<'func, I: VCodeInst> {
     /// Lowered machine instructions.
     vcode: VCodeBuilder<I>,
 
-    /// Number of active uses (minus `dec_use()` calls by backend) of each instruction.
-    num_uses: SecondaryMap<Inst, u32>,
-
     /// Mapping from `Value` (SSA value in IR) to virtual register.
     value_regs: SecondaryMap<Value, Reg>,
 
     /// Return-value vregs.
     retval_regs: Vec<(Reg, ArgumentExtension)>,
 
+    /// Instruction colors.
+    inst_colors: SecondaryMap<Inst, InstColor>,
+
+    /// Instruction constant values, if known.
+    inst_constants: FxHashMap<Inst, u64>,
+
+    /// Instruction has a side-effect and must be codegen'd.
+    inst_needed: SecondaryMap<Inst, bool>,
+
+    /// Value (vreg) is needed and producer must be codegen'd.
+    vreg_needed: Vec<bool>,
+
     /// Next virtual register number to allocate.
     next_vreg: u32,
+
+    /// Insts in reverse block order, before final copy to vcode.
+    block_insts: Vec<(SourceLoc, I)>,
+
+    /// Ranges in `block_insts` constituting BBs.
+    block_ranges: Vec<(usize, usize)>,
+
+    /// Instructions collected for the BB in progress, in reverse order, with
+    /// source-locs attached.
+    bb_insts: Vec<(SourceLoc, I)>,
+
+    /// Instructions collected for the CLIF inst in progress, in forward order.
+    ir_insts: Vec<I>,
+
+    /// The register to use for GetPinnedReg, if any, on this architecture.
+    pinned_reg: Option<Reg>,
+}
+
+/// Notion of "relocation distance". This gives an estimate of how far away a symbol will be from a
+/// reference.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RelocDistance {
+    /// Target of relocation is "nearby". The threshold for this is fuzzy but should be interpreted
+    /// as approximately "within the compiled output of one module"; e.g., within AArch64's +/-
+    /// 128MB offset. If unsure, use `Far` instead.
+    Near,
+    /// Target of relocation could be anywhere in the address space.
+    Far,
 }
 
 fn alloc_vreg(
@@ -128,7 +267,7 @@ fn alloc_vreg(
     value: Value,
     next_vreg: &mut u32,
 ) -> VirtualReg {
-    if value_regs[value].get_index() == 0 {
+    if value_regs[value].is_invalid() {
         // default value in map.
         let v = *next_vreg;
         *next_vreg += 1;
@@ -144,41 +283,35 @@ enum GenerateReturn {
 
 impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Prepare a new lowering context for the given IR function.
-    pub fn new(f: &'func Function, abi: Box<dyn ABIBody<I = I>>) -> CodegenResult<Lower<'func, I>> {
-        let mut vcode = VCodeBuilder::new(abi);
+    pub fn new(
+        f: &'func Function,
+        abi: Box<dyn ABIBody<I = I>>,
+        block_order: BlockLoweringOrder,
+    ) -> CodegenResult<Lower<'func, I>> {
+        let mut vcode = VCodeBuilder::new(abi, block_order);
 
-        let num_uses = NumUses::compute(f).take_uses();
+        let mut next_vreg: u32 = 0;
 
-        let mut next_vreg: u32 = 1;
+        let mut value_regs = SecondaryMap::with_default(Reg::invalid());
 
-        // Default register should never be seen, but the `value_regs` map needs a default and we
-        // don't want to push `Option` everywhere. All values will be assigned registers by the
-        // loops over block parameters and instruction results below.
-        //
-        // We do not use vreg 0 so that we can detect any unassigned register that leaks through.
-        let default_register = Reg::new_virtual(RegClass::I32, 0);
-        let mut value_regs = SecondaryMap::with_default(default_register);
-
-        // Assign a vreg to each value.
+        // Assign a vreg to each block param and each inst result.
         for bb in f.layout.blocks() {
-            for param in f.dfg.block_params(bb) {
-                let vreg = alloc_vreg(
-                    &mut value_regs,
-                    I::rc_for_type(f.dfg.value_type(*param))?,
-                    *param,
-                    &mut next_vreg,
-                );
-                vcode.set_vreg_type(vreg, f.dfg.value_type(*param));
+            for &param in f.dfg.block_params(bb) {
+                let ty = f.dfg.value_type(param);
+                let vreg = alloc_vreg(&mut value_regs, I::rc_for_type(ty)?, param, &mut next_vreg);
+                vcode.set_vreg_type(vreg, ty);
+                debug!("bb {} param {}: vreg {:?}", bb, param, vreg);
             }
             for inst in f.layout.block_insts(bb) {
-                for result in f.dfg.inst_results(inst) {
-                    let vreg = alloc_vreg(
-                        &mut value_regs,
-                        I::rc_for_type(f.dfg.value_type(*result))?,
-                        *result,
-                        &mut next_vreg,
+                for &result in f.dfg.inst_results(inst) {
+                    let ty = f.dfg.value_type(result);
+                    let vreg =
+                        alloc_vreg(&mut value_regs, I::rc_for_type(ty)?, result, &mut next_vreg);
+                    vcode.set_vreg_type(vreg, ty);
+                    debug!(
+                        "bb {} inst {} ({:?}): result vreg {:?}",
+                        bb, inst, f.dfg[inst], vreg
                     );
-                    vcode.set_vreg_type(vreg, f.dfg.value_type(*result));
                 }
             }
         }
@@ -194,13 +327,51 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             vcode.set_vreg_type(vreg.as_virtual_reg().unwrap(), ret.value_type);
         }
 
+        // Compute instruction colors, find constant instructions, and find instructions with
+        // side-effects, in one combined pass.
+        let mut cur_color = 0;
+        let mut inst_colors = SecondaryMap::with_default(InstColor::new(0));
+        let mut inst_constants = FxHashMap::default();
+        let mut inst_needed = SecondaryMap::with_default(false);
+        for bb in f.layout.blocks() {
+            cur_color += 1;
+            for inst in f.layout.block_insts(bb) {
+                let side_effect = has_side_effect_or_load(f, inst);
+
+                // Assign colors. A new color is chosen *after* any side-effecting instruction.
+                inst_colors[inst] = InstColor::new(cur_color);
+                debug!("bb {} inst {} has color {}", bb, inst, cur_color);
+                if side_effect {
+                    debug!(" -> side-effecting");
+                    inst_needed[inst] = true;
+                    cur_color += 1;
+                }
+
+                // Determine if this is a constant; if so, add to the table.
+                if let Some(c) = is_constant_64bit(f, inst) {
+                    debug!(" -> constant: {}", c);
+                    inst_constants.insert(inst, c);
+                }
+            }
+        }
+
+        let vreg_needed = std::iter::repeat(false).take(next_vreg as usize).collect();
+
         Ok(Lower {
             f,
             vcode,
-            num_uses,
             value_regs,
             retval_regs,
+            inst_colors,
+            inst_constants,
+            inst_needed,
+            vreg_needed,
             next_vreg,
+            block_insts: vec![],
+            block_ranges: vec![],
+            bb_insts: vec![],
+            ir_insts: vec![],
+            pinned_reg: None,
         })
     }
 
@@ -214,451 +385,441 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for (i, param) in self.f.dfg.block_params(entry_bb).iter().enumerate() {
                 let reg = Writable::from_reg(self.value_regs[*param]);
                 let insn = self.vcode.abi().gen_copy_arg_to_reg(i, reg);
-                self.vcode.push(insn);
+                self.emit(insn);
+            }
+            if let Some(insn) = self.vcode.abi().gen_retval_area_setup() {
+                self.emit(insn);
             }
         }
     }
 
     fn gen_retval_setup(&mut self, gen_ret_inst: GenerateReturn) {
-        for (i, (reg, ext)) in self.retval_regs.iter().enumerate() {
-            let reg = Writable::from_reg(*reg);
-            let insns = self.vcode.abi().gen_copy_reg_to_retval(i, reg, *ext);
+        let retval_regs = self.retval_regs.clone();
+        for (i, (reg, ext)) in retval_regs.into_iter().enumerate() {
+            let reg = Writable::from_reg(reg);
+            let insns = self.vcode.abi().gen_copy_reg_to_retval(i, reg, ext);
             for insn in insns {
-                self.vcode.push(insn);
+                self.emit(insn);
             }
         }
         let inst = match gen_ret_inst {
             GenerateReturn::Yes => self.vcode.abi().gen_ret(),
             GenerateReturn::No => self.vcode.abi().gen_epilogue_placeholder(),
         };
-        self.vcode.push(inst);
+        self.emit(inst);
     }
 
-    fn find_reachable_bbs(&self) -> SmallVec<[Block; 16]> {
-        if let Some(entry) = self.f.layout.entry_block() {
-            let mut ret = SmallVec::new();
-            let mut queue = VecDeque::new();
-            let mut visited = SecondaryMap::with_default(false);
-            queue.push_back(entry);
-            visited[entry] = true;
-            while !queue.is_empty() {
-                let b = queue.pop_front().unwrap();
-                ret.push(b);
-                let mut succs: SmallVec<[Block; 16]> = SmallVec::new();
-                for inst in self.f.layout.block_insts(b) {
-                    if self.f.dfg[inst].opcode().is_branch() {
-                        visit_branch_targets(self.f, b, inst, |succ| {
-                            succs.push(succ);
-                        });
-                    }
-                }
-                for succ in succs.into_iter() {
-                    if !visited[succ] {
-                        queue.push_back(succ);
-                        visited[succ] = true;
-                    }
+    fn lower_edge(&mut self, pred: Block, inst: Inst, succ: Block) -> CodegenResult<()> {
+        debug!("lower_edge: pred {} succ {}", pred, succ);
+
+        let num_args = self.f.dfg.block_params(succ).len();
+        debug_assert!(num_args == self.f.dfg.inst_variable_args(inst).len());
+
+        // Most blocks have no params, so skip all the hoop-jumping below and make an early exit.
+        if num_args == 0 {
+            return Ok(());
+        }
+
+        // Make up two vectors of info:
+        //
+        // * one for dsts which are to be assigned constants.  We'll deal with those second, so
+        //   as to minimise live ranges.
+        //
+        // * one for dsts whose sources are non-constants.
+
+        let mut const_bundles = SmallVec::<[(Type, Writable<Reg>, u64); 16]>::new();
+        let mut var_bundles = SmallVec::<[(Type, Writable<Reg>, Reg); 16]>::new();
+
+        let mut i = 0;
+        for (dst_val, src_val) in self
+            .f
+            .dfg
+            .block_params(succ)
+            .iter()
+            .zip(self.f.dfg.inst_variable_args(inst).iter())
+        {
+            let src_val = self.f.dfg.resolve_aliases(*src_val);
+            let ty = self.f.dfg.value_type(src_val);
+
+            debug_assert!(ty == self.f.dfg.value_type(*dst_val));
+            let dst_reg = self.value_regs[*dst_val];
+
+            let input = self.get_input_for_val(inst, src_val);
+            debug!("jump arg {} is {}, reg {:?}", i, src_val, input.reg);
+            i += 1;
+
+            if let Some(c) = input.constant {
+                const_bundles.push((ty, Writable::from_reg(dst_reg), c));
+            } else {
+                self.use_input_reg(input);
+                let src_reg = input.reg;
+                // Skip self-assignments.  Not only are they pointless, they falsely trigger the
+                // overlap-check below and hence can cause a lot of unnecessary copying through
+                // temporaries.
+                if dst_reg != src_reg {
+                    var_bundles.push((ty, Writable::from_reg(dst_reg), src_reg));
                 }
             }
+        }
 
-            ret
+        // Deal first with the moves whose sources are variables.
+
+        // FIXME: use regalloc.rs' SparseSetU here.  This would avoid all heap allocation
+        // for cases of up to circa 16 args.  Currently not possible because regalloc.rs
+        // does not export it.
+        let mut src_reg_set = FxHashSet::<Reg>::default();
+        for (_, _, src_reg) in &var_bundles {
+            src_reg_set.insert(*src_reg);
+        }
+        let mut overlaps = false;
+        for (_, dst_reg, _) in &var_bundles {
+            if src_reg_set.contains(&dst_reg.to_reg()) {
+                overlaps = true;
+                break;
+            }
+        }
+
+        // If, as is mostly the case, the source and destination register sets are non
+        // overlapping, then we can copy directly, so as to save the register allocator work.
+        if !overlaps {
+            for (ty, dst_reg, src_reg) in &var_bundles {
+                self.emit(I::gen_move(*dst_reg, *src_reg, *ty));
+            }
         } else {
-            SmallVec::new()
+            // There's some overlap, so play safe and copy via temps.
+            let mut tmp_regs = SmallVec::<[Writable<Reg>; 16]>::new();
+            for (ty, _, _) in &var_bundles {
+                tmp_regs.push(self.alloc_tmp(I::rc_for_type(*ty)?, *ty));
+            }
+            for ((ty, _, src_reg), tmp_reg) in var_bundles.iter().zip(tmp_regs.iter()) {
+                self.emit(I::gen_move(*tmp_reg, *src_reg, *ty));
+            }
+            for ((ty, dst_reg, _), tmp_reg) in var_bundles.iter().zip(tmp_regs.iter()) {
+                self.emit(I::gen_move(*dst_reg, (*tmp_reg).to_reg(), *ty));
+            }
+        }
+
+        // Now, finally, deal with the moves whose sources are constants.
+        for (ty, dst_reg, const_u64) in &const_bundles {
+            for inst in I::gen_constant(*dst_reg, *const_u64, *ty).into_iter() {
+                self.emit(inst);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn lower_clif_block<B: LowerBackend<MInst = I>>(
+        &mut self,
+        backend: &B,
+        block: Block,
+    ) -> CodegenResult<()> {
+        // Lowering loop:
+        // - For each non-branch instruction, in reverse order:
+        //   - If side-effecting (load, store, branch/call/return, possible trap), or if
+        //     used outside of this block, or if demanded by another inst, then lower.
+        //
+        // That's it! Lowering of side-effecting ops will force all *needed*
+        // (live) non-side-effecting ops to be lowered at the right places, via
+        // the `use_input_reg()` callback on the `LowerCtx` (that's us). That's
+        // because `use_input_reg()` sets the eager/demand bit for any insts
+        // whose result registers are used.
+        //
+        // We build up the BB in reverse instruction order in `bb_insts`.
+        // Because the machine backend calls `ctx.emit()` in forward order, we
+        // collect per-IR-inst lowered instructions in `ir_insts`, then reverse
+        // these and append to `bb_insts` as we go backward through the block.
+        // `bb_insts` are then reversed again and appended to the VCode at the
+        // end of the BB (in the toplevel driver `lower()`).
+        for inst in self.f.layout.block_insts(block).rev() {
+            let data = &self.f.dfg[inst];
+            let value_needed = self
+                .f
+                .dfg
+                .inst_results(inst)
+                .iter()
+                .any(|&result| self.vreg_needed[self.value_regs[result].get_index()]);
+            debug!(
+                "lower_clif_block: block {} inst {} ({:?}) is_branch {} inst_needed {} value_needed {}",
+                block,
+                inst,
+                data,
+                data.opcode().is_branch(),
+                self.inst_needed[inst],
+                value_needed,
+            );
+            if self.f.dfg[inst].opcode().is_branch() {
+                continue;
+            }
+            // Normal instruction: codegen if eager bit is set. (Other instructions may also be
+            // codegened if not eager when they are used by another instruction.)
+            if self.inst_needed[inst] || value_needed {
+                debug!("lowering: inst {}: {:?}", inst, self.f.dfg[inst]);
+                backend.lower(self, inst)?;
+            }
+            if data.opcode().is_return() {
+                // Return: handle specially, using ABI-appropriate sequence.
+                let gen_ret = if data.opcode() == Opcode::Return {
+                    GenerateReturn::Yes
+                } else {
+                    debug_assert!(data.opcode() == Opcode::FallthroughReturn);
+                    GenerateReturn::No
+                };
+                self.gen_retval_setup(gen_ret);
+            }
+
+            let loc = self.srcloc(inst);
+            self.finish_ir_inst(loc);
+        }
+        Ok(())
+    }
+
+    fn finish_ir_inst(&mut self, loc: SourceLoc) {
+        for inst in self.ir_insts.drain(..).rev() {
+            self.bb_insts.push((loc, inst));
+        }
+    }
+
+    fn finish_bb(&mut self) {
+        let start = self.block_insts.len();
+        for pair in self.bb_insts.drain(..).rev() {
+            self.block_insts.push(pair);
+        }
+        let end = self.block_insts.len();
+        self.block_ranges.push((start, end));
+    }
+
+    fn copy_bbs_to_vcode(&mut self) {
+        for &(start, end) in self.block_ranges.iter().rev() {
+            for &(loc, ref inst) in &self.block_insts[start..end] {
+                self.vcode.set_srcloc(loc);
+                self.vcode.push(inst.clone());
+            }
+            self.vcode.end_bb();
+        }
+    }
+
+    fn lower_clif_branches<B: LowerBackend<MInst = I>>(
+        &mut self,
+        backend: &B,
+        block: Block,
+        branches: &SmallVec<[Inst; 2]>,
+        targets: &SmallVec<[MachLabel; 2]>,
+        maybe_fallthrough: Option<MachLabel>,
+    ) -> CodegenResult<()> {
+        debug!(
+            "lower_clif_branches: block {} branches {:?} targets {:?} maybe_fallthrough {:?}",
+            block, branches, targets, maybe_fallthrough
+        );
+        backend.lower_branch_group(self, branches, targets, maybe_fallthrough)?;
+        let loc = self.srcloc(branches[0]);
+        self.finish_ir_inst(loc);
+        Ok(())
+    }
+
+    fn collect_branches_and_targets(
+        &self,
+        bindex: BlockIndex,
+        _bb: Block,
+        branches: &mut SmallVec<[Inst; 2]>,
+        targets: &mut SmallVec<[MachLabel; 2]>,
+    ) {
+        branches.clear();
+        targets.clear();
+        let mut last_inst = None;
+        for &(inst, succ) in self.vcode.block_order().succ_indices(bindex) {
+            // Avoid duplicates: this ensures a br_table is only inserted once.
+            if last_inst != Some(inst) {
+                branches.push(inst);
+            } else {
+                debug_assert!(self.f.dfg[inst].opcode() == Opcode::BrTable);
+                debug_assert!(branches.len() == 1);
+            }
+            last_inst = Some(inst);
+            targets.push(MachLabel::from_block(succ));
         }
     }
 
     /// Lower the function.
     pub fn lower<B: LowerBackend<MInst = I>>(mut self, backend: &B) -> CodegenResult<VCode<I>> {
-        // Find all reachable blocks.
-        let bbs = self.find_reachable_bbs();
-
-        // This records a Block-to-BlockIndex map so that branch targets can be resolved.
-        let mut next_bindex = self.vcode.init_bb_map(&bbs[..]);
-
-        // Allocate a separate BlockIndex for each control-flow instruction so that we can create
-        // the edge blocks later. Each entry for a control-flow inst is the edge block; the list
-        // has (control flow inst, edge block, orig block) tuples.
-        let mut edge_blocks_by_inst: SecondaryMap<Inst, Vec<BlockIndex>> =
-            SecondaryMap::with_default(vec![]);
-        let mut edge_blocks: Vec<(Inst, BlockIndex, Block)> = vec![];
-
         debug!("about to lower function: {:?}", self.f);
-        debug!("bb map: {:?}", self.vcode.blocks_by_bb());
 
-        // Work backward (reverse block order, reverse through each block), skipping insns with zero
-        // uses.
-        for bb in bbs.iter().rev() {
-            for inst in self.f.layout.block_insts(*bb) {
-                let op = self.f.dfg[inst].opcode();
-                if op.is_branch() {
-                    // Find the original target.
-                    let mut add_succ = |next_bb| {
-                        let edge_block = next_bindex;
-                        next_bindex += 1;
-                        edge_blocks_by_inst[inst].push(edge_block);
-                        edge_blocks.push((inst, edge_block, next_bb));
-                    };
-                    visit_branch_targets(self.f, *bb, inst, |succ| {
-                        add_succ(succ);
-                    });
-                }
-            }
-        }
+        // Initialize the ABI object, giving it a temp if requested.
+        let maybe_tmp = if self.vcode.abi().temp_needed() {
+            Some(self.alloc_tmp(RegClass::I64, I64))
+        } else {
+            None
+        };
+        self.vcode.abi().init(maybe_tmp);
 
-        for bb in bbs.iter() {
-            debug!("lowering bb: {}", bb);
+        // Get the pinned reg here (we only parameterize this function on `B`,
+        // not the whole `Lower` impl).
+        self.pinned_reg = backend.maybe_pinned_reg();
 
-            // If this is a return block, produce the return value setup.  N.B.: this comes
-            // *before* the below because it must occur *after* any other instructions, and
-            // instructions are lowered in reverse order.
-            let last_insn = self.f.layout.block_insts(*bb).last().unwrap();
-            let last_insn_opcode = self.f.dfg[last_insn].opcode();
-            if last_insn_opcode.is_return() {
-                let gen_ret = if last_insn_opcode == Opcode::Return {
-                    GenerateReturn::Yes
-                } else {
-                    debug_assert!(last_insn_opcode == Opcode::FallthroughReturn);
-                    GenerateReturn::No
-                };
-                self.gen_retval_setup(gen_ret);
-                self.vcode.end_ir_inst();
-            }
+        self.vcode.set_entry(0);
 
-            // Find the branches at the end first, and process those, if any.
-            let mut branches: SmallVec<[Inst; 2]> = SmallVec::new();
-            let mut targets: SmallVec<[BlockIndex; 2]> = SmallVec::new();
+        // Reused vectors for branch lowering.
+        let mut branches: SmallVec<[Inst; 2]> = SmallVec::new();
+        let mut targets: SmallVec<[MachLabel; 2]> = SmallVec::new();
 
-            for inst in self.f.layout.block_insts(*bb).rev() {
-                debug!("lower: inst {}", inst);
-                if edge_blocks_by_inst[inst].len() > 0 {
-                    branches.push(inst);
-                    for target in edge_blocks_by_inst[inst].iter().rev().cloned() {
-                        targets.push(target);
-                    }
-                } else {
-                    // We've reached the end of the branches -- process all as a group, first.
-                    if branches.len() > 0 {
-                        let fallthrough = self.f.layout.next_block(*bb);
-                        let fallthrough = fallthrough.map(|bb| self.vcode.bb_to_bindex(bb));
-                        branches.reverse();
-                        targets.reverse();
-                        debug!(
-                            "lower_branch_group: targets = {:?} branches = {:?}",
-                            targets, branches
-                        );
-                        self.vcode.set_srcloc(self.srcloc(branches[0]));
-                        backend.lower_branch_group(
-                            &mut self,
-                            &branches[..],
-                            &targets[..],
-                            fallthrough,
-                        );
-                        self.vcode.end_ir_inst();
-                        branches.clear();
-                        targets.clear();
-                    }
+        // get a copy of the lowered order; we hold this separately because we
+        // need a mut ref to the vcode to mutate it below.
+        let lowered_order: SmallVec<[LoweredBlock; 64]> = self
+            .vcode
+            .block_order()
+            .lowered_order()
+            .iter()
+            .cloned()
+            .collect();
 
-                    // Only codegen an instruction if it either has a side
-                    // effect, or has at least one use of one of its results.
-                    let num_uses = self.num_uses[inst];
-                    let side_effect = has_side_effect(self.f, inst);
-                    if side_effect || num_uses > 0 {
-                        self.vcode.set_srcloc(self.srcloc(inst));
-                        backend.lower(&mut self, inst);
-                        self.vcode.end_ir_inst();
+        // Main lowering loop over lowered blocks.
+        for (bindex, lb) in lowered_order.iter().enumerate().rev() {
+            let bindex = bindex as BlockIndex;
+
+            // Lower the block body in reverse order (see comment in
+            // `lower_clif_block()` for rationale).
+
+            // End branches.
+            if let Some(bb) = lb.orig_block() {
+                self.collect_branches_and_targets(bindex, bb, &mut branches, &mut targets);
+                if branches.len() > 0 {
+                    let maybe_fallthrough = if (bindex + 1) < (lowered_order.len() as BlockIndex) {
+                        Some(MachLabel::from_block(bindex + 1))
                     } else {
-                        // If we're skipping the instruction, we need to dec-ref
-                        // its arguments.
-                        for arg in self.f.dfg.inst_args(inst) {
-                            let val = self.f.dfg.resolve_aliases(*arg);
-                            match self.f.dfg.value_def(val) {
-                                ValueDef::Result(src_inst, _) => {
-                                    self.dec_use(src_inst);
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                }
-            }
-
-            // There are possibly some branches left if the block contained only branches.
-            if branches.len() > 0 {
-                let fallthrough = self.f.layout.next_block(*bb);
-                let fallthrough = fallthrough.map(|bb| self.vcode.bb_to_bindex(bb));
-                branches.reverse();
-                targets.reverse();
-                debug!(
-                    "lower_branch_group: targets = {:?} branches = {:?}",
-                    targets, branches
-                );
-                self.vcode.set_srcloc(self.srcloc(branches[0]));
-                backend.lower_branch_group(&mut self, &branches[..], &targets[..], fallthrough);
-                self.vcode.end_ir_inst();
-                branches.clear();
-                targets.clear();
-            }
-
-            // If this is the entry block, produce the argument setup.
-            if Some(*bb) == self.f.layout.entry_block() {
-                self.gen_arg_setup();
-                self.vcode.end_ir_inst();
-            }
-
-            let vcode_bb = self.vcode.end_bb();
-            debug!("finished building bb: BlockIndex {}", vcode_bb);
-            debug!("bb_to_bindex map says: {}", self.vcode.bb_to_bindex(*bb));
-            assert!(vcode_bb == self.vcode.bb_to_bindex(*bb));
-            if Some(*bb) == self.f.layout.entry_block() {
-                self.vcode.set_entry(vcode_bb);
-            }
-        }
-
-        // Now create the edge blocks, with phi lowering (block parameter copies).
-        for (inst, edge_block, orig_block) in edge_blocks.into_iter() {
-            debug!(
-                "creating edge block: inst {}, edge_block {}, orig_block {}",
-                inst, edge_block, orig_block
-            );
-
-            // Create a temporary for each block parameter.
-            let phi_classes: Vec<Type> = self
-                .f
-                .dfg
-                .block_params(orig_block)
-                .iter()
-                .map(|p| self.f.dfg.value_type(*p))
-                .collect();
-
-            // FIXME sewardj 2020Feb29: use SmallVec
-            let mut src_regs = vec![];
-            let mut dst_regs = vec![];
-
-            // Create all of the phi uses (reads) from jump args to temps.
-
-            // Round up all the source and destination regs
-            for (i, arg) in self.f.dfg.inst_variable_args(inst).iter().enumerate() {
-                let arg = self.f.dfg.resolve_aliases(*arg);
-                debug!("jump arg {} is {}", i, arg);
-                src_regs.push(self.value_regs[arg]);
-            }
-            for (i, param) in self.f.dfg.block_params(orig_block).iter().enumerate() {
-                debug!("bb arg {} is {}", i, param);
-                dst_regs.push(Writable::from_reg(self.value_regs[*param]));
-            }
-            debug_assert!(src_regs.len() == dst_regs.len());
-            debug_assert!(phi_classes.len() == dst_regs.len());
-
-            // If, as is mostly the case, the source and destination register
-            // sets are non overlapping, then we can copy directly, so as to
-            // save the register allocator work.
-            if !Set::<Reg>::from_vec(src_regs.clone()).intersects(&Set::<Reg>::from_vec(
-                dst_regs.iter().map(|r| r.to_reg()).collect(),
-            )) {
-                for (dst_reg, (src_reg, ty)) in
-                    dst_regs.iter().zip(src_regs.iter().zip(phi_classes))
-                {
-                    self.vcode.push(I::gen_move(*dst_reg, *src_reg, ty));
+                        None
+                    };
+                    self.lower_clif_branches(backend, bb, &branches, &targets, maybe_fallthrough)?;
+                    self.finish_ir_inst(self.srcloc(branches[0]));
                 }
             } else {
-                // There's some overlap, so play safe and copy via temps.
-                let mut tmp_regs = Vec::with_capacity(phi_classes.len());
-                for &ty in &phi_classes {
-                    tmp_regs.push(self.tmp(I::rc_for_type(ty)?, ty));
-                }
-
-                debug!("phi_temps = {:?}", tmp_regs);
-                debug_assert!(tmp_regs.len() == src_regs.len());
-
-                for (tmp_reg, (src_reg, &ty)) in
-                    tmp_regs.iter().zip(src_regs.iter().zip(phi_classes.iter()))
-                {
-                    self.vcode.push(I::gen_move(*tmp_reg, *src_reg, ty));
-                }
-                for (dst_reg, (tmp_reg, &ty)) in
-                    dst_regs.iter().zip(tmp_regs.iter().zip(phi_classes.iter()))
-                {
-                    self.vcode.push(I::gen_move(*dst_reg, tmp_reg.to_reg(), ty));
-                }
+                // If no orig block, this must be a pure edge block; get the successor and
+                // emit a jump.
+                let (_, succ) = self.vcode.block_order().succ_indices(bindex)[0];
+                self.emit(I::gen_jump(MachLabel::from_block(succ)));
+                self.finish_ir_inst(SourceLoc::default());
             }
 
-            // Create the unconditional jump to the original target block.
-            self.vcode
-                .push(I::gen_jump(self.vcode.bb_to_bindex(orig_block)));
+            // Out-edge phi moves.
+            if let Some((pred, inst, succ)) = lb.out_edge() {
+                self.lower_edge(pred, inst, succ)?;
+                self.finish_ir_inst(SourceLoc::default());
+            }
+            // Original block body.
+            if let Some(bb) = lb.orig_block() {
+                self.lower_clif_block(backend, bb)?;
+            }
+            // In-edge phi moves.
+            if let Some((pred, inst, succ)) = lb.in_edge() {
+                self.lower_edge(pred, inst, succ)?;
+                self.finish_ir_inst(SourceLoc::default());
+            }
 
-            // End the IR inst and block. (We lower this as if it were one IR instruction so that
-            // we can emit machine instructions in forward order.)
-            self.vcode.end_ir_inst();
-            let blocknum = self.vcode.end_bb();
-            assert!(blocknum == edge_block);
+            if bindex == 0 {
+                // Set up the function with arg vreg inits.
+                self.gen_arg_setup();
+                self.finish_ir_inst(SourceLoc::default());
+            }
+
+            self.finish_bb();
         }
 
+        self.copy_bbs_to_vcode();
+
         // Now that we've emitted all instructions into the VCodeBuilder, let's build the VCode.
-        Ok(self.vcode.build())
+        let vcode = self.vcode.build();
+        debug!("built vcode: {:?}", vcode);
+
+        Ok(vcode)
     }
 
-    /// Reduce the use-count of an IR instruction. Use this when, e.g., isel incorporates the
-    /// computation of an input instruction directly, so that input instruction has one
-    /// fewer use.
-    fn dec_use(&mut self, ir_inst: Inst) {
-        assert!(self.num_uses[ir_inst] > 0);
-        self.num_uses[ir_inst] -= 1;
-        debug!(
-            "incref: ir_inst {} now has {} uses",
-            ir_inst, self.num_uses[ir_inst]
-        );
-    }
+    /// Get the actual inputs for a value. This is the implementation for
+    /// `get_input()` but starting from the SSA value, which is not exposed to
+    /// the backend.
+    fn get_input_for_val(&self, at_inst: Inst, val: Value) -> LowerInput {
+        debug!("get_input_for_val: val {} at inst {}", val, at_inst);
+        let mut reg = self.value_regs[val];
+        debug!(" -> reg {:?}", reg);
+        assert!(reg.is_valid());
+        let mut inst = match self.f.dfg.value_def(val) {
+            // OK to merge source instruction if (i) we have a source
+            // instruction, and either (ii-a) it has no side effects, or (ii-b)
+            // it has the same color as this instruction.
+            ValueDef::Result(src_inst, result_idx) => {
+                debug!(" -> src inst {}", src_inst);
+                debug!(
+                    " -> has side effect: {}",
+                    has_side_effect_or_load(self.f, src_inst)
+                );
+                debug!(
+                    " -> our color is {:?}, src inst is {:?}",
+                    self.inst_color(at_inst),
+                    self.inst_color(src_inst)
+                );
+                if !has_side_effect_or_load(self.f, src_inst)
+                    || self.inst_color(at_inst) == self.inst_color(src_inst)
+                {
+                    Some((src_inst, result_idx))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        let constant = inst.and_then(|(inst, _)| self.get_constant(inst));
 
-    /// Increase the use-count of an IR instruction. Use this when, e.g., isel incorporates
-    /// the computation of an input instruction directly, so that input instruction's
-    /// inputs are now used directly by the merged instruction.
-    fn inc_use(&mut self, ir_inst: Inst) {
-        self.num_uses[ir_inst] += 1;
-        debug!(
-            "decref: ir_inst {} now has {} uses",
-            ir_inst, self.num_uses[ir_inst]
-        );
+        // Pinned-reg hack: if backend specifies a fixed pinned register, use it
+        // directly when we encounter a GetPinnedReg op, rather than lowering
+        // the actual op, and do not return the source inst to the caller; the
+        // value comes "out of the ether" and we will not force generation of
+        // the superfluous move.
+        if let Some((i, _)) = inst {
+            if self.f.dfg[i].opcode() == Opcode::GetPinnedReg {
+                if let Some(pr) = self.pinned_reg {
+                    reg = pr;
+                }
+                inst = None;
+            }
+        }
+
+        LowerInput {
+            reg,
+            inst,
+            constant,
+        }
     }
 }
 
 impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
     type I = I;
 
-    /// Get the instdata for a given IR instruction.
-    fn data(&self, ir_inst: Inst) -> &InstructionData {
-        &self.f.dfg[ir_inst]
-    }
-
-    /// Get the controlling type for a polymorphic IR instruction.
-    fn ty(&self, ir_inst: Inst) -> Type {
-        self.f.dfg.ctrl_typevar(ir_inst)
-    }
-
     fn abi(&mut self) -> &dyn ABIBody<I = I> {
         self.vcode.abi()
     }
 
-    /// Emit a machine instruction.
-    fn emit(&mut self, mach_inst: I) {
-        self.vcode.push(mach_inst);
-    }
-
-    /// Indicate that a merge has occurred.
-    fn merged(&mut self, from_inst: Inst) {
-        debug!("merged: inst {}", from_inst);
-        // First, inc-ref all inputs of `from_inst`, because they are now used
-        // directly by `into_inst`.
-        for arg in self.f.dfg.inst_args(from_inst) {
-            let arg = self.f.dfg.resolve_aliases(*arg);
-            match self.f.dfg.value_def(arg) {
-                ValueDef::Result(src_inst, _) => {
-                    debug!(" -> inc-reffing src inst {}", src_inst);
-                    self.inc_use(src_inst);
-                }
-                _ => {}
-            }
-        }
-        // Then, dec-ref the merged instruction itself. It still retains references
-        // to its arguments (inc-ref'd above). If its refcount has reached zero,
-        // it will be skipped during emission and its args will be dec-ref'd at that
-        // time.
-        self.dec_use(from_inst);
-    }
-
-    /// Get the producing instruction, if any, and output number, for the `idx`th input to the
-    /// given IR instruction.
-    fn input_inst(&self, ir_inst: Inst, idx: usize) -> Option<(Inst, usize)> {
-        let val = self.f.dfg.inst_args(ir_inst)[idx];
-        let val = self.f.dfg.resolve_aliases(val);
-        match self.f.dfg.value_def(val) {
-            ValueDef::Result(src_inst, result_idx) => Some((src_inst, result_idx)),
-            _ => None,
-        }
-    }
-
-    /// Map a Value to its associated writable (probably virtual) Reg.
-    fn value_to_writable_reg(&self, val: Value) -> Writable<Reg> {
-        let val = self.f.dfg.resolve_aliases(val);
-        Writable::from_reg(self.value_regs[val])
-    }
-
-    /// Map a Value to its associated (probably virtual) Reg.
-    fn value_to_reg(&self, val: Value) -> Reg {
-        let val = self.f.dfg.resolve_aliases(val);
-        self.value_regs[val]
-    }
-
-    /// Get the `idx`th input to the given IR instruction as a virtual register.
-    fn input(&self, ir_inst: Inst, idx: usize) -> Reg {
-        let val = self.f.dfg.inst_args(ir_inst)[idx];
-        let val = self.f.dfg.resolve_aliases(val);
-        self.value_to_reg(val)
-    }
-
-    /// Get the `idx`th output of the given IR instruction as a virtual register.
-    fn output(&self, ir_inst: Inst, idx: usize) -> Writable<Reg> {
-        let val = self.f.dfg.inst_results(ir_inst)[idx];
-        self.value_to_writable_reg(val)
-    }
-
-    /// Get a new temp.
-    fn tmp(&mut self, rc: RegClass, ty: Type) -> Writable<Reg> {
-        let v = self.next_vreg;
-        self.next_vreg += 1;
-        let vreg = Reg::new_virtual(rc, v);
-        self.vcode.set_vreg_type(vreg.as_virtual_reg().unwrap(), ty);
-        Writable::from_reg(vreg)
-    }
-
-    /// Get the number of inputs for the given IR instruction.
-    fn num_inputs(&self, ir_inst: Inst) -> usize {
-        self.f.dfg.inst_args(ir_inst).len()
-    }
-
-    /// Get the number of outputs for the given IR instruction.
-    fn num_outputs(&self, ir_inst: Inst) -> usize {
-        self.f.dfg.inst_results(ir_inst).len()
-    }
-
-    /// Get the type for an instruction's input.
-    fn input_ty(&self, ir_inst: Inst, idx: usize) -> Type {
-        let val = self.f.dfg.inst_args(ir_inst)[idx];
-        let val = self.f.dfg.resolve_aliases(val);
-        self.f.dfg.value_type(val)
-    }
-
-    /// Get the type for an instruction's output.
-    fn output_ty(&self, ir_inst: Inst, idx: usize) -> Type {
-        self.f.dfg.value_type(self.f.dfg.inst_results(ir_inst)[idx])
-    }
-
-    /// Get the number of block params.
-    fn num_bb_params(&self, bb: Block) -> usize {
-        self.f.dfg.block_params(bb).len()
-    }
-
-    /// Get the register for a block param.
-    fn bb_param(&self, bb: Block, idx: usize) -> Reg {
-        let val = self.f.dfg.block_params(bb)[idx];
-        self.value_regs[val]
-    }
-
-    /// Get the register for a return value.
     fn retval(&self, idx: usize) -> Writable<Reg> {
         Writable::from_reg(self.retval_regs[idx].0)
     }
 
-    /// Get the target for a call instruction, as an `ExternalName`.
-    fn call_target<'b>(&'b self, ir_inst: Inst) -> Option<&'b ExternalName> {
+    fn data(&self, ir_inst: Inst) -> &InstructionData {
+        &self.f.dfg[ir_inst]
+    }
+
+    fn ty(&self, ir_inst: Inst) -> Type {
+        self.f.dfg.ctrl_typevar(ir_inst)
+    }
+
+    fn call_target<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance)> {
         match &self.f.dfg[ir_inst] {
             &InstructionData::Call { func_ref, .. }
             | &InstructionData::FuncAddr { func_ref, .. } => {
                 let funcdata = &self.f.dfg.ext_funcs[func_ref];
-                Some(&funcdata.name)
+                let dist = funcdata.reloc_distance();
+                Some((&funcdata.name, dist))
             }
             _ => None,
         }
     }
-    /// Get the signature for a call or call-indirect instruction.
+
     fn call_sig<'b>(&'b self, ir_inst: Inst) -> Option<&'b Signature> {
         match &self.f.dfg[ir_inst] {
             &InstructionData::Call { func_ref, .. } => {
@@ -670,8 +831,7 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         }
     }
 
-    /// Get the symbol name and offset for a symbol_value instruction.
-    fn symbol_value<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, i64)> {
+    fn symbol_value<'b>(&'b self, ir_inst: Inst) -> Option<(&'b ExternalName, RelocDistance, i64)> {
         match &self.f.dfg[ir_inst] {
             &InstructionData::UnaryGlobalValue { global_value, .. } => {
                 let gvdata = &self.f.global_values[global_value];
@@ -682,7 +842,8 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
                         ..
                     } => {
                         let offset = offset.bits();
-                        Some((name, offset))
+                        let dist = gvdata.maybe_reloc_distance().unwrap();
+                        Some((name, dist, offset))
                     }
                     _ => None,
                 }
@@ -691,7 +852,6 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         }
     }
 
-    /// Returns the memory flags of a given memory access.
     fn memflags(&self, ir_inst: Inst) -> Option<MemFlags> {
         match &self.f.dfg[ir_inst] {
             &InstructionData::Load { flags, .. }
@@ -702,27 +862,102 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         }
     }
 
-    /// Get the source location for a given instruction.
     fn srcloc(&self, ir_inst: Inst) -> SourceLoc {
         self.f.srclocs[ir_inst]
     }
+
+    fn inst_color(&self, ir_inst: Inst) -> InstColor {
+        self.inst_colors[ir_inst]
+    }
+
+    fn num_inputs(&self, ir_inst: Inst) -> usize {
+        self.f.dfg.inst_args(ir_inst).len()
+    }
+
+    fn num_outputs(&self, ir_inst: Inst) -> usize {
+        self.f.dfg.inst_results(ir_inst).len()
+    }
+
+    fn input_ty(&self, ir_inst: Inst, idx: usize) -> Type {
+        let val = self.f.dfg.inst_args(ir_inst)[idx];
+        let val = self.f.dfg.resolve_aliases(val);
+        self.f.dfg.value_type(val)
+    }
+
+    fn output_ty(&self, ir_inst: Inst, idx: usize) -> Type {
+        self.f.dfg.value_type(self.f.dfg.inst_results(ir_inst)[idx])
+    }
+
+    fn get_constant(&self, ir_inst: Inst) -> Option<u64> {
+        self.inst_constants.get(&ir_inst).cloned()
+    }
+
+    fn get_input(&self, ir_inst: Inst, idx: usize) -> LowerInput {
+        let val = self.f.dfg.inst_args(ir_inst)[idx];
+        let val = self.f.dfg.resolve_aliases(val);
+        self.get_input_for_val(ir_inst, val)
+    }
+
+    fn get_output(&self, ir_inst: Inst, idx: usize) -> Writable<Reg> {
+        let val = self.f.dfg.inst_results(ir_inst)[idx];
+        Writable::from_reg(self.value_regs[val])
+    }
+
+    fn alloc_tmp(&mut self, rc: RegClass, ty: Type) -> Writable<Reg> {
+        let v = self.next_vreg;
+        self.next_vreg += 1;
+        let vreg = Reg::new_virtual(rc, v);
+        self.vcode.set_vreg_type(vreg.as_virtual_reg().unwrap(), ty);
+        Writable::from_reg(vreg)
+    }
+
+    fn emit(&mut self, mach_inst: I) {
+        self.ir_insts.push(mach_inst);
+    }
+
+    fn use_input_reg(&mut self, input: LowerInput) {
+        debug!("use_input_reg: vreg {:?} is needed", input.reg);
+        self.vreg_needed[input.reg.get_index()] = true;
+    }
+
+    fn is_reg_needed(&self, ir_inst: Inst, reg: Reg) -> bool {
+        self.inst_needed[ir_inst] || self.vreg_needed[reg.get_index()]
+    }
+
+    fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData {
+        self.f.dfg.constants.get(constant_handle)
+    }
 }
 
-fn visit_branch_targets<F: FnMut(Block)>(f: &Function, block: Block, inst: Inst, mut visit: F) {
+/// Visit all successors of a block with a given visitor closure.
+pub(crate) fn visit_block_succs<F: FnMut(Inst, Block)>(f: &Function, block: Block, mut visit: F) {
+    for inst in f.layout.block_likely_branches(block) {
+        if f.dfg[inst].opcode().is_branch() {
+            visit_branch_targets(f, block, inst, &mut visit);
+        }
+    }
+}
+
+fn visit_branch_targets<F: FnMut(Inst, Block)>(
+    f: &Function,
+    block: Block,
+    inst: Inst,
+    visit: &mut F,
+) {
     if f.dfg[inst].opcode() == Opcode::Fallthrough {
-        visit(f.layout.next_block(block).unwrap());
+        visit(inst, f.layout.next_block(block).unwrap());
     } else {
         match f.dfg[inst].analyze_branch(&f.dfg.value_lists) {
             BranchInfo::NotABranch => {}
             BranchInfo::SingleDest(dest, _) => {
-                visit(dest);
+                visit(inst, dest);
             }
             BranchInfo::Table(table, maybe_dest) => {
                 if let Some(dest) = maybe_dest {
-                    visit(dest);
+                    visit(inst, dest);
                 }
                 for &dest in f.jump_tables[table].as_slice() {
-                    visit(dest);
+                    visit(inst, dest);
                 }
             }
         }

@@ -13,8 +13,8 @@ fn test_invoke_func_via_table() -> Result<()> {
         (elem (i32.const 0) $f)
       )
     "#;
-    let module = Module::new(&store, wat).context("> Error compiling module!")?;
-    let instance = Instance::new(&module, &[]).context("> Error instantiating module!")?;
+    let module = Module::new(store.engine(), wat).context("> Error compiling module!")?;
+    let instance = Instance::new(&store, &module, &[]).context("> Error instantiating module!")?;
 
     let f = instance
         .get_table("table")

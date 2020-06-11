@@ -1,13 +1,12 @@
 //! CLI tool to compile Cranelift IR files to native code in memory and execute them.
 
-use crate::utils::read_to_string;
+use crate::utils::{iterate_files, read_to_string};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_filetests::SingleFunctionCompiler;
 use cranelift_native::builder as host_isa_builder;
 use cranelift_reader::{parse_run_command, parse_test, Details, IsaSpec, ParseOptions};
 use std::path::PathBuf;
 use target_lexicon::Triple;
-use walkdir::WalkDir;
 
 pub fn run(files: Vec<String>, flag_print: bool) -> Result<(), String> {
     let stdin_exist = files.iter().find(|file| *file == "-").is_some();
@@ -54,29 +53,6 @@ pub fn run(files: Vec<String>, flag_print: bool) -> Result<(), String> {
     }
 }
 
-/// Iterate over all of the files passed as arguments, recursively iterating through directories
-fn iterate_files(files: Vec<String>) -> impl Iterator<Item = PathBuf> {
-    files
-        .into_iter()
-        .flat_map(WalkDir::new)
-        .filter(|f| match f {
-            Ok(d) => {
-                // filter out hidden files (starting with .)
-                !d.file_name().to_str().map_or(false, |s| s.starts_with('.'))
-                    // filter out directories
-                    && !d.file_type().is_dir()
-            }
-            Err(e) => {
-                println!("Unable to read file: {}", e);
-                false
-            }
-        })
-        .map(|f| {
-            f.expect("This should not happen: we have already filtered out the errors")
-                .into_path()
-        })
-}
-
 /// Run all functions in a file that are succeeded by "run:" comments
 fn run_single_file(path: &PathBuf) -> Result<(), String> {
     let file_contents = read_to_string(&path).map_err(|e| e.to_string())?;
@@ -98,7 +74,7 @@ fn run_file_contents(file_contents: String) -> Result<(), String> {
                 parse_run_command(comment.text, &func.signature).map_err(|e| e.to_string())?
             {
                 let compiled_fn = compiler.compile(func.clone()).map_err(|e| e.to_string())?;
-                command.run(|args| compiled_fn.call(args))?;
+                command.run(|_, args| Ok(compiled_fn.call(args)))?;
             }
         }
     }

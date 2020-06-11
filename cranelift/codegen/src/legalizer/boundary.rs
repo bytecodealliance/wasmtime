@@ -504,6 +504,13 @@ where
             // this value.
             pos.ins().with_results([into_result]).ireduce(ty, arg)
         }
+        // ABI argument is a pointer to the value we want.
+        ValueConversion::Pointer(abi_ty) => {
+            let arg = convert_from_abi(pos, abi_ty, None, get_arg);
+            pos.ins()
+                .with_results([into_result])
+                .load(ty, MemFlags::new(), arg, 0)
+        }
     }
 }
 
@@ -561,6 +568,18 @@ fn convert_to_abi<PutArg>(
         }
         ValueConversion::Uext(abi_ty) => {
             let arg = pos.ins().uextend(abi_ty, value);
+            convert_to_abi(pos, cfg, arg, put_arg);
+        }
+        ValueConversion::Pointer(abi_ty) => {
+            // Note: This conversion can only happen for call arguments,
+            // so we can allocate the value on stack safely.
+            let stack_slot = pos.func.create_stack_slot(StackSlotData {
+                kind: StackSlotKind::ExplicitSlot,
+                size: ty.bytes(),
+                offset: None,
+            });
+            let arg = pos.ins().stack_addr(abi_ty, stack_slot, 0);
+            pos.ins().store(MemFlags::new(), value, arg, 0);
             convert_to_abi(pos, cfg, arg, put_arg);
         }
     }
@@ -757,18 +776,19 @@ pub fn handle_call_abi(
     {
         legalize_sret_call(isa, pos, sig_ref, inst);
     } else {
-        // OK, we need to fix the call arguments to match the ABI signature.
-        let abi_args = pos.func.dfg.signatures[sig_ref].params.len();
-        legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
-            func.dfg.signatures[sig_ref].params[abi_arg]
-        });
-
         if !pos.func.dfg.signatures[sig_ref].returns.is_empty() {
             inst = legalize_inst_results(pos, |func, abi_res| {
                 func.dfg.signatures[sig_ref].returns[abi_res]
             });
         }
     }
+
+    // Go back and fix the call arguments to match the ABI signature.
+    pos.goto_inst(inst);
+    let abi_args = pos.func.dfg.signatures[sig_ref].params.len();
+    legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
+        func.dfg.signatures[sig_ref].params[abi_arg]
+    });
 
     debug_assert!(
         check_call_signature(&pos.func.dfg, inst).is_ok(),
@@ -814,7 +834,12 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
     pos.use_srcloc(inst);
 
     legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
-        func.signature.returns[abi_arg]
+        let arg = func.signature.returns[abi_arg];
+        debug_assert!(
+            !arg.legalized_to_pointer,
+            "Return value cannot be legalized to pointer"
+        );
+        arg
     });
     // Append special return arguments for any `sret`, `link`, and `vmctx` return values added to
     // the legalized signature. These values should simply be propagated from the entry block

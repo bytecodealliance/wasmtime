@@ -12,11 +12,11 @@ fn test_trap_return() -> Result<()> {
         )
     "#;
 
-    let module = Module::new(&store, wat)?;
+    let module = Module::new(store.engine(), wat)?;
     let hello_type = FuncType::new(Box::new([]), Box::new([]));
     let hello_func = Func::new(&store, hello_type, |_, _, _| Err(Trap::new("test 123")));
 
-    let instance = Instance::new(&module, &[hello_func.into()])?;
+    let instance = Instance::new(&store, &module, &[hello_func.into()])?;
     let run_func = instance.get_func("run").expect("expected function export");
 
     let e = run_func
@@ -25,7 +25,7 @@ fn test_trap_return() -> Result<()> {
         .expect("error calling function")
         .downcast::<Trap>()?;
 
-    assert_eq!(e.message(), "test 123");
+    assert!(e.to_string().contains("test 123"));
 
     Ok(())
 }
@@ -41,8 +41,8 @@ fn test_trap_trace() -> Result<()> {
         )
     "#;
 
-    let module = Module::new(&store, wat)?;
-    let instance = Instance::new(&module, &[])?;
+    let module = Module::new(store.engine(), wat)?;
+    let instance = Instance::new(&store, &module, &[])?;
     let run_func = instance.get_func("run").expect("expected function export");
 
     let e = run_func
@@ -64,9 +64,9 @@ fn test_trap_trace() -> Result<()> {
     assert_eq!(trace[1].func_offset(), 1);
     assert_eq!(trace[1].module_offset(), 0x21);
     assert!(
-        e.message().contains("unreachable"),
+        e.to_string().contains("unreachable"),
         "wrong message: {}",
-        e.message()
+        e.to_string()
     );
 
     Ok(())
@@ -87,8 +87,8 @@ fn test_trap_trace_cb() -> Result<()> {
     let fn_type = FuncType::new(Box::new([]), Box::new([]));
     let fn_func = Func::new(&store, fn_type, |_, _, _| Err(Trap::new("cb throw")));
 
-    let module = Module::new(&store, wat)?;
-    let instance = Instance::new(&module, &[fn_func.into()])?;
+    let module = Module::new(store.engine(), wat)?;
+    let instance = Instance::new(&store, &module, &[fn_func.into()])?;
     let run_func = instance.get_func("run").expect("expected function export");
 
     let e = run_func
@@ -103,7 +103,7 @@ fn test_trap_trace_cb() -> Result<()> {
     assert_eq!(trace[0].func_index(), 2);
     assert_eq!(trace[1].module_name().unwrap(), "hello_mod");
     assert_eq!(trace[1].func_index(), 1);
-    assert_eq!(e.message(), "cb throw");
+    assert!(e.to_string().contains("cb throw"));
 
     Ok(())
 }
@@ -118,8 +118,8 @@ fn test_trap_stack_overflow() -> Result<()> {
         )
     "#;
 
-    let module = Module::new(&store, wat)?;
-    let instance = Instance::new(&module, &[])?;
+    let module = Module::new(store.engine(), wat)?;
+    let instance = Instance::new(&store, &module, &[])?;
     let run_func = instance.get_func("run").expect("expected function export");
 
     let e = run_func
@@ -135,7 +135,7 @@ fn test_trap_stack_overflow() -> Result<()> {
         assert_eq!(trace[i].func_index(), 0);
         assert_eq!(trace[i].func_name(), Some("run"));
     }
-    assert!(e.message().contains("call stack exhausted"));
+    assert!(e.to_string().contains("call stack exhausted"));
 
     Ok(())
 }
@@ -153,8 +153,8 @@ fn trap_display_pretty() -> Result<()> {
         )
     "#;
 
-    let module = Module::new(&store, wat)?;
-    let instance = Instance::new(&module, &[])?;
+    let module = Module::new(store.engine(), wat)?;
+    let instance = Instance::new(&store, &module, &[])?;
     let run_func = instance.get_func("bar").expect("expected function export");
 
     let e = run_func.call(&[]).err().expect("error calling function");
@@ -185,8 +185,8 @@ fn trap_display_multi_module() -> Result<()> {
         )
     "#;
 
-    let module = Module::new(&store, wat)?;
-    let instance = Instance::new(&module, &[])?;
+    let module = Module::new(store.engine(), wat)?;
+    let instance = Instance::new(&store, &module, &[])?;
     let bar = instance.get_export("bar").unwrap();
 
     let wat = r#"
@@ -196,8 +196,8 @@ fn trap_display_multi_module() -> Result<()> {
             (func (export "bar2") call $middle)
         )
     "#;
-    let module = Module::new(&store, wat)?;
-    let instance = Instance::new(&module, &[bar])?;
+    let module = Module::new(store.engine(), wat)?;
+    let instance = Instance::new(&store, &module, &[bar])?;
     let bar2 = instance.get_func("bar2").expect("expected function export");
 
     let e = bar2.call(&[]).err().expect("error calling function");
@@ -230,11 +230,17 @@ fn trap_start_function_import() -> Result<()> {
         "#,
     )?;
 
-    let module = Module::new(&store, &binary)?;
+    let module = Module::new(store.engine(), &binary)?;
     let sig = FuncType::new(Box::new([]), Box::new([]));
     let func = Func::new(&store, sig, |_, _, _| Err(Trap::new("user trap")));
-    let err = Instance::new(&module, &[func.into()]).err().unwrap();
-    assert_eq!(err.downcast_ref::<Trap>().unwrap().message(), "user trap");
+    let err = Instance::new(&store, &module, &[func.into()])
+        .err()
+        .unwrap();
+    assert!(err
+        .downcast_ref::<Trap>()
+        .unwrap()
+        .to_string()
+        .contains("user trap"));
     Ok(())
 }
 
@@ -253,10 +259,11 @@ fn rust_panic_import() -> Result<()> {
         "#,
     )?;
 
-    let module = Module::new(&store, &binary)?;
+    let module = Module::new(store.engine(), &binary)?;
     let sig = FuncType::new(Box::new([]), Box::new([]));
     let func = Func::new(&store, sig, |_, _, _| panic!("this is a panic"));
     let instance = Instance::new(
+        &store,
         &module,
         &[
             func.into(),
@@ -295,18 +302,18 @@ fn rust_panic_start_function() -> Result<()> {
         "#,
     )?;
 
-    let module = Module::new(&store, &binary)?;
+    let module = Module::new(store.engine(), &binary)?;
     let sig = FuncType::new(Box::new([]), Box::new([]));
     let func = Func::new(&store, sig, |_, _, _| panic!("this is a panic"));
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
-        drop(Instance::new(&module, &[func.into()]));
+        drop(Instance::new(&store, &module, &[func.into()]));
     }))
     .unwrap_err();
     assert_eq!(err.downcast_ref::<&'static str>(), Some(&"this is a panic"));
 
     let func = Func::wrap(&store, || panic!("this is another panic"));
     let err = panic::catch_unwind(AssertUnwindSafe(|| {
-        drop(Instance::new(&module, &[func.into()]));
+        drop(Instance::new(&store, &module, &[func.into()]));
     }))
     .unwrap_err();
     assert_eq!(
@@ -328,8 +335,8 @@ fn mismatched_arguments() -> Result<()> {
         "#,
     )?;
 
-    let module = Module::new(&store, &binary)?;
-    let instance = Instance::new(&module, &[])?;
+    let module = Module::new(store.engine(), &binary)?;
+    let instance = Instance::new(&store, &module, &[])?;
     let func = instance.get_func("foo").unwrap();
     assert_eq!(
         func.call(&[]).unwrap_err().to_string(),
@@ -337,7 +344,7 @@ fn mismatched_arguments() -> Result<()> {
     );
     assert_eq!(
         func.call(&[Val::F32(0)]).unwrap_err().to_string(),
-        "argument type mismatch",
+        "argument type mismatch: found f32 but expected i32",
     );
     assert_eq!(
         func.call(&[Val::I32(0), Val::I32(1)])
@@ -367,13 +374,15 @@ fn call_signature_mismatch() -> Result<()> {
         "#,
     )?;
 
-    let module = Module::new(&store, &binary)?;
-    let err = Instance::new(&module, &[])
+    let module = Module::new(store.engine(), &binary)?;
+    let err = Instance::new(&store, &module, &[])
         .err()
         .unwrap()
         .downcast::<Trap>()
         .unwrap();
-    assert_eq!(err.message(), "wasm trap: indirect call type mismatch");
+    assert!(err
+        .to_string()
+        .contains("wasm trap: indirect call type mismatch"));
     Ok(())
 }
 
@@ -391,8 +400,8 @@ fn start_trap_pretty() -> Result<()> {
         )
     "#;
 
-    let module = Module::new(&store, wat)?;
-    let e = match Instance::new(&module, &[]) {
+    let module = Module::new(store.engine(), wat)?;
+    let e = match Instance::new(&store, &module, &[]) {
         Ok(_) => panic!("expected failure"),
         Err(e) => e.downcast::<Trap>()?,
     };
@@ -414,8 +423,8 @@ wasm backtrace:
 #[test]
 fn present_after_module_drop() -> Result<()> {
     let store = Store::default();
-    let module = Module::new(&store, r#"(func (export "foo") unreachable)"#)?;
-    let instance = Instance::new(&module, &[])?;
+    let module = Module::new(store.engine(), r#"(func (export "foo") unreachable)"#)?;
+    let instance = Instance::new(&store, &module, &[])?;
     let func = instance.get_func("foo").unwrap();
 
     println!("asserting before we drop modules");

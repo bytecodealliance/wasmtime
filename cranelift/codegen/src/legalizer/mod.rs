@@ -35,7 +35,7 @@ mod table;
 use self::call::expand_call;
 use self::globalvalue::expand_global_value;
 use self::heap::expand_heap_addr;
-use self::libcall::expand_as_libcall;
+pub(crate) use self::libcall::expand_as_libcall;
 use self::table::expand_table_addr;
 
 enum LegalizeInstResult {

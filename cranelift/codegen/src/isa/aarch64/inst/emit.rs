@@ -4,12 +4,13 @@ use crate::binemit::{CodeOffset, Reloc};
 use crate::ir::constant::ConstantData;
 use crate::ir::types::*;
 use crate::ir::TrapCode;
-use crate::isa::aarch64::{inst::regs::PINNED_REG, inst::*};
+use crate::isa::aarch64::inst::*;
+use crate::isa::aarch64::lower::ty_bits;
 
 use regalloc::{Reg, RegClass, Writable};
 
-use alloc::vec::Vec;
 use core::convert::TryFrom;
+use log::debug;
 
 /// Memory label/reference finalization: convert a MemLabel to a PC-relative
 /// offset, possibly emitting relocation(s) as necessary.
@@ -23,43 +24,67 @@ pub fn memlabel_finalize(_insn_off: CodeOffset, label: &MemLabel) -> i32 {
 /// generic arbitrary stack offset) into real addressing modes, possibly by
 /// emitting some helper instructions that come immediately before the use
 /// of this amode.
-pub fn mem_finalize(insn_off: CodeOffset, mem: &MemArg) -> (Vec<Inst>, MemArg) {
+pub fn mem_finalize(
+    insn_off: CodeOffset,
+    mem: &MemArg,
+    state: &EmitState,
+) -> (SmallVec<[Inst; 4]>, MemArg) {
     match mem {
-        &MemArg::SPOffset(off) | &MemArg::FPOffset(off) => {
+        &MemArg::RegOffset(_, off, ty)
+        | &MemArg::SPOffset(off, ty)
+        | &MemArg::FPOffset(off, ty)
+        | &MemArg::NominalSPOffset(off, ty) => {
             let basereg = match mem {
-                &MemArg::SPOffset(..) => stack_reg(),
+                &MemArg::RegOffset(reg, _, _) => reg,
+                &MemArg::SPOffset(..) | &MemArg::NominalSPOffset(..) => stack_reg(),
                 &MemArg::FPOffset(..) => fp_reg(),
                 _ => unreachable!(),
             };
+            let adj = match mem {
+                &MemArg::NominalSPOffset(..) => {
+                    debug!(
+                        "mem_finalize: nominal SP offset {} + adj {} -> {}",
+                        off,
+                        state.virtual_sp_offset,
+                        off + state.virtual_sp_offset
+                    );
+                    state.virtual_sp_offset
+                }
+                _ => 0,
+            };
+            let off = off + adj;
+
             if let Some(simm9) = SImm9::maybe_from_i64(off) {
                 let mem = MemArg::Unscaled(basereg, simm9);
-                (vec![], mem)
+                (smallvec![], mem)
+            } else if let Some(uimm12s) = UImm12Scaled::maybe_from_i64(off, ty) {
+                let mem = MemArg::UnsignedOffset(basereg, uimm12s);
+                (smallvec![], mem)
             } else {
-                // In an addition, x31 is the zero register, not sp; we have only one temporary
-                // so we can't do the proper add here.
-                debug_assert_ne!(
-                    basereg,
-                    stack_reg(),
-                    "should have diverted SP before mem_finalize"
-                );
-
                 let tmp = writable_spilltmp_reg();
                 let mut const_insts = Inst::load_constant(tmp, off as u64);
-                let add_inst = Inst::AluRRR {
+                // N.B.: we must use AluRRRExtend because AluRRR uses the "shifted register" form
+                // (AluRRRShift) instead, which interprets register 31 as the zero reg, not SP. SP
+                // is a valid base (for SPOffset) which we must handle here.
+                // Also, SP needs to be the first arg, not second.
+                let add_inst = Inst::AluRRRExtend {
                     alu_op: ALUOp::Add64,
                     rd: tmp,
-                    rn: tmp.to_reg(),
-                    rm: basereg,
+                    rn: basereg,
+                    rm: tmp.to_reg(),
+                    extendop: ExtendOp::UXTX,
                 };
                 const_insts.push(add_inst);
-                (const_insts.to_vec(), MemArg::reg(tmp.to_reg()))
+                (const_insts, MemArg::reg(tmp.to_reg()))
             }
         }
+
         &MemArg::Label(ref label) => {
             let off = memlabel_finalize(insn_off, label);
-            (vec![], MemArg::Label(MemLabel::PCRel(off)))
+            (smallvec![], MemArg::Label(MemLabel::PCRel(off)))
         }
-        _ => (vec![], mem.clone()),
+
+        _ => (smallvec![], mem.clone()),
     }
 }
 
@@ -73,12 +98,12 @@ pub fn u64_constant(bits: u64) -> ConstantData {
 // Instructions and subcomponents: emission
 
 fn machreg_to_gpr(m: Reg) -> u32 {
-    assert!(m.get_class() == RegClass::I64);
+    assert_eq!(m.get_class(), RegClass::I64);
     u32::try_from(m.to_real_reg().get_hw_encoding()).unwrap()
 }
 
 fn machreg_to_vec(m: Reg) -> u32 {
-    assert!(m.get_class() == RegClass::V128);
+    assert_eq!(m.get_class(), RegClass::V128);
     u32::try_from(m.to_real_reg().get_hw_encoding()).unwrap()
 }
 
@@ -135,6 +160,14 @@ fn enc_cbr(op_31_24: u32, off_18_0: u32, op_4: u32, cond: u32) -> u32 {
     assert!(off_18_0 < (1 << 19));
     assert!(cond < (1 << 4));
     (op_31_24 << 24) | (off_18_0 << 5) | (op_4 << 4) | cond
+}
+
+fn enc_conditional_br(taken: BranchTarget, kind: CondBrKind) -> u32 {
+    match kind {
+        CondBrKind::Zero(reg) => enc_cmpbr(0b1_011010_0, taken.as_offset19_or_zero(), reg),
+        CondBrKind::NotZero(reg) => enc_cmpbr(0b1_011010_1, taken.as_offset19_or_zero(), reg),
+        CondBrKind::Cond(c) => enc_cbr(0b01010100, taken.as_offset19_or_zero(), 0b0, c.bits()),
+    }
 }
 
 const MOVE_WIDE_FIXED: u32 = 0x92800000;
@@ -275,8 +308,8 @@ fn enc_ccmp_imm(size: InstSize, rn: Reg, imm: UImm5, nzcv: NZCV, cond: Cond) -> 
 }
 
 fn enc_vecmov(is_16b: bool, rd: Writable<Reg>, rn: Reg) -> u32 {
-    debug_assert!(!is_16b); // to be supported later.
     0b00001110_101_00000_00011_1_00000_00000
+        | ((is_16b as u32) << 30)
         | machreg_to_vec(rd.to_reg())
         | (machreg_to_vec(rn) << 16)
         | (machreg_to_vec(rn) << 5)
@@ -322,8 +355,29 @@ fn enc_fround(top22: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
     (top22 << 10) | (machreg_to_vec(rn) << 5) | machreg_to_vec(rd.to_reg())
 }
 
-impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
-    fn emit(&self, sink: &mut O, flags: &settings::Flags) {
+fn enc_vec_rr_misc(bits_12_16: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
+    debug_assert_eq!(bits_12_16 & 0b11111, bits_12_16);
+    let bits = 0b0_1_1_01110_00_10000_00000_10_00000_00000;
+    bits | bits_12_16 << 12 | machreg_to_vec(rn) << 5 | machreg_to_vec(rd.to_reg())
+}
+
+/// State carried between emissions of a sequence of instructions.
+#[derive(Default, Clone, Debug)]
+pub struct EmitState {
+    virtual_sp_offset: i64,
+}
+
+impl MachInstEmit for Inst {
+    type State = EmitState;
+
+    fn emit(&self, sink: &mut MachBuffer<Inst>, flags: &settings::Flags, state: &mut EmitState) {
+        // N.B.: we *must* not exceed the "worst-case size" used to compute
+        // where to insert islands, except when islands are explicitly triggered
+        // (with an `EmitIsland`). We check this in debug builds. This is `mut`
+        // to allow disabling the check for `JTSequence`, which is always
+        // emitted following an `EmitIsland`.
+        let mut start_off = sink.cur_offset();
+
         match self {
             &Inst::AluRRR { alu_op, rd, rn, rm } => {
                 let top11 = match alu_op {
@@ -596,10 +650,10 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 ref mem,
                 srcloc,
             } => {
-                let (mem_insts, mem) = mem_finalize(sink.cur_offset_from_start(), mem);
+                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), mem, state);
 
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink, flags);
+                    inst.emit(sink, flags, state);
                 }
 
                 // ldst encoding helpers take Reg, not Writable<Reg>.
@@ -608,17 +662,17 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 // This is the base opcode (top 10 bits) for the "unscaled
                 // immediate" form (Unscaled). Other addressing modes will OR in
                 // other values for bits 24/25 (bits 1/2 of this constant).
-                let op = match self {
-                    &Inst::ULoad8 { .. } => 0b0011100001,
-                    &Inst::SLoad8 { .. } => 0b0011100010,
-                    &Inst::ULoad16 { .. } => 0b0111100001,
-                    &Inst::SLoad16 { .. } => 0b0111100010,
-                    &Inst::ULoad32 { .. } => 0b1011100001,
-                    &Inst::SLoad32 { .. } => 0b1011100010,
-                    &Inst::ULoad64 { .. } => 0b1111100001,
-                    &Inst::FpuLoad32 { .. } => 0b1011110001,
-                    &Inst::FpuLoad64 { .. } => 0b1111110001,
-                    &Inst::FpuLoad128 { .. } => 0b0011110011,
+                let (op, bits) = match self {
+                    &Inst::ULoad8 { .. } => (0b0011100001, 8),
+                    &Inst::SLoad8 { .. } => (0b0011100010, 8),
+                    &Inst::ULoad16 { .. } => (0b0111100001, 16),
+                    &Inst::SLoad16 { .. } => (0b0111100010, 16),
+                    &Inst::ULoad32 { .. } => (0b1011100001, 32),
+                    &Inst::SLoad32 { .. } => (0b1011100010, 32),
+                    &Inst::ULoad64 { .. } => (0b1111100001, 64),
+                    &Inst::FpuLoad32 { .. } => (0b1011110001, 32),
+                    &Inst::FpuLoad64 { .. } => (0b1111110001, 64),
+                    &Inst::FpuLoad128 { .. } => (0b0011110011, 128),
                     _ => unreachable!(),
                 };
 
@@ -632,6 +686,9 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                         sink.put4(enc_ldst_simm9(op, simm9, 0b00, reg, rd));
                     }
                     &MemArg::UnsignedOffset(reg, uimm12scaled) => {
+                        if uimm12scaled.value() != 0 {
+                            assert_eq!(bits, ty_bits(uimm12scaled.scale_ty()));
+                        }
                         sink.put4(enc_ldst_uimm12(op, uimm12scaled, reg, rd));
                     }
                     &MemArg::RegReg(r1, r2) => {
@@ -640,19 +697,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                         ));
                     }
                     &MemArg::RegScaled(r1, r2, ty) | &MemArg::RegScaledExtended(r1, r2, ty, _) => {
-                        match (ty, self) {
-                            (I8, &Inst::ULoad8 { .. }) => {}
-                            (I8, &Inst::SLoad8 { .. }) => {}
-                            (I16, &Inst::ULoad16 { .. }) => {}
-                            (I16, &Inst::SLoad16 { .. }) => {}
-                            (I32, &Inst::ULoad32 { .. }) => {}
-                            (I32, &Inst::SLoad32 { .. }) => {}
-                            (I64, &Inst::ULoad64 { .. }) => {}
-                            (F32, &Inst::FpuLoad32 { .. }) => {}
-                            (F64, &Inst::FpuLoad64 { .. }) => {}
-                            (I128, &Inst::FpuLoad128 { .. }) => {}
-                            _ => panic!("Mismatching reg-scaling type in MemArg"),
-                        }
+                        assert_eq!(bits, ty_bits(ty));
                         let extendop = match &mem {
                             &MemArg::RegScaled(..) => None,
                             &MemArg::RegScaledExtended(_, _, _, op) => Some(op),
@@ -697,9 +742,10 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                         sink.put4(enc_ldst_simm9(op, simm9, 0b01, reg.to_reg(), rd));
                     }
                     // Eliminated by `mem_finalize()` above.
-                    &MemArg::SPOffset(..) | &MemArg::FPOffset(..) => {
-                        panic!("Should not see stack-offset here!")
-                    }
+                    &MemArg::SPOffset(..)
+                    | &MemArg::FPOffset(..)
+                    | &MemArg::NominalSPOffset(..) => panic!("Should not see stack-offset here!"),
+                    &MemArg::RegOffset(..) => panic!("SHould not see generic reg-offset here!"),
                 }
             }
 
@@ -739,20 +785,20 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 ref mem,
                 srcloc,
             } => {
-                let (mem_insts, mem) = mem_finalize(sink.cur_offset_from_start(), mem);
+                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), mem, state);
 
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink, flags);
+                    inst.emit(sink, flags, state);
                 }
 
-                let op = match self {
-                    &Inst::Store8 { .. } => 0b0011100000,
-                    &Inst::Store16 { .. } => 0b0111100000,
-                    &Inst::Store32 { .. } => 0b1011100000,
-                    &Inst::Store64 { .. } => 0b1111100000,
-                    &Inst::FpuStore32 { .. } => 0b1011110000,
-                    &Inst::FpuStore64 { .. } => 0b1111110000,
-                    &Inst::FpuStore128 { .. } => 0b0011110010,
+                let (op, bits) = match self {
+                    &Inst::Store8 { .. } => (0b0011100000, 8),
+                    &Inst::Store16 { .. } => (0b0111100000, 16),
+                    &Inst::Store32 { .. } => (0b1011100000, 32),
+                    &Inst::Store64 { .. } => (0b1111100000, 64),
+                    &Inst::FpuStore32 { .. } => (0b1011110000, 32),
+                    &Inst::FpuStore64 { .. } => (0b1111110000, 64),
+                    &Inst::FpuStore128 { .. } => (0b0011110010, 128),
                     _ => unreachable!(),
                 };
 
@@ -766,6 +812,9 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                         sink.put4(enc_ldst_simm9(op, simm9, 0b00, reg, rd));
                     }
                     &MemArg::UnsignedOffset(reg, uimm12scaled) => {
+                        if uimm12scaled.value() != 0 {
+                            assert_eq!(bits, ty_bits(uimm12scaled.scale_ty()));
+                        }
                         sink.put4(enc_ldst_uimm12(op, uimm12scaled, reg, rd));
                     }
                     &MemArg::RegReg(r1, r2) => {
@@ -794,9 +843,10 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                         sink.put4(enc_ldst_simm9(op, simm9, 0b01, reg.to_reg(), rd));
                     }
                     // Eliminated by `mem_finalize()` above.
-                    &MemArg::SPOffset(..) | &MemArg::FPOffset(..) => {
-                        panic!("Should not see stack-offset here!")
-                    }
+                    &MemArg::SPOffset(..)
+                    | &MemArg::FPOffset(..)
+                    | &MemArg::NominalSPOffset(..) => panic!("Should not see stack-offset here!"),
+                    &MemArg::RegOffset(..) => panic!("SHould not see generic reg-offset here!"),
                 }
             }
 
@@ -883,6 +933,24 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
             &Inst::FpuMove64 { rd, rn } => {
                 sink.put4(enc_vecmov(/* 16b = */ false, rd, rn));
             }
+            &Inst::FpuMove128 { rd, rn } => {
+                sink.put4(enc_vecmov(/* 16b = */ true, rd, rn));
+            }
+            &Inst::FpuMoveFromVec { rd, rn, idx, ty } => {
+                let (imm5, shift, mask) = match ty {
+                    F32 => (0b00100, 3, 0b011),
+                    F64 => (0b01000, 4, 0b001),
+                    _ => unimplemented!(),
+                };
+                debug_assert_eq!(idx & mask, idx);
+                let imm5 = imm5 | ((idx as u32) << shift);
+                sink.put4(
+                    0b010_11110000_00000_000001_00000_00000
+                        | (imm5 << 16)
+                        | (machreg_to_vec(rn) << 5)
+                        | machreg_to_vec(rd.to_reg()),
+                );
+            }
             &Inst::FpuRR { fpu_op, rd, rn } => {
                 let top22 = match fpu_op {
                     FPUOp1::Abs32 => 0b000_11110_00_1_000001_10000,
@@ -913,6 +981,44 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 };
                 sink.put4(enc_fpurrr(top22, rd, rn, rm));
             }
+            &Inst::FpuRRI { fpu_op, rd, rn } => match fpu_op {
+                FPUOpRI::UShr32(imm) => {
+                    debug_assert_eq!(32, imm.lane_size_in_bits);
+                    sink.put4(
+                        0b0_0_1_011110_0000000_00_0_0_0_1_00000_00000
+                            | imm.enc() << 16
+                            | machreg_to_vec(rn) << 5
+                            | machreg_to_vec(rd.to_reg()),
+                    )
+                }
+                FPUOpRI::UShr64(imm) => {
+                    debug_assert_eq!(64, imm.lane_size_in_bits);
+                    sink.put4(
+                        0b01_1_111110_0000000_00_0_0_0_1_00000_00000
+                            | imm.enc() << 16
+                            | machreg_to_vec(rn) << 5
+                            | machreg_to_vec(rd.to_reg()),
+                    )
+                }
+                FPUOpRI::Sli64(imm) => {
+                    debug_assert_eq!(64, imm.lane_size_in_bits);
+                    sink.put4(
+                        0b01_1_111110_0000000_010101_00000_00000
+                            | imm.enc() << 16
+                            | machreg_to_vec(rn) << 5
+                            | machreg_to_vec(rd.to_reg()),
+                    )
+                }
+                FPUOpRI::Sli32(imm) => {
+                    debug_assert_eq!(32, imm.lane_size_in_bits);
+                    sink.put4(
+                        0b0_0_1_011110_0000000_010101_00000_00000
+                            | imm.enc() << 16
+                            | machreg_to_vec(rn) << 5
+                            | machreg_to_vec(rd.to_reg()),
+                    )
+                }
+            },
             &Inst::FpuRRRR {
                 fpu_op,
                 rd,
@@ -925,6 +1031,15 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     FPUOp3::MAdd64 => 0b000_11111_01_0_00000_0,
                 };
                 sink.put4(enc_fpurrrr(top17, rd, rn, rm, ra));
+            }
+            &Inst::VecMisc { op, rd, rn, ty } => {
+                let bits_12_16 = match op {
+                    VecMisc2::Not => {
+                        debug_assert_eq!(I8X16, ty);
+                        0b00101
+                    }
+                };
+                sink.put4(enc_vec_rr_misc(bits_12_16, rd, rn));
             }
             &Inst::FpuCmp32 { rn, rm } => {
                 sink.put4(enc_fcmp(InstSize::Size32, rn, rm));
@@ -980,11 +1095,11 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     mem: MemArg::Label(MemLabel::PCRel(8)),
                     srcloc: None,
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(8),
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 sink.put4(const_data.to_bits());
             }
             &Inst::LoadFpuConst64 { rd, const_data } => {
@@ -993,12 +1108,28 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     mem: MemArg::Label(MemLabel::PCRel(8)),
                     srcloc: None,
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(12),
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 sink.put8(const_data.to_bits());
+            }
+            &Inst::LoadFpuConst128 { rd, const_data } => {
+                let inst = Inst::FpuLoad128 {
+                    rd,
+                    mem: MemArg::Label(MemLabel::PCRel(8)),
+                    srcloc: None,
+                };
+                inst.emit(sink, flags, state);
+                let inst = Inst::Jump {
+                    dest: BranchTarget::ResolvedOffset(20),
+                };
+                inst.emit(sink, flags, state);
+
+                for i in const_data.to_le_bytes().iter() {
+                    sink.put1(*i);
+                }
             }
             &Inst::FpuCSel32 { rd, rn, rm, cond } => {
                 sink.put4(enc_fcsel(rd, rn, rm, cond, InstSize::Size32));
@@ -1026,19 +1157,105 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                         | machreg_to_vec(rd.to_reg()),
                 );
             }
-            &Inst::MovFromVec64 { rd, rn } => {
+            &Inst::MovFromVec { rd, rn, idx, ty } => {
+                let (q, imm5, shift, mask) = match ty {
+                    I8 => (0b0, 0b00001, 1, 0b1111),
+                    I16 => (0b0, 0b00010, 2, 0b0111),
+                    I32 => (0b0, 0b00100, 3, 0b0011),
+                    I64 => (0b1, 0b01000, 4, 0b0001),
+                    _ => unreachable!(),
+                };
+                debug_assert_eq!(idx & mask, idx);
+                let imm5 = imm5 | ((idx as u32) << shift);
                 sink.put4(
-                    0b010_01110000_01000_0_0111_1_00000_00000
+                    0b000_01110000_00000_0_0111_1_00000_00000
+                        | (q << 30)
+                        | (imm5 << 16)
                         | (machreg_to_vec(rn) << 5)
                         | machreg_to_gpr(rd.to_reg()),
                 );
             }
-            &Inst::VecRRR { rd, rn, rm, alu_op } => {
+            &Inst::VecDup { rd, rn, ty } => {
+                let imm5 = match ty {
+                    I8 => 0b00001,
+                    I16 => 0b00010,
+                    I32 => 0b00100,
+                    I64 => 0b01000,
+                    _ => unimplemented!(),
+                };
+                sink.put4(
+                    0b010_01110000_00000_000011_00000_00000
+                        | (imm5 << 16)
+                        | (machreg_to_gpr(rn) << 5)
+                        | machreg_to_vec(rd.to_reg()),
+                );
+            }
+            &Inst::VecDupFromFpu { rd, rn, ty } => {
+                let imm5 = match ty {
+                    F32 => 0b00100,
+                    F64 => 0b01000,
+                    _ => unimplemented!(),
+                };
+                sink.put4(
+                    0b010_01110000_00000_000001_00000_00000
+                        | (imm5 << 16)
+                        | (machreg_to_vec(rn) << 5)
+                        | machreg_to_vec(rd.to_reg()),
+                );
+            }
+            &Inst::VecExtend { t, rd, rn } => {
+                let (u, immh) = match t {
+                    VecExtendOp::Sxtl8 => (0b0, 0b001),
+                    VecExtendOp::Sxtl16 => (0b0, 0b010),
+                    VecExtendOp::Sxtl32 => (0b0, 0b100),
+                    VecExtendOp::Uxtl8 => (0b1, 0b001),
+                    VecExtendOp::Uxtl16 => (0b1, 0b010),
+                    VecExtendOp::Uxtl32 => (0b1, 0b100),
+                };
+                sink.put4(
+                    0b000_011110_0000_000_101001_00000_00000
+                        | (u << 29)
+                        | (immh << 19)
+                        | (machreg_to_vec(rn) << 5)
+                        | machreg_to_vec(rd.to_reg()),
+                );
+            }
+            &Inst::VecRRR {
+                rd,
+                rn,
+                rm,
+                alu_op,
+                ty,
+            } => {
+                let enc_size_for_cmp = match ty {
+                    I8X16 => 0b00,
+                    I16X8 => 0b01,
+                    I32X4 => 0b10,
+                    _ => 0,
+                };
+
                 let (top11, bit15_10) = match alu_op {
-                    VecALUOp::SQAddScalar => (0b010_11110_11_1, 0b000011),
-                    VecALUOp::SQSubScalar => (0b010_11110_11_1, 0b001011),
-                    VecALUOp::UQAddScalar => (0b011_11110_11_1, 0b000011),
-                    VecALUOp::UQSubScalar => (0b011_11110_11_1, 0b001011),
+                    VecALUOp::SQAddScalar => {
+                        debug_assert_eq!(I64, ty);
+                        (0b010_11110_11_1, 0b000011)
+                    }
+                    VecALUOp::SQSubScalar => {
+                        debug_assert_eq!(I64, ty);
+                        (0b010_11110_11_1, 0b001011)
+                    }
+                    VecALUOp::UQAddScalar => {
+                        debug_assert_eq!(I64, ty);
+                        (0b011_11110_11_1, 0b000011)
+                    }
+                    VecALUOp::UQSubScalar => {
+                        debug_assert_eq!(I64, ty);
+                        (0b011_11110_11_1, 0b001011)
+                    }
+                    VecALUOp::Cmeq => (0b011_01110_00_1 | enc_size_for_cmp << 1, 0b100011),
+                    VecALUOp::Cmge => (0b010_01110_00_1 | enc_size_for_cmp << 1, 0b001111),
+                    VecALUOp::Cmgt => (0b010_01110_00_1 | enc_size_for_cmp << 1, 0b001101),
+                    VecALUOp::Cmhi => (0b011_01110_00_1 | enc_size_for_cmp << 1, 0b001101),
+                    VecALUOp::Cmhs => (0b011_01110_00_1 | enc_size_for_cmp << 1, 0b001111),
                 };
                 sink.put4(enc_vec_rrr(top11, rm, bit15_10, rn, rd));
             }
@@ -1084,7 +1301,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 if top22 != 0 {
                     sink.put4(enc_extend(top22, rd, rn));
                 } else {
-                    Inst::mov32(rd, rn).emit(sink, flags);
+                    Inst::mov32(rd, rn).emit(sink, flags, state);
                 }
             }
             &Inst::Extend {
@@ -1107,7 +1324,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     rn: zero_reg(),
                     rm: rd.to_reg(),
                 };
-                sub_inst.emit(sink, flags);
+                sub_inst.emit(sink, flags, state);
             }
             &Inst::Extend {
                 rd,
@@ -1127,10 +1344,14 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 panic!("Unsupported extend variant");
             }
             &Inst::Jump { ref dest } => {
-                // TODO: differentiate between as_off26() returning `None` for
-                // out-of-range vs. not-yet-finalized. The latter happens when we
-                // do early (fake) emission for size computation.
-                sink.put4(enc_jump26(0b000101, dest.as_off26().unwrap()));
+                let off = sink.cur_offset();
+                // Indicate that the jump uses a label, if so, so that a fixup can occur later.
+                if let Some(l) = dest.as_label() {
+                    sink.use_label_at_offset(off, l, LabelUse::Branch26);
+                    sink.add_uncond_branch(off, off + 4, l);
+                }
+                // Emit the jump itself.
+                sink.put4(enc_jump26(0b000101, dest.as_offset26_or_zero()));
             }
             &Inst::Ret => {
                 sink.put4(0xd65f03c0);
@@ -1138,71 +1359,47 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
             &Inst::EpiloguePlaceholder => {
                 // Noop; this is just a placeholder for epilogues.
             }
-            &Inst::Call {
-                ref dest,
-                loc,
-                opcode,
-                ..
-            } => {
-                sink.add_reloc(loc, Reloc::Arm64Call, dest, 0);
+            &Inst::Call { ref info } => {
+                sink.add_reloc(info.loc, Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b100101, 0));
-                if opcode.is_call() {
-                    sink.add_call_site(loc, opcode);
+                if info.opcode.is_call() {
+                    sink.add_call_site(info.loc, info.opcode);
                 }
             }
-            &Inst::CallInd {
-                rn, loc, opcode, ..
-            } => {
-                sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(rn) << 5));
-                if opcode.is_call() {
-                    sink.add_call_site(loc, opcode);
+            &Inst::CallInd { ref info } => {
+                sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(info.rn) << 5));
+                if info.opcode.is_call() {
+                    sink.add_call_site(info.loc, info.opcode);
                 }
             }
-            &Inst::CondBr { .. } => panic!("Unlowered CondBr during binemit!"),
-            &Inst::CondBrLowered { target, kind } => match kind {
-                // TODO: handle >2^19 case by emitting a compound sequence with
-                // an unconditional (26-bit) branch. We need branch-relaxation
-                // adjustment machinery to enable this (because we don't want to
-                // always emit the long form).
-                CondBrKind::Zero(reg) => {
-                    sink.put4(enc_cmpbr(0b1_011010_0, target.as_off19().unwrap(), reg));
-                }
-                CondBrKind::NotZero(reg) => {
-                    sink.put4(enc_cmpbr(0b1_011010_1, target.as_off19().unwrap(), reg));
-                }
-                CondBrKind::Cond(c) => {
-                    sink.put4(enc_cbr(
-                        0b01010100,
-                        target.as_off19().unwrap_or(0),
-                        0b0,
-                        c.bits(),
-                    ));
-                }
-            },
-            &Inst::CondBrLoweredCompound {
+            &Inst::CondBr {
                 taken,
                 not_taken,
                 kind,
             } => {
                 // Conditional part first.
-                match kind {
-                    CondBrKind::Zero(reg) => {
-                        sink.put4(enc_cmpbr(0b1_011010_0, taken.as_off19().unwrap(), reg));
-                    }
-                    CondBrKind::NotZero(reg) => {
-                        sink.put4(enc_cmpbr(0b1_011010_1, taken.as_off19().unwrap(), reg));
-                    }
-                    CondBrKind::Cond(c) => {
-                        sink.put4(enc_cbr(
-                            0b01010100,
-                            taken.as_off19().unwrap_or(0),
-                            0b0,
-                            c.bits(),
-                        ));
-                    }
+                let cond_off = sink.cur_offset();
+                if let Some(l) = taken.as_label() {
+                    sink.use_label_at_offset(cond_off, l, LabelUse::Branch19);
+                    let inverted = enc_conditional_br(taken, kind.invert()).to_le_bytes();
+                    sink.add_cond_branch(cond_off, cond_off + 4, l, &inverted[..]);
                 }
-                // Unconditional part.
-                sink.put4(enc_jump26(0b000101, not_taken.as_off26().unwrap_or(0)));
+                sink.put4(enc_conditional_br(taken, kind));
+
+                // Unconditional part next.
+                let uncond_off = sink.cur_offset();
+                if let Some(l) = not_taken.as_label() {
+                    sink.use_label_at_offset(uncond_off, l, LabelUse::Branch26);
+                    sink.add_uncond_branch(uncond_off, uncond_off + 4, l);
+                }
+                sink.put4(enc_jump26(0b000101, not_taken.as_offset26_or_zero()));
+            }
+            &Inst::OneWayCondBr { target, kind } => {
+                let off = sink.cur_offset();
+                if let Some(l) = target.as_label() {
+                    sink.use_label_at_offset(off, l, LabelUse::Branch19);
+                }
+                sink.put4(enc_conditional_br(target, kind));
             }
             &Inst::IndirectBr { rn, .. } => {
                 sink.put4(enc_br(rn));
@@ -1219,8 +1416,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 sink.add_trap(srcloc, code);
                 sink.put4(0xd4a00000);
             }
-            &Inst::Adr { rd, ref label } => {
-                let off = memlabel_finalize(sink.cur_offset_from_start(), label);
+            &Inst::Adr { rd, off } => {
                 assert!(off > -(1 << 20));
                 assert!(off < (1 << 20));
                 sink.put4(enc_adr(off, rd));
@@ -1235,26 +1431,20 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                 ridx,
                 rtmp1,
                 rtmp2,
-                ref targets,
+                ref info,
                 ..
             } => {
                 // This sequence is *one* instruction in the vcode, and is expanded only here at
                 // emission time, because we cannot allow the regalloc to insert spills/reloads in
                 // the middle; we depend on hardcoded PC-rel addressing below.
-                //
-                // N.B.: if PC-rel addressing on ADR below is changed, also update
-                // `Inst::with_block_offsets()` in aarch64/inst/mod.rs.
 
                 // Save index in a tmp (the live range of ridx only goes to start of this
                 // sequence; rtmp1 or rtmp2 may overwrite it).
                 let inst = Inst::gen_move(rtmp2, ridx, I64);
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 // Load address of jump table
-                let inst = Inst::Adr {
-                    rd: rtmp1,
-                    label: MemLabel::PCRel(16),
-                };
-                inst.emit(sink, flags);
+                let inst = Inst::Adr { rd: rtmp1, off: 16 };
+                inst.emit(sink, flags, state);
                 // Load value out of jump table
                 let inst = Inst::SLoad32 {
                     rd: rtmp2,
@@ -1266,7 +1456,7 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     ),
                     srcloc: None, // can't cause a user trap.
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 // Add base of jump table to jump-table-sourced block offset
                 let inst = Inst::AluRRR {
                     alu_op: ALUOp::Add64,
@@ -1274,22 +1464,30 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     rn: rtmp1.to_reg(),
                     rm: rtmp2.to_reg(),
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 // Branch to computed address. (`targets` here is only used for successor queries
                 // and is not needed for emission.)
                 let inst = Inst::IndirectBr {
                     rn: rtmp1.to_reg(),
                     targets: vec![],
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 // Emit jump table (table of 32-bit offsets).
-                for target in targets {
-                    let off = target.as_offset_words() * 4;
-                    let off = i32::try_from(off).unwrap();
-                    // cast i32 to u32 (two's-complement)
-                    let off = off as u32;
-                    sink.put4(off);
+                let jt_off = sink.cur_offset();
+                for &target in info.targets.iter() {
+                    let word_off = sink.cur_offset();
+                    let off_into_table = word_off - jt_off;
+                    sink.use_label_at_offset(
+                        word_off,
+                        target.as_label().unwrap(),
+                        LabelUse::PCRel32,
+                    );
+                    sink.put4(off_into_table);
                 }
+
+                // Lowering produces an EmitIsland before using a JTSequence, so we can safely
+                // disable the worst-case-size check in this case.
+                start_off = sink.cur_offset();
             }
             &Inst::LoadConst64 { rd, const_data } => {
                 let inst = Inst::ULoad64 {
@@ -1297,11 +1495,11 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     mem: MemArg::Label(MemLabel::PCRel(8)),
                     srcloc: None, // can't cause a user trap.
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(12),
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 sink.put8(const_data);
             }
             &Inst::LoadExtName {
@@ -1315,11 +1513,11 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     mem: MemArg::Label(MemLabel::PCRel(8)),
                     srcloc: None, // can't cause a user trap.
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(12),
                 };
-                inst.emit(sink, flags);
+                inst.emit(sink, flags, state);
                 sink.add_reloc(srcloc, Reloc::Abs8, name, offset);
                 if flags.emit_all_ones_funcaddrs() {
                     sink.put8(u64::max_value());
@@ -1327,53 +1525,82 @@ impl<O: MachSectionOutput> MachInstEmit<O> for Inst {
                     sink.put8(0);
                 }
             }
-            &Inst::LoadAddr { rd, ref mem } => match *mem {
-                MemArg::FPOffset(fp_off) => {
-                    let alu_op = if fp_off < 0 {
-                        ALUOp::Sub64
-                    } else {
-                        ALUOp::Add64
-                    };
-                    if let Some(imm12) = Imm12::maybe_from_u64(u64::try_from(fp_off.abs()).unwrap())
-                    {
-                        let inst = Inst::AluRRImm12 {
-                            alu_op,
-                            rd,
-                            imm12,
-                            rn: fp_reg(),
-                        };
-                        inst.emit(sink, flags);
-                    } else {
-                        let const_insts =
-                            Inst::load_constant(rd, u64::try_from(fp_off.abs()).unwrap());
-                        for inst in const_insts {
-                            inst.emit(sink, flags);
-                        }
-                        let inst = Inst::AluRRR {
-                            alu_op,
-                            rd,
-                            rn: fp_reg(),
-                            rm: rd.to_reg(),
-                        };
-                        inst.emit(sink, flags);
-                    }
+            &Inst::LoadAddr { rd, ref mem } => {
+                let (mem_insts, mem) = mem_finalize(sink.cur_offset(), mem, state);
+                for inst in mem_insts.into_iter() {
+                    inst.emit(sink, flags, state);
                 }
-                _ => unimplemented!("{:?}", mem),
-            },
-            &Inst::GetPinnedReg { rd } => {
-                let inst = Inst::Mov {
-                    rd,
-                    rm: xreg(PINNED_REG),
+
+                let (reg, offset) = match mem {
+                    MemArg::Unscaled(r, simm9) => (r, simm9.value()),
+                    MemArg::UnsignedOffset(r, uimm12scaled) => (r, uimm12scaled.value() as i32),
+                    _ => panic!("Unsupported case for LoadAddr: {:?}", mem),
                 };
-                inst.emit(sink, flags);
+                let abs_offset = if offset < 0 {
+                    -offset as u64
+                } else {
+                    offset as u64
+                };
+                let alu_op = if offset < 0 {
+                    ALUOp::Sub64
+                } else {
+                    ALUOp::Add64
+                };
+
+                if offset == 0 {
+                    let mov = Inst::mov(rd, reg);
+                    mov.emit(sink, flags, state);
+                } else if let Some(imm12) = Imm12::maybe_from_u64(abs_offset) {
+                    let add = Inst::AluRRImm12 {
+                        alu_op,
+                        rd,
+                        rn: reg,
+                        imm12,
+                    };
+                    add.emit(sink, flags, state);
+                } else {
+                    // Use `tmp2` here: `reg` may be `spilltmp` if the `MemArg` on this instruction
+                    // was initially an `SPOffset`. Assert that `tmp2` is truly free to use. Note
+                    // that no other instructions will be inserted here (we're emitting directly),
+                    // and a live range of `tmp2` should not span this instruction, so this use
+                    // should otherwise be correct.
+                    debug_assert!(rd.to_reg() != tmp2_reg());
+                    debug_assert!(reg != tmp2_reg());
+                    let tmp = writable_tmp2_reg();
+                    for insn in Inst::load_constant(tmp, abs_offset).into_iter() {
+                        insn.emit(sink, flags, state);
+                    }
+                    let add = Inst::AluRRR {
+                        alu_op,
+                        rd,
+                        rn: reg,
+                        rm: tmp.to_reg(),
+                    };
+                    add.emit(sink, flags, state);
+                }
             }
-            &Inst::SetPinnedReg { rm } => {
-                let inst = Inst::Mov {
-                    rd: Writable::from_reg(xreg(PINNED_REG)),
-                    rm,
-                };
-                inst.emit(sink, flags);
+            &Inst::VirtualSPOffsetAdj { offset } => {
+                debug!(
+                    "virtual sp offset adjusted by {} -> {}",
+                    offset,
+                    state.virtual_sp_offset + offset
+                );
+                state.virtual_sp_offset += offset;
+            }
+            &Inst::EmitIsland { needed_space } => {
+                if sink.island_needed(needed_space + 4) {
+                    let jump_around_label = sink.get_label();
+                    let jmp = Inst::Jump {
+                        dest: BranchTarget::Label(jump_around_label),
+                    };
+                    jmp.emit(sink, flags, state);
+                    sink.emit_island();
+                    sink.bind_label(jump_around_label);
+                }
             }
         }
+
+        let end_off = sink.cur_offset();
+        debug_assert!((end_off - start_off) <= Inst::worst_case_size());
     }
 }

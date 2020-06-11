@@ -32,7 +32,12 @@ pub enum SerInstData {
         opcode: String,
         args: [String; 2],
     },
-    BinaryImm {
+    BinaryImm8 {
+        opcode: String,
+        arg: String,
+        imm: String,
+    },
+    BinaryImm64 {
         opcode: String,
         arg: String,
         imm: String,
@@ -41,22 +46,17 @@ pub enum SerInstData {
         opcode: String,
         args: [String; 3],
     },
+    TernaryImm8 {
+        opcode: String,
+        args: [String; 2],
+        imm: String,
+    },
     MultiAry {
         opcode: String,
         args: Vec<String>,
     },
     NullAry {
         opcode: String,
-    },
-    InsertLane {
-        opcode: String,
-        args: [String; 2],
-        lane: String,
-    },
-    ExtractLane {
-        opcode: String,
-        arg: String,
-        lane: String,
     },
     Shuffle {
         opcode: String,
@@ -292,7 +292,12 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
                 args: hold_args,
             }
         }
-        InstructionData::BinaryImm { opcode, arg, imm } => SerInstData::BinaryImm {
+        InstructionData::BinaryImm8 { opcode, arg, imm } => SerInstData::BinaryImm8 {
+            opcode: opcode.to_string(),
+            arg: arg.to_string(),
+            imm: imm.to_string(),
+        },
+        InstructionData::BinaryImm64 { opcode, arg, imm } => SerInstData::BinaryImm64 {
             opcode: opcode.to_string(),
             arg: arg.to_string(),
             imm: imm.to_string(),
@@ -323,19 +328,14 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
         InstructionData::NullAry { opcode } => SerInstData::NullAry {
             opcode: opcode.to_string(),
         },
-        InstructionData::InsertLane { opcode, args, lane } => {
+        InstructionData::TernaryImm8 { opcode, args, imm } => {
             let hold_args = [args[0].to_string(), args[1].to_string()];
-            SerInstData::InsertLane {
+            SerInstData::TernaryImm8 {
                 opcode: opcode.to_string(),
                 args: hold_args,
-                lane: lane.to_string(),
+                imm: imm.to_string(),
             }
         }
-        InstructionData::ExtractLane { opcode, arg, lane } => SerInstData::ExtractLane {
-            opcode: opcode.to_string(),
-            arg: arg.to_string(),
-            lane: lane.to_string(),
-        },
         InstructionData::UnaryConst {
             opcode,
             constant_handle,

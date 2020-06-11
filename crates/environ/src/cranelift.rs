@@ -93,7 +93,7 @@ use crate::compilation::{
 use crate::func_environ::{get_func_name, FuncEnvironment};
 use crate::{CacheConfig, FunctionBodyData, ModuleLocal, ModuleTranslation, Tunables};
 use cranelift_codegen::ir::{self, ExternalName};
-use cranelift_codegen::machinst::sections::MachSrcLoc;
+use cranelift_codegen::machinst::buffer::MachSrcLoc;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{binemit, isa, Context};
 use cranelift_entity::PrimaryMap;
@@ -215,7 +215,7 @@ fn get_function_address_map<'data>(
     if let Some(ref mcr) = &context.mach_compile_result {
         // New-style backend: we have a `MachCompileResult` that will give us `MachSrcLoc` mapping
         // tuples.
-        for &MachSrcLoc { start, end, loc } in mcr.sections.get_srclocs_sorted() {
+        for &MachSrcLoc { start, end, loc } in mcr.buffer.get_srclocs_sorted() {
             instructions.push(InstructionAddressMap {
                 srcloc: loc,
                 code_offset: start as usize,
@@ -303,7 +303,7 @@ fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError
             let func_index = env.local.func_index(*i);
             let mut context = Context::new();
             context.func.name = get_func_name(func_index);
-            context.func.signature = env.local.func_signature(func_index).clone();
+            context.func.signature = env.local.native_func_signature(func_index).clone();
             if env.tunables.debug_info {
                 context.func.collect_debug_info();
             }

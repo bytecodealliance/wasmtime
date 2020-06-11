@@ -153,7 +153,6 @@ fn switch_error() {
 }
 
 #[test]
-#[cfg_attr(target_arch = "aarch64", should_panic)] // FIXME(#1521)
 fn libcall_function() {
     let mut module: Module<SimpleJITBackend> =
         Module::new(SimpleJITBuilder::new(default_libcall_names()));

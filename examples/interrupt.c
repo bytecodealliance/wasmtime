@@ -93,7 +93,7 @@ int main() {
   wasm_byte_vec_delete(&wasm);
   if (error != NULL)
     exit_with_error("failed to compile module", error, NULL);
-  error = wasmtime_instance_new(module, NULL, 0, &instance, &trap);
+  error = wasmtime_instance_new(store, module, NULL, 0, &instance, &trap);
   if (instance == NULL)
     exit_with_error("failed to instantiate", error, trap);
 

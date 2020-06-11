@@ -1,8 +1,11 @@
 //! Linking for JIT-compiled code.
 
-use crate::Compilation;
+use crate::CodeMemory;
 use cranelift_codegen::binemit::Reloc;
+use cranelift_codegen::ir::JumpTableOffsets;
 use std::ptr::{read_unaligned, write_unaligned};
+use wasmtime_environ::entity::PrimaryMap;
+use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::{Module, Relocation, RelocationTarget};
 use wasmtime_runtime::libcalls;
 use wasmtime_runtime::VMFunctionBody;
@@ -10,27 +13,22 @@ use wasmtime_runtime::VMFunctionBody;
 /// Links a module that has been compiled with `compiled_module` in `wasmtime-environ`.
 ///
 /// Performs all required relocations inside the function code, provided the necessary metadata.
-pub fn link_module(module: &Module, compilation: &Compilation) {
-    for (i, function_relocs) in compilation.relocations.iter() {
-        for r in function_relocs.iter() {
-            let fatptr: *const [VMFunctionBody] = compilation.finished_functions[i];
-            let body = fatptr as *const VMFunctionBody;
-            apply_reloc(module, compilation, body, r);
-        }
-    }
-
-    for (i, function_relocs) in compilation.trampoline_relocations.iter() {
-        for r in function_relocs.iter() {
-            println!("tramopline relocation");
-            let body = compilation.trampolines[&i] as *const VMFunctionBody;
-            apply_reloc(module, compilation, body, r);
-        }
+pub fn link_module(
+    code_memory: &mut CodeMemory,
+    module: &Module,
+    finished_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    jt_offsets: &PrimaryMap<DefinedFuncIndex, JumpTableOffsets>,
+) {
+    for (fatptr, r) in code_memory.unpublished_relocations() {
+        let body = fatptr as *const VMFunctionBody;
+        apply_reloc(module, finished_functions, jt_offsets, body, r);
     }
 }
 
 fn apply_reloc(
     module: &Module,
-    compilation: &Compilation,
+    finished_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    jt_offsets: &PrimaryMap<DefinedFuncIndex, JumpTableOffsets>,
     body: *const VMFunctionBody,
     r: &Relocation,
 ) {
@@ -38,7 +36,7 @@ fn apply_reloc(
     let target_func_address: usize = match r.reloc_target {
         RelocationTarget::UserFunc(index) => match module.local.defined_func_index(index) {
             Some(f) => {
-                let fatptr: *const [VMFunctionBody] = compilation.finished_functions[f];
+                let fatptr: *const [VMFunctionBody] = finished_functions[f];
                 fatptr as *const VMFunctionBody as usize
             }
             None => panic!("direct call to import"),
@@ -46,6 +44,13 @@ fn apply_reloc(
         RelocationTarget::LibCall(libcall) => {
             use cranelift_codegen::ir::LibCall::*;
             match libcall {
+                UdivI64 => wasmtime_i64_udiv as usize,
+                SdivI64 => wasmtime_i64_sdiv as usize,
+                UremI64 => wasmtime_i64_urem as usize,
+                SremI64 => wasmtime_i64_srem as usize,
+                IshlI64 => wasmtime_i64_ishl as usize,
+                UshrI64 => wasmtime_i64_ushr as usize,
+                SshrI64 => wasmtime_i64_sshr as usize,
                 CeilF32 => wasmtime_f32_ceil as usize,
                 FloorF32 => wasmtime_f32_floor as usize,
                 TruncF32 => wasmtime_f32_trunc as usize,
@@ -60,12 +65,11 @@ fn apply_reloc(
         RelocationTarget::JumpTable(func_index, jt) => {
             match module.local.defined_func_index(func_index) {
                 Some(f) => {
-                    let offset = *compilation
-                        .jt_offsets
+                    let offset = *jt_offsets
                         .get(f)
                         .and_then(|ofs| ofs.get(jt))
                         .expect("func jump table");
-                    let fatptr: *const [VMFunctionBody] = compilation.finished_functions[f];
+                    let fatptr: *const [VMFunctionBody] = finished_functions[f];
                     fatptr as *const VMFunctionBody as usize + offset as usize
                 }
                 None => panic!("func index of jump table"),
@@ -94,9 +98,14 @@ fn apply_reloc(
             write_unaligned(reloc_address as *mut u32, reloc_delta_u32);
         },
         #[cfg(target_pointer_width = "32")]
-        Reloc::X86CallPCRel4 => {
-            // ignore
-        }
+        Reloc::X86CallPCRel4 => unsafe {
+            let reloc_address = body.add(r.offset as usize) as usize;
+            let reloc_addend = r.addend as isize;
+            let reloc_delta_u32 = (target_func_address as u32)
+                .wrapping_sub(reloc_address as u32)
+                .wrapping_add(reloc_addend as u32);
+            write_unaligned(reloc_address as *mut u32, reloc_delta_u32);
+        },
         Reloc::X86PCRelRodata4 => {
             // ignore
         }

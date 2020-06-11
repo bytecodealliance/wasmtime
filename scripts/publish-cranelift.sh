@@ -18,6 +18,10 @@ cd "$topdir"
 for crate in \
     entity \
     bforest \
+    peepmatic/crates/macro \
+    peepmatic/crates/automata \
+    peepmatic/crates/runtime \
+    peepmatic \
     codegen/shared \
     codegen/meta \
     codegen \

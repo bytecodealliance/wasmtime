@@ -40,8 +40,12 @@ unsafe fn test_timeout() {
     };
     let r#in = [wasi::Subscription {
         userdata: CLOCK_ID,
-        r#type: wasi::EVENTTYPE_CLOCK,
-        u: wasi::SubscriptionU { clock },
+        u: wasi::SubscriptionU {
+            tag: wasi::EVENTTYPE_CLOCK,
+            u: wasi::SubscriptionUU {
+                clock
+            }
+        },
     }];
     let out = poll_oneoff_impl(&r#in, 1);
     let event = &out[0];
@@ -74,14 +78,22 @@ unsafe fn test_stdin_read() {
     let r#in = [
         wasi::Subscription {
             userdata: CLOCK_ID,
-            r#type: wasi::EVENTTYPE_CLOCK,
-            u: wasi::SubscriptionU { clock },
+            u: wasi::SubscriptionU {
+                tag: wasi::EVENTTYPE_CLOCK,
+                u: wasi::SubscriptionUU {
+                    clock
+                }
+            },
         },
         // Make sure that timeout is returned only once even if there are multiple read events
         wasi::Subscription {
             userdata: 1,
-            r#type: wasi::EVENTTYPE_FD_READ,
-            u: wasi::SubscriptionU { fd_readwrite },
+            u: wasi::SubscriptionU {
+                tag: wasi::EVENTTYPE_FD_READ,
+                u: wasi::SubscriptionUU {
+                    fd_read: fd_readwrite
+                }
+            },
         },
     ];
     let out = poll_oneoff_impl(&r#in, 1);
@@ -112,16 +124,20 @@ unsafe fn test_stdout_stderr_write() {
     let r#in = [
         wasi::Subscription {
             userdata: 1,
-            r#type: wasi::EVENTTYPE_FD_WRITE,
             u: wasi::SubscriptionU {
-                fd_readwrite: stdout_readwrite,
+                tag: wasi::EVENTTYPE_FD_WRITE,
+                u: wasi::SubscriptionUU {
+                    fd_write: stdout_readwrite
+                },
             },
         },
         wasi::Subscription {
             userdata: 2,
-            r#type: wasi::EVENTTYPE_FD_WRITE,
             u: wasi::SubscriptionU {
-                fd_readwrite: stderr_readwrite,
+                tag: wasi::EVENTTYPE_FD_WRITE,
+                u: wasi::SubscriptionUU {
+                    fd_write: stderr_readwrite
+                }
             },
         },
     ];
@@ -163,13 +179,21 @@ unsafe fn test_fd_readwrite(fd: wasi::Fd, error_code: wasi::Errno) {
     let r#in = [
         wasi::Subscription {
             userdata: 1,
-            r#type: wasi::EVENTTYPE_FD_READ,
-            u: wasi::SubscriptionU { fd_readwrite },
+            u: wasi::SubscriptionU {
+                tag: wasi::EVENTTYPE_FD_READ,
+                u: wasi::SubscriptionUU {
+                    fd_read: fd_readwrite
+                }
+            },
         },
         wasi::Subscription {
             userdata: 2,
-            r#type: wasi::EVENTTYPE_FD_WRITE,
-            u: wasi::SubscriptionU { fd_readwrite },
+            u: wasi::SubscriptionU {
+                tag: wasi::EVENTTYPE_FD_WRITE,
+                u: wasi::SubscriptionUU {
+                    fd_write: fd_readwrite
+                }
+            },
         },
     ];
     let out = poll_oneoff_impl(&r#in, 2);

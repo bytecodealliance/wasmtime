@@ -1,6 +1,7 @@
+use crate::host_ref::HostRef;
 use crate::wasm_externkind_t;
 use crate::{wasm_externtype_t, wasm_func_t, wasm_global_t, wasm_memory_t, wasm_table_t};
-use wasmtime::{ExternType, Func, Global, HostRef, Memory, Table};
+use wasmtime::{ExternType, Func, Global, Memory, Table};
 
 #[derive(Clone)]
 pub struct wasm_extern_t {
@@ -18,12 +19,12 @@ pub(crate) enum ExternHost {
 }
 
 impl wasm_extern_t {
-    fn anyref(&self) -> wasmtime::AnyRef {
+    pub(crate) fn externref(&self) -> wasmtime::ExternRef {
         match &self.which {
-            ExternHost::Func(f) => f.anyref(),
-            ExternHost::Global(f) => f.anyref(),
-            ExternHost::Memory(f) => f.anyref(),
-            ExternHost::Table(f) => f.anyref(),
+            ExternHost::Func(f) => f.clone().into(),
+            ExternHost::Global(f) => f.clone().into(),
+            ExternHost::Memory(f) => f.clone().into(),
+            ExternHost::Table(f) => f.clone().into(),
         }
     }
 }

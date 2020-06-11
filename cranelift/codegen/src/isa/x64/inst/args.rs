@@ -5,7 +5,6 @@ use std::string::{String, ToString};
 
 use regalloc::{RealRegUniverse, Reg, RegClass, RegUsageCollector};
 
-use crate::binemit::CodeOffset;
 use crate::machinst::*;
 
 use super::regs::show_ireg_sized;
@@ -145,7 +144,7 @@ impl RM {
     // Constructors.
 
     pub(crate) fn reg(reg: Reg) -> Self {
-        debug_assert!(reg.get_class() == RegClass::I64);
+        debug_assert!(reg.get_class() == RegClass::I64 || reg.get_class() == RegClass::V128);
         RM::R { reg }
     }
 
@@ -206,8 +205,75 @@ impl fmt::Debug for RMI_R_Op {
     }
 }
 
-/// These indicate ways of extending (widening) a value, using the Intel naming:
-/// B(yte) = u8, W(ord) = u16, L(ong)word = u32, Q(uad)word = u64
+/// Some scalar SSE operations requiring 2 operands r/m and r
+/// Each instruction is prefixed with the SSE version that introduced
+/// the particular instructions.
+/// TODO: Below only includes scalar operations. To be seen if packed will
+/// be added here.
+#[derive(Clone, PartialEq)]
+pub enum SSE_Op {
+    SSE_Addss,
+    SSE2_Addsd,
+    SSE_Comiss,
+    SSE2_Comisd,
+    SSE2_Cvtsd2ss,
+    SSE2_Cvtsd2si,
+    SSE_Cvtsi2ss,
+    SSE2_Cvtsi2sd,
+    SSE_Cvtss2si,
+    SSE2_Cvtss2sd,
+    SSE_Cvttss2si,
+    SSE2_Cvttsd2si,
+    SSE_Divss,
+    SSE2_Divsd,
+    SSE_Maxss,
+    SSE2_Maxsd,
+    SSE_Minss,
+    SSE2_Minsd,
+    SSE_Movss,
+    SSE2_Movsd,
+    SSE_Mulss,
+    SSE2_Mulsd,
+    SSE_Rcpss,
+    SSE41_Roundss,
+    SSE41_Roundsd,
+    SSE_Rsqrtss,
+    SSE_Sqrtss,
+    SSE2_Sqrtsd,
+    SSE_Subss,
+    SSE2_Subsd,
+    SSE_Ucomiss,
+    SSE2_Ucomisd,
+}
+
+/// Some SSE operations requiring 3 operands i, r/m, and r
+#[derive(Clone, PartialEq)]
+pub enum SSE_RMI_Op {
+    SSE_Cmpss,
+    SSE2_Cmpsd,
+    SSE41_Insertps,
+}
+
+impl SSE_Op {
+    pub(crate) fn to_string(&self) -> String {
+        match self {
+            SSE_Op::SSE_Addss => "addss".to_string(),
+            SSE_Op::SSE_Subss => "subss".to_string(),
+            SSE_Op::SSE_Movss => "movss".to_string(),
+            SSE_Op::SSE2_Movsd => "movsd".to_string(),
+            _ => "unimplemented sse_op".to_string(),
+        }
+    }
+}
+
+impl fmt::Debug for SSE_Op {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "{}", self.to_string())
+    }
+}
+
+/// These indicate ways of extending (widening) a value, using the Intel
+/// naming: B(yte) = u8, W(ord) = u16, L(ong)word = u32, Q(uad)word = u64
 #[derive(Clone, PartialEq)]
 pub enum ExtMode {
     /// Byte -> Longword.
@@ -375,43 +441,27 @@ impl fmt::Debug for CC {
 /// from end of current instruction).
 #[derive(Clone, Copy, Debug)]
 pub enum BranchTarget {
-    /// An unresolved reference to a BlockIndex, as passed into
-    /// `lower_branch_group()`.
-    Block(BlockIndex),
+    /// An unresolved reference to a MachLabel.
+    Label(MachLabel),
 
-    /// A resolved reference to another instruction, after
-    /// `Inst::with_block_offsets()`.  This offset is in bytes.
-    ResolvedOffset(BlockIndex, isize),
+    /// A resolved reference to another instruction, in bytes.
+    ResolvedOffset(isize),
 }
 
 impl ShowWithRRU for BranchTarget {
     fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
         match self {
-            BranchTarget::Block(bix) => format!("(Block {})", bix),
-            BranchTarget::ResolvedOffset(bix, offs) => format!("(Block {}, offset {})", bix, offs),
+            BranchTarget::Label(l) => format!("{:?}", l),
+            BranchTarget::ResolvedOffset(offs) => format!("(offset {})", offs),
         }
     }
 }
 
 impl BranchTarget {
-    /// Lower the branch target given offsets of each block.
-    pub fn lower(&mut self, targets: &[CodeOffset], my_offset: CodeOffset) {
+    /// Get the label.
+    pub fn as_label(&self) -> Option<MachLabel> {
         match self {
-            &mut BranchTarget::Block(bix) => {
-                let bix = bix as usize;
-                assert!(bix < targets.len());
-                let block_offset_in_func = targets[bix];
-                let branch_offset = (block_offset_in_func as isize) - (my_offset as isize);
-                *self = BranchTarget::ResolvedOffset(bix as BlockIndex, branch_offset);
-            }
-            &mut BranchTarget::ResolvedOffset(..) => {}
-        }
-    }
-
-    /// Get the block index.
-    pub fn as_block_index(&self) -> Option<BlockIndex> {
-        match self {
-            &BranchTarget::Block(bix) => Some(bix),
+            &BranchTarget::Label(l) => Some(l),
             _ => None,
         }
     }
@@ -421,31 +471,17 @@ impl BranchTarget {
     /// byte of the target.  It does not take into account the Intel-specific
     /// rule that a branch offset is encoded as relative to the start of the
     /// following instruction.  That is a problem for the emitter to deal
-    /// with.
-    pub fn as_offset_i32(&self) -> Option<i32> {
+    /// with. If a label, returns zero.
+    pub fn as_offset32_or_zero(&self) -> i32 {
         match self {
-            &BranchTarget::ResolvedOffset(_, off) => {
+            &BranchTarget::ResolvedOffset(off) => {
                 // Leave a bit of slack so that the emitter is guaranteed to
                 // be able to add the length of the jump instruction encoding
                 // to this value and still have a value in signed-32 range.
-                if off >= -0x7FFF_FF00isize && off <= 0x7FFF_FF00isize {
-                    Some(off as i32)
-                } else {
-                    None
-                }
+                assert!(off >= -0x7FFF_FF00 && off <= 0x7FFF_FF00);
+                off as i32
             }
-            _ => None,
-        }
-    }
-
-    /// Map the block index given a transform map.
-    pub fn map(&mut self, block_index_map: &[BlockIndex]) {
-        match self {
-            &mut BranchTarget::Block(ref mut bix) => {
-                let n = block_index_map[*bix as usize];
-                *bix = n;
-            }
-            _ => panic!("BranchTarget::map() called on already-lowered BranchTarget!"),
+            _ => 0,
         }
     }
 }

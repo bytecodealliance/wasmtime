@@ -7,6 +7,7 @@
 
 use crate::ir::{ArgumentLoc, ExternalName, SigRef, Type};
 use crate::isa::{CallConv, RegInfo, RegUnit};
+use crate::machinst::RelocDistance;
 use alloc::vec::Vec;
 use core::fmt;
 use core::str::FromStr;
@@ -155,6 +156,8 @@ pub struct AbiParam {
     /// ABI-specific location of this argument, or `Unassigned` for arguments that have not yet
     /// been legalized.
     pub location: ArgumentLoc,
+    /// Was the argument converted to pointer during legalization?
+    pub legalized_to_pointer: bool,
 }
 
 impl AbiParam {
@@ -165,6 +168,7 @@ impl AbiParam {
             extension: ArgumentExtension::None,
             purpose: ArgumentPurpose::Normal,
             location: Default::default(),
+            legalized_to_pointer: false,
         }
     }
 
@@ -175,6 +179,7 @@ impl AbiParam {
             extension: ArgumentExtension::None,
             purpose,
             location: Default::default(),
+            legalized_to_pointer: false,
         }
     }
 
@@ -185,6 +190,7 @@ impl AbiParam {
             extension: ArgumentExtension::None,
             purpose,
             location: ArgumentLoc::Reg(regunit),
+            legalized_to_pointer: false,
         }
     }
 
@@ -218,6 +224,9 @@ pub struct DisplayAbiParam<'a>(&'a AbiParam, Option<&'a RegInfo>);
 impl<'a> fmt::Display for DisplayAbiParam<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.0.value_type)?;
+        if self.0.legalized_to_pointer {
+            write!(f, " ptr")?;
+        }
         match self.0.extension {
             ArgumentExtension::None => {}
             ArgumentExtension::Uext => write!(f, " uext")?,
@@ -366,6 +375,16 @@ pub struct ExtFuncData {
     /// Will this function be defined nearby, such that it will always be a certain distance away,
     /// after linking? If so, references to it can avoid going through a GOT or PLT. Note that
     /// symbols meant to be preemptible cannot be considered colocated.
+    ///
+    /// If `true`, some backends may use relocation forms that have limited range. The exact
+    /// distance depends on the code model in use. Currently on AArch64, for example, Cranelift
+    /// uses a custom code model supporting up to +/- 128MB displacements. If it is unknown how
+    /// far away the target will be, it is best not to set the `colocated` flag; in general, this
+    /// flag is best used when the target is known to be in the same unit of code generation, such
+    /// as a Wasm module.
+    ///
+    /// See the documentation for [`RelocDistance`](machinst::RelocDistance) for more details. A
+    /// `colocated` flag value of `true` implies `RelocDistance::Near`.
     pub colocated: bool,
 }
 
@@ -375,6 +394,17 @@ impl fmt::Display for ExtFuncData {
             write!(f, "colocated ")?;
         }
         write!(f, "{} {}", self.name, self.signature)
+    }
+}
+
+impl ExtFuncData {
+    /// Return an estimate of the distance to the referred-to function symbol.
+    pub fn reloc_distance(&self) -> RelocDistance {
+        if self.colocated {
+            RelocDistance::Near
+        } else {
+            RelocDistance::Far
+        }
     }
 }
 
@@ -393,6 +423,8 @@ mod tests {
         assert_eq!(t.sext().to_string(), "i32 sext");
         t.purpose = ArgumentPurpose::StructReturn;
         assert_eq!(t.to_string(), "i32 uext sret");
+        t.legalized_to_pointer = true;
+        assert_eq!(t.to_string(), "i32 ptr uext sret");
     }
 
     #[test]

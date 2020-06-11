@@ -5,6 +5,9 @@ on:
     tags-ignore: [dev]
   pull_request:
     branches: [master]
+defaults:
+  run:
+    shell: bash
 
 jobs:
   # Check Code style quickly by running `rustfmt` over all code
@@ -12,7 +15,7 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -25,7 +28,7 @@ jobs:
     name: Doc - build the book
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
       with:
         submodules: true
     - run: |
@@ -47,12 +50,12 @@ jobs:
     name: Doc - build the API documentation
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly
+        toolchain: nightly-2020-06-03
     - run: cargo doc --no-deps --all --exclude wasmtime-cli --exclude test-programs --exclude cranelift-codegen-meta
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
     - uses: actions/upload-artifact@v1
@@ -67,18 +70,18 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly
+        toolchain: nightly-2020-06-03
 
     # Check some feature combinations of the `wasmtime` crate
-    - run: cargo check --manifest-path crates/api/Cargo.toml --no-default-features
-    - run: cargo check --manifest-path crates/api/Cargo.toml --features wat
-    - run: cargo check --manifest-path crates/api/Cargo.toml --features lightbeam
-    - run: cargo check --manifest-path crates/api/Cargo.toml --features jitdump
+    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --no-default-features
+    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features wat
+    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features lightbeam
+    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features jitdump
 
     # Check some feature combinations of the `wasmtime-c-api` crate
     - run: cargo check --manifest-path crates/c-api/Cargo.toml --no-default-features
@@ -105,65 +108,47 @@ jobs:
     - run: cargo check --target armv7-unknown-linux-gnueabihf -p wasi-common
 
 
-  # Download our libFuzzer corpus and make sure that we can still handle all the
-  # inputs.
-  fuzz_corpora:
-    name: Fuzz Corpora
+  fuzz_targets:
+    name: Fuzz Targets
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
       with:
         submodules: true
-    - uses: actions/checkout@v1
-      with:
-        repository: bytecodealliance/wasmtime-libfuzzer-corpus
-        path: ./wasmtime/fuzz/corpus
-        ref: refs/heads/master
     - uses: ./.github/actions/install-rust
       with:
         toolchain: nightly
     - run: cargo install cargo-fuzz --vers "^0.7"
     - run: cargo fetch
       working-directory: ./fuzz
-    - run: cargo fuzz build --release --debug-assertions --features binaryen
-    # Our corpora are too large to run in full on every pull request, they just
-    # take too long. Instead, we sample some of them and make sure that running
-    # our fuzzers over the sampled inputs still works OK.
-    - run: |
-        find fuzz/corpus/compile -type f \
-            | shuf \
-            | head -n 3000 \
-            | xargs cargo fuzz run compile --release --debug-assertions --features binaryen
-      env:
-        RUST_BACKTRACE: 1
-    - run: |
-        find fuzz/corpus/instantiate -type f \
-            | shuf \
-            | head -n 2000 \
-            | xargs cargo fuzz run instantiate --release --debug-assertions --features binaryen
-      env:
-        RUST_BACKTRACE: 1
-    - run: |
-        find fuzz/corpus/instantiate_translated -type f \
-            | shuf \
-            | head -n 1000 \
-            | xargs cargo fuzz run instantiate_translated --release --debug-assertions --features binaryen
-      env:
-        RUST_BACKTRACE: 1
-    - run: |
-        find fuzz/corpus/api_calls -type f \
-            | shuf \
-            | head -n 100 \
-            | xargs cargo fuzz run api_calls --release --debug-assertions --features binaryen
-      env:
-        RUST_BACKTRACE: 1
-    - run: |
-        find fuzz/corpus/differential -type f \
-            | shuf \
-            | head -n 100 \
-            | xargs cargo fuzz run differential --release --debug-assertions --features binaryen
-      env:
-        RUST_BACKTRACE: 1
+    - run: cargo fuzz build --features binaryen
+
+  rebuild_peephole_optimizers:
+    name: Rebuild Peephole Optimizers
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - name: Test `peepmatic`
+      run: |
+        cargo test \
+          --package peepmatic \
+          --package peepmatic-automata \
+          --package peepmatic-fuzzing \
+          --package peepmatic-macro \
+          --package peepmatic-runtime \
+          --package peepmatic-test
+    - name: Rebuild Cranelift's peepmatic-based peephole optimizers
+      run: |
+        cd cranelift/
+        cargo build --features 'enable-peepmatic cranelift-codegen/rebuild-peephole-optimizers'
+    - name: Check that peephole optimizers are up to date
+      run: git diff --exit-code
+    - name: Test `cranelift-codegen` with `peepmatic` enabled
+      run: |
+        cd cranelift/
+        cargo test --features 'enable-peepmatic'
 
   # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
   # channels of Rust as well as macOS/Linux/Windows.
@@ -182,7 +167,7 @@ jobs:
             rust: beta
           - build: nightly
             os: ubuntu-latest
-            rust: nightly
+            rust: nightly-2020-06-03
           - build: macos
             os: macos-latest
             rust: stable
@@ -190,7 +175,7 @@ jobs:
             os: windows-latest
             rust: stable
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -202,15 +187,15 @@ jobs:
       # Note: libclang is pre-installed on the macOS and linux images.
       if: matrix.os == 'windows-latest'
       run: |
-        Invoke-WebRequest https://releases.llvm.org/9.0.0/LLVM-9.0.0-win64.exe -OutFile llvm-installer.exe
-        7z x llvm-installer.exe -oC:\llvm-binary
-        Write-Host ::set-env name=LIBCLANG_PATH::C:\llvm-binary\bin\libclang.dll
-        Write-Host ::add-path::C:\llvm-binary\bin
+        curl https://releases.llvm.org/9.0.0/LLVM-9.0.0-win64.exe -o llvm-installer.exe
+        7z x llvm-installer.exe -oC:/llvm-binary
+        echo ::set-env name=LIBCLANG_PATH::C:/llvm-binary/bin/libclang.dll
+        echo ::add-path::C:/llvm-binary/bin
 
     - name: Query Clang Version
       if: matrix.os == 'windows-latest'
       run: |
-        Get-Command clang.exe
+        where clang.exe
         clang.exe --version
 
     # Install wasm32 targets in order to build various tests throughout the
@@ -225,7 +210,17 @@ jobs:
     - run: cargo run -p run-examples
 
     # Build and test all features except for lightbeam
-    - run: cargo test --features test-programs/test_programs --all --exclude lightbeam
+    - run: |
+        cargo test \
+            --features test-programs/test_programs \
+            --all \
+            --exclude lightbeam \
+            --exclude peepmatic \
+            --exclude peepmatic-automata \
+            --exclude peepmatic-fuzzing \
+            --exclude peepmatic-macro \
+            --exclude peepmatic-runtime \
+            --exclude peepmatic-test
       env:
         RUST_BACKTRACE: 1
 
@@ -238,9 +233,9 @@ jobs:
     # Build and test lightbeam if we're using the nightly toolchain. Note that
     # Lightbeam tests fail right now, but we don't want to block on that.
     - run: cargo build --package lightbeam
-      if: matrix.rust == 'nightly'
+      if: matrix.rust == 'nightly-2020-06-03'
     - run: cargo test --package lightbeam
-      if: matrix.rust == 'nightly'
+      if: matrix.rust == 'nightly-2020-06-03'
       continue-on-error: true
       env:
         RUST_BACKTRACE: 1
@@ -250,7 +245,7 @@ jobs:
     name: Meta deterministic check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
       with:
         submodules: true
     - name: Install Rust
@@ -289,7 +284,7 @@ jobs:
           qemu: qemu-aarch64 -L /usr/aarch64-linux-gnu
           qemu_target: aarch64-linux-user
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
@@ -302,7 +297,6 @@ jobs:
       run: |
         echo ::set-env name=CARGO_BUILD_TARGET::${{ matrix.target }}
         rustup target add ${{ matrix.target }}
-      shell: bash
       if: matrix.target != ''
 
     - name: Install cross-compilation tools
@@ -315,8 +309,8 @@ jobs:
         # way faster at arm emulation than the current version github actions'
         # ubuntu image uses. Disable as much as we can to get it to build
         # quickly.
-        curl https://download.qemu.org/qemu-4.2.0.tar.xz | tar xJf -
-        cd qemu-4.2.0
+        curl https://download.qemu.org/qemu-5.0.0.tar.xz | tar xJf -
+        cd qemu-5.0.0
         ./configure --target-list=${{ matrix.qemu_target }} --prefix=$HOME/qemu --disable-tools --disable-slirp --disable-fdt --disable-capstone --disable-docs
         make -j$(nproc) install
 
@@ -333,13 +327,28 @@ jobs:
 
     # Build `wasmtime` and executables
     - run: $CENTOS cargo build --release --bin wasmtime
-      shell: bash
+
     # Build `libwasmtime.so`
     - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
-      shell: bash
-    # Test what we just built
-    - run: $CENTOS cargo test --features test-programs/test_programs --release --all --exclude lightbeam
-      shell: bash
+
+    # Test what we just built.
+    #
+    # Ignore some optional dependencies that are used by features that aren't
+    # enabled by default, are tested in other, dedicated CI jobs, and which
+    # would increase build times here.
+    - run: |
+        $CENTOS cargo test \
+            --features test-programs/test_programs \
+            --release \
+            --all \
+            --exclude lightbeam \
+            --exclude peepmatic \
+            --exclude peepmatic-automata \
+            --exclude peepmatic-fuzzing \
+            --exclude peepmatic-macro \
+            --exclude peepmatic-runtime \
+            --exclude peepmatic-test \
+            --exclude wasmtime-fuzz
       env:
         RUST_BACKTRACE: 1
 
@@ -353,7 +362,6 @@ jobs:
     # something that we'll upload from this action.
 
     - run: mkdir dist
-      shell: bash
 
     # Move binaries to dist folder
     - run: cp target/release/wasmtime dist
@@ -361,10 +369,8 @@ jobs:
     - run: cp target/${{ matrix.target }}/release/wasmtime dist
       if: matrix.os != 'windows-latest' && matrix.target != ''
     - run: cp target/release/wasmtime.exe dist
-      shell: bash
       if: matrix.build == 'x86_64-windows'
     - run: cp target/x86_64-pc-windows-gnu/release/wasmtime.exe dist
-      shell: bash
       if: matrix.build == 'x86_64-mingw'
 
     # Move libwasmtime dylib to dist folder
@@ -375,10 +381,8 @@ jobs:
     - run: cp target/release/libwasmtime.{dylib,a} dist
       if: matrix.os == 'macos-latest'
     - run: cp target/release/wasmtime.{dll,lib,dll.lib} dist
-      shell: bash
       if: matrix.build == 'x86_64-windows'
     - run: cp target/x86_64-pc-windows-gnu/release/{wasmtime.dll,libwasmtime.a} dist
-      shell: bash
       if: matrix.build == 'x86_64-mingw'
 
     # Make a Windows MSI installer if we're on Windows
@@ -387,7 +391,6 @@ jobs:
         "$WIX/bin/candle" -arch x64 -out target/wasmtime.wixobj ci/wasmtime.wxs
         "$WIX/bin/light" -out dist/installer.msi target/wasmtime.wixobj -ext WixUtilExtension
         rm dist/installer.wixpdb
-      shell: bash
       if: matrix.build == 'x86_64-windows'
 
     - uses: actions/upload-artifact@v1
@@ -404,7 +407,7 @@ jobs:
     needs: [doc_book, doc_api, build]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
       with:
         submodules: true
     - run: rustup update stable && rustup default stable
@@ -510,7 +513,7 @@ jobs:
       CARGO_AUDIT_VERSION: 0.11.2
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - uses: actions/cache@v1
       with:
         path: ${{ runner.tool_cache }}/cargo-audit

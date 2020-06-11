@@ -14,7 +14,8 @@ cranelift-reader = { path = "../cranelift/reader" }
 cranelift-wasm = { path = "../cranelift/wasm" }
 libfuzzer-sys = "0.3.2"
 target-lexicon = "0.10"
-wasmtime = { path = "../crates/api" }
+peepmatic-fuzzing = { path = "../cranelift/peepmatic/crates/fuzzing", optional = true }
+wasmtime = { path = "../crates/wasmtime" }
 wasmtime-fuzzing = { path = "../crates/fuzzing" }
 
 [[bin]]
@@ -34,21 +35,21 @@ name = "instantiate_translated"
 path = "fuzz_targets/instantiate_translated.rs"
 test = false
 doc = false
-required-features = ['binaryen']
+required-features = ["binaryen"]
 
 [[bin]]
 name = "api_calls"
 path = "fuzz_targets/api_calls.rs"
 test = false
 doc = false
-required-features = ['binaryen']
+required-features = ["binaryen"]
 
 [[bin]]
 name = "differential"
 path = "fuzz_targets/differential.rs"
 test = false
 doc = false
-required-features = ['binaryen']
+required-features = ["binaryen"]
 
 [[bin]]
 name = "spectests"
@@ -56,5 +57,40 @@ path = "fuzz_targets/spectests.rs"
 test = false
 doc = false
 
+[[bin]]
+name = "peepmatic_simple_automata"
+path = "fuzz_targets/peepmatic_simple_automata.rs"
+test = false
+doc = false
+required-features = ["peepmatic-fuzzing"]
+
+[[bin]]
+name = "peepmatic_fst_differential"
+path = "fuzz_targets/peepmatic_fst_differential.rs"
+test = false
+doc = false
+required-features = ["peepmatic-fuzzing"]
+
+[[bin]]
+name = "peepmatic_parser"
+path = "fuzz_targets/peepmatic_parser.rs"
+test = false
+doc = false
+required-features = ["peepmatic-fuzzing"]
+
+[[bin]]
+name = "peepmatic_compile"
+path = "fuzz_targets/peepmatic_compile.rs"
+test = false
+doc = false
+required-features = ["peepmatic-fuzzing"]
+
+[[bin]]
+name = "peepmatic_interp"
+path = "fuzz_targets/peepmatic_interp.rs"
+test = false
+doc = false
+required-features = ["peepmatic-fuzzing"]
+
 [features]
-binaryen = ['wasmtime-fuzzing/binaryen']
+binaryen = ["wasmtime-fuzzing/binaryen"]

@@ -91,3 +91,56 @@ fn atom_token(atom: witx::AtomType) -> TokenStream {
         witx::AtomType::F64 => quote!(f64),
     }
 }
+
+pub trait WiggleType {
+    fn impls_display(&self) -> bool;
+}
+
+impl WiggleType for witx::TypeRef {
+    fn impls_display(&self) -> bool {
+        match self {
+            witx::TypeRef::Name(alias_to) => (&*alias_to).impls_display(),
+            witx::TypeRef::Value(v) => (&*v).impls_display(),
+        }
+    }
+}
+
+impl WiggleType for witx::NamedType {
+    fn impls_display(&self) -> bool {
+        self.tref.impls_display()
+    }
+}
+
+impl WiggleType for witx::Type {
+    fn impls_display(&self) -> bool {
+        match self {
+            witx::Type::Enum(x) => x.impls_display(),
+            witx::Type::Int(x) => x.impls_display(),
+            witx::Type::Flags(x) => x.impls_display(),
+            witx::Type::Struct(x) => x.impls_display(),
+            witx::Type::Union(x) => x.impls_display(),
+            witx::Type::Handle(x) => x.impls_display(),
+            witx::Type::Builtin(x) => x.impls_display(),
+            witx::Type::Pointer { .. }
+            | witx::Type::ConstPointer { .. }
+            | witx::Type::Array { .. } => false,
+        }
+    }
+}
+
+impl WiggleType for witx::BuiltinType {
+    fn impls_display(&self) -> bool {
+        true
+    }
+}
+
+impl WiggleType for witx::InterfaceFuncParam {
+    fn impls_display(&self) -> bool {
+        match &*self.tref.type_() {
+            witx::Type::Struct { .. }
+            | witx::Type::Union { .. }
+            | witx::Type::Builtin(witx::BuiltinType::String { .. }) => false,
+            _ => self.tref.impls_display(),
+        }
+    }
+}
