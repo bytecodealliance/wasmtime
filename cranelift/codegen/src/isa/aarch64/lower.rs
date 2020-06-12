@@ -14,7 +14,7 @@ use crate::ir::Inst as IRInst;
 use crate::ir::{InstructionData, Opcode, TrapCode, Type};
 use crate::machinst::lower::*;
 use crate::machinst::*;
-use crate::CodegenResult;
+use crate::{CodegenError, CodegenResult};
 
 use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::AArch64Backend;
@@ -726,6 +726,77 @@ pub(crate) fn lower_fp_condcode(cc: FloatCC) -> Cond {
     }
 }
 
+pub(crate) fn lower_vector_compare<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    rd: Writable<Reg>,
+    mut rn: Reg,
+    mut rm: Reg,
+    ty: Type,
+    cond: Cond,
+) -> CodegenResult<()> {
+    match ty {
+        F32X4 | F64X2 | I8X16 | I16X8 | I32X4 => {}
+        _ => {
+            return Err(CodegenError::Unsupported(format!(
+                "unsupported SIMD type: {:?}",
+                ty
+            )));
+        }
+    };
+
+    let is_float = match ty {
+        F32X4 | F64X2 => true,
+        _ => false,
+    };
+    // 'Less than' operations are implemented by swapping
+    // the order of operands and using the 'greater than'
+    // instructions.
+    // 'Not equal' is implemented with 'equal' and inverting
+    // the result.
+    let (alu_op, swap) = match (is_float, cond) {
+        (false, Cond::Eq) => (VecALUOp::Cmeq, false),
+        (false, Cond::Ne) => (VecALUOp::Cmeq, false),
+        (false, Cond::Ge) => (VecALUOp::Cmge, false),
+        (false, Cond::Gt) => (VecALUOp::Cmgt, false),
+        (false, Cond::Le) => (VecALUOp::Cmge, true),
+        (false, Cond::Lt) => (VecALUOp::Cmgt, true),
+        (false, Cond::Hs) => (VecALUOp::Cmhs, false),
+        (false, Cond::Hi) => (VecALUOp::Cmhi, false),
+        (false, Cond::Ls) => (VecALUOp::Cmhs, true),
+        (false, Cond::Lo) => (VecALUOp::Cmhi, true),
+        (true, Cond::Eq) => (VecALUOp::Fcmeq, false),
+        (true, Cond::Ne) => (VecALUOp::Fcmeq, false),
+        (true, Cond::Mi) => (VecALUOp::Fcmgt, true),
+        (true, Cond::Ls) => (VecALUOp::Fcmge, true),
+        (true, Cond::Ge) => (VecALUOp::Fcmge, false),
+        (true, Cond::Gt) => (VecALUOp::Fcmgt, false),
+        _ => unreachable!(),
+    };
+
+    if swap {
+        std::mem::swap(&mut rn, &mut rm);
+    }
+
+    ctx.emit(Inst::VecRRR {
+        alu_op,
+        rd,
+        rn,
+        rm,
+        ty,
+    });
+
+    if cond == Cond::Ne {
+        ctx.emit(Inst::VecMisc {
+            op: VecMisc2::Not,
+            rd,
+            rn: rd.to_reg(),
+            ty: I8X16,
+        });
+    }
+
+    Ok(())
+}
+
 /// Determines whether this condcode interprets inputs as signed or
 /// unsigned.  See the documentation for the `icmp` instruction in
 /// cranelift-codegen/meta/src/shared/instructions.rs for further insights
@@ -762,6 +833,7 @@ pub fn ty_bits(ty: Type) -> usize {
         IFLAGS | FFLAGS => 32,
         B8X8 | I8X8 | B16X4 | I16X4 | B32X2 | I32X2 => 64,
         B8X16 | I8X16 | B16X8 | I16X8 | B32X4 | I32X4 | B64X2 | I64X2 => 128,
+        F32X4 | F64X2 => 128,
         _ => panic!("ty_bits() on unknown type: {:?}", ty),
     }
 }

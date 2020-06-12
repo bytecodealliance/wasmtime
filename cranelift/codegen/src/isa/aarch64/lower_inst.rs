@@ -7,7 +7,7 @@ use crate::ir::Inst as IRInst;
 use crate::ir::{InstructionData, Opcode, TrapCode};
 use crate::machinst::lower::*;
 use crate::machinst::*;
-use crate::{CodegenError, CodegenResult};
+use crate::CodegenResult;
 
 use crate::isa::aarch64::abi::*;
 use crate::isa::aarch64::inst::*;
@@ -1234,6 +1234,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let condcode = inst_condcode(ctx.data(insn)).unwrap();
             let cond = lower_condcode(condcode);
             let is_signed = condcode_is_signed(condcode);
+            let rd = output_to_reg(ctx, outputs[0]);
             let ty = ctx.input_ty(insn, 0);
             let bits = ty_bits(ty);
             let narrow_mode = match (bits <= 32, is_signed) {
@@ -1242,68 +1243,16 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 (false, true) => NarrowValueMode::SignExtend64,
                 (false, false) => NarrowValueMode::ZeroExtend64,
             };
+            let rn = input_to_reg(ctx, inputs[0], narrow_mode);
 
             if ty_bits(ty) < 128 {
                 let alu_op = choose_32_64(ty, ALUOp::SubS32, ALUOp::SubS64);
-                let rn = input_to_reg(ctx, inputs[0], narrow_mode);
                 let rm = input_to_rse_imm12(ctx, inputs[1], narrow_mode);
-                let rd = output_to_reg(ctx, outputs[0]);
                 ctx.emit(alu_inst_imm12(alu_op, writable_zero_reg(), rn, rm));
                 ctx.emit(Inst::CondSet { cond, rd });
             } else {
-                match ty {
-                    I8X16 | I16X8 | I32X4 => {}
-                    _ => {
-                        return Err(CodegenError::Unsupported(format!(
-                            "unsupported simd type: {:?}",
-                            ty
-                        )));
-                    }
-                };
-
-                let mut rn = input_to_reg(ctx, inputs[0], narrow_mode);
-                let mut rm = input_to_reg(ctx, inputs[1], narrow_mode);
-                let rd = output_to_reg(ctx, outputs[0]);
-
-                // 'Less than' operations are implemented by swapping
-                // the order of operands and using the 'greater than'
-                // instructions.
-                // 'Not equal' is implemented with 'equal' and inverting
-                // the result.
-                let (alu_op, swap) = match cond {
-                    Cond::Eq => (VecALUOp::Cmeq, false),
-                    Cond::Ne => (VecALUOp::Cmeq, false),
-                    Cond::Ge => (VecALUOp::Cmge, false),
-                    Cond::Gt => (VecALUOp::Cmgt, false),
-                    Cond::Le => (VecALUOp::Cmge, true),
-                    Cond::Lt => (VecALUOp::Cmgt, true),
-                    Cond::Hs => (VecALUOp::Cmhs, false),
-                    Cond::Hi => (VecALUOp::Cmhi, false),
-                    Cond::Ls => (VecALUOp::Cmhs, true),
-                    Cond::Lo => (VecALUOp::Cmhi, true),
-                    _ => unreachable!(),
-                };
-
-                if swap {
-                    std::mem::swap(&mut rn, &mut rm);
-                }
-
-                ctx.emit(Inst::VecRRR {
-                    alu_op,
-                    rd,
-                    rn,
-                    rm,
-                    ty,
-                });
-
-                if cond == Cond::Ne {
-                    ctx.emit(Inst::VecMisc {
-                        op: VecMisc2::Not,
-                        rd,
-                        rn: rd.to_reg(),
-                        ty: I8X16,
-                    });
-                }
+                let rm = input_to_reg(ctx, inputs[1], narrow_mode);
+                lower_vector_compare(ctx, rd, rn, rm, ty, cond)?;
             }
         }
 
@@ -1314,16 +1263,21 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
             let rm = input_to_reg(ctx, inputs[1], NarrowValueMode::None);
             let rd = output_to_reg(ctx, outputs[0]);
-            match ty_bits(ty) {
-                32 => {
-                    ctx.emit(Inst::FpuCmp32 { rn, rm });
+
+            if ty_bits(ty) < 128 {
+                match ty_bits(ty) {
+                    32 => {
+                        ctx.emit(Inst::FpuCmp32 { rn, rm });
+                    }
+                    64 => {
+                        ctx.emit(Inst::FpuCmp64 { rn, rm });
+                    }
+                    _ => panic!("Bad float size"),
                 }
-                64 => {
-                    ctx.emit(Inst::FpuCmp64 { rn, rm });
-                }
-                _ => panic!("Bad float size"),
+                ctx.emit(Inst::CondSet { cond, rd });
+            } else {
+                lower_vector_compare(ctx, rd, rn, rm, ty, cond)?;
             }
-            ctx.emit(Inst::CondSet { cond, rd });
         }
 
         Opcode::JumpTableEntry | Opcode::JumpTableBase => {

@@ -2211,6 +2211,42 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::VecRRR {
+            alu_op: VecALUOp::Fcmeq,
+            rd: writable_vreg(28),
+            rn: vreg(12),
+            rm: vreg(4),
+            ty: F32X4,
+        },
+        "9CE5244E",
+        "fcmeq v28.4s, v12.4s, v4.4s",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Fcmgt,
+            rd: writable_vreg(3),
+            rn: vreg(16),
+            rm: vreg(31),
+            ty: F64X2,
+        },
+        "03E6FF6E",
+        "fcmgt v3.2d, v16.2d, v31.2d",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Fcmge,
+            rd: writable_vreg(18),
+            rn: vreg(23),
+            rm: vreg(0),
+            ty: F64X2,
+        },
+        "F2E6606E",
+        "fcmge v18.2d, v23.2d, v0.2d",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
             alu_op: VecALUOp::And,
             rd: writable_vreg(20),
             rn: vreg(19),
