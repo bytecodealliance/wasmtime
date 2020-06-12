@@ -1,5 +1,8 @@
-use crate::isa::x64::inst::*;
+use log::debug;
 use regalloc::Reg;
+
+use crate::binemit::Reloc;
+use crate::isa::x64::inst::*;
 
 fn low8_will_sign_extend_to_64(x: u32) -> bool {
     let xs = (x as i32) as i64;
@@ -164,7 +167,7 @@ fn emit_std_enc_mem(
     opcodes: u32,
     mut num_opcodes: usize,
     enc_g: u8,
-    mem_e: &Addr,
+    mem_e: &Amode,
     rex: RexFlags,
 ) {
     // General comment for this function: the registers in `mem_e` must be
@@ -174,7 +177,7 @@ fn emit_std_enc_mem(
     prefix.emit(sink);
 
     match mem_e {
-        Addr::ImmReg { simm32, base } => {
+        Amode::ImmReg { simm32, base } => {
             // First, the REX byte.
             let enc_e = int_reg_enc(*base);
             rex.emit_two_op(sink, enc_g, enc_e);
@@ -228,7 +231,7 @@ fn emit_std_enc_mem(
             }
         }
 
-        Addr::ImmRegRegShift {
+        Amode::ImmRegRegShift {
             simm32,
             base: reg_base,
             index: reg_index,
@@ -306,7 +309,7 @@ fn emit_std_reg_mem(
     opcodes: u32,
     num_opcodes: usize,
     reg_g: Reg,
-    mem_e: &Addr,
+    mem_e: &Amode,
     rex: RexFlags,
 ) {
     let enc_g = reg_enc(reg_g);
@@ -389,10 +392,13 @@ fn emit_simm(sink: &mut MachBuffer<Inst>, size: u8, simm32: u32) {
 ///
 /// * there's a shorter encoding for shl/shr/sar by a 1-bit immediate.  (Do we
 ///   care?)
-pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
+pub(crate) fn emit(
+    inst: &Inst,
+    sink: &mut MachBuffer<Inst>,
+    _flags: &settings::Flags,
+    state: &mut EmitState,
+) {
     match inst {
-        Inst::Nop { len: 0 } => {}
-
         Inst::Alu_RMI_R {
             is_64,
             op,
@@ -428,7 +434,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                             0x0FAF,
                             2,
                             reg_g.to_reg(),
-                            addr,
+                            &addr.finalize(state),
                             rex,
                         );
                     }
@@ -460,47 +466,39 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                 };
 
                 match src {
-                    RegMemImm::Reg { reg: regE } => {
-                        // Note.  The arguments .. regE .. reg_g .. sequence
-                        // here is the opposite of what is expected.  I'm not
-                        // sure why this is.  But I am fairly sure that the
-                        // arg order could be switched back to the expected
-                        // .. reg_g .. regE .. if opcode_rr is also switched
-                        // over to the "other" basic integer opcode (viz, the
-                        // R/RM vs RM/R duality).  However, that would mean
-                        // that the test results won't be in accordance with
-                        // the GNU as reference output.  In other words, the
-                        // inversion exists as a result of using GNU as as a
-                        // gold standard.
+                    RegMemImm::Reg { reg: reg_e } => {
+                        // GCC/llvm use the swapped operand encoding (viz., the R/RM vs RM/R
+                        // duality). Do this too, so as to be able to compare generated machine
+                        // code easily.
                         emit_std_reg_reg(
                             sink,
                             LegacyPrefix::None,
                             opcode_r,
                             1,
-                            *regE,
+                            *reg_e,
                             reg_g.to_reg(),
                             rex,
                         );
-                        // NB: if this is ever extended to handle byte size
-                        // ops, be sure to retain redundant REX prefixes.
+                        // NB: if this is ever extended to handle byte size ops, be sure to retain
+                        // redundant REX prefixes.
                     }
 
                     RegMemImm::Mem { addr } => {
-                        // Whereas here we revert to the "normal" G-E ordering.
+                        // Here we revert to the "normal" G-E ordering.
                         emit_std_reg_mem(
                             sink,
                             LegacyPrefix::None,
                             opcode_m,
                             1,
                             reg_g.to_reg(),
-                            addr,
+                            &addr.finalize(state),
                             rex,
                         );
                     }
 
                     RegMemImm::Imm { simm32 } => {
-                        let useImm8 = low8_will_sign_extend_to_32(*simm32);
-                        let opcode = if useImm8 { 0x83 } else { 0x81 };
+                        let use_imm8 = low8_will_sign_extend_to_32(*simm32);
+                        let opcode = if use_imm8 { 0x83 } else { 0x81 };
                         // And also here we use the "normal" G-E ordering.
                         let enc_g = int_reg_enc(reg_g.to_reg());
                         emit_std_enc_enc(
@@ -512,7 +510,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                             enc_g,
                             rex,
                         );
-                        emit_simm(sink, if useImm8 { 1 } else { 4 }, *simm32);
+                        emit_simm(sink, if use_imm8 { 1 } else { 4 }, *simm32);
                     }
                 }
             }
@@ -548,161 +546,129 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
             emit_std_reg_reg(sink, LegacyPrefix::None, 0x89, 1, *src, dst.to_reg(), rex);
         }
 
-        Inst::MovZX_M_R { extMode, addr, dst } => {
-            match extMode {
+        Inst::MovZX_RM_R { ext_mode, src, dst } => {
+            let (opcodes, num_opcodes, rex_flags) = match ext_mode {
                 ExtMode::BL => {
                     // MOVZBL is (REX.W==0) 0F B6 /r
-                    emit_std_reg_mem(
-                        sink,
-                        LegacyPrefix::None,
-                        0x0FB6,
-                        2,
-                        dst.to_reg(),
-                        addr,
-                        RexFlags::clear_w(),
-                    )
+                    (0x0FB6, 2, RexFlags::clear_w())
                 }
-
                 ExtMode::BQ => {
                     // MOVZBQ is (REX.W==1) 0F B6 /r
                     // I'm not sure why the Intel manual offers different
                     // encodings for MOVZBQ than for MOVZBL.  AIUI they should
                     // achieve the same, since MOVZBL is just going to zero out
                     // the upper half of the destination anyway.
-                    emit_std_reg_mem(
-                        sink,
-                        LegacyPrefix::None,
-                        0x0FB6,
-                        2,
-                        dst.to_reg(),
-                        addr,
-                        RexFlags::set_w(),
-                    )
+                    (0x0FB6, 2, RexFlags::set_w())
                 }
-
                 ExtMode::WL => {
                     // MOVZWL is (REX.W==0) 0F B7 /r
-                    emit_std_reg_mem(
-                        sink,
-                        LegacyPrefix::None,
-                        0x0FB7,
-                        2,
-                        dst.to_reg(),
-                        addr,
-                        RexFlags::clear_w(),
-                    )
+                    (0x0FB7, 2, RexFlags::clear_w())
                 }
-
                 ExtMode::WQ => {
                     // MOVZWQ is (REX.W==1) 0F B7 /r
-                    emit_std_reg_mem(
-                        sink,
-                        LegacyPrefix::None,
-                        0x0FB7,
-                        2,
-                        dst.to_reg(),
-                        addr,
-                        RexFlags::set_w(),
-                    )
+                    (0x0FB7, 2, RexFlags::set_w())
                 }
-
                 ExtMode::LQ => {
                     // This is just a standard 32 bit load, and we rely on the
                     // default zero-extension rule to perform the extension.
+                    // Note that in reg/reg mode, gcc seems to use the swapped form R/RM, which we
+                    // don't do here, since it's the same encoding size.
                     // MOV r/m32, r32 is (REX.W==0) 8B /r
-                    emit_std_reg_mem(
-                        sink,
-                        LegacyPrefix::None,
-                        0x8B,
-                        1,
-                        dst.to_reg(),
-                        addr,
-                        RexFlags::clear_w(),
-                    )
+                    (0x8B, 1, RexFlags::clear_w())
                 }
+            };
+
+            match src {
+                RegMem::Reg { reg: src } => emit_std_reg_reg(
+                    sink,
+                    LegacyPrefix::None,
+                    opcodes,
+                    num_opcodes,
+                    dst.to_reg(),
+                    *src,
+                    rex_flags,
+                ),
+                RegMem::Mem { addr: src } => emit_std_reg_mem(
+                    sink,
+                    LegacyPrefix::None,
+                    opcodes,
+                    num_opcodes,
+                    dst.to_reg(),
+                    &src.finalize(state),
+                    rex_flags,
+                ),
             }
         }
 
-        Inst::Mov64_M_R { addr, dst } => emit_std_reg_mem(
+        Inst::Mov64_M_R { src, dst } => emit_std_reg_mem(
             sink,
             LegacyPrefix::None,
             0x8B,
             1,
             dst.to_reg(),
-            addr,
+            &src.finalize(state),
             RexFlags::set_w(),
         ),
 
-        Inst::MovSX_M_R { extMode, addr, dst } => {
-            match extMode {
+        Inst::LoadEffectiveAddress { addr, dst } => emit_std_reg_mem(
+            sink,
+            LegacyPrefix::None,
+            0x8D,
+            1,
+            dst.to_reg(),
+            &addr.finalize(state),
+            RexFlags::set_w(),
+        ),
+
+        Inst::MovSX_RM_R { ext_mode, src, dst } => {
+            let (opcodes, num_opcodes, rex_flags) = match ext_mode {
                 ExtMode::BL => {
                     // MOVSBL is (REX.W==0) 0F BE /r
-                    emit_std_reg_mem(
-                        sink,
-                        LegacyPrefix::None,
-                        0x0FBE,
-                        2,
-                        dst.to_reg(),
-                        addr,
-                        RexFlags::clear_w(),
-                    )
+                    (0x0FBE, 2, RexFlags::clear_w())
                 }
-
                 ExtMode::BQ => {
                     // MOVSBQ is (REX.W==1) 0F BE /r
-                    emit_std_reg_mem(
-                        sink,
-                        LegacyPrefix::None,
-                        0x0FBE,
-                        2,
-                        dst.to_reg(),
-                        addr,
-                        RexFlags::set_w(),
-                    )
+                    (0x0FBE, 2, RexFlags::set_w())
                 }
-
                 ExtMode::WL => {
                     // MOVSWL is (REX.W==0) 0F BF /r
-                    emit_std_reg_mem(
-                        sink,
-                        LegacyPrefix::None,
-                        0x0FBF,
-                        2,
-                        dst.to_reg(),
-                        addr,
-                        RexFlags::clear_w(),
-                    )
+                    (0x0FBF, 2, RexFlags::clear_w())
                 }
-
                 ExtMode::WQ => {
                     // MOVSWQ is (REX.W==1) 0F BF /r
-                    emit_std_reg_mem(
-                        sink,
-                        LegacyPrefix::None,
-                        0x0FBF,
-                        2,
-                        dst.to_reg(),
-                        addr,
-                        RexFlags::set_w(),
-                    )
+                    (0x0FBF, 2, RexFlags::set_w())
                 }
-
                 ExtMode::LQ => {
                     // MOVSLQ is (REX.W==1) 63 /r
-                    emit_std_reg_mem(
-                        sink,
-                        LegacyPrefix::None,
-                        0x63,
-                        1,
-                        dst.to_reg(),
-                        addr,
-                        RexFlags::set_w(),
-                    )
+                    (0x63, 1, RexFlags::set_w())
                 }
+            };
+
+            match src {
+                RegMem::Reg { reg: src } => emit_std_reg_reg(
+                    sink,
+                    LegacyPrefix::None,
+                    opcodes,
+                    num_opcodes,
+                    dst.to_reg(),
+                    *src,
+                    rex_flags,
+                ),
+                RegMem::Mem { addr: src } => emit_std_reg_mem(
+                    sink,
+                    LegacyPrefix::None,
+                    opcodes,
+                    num_opcodes,
+                    dst.to_reg(),
+                    &src.finalize(state),
+                    rex_flags,
+                ),
             }
         }
 
-        Inst::Mov_R_M { size, src, addr } => {
+        Inst::Mov_R_M { size, src, dst } => {
+            let dst = &dst.finalize(state);
+
             match size {
                 1 => {
                     // This is one of the few places where the presence of a
@@ -716,7 +682,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                     };
 
                     // MOV r8, r/m8 is (REX.W==0) 88 /r
-                    emit_std_reg_mem(sink, LegacyPrefix::None, 0x88, 1, *src, addr, rex)
+                    emit_std_reg_mem(sink, LegacyPrefix::None, 0x88, 1, *src, dst, rex)
                 }
 
                 2 => {
@@ -727,7 +693,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                         0x89,
                         1,
                         *src,
-                        addr,
+                        dst,
                         RexFlags::clear_w(),
                     )
                 }
@@ -740,7 +706,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                         0x89,
                         1,
                         *src,
-                        addr,
+                        dst,
                         RexFlags::clear_w(),
                     )
                 }
@@ -753,7 +719,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                         0x89,
                         1,
                         *src,
-                        addr,
+                        dst,
                         RexFlags::set_w(),
                     )
                 }
@@ -825,23 +791,25 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
             };
 
             match src_e {
-                RegMemImm::Reg { reg: regE } => {
-                    let opcode = if *size == 1 { 0x38 } else { 0x39 };
+                RegMemImm::Reg { reg: reg_e } => {
                     if *size == 1 {
-                        // We also need to check whether the E register forces
-                        // the use of a redundant REX.
-                        let encE = int_reg_enc(*regE);
-                        if encE >= 4 && encE <= 7 {
+                        // Check whether the E register forces the use of a redundant REX.
+                        let enc_e = int_reg_enc(*reg_e);
+                        if enc_e >= 4 && enc_e <= 7 {
                             rex.always_emit();
                         }
                     }
-                    // Same comment re swapped args as for Alu_RMI_R.
-                    emit_std_reg_reg(sink, prefix, opcode, 1, *regE, *reg_g, rex);
+
+                    // Use the swapped operands encoding, to stay consistent with the output of
+                    // gcc/llvm.
+                    let opcode = if *size == 1 { 0x38 } else { 0x39 };
+                    emit_std_reg_reg(sink, prefix, opcode, 1, *reg_e, *reg_g, rex);
                 }
 
                 RegMemImm::Mem { addr } => {
-                    let opcode = if *size == 1 { 0x3A } else { 0x3B };
+                    let addr = &addr.finalize(state);
                     // Whereas here we revert to the "normal" G-E ordering.
+                    let opcode = if *size == 1 { 0x3A } else { 0x3B };
                     emit_std_reg_mem(sink, prefix, opcode, 1, *reg_g, addr, rex);
                 }
 
@@ -849,6 +817,8 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                     // FIXME JRS 2020Feb11: there are shorter encodings for
                     // cmp $imm, rax/eax/ax/al.
                     let use_imm8 = low8_will_sign_extend_to_32(*simm32);
+
+                    // And also here we use the "normal" G-E ordering.
                     let opcode = if *size == 1 {
                         0x80
                     } else if use_imm8 {
@@ -857,12 +827,26 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                         0x81
                     };
 
-                    // And also here we use the "normal" G-E ordering.
                     let enc_g = int_reg_enc(*reg_g);
                     emit_std_enc_enc(sink, prefix, opcode, 1, 7 /*subopcode*/, enc_g, rex);
                     emit_simm(sink, if use_imm8 { 1 } else { *size }, *simm32);
                 }
             }
+        }
+
+        Inst::Setcc { cc, dst } => {
+            let opcode = 0x0f90 + cc.get_enc() as u32;
+            let mut rex_flags = RexFlags::clear_w();
+            rex_flags.always_emit();
+            emit_std_enc_enc(
+                sink,
+                LegacyPrefix::None,
+                opcode,
+                2,
+                0,
+                reg_enc(dst.to_reg()),
+                rex_flags,
+            );
         }
 
         Inst::Push64 { src } => {
@@ -877,6 +861,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                 }
 
                 RegMemImm::Mem { addr } => {
+                    let addr = &addr.finalize(state);
                     emit_std_enc_mem(
                         sink,
                         LegacyPrefix::None,
@@ -910,7 +895,22 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
             sink.put1(0x58 + (encDst & 7));
         }
 
-        Inst::CallUnknown { dest } => {
+        Inst::CallKnown {
+            dest, loc, opcode, ..
+        } => {
+            sink.put1(0xE8);
+            // The addend adjusts for the difference between the end of the instruction and the
+            // beginning of the immediate field.
+            sink.add_reloc(*loc, Reloc::X86CallPCRel4, &dest, -4);
+            sink.put4(0);
+            if opcode.is_call() {
+                sink.add_call_site(*loc, *opcode);
+            }
+        }
+
+        Inst::CallUnknown {
+            dest, opcode, loc, ..
+        } => {
             match dest {
                 RegMem::Reg { reg } => {
                     let reg_enc = int_reg_enc(*reg);
@@ -926,6 +926,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                 }
 
                 RegMem::Mem { addr } => {
+                    let addr = &addr.finalize(state);
                     emit_std_enc_mem(
                         sink,
                         LegacyPrefix::None,
@@ -937,61 +938,61 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                     );
                 }
             }
+            if opcode.is_call() {
+                sink.add_call_site(*loc, *opcode);
+            }
         }
 
         Inst::Ret {} => sink.put1(0xC3),
 
-        Inst::JmpKnown { dest } => {
-            let disp = dest.as_offset32_or_zero() - 5;
-            let disp = disp as u32;
+        Inst::JmpKnown { dst } => {
             let br_start = sink.cur_offset();
             let br_disp_off = br_start + 1;
             let br_end = br_start + 5;
-            if let Some(l) = dest.as_label() {
-                sink.use_label_at_offset(br_disp_off, l, LabelUse::Rel32);
+            if let Some(l) = dst.as_label() {
+                sink.use_label_at_offset(br_disp_off, l, LabelUse::JmpRel32);
                 sink.add_uncond_branch(br_start, br_end, l);
             }
+
+            let disp = dst.as_offset32_or_zero();
+            let disp = disp as u32;
             sink.put1(0xE9);
             sink.put4(disp);
         }
 
-        Inst::JmpCondSymm {
+        Inst::JmpCond {
             cc,
             taken,
             not_taken,
         } => {
-            // Conditional part.
-
-            // This insn is 6 bytes long.  Currently `offset` is relative to
-            // the start of this insn, but the Intel encoding requires it to
-            // be relative to the start of the next instruction.  Hence the
-            // adjustment.
-            let taken_disp = taken.as_offset32_or_zero() - 6;
-            let taken_disp = taken_disp as u32;
+            // If taken.
             let cond_start = sink.cur_offset();
             let cond_disp_off = cond_start + 2;
             let cond_end = cond_start + 6;
             if let Some(l) = taken.as_label() {
-                sink.use_label_at_offset(cond_disp_off, l, LabelUse::Rel32);
+                sink.use_label_at_offset(cond_disp_off, l, LabelUse::JmpRel32);
                 let inverted: [u8; 6] =
-                    [0x0F, 0x80 + (cc.invert().get_enc()), 0xFA, 0xFF, 0xFF, 0xFF];
+                    [0x0F, 0x80 + (cc.invert().get_enc()), 0x00, 0x00, 0x00, 0x00];
                 sink.add_cond_branch(cond_start, cond_end, l, &inverted[..]);
             }
+
+            let taken_disp = taken.as_offset32_or_zero();
+            let taken_disp = taken_disp as u32;
             sink.put1(0x0F);
             sink.put1(0x80 + cc.get_enc());
             sink.put4(taken_disp);
 
-            // Unconditional part.
-
-            let nt_disp = not_taken.as_offset32_or_zero() - 5;
-            let nt_disp = nt_disp as u32;
+            // If not taken.
             let uncond_start = sink.cur_offset();
             let uncond_disp_off = uncond_start + 1;
             let uncond_end = uncond_start + 5;
             if let Some(l) = not_taken.as_label() {
-                sink.use_label_at_offset(uncond_disp_off, l, LabelUse::Rel32);
+                sink.use_label_at_offset(uncond_disp_off, l, LabelUse::JmpRel32);
                 sink.add_uncond_branch(uncond_start, uncond_end, l);
             }
+
+            let nt_disp = not_taken.as_offset32_or_zero();
+            let nt_disp = nt_disp as u32;
             sink.put1(0xE9);
             sink.put4(nt_disp);
         }
@@ -1012,6 +1013,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                 }
 
                 RegMem::Mem { addr } => {
+                    let addr = &addr.finalize(state);
                     emit_std_enc_mem(
                         sink,
                         LegacyPrefix::None,
@@ -1045,6 +1047,7 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                 }
 
                 RegMem::Mem { addr } => {
+                    let addr = &addr.finalize(state);
                     emit_std_reg_mem(sink, prefix, opcode, 2, reg_g.to_reg(), addr, rex);
                 }
             }
@@ -1074,11 +1077,33 @@ pub(crate) fn emit(inst: &Inst, sink: &mut MachBuffer<Inst>) {
                 }
 
                 RegMem::Mem { addr } => {
+                    let addr = &addr.finalize(state);
                     emit_std_reg_mem(sink, prefix, opcode, 2, reg_g.to_reg(), addr, rex);
                 }
             }
         }
 
-        _ => panic!("x64_emit: unhandled: {} ", inst.show_rru(None)),
+        Inst::Hlt => {
+            sink.put1(0xcc);
+        }
+
+        Inst::Ud2 { trap_info } => {
+            sink.add_trap(trap_info.0, trap_info.1);
+            sink.put1(0x0f);
+            sink.put1(0x0b);
+        }
+
+        Inst::VirtualSPOffsetAdj { offset } => {
+            debug!(
+                "virtual sp offset adjusted by {} -> {}",
+                offset,
+                state.virtual_sp_offset + offset
+            );
+            state.virtual_sp_offset += offset;
+        }
+
+        Inst::Nop { .. } | Inst::EpiloguePlaceholder => {
+            // Generate no code.
+        }
     }
 }

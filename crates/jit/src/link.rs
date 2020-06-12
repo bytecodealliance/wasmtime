@@ -106,6 +106,19 @@ fn apply_reloc(
                 .wrapping_add(reloc_addend as u32);
             write_unaligned(reloc_address as *mut u32, reloc_delta_u32);
         },
+        #[cfg(target_pointer_width = "64")]
+        Reloc::X86CallPCRel4 => unsafe {
+            let reloc_address = body.add(r.offset as usize) as usize;
+            let reloc_addend = r.addend as isize;
+            let reloc_delta_u64 = (target_func_address as u64)
+                .wrapping_sub(reloc_address as u64)
+                .wrapping_add(reloc_addend as u64);
+            assert!(
+                reloc_delta_u64 as isize <= i32::max_value() as isize,
+                "relocation too large to fit in i32"
+            );
+            write_unaligned(reloc_address as *mut u32, reloc_delta_u64 as u32);
+        },
         Reloc::X86PCRelRodata4 => {
             // ignore
         }

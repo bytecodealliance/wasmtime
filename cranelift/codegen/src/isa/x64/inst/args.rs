@@ -3,16 +3,20 @@
 use std::fmt;
 use std::string::{String, ToString};
 
-use regalloc::{RealRegUniverse, Reg, RegClass, RegUsageCollector};
+use regalloc::{RealRegUniverse, Reg, RegClass, RegUsageCollector, RegUsageMapper};
 
 use crate::ir::condcodes::IntCC;
 use crate::machinst::*;
 
-use super::regs::show_ireg_sized;
+use super::{
+    regs::{self, show_ireg_sized},
+    EmitState,
+};
 
-/// A Memory Address. These denote a 64-bit value only.
+/// A possible addressing mode (amode) that can be used in instructions.
+/// These denote a 64-bit value only.
 #[derive(Clone)]
-pub(crate) enum Addr {
+pub enum Amode {
     /// Immediate sign-extended and a Register.
     ImmReg { simm32: u32, base: Reg },
 
@@ -25,7 +29,7 @@ pub(crate) enum Addr {
     },
 }
 
-impl Addr {
+impl Amode {
     pub(crate) fn imm_reg(simm32: u32, base: Reg) -> Self {
         debug_assert!(base.get_class() == RegClass::I64);
         Self::ImmReg { simm32, base }
@@ -46,15 +50,10 @@ impl Addr {
     /// Add the regs mentioned by `self` to `collector`.
     pub(crate) fn get_regs_as_uses(&self, collector: &mut RegUsageCollector) {
         match self {
-            Addr::ImmReg { simm32: _, base } => {
+            Amode::ImmReg { base, .. } => {
                 collector.add_use(*base);
             }
-            Addr::ImmRegRegShift {
-                simm32: _,
-                base,
-                index,
-                shift: _,
-            } => {
+            Amode::ImmRegRegShift { base, index, .. } => {
                 collector.add_use(*base);
                 collector.add_use(*index);
             }
@@ -62,13 +61,13 @@ impl Addr {
     }
 }
 
-impl ShowWithRRU for Addr {
+impl ShowWithRRU for Amode {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         match self {
-            Addr::ImmReg { simm32, base } => {
+            Amode::ImmReg { simm32, base } => {
                 format!("{}({})", *simm32 as i32, base.show_rru(mb_rru))
             }
-            Addr::ImmRegRegShift {
+            Amode::ImmRegRegShift {
                 simm32,
                 base,
                 index,
@@ -84,14 +83,84 @@ impl ShowWithRRU for Addr {
     }
 }
 
+/// A Memory Address. These denote a 64-bit value only.
+/// Used for usual addressing modes as well as addressing modes used during compilation, when the
+/// moving SP offset is not known.
+#[derive(Clone)]
+pub enum SyntheticAmode {
+    /// A real amode.
+    Real(Amode),
+
+    /// A (virtual) offset to the "nominal SP" value, which will be recomputed as we push and pop
+    /// within the function.
+    NominalSPOffset { simm32: u32 },
+}
+
+impl SyntheticAmode {
+    pub(crate) fn nominal_sp_offset(simm32: u32) -> Self {
+        SyntheticAmode::NominalSPOffset { simm32 }
+    }
+
+    /// Add the regs mentioned by `self` to `collector`.
+    pub(crate) fn get_regs_as_uses(&self, collector: &mut RegUsageCollector) {
+        match self {
+            SyntheticAmode::Real(addr) => addr.get_regs_as_uses(collector),
+            SyntheticAmode::NominalSPOffset { .. } => {
+                // Nothing to do; the base is SP and isn't involved in regalloc.
+            }
+        }
+    }
+
+    pub(crate) fn map_uses<RUM: RegUsageMapper>(&mut self, map: &RUM) {
+        match self {
+            SyntheticAmode::Real(addr) => addr.map_uses(map),
+            SyntheticAmode::NominalSPOffset { .. } => {
+                // Nothing to do.
+            }
+        }
+    }
+
+    pub(crate) fn finalize(&self, state: &mut EmitState) -> Amode {
+        match self {
+            SyntheticAmode::Real(addr) => addr.clone(),
+            SyntheticAmode::NominalSPOffset { simm32 } => {
+                let off = *simm32 as i64 + state.virtual_sp_offset;
+                // TODO will require a sequence of add etc.
+                assert!(
+                    off <= u32::max_value() as i64,
+                    "amode finalize: add sequence NYI"
+                );
+                Amode::imm_reg(off as u32, regs::rsp())
+            }
+        }
+    }
+}
+
+impl Into<SyntheticAmode> for Amode {
+    fn into(self) -> SyntheticAmode {
+        SyntheticAmode::Real(self)
+    }
+}
+
+impl ShowWithRRU for SyntheticAmode {
+    fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
+        match self {
+            SyntheticAmode::Real(addr) => addr.show_rru(mb_rru),
+            SyntheticAmode::NominalSPOffset { simm32 } => {
+                format!("rsp({} + virtual offset)", *simm32 as i32)
+            }
+        }
+    }
+}
+
 /// An operand which is either an integer Register, a value in Memory or an Immediate.  This can
 /// denote an 8, 16, 32 or 64 bit value.  For the Immediate form, in the 8- and 16-bit case, only
 /// the lower 8 or 16 bits of `simm32` is relevant.  In the 64-bit case, the value denoted by
 /// `simm32` is its sign-extension out to 64 bits.
 #[derive(Clone)]
-pub(crate) enum RegMemImm {
+pub enum RegMemImm {
     Reg { reg: Reg },
-    Mem { addr: Addr },
+    Mem { addr: SyntheticAmode },
     Imm { simm32: u32 },
 }
 
@@ -100,8 +169,8 @@ impl RegMemImm {
         debug_assert!(reg.get_class() == RegClass::I64);
         Self::Reg { reg }
     }
-    pub(crate) fn mem(addr: Addr) -> Self {
-        Self::Mem { addr }
+    pub(crate) fn mem(addr: impl Into<SyntheticAmode>) -> Self {
+        Self::Mem { addr: addr.into() }
     }
     pub(crate) fn imm(simm32: u32) -> Self {
         Self::Imm { simm32 }
@@ -134,9 +203,9 @@ impl ShowWithRRU for RegMemImm {
 /// An operand which is either an integer Register or a value in Memory.  This can denote an 8, 16,
 /// 32 or 64 bit value.
 #[derive(Clone)]
-pub(crate) enum RegMem {
+pub enum RegMem {
     Reg { reg: Reg },
-    Mem { addr: Addr },
+    Mem { addr: SyntheticAmode },
 }
 
 impl RegMem {
@@ -144,8 +213,8 @@ impl RegMem {
         debug_assert!(reg.get_class() == RegClass::I64 || reg.get_class() == RegClass::V128);
         Self::Reg { reg }
     }
-    pub(crate) fn mem(addr: Addr) -> Self {
-        Self::Mem { addr }
+    pub(crate) fn mem(addr: impl Into<SyntheticAmode>) -> Self {
+        Self::Mem { addr: addr.into() }
     }
 
     /// Add the regs mentioned by `self` to `collector`.
@@ -382,6 +451,13 @@ pub enum ExtMode {
 }
 
 impl ExtMode {
+    pub(crate) fn src_size(&self) -> u8 {
+        match self {
+            ExtMode::BL | ExtMode::BQ => 1,
+            ExtMode::WL | ExtMode::WQ => 2,
+            ExtMode::LQ => 4,
+        }
+    }
     pub(crate) fn dst_size(&self) -> u8 {
         match self {
             ExtMode::BL | ExtMode::WL => 4,

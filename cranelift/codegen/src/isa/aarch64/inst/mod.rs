@@ -899,7 +899,7 @@ pub enum Inst {
     },
 
     /// Marker, no-op in generated code: SP "virtual offset" is adjusted. This
-    /// controls MemArg::NominalSPOffset args are lowered.
+    /// controls how MemArg::NominalSPOffset args are lowered.
     VirtualSPOffsetAdj {
         offset: i64,
     },
