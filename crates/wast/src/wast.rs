@@ -81,8 +81,7 @@ impl WastContext {
 
     /// Instantiate a module, without defining it under a given name
     pub fn instantiate(&mut self, module: &[u8]) -> Result<Outcome<Instance>> {
-        let module = Module::new(&self.store, module)?;
-        self.modules.push(module.clone());
+        let module = Module::new(self.store.engine(), module)?;
         let instance = match self.linker.instantiate(&module) {
             Ok(i) => i,
             Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),

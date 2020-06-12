@@ -245,6 +245,10 @@ pub fn ret_locs(types: impl IntoIterator<Item = SignlessType>) -> Result<Vec<CCL
         }
     }
 
+    if out.len() > 1 {
+        return Err(Error::Input("invalid result arity".to_string()));
+    }
+
     Ok(out)
 }
 
@@ -2473,7 +2477,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             }
         }
 
-        mem::replace(&mut self.stack, stack);
+        self.stack = stack;
 
         Ok(true)
     }

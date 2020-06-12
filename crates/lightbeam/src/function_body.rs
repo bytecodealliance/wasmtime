@@ -1056,7 +1056,7 @@ where
         ctx.epilogue();
     }
 
-    mem::replace(&mut session.op_offset_map, op_offset_map);
+    session.op_offset_map = op_offset_map;
 
     Ok(())
 }

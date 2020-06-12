@@ -10,11 +10,12 @@ pub mod microwasm;
 mod module;
 mod translate_sections;
 
-pub use crate::backend::CodeGenSession;
-pub use crate::function_body::{
+pub use error::Error;
+pub use backend::CodeGenSession;
+pub use function_body::{
     translate_wasm as translate_function, NullOffsetSink, OffsetSink, Sinks,
 };
-pub use crate::module::{
+pub use module::{
     translate, ExecutableModule, ExecutionError, ModuleContext, Signature, TranslatedModule,
 };
 pub use disassemble::disassemble;
