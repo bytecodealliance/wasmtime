@@ -1049,7 +1049,8 @@ fn memarg_regs(memarg: &MemArg, collector: &mut RegUsageCollector) {
         }
         &MemArg::RegReg(r1, r2, ..)
         | &MemArg::RegScaled(r1, r2, ..)
-        | &MemArg::RegScaledExtended(r1, r2, ..) => {
+        | &MemArg::RegScaledExtended(r1, r2, ..)
+        | &MemArg::RegExtended(r1, r2, ..) => {
             collector.add_use(r1);
             collector.add_use(r2);
         }
@@ -1384,15 +1385,10 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         match mem {
             &mut MemArg::Unscaled(ref mut reg, ..) => map_use(m, reg),
             &mut MemArg::UnsignedOffset(ref mut reg, ..) => map_use(m, reg),
-            &mut MemArg::RegReg(ref mut r1, ref mut r2) => {
-                map_use(m, r1);
-                map_use(m, r2);
-            }
-            &mut MemArg::RegScaled(ref mut r1, ref mut r2, ..) => {
-                map_use(m, r1);
-                map_use(m, r2);
-            }
-            &mut MemArg::RegScaledExtended(ref mut r1, ref mut r2, ..) => {
+            &mut MemArg::RegReg(ref mut r1, ref mut r2)
+            | &mut MemArg::RegScaled(ref mut r1, ref mut r2, ..)
+            | &mut MemArg::RegScaledExtended(ref mut r1, ref mut r2, ..)
+            | &mut MemArg::RegExtended(ref mut r1, ref mut r2, ..) => {
                 map_use(m, r1);
                 map_use(m, r2);
             }
