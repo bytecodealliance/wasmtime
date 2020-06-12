@@ -1,5 +1,6 @@
 //! Defines `ObjectBackend`.
 
+use anyhow::anyhow;
 use cranelift_codegen::binemit::{
     Addend, CodeOffset, NullStackmapSink, Reloc, RelocSink, TrapSink,
 };
@@ -7,8 +8,8 @@ use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, binemit, ir};
 use cranelift_module::{
-    Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleNamespace,
-    ModuleResult,
+    Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleError,
+    ModuleNamespace, ModuleResult,
 };
 use object::write::{
     Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
@@ -18,11 +19,14 @@ use object::{
 };
 use std::collections::HashMap;
 use std::mem;
-use target_lexicon::{BinaryFormat, PointerWidth};
+use target_lexicon::PointerWidth;
 
 /// A builder for `ObjectBackend`.
 pub struct ObjectBuilder {
     isa: Box<dyn TargetIsa>,
+    binary_format: object::BinaryFormat,
+    architecture: object::Architecture,
+    endian: object::Endianness,
     name: Vec<u8>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     function_alignment: u64,
@@ -40,13 +44,47 @@ impl ObjectBuilder {
         isa: Box<dyn TargetIsa>,
         name: V,
         libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
-    ) -> Self {
-        Self {
+    ) -> ModuleResult<Self> {
+        let binary_format = match isa.triple().binary_format {
+            target_lexicon::BinaryFormat::Elf => object::BinaryFormat::Elf,
+            target_lexicon::BinaryFormat::Coff => object::BinaryFormat::Coff,
+            target_lexicon::BinaryFormat::Macho => object::BinaryFormat::MachO,
+            target_lexicon::BinaryFormat::Wasm => {
+                return Err(ModuleError::Backend(anyhow!(
+                    "binary format wasm is unsupported",
+                )))
+            }
+            target_lexicon::BinaryFormat::Unknown => {
+                return Err(ModuleError::Backend(anyhow!("binary format is unknown")))
+            }
+        };
+        let architecture = match isa.triple().architecture {
+            target_lexicon::Architecture::I386
+            | target_lexicon::Architecture::I586
+            | target_lexicon::Architecture::I686 => object::Architecture::I386,
+            target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
+            target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
+            target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
+            architecture => {
+                return Err(ModuleError::Backend(anyhow!(
+                    "target architecture {:?} is unsupported",
+                    architecture,
+                )))
+            }
+        };
+        let endian = match isa.triple().endianness().unwrap() {
+            target_lexicon::Endianness::Little => object::Endianness::Little,
+            target_lexicon::Endianness::Big => object::Endianness::Big,
+        };
+        Ok(Self {
             isa,
+            binary_format,
+            architecture,
+            endian,
             name: name.into(),
             libcall_names,
             function_alignment: 1,
-        }
+        })
     }
 
     /// Set the alignment used for functions.
@@ -85,8 +123,7 @@ impl Backend for ObjectBackend {
 
     /// Create a new `ObjectBackend` using the given Cranelift target.
     fn new(builder: ObjectBuilder) -> Self {
-        let triple = builder.isa.triple();
-        let mut object = Object::new(triple.binary_format, triple.architecture);
+        let mut object = Object::new(builder.binary_format, builder.architecture, builder.endian);
         object.add_file_symbol(builder.name);
         Self {
             isa: builder.isa,
@@ -383,7 +420,7 @@ impl Backend for ObjectBackend {
         }
 
         // Indicate that this object has a non-executable stack.
-        if self.object.format() == BinaryFormat::Elf {
+        if self.object.format() == object::BinaryFormat::Elf {
             self.object.add_section(
                 vec![],
                 ".note.GNU-stack".as_bytes().to_vec(),
@@ -509,12 +546,12 @@ struct RelocRecord {
 }
 
 struct ObjectRelocSink {
-    format: BinaryFormat,
+    format: object::BinaryFormat,
     relocs: Vec<RelocRecord>,
 }
 
 impl ObjectRelocSink {
-    fn new(format: BinaryFormat) -> Self {
+    fn new(format: object::BinaryFormat) -> Self {
         Self {
             format,
             relocs: vec![],
@@ -552,7 +589,7 @@ impl RelocSink for ObjectRelocSink {
             Reloc::ElfX86_64TlsGd => {
                 assert_eq!(
                     self.format,
-                    BinaryFormat::Elf,
+                    object::BinaryFormat::Elf,
                     "ElfX86_64TlsGd is not supported for this file format"
                 );
                 (
@@ -564,7 +601,7 @@ impl RelocSink for ObjectRelocSink {
             Reloc::MachOX86_64Tlv => {
                 assert_eq!(
                     self.format,
-                    BinaryFormat::Macho,
+                    object::BinaryFormat::MachO,
                     "MachOX86_64Tlv is not supported for this file format"
                 );
                 addend += 4; // X86_64_RELOC_TLV has an implicit addend of -4
