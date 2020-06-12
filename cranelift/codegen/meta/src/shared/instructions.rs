@@ -340,7 +340,21 @@ fn define_control_flow(
                 r#"
         Trap when non-zero.
 
-        if ``c`` is zero, execution continues at the following instruction.
+        If ``c`` is zero, execution continues at the following instruction.
+        "#,
+                &formats.cond_trap,
+            )
+            .operands_in(vec![c, code])
+            .can_trap(true),
+        );
+
+        ig.push(
+            Inst::new(
+                "resumable_trapnz",
+                r#"
+        A resumable trap to be called when the passed condition is non-zero.
+
+        If ``c`` is zero, execution continues at the following instruction.
         "#,
                 &formats.cond_trap,
             )

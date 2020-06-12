@@ -99,6 +99,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     let jump = insts.by_name("jump");
     let load = insts.by_name("load");
     let popcnt = insts.by_name("popcnt");
+    let resumable_trapnz = insts.by_name("resumable_trapnz");
     let rotl = insts.by_name("rotl");
     let rotl_imm = insts.by_name("rotl_imm");
     let rotr = insts.by_name("rotr");
@@ -138,6 +139,7 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
     // TODO: Add sufficient XForm syntax that we don't need to hand-code these.
     expand.custom_legalize(trapz, "expand_cond_trap");
     expand.custom_legalize(trapnz, "expand_cond_trap");
+    expand.custom_legalize(resumable_trapnz, "expand_cond_trap");
     expand.custom_legalize(br_table, "expand_br_table");
     expand.custom_legalize(select, "expand_select");
     widen.custom_legalize(select, "expand_select"); // small ints
