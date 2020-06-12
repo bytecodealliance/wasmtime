@@ -1115,7 +1115,6 @@ dependencies = [
  "memoffset",
  "more-asserts",
  "quickcheck",
- "staticvec",
  "thiserror",
  "wasmparser 0.57.0",
  "wat",
@@ -1898,12 +1897,6 @@ name = "stable_deref_trait"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dba1a27d3efae4351c8051072d619e3ade2820635c3958d826bfea39d59b54c8"
-
-[[package]]
-name = "staticvec"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f64ce848230697e25aeacc324f6adb2bba66e5b6cabf8fa7439f3e80c26d1455"
 
 [[package]]
 name = "string-interner"

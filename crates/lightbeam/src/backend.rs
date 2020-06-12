@@ -235,18 +235,14 @@ pub fn ret_locs(types: impl IntoIterator<Item = SignlessType>) -> Result<Vec<CCL
     for ty in types {
         match ty {
             I32 | I64 => match int_gpr_iter.next() {
-                None => return Err(error("We don't support stack returns yet".to_string())),
+                None => return Err(error("We don't support stack returns yet")),
                 Some(val) => out.push(CCLoc::Reg(*val)),
             },
             F32 | F64 => match float_gpr_iter.next() {
-                None => return Err(error("We don't support stack returns yet".to_string())),
+                None => return Err(error("We don't support stack returns yet")),
                 Some(val) => out.push(CCLoc::Reg(*val)),
             },
         }
-    }
-
-    if out.len() > 1 {
-        return Err(Error::Input("invalid result arity".to_string()));
     }
 
     Ok(out)
@@ -1235,7 +1231,7 @@ macro_rules! int_div {
                     false
                 }
                 ValueLocation::Reg(_) => {
-                    let reg = self.put_into_register(GPRType::Rq, &mut divisor)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                    let reg = self.put_into_register(GPRType::Rq, &mut divisor)?.ok_or_else(|| error("Ran out of free registers"))?;
 
                     dynasm!(self.asm
                         ; cmp $reg_ty(reg.rq().unwrap()), -1
@@ -1344,7 +1340,7 @@ macro_rules! unop {
                     ValueLocation::Reg(temp)
                 }
                 ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                    let reg = self.put_into_register(GPRType::Rq, &mut val)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                    let reg = self.put_into_register(GPRType::Rq, &mut val)?.ok_or_else(|| error("Ran out of free registers"))?;
                     let temp = self.take_or_free_reg(Type::for_::<$typ>()).unwrap();
                     dynasm!(self.asm
                         ; $instr $reg_ty(temp.rq().unwrap()), $reg_ty(reg.rq().unwrap())
@@ -1391,7 +1387,7 @@ macro_rules! conversion {
                     ValueLocation::Reg(temp)
                 }
                 ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                    let reg = self.put_into_register(Type::for_::<$in_typ>(), &mut val)? .ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                    let reg = self.put_into_register(Type::for_::<$in_typ>(), &mut val)? .ok_or_else(|| error("Ran out of free registers"))?;
                     let temp = self.take_or_free_reg(Type::for_::<$out_typ>()).unwrap();
 
                     dynasm!(self.asm
@@ -1420,7 +1416,7 @@ macro_rules! shift {
             if let Some(imm) = count.immediate() {
                 if let Some(imm) = imm.as_int() {
                     if let Ok(imm) = i8::try_from(imm) {
-                        let reg = self.put_into_temp_register($ty, &mut val)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                        let reg = self.put_into_temp_register($ty, &mut val)?.ok_or_else(|| error("Ran out of free registers"))?;
 
                         dynasm!(self.asm
                             ; $instr $reg_ty(reg.rq().unwrap()), imm
@@ -1464,7 +1460,7 @@ macro_rules! shift {
             self.mark_used(CCLoc::Reg(RCX))?;
             count = ValueLocation::Reg(RCX);
 
-            let reg = self.put_into_temp_register($ty, &mut val)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+            let reg = self.put_into_temp_register($ty, &mut val)?.ok_or_else(|| error("Ran out of free registers"))?;
 
             dynasm!(self.asm
                 ; $instr $reg_ty(reg.rq().unwrap()), cl
@@ -1502,7 +1498,7 @@ macro_rules! cmp_i32 {
                         ValueLocation::Cond($reverse_flags)
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                        let rreg = self.put_into_register(I32, &mut right)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                        let rreg = self.put_into_register(I32, &mut right)?.ok_or_else(|| error("Ran out of free registers"))?;
                         dynasm!(self.asm
                             ; cmp Rd(rreg.rq().unwrap()), i
                         );
@@ -1519,7 +1515,7 @@ macro_rules! cmp_i32 {
                     }
                 }
             } else {
-                let lreg = self.put_into_register(I32, &mut left)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                let lreg = self.put_into_register(I32, &mut left)?.ok_or_else(|| error("Ran out of free registers"))?;
 
                 match right {
                     ValueLocation::Stack(offset) => {
@@ -1529,7 +1525,7 @@ macro_rules! cmp_i32 {
                         );
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                        let rreg = self.put_into_register(I32, &mut right)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                        let rreg = self.put_into_register(I32, &mut right)?.ok_or_else(|| error("Ran out of free registers"))?;
 
                         dynasm!(self.asm
                             ; cmp Rd(lreg.rq().unwrap()), Rd(rreg.rq().unwrap())
@@ -1569,7 +1565,7 @@ macro_rules! cmp_i64 {
                                 ; cmp QWORD [rsp + offset], i
                             );
                         } else {
-                            let lreg = self.put_into_register(I32, &mut left)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                            let lreg = self.put_into_register(I32, &mut left)?.ok_or_else(|| error("Ran out of free registers"))?;
 
                             dynasm!(self.asm
                                 ; cmp QWORD [rsp + offset], Rq(lreg.rq().unwrap())
@@ -1578,14 +1574,14 @@ macro_rules! cmp_i64 {
                         ValueLocation::Cond($reverse_flags)
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                        let rreg = self.put_into_register(I32, &mut right)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                        let rreg = self.put_into_register(I32, &mut right)?.ok_or_else(|| error("Ran out of free registers"))?;
 
                         if let Some(i) = i.try_into().ok() {
                             dynasm!(self.asm
                                 ; cmp Rq(rreg.rq().unwrap()), i
                             );
                         } else {
-                            let lreg = self.put_into_register(I32, &mut left)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                            let lreg = self.put_into_register(I32, &mut left)?.ok_or_else(|| error("Ran out of free registers"))?;
 
                             dynasm!(self.asm
                                 ; cmp Rq(rreg.rq().unwrap()), Rq(lreg.rq().unwrap())
@@ -1604,7 +1600,7 @@ macro_rules! cmp_i64 {
                     }
                 }
             } else {
-                let lreg = self.put_into_register(I64, &mut left)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                let lreg = self.put_into_register(I64, &mut left)?.ok_or_else(|| error("Ran out of free registers"))?;
 
                 match right {
                     ValueLocation::Stack(offset) => {
@@ -1614,7 +1610,7 @@ macro_rules! cmp_i64 {
                         );
                     }
                     ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
-                        let rreg = self.put_into_register(I32, &mut right)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                        let rreg = self.put_into_register(I32, &mut right)?.ok_or_else(|| error("Ran out of free registers"))?;
 
                         dynasm!(self.asm
                             ; cmp Rq(lreg.rq().unwrap()), Rq(rreg.rq().unwrap())
@@ -1627,7 +1623,7 @@ macro_rules! cmp_i64 {
                                 ; cmp Rq(lreg.rq().unwrap()), i
                             );
                         } else {
-                            let rreg = self.put_into_register(I32, &mut right)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                            let rreg = self.put_into_register(I32, &mut right)?.ok_or_else(|| error("Ran out of free registers"))?;
 
                             dynasm!(self.asm
                                 ; cmp Rq(lreg.rq().unwrap()), Rq(rreg.rq().unwrap())
@@ -1685,8 +1681,8 @@ macro_rules! eq_float {
                 _ =>  (right, left)
             };
 
-            let lreg = self.put_into_temp_register(GPRType::Rx, &mut left)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
-            let rreg = self.put_into_register(GPRType::Rx, &mut right)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+            let lreg = self.put_into_temp_register(GPRType::Rx, &mut left)?.ok_or_else(|| error("Ran out of free registers"))?;
+            let rreg = self.put_into_register(GPRType::Rx, &mut right)?.ok_or_else(|| error("Ran out of free registers"))?;
 
             let out = self.take_or_free_reg(I32).ok_or_else(|| error("Ran out of free registers"))?;
 
@@ -1733,8 +1729,8 @@ macro_rules! minmax_float {
                 _ =>  (right, left)
             };
 
-            let lreg = self.put_into_temp_register(GPRType::Rx, &mut left)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
-            let rreg = self.put_into_register(GPRType::Rx, &mut right)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+            let lreg = self.put_into_temp_register(GPRType::Rx, &mut left)?.ok_or_else(|| error("Ran out of free registers"))?;
+            let rreg = self.put_into_register(GPRType::Rx, &mut right)?.ok_or_else(|| error("Ran out of free registers"))?;
 
             dynasm!(self.asm
                 ; $cmpinstr Rx(lreg.rx().unwrap()), Rx(rreg.rx().unwrap())
@@ -1782,7 +1778,7 @@ macro_rules! cmp_float {
                 ValueLocation::Immediate(0i32.into())
             }
         } else {
-            let lreg = this.put_into_register(GPRType::Rx, left)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+            let lreg = this.put_into_register(GPRType::Rx, left)?.ok_or_else(|| error("Ran out of free registers"))?;
 
             let result = this.take_or_free_reg(I32).ok_or_else(|| error("Ran out of free registers"))?;
 
@@ -1797,7 +1793,7 @@ macro_rules! cmp_float {
                     );
                 }
                 right => {
-                    let rreg = this.put_into_register(GPRType::Rx, right)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                    let rreg = this.put_into_register(GPRType::Rx, right)?.ok_or_else(|| error("Ran out of free registers"))?;
 
                     dynasm!(this.asm
                         ; xor Rq(result.rq().unwrap()), Rq(result.rq().unwrap())
@@ -2034,12 +2030,12 @@ macro_rules! binop {
             }
 
             let (mut left, mut right) = $map_op(left, right);
-            let lreg = self.put_into_temp_register($ty, &mut left)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+            let lreg = self.put_into_temp_register($ty, &mut left)?.ok_or_else(|| error("Ran out of free registers"))?;
 
             match right {
                 ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                     // This handles the case where we (for example) have a float in an `Rq` reg
-                    let right_reg = self.put_into_register($ty, &mut right)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                    let right_reg = self.put_into_register($ty, &mut right)?.ok_or_else(|| error("Ran out of free registers"))?;
 
                     dynasm!(self.asm
                         ; $instr $reg_ty(lreg.$reg_fn().unwrap()), $reg_ty(right_reg.$reg_fn().unwrap())
@@ -2116,7 +2112,7 @@ macro_rules! load {
                         }
                         Err(gpr) => {
                             if offset == 0 {
-                                ctx.clone_to_register(I32, ValueLocation::Reg(gpr))?.ok_or_else(|| error("Ran out of free registers".to_string()))?
+                                ctx.clone_to_register(I32, ValueLocation::Reg(gpr))?.ok_or_else(|| error("Ran out of free registers"))?
                             } else if offset > 0 {
                                 let addr_reg = ctx.take_or_free_reg(I64).ok_or_else(|| error("Ran out of free registers"))?;
                                 dynasm!(ctx.asm
@@ -2173,7 +2169,7 @@ macro_rules! load {
                     load_to_reg(self, temp, (offset as _, Ok(i.as_i32().unwrap())))?;
                 }
                 mut base => {
-                    let gpr = self.put_into_register(I32, &mut base)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                    let gpr = self.put_into_register(I32, &mut base)?.ok_or_else(|| error("Ran out of free registers"))?;
                     load_to_reg(self, temp, (offset as _, Err(gpr)))?;
                     self.free(base)?;
                 }
@@ -2299,7 +2295,7 @@ macro_rules! store {
                         }
                         Err(gpr) => {
                             if offset == 0 {
-                                ctx.clone_to_register(I32, ValueLocation::Reg(gpr))?.ok_or_else(|| error("Ran out of free registers".to_string()))?
+                                ctx.clone_to_register(I32, ValueLocation::Reg(gpr))?.ok_or_else(|| error("Ran out of free registers"))?
 
                             } else if offset > 0 {
                                 let addr_reg = ctx.take_or_free_reg(I64).ok_or_else(|| error("Ran out of free registers"))?;
@@ -2357,7 +2353,7 @@ macro_rules! store {
 
             // `store_from_reg` frees `src`
             // TODO: Would it be better to free it outside `store_from_reg`?
-            let src_reg = self.put_into_register(None, &mut src)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+            let src_reg = self.put_into_register(None, &mut src)?.ok_or_else(|| error("Ran out of free registers"))?;
 
 
             match base {
@@ -2365,7 +2361,7 @@ macro_rules! store {
                     store_from_reg(self, src_reg, (offset as i32, Ok(i.as_i32().unwrap())))?
                 }
                 mut base => {
-                    let gpr = self.put_into_register(I32, &mut base)?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                    let gpr = self.put_into_register(I32, &mut base)?.ok_or_else(|| error("Ran out of free registers"))?;
                     store_from_reg(self, src_reg, (offset as i32, Err(gpr)))?;
                     self.free(base)?;
                 }
@@ -2378,7 +2374,7 @@ macro_rules! store {
             $name,
             $int_reg_ty,
             |ctx: &mut Context<_>, mem_ptr_reg: GPR, runtime_offset: Result<i32, GPR>, offset: i32, src| -> Result<GPR, Error> {
-                let src_reg = ctx.put_into_temp_register(GPRType::Rq, &mut ValueLocation::Reg(src))?.ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                let src_reg = ctx.put_into_temp_register(GPRType::Rq, &mut ValueLocation::Reg(src))?.ok_or_else(|| error("Ran out of free registers"))?;
 
                 match runtime_offset {
                     Ok(imm) => {
@@ -2431,6 +2427,59 @@ macro_rules! store {
             $size
         );
     };
+}
+
+macro_rules! sign_extend {
+    ($fn_name:ident, ($outty:ident, $outreg:tt), ($inty:ident, $inreg:tt), $size:ident) => {
+        pub fn $fn_name(&mut self) -> Result<(), Error> {
+            let val = self.pop()?;
+
+            let out = if let ValueLocation::Immediate(imm) = val {
+                ValueLocation::Immediate((imm.as_bytes() as $inty as $outty).into())
+            } else {
+                let new_reg = self
+                    .take_or_free_reg(I64)
+                    .ok_or_else(|| error("Ran out of free registers"))?;
+
+                // TODO: Track set-ness of bits - we can make this a no-op in most cases
+                //       but we have to make this unconditional just in case this value
+                //       came from a truncate.
+                match val {
+                    ValueLocation::Reg(GPR::Rx(rxreg)) => {
+                        dynasm!(self.asm
+                            ; movd Rd(new_reg.rq().unwrap()), Rx(rxreg)
+                        );
+
+                        self.free(val)?;
+                        self.push(ValueLocation::Reg(new_reg))?;
+
+                        return self.$fn_name();
+                    }
+                    ValueLocation::Reg(GPR::Rq(rqreg)) => {
+                        dynasm!(self.asm
+                            ; movsx $outreg(new_reg.rq().unwrap()), $inreg(rqreg)
+                        );
+                    }
+                    ValueLocation::Stack(offset) => {
+                        let offset = self.adjusted_offset(offset);
+
+                        dynasm!(self.asm
+                            ; movsx $outreg(new_reg.rq().unwrap()), $size [rsp + offset]
+                        );
+                    }
+                    ValueLocation::Cond(_) => self.copy_value(val, CCLoc::Reg(new_reg))?,
+                    ValueLocation::Immediate(_) => return Err(error("unreachable")),
+                }
+
+                ValueLocation::Reg(new_reg)
+            };
+
+            self.free(val)?;
+
+            self.push(out)?;
+            Ok(())
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -2630,7 +2679,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let reg = self
             .put_into_register(I32, &mut val)?
-            .ok_or_else(|| error("Ran out of free registers".to_string()))?;
+            .ok_or_else(|| error("Ran out of free registers"))?;
 
         dynasm!(self.asm
             ; test Rd(reg.rq().unwrap()), Rd(reg.rq().unwrap())
@@ -2659,7 +2708,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let reg = self
             .put_into_register(I64, &mut val)?
-            .ok_or_else(|| error("Ran out of free registers".to_string()))?;
+            .ok_or_else(|| error("Ran out of free registers"))?;
 
         dynasm!(self.asm
             ; test Rq(reg.rq().unwrap()), Rq(reg.rq().unwrap())
@@ -3397,7 +3446,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         let val_reg = self
             .put_into_register(GPRType::Rq, &mut val)?
-            .ok_or_else(|| error("Ran out of free registers".to_string()))?;
+            .ok_or_else(|| error("Ran out of free registers"))?;
         let vmctx = GPR::Rq(VMCTX);
 
         // We always use `Rq` (even for floats) since the globals are not necessarily aligned to 128 bits
@@ -3845,7 +3894,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     pub fn pop(&mut self) -> Result<ValueLocation, Error> {
         match self.stack.pop() {
             Some(v) => Ok(v),
-            None => Err(error("Stack is empty - pop impossible".to_string())),
+            None => Err(error("Stack is empty - pop impossible")),
         }
     }
 
@@ -4027,7 +4076,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let reg = match self.put_into_temp_register(GPRType::Rx, &mut val) {
                 Err(e) => return Err(e),
-                Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
             };
             let const_label = self.aligned_label(16, LabelValue::I32(SIGN_MASK_F32 as i32));
 
@@ -4052,7 +4101,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let reg = match self.put_into_temp_register(GPRType::Rx, &mut val) {
                 Err(e) => return Err(e),
-                Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
             };
             let const_label = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
 
@@ -4077,7 +4126,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let reg = match self.put_into_temp_register(GPRType::Rx, &mut val) {
                 Err(e) => return Err(e),
-                Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
             };
             let const_label = self.aligned_label(16, LabelValue::I32(REST_MASK_F32 as i32));
 
@@ -4102,7 +4151,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let reg = match self.put_into_temp_register(GPRType::Rx, &mut val) {
                 Err(e) => return Err(e),
-                Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
             };
 
             let const_label = self.aligned_label(16, LabelValue::I64(REST_MASK_F64 as i64));
@@ -4128,7 +4177,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let reg = match self.put_into_temp_register(GPRType::Rx, &mut val) {
                 Err(e) => return Err(e),
-                Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
             };
 
             dynasm!(self.asm
@@ -4152,7 +4201,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let reg = match self.put_into_temp_register(GPRType::Rx, &mut val) {
                 Err(e) => return Err(e),
-                Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
             };
 
             dynasm!(self.asm
@@ -4180,11 +4229,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let lreg = match self.put_into_temp_register(GPRType::Rx, &mut left) {
                 Err(e) => return Err(e),
-                Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
             };
             let rreg = match self.put_into_register(GPRType::Rx, &mut right) {
                 Err(e) => return Err(e),
-                Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
             };
 
             let sign_mask = self.aligned_label(16, LabelValue::I32(SIGN_MASK_F32 as i32));
@@ -4219,11 +4268,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let lreg = match self.put_into_temp_register(GPRType::Rx, &mut left) {
                 Err(e) => return Err(e),
-                Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
             };
             let rreg = match self.put_into_register(GPRType::Rx, &mut right) {
                 Err(e) => return Err(e),
-                Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
             };
 
             let sign_mask = self.aligned_label(16, LabelValue::I64(SIGN_MASK_F64 as i64));
@@ -4281,7 +4330,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let reg = match self.put_into_register(GPRType::Rq, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 let temp = self
@@ -4348,7 +4397,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let reg = match self.put_into_register(GPRType::Rq, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
                 let temp = self
                     .take_or_free_reg(I64)
@@ -4412,7 +4461,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let reg = match self.put_into_register(GPRType::Rq, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
                 let temp = self
                     .take_or_free_reg(I32)
@@ -4474,7 +4523,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let reg = match self.put_into_register(GPRType::Rq, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
                 let temp = self
                     .take_or_free_reg(I64)
@@ -4494,7 +4543,12 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Ok(())
     }
 
-    pub fn i32_extend_u(&mut self) -> Result<(), Error> {
+    sign_extend!(i32_convert_from_i8, (i32, Rd), (i8, Rb), BYTE);
+    sign_extend!(i32_convert_from_i16, (i32, Rd), (i16, Rw), WORD);
+    sign_extend!(i64_convert_from_i8, (i64, Rq), (i8, Rb), BYTE);
+    sign_extend!(i64_convert_from_i16, (i64, Rq), (i16, Rw), WORD);
+
+    pub fn u64_convert_from_u32(&mut self) -> Result<(), Error> {
         let val = self.pop()?;
 
         let out = if let ValueLocation::Immediate(imm) = val {
@@ -4526,9 +4580,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     );
                 }
                 ValueLocation::Cond(_) => self.copy_value(val, CCLoc::Reg(new_reg))?,
-                ValueLocation::Immediate(_) => {
-                    return Err(error("i32_extend_u unreachable code".to_string()))
-                }
+                ValueLocation::Immediate(_) => return Err(error("i32_extend_u unreachable code")),
             }
 
             ValueLocation::Reg(new_reg)
@@ -4540,7 +4592,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         Ok(())
     }
 
-    pub fn i32_extend_s(&mut self) -> Result<(), Error> {
+    pub fn i64_convert_from_i32(&mut self) -> Result<(), Error> {
         let val = self.pop()?;
 
         self.free(val)?;
@@ -4627,7 +4679,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(F32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
                 let temp = self
                     .take_or_free_reg(I32)
@@ -4673,7 +4725,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_temp_register(F32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 let temp = self
@@ -4724,7 +4776,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(F32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 let temp = self
@@ -4771,7 +4823,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_temp_register(F32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 let temp = self
@@ -4871,7 +4923,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_temp_register(F32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 let temp = self
@@ -4918,7 +4970,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(F32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 let temp = self
@@ -4965,7 +5017,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(F32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 let temp = self
@@ -5014,7 +5066,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(F64, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 let temp = self
@@ -5065,7 +5117,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(I32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 let temp = self
@@ -5097,7 +5149,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(I32, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 let temp = self
@@ -5129,7 +5181,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(I64, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 let out = self
@@ -5176,7 +5228,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let reg = match self.put_into_register(I64, &mut val) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 let out = self
@@ -5605,10 +5657,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.free(divisor)?;
 
         if self.is_free(CCLoc::Reg(RAX))? {
-            return Err(error("full_div: RAX is not free".to_string()));
+            return Err(error("full_div: RAX is not free"));
         }
         if self.is_free(CCLoc::Reg(RDX))? {
-            return Err(error("full_div: RDX is not free".to_string()));
+            return Err(error("full_div: RDX is not free"));
         }
 
         Ok((ValueLocation::Reg(RAX), ValueLocation::Reg(RDX), saved))
@@ -5638,7 +5690,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Immediate(_) | ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let r = match this.put_into_register(I32, divisor) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 dynasm!(this.asm
@@ -5674,7 +5726,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Immediate(_) | ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let r = match this.put_into_register(I32, divisor) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 dynasm!(this.asm
@@ -5710,7 +5762,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Immediate(_) | ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let r = match this.put_into_register(I64, divisor) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
                 dynasm!(this.asm
                     ; xor rdx, rdx
@@ -5745,7 +5797,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Immediate(_) | ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let r = match this.put_into_register(I64, divisor) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 dynasm!(this.asm
@@ -5787,11 +5839,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let rreg = match self.put_into_register(I32, &mut right) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
                 let lreg = match self.put_into_temp_register(I32, &mut left) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 dynasm!(self.asm
@@ -5804,7 +5856,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                 let lreg = match self.put_into_temp_register(I32, &mut left) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 dynasm!(self.asm
@@ -5815,7 +5867,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Immediate(i) => {
                 let lreg = match self.put_into_register(I32, &mut left) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 let new_reg = self
@@ -5864,11 +5916,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::Reg(_) | ValueLocation::Cond(_) => {
                 let rreg = match self.put_into_register(I64, &mut right) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
                 let lreg = match self.put_into_temp_register(I64, &mut left) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 dynasm!(self.asm
@@ -5881,7 +5933,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                 let lreg = match self.put_into_temp_register(I64, &mut left) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
 
                 dynasm!(self.asm
@@ -5898,7 +5950,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
                     let lreg = self
                         .put_into_register(I64, &mut left)?
-                        .ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                        .ok_or_else(|| error("Ran out of free registers"))?;
 
                     dynasm!(self.asm
                         ; imul Rq(new_reg.rq().unwrap()), Rq(lreg.rq().unwrap()), i
@@ -5910,10 +5962,10 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                 } else {
                     let rreg = self
                         .put_into_register(I64, &mut right)?
-                        .ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                        .ok_or_else(|| error("Ran out of free registers"))?;
                     let lreg = self
                         .put_into_temp_register(I64, &mut left)?
-                        .ok_or_else(|| error("Ran out of free registers".to_string()))?;
+                        .ok_or_else(|| error("Ran out of free registers"))?;
 
                     dynasm!(self.asm
                         ; imul Rq(lreg.rq().unwrap()), Rq(rreg.rq().unwrap())
@@ -6063,7 +6115,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             _ => {
                 let cond_reg = match self.put_into_register(I32, &mut cond) {
                     Err(e) => return Err(e),
-                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                    Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
                 };
                 dynasm!(self.asm
                     ; test Rd(cond_reg.rq().unwrap()), Rd(cond_reg.rq().unwrap())
@@ -6079,7 +6131,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let gpr = match self.put_into_register(I32, &mut else_) {
                 Err(e) => return Err(e),
-                Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
             };
             CCLoc::Reg(gpr)
         };
@@ -6089,7 +6141,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             let gpr = match self.put_into_register(I32, &mut then) {
                 Err(e) => return Err(e),
-                Ok(o) => o.ok_or_else(|| error("Ran out of free registers".to_string()))?,
+                Ok(o) => o.ok_or_else(|| error("Ran out of free registers"))?,
             };
             CCLoc::Reg(gpr)
         };
@@ -6489,7 +6541,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let mut callee = self.pop()?;
         let callee_reg = self
             .put_into_temp_register(I32, &mut callee)?
-            .ok_or_else(|| error("Ran out of free registers".to_string()))?;
+            .ok_or_else(|| error("Ran out of free registers"))?;
 
         for loc in locs.as_ref().locs {
             if loc.reg().is_some() {

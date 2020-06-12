@@ -20,7 +20,6 @@ iter-enum = "0.2"
 itertools = "0.8.2"
 memoffset = "0.5.3"
 more-asserts = "0.2.1"
-staticvec = "0.9"
 thiserror = "1.0.9"
 wasmparser = "0.57.0"
 

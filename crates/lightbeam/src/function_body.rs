@@ -907,12 +907,24 @@ where
                 } => {
                     ctx.i64_truncate_f64_u()?;
                 }
-                Operator::Extend {
+                Operator::Extend8 {
+                    size: Size::_32,
+                } => ctx.i32_convert_from_i8()?,
+                Operator::Extend16 {
+                    size: Size::_32,
+                } => ctx.i32_convert_from_i16()?,
+                Operator::Extend8 {
+                    size: Size::_64,
+                } => ctx.i64_convert_from_i8()?,
+                Operator::Extend16 {
+                    size: Size::_64,
+                } => ctx.i64_convert_from_i16()?,
+                Operator::Extend32 {
                     sign: Signedness::Unsigned,
-                } => ctx.i32_extend_u()?,
-                Operator::Extend {
+                } => ctx.u64_convert_from_u32()?,
+                Operator::Extend32 {
                     sign: Signedness::Signed,
-                } => ctx.i32_extend_s()?,
+                } => ctx.i64_convert_from_i32()?,
                 Operator::FConvertFromI {
                     input_ty: sint::I32,
                     output_ty: Size::_32,

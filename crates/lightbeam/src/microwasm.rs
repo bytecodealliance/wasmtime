@@ -734,8 +734,13 @@ pub enum Operator<Label> {
     I64ReinterpretFromF64,
     F32ReinterpretFromI32,
     F64ReinterpretFromI64,
-    // Only available for input I32 and output I64
-    Extend {
+    Extend8 {
+        size: Size,
+    },
+    Extend16 {
+        size: Size,
+    },
+    Extend32 {
         sign: Signedness,
     },
 }
@@ -940,11 +945,21 @@ where
                 output_ty,
                 Type::<Int>::Float(*input_ty)
             ),
-            Operator::Extend { sign } => write!(
+            Operator::Extend32 { sign } => write!(
                 f,
                 "{}.extend_from.{}",
                 SignfulInt(*sign, Size::_64),
                 SignfulInt(*sign, Size::_32)
+            ),
+            Operator::Extend16 { size } => write!(
+                f,
+                "{}.extend_from.i16",
+                SignfulInt(Signedness::Signed, *size),
+            ),
+            Operator::Extend8 { size } => write!(
+                f,
+                "{}.extend_from.i8",
+                SignfulInt(Signedness::Signed, *size),
             ),
         }
     }
@@ -1521,13 +1536,17 @@ where
             WasmOperator::F32ReinterpretI32 => sig!((I32) -> (F32)),
             WasmOperator::F64ReinterpretI64 => sig!((I64) -> (F64)),
 
-            WasmOperator::I32Extend8S => sig!((I32) -> (I32)),
-            WasmOperator::I32Extend16S => sig!((I32) -> (I32)),
-            WasmOperator::I64Extend8S => sig!((I32) -> (I64)),
-            WasmOperator::I64Extend16S => sig!((I32) -> (I64)),
-            WasmOperator::I64Extend32S => sig!((I32) -> (I64)),
+            WasmOperator::I32Extend8S | WasmOperator::I32Extend16S => sig!((I32) -> (I32)),
+            WasmOperator::I64Extend8S | WasmOperator::I64Extend16S | WasmOperator::I64Extend32S => {
+                sig!((I64) -> (I64))
+            }
 
-            _ => return Err(Error::Microwasm("Opcode Unimplemented".into())),
+            other => {
+                return Err(Error::Microwasm(format!(
+                    "Opcode unimplemented: {:?}",
+                    other
+                )))
+            }
         };
         Ok(o)
     }
@@ -1638,7 +1657,6 @@ where
         &mut self,
     ) -> Result<Option<impl ExactSizeIterator<Item = WithLoc<OperatorFromWasm>> + '_>, Error> {
         use iter_enum::{ExactSizeIterator, Iterator};
-        use staticvec::staticvec;
 
         struct Consts {
             inner: <Vec<Value> as IntoIterator>::IntoIter,
@@ -1957,11 +1975,17 @@ where
 
                 let label = (block.id, NameTag::Else);
 
-                iter(to_drop.into_iter().map(Operator::Drop).chain(staticvec![
-                    Operator::Const(0i32.into()),
-                    Operator::End(BrTarget::Label((block.id, NameTag::End)).into()),
-                    Operator::Start(label)
-                ]))
+                iter(
+                    to_drop.into_iter().map(Operator::Drop).chain(
+                        [
+                            Operator::Const(0i32.into()),
+                            Operator::End(BrTarget::Label((block.id, NameTag::End)).into()),
+                            Operator::Start(label),
+                        ]
+                        .iter()
+                        .cloned(),
+                    ),
+                )
             }
             WasmOperator::End => {
                 let block = self
@@ -1981,29 +2005,45 @@ where
                     let else_ = (block.id, NameTag::Else);
                     let end = (block.id, NameTag::End);
 
-                    iter(to_drop.map(Operator::Drop).into_iter().chain(staticvec![
-                        Operator::Const(0i32.into()),
-                        Operator::End(BrTarget::Label(end).into()),
-                        Operator::Start(else_),
-                        Operator::Const(0i32.into()),
-                        Operator::End(BrTarget::Label(end).into()),
-                        Operator::Start(end),
-                    ]))
+                    iter(
+                        to_drop.map(Operator::Drop).into_iter().chain(
+                            [
+                                Operator::Const(0i32.into()),
+                                Operator::End(BrTarget::Label(end).into()),
+                                Operator::Start(else_),
+                                Operator::Const(0i32.into()),
+                                Operator::End(BrTarget::Label(end).into()),
+                                Operator::Start(end),
+                            ]
+                            .iter()
+                            .cloned(),
+                        ),
+                    )
                 } else if self.control_frames.is_empty() {
                     self.is_done = true;
 
-                    iter(staticvec![
-                        Operator::Const(0i32.into()),
-                        Operator::End(BrTarget::Return.into()),
-                    ])
+                    iter(
+                        [
+                            Operator::Const(0i32.into()),
+                            Operator::End(BrTarget::Return.into()),
+                        ]
+                        .iter()
+                        .cloned(),
+                    )
                 } else if block.needs_end_label() {
                     let label = (block.id, NameTag::End);
 
-                    iter(to_drop.map(Operator::Drop).into_iter().chain(staticvec![
-                        Operator::Const(0i32.into()),
-                        Operator::End(BrTarget::Label(label).into()),
-                        Operator::Start(label)
-                    ]))
+                    iter(
+                        to_drop.map(Operator::Drop).into_iter().chain(
+                            [
+                                Operator::Const(0i32.into()),
+                                Operator::End(BrTarget::Label(label).into()),
+                                Operator::Start(label),
+                            ]
+                            .iter()
+                            .cloned(),
+                        ),
+                    )
                 } else {
                     iter(to_drop.map(Operator::Drop).into_iter())
                 }
@@ -2014,10 +2054,16 @@ where
 
                 let block = &mut self.control_frames[relative_depth as _];
                 block.mark_branched_to();
-                iter(to_drop.into_iter().map(Operator::Drop).chain(staticvec![
-                    Operator::Const(0i32.into()),
-                    Operator::End(block.br_target().into()),
-                ]))
+                iter(
+                    to_drop.into_iter().map(Operator::Drop).chain(
+                        [
+                            Operator::Const(0i32.into()),
+                            Operator::End(block.br_target().into()),
+                        ]
+                        .iter()
+                        .cloned(),
+                    ),
+                )
             }
             WasmOperator::BrIf { relative_depth } => {
                 let to_drop = to_drop!(self.control_frames[relative_depth as _]);
@@ -2075,10 +2121,16 @@ where
                 let block = self.control_frames.function_block();
                 let to_drop = to_drop!(block);
 
-                iter(to_drop.into_iter().map(Operator::Drop).chain(staticvec![
-                    Operator::Const(0i32.into()),
-                    Operator::End(block.br_target().into()),
-                ]))
+                iter(
+                    to_drop.into_iter().map(Operator::Drop).chain(
+                        [
+                            Operator::Const(0i32.into()),
+                            Operator::End(block.br_target().into()),
+                        ]
+                        .iter()
+                        .cloned(),
+                    ),
+                )
             }
             WasmOperator::Call { function_index } => one(Operator::Call { function_index }),
             WasmOperator::CallIndirect { index, table_index } => one(Operator::CallIndirect {
@@ -2347,12 +2399,16 @@ where
                 input_ty: Size::_64,
                 output_ty: sint::U32,
             }),
-            WasmOperator::I64ExtendI32S => one(Operator::Extend {
+            WasmOperator::I64ExtendI32S | WasmOperator::I64Extend32S => one(Operator::Extend32 {
                 sign: Signedness::Signed,
             }),
-            WasmOperator::I64ExtendI32U => one(Operator::Extend {
+            WasmOperator::I64ExtendI32U => one(Operator::Extend32 {
                 sign: Signedness::Unsigned,
             }),
+            WasmOperator::I64Extend16S => one(Operator::Extend16 { size: Size::_64 }),
+            WasmOperator::I64Extend8S => one(Operator::Extend8 { size: Size::_64 }),
+            WasmOperator::I32Extend16S => one(Operator::Extend16 { size: Size::_32 }),
+            WasmOperator::I32Extend8S => one(Operator::Extend8 { size: Size::_32 }),
             WasmOperator::I64TruncF32S => one(Operator::ITruncFromF {
                 input_ty: Size::_32,
                 output_ty: sint::I64,
@@ -2407,21 +2463,6 @@ where
             WasmOperator::I64ReinterpretF64 => one(Operator::I64ReinterpretFromF64),
             WasmOperator::F32ReinterpretI32 => one(Operator::F32ReinterpretFromI32),
             WasmOperator::F64ReinterpretI64 => one(Operator::F64ReinterpretFromI64),
-            WasmOperator::I32Extend8S => {
-                return Err(Error::Microwasm("I32Extend8S unimplemented".into()))
-            }
-            WasmOperator::I32Extend16S => {
-                return Err(Error::Microwasm("I32Extend16S unimplemented".into()))
-            }
-            WasmOperator::I64Extend8S => {
-                return Err(Error::Microwasm("I64Extend8S unimplemented".into()))
-            }
-            WasmOperator::I64Extend16S => {
-                return Err(Error::Microwasm("I64Extend16S unimplemented".into()))
-            }
-            WasmOperator::I64Extend32S => {
-                return Err(Error::Microwasm("I64Extend32S unimplemented".into()))
-            }
 
             WasmOperator::I32TruncSatF32S => {
                 return Err(Error::Microwasm("I32TruncSatF32S unimplemented".into()))
@@ -2447,7 +2488,12 @@ where
             WasmOperator::I64TruncSatF64U => {
                 return Err(Error::Microwasm("I64TruncSatF64U unimplemented".into()))
             }
-            _other => return Err(Error::Microwasm("Opcode unimplemented".into())),
+            other => {
+                return Err(Error::Microwasm(format!(
+                    "Opcode unimplemented: {:?}",
+                    other
+                )))
+            }
         };
 
         Ok(Some(WithLocIter {
