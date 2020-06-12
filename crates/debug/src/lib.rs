@@ -2,12 +2,13 @@
 
 #![allow(clippy::cast_ptr_alignment)]
 
-use anyhow::Error;
+use anyhow::{bail, Error};
 use more_asserts::assert_gt;
 use object::write::{Object, Relocation, StandardSegment};
-use object::{RelocationEncoding, RelocationKind, SectionKind};
+use object::{
+    Architecture, BinaryFormat, Endianness, RelocationEncoding, RelocationKind, SectionKind,
+};
 use std::collections::HashMap;
-use target_lexicon::BinaryFormat;
 use wasmtime_environ::isa::TargetIsa;
 
 pub use crate::read_debuginfo::{read_debuginfo, DebugInfoData, WasmFileInfo};
@@ -91,7 +92,14 @@ pub fn write_debugsections_image(
     code_region: (*const u8, usize),
     funcs: &[*const u8],
 ) -> Result<Vec<u8>, Error> {
-    let mut obj = Object::new(BinaryFormat::Elf, isa.triple().architecture);
+    if isa.triple().architecture != target_lexicon::Architecture::X86_64 {
+        bail!(
+            "Unsupported architecture for DWARF image: {}",
+            isa.triple().architecture
+        );
+    }
+
+    let mut obj = Object::new(BinaryFormat::Elf, Architecture::X86_64, Endianness::Little);
 
     assert!(!code_region.0.is_null() && code_region.1 > 0);
     assert_gt!(funcs.len(), 0);

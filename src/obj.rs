@@ -13,6 +13,42 @@ use wasmtime_environ::{
 use wasmtime_jit::native;
 use wasmtime_obj::emit_module;
 
+fn to_obj_format(
+    triple: &Triple,
+) -> Result<(
+    object::BinaryFormat,
+    object::Architecture,
+    object::Endianness,
+)> {
+    let binary_format = match triple.binary_format {
+        target_lexicon::BinaryFormat::Elf => object::BinaryFormat::Elf,
+        target_lexicon::BinaryFormat::Coff => object::BinaryFormat::Coff,
+        target_lexicon::BinaryFormat::Macho => object::BinaryFormat::MachO,
+        target_lexicon::BinaryFormat::Wasm => {
+            bail!("binary format wasm is unsupported");
+        }
+        target_lexicon::BinaryFormat::Unknown => {
+            bail!("binary format is unknown");
+        }
+    };
+    let architecture = match triple.architecture {
+        target_lexicon::Architecture::I386
+        | target_lexicon::Architecture::I586
+        | target_lexicon::Architecture::I686 => object::Architecture::I386,
+        target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
+        target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
+        target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
+        architecture => {
+            bail!("target architecture {:?} is unsupported", architecture,);
+        }
+    };
+    let endian = match triple.endianness().unwrap() {
+        target_lexicon::Endianness::Little => object::Endianness::Little,
+        target_lexicon::Endianness::Big => object::Endianness::Big,
+    };
+    Ok((binary_format, architecture, endian))
+}
+
 /// Creates object file from binary wasm data.
 pub fn compile_to_obj(
     wasm: &[u8],
@@ -50,7 +86,8 @@ pub fn compile_to_obj(
 
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
-    let mut obj = Object::new(isa.triple().binary_format, isa.triple().architecture);
+    let (obj_format, obj_arch, obj_endian) = to_obj_format(isa.triple())?;
+    let mut obj = Object::new(obj_format, obj_arch, obj_endian);
 
     // TODO: Expose the tunables as command-line flags.
     let mut tunables = Tunables::default();
