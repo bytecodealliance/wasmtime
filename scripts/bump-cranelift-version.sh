@@ -9,7 +9,7 @@ topdir=$(dirname "$0")/..
 cd "$topdir"
 
 # All the cranelift-* crates have the same version number
-version="0.64.0"
+version="0.65.0"
 
 # Update all of the Cargo.toml files.
 echo "Updating crate versions to $version"
@@ -24,6 +24,7 @@ find -name Cargo.toml \
     -not -path ./crates/wasi-common/WASI/tools/witx/Cargo.toml \
     -exec sed -i.bk \
         -e "/^cranelift/s/version = \"[^\"]*\"/version = \"$version\"/" \
+        -e "/^peepmatic /s/version = \"[^\"]*\"/version = \"$version\"/" \
         {} \;
 
 # Update the Cargo.lock file for the new versions.

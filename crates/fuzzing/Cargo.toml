@@ -4,7 +4,7 @@ description = "Fuzzing infrastructure for Wasmtime"
 edition = "2018"
 name = "wasmtime-fuzzing"
 publish = false
-version = "0.17.0"
+version = "0.18.0"
 
 [dependencies]
 anyhow = "1.0.22"

@@ -2192,11 +2192,71 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::And,
+            rd: writable_vreg(20),
+            rn: vreg(19),
+            rm: vreg(18),
+            ty: I32X4,
+        },
+        "741E324E",
+        "and v20.16b, v19.16b, v18.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Bic,
+            rd: writable_vreg(8),
+            rn: vreg(11),
+            rm: vreg(1),
+            ty: I8X16,
+        },
+        "681D614E",
+        "bic v8.16b, v11.16b, v1.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Orr,
+            rd: writable_vreg(15),
+            rn: vreg(2),
+            rm: vreg(12),
+            ty: I16X8,
+        },
+        "4F1CAC4E",
+        "orr v15.16b, v2.16b, v12.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Eor,
+            rd: writable_vreg(18),
+            rn: vreg(3),
+            rm: vreg(22),
+            ty: I8X16,
+        },
+        "721C366E",
+        "eor v18.16b, v3.16b, v22.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Bsl,
+            rd: writable_vreg(8),
+            rn: vreg(9),
+            rm: vreg(1),
+            ty: I8X16,
+        },
+        "281D616E",
+        "bsl v8.16b, v9.16b, v1.16b",
+    ));
+
+    insns.push((
         Inst::VecMisc {
             op: VecMisc2::Not,
             rd: writable_vreg(2),
             rn: vreg(1),
-            ty: I8X16,
+            ty: I32X4,
         },
         "2258206E",
         "mvn v2.16b, v1.16b",

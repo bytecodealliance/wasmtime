@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-jit"
-version = "0.17.0"
+version = "0.18.0"
 authors = ["The Wasmtime Project Developers"]
 description = "JIT-style execution for WebAsssembly code in Cranelift"
 documentation = "https://docs.rs/wasmtime-jit"
@@ -12,15 +12,15 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../../cranelift/codegen", version = "0.64.0", features = ["enable-serde"] }
-cranelift-entity = { path = "../../cranelift/entity", version = "0.64.0", features = ["enable-serde"] }
-cranelift-wasm = { path = "../../cranelift/wasm", version = "0.64.0", features = ["enable-serde"] }
-cranelift-native = { path = "../../cranelift/native", version = "0.64.0" }
-cranelift-frontend = { path = "../../cranelift/frontend", version = "0.64.0" }
-wasmtime-environ = { path = "../environ", version = "0.17.0" }
-wasmtime-runtime = { path = "../runtime", version = "0.17.0" }
-wasmtime-debug = { path = "../debug", version = "0.17.0" }
-wasmtime-profiling = { path = "../profiling", version = "0.17.0" }
+cranelift-codegen = { path = "../../cranelift/codegen", version = "0.65.0", features = ["enable-serde"] }
+cranelift-entity = { path = "../../cranelift/entity", version = "0.65.0", features = ["enable-serde"] }
+cranelift-wasm = { path = "../../cranelift/wasm", version = "0.65.0", features = ["enable-serde"] }
+cranelift-native = { path = "../../cranelift/native", version = "0.65.0" }
+cranelift-frontend = { path = "../../cranelift/frontend", version = "0.65.0" }
+wasmtime-environ = { path = "../environ", version = "0.18.0" }
+wasmtime-runtime = { path = "../runtime", version = "0.18.0" }
+wasmtime-debug = { path = "../debug", version = "0.18.0" }
+wasmtime-profiling = { path = "../profiling", version = "0.18.0" }
 region = "2.0.0"
 thiserror = "1.0.4"
 target-lexicon = { version = "0.10.0", default-features = false }

@@ -351,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-frontend",
@@ -359,14 +359,14 @@ dependencies = [
 
 [[package]]
 name = "cranelift-bforest"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "cranelift-entity",
 ]
 
 [[package]]
 name = "cranelift-codegen"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "bincode",
  "byteorder",
@@ -388,7 +388,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-meta"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "cranelift-codegen-shared",
  "cranelift-entity",
@@ -396,18 +396,18 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-shared"
-version = "0.64.0"
+version = "0.65.0"
 
 [[package]]
 name = "cranelift-entity"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "cranelift-faerie"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -419,7 +419,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-filetests"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "byteorder",
  "cranelift-codegen",
@@ -441,7 +441,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-frontend"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "cranelift-codegen",
  "hashbrown 0.7.2",
@@ -452,7 +452,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-interpreter"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -467,7 +467,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-module"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -479,7 +479,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-native"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "cranelift-codegen",
  "raw-cpuid",
@@ -488,7 +488,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-object"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-module",
@@ -498,7 +498,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-preopt"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -506,7 +506,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-reader"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "cranelift-codegen",
  "smallvec",
@@ -516,7 +516,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-serde"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "clap",
  "cranelift-codegen",
@@ -528,7 +528,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-simplejit"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "cranelift",
  "cranelift-codegen",
@@ -546,7 +546,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-tools"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "capstone",
  "cfg-if",
@@ -581,7 +581,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-wasm"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -1101,7 +1101,7 @@ dependencies = [
 
 [[package]]
 name = "lightbeam"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "capstone",
@@ -1270,7 +1270,7 @@ dependencies = [
 
 [[package]]
 name = "peepmatic"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "anyhow",
  "peepmatic-automata",
@@ -1282,14 +1282,14 @@ dependencies = [
 
 [[package]]
 name = "peepmatic-automata"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "peepmatic-fuzzing"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "arbitrary",
  "bincode",
@@ -1307,7 +1307,7 @@ dependencies = [
 
 [[package]]
 name = "peepmatic-macro"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1316,7 +1316,7 @@ dependencies = [
 
 [[package]]
 name = "peepmatic-runtime"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bincode",
  "bumpalo",
@@ -1330,7 +1330,7 @@ dependencies = [
 
 [[package]]
 name = "peepmatic-test"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "env_logger",
  "log",
@@ -1729,7 +1729,7 @@ dependencies = [
 
 [[package]]
 name = "run-examples"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "cc",
 ]
@@ -2026,7 +2026,7 @@ dependencies = [
 
 [[package]]
 name = "test-programs"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -2234,7 +2234,7 @@ checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
 
 [[package]]
 name = "wasi-common"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -2276,7 +2276,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -2299,7 +2299,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-c-api"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "env_logger",
@@ -2313,7 +2313,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-c-api-macros"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2321,7 +2321,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-cli"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "env_logger",
@@ -2353,7 +2353,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-debug"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "gimli",
@@ -2367,7 +2367,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-environ"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "base64 0.12.1",
@@ -2413,7 +2413,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-fuzzing"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "arbitrary",
@@ -2430,7 +2430,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-jit"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -2455,7 +2455,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-obj"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "more-asserts",
@@ -2465,7 +2465,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-profiling"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -2483,7 +2483,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-runtime"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "backtrace",
  "cc",
@@ -2501,7 +2501,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-rust"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "wasmtime",
@@ -2511,7 +2511,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-rust-macro"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2520,7 +2520,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wasi"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "log",
@@ -2533,7 +2533,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wast"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "wasmtime",
@@ -2596,7 +2596,7 @@ dependencies = [
 
 [[package]]
 name = "wig"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -2606,7 +2606,7 @@ dependencies = [
 
 [[package]]
 name = "wiggle"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "proptest",
  "thiserror",
@@ -2618,7 +2618,7 @@ dependencies = [
 
 [[package]]
 name = "wiggle-generate"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "anyhow",
  "heck",
@@ -2630,7 +2630,7 @@ dependencies = [
 
 [[package]]
 name = "wiggle-macro"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "quote",
  "syn",
@@ -2641,7 +2641,7 @@ dependencies = [
 
 [[package]]
 name = "wiggle-test"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "env_logger",
  "proptest",
@@ -2684,7 +2684,7 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "winx"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "bitflags",
  "cvt",
@@ -2706,7 +2706,7 @@ dependencies = [
 
 [[package]]
 name = "yanix"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "bitflags",
  "cfg-if",

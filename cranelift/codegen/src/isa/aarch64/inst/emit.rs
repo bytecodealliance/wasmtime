@@ -1035,7 +1035,7 @@ impl MachInstEmit for Inst {
             &Inst::VecMisc { op, rd, rn, ty } => {
                 let bits_12_16 = match op {
                     VecMisc2::Not => {
-                        debug_assert_eq!(I8X16, ty);
+                        debug_assert_eq!(128, ty_bits(ty));
                         0b00101
                     }
                 };
@@ -1256,6 +1256,28 @@ impl MachInstEmit for Inst {
                     VecALUOp::Cmgt => (0b010_01110_00_1 | enc_size_for_cmp << 1, 0b001101),
                     VecALUOp::Cmhi => (0b011_01110_00_1 | enc_size_for_cmp << 1, 0b001101),
                     VecALUOp::Cmhs => (0b011_01110_00_1 | enc_size_for_cmp << 1, 0b001111),
+                    // The following instructions operate on bytes, so are not encoded differently
+                    // for the different vector types.
+                    VecALUOp::And => {
+                        debug_assert_eq!(128, ty_bits(ty));
+                        (0b010_01110_00_1, 0b000111)
+                    }
+                    VecALUOp::Bic => {
+                        debug_assert_eq!(128, ty_bits(ty));
+                        (0b010_01110_01_1, 0b000111)
+                    }
+                    VecALUOp::Orr => {
+                        debug_assert_eq!(128, ty_bits(ty));
+                        (0b010_01110_10_1, 0b000111)
+                    }
+                    VecALUOp::Eor => {
+                        debug_assert_eq!(128, ty_bits(ty));
+                        (0b011_01110_00_1, 0b000111)
+                    }
+                    VecALUOp::Bsl => {
+                        debug_assert_eq!(128, ty_bits(ty));
+                        (0b011_01110_01_1, 0b000111)
+                    }
                 };
                 sink.put4(enc_vec_rrr(top11, rm, bit15_10, rn, rd));
             }

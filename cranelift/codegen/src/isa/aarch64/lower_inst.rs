@@ -386,11 +386,21 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Bnot => {
             let rd = output_to_reg(ctx, outputs[0]);
-            let rm = input_to_rs_immlogic(ctx, inputs[0], NarrowValueMode::None);
             let ty = ty.unwrap();
-            let alu_op = choose_32_64(ty, ALUOp::OrrNot32, ALUOp::OrrNot64);
-            // NOT rd, rm ==> ORR_NOT rd, zero, rm
-            ctx.emit(alu_inst_immlogic(alu_op, rd, zero_reg(), rm));
+            if ty_bits(ty) < 128 {
+                let rm = input_to_rs_immlogic(ctx, inputs[0], NarrowValueMode::None);
+                let alu_op = choose_32_64(ty, ALUOp::OrrNot32, ALUOp::OrrNot64);
+                // NOT rd, rm ==> ORR_NOT rd, zero, rm
+                ctx.emit(alu_inst_immlogic(alu_op, rd, zero_reg(), rm));
+            } else {
+                let rm = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
+                ctx.emit(Inst::VecMisc {
+                    op: VecMisc2::Not,
+                    rd,
+                    rn: rm,
+                    ty,
+                });
+            }
         }
 
         Opcode::Band
@@ -400,19 +410,41 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::BorNot
         | Opcode::BxorNot => {
             let rd = output_to_reg(ctx, outputs[0]);
-            let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rm = input_to_rs_immlogic(ctx, inputs[1], NarrowValueMode::None);
             let ty = ty.unwrap();
-            let alu_op = match op {
-                Opcode::Band => choose_32_64(ty, ALUOp::And32, ALUOp::And64),
-                Opcode::Bor => choose_32_64(ty, ALUOp::Orr32, ALUOp::Orr64),
-                Opcode::Bxor => choose_32_64(ty, ALUOp::Eor32, ALUOp::Eor64),
-                Opcode::BandNot => choose_32_64(ty, ALUOp::AndNot32, ALUOp::AndNot64),
-                Opcode::BorNot => choose_32_64(ty, ALUOp::OrrNot32, ALUOp::OrrNot64),
-                Opcode::BxorNot => choose_32_64(ty, ALUOp::EorNot32, ALUOp::EorNot64),
-                _ => unreachable!(),
-            };
-            ctx.emit(alu_inst_immlogic(alu_op, rd, rn, rm));
+            if ty_bits(ty) < 128 {
+                let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
+                let rm = input_to_rs_immlogic(ctx, inputs[1], NarrowValueMode::None);
+                let alu_op = match op {
+                    Opcode::Band => choose_32_64(ty, ALUOp::And32, ALUOp::And64),
+                    Opcode::Bor => choose_32_64(ty, ALUOp::Orr32, ALUOp::Orr64),
+                    Opcode::Bxor => choose_32_64(ty, ALUOp::Eor32, ALUOp::Eor64),
+                    Opcode::BandNot => choose_32_64(ty, ALUOp::AndNot32, ALUOp::AndNot64),
+                    Opcode::BorNot => choose_32_64(ty, ALUOp::OrrNot32, ALUOp::OrrNot64),
+                    Opcode::BxorNot => choose_32_64(ty, ALUOp::EorNot32, ALUOp::EorNot64),
+                    _ => unreachable!(),
+                };
+                ctx.emit(alu_inst_immlogic(alu_op, rd, rn, rm));
+            } else {
+                let alu_op = match op {
+                    Opcode::Band => VecALUOp::And,
+                    Opcode::BandNot => VecALUOp::Bic,
+                    Opcode::Bor => VecALUOp::Orr,
+                    Opcode::Bxor => VecALUOp::Eor,
+                    _ => unreachable!(),
+                };
+
+                let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
+                let rm = input_to_reg(ctx, inputs[1], NarrowValueMode::None);
+                let rd = output_to_reg(ctx, outputs[0]);
+
+                ctx.emit(Inst::VecRRR {
+                    alu_op,
+                    rd,
+                    rn,
+                    rm,
+                    ty,
+                });
+            }
         }
 
         Opcode::Ishl | Opcode::Ushr | Opcode::Sshr => {
@@ -1035,32 +1067,49 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Bitselect => {
-            let tmp = ctx.alloc_tmp(RegClass::I64, I64);
-            let rd = output_to_reg(ctx, outputs[0]);
-            let rcond = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rn = input_to_reg(ctx, inputs[1], NarrowValueMode::None);
-            let rm = input_to_reg(ctx, inputs[2], NarrowValueMode::None);
-            // AND rTmp, rn, rcond
-            ctx.emit(Inst::AluRRR {
-                alu_op: ALUOp::And64,
-                rd: tmp,
-                rn,
-                rm: rcond,
-            });
-            // BIC rd, rm, rcond
-            ctx.emit(Inst::AluRRR {
-                alu_op: ALUOp::AndNot64,
-                rd,
-                rn: rm,
-                rm: rcond,
-            });
-            // ORR rd, rd, rTmp
-            ctx.emit(Inst::AluRRR {
-                alu_op: ALUOp::Orr64,
-                rd,
-                rn: rd.to_reg(),
-                rm: tmp.to_reg(),
-            });
+            let ty = ty.unwrap();
+            if ty_bits(ty) < 128 {
+                let tmp = ctx.alloc_tmp(RegClass::I64, I64);
+                let rd = output_to_reg(ctx, outputs[0]);
+                let rcond = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
+                let rn = input_to_reg(ctx, inputs[1], NarrowValueMode::None);
+                let rm = input_to_reg(ctx, inputs[2], NarrowValueMode::None);
+                // AND rTmp, rn, rcond
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::And64,
+                    rd: tmp,
+                    rn,
+                    rm: rcond,
+                });
+                // BIC rd, rm, rcond
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::AndNot64,
+                    rd,
+                    rn: rm,
+                    rm: rcond,
+                });
+                // ORR rd, rd, rTmp
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::Orr64,
+                    rd,
+                    rn: rd.to_reg(),
+                    rm: tmp.to_reg(),
+                });
+            } else {
+                let rcond = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
+                let rn = input_to_reg(ctx, inputs[1], NarrowValueMode::None);
+                let rm = input_to_reg(ctx, inputs[2], NarrowValueMode::None);
+                let rd = output_to_reg(ctx, outputs[0]);
+                ctx.emit(Inst::gen_move(rd, rcond, ty));
+
+                ctx.emit(Inst::VecRRR {
+                    alu_op: VecALUOp::Bsl,
+                    rd,
+                    rn,
+                    rm,
+                    ty,
+                });
+            }
         }
 
         Opcode::Trueif => {

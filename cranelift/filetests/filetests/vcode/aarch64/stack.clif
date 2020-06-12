@@ -113,3 +113,156 @@ block0(v0: i64):
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
+
+; Force a b1 to be spilled into a slot at an SP offset between 0x100 and
+; 0x1fff, to exercise the scaled addressing mode.
+function %b1_spill_slot(b1) -> b1, i64 {
+    ss0 = explicit_slot 1000
+
+block0(v0: b1):
+  v1 = iconst.i64 1
+  v2 = iconst.i64 2
+  v3 = iconst.i64 3
+  v4 = iconst.i64 4
+  v5 = iconst.i64 5
+  v6 = iconst.i64 6
+  v7 = iconst.i64 7
+  v8 = iconst.i64 8
+  v9 = iconst.i64 9
+  v10 = iconst.i64 10
+  v11 = iconst.i64 11
+  v12 = iconst.i64 12
+  v13 = iconst.i64 13
+  v14 = iconst.i64 14
+  v15 = iconst.i64 15
+  v16 = iconst.i64 16
+  v17 = iconst.i64 17
+  v18 = iconst.i64 18
+  v19 = iconst.i64 19
+  v20 = iconst.i64 20
+  v21 = iconst.i64 21
+  v22 = iconst.i64 22
+  v23 = iconst.i64 23
+  v24 = iconst.i64 24
+  v25 = iconst.i64 25
+  v26 = iconst.i64 26
+  v27 = iconst.i64 27
+  v28 = iconst.i64 28
+  v29 = iconst.i64 29
+  v30 = iconst.i64 30
+  v31 = iconst.i64 31
+  v32 = iconst.i64 32
+  v33 = iconst.i64 33
+  v34 = iconst.i64 34
+  v35 = iconst.i64 35
+  v36 = iconst.i64 36
+  v37 = iconst.i64 37
+  v38 = iconst.i64 38
+  v39 = iconst.i64 39
+  v40 = iconst.i64 30
+  v41 = iconst.i64 31
+  v42 = iconst.i64 32
+  v43 = iconst.i64 33
+  v44 = iconst.i64 34
+  v45 = iconst.i64 35
+  v46 = iconst.i64 36
+  v47 = iconst.i64 37
+  v48 = iconst.i64 38
+  v49 = iconst.i64 39
+  v50 = iconst.i64 30
+  v51 = iconst.i64 31
+  v52 = iconst.i64 32
+  v53 = iconst.i64 33
+  v54 = iconst.i64 34
+  v55 = iconst.i64 35
+  v56 = iconst.i64 36
+  v57 = iconst.i64 37
+  v58 = iconst.i64 38
+  v59 = iconst.i64 39
+  v60 = iconst.i64 30
+  v61 = iconst.i64 31
+  v62 = iconst.i64 32
+  v63 = iconst.i64 33
+  v64 = iconst.i64 34
+  v65 = iconst.i64 35
+  v66 = iconst.i64 36
+  v67 = iconst.i64 37
+  v68 = iconst.i64 38
+  v69 = iconst.i64 39
+
+  v70 = iadd.i64 v1, v2
+  v71 = iadd.i64 v3, v4
+  v72 = iadd.i64 v5, v6
+  v73 = iadd.i64 v7, v8
+  v74 = iadd.i64 v9, v10
+  v75 = iadd.i64 v11, v12
+  v76 = iadd.i64 v13, v14
+  v77 = iadd.i64 v15, v16
+  v78 = iadd.i64 v17, v18
+  v79 = iadd.i64 v19, v20
+  v80 = iadd.i64 v21, v22
+  v81 = iadd.i64 v23, v24
+  v82 = iadd.i64 v25, v26
+  v83 = iadd.i64 v27, v28
+  v84 = iadd.i64 v29, v30
+  v85 = iadd.i64 v31, v32
+  v86 = iadd.i64 v33, v34
+  v87 = iadd.i64 v35, v36
+  v88 = iadd.i64 v37, v38
+  v89 = iadd.i64 v39, v40
+  v90 = iadd.i64 v41, v42
+  v91 = iadd.i64 v43, v44
+  v92 = iadd.i64 v45, v46
+  v93 = iadd.i64 v47, v48
+  v94 = iadd.i64 v49, v50
+  v95 = iadd.i64 v51, v52
+  v96 = iadd.i64 v53, v54
+  v97 = iadd.i64 v55, v56
+  v98 = iadd.i64 v57, v58
+  v99 = iadd.i64 v59, v60
+  v100 = iadd.i64 v61, v62
+  v101 = iadd.i64 v63, v64
+  v102 = iadd.i64 v65, v66
+  v103 = iadd.i64 v67, v68
+
+  v104 = iadd.i64 v69, v70
+  v105 = iadd.i64 v71, v72
+  v106 = iadd.i64 v73, v74
+  v107 = iadd.i64 v75, v76
+  v108 = iadd.i64 v77, v78
+  v109 = iadd.i64 v79, v80
+  v110 = iadd.i64 v81, v82
+  v111 = iadd.i64 v83, v84
+  v112 = iadd.i64 v85, v86
+  v113 = iadd.i64 v87, v88
+  v114 = iadd.i64 v89, v90
+  v115 = iadd.i64 v91, v92
+  v116 = iadd.i64 v93, v94
+  v117 = iadd.i64 v95, v96
+  v118 = iadd.i64 v97, v98
+  v119 = iadd.i64 v99, v100
+  v120 = iadd.i64 v101, v102
+
+  v121 = iadd.i64 v103, v104
+  v122 = iadd.i64 v105, v106
+  v123 = iadd.i64 v107, v108
+  v124 = iadd.i64 v109, v110
+  v125 = iadd.i64 v111, v112
+  v126 = iadd.i64 v113, v114
+  v127 = iadd.i64 v115, v116
+  v128 = iadd.i64 v117, v118
+  v129 = iadd.i64 v119, v120
+
+  v130 = iadd.i64 v121, v122
+  v131 = iadd.i64 v123, v124
+  v132 = iadd.i64 v125, v126
+  v133 = iadd.i64 v127, v128
+
+  v134 = iadd.i64 v129, v130
+  v135 = iadd.i64 v131, v132
+
+  v136 = iadd.i64 v133, v134
+  v137 = iadd.i64 v135, v136
+
+  return v0, v137
+}
