@@ -123,7 +123,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly
+        toolchain: nightly-2020-06-03
     - run: cargo install cargo-fuzz --vers "^0.7"
     - run: cargo fetch
       working-directory: ./fuzz
@@ -241,9 +241,9 @@ jobs:
     # Build and test lightbeam if we're using the nightly toolchain. Note that
     # Lightbeam tests fail right now, but we don't want to block on that.
     - run: cargo build --package lightbeam
-      if: matrix.rust == 'nightly-2020-06-03'
+      if: matrix.build == 'nightly'
     - run: cargo test --package lightbeam
-      if: matrix.rust == 'nightly-2020-06-03'
+      if: matrix.build == 'nightly'
       continue-on-error: true
       env:
         RUST_BACKTRACE: 1
@@ -282,7 +282,7 @@ jobs:
         - build: x86_64-mingw
           os: windows-latest
           target: x86_64-pc-windows-gnu
-          rust: nightly     # needs rust-lang/rust#69351 to ride to stable
+          rust: beta        # needs rust-lang/rust#69351 to ride to stable
         - build: aarch64-linux
           os: ubuntu-latest
           rust: stable
