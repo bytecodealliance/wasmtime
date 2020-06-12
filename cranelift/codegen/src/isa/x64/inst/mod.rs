@@ -4,19 +4,17 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 
-use core::convert::TryFrom;
+use alloc::vec::Vec;
 use smallvec::SmallVec;
 use std::fmt;
 use std::string::{String, ToString};
 
 use regalloc::RegUsageCollector;
-use regalloc::Set;
 use regalloc::{RealRegUniverse, Reg, RegClass, RegUsageMapper, SpillSlot, VirtualReg, Writable};
 
 use crate::binemit::CodeOffset;
 use crate::ir::types::{B1, B128, B16, B32, B64, B8, F32, F64, I128, I16, I32, I64, I8};
-use crate::ir::ExternalName;
-use crate::ir::Type;
+use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
 use crate::settings::Flags;
 use crate::{settings, CodegenError, CodegenResult};
@@ -37,11 +35,13 @@ use regs::{create_reg_universe_systemv, show_ireg_sized};
 
 /// Instructions.  Destinations are on the RIGHT (a la AT&T syntax).
 #[derive(Clone)]
-pub(crate) enum Inst {
+pub enum Inst {
     /// nops of various sizes, including zero
     Nop { len: u8 },
 
-    /// (add sub and or xor mul adc? sbb?) (32 64) (reg addr imm) reg
+    // =====================================
+    // Integer instructions.
+    /// Integer arithmetic/bit-twiddling: (add sub and or xor mul adc? sbb?) (32 64) (reg addr imm) reg
     Alu_RMI_R {
         is_64: bool,
         op: AluRmiROpcode,
@@ -49,49 +49,57 @@ pub(crate) enum Inst {
         dst: Writable<Reg>,
     },
 
-    /// (imm32 imm64) reg.
-    /// Either: movl $imm32, %reg32 or movabsq $imm64, %reg32
+    /// Constant materialization: (imm32 imm64) reg.
+    /// Either: movl $imm32, %reg32 or movabsq $imm64, %reg32.
     Imm_R {
         dst_is_64: bool,
         simm64: u64,
         dst: Writable<Reg>,
     },
 
-    /// mov (64 32) reg reg
+    /// GPR to GPR move: mov (64 32) reg reg.
     Mov_R_R {
         is_64: bool,
         src: Reg,
         dst: Writable<Reg>,
     },
 
-    /// movz (bl bq wl wq lq) addr reg (good for all ZX loads except 64->64).
-    /// Note that the lq variant doesn't really exist since the default
-    /// zero-extend rule makes it unnecessary.  For that case we emit the
-    /// equivalent "movl AM, reg32".
-    MovZX_M_R {
-        extMode: ExtMode,
-        addr: Addr,
+    /// Zero-extended loads, except for 64 bits: movz (bl bq wl wq lq) addr reg.
+    /// Note that the lq variant doesn't really exist since the default zero-extend rule makes it
+    /// unnecessary. For that case we emit the equivalent "movl AM, reg32".
+    MovZX_RM_R {
+        ext_mode: ExtMode,
+        src: RegMem,
         dst: Writable<Reg>,
     },
 
-    /// A plain 64-bit integer load, since MovZX_M_R can't represent that
-    Mov64_M_R { addr: Addr, dst: Writable<Reg> },
-
-    /// movs (bl bq wl wq lq) addr reg (good for all SX loads)
-    MovSX_M_R {
-        extMode: ExtMode,
-        addr: Addr,
+    /// A plain 64-bit integer load, since MovZX_RM_R can't represent that.
+    Mov64_M_R {
+        src: SyntheticAmode,
         dst: Writable<Reg>,
     },
 
-    /// mov (b w l q) reg addr (good for all integer stores)
+    /// Loads the memory address of addr into dst.
+    LoadEffectiveAddress {
+        addr: SyntheticAmode,
+        dst: Writable<Reg>,
+    },
+
+    /// Sign-extended loads and moves: movs (bl bq wl wq lq) addr reg.
+    MovSX_RM_R {
+        ext_mode: ExtMode,
+        src: RegMem,
+        dst: Writable<Reg>,
+    },
+
+    /// Integer stores: mov (b w l q) reg addr.
     Mov_R_M {
-        size: u8, // 1, 2, 4 or 8
+        size: u8, // 1, 2, 4 or 8.
         src: Reg,
-        addr: Addr,
+        dst: SyntheticAmode,
     },
 
-    /// (shl shr sar) (l q) imm reg
+    /// Arithmetic shifts: (shl shr sar) (l q) imm reg.
     Shift_R {
         is_64: bool,
         kind: ShiftKind,
@@ -100,75 +108,95 @@ pub(crate) enum Inst {
         dst: Writable<Reg>,
     },
 
-    /// cmp (b w l q) (reg addr imm) reg
+    /// Integer comparisons/tests: cmp (b w l q) (reg addr imm) reg.
     Cmp_RMI_R {
         size: u8, // 1, 2, 4 or 8
         src: RegMemImm,
         dst: Reg,
     },
 
+    /// Materializes the requested condition code in the destination reg.
+    Setcc { cc: CC, dst: Writable<Reg> },
+
+    // =====================================
+    // Stack manipulation.
     /// pushq (reg addr imm)
     Push64 { src: RegMemImm },
 
     /// popq reg
     Pop64 { dst: Writable<Reg> },
 
-    /// call simm32
-    CallKnown {
-        dest: ExternalName,
-        uses: Set<Reg>,
-        defs: Set<Writable<Reg>>,
+    // =====================================
+    // Floating-point operations.
+    /// Float arithmetic/bit-twiddling: (add sub and or xor mul adc? sbb?) (32 64) (reg addr) reg
+    XMM_RM_R {
+        op: SseOpcode,
+        src: RegMem,
+        dst: Writable<Reg>,
     },
-
-    /// callq (reg mem)
-    CallUnknown {
-        dest: RegMem,
-        //uses: Set<Reg>,
-        //defs: Set<Writable<Reg>>,
-    },
-
-    // ---- branches (exactly one must appear at end of BB) ----
-    /// ret
-    Ret,
-
-    /// A placeholder instruction, generating no code, meaning that a function epilogue must be
-    /// inserted there.
-    EpiloguePlaceholder,
-
-    /// jmp simm32
-    JmpKnown { dest: BranchTarget },
-
-    /// jcond cond target target
-    /// Symmetrical two-way conditional branch.
-    /// Emitted as a compound sequence; the MachBuffer will shrink it
-    /// as appropriate.
-    JmpCondSymm {
-        cc: CC,
-        taken: BranchTarget,
-        not_taken: BranchTarget,
-    },
-
-    /// jmpq (reg mem)
-    JmpUnknown { target: RegMem },
 
     /// mov between XMM registers (32 64) (reg addr) reg
-    /// XMM_MOV_RM_R differs from XMM_RM_R in that the dst
-    /// register of XMM_MOV_RM_R is not used in the computation
-    /// of the instruction dst value and so does not have to
-    /// be a previously valid value. This is characteristic of
-    /// mov instructions.
+    /// XMM_MOV_RM_R differs from XMM_RM_R in that the dst register of XMM_MOV_RM_R is not used in
+    /// the computation of the instruction dst value and so does not have to be a previously valid
+    /// value. This is characteristic of mov instructions.
     XMM_MOV_RM_R {
         op: SseOpcode,
         src: RegMem,
         dst: Writable<Reg>,
     },
 
-    /// (add sub and or xor mul adc? sbb?) (32 64) (reg addr imm) reg
-    XMM_RM_R {
-        op: SseOpcode,
-        src: RegMem,
-        dst: Writable<Reg>,
+    // =====================================
+    // Control flow instructions.
+    /// Direct call: call simm32.
+    CallKnown {
+        dest: ExternalName,
+        uses: Vec<Reg>,
+        defs: Vec<Writable<Reg>>,
+        loc: SourceLoc,
+        opcode: Opcode,
     },
+
+    /// Indirect call: callq (reg mem).
+    CallUnknown {
+        dest: RegMem,
+        uses: Vec<Reg>,
+        defs: Vec<Writable<Reg>>,
+        loc: SourceLoc,
+        opcode: Opcode,
+    },
+
+    /// Return.
+    Ret,
+
+    /// A placeholder instruction, generating no code, meaning that a function epilogue must be
+    /// inserted there.
+    EpiloguePlaceholder,
+
+    /// Jump to a known target: jmp simm32.
+    JmpKnown { dst: BranchTarget },
+
+    /// Two-way conditional branch: jcond cond target target.
+    /// Emitted as a compound sequence; the MachBuffer will shrink it as appropriate.
+    JmpCond {
+        cc: CC,
+        taken: BranchTarget,
+        not_taken: BranchTarget,
+    },
+
+    /// Indirect jump: jmpq (reg mem).
+    JmpUnknown { target: RegMem },
+
+    /// A debug trap.
+    Hlt,
+
+    /// An instruction that will always trigger the illegal instruction exception.
+    Ud2 { trap_info: (SourceLoc, TrapCode) },
+
+    // =====================================
+    // Meta-instructions generating no code.
+    /// Marker, no-op in generated code: SP "virtual offset" is adjusted. This
+    /// controls how MemArg::NominalSPOffset args are lowered.
+    VirtualSPOffsetAdj { offset: i64 },
 }
 
 // Handy constructors for Insts.
@@ -229,29 +257,44 @@ impl Inst {
         Inst::XMM_RM_R { op, src, dst }
     }
 
-    pub(crate) fn movzx_m_r(extMode: ExtMode, addr: Addr, dst: Writable<Reg>) -> Inst {
+    pub(crate) fn movzx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
-        Inst::MovZX_M_R { extMode, addr, dst }
+        Inst::MovZX_RM_R { ext_mode, src, dst }
     }
 
-    pub(crate) fn mov64_m_r(addr: Addr, dst: Writable<Reg>) -> Inst {
+    pub(crate) fn mov64_m_r(src: impl Into<SyntheticAmode>, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
-        Inst::Mov64_M_R { addr, dst }
+        Inst::Mov64_M_R {
+            src: src.into(),
+            dst,
+        }
     }
 
-    pub(crate) fn movsx_m_r(extMode: ExtMode, addr: Addr, dst: Writable<Reg>) -> Inst {
+    pub(crate) fn movsx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
-        Inst::MovSX_M_R { extMode, addr, dst }
+        Inst::MovSX_RM_R { ext_mode, src, dst }
     }
 
     pub(crate) fn mov_r_m(
         size: u8, // 1, 2, 4 or 8
         src: Reg,
-        addr: Addr,
+        dst: impl Into<SyntheticAmode>,
     ) -> Inst {
         debug_assert!(size == 8 || size == 4 || size == 2 || size == 1);
         debug_assert!(src.get_class() == RegClass::I64);
-        Inst::Mov_R_M { size, src, addr }
+        Inst::Mov_R_M {
+            size,
+            src,
+            dst: dst.into(),
+        }
+    }
+
+    pub(crate) fn lea(addr: impl Into<SyntheticAmode>, dst: Writable<Reg>) -> Inst {
+        debug_assert!(dst.to_reg().get_class() == RegClass::I64);
+        Inst::LoadEffectiveAddress {
+            addr: addr.into(),
+            dst,
+        }
     }
 
     pub(crate) fn shift_r(
@@ -274,6 +317,8 @@ impl Inst {
         }
     }
 
+    /// Does a comparison of dst - src for operands of size `size`, as stated by the machine
+    /// instruction semantics. Be careful with the order of parameters!
     pub(crate) fn cmp_rmi_r(
         size: u8, // 1, 2, 4 or 8
         src: RegMemImm,
@@ -284,6 +329,11 @@ impl Inst {
         Inst::Cmp_RMI_R { size, src, dst }
     }
 
+    pub(crate) fn setcc(cc: CC, dst: Writable<Reg>) -> Inst {
+        debug_assert!(dst.to_reg().get_class() == RegClass::I64);
+        Inst::Setcc { cc, dst }
+    }
+
     pub(crate) fn push64(src: RegMemImm) -> Inst {
         Inst::Push64 { src }
     }
@@ -292,8 +342,36 @@ impl Inst {
         Inst::Pop64 { dst }
     }
 
-    pub(crate) fn call_unknown(dest: RegMem) -> Inst {
-        Inst::CallUnknown { dest }
+    pub(crate) fn call_known(
+        dest: ExternalName,
+        uses: Vec<Reg>,
+        defs: Vec<Writable<Reg>>,
+        loc: SourceLoc,
+        opcode: Opcode,
+    ) -> Inst {
+        Inst::CallKnown {
+            dest,
+            uses,
+            defs,
+            loc,
+            opcode,
+        }
+    }
+
+    pub(crate) fn call_unknown(
+        dest: RegMem,
+        uses: Vec<Reg>,
+        defs: Vec<Writable<Reg>>,
+        loc: SourceLoc,
+        opcode: Opcode,
+    ) -> Inst {
+        Inst::CallUnknown {
+            dest,
+            uses,
+            defs,
+            loc,
+            opcode,
+        }
     }
 
     pub(crate) fn ret() -> Inst {
@@ -304,12 +382,12 @@ impl Inst {
         Inst::EpiloguePlaceholder
     }
 
-    pub(crate) fn jmp_known(dest: BranchTarget) -> Inst {
-        Inst::JmpKnown { dest }
+    pub(crate) fn jmp_known(dst: BranchTarget) -> Inst {
+        Inst::JmpKnown { dst }
     }
 
-    pub(crate) fn jmp_cond_symm(cc: CC, taken: BranchTarget, not_taken: BranchTarget) -> Inst {
-        Inst::JmpCondSymm {
+    pub(crate) fn jmp_cond(cc: CC, taken: BranchTarget, not_taken: BranchTarget) -> Inst {
+        Inst::JmpCond {
             cc,
             taken,
             not_taken,
@@ -414,40 +492,46 @@ impl ShowWithRRU for Inst {
                 show_ireg_sized(*src, mb_rru, sizeLQ(*is_64)),
                 show_ireg_sized(dst.to_reg(), mb_rru, sizeLQ(*is_64))
             ),
-            Inst::MovZX_M_R { extMode, addr, dst } => {
-                if *extMode == ExtMode::LQ {
+            Inst::MovZX_RM_R { ext_mode, src, dst } => {
+                if *ext_mode == ExtMode::LQ {
                     format!(
                         "{} {}, {}",
                         ljustify("movl".to_string()),
-                        addr.show_rru(mb_rru),
+                        src.show_rru_sized(mb_rru, ext_mode.src_size()),
                         show_ireg_sized(dst.to_reg(), mb_rru, 4)
                     )
                 } else {
                     format!(
                         "{} {}, {}",
-                        ljustify2("movz".to_string(), extMode.to_string()),
-                        addr.show_rru(mb_rru),
-                        show_ireg_sized(dst.to_reg(), mb_rru, extMode.dst_size())
+                        ljustify2("movz".to_string(), ext_mode.to_string()),
+                        src.show_rru_sized(mb_rru, ext_mode.src_size()),
+                        show_ireg_sized(dst.to_reg(), mb_rru, ext_mode.dst_size())
                     )
                 }
             }
-            Inst::Mov64_M_R { addr, dst } => format!(
+            Inst::Mov64_M_R { src, dst } => format!(
                 "{} {}, {}",
                 ljustify("movq".to_string()),
+                src.show_rru(mb_rru),
+                dst.show_rru(mb_rru)
+            ),
+            Inst::LoadEffectiveAddress { addr, dst } => format!(
+                "{} {}, {}",
+                ljustify("lea".to_string()),
                 addr.show_rru(mb_rru),
                 dst.show_rru(mb_rru)
             ),
-            Inst::MovSX_M_R { extMode, addr, dst } => format!(
+            Inst::MovSX_RM_R { ext_mode, src, dst } => format!(
                 "{} {}, {}",
-                ljustify2("movs".to_string(), extMode.to_string()),
-                addr.show_rru(mb_rru),
-                show_ireg_sized(dst.to_reg(), mb_rru, extMode.dst_size())
+                ljustify2("movs".to_string(), ext_mode.to_string()),
+                src.show_rru_sized(mb_rru, ext_mode.src_size()),
+                show_ireg_sized(dst.to_reg(), mb_rru, ext_mode.dst_size())
             ),
-            Inst::Mov_R_M { size, src, addr } => format!(
+            Inst::Mov_R_M { size, src, dst } => format!(
                 "{} {}, {}",
                 ljustify2("mov".to_string(), suffixBWLQ(*size)),
                 show_ireg_sized(*src, mb_rru, *size),
-                addr.show_rru(mb_rru)
+                dst.show_rru(mb_rru)
             ),
             Inst::Shift_R {
                 is_64,
@@ -474,25 +558,29 @@ impl ShowWithRRU for Inst {
                 src.show_rru_sized(mb_rru, *size),
                 show_ireg_sized(*dst, mb_rru, *size)
             ),
+            Inst::Setcc { cc, dst } => format!(
+                "{} {}",
+                ljustify2("set".to_string(), cc.to_string()),
+                show_ireg_sized(dst.to_reg(), mb_rru, 1)
+            ),
             Inst::Push64 { src } => {
                 format!("{} {}", ljustify("pushq".to_string()), src.show_rru(mb_rru))
             }
             Inst::Pop64 { dst } => {
                 format!("{} {}", ljustify("popq".to_string()), dst.show_rru(mb_rru))
             }
-            //Inst::CallKnown { target } => format!("{} {:?}", ljustify("call".to_string()), target),
-            Inst::CallKnown { .. } => "**CallKnown**".to_string(),
-            Inst::CallUnknown { dest } => format!(
+            Inst::CallKnown { dest, .. } => format!("{} {:?}", ljustify("call".to_string()), dest),
+            Inst::CallUnknown { dest, .. } => format!(
                 "{} *{}",
                 ljustify("call".to_string()),
                 dest.show_rru(mb_rru)
             ),
             Inst::Ret => "ret".to_string(),
             Inst::EpiloguePlaceholder => "epilogue placeholder".to_string(),
-            Inst::JmpKnown { dest } => {
-                format!("{} {}", ljustify("jmp".to_string()), dest.show_rru(mb_rru))
+            Inst::JmpKnown { dst } => {
+                format!("{} {}", ljustify("jmp".to_string()), dst.show_rru(mb_rru))
             }
-            Inst::JmpCondSymm {
+            Inst::JmpCond {
                 cc,
                 taken,
                 not_taken,
@@ -508,6 +596,9 @@ impl ShowWithRRU for Inst {
                 ljustify("jmp".to_string()),
                 target.show_rru(mb_rru)
             ),
+            Inst::VirtualSPOffsetAdj { offset } => format!("virtual_sp_offset_adjust {}", offset),
+            Inst::Hlt => "hlt".into(),
+            Inst::Ud2 { trap_info } => format!("ud2 {}", trap_info.1),
         }
     }
 }
@@ -526,7 +617,6 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
     // regalloc.rs will "fix" this for us by removing the the modified set from the use and def
     // sets.
     match inst {
-        // ** Nop
         Inst::Alu_RMI_R {
             is_64: _,
             op: _,
@@ -544,40 +634,28 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             src.get_regs_as_uses(collector);
             collector.add_mod(*dst);
         }
-        Inst::Imm_R {
-            dst_is_64: _,
-            simm64: _,
-            dst,
-        } => {
+        Inst::Imm_R { dst, .. } => {
             collector.add_def(*dst);
         }
-        Inst::Mov_R_R { is_64: _, src, dst } => {
+        Inst::Mov_R_R { src, dst, .. } => {
             collector.add_use(*src);
             collector.add_def(*dst);
         }
-        Inst::MovZX_M_R {
-            extMode: _,
-            addr,
-            dst,
-        } => {
-            addr.get_regs_as_uses(collector);
+        Inst::MovZX_RM_R { src, dst, .. } => {
+            src.get_regs_as_uses(collector);
             collector.add_def(*dst);
         }
-        Inst::Mov64_M_R { addr, dst } => {
-            addr.get_regs_as_uses(collector);
+        Inst::Mov64_M_R { src, dst } | Inst::LoadEffectiveAddress { addr: src, dst } => {
+            src.get_regs_as_uses(collector);
+            collector.add_def(*dst)
+        }
+        Inst::MovSX_RM_R { src, dst, .. } => {
+            src.get_regs_as_uses(collector);
             collector.add_def(*dst);
         }
-        Inst::MovSX_M_R {
-            extMode: _,
-            addr,
-            dst,
-        } => {
-            addr.get_regs_as_uses(collector);
-            collector.add_def(*dst);
-        }
-        Inst::Mov_R_M { size: _, src, addr } => {
+        Inst::Mov_R_M { src, dst, .. } => {
             collector.add_use(*src);
-            addr.get_regs_as_uses(collector);
+            dst.get_regs_as_uses(collector);
         }
         Inst::Shift_R {
             is_64: _,
@@ -594,6 +672,9 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             src.get_regs_as_uses(collector);
             collector.add_use(*dst); // yes, really `add_use`
         }
+        Inst::Setcc { dst, .. } => {
+            collector.add_def(*dst);
+        }
         Inst::Push64 { src } => {
             src.get_regs_as_uses(collector);
             collector.add_mod(Writable::from_reg(regs::rsp()));
@@ -601,29 +682,36 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         Inst::Pop64 { dst } => {
             collector.add_def(*dst);
         }
+
         Inst::CallKnown {
-            dest: _,
-            uses: _,
-            defs: _,
+            ref uses, ref defs, ..
         } => {
-            // FIXME add arg regs (iru.used) and caller-saved regs (iru.defined)
-            unimplemented!();
+            collector.add_uses(uses);
+            collector.add_defs(defs);
         }
-        Inst::CallUnknown { dest } => {
+
+        Inst::CallUnknown {
+            ref uses,
+            ref defs,
+            dest,
+            ..
+        } => {
+            collector.add_uses(uses);
+            collector.add_defs(defs);
             dest.get_regs_as_uses(collector);
         }
-        Inst::Ret => {}
-        Inst::EpiloguePlaceholder => {}
-        Inst::JmpKnown { dest: _ } => {}
-        Inst::JmpCondSymm {
-            cc: _,
-            taken: _,
-            not_taken: _,
-        } => {}
-        //Inst::JmpUnknown { target } => {
-        //    target.get_regs_as_uses(collector);
-        //}
-        Inst::Nop { .. } | Inst::JmpUnknown { .. } => unimplemented!("x64_get_regs inst"),
+
+        Inst::Ret
+        | Inst::EpiloguePlaceholder
+        | Inst::JmpKnown { .. }
+        | Inst::JmpCond { .. }
+        | Inst::Nop { .. }
+        | Inst::JmpUnknown { .. }
+        | Inst::VirtualSPOffsetAdj { .. }
+        | Inst::Hlt
+        | Inst::Ud2 { .. } => {
+            // No registers are used.
+        }
     }
 }
 
@@ -631,34 +719,34 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
 // Instructions and subcomponents: map_regs
 
 fn map_use<RUM: RegUsageMapper>(m: &RUM, r: &mut Reg) {
-    if r.is_virtual() {
-        let new = m.get_use(r.to_virtual_reg()).unwrap().to_reg();
+    if let Some(reg) = r.as_virtual_reg() {
+        let new = m.get_use(reg).unwrap().to_reg();
         *r = new;
     }
 }
 
 fn map_def<RUM: RegUsageMapper>(m: &RUM, r: &mut Writable<Reg>) {
-    if r.to_reg().is_virtual() {
-        let new = m.get_def(r.to_reg().to_virtual_reg()).unwrap().to_reg();
+    if let Some(reg) = r.to_reg().as_virtual_reg() {
+        let new = m.get_def(reg).unwrap().to_reg();
         *r = Writable::from_reg(new);
     }
 }
 
 fn map_mod<RUM: RegUsageMapper>(m: &RUM, r: &mut Writable<Reg>) {
-    if r.to_reg().is_virtual() {
-        let new = m.get_mod(r.to_reg().to_virtual_reg()).unwrap().to_reg();
+    if let Some(reg) = r.to_reg().as_virtual_reg() {
+        let new = m.get_mod(reg).unwrap().to_reg();
         *r = Writable::from_reg(new);
     }
 }
 
-impl Addr {
+impl Amode {
     fn map_uses<RUM: RegUsageMapper>(&mut self, map: &RUM) {
         match self {
-            Addr::ImmReg {
+            Amode::ImmReg {
                 simm32: _,
                 ref mut base,
             } => map_use(map, base),
-            Addr::ImmRegRegShift {
+            Amode::ImmRegRegShift {
                 simm32: _,
                 ref mut base,
                 ref mut index,
@@ -732,33 +820,33 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, src);
             map_def(mapper, dst);
         }
-        Inst::MovZX_M_R {
-            extMode: _,
-            ref mut addr,
+        Inst::MovZX_RM_R {
+            ref mut src,
             ref mut dst,
+            ..
         } => {
-            addr.map_uses(mapper);
+            src.map_uses(mapper);
             map_def(mapper, dst);
         }
-        Inst::Mov64_M_R { addr, dst } => {
-            addr.map_uses(mapper);
+        Inst::Mov64_M_R { src, dst } | Inst::LoadEffectiveAddress { addr: src, dst } => {
+            src.map_uses(mapper);
             map_def(mapper, dst);
         }
-        Inst::MovSX_M_R {
-            extMode: _,
-            ref mut addr,
+        Inst::MovSX_RM_R {
+            ref mut src,
             ref mut dst,
+            ..
         } => {
-            addr.map_uses(mapper);
+            src.map_uses(mapper);
             map_def(mapper, dst);
         }
         Inst::Mov_R_M {
-            size: _,
             ref mut src,
-            ref mut addr,
+            ref mut dst,
+            ..
         } => {
             map_use(mapper, src);
-            addr.map_uses(mapper);
+            dst.map_uses(mapper);
         }
         Inst::Shift_R {
             is_64: _,
@@ -776,28 +864,51 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             src.map_uses(mapper);
             map_use(mapper, dst);
         }
+        Inst::Setcc { ref mut dst, .. } => map_def(mapper, dst),
         Inst::Push64 { ref mut src } => src.map_uses(mapper),
         Inst::Pop64 { ref mut dst } => {
             map_def(mapper, dst);
         }
+
         Inst::CallKnown {
-            dest: _,
-            uses: _,
-            defs: _,
-        } => {}
-        Inst::CallUnknown { dest } => dest.map_uses(mapper),
-        Inst::Ret => {}
-        Inst::EpiloguePlaceholder => {}
-        Inst::JmpKnown { dest: _ } => {}
-        Inst::JmpCondSymm {
-            cc: _,
-            taken: _,
-            not_taken: _,
-        } => {}
-        //Inst::JmpUnknown { target } => {
-        //    target.apply_map(mapper);
-        //}
-        Inst::Nop { .. } | Inst::JmpUnknown { .. } => unimplemented!("x64_map_regs opcode"),
+            ref mut uses,
+            ref mut defs,
+            ..
+        } => {
+            for r in uses.iter_mut() {
+                map_use(mapper, r);
+            }
+            for r in defs.iter_mut() {
+                map_def(mapper, r);
+            }
+        }
+
+        Inst::CallUnknown {
+            ref mut uses,
+            ref mut defs,
+            ref mut dest,
+            ..
+        } => {
+            for r in uses.iter_mut() {
+                map_use(mapper, r);
+            }
+            for r in defs.iter_mut() {
+                map_def(mapper, r);
+            }
+            dest.map_uses(mapper);
+        }
+
+        Inst::Ret
+        | Inst::EpiloguePlaceholder
+        | Inst::JmpKnown { .. }
+        | Inst::JmpCond { .. }
+        | Inst::Nop { .. }
+        | Inst::JmpUnknown { .. }
+        | Inst::VirtualSPOffsetAdj { .. }
+        | Inst::Ud2 { .. }
+        | Inst::Hlt => {
+            // No registers are used.
+        }
     }
 }
 
@@ -847,8 +958,8 @@ impl MachInst for Inst {
         match self {
             // Interesting cases.
             &Self::Ret | &Self::EpiloguePlaceholder => MachTerminator::Ret,
-            &Self::JmpKnown { dest } => MachTerminator::Uncond(dest.as_label().unwrap()),
-            &Self::JmpCondSymm {
+            &Self::JmpKnown { dst } => MachTerminator::Uncond(dst.as_label().unwrap()),
+            &Self::JmpCond {
                 cc: _,
                 taken,
                 not_taken,
@@ -875,7 +986,7 @@ impl MachInst for Inst {
     }
 
     fn gen_zero_len_nop() -> Inst {
-        unimplemented!()
+        Inst::Nop { len: 0 }
     }
 
     fn gen_nop(_preferred_size: usize) -> Inst {
@@ -919,20 +1030,27 @@ impl MachInst for Inst {
     type LabelUse = LabelUse;
 }
 
-impl MachInstEmit for Inst {
-    type State = ();
+/// State carried between emissions of a sequence of instructions.
+#[derive(Default, Clone, Debug)]
+pub struct EmitState {
+    virtual_sp_offset: i64,
+}
 
-    fn emit(&self, sink: &mut MachBuffer<Inst>, _flags: &settings::Flags, _: &mut Self::State) {
-        emit::emit(self, sink);
+impl MachInstEmit for Inst {
+    type State = EmitState;
+
+    fn emit(&self, sink: &mut MachBuffer<Inst>, flags: &settings::Flags, state: &mut Self::State) {
+        emit::emit(self, sink, flags, state);
     }
 }
 
 /// A label-use (internal relocation) in generated code.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum LabelUse {
-    /// A 32-bit offset from location of relocation itself, added to the
-    /// existing value at that location.
-    Rel32,
+pub enum LabelUse {
+    /// A 32-bit offset from location of relocation itself, added to the existing value at that
+    /// location. Used for control flow instructions which consider an offset from the start of the
+    /// next instruction (so the size of the payload -- 4 bytes -- is subtracted from the payload).
+    JmpRel32,
 }
 
 impl MachInstLabelUse for LabelUse {
@@ -940,30 +1058,31 @@ impl MachInstLabelUse for LabelUse {
 
     fn max_pos_range(self) -> CodeOffset {
         match self {
-            LabelUse::Rel32 => 0x7fff_ffff,
+            LabelUse::JmpRel32 => 0x7fff_ffff,
         }
     }
 
     fn max_neg_range(self) -> CodeOffset {
         match self {
-            LabelUse::Rel32 => 0x8000_0000,
+            LabelUse::JmpRel32 => 0x8000_0000,
         }
     }
 
     fn patch_size(self) -> CodeOffset {
         match self {
-            LabelUse::Rel32 => 4,
+            LabelUse::JmpRel32 => 4,
         }
     }
 
     fn patch(self, buffer: &mut [u8], use_offset: CodeOffset, label_offset: CodeOffset) {
+        let pc_rel = (label_offset as i64) - (use_offset as i64);
+        debug_assert!(pc_rel <= self.max_pos_range() as i64);
+        debug_assert!(pc_rel >= -(self.max_neg_range() as i64));
+        let pc_rel = pc_rel as u32;
         match self {
-            LabelUse::Rel32 => {
-                let addend = i32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
-                let value = i32::try_from(label_offset)
-                    .unwrap()
-                    .wrapping_sub(i32::try_from(use_offset).unwrap())
-                    .wrapping_add(addend);
+            LabelUse::JmpRel32 => {
+                let addend = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+                let value = pc_rel.wrapping_add(addend).wrapping_sub(4);
                 buffer.copy_from_slice(&value.to_le_bytes()[..]);
             }
         }
@@ -971,20 +1090,20 @@ impl MachInstLabelUse for LabelUse {
 
     fn supports_veneer(self) -> bool {
         match self {
-            LabelUse::Rel32 => false,
+            LabelUse::JmpRel32 => false,
         }
     }
 
     fn veneer_size(self) -> CodeOffset {
         match self {
-            LabelUse::Rel32 => 0,
+            LabelUse::JmpRel32 => 0,
         }
     }
 
     fn generate_veneer(self, _: &mut [u8], _: CodeOffset) -> (CodeOffset, LabelUse) {
         match self {
-            LabelUse::Rel32 => {
-                panic!("Veneer not supported for Rel32 label-use.");
+            LabelUse::JmpRel32 => {
+                panic!("Veneer not supported for JumpRel32 label-use.");
             }
         }
     }
