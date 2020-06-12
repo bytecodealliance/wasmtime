@@ -1334,7 +1334,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::Brk);
         }
 
-        Opcode::Trap => {
+        Opcode::Trap | Opcode::ResumableTrap => {
             let trap_info = (ctx.srcloc(insn), inst_trapcode(ctx.data(insn)).unwrap());
             ctx.emit(Inst::Udf { trap_info })
         }
@@ -1385,12 +1385,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("safepoint support not implemented!");
         }
 
-        Opcode::Trapz | Opcode::Trapnz => {
-            panic!("trapz / trapnz should have been removed by legalization!");
-        }
-
-        Opcode::ResumableTrap => {
-            panic!("Resumable traps not supported");
+        Opcode::Trapz | Opcode::Trapnz | Opcode::ResumableTrapnz => {
+            panic!("trapz / trapnz / resumable_trapnz should have been removed by legalization!");
         }
 
         Opcode::FuncAddr => {
@@ -2277,6 +2273,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     dest: BranchTarget::Label(targets[0]),
                 });
             }
+
             Opcode::BrTable => {
                 // Expand `br_table index, default, JT` to:
                 //
