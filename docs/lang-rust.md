@@ -43,7 +43,7 @@ dependency in `Cargo.toml`:
 
 ```toml
 [dependencies]
-wasmtime = "0.16.0"
+wasmtime = "0.18.0"
 ```
 
 Next up let's write the code that we need to execute this wasm file. The
