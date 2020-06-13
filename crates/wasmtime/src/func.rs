@@ -195,16 +195,9 @@ macro_rules! getters {
                     let mut ret = None;
                     $(let $args = $args.into_abi();)*
 
-                    {
-                        let canary = 0;
-                        let _auto_reset = instance
-                            .store
-                            .externref_activations_table()
-                            .set_stack_canary(&canary);
-                        catch_traps(export.vmctx, &instance.store, || {
-                            ret = Some(fnptr(export.vmctx, ptr::null_mut(), $($args,)*));
-                        })?;
-                    }
+                    invoke_wasm_and_catch_traps(export.vmctx, &instance.store, || {
+                        ret = Some(fnptr(export.vmctx, ptr::null_mut(), $($args,)*));
+                    })?;
 
                     Ok(ret.unwrap())
                 }
@@ -560,23 +553,14 @@ impl Func {
         }
 
         // Call the trampoline.
-        {
-            let canary = 0;
-            let _auto_reset = self
-                .instance
-                .store
-                .externref_activations_table()
-                .set_stack_canary(&canary);
-
-            catch_traps(self.export.vmctx, &self.instance.store, || unsafe {
-                (self.trampoline)(
-                    self.export.vmctx,
-                    ptr::null_mut(),
-                    self.export.address,
-                    values_vec.as_mut_ptr(),
-                )
-            })?;
-        }
+        invoke_wasm_and_catch_traps(self.export.vmctx, &self.instance.store, || unsafe {
+            (self.trampoline)(
+                self.export.vmctx,
+                ptr::null_mut(),
+                self.export.address,
+                values_vec.as_mut_ptr(),
+            )
+        })?;
 
         // Load the return values out of `values_vec`.
         let mut results = Vec::with_capacity(my_ty.results().len());
@@ -746,13 +730,18 @@ impl fmt::Debug for Func {
     }
 }
 
-pub(crate) fn catch_traps(
+pub(crate) fn invoke_wasm_and_catch_traps(
     vmctx: *mut VMContext,
     store: &Store,
     closure: impl FnMut(),
 ) -> Result<(), Trap> {
     let signalhandler = store.signal_handler();
     unsafe {
+        let canary = 0;
+        let _auto_reset_canary = store
+            .externref_activations_table()
+            .set_stack_canary(&canary);
+
         wasmtime_runtime::catch_traps(
             vmctx,
             store.engine().config().max_wasm_stack,

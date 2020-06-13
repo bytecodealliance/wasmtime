@@ -1,6 +1,7 @@
 use crate::externals::MemoryCreator;
 use crate::r#ref::ExternRef;
 use crate::trampoline::{MemoryCreatorProxy, StoreInstanceHandle};
+use crate::Module;
 use anyhow::{bail, Result};
 use std::any::Any;
 use std::cell::RefCell;
@@ -14,7 +15,7 @@ use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use wasmparser::{OperatorValidatorConfig, ValidatingParserConfig};
 use wasmtime_environ::settings::{self, Configurable};
-use wasmtime_environ::{ir, wasm, CacheConfig, Tunables};
+use wasmtime_environ::{ir, isa::TargetIsa, wasm, CacheConfig, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{
@@ -195,6 +196,7 @@ impl Config {
         self.validating_config
             .operator_config
             .enable_reference_types = enable;
+
         self.flags
             .set("enable_safepoints", if enable { "true" } else { "false" })
             .unwrap();
@@ -597,8 +599,12 @@ impl Config {
         self
     }
 
+    pub(crate) fn target_isa(&self) -> Box<dyn TargetIsa> {
+        native::builder().finish(settings::Flags::new(self.flags.clone()))
+    }
+
     fn build_compiler(&self) -> Compiler {
-        let isa = native::builder().finish(settings::Flags::new(self.flags.clone()));
+        let isa = self.target_isa();
         Compiler::new(
             isa,
             self.strategy,
@@ -730,7 +736,6 @@ pub struct Engine {
 struct EngineInner {
     config: Config,
     compiler: Compiler,
-    stack_map_registry: Arc<StackMapRegistry>,
 }
 
 impl Engine {
@@ -742,7 +747,6 @@ impl Engine {
             inner: Arc::new(EngineInner {
                 config: config.clone(),
                 compiler: config.build_compiler(),
-                stack_map_registry: Arc::new(StackMapRegistry::default()),
             }),
         }
     }
@@ -801,7 +805,7 @@ pub(crate) struct StoreInner {
     jit_code_ranges: RefCell<Vec<(usize, usize)>>,
     host_info: RefCell<HashMap<HostInfoKey, Rc<RefCell<dyn Any>>>>,
     externref_activations_table: Rc<VMExternRefActivationsTable>,
-    stack_map_registry: Arc<StackMapRegistry>,
+    stack_map_registry: Rc<StackMapRegistry>,
 }
 
 struct HostInfoKey(VMExternRef);
@@ -843,7 +847,7 @@ impl Store {
                 jit_code_ranges: RefCell::new(Vec::new()),
                 host_info: RefCell::new(HashMap::new()),
                 externref_activations_table: Rc::new(VMExternRefActivationsTable::new()),
-                stack_map_registry: engine.inner.stack_map_registry.clone(),
+                stack_map_registry: Rc::new(StackMapRegistry::default()),
             }),
         }
     }
@@ -914,6 +918,24 @@ impl Store {
                 }
             }
         }
+    }
+
+    pub(crate) fn register_stack_maps(&self, module: &Module) {
+        let module = &module.compiled_module();
+        self.stack_map_registry().register_stack_maps(
+            module
+                .finished_functions()
+                .values()
+                .zip(module.stack_maps().values())
+                .map(|(func, stack_maps)| unsafe {
+                    let ptr = (**func).as_ptr();
+                    let len = (**func).len();
+                    let start = ptr as usize;
+                    let end = ptr as usize + len;
+                    let range = start..end;
+                    (range, &stack_maps[..])
+                }),
+        );
     }
 
     pub(crate) unsafe fn add_instance(&self, handle: InstanceHandle) -> StoreInstanceHandle {
@@ -1091,14 +1113,15 @@ impl Store {
         &self.inner.externref_activations_table
     }
 
-    pub(crate) fn stack_map_registry(&self) -> &Arc<StackMapRegistry> {
-        &self.inner.engine.inner.stack_map_registry
+    pub(crate) fn stack_map_registry(&self) -> &Rc<StackMapRegistry> {
+        &self.inner.stack_map_registry
     }
 
     /// Perform garbage collection of `ExternRef`s.
     pub fn gc(&self) {
         // For this crate's API, we ensure that `set_stack_canary` invariants
-        // are upheld for all host-->Wasm calls.
+        // are upheld for all host-->Wasm calls, and we register every module
+        // used with this store in `self.inner.stack_map_registry`.
         unsafe {
             wasmtime_runtime::gc(
                 &*self.inner.stack_map_registry,

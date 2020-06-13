@@ -221,7 +221,7 @@ impl binemit::StackmapSink for StackMapSink {
 
 impl StackMapSink {
     fn finish(mut self) -> Vec<StackMapInformation> {
-        self.infos.sort_by_key(|info| info.code_offset);
+        self.infos.sort_unstable_by_key(|info| info.code_offset);
         self.infos
     }
 }

@@ -21,7 +21,6 @@ use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::{mem, ptr, slice};
 use thiserror::Error;
@@ -73,19 +72,6 @@ pub(crate) struct Instance {
     /// Externally allocated data indicating how this instance will be
     /// interrupted.
     pub(crate) interrupts: Arc<VMInterrupts>,
-
-    /// A handle to the (over-approximized) set of `externref`s that Wasm code
-    /// is using.
-    ///
-    /// The `vmctx` also holds a raw pointer to the table and relies on this
-    /// member to keep it alive.
-    pub(crate) externref_activations_table: Rc<VMExternRefActivationsTable>,
-
-    /// A handle to the stack map registry for this thread.
-    ///
-    /// The `vmctx` also holds a raw pointer to the registry and relies on this
-    /// member to keep it alive.
-    pub(crate) stack_map_registry: Arc<StackMapRegistry>,
 
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
@@ -799,6 +785,10 @@ impl InstanceHandle {
     /// internally if you'd like to do so. If possible it's recommended to use
     /// the `wasmtime` crate API rather than this type since that is vetted for
     /// safety.
+    ///
+    /// It is your responsibility to ensure that the given raw
+    /// `externref_activations_table` and `stack_map_registry` outlive this
+    /// instance.
     pub unsafe fn new(
         module: Arc<Module>,
         code: Arc<dyn Any>,
@@ -809,9 +799,12 @@ impl InstanceHandle {
         vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         host_state: Box<dyn Any>,
         interrupts: Arc<VMInterrupts>,
-        externref_activations_table: Rc<VMExternRefActivationsTable>,
-        stack_map_registry: Arc<StackMapRegistry>,
+        externref_activations_table: *mut VMExternRefActivationsTable,
+        stack_map_registry: *mut StackMapRegistry,
     ) -> Result<Self, InstantiationError> {
+        debug_assert!(!externref_activations_table.is_null());
+        debug_assert!(!stack_map_registry.is_null());
+
         let tables = create_tables(&module);
         let memories = create_memories(&module, mem_creator.unwrap_or(&DefaultMemoryCreator {}))?;
 
@@ -846,8 +839,6 @@ impl InstanceHandle {
                 trampolines,
                 host_state,
                 interrupts,
-                externref_activations_table,
-                stack_map_registry,
                 vmctx: VMContext {},
             };
             let layout = instance.alloc_layout();
@@ -907,9 +898,8 @@ impl InstanceHandle {
             VMBuiltinFunctionsArray::initialized(),
         );
         *instance.interrupts() = &*instance.interrupts;
-        *instance.externref_activations_table() =
-            &*instance.externref_activations_table as *const _ as *mut _;
-        *instance.stack_map_registry() = &*instance.stack_map_registry as *const _ as *mut _;
+        *instance.externref_activations_table() = externref_activations_table;
+        *instance.stack_map_registry() = stack_map_registry;
 
         // Perform infallible initialization in this constructor, while fallible
         // initialization is deferred to the `initialize` method.

@@ -105,11 +105,11 @@ use std::cell::{Cell, RefCell, UnsafeCell};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
-use std::hash::Hasher;
+use std::hash::{Hash, Hasher};
 use std::mem;
 use std::ops::Deref;
 use std::ptr::{self, NonNull};
-use std::sync::{Arc, RwLock};
+use std::rc::Rc;
 use wasmtime_environ::{ir::Stackmap, StackMapInformation};
 
 /// An external reference to some opaque data.
@@ -337,37 +337,6 @@ impl VMExternRef {
         }
     }
 
-    // /// Turn this `VMExternRef` into a raw, untyped pointer.
-    // ///
-    // /// This forgets `self` and does *not* decrement the reference count on the
-    // /// pointed-to data.
-    // ///
-    // /// This `VMExternRef` may be recovered with `VMExternRef::from_raw`.
-    // pub fn into_raw(self) -> *mut u8 {
-    //     let ptr = self.as_raw();
-    //     mem::forget(self);
-    //     ptr
-    // }
-
-    // /// Recreate a `VMExternRef` from a pointer returned from a previous call to
-    // /// `VMExternRef::into_raw`.
-    // ///
-    // /// # Safety
-    // ///
-    // /// Wildly unsafe to use with anything other than the result of a previous
-    // /// `into_raw` call!
-    // ///
-    // /// This method does *not* increment the reference count on the pointed-to
-    // /// data, so `from_raw` must be called at most *once* on the result of a
-    // /// previous `into_raw` call. (Ideally, every `into_raw` is later followed
-    // /// by a `from_raw`, but it is technically memory safe to never call
-    // /// `from_raw` after `into_raw`: it will leak the pointed-to value, which is
-    // /// memory safe).
-    // pub unsafe fn from_raw(ptr: *mut u8) -> Self {
-    //     debug_assert!(!ptr.is_null());
-    //     VMExternRef(NonNull::new_unchecked(ptr).cast())
-    // }
-
     /// Turn this `VMExternRef` into a raw, untyped pointer.
     ///
     /// Unlike `into_raw`, this does not consume and forget `self`. It is *not*
@@ -379,7 +348,6 @@ impl VMExternRef {
     ///  `clone_from_raw` is called.
     pub fn as_raw(&self) -> *mut u8 {
         let ptr = self.0.cast::<u8>().as_ptr();
-        mem::forget(self);
         ptr
     }
 
@@ -401,8 +369,8 @@ impl VMExternRef {
         x
     }
 
-    /// Get the reference count for this `VMExternRef`.
-    pub fn get_reference_count(&self) -> usize {
+    /// Get the strong reference count for this `VMExternRef`.
+    pub fn strong_count(&self) -> usize {
         self.extern_data().get_ref_count()
     }
 
@@ -461,6 +429,31 @@ impl Deref for VMExternRef {
     }
 }
 
+/// A wrapper around a `VMExternRef` that implements `Eq` and `Hash` with
+/// pointer semantics.
+///
+/// We use this so that we can morally put `VMExternRef`s inside of `HashSet`s
+/// even though they don't implement `Eq` and `Hash` to avoid foot guns.
+#[derive(Clone)]
+struct VMExternRefWithTraits(VMExternRef);
+
+impl Hash for VMExternRefWithTraits {
+    fn hash<H>(&self, hasher: &mut H)
+    where
+        H: Hasher,
+    {
+        VMExternRef::hash(&self.0, hasher)
+    }
+}
+
+impl PartialEq for VMExternRefWithTraits {
+    fn eq(&self, other: &Self) -> bool {
+        VMExternRef::eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for VMExternRefWithTraits {}
+
 type TableElem = UnsafeCell<Option<VMExternRef>>;
 
 /// A table that over-approximizes the set of `VMExternRef`s that any Wasm
@@ -470,35 +463,37 @@ type TableElem = UnsafeCell<Option<VMExternRef>>;
 /// entries. Deduplication happens at GC time.
 #[repr(C)]
 pub struct VMExternRefActivationsTable {
-    /// Bump-allocation finger within the current chunk.
+    /// Bump-allocation finger within the `chunk`.
     ///
-    /// NB: this is an `UnsafeCell` because it is read from and written to by
-    /// compiled Wasm code.
+    /// NB: this is an `UnsafeCell` because it is written to by compiled Wasm
+    /// code.
     next: UnsafeCell<NonNull<TableElem>>,
 
-    /// Pointer to just after the current chunk.
+    /// Pointer to just after the `chunk`.
     ///
     /// This is *not* within the current chunk and therefore is not a valid
     /// place to insert a reference!
-    ///
-    /// This is only updated from host code.
-    end: Cell<NonNull<TableElem>>,
+    end: NonNull<TableElem>,
 
-    /// The chunks within which we are bump allocating.
+    /// Bump allocation chunk that stores fast-path insertions.
+    chunk: Box<[TableElem]>,
+
+    /// When unioned with `chunk`, this is an over-approximation of the GC roots
+    /// on the stack, inside Wasm frames.
     ///
-    /// This is only updated from host code.
-    chunks: RefCell<Vec<Box<[TableElem]>>>,
+    /// This is used by slow-path insertion, and when a GC cycle finishes, is
+    /// re-initialized to the just-discovered precise set of stack roots (which
+    /// immediately becomes an over-approximation again as soon as Wasm runs and
+    /// potentially drops references).
+    over_approximated_stack_roots: RefCell<HashSet<VMExternRefWithTraits>>,
 
     /// The precise set of on-stack, inside-Wasm GC roots that we discover via
     /// walking the stack and interpreting stack maps.
     ///
-    /// That is, this is the precise set that the bump allocation table is
-    /// over-approximating.
-    ///
     /// This is *only* used inside the `gc` function, and is empty otherwise. It
     /// is just part of this struct so that we can reuse the allocation, rather
     /// than create a new hash set every GC.
-    precise_stack_roots: RefCell<HashSet<NonNull<VMExternData>>>,
+    precise_stack_roots: RefCell<HashSet<VMExternRefWithTraits>>,
 
     /// A pointer to a `u8` on the youngest host stack frame before we called
     /// into Wasm for the first time. When walking the stack in garbage
@@ -510,119 +505,107 @@ pub struct VMExternRefActivationsTable {
 }
 
 impl VMExternRefActivationsTable {
-    const INITIAL_CHUNK_SIZE: usize = 4096 / mem::size_of::<usize>();
+    const CHUNK_SIZE: usize = 4096 / mem::size_of::<usize>();
 
     /// Create a new `VMExternRefActivationsTable`.
     pub fn new() -> Self {
-        let chunk = Self::new_chunk(Self::INITIAL_CHUNK_SIZE);
+        let chunk = Self::new_chunk(Self::CHUNK_SIZE);
         let next = chunk.as_ptr() as *mut TableElem;
         let end = unsafe { next.add(chunk.len()) };
 
         VMExternRefActivationsTable {
             next: UnsafeCell::new(NonNull::new(next).unwrap()),
-            end: Cell::new(NonNull::new(end).unwrap()),
-            chunks: RefCell::new(vec![chunk]),
-            precise_stack_roots: RefCell::new(HashSet::with_capacity(Self::INITIAL_CHUNK_SIZE)),
+            end: NonNull::new(end).unwrap(),
+            chunk,
+            over_approximated_stack_roots: RefCell::new(HashSet::with_capacity(Self::CHUNK_SIZE)),
+            precise_stack_roots: RefCell::new(HashSet::with_capacity(Self::CHUNK_SIZE)),
             stack_canary: Cell::new(None),
         }
     }
 
     fn new_chunk(size: usize) -> Box<[UnsafeCell<Option<VMExternRef>>]> {
-        assert!(size >= Self::INITIAL_CHUNK_SIZE);
-        let mut chunk = Vec::with_capacity(size);
-        for _ in 0..size {
-            chunk.push(UnsafeCell::new(None));
-        }
-        chunk.into_boxed_slice()
+        assert!(size >= Self::CHUNK_SIZE);
+        (0..size).map(|_| UnsafeCell::new(None)).collect()
     }
 
     /// Try and insert a `VMExternRef` into this table.
     ///
-    /// This is a fast path that only succeeds when the current chunk has the
+    /// This is a fast path that only succeeds when the bump chunk has the
     /// capacity for the requested insertion.
     ///
     /// If the insertion fails, then the `VMExternRef` is given back. Callers
     /// may attempt a GC to free up space and try again, or may call
-    /// `insert_slow_path` to allocate a new bump chunk for this insertion.
+    /// `insert_slow_path` to infallibly insert the reference (potentially
+    /// allocating additional space in the table to hold it).
     #[inline]
     pub fn try_insert(&self, externref: VMExternRef) -> Result<(), VMExternRef> {
         unsafe {
             let next = *self.next.get();
-            let end = self.end.get();
-            if next == end {
+            if next == self.end {
                 return Err(externref);
             }
 
             debug_assert!((*next.as_ref().get()).is_none());
             ptr::write(next.as_ptr(), UnsafeCell::new(Some(externref)));
+
             let next = NonNull::new_unchecked(next.as_ptr().add(1));
-            debug_assert!(next <= end);
+            debug_assert!(next <= self.end);
             *self.next.get() = next;
+
             Ok(())
         }
     }
 
-    /// This is a slow path for inserting a reference into the table when the
-    /// current bump chunk is full.
+    /// Insert a reference into the table, falling back on a GC to clear up
+    /// space if the table is already full.
     ///
-    /// This method is infallible, and will allocate an additional bump chunk if
-    /// necessary.
-    #[inline(never)]
-    pub fn insert_slow_path(&self, externref: VMExternRef) {
-        let externref = match self.try_insert(externref) {
-            Ok(()) => return,
-            Err(x) => x,
-        };
-
-        {
-            let mut chunks = self.chunks.borrow_mut();
-
-            let new_size = chunks.last().unwrap().len() * 2;
-            let new_chunk = Self::new_chunk(new_size);
-
-            unsafe {
-                let next = new_chunk.as_ptr() as *mut TableElem;
-                debug_assert!(!next.is_null());
-                *self.next.get() = NonNull::new_unchecked(next);
-
-                let end = next.add(new_chunk.len());
-                debug_assert!(!end.is_null());
-                self.end.set(NonNull::new_unchecked(end));
-            }
-
-            chunks.push(new_chunk);
+    /// # Unsafety
+    ///
+    /// The same as `gc`.
+    #[inline]
+    pub unsafe fn insert_with_gc(
+        &self,
+        externref: VMExternRef,
+        stack_maps_registry: &StackMapRegistry,
+    ) {
+        if let Err(externref) = self.try_insert(externref) {
+            self.gc_and_insert_slow(externref, stack_maps_registry);
         }
-
-        self.try_insert(externref)
-            .expect("insertion should always succeed after we allocate a new chunk");
     }
 
-    fn num_filled_in_last_chunk(&self, chunks: &[Box<[TableElem]>]) -> usize {
-        let last_chunk = chunks.last().unwrap();
+    #[inline(never)]
+    unsafe fn gc_and_insert_slow(
+        &self,
+        externref: VMExternRef,
+        stack_maps_registry: &StackMapRegistry,
+    ) {
+        gc(stack_maps_registry, self);
+
+        // Might as well insert right into the hash set, rather than the bump
+        // chunk, since we are already on a slow path and we get de-duplication
+        // this way.
+        let mut roots = self.over_approximated_stack_roots.borrow_mut();
+        roots.insert(VMExternRefWithTraits(externref));
+    }
+
+    fn num_filled_in_bump_chunk(&self) -> usize {
         let next = unsafe { *self.next.get() };
-        let end = self.end.get();
-        let num_unused_in_last_chunk =
-            ((end.as_ptr() as usize) - (next.as_ptr() as usize)) / mem::size_of::<usize>();
-        last_chunk.len().saturating_sub(num_unused_in_last_chunk)
+        let bytes_unused = (self.end.as_ptr() as usize) - (next.as_ptr() as usize);
+        let slots_unused = bytes_unused / mem::size_of::<TableElem>();
+        self.chunk.len().saturating_sub(slots_unused)
     }
 
     fn elements(&self, mut f: impl FnMut(&VMExternRef)) {
-        // Every chunk except the last one is full, so we can simply iterate
-        // over all of their elements.
-        let chunks = self.chunks.borrow();
-        for chunk in chunks.iter().take(chunks.len() - 1) {
-            for elem in chunk.iter() {
-                if let Some(elem) = unsafe { &*elem.get() } {
-                    f(elem);
-                }
-            }
+        let roots = self.over_approximated_stack_roots.borrow();
+        for elem in roots.iter() {
+            f(&elem.0);
         }
 
-        // The last chunk is not all the way full, so we only iterate over its
-        // full parts.
-        let num_filled_in_last_chunk = self.num_filled_in_last_chunk(&chunks);
-        for elem in chunks.last().unwrap().iter().take(num_filled_in_last_chunk) {
-            if let Some(elem) = unsafe { &*elem.get() } {
+        // The bump chunk is not all the way full, so we only iterate over its
+        // filled-in slots.
+        let num_filled = self.num_filled_in_bump_chunk();
+        for slot in self.chunk.iter().take(num_filled) {
+            if let Some(elem) = unsafe { &*slot.get() } {
                 f(elem);
             }
         }
@@ -630,94 +613,43 @@ impl VMExternRefActivationsTable {
 
     fn insert_precise_stack_root(&self, root: NonNull<VMExternData>) {
         let mut precise_stack_roots = self.precise_stack_roots.borrow_mut();
-        if precise_stack_roots.insert(root) {
-            // If this root was not already in the set, then we need to
-            // increment its reference count, so that it doesn't get freed in
-            // `reset` when we're overwriting old bump allocation table entries
-            // with new ones.
-            unsafe {
-                root.as_ref().increment_ref_count();
-            }
-        }
+        let root = unsafe { VMExternRef::clone_from_raw(root.as_ptr() as *mut _) };
+        precise_stack_roots.insert(VMExternRefWithTraits(root));
     }
 
-    /// Refill the bump allocation table with our precise stack roots, and sweep
-    /// away everything else.
-    fn reset(&self) {
-        let mut chunks = self.chunks.borrow_mut();
-
-        let mut precise_roots = self.precise_stack_roots.borrow_mut();
-        if precise_roots.is_empty() {
-            // Get rid of all but our first bump chunk, and set our `next` and
-            // `end` bump allocation fingers into it.
-            unsafe {
-                let chunk = chunks.first().unwrap();
-
-                let next = chunk.as_ptr() as *mut TableElem;
-                debug_assert!(!next.is_null());
-                *self.next.get() = NonNull::new_unchecked(next);
-
-                let end = next.add(chunk.len());
-                debug_assert!(!end.is_null());
-                self.end.set(NonNull::new_unchecked(end));
-            }
-            chunks.truncate(1);
-        } else {
-            // Drain our precise stack roots into the bump allocation table.
-            //
-            // This overwrites old entries, which drops them and decrements their
-            // reference counts. Safety relies on the reference count increment in
-            // `insert_precise_stack_root` to avoid over-eagerly dropping references
-            // that are in `self.precise_stack_roots` but haven't been inserted into
-            // the bump allocation table yet.
-            let mut precise_roots = precise_roots.drain();
-            'outer: for (chunk_index, chunk) in chunks.iter().enumerate() {
-                for (slot_index, slot) in chunk.iter().enumerate() {
-                    if let Some(root) = precise_roots.next() {
-                        unsafe {
-                            // NB: there is no reference count increment here
-                            // because everything in `self.precise_stack_roots`
-                            // already had its reference count incremented for us,
-                            // and this is logically a move out from there, rather
-                            // than a clone.
-                            *slot.get() = Some(VMExternRef(root));
-                        }
-                    } else {
-                        // We've inserted all of our precise, on-stack roots back
-                        // into the bump allocation table. Update our `next` and
-                        // `end` bump pointer members for the new current chunk, and
-                        // free any excess chunks.
-                        let start = chunk.as_ptr() as *mut TableElem;
-                        unsafe {
-                            let next = start.add(slot_index + 1);
-                            debug_assert!(!next.is_null());
-                            *self.next.get() = NonNull::new_unchecked(next);
-
-                            let end = start.add(chunk.len());
-                            debug_assert!(!end.is_null());
-                            self.end.set(NonNull::new_unchecked(end));
-                        }
-                        chunks.truncate(chunk_index + 1);
-                        break 'outer;
-                    }
-                }
-            }
-
-            debug_assert!(
-                precise_roots.next().is_none(),
-                "should always have enough capacity in the bump allocations table \
-                 to hold all of our precise, on-stack roots"
-            );
-        }
-
-        // Finally, sweep away excess capacity within our new last/current
-        // chunk, so that old, no-longer-live roots get dropped.
-        let num_filled_in_last_chunk = self.num_filled_in_last_chunk(&chunks);
-        for slot in chunks.last().unwrap().iter().skip(num_filled_in_last_chunk) {
+    /// Sweep the bump allocation table after we've discovered our precise stack
+    /// roots.
+    fn sweep(&self) {
+        // Sweep our bump chunk.
+        let num_filled = self.num_filled_in_bump_chunk();
+        for slot in self.chunk.iter().take(num_filled) {
             unsafe {
                 *slot.get() = None;
             }
         }
+        debug_assert!(
+            self.chunk
+                .iter()
+                .all(|slot| unsafe { (*slot.get()).as_ref().is_none() }),
+            "after sweeping the bump chunk, all slots should be `None`"
+        );
+
+        // Reset our `next` bump allocation finger.
+        unsafe {
+            let next = self.chunk.as_ptr() as *mut TableElem;
+            debug_assert!(!next.is_null());
+            *self.next.get() = NonNull::new_unchecked(next);
+        }
+
+        // The current `precise_roots` becomes our new over-appoximated set for
+        // the next GC cycle.
+        let mut precise_roots = self.precise_stack_roots.borrow_mut();
+        let mut over_approximated = self.over_approximated_stack_roots.borrow_mut();
+        mem::swap(&mut *precise_roots, &mut *over_approximated);
+
+        // And finally, the new `precise_roots` should be cleared and remain
+        // empty until the next GC cycle.
+        precise_roots.clear();
     }
 
     /// Set the stack canary around a call into Wasm.
@@ -739,7 +671,7 @@ impl VMExternRefActivationsTable {
     /// ```no_run
     /// use wasmtime_runtime::*;
     ///
-    /// #let get_table_from_somewhere = || unimplemented!();
+    /// # let get_table_from_somewhere = || unimplemented!();
     /// let table: &VMExternRefActivationsTable = get_table_from_somewhere();
     ///
     /// // Set the canary before a Wasm call. The canary should always be a
@@ -748,7 +680,7 @@ impl VMExternRefActivationsTable {
     /// let auto_reset_canary = table.set_stack_canary(&canary);
     ///
     /// // Do the call into Wasm.
-    /// #let call_into_wasm = || unimplemented!();
+    /// # let call_into_wasm = || unimplemented!();
     /// call_into_wasm();
     ///
     /// // Only drop the value returned by `set_stack_canary` after the Wasm
@@ -791,7 +723,7 @@ impl VMExternRefActivationsTable {
 /// A registry of stack maps for currently active Wasm modules.
 #[derive(Default)]
 pub struct StackMapRegistry {
-    inner: RwLock<StackMapRegistryInner>,
+    inner: RefCell<StackMapRegistryInner>,
 }
 
 #[derive(Default)]
@@ -804,13 +736,13 @@ struct StackMapRegistryInner {
 
 #[derive(Debug)]
 struct ModuleStackMaps {
-    /// The range of PCs that this module covers. Different modules should
-    /// always have distinct ranges.
+    /// The range of PCs that this module covers. Different modules must always
+    /// have distinct ranges.
     range: std::ops::Range<usize>,
 
     /// A map from a PC in this module (that is a GC safepoint) to its
     /// associated stack map.
-    pc_to_stack_map: Vec<(usize, Arc<Stackmap>)>,
+    pc_to_stack_map: Vec<(usize, Rc<Stackmap>)>,
 }
 
 impl StackMapRegistry {
@@ -820,22 +752,10 @@ impl StackMapRegistry {
     /// in memory (that is, where the JIT actually allocated and emitted the
     /// function's code at), and the stack maps and code offsets within that
     /// range for each of its GC safepoints.
-    ///
-    /// The return value is an RAII registration for the stack maps. The
-    /// registration should not be dropped until its associated module is
-    /// dropped. Dropping the registration will unregister its stack
-    /// maps.
-    ///
-    /// # Safety
-    ///
-    /// Dropping the returned registration before the module is dropped, or when
-    /// there are still active frames from the module on the stack, means we
-    /// will no longer be able to find GC roots for the module's frames anymore,
-    /// which could lead to freeing still-in-use objects and use-after-free!
-    pub unsafe fn register_stack_maps<'a>(
-        self: &Arc<Self>,
+    pub fn register_stack_maps<'a>(
+        &self,
         stack_maps: impl IntoIterator<Item = (std::ops::Range<usize>, &'a [StackMapInformation])>,
-    ) -> Option<StackMapRegistration> {
+    ) {
         let mut min = usize::max_value();
         let mut max = 0;
         let mut pc_to_stack_map = vec![];
@@ -850,14 +770,14 @@ impl StackMapRegistry {
                 assert!((info.code_offset as usize) < len);
                 pc_to_stack_map.push((
                     range.start + (info.code_offset as usize),
-                    Arc::new(info.stack_map.clone()),
+                    Rc::new(info.stack_map.clone()),
                 ));
             }
         }
 
         if pc_to_stack_map.is_empty() {
             // Nothing to register.
-            return None;
+            return;
         }
 
         let module_stack_maps = ModuleStackMaps {
@@ -865,7 +785,17 @@ impl StackMapRegistry {
             pc_to_stack_map,
         };
 
-        let mut inner = self.inner.write().unwrap();
+        let mut inner = self.inner.borrow_mut();
+
+        // Check if we've already registered this module.
+        if let Some(existing_module) = inner.ranges.get(&max) {
+            assert_eq!(existing_module.range, module_stack_maps.range);
+            debug_assert_eq!(
+                existing_module.pc_to_stack_map,
+                module_stack_maps.pc_to_stack_map,
+            );
+            return;
+        }
 
         // Assert that this chunk of ranges doesn't collide with any other known
         // chunks.
@@ -878,16 +808,11 @@ impl StackMapRegistry {
 
         let old = inner.ranges.insert(max, module_stack_maps);
         assert!(old.is_none());
-
-        Some(StackMapRegistration {
-            key: max,
-            registry: self.clone(),
-        })
     }
 
     /// Lookup the stack map for the given PC, if any.
-    pub fn lookup_stack_map(&self, pc: usize) -> Option<Arc<Stackmap>> {
-        let inner = self.inner.read().unwrap();
+    pub fn lookup_stack_map(&self, pc: usize) -> Option<Rc<Stackmap>> {
+        let inner = self.inner.borrow();
         let stack_maps = inner.module_stack_maps(pc)?;
 
         // Do a binary search to find the stack map for the given PC.
@@ -968,64 +893,36 @@ impl StackMapRegistryInner {
     }
 }
 
-/// The registration for a module's stack maps.
-///
-/// Unsafe to drop earlier than its module is dropped. See
-/// `StackMapRegistry::register_stack_maps` for details.
-pub struct StackMapRegistration {
-    key: usize,
-    registry: Arc<StackMapRegistry>,
-}
-
-impl Drop for StackMapRegistration {
-    fn drop(&mut self) {
-        if let Ok(mut inner) = self.registry.inner.write() {
-            inner.ranges.remove(&self.key);
-        }
-    }
-}
-
-#[cfg(debug_assertions)]
 #[derive(Debug, Default)]
 struct DebugOnly<T> {
     inner: T,
 }
 
-#[cfg(debug_assertions)]
 impl<T> std::ops::Deref for DebugOnly<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
-        &self.inner
+        if cfg!(debug_assertions) {
+            &self.inner
+        } else {
+            panic!(
+                "only deref `DebugOnly` when `cfg(debug_assertions)` or \
+                 inside a `debug_assert!(..)`"
+            )
+        }
     }
 }
 
-#[cfg(debug_assertions)]
 impl<T> std::ops::DerefMut for DebugOnly<T> {
     fn deref_mut(&mut self) -> &mut T {
-        &mut self.inner
-    }
-}
-
-#[cfg(not(debug_assertions))]
-#[derive(Debug, Default)]
-struct DebugOnly<T> {
-    _phantom: PhantomData<T>,
-}
-
-#[cfg(not(debug_assertions))]
-impl<T> std::ops::Deref for DebugOnly<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        panic!("only deref `DebugOnly` inside `debug_assert!`s")
-    }
-}
-
-#[cfg(not(debug_assertions))]
-impl<T> std::ops::DerefMut for DebugOnly<T> {
-    fn deref_mut(&mut self) -> &mut T {
-        panic!("only deref `DebugOnly` inside `debug_assert!`s")
+        if cfg!(debug_assertions) {
+            &mut self.inner
+        } else {
+            panic!(
+                "only deref `DebugOnly` when `cfg(debug_assertions)` or \
+                 inside a `debug_assert!(..)`"
+            )
+        }
     }
 }
 
@@ -1037,6 +934,9 @@ impl<T> std::ops::DerefMut for DebugOnly<T> {
 /// least the oldest host-->Wasm stack frame transition on this thread's stack
 /// (it is idempotent to call it more than once) and keep its return value alive
 /// across the duration of that host-->Wasm call.
+///
+/// Additionally, you must have registered the stack maps for every Wasm module
+/// that has frames on the stack with the given `stack_maps_registry`.
 pub unsafe fn gc(
     stack_maps_registry: &StackMapRegistry,
     externref_activations_table: &VMExternRefActivationsTable,
@@ -1068,7 +968,7 @@ pub unsafe fn gc(
                     true
                 });
             }
-            externref_activations_table.reset();
+            externref_activations_table.sweep();
             log::debug!("end GC");
             return;
         }
@@ -1086,7 +986,7 @@ pub unsafe fn gc(
     // * resetting our bump-allocated table's over-approximation to the
     //   newly-discovered precise set.
 
-    // The SP of the previous frame we processed.
+    // The SP of the previous (younger) frame we processed.
     let mut last_sp = None;
 
     // Whether we have found our stack canary or not yet.
@@ -1109,6 +1009,8 @@ pub unsafe fn gc(
         let sp = frame.sp() as usize;
 
         if let Some(stack_map) = stack_maps_registry.lookup_stack_map(pc) {
+            debug_assert!(sp != 0, "we should always get a valid SP for Wasm frames");
+
             for i in 0..(stack_map.mapped_words() as usize) {
                 if stack_map.get_bit(i) {
                     // Stack maps have one bit per word in the frame, and the
@@ -1144,14 +1046,16 @@ pub unsafe fn gc(
         !found_canary
     });
 
-    // Only reset the table if we found the stack canary, and therefore know
-    // that we discovered all the on-stack, inside-a-Wasm-frame roots. If we did
-    // *not* find the stack canary, then `libunwind` failed to walk the whole
-    // stack, and we might be missing roots. Reseting the table would free those
-    // missing roots while they are still in use, leading to use-after-free.
+    // Only sweep and reset the table if we found the stack canary, and
+    // therefore know that we discovered all the on-stack, inside-a-Wasm-frame
+    // roots. If we did *not* find the stack canary, then `libunwind` failed to
+    // walk the whole stack, and we might be missing roots. Reseting the table
+    // would free those missing roots while they are still in use, leading to
+    // use-after-free.
     if found_canary {
-        externref_activations_table.reset();
+        externref_activations_table.sweep();
     } else {
+        log::warn!("did not find stack canary; skipping GC sweep");
         let mut roots = externref_activations_table.precise_stack_roots.borrow_mut();
         roots.clear();
     }
@@ -1221,7 +1125,10 @@ mod tests {
             num_defined_memories: 0,
             num_defined_globals: 0,
         };
-        assert_eq!(offsets.vm_extern_ref_activation_table_next(), actual_offset);
+        assert_eq!(
+            offsets.vm_extern_ref_activation_table_next() as usize,
+            actual_offset
+        );
     }
 
     #[test]
@@ -1244,21 +1151,9 @@ mod tests {
             num_defined_memories: 0,
             num_defined_globals: 0,
         };
-        assert_eq!(offsets.vm_extern_ref_activation_table_end(), actual_offset);
-    }
-
-    fn assert_is_send<T: Send>() {}
-    fn assert_is_sync<T: Send>() {}
-
-    #[test]
-    fn stack_map_registry_is_send_sync() {
-        assert_is_send::<StackMapRegistry>();
-        assert_is_sync::<StackMapRegistry>();
-    }
-
-    #[test]
-    fn stack_map_registration_is_send_sync() {
-        assert_is_send::<StackMapRegistration>();
-        assert_is_sync::<StackMapRegistration>();
+        assert_eq!(
+            offsets.vm_extern_ref_activation_table_end() as usize,
+            actual_offset
+        );
     }
 }

@@ -89,10 +89,9 @@ impl Val {
             Val::ExternRef(None) => ptr::write(p, 0),
             Val::ExternRef(Some(x)) => {
                 let externref_ptr = x.inner.as_raw();
-                if let Err(inner) = store.externref_activations_table().try_insert(x.inner) {
-                    store.gc();
-                    store.externref_activations_table().insert_slow_path(inner);
-                }
+                store
+                    .externref_activations_table()
+                    .insert_with_gc(x.inner, store.stack_map_registry());
                 ptr::write(p as *mut *mut u8, externref_ptr)
             }
             _ => unimplemented!("Val::write_value_to"),

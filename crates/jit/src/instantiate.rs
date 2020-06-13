@@ -10,7 +10,6 @@ use crate::link::link_module;
 use crate::resolver::Resolver;
 use std::any::Any;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_debug::{read_debuginfo, write_debugsections_image, DwarfSection};
@@ -173,8 +172,8 @@ impl CompiledModule {
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
         interrupts: Arc<VMInterrupts>,
         host_state: Box<dyn Any>,
-        externref_activations_table: Rc<VMExternRefActivationsTable>,
-        stack_map_registry: Arc<StackMapRegistry>,
+        externref_activations_table: *mut VMExternRefActivationsTable,
+        stack_map_registry: *mut StackMapRegistry,
     ) -> Result<InstanceHandle, InstantiationError> {
         // Compute indices into the shared signature table.
         let signatures = {

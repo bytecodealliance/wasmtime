@@ -59,12 +59,12 @@ fn smoke_test_gc() -> anyhow::Result<()> {
 
     // Still held alive by the `VMExternRefActivationsTable` (potentially in
     // multiple slots within the table) and by this `r` local.
-    assert!(r.get_reference_count() >= 2);
+    assert!(r.strong_count() >= 2);
 
     // Doing a GC should see that there aren't any `externref`s on the stack in
     // Wasm frames anymore.
     store.gc();
-    assert_eq!(r.get_reference_count(), 1);
+    assert_eq!(r.strong_count(), 1);
 
     // Dropping `r` should drop the inner `SetFlagOnDrop` value.
     drop(r);
