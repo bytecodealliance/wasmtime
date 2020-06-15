@@ -39,5 +39,9 @@ lightbeam = ["wasmtime-environ/lightbeam"]
 jitdump = ["wasmtime-profiling/jitdump"]
 vtune = ["wasmtime-profiling/vtune"]
 
+# Try the experimental, work-in-progress new x86_64 backend. This is not stable
+# as of June 2020.
+experimental_x64 = ["cranelift-codegen/x64"]
+
 [badges]
 maintenance = { status = "actively-developed" }

@@ -150,6 +150,7 @@ pub enum LookupError {
 
 /// Builder for a `TargetIsa`.
 /// Modify the ISA-specific settings before creating the `TargetIsa` trait object with `finish`.
+#[derive(Clone)]
 pub struct Builder {
     triple: Triple,
     setup: settings::Builder,
