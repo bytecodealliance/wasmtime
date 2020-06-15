@@ -2,14 +2,17 @@
 
 [Wasmtime][github], a [Bytecode Alliance][BA] project, is used to run
 [Webassembly][Wasm] (Wasm) programs [without a web browser].  
-[Wasm] is a low-level executable assembly language.  Typically, an application
-or library calls wasmtime to load and run Wasm code. Or, the Wasmtime command
-line utility can run standalone Wasm programs.
 
-Wasm programs are generally written in high-level languages, and compiled to
-Wasm.  [WebAssembly System Interface][WASI] (WASI) provides a library of
-essential functions, such as reading files, somewhat similar libc. Wasmtime
-enables them to run inside another application.
+[Wasm] is an assembly language for a [virutal stack machine][VSM]
+running inside an application.  Typically, an application calls
+Wasmtime to load and run Wasm code. Or, the Wasmtime command line
+utility can run standalone Wasm programs.
+
+High-level language must be compiled to Wasm prior to loading.  Upon
+loading, Wasmtime compiles Wasm to native machine code.
+[WebAssembly System Interface][WASI] (WASI) provides a library of
+essential functions, such as reading files, somewhat similar
+libc. Wasmtime enables them to run inside another application.
 
 Wasmtime strives to be a highly configurable and embeddable runtime to run on
 any scale of application. Many features are still under development so if you
@@ -29,6 +32,7 @@ contributions are welcome!
 
 [github]: https://github.com/bytecodealliance/wasmtime
 [BA]: https://bytecodealliance.org/
+[VSM]: https://en.wikipedia.org/wiki/Stack_machine
 [Wasm]: https://webassembly.org/
 [WASI]: https://wasi.dev
 [without a web browser]: https://webassembly.org/docs/non-web/
