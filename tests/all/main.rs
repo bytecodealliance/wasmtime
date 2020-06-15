@@ -4,7 +4,6 @@ mod debug;
 mod externals;
 mod func;
 mod fuzzing;
-mod gc;
 mod globals;
 mod iloop;
 mod import_calling_export;
@@ -19,3 +18,7 @@ mod table;
 mod traps;
 mod use_after_drop;
 mod wast;
+
+// Cranelift only supports reference types on x64.
+#[cfg(target_arch = "x86_64")]
+mod gc;

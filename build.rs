@@ -209,9 +209,14 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             // testsuite repo.
             ("simd", "simd_const") => return true,
 
+            ("reference_types", "table_copy_on_imported_tables")
+            | ("reference_types", "externref_id_function") => {
+                // Ignore if this isn't x64, because Cranelift only supports
+                // reference types on x64.
+                return env::var("CARGO_CFG_TARGET_ARCH").unwrap() != "x86_64";
+            }
+
             // Still working on implementing these. See #929.
-            ("reference_types", "table_copy_on_imported_tables") => return false,
-            ("reference_types", "externref_id_function") => return false,
             ("reference_types", _) => return true,
 
             _ => {}
