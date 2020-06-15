@@ -547,6 +547,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // `bb_insts` are then reversed again and appended to the VCode at the
         // end of the BB (in the toplevel driver `lower()`).
         for inst in self.f.layout.block_insts(block).rev() {
+            dbg!(&inst);
             let data = &self.f.dfg[inst];
             let value_needed = self
                 .f
@@ -700,6 +701,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         // Main lowering loop over lowered blocks.
         for (bindex, lb) in lowered_order.iter().enumerate().rev() {
+            dbg!(&lb);
             let bindex = bindex as BlockIndex;
 
             // Lower the block body in reverse order (see comment in
@@ -707,6 +709,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             // End branches.
             if let Some(bb) = lb.orig_block() {
+                dbg!(&bb);
                 self.collect_branches_and_targets(bindex, bb, &mut branches, &mut targets);
                 if branches.len() > 0 {
                     let maybe_fallthrough = if (bindex + 1) < (lowered_order.len() as BlockIndex) {

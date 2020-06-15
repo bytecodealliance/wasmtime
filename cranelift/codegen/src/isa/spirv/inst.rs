@@ -39,15 +39,24 @@ use alloc::vec::Vec;
 pub(crate) struct Inst {
     op: Op,
     result_type: Option<u32>,
-    result_id: Option<u32>,
-    operands: Vec<Operand>,
+    result_id: Option<Writable<Reg>>,
+    operands: Vec<Reg>,
 }
 
 impl Inst {
-    pub(crate) fn new(op: Op, result_type: Option<u32>, result_id: Option<u32>, operands: Vec<Operand>) -> Self {
+    pub(crate) fn new(op: Op, result_type: Option<u32>, result_id: Option<Writable<Reg>>, operands: Vec<Reg>) -> Self {
         Self {
             op, result_type, result_id, operands
         }
+    }
+
+    pub(crate) fn type_void(result_id: Option<Writable<Reg>>) -> Inst {
+        Inst::new(
+            Op::TypeVoid,
+            None,
+            result_id,
+            vec![],
+        )
     }
 }
 
@@ -59,19 +68,16 @@ pub(crate) struct MachInstEmitState {
 impl MachInstEmit for Inst {
     type State = MachInstEmitState;
 
+    /// Unlike most ISA's, SPIR-V is relatively straight forward, all opcodes have the exact same
+    /// binary representation. Since SPIR-V already has virtual registers, there is no real need
+    /// for us to translate them (yet) so we just use the virtual register index from the CLIF
+    /// as the SPIR-V register index for now.
     fn emit(&self, sink: &mut MachBuffer<Self>, flags: &Flags, state: &mut Self::State) {
-        sink.put4(0x07230203); // SPIR-V magic header
-        sink.put4(0x05); // HLSL, but not really - needs SPIR-V update
-        sink.put4(5); // GLCompute
-        sink.put4(0); // Logical addressing mode
-        sink.put4(1); // GLSL450
-        sink.put4(0x00020011); // OpCapability 
-        sink.put4(0x1); //  Shader
-
         let mut operands = vec![];
         
         for operand in &self.operands {
-            operands.extend(operand.assemble());
+            let idx = operand.get_index();
+            operands.push(idx as u32); 
         }
         
         let mut opcode_len = 1 + operands.len() as u32;
@@ -88,9 +94,12 @@ impl MachInstEmit for Inst {
         if let Some(r) = self.result_type {
             sink.put4(r);
         }
+
         if let Some(r) = self.result_id {
-            sink.put4(r);
+            let idx = r.to_reg().get_index();
+            sink.put4(idx as u32);
         }
+
         for op in operands {
             sink.put4(op);
         }
@@ -99,7 +108,15 @@ impl MachInstEmit for Inst {
 
 
 impl MachInst for Inst {
-    fn get_regs(&self, collector: &mut RegUsageCollector) {}
+    fn get_regs(&self, collector: &mut RegUsageCollector) {
+        if let Some(result) = self.result_id{
+            collector.add_def(result);
+        }
+
+        for reg in &self.operands {
+            collector.add_use(*reg)
+        }
+    }
 
     fn map_regs<RUM: RegUsageMapper>(&mut self, maps: &RUM) {}
 
@@ -108,7 +125,10 @@ impl MachInst for Inst {
     }
 
     fn is_term<'a>(&'a self) -> MachTerminator<'a> {
-        MachTerminator::None
+        match self.op {
+            Op::Return | Op::ReturnValue => MachTerminator::Ret,
+            _ => MachTerminator::None
+        } 
     }
 
     fn is_epilogue_placeholder(&self) -> bool {

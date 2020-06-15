@@ -1,3 +1,3 @@
-set RUST_LOG=trace
+set RUST_LOG=debug
 
-cargo run -- compile -d -D -v --target spirv test.clif
+cargo run -- compile -d -v --target spirv test.clif

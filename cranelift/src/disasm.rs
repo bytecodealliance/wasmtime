@@ -129,6 +129,9 @@ cfg_if! {
                 Architecture::Riscv32 | Architecture::Riscv64 => {
                     return Err(String::from("No disassembler for RiscV"))
                 }
+                Architecture::Spirv => {
+                    return Err(String::from("No disassembler for SPIR-V"))
+                }
                 Architecture::I386 | Architecture::I586 | Architecture::I686 => Capstone::new()
                     .x86()
                     .mode(arch::x86::ArchMode::Mode32)
