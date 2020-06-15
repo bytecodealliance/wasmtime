@@ -2,8 +2,10 @@ use crate::trampoline::{
     generate_global_export, generate_memory_export, generate_table_export, StoreInstanceHandle,
 };
 use crate::values::{from_checked_anyfunc, into_checked_anyfunc, Val};
-use crate::{ExternType, GlobalType, MemoryType, Mutability, TableType, ValType};
-use crate::{Func, Store, Trap};
+use crate::{
+    ExternRef, ExternType, Func, GlobalType, MemoryType, Mutability, Store, TableType, Trap,
+    ValType,
+};
 use anyhow::{anyhow, bail, Result};
 use std::slice;
 use wasmtime_environ::wasm;
@@ -299,7 +301,11 @@ fn set_table_item(
     item: wasmtime_runtime::VMCallerCheckedAnyfunc,
 ) -> Result<()> {
     instance
-        .table_set(table_index, item_index, item)
+        .table_set(
+            table_index,
+            item_index,
+            runtime::TableElement::FuncRef(item),
+        )
         .map_err(|()| anyhow!("table element index out of bounds"))
 }
 
@@ -348,7 +354,16 @@ impl Table {
     pub fn get(&self, index: u32) -> Option<Val> {
         let table_index = self.wasmtime_table_index();
         let item = self.instance.table_get(table_index, index)?;
-        Some(from_checked_anyfunc(item, &self.instance.store))
+        match item {
+            runtime::TableElement::FuncRef(f) => {
+                Some(from_checked_anyfunc(f, &self.instance.store))
+            }
+            runtime::TableElement::ExternRef(None) => Some(Val::ExternRef(None)),
+            runtime::TableElement::ExternRef(Some(x)) => Some(Val::ExternRef(Some(ExternRef {
+                inner: x,
+                store: self.instance.store.weak(),
+            }))),
+        }
     }
 
     /// Writes the `val` provided into `index` within this table.
