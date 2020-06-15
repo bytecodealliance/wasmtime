@@ -1192,7 +1192,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         _table: ir::Table,
     ) -> WasmResult<ir::Value> {
         Err(WasmError::Unsupported(
-            "bulk memory: `table.size`".to_string(),
+            "reference types: `table.size`".to_string(),
         ))
     }
 
