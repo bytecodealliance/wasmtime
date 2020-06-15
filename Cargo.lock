@@ -489,6 +489,7 @@ dependencies = [
 name = "cranelift-object"
 version = "0.64.0"
 dependencies = [
+ "anyhow",
  "cranelift-codegen",
  "cranelift-module",
  "object",

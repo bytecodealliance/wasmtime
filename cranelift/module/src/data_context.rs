@@ -3,7 +3,9 @@
 use cranelift_codegen::binemit::{Addend, CodeOffset};
 use cranelift_codegen::entity::PrimaryMap;
 use cranelift_codegen::ir;
+use std::borrow::ToOwned;
 use std::boxed::Box;
+use std::string::String;
 use std::vec::Vec;
 
 /// This specifies how data is to be initialized.
@@ -47,7 +49,7 @@ pub struct DataDescription {
     /// Data addresses to write at specified offsets.
     pub data_relocs: Vec<(CodeOffset, ir::GlobalValue, Addend)>,
     /// Object file section
-    pub section: Option<(std::string::String, std::string::String)>,
+    pub custom_segment_section: Option<(String, String)>,
 }
 
 /// This is to data objects what cranelift_codegen::Context is to functions.
@@ -65,7 +67,7 @@ impl DataContext {
                 data_decls: PrimaryMap::new(),
                 function_relocs: vec![],
                 data_relocs: vec![],
-                section: None,
+                custom_segment_section: None,
             },
         }
     }
@@ -94,10 +96,10 @@ impl DataContext {
     }
 
     /// Override the segment/section for data, only supported on Object backend
-    pub fn set_section(&mut self, seg: &str, sec: &str) {
-        self.description.section = Some((
-            std::string::String::from(seg),
-            std::string::String::from(sec),
+    pub fn set_segment_section(&mut self, seg: &str, sec: &str) {
+        self.description.custom_segment_section = Some((
+            seg.to_owned(),
+            sec.to_owned(),
         ))
     }
 

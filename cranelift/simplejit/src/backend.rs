@@ -361,10 +361,8 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             ref data_decls,
             ref function_relocs,
             ref data_relocs,
-            section: ref datasection,
+            custom_segment_section: _,
         } = data.description();
-
-        assert!(datasection.is_none(), "Custom sections not supported");
 
         let size = init.size();
         let storage = if writable {

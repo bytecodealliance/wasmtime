@@ -234,7 +234,7 @@ impl Backend for ObjectBackend {
             ref data_decls,
             ref function_relocs,
             ref data_relocs,
-            section: ref datasection,
+            ref custom_segment_section,
         } = data_ctx.description();
 
         let reloc_size = match self.isa.triple().pointer_width().unwrap() {
@@ -265,7 +265,7 @@ impl Backend for ObjectBackend {
         }
 
         let symbol = self.data_objects[data_id].unwrap();
-        let section = if datasection.is_none() {
+        let section = if custom_segment_section.is_none() {
             let section_kind = if let Init::Zeros { .. } = *init {
                 if tls {
                     StandardSection::UninitializedTls
@@ -283,8 +283,10 @@ impl Backend for ObjectBackend {
             };
             self.object.section_id(section_kind)
         } else {
-            assert!(!tls, "Tls data cannot be in named section");
-            let (seg, sec) = &datasection.as_ref().unwrap();
+            if tls {
+                return Err(cranelift_module::ModuleError::Backend(anyhow::anyhow!("Custom section not supported for TLS")));
+            }
+            let (seg, sec) = &custom_segment_section.as_ref().unwrap();
             self.object.add_section(
                 seg.clone().into_bytes(),
                 sec.clone().into_bytes(),

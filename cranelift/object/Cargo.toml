@@ -14,6 +14,7 @@ cranelift-module = { path = "../module", version = "0.64.0" }
 cranelift-codegen = { path = "../codegen", version = "0.64.0", default-features = false, features = ["std"] }
 object = { version = "0.18", default-features = false, features = ["write"] }
 target-lexicon = "0.10"
+anyhow = "1.0"
 
 [badges]
 maintenance = { status = "experimental" }
