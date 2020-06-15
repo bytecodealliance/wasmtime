@@ -81,6 +81,10 @@ lightbeam = [
 jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
 
+# Try the experimental, work-in-progress new x86_64 backend. This is not stable
+# as of June 2020.
+experimental_x64 = ["wasmtime-jit/experimental_x64"]
+
 [badges]
 maintenance = { status = "actively-developed" }
 

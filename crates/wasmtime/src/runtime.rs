@@ -14,8 +14,8 @@ use std::path::Path;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use wasmparser::{OperatorValidatorConfig, ValidatingParserConfig};
-use wasmtime_environ::settings::{self, Configurable};
-use wasmtime_environ::{ir, isa::TargetIsa, wasm, CacheConfig, Tunables};
+use wasmtime_environ::settings::{self, Configurable, SetError};
+use wasmtime_environ::{ir, isa, isa::TargetIsa, wasm, CacheConfig, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{
@@ -36,6 +36,7 @@ use wasmtime_runtime::{
 #[derive(Clone)]
 pub struct Config {
     pub(crate) flags: settings::Builder,
+    pub(crate) isa_flags: isa::Builder,
     pub(crate) validating_config: ValidatingParserConfig,
     pub(crate) tunables: Tunables,
     pub(crate) strategy: CompilationStrategy,
@@ -94,6 +95,7 @@ impl Config {
                 },
             },
             flags,
+            isa_flags: native::builder(),
             strategy: CompilationStrategy::Auto,
             cache_config: CacheConfig::new_cache_disabled(),
             profiler: Arc::new(NullProfilerAgent),
@@ -377,7 +379,15 @@ impl Config {
     /// This method can fail if the flag's name does not exist, or the value is not appropriate for
     /// the flag type.
     pub unsafe fn cranelift_other_flag(&mut self, name: &str, value: &str) -> Result<&mut Self> {
-        self.flags.set(name, value)?;
+        if let Err(err) = self.flags.set(name, value) {
+            match err {
+                SetError::BadName(_) => {
+                    // Try the target-specific flags.
+                    self.isa_flags.set(name, value)?;
+                }
+                _ => bail!(err),
+            }
+        }
         Ok(self)
     }
 
@@ -600,7 +610,9 @@ impl Config {
     }
 
     pub(crate) fn target_isa(&self) -> Box<dyn TargetIsa> {
-        native::builder().finish(settings::Flags::new(self.flags.clone()))
+        self.isa_flags
+            .clone()
+            .finish(settings::Flags::new(self.flags.clone()))
     }
 
     fn build_compiler(&self) -> Compiler {
