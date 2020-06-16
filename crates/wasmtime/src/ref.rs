@@ -36,6 +36,11 @@ impl ExternRef {
         &*self.inner
     }
 
+    /// Get the strong reference count for this `ExternRef`.
+    pub fn strong_count(&self) -> usize {
+        self.inner.strong_count()
+    }
+
     /// Does this `ExternRef` point to the same inner value as `other`?0
     ///
     /// This is *only* pointer equality, and does *not* run any inner value's

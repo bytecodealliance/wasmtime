@@ -144,6 +144,22 @@ pub struct TrapInformation {
 /// Information about traps associated with the functions where the traps are placed.
 pub type Traps = PrimaryMap<DefinedFuncIndex, Vec<TrapInformation>>;
 
+/// The offset within a function of a GC safepoint, and its associated stack
+/// map.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct StackMapInformation {
+    /// The offset of the GC safepoint within the function's native code. It is
+    /// relative to the beginning of the function.
+    pub code_offset: binemit::CodeOffset,
+
+    /// The stack map for identifying live GC refs at the GC safepoint.
+    pub stack_map: binemit::Stackmap,
+}
+
+/// Information about GC safepoints and their associated stack maps within each
+/// function.
+pub type StackMaps = PrimaryMap<DefinedFuncIndex, Vec<StackMapInformation>>;
+
 /// An error while compiling WebAssembly to machine code.
 #[derive(Error, Debug)]
 pub enum CompileError {

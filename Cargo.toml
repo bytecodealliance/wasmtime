@@ -38,6 +38,7 @@ pretty_env_logger = "0.4.0"
 file-per-thread-logger = "0.1.1"
 wat = "1.0.18"
 libc = "0.2.60"
+log = "0.4.8"
 rayon = "1.2.1"
 humantime = "1.3.0"
 
@@ -86,3 +87,6 @@ maintenance = { status = "actively-developed" }
 [[test]]
 name = "host_segfault"
 harness = false
+
+[profile.dev.package.backtrace]
+debug = false # FIXME(#1813)

@@ -50,6 +50,8 @@ fn instantiate(
             config.memory_creator.as_ref().map(|a| a as _),
             store.interrupts().clone(),
             host,
+            &*store.externref_activations_table() as *const _ as *mut _,
+            &*store.stack_map_registry() as *const _ as *mut _,
         )?;
 
         // After we've created the `InstanceHandle` we still need to run
@@ -89,7 +91,7 @@ fn instantiate(
         };
         let vmctx_ptr = instance.handle.vmctx_ptr();
         unsafe {
-            super::func::catch_traps(vmctx_ptr, store, || {
+            super::func::invoke_wasm_and_catch_traps(vmctx_ptr, store, || {
                 mem::transmute::<
                     *const VMFunctionBody,
                     unsafe extern "C" fn(*mut VMContext, *mut VMContext),
@@ -183,10 +185,14 @@ impl Instance {
             bail!("cross-`Engine` instantiation is not currently supported");
         }
 
-        let info = module.register_frame_info();
-        store.register_jit_code(module.compiled_module().jit_code_ranges());
+        let host_info = Box::new({
+            let frame_info_registration = module.register_frame_info();
+            store.register_jit_code(module.compiled_module().jit_code_ranges());
+            store.register_stack_maps(&module);
+            frame_info_registration
+        });
 
-        let handle = instantiate(store, module.compiled_module(), imports, Box::new(info))?;
+        let handle = instantiate(store, module.compiled_module(), imports, host_info)?;
 
         Ok(Instance {
             handle,

@@ -34,6 +34,7 @@ impl crate::compilation::Compiler for Lightbeam {
         );
         let mut relocations = PrimaryMap::with_capacity(translation.function_body_inputs.len());
         let mut traps = PrimaryMap::with_capacity(translation.function_body_inputs.len());
+        let stack_maps = PrimaryMap::with_capacity(translation.function_body_inputs.len());
 
         let mut codegen_session: CodeGenSession<_> = CodeGenSession::new(
             translation.function_body_inputs.len() as u32,
@@ -81,6 +82,7 @@ impl crate::compilation::Compiler for Lightbeam {
             ValueLabelsRanges::new(),
             PrimaryMap::new(),
             traps,
+            stack_maps,
         ))
     }
 }

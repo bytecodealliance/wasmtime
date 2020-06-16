@@ -46,6 +46,8 @@ pub(crate) fn create_handle(
             signatures.into_boxed_slice(),
             state,
             store.interrupts().clone(),
+            &*store.externref_activations_table() as *const _ as *mut _,
+            &*store.stack_map_registry() as *const _ as *mut _,
         )?;
         Ok(store.add_instance(handle))
     }

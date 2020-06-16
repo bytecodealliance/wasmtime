@@ -1,6 +1,7 @@
 #![doc(hidden)]
 
 pub mod ir {
+    pub use cranelift_codegen::binemit::Stackmap;
     pub use cranelift_codegen::ir::{
         types, AbiParam, ArgumentPurpose, Signature, SourceLoc, StackSlots, TrapCode, Type,
         ValueLabel, ValueLoc,

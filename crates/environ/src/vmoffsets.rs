@@ -5,6 +5,8 @@
 //
 // struct VMContext {
 //      interrupts: *const VMInterrupts,
+//      externref_activations_table: *mut VMExternRefActivationsTable,
+//      stack_map_registry: *mut StackMapRegistry,
 //      signature_ids: [VMSharedSignatureIndex; module.num_signature_ids],
 //      imported_functions: [VMFunctionImport; module.num_imported_functions],
 //      imported_tables: [VMTableImport; module.num_imported_tables],
@@ -286,9 +288,23 @@ impl VMOffsets {
         0
     }
 
+    /// The offset of the `VMExternRefActivationsTable` member.
+    pub fn vmctx_externref_activations_table(&self) -> u32 {
+        self.vmctx_interrupts()
+            .checked_add(u32::from(self.pointer_size))
+            .unwrap()
+    }
+
+    /// The offset of the `*mut StackMapRegistry` member.
+    pub fn vmctx_stack_map_registry(&self) -> u32 {
+        self.vmctx_externref_activations_table()
+            .checked_add(u32::from(self.pointer_size))
+            .unwrap()
+    }
+
     /// The offset of the `signature_ids` array.
     pub fn vmctx_signature_ids_begin(&self) -> u32 {
-        self.vmctx_interrupts()
+        self.vmctx_stack_map_registry()
             .checked_add(u32::from(self.pointer_size))
             .unwrap()
     }
@@ -588,6 +604,19 @@ impl VMOffsets {
     /// Return the offset for `VMExternData::ref_count`.
     pub fn vm_extern_data_ref_count() -> u32 {
         0
+    }
+}
+
+/// Offsets for `VMExternRefActivationsTable`.
+impl VMOffsets {
+    /// Return the offset for `VMExternRefActivationsTable::next`.
+    pub fn vm_extern_ref_activation_table_next(&self) -> u32 {
+        0
+    }
+
+    /// Return the offset for `VMExternRefActivationsTable::end`.
+    pub fn vm_extern_ref_activation_table_end(&self) -> u32 {
+        self.pointer_size.into()
     }
 }
 

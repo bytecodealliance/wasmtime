@@ -47,7 +47,7 @@ pub use crate::cache::create_new_config as cache_create_new_config;
 pub use crate::cache::CacheConfig;
 pub use crate::compilation::{
     Compilation, CompileError, CompiledFunction, Compiler, Relocation, RelocationTarget,
-    Relocations, TrapInformation, Traps,
+    Relocations, StackMapInformation, StackMaps, TrapInformation, Traps,
 };
 pub use crate::cranelift::Cranelift;
 pub use crate::data_structures::*;

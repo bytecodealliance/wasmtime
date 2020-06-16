@@ -15,7 +15,7 @@ use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex, 
 use wasmtime_environ::{
     CacheConfig, CompileError, CompiledFunction, Compiler as _C, Module, ModuleAddressMap,
     ModuleMemoryOffset, ModuleTranslation, ModuleVmctxInfo, Relocation, RelocationTarget,
-    Relocations, Traps, Tunables, VMOffsets, ValueLabelsRanges,
+    Relocations, StackMaps, Traps, Tunables, VMOffsets, ValueLabelsRanges,
 };
 use wasmtime_runtime::{InstantiationError, VMFunctionBody, VMTrampoline};
 
@@ -138,6 +138,7 @@ pub struct Compilation {
     pub jt_offsets: PrimaryMap<DefinedFuncIndex, ir::JumpTableOffsets>,
     pub dwarf_sections: Vec<DwarfSection>,
     pub traps: Traps,
+    pub stack_maps: StackMaps,
     pub address_transform: ModuleAddressMap,
 }
 
@@ -165,27 +166,34 @@ impl Compiler {
     ) -> Result<Compilation, SetupError> {
         let mut code_memory = CodeMemory::new();
 
-        let (compilation, relocations, address_transform, value_ranges, stack_slots, traps) =
-            match self.strategy {
-                // For now, interpret `Auto` as `Cranelift` since that's the most stable
-                // implementation.
-                CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
-                    wasmtime_environ::cranelift::Cranelift::compile_module(
-                        translation,
-                        &*self.isa,
-                        &self.cache_config,
-                    )
-                }
-                #[cfg(feature = "lightbeam")]
-                CompilationStrategy::Lightbeam => {
-                    wasmtime_environ::lightbeam::Lightbeam::compile_module(
-                        translation,
-                        &*self.isa,
-                        &self.cache_config,
-                    )
-                }
+        let (
+            compilation,
+            relocations,
+            address_transform,
+            value_ranges,
+            stack_slots,
+            traps,
+            stack_maps,
+        ) = match self.strategy {
+            // For now, interpret `Auto` as `Cranelift` since that's the most stable
+            // implementation.
+            CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
+                wasmtime_environ::cranelift::Cranelift::compile_module(
+                    translation,
+                    &*self.isa,
+                    &self.cache_config,
+                )
             }
-            .map_err(SetupError::Compile)?;
+            #[cfg(feature = "lightbeam")]
+            CompilationStrategy::Lightbeam => {
+                wasmtime_environ::lightbeam::Lightbeam::compile_module(
+                    translation,
+                    &*self.isa,
+                    &self.cache_config,
+                )
+            }
+        }
+        .map_err(SetupError::Compile)?;
 
         let dwarf_sections = if debug_data.is_some() && !compilation.is_empty() {
             transform_dwarf_data(
@@ -239,6 +247,7 @@ impl Compiler {
             jt_offsets,
             dwarf_sections,
             traps,
+            stack_maps,
             address_transform,
         })
     }

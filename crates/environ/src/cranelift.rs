@@ -88,7 +88,8 @@
 use crate::address_map::{FunctionAddressMap, InstructionAddressMap};
 use crate::cache::{ModuleCacheDataTupleType, ModuleCacheEntry};
 use crate::compilation::{
-    Compilation, CompileError, CompiledFunction, Relocation, RelocationTarget, TrapInformation,
+    Compilation, CompileError, CompiledFunction, Relocation, RelocationTarget, StackMapInformation,
+    TrapInformation,
 };
 use crate::func_environ::{get_func_name, FuncEnvironment};
 use crate::{CacheConfig, FunctionBodyData, ModuleLocal, ModuleTranslation, Tunables};
@@ -204,6 +205,27 @@ impl binemit::TrapSink for TrapSink {
     }
 }
 
+#[derive(Default)]
+struct StackMapSink {
+    infos: Vec<StackMapInformation>,
+}
+
+impl binemit::StackmapSink for StackMapSink {
+    fn add_stackmap(&mut self, code_offset: binemit::CodeOffset, stack_map: binemit::Stackmap) {
+        self.infos.push(StackMapInformation {
+            code_offset,
+            stack_map,
+        });
+    }
+}
+
+impl StackMapSink {
+    fn finish(mut self) -> Vec<StackMapInformation> {
+        self.infos.sort_unstable_by_key(|info| info.code_offset);
+        self.infos
+    }
+}
+
 fn get_function_address_map<'data>(
     context: &Context,
     data: &FunctionBodyData<'data>,
@@ -294,6 +316,7 @@ fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError
     let mut value_ranges = PrimaryMap::with_capacity(env.function_body_inputs.len());
     let mut stack_slots = PrimaryMap::with_capacity(env.function_body_inputs.len());
     let mut traps = PrimaryMap::with_capacity(env.function_body_inputs.len());
+    let mut stack_maps = PrimaryMap::with_capacity(env.function_body_inputs.len());
 
     env.function_body_inputs
         .into_iter()
@@ -354,14 +377,14 @@ fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError
             let mut code_buf: Vec<u8> = Vec::new();
             let mut reloc_sink = RelocSink::new(func_index);
             let mut trap_sink = TrapSink::new();
-            let mut stackmap_sink = binemit::NullStackmapSink {};
+            let mut stack_map_sink = StackMapSink::default();
             context
                 .compile_and_emit(
                     isa,
                     &mut code_buf,
                     &mut reloc_sink,
                     &mut trap_sink,
-                    &mut stackmap_sink,
+                    &mut stack_map_sink,
                 )
                 .map_err(|error| {
                     CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
@@ -391,6 +414,7 @@ fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError
                 context.func.stack_slots,
                 trap_sink.traps,
                 unwind_info,
+                stack_map_sink.finish(),
             ))
         })
         .collect::<Result<Vec<_>, CompileError>>()?
@@ -405,6 +429,7 @@ fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError
                 sss,
                 function_traps,
                 unwind_info,
+                stack_map,
             )| {
                 functions.push(CompiledFunction {
                     body: function,
@@ -416,6 +441,7 @@ fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError
                 value_ranges.push(ranges.unwrap_or_default());
                 stack_slots.push(sss);
                 traps.push(function_traps);
+                stack_maps.push(stack_map);
             },
         );
 
@@ -428,6 +454,7 @@ fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError
         value_ranges,
         stack_slots,
         traps,
+        stack_maps,
     ))
 }
 

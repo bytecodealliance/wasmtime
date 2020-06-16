@@ -658,13 +658,6 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
     fn target_config(&self) -> TargetFrontendConfig {
         self.target_config
     }
-
-    fn reference_type(&self) -> ir::Type {
-        // For now, the only reference types we support are `externref`, which
-        // don't require tracing GC and stack maps. So we just use the target's
-        // pointer type. This will have to change once we move to tracing GC.
-        self.pointer_type()
-    }
 }
 
 impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'module_environment> {

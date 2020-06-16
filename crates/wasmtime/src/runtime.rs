@@ -1,6 +1,7 @@
 use crate::externals::MemoryCreator;
 use crate::r#ref::ExternRef;
 use crate::trampoline::{MemoryCreatorProxy, StoreInstanceHandle};
+use crate::Module;
 use anyhow::{bail, Result};
 use std::any::Any;
 use std::cell::RefCell;
@@ -14,12 +15,13 @@ use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use wasmparser::{OperatorValidatorConfig, ValidatingParserConfig};
 use wasmtime_environ::settings::{self, Configurable};
-use wasmtime_environ::{ir, wasm, CacheConfig, Tunables};
+use wasmtime_environ::{ir, isa::TargetIsa, wasm, CacheConfig, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{
     debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, SignatureRegistry,
-    VMExternRef, VMInterrupts, VMSharedSignatureIndex,
+    StackMapRegistry, VMExternRef, VMExternRefActivationsTable, VMInterrupts,
+    VMSharedSignatureIndex,
 };
 
 // Runtime Environment
@@ -194,10 +196,16 @@ impl Config {
         self.validating_config
             .operator_config
             .enable_reference_types = enable;
-        // The reference types proposal depends on the bulk memory proposal
+
+        self.flags
+            .set("enable_safepoints", if enable { "true" } else { "false" })
+            .unwrap();
+
+        // The reference types proposal depends on the bulk memory proposal.
         if enable {
             self.wasm_bulk_memory(true);
         }
+
         self
     }
 
@@ -591,8 +599,12 @@ impl Config {
         self
     }
 
+    pub(crate) fn target_isa(&self) -> Box<dyn TargetIsa> {
+        native::builder().finish(settings::Flags::new(self.flags.clone()))
+    }
+
     fn build_compiler(&self) -> Compiler {
-        let isa = native::builder().finish(settings::Flags::new(self.flags.clone()));
+        let isa = self.target_isa();
         Compiler::new(
             isa,
             self.strategy,
@@ -792,6 +804,8 @@ pub(crate) struct StoreInner {
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
     jit_code_ranges: RefCell<Vec<(usize, usize)>>,
     host_info: RefCell<HashMap<HostInfoKey, Rc<RefCell<dyn Any>>>>,
+    externref_activations_table: Rc<VMExternRefActivationsTable>,
+    stack_map_registry: Rc<StackMapRegistry>,
 }
 
 struct HostInfoKey(VMExternRef);
@@ -832,6 +846,8 @@ impl Store {
                 signal_handler: RefCell::new(None),
                 jit_code_ranges: RefCell::new(Vec::new()),
                 host_info: RefCell::new(HashMap::new()),
+                externref_activations_table: Rc::new(VMExternRefActivationsTable::new()),
+                stack_map_registry: Rc::new(StackMapRegistry::default()),
             }),
         }
     }
@@ -902,6 +918,24 @@ impl Store {
                 }
             }
         }
+    }
+
+    pub(crate) fn register_stack_maps(&self, module: &Module) {
+        let module = &module.compiled_module();
+        self.stack_map_registry().register_stack_maps(
+            module
+                .finished_functions()
+                .values()
+                .zip(module.stack_maps().values())
+                .map(|(func, stack_maps)| unsafe {
+                    let ptr = (**func).as_ptr();
+                    let len = (**func).len();
+                    let start = ptr as usize;
+                    let end = ptr as usize + len;
+                    let range = start..end;
+                    (range, &stack_maps[..])
+                }),
+        );
     }
 
     pub(crate) unsafe fn add_instance(&self, handle: InstanceHandle) -> StoreInstanceHandle {
@@ -1072,6 +1106,27 @@ impl Store {
             })
         } else {
             bail!("interrupts aren't enabled for this `Store`")
+        }
+    }
+
+    pub(crate) fn externref_activations_table(&self) -> &Rc<VMExternRefActivationsTable> {
+        &self.inner.externref_activations_table
+    }
+
+    pub(crate) fn stack_map_registry(&self) -> &Rc<StackMapRegistry> {
+        &self.inner.stack_map_registry
+    }
+
+    /// Perform garbage collection of `ExternRef`s.
+    pub fn gc(&self) {
+        // For this crate's API, we ensure that `set_stack_canary` invariants
+        // are upheld for all host-->Wasm calls, and we register every module
+        // used with this store in `self.inner.stack_map_registry`.
+        unsafe {
+            wasmtime_runtime::gc(
+                &*self.inner.stack_map_registry,
+                &*self.inner.externref_activations_table,
+            );
         }
     }
 }

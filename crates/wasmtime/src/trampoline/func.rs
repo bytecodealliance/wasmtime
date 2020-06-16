@@ -208,11 +208,7 @@ pub fn create_handle_with_function(
     func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
     store: &Store,
 ) -> Result<(StoreInstanceHandle, VMTrampoline)> {
-    let isa = {
-        let isa_builder = native::builder();
-        let flag_builder = settings::builder();
-        isa_builder.finish(settings::Flags::new(flag_builder))
-    };
+    let isa = store.engine().config().target_isa();
 
     let pointer_type = isa.pointer_type();
     let sig = match ft.get_wasmtime_signature(pointer_type) {
