@@ -6,7 +6,7 @@ Typically, an application calls Wasmtime to load and run Wasm
 modules. Or, the Wasmtime command line utility can run standalone Wasm
 programs.
 
-[Webassembly][Wasm] (Wasm) is an assembly language for a [virutal
+[Webassembly][Wasm] (Wasm) is an assembly language for a [virtual
 stack machine][VSM] running inside an application.  High-level
 languages must be compiled to Wasm prior to loading. Upon loading,
 Wasmtime compiles Wasm to native machine code.
