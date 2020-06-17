@@ -12,8 +12,7 @@ languages must be compiled to Wasm prior to loading. Upon loading,
 Wasmtime compiles Wasm to native machine code.
 
 [WebAssembly System Interface][WASI] (WASI) provides a library of
-essential functions, such as reading files, somewhat similar
-libc. Wasmtime enables Wasm and Wasi to run inside an application.
+essential functions, such as reading files, somewhat similar libc.
 
 Wasmtime strives to be a highly configurable and embeddable runtime to run on
 any scale of application. Many features are still under development so if you
