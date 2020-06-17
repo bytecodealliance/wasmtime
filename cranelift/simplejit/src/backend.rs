@@ -361,6 +361,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             ref data_decls,
             ref function_relocs,
             ref data_relocs,
+            custom_segment_section: _,
         } = data.description();
 
         let size = init.size();
