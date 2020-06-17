@@ -448,21 +448,41 @@ impl Instance {
         foreign_instance.memory_size(foreign_index)
     }
 
-    /// Grow table by the specified amount of elements.
+    /// Grow table by the specified amount of elements, filling them with
+    /// `init_value`.
     ///
-    /// Returns `None` if table can't be grown by the specified amount
-    /// of elements.
-    pub(crate) fn table_grow(&self, table_index: DefinedTableIndex, delta: u32) -> Option<u32> {
-        let result = self
-            .tables
-            .get(table_index)
-            .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
-            .grow(delta);
+    /// Returns `None` if table can't be grown by the specified amount of
+    /// elements, or if `init_value` is the wrong type of table element.
+    pub(crate) fn table_grow(
+        &self,
+        table_index: TableIndex,
+        delta: u32,
+        init_value: TableElement,
+    ) -> Option<u32> {
+        let (defined_table_index, instance) =
+            self.get_defined_table_index_and_instance(table_index);
+        instance.defined_table_grow(defined_table_index, delta, init_value)
+    }
 
-        // Keep current the VMContext pointers used by compiled wasm code.
-        self.set_table(table_index, self.tables[table_index].vmtable());
+    fn defined_table_grow(
+        &self,
+        table_index: DefinedTableIndex,
+        delta: u32,
+        init_value: TableElement,
+    ) -> Option<u32> {
+        unsafe {
+            let orig_size = self
+                .tables
+                .get(table_index)
+                .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
+                .grow(delta, init_value)?;
 
-        result
+            // Keep the `VMContext` pointers used by compiled Wasm code up to
+            // date.
+            self.set_table(table_index, self.tables[table_index].vmtable());
+
+            Some(orig_size)
+        }
     }
 
     // Get table element by index.
@@ -757,6 +777,21 @@ impl Instance {
         let foreign_index = foreign_instance.table_index(foreign_table);
         &foreign_instance.tables[foreign_index]
     }
+
+    pub(crate) fn get_defined_table_index_and_instance(
+        &self,
+        index: TableIndex,
+    ) -> (DefinedTableIndex, &Instance) {
+        if let Some(defined_table_index) = self.module.local.defined_table_index(index) {
+            (defined_table_index, self)
+        } else {
+            let import = self.imported_table(index);
+            let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
+            let foreign_table_def = unsafe { &mut *(import).from };
+            let foreign_table_index = foreign_instance.table_index(foreign_table_def);
+            (foreign_table_index, foreign_instance)
+        }
+    }
 }
 
 /// A handle holding an `Instance` of a WebAssembly module.
@@ -1000,12 +1035,37 @@ impl InstanceHandle {
         self.instance().table_index(table)
     }
 
-    /// Grow table in this instance by the specified amount of pages.
+    /// Grow table in this instance by the specified amount of elements.
     ///
-    /// Returns `None` if memory can't be grown by the specified amount
-    /// of pages.
-    pub fn table_grow(&self, table_index: DefinedTableIndex, delta: u32) -> Option<u32> {
-        self.instance().table_grow(table_index, delta)
+    /// When the table is successfully grown, returns the original size of the
+    /// table.
+    ///
+    /// Returns `None` if memory can't be grown by the specified amount of pages
+    /// or if the `init_value` is the incorrect table element type.
+    pub fn table_grow(
+        &self,
+        table_index: TableIndex,
+        delta: u32,
+        init_value: TableElement,
+    ) -> Option<u32> {
+        self.instance().table_grow(table_index, delta, init_value)
+    }
+
+    /// Grow table in this instance by the specified amount of elements.
+    ///
+    /// When the table is successfully grown, returns the original size of the
+    /// table.
+    ///
+    /// Returns `None` if memory can't be grown by the specified amount of pages
+    /// or if the `init_value` is the incorrect table element type.
+    pub fn defined_table_grow(
+        &self,
+        table_index: DefinedTableIndex,
+        delta: u32,
+        init_value: TableElement,
+    ) -> Option<u32> {
+        self.instance()
+            .defined_table_grow(table_index, delta, init_value)
     }
 
     /// Get table element reference.

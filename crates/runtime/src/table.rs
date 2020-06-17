@@ -67,29 +67,42 @@ impl Table {
 
     /// Grow table by the specified amount of elements.
     ///
-    /// Returns `None` if table can't be grown by the specified amount
-    /// of elements. Returns the previous size of the table if growth is
-    /// successful.
-    pub fn grow(&self, delta: u32) -> Option<u32> {
+    /// Returns the previous size of the table if growth is successful.
+    ///
+    /// Returns `None` if table can't be grown by the specified amount of
+    /// elements, or if the `init_value` is the wrong kind of table element.
+    ///
+    /// # Unsafety
+    ///
+    /// Resizing the table can reallocate its internal elements buffer. This
+    /// table's instance's `VMContext` has raw pointers to the elements buffer
+    /// that are used by Wasm, and they need to be fixed up before we call into
+    /// Wasm again. Failure to do so will result in use-after-free inside Wasm.
+    ///
+    /// Generally, prefer using `InstanceHandle::table_grow`, which encapsulates
+    /// this unsafety.
+    pub unsafe fn grow(&self, delta: u32, init_value: TableElement) -> Option<u32> {
         let size = self.size();
-        let new_len = match size.checked_add(delta) {
-            Some(len) => {
-                if let Some(max) = self.maximum {
-                    if len > max {
-                        return None;
-                    }
-                }
-                len
-            }
-            None => {
+
+        let new_len = size.checked_add(delta)?;
+        if let Some(max) = self.maximum {
+            if new_len > max {
                 return None;
             }
-        };
-        let new_len = usize::try_from(new_len).unwrap();
-        match &mut *self.elements.borrow_mut() {
-            TableElements::FuncRefs(x) => x.resize(new_len, VMCallerCheckedAnyfunc::default()),
-            TableElements::ExternRefs(x) => x.resize(new_len, None),
         }
+        let new_len = usize::try_from(new_len).unwrap();
+
+        match &mut *self.elements.borrow_mut() {
+            TableElements::FuncRefs(x) => {
+                let init_value = init_value.try_into().ok()?;
+                x.resize(new_len, init_value)
+            }
+            TableElements::ExternRefs(x) => {
+                let init_value = init_value.try_into().ok()?;
+                x.resize(new_len, init_value)
+            }
+        }
+
         Some(size)
     }
 
@@ -205,5 +218,23 @@ impl TryFrom<TableElement> for Option<VMExternRef> {
             TableElement::ExternRef(x) => Ok(x),
             _ => Err(e),
         }
+    }
+}
+
+impl From<VMCallerCheckedAnyfunc> for TableElement {
+    fn from(f: VMCallerCheckedAnyfunc) -> TableElement {
+        TableElement::FuncRef(f)
+    }
+}
+
+impl From<Option<VMExternRef>> for TableElement {
+    fn from(x: Option<VMExternRef>) -> TableElement {
+        TableElement::ExternRef(x)
+    }
+}
+
+impl From<VMExternRef> for TableElement {
+    fn from(x: VMExternRef) -> TableElement {
+        TableElement::ExternRef(Some(x))
     }
 }

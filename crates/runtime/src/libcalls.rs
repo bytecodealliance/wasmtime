@@ -31,8 +31,33 @@
 //!       }
 //!   }
 //!   ```
+//!
+//! * When receiving a raw `*mut u8` that is actually a `VMExternRef` reference,
+//!   convert it into a proper `VMExternRef` with `VMExternRef::clone_from_raw`
+//!   as soon as apossible. Any GC before raw pointer is converted into a
+//!   reference can potentially collect the referenced object, which could lead
+//!   to use after free. Avoid this by eagerly converting into a proper
+//!   `VMExternRef`!
+//!
+//!   ```ignore
+//!   pub unsafe extern "C" my_lib_takes_ref(raw_extern_ref: *mut u8) {
+//!       // Before `clone_from_raw`, `raw_extern_ref` is potentially unrooted,
+//!       // and doing GC here could lead to use after free!
+//!
+//!       let my_extern_ref = if raw_extern_ref.is_null() {
+//!           None
+//!       } else {
+//!           Some(VMExternRef::clone_from_raw(raw_extern_ref))
+//!       };
+//!
+//!       // Now that we did `clone_from_raw`, it is safe to do a GC (or do
+//!       // anything else that might transitively GC, like call back into
+//!       // Wasm!)
+//!   }
+//!   ```
 
-use crate::table::Table;
+use crate::externref::VMExternRef;
+use crate::table::{Table, TableElement};
 use crate::traphandlers::raise_lib_trap;
 use crate::vmcontext::VMContext;
 use wasmtime_environ::wasm::{DataIndex, DefinedMemoryIndex, ElemIndex, MemoryIndex, TableIndex};
@@ -199,6 +224,26 @@ pub unsafe extern "C" fn wasmtime_imported_memory32_size(
     let memory_index = MemoryIndex::from_u32(memory_index);
 
     instance.imported_memory_size(memory_index)
+}
+
+/// Implementation of `table.grow` for `externref`s.
+pub unsafe extern "C" fn wasmtime_table_grow_extern_ref(
+    vmctx: *mut VMContext,
+    table_index: u32,
+    delta: u32,
+    init_value: *mut u8,
+) -> u32 {
+    let init_value = if init_value.is_null() {
+        None
+    } else {
+        Some(VMExternRef::clone_from_raw(init_value))
+    };
+
+    let instance = (&mut *vmctx).instance();
+    let table_index = TableIndex::from_u32(table_index);
+    instance
+        .table_grow(table_index, delta, TableElement::ExternRef(init_value))
+        .unwrap_or(-1_i32 as u32)
 }
 
 /// Implementation of `table.copy`.

@@ -540,39 +540,34 @@ impl VMBuiltinFunctionsArray {
 
         let mut ptrs = [0; Self::len()];
 
-        ptrs[BuiltinFunctionIndex::get_memory32_grow_index().index() as usize] =
+        ptrs[BuiltinFunctionIndex::memory32_grow().index() as usize] =
             wasmtime_memory32_grow as usize;
-        ptrs[BuiltinFunctionIndex::get_imported_memory32_grow_index().index() as usize] =
+        ptrs[BuiltinFunctionIndex::imported_memory32_grow().index() as usize] =
             wasmtime_imported_memory32_grow as usize;
-
-        ptrs[BuiltinFunctionIndex::get_memory32_size_index().index() as usize] =
+        ptrs[BuiltinFunctionIndex::memory32_size().index() as usize] =
             wasmtime_memory32_size as usize;
-        ptrs[BuiltinFunctionIndex::get_imported_memory32_size_index().index() as usize] =
+        ptrs[BuiltinFunctionIndex::imported_memory32_size().index() as usize] =
             wasmtime_imported_memory32_size as usize;
-
-        ptrs[BuiltinFunctionIndex::get_table_copy_index().index() as usize] =
-            wasmtime_table_copy as usize;
-
-        ptrs[BuiltinFunctionIndex::get_table_init_index().index() as usize] =
-            wasmtime_table_init as usize;
-        ptrs[BuiltinFunctionIndex::get_elem_drop_index().index() as usize] =
-            wasmtime_elem_drop as usize;
-
-        ptrs[BuiltinFunctionIndex::get_defined_memory_copy_index().index() as usize] =
+        ptrs[BuiltinFunctionIndex::table_copy().index() as usize] = wasmtime_table_copy as usize;
+        ptrs[BuiltinFunctionIndex::table_grow_extern_ref().index() as usize] =
+            wasmtime_table_grow_extern_ref as usize;
+        ptrs[BuiltinFunctionIndex::table_init().index() as usize] = wasmtime_table_init as usize;
+        ptrs[BuiltinFunctionIndex::elem_drop().index() as usize] = wasmtime_elem_drop as usize;
+        ptrs[BuiltinFunctionIndex::defined_memory_copy().index() as usize] =
             wasmtime_defined_memory_copy as usize;
-        ptrs[BuiltinFunctionIndex::get_imported_memory_copy_index().index() as usize] =
+        ptrs[BuiltinFunctionIndex::imported_memory_copy().index() as usize] =
             wasmtime_imported_memory_copy as usize;
-        ptrs[BuiltinFunctionIndex::get_memory_fill_index().index() as usize] =
-            wasmtime_memory_fill as usize;
-        ptrs[BuiltinFunctionIndex::get_imported_memory_fill_index().index() as usize] =
+        ptrs[BuiltinFunctionIndex::memory_fill().index() as usize] = wasmtime_memory_fill as usize;
+        ptrs[BuiltinFunctionIndex::imported_memory_fill().index() as usize] =
             wasmtime_imported_memory_fill as usize;
-        ptrs[BuiltinFunctionIndex::get_memory_init_index().index() as usize] =
-            wasmtime_memory_init as usize;
-        ptrs[BuiltinFunctionIndex::get_data_drop_index().index() as usize] =
-            wasmtime_data_drop as usize;
+        ptrs[BuiltinFunctionIndex::memory_init().index() as usize] = wasmtime_memory_init as usize;
+        ptrs[BuiltinFunctionIndex::data_drop().index() as usize] = wasmtime_data_drop as usize;
 
-        debug_assert!(ptrs.iter().cloned().all(|p| p != 0));
-
+        if cfg!(debug_assertions) {
+            for i in 0..ptrs.len() {
+                debug_assert!(ptrs[i] != 0, "index {} is not initialized", i);
+            }
+        }
         Self { ptrs }
     }
 }
