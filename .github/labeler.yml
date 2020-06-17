@@ -19,6 +19,9 @@
 
 "cranelift":
   - "cranelift/**"
+  
+"cranelift:area:machinst":
+  - "cranelift/codegen/src/machinst/**"
 
 "cranelift:area:aarch64":
   - "cranelift/codegen/src/isa/aarch64/**"
