@@ -215,7 +215,11 @@ impl Backend for FaerieBackend {
         } = data_ctx.description();
 
         if let Some((segment, section)) = custom_segment_section {
-            return Err(cranelift_module::ModuleError::Backend(anyhow::anyhow!("Custom section not supported by cranelift-faerie: `{}:{}`", segment, section)));
+            return Err(cranelift_module::ModuleError::Backend(anyhow::anyhow!(
+                "Custom section not supported by cranelift-faerie: `{}:{}`",
+                segment,
+                section
+            )));
         }
 
         for &(offset, id) in function_relocs {

@@ -97,10 +97,7 @@ impl DataContext {
 
     /// Override the segment/section for data, only supported on Object backend
     pub fn set_segment_section(&mut self, seg: &str, sec: &str) {
-        self.description.custom_segment_section = Some((
-            seg.to_owned(),
-            sec.to_owned(),
-        ))
+        self.description.custom_segment_section = Some((seg.to_owned(), sec.to_owned()))
     }
 
     /// Declare an external function import.

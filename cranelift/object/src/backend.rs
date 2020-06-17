@@ -284,7 +284,9 @@ impl Backend for ObjectBackend {
             self.object.section_id(section_kind)
         } else {
             if tls {
-                return Err(cranelift_module::ModuleError::Backend(anyhow::anyhow!("Custom section not supported for TLS")));
+                return Err(cranelift_module::ModuleError::Backend(anyhow::anyhow!(
+                    "Custom section not supported for TLS"
+                )));
             }
             let (seg, sec) = &custom_segment_section.as_ref().unwrap();
             self.object.add_section(
