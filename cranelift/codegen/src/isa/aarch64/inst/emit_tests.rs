@@ -2270,6 +2270,42 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Umaxp,
+            rd: writable_vreg(8),
+            rn: vreg(12),
+            rm: vreg(1),
+            ty: I8X16,
+        },
+        "88A5216E",
+        "umaxp v8.16b, v12.16b, v1.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Umaxp,
+            rd: writable_vreg(1),
+            rn: vreg(6),
+            rm: vreg(1),
+            ty: I16X8,
+        },
+        "C1A4616E",
+        "umaxp v1.8h, v6.8h, v1.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Umaxp,
+            rd: writable_vreg(1),
+            rn: vreg(20),
+            rm: vreg(16),
+            ty: I32X4,
+        },
+        "81A6B06E",
+        "umaxp v1.4s, v20.4s, v16.4s",
+    ));
+
+    insns.push((
         Inst::VecMisc {
             op: VecMisc2::Not,
             rd: writable_vreg(2),
@@ -2278,6 +2314,39 @@ fn test_aarch64_binemit() {
         },
         "2258206E",
         "mvn v2.16b, v1.16b",
+    ));
+
+    insns.push((
+        Inst::VecLanes {
+            op: VecLanesOp::Uminv,
+            rd: writable_vreg(2),
+            rn: vreg(1),
+            ty: I8X16,
+        },
+        "22A8316E",
+        "uminv b2, v1.16b",
+    ));
+
+    insns.push((
+        Inst::VecLanes {
+            op: VecLanesOp::Uminv,
+            rd: writable_vreg(3),
+            rn: vreg(11),
+            ty: I16X8,
+        },
+        "63A9716E",
+        "uminv h3, v11.8h",
+    ));
+
+    insns.push((
+        Inst::VecLanes {
+            op: VecLanesOp::Uminv,
+            rd: writable_vreg(18),
+            rn: vreg(4),
+            ty: I32X4,
+        },
+        "92A8B16E",
+        "uminv s18, v4.4s",
     ));
 
     insns.push((
