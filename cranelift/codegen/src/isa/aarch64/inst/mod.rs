@@ -235,6 +235,8 @@ pub enum VecALUOp {
     Eor,
     /// Bitwise select
     Bsl,
+    /// Unsigned maximum pairwise
+    Umaxp,
 }
 
 /// A Vector miscellaneous operation with two registers.
@@ -242,6 +244,13 @@ pub enum VecALUOp {
 pub enum VecMisc2 {
     /// Bitwise NOT.
     Not,
+}
+
+/// An operation across the lanes of vectors.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum VecLanesOp {
+    /// Unsigned minimum across a vector
+    Uminv,
 }
 
 /// An operation on the bits of a register. This can be paired with several instruction formats
@@ -743,6 +752,14 @@ pub enum Inst {
         ty: Type,
     },
 
+    /// Vector instruction across lanes.
+    VecLanes {
+        op: VecLanesOp,
+        rd: Writable<Reg>,
+        rn: Reg,
+        ty: Type,
+    },
+
     /// Move to the NZCV flags (actually a `MSR NZCV, Xn` insn).
     MovToNZCV {
         rn: Reg,
@@ -1211,6 +1228,11 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(ra);
         }
         &Inst::VecMisc { rd, rn, .. } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
+        }
+
+        &Inst::VecLanes { rd, rn, .. } => {
             collector.add_def(rd);
             collector.add_use(rn);
         }
@@ -1701,6 +1723,14 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, ra);
         }
         &mut Inst::VecMisc {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+        }
+        &mut Inst::VecLanes {
             ref mut rd,
             ref mut rn,
             ..
@@ -2482,7 +2512,7 @@ impl ShowWithRRU for Inst {
                 let show_vreg_fn: fn(Reg, Option<&RealRegUniverse>) -> String = if vector {
                     |reg, mb_rru| show_vreg_vector(reg, mb_rru, F32X2)
                 } else {
-                    show_vreg_scalar
+                    |reg, mb_rru| show_vreg_scalar(reg, mb_rru, F64)
                 };
                 let rd = show_vreg_fn(rd.to_reg(), mb_rru);
                 let rn = show_vreg_fn(rn, mb_rru);
@@ -2695,12 +2725,13 @@ impl ShowWithRRU for Inst {
                     VecALUOp::Orr => ("orr", true, I8X16),
                     VecALUOp::Eor => ("eor", true, I8X16),
                     VecALUOp::Bsl => ("bsl", true, I8X16),
+                    VecALUOp::Umaxp => ("umaxp", true, ty),
                 };
 
                 let show_vreg_fn: fn(Reg, Option<&RealRegUniverse>, Type) -> String = if vector {
                     |reg, mb_rru, ty| show_vreg_vector(reg, mb_rru, ty)
                 } else {
-                    |reg, mb_rru, _ty| show_vreg_scalar(reg, mb_rru)
+                    |reg, mb_rru, _ty| show_vreg_scalar(reg, mb_rru, I64)
                 };
 
                 let rd = show_vreg_fn(rd.to_reg(), mb_rru, ty);
@@ -2719,6 +2750,15 @@ impl ShowWithRRU for Inst {
                 };
 
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, ty);
+                let rn = show_vreg_vector(rn, mb_rru, ty);
+                format!("{} {}, {}", op, rd, rn)
+            }
+            &Inst::VecLanes { op, rd, rn, ty } => {
+                let op = match op {
+                    VecLanesOp::Uminv => "uminv",
+                };
+
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, ty);
                 let rn = show_vreg_vector(rn, mb_rru, ty);
                 format!("{} {}, {}", op, rd, rn)
             }

@@ -1540,12 +1540,58 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(inst);
         }
 
+        Opcode::VanyTrue | Opcode::VallTrue => {
+            let rd = output_to_reg(ctx, outputs[0]);
+            let rm = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
+            let tmp = ctx.alloc_tmp(RegClass::V128, ty.unwrap());
+
+            // This operation is implemented by using umaxp or uminv to
+            // create a scalar value, which is then compared against zero.
+            //
+            // umaxp vn.16b, vm.16, vm.16 / uminv bn, vm.16b
+            // mov xm, vn.d[0]
+            // cmp xm, #0
+            // cset xm, ne
+
+            let input_ty = ctx.input_ty(insn, 0);
+            if op == Opcode::VanyTrue {
+                ctx.emit(Inst::VecRRR {
+                    alu_op: VecALUOp::Umaxp,
+                    rd: tmp,
+                    rn: rm,
+                    rm: rm,
+                    ty: input_ty,
+                });
+            } else {
+                ctx.emit(Inst::VecLanes {
+                    op: VecLanesOp::Uminv,
+                    rd: tmp,
+                    rn: rm,
+                    ty: input_ty,
+                });
+            };
+
+            ctx.emit(Inst::MovFromVec {
+                rd,
+                rn: tmp.to_reg(),
+                idx: 0,
+                ty: I64,
+            });
+
+            ctx.emit(Inst::AluRRImm12 {
+                alu_op: ALUOp::SubS64,
+                rd: writable_zero_reg(),
+                rn: rd.to_reg(),
+                imm12: Imm12::zero(),
+            });
+
+            ctx.emit(Inst::CSet { rd, cond: Cond::Ne });
+        }
+
         Opcode::Shuffle
         | Opcode::Vsplit
         | Opcode::Vconcat
         | Opcode::Vselect
-        | Opcode::VanyTrue
-        | Opcode::VallTrue
         | Opcode::Insertlane
         | Opcode::ScalarToVector
         | Opcode::Swizzle
