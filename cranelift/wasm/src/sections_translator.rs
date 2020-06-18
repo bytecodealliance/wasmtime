@@ -97,6 +97,7 @@ pub fn parse_import_section<'data>(
             ImportSectionEntryType::Global(ref ty) => {
                 environ.declare_global_import(
                     Global {
+                        wasm_ty: ty.content_type,
                         ty: type_to_type(ty.content_type, environ).unwrap(),
                         mutability: ty.mutable,
                         initializer: GlobalInit::Import,
@@ -229,6 +230,7 @@ pub fn parse_global_section(
             }
         };
         let global = Global {
+            wasm_ty: content_type,
             ty: type_to_type(content_type, environ).unwrap(),
             mutability: mutable,
             initializer,

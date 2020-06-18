@@ -67,10 +67,18 @@ entity_impl!(DataIndex);
 pub struct ElemIndex(u32);
 entity_impl!(ElemIndex);
 
-/// WebAssembly global.
+/// A WebAssembly global.
+///
+/// Note that we record both the original Wasm type and the Cranelift IR type
+/// used to represent it. This is because multiple different kinds of Wasm types
+/// might be represented with the same Cranelift IR type. For example, both a
+/// Wasm `i64` and a `funcref` might be represented with a Cranelift `i64` on
+/// 64-bit architectures, and when GC is not required for func refs.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub struct Global {
-    /// The type of the value stored in the global.
+    /// The Wasm type of the value stored in the global.
+    pub wasm_ty: crate::WasmType,
+    /// The Cranelift IR type of the value stored in the global.
     pub ty: ir::Type,
     /// A flag indicating whether the value may change at runtime.
     pub mutability: bool,

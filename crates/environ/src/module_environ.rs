@@ -92,6 +92,10 @@ impl<'data> TargetEnvironment for ModuleEnvironment<'data> {
     fn target_config(&self) -> TargetFrontendConfig {
         self.result.target_config
     }
+
+    fn reference_type(&self, ty: cranelift_wasm::WasmType) -> ir::Type {
+        crate::reference_type(ty, self.pointer_type())
+    }
 }
 
 /// This trait is useful for `translate_module` because it tells how to translate

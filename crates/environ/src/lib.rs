@@ -72,3 +72,18 @@ pub const WASM_MAX_PAGES: u32 = 0x10000;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+pub(crate) fn reference_type(
+    wasm_ty: cranelift_wasm::WasmType,
+    pointer_type: ir::Type,
+) -> ir::Type {
+    match wasm_ty {
+        cranelift_wasm::WasmType::FuncRef => pointer_type,
+        cranelift_wasm::WasmType::ExternRef => match pointer_type {
+            ir::types::I32 => ir::types::R32,
+            ir::types::I64 => ir::types::R64,
+            _ => panic!("unsupported pointer type"),
+        },
+        _ => panic!("unsupported Wasm reference type"),
+    }
+}

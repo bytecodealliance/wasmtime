@@ -6,6 +6,7 @@ use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
 use crate::{Trap, VMExternRef};
 use std::cell::RefCell;
 use std::convert::{TryFrom, TryInto};
+use std::ptr;
 use wasmtime_environ::wasm::TableElementType;
 use wasmtime_environ::{ir, TablePlan, TableStyle};
 
@@ -20,40 +21,41 @@ pub struct Table {
 #[derive(Clone, Debug)]
 pub enum TableElement {
     /// A `funcref`.
-    FuncRef(VMCallerCheckedAnyfunc),
+    FuncRef(*mut VMCallerCheckedAnyfunc),
     /// An `exrernref`.
     ExternRef(Option<VMExternRef>),
 }
 
 #[derive(Debug)]
 enum TableElements {
-    FuncRefs(Vec<VMCallerCheckedAnyfunc>),
+    FuncRefs(Vec<*mut VMCallerCheckedAnyfunc>),
     ExternRefs(Vec<Option<VMExternRef>>),
 }
 
 impl Table {
     /// Create a new table instance with specified minimum and maximum number of elements.
     pub fn new(plan: &TablePlan) -> Self {
-        let elements =
-            RefCell::new(match plan.table.ty {
-                TableElementType::Func => TableElements::FuncRefs(vec![
-                    VMCallerCheckedAnyfunc::default();
-                    usize::try_from(plan.table.minimum).unwrap()
-                ]),
-                TableElementType::Val(ty)
-                    if (cfg!(target_pointer_width = "64") && ty == ir::types::R64)
-                        || (cfg!(target_pointer_width = "32") && ty == ir::types::R32) =>
-                {
-                    let min = usize::try_from(plan.table.minimum).unwrap();
-                    TableElements::ExternRefs(vec![None; min])
-                }
-                TableElementType::Val(ty) => unimplemented!("unsupported table type ({})", ty),
-            });
+        let min = usize::try_from(plan.table.minimum).unwrap();
+        let elements = RefCell::new(match plan.table.ty {
+            TableElementType::Func => TableElements::FuncRefs(vec![ptr::null_mut(); min]),
+            TableElementType::Val(ty) => {
+                debug_assert_eq!(ty, crate::ref_type());
+                TableElements::ExternRefs(vec![None; min])
+            }
+        });
         match plan.style {
             TableStyle::CallerChecksSignature => Self {
                 elements,
                 maximum: plan.table.maximum,
             },
+        }
+    }
+
+    /// Returns the type of the elements in this table.
+    pub fn element_type(&self) -> TableElementType {
+        match &*self.elements.borrow() {
+            TableElements::FuncRefs(_) => TableElementType::Func,
+            TableElements::ExternRefs(_) => TableElementType::Val(crate::ref_type()),
         }
     }
 
@@ -199,7 +201,7 @@ impl Table {
     }
 }
 
-impl TryFrom<TableElement> for VMCallerCheckedAnyfunc {
+impl TryFrom<TableElement> for *mut VMCallerCheckedAnyfunc {
     type Error = TableElement;
 
     fn try_from(e: TableElement) -> Result<Self, Self::Error> {
@@ -221,8 +223,8 @@ impl TryFrom<TableElement> for Option<VMExternRef> {
     }
 }
 
-impl From<VMCallerCheckedAnyfunc> for TableElement {
-    fn from(f: VMCallerCheckedAnyfunc) -> TableElement {
+impl From<*mut VMCallerCheckedAnyfunc> for TableElement {
+    fn from(f: *mut VMCallerCheckedAnyfunc) -> TableElement {
         TableElement::FuncRef(f)
     }
 }

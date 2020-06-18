@@ -57,10 +57,12 @@
 //!   ```
 
 use crate::externref::VMExternRef;
-use crate::table::{Table, TableElement};
+use crate::table::Table;
 use crate::traphandlers::raise_lib_trap;
-use crate::vmcontext::VMContext;
-use wasmtime_environ::wasm::{DataIndex, DefinedMemoryIndex, ElemIndex, MemoryIndex, TableIndex};
+use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
+use wasmtime_environ::wasm::{
+    DataIndex, DefinedMemoryIndex, ElemIndex, MemoryIndex, TableElementType, TableIndex,
+};
 
 /// Implementation of f32.ceil
 pub extern "C" fn wasmtime_f32_ceil(x: f32) -> f32 {
@@ -226,24 +228,38 @@ pub unsafe extern "C" fn wasmtime_imported_memory32_size(
     instance.imported_memory_size(memory_index)
 }
 
-/// Implementation of `table.grow` for `externref`s.
-pub unsafe extern "C" fn wasmtime_table_grow_extern_ref(
+/// Implementation of `table.grow`.
+pub unsafe extern "C" fn wasmtime_table_grow(
     vmctx: *mut VMContext,
     table_index: u32,
     delta: u32,
+    // NB: we don't know whether this is a pointer to a `VMCallerCheckedAnyfunc`
+    // or is a `VMExternRef` until we look at the table type.
     init_value: *mut u8,
 ) -> u32 {
-    let init_value = if init_value.is_null() {
-        None
-    } else {
-        Some(VMExternRef::clone_from_raw(init_value))
-    };
-
     let instance = (&mut *vmctx).instance();
     let table_index = TableIndex::from_u32(table_index);
-    instance
-        .table_grow(table_index, delta, TableElement::ExternRef(init_value))
-        .unwrap_or(-1_i32 as u32)
+    match instance.table_element_type(table_index) {
+        TableElementType::Func => {
+            let func = init_value as *mut VMCallerCheckedAnyfunc;
+            instance
+                .table_grow(table_index, delta, func.into())
+                .unwrap_or(-1_i32 as u32)
+        }
+        TableElementType::Val(ty) => {
+            debug_assert_eq!(ty, crate::ref_type());
+
+            let init_value = if init_value.is_null() {
+                None
+            } else {
+                Some(VMExternRef::clone_from_raw(init_value))
+            };
+
+            instance
+                .table_grow(table_index, delta, init_value.into())
+                .unwrap_or(-1_i32 as u32)
+        }
+    }
 }
 
 /// Implementation of `table.copy`.

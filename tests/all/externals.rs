@@ -28,27 +28,27 @@ fn bad_tables() {
 
     // get out of bounds
     let ty = TableType::new(ValType::FuncRef, Limits::new(0, Some(1)));
-    let t = Table::new(&Store::default(), ty.clone(), Val::ExternRef(None)).unwrap();
+    let t = Table::new(&Store::default(), ty.clone(), Val::FuncRef(None)).unwrap();
     assert!(t.get(0).is_none());
     assert!(t.get(u32::max_value()).is_none());
 
     // set out of bounds or wrong type
     let ty = TableType::new(ValType::FuncRef, Limits::new(1, Some(1)));
-    let t = Table::new(&Store::default(), ty.clone(), Val::ExternRef(None)).unwrap();
+    let t = Table::new(&Store::default(), ty.clone(), Val::FuncRef(None)).unwrap();
     assert!(t.set(0, Val::I32(0)).is_err());
-    assert!(t.set(0, Val::ExternRef(None)).is_ok());
-    assert!(t.set(1, Val::ExternRef(None)).is_err());
+    assert!(t.set(0, Val::FuncRef(None)).is_ok());
+    assert!(t.set(1, Val::FuncRef(None)).is_err());
 
     // grow beyond max
     let ty = TableType::new(ValType::FuncRef, Limits::new(1, Some(1)));
-    let t = Table::new(&Store::default(), ty.clone(), Val::ExternRef(None)).unwrap();
-    assert!(t.grow(0, Val::ExternRef(None)).is_ok());
-    assert!(t.grow(1, Val::ExternRef(None)).is_err());
+    let t = Table::new(&Store::default(), ty.clone(), Val::FuncRef(None)).unwrap();
+    assert!(t.grow(0, Val::FuncRef(None)).is_ok());
+    assert!(t.grow(1, Val::FuncRef(None)).is_err());
     assert_eq!(t.size(), 1);
 
     // grow wrong type
     let ty = TableType::new(ValType::FuncRef, Limits::new(1, Some(2)));
-    let t = Table::new(&Store::default(), ty.clone(), Val::ExternRef(None)).unwrap();
+    let t = Table::new(&Store::default(), ty.clone(), Val::FuncRef(None)).unwrap();
     assert!(t.grow(1, Val::I32(0)).is_err());
     assert_eq!(t.size(), 1);
 }
@@ -69,7 +69,7 @@ fn cross_store() -> anyhow::Result<()> {
     let ty = MemoryType::new(Limits::new(1, None));
     let memory = Memory::new(&store2, ty);
     let ty = TableType::new(ValType::FuncRef, Limits::new(1, None));
-    let table = Table::new(&store2, ty, Val::ExternRef(None))?;
+    let table = Table::new(&store2, ty, Val::FuncRef(None))?;
 
     let need_func = Module::new(&engine, r#"(module (import "" "" (func)))"#)?;
     assert!(Instance::new(&store1, &need_func, &[func.into()]).is_err());
@@ -85,8 +85,8 @@ fn cross_store() -> anyhow::Result<()> {
 
     // ============ Cross-store globals ==============
 
-    let store1val = Val::FuncRef(Func::wrap(&store1, || {}));
-    let store2val = Val::FuncRef(Func::wrap(&store2, || {}));
+    let store1val = Val::FuncRef(Some(Func::wrap(&store1, || {})));
+    let store2val = Val::FuncRef(Some(Func::wrap(&store2, || {})));
 
     let ty = GlobalType::new(ValType::FuncRef, Mutability::Var);
     assert!(Global::new(&store2, ty.clone(), store1val.clone()).is_err());
