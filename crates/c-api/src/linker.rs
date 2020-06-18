@@ -107,11 +107,11 @@ pub extern "C" fn wasmtime_linker_module(
 
 #[no_mangle]
 pub extern "C" fn wasmtime_linker_get_default(
-    linker: &mut wasmtime_linker_t,
+    linker: &wasmtime_linker_t,
     name: &wasm_name_t,
     func: &mut *mut wasm_func_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let linker = &mut linker.linker;
+    let linker = &linker.linker;
     let name = match str::from_utf8(name.as_slice()) {
         Ok(s) => s,
         Err(_) => return bad_utf8(),
@@ -123,12 +123,12 @@ pub extern "C" fn wasmtime_linker_get_default(
 
 #[no_mangle]
 pub extern "C" fn wasmtime_linker_get_one_by_name(
-    linker: &mut wasmtime_linker_t,
+    linker: &wasmtime_linker_t,
     module: &wasm_name_t,
     name: &wasm_name_t,
     item_ptr: &mut *mut wasm_extern_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let linker = &mut linker.linker;
+    let linker = &linker.linker;
     let module = match str::from_utf8(module.as_slice()) {
         Ok(s) => s,
         Err(_) => return bad_utf8(),
