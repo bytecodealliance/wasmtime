@@ -225,6 +225,12 @@ pub enum VecALUOp {
     Cmhs,
     /// Compare unsigned higher or same
     Cmhi,
+    /// Floating-point compare equal
+    Fcmeq,
+    /// Floating-point compare greater than
+    Fcmgt,
+    /// Floating-point compare greater than or equal
+    Fcmge,
     /// Bitwise and
     And,
     /// Bitwise bit clear
@@ -2085,7 +2091,9 @@ impl MachInst for Inst {
             I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 => Ok(RegClass::I64),
             F32 | F64 => Ok(RegClass::V128),
             IFLAGS | FFLAGS => Ok(RegClass::I64),
-            B8X16 | I8X16 | B16X8 | I16X8 | B32X4 | I32X4 | B64X2 | I64X2 => Ok(RegClass::V128),
+            B8X16 | I8X16 | B16X8 | I16X8 | B32X4 | I32X4 | B64X2 | I64X2 | F32X4 | F64X2 => {
+                Ok(RegClass::V128)
+            }
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty
@@ -2720,6 +2728,9 @@ impl ShowWithRRU for Inst {
                     VecALUOp::Cmgt => ("cmgt", true, ty),
                     VecALUOp::Cmhs => ("cmhs", true, ty),
                     VecALUOp::Cmhi => ("cmhi", true, ty),
+                    VecALUOp::Fcmeq => ("fcmeq", true, ty),
+                    VecALUOp::Fcmgt => ("fcmgt", true, ty),
+                    VecALUOp::Fcmge => ("fcmge", true, ty),
                     VecALUOp::And => ("and", true, I8X16),
                     VecALUOp::Bic => ("bic", true, I8X16),
                     VecALUOp::Orr => ("orr", true, I8X16),

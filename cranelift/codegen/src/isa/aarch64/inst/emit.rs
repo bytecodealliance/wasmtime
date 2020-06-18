@@ -1279,6 +1279,11 @@ impl MachInstEmit for Inst {
                     I32X4 => 0b10,
                     _ => 0,
                 };
+                let enc_size_for_fcmp = match ty {
+                    F32X4 => 0b0,
+                    F64X2 => 0b1,
+                    _ => 0,
+                };
 
                 let (top11, bit15_10) = match alu_op {
                     VecALUOp::SQAddScalar => {
@@ -1302,6 +1307,9 @@ impl MachInstEmit for Inst {
                     VecALUOp::Cmgt => (0b010_01110_00_1 | enc_size << 1, 0b001101),
                     VecALUOp::Cmhi => (0b011_01110_00_1 | enc_size << 1, 0b001101),
                     VecALUOp::Cmhs => (0b011_01110_00_1 | enc_size << 1, 0b001111),
+                    VecALUOp::Fcmeq => (0b010_01110_00_1 | enc_size_for_fcmp << 1, 0b111001),
+                    VecALUOp::Fcmgt => (0b011_01110_10_1 | enc_size_for_fcmp << 1, 0b111001),
+                    VecALUOp::Fcmge => (0b011_01110_00_1 | enc_size_for_fcmp << 1, 0b111001),
                     // The following logical instructions operate on bytes, so are not encoded differently
                     // for the different vector types.
                     VecALUOp::And => {
