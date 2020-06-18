@@ -168,7 +168,7 @@ pub(crate) fn output_to_const_f128<C: LowerCtx<I = Inst>>(
 }
 
 /// How to handle narrow values loaded into registers; see note on `narrow_mode`
-/// parameter to `input_to_*` below.
+/// parameter to `put_input_in_*` below.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NarrowValueMode {
     None,
@@ -193,7 +193,7 @@ impl NarrowValueMode {
 }
 
 /// Allocate a register for an instruction output and return it.
-pub(crate) fn output_to_reg<C: LowerCtx<I = Inst>>(ctx: &mut C, out: InsnOutput) -> Writable<Reg> {
+pub(crate) fn get_output_reg<C: LowerCtx<I = Inst>>(ctx: &mut C, out: InsnOutput) -> Writable<Reg> {
     ctx.get_output(out.insn, out.output)
 }
 
@@ -202,12 +202,12 @@ pub(crate) fn output_to_reg<C: LowerCtx<I = Inst>>(ctx: &mut C, out: InsnOutput)
 /// The given register will be extended appropriately, according to
 /// `narrow_mode` and the input's type. If extended, the value is
 /// always extended to 64 bits, for simplicity.
-pub(crate) fn input_to_reg<C: LowerCtx<I = Inst>>(
+pub(crate) fn put_input_in_reg<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     input: InsnInput,
     narrow_mode: NarrowValueMode,
 ) -> Reg {
-    debug!("input_to_reg: input {:?}", input);
+    debug!("put_input_in_reg: input {:?}", input);
     let ty = ctx.input_ty(input.insn, input.input);
     let from_bits = ty_bits(ty) as u8;
     let inputs = ctx.get_input(input.insn, input.input);
@@ -302,7 +302,7 @@ pub(crate) fn input_to_reg<C: LowerCtx<I = Inst>>(
 /// divide or a right-shift or a compare-to-zero), `narrow_mode` should be
 /// set to `ZeroExtend` or `SignExtend` as appropriate, and the resulting
 /// register will be provided the extended value.
-fn input_to_rs<C: LowerCtx<I = Inst>>(
+fn put_input_in_rs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     input: InsnInput,
     narrow_mode: NarrowValueMode,
@@ -317,21 +317,21 @@ fn input_to_rs<C: LowerCtx<I = Inst>>(
 
             // Can we get the shift amount as an immediate?
             if let Some(shiftimm) = input_to_shiftimm(ctx, shift_amt) {
-                let reg = input_to_reg(ctx, shiftee, narrow_mode);
+                let reg = put_input_in_reg(ctx, shiftee, narrow_mode);
                 return ResultRS::RegShift(reg, ShiftOpAndAmt::new(ShiftOp::LSL, shiftimm));
             }
         }
     }
 
-    ResultRS::Reg(input_to_reg(ctx, input, narrow_mode))
+    ResultRS::Reg(put_input_in_reg(ctx, input, narrow_mode))
 }
 
 /// Lower an instruction input to a reg or reg/shift, or reg/extend operand.
 /// This does not actually codegen the source instruction; it just uses the
 /// vreg into which the source instruction will generate its value.
 ///
-/// See note on `input_to_rs` for a description of `narrow_mode`.
-fn input_to_rse<C: LowerCtx<I = Inst>>(
+/// See note on `put_input_in_rs` for a description of `narrow_mode`.
+fn put_input_in_rse<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     input: InsnInput,
     narrow_mode: NarrowValueMode,
@@ -349,7 +349,7 @@ fn input_to_rse<C: LowerCtx<I = Inst>>(
             && ((narrow_mode.is_32bit() && out_bits < 32)
                 || (!narrow_mode.is_32bit() && out_bits < 64))
         {
-            let reg = input_to_reg(ctx, InsnInput { insn, input: 0 }, NarrowValueMode::None);
+            let reg = put_input_in_reg(ctx, InsnInput { insn, input: 0 }, NarrowValueMode::None);
             let extendop = match (narrow_mode, out_bits) {
                 (NarrowValueMode::SignExtend32, 1) | (NarrowValueMode::SignExtend64, 1) => {
                     ExtendOp::SXTB
@@ -394,15 +394,15 @@ fn input_to_rse<C: LowerCtx<I = Inst>>(
                 (false, 32) => ExtendOp::UXTW,
                 _ => unreachable!(),
             };
-            let reg = input_to_reg(ctx, InsnInput { insn, input: 0 }, NarrowValueMode::None);
+            let reg = put_input_in_reg(ctx, InsnInput { insn, input: 0 }, NarrowValueMode::None);
             return ResultRSE::RegExtend(reg, extendop);
         }
     }
 
-    ResultRSE::from_rs(input_to_rs(ctx, input, narrow_mode))
+    ResultRSE::from_rs(put_input_in_rs(ctx, input, narrow_mode))
 }
 
-pub(crate) fn input_to_rse_imm12<C: LowerCtx<I = Inst>>(
+pub(crate) fn put_input_in_rse_imm12<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     input: InsnInput,
     narrow_mode: NarrowValueMode,
@@ -413,10 +413,10 @@ pub(crate) fn input_to_rse_imm12<C: LowerCtx<I = Inst>>(
         }
     }
 
-    ResultRSEImm12::from_rse(input_to_rse(ctx, input, narrow_mode))
+    ResultRSEImm12::from_rse(put_input_in_rse(ctx, input, narrow_mode))
 }
 
-pub(crate) fn input_to_rs_immlogic<C: LowerCtx<I = Inst>>(
+pub(crate) fn put_input_in_rs_immlogic<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     input: InsnInput,
     narrow_mode: NarrowValueMode,
@@ -429,10 +429,10 @@ pub(crate) fn input_to_rs_immlogic<C: LowerCtx<I = Inst>>(
         }
     }
 
-    ResultRSImmLogic::from_rs(input_to_rs(ctx, input, narrow_mode))
+    ResultRSImmLogic::from_rs(put_input_in_rs(ctx, input, narrow_mode))
 }
 
-pub(crate) fn input_to_reg_immshift<C: LowerCtx<I = Inst>>(
+pub(crate) fn put_input_in_reg_immshift<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     input: InsnInput,
 ) -> ResultRegImmShift {
@@ -442,7 +442,7 @@ pub(crate) fn input_to_reg_immshift<C: LowerCtx<I = Inst>>(
         }
     }
 
-    ResultRegImmShift::Reg(input_to_reg(ctx, input, NarrowValueMode::None))
+    ResultRegImmShift::Reg(put_input_in_reg(ctx, input, NarrowValueMode::None))
 }
 
 //============================================================================
@@ -546,7 +546,7 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
 
     // Handle one reg and offset.
     if addends.len() == 1 {
-        let reg = input_to_reg(ctx, addends[0], NarrowValueMode::ZeroExtend64);
+        let reg = put_input_in_reg(ctx, addends[0], NarrowValueMode::ZeroExtend64);
         return MemArg::RegOffset(reg, offset as i64, elem_ty);
     }
 
@@ -560,9 +560,9 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
                 maybe_input_insn_multi(ctx, addends[i], &[Opcode::Uextend, Opcode::Sextend])
             {
                 // Non-extended addend.
-                let r1 = input_to_reg(ctx, addends[1 - i], NarrowValueMode::ZeroExtend64);
+                let r1 = put_input_in_reg(ctx, addends[1 - i], NarrowValueMode::ZeroExtend64);
                 // Extended addend.
-                let r2 = input_to_reg(
+                let r2 = put_input_in_reg(
                     ctx,
                     InsnInput {
                         insn: ext_insn,
@@ -596,8 +596,8 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
 
     // Handle two regs and a zero offset in the general case, if possible.
     if addends.len() == 2 && offset == 0 {
-        let ra = input_to_reg(ctx, addends[0], NarrowValueMode::ZeroExtend64);
-        let rb = input_to_reg(ctx, addends[1], NarrowValueMode::ZeroExtend64);
+        let ra = put_input_in_reg(ctx, addends[0], NarrowValueMode::ZeroExtend64);
+        let rb = put_input_in_reg(ctx, addends[1], NarrowValueMode::ZeroExtend64);
         return MemArg::reg_plus_reg(ra, rb);
     }
 
@@ -609,7 +609,7 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
 
     // Add each addend to the address.
     for addend in addends {
-        let reg = input_to_reg(ctx, *addend, NarrowValueMode::ZeroExtend64);
+        let reg = put_input_in_reg(ctx, *addend, NarrowValueMode::ZeroExtend64);
 
         // In an addition, the stack register is the zero register, so divert it to another
         // register just before doing the actual add.
@@ -997,8 +997,8 @@ pub(crate) fn lower_icmp_or_ifcmp_to_flags<C: LowerCtx<I = Inst>>(
         },
     ];
     let ty = ctx.input_ty(insn, 0);
-    let rn = input_to_reg(ctx, inputs[0], narrow_mode);
-    let rm = input_to_rse_imm12(ctx, inputs[1], narrow_mode);
+    let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
+    let rm = put_input_in_rse_imm12(ctx, inputs[1], narrow_mode);
     debug!("lower_icmp_or_ifcmp_to_flags: rn = {:?} rm = {:?}", rn, rm);
     let alu_op = choose_32_64(ty, ALUOp::SubS32, ALUOp::SubS64);
     let rd = writable_zero_reg();
@@ -1018,8 +1018,8 @@ pub(crate) fn lower_fcmp_or_ffcmp_to_flags<C: LowerCtx<I = Inst>>(ctx: &mut C, i
             input: 1,
         },
     ];
-    let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
-    let rm = input_to_reg(ctx, inputs[1], NarrowValueMode::None);
+    let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+    let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
     match bits {
         32 => {
             ctx.emit(Inst::FpuCmp32 { rn, rm });

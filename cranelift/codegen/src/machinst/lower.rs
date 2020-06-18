@@ -132,7 +132,11 @@ pub trait LowerCtx {
     fn get_input(&self, ir_inst: Inst, idx: usize) -> LowerInput;
     /// Get the `idx`th output register of the given IR instruction. When
     /// `backend.lower_inst_to_regs(ctx, inst)` is called, it is expected that
-    /// the backend will write results to these output register(s).
+    /// the backend will write results to these output register(s).  This
+    /// register will always be "fresh"; it is guaranteed not to overlap with
+    /// any of the inputs, and can be freely used as a scratch register within
+    /// the lowered instruction sequence, as long as its final value is the
+    /// result of the computation.
     fn get_output(&self, ir_inst: Inst, idx: usize) -> Writable<Reg>;
 
     // Codegen primitives: allocate temps, emit instructions, set result registers,
