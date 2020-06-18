@@ -327,6 +327,10 @@ jobs:
         upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
         echo ::set-env name=CARGO_TARGET_${upcase}_RUNNER::$HOME/qemu/bin/${{ matrix.qemu }}
         echo ::set-env name=CARGO_TARGET_${upcase}_LINKER::${{ matrix.gcc }}
+
+        # See comments in the source for why we enable this during QEMU
+        # emulation.
+        echo ::set-env name=WASMTIME_TEST_NO_HOG_MEMORY::1
       if: matrix.target != '' && matrix.os == 'ubuntu-latest'
 
     # Install wasm32-wasi target in order to build wasi-common's integration
