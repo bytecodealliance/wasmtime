@@ -687,7 +687,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn translate_ref_func(
         &mut self,
         _: cranelift_codegen::cursor::FuncCursor<'_>,
-        _: u32,
+        _: FuncIndex,
     ) -> WasmResult<ir::Value> {
         Err(WasmError::Unsupported(
             "the `ref.func` instruction is not supported yet".into(),

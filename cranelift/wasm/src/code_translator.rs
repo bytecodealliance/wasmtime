@@ -1045,7 +1045,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(environ.translate_ref_is_null(builder.cursor(), value)?);
         }
         Operator::RefFunc { function_index } => {
-            state.push1(environ.translate_ref_func(builder.cursor(), *function_index)?);
+            let index = FuncIndex::from_u32(*function_index);
+            state.push1(environ.translate_ref_func(builder.cursor(), index)?);
         }
         Operator::AtomicNotify { .. }
         | Operator::I32AtomicWait { .. }

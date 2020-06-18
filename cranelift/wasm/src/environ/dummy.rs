@@ -516,7 +516,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     fn translate_ref_func(
         &mut self,
         mut pos: FuncCursor,
-        _func_index: u32,
+        _func_index: FuncIndex,
     ) -> WasmResult<ir::Value> {
         Ok(pos.ins().null(self.reference_type()))
     }

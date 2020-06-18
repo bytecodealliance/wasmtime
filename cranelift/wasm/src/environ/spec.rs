@@ -456,7 +456,11 @@ pub trait FuncEnvironment: TargetEnvironment {
     }
 
     /// Translate a `ref.func` WebAssembly instruction.
-    fn translate_ref_func(&mut self, pos: FuncCursor, func_index: u32) -> WasmResult<ir::Value>;
+    fn translate_ref_func(
+        &mut self,
+        pos: FuncCursor,
+        func_index: FuncIndex,
+    ) -> WasmResult<ir::Value>;
 
     /// Translate a `global.get` WebAssembly instruction at `pos` for a global
     /// that is custom.
