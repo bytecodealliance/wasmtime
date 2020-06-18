@@ -81,7 +81,7 @@ pub extern "C" fn wasmtime_linker_define_instance(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_linker_instantiate(
+pub extern "C" fn wasmtime_linker_instantiate(
     linker: &wasmtime_linker_t,
     module: &wasm_module_t,
     instance_ptr: &mut *mut wasm_instance_t,
@@ -92,7 +92,7 @@ pub unsafe extern "C" fn wasmtime_linker_instantiate(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_linker_module(
+pub extern "C" fn wasmtime_linker_module(
     linker: &mut wasmtime_linker_t,
     name: &wasm_name_t,
     module: &wasm_module_t,
@@ -106,7 +106,7 @@ pub unsafe extern "C" fn wasmtime_linker_module(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_linker_get_default(
+pub extern "C" fn wasmtime_linker_get_default(
     linker: &mut wasmtime_linker_t,
     name: &wasm_name_t,
     func: &mut *mut wasm_func_t,
