@@ -174,16 +174,14 @@ where
         let returns = func_type.returns().iter().map(|t| t.to_microwasm_type());
 
         let ret_block_params = returns.len() as u32;
-        let loc = ret_locs(returns)?;
+        let locs = ret_locs(returns).locs;
 
         blocks.insert(
             BrTarget::Return,
             Block {
                 label: BrTarget::Return,
                 params: ret_block_params,
-                calling_convention: Some(CallingConvention::function_start(
-                    loc.into_iter().map(ValueLocation::from).collect(),
-                )),
+                calling_convention: Some(CallingConvention::function_start(locs)),
                 is_next: false,
                 already_emitted: true,
                 has_backwards_callers: false,
@@ -907,18 +905,10 @@ where
                 } => {
                     ctx.i64_truncate_f64_u()?;
                 }
-                Operator::Extend8 {
-                    size: Size::_32,
-                } => ctx.i32_convert_from_i8()?,
-                Operator::Extend16 {
-                    size: Size::_32,
-                } => ctx.i32_convert_from_i16()?,
-                Operator::Extend8 {
-                    size: Size::_64,
-                } => ctx.i64_convert_from_i8()?,
-                Operator::Extend16 {
-                    size: Size::_64,
-                } => ctx.i64_convert_from_i16()?,
+                Operator::Extend8 { size: Size::_32 } => ctx.i32_convert_from_i8()?,
+                Operator::Extend16 { size: Size::_32 } => ctx.i32_convert_from_i16()?,
+                Operator::Extend8 { size: Size::_64 } => ctx.i64_convert_from_i8()?,
+                Operator::Extend16 { size: Size::_64 } => ctx.i64_convert_from_i16()?,
                 Operator::Extend32 {
                     sign: Signedness::Unsigned,
                 } => ctx.u64_convert_from_u32()?,

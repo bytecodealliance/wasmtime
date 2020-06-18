@@ -27,9 +27,9 @@ use std::{
     mem,
     ops::{Deref, RangeInclusive},
 };
-// use wasmtime_environ::BuiltinFunctionIndex;
 
 mod magic {
+    // This is a replacement for `use wasmtime_environ::BuiltinFunctionIndex;`
     /// An index type for builtin functions.
     pub struct BuiltinFunctionIndex(u32);
 
@@ -135,16 +135,17 @@ where
     }
 }
 
-fn arg_locs<T: From<CCLoc>, I: IntoIterator<Item = SignlessType>>(types: I) -> Locs<Vec<T>>
-where
-    I::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
-{
+fn locs<T: From<CCLoc>, I: IntoIterator<Item = SignlessType>>(
+    types: I,
+    integers_in_gprs: &'static [GPR],
+    floats_in_gprs: &'static [GPR],
+) -> Locs<Vec<T>> {
     // TODO: VmCtx is in the first register
-    let mut int_gpr_iter = INTEGER_ARGS_IN_GPRS.iter();
-    let mut float_gpr_iter = FLOAT_ARGS_IN_GPRS.iter();
+    let mut int_gpr_iter = integers_in_gprs.iter();
+    let mut float_gpr_iter = floats_in_gprs.iter();
     let mut stack_idx = 0u32;
 
-    let iter = types
+    let locs = types
         .into_iter()
         .map(|ty| {
             match ty {
@@ -165,8 +166,15 @@ where
 
     Locs {
         max_depth: StackDepth(stack_idx),
-        locs: iter,
+        locs,
     }
+}
+
+fn arg_locs<T: From<CCLoc>, I: IntoIterator<Item = SignlessType>>(types: I) -> Locs<Vec<T>>
+where
+    I::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+{
+    locs::<T, I>(types, INTEGER_ARGS_IN_GPRS, FLOAT_ARGS_IN_GPRS)
 }
 
 fn arg_locs_skip_caller_vmctx<T: From<CCLoc>, I: IntoIterator<Item = SignlessType>>(
@@ -225,27 +233,8 @@ where
     Locs { locs, max_depth }
 }
 
-pub fn ret_locs(types: impl IntoIterator<Item = SignlessType>) -> Result<Vec<CCLoc>, Error> {
-    let types = types.into_iter();
-    let mut out = Vec::with_capacity(types.size_hint().0);
-    // TODO: VmCtx is in the first register
-    let mut int_gpr_iter = INTEGER_RETURN_GPRS.iter();
-    let mut float_gpr_iter = FLOAT_RETURN_GPRS.iter();
-
-    for ty in types {
-        match ty {
-            I32 | I64 => match int_gpr_iter.next() {
-                None => return Err(error("We don't support stack returns yet")),
-                Some(val) => out.push(CCLoc::Reg(*val)),
-            },
-            F32 | F64 => match float_gpr_iter.next() {
-                None => return Err(error("We don't support stack returns yet")),
-                Some(val) => out.push(CCLoc::Reg(*val)),
-            },
-        }
-    }
-
-    Ok(out)
+pub fn ret_locs<T: From<CCLoc>, I: IntoIterator<Item = SignlessType>>(types: I) -> Locs<Vec<T>> {
+    locs::<T, I>(types, INTEGER_RETURN_GPRS, FLOAT_RETURN_GPRS)
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -6203,7 +6192,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
         R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
     {
-        let locs = arg_locs_skip_caller_vmctx::<CCLoc, _>(args);
+        let arg_locs = arg_locs_skip_caller_vmctx::<CCLoc, _>(args);
+        let ret_locs = ret_locs(rets);
 
         let saved_vmctx = if func_def_loc == FunctionDefLocation::PossiblyExternal {
             self.save_regs(iter::once(GPR::Rq(CALLER_VMCTX)))?;
@@ -6221,7 +6211,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         self.save_volatile()?;
 
-        let locs = self.pass_outgoing_args(locs.as_ref())?;
+        let arg_locs = self.pass_outgoing_args(arg_locs.as_ref())?;
 
         let needed_depth = self.physical_stack_depth.clone();
 
@@ -6250,11 +6240,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         );
         self.free(ValueLocation::Reg(temp))?;
 
-        for i in locs {
+        for i in arg_locs {
             self.free(i)?;
         }
 
-        self.push_function_returns(rets)?;
+        self.push_function_returns(ret_locs.as_ref())?;
 
         if func_def_loc == FunctionDefLocation::PossiblyExternal {
             let saved_vmctx = saved_vmctx.unwrap();
@@ -6279,14 +6269,15 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
         R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
     {
-        let locs = arg_locs::<CCLoc, _>(args);
+        let arg_locs = arg_locs::<CCLoc, _>(args);
+        let ret_locs = ret_locs(rets);
 
         let saved_vmctx =
             ValueLocation::from(self.push_copy_physical(ValueLocation::Reg(GPR::Rq(VMCTX)))?);
 
         self.save_volatile()?;
 
-        let locs = self.pass_outgoing_args(locs.as_ref())?;
+        let arg_locs = self.pass_outgoing_args(arg_locs.as_ref())?;
         let needed_depth = self.physical_stack_depth.clone();
 
         let temp = self
@@ -6302,11 +6293,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         self.free(ValueLocation::Reg(temp))?;
 
-        for i in locs {
+        for i in arg_locs {
             self.free(i)?;
         }
 
-        self.push_function_returns(rets)?;
+        self.push_function_returns(ret_locs.as_ref())?;
 
         self.copy_value(saved_vmctx, CCLoc::Reg(GPR::Rq(VMCTX)))?;
         self.free(saved_vmctx)?;
@@ -6493,12 +6484,18 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
     fn push_function_returns(
         &mut self,
-        returns: impl IntoIterator<Item = SignlessType>,
+        returns: Locs<impl ExactSizeIterator<Item = ValueLocation> + DoubleEndedIterator + Clone>,
     ) -> Result<(), Error> {
-        for loc in ret_locs(returns)? {
-            self.mark_used(loc)?;
+        for loc in returns.locs {
+            let loc = match loc {
+                ValueLocation::Stack(offset) => {
+                    ValueLocation::Stack(offset - self.physical_stack_depth.0 as i32)
+                }
+                ValueLocation::Cond(_) | ValueLocation::Immediate(_) | ValueLocation::Reg(_) => loc,
+            };
 
-            self.push(loc.into())?;
+            self.mark_used(loc)?;
+            self.push(loc)?;
         }
         Ok(())
     }
@@ -6524,7 +6521,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
     {
         let saved_vmctx = self.push_copy_physical(ValueLocation::Reg(GPR::Rq(VMCTX)))?;
-        let locs = arg_locs_skip_caller_vmctx::<CCLoc, _>(arg_types);
+        let arg_locs = arg_locs_skip_caller_vmctx::<CCLoc, _>(arg_types);
+        let ret_locs = ret_locs(return_types);
 
         self.save_regs(iter::once(GPR::Rq(CALLER_VMCTX)))?;
         dynasm!(self.asm
@@ -6532,7 +6530,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         );
         self.mark_used(CCLoc::Reg(GPR::Rq(CALLER_VMCTX)))?;
 
-        for loc in locs.as_ref().locs {
+        for loc in arg_locs.as_ref().locs {
             if loc.reg().is_some() {
                 self.mark_used(loc)?;
             }
@@ -6543,7 +6541,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             .put_into_temp_register(I32, &mut callee)?
             .ok_or_else(|| error("Ran out of free registers"))?;
 
-        for loc in locs.as_ref().locs {
+        for loc in arg_locs.as_ref().locs {
             if loc.reg().is_some() {
                 self.free(loc)?;
             }
@@ -6551,7 +6549,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
 
         self.save_volatile()?;
 
-        let locs = self.pass_outgoing_args(locs.as_ref())?;
+        let arg_locs = self.pass_outgoing_args(arg_locs.as_ref())?;
         let needed_depth = self.physical_stack_depth.clone();
 
         let table_index = 0;
@@ -6639,11 +6637,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.free(ValueLocation::Reg(GPR::Rq(CALLER_VMCTX)))?;
         self.free(callee)?;
 
-        for i in locs {
+        for i in arg_locs {
             self.free(i)?;
         }
 
-        self.push_function_returns(return_types)?;
+        self.push_function_returns(ret_locs.as_ref())?;
 
         self.copy_value(saved_vmctx.into(), CCLoc::Reg(GPR::Rq(VMCTX)))?;
         self.free(saved_vmctx)?;
@@ -6700,23 +6698,24 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
         R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
     {
-        let locs = arg_locs_skip_caller_vmctx::<CCLoc, _>(arg_types);
+        let arg_locs = arg_locs_skip_caller_vmctx::<CCLoc, _>(arg_types);
+        let ret_locs = ret_locs(return_types);
 
         self.save_volatile()?;
 
         let (_, label) = self.func_starts[self.current_function as usize];
 
-        let locs = self.pass_outgoing_args(locs.as_ref())?;
+        let arg_locs = self.pass_outgoing_args(arg_locs.as_ref())?;
 
         dynasm!(self.asm
             ; call =>label
         );
 
-        for i in locs {
+        for i in arg_locs {
             self.free(i)?;
         }
 
-        self.push_function_returns(return_types)?;
+        self.push_function_returns(ret_locs.as_ref())?;
         Ok(())
     }
 
@@ -6734,7 +6733,8 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         A::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
         R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
     {
-        let locs = arg_locs_skip_caller_vmctx::<CCLoc, _>(arg_types);
+        let arg_locs = arg_locs_skip_caller_vmctx::<CCLoc, _>(arg_types);
+        let ret_locs = ret_locs(return_types);
 
         self.save_regs(iter::once(GPR::Rq(CALLER_VMCTX)))?;
         dynasm!(self.asm
@@ -6745,7 +6745,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ValueLocation::from(self.push_copy_physical(ValueLocation::Reg(GPR::Rq(VMCTX)))?);
 
         self.save_volatile()?;
-        let locs = self.pass_outgoing_args(locs.as_ref())?;
+        let arg_locs = self.pass_outgoing_args(arg_locs.as_ref())?;
 
         let callee = self
             .take_reg(I64)
@@ -6764,11 +6764,11 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         self.free(ValueLocation::Reg(callee))?;
         self.free(ValueLocation::Reg(GPR::Rq(CALLER_VMCTX)))?;
 
-        for i in locs {
+        for i in arg_locs {
             self.free(i)?;
         }
 
-        self.push_function_returns(return_types)?;
+        self.push_function_returns(ret_locs.as_ref())?;
 
         self.copy_value(saved_vmctx, CCLoc::Reg(GPR::Rq(VMCTX)))?;
         self.free(saved_vmctx)?;
