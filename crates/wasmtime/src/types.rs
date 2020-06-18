@@ -394,12 +394,14 @@ impl TableType {
     }
 
     pub(crate) fn from_wasmtime_table(table: &wasm::Table) -> TableType {
-        assert!(if let wasm::TableElementType::Func = table.ty {
-            true
-        } else {
-            false
-        });
-        let ty = ValType::FuncRef;
+        let ty = match table.ty {
+            wasm::TableElementType::Func => ValType::FuncRef,
+            #[cfg(target_pointer_width = "64")]
+            wasm::TableElementType::Val(ir::types::R64) => ValType::ExternRef,
+            #[cfg(target_pointer_width = "32")]
+            wasm::TableElementType::Val(ir::types::R32) => ValType::ExternRef,
+            _ => panic!("only `funcref` and `externref` tables supported"),
+        };
         let limits = Limits::new(table.minimum, table.maximum);
         TableType::new(ty, limits)
     }

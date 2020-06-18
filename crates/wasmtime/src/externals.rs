@@ -395,12 +395,28 @@ impl Table {
     /// error if `init` is not of the right type.
     pub fn grow(&self, delta: u32, init: Val) -> Result<u32> {
         let index = self.wasmtime_table_index();
-        let item = into_checked_anyfunc(init, &self.instance.store)?;
-        if let Some(len) = self.instance.table_grow(index, delta) {
-            for i in 0..delta {
-                set_table_item(&self.instance, index, len + i, item.clone())?;
+        let orig_size = match self.ty().element() {
+            ValType::FuncRef => {
+                let init = into_checked_anyfunc(init, &self.instance.store)?;
+                self.instance
+                    .defined_table_grow(index, delta, runtime::TableElement::FuncRef(init))
             }
-            Ok(len)
+            ValType::ExternRef => {
+                let init = match init {
+                    Val::ExternRef(Some(x)) => Some(x.inner),
+                    Val::ExternRef(None) => None,
+                    _ => bail!("incorrect init value for growing table"),
+                };
+                self.instance.defined_table_grow(
+                    index,
+                    delta,
+                    runtime::TableElement::ExternRef(init),
+                )
+            }
+            _ => unreachable!("only `funcref` and `externref` tables are supported"),
+        };
+        if let Some(size) = orig_size {
+            Ok(size)
         } else {
             bail!("failed to grow table by `{}`", delta)
         }
