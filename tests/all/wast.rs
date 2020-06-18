@@ -25,6 +25,19 @@ fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
         .strategy(strategy)?
         .cranelift_debug_verifier(true);
 
+    // By default we'll allocate huge chunks (6gb) of the address space for each
+    // linear memory. This is typically fine but when we emulate tests with QEMU
+    // it turns out that it causes memory usage to balloon massively. Leave a
+    // knob here so on CI we can cut down the memory usage of QEMU and avoid the
+    // OOM killer.
+    //
+    // Locally testing this out this drops QEMU's memory usage running this
+    // tests suite from 10GiB to 600MiB. Previously we saw that crossing the
+    // 10GiB threshold caused our processes to get OOM killed on CI.
+    if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
+        cfg.static_memory_maximum_size(0);
+    }
+
     let store = Store::new(&Engine::new(&cfg));
     let mut wast_context = WastContext::new(store);
     wast_context.register_spectest()?;
