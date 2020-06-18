@@ -32,7 +32,7 @@ fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
     // OOM killer.
     //
     // Locally testing this out this drops QEMU's memory usage running this
-    // tests suite from 10GiB to 600MiB. Prevoiusly we saw that crossing the
+    // tests suite from 10GiB to 600MiB. Previously we saw that crossing the
     // 10GiB threshold caused our processes to get OOM killed on CI.
     if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
         cfg.static_memory_maximum_size(0);
