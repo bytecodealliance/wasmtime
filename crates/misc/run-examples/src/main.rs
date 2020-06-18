@@ -52,19 +52,19 @@ fn main() {
             .arg(&example));
 
         println!("======== C/C++ example `{}` ============", example);
-        let mut cmd = cc::Build::new()
-            .opt_level(0)
-            .cargo_metadata(false)
-            .target(env!("TARGET"))
-            .host(env!("TARGET"))
-            .include("crates/c-api/include")
-            .include("crates/c-api/wasm-c-api/include")
-            .define("WASM_API_EXTERN", Some("")) // static linkage, not dynamic
-            .warnings(false)
-            .get_compiler()
-            .to_command();
-
         for extension in ["c", "cc"].iter() {
+            let mut cmd = cc::Build::new()
+                .opt_level(0)
+                .cargo_metadata(false)
+                .target(env!("TARGET"))
+                .host(env!("TARGET"))
+                .include("crates/c-api/include")
+                .include("crates/c-api/wasm-c-api/include")
+                .define("WASM_API_EXTERN", Some("")) // static linkage, not dynamic
+                .warnings(false)
+                .get_compiler()
+                .to_command();
+
             let file = if is_dir {
                 format!("examples/{}/main.{}", example, extension)
             } else {
