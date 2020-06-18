@@ -120,3 +120,31 @@ pub unsafe extern "C" fn wasmtime_linker_get_default(
         *func = Box::into_raw(Box::new(HostRef::new(linker.store(), f).into()))
     })
 }
+
+#[no_mangle]
+pub extern "C" fn wasmtime_linker_get_one_by_name(
+    linker: &mut wasmtime_linker_t,
+    module: &wasm_name_t,
+    name: &wasm_name_t,
+    item_ptr: &mut *mut wasm_extern_t,
+) -> Option<Box<wasmtime_error_t>> {
+    let linker = &mut linker.linker;
+    let module = match str::from_utf8(module.as_slice()) {
+        Ok(s) => s,
+        Err(_) => return bad_utf8(),
+    };
+    let name = match str::from_utf8(name.as_slice()) {
+        Ok(s) => s,
+        Err(_) => return bad_utf8(),
+    };
+    handle_result(linker.get_one_by_name(module, name), |item| {
+        let store = linker.store();
+        let which = match item {
+            Extern::Func(f) => ExternHost::Func(HostRef::new(&store, f)),
+            Extern::Global(g) => ExternHost::Global(HostRef::new(&store, g)),
+            Extern::Memory(m) => ExternHost::Memory(HostRef::new(&store, m)),
+            Extern::Table(t) => ExternHost::Table(HostRef::new(&store, t)),
+        };
+        *item_ptr = Box::into_raw(Box::new(wasm_extern_t { which }))
+    })
+}
