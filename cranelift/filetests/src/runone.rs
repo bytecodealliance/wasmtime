@@ -75,6 +75,7 @@ pub fn run(path: &Path, passes: Option<&[String]>, target: Option<&str>) -> Test
         Some(t) => t,
     };
 
+    let file_path = path.to_string_lossy();
     for (func, details) in testfile.functions {
         let mut context = Context {
             preamble_comments: &testfile.preamble_comments,
@@ -82,6 +83,7 @@ pub fn run(path: &Path, passes: Option<&[String]>, target: Option<&str>) -> Test
             verified: false,
             flags,
             isa: None,
+            file_path: file_path.as_ref(),
         };
 
         for tuple in &tuples {
