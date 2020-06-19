@@ -39,7 +39,7 @@ enum wasmtime_opt_level_enum { // OptLevel
 };
 
 typedef uint8_t wasmtime_profiling_strategy_t;
-enum wasmtime_profiling_strategy_t { // ProfilingStrategy
+enum wasmtime_profiling_strategy_enum { // ProfilingStrategy
   WASMTIME_PROFILING_STRATEGY_NONE,
   WASMTIME_PROFILING_STRATEGY_JITDUMP,
   WASMTIME_PROFILING_STRATEGY_VTUNE,
