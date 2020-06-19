@@ -14,7 +14,7 @@ use crate::ir::Inst as IRInst;
 use crate::ir::{InstructionData, Opcode, TrapCode, Type};
 use crate::machinst::lower::*;
 use crate::machinst::*;
-use crate::{CodegenError, CodegenResult};
+use crate::CodegenResult;
 
 use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::AArch64Backend;
@@ -736,20 +736,11 @@ pub(crate) fn lower_vector_compare<C: LowerCtx<I = Inst>>(
     ty: Type,
     cond: Cond,
 ) -> CodegenResult<()> {
-    match ty {
-        F32X4 | F64X2 | I8X16 | I16X8 | I32X4 => {}
-        _ => {
-            return Err(CodegenError::Unsupported(format!(
-                "unsupported SIMD type: {:?}",
-                ty
-            )));
-        }
-    };
-
     let is_float = match ty {
         F32X4 | F64X2 => true,
         _ => false,
     };
+    let size = VectorSize::from_ty(ty);
     // 'Less than' operations are implemented by swapping
     // the order of operands and using the 'greater than'
     // instructions.
@@ -784,7 +775,7 @@ pub(crate) fn lower_vector_compare<C: LowerCtx<I = Inst>>(
         rd,
         rn,
         rm,
-        ty,
+        size,
     });
 
     if cond == Cond::Ne {
@@ -792,7 +783,7 @@ pub(crate) fn lower_vector_compare<C: LowerCtx<I = Inst>>(
             op: VecMisc2::Not,
             rd,
             rn: rd.to_reg(),
-            ty: I8X16,
+            size,
         });
     }
 
