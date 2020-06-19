@@ -11,7 +11,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 include = ["src/**/*", "LICENSE"]
 
 [dependencies]
-wasmtime = { path = "../../wasmtime", version = "0.18.0" }
+wasmtime = { path = "../../wasmtime", version = "0.18.0", default-features = false }
 wasmtime-wiggle-macro = { path = "./macro", version = "0.18.0" }
 witx = { path = "../../wasi-common/WASI/tools/witx", version = "0.8.5", optional = true }
 wiggle = { path = "..", version = "0.18.0" }
