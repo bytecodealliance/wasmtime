@@ -14,7 +14,7 @@ edition = "2018"
 [dependencies]
 gimli = "0.21.0"
 wasmparser = "0.58.0"
-object = { version = "0.19", default-features = false, features = ["write"] }
+object = { version = "0.20", default-features = false, features = ["write"] }
 wasmtime-environ = { path = "../environ", version = "0.18.0" }
 target-lexicon = { version = "0.10.0", default-features = false }
 anyhow = "1.0"

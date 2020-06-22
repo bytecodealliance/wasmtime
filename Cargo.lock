@@ -108,7 +108,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "miniz_oxide",
- "object 0.20.0",
+ "object",
  "rustc-demangle",
 ]
 
@@ -497,7 +497,7 @@ dependencies = [
  "anyhow",
  "cranelift-codegen",
  "cranelift-module",
- "object 0.19.0",
+ "object",
  "target-lexicon",
 ]
 
@@ -1237,19 +1237,13 @@ checksum = "17b02fc0ff9a9e4b35b3342880f48e896ebf69f2967921fe8646bf5b7125956a"
 
 [[package]]
 name = "object"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cbca9424c482ee628fa549d9c812e2cd22f1180b9222c9200fdfa6eb31aecb2"
+checksum = "1ab52be62400ca80aa00285d25253d7f7c437b7375c4de678f5405d3afe82ca5"
 dependencies = [
  "crc32fast",
  "indexmap",
 ]
-
-[[package]]
-name = "object"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ab52be62400ca80aa00285d25253d7f7c437b7375c4de678f5405d3afe82ca5"
 
 [[package]]
 name = "once_cell"
@@ -2380,7 +2374,7 @@ dependencies = [
  "libc",
  "log",
  "more-asserts",
- "object 0.19.0",
+ "object",
  "pretty_env_logger",
  "rayon",
  "structopt",
@@ -2407,7 +2401,7 @@ dependencies = [
  "anyhow",
  "gimli",
  "more-asserts",
- "object 0.19.0",
+ "object",
  "target-lexicon",
  "thiserror",
  "wasmparser 0.58.0",
@@ -2509,7 +2503,7 @@ version = "0.18.0"
 dependencies = [
  "anyhow",
  "more-asserts",
- "object 0.19.0",
+ "object",
  "wasmtime-environ",
 ]
 
@@ -2523,7 +2517,7 @@ dependencies = [
  "ittapi-rs",
  "lazy_static",
  "libc",
- "object 0.19.0",
+ "object",
  "scroll",
  "serde",
  "target-lexicon",
@@ -2589,7 +2583,7 @@ version = "0.18.0"
 dependencies = [
  "anyhow",
  "wasmtime",
- "wast 17.0.0",
+ "wast 18.0.0",
 ]
 
 [[package]]
@@ -2627,15 +2621,6 @@ name = "wast"
 version = "15.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a10df5277f68adee65bba117b40235f07a4cb3d59e5ec9aa86dbee180fb1bc04"
-dependencies = [
- "leb128",
-]
-
-[[package]]
-name = "wast"
-version = "17.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a0e1c36b928fca33dbaf96235188f5fad22ee87100e26cc606bd0fbabdf1932"
 dependencies = [
  "leb128",
 ]
