@@ -441,7 +441,6 @@ dependencies = [
  "log",
  "memmap",
  "num_cpus",
- "region",
  "target-lexicon",
  "thiserror",
 ]
@@ -467,9 +466,7 @@ dependencies = [
  "cranelift-reader",
  "hashbrown 0.7.2",
  "log",
- "pretty_env_logger",
  "thiserror",
- "walkdir",
 ]
 
 [[package]]
@@ -579,7 +576,6 @@ dependencies = [
  "indicatif",
  "log",
  "pretty_env_logger",
- "serde",
  "target-lexicon",
  "term",
  "thiserror",
