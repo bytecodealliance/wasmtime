@@ -435,6 +435,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         &mut self,
         mut pos: FuncCursor,
         _table_index: TableIndex,
+        _table: ir::Table,
         _delta: ir::Value,
         _init_value: ir::Value,
     ) -> WasmResult<ir::Value> {
@@ -445,6 +446,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         &mut self,
         mut pos: FuncCursor,
         _table_index: TableIndex,
+        _table: ir::Table,
         _index: ir::Value,
     ) -> WasmResult<ir::Value> {
         Ok(pos.ins().null(self.reference_type()))
@@ -454,6 +456,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         &mut self,
         _pos: FuncCursor,
         _table_index: TableIndex,
+        _table: ir::Table,
         _value: ir::Value,
         _index: ir::Value,
     ) -> WasmResult<()> {

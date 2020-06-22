@@ -533,7 +533,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // `index` is the index of the function's signature and `table_index` is the index of
             // the table to search the function in.
             let (sigref, num_args) = state.get_indirect_sig(builder.func, *index, environ)?;
-            let table = state.get_table(builder.func, *table_index, environ)?;
+            let table = state.get_or_create_table(builder.func, *table_index, environ)?;
             let callee = state.pop1();
 
             // Bitcast any vector arguments to their default type, I8X16, before calling.
@@ -1163,41 +1163,50 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             environ.translate_data_drop(builder.cursor(), *segment)?;
         }
         Operator::TableSize { table: index } => {
-            let table = state.get_table(builder.func, *index, environ)?;
+            let table = state.get_or_create_table(builder.func, *index, environ)?;
             state.push1(environ.translate_table_size(
                 builder.cursor(),
                 TableIndex::from_u32(*index),
                 table,
             )?);
         }
-        Operator::TableGrow { table } => {
-            let table_index = TableIndex::from_u32(*table);
+        Operator::TableGrow { table: index } => {
+            let table_index = TableIndex::from_u32(*index);
+            let table = state.get_or_create_table(builder.func, *index, environ)?;
             let delta = state.pop1();
             let init_value = state.pop1();
             state.push1(environ.translate_table_grow(
                 builder.cursor(),
                 table_index,
+                table,
                 delta,
                 init_value,
             )?);
         }
-        Operator::TableGet { table } => {
-            let table_index = TableIndex::from_u32(*table);
+        Operator::TableGet { table: index } => {
+            let table_index = TableIndex::from_u32(*index);
+            let table = state.get_or_create_table(builder.func, *index, environ)?;
             let index = state.pop1();
-            state.push1(environ.translate_table_get(builder.cursor(), table_index, index)?);
+            state.push1(environ.translate_table_get(
+                builder.cursor(),
+                table_index,
+                table,
+                index,
+            )?);
         }
-        Operator::TableSet { table } => {
-            let table_index = TableIndex::from_u32(*table);
+        Operator::TableSet { table: index } => {
+            let table_index = TableIndex::from_u32(*index);
+            let table = state.get_or_create_table(builder.func, *index, environ)?;
             let value = state.pop1();
             let index = state.pop1();
-            environ.translate_table_set(builder.cursor(), table_index, value, index)?;
+            environ.translate_table_set(builder.cursor(), table_index, table, value, index)?;
         }
         Operator::TableCopy {
             dst_table: dst_table_index,
             src_table: src_table_index,
         } => {
-            let dst_table = state.get_table(builder.func, *dst_table_index, environ)?;
-            let src_table = state.get_table(builder.func, *src_table_index, environ)?;
+            let dst_table = state.get_or_create_table(builder.func, *dst_table_index, environ)?;
+            let src_table = state.get_or_create_table(builder.func, *src_table_index, environ)?;
             let len = state.pop1();
             let src = state.pop1();
             let dest = state.pop1();
@@ -1223,7 +1232,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             segment,
             table: table_index,
         } => {
-            let table = state.get_table(builder.func, *table_index, environ)?;
+            let table = state.get_or_create_table(builder.func, *table_index, environ)?;
             let len = state.pop1();
             let src = state.pop1();
             let dest = state.pop1();

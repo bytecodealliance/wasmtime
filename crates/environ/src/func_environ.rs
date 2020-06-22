@@ -622,6 +622,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
         table_index: TableIndex,
+        _table: ir::Table,
         delta: ir::Value,
         init_value: ir::Value,
     ) -> WasmResult<ir::Value> {
@@ -649,6 +650,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         _: cranelift_codegen::cursor::FuncCursor<'_>,
         _: TableIndex,
+        _: ir::Table,
         _: ir::Value,
     ) -> WasmResult<ir::Value> {
         Err(WasmError::Unsupported(
@@ -660,6 +662,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         _: cranelift_codegen::cursor::FuncCursor<'_>,
         _: TableIndex,
+        _: ir::Table,
         _: ir::Value,
         _: ir::Value,
     ) -> WasmResult<()> {

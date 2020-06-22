@@ -202,7 +202,7 @@ pub struct FuncTranslationState {
     heaps: HashMap<MemoryIndex, ir::Heap>,
 
     // Map of tables that have been created by `FuncEnvironment::make_table`.
-    tables: HashMap<TableIndex, ir::Table>,
+    pub(crate) tables: HashMap<TableIndex, ir::Table>,
 
     // Map of indirect call signatures that have been created by
     // `FuncEnvironment::make_indirect_sig()`.
@@ -446,7 +446,7 @@ impl FuncTranslationState {
 
     /// Get the `Table` reference that should be used to access table `index`.
     /// Create the reference if necessary.
-    pub(crate) fn get_table<FE: FuncEnvironment + ?Sized>(
+    pub(crate) fn get_or_create_table<FE: FuncEnvironment + ?Sized>(
         &mut self,
         func: &mut ir::Function,
         index: u32,
