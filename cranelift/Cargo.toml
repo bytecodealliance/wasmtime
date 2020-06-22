@@ -33,7 +33,6 @@ cranelift = { path = "umbrella", version = "0.65.0" }
 filecheck = "0.5.0"
 clap = "2.32.0"
 log = "0.4.8"
-serde = "1.0.8"
 term = "0.6.1"
 capstone = { version = "0.6.0", optional = true }
 wat = { version = "1.0.18", optional = true }
