@@ -133,10 +133,15 @@ pub trait TargetEnvironment {
         self.target_config().pointer_bytes()
     }
 
-    /// Get the Cranelift reference type to use for native references.
+    /// Get the Cranelift reference type to use for the given Wasm reference
+    /// type.
     ///
-    /// This returns `R64` for 64-bit architectures and `R32` for 32-bit architectures.
-    fn reference_type(&self) -> ir::Type {
+    /// By default, this returns `R64` for 64-bit architectures and `R32` for
+    /// 32-bit architectures. If you override this, then you should also
+    /// override `FuncEnvironment::{translate_ref_null, translate_ref_is_null}`
+    /// as well.
+    fn reference_type(&self, ty: WasmType) -> ir::Type {
+        let _ = ty;
         match self.pointer_type() {
             ir::types::I32 => ir::types::R32,
             ir::types::I64 => ir::types::R64,
@@ -418,6 +423,37 @@ pub trait FuncEnvironment: TargetEnvironment {
 
     /// Translate a `elem.drop` WebAssembly instruction.
     fn translate_elem_drop(&mut self, pos: FuncCursor, seg_index: u32) -> WasmResult<()>;
+
+    /// Translate a `ref.null T` WebAssembly instruction.
+    ///
+    /// By default, translates into a null reference type.
+    ///
+    /// Override this if you don't use Cranelift reference types for all Wasm
+    /// reference types (e.g. you use a raw pointer for `funcref`s) or if the
+    /// null sentinel is not a null reference type pointer for your type. If you
+    /// override this method, then you should also override
+    /// `translate_ref_is_null` as well.
+    fn translate_ref_null(&mut self, mut pos: FuncCursor, ty: WasmType) -> WasmResult<ir::Value> {
+        let _ = ty;
+        Ok(pos.ins().null(self.reference_type(ty)))
+    }
+
+    /// Translate a `ref.is_null` WebAssembly instruction.
+    ///
+    /// By default, assumes that `value` is a Cranelift reference type, and that
+    /// a null Cranelift reference type is the null value for all Wasm reference
+    /// types.
+    ///
+    /// If you override this method, you probably also want to override
+    /// `translate_ref_null` as well.
+    fn translate_ref_is_null(
+        &mut self,
+        mut pos: FuncCursor,
+        value: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        let is_null = pos.ins().is_null(value);
+        Ok(pos.ins().bint(ir::types::I32, is_null))
+    }
 
     /// Translate a `ref.func` WebAssembly instruction.
     fn translate_ref_func(&mut self, pos: FuncCursor, func_index: u32) -> WasmResult<ir::Value>;

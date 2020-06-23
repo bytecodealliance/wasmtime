@@ -1039,12 +1039,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::F32Le | Operator::F64Le => {
             translate_fcmp(FloatCC::LessThanOrEqual, builder, state)
         }
-        Operator::RefNull { ty: _ } => state.push1(builder.ins().null(environ.reference_type())),
+        Operator::RefNull { ty } => state.push1(environ.translate_ref_null(builder.cursor(), *ty)?),
         Operator::RefIsNull { ty: _ } => {
-            let arg = state.pop1();
-            let val = builder.ins().is_null(arg);
-            let val_int = builder.ins().bint(I32, val);
-            state.push1(val_int);
+            let value = state.pop1();
+            state.push1(environ.translate_ref_is_null(builder.cursor(), value)?);
         }
         Operator::RefFunc { function_index } => {
             state.push1(environ.translate_ref_func(builder.cursor(), *function_index)?);

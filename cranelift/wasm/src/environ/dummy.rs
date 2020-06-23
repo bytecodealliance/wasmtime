@@ -197,6 +197,14 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
         ));
         sig
     }
+
+    fn reference_type(&self) -> ir::Type {
+        match self.pointer_type() {
+            ir::types::I32 => ir::types::R32,
+            ir::types::I64 => ir::types::R64,
+            _ => panic!("unsupported pointer type"),
+        }
+    }
 }
 
 impl<'dummy_environment> TargetEnvironment for DummyFuncEnvironment<'dummy_environment> {
