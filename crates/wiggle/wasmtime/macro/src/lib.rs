@@ -6,6 +6,8 @@ use wiggle_generate::Names;
 
 mod config;
 
+use config::InstanceTypenameConf;
+
 #[proc_macro]
 pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
     let mut config = parse_macro_input!(args as config::Config);
@@ -15,7 +17,7 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
     let doc = config.load_document();
     let names = Names::new(&config.ctx.name, quote!(wasmtime_wiggle));
 
-    generate(&doc, &names).into()
+    generate(&doc, &names, &config.instance_typename).into()
 }
 
 enum Abi {
@@ -25,7 +27,11 @@ enum Abi {
     F64,
 }
 
-fn generate(doc: &witx::Document, names: &Names) -> TokenStream2 {
+fn generate(
+    doc: &witx::Document,
+    names: &Names,
+    instance_typename: &InstanceTypenameConf,
+) -> TokenStream2 {
     let mut fields = Vec::new();
     let mut get_exports = Vec::new();
     let mut ctor_externs = Vec::new();
@@ -233,6 +239,7 @@ fn generate(doc: &witx::Document, names: &Names) -> TokenStream2 {
         }
     }
 
+    let inst_type = instance_typename.name.clone();
     let ctx_type = names.ctx_type();
 
     quote! {
@@ -241,23 +248,23 @@ fn generate(doc: &witx::Document, names: &Names) -> TokenStream2 {
         /// This represents a wasi module which can be used to instantiate other
         /// wasm modules. This structure exports all that various fields of the
         /// wasi instance as fields which can be used to implement your own
-        /// instantiation logic, if necessary. Additionally [`Wasi::get_export`]
+        /// instantiation logic, if necessary. Additionally [`#inst_type::get_export`]
         /// can be used to do name-based resolution.
-        pub struct Wasi {
+        pub struct #inst_type {
             #(#fields,)*
         }
 
-        impl Wasi {
-            /// Creates a new [`Wasi`] instance.
+        impl #inst_type {
+            /// Creates a new [`#inst_type`] instance.
             ///
             /// External values are allocated into the `store` provided and
             /// configuration of the wasi instance itself should be all
             /// contained in the `cx` parameter.
-            pub fn new(store: &wasmtime::Store, cx: #ctx_type) -> Wasi {
+            pub fn new(store: &wasmtime::Store, cx: #ctx_type) -> Self {
                 let cx = std::rc::Rc::new(std::cell::RefCell::new(cx));
                 #(#ctor_externs)*
 
-                Wasi {
+                Self {
                     #(#ctor_fields,)*
                 }
             }

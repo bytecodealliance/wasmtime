@@ -4,7 +4,7 @@ use {
         braced,
         parse::{Parse, ParseStream},
         punctuated::Punctuated,
-        Error, Result, Token,
+        Error, Ident, Result, Token,
     },
     wiggle_generate::config::{CtxConf, WitxConf},
 };
@@ -13,18 +13,21 @@ use {
 pub struct Config {
     pub witx: WitxConf,
     pub ctx: CtxConf,
+    pub instance_typename: InstanceTypenameConf,
 }
 
 #[derive(Debug, Clone)]
 pub enum ConfigField {
     Witx(WitxConf),
     Ctx(CtxConf),
+    InstanceTypename(InstanceTypenameConf),
 }
 
 mod kw {
     syn::custom_keyword!(witx);
     syn::custom_keyword!(witx_literal);
     syn::custom_keyword!(ctx);
+    syn::custom_keyword!(instance);
 }
 
 impl Parse for ConfigField {
@@ -42,6 +45,10 @@ impl Parse for ConfigField {
             input.parse::<kw::ctx>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Ctx(input.parse()?))
+        } else if lookahead.peek(kw::instance) {
+            input.parse::<kw::instance>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ConfigField::InstanceTypename(input.parse()?))
         } else {
             Err(lookahead.error())
         }
@@ -52,6 +59,7 @@ impl Config {
     pub fn build(fields: impl Iterator<Item = ConfigField>, err_loc: Span) -> Result<Self> {
         let mut witx = None;
         let mut ctx = None;
+        let mut instance_typename = None;
         for f in fields {
             match f {
                 ConfigField::Witx(c) => {
@@ -66,6 +74,12 @@ impl Config {
                     }
                     ctx = Some(c);
                 }
+                ConfigField::InstanceTypename(c) => {
+                    if instance_typename.is_some() {
+                        return Err(Error::new(err_loc, "duplicate `instance` field"));
+                    }
+                    instance_typename = Some(c);
+                }
             }
         }
         Ok(Config {
@@ -75,6 +89,9 @@ impl Config {
             ctx: ctx
                 .take()
                 .ok_or_else(|| Error::new(err_loc, "`ctx` field required"))?,
+            instance_typename: instance_typename
+                .take()
+                .ok_or_else(|| Error::new(err_loc, "`instance` field required"))?,
         })
     }
 
@@ -95,5 +112,18 @@ impl Parse for Config {
         let fields: Punctuated<ConfigField, Token![,]> =
             contents.parse_terminated(ConfigField::parse)?;
         Ok(Config::build(fields.into_iter(), input.span())?)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct InstanceTypenameConf {
+    pub name: Ident,
+}
+
+impl Parse for InstanceTypenameConf {
+    fn parse(input: ParseStream) -> Result<Self> {
+        Ok(InstanceTypenameConf {
+            name: input.parse()?,
+        })
     }
 }

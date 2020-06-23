@@ -9,6 +9,7 @@ pub use wasi_common::{WasiCtx, WasiCtxBuilder};
 wasmtime_wiggle::define_struct_for_wiggle!({
     witx: ["../wasi-common/WASI/phases/snapshot/witx/wasi_snapshot_preview1.witx"],
     ctx: WasiCtx,
+    instance: Wasi,
 });
 
 pub fn is_wasi_module(name: &str) -> bool {
