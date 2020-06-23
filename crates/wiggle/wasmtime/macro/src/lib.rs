@@ -6,7 +6,7 @@ use wiggle_generate::Names;
 
 mod config;
 
-use config::InstanceTypenameConf;
+use config::InstanceConf;
 
 #[proc_macro]
 pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
@@ -17,7 +17,7 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
     let doc = config.load_document();
     let names = Names::new(&config.ctx.name, quote!(wasmtime_wiggle));
 
-    generate(&doc, &names, &config.instance_typename).into()
+    generate(&doc, &names, &config.instance).into()
 }
 
 enum Abi {
@@ -27,11 +27,7 @@ enum Abi {
     F64,
 }
 
-fn generate(
-    doc: &witx::Document,
-    names: &Names,
-    instance_typename: &InstanceTypenameConf,
-) -> TokenStream2 {
+fn generate(doc: &witx::Document, names: &Names, instance_conf: &InstanceConf) -> TokenStream2 {
     let mut fields = Vec::new();
     let mut get_exports = Vec::new();
     let mut ctor_externs = Vec::new();
@@ -239,27 +235,31 @@ fn generate(
         }
     }
 
-    let inst_type = instance_typename.name.clone();
+    let inst_type = instance_conf.name.clone();
+    let inst_docs = if let Some(ref docs) = instance_conf.docs {
+        quote!( #[doc = #docs] )
+    } else {
+        quote!()
+    };
+    let constructor_docs = format!(
+        "Creates a new [`{}`] instance.
+
+External values are allocated into the `store` provided and
+configuration of the wasi instance itself should be all
+contained in the `cx` parameter.",
+        instance_conf.name.to_string()
+    );
+
     let ctx_type = names.ctx_type();
 
     quote! {
-        /// An instantiated instance of the wasi exports.
-        ///
-        /// This represents a wasi module which can be used to instantiate other
-        /// wasm modules. This structure exports all that various fields of the
-        /// wasi instance as fields which can be used to implement your own
-        /// instantiation logic, if necessary. Additionally [`#inst_type::get_export`]
-        /// can be used to do name-based resolution.
+        #inst_docs
         pub struct #inst_type {
             #(#fields,)*
         }
 
         impl #inst_type {
-            /// Creates a new [`#inst_type`] instance.
-            ///
-            /// External values are allocated into the `store` provided and
-            /// configuration of the wasi instance itself should be all
-            /// contained in the `cx` parameter.
+            #[doc = #constructor_docs]
             pub fn new(store: &wasmtime::Store, cx: #ctx_type) -> Self {
                 let cx = std::rc::Rc::new(std::cell::RefCell::new(cx));
                 #(#ctor_externs)*
@@ -281,7 +281,7 @@ fn generate(
                 }
             }
 
-            /// Adds all wasi items to the specified `Linker`.
+            /// Adds all instance items to the specified `Linker`.
             pub fn add_to_linker(&self, linker: &mut wasmtime::Linker) -> anyhow::Result<()> {
                 #(#linker_add)*
                 Ok(())

@@ -13,14 +13,14 @@ use {
 pub struct Config {
     pub witx: WitxConf,
     pub ctx: CtxConf,
-    pub instance_typename: InstanceTypenameConf,
+    pub instance: InstanceConf,
 }
 
 #[derive(Debug, Clone)]
 pub enum ConfigField {
     Witx(WitxConf),
     Ctx(CtxConf),
-    InstanceTypename(InstanceTypenameConf),
+    Instance(InstanceConf),
 }
 
 mod kw {
@@ -28,6 +28,8 @@ mod kw {
     syn::custom_keyword!(witx_literal);
     syn::custom_keyword!(ctx);
     syn::custom_keyword!(instance);
+    syn::custom_keyword!(name);
+    syn::custom_keyword!(docs);
 }
 
 impl Parse for ConfigField {
@@ -48,7 +50,7 @@ impl Parse for ConfigField {
         } else if lookahead.peek(kw::instance) {
             input.parse::<kw::instance>()?;
             input.parse::<Token![:]>()?;
-            Ok(ConfigField::InstanceTypename(input.parse()?))
+            Ok(ConfigField::Instance(input.parse()?))
         } else {
             Err(lookahead.error())
         }
@@ -59,7 +61,7 @@ impl Config {
     pub fn build(fields: impl Iterator<Item = ConfigField>, err_loc: Span) -> Result<Self> {
         let mut witx = None;
         let mut ctx = None;
-        let mut instance_typename = None;
+        let mut instance = None;
         for f in fields {
             match f {
                 ConfigField::Witx(c) => {
@@ -74,11 +76,11 @@ impl Config {
                     }
                     ctx = Some(c);
                 }
-                ConfigField::InstanceTypename(c) => {
-                    if instance_typename.is_some() {
+                ConfigField::Instance(c) => {
+                    if instance.is_some() {
                         return Err(Error::new(err_loc, "duplicate `instance` field"));
                     }
-                    instance_typename = Some(c);
+                    instance = Some(c);
                 }
             }
         }
@@ -89,7 +91,7 @@ impl Config {
             ctx: ctx
                 .take()
                 .ok_or_else(|| Error::new(err_loc, "`ctx` field required"))?,
-            instance_typename: instance_typename
+            instance: instance
                 .take()
                 .ok_or_else(|| Error::new(err_loc, "`instance` field required"))?,
         })
@@ -115,15 +117,70 @@ impl Parse for Config {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct InstanceTypenameConf {
-    pub name: Ident,
+enum InstanceConfField {
+    Name(Ident),
+    Docs(String),
 }
 
-impl Parse for InstanceTypenameConf {
+impl Parse for InstanceConfField {
     fn parse(input: ParseStream) -> Result<Self> {
-        Ok(InstanceTypenameConf {
-            name: input.parse()?,
+        let lookahead = input.lookahead1();
+        if lookahead.peek(kw::name) {
+            input.parse::<kw::name>()?;
+            input.parse::<Token![:]>()?;
+            Ok(InstanceConfField::Name(input.parse()?))
+        } else if lookahead.peek(kw::docs) {
+            input.parse::<kw::docs>()?;
+            input.parse::<Token![:]>()?;
+            let docs: syn::LitStr = input.parse()?;
+            Ok(InstanceConfField::Docs(docs.value()))
+        } else {
+            Err(lookahead.error())
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct InstanceConf {
+    pub name: Ident,
+    pub docs: Option<String>,
+}
+
+impl InstanceConf {
+    fn build(fields: impl Iterator<Item = InstanceConfField>, err_loc: Span) -> Result<Self> {
+        let mut name = None;
+        let mut docs = None;
+        for f in fields {
+            match f {
+                InstanceConfField::Name(c) => {
+                    if name.is_some() {
+                        return Err(Error::new(err_loc, "duplicate `name` field"));
+                    }
+                    name = Some(c);
+                }
+                InstanceConfField::Docs(c) => {
+                    if docs.is_some() {
+                        return Err(Error::new(err_loc, "duplicate `docs` field"));
+                    }
+                    docs = Some(c);
+                }
+            }
+        }
+        Ok(InstanceConf {
+            name: name
+                .take()
+                .ok_or_else(|| Error::new(err_loc, "`name` field required"))?,
+            docs,
         })
+    }
+}
+
+impl Parse for InstanceConf {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let contents;
+        let _lbrace = braced!(contents in input);
+        let fields: Punctuated<InstanceConfField, Token![,]> =
+            contents.parse_terminated(InstanceConfField::parse)?;
+        Ok(InstanceConf::build(fields.into_iter(), input.span())?)
     }
 }
