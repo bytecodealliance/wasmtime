@@ -6,7 +6,7 @@ use wiggle_generate::Names;
 
 mod config;
 
-use config::{InstanceConf, MissingMemoryConf, TargetConf};
+use config::{FunctionOverrideConf, InstanceConf, MissingMemoryConf, TargetConf};
 
 #[proc_macro]
 pub fn define_wasmtime_integration(args: TokenStream) -> TokenStream {
@@ -23,6 +23,7 @@ pub fn define_wasmtime_integration(args: TokenStream) -> TokenStream {
         &config.target,
         &config.instance,
         &config.missing_memory,
+        &config.function_override,
     )
     .into()
 }
@@ -40,6 +41,7 @@ fn generate(
     target_conf: &TargetConf,
     instance_conf: &InstanceConf,
     missing_mem_conf: &MissingMemoryConf,
+    func_override_conf: &FunctionOverrideConf,
 ) -> TokenStream2 {
     let mut fields = Vec::new();
     let mut get_exports = Vec::new();
@@ -63,12 +65,10 @@ fn generate(
             linker_add.push(quote! {
                 linker.define(#module_name, #name, self.#name_ident.clone())?;
             });
-            // `proc_exit` is special; it's essentially an unwinding primitive,
-            // so we implement it in the runtime rather than use the implementation
-            // in wasi-common.
-            if name == "proc_exit" {
+
+            if let Some(func_override) = func_override_conf.find(module_name, name) {
                 ctor_externs.push(quote! {
-                    let #name_ident = wasmtime::Func::wrap(store, crate::wasi_proc_exit);
+                    let #name_ident = wasmtime::Func::wrap(store, #func_override);
                 });
                 continue;
             }

@@ -27,6 +27,11 @@ can be used to do name-based resolution."
     },
     // Error to return when caller module is missing memory export:
     missing_memory: { wasi_common::wasi::Errno::Inval },
+    // Don't use the wiggle generated code to implement proc_exit, we need to hook directly into
+    // the runtime there:
+    function_override: {
+        wasi_snapshot_preview1:proc_exit => wasi_proc_exit
+    }
 });
 
 pub fn is_wasi_module(name: &str) -> bool {

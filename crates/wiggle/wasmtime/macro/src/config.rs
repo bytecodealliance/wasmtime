@@ -16,6 +16,7 @@ pub struct Config {
     pub ctx: CtxConf,
     pub instance: InstanceConf,
     pub missing_memory: MissingMemoryConf,
+    pub function_override: FunctionOverrideConf,
 }
 
 #[derive(Debug, Clone)]
@@ -25,6 +26,7 @@ pub enum ConfigField {
     Ctx(CtxConf),
     Instance(InstanceConf),
     MissingMemory(MissingMemoryConf),
+    FunctionOverride(FunctionOverrideConf),
 }
 
 mod kw {
@@ -36,6 +38,7 @@ mod kw {
     syn::custom_keyword!(name);
     syn::custom_keyword!(docs);
     syn::custom_keyword!(missing_memory);
+    syn::custom_keyword!(function_override);
 }
 
 impl Parse for ConfigField {
@@ -65,6 +68,10 @@ impl Parse for ConfigField {
             input.parse::<kw::missing_memory>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::MissingMemory(input.parse()?))
+        } else if lookahead.peek(kw::function_override) {
+            input.parse::<kw::function_override>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ConfigField::FunctionOverride(input.parse()?))
         } else {
             Err(lookahead.error())
         }
@@ -78,6 +85,7 @@ impl Config {
         let mut ctx = None;
         let mut instance = None;
         let mut missing_memory = None;
+        let mut function_override = None;
         for f in fields {
             match f {
                 ConfigField::Target(c) => {
@@ -110,6 +118,12 @@ impl Config {
                     }
                     missing_memory = Some(c);
                 }
+                ConfigField::FunctionOverride(c) => {
+                    if function_override.is_some() {
+                        return Err(Error::new(err_loc, "duplicate `function_override` field"));
+                    }
+                    function_override = Some(c);
+                }
             }
         }
         Ok(Config {
@@ -128,6 +142,7 @@ impl Config {
             missing_memory: missing_memory
                 .take()
                 .ok_or_else(|| Error::new(err_loc, "`missing_memory` field required"))?,
+            function_override: function_override.take().unwrap_or_default(),
         })
     }
 
@@ -242,6 +257,52 @@ impl Parse for MissingMemoryConf {
         let _lbrace = braced!(contents in input);
         Ok(MissingMemoryConf {
             err: contents.parse()?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct FunctionOverrideConf {
+    pub funcs: Vec<FunctionOverrideField>,
+}
+impl FunctionOverrideConf {
+    pub fn find(&self, module: &str, field: &str) -> Option<&Ident> {
+        self.funcs
+            .iter()
+            .find(|f| f.module == module && f.field == field)
+            .map(|f| &f.replacement)
+    }
+}
+
+impl Parse for FunctionOverrideConf {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let contents;
+        let _lbrace = braced!(contents in input);
+        let fields: Punctuated<FunctionOverrideField, Token![,]> =
+            contents.parse_terminated(FunctionOverrideField::parse)?;
+        Ok(FunctionOverrideConf {
+            funcs: fields.into_iter().collect(),
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionOverrideField {
+    pub module: String,
+    pub field: String,
+    pub replacement: Ident,
+}
+impl Parse for FunctionOverrideField {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let module = input.parse::<Ident>()?.to_string();
+        input.parse::<Token![:]>()?;
+        let field = input.parse::<Ident>()?.to_string();
+        input.parse::<Token![=>]>()?;
+        let replacement = input.parse::<Ident>()?;
+        Ok(FunctionOverrideField {
+            module,
+            field,
+            replacement,
         })
     }
 }
