@@ -30,6 +30,7 @@ mod tests {
         assert_eq!(f1.has_sse41(), true);
         assert_eq!(f1.has_bmi1(), true);
     }
+
     #[test]
     fn display_presets() {
         // Spot check that the flags Display impl does not cause a panic
@@ -48,5 +49,11 @@ mod tests {
         b2.enable("haswell").unwrap();
         let f2 = Flags::new(&shared, b2);
         let _ = format!("{}", f2);
+    }
+
+    #[test]
+    fn default() {
+        let shared = settings::Flags::new(settings::builder());
+        assert_eq!(Flags::new(&shared, builder()), Flags::default());
     }
 }

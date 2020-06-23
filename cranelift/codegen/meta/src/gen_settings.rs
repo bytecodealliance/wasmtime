@@ -11,6 +11,7 @@ use crate::error;
 use crate::srcgen::{Formatter, Match};
 use crate::unique_table::UniqueSeqTable;
 
+#[derive(Clone, Copy)]
 pub(crate) enum ParentGroup {
     None,
     Shared,
@@ -64,6 +65,27 @@ fn gen_constructor(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatte
             }
 
             fmtln!(fmt, group.name);
+        });
+        fmtln!(fmt, "}");
+    });
+    fmtln!(fmt, "}");
+}
+
+/// Generate an implementation of Default for ease-of-use.
+fn gen_default(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
+    fmt.doc_comment(format!("Create a default version of {} Flags.", group.name));
+    fmtln!(fmt, "impl std::default::Default for Flags {");
+    fmt.indent(|fmt| {
+        fmtln!(fmt, "fn default() -> Self {");
+        fmt.indent(|fmt| match parent {
+            ParentGroup::None => fmtln!(fmt, "Self::new(builder())"),
+            ParentGroup::Shared => {
+                fmtln!(
+                    fmt,
+                    "let shared = settings::Flags::new(settings::builder());"
+                );
+                fmtln!(fmt, "Self::new(&shared, builder())")
+            }
         });
         fmtln!(fmt, "}");
     });
@@ -418,7 +440,7 @@ fn gen_display(group: &SettingGroup, fmt: &mut Formatter) {
 
 fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
     // Generate struct.
-    fmtln!(fmt, "#[derive(Clone)]");
+    fmtln!(fmt, "#[derive(Clone, Debug, PartialEq)]");
     fmt.doc_comment(format!("Flags group `{}`.", group.name));
     fmtln!(fmt, "pub struct Flags {");
     fmt.indent(|fmt| {
@@ -427,6 +449,7 @@ fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
     fmtln!(fmt, "}");
 
     gen_constructor(group, parent, fmt);
+    gen_default(group, parent, fmt);
     gen_enum_types(group, fmt);
     gen_getters(group, fmt);
     gen_descriptors(group, fmt);

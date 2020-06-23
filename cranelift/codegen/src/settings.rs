@@ -442,4 +442,9 @@ enable_jump_tables = true
         assert_eq!(f.enable_simd(), false);
         assert_eq!(f.opt_level(), super::OptLevel::Speed);
     }
+
+    #[test]
+    fn default() {
+        assert_eq!(Flags::new(builder()), Flags::default());
+    }
 }
