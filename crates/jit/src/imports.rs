@@ -201,6 +201,7 @@ fn is_table_compatible(exported: &TablePlan, imported: &TablePlan) -> bool {
     let TablePlan {
         table:
             Table {
+                wasm_ty: exported_wasm_ty,
                 ty: exported_ty,
                 minimum: exported_minimum,
                 maximum: exported_maximum,
@@ -210,6 +211,7 @@ fn is_table_compatible(exported: &TablePlan, imported: &TablePlan) -> bool {
     let TablePlan {
         table:
             Table {
+                wasm_ty: imported_wasm_ty,
                 ty: imported_ty,
                 minimum: imported_minimum,
                 maximum: imported_maximum,
@@ -217,7 +219,8 @@ fn is_table_compatible(exported: &TablePlan, imported: &TablePlan) -> bool {
         style: _imported_style,
     } = imported;
 
-    is_table_element_type_compatible(*exported_ty, *imported_ty)
+    exported_wasm_ty == imported_wasm_ty
+        && is_table_element_type_compatible(*exported_ty, *imported_ty)
         && imported_minimum <= exported_minimum
         && (imported_maximum.is_none()
             || (!exported_maximum.is_none()

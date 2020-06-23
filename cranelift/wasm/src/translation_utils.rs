@@ -1,5 +1,5 @@
 //! Helper functions and structures for the translation.
-use crate::environ::{TargetEnvironment, WasmResult};
+use crate::environ::{TargetEnvironment, WasmResult, WasmType};
 use crate::state::ModuleTranslationState;
 use crate::wasm_unsupported;
 use core::u32;
@@ -104,7 +104,9 @@ pub enum GlobalInit {
 /// WebAssembly table.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub struct Table {
-    /// The type of data stored in elements of the table.
+    /// The table elements' Wasm type.
+    pub wasm_ty: WasmType,
+    /// The table elements' Cranelift type.
     pub ty: TableElementType,
     /// The minimum number of elements in the table.
     pub minimum: u32,

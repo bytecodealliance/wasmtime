@@ -108,6 +108,7 @@ pub fn parse_import_section<'data>(
             ImportSectionEntryType::Table(ref tab) => {
                 environ.declare_table_import(
                     Table {
+                        wasm_ty: tab.element_type,
                         ty: match tabletype_to_type(tab.element_type, environ)? {
                             Some(t) => TableElementType::Val(t),
                             None => TableElementType::Func,
@@ -157,6 +158,7 @@ pub fn parse_table_section(
     for entry in tables {
         let table = entry?;
         environ.declare_table(Table {
+            wasm_ty: table.element_type,
             ty: match tabletype_to_type(table.element_type, environ)? {
                 Some(t) => TableElementType::Val(t),
                 None => TableElementType::Func,
