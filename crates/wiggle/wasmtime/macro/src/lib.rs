@@ -2,9 +2,9 @@ use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
 use syn::parse_macro_input;
+use wiggle_generate::Names;
 
 mod config;
-mod utils;
 
 #[proc_macro]
 pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
@@ -13,7 +13,9 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR env var"),
     );
     let doc = config.load_document();
-    generate(&doc).into()
+    let names = Names::new(&config.ctx.name, quote!(wasmtime_wiggle));
+
+    generate(&doc, &names).into()
 }
 
 enum Abi {
@@ -23,7 +25,7 @@ enum Abi {
     F64,
 }
 
-fn generate(doc: &witx::Document) -> TokenStream2 {
+fn generate(doc: &witx::Document, names: &Names) -> TokenStream2 {
     let mut fields = Vec::new();
     let mut get_exports = Vec::new();
     let mut ctor_externs = Vec::new();
@@ -59,7 +61,7 @@ fn generate(doc: &witx::Document) -> TokenStream2 {
             let mut hostcall_args = Vec::new();
 
             for param in func.params.iter() {
-                let name = utils::param_name(param);
+                let name = names.func_param(&param.name);
 
                 // Registers a new parameter to the shim we're making with the
                 // given `name`, the `abi_ty` wasm type and `hex` defines

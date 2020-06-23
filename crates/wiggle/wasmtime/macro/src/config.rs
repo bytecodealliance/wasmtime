@@ -6,22 +6,25 @@ use {
         punctuated::Punctuated,
         Error, Result, Token,
     },
-    wiggle_generate::config::WitxConf,
+    wiggle_generate::config::{CtxConf, WitxConf},
 };
 
 #[derive(Debug, Clone)]
 pub struct Config {
     pub witx: WitxConf,
+    pub ctx: CtxConf,
 }
 
 #[derive(Debug, Clone)]
 pub enum ConfigField {
     Witx(WitxConf),
+    Ctx(CtxConf),
 }
 
 mod kw {
     syn::custom_keyword!(witx);
     syn::custom_keyword!(witx_literal);
+    syn::custom_keyword!(ctx);
 }
 
 impl Parse for ConfigField {
@@ -35,6 +38,10 @@ impl Parse for ConfigField {
             input.parse::<kw::witx_literal>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Witx(WitxConf::Literal(input.parse()?)))
+        } else if lookahead.peek(kw::ctx) {
+            input.parse::<kw::ctx>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ConfigField::Ctx(input.parse()?))
         } else {
             Err(lookahead.error())
         }
@@ -44,6 +51,7 @@ impl Parse for ConfigField {
 impl Config {
     pub fn build(fields: impl Iterator<Item = ConfigField>, err_loc: Span) -> Result<Self> {
         let mut witx = None;
+        let mut ctx = None;
         for f in fields {
             match f {
                 ConfigField::Witx(c) => {
@@ -52,12 +60,21 @@ impl Config {
                     }
                     witx = Some(c);
                 }
+                ConfigField::Ctx(c) => {
+                    if ctx.is_some() {
+                        return Err(Error::new(err_loc, "duplicate `ctx` field"));
+                    }
+                    ctx = Some(c);
+                }
             }
         }
         Ok(Config {
             witx: witx
                 .take()
                 .ok_or_else(|| Error::new(err_loc, "`witx` field required"))?,
+            ctx: ctx
+                .take()
+                .ok_or_else(|| Error::new(err_loc, "`ctx` field required"))?,
         })
     }
 
