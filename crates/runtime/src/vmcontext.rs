@@ -555,6 +555,10 @@ impl VMBuiltinFunctionsArray {
             wasmtime_imported_memory_fill as usize;
         ptrs[BuiltinFunctionIndex::memory_init().index() as usize] = wasmtime_memory_init as usize;
         ptrs[BuiltinFunctionIndex::data_drop().index() as usize] = wasmtime_data_drop as usize;
+        ptrs[BuiltinFunctionIndex::drop_externref().index() as usize] =
+            wasmtime_drop_externref as usize;
+        ptrs[BuiltinFunctionIndex::activations_table_insert_with_gc().index() as usize] =
+            wasmtime_activations_table_insert_with_gc as usize;
 
         if cfg!(debug_assertions) {
             for i in 0..ptrs.len() {

@@ -1186,19 +1186,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let table_index = TableIndex::from_u32(*index);
             let table = state.get_or_create_table(builder.func, *index, environ)?;
             let index = state.pop1();
-            state.push1(environ.translate_table_get(
-                builder.cursor(),
-                table_index,
-                table,
-                index,
-            )?);
+            state.push1(environ.translate_table_get(builder, table_index, table, index)?);
         }
         Operator::TableSet { table: index } => {
             let table_index = TableIndex::from_u32(*index);
             let table = state.get_or_create_table(builder.func, *index, environ)?;
             let value = state.pop1();
             let index = state.pop1();
-            environ.translate_table_set(builder.cursor(), table_index, table, value, index)?;
+            environ.translate_table_set(builder, table_index, table, value, index)?;
         }
         Operator::TableCopy {
             dst_table: dst_table_index,

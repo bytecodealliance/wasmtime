@@ -206,6 +206,11 @@ impl<'a> FunctionBuilder<'a> {
         }
     }
 
+    /// Get the block that this builder is currently at.
+    pub fn current_block(&self) -> Option<Block> {
+        self.position.expand()
+    }
+
     /// Set the source location that should be assigned to all new instructions.
     pub fn set_srcloc(&mut self, srcloc: ir::SourceLoc) {
         self.srcloc = srcloc;

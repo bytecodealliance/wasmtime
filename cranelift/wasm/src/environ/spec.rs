@@ -368,7 +368,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// Translate a `table.get` WebAssembly instruction.
     fn translate_table_get(
         &mut self,
-        pos: FuncCursor,
+        builder: &mut FunctionBuilder,
         table_index: TableIndex,
         table: ir::Table,
         index: ir::Value,
@@ -377,7 +377,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// Translate a `table.set` WebAssembly instruction.
     fn translate_table_set(
         &mut self,
-        pos: FuncCursor,
+        builder: &mut FunctionBuilder,
         table_index: TableIndex,
         table: ir::Table,
         value: ir::Value,

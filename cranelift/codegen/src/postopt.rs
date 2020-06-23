@@ -386,7 +386,11 @@ fn optimize_complex_addresses(pos: &mut EncCursor, inst: Inst, isa: &dyn TargetI
     }
 
     let ok = pos.func.update_encoding(inst, isa).is_ok();
-    debug_assert!(ok);
+    debug_assert!(
+        ok,
+        "failed to update encoding for `{}`",
+        pos.func.dfg.display_inst(inst, isa)
+    );
 }
 
 //----------------------------------------------------------------------

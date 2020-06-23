@@ -232,6 +232,32 @@ impl PerCpuModeEncodings {
     }
 
     /// Add encodings for `inst.r32` to X86_32.
+    /// Add encodings for `inst.r32` to X86_64 with and without REX.
+    /// Add encodings for `inst.r64` to X86_64 with a REX.W prefix.
+    fn enc_r32_r64_instp(
+        &mut self,
+        inst: &Instruction,
+        template: Template,
+        instp: InstructionPredicateNode,
+    ) {
+        self.enc32_func(inst.bind(R32), template.nonrex(), |builder| {
+            builder.inst_predicate(instp.clone())
+        });
+
+        // REX-less encoding must come after REX encoding so we don't use it by default. Otherwise
+        // reg-alloc would never use r8 and up.
+        self.enc64_func(inst.bind(R32), template.rex(), |builder| {
+            builder.inst_predicate(instp.clone())
+        });
+        self.enc64_func(inst.bind(R32), template.nonrex(), |builder| {
+            builder.inst_predicate(instp.clone())
+        });
+        self.enc64_func(inst.bind(R64), template.rex().w(), |builder| {
+            builder.inst_predicate(instp)
+        });
+    }
+
+    /// Add encodings for `inst.r32` to X86_32.
     /// Add encodings for `inst.r64` to X86_64 with a REX.W prefix.
     fn enc_r32_r64_rex_only(&mut self, inst: impl Into<InstSpec>, template: Template) {
         let inst: InstSpec = inst.into();
@@ -810,6 +836,11 @@ fn define_memory(
             recipe.opcodes(&MOV_LOAD),
             is_load_complex_length_two.clone(),
         );
+        e.enc_r32_r64_instp(
+            load_complex,
+            recipe.opcodes(&MOV_LOAD),
+            is_load_complex_length_two.clone(),
+        );
         e.enc_x86_64_instp(
             uload32_complex,
             recipe.opcodes(&MOV_LOAD),
@@ -851,6 +882,11 @@ fn define_memory(
 
     for recipe in &[rec_stWithIndex, rec_stWithIndexDisp8, rec_stWithIndexDisp32] {
         e.enc_i32_i64_instp(
+            store_complex,
+            recipe.opcodes(&MOV_STORE),
+            is_store_complex_length_three.clone(),
+        );
+        e.enc_r32_r64_instp(
             store_complex,
             recipe.opcodes(&MOV_STORE),
             is_store_complex_length_three.clone(),
@@ -947,6 +983,10 @@ fn define_memory(
     for &ty in &[F64, F32] {
         e.enc64_rec(fill_nop.bind(ty), rec_ffillnull, 0);
         e.enc32_rec(fill_nop.bind(ty), rec_ffillnull, 0);
+    }
+    for &ty in &[R64, R32] {
+        e.enc64_rec(fill_nop.bind(ty), rec_fillnull, 0);
+        e.enc32_rec(fill_nop.bind(ty), rec_fillnull, 0);
     }
 
     // Load 32 bits from `b1`, `i8` and `i16` spill slots. See `spill.b1` above.

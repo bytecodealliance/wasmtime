@@ -9,6 +9,7 @@ use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature};
 use cranelift_codegen::isa::{self, TargetFrontendConfig};
 use cranelift_entity::EntityRef;
+use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
     self, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableIndex,
     TargetEnvironment, WasmError, WasmResult, WasmType,
@@ -169,6 +170,11 @@ declare_builtin_functions! {
     table_grow_funcref(vmctx, i32, i32, pointer) -> (i32);
     /// Returns an index for Wasm's `table.grow` instruction for `externref`s.
     table_grow_externref(vmctx, i32, i32, reference) -> (i32);
+    /// Returns an index to drop a `VMExternRef`.
+    drop_externref(pointer) -> ();
+    /// Returns an index to do a GC and then insert a `VMExternRef` into the
+    /// `VMExternRefActivationsTable`.
+    activations_table_insert_with_gc(vmctx, reference) -> ();
 }
 
 impl BuiltinFunctionIndex {
@@ -392,6 +398,40 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
         (base, func_addr)
     }
+
+    /// Generate code to increment or decrement the given `externref`'s
+    /// reference count.
+    ///
+    /// The new reference count is returned.
+    fn mutate_extenref_ref_count(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        externref: ir::Value,
+        delta: i64,
+    ) -> ir::Value {
+        debug_assert!(delta == -1 || delta == 1);
+
+        let pointer_type = self.pointer_type();
+        let ref_count_offset = ir::immediates::Offset32::new(
+            i32::try_from(VMOffsets::vm_extern_data_ref_count()).unwrap(),
+        );
+
+        let old_ref_count = builder.ins().load(
+            pointer_type,
+            ir::MemFlags::trusted(),
+            externref,
+            ref_count_offset,
+        );
+        let new_ref_count = builder.ins().iadd_imm(old_ref_count, delta);
+        builder.ins().store(
+            ir::MemFlags::trusted(),
+            new_ref_count,
+            externref,
+            ref_count_offset,
+        );
+
+        new_ref_count
+    }
 }
 
 // TODO: This is necessary as if Lightbeam used `FuncEnvironment` directly it would cause
@@ -593,9 +633,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             readonly: false,
         });
 
-        let element_size = match self.module.table_plans[index].style {
-            TableStyle::CallerChecksSignature => u64::from(self.pointer_type().bytes()),
-        };
+        let element_size = u64::from(
+            self.reference_type(self.module.table_plans[index].table.wasm_ty)
+                .bytes(),
+        );
 
         Ok(func.create_table(ir::TableData {
             base_gv,
@@ -646,27 +687,325 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_table_get(
         &mut self,
-        _: cranelift_codegen::cursor::FuncCursor<'_>,
-        _: TableIndex,
-        _: ir::Table,
-        _: ir::Value,
+        builder: &mut FunctionBuilder,
+        table_index: TableIndex,
+        table: ir::Table,
+        index: ir::Value,
     ) -> WasmResult<ir::Value> {
-        Err(WasmError::Unsupported(
-            "the `table.get` instruction is not supported yet".into(),
-        ))
+        let pointer_type = self.pointer_type();
+
+        let plan = &self.module.table_plans[table_index];
+        match plan.table.wasm_ty {
+            WasmType::FuncRef => match plan.style {
+                TableStyle::CallerChecksSignature => {
+                    let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
+                    Ok(builder.ins().load(
+                        pointer_type,
+                        ir::MemFlags::trusted(),
+                        table_entry_addr,
+                        0,
+                    ))
+                }
+            },
+            WasmType::ExternRef => {
+                // Our read barrier for `externref` tables is roughly equivalent
+                // to the following pseudocode:
+                //
+                // ```
+                // let elem = table[index]
+                // if elem is not null:
+                //     let (next, end) = VMExternRefActivationsTable bump region
+                //     if next != end:
+                //         elem.ref_count += 1
+                //         *next = elem
+                //         next += 1
+                //     else:
+                //         call activations_table_insert_with_gc(elem)
+                // return elem
+                // ```
+                //
+                // This ensures that all `externref`s coming out of tables and
+                // onto the stack are safely held alive by the
+                // `VMExternRefActivationsTable`.
+
+                let reference_type = self.reference_type(WasmType::ExternRef);
+
+                let continue_block = builder.create_block();
+                let non_null_elem_block = builder.create_block();
+                let gc_block = builder.create_block();
+                let no_gc_block = builder.create_block();
+                let current_block = builder.current_block().unwrap();
+                builder
+                    .func
+                    .layout
+                    .insert_block_after(non_null_elem_block, current_block);
+                builder
+                    .func
+                    .layout
+                    .insert_block_after(no_gc_block, non_null_elem_block);
+                builder
+                    .func
+                    .layout
+                    .insert_block_after(gc_block, no_gc_block);
+                builder
+                    .func
+                    .layout
+                    .insert_block_after(continue_block, gc_block);
+
+                // Load the table element.
+                let elem_addr = builder.ins().table_addr(pointer_type, table, index, 0);
+                let elem =
+                    builder
+                        .ins()
+                        .load(reference_type, ir::MemFlags::trusted(), elem_addr, 0);
+
+                let elem_is_null = builder.ins().is_null(elem);
+                builder.ins().brnz(elem_is_null, continue_block, &[]);
+                builder.ins().jump(non_null_elem_block, &[]);
+
+                // Load the `VMExternRefActivationsTable::next` bump finger and
+                // the `VMExternRefActivationsTable::end` bump boundary.
+                builder.switch_to_block(non_null_elem_block);
+                let vmctx = self.vmctx(&mut builder.func);
+                let vmctx = builder.ins().global_value(pointer_type, vmctx);
+                let activations_table = builder.ins().load(
+                    pointer_type,
+                    ir::MemFlags::trusted(),
+                    vmctx,
+                    i32::try_from(self.offsets.vmctx_externref_activations_table()).unwrap(),
+                );
+                let next = builder.ins().load(
+                    pointer_type,
+                    ir::MemFlags::trusted(),
+                    activations_table,
+                    i32::try_from(self.offsets.vm_extern_ref_activation_table_next()).unwrap(),
+                );
+                let end = builder.ins().load(
+                    pointer_type,
+                    ir::MemFlags::trusted(),
+                    activations_table,
+                    i32::try_from(self.offsets.vm_extern_ref_activation_table_end()).unwrap(),
+                );
+
+                // If `next == end`, then we are at full capacity. Call a
+                // builtin to do a GC and insert this reference into the
+                // just-swept table for us.
+                let at_capacity = builder.ins().icmp(ir::condcodes::IntCC::Equal, next, end);
+                builder.ins().brnz(at_capacity, gc_block, &[]);
+                builder.ins().jump(no_gc_block, &[]);
+                builder.switch_to_block(gc_block);
+                let builtin_idx = BuiltinFunctionIndex::activations_table_insert_with_gc();
+                let builtin_sig = self
+                    .builtin_function_signatures
+                    .activations_table_insert_with_gc(builder.func);
+                let (vmctx, builtin_addr) = self
+                    .translate_load_builtin_function_address(&mut builder.cursor(), builtin_idx);
+                builder
+                    .ins()
+                    .call_indirect(builtin_sig, builtin_addr, &[vmctx, elem]);
+                builder.ins().jump(continue_block, &[]);
+
+                // If `next != end`, then:
+                //
+                // * increment this reference's ref count,
+                // * store the reference into the bump table at `*next`,
+                // * and finally increment the `next` bump finger.
+                builder.switch_to_block(no_gc_block);
+                self.mutate_extenref_ref_count(builder, elem, 1);
+                builder.ins().store(ir::MemFlags::trusted(), elem, next, 0);
+
+                let new_next = builder
+                    .ins()
+                    .iadd_imm(next, i64::from(reference_type.bytes()));
+                builder.ins().store(
+                    ir::MemFlags::trusted(),
+                    new_next,
+                    activations_table,
+                    i32::try_from(self.offsets.vm_extern_ref_activation_table_next()).unwrap(),
+                );
+
+                builder.ins().jump(continue_block, &[]);
+                builder.switch_to_block(continue_block);
+
+                builder.seal_block(non_null_elem_block);
+                builder.seal_block(gc_block);
+                builder.seal_block(no_gc_block);
+                builder.seal_block(continue_block);
+
+                Ok(elem)
+            }
+            ty => Err(WasmError::Unsupported(format!(
+                "unsupported table type for `table.get` instruction: {:?}",
+                ty
+            ))),
+        }
     }
 
     fn translate_table_set(
         &mut self,
-        _: cranelift_codegen::cursor::FuncCursor<'_>,
-        _: TableIndex,
-        _: ir::Table,
-        _: ir::Value,
-        _: ir::Value,
+        builder: &mut FunctionBuilder,
+        table_index: TableIndex,
+        table: ir::Table,
+        value: ir::Value,
+        index: ir::Value,
     ) -> WasmResult<()> {
-        Err(WasmError::Unsupported(
-            "the `table.set` instruction is not supported yet".into(),
-        ))
+        let pointer_type = self.pointer_type();
+
+        let plan = &self.module.table_plans[table_index];
+        match plan.table.wasm_ty {
+            WasmType::FuncRef => match plan.style {
+                TableStyle::CallerChecksSignature => {
+                    let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
+                    builder
+                        .ins()
+                        .store(ir::MemFlags::trusted(), value, table_entry_addr, 0);
+                    Ok(())
+                }
+            },
+            WasmType::ExternRef => {
+                // Our write barrier for `externref`s being copied out of the
+                // stack and into a table is roughly equivalent to the following
+                // pseudocode:
+                //
+                // ```
+                // if value != null:
+                //     value.ref_count += 1
+                // let current_elem = table[index]
+                // table[index] = value
+                // if current_elem != null:
+                //     current_elem.ref_count -= 1
+                //     if current_elem.ref_count == 0:
+                //         call drop_externref(current_elem)
+                // ```
+                //
+                // This write barrier is responsible for ensuring that:
+                //
+                // 1. The value's ref count is incremented now that the
+                //    table is holding onto it. This is required for memory safety.
+                //
+                // 2. The old table element, if any, has its ref count
+                //    decremented, and that the wrapped data is dropped if the
+                //    ref count reaches zero. This is not required for memory
+                //    safety, but is required to avoid leaks. Furthermore, the
+                //    destructor might GC or touch this table, so we must only
+                //    drop the old table element *after* we've replaced it with
+                //    the new `value`!
+
+                let current_block = builder.current_block().unwrap();
+                let inc_ref_count_block = builder.create_block();
+                builder
+                    .func
+                    .layout
+                    .insert_block_after(inc_ref_count_block, current_block);
+                let check_current_elem_block = builder.create_block();
+                builder
+                    .func
+                    .layout
+                    .insert_block_after(check_current_elem_block, inc_ref_count_block);
+                let dec_ref_count_block = builder.create_block();
+                builder
+                    .func
+                    .layout
+                    .insert_block_after(dec_ref_count_block, check_current_elem_block);
+                let drop_block = builder.create_block();
+                builder
+                    .func
+                    .layout
+                    .insert_block_after(drop_block, dec_ref_count_block);
+                let continue_block = builder.create_block();
+                builder
+                    .func
+                    .layout
+                    .insert_block_after(continue_block, drop_block);
+
+                // Calculate the table address of the current element and do
+                // bounds checks. This is the first thing we do, because we
+                // don't want to modify any ref counts if this `table.set` is
+                // going to trap.
+                let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
+
+                // If value is not null, increment `value`'s ref count.
+                //
+                // This has to come *before* decrementing the current table
+                // element's ref count, because it might reach ref count == zero,
+                // causing us to deallocate the current table element. However,
+                // if `value` *is* the current table element (and therefore this
+                // whole `table.set` is a no-op), then we would incorrectly
+                // deallocate `value` and leave it in the table, leading to use
+                // after free.
+                let value_is_null = builder.ins().is_null(value);
+                builder
+                    .ins()
+                    .brnz(value_is_null, check_current_elem_block, &[]);
+                builder.ins().jump(inc_ref_count_block, &[]);
+                builder.switch_to_block(inc_ref_count_block);
+                self.mutate_extenref_ref_count(builder, value, 1);
+                builder.ins().jump(check_current_elem_block, &[]);
+
+                // Grab the current element from the table, and store the new
+                // `value` into the table.
+                //
+                // Note that we load the current element as a pointer, not a
+                // reference. This is so that if we call out-of-line to run its
+                // destructor, and its destructor triggers GC, this reference is
+                // not recorded in the stack map (which would lead to the GC
+                // saving a reference to a deallocated object, and then using it
+                // after its been freed).
+                builder.switch_to_block(check_current_elem_block);
+                let current_elem =
+                    builder
+                        .ins()
+                        .load(pointer_type, ir::MemFlags::trusted(), table_entry_addr, 0);
+                builder
+                    .ins()
+                    .store(ir::MemFlags::trusted(), value, table_entry_addr, 0);
+
+                // If the current element is non-null, decrement its reference
+                // count. And if its reference count has reached zero, then make
+                // an out-of-line call to deallocate it.
+                let current_elem_is_null =
+                    builder
+                        .ins()
+                        .icmp_imm(ir::condcodes::IntCC::Equal, current_elem, 0);
+                builder
+                    .ins()
+                    .brz(current_elem_is_null, dec_ref_count_block, &[]);
+                builder.ins().jump(continue_block, &[]);
+
+                builder.switch_to_block(dec_ref_count_block);
+                let ref_count = self.mutate_extenref_ref_count(builder, current_elem, -1);
+                builder.ins().brz(ref_count, drop_block, &[]);
+                builder.ins().jump(continue_block, &[]);
+
+                // Call the `drop_externref` builtin to (you guessed it) drop
+                // the `externref`.
+                builder.switch_to_block(drop_block);
+                let builtin_idx = BuiltinFunctionIndex::drop_externref();
+                let builtin_sig = self
+                    .builtin_function_signatures
+                    .drop_externref(builder.func);
+                let (_vmctx, builtin_addr) = self
+                    .translate_load_builtin_function_address(&mut builder.cursor(), builtin_idx);
+                builder
+                    .ins()
+                    .call_indirect(builtin_sig, builtin_addr, &[current_elem]);
+                builder.ins().jump(continue_block, &[]);
+
+                builder.switch_to_block(continue_block);
+
+                builder.seal_block(inc_ref_count_block);
+                builder.seal_block(check_current_elem_block);
+                builder.seal_block(dec_ref_count_block);
+                builder.seal_block(drop_block);
+                builder.seal_block(continue_block);
+
+                Ok(())
+            }
+            ty => Err(WasmError::Unsupported(format!(
+                "unsupported table type for `table.set` instruction: {:?}",
+                ty
+            ))),
+        }
     }
 
     fn translate_table_fill(
