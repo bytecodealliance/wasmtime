@@ -90,8 +90,10 @@ impl UnwindRegistry {
         let mut eh_frame = EhFrame(EndianVec::new(RunTimeEndian::default()));
         table.write_eh_frame(&mut eh_frame).unwrap();
 
-        // GCC expects a terminating "empty" length, so write a 0 length at the end of the table.
-        eh_frame.0.write_u32(0).unwrap();
+        if cfg!(all(target_os = "linux", target_env = "gnu")) {
+            // libgcc expects a terminating "empty" length, so write a 0 length at the end of the table.
+            eh_frame.0.write_u32(0).unwrap();
+        }
 
         self.frame_table = eh_frame.0.into_vec();
 
@@ -99,31 +101,29 @@ impl UnwindRegistry {
     }
 
     unsafe fn register_frames(&mut self) {
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "macos")] {
-                // On macOS, `__register_frame` takes a pointer to a single FDE
-                let start = self.frame_table.as_ptr();
-                let end = start.add(self.frame_table.len());
-                let mut current = start;
+        if cfg!(all(target_os = "linux", target_env = "gnu")) {
+            // On gnu (libgcc), `__register_frame` will walk the FDEs until an entry of length 0
+            let ptr = self.frame_table.as_ptr();
+            __register_frame(ptr);
+            self.registrations.push(ptr as usize);
+        } else {
+            // For libunwind, `__register_frame` takes a pointer to a single FDE
+            let start = self.frame_table.as_ptr();
+            let end = start.add(self.frame_table.len());
+            let mut current = start;
 
-                // Walk all of the entries in the frame table and register them
-                while current < end {
-                    let len = std::ptr::read::<u32>(current as *const u32) as usize;
+            // Walk all of the entries in the frame table and register them
+            while current < end {
+                let len = std::ptr::read::<u32>(current as *const u32) as usize;
 
-                    // Skip over the CIE
-                    if current != start {
-                        __register_frame(current);
-                        self.registrations.push(current as usize);
-                    }
-
-                    // Move to the next table entry (+4 because the length itself is not inclusive)
-                    current = current.add(len + 4);
+                // Skip over the CIE
+                if current != start {
+                    __register_frame(current);
+                    self.registrations.push(current as usize);
                 }
-            } else {
-                // On other platforms, `__register_frame` will walk the FDEs until an entry of length 0
-                let ptr = self.frame_table.as_ptr();
-                __register_frame(ptr);
-                self.registrations.push(ptr as usize);
+
+                // Move to the next table entry (+4 because the length itself is not inclusive)
+                current = current.add(len + 4);
             }
         }
     }
