@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
+use proc_macro2::{Ident, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
 use syn::parse_macro_input;
 use wiggle_generate::Names;
@@ -32,12 +32,14 @@ fn generate(doc: &witx::Document, names: &Names) -> TokenStream2 {
     let mut ctor_fields = Vec::new();
     let mut linker_add = Vec::new();
 
+    let runtime = names.runtime_mod();
+
     for module in doc.modules() {
         let module_name = module.name.as_str();
-        let module_id = Ident::new(module_name, Span::call_site());
+        let module_id = names.module(&module.name);
         for func in module.funcs() {
             let name = func.name.as_str();
-            let name_ident = Ident::new(name, Span::call_site());
+            let name_ident = names.func(&func.name);
             fields.push(quote! { pub #name_ident: wasmtime::Func });
             get_exports.push(quote! { #name => Some(&self.#name_ident) });
             ctor_fields.push(name_ident.clone());
@@ -217,8 +219,8 @@ fn generate(doc: &witx::Document, names: &Names) -> TokenStream2 {
                             // or expose the memory via non-wiggle mechanisms.
                             // Therefore, creating a new BorrowChecker at the
                             // root of each function invocation is correct.
-                            let bc = wasmtime_wiggle::BorrowChecker::new();
-                            let mem = wasmtime_wiggle::WasmtimeGuestMemory::new( mem, bc );
+                            let bc = #runtime::BorrowChecker::new();
+                            let mem = #runtime::WasmtimeGuestMemory::new( mem, bc );
                             wasi_common::wasi::#module_id::#name_ident(
                                 &mut my_cx.borrow_mut(),
                                 &mem,
@@ -230,6 +232,8 @@ fn generate(doc: &witx::Document, names: &Names) -> TokenStream2 {
             });
         }
     }
+
+    let ctx_type = names.ctx_type();
 
     quote! {
         /// An instantiated instance of the wasi exports.
@@ -249,7 +253,7 @@ fn generate(doc: &witx::Document, names: &Names) -> TokenStream2 {
             /// External values are allocated into the `store` provided and
             /// configuration of the wasi instance itself should be all
             /// contained in the `cx` parameter.
-            pub fn new(store: &wasmtime::Store, cx: WasiCtx) -> Wasi {
+            pub fn new(store: &wasmtime::Store, cx: #ctx_type) -> Wasi {
                 let cx = std::rc::Rc::new(std::cell::RefCell::new(cx));
                 #(#ctor_externs)*
 
