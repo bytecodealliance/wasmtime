@@ -132,4 +132,8 @@ impl TargetIsa for TargetIsaAdapter {
     fn as_any(&self) -> &dyn Any {
         self as &dyn Any
     }
+
+    fn is_compatible_with(&self, _: &dyn TargetIsa) -> bool {
+        false
+    }
 }

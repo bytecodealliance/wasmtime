@@ -428,6 +428,11 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Return an [Any] reference for downcasting to the ISA-specific implementation of this trait
     /// with `isa.as_any().downcast_ref::<isa::foo::Isa>()`.
     fn as_any(&self) -> &dyn Any;
+
+    /// Check if this [TargetIsa] is compatible with another [TargetIsa]. If this function returns
+    /// true, code generated for the first [TargetIsa] should be executable on the second
+    /// [TargetIsa].
+    fn is_compatible_with(&self, other: &dyn TargetIsa) -> bool;
 }
 
 impl Debug for &dyn TargetIsa {

@@ -135,6 +135,15 @@ impl TargetIsa for Isa {
     fn as_any(&self) -> &dyn Any {
         self as &dyn Any
     }
+
+    fn is_compatible_with(&self, other: &dyn TargetIsa) -> bool {
+        match other.as_any().downcast_ref::<Self>() {
+            Some(other) => {
+                self.triple == other.triple && self.isa_flags.is_compatible_with(&other.isa_flags)
+            }
+            None => false,
+        }
+    }
 }
 
 #[cfg(test)]
