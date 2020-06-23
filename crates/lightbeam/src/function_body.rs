@@ -148,6 +148,7 @@ where
         ));
 
         let params = func_type.params().iter().map(|t| t.to_microwasm_type());
+        let returns = func_type.returns().iter().map(|t| t.to_microwasm_type());
 
         const DISASSEMBLE: bool = false;
 
@@ -164,14 +165,23 @@ where
             }
             println!("]");
 
+            print!("     \tdef .return :: [");
+            let mut returns_iter = returns.clone();
+
+            if let Some(arg) = returns_iter.next() {
+                print!("{}", arg);
+                for arg in returns_iter {
+                    print!(", {}", arg);
+                }
+            }
+            println!("]");
+
             println!("start .Fn{}:", func_idx);
         }
 
-        ctx.start_function(params)?;
+        ctx.start_function(params, returns.clone())?;
 
         let mut blocks = HashMap::<BrTarget<L>, Block>::new();
-
-        let returns = func_type.returns().iter().map(|t| t.to_microwasm_type());
 
         let ret_block_params = returns.len() as u32;
         let locs = ret_locs(returns).locs;

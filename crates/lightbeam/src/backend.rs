@@ -6779,16 +6779,25 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     // TODO: Reserve space to store RBX, RBP, and R12..R15 so we can use them
     //       as scratch registers
     /// Writes the function prologue and stores the arguments as locals
-    pub fn start_function<P: IntoIterator<Item = SignlessType>>(
+    pub fn start_function<
+        P: IntoIterator<Item = SignlessType>,
+        R: IntoIterator<Item = SignlessType>,
+    >(
         &mut self,
         params: P,
+        returns: R,
     ) -> Result<(), Error>
     where
         P::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
+        R::IntoIter: ExactSizeIterator + DoubleEndedIterator + Clone,
     {
         let Locs { locs, max_depth } = arg_locs_skip_caller_vmctx(params);
+        let Locs {
+            locs: _,
+            max_depth: ret_max_depth,
+        } = ret_locs::<CCLoc, _>(returns);
 
-        self.allocated_stack = StackUsage::new(max_depth.0);
+        self.allocated_stack = StackUsage::new(max_depth.0.max(ret_max_depth.0));
         self.set_state(CallingConvention::function_start(locs))?;
 
         dynasm!(self.asm

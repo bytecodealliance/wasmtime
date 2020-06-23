@@ -1,5 +1,5 @@
 use crate::{
-    error::Error,
+    error::{error, Error},
     module::{ModuleContext, SigType, Signature},
 };
 use cranelift_codegen::ir::SourceLoc;
@@ -1311,11 +1311,27 @@ where
             WasmOperator::Unreachable => OpSig::none(),
             WasmOperator::Nop => OpSig::none(),
 
-            WasmOperator::Block { .. } => OpSig::none(),
-            WasmOperator::Loop { .. } => OpSig::none(),
-            WasmOperator::If { .. } => sig!((I32) -> ()),
-            WasmOperator::Else => OpSig::none(),
-            WasmOperator::End => OpSig::none(),
+            // TODO: Multi-value
+            WasmOperator::Block { ty } | WasmOperator::Loop { ty } => {
+                let (input, _) = self.type_or_func_type_to_sig(*ty)?;
+
+                OpSig::new(input.map(SigT::Concrete), none())
+            }
+            WasmOperator::If { ty } => {
+                let (input, _) = self.type_or_func_type_to_sig(*ty)?;
+                OpSig::new(input.map(SigT::Concrete).chain(one(I32)), none())
+            }
+
+            WasmOperator::Else | WasmOperator::End => OpSig::new(
+                self.control_frames
+                    .top()
+                    .ok_or_else(|| error("Missing control frame"))?
+                    .returns
+                    .iter()
+                    .copied()
+                    .map(SigT::Concrete),
+                none(),
+            ),
 
             WasmOperator::Br { .. } => OpSig::none(),
             WasmOperator::BrIf { .. } => sig!((I32) -> ()),
@@ -1323,14 +1339,15 @@ where
             WasmOperator::Return => OpSig::none(),
 
             WasmOperator::Call { function_index } => {
-                let func_type = self.module.func_type(*function_index);
-                func_type.into()
+                let mut func_type = self.module.func_type(*function_index).into();
+                func_type.output.reverse();
+                func_type
             }
             WasmOperator::CallIndirect { index, .. } => {
-                let func_type = self.module.signature(*index);
-                let mut out = func_type.into();
-                out.input.push(I32.into());
-                out
+                let mut func_type = self.module.signature(*index).into();
+                func_type.input.push(I32.into());
+                func_type.output.reverse();
+                func_type
             }
 
             WasmOperator::Drop => sig!((T) -> ()),
@@ -1561,7 +1578,7 @@ where
         self.stack.len() as i32 - 1 - idx as i32
     }
 
-    fn apply_op(&mut self, sig: OpSig) -> Result<(), Error> {
+    fn apply_op(&mut self, op: impl fmt::Debug, sig: OpSig) -> Result<(), Error> {
         let mut ty_param = None;
 
         for p in sig.input.iter().rev() {
@@ -1584,8 +1601,8 @@ where
 
             if ty != stack_ty {
                 return Err(Error::Microwasm(format!(
-                    "Error in params for op (sig {}): expected {}, found {}",
-                    sig, ty, stack_ty
+                    "Error in params for op {:?} (sig {}): expected {}, found {}",
+                    op, sig, ty, stack_ty
                 )));
             }
         }
@@ -1880,7 +1897,7 @@ where
 
         let op_sig = self.op_sig(&op)?;
 
-        self.apply_op(op_sig)
+        self.apply_op(&op, op_sig)
             .map_err(|e| Error::Microwasm(format!("{} (in {:?})", e, op)))?;
 
         let out = match op {
