@@ -56,4 +56,29 @@ mod tests {
         let shared = settings::Flags::new(settings::builder());
         assert_eq!(Flags::new(&shared, builder()), Flags::default());
     }
+
+    #[test]
+    fn compatibility() {
+        let shared = settings::Flags::new(settings::builder());
+
+        // Create default flags.
+        let b0 = builder();
+        let f0 = Flags::new(&shared, b0);
+
+        // Create flags with some preset configuration.
+        let mut b1 = builder();
+        b1.enable("nehalem").unwrap();
+        let f1 = Flags::new(&shared, b1);
+
+        assert!(f1.is_compatible_with(&f0), "we expect the modified flags to be compatible with the default flags--the default flags are more general");
+        assert!(!f0.is_compatible_with(&f1), "we do not expect the default flags to be compatible with the modified flags--the modified flags should be more specific");
+        assert!(
+            f0.is_compatible_with(&f0),
+            "we expect flags to be compatible with themselves"
+        );
+        assert!(
+            f1.is_compatible_with(&f1),
+            "we expect flags to be compatible with themselves"
+        );
+    }
 }

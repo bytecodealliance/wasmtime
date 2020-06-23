@@ -438,6 +438,45 @@ fn gen_display(group: &SettingGroup, fmt: &mut Formatter) {
     fmtln!(fmt, "}");
 }
 
+/// Generate `Flags::is_compatible_with`; this allows users to check if, e.g., their specified ISA
+/// flags are compatible with a host system.
+fn gen_compatibility(group: &SettingGroup, fmt: &mut Formatter) {
+    fmt.doc_comment(format!(
+        "Check if two instances of {} Flags are compatible with one another.",
+        group.name
+    ));
+    fmtln!(fmt, "#[allow(dead_code)]");
+    fmtln!(fmt, "impl Flags {");
+    fmt.indent(|fmt| {
+        fmt.doc_comment(
+            "Return true if `self` is compatible with `other`; this means that \
+             `self` has all of the same settings as `other` and possibly others as well. \
+              Note that if `self` may be compatible this does not necessarily mean `other` \
+              is compatible with `self`. Only non-default settings are compared.",
+        );
+        fmt.line("pub fn is_compatible_with(&self, other: &Self) -> bool {");
+        fmt.indent(|fmt| {
+            fmtln!(fmt, "use detail::{Detail, is_same_or_default_bit, is_same_or_default_byte};");
+            fmtln!(fmt, "let default = Flags::default();");
+            fmtln!(fmt, "for descriptor in &DESCRIPTORS {");
+            fmt.indent(|fmt| {
+                fmtln!(fmt, "let byte_offset = descriptor.offset as usize;");
+                fmtln!(fmt, "match descriptor.detail {");
+                fmt.indent(|fmt| {
+                    fmtln!(fmt, "Detail::Bool { bit } => if !is_same_or_default_bit(bit, other.bytes[byte_offset], self.bytes[byte_offset], default.bytes[byte_offset]) { return false; },");
+                    fmtln!(fmt, "Detail::Num | Detail::Enum { .. } => if !is_same_or_default_byte(other.bytes[byte_offset], self.bytes[byte_offset], default.bytes[byte_offset]) { return false; },");
+                    fmtln!(fmt, "Detail::Preset => break,");
+                });
+                fmtln!(fmt, "}");
+            });
+            fmtln!(fmt, "}");
+            fmtln!(fmt, "true");
+        });
+        fmtln!(fmt, "}")
+    });
+    fmtln!(fmt, "}");
+}
+
 fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
     // Generate struct.
     fmtln!(fmt, "#[derive(Clone, Debug, PartialEq)]");
@@ -455,6 +494,7 @@ fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
     gen_descriptors(group, fmt);
     gen_template(group, fmt);
     gen_display(group, fmt);
+    gen_compatibility(group, fmt);
 }
 
 pub(crate) fn generate(
