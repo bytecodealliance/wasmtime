@@ -4,13 +4,14 @@ use {
         braced,
         parse::{Parse, ParseStream},
         punctuated::Punctuated,
-        Error, Ident, Result, Token,
+        Error, Ident, Path, Result, Token,
     },
     wiggle_generate::config::{CtxConf, WitxConf},
 };
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub target: TargetConf,
     pub witx: WitxConf,
     pub ctx: CtxConf,
     pub instance: InstanceConf,
@@ -18,12 +19,14 @@ pub struct Config {
 
 #[derive(Debug, Clone)]
 pub enum ConfigField {
+    Target(TargetConf),
     Witx(WitxConf),
     Ctx(CtxConf),
     Instance(InstanceConf),
 }
 
 mod kw {
+    syn::custom_keyword!(target);
     syn::custom_keyword!(witx);
     syn::custom_keyword!(witx_literal);
     syn::custom_keyword!(ctx);
@@ -35,7 +38,11 @@ mod kw {
 impl Parse for ConfigField {
     fn parse(input: ParseStream) -> Result<Self> {
         let lookahead = input.lookahead1();
-        if lookahead.peek(kw::witx) {
+        if lookahead.peek(kw::target) {
+            input.parse::<kw::target>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ConfigField::Target(input.parse()?))
+        } else if lookahead.peek(kw::witx) {
             input.parse::<kw::witx>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Witx(WitxConf::Paths(input.parse()?)))
@@ -59,11 +66,18 @@ impl Parse for ConfigField {
 
 impl Config {
     pub fn build(fields: impl Iterator<Item = ConfigField>, err_loc: Span) -> Result<Self> {
+        let mut target = None;
         let mut witx = None;
         let mut ctx = None;
         let mut instance = None;
         for f in fields {
             match f {
+                ConfigField::Target(c) => {
+                    if target.is_some() {
+                        return Err(Error::new(err_loc, "duplicate `target` field"));
+                    }
+                    target = Some(c);
+                }
                 ConfigField::Witx(c) => {
                     if witx.is_some() {
                         return Err(Error::new(err_loc, "duplicate `witx` field"));
@@ -85,6 +99,9 @@ impl Config {
             }
         }
         Ok(Config {
+            target: target
+                .take()
+                .ok_or_else(|| Error::new(err_loc, "`target` field required"))?,
             witx: witx
                 .take()
                 .ok_or_else(|| Error::new(err_loc, "`witx` field required"))?,
@@ -114,6 +131,19 @@ impl Parse for Config {
         let fields: Punctuated<ConfigField, Token![,]> =
             contents.parse_terminated(ConfigField::parse)?;
         Ok(Config::build(fields.into_iter(), input.span())?)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TargetConf {
+    pub path: Path,
+}
+
+impl Parse for TargetConf {
+    fn parse(input: ParseStream) -> Result<Self> {
+        Ok(TargetConf {
+            path: input.parse()?,
+        })
     }
 }
 

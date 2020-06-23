@@ -7,6 +7,7 @@ pub use wasi_common::{WasiCtx, WasiCtxBuilder};
 // Defines a `struct Wasi` with member fields and appropriate APIs for dealing
 // with all the various WASI exports.
 wasmtime_wiggle::define_struct_for_wiggle!({
+    target: wasi_common::wasi,
     witx: ["../wasi-common/WASI/phases/snapshot/witx/wasi_snapshot_preview1.witx"],
     ctx: WasiCtx,
     instance: {

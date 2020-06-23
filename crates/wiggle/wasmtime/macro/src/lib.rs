@@ -6,7 +6,7 @@ use wiggle_generate::Names;
 
 mod config;
 
-use config::InstanceConf;
+use config::{InstanceConf, TargetConf};
 
 #[proc_macro]
 pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
@@ -17,7 +17,7 @@ pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
     let doc = config.load_document();
     let names = Names::new(&config.ctx.name, quote!(wasmtime_wiggle));
 
-    generate(&doc, &names, &config.instance).into()
+    generate(&doc, &names, &config.target, &config.instance).into()
 }
 
 enum Abi {
@@ -27,7 +27,12 @@ enum Abi {
     F64,
 }
 
-fn generate(doc: &witx::Document, names: &Names, instance_conf: &InstanceConf) -> TokenStream2 {
+fn generate(
+    doc: &witx::Document,
+    names: &Names,
+    target_conf: &TargetConf,
+    instance_conf: &InstanceConf,
+) -> TokenStream2 {
     let mut fields = Vec::new();
     let mut get_exports = Vec::new();
     let mut ctor_externs = Vec::new();
@@ -35,6 +40,7 @@ fn generate(doc: &witx::Document, names: &Names, instance_conf: &InstanceConf) -
     let mut linker_add = Vec::new();
 
     let runtime = names.runtime_mod();
+    let target_path = &target_conf.path;
 
     for module in doc.modules() {
         let module_name = module.name.as_str();
@@ -223,7 +229,7 @@ fn generate(doc: &witx::Document, names: &Names, instance_conf: &InstanceConf) -
                             // root of each function invocation is correct.
                             let bc = #runtime::BorrowChecker::new();
                             let mem = #runtime::WasmtimeGuestMemory::new( mem, bc );
-                            wasi_common::wasi::#module_id::#name_ident(
+                            #target_path::#module_id::#name_ident(
                                 &mut my_cx.borrow_mut(),
                                 &mem,
                                 #(#hostcall_args),*
