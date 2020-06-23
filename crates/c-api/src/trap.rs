@@ -92,6 +92,18 @@ pub extern "C" fn wasm_trap_trace(raw: &wasm_trap_t, out: &mut wasm_frame_vec_t)
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_trap_exit_status(raw: &wasm_trap_t, status: &mut i32) -> bool {
+    let trap = raw.trap.borrow();
+    match trap.i32_exit_status() {
+        Some(i) => {
+            *status = i;
+            true
+        }
+        None => false,
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn wasm_frame_func_index(frame: &wasm_frame_t) -> u32 {
     frame.trap.borrow().trace()[frame.idx].func_index()
 }
