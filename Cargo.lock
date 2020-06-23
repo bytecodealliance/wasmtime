@@ -2567,6 +2567,7 @@ dependencies = [
  "wasi-common",
  "wasmtime",
  "wasmtime-runtime",
+ "wasmtime-wiggle",
  "wig",
  "wiggle",
 ]
