@@ -6,7 +6,7 @@ use wiggle_generate::Names;
 
 mod config;
 
-use config::{InstanceConf, TargetConf};
+use config::{InstanceConf, MissingMemoryConf, TargetConf};
 
 #[proc_macro]
 pub fn define_wasmtime_integration(args: TokenStream) -> TokenStream {
@@ -17,7 +17,14 @@ pub fn define_wasmtime_integration(args: TokenStream) -> TokenStream {
     let doc = config.load_document();
     let names = Names::new(&config.ctx.name, quote!(wasmtime_wiggle));
 
-    generate(&doc, &names, &config.target, &config.instance).into()
+    generate(
+        &doc,
+        &names,
+        &config.target,
+        &config.instance,
+        &config.missing_memory,
+    )
+    .into()
 }
 
 enum Abi {
@@ -32,6 +39,7 @@ fn generate(
     names: &Names,
     target_conf: &TargetConf,
     instance_conf: &InstanceConf,
+    missing_mem_conf: &MissingMemoryConf,
 ) -> TokenStream2 {
     let mut fields = Vec::new();
     let mut get_exports = Vec::new();
@@ -41,6 +49,7 @@ fn generate(
 
     let runtime = names.runtime_mod();
     let target_path = &target_conf.path;
+    let missing_mem_err = &missing_mem_conf.err;
 
     for module in doc.modules() {
         let module_name = module.name.as_str();
@@ -205,7 +214,7 @@ fn generate(
                                 Some(wasmtime::Extern::Memory(m)) => m,
                                 _ => {
                                     log::warn!("callee does not export a memory as \"memory\"");
-                                    let e = wasi_common::wasi::Errno::Inval;
+                                    let e = { #missing_mem_err };
                                     #handle_early_error
                                 }
                             };

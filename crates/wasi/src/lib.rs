@@ -24,7 +24,9 @@ wasm modules. This structure exports all that various fields of the
 wasi instance as fields which can be used to implement your own
 instantiation logic, if necessary. Additionally [`Wasi::get_export`]
 can be used to do name-based resolution."
-    }
+    },
+    // Error to return when caller module is missing memory export:
+    missing_memory: { wasi_common::wasi::Errno::Inval },
 });
 
 pub fn is_wasi_module(name: &str) -> bool {

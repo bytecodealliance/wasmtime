@@ -1,5 +1,5 @@
 use {
-    proc_macro2::Span,
+    proc_macro2::{Span, TokenStream},
     syn::{
         braced,
         parse::{Parse, ParseStream},
@@ -15,6 +15,7 @@ pub struct Config {
     pub witx: WitxConf,
     pub ctx: CtxConf,
     pub instance: InstanceConf,
+    pub missing_memory: MissingMemoryConf,
 }
 
 #[derive(Debug, Clone)]
@@ -23,6 +24,7 @@ pub enum ConfigField {
     Witx(WitxConf),
     Ctx(CtxConf),
     Instance(InstanceConf),
+    MissingMemory(MissingMemoryConf),
 }
 
 mod kw {
@@ -33,6 +35,7 @@ mod kw {
     syn::custom_keyword!(instance);
     syn::custom_keyword!(name);
     syn::custom_keyword!(docs);
+    syn::custom_keyword!(missing_memory);
 }
 
 impl Parse for ConfigField {
@@ -58,6 +61,10 @@ impl Parse for ConfigField {
             input.parse::<kw::instance>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Instance(input.parse()?))
+        } else if lookahead.peek(kw::missing_memory) {
+            input.parse::<kw::missing_memory>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ConfigField::MissingMemory(input.parse()?))
         } else {
             Err(lookahead.error())
         }
@@ -70,6 +77,7 @@ impl Config {
         let mut witx = None;
         let mut ctx = None;
         let mut instance = None;
+        let mut missing_memory = None;
         for f in fields {
             match f {
                 ConfigField::Target(c) => {
@@ -96,6 +104,12 @@ impl Config {
                     }
                     instance = Some(c);
                 }
+                ConfigField::MissingMemory(c) => {
+                    if missing_memory.is_some() {
+                        return Err(Error::new(err_loc, "duplicate `missing_memory` field"));
+                    }
+                    missing_memory = Some(c);
+                }
             }
         }
         Ok(Config {
@@ -111,6 +125,9 @@ impl Config {
             instance: instance
                 .take()
                 .ok_or_else(|| Error::new(err_loc, "`instance` field required"))?,
+            missing_memory: missing_memory
+                .take()
+                .ok_or_else(|| Error::new(err_loc, "`missing_memory` field required"))?,
         })
     }
 
@@ -212,5 +229,19 @@ impl Parse for InstanceConf {
         let fields: Punctuated<InstanceConfField, Token![,]> =
             contents.parse_terminated(InstanceConfField::parse)?;
         Ok(InstanceConf::build(fields.into_iter(), input.span())?)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MissingMemoryConf {
+    pub err: TokenStream,
+}
+impl Parse for MissingMemoryConf {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let contents;
+        let _lbrace = braced!(contents in input);
+        Ok(MissingMemoryConf {
+            err: contents.parse()?,
+        })
     }
 }
