@@ -6,10 +6,15 @@ pub use wasi_common::{WasiCtx, WasiCtxBuilder};
 
 // Defines a `struct Wasi` with member fields and appropriate APIs for dealing
 // with all the various WASI exports.
-wasmtime_wiggle::define_struct_for_wiggle!({
+wasmtime_wiggle::define_wasmtime_integration!({
+    // The wiggle code to integrate with lives here:
     target: wasi_common::wasi,
+    // This must be the same witx document as used above:
     witx: ["../wasi-common/WASI/phases/snapshot/witx/wasi_snapshot_preview1.witx"],
+    // This must be the same ctx type as used for the target:
     ctx: WasiCtx,
+    // This macro will emit a struct to represent the instance,
+    // with this name and docs:
     instance: {
         name: Wasi,
         docs: "An instantiated instance of the wasi exports.

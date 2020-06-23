@@ -9,7 +9,7 @@ mod config;
 use config::{InstanceConf, TargetConf};
 
 #[proc_macro]
-pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
+pub fn define_wasmtime_integration(args: TokenStream) -> TokenStream {
     let mut config = parse_macro_input!(args as config::Config);
     config.witx.make_paths_relative_to(
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR env var"),
