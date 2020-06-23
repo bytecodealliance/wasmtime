@@ -66,25 +66,21 @@ fn generate(
 
             let mut shim_arg_decls = Vec::new();
             let mut params = Vec::new();
-            let mut formats = Vec::new();
-            let mut format_args = Vec::new();
             let mut hostcall_args = Vec::new();
 
             for param in func.params.iter() {
                 let name = names.func_param(&param.name);
 
                 // Registers a new parameter to the shim we're making with the
-                // given `name`, the `abi_ty` wasm type and `hex` defines
-                // whether it's debug-printed in a hex format or not.
+                // given `name`, the `abi_ty` wasm type
                 //
                 // This will register a whole bunch of things:
                 //
                 // * The cranelift type for the parameter
                 // * Syntax to specify the actual function parameter
-                // * How to log the parameter value in a call to `trace!`
                 // * How to actually pass this argument to the host
                 //   implementation, converting as necessary.
-                let mut add_param = |name: &Ident, abi_ty: Abi, hex: bool| {
+                let mut add_param = |name: &Ident, abi_ty: Abi| {
                     match abi_ty {
                         Abi::I32 => {
                             params.push(quote! { types::I32 });
@@ -103,25 +99,23 @@ fn generate(
                             shim_arg_decls.push(quote! { #name: f64 });
                         }
                     }
-                    formats.push(format!("{}={}", name, if hex { "{:#x}" } else { "{}" },));
-                    format_args.push(name.clone());
                     hostcall_args.push(quote! { #name as _ });
                 };
 
                 match &*param.tref.type_() {
                     witx::Type::Int(e) => match e.repr {
-                        witx::IntRepr::U64 => add_param(&name, Abi::I64, false),
-                        _ => add_param(&name, Abi::I32, false),
+                        witx::IntRepr::U64 => add_param(&name, Abi::I64),
+                        _ => add_param(&name, Abi::I32),
                     },
 
                     witx::Type::Enum(e) => match e.repr {
-                        witx::IntRepr::U64 => add_param(&name, Abi::I64, false),
-                        _ => add_param(&name, Abi::I32, false),
+                        witx::IntRepr::U64 => add_param(&name, Abi::I64),
+                        _ => add_param(&name, Abi::I32),
                     },
 
                     witx::Type::Flags(f) => match f.repr {
-                        witx::IntRepr::U64 => add_param(&name, Abi::I64, true),
-                        _ => add_param(&name, Abi::I32, true),
+                        witx::IntRepr::U64 => add_param(&name, Abi::I64),
+                        _ => add_param(&name, Abi::I32),
                     },
 
                     witx::Type::Builtin(witx::BuiltinType::Char8)
@@ -132,34 +126,34 @@ fn generate(
                     | witx::Type::Builtin(witx::BuiltinType::S32)
                     | witx::Type::Builtin(witx::BuiltinType::U32)
                     | witx::Type::Builtin(witx::BuiltinType::USize) => {
-                        add_param(&name, Abi::I32, false);
+                        add_param(&name, Abi::I32);
                     }
 
                     witx::Type::Builtin(witx::BuiltinType::S64)
                     | witx::Type::Builtin(witx::BuiltinType::U64) => {
-                        add_param(&name, Abi::I64, false);
+                        add_param(&name, Abi::I64);
                     }
 
                     witx::Type::Builtin(witx::BuiltinType::F32) => {
-                        add_param(&name, Abi::F32, false);
+                        add_param(&name, Abi::F32);
                     }
 
                     witx::Type::Builtin(witx::BuiltinType::F64) => {
-                        add_param(&name, Abi::F64, false);
+                        add_param(&name, Abi::F64);
                     }
 
                     // strings/arrays have an extra ABI parameter for the length
                     // of the array passed.
                     witx::Type::Builtin(witx::BuiltinType::String) | witx::Type::Array(_) => {
-                        add_param(&name, Abi::I32, true);
+                        add_param(&name, Abi::I32);
                         let len = format_ident!("{}_len", name);
-                        add_param(&len, Abi::I32, false);
+                        add_param(&len, Abi::I32);
                     }
 
                     witx::Type::ConstPointer(_)
                     | witx::Type::Handle(_)
                     | witx::Type::Pointer(_) => {
-                        add_param(&name, Abi::I32, true);
+                        add_param(&name, Abi::I32);
                     }
 
                     witx::Type::Struct(_) | witx::Type::Union(_) => {
@@ -198,21 +192,14 @@ fn generate(
                 let name = format_ident!("{}", result.name.as_str());
                 params.push(quote! { types::I32 });
                 shim_arg_decls.push(quote! { #name: i32 });
-                formats.push(format!("{}={{:#x}}", name));
-                format_args.push(name.clone());
                 hostcall_args.push(quote! { #name });
             }
 
-            let format_str = format!("{}({})", name, formats.join(", "));
             ctor_externs.push(quote! {
                 let my_cx = cx.clone();
                 let #name_ident = wasmtime::Func::wrap(
                     store,
                     move |caller: wasmtime::Caller<'_> #(,#shim_arg_decls)*| -> #ret_ty {
-                        log::trace!(
-                            #format_str,
-                            #(#format_args),*
-                        );
                         unsafe {
                             let mem = match caller.get_export("memory") {
                                 Some(wasmtime::Extern::Memory(m)) => m,
