@@ -1,12 +1,19 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::{format_ident, quote};
+use syn::parse_macro_input;
 
+mod config;
 mod utils;
 
 #[proc_macro]
 pub fn define_struct_for_wiggle(args: TokenStream) -> TokenStream {
-    inner(TokenStream2::from(args)).into()
+    let mut config = parse_macro_input!(args as config::Config);
+    config.witx.make_paths_relative_to(
+        std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR env var"),
+    );
+    let doc = config.load_document();
+    generate(&doc).into()
 }
 
 enum Abi {
@@ -16,15 +23,7 @@ enum Abi {
     F64,
 }
 
-fn inner(args: TokenStream2) -> TokenStream2 {
-    let path = utils::witx_path_from_args(args);
-    let doc = match witx::load(&[&path]) {
-        Ok(doc) => doc,
-        Err(e) => {
-            panic!("error opening file {}: {}", path.display(), e);
-        }
-    };
-
+fn generate(doc: &witx::Document) -> TokenStream2 {
     let mut fields = Vec::new();
     let mut get_exports = Vec::new();
     let mut ctor_externs = Vec::new();
