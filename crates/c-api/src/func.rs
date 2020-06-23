@@ -273,7 +273,7 @@ pub extern "C" fn wasm_func_as_extern(f: &mut wasm_func_t) -> &mut wasm_extern_t
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_caller_export_get(
+pub extern "C" fn wasmtime_caller_export_get(
     caller: &wasmtime_caller_t,
     name: &wasm_name_t,
 ) -> Option<Box<wasm_extern_t>> {

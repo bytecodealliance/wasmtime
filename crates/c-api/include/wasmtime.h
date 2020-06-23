@@ -129,6 +129,13 @@ WASM_API_EXTERN own wasmtime_error_t* wasmtime_linker_get_default(
     own wasm_func_t **func
 );
 
+WASM_API_EXTERN own wasmtime_error_t* wasmtime_linker_get_one_by_name(
+    const wasmtime_linker_t *linker,
+    const wasm_name_t *module,
+    const wasm_name_t *name,
+    own wasm_extern_t **item
+);
+
 ///////////////////////////////////////////////////////////////////////////////
 //
 // wasmtime_caller_t extension, binding the `Caller` type in the Rust API
