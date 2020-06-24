@@ -259,7 +259,7 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
     /// Creates a new `GuestPtr` from the given `mem` and `pointer` values.
     ///
     /// Note that for sized types like `u32`, `GuestPtr<T>`, etc, the `pointer`
-    /// vlue is a `u32` offset into guest memory. For slices and strings,
+    /// value is a `u32` offset into guest memory. For slices and strings,
     /// `pointer` is a `(u32, u32)` offset/length pair.
     pub fn new(mem: &'a (dyn GuestMemory + 'a), pointer: T::Pointer) -> GuestPtr<'a, T> {
         GuestPtr {
@@ -488,7 +488,7 @@ impl<'a> GuestPtr<'a, str> {
         self.pointer.0
     }
 
-    /// Returns the length, in bytes, of th estring.
+    /// Returns the length, in bytes, of the string.
     pub fn len(&self) -> u32 {
         self.pointer.1
     }
@@ -496,6 +496,12 @@ impl<'a> GuestPtr<'a, str> {
     /// Returns a raw pointer for the underlying slice of bytes that this
     /// pointer points to.
     pub fn as_bytes(&self) -> GuestPtr<'a, [u8]> {
+        GuestPtr::new(self.mem, self.pointer)
+    }
+
+    /// Returns a pointer for the underlying slice of bytes that this
+    /// pointer points to.
+    pub fn as_byte_ptr(&self) -> GuestPtr<'a, [u8]> {
         GuestPtr::new(self.mem, self.pointer)
     }
 
@@ -530,6 +536,14 @@ impl<'a> GuestPtr<'a, str> {
             }),
             Err(e) => Err(GuestError::InvalidUtf8(e)),
         }
+    }
+}
+
+impl<'a> GuestPtr<'a, [u8]> {
+    /// Returns a pointer to the string represented by a `[u8]` without
+    /// validating whether each u8 is a utf-8 codepoint.
+    pub fn as_str_ptr(&self) -> GuestPtr<'a, str> {
+        GuestPtr::new(self.mem, self.pointer)
     }
 }
 
