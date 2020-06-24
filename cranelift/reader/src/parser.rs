@@ -80,12 +80,22 @@ pub fn parse_test<'a>(text: &'a str, options: ParseOptions<'a>) -> ParseResult<T
         Some(pass_vec) => {
             parser.parse_test_commands();
             commands = parser.parse_cmdline_passes(pass_vec);
-            parser.parse_target_specs()?;
+            let default_triple = if has_run_directive(&commands) {
+                Some(Triple::host())
+            } else {
+                None
+            };
+            parser.parse_target_specs(default_triple)?;
             isa_spec = parser.parse_cmdline_target(options.target)?;
         }
         None => {
             commands = parser.parse_test_commands();
-            isa_spec = parser.parse_target_specs()?;
+            let default_triple = if has_run_directive(&commands) {
+                Some(Triple::host())
+            } else {
+                None
+            };
+            isa_spec = parser.parse_target_specs(default_triple)?;
         }
     };
     let features = parser.parse_cranelift_features()?;
@@ -93,7 +103,7 @@ pub fn parse_test<'a>(text: &'a str, options: ParseOptions<'a>) -> ParseResult<T
     // Decide between using the calling convention passed in the options or using the
     // host's calling convention--if any tests are to be run on the host we should default to the
     // host's calling convention.
-    parser = if commands.iter().any(|tc| tc.command == "run") {
+    parser = if has_run_directive(&commands) {
         let host_default_calling_convention = CallConv::triple_default(&Triple::host());
         parser.with_default_calling_convention(host_default_calling_convention)
     } else {
@@ -1161,7 +1171,10 @@ impl<'a> Parser<'a> {
     ///
     /// Accept a mix of `target` and `set` command lines. The `set` commands are cumulative.
     ///
-    fn parse_target_specs(&mut self) -> ParseResult<isaspec::IsaSpec> {
+    fn parse_target_specs(
+        &mut self,
+        default_triple: Option<Triple>,
+    ) -> ParseResult<isaspec::IsaSpec> {
         // Were there any `target` commands?
         let mut seen_target = false;
         // Location of last `set` command since the last `target`.
@@ -1192,7 +1205,13 @@ impl<'a> Parser<'a> {
                         None => return err!(loc, "expected target triple"),
                     };
                     let triple = match Triple::from_str(target_name) {
-                        Ok(triple) => triple,
+                        Ok(triple) => {
+                            if let Some(default_triple) = default_triple.clone() {
+                                merge(&triple, default_triple)
+                            } else {
+                                triple
+                            }
+                        }
                         Err(err) => return err!(loc, err),
                     };
                     let mut isa_builder = match isa::lookup(triple) {
@@ -3197,6 +3216,32 @@ impl<'a> Parser<'a> {
         };
         Ok(idata)
     }
+}
+
+/// Merge non-default values of [Triple] into another [Triple] and return this second instance.
+fn merge(from: &Triple, mut to: Triple) -> Triple {
+    use target_lexicon::{Architecture, BinaryFormat, Environment, OperatingSystem, Vendor};
+    if from.architecture != Architecture::Unknown {
+        to.architecture = from.architecture
+    }
+    if from.vendor != Vendor::Unknown {
+        to.vendor = from.vendor.clone()
+    }
+    if from.operating_system != OperatingSystem::Unknown {
+        to.operating_system = from.operating_system
+    }
+    if from.environment != Environment::Unknown {
+        to.environment = from.environment
+    }
+    if from.binary_format != BinaryFormat::Unknown {
+        to.binary_format = from.binary_format
+    }
+    to
+}
+
+/// Check whether the commands contain any `test run` directives.
+fn has_run_directive(commands: &[TestCommand]) -> bool {
+    commands.iter().any(|tc| tc.command == "run")
 }
 
 #[cfg(test)]
