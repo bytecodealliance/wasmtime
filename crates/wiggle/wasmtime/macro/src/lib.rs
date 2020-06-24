@@ -46,193 +46,200 @@ fn generate_module(
     target_conf: &TargetConf,
     missing_mem_conf: &MissingMemoryConf,
 ) -> TokenStream2 {
-    let mut fields = Vec::new();
-    let mut get_exports = Vec::new();
-    let mut ctor_externs = Vec::new();
-    let mut ctor_fields = Vec::new();
-    let mut linker_add = Vec::new();
+    let fields = module.funcs().map(|f| {
+        let name_ident = names.func(&f.name);
+        quote! { pub #name_ident: wasmtime::Func }
+    });
+    let get_exports = module.funcs().map(|f| {
+        let func_name = f.name.as_str();
+        let name_ident = names.func(&f.name);
+        quote! { #func_name => Some(&self.#name_ident) }
+    });
+    let ctor_fields = module.funcs().map(|f| names.func(&f.name));
+
+    let module_name = module.name.as_str();
+
+    let linker_add = module.funcs().map(|f| {
+        let func_name = f.name.as_str();
+        let name_ident = names.func(&f.name);
+        quote! {
+            linker.define(#module_name, #func_name, self.#name_ident.clone())?;
+        }
+    });
 
     let runtime = names.runtime_mod();
     let target_path = &target_conf.path;
     let missing_mem_err = &missing_mem_conf.err;
-
-    let module_name = module.name.as_str();
     let module_id = names.module(&module.name);
-    for func in module.funcs() {
-        let func_name = func.name.as_str();
-        let name_ident = names.func(&func.name);
-        fields.push(quote! { pub #name_ident: wasmtime::Func });
-        get_exports.push(quote! { #func_name => Some(&self.#name_ident) });
-        ctor_fields.push(name_ident.clone());
-        linker_add.push(quote! {
-            linker.define(#module_name, #func_name, self.#name_ident.clone())?;
-        });
 
-        if let Some(func_override) = module_conf.function_override.find(func_name) {
-            ctor_externs.push(quote! {
-                let #name_ident = wasmtime::Func::wrap(store, #func_override);
-            });
-            continue;
-        }
+    let ctor_externs = module.funcs().map(|f| {
+        let name_ident = names.func(&f.name);
+        if let Some(func_override) = module_conf.function_override.find(&f.name.as_str()) {
+            quote! { let #name_ident = wasmtime::Func::wrap(store, #func_override); }
+        } else {
+            let mut shim_arg_decls = Vec::new();
+            let mut params = Vec::new();
+            let mut hostcall_args = Vec::new();
 
-        let mut shim_arg_decls = Vec::new();
-        let mut params = Vec::new();
-        let mut hostcall_args = Vec::new();
+            for param in f.params.iter() {
+                let name = names.func_param(&param.name);
 
-        for param in func.params.iter() {
-            let name = names.func_param(&param.name);
-
-            // Registers a new parameter to the shim we're making with the
-            // given `name`, the `abi_ty` wasm type
-            //
-            // This will register a whole bunch of things:
-            //
-            // * The cranelift type for the parameter
-            // * Syntax to specify the actual function parameter
-            // * How to actually pass this argument to the host
-            //   implementation, converting as necessary.
-            let mut add_param = |name: &Ident, abi_ty: Abi| {
-                match abi_ty {
-                    Abi::I32 => {
-                        params.push(quote! { types::I32 });
-                        shim_arg_decls.push(quote! { #name: i32 });
+                // Registers a new parameter to the shim we're making with the
+                // given `name`, the `abi_ty` wasm type
+                //
+                // This will register a whole bunch of things:
+                //
+                // * The cranelift type for the parameter
+                // * Syntax to specify the actual function parameter
+                // * How to actually pass this argument to the host
+                //   implementation, converting as necessary.
+                let mut add_param = |name: &Ident, abi_ty: Abi| {
+                    match abi_ty {
+                        Abi::I32 => {
+                            params.push(quote! { types::I32 });
+                            shim_arg_decls.push(quote! { #name: i32 });
+                        }
+                        Abi::I64 => {
+                            params.push(quote! { types::I64 });
+                            shim_arg_decls.push(quote! { #name: i64 });
+                        }
+                        Abi::F32 => {
+                            params.push(quote! { types::F32 });
+                            shim_arg_decls.push(quote! { #name: f32 });
+                        }
+                        Abi::F64 => {
+                            params.push(quote! { types::F64 });
+                            shim_arg_decls.push(quote! { #name: f64 });
+                        }
                     }
-                    Abi::I64 => {
-                        params.push(quote! { types::I64 });
-                        shim_arg_decls.push(quote! { #name: i64 });
+                    hostcall_args.push(quote! { #name as _ });
+                };
+
+                match &*param.tref.type_() {
+                    witx::Type::Int(e) => match e.repr {
+                        witx::IntRepr::U64 => add_param(&name, Abi::I64),
+                        _ => add_param(&name, Abi::I32),
+                    },
+
+                    witx::Type::Enum(e) => match e.repr {
+                        witx::IntRepr::U64 => add_param(&name, Abi::I64),
+                        _ => add_param(&name, Abi::I32),
+                    },
+
+                    witx::Type::Flags(f) => match f.repr {
+                        witx::IntRepr::U64 => add_param(&name, Abi::I64),
+                        _ => add_param(&name, Abi::I32),
+                    },
+
+                    witx::Type::Builtin(witx::BuiltinType::Char8)
+                    | witx::Type::Builtin(witx::BuiltinType::S8)
+                    | witx::Type::Builtin(witx::BuiltinType::U8)
+                    | witx::Type::Builtin(witx::BuiltinType::S16)
+                    | witx::Type::Builtin(witx::BuiltinType::U16)
+                    | witx::Type::Builtin(witx::BuiltinType::S32)
+                    | witx::Type::Builtin(witx::BuiltinType::U32)
+                    | witx::Type::Builtin(witx::BuiltinType::USize) => {
+                        add_param(&name, Abi::I32);
                     }
-                    Abi::F32 => {
-                        params.push(quote! { types::F32 });
-                        shim_arg_decls.push(quote! { #name: f32 });
+
+                    witx::Type::Builtin(witx::BuiltinType::S64)
+                    | witx::Type::Builtin(witx::BuiltinType::U64) => {
+                        add_param(&name, Abi::I64);
                     }
-                    Abi::F64 => {
-                        params.push(quote! { types::F64 });
-                        shim_arg_decls.push(quote! { #name: f64 });
+
+                    witx::Type::Builtin(witx::BuiltinType::F32) => {
+                        add_param(&name, Abi::F32);
+                    }
+
+                    witx::Type::Builtin(witx::BuiltinType::F64) => {
+                        add_param(&name, Abi::F64);
+                    }
+
+                    // strings/arrays have an extra ABI parameter for the length
+                    // of the array passed.
+                    witx::Type::Builtin(witx::BuiltinType::String) | witx::Type::Array(_) => {
+                        add_param(&name, Abi::I32);
+                        let len = format_ident!("{}_len", name);
+                        add_param(&len, Abi::I32);
+                    }
+
+                    witx::Type::ConstPointer(_)
+                    | witx::Type::Handle(_)
+                    | witx::Type::Pointer(_) => {
+                        add_param(&name, Abi::I32);
+                    }
+
+                    witx::Type::Struct(_) | witx::Type::Union(_) => {
+                        panic!("unsupported argument type")
                     }
                 }
-                hostcall_args.push(quote! { #name as _ });
-            };
+            }
 
-            match &*param.tref.type_() {
-                witx::Type::Int(e) => match e.repr {
-                    witx::IntRepr::U64 => add_param(&name, Abi::I64),
-                    _ => add_param(&name, Abi::I32),
-                },
+            let mut results = f.results.iter();
+            let mut ret_ty = quote! { () };
+            let mut cvt_ret = quote! {};
+            let mut returns = Vec::new();
+            let mut handle_early_error = quote! { panic!("error: {:?}", e) };
 
-                witx::Type::Enum(e) => match e.repr {
-                    witx::IntRepr::U64 => add_param(&name, Abi::I64),
-                    _ => add_param(&name, Abi::I32),
-                },
-
-                witx::Type::Flags(f) => match f.repr {
-                    witx::IntRepr::U64 => add_param(&name, Abi::I64),
-                    _ => add_param(&name, Abi::I32),
-                },
-
-                witx::Type::Builtin(witx::BuiltinType::Char8)
-                | witx::Type::Builtin(witx::BuiltinType::S8)
-                | witx::Type::Builtin(witx::BuiltinType::U8)
-                | witx::Type::Builtin(witx::BuiltinType::S16)
-                | witx::Type::Builtin(witx::BuiltinType::U16)
-                | witx::Type::Builtin(witx::BuiltinType::S32)
-                | witx::Type::Builtin(witx::BuiltinType::U32)
-                | witx::Type::Builtin(witx::BuiltinType::USize) => {
-                    add_param(&name, Abi::I32);
+            // The first result is returned bare right now...
+            if let Some(ret) = results.next() {
+                handle_early_error = quote! { return e.into() };
+                match &*ret.tref.type_() {
+                    // Eventually we'll want to add support for more returned
+                    // types, but for now let's just conform to what `*.witx`
+                    // definitions currently use.
+                    witx::Type::Enum(e) => match e.repr {
+                        witx::IntRepr::U16 => {
+                            returns.push(quote! { types::I32 });
+                            ret_ty = quote! { i32 };
+                            cvt_ret = quote! { .into() }
+                        }
+                        other => panic!("unsupported ret enum repr {:?}", other),
+                    },
+                    other => panic!("unsupported first return {:?}", other),
                 }
+            }
 
-                witx::Type::Builtin(witx::BuiltinType::S64)
-                | witx::Type::Builtin(witx::BuiltinType::U64) => {
-                    add_param(&name, Abi::I64);
-                }
+            // ... and all remaining results are returned via out-poiners
+            for result in results {
+                let name = format_ident!("{}", result.name.as_str());
+                params.push(quote! { types::I32 });
+                shim_arg_decls.push(quote! { #name: i32 });
+                hostcall_args.push(quote! { #name });
+            }
 
-                witx::Type::Builtin(witx::BuiltinType::F32) => {
-                    add_param(&name, Abi::F32);
-                }
-
-                witx::Type::Builtin(witx::BuiltinType::F64) => {
-                    add_param(&name, Abi::F64);
-                }
-
-                // strings/arrays have an extra ABI parameter for the length
-                // of the array passed.
-                witx::Type::Builtin(witx::BuiltinType::String) | witx::Type::Array(_) => {
-                    add_param(&name, Abi::I32);
-                    let len = format_ident!("{}_len", name);
-                    add_param(&len, Abi::I32);
-                }
-
-                witx::Type::ConstPointer(_) | witx::Type::Handle(_) | witx::Type::Pointer(_) => {
-                    add_param(&name, Abi::I32);
-                }
-
-                witx::Type::Struct(_) | witx::Type::Union(_) => panic!("unsupported argument type"),
+            quote! {
+                let my_cx = cx.clone();
+                let #name_ident = wasmtime::Func::wrap(
+                    store,
+                    move |caller: wasmtime::Caller<'_> #(,#shim_arg_decls)*| -> #ret_ty {
+                        unsafe {
+                            let mem = match caller.get_export("memory") {
+                                Some(wasmtime::Extern::Memory(m)) => m,
+                                _ => {
+                                    log::warn!("callee does not export a memory as \"memory\"");
+                                    let e = { #missing_mem_err };
+                                    #handle_early_error
+                                }
+                            };
+                            // Wiggle does not expose any methods for
+                            // functions to re-enter the WebAssembly module,
+                            // or expose the memory via non-wiggle mechanisms.
+                            // Therefore, creating a new BorrowChecker at the
+                            // root of each function invocation is correct.
+                            let bc = #runtime::BorrowChecker::new();
+                            let mem = #runtime::WasmtimeGuestMemory::new( mem, bc );
+                            #target_path::#module_id::#name_ident(
+                                &mut my_cx.borrow_mut(),
+                                &mem,
+                                #(#hostcall_args),*
+                            ) #cvt_ret
+                        }
+                    }
+                );
             }
         }
-
-        let mut results = func.results.iter();
-        let mut ret_ty = quote! { () };
-        let mut cvt_ret = quote! {};
-        let mut returns = Vec::new();
-        let mut handle_early_error = quote! { panic!("error: {:?}", e) };
-
-        // The first result is returned bare right now...
-        if let Some(ret) = results.next() {
-            handle_early_error = quote! { return e.into() };
-            match &*ret.tref.type_() {
-                // Eventually we'll want to add support for more returned
-                // types, but for now let's just conform to what `*.witx`
-                // definitions currently use.
-                witx::Type::Enum(e) => match e.repr {
-                    witx::IntRepr::U16 => {
-                        returns.push(quote! { types::I32 });
-                        ret_ty = quote! { i32 };
-                        cvt_ret = quote! { .into() }
-                    }
-                    other => panic!("unsupported ret enum repr {:?}", other),
-                },
-                other => panic!("unsupported first return {:?}", other),
-            }
-        }
-
-        // ... and all remaining results are returned via out-poiners
-        for result in results {
-            let name = format_ident!("{}", result.name.as_str());
-            params.push(quote! { types::I32 });
-            shim_arg_decls.push(quote! { #name: i32 });
-            hostcall_args.push(quote! { #name });
-        }
-
-        ctor_externs.push(quote! {
-            let my_cx = cx.clone();
-            let #name_ident = wasmtime::Func::wrap(
-                store,
-                move |caller: wasmtime::Caller<'_> #(,#shim_arg_decls)*| -> #ret_ty {
-                    unsafe {
-                        let mem = match caller.get_export("memory") {
-                            Some(wasmtime::Extern::Memory(m)) => m,
-                            _ => {
-                                log::warn!("callee does not export a memory as \"memory\"");
-                                let e = { #missing_mem_err };
-                                #handle_early_error
-                            }
-                        };
-                        // Wiggle does not expose any methods for
-                        // functions to re-enter the WebAssembly module,
-                        // or expose the memory via non-wiggle mechanisms.
-                        // Therefore, creating a new BorrowChecker at the
-                        // root of each function invocation is correct.
-                        let bc = #runtime::BorrowChecker::new();
-                        let mem = #runtime::WasmtimeGuestMemory::new( mem, bc );
-                        #target_path::#module_id::#name_ident(
-                            &mut my_cx.borrow_mut(),
-                            &mem,
-                            #(#hostcall_args),*
-                        ) #cvt_ret
-                    }
-                }
-            );
-        });
-    }
+    });
 
     let type_name = module_conf.name.clone();
     let type_docs = module_conf
