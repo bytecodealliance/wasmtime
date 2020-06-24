@@ -1,9 +1,9 @@
 //! CLI tool to compile Cranelift IR files to native code in memory and execute them.
 
 use crate::utils::{iterate_files, read_to_string};
-use cranelift_codegen::isa::{CallConv, TargetIsa};
+use cranelift_codegen::{isa::CallConv, isa::TargetIsa};
 use cranelift_filetests::SingleFunctionCompiler;
-use cranelift_native::builder as host_isa_builder;
+use cranelift_native::{builder as host_isa_builder, default_host_isa};
 use cranelift_reader::{parse_run_command, parse_test, Details, IsaSpec, ParseOptions};
 use std::path::PathBuf;
 use target_lexicon::Triple;
@@ -67,7 +67,7 @@ fn run_file_contents(file_contents: String) -> Result<(), String> {
     };
     let test_file = parse_test(&file_contents, options).map_err(|e| e.to_string())?;
     let isa = create_target_isa(&test_file.isa_spec)?;
-    let mut compiler = SingleFunctionCompiler::new(isa);
+    let mut compiler = SingleFunctionCompiler::new(isa.as_ref());
     for (func, Details { comments, .. }) in test_file.functions {
         for comment in comments {
             if let Some(command) =
@@ -84,9 +84,22 @@ fn run_file_contents(file_contents: String) -> Result<(), String> {
 /// Build an ISA based on the current machine running this code (the host)
 fn create_target_isa(isa_spec: &IsaSpec) -> Result<Box<dyn TargetIsa>, String> {
     if let IsaSpec::None(flags) = isa_spec {
-        // build an ISA for the current machine
+        // Build an ISA for the current machine.
         let builder = host_isa_builder()?;
-        Ok(builder.finish(flags.clone()))
+        let host_isa_with_flags = builder.finish(flags.clone());
+
+        // If this test requests to run with flags that are unavailable, then we warn the user
+        // and proceed.
+        let default_host_isa = default_host_isa().expect("to be able to create a default host ISA");
+        if !default_host_isa.is_compatible_with(host_isa_with_flags.as_ref()) {
+            println!(
+                "WARNING: host and target ISAs do not match: host = {}, target = {} (could also be due to flags, not shown)",
+                default_host_isa.triple(),
+                host_isa_with_flags.triple(),
+            );
+        }
+
+        return Ok(host_isa_with_flags);
     } else {
         Err(String::from("A target ISA was specified in the file but should not have been--only the host ISA can be used for running CLIF files"))
     }

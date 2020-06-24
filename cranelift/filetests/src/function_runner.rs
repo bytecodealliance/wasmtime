@@ -3,9 +3,8 @@ use core::{mem, ptr};
 use cranelift_codegen::binemit::{NullRelocSink, NullStackmapSink, NullTrapSink};
 use cranelift_codegen::ir::{condcodes::IntCC, Function, InstBuilder, Signature, Type};
 use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::{ir, settings, CodegenError, Context};
+use cranelift_codegen::{ir, CodegenError, Context};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
-use cranelift_native::builder as host_isa_builder;
 use cranelift_reader::DataValue;
 use log::trace;
 use memmap::{Mmap, MmapMut};
@@ -24,39 +23,28 @@ use thiserror::Error;
 ///
 /// ```
 /// use cranelift_filetests::SingleFunctionCompiler;
+/// use cranelift_native::default_host_isa;
+/// use cranelift_codegen::settings::Flags;
 /// use cranelift_reader::parse_functions;
 ///
 /// let code = "test run \n function %add(i32, i32) -> i32 {  block0(v0:i32, v1:i32):  v2 = iadd v0, v1  return v2 }".into();
 /// let func = parse_functions(code).unwrap().into_iter().nth(0).unwrap();
-/// let mut compiler = SingleFunctionCompiler::with_default_host_isa();
+/// let isa = default_host_isa().unwrap();
+/// let mut compiler = SingleFunctionCompiler::new(isa.as_ref());
 /// let compiled_func = compiler.compile(func).unwrap();
 /// println!("Address of compiled function: {:p}", compiled_func.as_ptr());
 /// ```
-pub struct SingleFunctionCompiler {
-    isa: Box<dyn TargetIsa>,
+pub struct SingleFunctionCompiler<'a> {
+    isa: &'a dyn TargetIsa,
     trampolines: HashMap<Signature, Trampoline>,
 }
 
-impl SingleFunctionCompiler {
+impl<'a> SingleFunctionCompiler<'a> {
     /// Build a [SingleFunctionCompiler] from a [TargetIsa]. For functions to be runnable on the
     /// host machine, this [TargetISA] must match the host machine's ISA (see [with_host_isa]).
-    pub fn new(isa: Box<dyn TargetIsa>) -> Self {
+    pub fn new(isa: &'a dyn TargetIsa) -> Self {
         let trampolines = HashMap::new();
         Self { isa, trampolines }
-    }
-
-    /// Build a [SingleFunctionCompiler] using the host machine's ISA and the passed flags.
-    pub fn with_host_isa(flags: settings::Flags) -> Self {
-        let builder = host_isa_builder().expect("Unable to build a TargetIsa for the current host");
-        let isa = builder.finish(flags);
-        Self::new(isa)
-    }
-
-    /// Build a [SingleFunctionCompiler] using the host machine's ISA and the default flags for this
-    /// ISA.
-    pub fn with_default_host_isa() -> Self {
-        let flags = settings::Flags::new(settings::builder());
-        Self::with_host_isa(flags)
     }
 
     /// Compile the passed [Function] to a [CompiledFunction]. This function will:
@@ -71,10 +59,10 @@ impl SingleFunctionCompiler {
         }
 
         // Compile the function itself.
-        let code_page = compile(function, self.isa.as_ref())?;
+        let code_page = compile(function, self.isa)?;
 
         // Compile the trampoline to call it, if necessary (it may be cached).
-        let isa = self.isa.as_ref();
+        let isa = self.isa;
         let trampoline = self
             .trampolines
             .entry(signature.clone())
@@ -125,11 +113,14 @@ impl Trampoline {
 ///
 /// ```
 /// use cranelift_filetests::SingleFunctionCompiler;
+/// use cranelift_native::default_host_isa;
+/// use cranelift_codegen::settings::Flags;
 /// use cranelift_reader::{parse_functions, DataValue};
 ///
 /// let code = "test run \n function %add(i32, i32) -> i32 {  block0(v0:i32, v1:i32):  v2 = iadd v0, v1  return v2 }".into();
 /// let func = parse_functions(code).unwrap().into_iter().nth(0).unwrap();
-/// let mut compiler = SingleFunctionCompiler::with_default_host_isa();
+/// let isa = default_host_isa().unwrap();
+/// let mut compiler = SingleFunctionCompiler::new(isa.as_ref());
 /// let compiled_func = compiler.compile(func).unwrap();
 ///
 /// let returned = compiled_func.call(&vec![DataValue::I32(2), DataValue::I32(40)]);
@@ -381,6 +372,7 @@ fn make_trampoline(signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
 #[cfg(test)]
 mod test {
     use super::*;
+    use cranelift_native::default_host_isa;
     use cranelift_reader::{parse_functions, parse_test, ParseOptions};
 
     fn parse(code: &str) -> Function {
@@ -406,7 +398,8 @@ mod test {
         let function = test_file.functions[0].0.clone();
 
         // execute function
-        let mut compiler = SingleFunctionCompiler::with_default_host_isa();
+        let isa = default_host_isa().unwrap();
+        let mut compiler = SingleFunctionCompiler::new(isa.as_ref());
         let compiled_function = compiler.compile(function).unwrap();
         let returned = compiled_function.call(&[]);
         assert_eq!(returned, vec![DataValue::B(true)])
@@ -424,8 +417,9 @@ mod test {
             }",
         );
 
-        let compiler = SingleFunctionCompiler::with_default_host_isa();
-        let trampoline = make_trampoline(&function.signature, compiler.isa.as_ref());
+        let isa = default_host_isa().unwrap();
+        let compiler = SingleFunctionCompiler::new(isa.as_ref());
+        let trampoline = make_trampoline(&function.signature, compiler.isa);
         assert!(format!("{}", trampoline).ends_with(
             "sig0 = (f32, i8, i64x2, b1) -> f32x4, b64 fast
 

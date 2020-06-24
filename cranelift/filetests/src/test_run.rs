@@ -5,20 +5,23 @@
 use crate::function_runner::SingleFunctionCompiler;
 use crate::subtest::{Context, SubTest, SubtestResult};
 use cranelift_codegen::ir;
-use cranelift_reader::parse_run_command;
-use cranelift_reader::TestCommand;
+use cranelift_codegen::isa::TargetIsa;
+use cranelift_native::default_host_isa;
+use cranelift_reader::{parse_run_command, TestCommand};
 use log::trace;
 use std::borrow::Cow;
-use target_lexicon::Architecture;
 
-struct TestRun;
+struct TestRun {
+    default_host_isa: Box<dyn TargetIsa>,
+}
 
 pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "run");
     if !parsed.options.is_empty() {
         Err(format!("No options allowed on {}", parsed))
     } else {
-        Ok(Box::new(TestRun))
+        let default_host_isa = default_host_isa()?;
+        Ok(Box::new(TestRun { default_host_isa }))
     }
 }
 
@@ -36,19 +39,22 @@ impl SubTest for TestRun {
     }
 
     fn run(&self, func: Cow<ir::Function>, context: &Context) -> SubtestResult<()> {
-        // If this test requests to run on a completely different
-        // architecture than the host platform then we skip it entirely,
+        let requested_isa = context.isa.unwrap();
+
+        // If this test requests to run on a completely different architecture than the host
+        // platform or if it requests flags that are unavailable, then we skip it entirely,
         // since we won't be able to natively execute machine code.
-        let requested_arch = context.isa.unwrap().triple().architecture;
-        if requested_arch != Architecture::host() {
+        if !self.default_host_isa.is_compatible_with(requested_isa) {
             println!(
-                "skipped {}: host can't run {:?} programs",
-                context.file_path, requested_arch
+                "skipped {}: host and target ISAs do not match: host = {}, target = {} (could also be due to flags, not shown)",
+                context.file_path,
+                self.default_host_isa.triple(),
+                requested_isa.triple(),
             );
             return Ok(());
         }
 
-        let mut compiler = SingleFunctionCompiler::with_host_isa(context.flags.clone());
+        let mut compiler = SingleFunctionCompiler::new(requested_isa);
         for comment in context.details.comments.iter() {
             if let Some(command) =
                 parse_run_command(comment.text, &func.signature).map_err(|e| e.to_string())?
