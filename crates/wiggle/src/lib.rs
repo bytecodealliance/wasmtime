@@ -499,6 +499,12 @@ impl<'a> GuestPtr<'a, str> {
         GuestPtr::new(self.mem, self.pointer)
     }
 
+    /// Returns a raw pointer for the underlying slice of bytes that this
+    /// pointer points to.
+    pub fn as_byte_ptr(&self) -> GuestPtr<'a, [u8]> {
+        GuestPtr::new(self.mem, self.pointer)
+    }
+
     /// Attempts to create a [`GuestStr<'_>`] from this pointer, performing
     /// bounds checks and utf-8 checks. The resulting `GuestStr` can be used
     /// as a `&str` or `&mut str` via the `Deref` and `DerefMut` traits. The
