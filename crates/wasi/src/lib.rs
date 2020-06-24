@@ -6,7 +6,7 @@ pub use wasi_common::{WasiCtx, WasiCtxBuilder};
 
 // Defines a `struct Wasi` with member fields and appropriate APIs for dealing
 // with all the various WASI exports.
-wasmtime_wiggle::define_wasmtime_integration!({
+wasmtime_wiggle::wasmtime_integration!({
     // The wiggle code to integrate with lives here:
     target: wasi_common::wasi,
     // This must be the same witx document as used above:

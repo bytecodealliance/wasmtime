@@ -8,8 +8,45 @@ mod config;
 
 use config::{MissingMemoryConf, ModuleConf, TargetConf};
 
+/// Define the structs required to integrate a Wiggle implementation with Wasmtime.
+///
+/// ## Arguments
+///
+/// Arguments are provided using struct syntax e.g. `{ arg_name: value }`.
+///
+/// * `target`: The path of the module where the Wiggle implementation is defined.
+/// * `witx` or `witx_literal`: the .witx document where the interface is defined.
+///   `witx` takes a list of filesystem paths, e.g. `["/path/to/file1.witx",
+///   "./path/to_file2.witx"]`. Relative paths are relative to the root of the crate
+///   where the macro is invoked. `witx_literal` takes a string of the witx document, e.g.
+///   `"(typename $foo u8)"`.
+/// * `ctx`: The context struct used for the Wiggle implementation. This must be the same
+///   type as the [`wasmtime_wiggle::from_witx`] macro at `target` was invoked with. However, it
+///   must be imported to the current scope so that it is a bare identifier e.g. `CtxType`, not
+///   `path::to::CtxType`.
+/// * `modules`: Describes how any modules in the witx document will be implemented as Wasmtime
+///    instances. `modules` takes a map from the witx module name to a configuration struct, e.g.
+///    `foo => { name: Foo }, bar => { name: Bar }` will generate integrations for the modules
+///    named `foo` and `bar` in the witx document, as `pub struct Foo` and `pub struct Bar`
+///    respectively.
+///    The module configuration uses struct syntax with the following fields:
+///      * `name`: required, gives the name of the struct which encapsulates the instance for
+///         Wasmtime.
+///      * `docs`: optional, a doc string that will be used for the definition of the struct.
+///      * `function_override`: A map of witx function names to Rust function symbols for
+///         functions that should not call the Wiggle-generated functions, but instead use
+///         a separate implementation. This is typically used for functions that need to interact
+///         with Wasmtime in a manner that Wiggle does not permit, e.g. wasi's `proc_exit` function
+///         needs to return a Trap directly to the runtime.
+///    Example:
+///    `modules: { some_module => { name: SomeTypeName, docs: "Doc string for definition of
+///     SomeTypeName here", function_override: { foo => my_own_foo } }`.
+/// * `missing_memory`: Describes the error value to return in case the calling module does not
+///   export a Memory as `"memory"`. This value is given in braces, e.g. `missing_memory: {
+///   wasi_common::wasi::Errno::Inval }`.
+///
 #[proc_macro]
-pub fn define_wasmtime_integration(args: TokenStream) -> TokenStream {
+pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
     let mut config = parse_macro_input!(args as config::Config);
     config.witx.make_paths_relative_to(
         std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR env var"),
@@ -175,11 +212,11 @@ fn generate_func(
                             #handle_early_error
                         }
                     };
-                    // Wiggle does not expose any methods for
-                    // functions to re-enter the WebAssembly module,
-                    // or expose the memory via non-wiggle mechanisms.
-                    // Therefore, creating a new BorrowChecker at the
-                    // root of each function invocation is correct.
+                    // Wiggle does not expose any methods for functions to re-enter the WebAssembly
+                    // instance, or expose the memory via non-wiggle mechanisms. However, the
+                    // user-defined code may end up re-entering the instance, in which case this
+                    // is an incorrect implementation - we require exactly one BorrowChecker exist
+                    // per instance.
                     let bc = #runtime::BorrowChecker::new();
                     let mem = #runtime::WasmtimeGuestMemory::new( mem, bc );
                     #target_module::#name_ident(
