@@ -499,7 +499,7 @@ impl<'a> GuestPtr<'a, str> {
         GuestPtr::new(self.mem, self.pointer)
     }
 
-    /// Returns a raw pointer for the underlying slice of bytes that this
+    /// Returns a pointer for the underlying slice of bytes that this
     /// pointer points to.
     pub fn as_byte_ptr(&self) -> GuestPtr<'a, [u8]> {
         GuestPtr::new(self.mem, self.pointer)
