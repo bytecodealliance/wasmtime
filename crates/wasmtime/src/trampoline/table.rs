@@ -10,6 +10,7 @@ pub fn create_handle_with_table(store: &Store, table: &TableType) -> Result<Stor
     let mut module = Module::new();
 
     let table = wasm::Table {
+        wasm_ty: table.element().to_wasm_type(),
         minimum: table.limits().min(),
         maximum: table.limits().max(),
         ty: match table.element() {

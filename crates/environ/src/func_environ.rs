@@ -10,8 +10,8 @@ use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Si
 use cranelift_codegen::isa::{self, TargetFrontendConfig};
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{
-    self, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableElementType,
-    TableIndex, TargetEnvironment, WasmError, WasmResult,
+    self, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableIndex,
+    TargetEnvironment, WasmError, WasmResult, WasmType,
 };
 #[cfg(feature = "lightbeam")]
 use cranelift_wasm::{DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex};
@@ -66,6 +66,10 @@ macro_rules! declare_builtin_functions {
 
             fn reference(&self) -> AbiParam {
                 AbiParam::new(self.reference_type)
+            }
+
+            fn pointer(&self) -> AbiParam {
+                AbiParam::new(self.pointer_type)
             }
 
             fn i32(&self) -> AbiParam {
@@ -161,8 +165,10 @@ declare_builtin_functions! {
     memory_init(vmctx, i32, i32, i32, i32, i32) -> ();
     /// Returns an index for wasm's `data.drop` instruction.
     data_drop(vmctx, i32) -> ();
+    /// Returns an index for Wasm's `table.grow` instruction for `funcref`s.
+    table_grow_funcref(vmctx, i32, i32, pointer) -> (i32);
     /// Returns an index for Wasm's `table.grow` instruction for `externref`s.
-    table_grow_extern_ref(vmctx, i32, i32, reference) -> (i32);
+    table_grow_externref(vmctx, i32, i32, reference) -> (i32);
 }
 
 impl BuiltinFunctionIndex {
@@ -277,26 +283,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 self.module.defined_memory_index(index).unwrap().index(),
                 BuiltinFunctionIndex::memory32_size(),
             )
-        }
-    }
-
-    fn get_table_grow_func(
-        &mut self,
-        func: &mut Function,
-        table_index: TableIndex,
-    ) -> WasmResult<(ir::SigRef, BuiltinFunctionIndex, usize)> {
-        match self.module.table_plans[table_index].table.ty {
-            TableElementType::Func => Err(WasmError::Unsupported(
-                "the `table.grow` instruction is not supported with `funcref` yet".into(),
-            )),
-            TableElementType::Val(ty) => {
-                assert_eq!(ty, self.reference_type());
-                Ok((
-                    self.builtin_function_signatures.table_grow_extern_ref(func),
-                    BuiltinFunctionIndex::table_grow_extern_ref(),
-                    table_index.as_u32() as usize,
-                ))
-            }
         }
     }
 
@@ -552,6 +538,10 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
     fn target_config(&self) -> TargetFrontendConfig {
         self.target_config
     }
+
+    fn reference_type(&self, ty: WasmType) -> ir::Type {
+        crate::reference_type(ty, self.pointer_type())
+    }
 }
 
 impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'module_environment> {
@@ -604,9 +594,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         });
 
         let element_size = match self.module.table_plans[index].style {
-            TableStyle::CallerChecksSignature => {
-                u64::from(self.offsets.size_of_vmcaller_checked_anyfunc())
-            }
+            TableStyle::CallerChecksSignature => u64::from(self.pointer_type().bytes()),
         };
 
         Ok(func.create_table(ir::TableData {
@@ -622,33 +610,45 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
         table_index: TableIndex,
+        _table: ir::Table,
         delta: ir::Value,
         init_value: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let (func_sig, func_idx, table_index_arg) =
-            self.get_table_grow_func(&mut pos.func, table_index)?;
-
-        let table_index_arg = pos.ins().iconst(I32, table_index_arg as i64);
+        let (func_idx, func_sig) =
+            match self.module.table_plans[table_index].table.wasm_ty {
+                WasmType::FuncRef => (
+                    BuiltinFunctionIndex::table_grow_funcref(),
+                    self.builtin_function_signatures
+                        .table_grow_funcref(&mut pos.func),
+                ),
+                WasmType::ExternRef => (
+                    BuiltinFunctionIndex::table_grow_externref(),
+                    self.builtin_function_signatures
+                        .table_grow_externref(&mut pos.func),
+                ),
+                _ => return Err(WasmError::Unsupported(
+                    "`table.grow` with a table element type that is not `funcref` or `externref`"
+                        .into(),
+                )),
+            };
 
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        let table_index_arg = pos.ins().iconst(I32, table_index.as_u32() as i64);
         let call_inst = pos.ins().call_indirect(
             func_sig,
             func_addr,
             &[vmctx, table_index_arg, delta, init_value],
         );
-        Ok(pos
-            .func
-            .dfg
-            .inst_results(call_inst)
-            .first()
-            .copied()
-            .unwrap())
+
+        Ok(pos.func.dfg.first_result(call_inst))
     }
 
     fn translate_table_get(
         &mut self,
         _: cranelift_codegen::cursor::FuncCursor<'_>,
         _: TableIndex,
+        _: ir::Table,
         _: ir::Value,
     ) -> WasmResult<ir::Value> {
         Err(WasmError::Unsupported(
@@ -660,6 +660,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         _: cranelift_codegen::cursor::FuncCursor<'_>,
         _: TableIndex,
+        _: ir::Table,
         _: ir::Value,
         _: ir::Value,
     ) -> WasmResult<()> {
@@ -681,14 +682,50 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         ))
     }
 
+    fn translate_ref_null(
+        &mut self,
+        mut pos: cranelift_codegen::cursor::FuncCursor,
+        ty: WasmType,
+    ) -> WasmResult<ir::Value> {
+        Ok(match ty {
+            WasmType::FuncRef => pos.ins().iconst(self.pointer_type(), 0),
+            WasmType::ExternRef => pos.ins().null(self.reference_type(ty)),
+            _ => {
+                return Err(WasmError::Unsupported(
+                    "`ref.null T` that is not a `funcref` or an `externref`".into(),
+                ));
+            }
+        })
+    }
+
+    fn translate_ref_is_null(
+        &mut self,
+        mut pos: cranelift_codegen::cursor::FuncCursor,
+        value: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        let bool_is_null = match pos.func.dfg.value_type(value) {
+            // `externref`
+            ty if ty.is_ref() => pos.ins().is_null(value),
+            // `funcref`
+            ty if ty == self.pointer_type() => {
+                pos.ins()
+                    .icmp_imm(cranelift_codegen::ir::condcodes::IntCC::Equal, value, 0)
+            }
+            _ => unreachable!(),
+        };
+
+        Ok(pos.ins().bint(ir::types::I32, bool_is_null))
+    }
+
     fn translate_ref_func(
         &mut self,
-        _: cranelift_codegen::cursor::FuncCursor<'_>,
-        _: u32,
+        mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
+        func_index: FuncIndex,
     ) -> WasmResult<ir::Value> {
-        Err(WasmError::Unsupported(
-            "the `ref.func` instruction is not supported yet".into(),
-        ))
+        let vmctx = self.vmctx(&mut pos.func);
+        let vmctx = pos.ins().global_value(self.pointer_type(), vmctx);
+        let offset = self.offsets.vmctx_anyfunc(func_index);
+        Ok(pos.ins().iadd_imm(vmctx, i64::from(offset)))
     }
 
     fn translate_custom_global_get(
@@ -858,17 +895,24 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let table_entry_addr = pos.ins().table_addr(pointer_type, table, callee, 0);
 
-        // Dereference table_entry_addr to get the function address.
+        // Dereference the table entry to get the pointer to the
+        // `VMCallerCheckedAnyfunc`.
+        let anyfunc_ptr =
+            pos.ins()
+                .load(pointer_type, ir::MemFlags::trusted(), table_entry_addr, 0);
+
+        // Check for whether the table element is null, and trap if so.
+        pos.ins()
+            .trapz(anyfunc_ptr, ir::TrapCode::IndirectCallToNull);
+
+        // Dereference anyfunc pointer to get the function address.
         let mem_flags = ir::MemFlags::trusted();
         let func_addr = pos.ins().load(
             pointer_type,
             mem_flags,
-            table_entry_addr,
+            anyfunc_ptr,
             i32::from(self.offsets.vmcaller_checked_anyfunc_func_ptr()),
         );
-
-        // Check whether `func_addr` is null.
-        pos.ins().trapz(func_addr, ir::TrapCode::IndirectCallToNull);
 
         // If necessary, check the signature.
         match self.module.table_plans[table_index].style {
@@ -890,7 +934,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let callee_sig_id = pos.ins().load(
                     sig_id_type,
                     mem_flags,
-                    table_entry_addr,
+                    anyfunc_ptr,
                     i32::from(self.offsets.vmcaller_checked_anyfunc_type_index()),
                 );
 
@@ -907,7 +951,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let vmctx = pos.ins().load(
             pointer_type,
             mem_flags,
-            table_entry_addr,
+            anyfunc_ptr,
             i32::from(self.offsets.vmcaller_checked_anyfunc_vmctx()),
         );
         real_call_args.push(vmctx);

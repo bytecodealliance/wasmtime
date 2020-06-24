@@ -15,6 +15,7 @@
 //      tables: [VMTableDefinition; module.num_defined_tables],
 //      memories: [VMMemoryDefinition; module.num_defined_memories],
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
+//      anyfuncs: [VMCallerCheckedAnyfunc; module.num_imported_functions + module.num_defined_functions],
 //      builtins: VMBuiltinFunctionsArray,
 // }
 
@@ -62,6 +63,8 @@ pub struct VMOffsets {
     pub num_imported_memories: u32,
     /// The number of imported globals in the module.
     pub num_imported_globals: u32,
+    /// The number of defined functions in the module.
+    pub num_defined_functions: u32,
     /// The number of defined tables in the module.
     pub num_defined_tables: u32,
     /// The number of defined memories in the module.
@@ -80,6 +83,7 @@ impl VMOffsets {
             num_imported_tables: cast_to_u32(module.num_imported_tables),
             num_imported_memories: cast_to_u32(module.num_imported_memories),
             num_imported_globals: cast_to_u32(module.num_imported_globals),
+            num_defined_functions: cast_to_u32(module.functions.len()),
             num_defined_tables: cast_to_u32(module.table_plans.len()),
             num_defined_memories: cast_to_u32(module.memory_plans.len()),
             num_defined_globals: cast_to_u32(module.globals.len()),
@@ -390,12 +394,25 @@ impl VMOffsets {
         align(offset, 16)
     }
 
-    /// The offset of the builtin functions array.
-    pub fn vmctx_builtin_functions_begin(&self) -> u32 {
+    /// The offset of the `anyfuncs` array.
+    pub fn vmctx_anyfuncs_begin(&self) -> u32 {
         self.vmctx_globals_begin()
             .checked_add(
                 self.num_defined_globals
                     .checked_mul(u32::from(self.size_of_vmglobal_definition()))
+                    .unwrap(),
+            )
+            .unwrap()
+    }
+
+    /// The offset of the builtin functions array.
+    pub fn vmctx_builtin_functions_begin(&self) -> u32 {
+        self.vmctx_anyfuncs_begin()
+            .checked_add(
+                self.num_imported_functions
+                    .checked_add(self.num_defined_functions)
+                    .unwrap()
+                    .checked_mul(u32::from(self.size_of_vmcaller_checked_anyfunc()))
                     .unwrap(),
             )
             .unwrap()
@@ -511,6 +528,19 @@ impl VMOffsets {
                 index
                     .as_u32()
                     .checked_mul(u32::from(self.size_of_vmglobal_definition()))
+                    .unwrap(),
+            )
+            .unwrap()
+    }
+
+    /// Return the offset to the `VMCallerCheckedAnyfunc` for the given function
+    /// index (either imported or defined).
+    pub fn vmctx_anyfunc(&self, index: FuncIndex) -> u32 {
+        self.vmctx_anyfuncs_begin()
+            .checked_add(
+                index
+                    .as_u32()
+                    .checked_mul(u32::from(self.size_of_vmcaller_checked_anyfunc()))
                     .unwrap(),
             )
             .unwrap()

@@ -205,7 +205,7 @@ impl Global {
 
     /// Returns the value type of this `global`.
     pub fn val_type(&self) -> ValType {
-        ValType::from_wasmtime_type(self.wasmtime_export.global.ty)
+        ValType::from_wasm_type(&self.wasmtime_export.global.wasm_ty)
             .expect("core wasm type should be supported")
     }
 
@@ -298,14 +298,10 @@ fn set_table_item(
     instance: &InstanceHandle,
     table_index: wasm::DefinedTableIndex,
     item_index: u32,
-    item: wasmtime_runtime::VMCallerCheckedAnyfunc,
+    item: *mut wasmtime_runtime::VMCallerCheckedAnyfunc,
 ) -> Result<()> {
     instance
-        .table_set(
-            table_index,
-            item_index,
-            runtime::TableElement::FuncRef(item),
-        )
+        .table_set(table_index, item_index, item.into())
         .map_err(|()| anyhow!("table element index out of bounds"))
 }
 
@@ -329,7 +325,7 @@ impl Table {
         let definition = unsafe { &*wasmtime_export.definition };
         let index = instance.table_index(definition);
         for i in 0..definition.current_elements {
-            set_table_item(&instance, index, i, item.clone())?;
+            set_table_item(&instance, index, i, item)?;
         }
 
         Ok(Table {
@@ -356,7 +352,7 @@ impl Table {
         let item = self.instance.table_get(table_index, index)?;
         match item {
             runtime::TableElement::FuncRef(f) => {
-                Some(from_checked_anyfunc(f, &self.instance.store))
+                Some(unsafe { from_checked_anyfunc(f, &self.instance.store) })
             }
             runtime::TableElement::ExternRef(None) => Some(Val::ExternRef(None)),
             runtime::TableElement::ExternRef(Some(x)) => Some(Val::ExternRef(Some(ExternRef {
@@ -398,8 +394,7 @@ impl Table {
         let orig_size = match self.ty().element() {
             ValType::FuncRef => {
                 let init = into_checked_anyfunc(init, &self.instance.store)?;
-                self.instance
-                    .defined_table_grow(index, delta, runtime::TableElement::FuncRef(init))
+                self.instance.defined_table_grow(index, delta, init.into())
             }
             ValType::ExternRef => {
                 let init = match init {

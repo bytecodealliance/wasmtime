@@ -1,20 +1,7 @@
+use super::ref_types_module;
 use std::cell::Cell;
 use std::rc::Rc;
 use wasmtime::*;
-
-fn ref_types_module(source: &str) -> anyhow::Result<(Store, Module)> {
-    let _ = env_logger::try_init();
-
-    let mut config = Config::new();
-    config.wasm_reference_types(true);
-
-    let engine = Engine::new(&config);
-    let store = Store::new(&engine);
-
-    let module = Module::new(&engine, source)?;
-
-    Ok((store, module))
-}
 
 #[test]
 fn smoke_test_gc() -> anyhow::Result<()> {

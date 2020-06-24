@@ -6,10 +6,11 @@ use std::cmp::max;
 use std::fmt;
 use std::mem;
 use std::panic::{self, AssertUnwindSafe};
-use std::ptr;
+use std::ptr::{self, NonNull};
 use std::rc::Weak;
-use wasmtime_runtime::{raise_user_trap, ExportFunction, VMTrampoline};
-use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
+use wasmtime_runtime::{
+    raise_user_trap, Export, InstanceHandle, VMContext, VMFunctionBody, VMTrampoline,
+};
 
 /// A WebAssembly function which can be called.
 ///
@@ -140,8 +141,8 @@ use wasmtime_runtime::{Export, InstanceHandle, VMContext, VMFunctionBody};
 #[derive(Clone)]
 pub struct Func {
     instance: StoreInstanceHandle,
-    export: ExportFunction,
     trampoline: VMTrampoline,
+    export: wasmtime_runtime::ExportFunction,
 }
 
 macro_rules! getters {
@@ -175,10 +176,11 @@ macro_rules! getters {
                 .context("Type mismatch in return type")?;
             ensure!(results.next().is_none(), "Type mismatch: too many return values (expected 1)");
 
-            // Pass the instance into the closure so that we keep it live for the lifetime
-            // of the closure. Pass the export in so that we can call it.
+            // Pass the instance into the closure so that we keep it live for
+            // the lifetime of the closure. Pass the `anyfunc` in so that we can
+            // call it.
             let instance = self.instance.clone();
-            let export = self.export.clone();
+            let anyfunc = self.export.anyfunc;
 
             // ... and then once we've passed the typechecks we can hand out our
             // object since our `transmute` below should be safe!
@@ -191,12 +193,12 @@ macro_rules! getters {
                             *mut VMContext,
                             $($args,)*
                         ) -> R,
-                    >(export.address);
+                    >(anyfunc.as_ref().func_ptr.as_ptr());
                     let mut ret = None;
                     $(let $args = $args.into_abi();)*
 
-                    invoke_wasm_and_catch_traps(export.vmctx, &instance.store, || {
-                        ret = Some(fnptr(export.vmctx, ptr::null_mut(), $($args,)*));
+                    invoke_wasm_and_catch_traps(anyfunc.as_ref().vmctx, &instance.store, || {
+                        ret = Some(fnptr(anyfunc.as_ref().vmctx, ptr::null_mut(), $($args,)*));
                     })?;
 
                     Ok(ret.unwrap())
@@ -282,8 +284,8 @@ impl Func {
             crate::trampoline::generate_func_export(&ty, func, store).expect("generated func");
         Func {
             instance,
-            export,
             trampoline,
+            export,
         }
     }
 
@@ -488,7 +490,10 @@ impl Func {
     pub fn ty(&self) -> FuncType {
         // Signatures should always be registered in the store's registry of
         // shared signatures, so we should be able to unwrap safely here.
-        let sig = self.instance.store.lookup_signature(self.export.signature);
+        let sig = self
+            .instance
+            .store
+            .lookup_signature(unsafe { self.export.anyfunc.as_ref().type_index });
 
         // This is only called with `Export::Function`, and since it's coming
         // from wasmtime_runtime itself we should support all the types coming
@@ -498,13 +503,19 @@ impl Func {
 
     /// Returns the number of parameters that this function takes.
     pub fn param_arity(&self) -> usize {
-        let sig = self.instance.store.lookup_signature(self.export.signature);
+        let sig = self
+            .instance
+            .store
+            .lookup_signature(unsafe { self.export.anyfunc.as_ref().type_index });
         sig.params.len()
     }
 
     /// Returns the number of results this function produces.
     pub fn result_arity(&self) -> usize {
-        let sig = self.instance.store.lookup_signature(self.export.signature);
+        let sig = self
+            .instance
+            .store
+            .lookup_signature(unsafe { self.export.anyfunc.as_ref().type_index });
         sig.returns.len()
     }
 
@@ -553,14 +564,17 @@ impl Func {
         }
 
         // Call the trampoline.
-        invoke_wasm_and_catch_traps(self.export.vmctx, &self.instance.store, || unsafe {
-            (self.trampoline)(
-                self.export.vmctx,
-                ptr::null_mut(),
-                self.export.address,
-                values_vec.as_mut_ptr(),
-            )
-        })?;
+        unsafe {
+            let anyfunc = self.export.anyfunc.as_ref();
+            invoke_wasm_and_catch_traps(anyfunc.vmctx, &self.instance.store, || {
+                (self.trampoline)(
+                    anyfunc.vmctx,
+                    ptr::null_mut(),
+                    anyfunc.func_ptr.as_ptr(),
+                    values_vec.as_mut_ptr(),
+                )
+            })?;
+        }
 
         // Load the return values out of `values_vec`.
         let mut results = Vec::with_capacity(my_ty.results().len());
@@ -578,6 +592,12 @@ impl Func {
         &self.export
     }
 
+    pub(crate) fn caller_checked_anyfunc(
+        &self,
+    ) -> NonNull<wasmtime_runtime::VMCallerCheckedAnyfunc> {
+        self.export.anyfunc
+    }
+
     pub(crate) fn from_wasmtime_function(
         export: wasmtime_runtime::ExportFunction,
         instance: StoreInstanceHandle,
@@ -586,7 +606,7 @@ impl Func {
         // on that module as well, so unwrap the result here since otherwise
         // it's a bug in wasmtime.
         let trampoline = instance
-            .trampoline(export.signature)
+            .trampoline(unsafe { export.anyfunc.as_ref().type_index })
             .expect("failed to retrieve trampoline from module");
 
         Func {

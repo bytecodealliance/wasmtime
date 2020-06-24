@@ -32,7 +32,9 @@ pub fn resolve_imports(
         match (import, &export) {
             (EntityIndex::Function(func_index), Some(Export::Function(f))) => {
                 let import_signature = module.local.native_func_signature(*func_index);
-                let signature = signatures.lookup_native(f.signature).unwrap();
+                let signature = signatures
+                    .lookup_native(unsafe { f.anyfunc.as_ref().type_index })
+                    .unwrap();
                 if signature != *import_signature {
                     // TODO: If the difference is in the calling convention,
                     // we could emit a wrapper function to fix it up.
@@ -43,8 +45,8 @@ pub fn resolve_imports(
                     )));
                 }
                 function_imports.push(VMFunctionImport {
-                    body: f.address,
-                    vmctx: f.vmctx,
+                    body: unsafe { f.anyfunc.as_ref().func_ptr },
+                    vmctx: unsafe { f.anyfunc.as_ref().vmctx },
                 });
             }
             (EntityIndex::Function(_), Some(_)) => {
@@ -169,16 +171,20 @@ fn is_global_compatible(exported: &Global, imported: &Global) -> bool {
     }
 
     let Global {
+        wasm_ty: exported_wasm_ty,
         ty: exported_ty,
         mutability: exported_mutability,
         initializer: _exported_initializer,
     } = exported;
     let Global {
+        wasm_ty: imported_wasm_ty,
         ty: imported_ty,
         mutability: imported_mutability,
         initializer: _imported_initializer,
     } = imported;
-    exported_ty == imported_ty && imported_mutability == exported_mutability
+    exported_wasm_ty == imported_wasm_ty
+        && exported_ty == imported_ty
+        && imported_mutability == exported_mutability
 }
 
 fn is_table_element_type_compatible(
@@ -201,6 +207,7 @@ fn is_table_compatible(exported: &TablePlan, imported: &TablePlan) -> bool {
     let TablePlan {
         table:
             Table {
+                wasm_ty: exported_wasm_ty,
                 ty: exported_ty,
                 minimum: exported_minimum,
                 maximum: exported_maximum,
@@ -210,6 +217,7 @@ fn is_table_compatible(exported: &TablePlan, imported: &TablePlan) -> bool {
     let TablePlan {
         table:
             Table {
+                wasm_ty: imported_wasm_ty,
                 ty: imported_ty,
                 minimum: imported_minimum,
                 maximum: imported_maximum,
@@ -217,7 +225,8 @@ fn is_table_compatible(exported: &TablePlan, imported: &TablePlan) -> bool {
         style: _imported_style,
     } = imported;
 
-    is_table_element_type_compatible(*exported_ty, *imported_ty)
+    exported_wasm_ty == imported_wasm_ty
+        && is_table_element_type_compatible(*exported_ty, *imported_ty)
         && imported_minimum <= exported_minimum
         && (imported_maximum.is_none()
             || (!exported_maximum.is_none()

@@ -23,6 +23,7 @@ fn test_invoke_func_via_table() -> Result<()> {
         .unwrap()
         .funcref()
         .unwrap()
+        .unwrap()
         .clone();
     let result = f.call(&[]).unwrap();
     assert_eq!(result[0].unwrap_i64(), 42);

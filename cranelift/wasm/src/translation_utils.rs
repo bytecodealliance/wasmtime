@@ -1,5 +1,5 @@
 //! Helper functions and structures for the translation.
-use crate::environ::{TargetEnvironment, WasmResult};
+use crate::environ::{TargetEnvironment, WasmResult, WasmType};
 use crate::state::ModuleTranslationState;
 use crate::wasm_unsupported;
 use core::u32;
@@ -67,10 +67,18 @@ entity_impl!(DataIndex);
 pub struct ElemIndex(u32);
 entity_impl!(ElemIndex);
 
-/// WebAssembly global.
+/// A WebAssembly global.
+///
+/// Note that we record both the original Wasm type and the Cranelift IR type
+/// used to represent it. This is because multiple different kinds of Wasm types
+/// might be represented with the same Cranelift IR type. For example, both a
+/// Wasm `i64` and a `funcref` might be represented with a Cranelift `i64` on
+/// 64-bit architectures, and when GC is not required for func refs.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub struct Global {
-    /// The type of the value stored in the global.
+    /// The Wasm type of the value stored in the global.
+    pub wasm_ty: crate::WasmType,
+    /// The Cranelift IR type of the value stored in the global.
     pub ty: ir::Type,
     /// A flag indicating whether the value may change at runtime.
     pub mutability: bool,
@@ -104,7 +112,9 @@ pub enum GlobalInit {
 /// WebAssembly table.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub struct Table {
-    /// The type of data stored in elements of the table.
+    /// The table elements' Wasm type.
+    pub wasm_ty: WasmType,
+    /// The table elements' Cranelift type.
     pub ty: TableElementType,
     /// The minimum number of elements in the table.
     pub minimum: u32,
@@ -143,7 +153,7 @@ pub fn type_to_type<PE: TargetEnvironment + ?Sized>(
         wasmparser::Type::F32 => Ok(ir::types::F32),
         wasmparser::Type::F64 => Ok(ir::types::F64),
         wasmparser::Type::V128 => Ok(ir::types::I8X16),
-        wasmparser::Type::ExternRef | wasmparser::Type::FuncRef => Ok(environ.reference_type()),
+        wasmparser::Type::ExternRef | wasmparser::Type::FuncRef => Ok(environ.reference_type(ty)),
         ty => Err(wasm_unsupported!("type_to_type: wasm type {:?}", ty)),
     }
 }
@@ -160,7 +170,7 @@ pub fn tabletype_to_type<PE: TargetEnvironment + ?Sized>(
         wasmparser::Type::F32 => Ok(Some(ir::types::F32)),
         wasmparser::Type::F64 => Ok(Some(ir::types::F64)),
         wasmparser::Type::V128 => Ok(Some(ir::types::I8X16)),
-        wasmparser::Type::ExternRef => Ok(Some(environ.reference_type())),
+        wasmparser::Type::ExternRef => Ok(Some(environ.reference_type(ty))),
         wasmparser::Type::FuncRef => Ok(None),
         ty => Err(wasm_unsupported!(
             "tabletype_to_type: table wasm type {:?}",
@@ -216,7 +226,7 @@ pub fn block_with_params<PE: TargetEnvironment + ?Sized>(
                 builder.append_block_param(block, ir::types::F64);
             }
             wasmparser::Type::ExternRef | wasmparser::Type::FuncRef => {
-                builder.append_block_param(block, environ.reference_type());
+                builder.append_block_param(block, environ.reference_type(*ty));
             }
             wasmparser::Type::V128 => {
                 builder.append_block_param(block, ir::types::I8X16);

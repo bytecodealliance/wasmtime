@@ -59,11 +59,11 @@ fn link_twice_bad() -> Result<()> {
 
     // tables
     let ty = TableType::new(ValType::FuncRef, Limits::new(1, None));
-    let table = Table::new(&store, ty, Val::ExternRef(None))?;
+    let table = Table::new(&store, ty, Val::FuncRef(None))?;
     linker.define("", "", table.clone())?;
     assert!(linker.define("", "", table.clone()).is_err());
     let ty = TableType::new(ValType::FuncRef, Limits::new(2, None));
-    let table = Table::new(&store, ty, Val::ExternRef(None))?;
+    let table = Table::new(&store, ty, Val::FuncRef(None))?;
     assert!(linker.define("", "", table.clone()).is_err());
     Ok(())
 }

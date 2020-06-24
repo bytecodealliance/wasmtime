@@ -3,8 +3,9 @@
 
 use crate::instance::Instance;
 use std::any::Any;
+use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
-use std::{ptr, u32};
+use std::u32;
 use wasmtime_environ::BuiltinFunctionIndex;
 
 /// An imported function.
@@ -12,7 +13,7 @@ use wasmtime_environ::BuiltinFunctionIndex;
 #[repr(C)]
 pub struct VMFunctionImport {
     /// A pointer to the imported function body.
-    pub body: *const VMFunctionBody,
+    pub body: NonNull<VMFunctionBody>,
 
     /// A pointer to the `VMContext` that owns the function.
     pub vmctx: *mut VMContext,
@@ -475,7 +476,7 @@ impl Default for VMSharedSignatureIndex {
 #[repr(C)]
 pub struct VMCallerCheckedAnyfunc {
     /// Function body.
-    pub func_ptr: *const VMFunctionBody,
+    pub func_ptr: NonNull<VMFunctionBody>,
     /// Function signature id.
     pub type_index: VMSharedSignatureIndex,
     /// Function `VMContext`.
@@ -513,16 +514,6 @@ mod test_vmcaller_checked_anyfunc {
     }
 }
 
-impl Default for VMCallerCheckedAnyfunc {
-    fn default() -> Self {
-        Self {
-            func_ptr: ptr::null_mut(),
-            type_index: Default::default(),
-            vmctx: ptr::null_mut(),
-        }
-    }
-}
-
 /// An array that stores addresses of builtin functions. We translate code
 /// to use indirect calls. This way, we don't have to patch the code.
 #[repr(C)]
@@ -549,8 +540,10 @@ impl VMBuiltinFunctionsArray {
         ptrs[BuiltinFunctionIndex::imported_memory32_size().index() as usize] =
             wasmtime_imported_memory32_size as usize;
         ptrs[BuiltinFunctionIndex::table_copy().index() as usize] = wasmtime_table_copy as usize;
-        ptrs[BuiltinFunctionIndex::table_grow_extern_ref().index() as usize] =
-            wasmtime_table_grow_extern_ref as usize;
+        ptrs[BuiltinFunctionIndex::table_grow_funcref().index() as usize] =
+            wasmtime_table_grow as usize;
+        ptrs[BuiltinFunctionIndex::table_grow_externref().index() as usize] =
+            wasmtime_table_grow as usize;
         ptrs[BuiltinFunctionIndex::table_init().index() as usize] = wasmtime_table_init as usize;
         ptrs[BuiltinFunctionIndex::elem_drop().index() as usize] = wasmtime_elem_drop as usize;
         ptrs[BuiltinFunctionIndex::defined_memory_copy().index() as usize] =

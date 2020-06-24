@@ -1,8 +1,8 @@
 use crate::r#ref::ExternRef;
 use crate::{Func, Store, ValType};
 use anyhow::{bail, Result};
-use std::ptr;
-use wasmtime_runtime::VMExternRef;
+use std::ptr::{self, NonNull};
+use wasmtime_runtime::{self as runtime, VMExternRef};
 
 /// Possible runtime values that a WebAssembly module can either consume or
 /// produce.
@@ -26,11 +26,18 @@ pub enum Val {
     /// `f64::from_bits` to create an `f64` value.
     F64(u64),
 
-    /// An `externref` value which can hold opaque data to the wasm instance itself.
+    /// An `externref` value which can hold opaque data to the Wasm instance
+    /// itself.
+    ///
+    /// `ExternRef(None)` is the null external reference, created by `ref.null
+    /// extern` in Wasm.
     ExternRef(Option<ExternRef>),
 
     /// A first-class reference to a WebAssembly function.
-    FuncRef(Func),
+    ///
+    /// `FuncRef(None)` is the null function reference, created by `ref.null
+    /// func` in Wasm.
+    FuncRef(Option<Func>),
 
     /// A 128-bit number
     V128(u128),
@@ -94,7 +101,14 @@ impl Val {
                     .insert_with_gc(x.inner, store.stack_map_registry());
                 ptr::write(p as *mut *mut u8, externref_ptr)
             }
-            _ => unimplemented!("Val::write_value_to"),
+            Val::FuncRef(f) => ptr::write(
+                p as *mut *mut runtime::VMCallerCheckedAnyfunc,
+                if let Some(f) = f {
+                    f.caller_checked_anyfunc().as_ptr()
+                } else {
+                    ptr::null_mut()
+                },
+            ),
         }
     }
 
@@ -116,7 +130,10 @@ impl Val {
                     }))
                 }
             }
-            _ => unimplemented!("Val::read_value_from: {:?}", ty),
+            ValType::FuncRef => {
+                let func = ptr::read(p as *const *mut runtime::VMCallerCheckedAnyfunc);
+                from_checked_anyfunc(func, store)
+            }
         }
     }
 
@@ -126,7 +143,7 @@ impl Val {
         (I64(i64) i64 unwrap_i64 *e)
         (F32(f32) f32 unwrap_f32 f32::from_bits(*e))
         (F64(f64) f64 unwrap_f64 f64::from_bits(*e))
-        (FuncRef(&Func) funcref unwrap_funcref e)
+        (FuncRef(Option<&Func>) funcref unwrap_funcref e.as_ref())
         (V128(u128) v128 unwrap_v128 *e)
     }
 
@@ -160,7 +177,8 @@ impl Val {
 
     pub(crate) fn comes_from_same_store(&self, store: &Store) -> bool {
         match self {
-            Val::FuncRef(f) => Store::same(store, f.store()),
+            Val::FuncRef(Some(f)) => Store::same(store, f.store()),
+            Val::FuncRef(None) => true,
 
             // TODO: need to implement this once we actually finalize what
             // `externref` will look like and it's actually implemented to pass it
@@ -211,51 +229,47 @@ impl From<Option<ExternRef>> for Val {
     }
 }
 
+impl From<Option<Func>> for Val {
+    fn from(val: Option<Func>) -> Val {
+        Val::FuncRef(val)
+    }
+}
+
 impl From<Func> for Val {
     fn from(val: Func) -> Val {
-        Val::FuncRef(val)
+        Val::FuncRef(Some(val))
     }
 }
 
 pub(crate) fn into_checked_anyfunc(
     val: Val,
     store: &Store,
-) -> Result<wasmtime_runtime::VMCallerCheckedAnyfunc> {
+) -> Result<*mut wasmtime_runtime::VMCallerCheckedAnyfunc> {
     if !val.comes_from_same_store(store) {
         bail!("cross-`Store` values are not supported");
     }
     Ok(match val {
-        Val::ExternRef(None) => wasmtime_runtime::VMCallerCheckedAnyfunc {
-            func_ptr: ptr::null(),
-            type_index: wasmtime_runtime::VMSharedSignatureIndex::default(),
-            vmctx: ptr::null_mut(),
-        },
-        Val::FuncRef(f) => {
-            let f = f.wasmtime_function();
-            wasmtime_runtime::VMCallerCheckedAnyfunc {
-                func_ptr: f.address,
-                type_index: f.signature,
-                vmctx: f.vmctx,
-            }
-        }
+        Val::FuncRef(None) => ptr::null_mut(),
+        Val::FuncRef(Some(f)) => f.caller_checked_anyfunc().as_ptr(),
         _ => bail!("val is not funcref"),
     })
 }
 
-pub(crate) fn from_checked_anyfunc(
-    item: wasmtime_runtime::VMCallerCheckedAnyfunc,
+pub(crate) unsafe fn from_checked_anyfunc(
+    anyfunc: *mut wasmtime_runtime::VMCallerCheckedAnyfunc,
     store: &Store,
 ) -> Val {
-    if item.type_index == wasmtime_runtime::VMSharedSignatureIndex::default() {
-        return Val::ExternRef(None);
-    }
-    let instance_handle = unsafe { wasmtime_runtime::InstanceHandle::from_vmctx(item.vmctx) };
-    let export = wasmtime_runtime::ExportFunction {
-        address: item.func_ptr,
-        signature: item.type_index,
-        vmctx: item.vmctx,
+    let anyfunc = match NonNull::new(anyfunc) {
+        None => return Val::FuncRef(None),
+        Some(f) => f,
     };
+
+    debug_assert!(
+        anyfunc.as_ref().type_index != wasmtime_runtime::VMSharedSignatureIndex::default()
+    );
+    let instance_handle = wasmtime_runtime::InstanceHandle::from_vmctx(anyfunc.as_ref().vmctx);
+    let export = wasmtime_runtime::ExportFunction { anyfunc };
     let instance = store.existing_instance_handle(instance_handle);
     let f = Func::from_wasmtime_function(export, instance);
-    Val::FuncRef(f)
+    Val::FuncRef(Some(f))
 }

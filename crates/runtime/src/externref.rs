@@ -545,7 +545,10 @@ impl VMExternRefActivationsTable {
                 return Err(externref);
             }
 
-            debug_assert!((*next.as_ref().get()).is_none());
+            debug_assert!(
+                (*next.as_ref().get()).is_none(),
+                "slots >= the `next` bump finger are always `None`"
+            );
             ptr::write(next.as_ptr(), UnsafeCell::new(Some(externref)));
 
             let next = NonNull::new_unchecked(next.as_ptr().add(1));
@@ -1121,6 +1124,7 @@ mod tests {
             num_imported_tables: 0,
             num_imported_memories: 0,
             num_imported_globals: 0,
+            num_defined_functions: 0,
             num_defined_tables: 0,
             num_defined_memories: 0,
             num_defined_globals: 0,
@@ -1147,6 +1151,7 @@ mod tests {
             num_imported_tables: 0,
             num_imported_memories: 0,
             num_imported_globals: 0,
+            num_defined_functions: 0,
             num_defined_tables: 0,
             num_defined_memories: 0,
             num_defined_globals: 0,
