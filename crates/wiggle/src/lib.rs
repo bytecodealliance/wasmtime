@@ -540,7 +540,7 @@ impl<'a> GuestPtr<'a, str> {
 }
 
 impl<'a> GuestPtr<'a, [u8]> {
-    /// Returns a raw pointer to the string represented by a `[u8]` without
+    /// Returns a pointer to the string represented by a `[u8]` without
     /// validating whether each u8 is a utf-8 codepoint.
     pub fn as_str_ptr(&self) -> GuestPtr<'a, str> {
         GuestPtr::new(self.mem, self.pointer)
