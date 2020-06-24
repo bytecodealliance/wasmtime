@@ -15,23 +15,24 @@ wasmtime_wiggle::define_wasmtime_integration!({
     ctx: WasiCtx,
     // This macro will emit a struct to represent the instance,
     // with this name and docs:
-    instance: {
-        name: Wasi,
-        docs: "An instantiated instance of the wasi exports.
+    modules: { wasi_snapshot_preview1 =>
+        { name: Wasi,
+          docs: "An instantiated instance of the wasi exports.
 
-This represents a wasi module which can be used to instantiate other
-wasm modules. This structure exports all that various fields of the
-wasi instance as fields which can be used to implement your own
-instantiation logic, if necessary. Additionally [`Wasi::get_export`]
-can be used to do name-based resolution."
+This represents a wasi module which can be used to instantiate other wasm
+modules. This structure exports all that various fields of the wasi instance
+as fields which can be used to implement your own instantiation logic, if
+necessary. Additionally [`Wasi::get_export`] can be used to do name-based
+resolution.",
+        // Don't use the wiggle generated code to implement proc_exit, we need
+        // to hook directly into the runtime there:
+          function_override: {
+            proc_exit => wasi_proc_exit
+          }
+        },
     },
     // Error to return when caller module is missing memory export:
     missing_memory: { wasi_common::wasi::Errno::Inval },
-    // Don't use the wiggle generated code to implement proc_exit, we need to hook directly into
-    // the runtime there:
-    function_override: {
-        wasi_snapshot_preview1:proc_exit => wasi_proc_exit
-    }
 });
 
 pub fn is_wasi_module(name: &str) -> bool {

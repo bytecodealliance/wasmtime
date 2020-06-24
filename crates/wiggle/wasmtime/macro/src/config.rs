@@ -1,5 +1,6 @@
 use {
     proc_macro2::{Span, TokenStream},
+    std::collections::HashMap,
     syn::{
         braced,
         parse::{Parse, ParseStream},
@@ -14,9 +15,8 @@ pub struct Config {
     pub target: TargetConf,
     pub witx: WitxConf,
     pub ctx: CtxConf,
-    pub instance: InstanceConf,
+    pub modules: ModulesConf,
     pub missing_memory: MissingMemoryConf,
-    pub function_override: FunctionOverrideConf,
 }
 
 #[derive(Debug, Clone)]
@@ -24,9 +24,8 @@ pub enum ConfigField {
     Target(TargetConf),
     Witx(WitxConf),
     Ctx(CtxConf),
-    Instance(InstanceConf),
+    Modules(ModulesConf),
     MissingMemory(MissingMemoryConf),
-    FunctionOverride(FunctionOverrideConf),
 }
 
 mod kw {
@@ -34,7 +33,7 @@ mod kw {
     syn::custom_keyword!(witx);
     syn::custom_keyword!(witx_literal);
     syn::custom_keyword!(ctx);
-    syn::custom_keyword!(instance);
+    syn::custom_keyword!(modules);
     syn::custom_keyword!(name);
     syn::custom_keyword!(docs);
     syn::custom_keyword!(missing_memory);
@@ -60,18 +59,14 @@ impl Parse for ConfigField {
             input.parse::<kw::ctx>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Ctx(input.parse()?))
-        } else if lookahead.peek(kw::instance) {
-            input.parse::<kw::instance>()?;
+        } else if lookahead.peek(kw::modules) {
+            input.parse::<kw::modules>()?;
             input.parse::<Token![:]>()?;
-            Ok(ConfigField::Instance(input.parse()?))
+            Ok(ConfigField::Modules(input.parse()?))
         } else if lookahead.peek(kw::missing_memory) {
             input.parse::<kw::missing_memory>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::MissingMemory(input.parse()?))
-        } else if lookahead.peek(kw::function_override) {
-            input.parse::<kw::function_override>()?;
-            input.parse::<Token![:]>()?;
-            Ok(ConfigField::FunctionOverride(input.parse()?))
         } else {
             Err(lookahead.error())
         }
@@ -83,9 +78,8 @@ impl Config {
         let mut target = None;
         let mut witx = None;
         let mut ctx = None;
-        let mut instance = None;
+        let mut modules = None;
         let mut missing_memory = None;
-        let mut function_override = None;
         for f in fields {
             match f {
                 ConfigField::Target(c) => {
@@ -106,11 +100,11 @@ impl Config {
                     }
                     ctx = Some(c);
                 }
-                ConfigField::Instance(c) => {
-                    if instance.is_some() {
-                        return Err(Error::new(err_loc, "duplicate `instance` field"));
+                ConfigField::Modules(c) => {
+                    if modules.is_some() {
+                        return Err(Error::new(err_loc, "duplicate `modules` field"));
                     }
-                    instance = Some(c);
+                    modules = Some(c);
                 }
                 ConfigField::MissingMemory(c) => {
                     if missing_memory.is_some() {
@@ -118,31 +112,15 @@ impl Config {
                     }
                     missing_memory = Some(c);
                 }
-                ConfigField::FunctionOverride(c) => {
-                    if function_override.is_some() {
-                        return Err(Error::new(err_loc, "duplicate `function_override` field"));
-                    }
-                    function_override = Some(c);
-                }
             }
         }
         Ok(Config {
-            target: target
-                .take()
-                .ok_or_else(|| Error::new(err_loc, "`target` field required"))?,
-            witx: witx
-                .take()
-                .ok_or_else(|| Error::new(err_loc, "`witx` field required"))?,
-            ctx: ctx
-                .take()
-                .ok_or_else(|| Error::new(err_loc, "`ctx` field required"))?,
-            instance: instance
-                .take()
-                .ok_or_else(|| Error::new(err_loc, "`instance` field required"))?,
+            target: target.ok_or_else(|| Error::new(err_loc, "`target` field required"))?,
+            witx: witx.ok_or_else(|| Error::new(err_loc, "`witx` field required"))?,
+            ctx: ctx.ok_or_else(|| Error::new(err_loc, "`ctx` field required"))?,
+            modules: modules.ok_or_else(|| Error::new(err_loc, "`modules` field required"))?,
             missing_memory: missing_memory
-                .take()
                 .ok_or_else(|| Error::new(err_loc, "`missing_memory` field required"))?,
-            function_override: function_override.take().unwrap_or_default(),
         })
     }
 
@@ -179,23 +157,28 @@ impl Parse for TargetConf {
     }
 }
 
-enum InstanceConfField {
+enum ModuleConfField {
     Name(Ident),
     Docs(String),
+    FunctionOverride(FunctionOverrideConf),
 }
 
-impl Parse for InstanceConfField {
+impl Parse for ModuleConfField {
     fn parse(input: ParseStream) -> Result<Self> {
         let lookahead = input.lookahead1();
         if lookahead.peek(kw::name) {
             input.parse::<kw::name>()?;
             input.parse::<Token![:]>()?;
-            Ok(InstanceConfField::Name(input.parse()?))
+            Ok(ModuleConfField::Name(input.parse()?))
         } else if lookahead.peek(kw::docs) {
             input.parse::<kw::docs>()?;
             input.parse::<Token![:]>()?;
             let docs: syn::LitStr = input.parse()?;
-            Ok(InstanceConfField::Docs(docs.value()))
+            Ok(ModuleConfField::Docs(docs.value()))
+        } else if lookahead.peek(kw::function_override) {
+            input.parse::<kw::function_override>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ModuleConfField::FunctionOverride(input.parse()?))
         } else {
             Err(lookahead.error())
         }
@@ -203,47 +186,82 @@ impl Parse for InstanceConfField {
 }
 
 #[derive(Debug, Clone)]
-pub struct InstanceConf {
+pub struct ModuleConf {
     pub name: Ident,
     pub docs: Option<String>,
+    pub function_override: FunctionOverrideConf,
 }
 
-impl InstanceConf {
-    fn build(fields: impl Iterator<Item = InstanceConfField>, err_loc: Span) -> Result<Self> {
+impl ModuleConf {
+    fn build(fields: impl Iterator<Item = ModuleConfField>, err_loc: Span) -> Result<Self> {
         let mut name = None;
         let mut docs = None;
+        let mut function_override = None;
         for f in fields {
             match f {
-                InstanceConfField::Name(c) => {
+                ModuleConfField::Name(c) => {
                     if name.is_some() {
                         return Err(Error::new(err_loc, "duplicate `name` field"));
                     }
                     name = Some(c);
                 }
-                InstanceConfField::Docs(c) => {
+                ModuleConfField::Docs(c) => {
                     if docs.is_some() {
                         return Err(Error::new(err_loc, "duplicate `docs` field"));
                     }
                     docs = Some(c);
                 }
+                ModuleConfField::FunctionOverride(c) => {
+                    if function_override.is_some() {
+                        return Err(Error::new(err_loc, "duplicate `function_override` field"));
+                    }
+                    function_override = Some(c);
+                }
             }
         }
-        Ok(InstanceConf {
-            name: name
-                .take()
-                .ok_or_else(|| Error::new(err_loc, "`name` field required"))?,
+        Ok(ModuleConf {
+            name: name.ok_or_else(|| Error::new(err_loc, "`name` field required"))?,
             docs,
+            function_override: function_override.unwrap_or_default(),
         })
     }
 }
 
-impl Parse for InstanceConf {
+impl Parse for ModuleConf {
     fn parse(input: ParseStream) -> Result<Self> {
         let contents;
         let _lbrace = braced!(contents in input);
-        let fields: Punctuated<InstanceConfField, Token![,]> =
-            contents.parse_terminated(InstanceConfField::parse)?;
-        Ok(InstanceConf::build(fields.into_iter(), input.span())?)
+        let fields: Punctuated<ModuleConfField, Token![,]> =
+            contents.parse_terminated(ModuleConfField::parse)?;
+        Ok(ModuleConf::build(fields.into_iter(), input.span())?)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ModulesConf {
+    pub mods: HashMap<String, ModuleConf>,
+}
+
+impl ModulesConf {
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &ModuleConf)> {
+        self.mods.iter()
+    }
+}
+
+impl Parse for ModulesConf {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let contents;
+        let _lbrace = braced!(contents in input);
+        let fields: Punctuated<(String, ModuleConf), Token![,]> =
+            contents.parse_terminated(|i| {
+                let name = i.parse::<Ident>()?.to_string();
+                i.parse::<Token![=>]>()?;
+                let val = i.parse()?;
+                Ok((name, val))
+            })?;
+        Ok(ModulesConf {
+            mods: fields.into_iter().collect(),
+        })
     }
 }
 
@@ -266,10 +284,10 @@ pub struct FunctionOverrideConf {
     pub funcs: Vec<FunctionOverrideField>,
 }
 impl FunctionOverrideConf {
-    pub fn find(&self, module: &str, field: &str) -> Option<&Ident> {
+    pub fn find(&self, name: &str) -> Option<&Ident> {
         self.funcs
             .iter()
-            .find(|f| f.module == module && f.field == field)
+            .find(|f| f.name == name)
             .map(|f| &f.replacement)
     }
 }
@@ -288,21 +306,14 @@ impl Parse for FunctionOverrideConf {
 
 #[derive(Debug, Clone)]
 pub struct FunctionOverrideField {
-    pub module: String,
-    pub field: String,
+    pub name: String,
     pub replacement: Ident,
 }
 impl Parse for FunctionOverrideField {
     fn parse(input: ParseStream) -> Result<Self> {
-        let module = input.parse::<Ident>()?.to_string();
-        input.parse::<Token![:]>()?;
-        let field = input.parse::<Ident>()?.to_string();
+        let name = input.parse::<Ident>()?.to_string();
         input.parse::<Token![=>]>()?;
         let replacement = input.parse::<Ident>()?;
-        Ok(FunctionOverrideField {
-            module,
-            field,
-            replacement,
-        })
+        Ok(FunctionOverrideField { name, replacement })
     }
 }
