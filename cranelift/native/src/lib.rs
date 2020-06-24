@@ -25,11 +25,21 @@
 )]
 #![no_std]
 
-use cranelift_codegen::isa;
+extern crate alloc;
+
+use alloc::boxed::Box;
+use cranelift_codegen::{isa, settings};
 use target_lexicon::Triple;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use raw_cpuid::CpuId;
+
+/// Return the default `TargetIsa` for the current host.
+pub fn default_host_isa() -> Result<Box<dyn isa::TargetIsa>, &'static str> {
+    let builder = builder()?;
+    let flags = settings::Flags::default();
+    Ok(builder.finish(flags))
+}
 
 /// Return an `isa` builder configured for the current host
 /// machine, or `Err(())` if the host machine is not supported
