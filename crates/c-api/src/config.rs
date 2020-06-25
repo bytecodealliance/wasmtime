@@ -34,6 +34,16 @@ pub enum wasmtime_profiling_strategy_t {
     WASMTIME_PROFILING_STRATEGY_JITDUMP,
 }
 
+#[repr(u8)]
+#[derive(Clone)]
+pub enum wasmtime_target_arch_t {
+    WASMTIME_X86,
+    WASMTIME_X64,
+    WASMTIME_ARM32,
+    WASMTIME_ARM64,
+    WASMTIME_RISCV,
+}
+
 #[no_mangle]
 pub extern "C" fn wasm_config_new() -> Box<wasm_config_t> {
     Box::new(wasm_config_t {
@@ -114,6 +124,19 @@ pub extern "C" fn wasmtime_config_cranelift_opt_level_set(
         WASMTIME_OPT_LEVEL_SPEED => OptLevel::Speed,
         WASMTIME_OPT_LEVEL_SPEED_AND_SIZE => OptLevel::SpeedAndSize,
     });
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_config_arch_set(c: &mut wasm_config_t, arch: wasmtime_target_arch_t) {
+    use wasmtime_target_arch_t::*;
+    let result = c.config.cranelift_other_flags(match strategy {
+        WASMTIME_X86 => ProfilingStrategy::None,
+        WASMTIME_X64 => ProfilingStrategy::JitDump,
+        WASMTIME_ARM32 => ProfilingStrategy::None,
+        WASMTIME_ARM64 => ProfilingStrategy::JitDump,
+        WASMTIME_RISCV => ProfilingStrategy::None,
+    });
+    handle_result(result, |_cfg| {})
 }
 
 #[no_mangle]

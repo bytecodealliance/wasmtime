@@ -56,7 +56,7 @@ fn isa_constructor(
     };
 
     let isa_flags = settings::Flags::new(&shared_flags, builder);
-
+    panic!("In isa constructor!!!\n");
     if isa_flags.use_new_backend() {
         #[cfg(not(feature = "x64"))]
         panic!("new backend x86 support not included by cargo features!");
