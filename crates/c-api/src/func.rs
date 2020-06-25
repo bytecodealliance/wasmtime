@@ -108,7 +108,7 @@ fn create_function(
         }
         Ok(())
     });
-    Box::new(HostRef::new(store, func).into())
+    Box::new(HostRef::new(func).into())
 }
 
 #[no_mangle]
@@ -183,7 +183,7 @@ pub unsafe extern "C" fn wasm_func_call(
         &mut trap,
     );
     match error {
-        Some(err) => Box::into_raw(err.to_trap(&wasm_func.ext.externref().store().unwrap())),
+        Some(err) => Box::into_raw(err.to_trap()),
         None => trap,
     }
 }
@@ -211,7 +211,6 @@ fn _wasmtime_func_call(
     results: &mut [wasm_val_t],
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let store = &func.ext.externref().store().unwrap();
     let func = func.func().borrow();
     if results.len() != func.result_arity() {
         return Some(Box::new(anyhow!("wrong number of results provided").into()));
@@ -232,7 +231,7 @@ fn _wasmtime_func_call(
         }
         Ok(Err(trap)) => match trap.downcast::<Trap>() {
             Ok(trap) => {
-                *trap_ptr = Box::into_raw(Box::new(wasm_trap_t::new(store, trap)));
+                *trap_ptr = Box::into_raw(Box::new(wasm_trap_t::new(trap)));
                 None
             }
             Err(err) => Some(Box::new(err.into())),
@@ -245,7 +244,7 @@ fn _wasmtime_func_call(
             } else {
                 Trap::new("rust panic happened")
             };
-            let trap = Box::new(wasm_trap_t::new(store, trap));
+            let trap = Box::new(wasm_trap_t::new(trap));
             *trap_ptr = Box::into_raw(trap);
             None
         }
@@ -279,12 +278,11 @@ pub extern "C" fn wasmtime_caller_export_get(
 ) -> Option<Box<wasm_extern_t>> {
     let name = str::from_utf8(name.as_slice()).ok()?;
     let export = caller.caller.get_export(name)?;
-    let store = caller.caller.store();
     let which = match export {
-        Extern::Func(f) => ExternHost::Func(HostRef::new(&store, f)),
-        Extern::Global(g) => ExternHost::Global(HostRef::new(&store, g)),
-        Extern::Memory(m) => ExternHost::Memory(HostRef::new(&store, m)),
-        Extern::Table(t) => ExternHost::Table(HostRef::new(&store, t)),
+        Extern::Func(f) => ExternHost::Func(HostRef::new(f)),
+        Extern::Global(g) => ExternHost::Global(HostRef::new(g)),
+        Extern::Memory(m) => ExternHost::Memory(HostRef::new(m)),
+        Extern::Table(t) => ExternHost::Table(HostRef::new(t)),
     };
     Some(Box::new(wasm_extern_t { which }))
 }

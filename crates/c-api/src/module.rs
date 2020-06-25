@@ -63,7 +63,7 @@ pub extern "C" fn wasmtime_module_new(
             .map(|e| wasm_exporttype_t::new(e.name().to_owned(), e.ty()))
             .collect::<Vec<_>>();
         let module = Box::new(wasm_module_t {
-            module: HostRef::new(store, module),
+            module: HostRef::new(module),
             imports,
             exports,
         });
@@ -130,7 +130,7 @@ pub extern "C" fn wasm_module_obtain(
         .map(|e| wasm_exporttype_t::new(e.name().to_owned(), e.ty()))
         .collect::<Vec<_>>();
     Some(Box::new(wasm_module_t {
-        module: HostRef::new(&store.store, module),
+        module: HostRef::new(module),
         imports,
         exports,
     }))

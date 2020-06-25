@@ -38,7 +38,7 @@ fn smoke_test_gc() -> anyhow::Result<()> {
     let func = instance.get_func("func").unwrap();
 
     let inner_dropped = Rc::new(Cell::new(false));
-    let r = ExternRef::new(&store, SetFlagOnDrop(inner_dropped.clone()));
+    let r = ExternRef::new(SetFlagOnDrop(inner_dropped.clone()));
     {
         let args = [Val::I32(5), Val::ExternRef(Some(r.clone()))];
         func.call(&args)?;
@@ -88,7 +88,7 @@ fn wasm_dropping_refs() -> anyhow::Result<()> {
     // NB: 4096 is greater than the initial `VMExternRefActivationsTable`
     // capacity, so this will trigger at least one GC.
     for _ in 0..4096 {
-        let r = ExternRef::new(&store, CountDrops(num_refs_dropped.clone()));
+        let r = ExternRef::new(CountDrops(num_refs_dropped.clone()));
         let args = [Val::ExternRef(Some(r))];
         drop_ref.call(&args)?;
     }
@@ -158,13 +158,10 @@ fn many_live_refs() -> anyhow::Result<()> {
             vec![ValType::ExternRef].into_boxed_slice(),
         ),
         {
-            let store = store.clone();
             let live_refs = live_refs.clone();
             move |_caller, _params, results| {
-                results[0] = Val::ExternRef(Some(ExternRef::new(
-                    &store,
-                    CountLiveRefs::new(live_refs.clone()),
-                )));
+                results[0] =
+                    Val::ExternRef(Some(ExternRef::new(CountLiveRefs::new(live_refs.clone()))));
                 Ok(())
             }
         },

@@ -10,7 +10,7 @@ use wast::{
 };
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
-fn runtime_value(store: &Store, v: &wast::Expression<'_>) -> Result<Val> {
+fn runtime_value(v: &wast::Expression<'_>) -> Result<Val> {
     use wast::Instruction::*;
 
     if v.instrs.len() != 1 {
@@ -24,7 +24,7 @@ fn runtime_value(store: &Store, v: &wast::Expression<'_>) -> Result<Val> {
         V128Const(x) => Val::V128(u128::from_le_bytes(x.to_le_bytes())),
         RefNull(RefType::Extern) => Val::ExternRef(None),
         RefNull(RefType::Func) => Val::FuncRef(None),
-        RefExtern(x) => Val::ExternRef(Some(ExternRef::new(store, *x))),
+        RefExtern(x) => Val::ExternRef(Some(ExternRef::new(*x))),
         other => bail!("couldn't convert {:?} to a runtime value", other),
     })
 }
@@ -120,7 +120,7 @@ impl WastContext {
         let values = exec
             .args
             .iter()
-            .map(|v| runtime_value(&self.store, v))
+            .map(|v| runtime_value(v))
             .collect::<Result<Vec<_>>>()?;
         self.invoke(exec.module.map(|i| i.name()), exec.name, &values)
     }

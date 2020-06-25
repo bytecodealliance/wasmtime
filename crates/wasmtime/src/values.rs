@@ -126,7 +126,6 @@ impl Val {
                 } else {
                     Val::ExternRef(Some(ExternRef {
                         inner: VMExternRef::clone_from_raw(raw),
-                        store: store.weak(),
                     }))
                 }
             }
@@ -180,15 +179,15 @@ impl Val {
             Val::FuncRef(Some(f)) => Store::same(store, f.store()),
             Val::FuncRef(None) => true,
 
-            // TODO: need to implement this once we actually finalize what
-            // `externref` will look like and it's actually implemented to pass it
-            // to compiled wasm as well.
-            Val::ExternRef(Some(e)) => e.store.ptr_eq(&store.weak()),
-            Val::ExternRef(None) => true,
-
-            // Integers have no association with any particular store, so
-            // they're always considered as "yes I came from that store",
-            Val::I32(_) | Val::I64(_) | Val::F32(_) | Val::F64(_) | Val::V128(_) => true,
+            // Integers, floats, vectors, and `externref`s have no association
+            // with any particular store, so they're always considered as "yes I
+            // came from that store",
+            Val::I32(_)
+            | Val::I64(_)
+            | Val::F32(_)
+            | Val::F64(_)
+            | Val::V128(_)
+            | Val::ExternRef(_) => true,
         }
     }
 }
