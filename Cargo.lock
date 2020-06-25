@@ -2567,6 +2567,7 @@ dependencies = [
  "wasi-common",
  "wasmtime",
  "wasmtime-runtime",
+ "wasmtime-wiggle",
  "wig",
  "wiggle",
 ]
@@ -2578,6 +2579,27 @@ dependencies = [
  "anyhow",
  "wasmtime",
  "wast 17.0.0",
+]
+
+[[package]]
+name = "wasmtime-wiggle"
+version = "0.18.0"
+dependencies = [
+ "wasmtime",
+ "wasmtime-wiggle-macro",
+ "wiggle",
+ "witx",
+]
+
+[[package]]
+name = "wasmtime-wiggle-macro"
+version = "0.18.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "wiggle-generate",
+ "witx",
 ]
 
 [[package]]
