@@ -179,7 +179,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) -> Codeg
             }
         }
 
-        Opcode::Iadd | Opcode::Isub => {
+        Opcode::Iadd | Opcode::Isub | Opcode::Imul | Opcode::Band | Opcode::Bor | Opcode::Bxor => {
             let lhs = input_to_reg(ctx, inputs[0]);
             let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
             let dst = output_to_reg(ctx, outputs[0]);
@@ -187,10 +187,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) -> Codeg
             // TODO For add, try to commute the operands if one is an immediate.
 
             let is_64 = int_ty_is_64(ty.unwrap());
-            let alu_op = if op == Opcode::Iadd {
-                AluRmiROpcode::Add
-            } else {
-                AluRmiROpcode::Sub
+            let alu_op = match op {
+                Opcode::Iadd => AluRmiROpcode::Add,
+                Opcode::Isub => AluRmiROpcode::Sub,
+                Opcode::Imul => AluRmiROpcode::Mul,
+                Opcode::Band => AluRmiROpcode::And,
+                Opcode::Bor => AluRmiROpcode::Or,
+                Opcode::Bxor => AluRmiROpcode::Xor,
+                _ => unreachable!(),
             };
 
             ctx.emit(Inst::mov_r_r(true, lhs, dst));
