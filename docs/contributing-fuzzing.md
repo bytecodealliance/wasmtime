@@ -34,5 +34,5 @@ fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html). They are defined in
 the `fuzz` subdirectory.
 
 See
-[`fuzz/README.md`](https://github.com/bytecodealliance/wasmtime/blob/master/fuzz/README.md)
+[`fuzz/README.md`](https://github.com/bytecodealliance/wasmtime/blob/main/fuzz/README.md)
 for details on how to run these fuzz targets and set up a corpus of seed inputs.

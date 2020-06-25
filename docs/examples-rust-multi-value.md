@@ -3,7 +3,7 @@
 You can also [browse this source code online][code] and clone the wasmtime
 repository to run the example locally.
 
-[code]: https://github.com/bytecodealliance/wasmtime/blob/master/examples/multi.rs
+[code]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/multi.rs
 
 This example shows off how to interact with a wasm module that uses multi-value
 exports and imports.

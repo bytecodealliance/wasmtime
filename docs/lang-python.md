@@ -69,7 +69,7 @@ print("gcd(27, 6) =", gcd(27, 6))
 The `wasmtime` Python package currently [lives in its own repository outside of
 `wasmtime`](https://github.com/bytecodealliance/wasmtime-py) and has a [number
 of other more advanced
-examples](https://github.com/bytecodealliance/wasmtime-py/tree/master/examples)
+examples](https://github.com/bytecodealliance/wasmtime-py/tree/main/examples)
 as well. Feel free to browse those, but if you find anything missing don't
 hesitate to [open an
 issue](https://github.com/bytecodealliance/wasmtime-py/issues/new) and let us

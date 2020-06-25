@@ -8,5 +8,5 @@ themselves one day.
 
 [proposal]: https://github.com/webassembly/wasm-c-api
 [`wasm.h`]: https://github.com/WebAssembly/wasm-c-api/blob/master/include/wasm.h
-[`wasi.h`]: https://github.com/bytecodealliance/wasmtime/blob/master/crates/c-api/include/wasi.h
-[`wasmtime.h`]: https://github.com/bytecodealliance/wasmtime/blob/master/crates/c-api/include/wasmtime.h
+[`wasi.h`]: https://github.com/bytecodealliance/wasmtime/blob/main/crates/c-api/include/wasi.h
+[`wasmtime.h`]: https://github.com/bytecodealliance/wasmtime/blob/main/crates/c-api/include/wasmtime.h

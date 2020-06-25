@@ -6,7 +6,7 @@
 //! which is our WASI implementation, [wasi-common].
 //!
 //! [nix]: https://github.com/nix-rust/nix
-//! [wasi-common]: https://github.com/bytecodealliance/wasmtime/tree/master/crates/wasi-common
+//! [wasi-common]: https://github.com/bytecodealliance/wasmtime/tree/main/crates/wasi-common
 #![cfg(unix)]
 
 pub mod clock;
