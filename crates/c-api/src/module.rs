@@ -1,4 +1,3 @@
-use crate::host_ref::HostRef;
 use crate::{
     handle_result, wasm_byte_vec_t, wasm_exporttype_t, wasm_exporttype_vec_t, wasm_importtype_t,
     wasm_importtype_vec_t, wasm_store_t, wasmtime_error_t,
@@ -9,18 +8,12 @@ use wasmtime::{Engine, Module};
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_module_t {
-    pub(crate) module: HostRef<Module>,
+    pub(crate) module: Module,
     pub(crate) imports: Vec<wasm_importtype_t>,
     pub(crate) exports: Vec<wasm_exporttype_t>,
 }
 
 wasmtime_c_api_macros::declare_ref!(wasm_module_t);
-
-impl wasm_module_t {
-    fn externref(&self) -> wasmtime::ExternRef {
-        self.module.clone().into()
-    }
-}
 
 #[repr(C)]
 #[derive(Clone)]
@@ -63,7 +56,7 @@ pub extern "C" fn wasmtime_module_new(
             .map(|e| wasm_exporttype_t::new(e.name().to_owned(), e.ty()))
             .collect::<Vec<_>>();
         let module = Box::new(wasm_module_t {
-            module: HostRef::new(module),
+            module: module,
             imports,
             exports,
         });
@@ -108,7 +101,7 @@ pub extern "C" fn wasm_module_imports(module: &wasm_module_t, out: &mut wasm_imp
 #[no_mangle]
 pub extern "C" fn wasm_module_share(module: &wasm_module_t) -> Box<wasm_shared_module_t> {
     Box::new(wasm_shared_module_t {
-        module: module.module.borrow().clone(),
+        module: module.module.clone(),
     })
 }
 
@@ -130,7 +123,7 @@ pub extern "C" fn wasm_module_obtain(
         .map(|e| wasm_exporttype_t::new(e.name().to_owned(), e.ty()))
         .collect::<Vec<_>>();
     Some(Box::new(wasm_module_t {
-        module: HostRef::new(module),
+        module: module,
         imports,
         exports,
     }))

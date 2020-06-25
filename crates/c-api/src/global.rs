@@ -1,8 +1,7 @@
-use crate::host_ref::HostRef;
 use crate::{handle_result, wasmtime_error_t};
-use crate::{wasm_extern_t, wasm_globaltype_t, wasm_store_t, wasm_val_t, ExternHost};
+use crate::{wasm_extern_t, wasm_globaltype_t, wasm_store_t, wasm_val_t};
 use std::ptr;
-use wasmtime::Global;
+use wasmtime::{Extern, Global};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -15,20 +14,16 @@ wasmtime_c_api_macros::declare_ref!(wasm_global_t);
 impl wasm_global_t {
     pub(crate) fn try_from(e: &wasm_extern_t) -> Option<&wasm_global_t> {
         match &e.which {
-            ExternHost::Global(_) => Some(unsafe { &*(e as *const _ as *const _) }),
+            Extern::Global(_) => Some(unsafe { &*(e as *const _ as *const _) }),
             _ => None,
         }
     }
 
-    fn global(&self) -> &HostRef<Global> {
+    fn global(&self) -> &Global {
         match &self.ext.which {
-            ExternHost::Global(g) => g,
+            Extern::Global(g) => g,
             _ => unsafe { std::hint::unreachable_unchecked() },
         }
-    }
-
-    fn externref(&self) -> wasmtime::ExternRef {
-        self.global().clone().into()
     }
 }
 
@@ -59,7 +54,7 @@ pub extern "C" fn wasmtime_global_new(
     handle_result(global, |global| {
         *ret = Box::into_raw(Box::new(wasm_global_t {
             ext: wasm_extern_t {
-                which: ExternHost::Global(HostRef::new(global)),
+                which: global.into(),
             },
         }));
     })
@@ -72,18 +67,18 @@ pub extern "C" fn wasm_global_as_extern(g: &wasm_global_t) -> &wasm_extern_t {
 
 #[no_mangle]
 pub extern "C" fn wasm_global_type(g: &wasm_global_t) -> Box<wasm_globaltype_t> {
-    let globaltype = g.global().borrow().ty();
+    let globaltype = g.global().ty();
     Box::new(wasm_globaltype_t::new(globaltype))
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_global_get(g: &wasm_global_t, out: &mut wasm_val_t) {
-    out.set(g.global().borrow().get());
+    out.set(g.global().get());
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_global_set(g: &wasm_global_t, val: &wasm_val_t) {
-    let result = g.global().borrow().set(val.val());
+    let result = g.global().set(val.val());
     // FIXME(WebAssembly/wasm-c-api#131) should communicate the error here
     drop(result);
 }
@@ -93,5 +88,5 @@ pub extern "C" fn wasmtime_global_set(
     g: &wasm_global_t,
     val: &wasm_val_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    handle_result(g.global().borrow().set(val.val()), |()| {})
+    handle_result(g.global().set(val.val()), |()| {})
 }

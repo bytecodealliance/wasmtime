@@ -1,30 +1,20 @@
-use crate::host_ref::HostRef;
 use crate::{wasm_extern_t, wasm_extern_vec_t, wasm_module_t, wasm_trap_t};
-use crate::{wasm_store_t, wasmtime_error_t, ExternHost};
+use crate::{wasm_store_t, wasmtime_error_t};
 use anyhow::Result;
-use std::cell::RefCell;
 use std::ptr;
-use wasmtime::{Extern, Instance, Trap};
+use wasmtime::{Instance, Trap};
 
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_instance_t {
-    pub(crate) instance: HostRef<Instance>,
-    exports_cache: RefCell<Option<Vec<ExternHost>>>,
+    pub(crate) instance: Instance,
 }
 
 wasmtime_c_api_macros::declare_ref!(wasm_instance_t);
 
 impl wasm_instance_t {
     pub(crate) fn new(instance: Instance) -> wasm_instance_t {
-        wasm_instance_t {
-            instance: HostRef::new(instance),
-            exports_cache: RefCell::new(None),
-        }
-    }
-
-    fn externref(&self) -> wasmtime::ExternRef {
-        self.instance.clone().into()
+        wasm_instance_t { instance: instance }
     }
 }
 
@@ -99,16 +89,10 @@ fn _wasmtime_instance_new(
     let store = &store.store;
     let imports = imports
         .iter()
-        .map(|import| match &import.which {
-            ExternHost::Func(e) => Extern::Func(e.borrow().clone()),
-            ExternHost::Table(e) => Extern::Table(e.borrow().clone()),
-            ExternHost::Global(e) => Extern::Global(e.borrow().clone()),
-            ExternHost::Memory(e) => Extern::Memory(e.borrow().clone()),
-        })
+        .map(|import| import.which.clone())
         .collect::<Vec<_>>();
-    let module = &module.module.borrow();
     handle_instantiate(
-        Instance::new(store, module, &imports),
+        Instance::new(store, &module.module, &imports),
         instance_ptr,
         trap_ptr,
     )
@@ -140,23 +124,15 @@ pub fn handle_instantiate(
 
 #[no_mangle]
 pub extern "C" fn wasm_instance_exports(instance: &wasm_instance_t, out: &mut wasm_extern_vec_t) {
-    let mut cache = instance.exports_cache.borrow_mut();
-    let exports = cache.get_or_insert_with(|| {
-        let instance = &instance.instance.borrow();
+    out.set_buffer(
         instance
+            .instance
             .exports()
-            .map(|e| match e.into_extern() {
-                Extern::Func(f) => ExternHost::Func(HostRef::new(f)),
-                Extern::Global(f) => ExternHost::Global(HostRef::new(f)),
-                Extern::Memory(f) => ExternHost::Memory(HostRef::new(f)),
-                Extern::Table(f) => ExternHost::Table(HostRef::new(f)),
+            .map(|e| {
+                Some(Box::new(wasm_extern_t {
+                    which: e.into_extern(),
+                }))
             })
-            .collect()
-    });
-    let mut buffer = Vec::with_capacity(exports.len());
-    for e in exports {
-        let ext = Box::new(wasm_extern_t { which: e.clone() });
-        buffer.push(Some(ext));
-    }
-    out.set_buffer(buffer);
+            .collect(),
+    );
 }
