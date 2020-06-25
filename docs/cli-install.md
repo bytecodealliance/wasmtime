@@ -41,7 +41,7 @@ precompiled binaries:
 1. Each tagged release will have a full set of release artifacts on the [GitHub
    releases page][releases].
 2. The [`dev` release] is also continuously updated with the latest build of the
-   `master` branch. If you want the latest-and-greatest and don't mind a bit of
+   `main` branch. If you want the latest-and-greatest and don't mind a bit of
    instability, this is the release for you.
 
 [`dev` release]: https://github.com/bytecodealliance/wasmtime/releases/tag/dev

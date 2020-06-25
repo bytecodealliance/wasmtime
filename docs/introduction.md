@@ -18,7 +18,7 @@ This guide is intended to server a number of purposes and within you'll find:
   Wasmtime.
 
 ... and more! The source for this guide [lives on
-GitHub](https://github.com/bytecodealliance/wasmtime/tree/master/docs) and
+GitHub](https://github.com/bytecodealliance/wasmtime/tree/main/docs) and
 contributions are welcome!
 
 [github]: https://github.com/bytecodealliance/wasmtime

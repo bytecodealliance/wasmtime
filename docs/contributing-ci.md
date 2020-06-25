@@ -9,7 +9,7 @@ what's expected of contributors.
 All CI currently happens on GitHub Actions and is configured in the [`.github`
 directory][dir] of the repository.
 
-[dir]: https://github.com/bytecodealliance/wasmtime/tree/master/.github
+[dir]: https://github.com/bytecodealliance/wasmtime/tree/main/.github
 
 ## PRs and CI
 
@@ -33,7 +33,7 @@ run on CI looks like this:
 
 * Book documentation tests - code snippets (Rust ones at least) in the book
   documentation ([the `docs`
-  folder](https://github.com/bytecodealliance/wasmtime/tree/master/docs)) are
+  folder](https://github.com/bytecodealliance/wasmtime/tree/main/docs)) are
   tested on CI to ensure they are working.
 
 * Crate tests - the moral equivalent of `cargo test --all` and `cargo test --all
@@ -78,7 +78,7 @@ builder](https://github.com/bytecodealliance/wasmtime/runs/488719677?check_suite
 you can see the artifacts link in the top right. Note that artifacts don't
 become available until the whole run finishes.
 
-Commits merged into the master branch will rerun CI and will also produce
-artifacts as usual. On the master branch, however, documentation is pushed to
+Commits merged into the `main` branch will rerun CI and will also produce
+artifacts as usual. On the `main` branch, however, documentation is pushed to
 the `gh-pages` branch as well, and binaries are pushed to the `dev` release on
 GitHub. Finally, tagged commits get a whole dedicated release to them too.

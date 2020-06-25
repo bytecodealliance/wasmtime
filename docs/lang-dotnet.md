@@ -77,7 +77,7 @@ WebAssembly code in .NET!
 The [.NET embedding of Wasmtime repository](https://github.com/bytecodealliance/wasmtime-dotnet)
 contains the source code for the Wasmtime NuGet package.
 
-The repository also has more [examples](https://github.com/bytecodealliance/wasmtime-dotnet/tree/master/examples)
+The repository also has more [examples](https://github.com/bytecodealliance/wasmtime-dotnet/tree/main/examples)
 as well.
 
 Feel free to browse those, but if you find anything missing don't

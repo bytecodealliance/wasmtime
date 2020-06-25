@@ -83,7 +83,7 @@ Hello, world!
   well. Wasmtime developers are intimately engaged with the WebAssembly
   standards process all along the way too.
 
-[Cranelift]: https://github.com/bytecodealliance/wasmtime/blob/master/cranelift/README.md
+[Cranelift]: https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/README.md
 [embedded]: https://bytecodealliance.github.io/wasmtime/lang.html
 
 ## Language Support
@@ -101,8 +101,8 @@ the implementation:
 [C]: https://bytecodealliance.github.io/wasmtime/examples-c-embed.html
 [`wasmtime` crate]: https://crates.io/crates/wasmtime
 [`wasm.h`]: https://github.com/WebAssembly/wasm-c-api/blob/master/include/wasm.h
-[`wasi.h`]: https://github.com/bytecodealliance/wasmtime/blob/master/crates/c-api/include/wasi.h
-[`wasmtime.h`]: https://github.com/bytecodealliance/wasmtime/blob/master/crates/c-api/include/wasmtime.h
+[`wasi.h`]: https://github.com/bytecodealliance/wasmtime/blob/main/crates/c-api/include/wasi.h
+[`wasmtime.h`]: https://github.com/bytecodealliance/wasmtime/blob/main/crates/c-api/include/wasmtime.h
 [Python]: https://bytecodealliance.github.io/wasmtime/lang-python.html
 [`wasmtime` PyPI package]: https://pypi.org/project/wasmtime/
 [.NET]: https://bytecodealliance.github.io/wasmtime/lang-dotnet.html

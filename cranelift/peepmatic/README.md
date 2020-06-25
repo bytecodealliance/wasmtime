@@ -4,7 +4,7 @@
   <p>
     <b>
       <code>peepmatic</code> is a DSL and compiler for peephole optimizers for
-      <a href="https://github.com/bytecodealliance/wasmtime/tree/master/cranelift#readme">Cranelift</a>.
+      <a href="https://github.com/bytecodealliance/wasmtime/tree/main/cranelift#readme">Cranelift</a>.
     </b>
   </p>
 
@@ -59,7 +59,7 @@ Cranelift's clif intermediate representation. The intended next target is
 Cranelift's new backend's "vcode" intermediate representation. Supporting
 non-Cranelift targets is not a goal.
 
-[Cranelift]: https://github.com/bytecodealliance/wasmtime/tree/master/cranelift#readme
+[Cranelift]: https://github.com/bytecodealliance/wasmtime/tree/main/cranelift#readme
 [Souper]: https://github.com/google/souper
 [Alive]: https://github.com/AliveToolkit/alive2
 

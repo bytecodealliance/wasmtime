@@ -1,10 +1,10 @@
 name: CI
 on:
   push:
-    branches: [master]
+    branches: [main]
     tags-ignore: [dev]
   pull_request:
-    branches: [master]
+    branches: [main]
 defaults:
   run:
     shell: bash
@@ -461,7 +461,7 @@ jobs:
         mv doc-book gh-pages
         mv doc-api gh-pages/api
 
-    # If this is a push to the master branch push to the `gh-pages` using a
+    # If this is a push to the main branch push to the `gh-pages` using a
     # deploy key. Note that a deploy key is necessary for now because otherwise
     # using the default token for github actions doesn't actually trigger a page
     # rebuild.
@@ -471,7 +471,7 @@ jobs:
         GITHUB_DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
         BUILD_REPOSITORY_ID: ${{ github.repository }}
         BUILD_SOURCEVERSION: ${{ github.sha }}
-      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     - name: Calculate tag name
       run: |
@@ -509,12 +509,12 @@ jobs:
         mkdir -p tmp/whl
         find dist/ -name '*.whl' -type f -exec cp '{}' tmp/whl -v \;
 
-    # ... and if this was an actual push (tag or `master`) then we publish a
+    # ... and if this was an actual push (tag or `main`) then we publish a
     # new release. This'll automatically publish a tag release or update `dev`
     # with this `sha`
     - name: Publish Release
       uses: ./.github/actions/github-release
-      if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
+      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
       with:
         files: "dist/*"
         name: ${{ steps.tagname.outputs.val }}

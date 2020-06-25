@@ -46,7 +46,7 @@ It can also be packaged using a `package.json` file:
 You can also [browse this source code online][code] and clone the wasmtime
 repository to run the example locally.
 
-[code]: https://github.com/bytecodealliance/wasmtime/blob/master/docs/assemblyscript-hello-world
+[code]: https://github.com/bytecodealliance/wasmtime/blob/main/docs/assemblyscript-hello-world
 [AssemblyScript]: https://assemblyscript.org
 [as-wasi]: https://github.com/jedisct1/as-wasi
 [half runtime]: https://docs.assemblyscript.org/details/runtime#runtime-variants
