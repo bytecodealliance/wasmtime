@@ -2482,6 +2482,44 @@ fn test_x64_emit() {
     insns.push((Inst::setcc(CC::LE, w_r14), "410F9EC6", "setle   %r14b"));
 
     // ========================================================
+    // Cmove
+    insns.push((
+        Inst::cmove(2, CC::O, RegMem::reg(rdi), w_rsi),
+        "660F40F7",
+        "cmovow  %di, %si",
+    ));
+    insns.push((
+        Inst::cmove(
+            2,
+            CC::NO,
+            RegMem::mem(Amode::imm_reg_reg_shift(37, rdi, rsi, 2)),
+            w_r15,
+        ),
+        "66440F417CB725",
+        "cmovnow 37(%rdi,%rsi,4), %r15w",
+    ));
+    insns.push((
+        Inst::cmove(4, CC::LE, RegMem::reg(rdi), w_rsi),
+        "0F4EF7",
+        "cmovlel %edi, %esi",
+    ));
+    insns.push((
+        Inst::cmove(4, CC::NLE, RegMem::mem(Amode::imm_reg(0, r15)), w_rsi),
+        "410F4F37",
+        "cmovnlel 0(%r15), %esi",
+    ));
+    insns.push((
+        Inst::cmove(8, CC::Z, RegMem::reg(rdi), w_r14),
+        "4C0F44F7",
+        "cmovzq  %rdi, %r14",
+    ));
+    insns.push((
+        Inst::cmove(8, CC::NZ, RegMem::mem(Amode::imm_reg(13, rdi)), w_r14),
+        "4C0F45770D",
+        "cmovnzq 13(%rdi), %r14",
+    ));
+
+    // ========================================================
     // Push64
     insns.push((Inst::push64(RegMemImm::reg(rdi)), "57", "pushq   %rdi"));
     insns.push((Inst::push64(RegMemImm::reg(r8)), "4150", "pushq   %r8"));

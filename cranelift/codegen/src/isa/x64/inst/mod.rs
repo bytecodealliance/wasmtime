@@ -118,6 +118,16 @@ pub enum Inst {
     /// Materializes the requested condition code in the destination reg.
     Setcc { cc: CC, dst: Writable<Reg> },
 
+    /// Integer conditional move.
+    /// Overwrites the destination register.
+    Cmove {
+        /// Possible values are 2, 4 or 8. Checked in the related factory.
+        size: u8,
+        cc: CC,
+        src: RegMem,
+        dst: Writable<Reg>,
+    },
+
     // =====================================
     // Stack manipulation.
     /// pushq (reg addr imm)
@@ -348,6 +358,12 @@ impl Inst {
     pub(crate) fn setcc(cc: CC, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
         Inst::Setcc { cc, dst }
+    }
+
+    pub(crate) fn cmove(size: u8, cc: CC, src: RegMem, dst: Writable<Reg>) -> Inst {
+        debug_assert!(size == 8 || size == 4 || size == 2);
+        debug_assert!(dst.to_reg().get_class() == RegClass::I64);
+        Inst::Cmove { size, cc, src, dst }
     }
 
     pub(crate) fn push64(src: RegMemImm) -> Inst {
@@ -585,6 +601,12 @@ impl ShowWithRRU for Inst {
                 ljustify2("set".to_string(), cc.to_string()),
                 show_ireg_sized(dst.to_reg(), mb_rru, 1)
             ),
+            Inst::Cmove { size, cc, src, dst } => format!(
+                "{} {}, {}",
+                ljustify(format!("cmov{}{}", cc.to_string(), suffixBWLQ(*size))),
+                src.show_rru_sized(mb_rru, *size),
+                show_ireg_sized(dst.to_reg(), mb_rru, *size)
+            ),
             Inst::Push64 { src } => {
                 format!("{} {}", ljustify("pushq".to_string()), src.show_rru(mb_rru))
             }
@@ -699,6 +721,10 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(*dst); // yes, really `add_use`
         }
         Inst::Setcc { dst, .. } => {
+            collector.add_def(*dst);
+        }
+        Inst::Cmove { src, dst, .. } => {
+            src.get_regs_as_uses(collector);
             collector.add_def(*dst);
         }
         Inst::Push64 { src } => {
@@ -899,6 +925,14 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, dst);
         }
         Inst::Setcc { ref mut dst, .. } => map_def(mapper, dst),
+        Inst::Cmove {
+            ref mut src,
+            ref mut dst,
+            ..
+        } => {
+            src.map_uses(mapper);
+            map_def(mapper, dst)
+        }
         Inst::Push64 { ref mut src } => src.map_uses(mapper),
         Inst::Pop64 { ref mut dst } => {
             map_def(mapper, dst);

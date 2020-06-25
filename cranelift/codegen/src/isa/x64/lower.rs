@@ -123,6 +123,11 @@ fn input_to_reg<'a>(ctx: Ctx<'a>, spec: InsnInput) -> Reg {
     inputs.reg
 }
 
+fn input_to_reg_mem(ctx: Ctx, spec: InsnInput) -> RegMem {
+    // TODO handle memory.
+    RegMem::reg(input_to_reg(ctx, spec))
+}
+
 /// Try to use an immediate for constant inputs, and a register otherwise.
 /// TODO: handle memory as well!
 fn input_to_reg_mem_imm(ctx: Ctx, spec: InsnInput) -> RegMemImm {
@@ -144,6 +149,20 @@ fn input_to_reg_mem_imm(ctx: Ctx, spec: InsnInput) -> RegMemImm {
 
 fn output_to_reg<'a>(ctx: Ctx<'a>, spec: InsnOutput) -> Writable<Reg> {
     ctx.get_output(spec.insn, spec.output)
+}
+
+fn emit_cmp(ctx: Ctx, insn: IRInst) {
+    let ty = ctx.input_ty(insn, 0);
+
+    let inputs = [InsnInput { insn, input: 0 }, InsnInput { insn, input: 1 }];
+
+    // TODO Try to commute the operands (and invert the condition) if one is an immediate.
+    let lhs = input_to_reg(ctx, inputs[0]);
+    let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
+
+    // Cranelift's icmp semantics want to compare lhs - rhs, while Intel gives
+    // us dst - src at the machine instruction level, so invert operands.
+    ctx.emit(Inst::cmp_rmi_r(ty.bytes() as u8, rhs, lhs));
 }
 
 //=============================================================================
@@ -269,18 +288,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) -> Codeg
         }
 
         Opcode::Icmp => {
+            emit_cmp(ctx, insn);
+
             let condcode = inst_condcode(ctx.data(insn));
             let cc = CC::from_intcc(condcode);
-            let ty = ctx.input_ty(insn, 0);
-
-            // TODO Try to commute the operands (and invert the condition) if one is an immediate.
-            let lhs = input_to_reg(ctx, inputs[0]);
-            let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
             let dst = output_to_reg(ctx, outputs[0]);
-
-            // Cranelift's icmp semantics want to compare lhs - rhs, while Intel gives
-            // us dst - src at the machine instruction level, so invert operands.
-            ctx.emit(Inst::cmp_rmi_r(ty.bytes() as u8, rhs, lhs));
             ctx.emit(Inst::setcc(cc, dst));
         }
 
@@ -601,6 +613,47 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) -> Codeg
                 .abi()
                 .stackslot_addr(stack_slot, u32::try_from(offset).unwrap(), dst);
             ctx.emit(inst);
+        }
+
+        Opcode::Select | Opcode::Selectif => {
+            let cc = if op == Opcode::Select {
+                // The input is a boolean value, compare it against zero.
+                let size = ctx.input_ty(insn, 0).bytes() as u8;
+                let test = input_to_reg(ctx, inputs[0]);
+                ctx.emit(Inst::cmp_rmi_r(size, RegMemImm::imm(0), test));
+
+                CC::NZ
+            } else {
+                // Verification ensures that the input is always a single-def ifcmp.
+                let cmp_insn = ctx
+                    .get_input(inputs[0].insn, inputs[0].input)
+                    .inst
+                    .unwrap()
+                    .0;
+                debug_assert_eq!(ctx.data(cmp_insn).opcode(), Opcode::Ifcmp);
+                emit_cmp(ctx, cmp_insn);
+
+                CC::from_intcc(inst_condcode(ctx.data(insn)))
+            };
+
+            let lhs = input_to_reg_mem(ctx, inputs[1]);
+            let rhs = input_to_reg(ctx, inputs[2]);
+            let dst = output_to_reg(ctx, outputs[0]);
+
+            let ty = ctx.output_ty(insn, 0);
+            assert!(is_int_ty(ty), "float cmov NYI");
+
+            let size = ty.bytes() as u8;
+            if size == 1 {
+                // Sign-extend operands to 32, then do a cmove of size 4.
+                let lhs_se = ctx.alloc_tmp(RegClass::I64, I32);
+                ctx.emit(Inst::movsx_rm_r(ExtMode::BL, lhs, lhs_se));
+                ctx.emit(Inst::movsx_rm_r(ExtMode::BL, RegMem::reg(rhs), dst));
+                ctx.emit(Inst::cmove(4, cc, RegMem::reg(lhs_se.to_reg()), dst));
+            } else {
+                ctx.emit(Inst::gen_move(dst, rhs, ty));
+                ctx.emit(Inst::cmove(size, cc, lhs, dst));
+            }
         }
 
         Opcode::IaddImm
