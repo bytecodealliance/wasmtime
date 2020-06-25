@@ -708,12 +708,7 @@ impl Linker {
             bail!("`_start` in '{}' is not a function", module);
         }
 
-        // Otherwise return a no-op function.
-        Ok(Func::new(
-            &self.store,
-            FuncType::new(Vec::new().into_boxed_slice(), Vec::new().into_boxed_slice()),
-            move |_, _, _| Ok(()),
-        ))
+        bail!("Could not find a default export or _start function.");
     }
 }
 
