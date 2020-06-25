@@ -849,6 +849,30 @@ pub(crate) fn emit(
             );
         }
 
+        Inst::Cmove {
+            size,
+            cc,
+            src,
+            dst: reg_g,
+        } => {
+            let (prefix, rex_flags) = match size {
+                2 => (LegacyPrefix::_66, RexFlags::clear_w()),
+                4 => (LegacyPrefix::None, RexFlags::clear_w()),
+                8 => (LegacyPrefix::None, RexFlags::set_w()),
+                _ => unreachable!("invalid size spec for cmove"),
+            };
+            let opcode = 0x0F40 + cc.get_enc() as u32;
+            match src {
+                RegMem::Reg { reg: reg_e } => {
+                    emit_std_reg_reg(sink, prefix, opcode, 2, reg_g.to_reg(), *reg_e, rex_flags);
+                }
+                RegMem::Mem { addr } => {
+                    let addr = &addr.finalize(state);
+                    emit_std_reg_mem(sink, prefix, opcode, 2, reg_g.to_reg(), addr, rex_flags);
+                }
+            }
+        }
+
         Inst::Push64 { src } => {
             match src {
                 RegMemImm::Reg { reg } => {
