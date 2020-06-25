@@ -59,7 +59,7 @@ pub extern "C" fn wasmtime_global_new(
     handle_result(global, |global| {
         *ret = Box::into_raw(Box::new(wasm_global_t {
             ext: wasm_extern_t {
-                which: ExternHost::Global(HostRef::new(&store.store, global)),
+                which: ExternHost::Global(HostRef::new(global)),
             },
         }));
     })

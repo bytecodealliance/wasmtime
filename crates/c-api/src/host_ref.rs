@@ -2,7 +2,7 @@ use std::any::Any;
 use std::cell::{self, RefCell};
 use std::convert::TryFrom;
 use std::marker::PhantomData;
-use wasmtime::{ExternRef, Store};
+use wasmtime::ExternRef;
 
 /// Represents a piece of data located in the host environment.
 #[derive(Debug)]
@@ -19,9 +19,9 @@ where
     T: 'static + Any,
 {
     /// Creates a new `HostRef<T>` from `T`.
-    pub fn new(store: &Store, item: T) -> HostRef<T> {
+    pub fn new(item: T) -> HostRef<T> {
         HostRef {
-            externref: ExternRef::new(store, RefCell::new(item)),
+            externref: ExternRef::new(RefCell::new(item)),
             _phantom: PhantomData,
         }
     }

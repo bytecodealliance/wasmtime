@@ -77,12 +77,13 @@ pub fn declare_ref(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
         #[no_mangle]
         pub extern fn #get_host_info(a: &#ty) -> *mut std::os::raw::c_void {
-            crate::r#ref::get_host_info(&a.externref())
+            std::ptr::null_mut()
         }
 
         #[no_mangle]
         pub extern fn #set_host_info(a: &#ty, info: *mut std::os::raw::c_void) {
-            crate::r#ref::set_host_info(&a.externref(), info, None)
+            eprintln!("`{}` is not implemented", stringify!(#set_host_info));
+            std::process::abort();
         }
 
         #[no_mangle]
@@ -91,7 +92,8 @@ pub fn declare_ref(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             info: *mut std::os::raw::c_void,
             finalizer: Option<extern "C" fn(*mut std::os::raw::c_void)>,
         ) {
-            crate::r#ref::set_host_info(&a.externref(), info, finalizer)
+            eprintln!("`{}` is not implemented", stringify!(#set_host_info_final));
+            std::process::abort();
         }
 
         #[no_mangle]

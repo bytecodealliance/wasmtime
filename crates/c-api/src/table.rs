@@ -47,7 +47,7 @@ pub extern "C" fn wasm_table_new(
     let table = Table::new(&store.store, tt.ty().ty.clone(), init).ok()?;
     Some(Box::new(wasm_table_t {
         ext: wasm_extern_t {
-            which: ExternHost::Table(HostRef::new(&store.store, table)),
+            which: ExternHost::Table(HostRef::new(table)),
         },
     }))
 }
@@ -68,7 +68,7 @@ pub extern "C" fn wasmtime_funcref_table_new(
         |table| {
             *out = Box::into_raw(Box::new(wasm_table_t {
                 ext: wasm_extern_t {
-                    which: ExternHost::Table(HostRef::new(&store.store, table)),
+                    which: ExternHost::Table(HostRef::new(table)),
                 },
             }));
         },
@@ -100,13 +100,7 @@ pub extern "C" fn wasmtime_funcref_table_get(
             *ptr = match val {
                 // TODO: what do do about creating new `HostRef` handles here?
                 Val::FuncRef(None) => ptr::null_mut(),
-                Val::FuncRef(Some(f)) => {
-                    let store = match t.table().as_ref().store() {
-                        None => return false,
-                        Some(store) => store,
-                    };
-                    Box::into_raw(Box::new(HostRef::new(&store, f).into()))
-                }
+                Val::FuncRef(Some(f)) => Box::into_raw(Box::new(HostRef::new(f).into())),
                 _ => return false,
             };
         }

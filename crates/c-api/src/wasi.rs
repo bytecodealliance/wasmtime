@@ -314,7 +314,7 @@ pub unsafe extern "C" fn wasi_instance_new(
         })),
         Err(e) => {
             *trap = Box::into_raw(Box::new(wasm_trap_t {
-                trap: HostRef::new(store, Trap::new(e)),
+                trap: HostRef::new(Trap::new(e)),
             }));
 
             None
@@ -352,14 +352,13 @@ pub extern "C" fn wasi_instance_bind_import<'a>(
     if &export.ty() != import.ty.func()? {
         return None;
     }
-    let store = export.store();
 
     let entry = instance
         .export_cache
         .entry(name.to_string())
         .or_insert_with(|| {
             Box::new(wasm_extern_t {
-                which: ExternHost::Func(HostRef::new(store, export.clone())),
+                which: ExternHost::Func(HostRef::new(export.clone())),
             })
         });
     Some(entry)

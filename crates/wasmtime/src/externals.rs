@@ -355,10 +355,9 @@ impl Table {
                 Some(unsafe { from_checked_anyfunc(f, &self.instance.store) })
             }
             runtime::TableElement::ExternRef(None) => Some(Val::ExternRef(None)),
-            runtime::TableElement::ExternRef(Some(x)) => Some(Val::ExternRef(Some(ExternRef {
-                inner: x,
-                store: self.instance.store.weak(),
-            }))),
+            runtime::TableElement::ExternRef(Some(x)) => {
+                Some(Val::ExternRef(Some(ExternRef { inner: x })))
+            }
         }
     }
 

@@ -1,12 +1,9 @@
 use crate::externals::MemoryCreator;
-use crate::r#ref::ExternRef;
 use crate::trampoline::{MemoryCreatorProxy, StoreInstanceHandle};
 use crate::Module;
 use anyhow::{bail, Result};
-use std::any::Any;
 use std::cell::RefCell;
 use std::cmp;
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -815,7 +812,6 @@ pub(crate) struct StoreInner {
     instances: RefCell<Vec<InstanceHandle>>,
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
     jit_code_ranges: RefCell<Vec<(usize, usize)>>,
-    host_info: RefCell<HashMap<HostInfoKey, Rc<RefCell<dyn Any>>>>,
     externref_activations_table: Rc<VMExternRefActivationsTable>,
     stack_map_registry: Rc<StackMapRegistry>,
 }
@@ -857,7 +853,6 @@ impl Store {
                 instances: RefCell::new(Vec::new()),
                 signal_handler: RefCell::new(None),
                 jit_code_ranges: RefCell::new(Vec::new()),
-                host_info: RefCell::new(HashMap::new()),
                 externref_activations_table: Rc::new(VMExternRefActivationsTable::new()),
                 stack_map_registry: Rc::new(StackMapRegistry::default()),
             }),
@@ -978,32 +973,6 @@ impl Store {
     pub(crate) fn upgrade(weak: &Weak<StoreInner>) -> Option<Self> {
         let inner = weak.upgrade()?;
         Some(Self { inner })
-    }
-
-    pub(crate) fn host_info(&self, externref: &ExternRef) -> Option<Rc<RefCell<dyn Any>>> {
-        debug_assert!(
-            std::rc::Weak::ptr_eq(&self.weak(), &externref.store),
-            "externref must be from this store"
-        );
-        let infos = self.inner.host_info.borrow();
-        infos.get(&HostInfoKey(externref.inner.clone())).cloned()
-    }
-
-    pub(crate) fn set_host_info(
-        &self,
-        externref: &ExternRef,
-        info: Option<Rc<RefCell<dyn Any>>>,
-    ) -> Option<Rc<RefCell<dyn Any>>> {
-        debug_assert!(
-            std::rc::Weak::ptr_eq(&self.weak(), &externref.store),
-            "externref must be from this store"
-        );
-        let mut infos = self.inner.host_info.borrow_mut();
-        if let Some(info) = info {
-            infos.insert(HostInfoKey(externref.inner.clone()), info)
-        } else {
-            infos.remove(&HostInfoKey(externref.inner.clone()))
-        }
     }
 
     pub(crate) fn signal_handler(&self) -> std::cell::Ref<'_, Option<Box<SignalHandler<'static>>>> {

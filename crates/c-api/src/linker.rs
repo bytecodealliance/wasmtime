@@ -88,7 +88,7 @@ pub extern "C" fn wasmtime_linker_instantiate(
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
     let result = linker.linker.instantiate(&module.module.borrow());
-    super::instance::handle_instantiate(linker.linker.store(), result, instance_ptr, trap_ptr)
+    super::instance::handle_instantiate(result, instance_ptr, trap_ptr)
 }
 
 #[no_mangle]
@@ -117,7 +117,7 @@ pub extern "C" fn wasmtime_linker_get_default(
         Err(_) => return bad_utf8(),
     };
     handle_result(linker.get_default(name), |f| {
-        *func = Box::into_raw(Box::new(HostRef::new(linker.store(), f).into()))
+        *func = Box::into_raw(Box::new(HostRef::new(f).into()))
     })
 }
 
@@ -138,12 +138,11 @@ pub extern "C" fn wasmtime_linker_get_one_by_name(
         Err(_) => return bad_utf8(),
     };
     handle_result(linker.get_one_by_name(module, name), |item| {
-        let store = linker.store();
         let which = match item {
-            Extern::Func(f) => ExternHost::Func(HostRef::new(&store, f)),
-            Extern::Global(g) => ExternHost::Global(HostRef::new(&store, g)),
-            Extern::Memory(m) => ExternHost::Memory(HostRef::new(&store, m)),
-            Extern::Table(t) => ExternHost::Table(HostRef::new(&store, t)),
+            Extern::Func(f) => ExternHost::Func(HostRef::new(f)),
+            Extern::Global(g) => ExternHost::Global(HostRef::new(g)),
+            Extern::Memory(m) => ExternHost::Memory(HostRef::new(m)),
+            Extern::Table(t) => ExternHost::Table(HostRef::new(t)),
         };
         *item_ptr = Box::into_raw(Box::new(wasm_extern_t { which }))
     })
