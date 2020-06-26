@@ -49,6 +49,30 @@ pub enum Inst {
         dst: Writable<Reg>,
     },
 
+    /// Integer quotient and remainder: (div idiv) $rax $rdx (reg addr)
+    Div {
+        size: u8, // 1, 2, 4 or 8
+        signed: bool,
+        divisor: RegMem,
+        loc: SourceLoc,
+    },
+
+    /// A synthetic sequence to implement the right inline checks for signed remainder and modulo,
+    /// assuming the dividend is in $rax.
+    /// Puts the result back into $rax if is_div, $rdx if !is_div, to mimic what the div
+    /// instruction does.
+    SignedDivOrRem {
+        is_div: bool,
+        size: u8,
+        divisor: Reg,
+        loc: SourceLoc,
+    },
+
+    /// Do a sign-extend based on the sign of the value in rax into rdx: (cwd cdq cqo)
+    SignExtendRaxRdx {
+        size: u8, // 1, 2, 4 or 8
+    },
+
     /// Constant materialization: (imm32 imm64) reg.
     /// Either: movl $imm32, %reg32 or movabsq $imm64, %reg32.
     Imm_R {
@@ -250,6 +274,20 @@ impl Inst {
         }
     }
 
+    pub(crate) fn div(size: u8, signed: bool, divisor: RegMem, loc: SourceLoc) -> Inst {
+        debug_assert!(size == 8 || size == 4 || size == 2 || size == 1);
+        Inst::Div {
+            size,
+            signed,
+            divisor,
+            loc,
+        }
+    }
+    pub(crate) fn sign_extend_rax_to_rdx(size: u8) -> Inst {
+        debug_assert!(size == 8 || size == 4 || size == 2);
+        Inst::SignExtendRaxRdx { size }
+    }
+
     pub(crate) fn imm_r(dst_is_64: bool, simm64: u64, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
         if !dst_is_64 {
@@ -357,6 +395,20 @@ impl Inst {
         debug_assert!(size == 8 || size == 4 || size == 2 || size == 1);
         debug_assert!(dst.get_class() == RegClass::I64);
         Inst::Cmp_RMI_R { size, src, dst }
+    }
+
+    pub(crate) fn trap(srcloc: SourceLoc, trap_code: TrapCode) -> Inst {
+        Inst::Ud2 {
+            trap_info: (srcloc, trap_code),
+        }
+    }
+    /// Returns the size of a trap instruction, which must be fixed. Asserted during codegen.
+    pub(crate) fn size_of_trap() -> u32 {
+        2
+    }
+
+    pub(crate) fn one_way_jmp(cc: CC, dst: BranchTarget) -> Inst {
+        Inst::OneWayJmpCond { cc, dst }
     }
 
     pub(crate) fn setcc(cc: CC, dst: Writable<Reg>) -> Inst {
@@ -489,6 +541,37 @@ impl ShowWithRRU for Inst {
                 src.show_rru_sized(mb_rru, sizeLQ(*is_64)),
                 show_ireg_sized(dst.to_reg(), mb_rru, sizeLQ(*is_64)),
             ),
+            Inst::Div {
+                size,
+                signed,
+                divisor,
+                ..
+            } => format!(
+                "{} {}",
+                ljustify(if *signed {
+                    "idiv".to_string()
+                } else {
+                    "div".into()
+                }),
+                divisor.show_rru_sized(mb_rru, *size)
+            ),
+            Inst::SignedDivOrRem {
+                is_div,
+                size,
+                divisor,
+                ..
+            } => format!(
+                "s{} $rax:$rdx, {}",
+                if *is_div { "div " } else { "rem " },
+                show_ireg_sized(*divisor, mb_rru, *size),
+            ),
+            Inst::SignExtendRaxRdx { size } => match size {
+                2 => "cwd",
+                4 => "cdq",
+                8 => "cqo",
+                _ => unreachable!(),
+            }
+            .into(),
             Inst::XMM_Mov_RM_R { op, src, dst } => format!(
                 "{} {}, {}",
                 ljustify(op.to_string()),
@@ -678,6 +761,20 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             src.get_regs_as_uses(collector);
             collector.add_mod(*dst);
         }
+        Inst::Div { divisor, .. } => {
+            collector.add_mod(Writable::from_reg(regs::rax()));
+            collector.add_mod(Writable::from_reg(regs::rdx()));
+            divisor.get_regs_as_uses(collector);
+        }
+        Inst::SignedDivOrRem { divisor, .. } => {
+            collector.add_mod(Writable::from_reg(regs::rax()));
+            collector.add_mod(Writable::from_reg(regs::rdx()));
+            collector.add_use(*divisor);
+        }
+        Inst::SignExtendRaxRdx { .. } => {
+            collector.add_use(regs::rax());
+            collector.add_mod(Writable::from_reg(regs::rdx()));
+        }
         Inst::XMM_Mov_RM_R { src, dst, .. } => {
             src.get_regs_as_uses(collector);
             collector.add_def(*dst);
@@ -852,6 +949,11 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             src.map_uses(mapper);
             map_mod(mapper, dst);
         }
+        Inst::Div { divisor, .. } => divisor.map_uses(mapper),
+        Inst::SignedDivOrRem { divisor, .. } => {
+            map_use(mapper, divisor);
+        }
+        Inst::SignExtendRaxRdx { .. } => {}
         Inst::XMM_Mov_RM_R {
             ref mut src,
             ref mut dst,

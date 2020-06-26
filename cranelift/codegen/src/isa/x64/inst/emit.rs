@@ -395,7 +395,7 @@ fn emit_simm(sink: &mut MachBuffer<Inst>, size: u8, simm32: u32) {
 pub(crate) fn emit(
     inst: &Inst,
     sink: &mut MachBuffer<Inst>,
-    _flags: &settings::Flags,
+    flags: &settings::Flags,
     state: &mut EmitState,
 ) {
     match inst {
@@ -513,6 +513,128 @@ pub(crate) fn emit(
                         emit_simm(sink, if use_imm8 { 1 } else { 4 }, *simm32);
                     }
                 }
+            }
+        }
+
+        Inst::Div {
+            size,
+            signed,
+            divisor,
+            loc,
+        } => {
+            let (prefix, rex_flags) = match size {
+                2 => (LegacyPrefix::_66, RexFlags::clear_w()),
+                4 => (LegacyPrefix::None, RexFlags::clear_w()),
+                8 => (LegacyPrefix::None, RexFlags::set_w()),
+                _ => unreachable!(),
+            };
+
+            sink.add_trap(*loc, TrapCode::IntegerDivisionByZero);
+
+            let subopcode = if *signed { 7 } else { 6 };
+            match divisor {
+                RegMem::Reg { reg } => {
+                    let src = int_reg_enc(*reg);
+                    emit_std_enc_enc(sink, prefix, 0xF7, 1, subopcode, src, rex_flags)
+                }
+                RegMem::Mem { addr: src } => emit_std_enc_mem(
+                    sink,
+                    prefix,
+                    0xF7,
+                    1,
+                    subopcode,
+                    &src.finalize(state),
+                    rex_flags,
+                ),
+            }
+        }
+
+        Inst::SignExtendRaxRdx { size } => {
+            let (prefix, rex_flags) = match size {
+                2 => (LegacyPrefix::_66, RexFlags::clear_w()),
+                4 => (LegacyPrefix::None, RexFlags::clear_w()),
+                8 => (LegacyPrefix::None, RexFlags::set_w()),
+                _ => unreachable!(),
+            };
+            prefix.emit(sink);
+            rex_flags.emit_two_op(sink, 0, 0);
+            sink.put1(0x99);
+        }
+
+        Inst::SignedDivOrRem {
+            is_div,
+            size,
+            divisor,
+            loc,
+        } => {
+            debug_assert!(flags.avoid_div_traps());
+
+            // Check if the divisor is zero, first.
+            let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0), *divisor);
+            inst.emit(sink, flags, state);
+
+            let inst = Inst::one_way_jmp(
+                CC::NZ,
+                BranchTarget::ResolvedOffset(Inst::size_of_trap() as isize),
+            );
+            inst.emit(sink, flags, state);
+
+            let inst = Inst::trap(*loc, TrapCode::IntegerDivisionByZero);
+            inst.emit(sink, flags, state);
+
+            // Now check if the divisor is -1.
+            let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0xffffffff), *divisor);
+            inst.emit(sink, flags, state);
+
+            let do_op = sink.get_label();
+            // If not equal, jump to do-op.
+            let inst = Inst::one_way_jmp(CC::NZ, BranchTarget::Label(do_op));
+            inst.emit(sink, flags, state);
+
+            // Here, divisor == -1.
+            let done_label = if !*is_div {
+                // x % -1 = 0; put the result into the destination, $rdx.
+                let done_label = sink.get_label();
+
+                let inst = Inst::imm_r(*size == 8, 0, Writable::from_reg(regs::rdx()));
+                inst.emit(sink, flags, state);
+
+                let inst = Inst::jmp_known(BranchTarget::Label(done_label));
+                inst.emit(sink, flags, state);
+
+                Some(done_label)
+            } else {
+                // Check for integer overflow.
+                let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0x80000000), regs::rax());
+                inst.emit(sink, flags, state);
+
+                // If not equal, jump over the trap.
+                let inst = Inst::one_way_jmp(
+                    CC::NZ,
+                    BranchTarget::ResolvedOffset(Inst::size_of_trap() as isize),
+                );
+                inst.emit(sink, flags, state);
+
+                let inst = Inst::trap(*loc, TrapCode::IntegerOverflow);
+                inst.emit(sink, flags, state);
+
+                None
+            };
+
+            sink.bind_label(do_op);
+
+            // Fill in the "high" parts: sign-extend the sign-bit of rax into rdx.
+            let inst = Inst::sign_extend_rax_to_rdx(*size);
+            inst.emit(sink, flags, state);
+
+            let inst = Inst::div(*size, true /*signed*/, RegMem::reg(*divisor), *loc);
+            inst.emit(sink, flags, state);
+
+            // The lowering takes care of moving the result back into the right register, see
+            // comment there.
+
+            if let Some(done) = done_label {
+                sink.bind_label(done);
             }
         }
 
@@ -1135,8 +1257,14 @@ pub(crate) fn emit(
 
         Inst::Ud2 { trap_info } => {
             sink.add_trap(trap_info.0, trap_info.1);
+            let cur_offset = sink.cur_offset();
             sink.put1(0x0f);
             sink.put1(0x0b);
+            assert_eq!(
+                sink.cur_offset() - cur_offset,
+                Inst::size_of_trap(),
+                "invalid trap size"
+            );
         }
 
         Inst::VirtualSPOffsetAdj { offset } => {

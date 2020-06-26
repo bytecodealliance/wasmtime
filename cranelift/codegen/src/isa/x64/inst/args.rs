@@ -532,7 +532,7 @@ pub enum CC {
 
     /// <= unsigned
     BE = 6,
-    /// > unsigend
+    /// > unsigned
     NBE = 7,
 
     /// negative
