@@ -11,7 +11,6 @@ mod error;
 mod r#extern;
 mod func;
 mod global;
-mod host_ref;
 mod instance;
 mod linker;
 mod memory;

@@ -1,6 +1,5 @@
-use crate::host_ref::HostRef;
-use crate::{wasm_extern_t, wasm_memorytype_t, wasm_store_t, ExternHost};
-use wasmtime::Memory;
+use crate::{wasm_extern_t, wasm_memorytype_t, wasm_store_t};
+use wasmtime::{Extern, Memory};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -15,20 +14,16 @@ pub type wasm_memory_pages_t = u32;
 impl wasm_memory_t {
     pub(crate) fn try_from(e: &wasm_extern_t) -> Option<&wasm_memory_t> {
         match &e.which {
-            ExternHost::Memory(_) => Some(unsafe { &*(e as *const _ as *const _) }),
+            Extern::Memory(_) => Some(unsafe { &*(e as *const _ as *const _) }),
             _ => None,
         }
     }
 
-    fn memory(&self) -> &HostRef<Memory> {
+    fn memory(&self) -> &Memory {
         match &self.ext.which {
-            ExternHost::Memory(m) => m,
+            Extern::Memory(m) => m,
             _ => unsafe { std::hint::unreachable_unchecked() },
         }
-    }
-
-    fn externref(&self) -> wasmtime::ExternRef {
-        self.memory().clone().into()
     }
 }
 
@@ -37,10 +32,10 @@ pub extern "C" fn wasm_memory_new(
     store: &wasm_store_t,
     mt: &wasm_memorytype_t,
 ) -> Box<wasm_memory_t> {
-    let memory = HostRef::new(Memory::new(&store.store, mt.ty().ty.clone()));
+    let memory = Memory::new(&store.store, mt.ty().ty.clone());
     Box::new(wasm_memory_t {
         ext: wasm_extern_t {
-            which: ExternHost::Memory(memory),
+            which: memory.into(),
         },
     })
 }
@@ -52,26 +47,26 @@ pub extern "C" fn wasm_memory_as_extern(m: &wasm_memory_t) -> &wasm_extern_t {
 
 #[no_mangle]
 pub extern "C" fn wasm_memory_type(m: &wasm_memory_t) -> Box<wasm_memorytype_t> {
-    let ty = m.memory().borrow().ty();
+    let ty = m.memory().ty();
     Box::new(wasm_memorytype_t::new(ty))
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_memory_data(m: &wasm_memory_t) -> *mut u8 {
-    m.memory().borrow().data_ptr()
+    m.memory().data_ptr()
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_memory_data_size(m: &wasm_memory_t) -> usize {
-    m.memory().borrow().data_size()
+    m.memory().data_size()
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_memory_size(m: &wasm_memory_t) -> wasm_memory_pages_t {
-    m.memory().borrow().size()
+    m.memory().size()
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_memory_grow(m: &wasm_memory_t, delta: wasm_memory_pages_t) -> bool {
-    m.memory().borrow().grow(delta).is_ok()
+    m.memory().grow(delta).is_ok()
 }

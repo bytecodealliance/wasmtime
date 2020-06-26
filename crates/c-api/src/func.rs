@@ -1,6 +1,5 @@
-use crate::host_ref::HostRef;
 use crate::{wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t};
-use crate::{wasm_name_t, wasm_trap_t, wasmtime_error_t, ExternHost};
+use crate::{wasm_name_t, wasm_trap_t, wasmtime_error_t};
 use anyhow::anyhow;
 use std::ffi::c_void;
 use std::panic::{self, AssertUnwindSafe};
@@ -59,29 +58,23 @@ impl Drop for Finalizer {
 impl wasm_func_t {
     pub(crate) fn try_from(e: &wasm_extern_t) -> Option<&wasm_func_t> {
         match &e.which {
-            ExternHost::Func(_) => Some(unsafe { &*(e as *const _ as *const _) }),
+            Extern::Func(_) => Some(unsafe { &*(e as *const _ as *const _) }),
             _ => None,
         }
     }
 
-    pub(crate) fn func(&self) -> &HostRef<Func> {
+    pub(crate) fn func(&self) -> &Func {
         match &self.ext.which {
-            ExternHost::Func(f) => f,
+            Extern::Func(f) => f,
             _ => unsafe { std::hint::unreachable_unchecked() },
         }
     }
-
-    fn externref(&self) -> wasmtime::ExternRef {
-        self.func().clone().into()
-    }
 }
 
-impl From<HostRef<Func>> for wasm_func_t {
-    fn from(func: HostRef<Func>) -> wasm_func_t {
+impl From<Func> for wasm_func_t {
+    fn from(func: Func) -> wasm_func_t {
         wasm_func_t {
-            ext: wasm_extern_t {
-                which: ExternHost::Func(func),
-            },
+            ext: wasm_extern_t { which: func.into() },
         }
     }
 }
@@ -101,14 +94,14 @@ fn create_function(
         let mut out_results = vec![wasm_val_t::default(); results.len()];
         let out = func(caller, params.as_ptr(), out_results.as_mut_ptr());
         if let Some(trap) = out {
-            return Err(trap.trap.borrow().clone());
+            return Err(trap.trap.clone());
         }
         for i in 0..results.len() {
             results[i] = out_results[i].val();
         }
         Ok(())
     });
-    Box::new(HostRef::new(func).into())
+    Box::new(func.into())
 }
 
 #[no_mangle]
@@ -172,7 +165,7 @@ pub unsafe extern "C" fn wasm_func_call(
     args: *const wasm_val_t,
     results: *mut wasm_val_t,
 ) -> *mut wasm_trap_t {
-    let func = wasm_func.func().borrow();
+    let func = wasm_func.func();
     let mut trap = ptr::null_mut();
     let error = wasmtime_func_call(
         wasm_func,
@@ -211,7 +204,7 @@ fn _wasmtime_func_call(
     results: &mut [wasm_val_t],
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let func = func.func().borrow();
+    let func = func.func();
     if results.len() != func.result_arity() {
         return Some(Box::new(anyhow!("wrong number of results provided").into()));
     }
@@ -253,17 +246,17 @@ fn _wasmtime_func_call(
 
 #[no_mangle]
 pub extern "C" fn wasm_func_type(f: &wasm_func_t) -> Box<wasm_functype_t> {
-    Box::new(wasm_functype_t::new(f.func().borrow().ty()))
+    Box::new(wasm_functype_t::new(f.func().ty()))
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_func_param_arity(f: &wasm_func_t) -> usize {
-    f.func().borrow().param_arity()
+    f.func().param_arity()
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_func_result_arity(f: &wasm_func_t) -> usize {
-    f.func().borrow().result_arity()
+    f.func().result_arity()
 }
 
 #[no_mangle]
@@ -277,12 +270,6 @@ pub extern "C" fn wasmtime_caller_export_get(
     name: &wasm_name_t,
 ) -> Option<Box<wasm_extern_t>> {
     let name = str::from_utf8(name.as_slice()).ok()?;
-    let export = caller.caller.get_export(name)?;
-    let which = match export {
-        Extern::Func(f) => ExternHost::Func(HostRef::new(f)),
-        Extern::Global(g) => ExternHost::Global(HostRef::new(g)),
-        Extern::Memory(m) => ExternHost::Memory(HostRef::new(m)),
-        Extern::Table(t) => ExternHost::Table(HostRef::new(t)),
-    };
+    let which = caller.caller.get_export(name)?;
     Some(Box::new(wasm_extern_t { which }))
 }

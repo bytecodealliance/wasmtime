@@ -71,8 +71,9 @@ pub fn declare_ref(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         }
 
         #[no_mangle]
-        pub extern fn #same(a: &#ty, b: &#ty) -> bool {
-            a.externref().ptr_eq(&b.externref())
+        pub extern fn #same(_a: &#ty, _b: &#ty) -> bool {
+            eprintln!("`{}` is not implemented", stringify!(#same));
+            std::process::abort();
         }
 
         #[no_mangle]
@@ -98,13 +99,14 @@ pub fn declare_ref(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
         #[no_mangle]
         pub extern fn #as_ref(a: &#ty) -> Box<crate::wasm_ref_t> {
-            let r = Some(a.externref());
-            Box::new(crate::wasm_ref_t { r })
+            eprintln!("`{}` is not implemented", stringify!(#as_ref));
+            std::process::abort();
         }
 
         #[no_mangle]
         pub extern fn #as_ref_const(a: &#ty) -> Box<crate::wasm_ref_t> {
-            #as_ref(a)
+            eprintln!("`{}` is not implemented", stringify!(#as_ref_const));
+            std::process::abort();
         }
 
         // TODO: implement `wasm_ref_as_#name#`
