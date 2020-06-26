@@ -15,6 +15,7 @@ use crate::ir::{condcodes::IntCC, InstructionData, Opcode, TrapCode, Type};
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
+use crate::settings::Flags;
 
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
@@ -169,7 +170,11 @@ fn emit_cmp(ctx: Ctx, insn: IRInst) {
 // Top-level instruction lowering entry point, for one instruction.
 
 /// Actually codegen an instruction's results into registers.
-fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) -> CodegenResult<()> {
+fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    insn: IRInst,
+    flags: &Flags,
+) -> CodegenResult<()> {
     let op = ctx.data(insn).opcode();
 
     let inputs: SmallVec<[InsnInput; 4]> = (0..ctx.num_inputs(insn))
@@ -656,6 +661,108 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) -> Codeg
             }
         }
 
+        Opcode::Udiv | Opcode::Urem => {
+            let input_ty = ctx.input_ty(insn, 0);
+            let size = input_ty.bytes() as u8;
+
+            let dividend = input_to_reg(ctx, inputs[0]);
+            let dst = output_to_reg(ctx, outputs[0]);
+
+            let divisor = if flags.avoid_div_traps() {
+                let srcloc = ctx.srcloc(insn);
+                let divisor = input_to_reg(ctx, inputs[1]);
+
+                // Check that divisor isn't zero, or trap otherwise.
+                let after_trap = BranchTarget::ResolvedOffset(Inst::size_of_trap() as isize);
+                ctx.emit(Inst::cmp_rmi_r(size, RegMemImm::imm(0), divisor));
+                ctx.emit(Inst::one_way_jmp(CC::NZ, after_trap));
+                ctx.emit(Inst::trap(srcloc, TrapCode::IntegerDivisionByZero));
+
+                RegMem::reg(divisor)
+            } else {
+                input_to_reg_mem(ctx, inputs[1])
+            };
+
+            ctx.emit(Inst::gen_move(
+                Writable::from_reg(regs::rax()),
+                dividend,
+                input_ty,
+            ));
+
+            // Fill in the "high" parts: unsigned means we put 0 in there.
+            ctx.emit(Inst::imm_r(true, 0, Writable::from_reg(regs::rdx())));
+
+            // Emit the actual idiv.
+            ctx.emit(Inst::div(
+                size,
+                false, /* signed */
+                divisor,
+                ctx.srcloc(insn),
+            ));
+
+            // Move the result back into the destination reg.
+            if op == Opcode::Udiv {
+                // The quotient is in rax.
+                ctx.emit(Inst::gen_move(dst, regs::rax(), input_ty));
+            } else {
+                // The remainder is in rdx.
+                ctx.emit(Inst::gen_move(dst, regs::rdx(), input_ty));
+            }
+        }
+
+        Opcode::Sdiv | Opcode::Srem => {
+            let input_ty = ctx.input_ty(insn, 0);
+            let size = input_ty.bytes() as u8;
+
+            let dividend = input_to_reg(ctx, inputs[0]);
+            let dst = output_to_reg(ctx, outputs[0]);
+
+            let srcloc = ctx.srcloc(insn);
+            ctx.emit(Inst::gen_move(
+                Writable::from_reg(regs::rax()),
+                dividend,
+                input_ty,
+            ));
+
+            if flags.avoid_div_traps() {
+                // Lowering all the inline checks and special behavior is a bit complicated, so
+                // this is implemented as a vcode meta-instruction.
+                //
+                // Note it keeps the result in $rax (if is_div) or $rdx (if !is_div), so that
+                // regalloc is aware of the coalescing opportunity between rax/rdx and the
+                // destination register.
+                let divisor = input_to_reg(ctx, inputs[1]);
+                ctx.emit(Inst::SignedDivOrRem {
+                    is_div: op == Opcode::Sdiv,
+                    size,
+                    divisor,
+                    loc: srcloc,
+                });
+            } else {
+                let divisor = input_to_reg_mem(ctx, inputs[1]);
+
+                // Fill in the "high" parts: sign-extend the sign-bit of rax into rdx.
+                ctx.emit(Inst::sign_extend_rax_to_rdx(size));
+
+                // Emit the actual idiv.
+                ctx.emit(Inst::div(
+                    size,
+                    true, /* signed */
+                    divisor,
+                    ctx.srcloc(insn),
+                ));
+            }
+
+            // Move the result back into the destination reg.
+            if op == Opcode::Sdiv {
+                // The quotient is in rax.
+                ctx.emit(Inst::gen_move(dst, regs::rax(), input_ty));
+            } else {
+                // The remainder is in rdx.
+                ctx.emit(Inst::gen_move(dst, regs::rdx(), input_ty));
+            }
+        }
+
         Opcode::IaddImm
         | Opcode::ImulImm
         | Opcode::UdivImm
@@ -698,7 +805,7 @@ impl LowerBackend for X64Backend {
     type MInst = Inst;
 
     fn lower<C: LowerCtx<I = Inst>>(&self, ctx: &mut C, ir_inst: IRInst) -> CodegenResult<()> {
-        lower_insn_to_regs(ctx, ir_inst)
+        lower_insn_to_regs(ctx, ir_inst, &self.flags)
     }
 
     fn lower_branch_group<C: LowerCtx<I = Inst>>(
