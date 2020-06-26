@@ -875,8 +875,7 @@ pub enum Inst {
         data: u64,
     },
 
-    /// Jump-table sequence, as one compound instruction (see note in lower.rs
-    /// for rationale).
+    /// Jump-table sequence, as one compound instruction (see note in lower_inst.rs for rationale).
     JTSequence {
         info: Box<JTSequenceInfo>,
         ridx: Reg,

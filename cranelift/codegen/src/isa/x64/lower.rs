@@ -5,6 +5,8 @@
 use log::trace;
 use regalloc::{Reg, RegClass, Writable};
 use smallvec::SmallVec;
+
+use alloc::vec::Vec;
 use std::convert::TryFrom;
 
 use crate::ir::types;
@@ -906,7 +908,85 @@ impl LowerBackend for X64Backend {
                 Opcode::Jump | Opcode::Fallthrough => {
                     ctx.emit(Inst::jmp_known(BranchTarget::Label(targets[0])));
                 }
-                _ => panic!("Unknown branch type!"),
+
+                Opcode::BrTable => {
+                    let jt_size = targets.len() - 1;
+                    assert!(jt_size <= u32::max_value() as usize);
+                    let jt_size = jt_size as u32;
+
+                    let idx_size = ctx.input_ty(branches[0], 0).bits();
+
+                    // Zero-extend to 32-bits if needed.
+                    // TODO consider factoring this out?
+                    let idx = if idx_size < 32 {
+                        let ext_mode = match idx_size {
+                            1 | 8 => ExtMode::BL,
+                            16 => ExtMode::WL,
+                            _ => unreachable!(),
+                        };
+                        let idx = input_to_reg_mem(
+                            ctx,
+                            InsnInput {
+                                insn: branches[0],
+                                input: 0,
+                            },
+                        );
+                        let tmp_idx = ctx.alloc_tmp(RegClass::I64, I32);
+                        ctx.emit(Inst::movzx_rm_r(ext_mode, idx, tmp_idx));
+                        tmp_idx.to_reg()
+                    } else {
+                        input_to_reg(
+                            ctx,
+                            InsnInput {
+                                insn: branches[0],
+                                input: 0,
+                            },
+                        )
+                    };
+
+                    // Bounds-check (compute flags from idx - jt_size) and branch to default.
+                    ctx.emit(Inst::cmp_rmi_r(4, RegMemImm::imm(jt_size), idx));
+
+                    let default_target = BranchTarget::Label(targets[0]);
+                    ctx.emit(Inst::OneWayJmpCond {
+                        dst: default_target,
+                        cc: CC::NB, // unsigned >=
+                    });
+
+                    // Emit the compound instruction that does:
+                    //
+                    // lea $jt, %rA
+                    // movsbl [%rA, %rIndex, 2], %rB
+                    // add %rB, %rA
+                    // j *%rA
+                    // [jt entries]
+                    //
+                    // This must be *one* instruction in the vcode because we cannot allow regalloc
+                    // to insert any spills/fills in the middle of the sequence; otherwise, the
+                    // lea PC-rel offset to the jumptable would be incorrect.  (The alternative
+                    // is to introduce a relocation pass for inlined jumptables, which is much
+                    // worse.)
+
+                    let tmp1 = ctx.alloc_tmp(RegClass::I64, I32);
+                    let tmp2 = ctx.alloc_tmp(RegClass::I64, I32);
+
+                    let jt_targets: Vec<BranchTarget> = targets
+                        .iter()
+                        .skip(1)
+                        .map(|bix| BranchTarget::Label(*bix))
+                        .collect();
+
+                    let targets_for_term: Vec<MachLabel> = targets.to_vec();
+                    ctx.emit(Inst::JmpTable {
+                        idx,
+                        tmp1,
+                        tmp2,
+                        targets: jt_targets,
+                        targets_for_term,
+                    });
+                }
+
+                _ => panic!("Unknown branch type {:?}", op),
             }
         }
 

@@ -262,6 +262,36 @@ fn emit_std_enc_mem(
                 panic!("ImmRegRegShift");
             }
         }
+
+        Amode::RipRelative { ref target } => {
+            // First, the REX byte, with REX.B = 0.
+            rex.emit_two_op(sink, enc_g, 0);
+
+            // Now the opcode(s).  These include any other prefixes the caller
+            // hands to us.
+            while num_opcodes > 0 {
+                num_opcodes -= 1;
+                sink.put1(((opcodes >> (num_opcodes << 3)) & 0xFF) as u8);
+            }
+
+            // RIP-relative is mod=00, rm=101.
+            sink.put1(encode_modrm(0, enc_g & 7, 0b101));
+
+            match *target {
+                BranchTarget::Label(label) => {
+                    let offset = sink.cur_offset();
+                    sink.use_label_at_offset(offset, label, LabelUse::JmpRel32);
+                    sink.put4(0);
+                }
+                BranchTarget::ResolvedOffset(offset) => {
+                    assert!(
+                        offset <= u32::max_value() as isize,
+                        "rip-relative can't hold >= U32_MAX values"
+                    );
+                    sink.put4(offset as u32);
+                }
+            }
+        }
     }
 }
 
@@ -1182,6 +1212,62 @@ pub(crate) fn emit(
                         RexFlags::clear_w(),
                     );
                 }
+            }
+        }
+
+        Inst::JmpTable {
+            idx,
+            tmp1,
+            tmp2,
+            ref targets,
+            ..
+        } => {
+            // This sequence is *one* instruction in the vcode, and is expanded only here at
+            // emission time, because we cannot allow the regalloc to insert spills/reloads in
+            // the middle; we depend on hardcoded PC-rel addressing below.
+
+            // Save index in a tmp (the live range of ridx only goes to start of this
+            // sequence; rtmp1 or rtmp2 may overwrite it).
+            let inst = Inst::gen_move(*tmp2, *idx, I64);
+            inst.emit(sink, flags, state);
+
+            // Load base address of jump table.
+            let start_of_jumptable = sink.get_label();
+            let inst = Inst::lea(
+                Amode::rip_relative(BranchTarget::Label(start_of_jumptable)),
+                *tmp1,
+            );
+            inst.emit(sink, flags, state);
+
+            // Load value out of jump table.
+            let inst = Inst::movzx_rm_r(
+                ExtMode::LQ,
+                RegMem::mem(Amode::imm_reg_reg_shift(0, tmp1.to_reg(), tmp2.to_reg(), 2)),
+                *tmp2,
+            );
+            inst.emit(sink, flags, state);
+
+            // Add base of jump table to jump-table-sourced block offset.
+            let inst = Inst::alu_rmi_r(
+                true, /* is_64 */
+                AluRmiROpcode::Add,
+                RegMemImm::reg(tmp2.to_reg()),
+                *tmp1,
+            );
+            inst.emit(sink, flags, state);
+
+            // Branch to computed address.
+            let inst = Inst::jmp_unknown(RegMem::reg(tmp1.to_reg()));
+            inst.emit(sink, flags, state);
+
+            // Emit jump table (table of 32-bit offsets).
+            sink.bind_label(start_of_jumptable);
+            let jt_off = sink.cur_offset();
+            for &target in targets.iter() {
+                let word_off = sink.cur_offset();
+                let off_into_table = word_off - jt_off;
+                sink.use_label_at_offset(word_off, target.as_label().unwrap(), LabelUse::PCRel32);
+                sink.put4(off_into_table);
             }
         }
 
