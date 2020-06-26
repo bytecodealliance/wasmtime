@@ -47,12 +47,9 @@ fn smoke_test_gc() -> anyhow::Result<()> {
         "#,
     )?;
 
-    let do_gc = Func::wrap(&store, {
-        let store = store.clone();
-        move || {
-            // Do a GC with `externref`s on the stack in Wasm frames.
-            store.gc();
-        }
+    let do_gc = Func::wrap(&store, |caller: Caller| {
+        // Do a GC with `externref`s on the stack in Wasm frames.
+        caller.store().gc();
     });
     let instance = Instance::new(&store, &module, &[do_gc.into()])?;
     let func = instance.get_func("func").unwrap();

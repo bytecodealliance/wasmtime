@@ -52,8 +52,8 @@ fn instantiate(
             config.memory_creator.as_ref().map(|a| a as _),
             store.interrupts().clone(),
             host,
-            &**store.externref_activations_table() as *const VMExternRefActivationsTable as *mut _,
-            &**store.stack_map_registry() as *const StackMapRegistry as *mut _,
+            store.externref_activations_table() as *const VMExternRefActivationsTable as *mut _,
+            store.stack_map_registry() as *const StackMapRegistry as *mut _,
         )?;
 
         // After we've created the `InstanceHandle` we still need to run

@@ -901,18 +901,14 @@ impl StackMapRegistry {
             // Exact hit.
             Ok(i) => i,
 
-            Err(n) => {
-                // `Err(0)` means that the associated stack map would have been
-                // the first element in the array if this pc had an associated
-                // stack map, but this pc does not have an associated stack
-                // map. That doesn't make sense since every call and trap inside
-                // Wasm is a GC safepoint and should have a stack map, and the
-                // only way to have Wasm frames under this native frame is if we
-                // are at a call or a trap.
-                debug_assert!(n != 0);
+            // `Err(0)` means that the associated stack map would have been the
+            // first element in the array if this pc had an associated stack
+            // map, but this pc does not have an associated stack map. This can
+            // only happen inside a Wasm frame if there are no live refs at this
+            // pc.
+            Err(0) => return None,
 
-                n - 1
-            }
+            Err(n) => n - 1,
         };
 
         let stack_map = stack_maps.pc_to_stack_map[index].1.clone();
