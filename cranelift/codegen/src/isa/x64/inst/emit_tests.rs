@@ -77,7 +77,7 @@ fn test_x64_emit() {
     let _w_xmm6 = Writable::<Reg>::from_reg(xmm6);
     let w_xmm7 = Writable::<Reg>::from_reg(xmm7);
     let w_xmm8 = Writable::<Reg>::from_reg(xmm8);
-    let _w_xmm9 = Writable::<Reg>::from_reg(xmm9);
+    let w_xmm9 = Writable::<Reg>::from_reg(xmm9);
     let w_xmm10 = Writable::<Reg>::from_reg(xmm10);
     let w_xmm11 = Writable::<Reg>::from_reg(xmm11);
     let w_xmm12 = Writable::<Reg>::from_reg(xmm12);
@@ -2699,6 +2699,12 @@ fn test_x64_emit() {
         Inst::xmm_mov_r_m(SseOpcode::Movss, xmm15, Amode::imm_reg(128, r12)),
         "F3450F11BC2480000000",
         "movss   %xmm15, 128(%r12)",
+    ));
+
+    insns.push((
+        Inst::xmm_mov_rm_r(SseOpcode::Movd, RegMem::mem(Amode::imm_reg(2, r10)), w_xmm9),
+        "66450F6E4A02",
+        "movd    2(%r10), %xmm9",
     ));
 
     insns.push((
