@@ -207,7 +207,7 @@ fn generate_func(
                     let mem = match caller.get_export("memory") {
                         Some(wasmtime::Extern::Memory(m)) => m,
                         _ => {
-                            log::warn!("callee does not export a memory as \"memory\"");
+                            wasmtime_wiggle::tracing::warn!("callee does not export a memory as \"memory\"");
                             let e = { #missing_mem_err };
                             #handle_early_error
                         }
