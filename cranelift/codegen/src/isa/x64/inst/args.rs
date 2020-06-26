@@ -27,6 +27,10 @@ pub enum Amode {
         index: Reg,
         shift: u8, /* 0 .. 3 only */
     },
+
+    /// sign-extend-32-to-64(Immediate) + RIP (instruction pointer).
+    /// To wit: not supported in 32-bits mode.
+    RipRelative { target: BranchTarget },
 }
 
 impl Amode {
@@ -47,6 +51,10 @@ impl Amode {
         }
     }
 
+    pub(crate) fn rip_relative(target: BranchTarget) -> Self {
+        Self::RipRelative { target }
+    }
+
     /// Add the regs mentioned by `self` to `collector`.
     pub(crate) fn get_regs_as_uses(&self, collector: &mut RegUsageCollector) {
         match self {
@@ -56,6 +64,9 @@ impl Amode {
             Amode::ImmRegRegShift { base, index, .. } => {
                 collector.add_use(*base);
                 collector.add_use(*index);
+            }
+            Amode::RipRelative { .. } => {
+                // RIP isn't involved in regalloc.
             }
         }
     }
@@ -79,6 +90,7 @@ impl ShowWithRRU for Amode {
                 index.show_rru(mb_rru),
                 1 << shift
             ),
+            Amode::RipRelative { ref target } => format!("{}(%rip)", target.show_rru(mb_rru)),
         }
     }
 }

@@ -2380,7 +2380,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     info: Box::new(JTSequenceInfo {
                         targets: jt_targets,
                         default_target,
-                        targets_for_term: targets_for_term,
+                        targets_for_term,
                     }),
                 });
             }

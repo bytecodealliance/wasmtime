@@ -1529,6 +1529,19 @@ fn test_x64_emit() {
         "4F8D840AB3000000",
         "lea     179(%r10,%r9,1), %r8",
     ));
+    insns.push((
+        Inst::lea(Amode::rip_relative(BranchTarget::ResolvedOffset(0)), w_rdi),
+        "488D3D00000000",
+        "lea     (offset 0)(%rip), %rdi",
+    ));
+    insns.push((
+        Inst::lea(
+            Amode::rip_relative(BranchTarget::ResolvedOffset(1337)),
+            w_r15,
+        ),
+        "4C8D3D39050000",
+        "lea     (offset 1337)(%rip), %r15",
+    ));
 
     // ========================================================
     // MovSX_RM_R

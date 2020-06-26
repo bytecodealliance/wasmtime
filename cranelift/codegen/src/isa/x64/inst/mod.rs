@@ -228,6 +228,15 @@ pub enum Inst {
     /// straight-line sequences in code to be emitted.
     OneWayJmpCond { cc: CC, dst: BranchTarget },
 
+    /// Jump-table sequence, as one compound instruction (see note in lower.rs for rationale).
+    JmpTable {
+        idx: Reg,
+        tmp1: Writable<Reg>,
+        tmp2: Writable<Reg>,
+        targets: Vec<BranchTarget>,
+        targets_for_term: Vec<MachLabel>,
+    },
+
     /// Indirect jump: jmpq (reg mem).
     JmpUnknown { target: RegMem },
 
@@ -726,6 +735,10 @@ impl ShowWithRRU for Inst {
                 ljustify2("j".to_string(), cc.to_string()),
                 dst.show_rru(mb_rru),
             ),
+            Inst::JmpTable { idx, .. } => {
+                format!("{} {}", ljustify("br_table".into()), idx.show_rru(mb_rru))
+            }
+            //
             Inst::JmpUnknown { target } => format!(
                 "{} *{}",
                 ljustify("jmp".to_string()),
@@ -858,6 +871,17 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             dest.get_regs_as_uses(collector);
         }
 
+        Inst::JmpTable {
+            ref idx,
+            ref tmp1,
+            ref tmp2,
+            ..
+        } => {
+            collector.add_use(*idx);
+            collector.add_def(*tmp1);
+            collector.add_def(*tmp2);
+        }
+
         Inst::Ret
         | Inst::EpiloguePlaceholder
         | Inst::JmpKnown { .. }
@@ -912,6 +936,9 @@ impl Amode {
             } => {
                 map_use(map, base);
                 map_use(map, index);
+            }
+            Amode::RipRelative { .. } => {
+                // RIP isn't involved in regalloc.
             }
         }
     }
@@ -1077,6 +1104,17 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             dest.map_uses(mapper);
         }
 
+        Inst::JmpTable {
+            ref mut idx,
+            ref mut tmp1,
+            ref mut tmp2,
+            ..
+        } => {
+            map_use(mapper, idx);
+            map_def(mapper, tmp1);
+            map_def(mapper, tmp2);
+        }
+
         Inst::Ret
         | Inst::EpiloguePlaceholder
         | Inst::JmpKnown { .. }
@@ -1144,6 +1182,10 @@ impl MachInst for Inst {
                 taken,
                 not_taken,
             } => MachTerminator::Cond(taken.as_label().unwrap(), not_taken.as_label().unwrap()),
+            &Self::JmpTable {
+                ref targets_for_term,
+                ..
+            } => MachTerminator::Indirect(&targets_for_term[..]),
             // All other cases are boring.
             _ => MachTerminator::None,
         }
@@ -1231,6 +1273,10 @@ pub enum LabelUse {
     /// location. Used for control flow instructions which consider an offset from the start of the
     /// next instruction (so the size of the payload -- 4 bytes -- is subtracted from the payload).
     JmpRel32,
+
+    /// A 32-bit offset from location of relocation itself, added to the existing value at that
+    /// location.
+    PCRel32,
 }
 
 impl MachInstLabelUse for LabelUse {
@@ -1238,19 +1284,19 @@ impl MachInstLabelUse for LabelUse {
 
     fn max_pos_range(self) -> CodeOffset {
         match self {
-            LabelUse::JmpRel32 => 0x7fff_ffff,
+            LabelUse::JmpRel32 | LabelUse::PCRel32 => 0x7fff_ffff,
         }
     }
 
     fn max_neg_range(self) -> CodeOffset {
         match self {
-            LabelUse::JmpRel32 => 0x8000_0000,
+            LabelUse::JmpRel32 | LabelUse::PCRel32 => 0x8000_0000,
         }
     }
 
     fn patch_size(self) -> CodeOffset {
         match self {
-            LabelUse::JmpRel32 => 4,
+            LabelUse::JmpRel32 | LabelUse::PCRel32 => 4,
         }
     }
 
@@ -1265,24 +1311,29 @@ impl MachInstLabelUse for LabelUse {
                 let value = pc_rel.wrapping_add(addend).wrapping_sub(4);
                 buffer.copy_from_slice(&value.to_le_bytes()[..]);
             }
+            LabelUse::PCRel32 => {
+                let addend = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+                let value = pc_rel.wrapping_add(addend);
+                buffer.copy_from_slice(&value.to_le_bytes()[..]);
+            }
         }
     }
 
     fn supports_veneer(self) -> bool {
         match self {
-            LabelUse::JmpRel32 => false,
+            LabelUse::JmpRel32 | LabelUse::PCRel32 => false,
         }
     }
 
     fn veneer_size(self) -> CodeOffset {
         match self {
-            LabelUse::JmpRel32 => 0,
+            LabelUse::JmpRel32 | LabelUse::PCRel32 => 0,
         }
     }
 
     fn generate_veneer(self, _: &mut [u8], _: CodeOffset) -> (CodeOffset, LabelUse) {
         match self {
-            LabelUse::JmpRel32 => {
+            LabelUse::JmpRel32 | LabelUse::PCRel32 => {
                 panic!("Veneer not supported for JumpRel32 label-use.");
             }
         }
