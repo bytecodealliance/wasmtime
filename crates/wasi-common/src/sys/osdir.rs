@@ -39,6 +39,12 @@ impl Handle for OsDir {
         self.rights.set(rights)
     }
     // FdOps
+    fn read_vectored(&self, _iovs: &mut [io::IoSliceMut]) -> Result<usize> {
+        Err(Errno::Isdir)
+    }
+    fn preadv(&self, _buf: &mut [io::IoSliceMut], _offset: u64) -> Result<usize> {
+        Err(Errno::Isdir)
+    }
     fn fdstat_get(&self) -> Result<types::Fdflags> {
         fd::fdstat_get(&*self.as_file()?)
     }

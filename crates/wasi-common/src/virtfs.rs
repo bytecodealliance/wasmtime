@@ -506,6 +506,12 @@ impl Handle for VirtualDir {
         };
         Ok(stat)
     }
+    fn read_vectored(&self, _iovs: &mut [io::IoSliceMut]) -> Result<usize> {
+        Err(Errno::Isdir)
+    }
+    fn preadv(&self, _buf: &mut [io::IoSliceMut], _offset: u64) -> Result<usize> {
+        Err(Errno::Isdir)
+    }
     fn readdir(
         &self,
         cookie: types::Dircookie,

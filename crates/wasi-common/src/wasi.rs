@@ -143,6 +143,8 @@ impl RightsExt for types::Rights {
             | Self::PATH_LINK_SOURCE
             | Self::PATH_LINK_TARGET
             | Self::PATH_OPEN
+            | Self::FD_READ
+            | Self::FD_SEEK
             | Self::FD_READDIR
             | Self::PATH_READLINK
             | Self::PATH_RENAME_SOURCE
