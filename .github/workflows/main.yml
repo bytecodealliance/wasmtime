@@ -162,16 +162,11 @@ jobs:
           --package peepmatic-macro \
           --package peepmatic-runtime \
           --package peepmatic-test
-    - name: Rebuild Cranelift's peepmatic-based peephole optimizers
-      run: |
-        cd cranelift/
-        cargo build --features 'enable-peepmatic cranelift-codegen/rebuild-peephole-optimizers'
+    - name: Rebuild Peepmatic-based peephole optimizers and test them
+      run: cargo test --features 'enable-peepmatic cranelift-codegen/rebuild-peephole-optimizers'
+      working-directory: ./cranelift
     - name: Check that peephole optimizers are up to date
       run: git diff --exit-code
-    - name: Test `cranelift-codegen` with `peepmatic` enabled
-      run: |
-        cd cranelift/
-        cargo test --features 'enable-peepmatic'
 
   # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
   # channels of Rust as well as macOS/Linux/Windows.

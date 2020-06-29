@@ -19,6 +19,7 @@ use peepmatic_runtime::{
     r#type::{BitWidth, Kind, Type},
     PeepholeOptimizations, PeepholeOptimizer,
 };
+use std::borrow::Cow;
 use std::boxed::Box;
 use std::convert::{TryFrom, TryInto};
 use std::ptr;
@@ -28,7 +29,34 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 pub(crate) fn preopt<'a, 'b>(
     isa: &'b dyn TargetIsa,
 ) -> PeepholeOptimizer<'static, 'a, &'b dyn TargetIsa> {
-    static SERIALIZED: &[u8] = include_bytes!("preopt.serialized");
+    #[cfg(feature = "rebuild-peephole-optimizers")]
+    fn get_serialized() -> Cow<'static, [u8]> {
+        use std::fs;
+        use std::path::Path;
+
+        let codegen_path = Path::new(include_str!(concat!(
+            env!("OUT_DIR"),
+            "/CRANELIFT_CODEGEN_PATH"
+        )));
+        let source_path = codegen_path.join("src").join("preopt.peepmatic");
+        println!("cargo:rerun-if-changed={}", source_path.display());
+
+        let preopt = peepmatic::compile_file(&source_path)
+            .expect("failed to compile `src/preopt.peepmatic`");
+
+        let serialized_path = codegen_path.join("src").join("preopt.serialized");
+        preopt
+            .serialize_to_file(&serialized_path)
+            .expect("failed to serialize peephole optimizer to `src/preopt.serialized`");
+        fs::read(&serialized_path)
+            .expect("failed to read `src/preopt.serialized`")
+            .into()
+    }
+
+    #[cfg(not(feature = "rebuild-peephole-optimizers"))]
+    fn get_serialized() -> Cow<'static, [u8]> {
+        static SERIALIZED: &[u8] = include_bytes!("preopt.serialized");
+    }
 
     // Once initialized, this must never be re-assigned. The initialized value
     // is semantically "static data" and is intentionally leaked for the whole
@@ -46,7 +74,7 @@ pub(crate) fn preopt<'a, 'b>(
     // another thread could be doing the same thing concurrently, so there is a
     // race to see who initializes `DESERIALIZED` first, and we need to be
     // prepared to both win or lose that race.
-    let peep_opts = PeepholeOptimizations::deserialize(SERIALIZED)
+    let peep_opts = PeepholeOptimizations::deserialize(&get_serialized())
         .expect("should always be able to deserialize `preopt.serialized`");
     let peep_opts = Box::into_raw(Box::new(peep_opts));
 
@@ -889,5 +917,23 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
 
     fn native_word_size_in_bits(&self, _pos: &mut FuncCursor<'b>) -> u8 {
         self.pointer_bits()
+    }
+}
+
+#[cfg(test)]
+#[cfg(feature = "x86")]
+mod tests {
+    use super::*;
+    use crate::isa::lookup;
+    use crate::settings::{builder, Flags};
+    use std::str::FromStr;
+    use target_lexicon::triple;
+
+    #[test]
+    fn get_peepmatic_preopt() {
+        let isa = lookup(triple!("x86_64"))
+            .expect("expect x86 ISA")
+            .finish(Flags::new(builder()));
+        let _ = preopt(&*isa);
     }
 }
