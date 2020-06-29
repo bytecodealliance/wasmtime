@@ -96,7 +96,7 @@
 //!
 //! ```
 
-use crate::binemit::{CodeInfo, CodeOffset};
+use crate::binemit::{CodeInfo, CodeOffset, Stackmap};
 use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, Type};
 use crate::result::CodegenResult;
@@ -191,6 +191,10 @@ pub trait MachInst: Clone + Debug {
     /// What is the worst-case instruction size emitted by this instruction type?
     fn worst_case_size() -> CodeOffset;
 
+    /// What is the register class used for reference types (GC-observable pointers)? Can
+    /// be dependent on compilation flags.
+    fn ref_type_rc(_flags: &Flags) -> RegClass;
+
     /// A label-use kind: a type that describes the types of label references that
     /// can occur in an instruction.
     type LabelUse: MachInstLabelUse;
@@ -256,9 +260,21 @@ pub enum MachTerminator<'a> {
 /// A trait describing the ability to encode a MachInst into binary machine code.
 pub trait MachInstEmit: MachInst {
     /// Persistent state carried across `emit` invocations.
-    type State: Default + Clone + Debug;
+    type State: MachInstEmitState<Self>;
     /// Emit the instruction.
     fn emit(&self, code: &mut MachBuffer<Self>, flags: &Flags, state: &mut Self::State);
+    /// Pretty-print the instruction.
+    fn pretty_print(&self, mb_rru: Option<&RealRegUniverse>, state: &mut Self::State) -> String;
+}
+
+/// A trait describing the emission state carried between MachInsts when
+/// emitting a function body.
+pub trait MachInstEmitState<I: MachInst>: Default + Clone + Debug {
+    /// Create a new emission state given the ABI object.
+    fn new(abi: &dyn ABIBody<I = I>) -> Self;
+    /// Update the emission state before emitting an instruction that is a
+    /// safepoint.
+    fn pre_safepoint(&mut self, _stackmap: Stackmap) {}
 }
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine

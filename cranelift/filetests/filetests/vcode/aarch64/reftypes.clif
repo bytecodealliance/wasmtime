@@ -63,3 +63,65 @@ block0:
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
+
+function %f5(r64, r64) -> r64, r64, r64 {
+    fn0 = %f(r64) -> b1
+    ss0 = explicit_slot 8
+
+block0(v0: r64, v1: r64):
+    v2 = call fn0(v0)
+    stack_store.r64 v0, ss0
+    brz v2, block1(v1, v0)
+    jump block2(v0, v1)
+
+block1(v3: r64, v4: r64):
+    jump block3(v3, v4)
+
+block2(v5: r64, v6: r64):
+    jump block3(v5, v6)
+
+block3(v7: r64, v8: r64):
+    v9 = stack_load.r64 ss0
+    return v7, v8, v9
+}
+
+; check: Block 0:
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sub sp, sp, #32
+; nextln: stp x19, x20, [sp, #-16]!
+; nextln: virtual_sp_offset_adjust 16
+; nextln: mov x19, x0
+; nextln: mov x20, x1
+; nextln: mov x0, x19
+; nextln: ldr x16, 8 ; b 12 ; data
+; nextln: stur x19, [sp, #24]
+; nextln: stur x20, [sp, #32]
+; nextln: (safepoint: slots [S0, S1]
+; nextln: blr x16
+; nextln: ldur x19, [sp, #24]
+; nextln: ldur x20, [sp, #32]
+; nextln: add x1, sp, #16
+; nextln: stur x19, [x1]
+; nextln: and w0, w0, #1
+; nextln: cbz x0, label1 ; b label3
+; check: Block 1:
+; check:  b label2
+; check: Block 2:
+; check: mov x0, x20
+; nextln: b label5
+; check: Block 3:
+; check: b label4
+; check: Block 4:
+; check: mov x0, x19
+; nextln: mov x19, x20
+; nextln: b label5
+; check: Block 5:
+; check: add x1, sp, #16
+; nextln: ldur x1, [x1]
+; nextln: mov x2, x1
+; nextln: mov x1, x19
+; nextln: ldp x19, x20, [sp], #16
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret

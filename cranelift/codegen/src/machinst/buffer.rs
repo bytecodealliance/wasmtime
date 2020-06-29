@@ -140,7 +140,7 @@
 //! Given these invariants, we argue why each optimization preserves execution
 //! semantics below (grep for "Preserves execution semantics").
 
-use crate::binemit::{Addend, CodeOffset, CodeSink, Reloc};
+use crate::binemit::{Addend, CodeOffset, CodeSink, Reloc, Stackmap};
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode};
 use crate::machinst::{BlockIndex, MachInstLabelUse, VCodeInst};
 
@@ -168,6 +168,8 @@ pub struct MachBuffer<I: VCodeInst> {
     call_sites: SmallVec<[MachCallSite; 16]>,
     /// Any source location mappings referring to this code.
     srclocs: SmallVec<[MachSrcLoc; 64]>,
+    /// Any stackmaps referring to this code.
+    stackmaps: SmallVec<[MachStackMap; 8]>,
     /// The current source location in progress (after `start_srcloc()` and
     /// before `end_srcloc()`).  This is a (start_offset, src_loc) tuple.
     cur_srcloc: Option<(CodeOffset, SourceLoc)>,
@@ -228,6 +230,8 @@ pub struct MachBufferFinalized {
     call_sites: SmallVec<[MachCallSite; 16]>,
     /// Any source location mappings referring to this code.
     srclocs: SmallVec<[MachSrcLoc; 64]>,
+    /// Any stackmaps referring to this code.
+    stackmaps: SmallVec<[MachStackMap; 8]>,
 }
 
 static UNKNOWN_LABEL_OFFSET: CodeOffset = 0xffff_ffff;
@@ -262,6 +266,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             traps: SmallVec::new(),
             call_sites: SmallVec::new(),
             srclocs: SmallVec::new(),
+            stackmaps: SmallVec::new(),
             cur_srcloc: None,
             label_offsets: SmallVec::new(),
             label_aliases: SmallVec::new(),
@@ -1090,6 +1095,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             traps: self.traps,
             call_sites: self.call_sites,
             srclocs: self.srclocs,
+            stackmaps: self.stackmaps,
         }
     }
 
@@ -1149,6 +1155,22 @@ impl<I: VCodeInst> MachBuffer<I> {
             self.srclocs.push(MachSrcLoc { start, end, loc });
         }
     }
+
+    /// Add stackmap metadata for this program point: a set of stack offsets
+    /// (from SP upward) that contain live references.
+    ///
+    /// The `offset_to_fp` value is the offset from the nominal SP (at which the
+    /// `stack_offsets` are based) and the FP value. By subtracting
+    /// `offset_to_fp` from each `stack_offsets` element, one can obtain
+    /// live-reference offsets from FP instead.
+    pub fn add_stackmap(&mut self, insn_len: CodeOffset, stackmap: Stackmap) {
+        let offset = self.cur_offset();
+        self.stackmaps.push(MachStackMap {
+            offset,
+            offset_end: offset + insn_len,
+            stackmap,
+        });
+    }
 }
 
 impl MachBufferFinalized {
@@ -1206,6 +1228,11 @@ impl MachBufferFinalized {
         sink.begin_jumptables();
         sink.begin_rodata();
         sink.end_codegen();
+    }
+
+    /// Get the stackmap metadata for this code.
+    pub fn stackmaps(&self) -> &[MachStackMap] {
+        &self.stackmaps[..]
     }
 }
 
@@ -1284,6 +1311,18 @@ pub struct MachSrcLoc {
     pub end: CodeOffset,
     /// The source location.
     pub loc: SourceLoc,
+}
+
+/// Record of stackmap metadata: stack offsets containing references.
+#[derive(Clone, Debug)]
+pub struct MachStackMap {
+    /// The code offset at which this stackmap applies.
+    pub offset: CodeOffset,
+    /// The code offset at the *end* of the instruction at which this stackmap
+    /// applies.
+    pub offset_end: CodeOffset,
+    /// The Stackmap itself.
+    pub stackmap: Stackmap,
 }
 
 /// Record of branch instruction in the buffer, to facilitate editing.

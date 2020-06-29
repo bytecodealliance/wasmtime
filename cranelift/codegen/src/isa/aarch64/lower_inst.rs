@@ -1394,7 +1394,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Trap | Opcode::ResumableTrap => {
             let trap_info = (ctx.srcloc(insn), inst_trapcode(ctx.data(insn)).unwrap());
-            ctx.emit(Inst::Udf { trap_info })
+            ctx.emit_safepoint(Inst::Udf { trap_info });
         }
 
         Opcode::Trapif | Opcode::Trapff => {
@@ -1432,10 +1432,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 trap_info,
                 kind: CondBrKind::Cond(cond),
             });
+            ctx.emit_safepoint(Inst::Udf { trap_info })
         }
 
         Opcode::Safepoint => {
-            panic!("safepoint support not implemented!");
+            panic!("safepoint instructions not used by new backend's safepoints!");
         }
 
         Opcode::Trapz | Opcode::Trapnz | Opcode::ResumableTrapnz => {

@@ -1,5 +1,6 @@
 //! ABI definitions.
 
+use crate::binemit::Stackmap;
 use crate::ir::{ArgumentExtension, StackSlot};
 use crate::machinst::*;
 use crate::settings;
@@ -100,6 +101,15 @@ pub trait ABIBody {
     /// Store to a spillslot.
     fn store_spillslot(&self, slot: SpillSlot, ty: Type, from_reg: Reg) -> Self::I;
 
+    /// Generate a stackmap, given a list of spillslots and the emission state
+    /// at a given program point (prior to emission fo the safepointing
+    /// instruction).
+    fn spillslots_to_stackmap(
+        &self,
+        slots: &[SpillSlot],
+        state: &<Self::I as MachInstEmit>::State,
+    ) -> Stackmap;
+
     /// Generate a prologue, post-regalloc. This should include any stack
     /// frame or other setup necessary to use the other methods (`load_arg`,
     /// `store_retval`, and spillslot accesses.)  `self` is mutable so that we
@@ -113,21 +123,34 @@ pub trait ABIBody {
     /// likely closely related.
     fn gen_epilogue(&self) -> Vec<Self::I>;
 
-    /// Returns the full frame size for the given function, after prologue emission has run. This
-    /// comprises the spill slots and stack-storage slots (but not storage for clobbered callee-save
-    /// registers, arguments pushed at callsites within this function, or other ephemeral pushes).
-    /// This is used for ABI variants where the client generates prologue/epilogue code, as in
-    /// Baldrdash (SpiderMonkey integration).
+    /// Returns the full frame size for the given function, after prologue
+    /// emission has run. This comprises the spill slots and stack-storage slots
+    /// (but not storage for clobbered callee-save registers, arguments pushed
+    /// at callsites within this function, or other ephemeral pushes).  This is
+    /// used for ABI variants where the client generates prologue/epilogue code,
+    /// as in Baldrdash (SpiderMonkey integration).
     fn frame_size(&self) -> u32;
+
+    /// Returns the size of arguments expected on the stack.
+    fn stack_args_size(&self) -> u32;
 
     /// Get the spill-slot size.
     fn get_spillslot_size(&self, rc: RegClass, ty: Type) -> u32;
 
-    /// Generate a spill.
-    fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg, ty: Type) -> Self::I;
+    /// Generate a spill. The type, if known, is given; this can be used to
+    /// generate a store instruction optimized for the particular type rather
+    /// than the RegClass (e.g., only F64 that resides in a V128 register). If
+    /// no type is given, the implementation should spill the whole register.
+    fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg, ty: Option<Type>) -> Self::I;
 
-    /// Generate a reload (fill).
-    fn gen_reload(&self, to_reg: Writable<RealReg>, from_slot: SpillSlot, ty: Type) -> Self::I;
+    /// Generate a reload (fill). As for spills, the type may be given to allow
+    /// a more optimized load instruction to be generated.
+    fn gen_reload(
+        &self,
+        to_reg: Writable<RealReg>,
+        from_slot: SpillSlot,
+        ty: Option<Type>,
+    ) -> Self::I;
 }
 
 /// Trait implemented by an object that tracks ABI-related state and can

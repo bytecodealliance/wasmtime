@@ -17,14 +17,15 @@
 //! See the main module comment in `mod.rs` for more details on the VCode-based
 //! backend pipeline.
 
-use crate::ir::{self, SourceLoc};
+use crate::ir::{self, types, SourceLoc};
 use crate::machinst::*;
 use crate::settings;
 
 use regalloc::Function as RegallocFunction;
 use regalloc::Set as RegallocSet;
 use regalloc::{
-    BlockIx, InstIx, Range, RegAllocResult, RegClass, RegUsageCollector, RegUsageMapper,
+    BlockIx, InstIx, Range, RegAllocResult, RegClass, RegUsageCollector, RegUsageMapper, SpillSlot,
+    StackmapRequestInfo,
 };
 
 use alloc::boxed::Box;
@@ -56,6 +57,9 @@ pub struct VCode<I: VCodeInst> {
     /// VReg IR-level types.
     vreg_types: Vec<Type>,
 
+    /// Do we have any ref values among our vregs?
+    have_ref_values: bool,
+
     /// Lowered machine instructions in order corresponding to the original IR.
     insts: Vec<I>,
 
@@ -82,6 +86,16 @@ pub struct VCode<I: VCodeInst> {
 
     /// ABI object.
     abi: Box<dyn ABIBody<I = I>>,
+
+    /// Safepoint instruction indices. Filled in post-regalloc. (Prior to
+    /// regalloc, the safepoint instructions are listed in the separate
+    /// `StackmapRequestInfo` held separate from the `VCode`.)
+    safepoint_insns: Vec<InsnIndex>,
+
+    /// For each safepoint entry in `safepoint_insns`, a list of `SpillSlot`s.
+    /// These are used to generate actual stackmaps at emission. Filled in
+    /// post-regalloc.
+    safepoint_slots: Vec<Vec<SpillSlot>>,
 }
 
 /// A builder for a VCode function body. This builder is designed for the
@@ -102,6 +116,9 @@ pub struct VCodeBuilder<I: VCodeInst> {
     /// In-progress VCode.
     vcode: VCode<I>,
 
+    /// In-progress stackmap-request info.
+    stackmap_info: StackmapRequestInfo,
+
     /// Index of the last block-start in the vcode.
     block_start: InsnIndex,
 
@@ -115,9 +132,17 @@ pub struct VCodeBuilder<I: VCodeInst> {
 impl<I: VCodeInst> VCodeBuilder<I> {
     /// Create a new VCodeBuilder.
     pub fn new(abi: Box<dyn ABIBody<I = I>>, block_order: BlockLoweringOrder) -> VCodeBuilder<I> {
+        let reftype_class = I::ref_type_rc(abi.flags());
         let vcode = VCode::new(abi, block_order);
+        let stackmap_info = StackmapRequestInfo {
+            reftype_class,
+            reftyped_vregs: vec![],
+            safepoint_insns: vec![],
+        };
+
         VCodeBuilder {
             vcode,
+            stackmap_info,
             block_start: 0,
             succ_start: 0,
             cur_srcloc: SourceLoc::default(),
@@ -142,6 +167,15 @@ impl<I: VCodeInst> VCodeBuilder<I> {
                 .resize(vreg.get_index() + 1, ir::types::I8);
         }
         self.vcode.vreg_types[vreg.get_index()] = ty;
+        if is_reftype(ty) {
+            self.stackmap_info.reftyped_vregs.push(vreg);
+            self.vcode.have_ref_values = true;
+        }
+    }
+
+    /// Are there any reference-typed values at all among the vregs?
+    pub fn have_ref_values(&self) -> bool {
+        self.vcode.have_ref_values()
     }
 
     /// Set the current block as the entry block.
@@ -166,7 +200,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     /// Push an instruction for the current BB and current IR inst within the BB.
-    pub fn push(&mut self, insn: I) {
+    pub fn push(&mut self, insn: I, is_safepoint: bool) {
         match insn.is_term() {
             MachTerminator::None | MachTerminator::Ret => {}
             MachTerminator::Uncond(target) => {
@@ -186,6 +220,11 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         }
         self.vcode.insts.push(insn);
         self.vcode.srclocs.push(self.cur_srcloc);
+        if is_safepoint {
+            self.stackmap_info
+                .safepoint_insns
+                .push(InstIx::new((self.vcode.insts.len() - 1) as u32));
+        }
     }
 
     /// Get the current source location.
@@ -198,19 +237,14 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         self.cur_srcloc = srcloc;
     }
 
-    /// Build the final VCode.
-    pub fn build(self) -> VCode<I> {
-        self.vcode
+    /// Build the final VCode, returning the vcode itself as well as auxiliary
+    /// information, such as the stackmap request information.
+    pub fn build(self) -> (VCode<I>, StackmapRequestInfo) {
+        // TODO: come up with an abstraction for "vcode and auxiliary data". The
+        // auxiliary data needs to be separate from the vcode so that it can be
+        // referenced as the vcode is mutated (e.g. by the register allocator).
+        (self.vcode, self.stackmap_info)
     }
-}
-
-fn block_ranges(indices: &[InstIx], len: usize) -> Vec<(usize, usize)> {
-    let v = indices
-        .iter()
-        .map(|iix| iix.get() as usize)
-        .chain(iter::once(len))
-        .collect::<Vec<usize>>();
-    v.windows(2).map(|p| (p[0], p[1])).collect()
 }
 
 fn is_redundant_move<I: VCodeInst>(insn: &I) -> bool {
@@ -221,6 +255,11 @@ fn is_redundant_move<I: VCodeInst>(insn: &I) -> bool {
     }
 }
 
+/// Is this type a reference type?
+fn is_reftype(ty: Type) -> bool {
+    ty == types::R32 || ty == types::R64
+}
+
 impl<I: VCodeInst> VCode<I> {
     /// New empty VCode.
     fn new(abi: Box<dyn ABIBody<I = I>>, block_order: BlockLoweringOrder) -> VCode<I> {
@@ -228,6 +267,7 @@ impl<I: VCodeInst> VCode<I> {
             liveins: abi.liveins(),
             liveouts: abi.liveouts(),
             vreg_types: vec![],
+            have_ref_values: false,
             insts: vec![],
             srclocs: vec![],
             entry: 0,
@@ -236,6 +276,8 @@ impl<I: VCodeInst> VCode<I> {
             block_succs: vec![],
             block_order,
             abi,
+            safepoint_insns: vec![],
+            safepoint_slots: vec![],
         }
     }
 
@@ -247,6 +289,11 @@ impl<I: VCodeInst> VCode<I> {
     /// Get the IR-level type of a VReg.
     pub fn vreg_type(&self, vreg: VirtualReg) -> Type {
         self.vreg_types[vreg.get_index()]
+    }
+
+    /// Are there any reference-typed values at all among the vregs?
+    pub fn have_ref_values(&self) -> bool {
+        self.have_ref_values
     }
 
     /// Get the entry block.
@@ -265,6 +312,11 @@ impl<I: VCodeInst> VCode<I> {
         self.abi.frame_size()
     }
 
+    /// Inbound stack-args size.
+    pub fn stack_args_size(&self) -> u32 {
+        self.abi.stack_args_size()
+    }
+
     /// Get the successors for a block.
     pub fn succs(&self, block: BlockIndex) -> &[BlockIx] {
         let (start, end) = self.block_succ_range[block as usize];
@@ -281,17 +333,21 @@ impl<I: VCodeInst> VCode<I> {
         self.abi
             .set_clobbered(result.clobbered_registers.map(|r| Writable::from_reg(*r)));
 
-        // We want to move instructions over in final block order, using the new
-        // block-start map given by the regalloc.
-        let block_ranges: Vec<(usize, usize)> =
-            block_ranges(result.target_map.elems(), result.insns.len());
         let mut final_insns = vec![];
         let mut final_block_ranges = vec![(0, 0); self.num_blocks()];
         let mut final_srclocs = vec![];
+        let mut final_safepoint_insns = vec![];
+        let mut safept_idx = 0;
 
+        assert!(result.target_map.elems().len() == self.num_blocks());
         for block in 0..self.num_blocks() {
+            let start = result.target_map.elems()[block].get() as usize;
+            let end = if block == self.num_blocks() - 1 {
+                result.insns.len()
+            } else {
+                result.target_map.elems()[block + 1].get() as usize
+            };
             let block = block as BlockIndex;
-            let (start, end) = block_ranges[block as usize];
             let final_start = final_insns.len() as InsnIndex;
 
             if block == self.entry {
@@ -333,6 +389,16 @@ impl<I: VCodeInst> VCode<I> {
                     final_insns.push(insn.clone());
                     final_srclocs.push(srcloc);
                 }
+
+                // Was this instruction a safepoint instruction? Add its final
+                // index to the safepoint insn-index list if so.
+                if safept_idx < result.new_safepoint_insns.len()
+                    && (result.new_safepoint_insns[safept_idx].get() as usize) == i
+                {
+                    let idx = final_insns.len() - 1;
+                    final_safepoint_insns.push(idx as InsnIndex);
+                    safept_idx += 1;
+                }
             }
 
             let final_end = final_insns.len() as InsnIndex;
@@ -344,6 +410,12 @@ impl<I: VCodeInst> VCode<I> {
         self.insts = final_insns;
         self.srclocs = final_srclocs;
         self.block_ranges = final_block_ranges;
+        self.safepoint_insns = final_safepoint_insns;
+
+        // Save safepoint slot-lists. These will be passed to the `EmitState`
+        // for the machine backend during emission so that it can do
+        // target-specific translations of slot numbers to stack offsets.
+        self.safepoint_slots = result.stackmaps;
     }
 
     /// Emit the instructions to a `MachBuffer`, containing fixed-up code and external
@@ -353,11 +425,12 @@ impl<I: VCodeInst> VCode<I> {
         I: MachInstEmit,
     {
         let mut buffer = MachBuffer::new();
-        let mut state = Default::default();
+        let mut state = I::State::new(&*self.abi);
 
         buffer.reserve_labels_for_blocks(self.num_blocks() as BlockIndex); // first N MachLabels are simply block indices.
 
         let flags = self.abi.flags();
+        let mut safepoint_idx = 0;
         let mut cur_srcloc = None;
         for block in 0..self.num_blocks() {
             let block = block as BlockIndex;
@@ -379,6 +452,19 @@ impl<I: VCodeInst> VCode<I> {
                     }
                     buffer.start_srcloc(srcloc);
                     cur_srcloc = Some(srcloc);
+                }
+
+                if safepoint_idx < self.safepoint_insns.len()
+                    && self.safepoint_insns[safepoint_idx] == iix
+                {
+                    if self.safepoint_slots[safepoint_idx].len() > 0 {
+                        let stackmap = self.abi.spillslots_to_stackmap(
+                            &self.safepoint_slots[safepoint_idx][..],
+                            &state,
+                        );
+                        state.pre_safepoint(stackmap);
+                    }
+                    safepoint_idx += 1;
                 }
 
                 self.insts[iix as usize].emit(&mut buffer, flags, &mut state);
@@ -476,13 +562,18 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         self.abi.get_spillslot_size(regclass, ty)
     }
 
-    fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg, vreg: VirtualReg) -> I {
-        let ty = self.vreg_type(vreg);
+    fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg, vreg: Option<VirtualReg>) -> I {
+        let ty = vreg.map(|v| self.vreg_type(v));
         self.abi.gen_spill(to_slot, from_reg, ty)
     }
 
-    fn gen_reload(&self, to_reg: Writable<RealReg>, from_slot: SpillSlot, vreg: VirtualReg) -> I {
-        let ty = self.vreg_type(vreg);
+    fn gen_reload(
+        &self,
+        to_reg: Writable<RealReg>,
+        from_slot: SpillSlot,
+        vreg: Option<VirtualReg>,
+    ) -> I {
+        let ty = vreg.map(|v| self.vreg_type(v));
         self.abi.gen_reload(to_reg, from_slot, ty)
     }
 
@@ -531,7 +622,7 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
 }
 
 /// Pretty-printing with `RealRegUniverse` context.
-impl<I: VCodeInst + ShowWithRRU> ShowWithRRU for VCode<I> {
+impl<I: VCodeInst> ShowWithRRU for VCode<I> {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         use std::fmt::Write;
 
@@ -539,6 +630,8 @@ impl<I: VCodeInst + ShowWithRRU> ShowWithRRU for VCode<I> {
         write!(&mut s, "VCode_ShowWithRRU {{{{\n").unwrap();
         write!(&mut s, "  Entry block: {}\n", self.entry).unwrap();
 
+        let mut state = Default::default();
+        let mut safepoint_idx = 0;
         for i in 0..self.num_blocks() {
             let block = i as BlockIndex;
 
@@ -552,11 +645,22 @@ impl<I: VCodeInst + ShowWithRRU> ShowWithRRU for VCode<I> {
             let (start, end) = self.block_ranges[block as usize];
             write!(&mut s, "  (instruction range: {} .. {})\n", start, end).unwrap();
             for inst in start..end {
+                if safepoint_idx < self.safepoint_insns.len()
+                    && self.safepoint_insns[safepoint_idx] == inst
+                {
+                    write!(
+                        &mut s,
+                        "      (safepoint: slots {:?} with EmitState {:?})\n",
+                        self.safepoint_slots[safepoint_idx], state,
+                    )
+                    .unwrap();
+                    safepoint_idx += 1;
+                }
                 write!(
                     &mut s,
                     "  Inst {}:   {}\n",
                     inst,
-                    self.insts[inst as usize].show_rru(mb_rru)
+                    self.insts[inst as usize].pretty_print(mb_rru, &mut state)
                 )
                 .unwrap();
             }

@@ -5,6 +5,7 @@ use log::trace;
 use regalloc::{RealReg, Reg, RegClass, Set, SpillSlot, Writable};
 use std::mem;
 
+use crate::binemit::Stackmap;
 use crate::ir::{self, types, types::*, ArgumentExtension, StackSlot, Type};
 use crate::isa::{self, x64::inst::*};
 use crate::machinst::*;
@@ -415,6 +416,10 @@ impl ABIBody for X64ABIBody {
         )
     }
 
+    fn spillslots_to_stackmap(&self, _slots: &[SpillSlot], _state: &EmitState) -> Stackmap {
+        unimplemented!("spillslots_to_stackmap")
+    }
+
     fn gen_prologue(&mut self) -> Vec<Inst> {
         let r_rsp = regs::rsp();
 
@@ -553,6 +558,10 @@ impl ABIBody for X64ABIBody {
             .expect("frame size not computed before prologue generation") as u32
     }
 
+    fn stack_args_size(&self) -> u32 {
+        unimplemented!("I need to be computed!")
+    }
+
     fn get_spillslot_size(&self, rc: RegClass, ty: Type) -> u32 {
         // We allocate in terms of 8-byte slots.
         match (rc, ty) {
@@ -563,12 +572,27 @@ impl ABIBody for X64ABIBody {
         }
     }
 
-    fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg, ty: Type) -> Inst {
+    fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg, ty: Option<Type>) -> Inst {
+        let ty = ty_from_ty_hint_or_reg_class(from_reg.to_reg(), ty);
         self.store_spillslot(to_slot, ty, from_reg.to_reg())
     }
 
-    fn gen_reload(&self, to_reg: Writable<RealReg>, from_slot: SpillSlot, ty: Type) -> Inst {
+    fn gen_reload(
+        &self,
+        to_reg: Writable<RealReg>,
+        from_slot: SpillSlot,
+        ty: Option<Type>,
+    ) -> Inst {
+        let ty = ty_from_ty_hint_or_reg_class(to_reg.to_reg().to_reg(), ty);
         self.load_spillslot(from_slot, ty, to_reg.map(|r| r.to_reg()))
+    }
+}
+
+fn ty_from_ty_hint_or_reg_class(r: Reg, ty: Option<Type>) -> Type {
+    match (ty, r.get_class()) {
+        (Some(t), _) => t,
+        (None, RegClass::I64) => I64,
+        _ => panic!("Unexpected register class!"),
     }
 }
 
