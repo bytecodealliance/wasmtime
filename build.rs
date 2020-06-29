@@ -200,11 +200,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", "simd_load") => return true, // FIXME Unsupported feature: proposed SIMD operator I32x4TruncSatF32x4S
             ("simd", "simd_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator I32x4TruncSatF32x4S
 
-            // not parsed in wasmparser yet
-            ("simd", "simd_i32x4_arith2") => return true,
-            ("simd", "simd_i16x8_arith2") => return true,
-            ("simd", "simd_i8x16_arith2") => return true,
-
             // Still working on implementing these. See #929.
             ("reference_types", "global")
             | ("reference_types", "linking")
