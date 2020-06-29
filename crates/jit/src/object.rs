@@ -9,7 +9,8 @@ use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::ir::{JumpTableOffsets, LibCall};
 use cranelift_frontend::FunctionBuilderContext;
 use object::write::{
-    Object, Relocation as ObjectRelocation, StandardSegment, Symbol, SymbolId, SymbolSection,
+    Object, Relocation as ObjectRelocation, SectionId, StandardSegment, Symbol, SymbolId,
+    SymbolSection,
 };
 use object::{
     elf, Architecture, BinaryFormat, Endianness, RelocationEncoding, RelocationKind, SectionKind,
@@ -115,6 +116,16 @@ pub enum ObjectUnwindInfo {
     Trampoline(SignatureIndex, UnwindInfo),
 }
 
+fn process_unwind_info(info: &UnwindInfo, obj: &mut Object, code_section: SectionId) {
+    if let UnwindInfo::WindowsX64(info) = &info {
+        // Windows prefers Unwind info after the code -- writing it here.
+        let unwind_size = info.emit_size();
+        let mut unwind_info = vec![0; unwind_size];
+        info.emit(&mut unwind_info);
+        let _off = obj.append_section_data(code_section, &unwind_info, 4);
+    }
+}
+
 // Builds ELF image from the module `Compilation`.
 pub(crate) fn build_object(
     isa: &dyn TargetIsa,
@@ -175,15 +186,9 @@ pub(crate) fn build_object(
             flags: SymbolFlags::None,
         });
         func_symbols.push(symbol_id);
-        if let Some(UnwindInfo::WindowsX64(info)) = &func.unwind_info {
-            // Windows prefers Unwind info after the code -- writing it here.
-            let unwind_size = info.emit_size();
-            let mut unwind_info = vec![0; unwind_size];
-            info.emit(&mut unwind_info);
-            let _off = obj.append_section_data(section_id, &unwind_info, 4);
-        }
         // Preserve function unwind info.
         if let Some(info) = &func.unwind_info {
+            process_unwind_info(info, &mut obj, section_id);
             unwind_info.push(ObjectUnwindInfo::Func(
                 FuncIndex::new(module.local.num_imported_funcs + index),
                 info.clone(),
@@ -209,15 +214,9 @@ pub(crate) fn build_object(
             flags: SymbolFlags::None,
         });
         trampoline_relocs.insert(symbol_id, relocs);
-        if let Some(UnwindInfo::WindowsX64(info)) = &func.unwind_info {
-            // Windows prefers Unwind info after the code -- writing it here.
-            let unwind_size = info.emit_size();
-            let mut unwind_info = vec![0; unwind_size];
-            info.emit(&mut unwind_info);
-            let _off = obj.append_section_data(section_id, &unwind_info, 4);
-        }
         // Preserve trampoline function unwind info.
         if let Some(info) = &func.unwind_info {
+            process_unwind_info(info, &mut obj, section_id);
             unwind_info.push(ObjectUnwindInfo::Trampoline(i, info.clone()))
         }
     }
