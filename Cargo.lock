@@ -1243,6 +1243,7 @@ checksum = "9cbca9424c482ee628fa549d9c812e2cd22f1180b9222c9200fdfa6eb31aecb2"
 dependencies = [
  "crc32fast",
  "indexmap",
+ "wasmparser 0.54.0",
 ]
 
 [[package]]
@@ -2290,6 +2291,12 @@ dependencies = [
  "winx",
  "yanix",
 ]
+
+[[package]]
+name = "wasmparser"
+version = "0.54.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "747467da102640806cf6643e032a70174e7768839bcac7e71a0a9aaa54761d59"
 
 [[package]]
 name = "wasmparser"
