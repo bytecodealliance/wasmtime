@@ -2349,6 +2349,18 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
+            "iabs",
+            r#"
+        Integer absolute value with wrapping: `a := |x|`.
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
             "imul",
             r#"
         Wrapping integer multiplication: `a := x y \pmod{2^B}`.
