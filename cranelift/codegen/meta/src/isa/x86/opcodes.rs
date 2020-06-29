@@ -303,6 +303,17 @@ pub static OR_IMM8_SIGN_EXTEND: [u8; 1] = [0x83];
 /// Return the bitwise logical OR of packed single-precision values in xmm and x/m (SSE).
 pub static ORPS: [u8; 2] = [0x0f, 0x56];
 
+/// Compute the absolute value of bytes in xmm2/m128 and store the unsigned result in xmm1 (SSSE3).
+pub static PABSB: [u8; 4] = [0x66, 0x0f, 0x38, 0x1c];
+
+/// Compute the absolute value of 32-bit integers in xmm2/m128 and store the unsigned result in
+/// xmm1 (SSSE3).
+pub static PABSD: [u8; 4] = [0x66, 0x0f, 0x38, 0x1e];
+
+/// Compute the absolute value of 16-bit integers in xmm2/m128 and store the unsigned result in
+/// xmm1 (SSSE3).
+pub static PABSW: [u8; 4] = [0x66, 0x0f, 0x38, 0x1d];
+
 /// Converts 8 packed signed word integers from xmm1 and from xxm2/m128 into 16 packed signed byte
 /// integers in xmm1 using signed saturation (SSE2).
 pub static PACKSSWB: [u8; 3] = [0x66, 0x0f, 0x63];

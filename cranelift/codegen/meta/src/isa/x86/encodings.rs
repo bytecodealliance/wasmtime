@@ -1638,6 +1638,7 @@ fn define_simd(
     let fill_nop = shared.by_name("fill_nop");
     let fmul = shared.by_name("fmul");
     let fsub = shared.by_name("fsub");
+    let iabs = shared.by_name("iabs");
     let iadd = shared.by_name("iadd");
     let icmp = shared.by_name("icmp");
     let imul = shared.by_name("imul");
@@ -2182,6 +2183,12 @@ fn define_simd(
     for (ty, opcodes) in &[(I8, &PAVGB[..]), (I16, &PAVGW[..])] {
         let avgr = avg_round.bind(vector(*ty, sse_vector_size));
         e.enc_both_inferred(avgr, rec_fa.opcodes(opcodes));
+    }
+
+    // SIMD integer absolute value.
+    for (ty, opcodes) in &[(I8, &PABSB[..]), (I16, &PABSW[..]), (I32, &PABSD)] {
+        let iabs = iabs.bind(vector(*ty, sse_vector_size));
+        e.enc_both_inferred_maybe_isap(iabs, rec_furm.opcodes(opcodes), Some(use_ssse3_simd));
     }
 
     // SIMD logical operations
