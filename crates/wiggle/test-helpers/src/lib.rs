@@ -1,7 +1,10 @@
 use proptest::prelude::*;
 use std::cell::UnsafeCell;
 use std::marker;
-use wiggle::{BorrowChecker, GuestMemory};
+use wiggle::{BorrowHandle, GuestMemory, Region};
+
+mod borrow;
+use borrow::BorrowChecker;
 
 #[derive(Debug, Clone)]
 pub struct MemAreas(Vec<MemArea>);
@@ -119,8 +122,17 @@ unsafe impl GuestMemory for HostMemory {
             ((*ptr).as_mut_ptr(), (*ptr).len() as u32)
         }
     }
-    fn borrow_checker(&self) -> &BorrowChecker {
-        &self.bc
+    fn has_outstanding_borrows(&self) -> bool {
+        self.bc.has_outstanding_borrows()
+    }
+    fn is_borrowed(&self, r: Region) -> bool {
+        self.bc.is_borrowed(r)
+    }
+    fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        self.bc.borrow(r)
+    }
+    fn unborrow(&self, h: BorrowHandle) {
+        self.bc.unborrow(h)
     }
 }
 

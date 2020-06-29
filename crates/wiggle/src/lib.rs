@@ -11,15 +11,12 @@ pub use wiggle_macro::from_witx;
 #[cfg(feature = "wiggle_metadata")]
 pub use witx;
 
-mod borrow;
 mod error;
 mod guest_type;
 mod region;
 
 pub extern crate tracing;
 
-pub use borrow::BorrowChecker;
-use borrow::BorrowHandle;
 pub use error::GuestError;
 pub use guest_type::{GuestErrorType, GuestType, GuestTypeTransparent};
 pub use region::Region;
@@ -55,24 +52,27 @@ pub use region::Region;
 /// must be "somehow nonzero in length" to allow users of `GuestMemory` and
 /// `GuestPtr` to safely read and write interior data.
 ///
+/// This type also provides methods for run-time borrow checking of references
+/// into the memory. The safety of this mechanism depends on there being
+/// exactly one associated tracking of borrows for a given WebAssembly memory.
+/// There must be no other reads or writes of WebAssembly the memory by either
+/// Rust or WebAssembly code while there are any outstanding borrows, as given
+/// by `GuestMemory::has_outstanding_borrows()`.
 ///
 /// # Using References
-///
-/// See the safety guarantees of [`BorrowChecker`], which asserts that exactly
-/// one `BorrowChecker` may be constructed for each WebAssembly memory.
 ///
 /// The [`GuestMemory::as_slice`] or [`GuestPtr::as_str`] will return smart
 /// pointers [`GuestSlice`] and [`GuestStr`]. These types, which implement
 /// [`std::ops::Deref`] and [`std::ops::DerefMut`], provide mutable references
 /// into the memory region given by a `GuestMemory`.
 ///
-/// These smart pointers are dynamically borrow-checked by the `BorrowChecker`
-/// given by [`GuestMemory::borrow_checker()`]. While a `GuestSlice`
-/// or a `GuestStr` are live, the [`BorrowChecker::has_outstanding_borrows()`]
-/// method will always return `true`. If you need to re-enter the guest or
-/// otherwise read or write to the contents of a WebAssembly memory, all
-/// `GuestSlice`s and `GuestStr`s for the memory must be dropped, at which
-/// point `BorrowChecker::has_outstanding_borrows()` will return `false`.
+/// These smart pointers are dynamically borrow-checked by the borrow checker
+/// methods on this trait. While a `GuestSlice` or a `GuestStr` are live, the
+/// [`GuestMemory::has_outstanding_borrows()`] method will always return
+/// `true`. If you need to re-enter the guest or otherwise read or write to
+/// the contents of a WebAssembly memory, all `GuestSlice`s and `GuestStr`s
+/// for the memory must be dropped, at which point
+/// `GuestMemory::has_outstanding_borrows()` will return `false`.
 pub unsafe trait GuestMemory {
     /// Returns the base allocation of this guest memory, located in host
     /// memory.
@@ -85,11 +85,6 @@ pub unsafe trait GuestMemory {
     /// implementations must uphold, and for more details see the
     /// [`GuestMemory`] documentation.
     fn base(&self) -> (*mut u8, u32);
-
-    /// Gives a reference to the [`BorrowChecker`] used to keep track of each
-    /// outstanding borrow of the memory region. [`BorrowChecker::new`] safety
-    /// rules require that exactly one checker exist for each memory region.
-    fn borrow_checker(&self) -> &BorrowChecker;
 
     /// Validates a guest-relative pointer given various attributes, and returns
     /// the corresponding host pointer.
@@ -152,16 +147,53 @@ pub unsafe trait GuestMemory {
     {
         GuestPtr::new(self, offset)
     }
+
+    /// Indicates whether any outstanding borrows are known to the
+    /// `GuestMemory`. This function must be `false` in order for it to be
+    /// safe to recursively call into a WebAssembly module, or to manipulate
+    /// the WebAssembly memory by any other means.
+    fn has_outstanding_borrows(&self) -> bool;
+    /// Check if a region of linear memory is borrowed. This is called during
+    /// any `GuestPtr::read` or `GuestPtr::write` operation to ensure that
+    /// wiggle is not reading or writing a region of memory which Rust believes
+    /// it has exclusive access to.
+    fn is_borrowed(&self, r: Region) -> bool;
+    /// Borrow a region of linear memory. This is used when constructing a
+    /// `GuestSlice` or `GuestStr`. Those types will give Rust `&mut` access
+    /// to the region of linear memory, therefore, the `GuestMemory` impl must
+    /// guarantee that at most one `BorrowHandle` is issued to a given region,
+    /// `GuestMemory::has_outstanding_borrows` is true for the duration of the
+    /// borrow, and that `GuestMemory::is_borrowed` of any overlapping region
+    /// is false for the duration of the borrow.
+    fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError>;
+    /// Unborrow a previously borrowed region. As long as `GuestSlice` and
+    /// `GuestStr` are implemented correctly, a `BorrowHandle` should only be
+    /// unborrowed once.
+    fn unborrow(&self, h: BorrowHandle);
 }
 
-// Forwarding trait implementations to the original type
+/// A handle to a borrow on linear memory. It is produced by `borrow` and
+/// consumed by `unborrow`. Only the `GuestMemory` impl should ever construct
+/// a `BorrowHandle` or inspect its contents.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct BorrowHandle(pub usize);
 
+// Forwarding trait implementations to the original type
 unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a T {
     fn base(&self) -> (*mut u8, u32) {
         T::base(self)
     }
-    fn borrow_checker(&self) -> &BorrowChecker {
-        T::borrow_checker(self)
+    fn has_outstanding_borrows(&self) -> bool {
+        T::has_outstanding_borrows(self)
+    }
+    fn is_borrowed(&self, r: Region) -> bool {
+        T::is_borrowed(self, r)
+    }
+    fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::borrow(self, r)
+    }
+    fn unborrow(&self, h: BorrowHandle) {
+        T::unborrow(self, h)
     }
 }
 
@@ -169,8 +201,17 @@ unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a mut T {
     fn base(&self) -> (*mut u8, u32) {
         T::base(self)
     }
-    fn borrow_checker(&self) -> &BorrowChecker {
-        T::borrow_checker(self)
+    fn has_outstanding_borrows(&self) -> bool {
+        T::has_outstanding_borrows(self)
+    }
+    fn is_borrowed(&self, r: Region) -> bool {
+        T::is_borrowed(self, r)
+    }
+    fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::borrow(self, r)
+    }
+    fn unborrow(&self, h: BorrowHandle) {
+        T::unborrow(self, h)
     }
 }
 
@@ -178,8 +219,17 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Box<T> {
     fn base(&self) -> (*mut u8, u32) {
         T::base(self)
     }
-    fn borrow_checker(&self) -> &BorrowChecker {
-        T::borrow_checker(self)
+    fn has_outstanding_borrows(&self) -> bool {
+        T::has_outstanding_borrows(self)
+    }
+    fn is_borrowed(&self, r: Region) -> bool {
+        T::is_borrowed(self, r)
+    }
+    fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::borrow(self, r)
+    }
+    fn unborrow(&self, h: BorrowHandle) {
+        T::unborrow(self, h)
     }
 }
 
@@ -187,8 +237,17 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Rc<T> {
     fn base(&self) -> (*mut u8, u32) {
         T::base(self)
     }
-    fn borrow_checker(&self) -> &BorrowChecker {
-        T::borrow_checker(self)
+    fn has_outstanding_borrows(&self) -> bool {
+        T::has_outstanding_borrows(self)
+    }
+    fn is_borrowed(&self, r: Region) -> bool {
+        T::is_borrowed(self, r)
+    }
+    fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::borrow(self, r)
+    }
+    fn unborrow(&self, h: BorrowHandle) {
+        T::unborrow(self, h)
     }
 }
 
@@ -196,8 +255,17 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Arc<T> {
     fn base(&self) -> (*mut u8, u32) {
         T::base(self)
     }
-    fn borrow_checker(&self) -> &BorrowChecker {
-        T::borrow_checker(self)
+    fn has_outstanding_borrows(&self) -> bool {
+        T::has_outstanding_borrows(self)
+    }
+    fn is_borrowed(&self, r: Region) -> bool {
+        T::is_borrowed(self, r)
+    }
+    fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::borrow(self, r)
+    }
+    fn unborrow(&self, h: BorrowHandle) {
+        T::unborrow(self, h)
     }
 }
 
@@ -280,11 +348,6 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
     /// Returns the guest memory that this pointer is coming from.
     pub fn mem(&self) -> &'a (dyn GuestMemory + 'a) {
         self.mem
-    }
-
-    /// Returns the borrow checker that this pointer uses
-    pub fn borrow_checker(&self) -> &'a BorrowChecker {
-        self.mem.borrow_checker()
     }
 
     /// Casts this `GuestPtr` type to a different type.
@@ -409,7 +472,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
     /// bounds checks and type validation. The `GuestSlice` is a smart pointer
     /// that can be used as a `&[T]` or a `&mut [T]` via the `Deref` and `DerefMut`
     /// traits. The region of memory backing the slice will be marked as borrowed
-    /// by the [`BorrowChecker`] until the `GuestSlice` is dropped.
+    /// by the [`GuestMemory`] until the `GuestSlice` is dropped.
     ///
     /// This function will return a `GuestSlice` into host memory if all checks
     /// succeed (valid utf-8, valid pointers, memory is not borrowed, etc). If
@@ -426,7 +489,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
             self.mem
                 .validate_size_align(self.pointer.0, T::guest_align(), len)? as *mut T;
 
-        let borrow = self.mem.borrow_checker().borrow(Region {
+        let borrow = self.mem.borrow(Region {
             start: self.pointer.0,
             len,
         })?;
@@ -442,7 +505,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
 
         Ok(GuestSlice {
             ptr,
-            bc: self.mem.borrow_checker(),
+            mem: self.mem,
             borrow,
         })
     }
@@ -509,7 +572,7 @@ impl<'a> GuestPtr<'a, str> {
     /// bounds checks and utf-8 checks. The resulting `GuestStr` can be used
     /// as a `&str` or `&mut str` via the `Deref` and `DerefMut` traits. The
     /// region of memory backing the `str` will be marked as borrowed by the
-    /// [`BorrowChecker`] until the `GuestStr` is dropped.
+    /// [`GuestMemory`] until the `GuestStr` is dropped.
     ///
     /// This function will return `GuestStr` into host memory if all checks
     /// succeed (valid utf-8, valid pointers, etc). If any checks fail then
@@ -519,7 +582,7 @@ impl<'a> GuestPtr<'a, str> {
             .mem
             .validate_size_align(self.pointer.0, 1, self.pointer.1)?;
 
-        let borrow = self.mem.borrow_checker().borrow(Region {
+        let borrow = self.mem.borrow(Region {
             start: self.pointer.0,
             len: self.pointer.1,
         })?;
@@ -531,7 +594,7 @@ impl<'a> GuestPtr<'a, str> {
         match str::from_utf8_mut(ptr) {
             Ok(ptr) => Ok(GuestStr {
                 ptr,
-                bc: self.mem.borrow_checker(),
+                mem: self.mem,
                 borrow,
             }),
             Err(e) => Err(GuestError::InvalidUtf8(e)),
@@ -566,7 +629,7 @@ impl<T: ?Sized + Pointee> fmt::Debug for GuestPtr<'_, T> {
 /// [`std::ops::DerefMut`].
 pub struct GuestSlice<'a, T> {
     ptr: &'a mut [T],
-    bc: &'a BorrowChecker,
+    mem: &'a dyn GuestMemory,
     borrow: BorrowHandle,
 }
 
@@ -585,7 +648,7 @@ impl<'a, T> std::ops::DerefMut for GuestSlice<'a, T> {
 
 impl<'a, T> Drop for GuestSlice<'a, T> {
     fn drop(&mut self) {
-        self.bc.unborrow(self.borrow)
+        self.mem.unborrow(self.borrow)
     }
 }
 
@@ -594,7 +657,7 @@ impl<'a, T> Drop for GuestSlice<'a, T> {
 /// [`std::ops::DerefMut`].
 pub struct GuestStr<'a> {
     ptr: &'a mut str,
-    bc: &'a BorrowChecker,
+    mem: &'a dyn GuestMemory,
     borrow: BorrowHandle,
 }
 
@@ -613,7 +676,7 @@ impl<'a> std::ops::DerefMut for GuestStr<'a> {
 
 impl<'a> Drop for GuestStr<'a> {
     fn drop(&mut self) {
-        self.bc.unborrow(self.borrow)
+        self.mem.unborrow(self.borrow)
     }
 }
 

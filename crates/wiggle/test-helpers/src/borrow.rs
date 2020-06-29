@@ -1,10 +1,6 @@
-use crate::error::GuestError;
-use crate::region::Region;
 use std::cell::RefCell;
 use std::collections::HashMap;
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct BorrowHandle(usize);
+use wiggle::{BorrowHandle, GuestError, Region};
 
 pub struct BorrowChecker {
     bc: RefCell<InnerBorrowChecker>,
@@ -16,10 +12,6 @@ impl BorrowChecker {
     /// `GuestSlice` and `GuestStr` structs, which implement `std::ops::Deref` and
     /// `std::ops::DerefMut`. It also enforces that `GuestPtr::read` and `GuestPtr::write` do not
     /// access memory with an outstanding borrow.
-    /// The safety of this mechanism depends on creating exactly one `BorrowChecker` per
-    /// WebAssembly memory. There must be no other reads or writes of WebAssembly the memory by
-    /// either Rust or WebAssembly code while there are any outstanding borrows, as given by
-    /// `BorrowChecker::has_outstanding_borrows()`.
     pub unsafe fn new() -> Self {
         BorrowChecker {
             bc: RefCell::new(InnerBorrowChecker::new()),
