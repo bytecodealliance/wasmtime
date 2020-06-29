@@ -26,6 +26,8 @@ pub fn link_module(
     }
 }
 
+const WASM_FUNCTION_PREFIX: &str = "_wasm_function_";
+
 fn apply_reloc(
     module: &Module,
     obj: &File,
@@ -39,8 +41,8 @@ fn apply_reloc(
             let sym = obj.symbol_by_index(i).unwrap();
             match sym.name() {
                 Some(name) => {
-                    if name.starts_with("_wasm_function_") {
-                        let index = name["_wasm_function_".len()..].parse::<usize>().unwrap();
+                    if name.starts_with(WASM_FUNCTION_PREFIX) {
+                        let index = name[WASM_FUNCTION_PREFIX.len()..].parse::<usize>().unwrap();
                         match module.local.defined_func_index(FuncIndex::new(index)) {
                             Some(f) => {
                                 let fatptr: *const [VMFunctionBody] = finished_functions[f];
@@ -48,8 +50,8 @@ fn apply_reloc(
                             }
                             None => panic!("direct call to import"),
                         }
-                    } else if name.starts_with("wasmtime_") {
-                        to_libcall_address(name)
+                    } else if let Some(addr) = to_libcall_address(name) {
+                        addr
                     } else {
                         panic!("unknown function to link: {}", name);
                     }
@@ -123,24 +125,20 @@ fn apply_reloc(
     }
 }
 
-fn to_libcall_address(name: &str) -> usize {
+fn to_libcall_address(name: &str) -> Option<usize> {
     use self::libcalls::*;
-    match name {
-        "wasmtime_i64_udiv" => wasmtime_i64_udiv as usize,
-        "wasmtime_i64_sdiv" => wasmtime_i64_sdiv as usize,
-        "wasmtime_i64_urem" => wasmtime_i64_urem as usize,
-        "wasmtime_i64_srem" => wasmtime_i64_srem as usize,
-        "wasmtime_i64_ishl" => wasmtime_i64_ishl as usize,
-        "wasmtime_i64_ushr" => wasmtime_i64_ushr as usize,
-        "wasmtime_i64_sshr" => wasmtime_i64_sshr as usize,
-        "wasmtime_f32_ceil" => wasmtime_f32_ceil as usize,
-        "wasmtime_f32_floor" => wasmtime_f32_floor as usize,
-        "wasmtime_f32_trunc" => wasmtime_f32_trunc as usize,
-        "wasmtime_f32_nearest" => wasmtime_f32_nearest as usize,
-        "wasmtime_f64_ceil" => wasmtime_f64_ceil as usize,
-        "wasmtime_f64_floor" => wasmtime_f64_floor as usize,
-        "wasmtime_f64_trunc" => wasmtime_f64_trunc as usize,
-        "wasmtime_f64_nearest" => wasmtime_f64_nearest as usize,
-        other => panic!("unexpected libcall: {}", other),
+    use crate::for_each_libcall;
+    macro_rules! add_libcall_symbol {
+        [$(($libcall:ident, $export:ident)),*] => {
+            Some(match name {
+                $(
+                    stringify!($export) => $export as usize,
+                )+
+                _ => {
+                    return None;
+                }
+            })
+        };
     }
+    for_each_libcall!(add_libcall_symbol)
 }
