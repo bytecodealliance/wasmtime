@@ -2,7 +2,7 @@
 
 [Wasmtime][github], a [Bytecode Alliance][BA] project, is used to run
 [Webassembly][Wasm] (Wasm) programs [without a web browser].  
-Typically, an application calls Wasmtime to load and run Wasm
+Typically, an application calls embedded Wasmtime to load and run Wasm
 modules. Or, the Wasmtime command line utility can run standalone Wasm
 programs.
 
@@ -12,7 +12,7 @@ languages must be compiled to Wasm prior to loading. Upon loading,
 Wasmtime compiles Wasm to native machine code.
 
 [WebAssembly System Interface][WASI] (WASI) provides a library of
-essential functions, such as reading files, somewhat similar libc.
+essential functions, such as reading files, somewhat similar to libc.
 
 Wasmtime strives to be a highly configurable embedded runtime for
 any scale of application. Many features are still under development so if you
