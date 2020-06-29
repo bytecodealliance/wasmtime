@@ -6,7 +6,7 @@ use gimli::{
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
-use wasmparser::{self, ModuleReader, SectionCode};
+use wasmparser::{self, ModuleReader, SectionCode, TypeDef};
 
 trait Reader: gimli::Reader<Offset = usize, Endian = LittleEndian> {}
 
@@ -186,7 +186,13 @@ pub fn read_debuginfo(data: &[u8]) -> Result<DebugInfoData> {
                 signatures_params = section
                     .get_type_section_reader()?
                     .into_iter()
-                    .map(|ft| Ok(ft?.params))
+                    .map(|ft| {
+                        if let Ok(TypeDef::Func(ft)) = ft {
+                            Ok(ft.params)
+                        } else {
+                            unimplemented!("module linking not implemented yet")
+                        }
+                    })
                     .collect::<Result<Vec<_>>>()?;
             }
             SectionCode::Import => {

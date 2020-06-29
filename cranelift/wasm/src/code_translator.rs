@@ -1575,7 +1575,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I32x4WidenLowI16x8S { .. }
         | Operator::I32x4WidenHighI16x8S { .. }
         | Operator::I32x4WidenLowI16x8U { .. }
-        | Operator::I32x4WidenHighI16x8U { .. } => {
+        | Operator::I32x4WidenHighI16x8U { .. }
+        | Operator::I8x16Bitmask
+        | Operator::I16x8Bitmask
+        | Operator::I32x4Bitmask => {
             return Err(wasm_unsupported!("proposed SIMD operator {:?}", op));
         }
 
@@ -2007,7 +2010,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I8x16MinU
         | Operator::I8x16MaxS
         | Operator::I8x16MaxU
-        | Operator::I8x16RoundingAverageU => I8X16,
+        | Operator::I8x16RoundingAverageU
+        | Operator::I8x16Bitmask => I8X16,
 
         Operator::I16x8Splat
         | Operator::V16x8LoadSplat { .. }
@@ -2041,7 +2045,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I16x8MaxS
         | Operator::I16x8MaxU
         | Operator::I16x8RoundingAverageU
-        | Operator::I16x8Mul => I16X8,
+        | Operator::I16x8Mul
+        | Operator::I16x8Bitmask => I16X8,
 
         Operator::I32x4Splat
         | Operator::V32x4LoadSplat { .. }
@@ -2071,7 +2076,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I32x4MaxS
         | Operator::I32x4MaxU
         | Operator::F32x4ConvertI32x4S
-        | Operator::F32x4ConvertI32x4U => I32X4,
+        | Operator::F32x4ConvertI32x4U
+        | Operator::I32x4Bitmask => I32X4,
 
         Operator::I64x2Splat
         | Operator::V64x2LoadSplat { .. }

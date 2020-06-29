@@ -595,7 +595,7 @@ dependencies = [
  "serde",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.57.0",
+ "wasmparser 0.58.0",
  "wat",
 ]
 
@@ -1123,7 +1123,7 @@ dependencies = [
  "staticvec",
  "thiserror",
  "typemap",
- "wasmparser 0.57.0",
+ "wasmparser 0.58.0",
  "wat",
 ]
 
@@ -2299,9 +2299,9 @@ checksum = "af931e2e1960c53f4a28b063fec4cacd036f35acbec8ff3a4739125b17382a87"
 
 [[package]]
 name = "wasmparser"
-version = "0.57.0"
+version = "0.58.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32fddd575d477c6e9702484139cf9f23dcd554b06d185ed0f56c857dd3a47aa6"
+checksum = "721a8d79483738d7aef6397edcf8f04cd862640b1ad5973adf5bb50fc10e86db"
 
 [[package]]
 name = "wasmprinter"
@@ -2327,7 +2327,7 @@ dependencies = [
  "rustc-demangle",
  "target-lexicon",
  "tempfile",
- "wasmparser 0.57.0",
+ "wasmparser 0.58.0",
  "wasmtime-environ",
  "wasmtime-jit",
  "wasmtime-profiling",
@@ -2400,7 +2400,7 @@ dependencies = [
  "object 0.19.0",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.57.0",
+ "wasmparser 0.58.0",
  "wasmtime-environ",
 ]
 
@@ -2431,7 +2431,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml",
- "wasmparser 0.57.0",
+ "wasmparser 0.58.0",
  "winapi",
  "zstd",
 ]
@@ -2460,7 +2460,7 @@ dependencies = [
  "env_logger",
  "log",
  "rayon",
- "wasmparser 0.57.0",
+ "wasmparser 0.58.0",
  "wasmprinter",
  "wasmtime",
  "wasmtime-wast",
@@ -2484,7 +2484,7 @@ dependencies = [
  "region",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.57.0",
+ "wasmparser 0.58.0",
  "wasmtime-debug",
  "wasmtime-environ",
  "wasmtime-profiling",
