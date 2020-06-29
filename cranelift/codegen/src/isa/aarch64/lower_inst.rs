@@ -1023,7 +1023,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // Nothing.
         }
 
-        Opcode::Select | Opcode::Selectif => {
+        Opcode::Select | Opcode::Selectif | Opcode::SelectifSpectreGuard => {
             let cond = if op == Opcode::Select {
                 let (cmp_op, narrow_mode) = if ty_bits(ctx.input_ty(insn, 0)) > 32 {
                     (ALUOp::SubS64, NarrowValueMode::ZeroExtend64)
