@@ -12,7 +12,7 @@ impl BorrowChecker {
     /// `GuestSlice` and `GuestStr` structs, which implement `std::ops::Deref` and
     /// `std::ops::DerefMut`. It also enforces that `GuestPtr::read` and `GuestPtr::write` do not
     /// access memory with an outstanding borrow.
-    pub unsafe fn new() -> Self {
+    pub fn new() -> Self {
         BorrowChecker {
             bc: RefCell::new(InnerBorrowChecker::new()),
         }

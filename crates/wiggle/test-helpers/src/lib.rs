@@ -60,7 +60,7 @@ impl HostMemory {
             buffer: HostBuffer {
                 cell: UnsafeCell::new([0; 4096]),
             },
-            bc: unsafe { BorrowChecker::new() },
+            bc: BorrowChecker::new(),
         }
     }
 

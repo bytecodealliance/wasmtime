@@ -25,7 +25,7 @@ impl WasmtimeGuestMemory {
             // This BorrowChecker construction is a holdover until it is
             // integrated fully with wasmtime:
             // https://github.com/bytecodealliance/wasmtime/issues/1917
-            bc: unsafe { BorrowChecker::new() },
+            bc: BorrowChecker::new(),
         }
     }
 }
