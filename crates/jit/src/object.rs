@@ -101,14 +101,6 @@ fn to_object_architecture(
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
-fn func_symbol_name(index: FuncIndex) -> String {
-    format!("_wasm_function_{}", index.index())
-}
-
-fn trampoline_symbol_name(index: SignatureIndex) -> String {
-    format!("_trampoline_{}", index.index())
-}
-
 /// Unwind information for object files functions (including trampolines).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ObjectUnwindInfo {
@@ -159,7 +151,9 @@ pub(crate) fn build_object(
     let mut func_symbols = PrimaryMap::with_capacity(compilation.len());
     for index in 0..module.local.num_imported_funcs {
         let symbol_id = obj.add_symbol(Symbol {
-            name: func_symbol_name(FuncIndex::new(index)).as_bytes().to_vec(),
+            name: utils::func_symbol_name(FuncIndex::new(index))
+                .as_bytes()
+                .to_vec(),
             value: 0,
             size: 0,
             kind: SymbolKind::Text,
@@ -174,7 +168,7 @@ pub(crate) fn build_object(
     for (index, func) in compilation.into_iter().enumerate() {
         let off = obj.append_section_data(section_id, &func.body, 1);
         let symbol_id = obj.add_symbol(Symbol {
-            name: func_symbol_name(module.local.func_index(DefinedFuncIndex::new(index)))
+            name: utils::func_symbol_name(module.local.func_index(DefinedFuncIndex::new(index)))
                 .as_bytes()
                 .to_vec(),
             value: off,
@@ -204,7 +198,7 @@ pub(crate) fn build_object(
             build_trampoline(isa, &mut cx, native_sig, std::mem::size_of::<u128>())?;
         let off = obj.append_section_data(section_id, &func.body, 1);
         let symbol_id = obj.add_symbol(Symbol {
-            name: trampoline_symbol_name(i).as_bytes().to_vec(),
+            name: utils::trampoline_symbol_name(i).as_bytes().to_vec(),
             value: off,
             size: func.body.len() as u64,
             kind: SymbolKind::Text,
@@ -345,4 +339,40 @@ fn write_libcall_symbols(obj: &mut Object) -> HashMap<LibCall, SymbolId> {
     for_each_libcall!(add_libcall_symbol);
 
     libcalls
+}
+
+pub(crate) mod utils {
+    use wasmtime_environ::entity::EntityRef;
+    use wasmtime_environ::wasm::{FuncIndex, SignatureIndex};
+
+    pub const FUNCTION_PREFIX: &str = "_wasm_function_";
+    pub const TRAMPOLINE_PREFIX: &str = "_trampoline_";
+
+    pub fn func_symbol_name(index: FuncIndex) -> String {
+        format!("_wasm_function_{}", index.index())
+    }
+
+    pub fn try_parse_func_name(name: &str) -> Option<FuncIndex> {
+        if !name.starts_with(FUNCTION_PREFIX) {
+            return None;
+        }
+        name[FUNCTION_PREFIX.len()..]
+            .parse()
+            .ok()
+            .map(FuncIndex::new)
+    }
+
+    pub fn trampoline_symbol_name(index: SignatureIndex) -> String {
+        format!("_trampoline_{}", index.index())
+    }
+
+    pub fn try_parse_trampoline_name(name: &str) -> Option<SignatureIndex> {
+        if !name.starts_with(TRAMPOLINE_PREFIX) {
+            return None;
+        }
+        name[TRAMPOLINE_PREFIX.len()..]
+            .parse()
+            .ok()
+            .map(SignatureIndex::new)
+    }
 }

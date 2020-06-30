@@ -1,6 +1,9 @@
 //! Memory management for executable code.
 
-use crate::object::ObjectUnwindInfo;
+use crate::object::{
+    utils::{try_parse_func_name, try_parse_trampoline_name},
+    ObjectUnwindInfo,
+};
 use crate::unwind::UnwindRegistry;
 use object::read::{File as ObjectFile, Object, ObjectSection};
 use region;
@@ -8,7 +11,6 @@ use std::collections::BTreeMap;
 use std::mem::ManuallyDrop;
 use std::{cmp, mem};
 use wasmtime_environ::{
-    entity::EntityRef,
     isa::{unwind::UnwindInfo, TargetIsa},
     wasm::{FuncIndex, SignatureIndex},
     Compilation, CompiledFunction,
@@ -51,8 +53,8 @@ impl Drop for CodeMemoryEntry {
 
 pub(crate) struct CodeMemoryObjectAllocation<'a> {
     buf: &'a mut [u8],
-    funcs: BTreeMap<usize, (usize, usize)>,
-    trampolines: BTreeMap<usize, (usize, usize)>,
+    funcs: BTreeMap<FuncIndex, (usize, usize)>,
+    trampolines: BTreeMap<SignatureIndex, (usize, usize)>,
 }
 
 impl<'a> CodeMemoryObjectAllocation<'a> {
@@ -62,7 +64,7 @@ impl<'a> CodeMemoryObjectAllocation<'a> {
     pub fn funcs(&'a self) -> impl Iterator<Item = (FuncIndex, &'a mut [VMFunctionBody])> + 'a {
         let buf = self.buf as *const _ as *mut [u8];
         self.funcs.iter().map(move |(i, (start, len))| {
-            (FuncIndex::new(*i), unsafe {
+            (*i, unsafe {
                 CodeMemory::view_as_mut_vmfunc_slice(&mut (*buf)[*start..*start + *len])
             })
         })
@@ -72,7 +74,7 @@ impl<'a> CodeMemoryObjectAllocation<'a> {
     ) -> impl Iterator<Item = (SignatureIndex, &'a mut [VMFunctionBody])> + 'a {
         let buf = self.buf as *const _ as *mut [u8];
         self.trampolines.iter().map(move |(i, (start, len))| {
-            (SignatureIndex::new(*i), unsafe {
+            (*i, unsafe {
                 CodeMemory::view_as_mut_vmfunc_slice(&mut (*buf)[*start..*start + *len])
             })
         })
@@ -315,13 +317,10 @@ impl CodeMemory {
         // Track locations of all defined functions and trampolines.
         let mut funcs = BTreeMap::new();
         let mut trampolines = BTreeMap::new();
-        const FUNCTION_PREFIX: &str = "_wasm_function_";
-        const TRAMPOLINE_PREFIX: &str = "_trampoline_";
         for (_id, sym) in obj.symbols() {
             match sym.name() {
                 Some(name) => {
-                    if name.starts_with(FUNCTION_PREFIX) {
-                        let index = name[FUNCTION_PREFIX.len()..].parse::<usize>().unwrap();
+                    if let Some(index) = try_parse_func_name(name) {
                         let is_import = sym.section_index().is_none();
                         if !is_import {
                             funcs.insert(
@@ -329,8 +328,7 @@ impl CodeMemory {
                                 (start + sym.address() as usize, sym.size() as usize),
                             );
                         }
-                    } else if name.starts_with(TRAMPOLINE_PREFIX) {
-                        let index = name[TRAMPOLINE_PREFIX.len()..].parse::<usize>().unwrap();
+                    } else if let Some(index) = try_parse_trampoline_name(name) {
                         trampolines
                             .insert(index, (start + sym.address() as usize, sym.size() as usize));
                     }
@@ -344,13 +342,13 @@ impl CodeMemory {
         for i in unwind_info {
             match i {
                 ObjectUnwindInfo::Func(func_index, info) => {
-                    let (start, len) = funcs.get(&func_index.index()).unwrap();
+                    let (start, len) = funcs.get(&func_index).unwrap();
                     registry
                         .register(*start as u32, *len as u32, &info)
                         .expect("failed to register unwind information");
                 }
                 ObjectUnwindInfo::Trampoline(trampoline_index, info) => {
-                    let (start, len) = trampolines.get(&trampoline_index.index()).unwrap();
+                    let (start, len) = trampolines.get(&trampoline_index).unwrap();
                     registry
                         .register(*start as u32, *len as u32, &info)
                         .expect("failed to register unwind information");

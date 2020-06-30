@@ -1,10 +1,11 @@
 //! Linking for JIT-compiled code.
 
+use crate::object::utils::try_parse_func_name;
 use object::read::{Object, ObjectSection, Relocation, RelocationTarget};
 use object::{elf, File, RelocationEncoding, RelocationKind};
 use std::ptr::{read_unaligned, write_unaligned};
-use wasmtime_environ::entity::{EntityRef, PrimaryMap};
-use wasmtime_environ::wasm::{DefinedFuncIndex, FuncIndex};
+use wasmtime_environ::entity::PrimaryMap;
+use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::Module;
 use wasmtime_runtime::libcalls;
 use wasmtime_runtime::VMFunctionBody;
@@ -26,8 +27,6 @@ pub fn link_module(
     }
 }
 
-const WASM_FUNCTION_PREFIX: &str = "_wasm_function_";
-
 fn apply_reloc(
     module: &Module,
     obj: &File,
@@ -41,9 +40,8 @@ fn apply_reloc(
             let sym = obj.symbol_by_index(i).unwrap();
             match sym.name() {
                 Some(name) => {
-                    if name.starts_with(WASM_FUNCTION_PREFIX) {
-                        let index = name[WASM_FUNCTION_PREFIX.len()..].parse::<usize>().unwrap();
-                        match module.local.defined_func_index(FuncIndex::new(index)) {
+                    if let Some(index) = try_parse_func_name(name) {
+                        match module.local.defined_func_index(index) {
                             Some(f) => {
                                 let fatptr: *const [VMFunctionBody] = finished_functions[f];
                                 fatptr as *const VMFunctionBody as usize
