@@ -21,6 +21,9 @@ bitflags! {
         const REMOVEDIR = libc::AT_REMOVEDIR;
         const SYMLINK_FOLLOW = libc::AT_SYMLINK_FOLLOW;
         const SYMLINK_NOFOLLOW = libc::AT_SYMLINK_NOFOLLOW;
+        #[cfg(any(target_os = "linux",
+                  target_os = "fuchsia"))]
+        const EMPTY_PATH = libc::AT_EMPTY_PATH;
     }
 }
 
@@ -88,6 +91,24 @@ bitflags! {
         const RSYNC = libc::O_RSYNC;
         const SYNC = libc::O_SYNC;
         const TRUNC = libc::O_TRUNC;
+        #[cfg(any(target_os = "linux",
+                  target_os = "fuchsia",
+                  target_os = "redox"))]
+        const PATH = libc::O_PATH;
+        #[cfg(any(target_os = "linux",
+                  target_os = "fuchsia",
+                  target_os = "hermit",
+                  target_os = "solaris",
+                  target_os = "haiku",
+                  target_os = "netbsd",
+                  target_os = "freebsd",
+                  target_os = "openbsd",
+                  target_os = "dragonfly",
+                  target_os = "vxworks",
+                  target_os = "macos",
+                  target_os = "ios",
+                  target_os = "redox"))]
+        const CLOEXEC = libc::O_CLOEXEC;
     }
 }
 
