@@ -1,10 +1,11 @@
 //! Interfacing with actual instructions.
 
-use crate::operator::Operator;
 use crate::part::{Constant, Part};
 use crate::paths::Path;
 use crate::r#type::Type;
 use std::fmt::Debug;
+use std::hash::Hash;
+use std::num::NonZeroU32;
 
 /// A trait for interfacing with actual instruction sequences.
 ///
@@ -31,6 +32,9 @@ pub unsafe trait InstructionSet<'a> {
     /// In practice, this is a `FuncCursor` for `cranelift-codegen`'s trait
     /// implementation.
     type Context;
+
+    /// An operator.
+    type Operator: 'static + Copy + Debug + Eq + Hash + Into<NonZeroU32>;
 
     /// An instruction (or identifier for an instruction).
     type Instruction: Copy + Debug + Eq;
@@ -64,10 +68,12 @@ pub unsafe trait InstructionSet<'a> {
 
     /// Get the given instruction's operator.
     ///
-    /// If the instruction's opcode does not have an associated
-    /// `peepmatic_runtime::operator::Operator` variant (i.e. that instruction
-    /// isn't supported by `peepmatic` yet) then `None` should be returned.
-    fn operator(&self, context: &mut Self::Context, instr: Self::Instruction) -> Option<Operator>;
+    /// If the instruction isn't supported, then `None` should be returned.
+    fn operator(
+        &self,
+        context: &mut Self::Context,
+        instr: Self::Instruction,
+    ) -> Option<Self::Operator>;
 
     /// Make a unary instruction.
     ///
@@ -76,7 +82,7 @@ pub unsafe trait InstructionSet<'a> {
         &self,
         context: &mut Self::Context,
         root: Self::Instruction,
-        operator: Operator,
+        operator: Self::Operator,
         r#type: Type,
         a: Part<Self::Instruction>,
     ) -> Self::Instruction;
@@ -92,7 +98,7 @@ pub unsafe trait InstructionSet<'a> {
         &self,
         context: &mut Self::Context,
         root: Self::Instruction,
-        operator: Operator,
+        operator: Self::Operator,
         r#type: Type,
         a: Part<Self::Instruction>,
         b: Part<Self::Instruction>,
@@ -108,7 +114,7 @@ pub unsafe trait InstructionSet<'a> {
         &self,
         context: &mut Self::Context,
         root: Self::Instruction,
-        operator: Operator,
+        operator: Self::Operator,
         r#type: Type,
         a: Part<Self::Instruction>,
         b: Part<Self::Instruction>,

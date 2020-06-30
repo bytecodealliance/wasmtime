@@ -22,12 +22,12 @@ pub mod error;
 pub mod instruction_set;
 pub mod integer_interner;
 pub mod linear;
-pub mod operator;
 pub mod optimizations;
 pub mod optimizer;
 pub mod part;
 pub mod paths;
 pub mod r#type;
+pub mod unquote;
 
 pub use error::{Error, Result};
 pub use optimizations::PeepholeOptimizations;

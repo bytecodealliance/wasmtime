@@ -7,17 +7,22 @@
 
 use crate::cc::ConditionCode;
 use crate::integer_interner::{IntegerId, IntegerInterner};
-use crate::operator::{Operator, UnquoteOperator};
 use crate::paths::{PathId, PathInterner};
 use crate::r#type::{BitWidth, Type};
+use crate::unquote::UnquoteOperator;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
+use std::hash::Hash;
 use std::num::NonZeroU32;
 
 /// A set of linear optimizations.
 #[derive(Debug)]
-pub struct Optimizations {
+pub struct Optimizations<TOperator>
+where
+    TOperator: 'static + Copy + Debug + Eq + Hash,
+{
     /// The linear optimizations.
-    pub optimizations: Vec<Optimization>,
+    pub optimizations: Vec<Optimization<TOperator>>,
 
     /// The de-duplicated paths referenced by these optimizations.
     pub paths: PathInterner,
@@ -28,9 +33,12 @@ pub struct Optimizations {
 
 /// A linearized optimization.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Optimization {
+pub struct Optimization<TOperator>
+where
+    TOperator: 'static + Copy + Debug + Eq + Hash,
+{
     /// The chain of increments for this optimization.
-    pub increments: Vec<Increment>,
+    pub increments: Vec<Increment<TOperator>>,
 }
 
 /// Match any value.
@@ -63,7 +71,10 @@ pub fn bool_to_match_result(b: bool) -> MatchResult {
 /// basically become a state and a transition edge out of that state in the
 /// final automata.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Increment {
+pub struct Increment<TOperator>
+where
+    TOperator: 'static + Copy + Debug + Eq + Hash,
+{
     /// The matching operation to perform.
     pub operation: MatchOp,
 
@@ -74,7 +85,7 @@ pub struct Increment {
 
     /// Actions to perform, given that the operation resulted in the expected
     /// value.
-    pub actions: Vec<Action>,
+    pub actions: Vec<Action<TOperator>>,
 }
 
 /// A matching operation to be performed on some Cranelift instruction as part
@@ -163,7 +174,7 @@ pub struct RhsId(pub u16);
 /// When evaluating actions, the `i^th` action implicitly defines the
 /// `RhsId(i)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Action {
+pub enum Action<TOperator> {
     /// Reuse something from the left-hand side.
     GetLhs {
         /// The path to the instruction or value.
@@ -215,13 +226,13 @@ pub enum Action {
         /// The type of this instruction's result.
         r#type: Type,
         /// The operator for this instruction.
-        operator: Operator,
+        operator: TOperator,
     },
 
     /// Make a binary instruction.
     MakeBinaryInst {
         /// The opcode for this instruction.
-        operator: Operator,
+        operator: TOperator,
         /// The type of this instruction's result.
         r#type: Type,
         /// The operands for this instruction.
@@ -231,7 +242,7 @@ pub enum Action {
     /// Make a ternary instruction.
     MakeTernaryInst {
         /// The opcode for this instruction.
-        operator: Operator,
+        operator: TOperator,
         /// The type of this instruction's result.
         r#type: Type,
         /// The operands for this instruction.
@@ -242,6 +253,7 @@ pub enum Action {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use peepmatic_test_operator::TestOperator;
 
     // These types all end up in the automaton, so we should take care that they
     // are small and don't fill up the data cache (or take up too much
@@ -259,6 +271,6 @@ mod tests {
 
     #[test]
     fn action_size() {
-        assert_eq!(std::mem::size_of::<Action>(), 16);
+        assert_eq!(std::mem::size_of::<Action<TestOperator>>(), 16);
     }
 }

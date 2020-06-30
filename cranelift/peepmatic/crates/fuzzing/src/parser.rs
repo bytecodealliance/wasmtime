@@ -1,6 +1,7 @@
 //! Utilities for fuzzing our DSL's parser.
 
 use peepmatic::Optimizations;
+use peepmatic_test_operator::TestOperator;
 use std::str;
 
 /// Attempt to parse the given string as if it were a snippet of our DSL.
@@ -15,7 +16,7 @@ pub fn parse(data: &[u8]) {
         Err(_) => return,
     };
 
-    let _ = wast::parser::parse::<Optimizations>(&buf);
+    let _ = wast::parser::parse::<Optimizations<TestOperator>>(&buf);
 }
 
 #[cfg(test)]

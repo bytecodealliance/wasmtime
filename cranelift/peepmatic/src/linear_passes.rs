@@ -5,6 +5,8 @@ use peepmatic_runtime::{
     paths::{PathId, PathInterner},
 };
 use std::cmp::Ordering;
+use std::fmt::Debug;
+use std::hash::Hash;
 
 /// Sort a set of optimizations from least to most general.
 ///
@@ -25,7 +27,10 @@ use std::cmp::Ordering;
 ///
 /// and we are matching `(imul 4 (..))`, then we want to apply the second
 /// optimization, because it is more specific than the first.
-pub fn sort_least_to_most_general(opts: &mut linear::Optimizations) {
+pub fn sort_least_to_most_general<TOperator>(opts: &mut linear::Optimizations<TOperator>)
+where
+    TOperator: Copy + Debug + Eq + Hash,
+{
     let linear::Optimizations {
         ref mut optimizations,
         ref paths,
@@ -41,7 +46,10 @@ pub fn sort_least_to_most_general(opts: &mut linear::Optimizations) {
 /// Sort the linear optimizations lexicographically.
 ///
 /// This sort order is required for automata construction.
-pub fn sort_lexicographically(opts: &mut linear::Optimizations) {
+pub fn sort_lexicographically<TOperator>(opts: &mut linear::Optimizations<TOperator>)
+where
+    TOperator: Copy + Debug + Eq + Hash,
+{
     let linear::Optimizations {
         ref mut optimizations,
         ref paths,
@@ -53,12 +61,15 @@ pub fn sort_lexicographically(opts: &mut linear::Optimizations) {
         .sort_by(|a, b| compare_optimizations(paths, a, b, |a_len, b_len| a_len.cmp(&b_len)));
 }
 
-fn compare_optimizations(
+fn compare_optimizations<TOperator>(
     paths: &PathInterner,
-    a: &linear::Optimization,
-    b: &linear::Optimization,
+    a: &linear::Optimization<TOperator>,
+    b: &linear::Optimization<TOperator>,
     compare_lengths: impl Fn(usize, usize) -> Ordering,
-) -> Ordering {
+) -> Ordering
+where
+    TOperator: Copy + Debug + Eq + Hash,
+{
     for (a, b) in a.increments.iter().zip(b.increments.iter()) {
         let c = compare_match_op_generality(paths, a.operation, b.operation);
         if c != Ordering::Equal {
@@ -79,11 +90,14 @@ fn compare_optimizations(
     compare_lengths(a.increments.len(), b.increments.len())
 }
 
-fn compare_optimization_generality(
+fn compare_optimization_generality<TOperator>(
     paths: &PathInterner,
-    a: &linear::Optimization,
-    b: &linear::Optimization,
-) -> Ordering {
+    a: &linear::Optimization<TOperator>,
+    b: &linear::Optimization<TOperator>,
+) -> Ordering
+where
+    TOperator: Copy + Debug + Eq + Hash,
+{
     compare_optimizations(paths, a, b, |a_len, b_len| {
         // If they shared equivalent prefixes, then compare lengths and invert the
         // result because longer patterns are less general than shorter patterns.
@@ -158,14 +172,22 @@ fn compare_paths(paths: &PathInterner, a: PathId, b: PathId) -> Ordering {
 }
 
 /// Are the given optimizations sorted from least to most general?
-pub(crate) fn is_sorted_by_generality(opts: &linear::Optimizations) -> bool {
+pub(crate) fn is_sorted_by_generality<TOperator>(opts: &linear::Optimizations<TOperator>) -> bool
+where
+    TOperator: Copy + Debug + Eq + Hash,
+{
     opts.optimizations
         .windows(2)
         .all(|w| compare_optimization_generality(&opts.paths, &w[0], &w[1]) <= Ordering::Equal)
 }
 
 /// Are the given optimizations sorted lexicographically?
-pub(crate) fn is_sorted_lexicographically(opts: &linear::Optimizations) -> bool {
+pub(crate) fn is_sorted_lexicographically<TOperator>(
+    opts: &linear::Optimizations<TOperator>,
+) -> bool
+where
+    TOperator: Copy + Debug + Eq + Hash,
+{
     opts.optimizations.windows(2).all(|w| {
         compare_optimizations(&opts.paths, &w[0], &w[1], |a_len, b_len| a_len.cmp(&b_len))
             <= Ordering::Equal
@@ -207,7 +229,10 @@ pub(crate) fn is_sorted_lexicographically(opts: &linear::Optimizations) -> bool 
 /// opcode @ 0 --iadd-->
 /// opcode @ 0 --(else)--> is-const? @ 0 --true-->
 /// ```
-pub fn match_in_same_order(opts: &mut linear::Optimizations) {
+pub fn match_in_same_order<TOperator>(opts: &mut linear::Optimizations<TOperator>)
+where
+    TOperator: Copy + Debug + Eq + Hash,
+{
     assert!(!opts.optimizations.is_empty());
 
     let mut prefix = vec![];
@@ -267,7 +292,10 @@ pub fn match_in_same_order(opts: &mut linear::Optimizations) {
 /// existence completely. So we just emit nop match operations for all variable
 /// patterns, and then in this post-processing pass, we fuse them and their
 /// actions with their preceding increment.
-pub fn remove_unnecessary_nops(opts: &mut linear::Optimizations) {
+pub fn remove_unnecessary_nops<TOperator>(opts: &mut linear::Optimizations<TOperator>)
+where
+    TOperator: Copy + Debug + Eq + Hash,
+{
     for opt in &mut opts.optimizations {
         if opt.increments.len() < 2 {
             debug_assert!(!opt.increments.is_empty());
@@ -289,9 +317,9 @@ mod tests {
     use crate::ast::*;
     use peepmatic_runtime::{
         linear::{bool_to_match_result, Else, MatchOp::*, MatchResult},
-        operator::Operator,
         paths::*,
     };
+    use peepmatic_test_operator::TestOperator;
     use std::num::NonZeroU32;
 
     #[test]
@@ -306,7 +334,7 @@ mod tests {
             fn $test_name() {
                 let buf = wast::parser::ParseBuffer::new($source).expect("should lex OK");
 
-                let opts = match wast::parser::parse::<Optimizations>(&buf) {
+                let opts = match wast::parser::parse::<Optimizations<TestOperator>>(&buf) {
                     Ok(opts) => opts,
                     Err(mut e) => {
                         e.set_path(std::path::Path::new(stringify!($test_name)));
@@ -383,7 +411,7 @@ mod tests {
             fn $test_name() {
                 let buf = wast::parser::ParseBuffer::new($source).expect("should lex OK");
 
-                let opts = match wast::parser::parse::<Optimizations>(&buf) {
+                let opts = match wast::parser::parse::<Optimizations<TestOperator>>(&buf) {
                     Ok(opts) => opts,
                     Err(mut e) => {
                         e.set_path(std::path::Path::new(stringify!($test_name)));
@@ -468,31 +496,19 @@ mod tests {
 ",
         |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> MatchResult| vec![
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Iadd.into())),
                 (Nop, Err(Else)),
-                (
-                    Opcode { path: p(&[0, 1]) },
-                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
-                ),
+                (Opcode { path: p(&[0, 1]) }, Ok(TestOperator::Iadd.into())),
                 (Nop, Err(Else)),
                 (Nop, Err(Else)),
             ],
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Iadd.into())),
                 (Nop, Err(Else)),
                 (IntegerValue { path: p(&[0, 1]) }, i(42))
             ],
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Iadd.into())),
                 (Nop, Err(Else)),
                 (IsConst { path: p(&[0, 1]) }, bool_to_match_result(true)),
                 (
@@ -501,10 +517,7 @@ mod tests {
                 )
             ],
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Iadd.into())),
                 (Nop, Err(Else)),
                 (IsConst { path: p(&[0, 1]) }, bool_to_match_result(true)),
                 (
@@ -513,18 +526,12 @@ mod tests {
                 )
             ],
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Iadd.into())),
                 (Nop, Err(Else)),
                 (IsConst { path: p(&[0, 1]) }, bool_to_match_result(true))
             ],
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Iadd.into())),
                 (Nop, Err(Else)),
                 (
                     Eq {
@@ -535,10 +542,7 @@ mod tests {
                 )
             ],
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Iadd.into())),
                 (Nop, Err(Else)),
                 (Nop, Err(Else)),
             ],
@@ -558,50 +562,32 @@ mod tests {
 ",
         |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> MatchResult| vec![
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Imul as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Imul.into())),
                 (IntegerValue { path: p(&[0, 0]) }, i(2)),
                 (Nop, Err(Else))
             ],
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Imul as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Imul.into())),
                 (IntegerValue { path: p(&[0, 0]) }, i(1)),
                 (Nop, Err(Else))
             ],
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Imul as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Imul.into())),
                 (Nop, Err(Else)),
                 (IntegerValue { path: p(&[0, 1]) }, i(2))
             ],
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Imul as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Imul.into())),
                 (Nop, Err(Else)),
                 (IntegerValue { path: p(&[0, 1]) }, i(1))
             ],
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Iadd.into())),
                 (IntegerValue { path: p(&[0, 0]) }, i(0)),
                 (Nop, Err(Else))
             ],
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Iadd as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Iadd.into())),
                 (Nop, Err(Else)),
                 (IntegerValue { path: p(&[0, 1]) }, i(0))
             ]
@@ -619,14 +605,8 @@ mod tests {
         ",
         |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> MatchResult| vec![
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Bor as _).unwrap())
-                ),
-                (
-                    Opcode { path: p(&[0, 0]) },
-                    Ok(NonZeroU32::new(Operator::Bor as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Bor.into())),
+                (Opcode { path: p(&[0, 0]) }, Ok(TestOperator::Bor.into())),
                 (Nop, Err(Else)),
                 (Nop, Err(Else)),
                 (
@@ -638,14 +618,8 @@ mod tests {
                 ),
             ],
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Bor as _).unwrap())
-                ),
-                (
-                    Opcode { path: p(&[0, 0]) },
-                    Ok(NonZeroU32::new(Operator::Bor as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Bor.into())),
+                (Opcode { path: p(&[0, 0]) }, Ok(TestOperator::Bor.into())),
                 (Nop, Err(Else)),
                 (Nop, Err(Else)),
                 (
@@ -670,14 +644,8 @@ mod tests {
         ",
         |p: &mut dyn FnMut(&[u8]) -> PathId, i: &mut dyn FnMut(u64) -> MatchResult| vec![
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Bor as _).unwrap())
-                ),
-                (
-                    Opcode { path: p(&[0, 0]) },
-                    Ok(NonZeroU32::new(Operator::Bor as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Bor.into())),
+                (Opcode { path: p(&[0, 0]) }, Ok(TestOperator::Bor.into())),
                 (Nop, Err(Else)),
                 (Nop, Err(Else)),
                 (
@@ -689,14 +657,8 @@ mod tests {
                 ),
             ],
             vec![
-                (
-                    Opcode { path: p(&[0]) },
-                    Ok(NonZeroU32::new(Operator::Bor as _).unwrap())
-                ),
-                (
-                    Opcode { path: p(&[0, 0]) },
-                    Ok(NonZeroU32::new(Operator::Bor as _).unwrap())
-                ),
+                (Opcode { path: p(&[0]) }, Ok(TestOperator::Bor.into())),
+                (Opcode { path: p(&[0, 0]) }, Ok(TestOperator::Bor.into())),
                 (Nop, Err(Else)),
                 (Nop, Err(Else)),
                 (

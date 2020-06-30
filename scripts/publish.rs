@@ -16,8 +16,10 @@ use std::process::{Command, Stdio};
 // note that this list must be topologically sorted by dependencies
 const CRATES_TO_PUBLISH: &[&str] = &[
     // peepmatic
+    "peepmatic-traits",
     "peepmatic-macro",
     "peepmatic-automata",
+    "peepmatic-test-operator",
     "peepmatic-runtime",
     "peepmatic",
     // cranelift

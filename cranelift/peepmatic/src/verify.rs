@@ -14,14 +14,13 @@
 
 use crate::ast::{Span as _, *};
 use crate::traversals::{Dfs, TraversalEvent};
-use peepmatic_runtime::{
-    operator::{Operator, TypingContext as TypingContextTrait},
-    r#type::{BitWidth, Kind, Type},
-};
+use peepmatic_runtime::r#type::{BitWidth, Kind, Type};
+use peepmatic_traits::{TypingContext as TypingContextTrait, TypingRules};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::iter;
 use std::mem;
@@ -94,7 +93,10 @@ impl VerifyError {
 pub type VerifyResult<T> = Result<T, VerifyError>;
 
 /// Verify and type check a set of optimizations.
-pub fn verify(opts: &Optimizations) -> VerifyResult<()> {
+pub fn verify<TOperator>(opts: &Optimizations<TOperator>) -> VerifyResult<()>
+where
+    TOperator: Copy + Debug + Eq + Hash + TypingRules,
+{
     if opts.optimizations.is_empty() {
         return Err(anyhow::anyhow!("no optimizations").into());
     }
@@ -113,7 +115,10 @@ pub fn verify(opts: &Optimizations) -> VerifyResult<()> {
 /// If there were duplicates, then it would be nondeterministic which one we
 /// applied and would make automata construction more difficult. It is better to
 /// check for duplicates and reject them if found.
-fn verify_unique_left_hand_sides(opts: &Optimizations) -> VerifyResult<()> {
+fn verify_unique_left_hand_sides<TOperator>(opts: &Optimizations<TOperator>) -> VerifyResult<()>
+where
+    TOperator: Copy + Eq + Debug + Hash,
+{
     let mut lefts = HashMap::new();
     for opt in &opts.optimizations {
         let canon_lhs = canonicalized_lhs_key(&opt.lhs);
@@ -146,7 +151,10 @@ fn verify_unique_left_hand_sides(opts: &Optimizations) -> VerifyResult<()> {
 ///
 /// This function creates an opaque, canonicalized hash key for left-hand sides
 /// that sees through identifier renaming.
-fn canonicalized_lhs_key(lhs: &Lhs) -> impl Hash + Eq {
+fn canonicalized_lhs_key<TOperator>(lhs: &Lhs<TOperator>) -> impl Hash + Eq
+where
+    TOperator: Copy + Debug + Eq + Hash,
+{
     let mut var_to_canon = HashMap::new();
     let mut const_to_canon = HashMap::new();
     let mut canonicalized = vec![];
@@ -183,19 +191,20 @@ fn canonicalized_lhs_key(lhs: &Lhs) -> impl Hash + Eq {
     return canonicalized;
 
     #[derive(Hash, PartialEq, Eq)]
-    enum CanonicalBit {
+    enum CanonicalBit<TOperator> {
         Var(u32),
         Const(u32),
         Integer(i64),
         Boolean(bool),
         ConditionCode(peepmatic_runtime::cc::ConditionCode),
-        Operation(Operator, Option<Type>),
+        Operation(TOperator, Option<Type>),
         Precondition(Constraint),
         Other(&'static str),
     }
 }
 
-pub(crate) struct TypingContext<'a> {
+#[derive(Debug)]
+struct TypingContext<'a, TOperator> {
     z3: &'a z3::Context,
     type_kind_sort: z3::DatatypeSort<'a>,
     solver: z3::Solver<'a>,
@@ -218,12 +227,15 @@ pub(crate) struct TypingContext<'a> {
     // Keep track of AST nodes that need to have their types assigned to
     // them. For these AST nodes, we know what bit width to use when
     // interpreting peephole optimization actions.
-    boolean_literals: Vec<(&'a Boolean<'a>, TypeVar<'a>)>,
-    integer_literals: Vec<(&'a Integer<'a>, TypeVar<'a>)>,
-    rhs_operations: Vec<(&'a Operation<'a, Rhs<'a>>, TypeVar<'a>)>,
+    boolean_literals: Vec<(&'a Boolean<'a, TOperator>, TypeVar<'a>)>,
+    integer_literals: Vec<(&'a Integer<'a, TOperator>, TypeVar<'a>)>,
+    rhs_operations: Vec<(
+        &'a Operation<'a, TOperator, Rhs<'a, TOperator>>,
+        TypeVar<'a>,
+    )>,
 }
 
-impl<'a> TypingContext<'a> {
+impl<'a, TOperator> TypingContext<'a, TOperator> {
     fn new(z3: &'a z3::Context) -> Self {
         let type_kind_sort = z3::DatatypeBuilder::new(z3)
             .variant("int", &[])
@@ -301,51 +313,55 @@ impl<'a> TypingContext<'a> {
     // and similar refer to the same type variables.
     fn enter_operation_scope<'b>(
         &'b mut self,
-    ) -> impl DerefMut<Target = TypingContext<'a>> + Drop + 'b {
+    ) -> impl DerefMut<Target = TypingContext<'a, TOperator>> + Drop + 'b {
         assert!(self.operation_scope.is_empty());
         return Scope(self);
 
-        struct Scope<'a, 'b>(&'b mut TypingContext<'a>)
+        struct Scope<'a, 'b, TOperator>(&'b mut TypingContext<'a, TOperator>)
         where
             'a: 'b;
 
-        impl<'a, 'b> Deref for Scope<'a, 'b>
+        impl<'a, 'b, TOperator> Deref for Scope<'a, 'b, TOperator>
         where
             'a: 'b,
         {
-            type Target = TypingContext<'a>;
-            fn deref(&self) -> &TypingContext<'a> {
+            type Target = TypingContext<'a, TOperator>;
+            fn deref(&self) -> &TypingContext<'a, TOperator> {
                 self.0
             }
         }
 
-        impl<'a, 'b> DerefMut for Scope<'a, 'b>
+        impl<'a, 'b, TOperator> DerefMut for Scope<'a, 'b, TOperator>
         where
             'a: 'b,
         {
-            fn deref_mut(&mut self) -> &mut TypingContext<'a> {
+            fn deref_mut(&mut self) -> &mut TypingContext<'a, TOperator> {
                 self.0
             }
         }
 
-        impl Drop for Scope<'_, '_> {
+        impl<TOperator> Drop for Scope<'_, '_, TOperator> {
             fn drop(&mut self) {
                 self.0.operation_scope.clear();
             }
         }
     }
 
-    fn remember_boolean_literal(&mut self, b: &'a Boolean<'a>, ty: TypeVar<'a>) {
+    fn remember_boolean_literal(&mut self, b: &'a Boolean<'a, TOperator>, ty: TypeVar<'a>) {
         self.assert_is_bool(b.span, &ty);
         self.boolean_literals.push((b, ty));
     }
 
-    fn remember_integer_literal(&mut self, i: &'a Integer<'a>, ty: TypeVar<'a>) {
+    fn remember_integer_literal(&mut self, i: &'a Integer<'a, TOperator>, ty: TypeVar<'a>) {
         self.assert_is_integer(i.span, &ty);
         self.integer_literals.push((i, ty));
     }
 
-    fn remember_rhs_operation(&mut self, op: &'a Operation<'a, Rhs<'a>>, ty: TypeVar<'a>) {
+    fn remember_rhs_operation(
+        &mut self,
+        op: &'a Operation<'a, TOperator, Rhs<'a, TOperator>>,
+        ty: TypeVar<'a>,
+    ) {
         self.rhs_operations.push((op, ty));
     }
 
@@ -638,7 +654,8 @@ impl<'a> TypingContext<'a> {
     }
 }
 
-impl<'a> TypingContextTrait<'a> for TypingContext<'a> {
+impl<'a, TOperator> TypingContextTrait<'a> for TypingContext<'a, TOperator> {
+    type Span = Span;
     type TypeVariable = TypeVar<'a>;
 
     fn cc(&mut self, span: Span) -> TypeVar<'a> {
@@ -737,13 +754,19 @@ impl<'a> TypingContextTrait<'a> for TypingContext<'a> {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct TypeVar<'a> {
+#[derive(Clone, Debug)]
+struct TypeVar<'a> {
     kind: z3::ast::Datatype<'a>,
     width: z3::ast::BV<'a>,
 }
 
-fn verify_optimization(z3: &z3::Context, opt: &Optimization) -> VerifyResult<()> {
+fn verify_optimization<TOperator>(
+    z3: &z3::Context,
+    opt: &Optimization<TOperator>,
+) -> VerifyResult<()>
+where
+    TOperator: Copy + Debug + Eq + Hash + TypingRules,
+{
     let mut context = TypingContext::new(z3);
     collect_type_constraints(&mut context, opt)?;
     context.type_check(opt.span)?;
@@ -755,10 +778,13 @@ fn verify_optimization(z3: &z3::Context, opt: &Optimization) -> VerifyResult<()>
     Ok(())
 }
 
-fn collect_type_constraints<'a>(
-    context: &mut TypingContext<'a>,
-    opt: &'a Optimization<'a>,
-) -> VerifyResult<()> {
+fn collect_type_constraints<'a, TOperator>(
+    context: &mut TypingContext<'a, TOperator>,
+    opt: &'a Optimization<'a, TOperator>,
+) -> VerifyResult<()>
+where
+    TOperator: Copy + Debug + Eq + Hash + TypingRules,
+{
     use crate::traversals::TraversalEvent as TE;
 
     let lhs_ty = context.new_type_var();
@@ -780,8 +806,22 @@ fn collect_type_constraints<'a>(
     // Build up the type constraints for the left-hand side.
     for (event, node) in Dfs::new(&opt.lhs) {
         match (event, node) {
-            (TE::Enter, DynAstRef::Pattern(Pattern::Constant(Constant { id, span })))
-            | (TE::Enter, DynAstRef::Pattern(Pattern::Variable(Variable { id, span }))) => {
+            (
+                TE::Enter,
+                DynAstRef::Pattern(Pattern::Constant(Constant {
+                    id,
+                    span,
+                    marker: _,
+                })),
+            )
+            | (
+                TE::Enter,
+                DynAstRef::Pattern(Pattern::Variable(Variable {
+                    id,
+                    span,
+                    marker: _,
+                })),
+            ) => {
                 let id = context.get_or_create_type_var_for_id(*id);
                 context.assert_type_eq(*span, expected_types.last().unwrap(), &id, None);
             }
@@ -805,11 +845,11 @@ fn collect_type_constraints<'a>(
                 let mut operand_types = vec![];
                 {
                     let mut scope = context.enter_operation_scope();
-                    result_ty = op.operator.result_type(&mut *scope, op.span);
+                    result_ty = op.operator.result_type(op.span, &mut *scope);
                     op.operator
-                        .immediate_types(&mut *scope, op.span, &mut operand_types);
+                        .immediate_types(op.span, &mut *scope, &mut operand_types);
                     op.operator
-                        .param_types(&mut *scope, op.span, &mut operand_types);
+                        .parameter_types(op.span, &mut *scope, &mut operand_types);
                 }
 
                 if op.operands.len() != operand_types.len() {
@@ -841,29 +881,22 @@ fn collect_type_constraints<'a>(
                     }
                 }
 
-                match op.operator {
-                    Operator::Ireduce | Operator::Uextend | Operator::Sextend => {
-                        if op.r#type.get().is_none() {
-                            return Err(WastError::new(
-                                op.span,
-                                "`ireduce`, `sextend`, and `uextend` require an ascribed type, \
-                                 like `(sextend{i64} ...)`"
-                                    .into(),
-                            )
-                            .into());
-                        }
-                    }
-                    _ => {}
+                if (op.operator.is_reduce() || op.operator.is_extend()) && op.r#type.get().is_none()
+                {
+                    return Err(WastError::new(
+                        op.span,
+                        "`ireduce`, `sextend`, and `uextend` require an ascribed type, \
+                         like `(sextend{i64} ...)`"
+                            .into(),
+                    )
+                    .into());
                 }
 
-                match op.operator {
-                    Operator::Uextend | Operator::Sextend => {
-                        context.assert_bit_width_gt(op.span, &result_ty, &operand_types[0]);
-                    }
-                    Operator::Ireduce => {
-                        context.assert_bit_width_lt(op.span, &result_ty, &operand_types[0]);
-                    }
-                    _ => {}
+                if op.operator.is_extend() {
+                    context.assert_bit_width_gt(op.span, &result_ty, &operand_types[0]);
+                }
+                if op.operator.is_reduce() {
+                    context.assert_bit_width_lt(op.span, &result_ty, &operand_types[0]);
                 }
 
                 if let Some(ty) = op.r#type.get() {
@@ -916,8 +949,22 @@ fn collect_type_constraints<'a>(
                 let ty = expected_types.last().unwrap();
                 context.assert_is_cc(cc.span, ty);
             }
-            (TE::Enter, DynAstRef::Rhs(Rhs::Constant(Constant { span, id })))
-            | (TE::Enter, DynAstRef::Rhs(Rhs::Variable(Variable { span, id }))) => {
+            (
+                TE::Enter,
+                DynAstRef::Rhs(Rhs::Constant(Constant {
+                    span,
+                    id,
+                    marker: _,
+                })),
+            )
+            | (
+                TE::Enter,
+                DynAstRef::Rhs(Rhs::Variable(Variable {
+                    span,
+                    id,
+                    marker: _,
+                })),
+            ) => {
                 let id_ty = context.get_type_var_for_id(*id)?;
                 context.assert_type_eq(*span, expected_types.last().unwrap(), &id_ty, None);
             }
@@ -926,11 +973,11 @@ fn collect_type_constraints<'a>(
                 let mut operand_types = vec![];
                 {
                     let mut scope = context.enter_operation_scope();
-                    result_ty = op.operator.result_type(&mut *scope, op.span);
+                    result_ty = op.operator.result_type(op.span, &mut *scope);
                     op.operator
-                        .immediate_types(&mut *scope, op.span, &mut operand_types);
+                        .immediate_types(op.span, &mut *scope, &mut operand_types);
                     op.operator
-                        .param_types(&mut *scope, op.span, &mut operand_types);
+                        .parameter_types(op.span, &mut *scope, &mut operand_types);
                 }
 
                 if op.operands.len() != operand_types.len() {
@@ -965,29 +1012,22 @@ fn collect_type_constraints<'a>(
                     }
                 }
 
-                match op.operator {
-                    Operator::Ireduce | Operator::Uextend | Operator::Sextend => {
-                        if op.r#type.get().is_none() {
-                            return Err(WastError::new(
-                                op.span,
-                                "`ireduce`, `sextend`, and `uextend` require an ascribed type, \
-                                 like `(sextend{i64} ...)`"
-                                    .into(),
-                            )
-                            .into());
-                        }
-                    }
-                    _ => {}
+                if (op.operator.is_reduce() || op.operator.is_extend()) && op.r#type.get().is_none()
+                {
+                    return Err(WastError::new(
+                        op.span,
+                        "`ireduce`, `sextend`, and `uextend` require an ascribed type, \
+                         like `(sextend{i64} ...)`"
+                            .into(),
+                    )
+                    .into());
                 }
 
-                match op.operator {
-                    Operator::Uextend | Operator::Sextend => {
-                        context.assert_bit_width_gt(op.span, &result_ty, &operand_types[0]);
-                    }
-                    Operator::Ireduce => {
-                        context.assert_bit_width_lt(op.span, &result_ty, &operand_types[0]);
-                    }
-                    _ => {}
+                if op.operator.is_extend() {
+                    context.assert_bit_width_gt(op.span, &result_ty, &operand_types[0]);
+                }
+                if op.operator.is_reduce() {
+                    context.assert_bit_width_lt(op.span, &result_ty, &operand_types[0]);
                 }
 
                 if let Some(ty) = op.r#type.get() {
@@ -1017,11 +1057,11 @@ fn collect_type_constraints<'a>(
                 let mut operand_types = vec![];
                 {
                     let mut scope = context.enter_operation_scope();
-                    result_ty = unq.operator.result_type(&mut *scope, unq.span);
+                    result_ty = unq.operator.result_type(unq.span, &mut *scope);
                     unq.operator
-                        .immediate_types(&mut *scope, unq.span, &mut operand_types);
+                        .immediate_types(unq.span, &mut *scope, &mut operand_types);
                     unq.operator
-                        .param_types(&mut *scope, unq.span, &mut operand_types);
+                        .parameter_types(unq.span, &mut *scope, &mut operand_types);
                 }
 
                 if unq.operands.len() != operand_types.len() {
@@ -1068,9 +1108,9 @@ fn collect_type_constraints<'a>(
     Ok(())
 }
 
-fn type_constrain_precondition<'a>(
-    context: &mut TypingContext<'a>,
-    pre: &Precondition<'a>,
+fn type_constrain_precondition<'a, TOperator>(
+    context: &mut TypingContext<'a, TOperator>,
+    pre: &Precondition<'a, TOperator>,
 ) -> VerifyResult<()> {
     match pre.constraint {
         Constraint::BitWidth => {
@@ -1182,13 +1222,14 @@ fn type_constrain_precondition<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use peepmatic_test_operator::TestOperator;
 
     macro_rules! verify_ok {
         ($name:ident, $src:expr) => {
             #[test]
             fn $name() {
                 let buf = wast::parser::ParseBuffer::new($src).expect("should lex OK");
-                let opts = match wast::parser::parse::<Optimizations>(&buf) {
+                let opts = match wast::parser::parse::<Optimizations<TestOperator>>(&buf) {
                     Ok(opts) => opts,
                     Err(mut e) => {
                         e.set_path(Path::new(stringify!($name)));
@@ -1215,7 +1256,7 @@ mod tests {
             #[test]
             fn $name() {
                 let buf = wast::parser::ParseBuffer::new($src).expect("should lex OK");
-                let opts = match wast::parser::parse::<Optimizations>(&buf) {
+                let opts = match wast::parser::parse::<Optimizations<TestOperator>>(&buf) {
                     Ok(opts) => opts,
                     Err(mut e) => {
                         e.set_path(Path::new(stringify!($name)));

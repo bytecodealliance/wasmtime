@@ -13,17 +13,267 @@ use cranelift_codegen_shared::condcodes::IntCC;
 use peepmatic_runtime::{
     cc::ConditionCode,
     instruction_set::InstructionSet,
-    operator::Operator,
     part::{Constant, Part},
     paths::Path,
     r#type::{BitWidth, Kind, Type},
     PeepholeOptimizations, PeepholeOptimizer,
 };
+use peepmatic_traits::TypingRules;
 use std::borrow::Cow;
 use std::boxed::Box;
 use std::convert::{TryFrom, TryInto};
 use std::ptr;
 use std::sync::atomic::{AtomicPtr, Ordering};
+
+peepmatic_traits::define_parse_and_typing_rules_for_operator! {
+    Opcode {
+        adjust_sp_down => AdjustSpDown {
+            parameters(iNN);
+            result(void);
+        }
+        adjust_sp_down_imm => AdjustSpDownImm {
+            immediates(iNN);
+            result(void);
+        }
+        band => Band {
+            parameters(iNN, iNN);
+            result(iNN);
+        }
+        band_imm => BandImm {
+            immediates(iNN);
+            parameters(iNN);
+            result(iNN);
+        }
+        bconst => Bconst {
+            immediates(b1);
+            result(bNN);
+        }
+        bint => Bint {
+            parameters(bNN);
+            result(iNN);
+        }
+        bor => Bor {
+            parameters(iNN, iNN);
+            result(iNN);
+        }
+        bor_imm => BorImm {
+            immediates(iNN);
+            parameters(iNN);
+            result(iNN);
+        }
+        brnz => Brnz {
+            parameters(bool_or_int);
+            result(void);
+        }
+        brz => Brz {
+            parameters(bool_or_int);
+            result(void);
+        }
+        bxor => Bxor {
+            parameters(iNN, iNN);
+            result(iNN);
+        }
+        bxor_imm => BxorImm {
+            immediates(iNN);
+            parameters(iNN);
+            result(iNN);
+        }
+        iadd => Iadd {
+            parameters(iNN, iNN);
+            result(iNN);
+        }
+        iadd_imm => IaddImm {
+            immediates(iNN);
+            parameters(iNN);
+            result(iNN);
+        }
+        icmp => Icmp {
+            immediates(cc);
+            parameters(iNN, iNN);
+            result(b1);
+        }
+        icmp_imm => IcmpImm {
+            immediates(cc, iNN);
+            parameters(iNN);
+            result(b1);
+        }
+        iconst => Iconst {
+            immediates(iNN);
+            result(iNN);
+        }
+        ifcmp => Ifcmp {
+            parameters(iNN, iNN);
+            result(cpu_flags);
+        }
+        ifcmp_imm => IfcmpImm {
+            immediates(iNN);
+            parameters(iNN);
+            result(cpu_flags);
+        }
+        imul => Imul {
+            parameters(iNN, iNN);
+            result(iNN);
+        }
+        imul_imm => ImulImm {
+            immediates(iNN);
+            parameters(iNN);
+            result(iNN);
+        }
+        ireduce => Ireduce {
+            parameters(iNN);
+            result(iMM);
+            is_reduce(true);
+        }
+        irsub_imm => IrsubImm {
+            immediates(iNN);
+            parameters(iNN);
+            result(iNN);
+        }
+        ishl => Ishl {
+            parameters(iNN, iNN);
+            result(iNN);
+        }
+        ishl_imm => IshlImm {
+            immediates(iNN);
+            parameters(iNN);
+            result(iNN);
+        }
+        isub => Isub {
+            parameters(iNN, iNN);
+            result(iNN);
+        }
+        rotl => Rotl {
+            parameters(iNN, iNN);
+            result(iNN);
+        }
+        rotl_imm => RotlImm {
+            immediates(iNN);
+            parameters(iNN);
+            result(iNN);
+        }
+        rotr => Rotr {
+            parameters(iNN, iNN);
+            result(iNN);
+        }
+        rotr_imm => RotrImm {
+            immediates(iNN);
+            parameters(iNN);
+            result(iNN);
+        }
+        sdiv => Sdiv {
+            parameters(iNN, iNN);
+            result(iNN);
+        }
+        sdiv_imm => SdivImm {
+            immediates(iNN);
+            parameters(iNN);
+            result(iNN);
+        }
+        select => Select {
+            parameters(bool_or_int, any_t, any_t);
+            result(any_t);
+        }
+        sextend => Sextend {
+            parameters(iNN);
+            result(iMM);
+            is_extend(true);
+        }
+        srem => Srem {
+            parameters(iNN, iNN);
+            result(iNN);
+        }
+        srem_imm => SremImm {
+            immediates(iNN);
+            parameters(iNN);
+            result(iNN);
+        }
+        sshr => Sshr {
+            parameters(iNN, iNN);
+            result(iNN);
+        }
+        sshr_imm => SshrImm {
+            immediates(iNN);
+            parameters(iNN);
+            result(iNN);
+        }
+        trapnz => Trapnz {
+            parameters(bool_or_int);
+            result(void);
+        }
+        trapz => Trapz {
+            parameters(bool_or_int);
+            result(void);
+        }
+        udiv => Udiv {
+            parameters(iNN, iNN);
+            result(iNN);
+        }
+        udiv_imm => UdivImm {
+            immediates(iNN);
+            parameters(iNN);
+            result(iNN);
+        }
+        uextend => Uextend {
+            parameters(iNN);
+            result(iMM);
+            is_extend(true);
+        }
+        urem => Urem {
+            parameters(iNN, iNN);
+            result(iNN);
+        }
+        urem_imm => UremImm {
+            immediates(iNN);
+            parameters(iNN);
+            result(iNN);
+        }
+        ushr => Ushr {
+            parameters(iNN, iNN);
+            result(iNN);
+        }
+        ushr_imm => UshrImm {
+            immediates(iNN);
+            parameters(iNN);
+            result(iNN);
+        }
+    }
+    parse_cfg(feature = "rebuild-peephole-optimizers");
+}
+
+/// Code required to rebuild Peepmatic-based peephole optimizers.
+///
+/// This module is used to scope imports and dependencies that are only required
+/// for building peephole optimizers (as opposed to just using pre-built
+/// peephole optimizers). This helps ensure that our regular builds using
+/// pre-built peephole optimizers stay lean.
+#[cfg(feature = "rebuild-peephole-optimizers")]
+mod rebuild {
+    use super::*;
+    use alloc::vec::Vec;
+    use std::fs;
+    use std::path::Path;
+
+    /// Rebuild the `preopt.peepmatic` peephole optimizer.
+    ///
+    /// Saves and overwrites the old `preopt.serialized` build and returns a
+    /// copy of the result.
+    pub fn rebuild_preopt() -> Vec<u8> {
+        let codegen_path = Path::new(include_str!(concat!(
+            env!("OUT_DIR"),
+            "/CRANELIFT_CODEGEN_PATH"
+        )));
+        let source_path = codegen_path.join("src").join("preopt.peepmatic");
+
+        let preopt = peepmatic::compile_file::<Opcode>(&source_path)
+            .expect("failed to compile `src/preopt.peepmatic`");
+
+        let serialized_path = codegen_path.join("src").join("preopt.serialized");
+        preopt
+            .serialize_to_file(&serialized_path)
+            .expect("failed to serialize peephole optimizer to `src/preopt.serialized`");
+        fs::read(&serialized_path).expect("failed to read `src/preopt.serialized`")
+    }
+}
 
 /// Get the `preopt.peepmatic` peephole optimizer.
 pub(crate) fn preopt<'a, 'b>(
@@ -31,37 +281,19 @@ pub(crate) fn preopt<'a, 'b>(
 ) -> PeepholeOptimizer<'static, 'a, &'b dyn TargetIsa> {
     #[cfg(feature = "rebuild-peephole-optimizers")]
     fn get_serialized() -> Cow<'static, [u8]> {
-        use std::fs;
-        use std::path::Path;
-
-        let codegen_path = Path::new(include_str!(concat!(
-            env!("OUT_DIR"),
-            "/CRANELIFT_CODEGEN_PATH"
-        )));
-        let source_path = codegen_path.join("src").join("preopt.peepmatic");
-        println!("cargo:rerun-if-changed={}", source_path.display());
-
-        let preopt = peepmatic::compile_file(&source_path)
-            .expect("failed to compile `src/preopt.peepmatic`");
-
-        let serialized_path = codegen_path.join("src").join("preopt.serialized");
-        preopt
-            .serialize_to_file(&serialized_path)
-            .expect("failed to serialize peephole optimizer to `src/preopt.serialized`");
-        fs::read(&serialized_path)
-            .expect("failed to read `src/preopt.serialized`")
-            .into()
+        rebuild::rebuild_preopt().into()
     }
 
     #[cfg(not(feature = "rebuild-peephole-optimizers"))]
     fn get_serialized() -> Cow<'static, [u8]> {
         static SERIALIZED: &[u8] = include_bytes!("preopt.serialized");
+        SERIALIZED.into()
     }
 
     // Once initialized, this must never be re-assigned. The initialized value
     // is semantically "static data" and is intentionally leaked for the whole
     // program's lifetime.
-    static DESERIALIZED: AtomicPtr<PeepholeOptimizations> = AtomicPtr::new(ptr::null_mut());
+    static DESERIALIZED: AtomicPtr<PeepholeOptimizations<Opcode>> = AtomicPtr::new(ptr::null_mut());
 
     // If `DESERIALIZED` has already been initialized, then just use it.
     let ptr = DESERIALIZED.load(Ordering::SeqCst);
@@ -247,70 +479,6 @@ fn part_to_value(pos: &mut FuncCursor, root: Inst, part: Part<ValueOrInst>) -> O
     }
 }
 
-impl Opcode {
-    fn to_peepmatic_operator(&self) -> Option<Operator> {
-        macro_rules! convert {
-            ( $( $op:ident $(,)* )* ) => {
-                match self {
-                    $( Self::$op => Some(Operator::$op), )*
-                    _ => None,
-                }
-            }
-        }
-
-        convert!(
-            AdjustSpDown,
-            AdjustSpDownImm,
-            Band,
-            BandImm,
-            Bconst,
-            Bint,
-            Bnot,
-            Bor,
-            BorImm,
-            Brnz,
-            Brz,
-            Bxor,
-            BxorImm,
-            Iadd,
-            IaddImm,
-            Icmp,
-            IcmpImm,
-            Iconst,
-            Ifcmp,
-            IfcmpImm,
-            Imul,
-            ImulImm,
-            Ireduce,
-            IrsubImm,
-            Ishl,
-            IshlImm,
-            Isub,
-            Rotl,
-            RotlImm,
-            Rotr,
-            RotrImm,
-            Sdiv,
-            SdivImm,
-            Select,
-            Sextend,
-            Srem,
-            SremImm,
-            Sshr,
-            SshrImm,
-            Trapnz,
-            Trapz,
-            Udiv,
-            UdivImm,
-            Uextend,
-            Urem,
-            UremImm,
-            Ushr,
-            UshrImm,
-        )
-    }
-}
-
 impl TryFrom<Constant> for Imm64 {
     type Error = &'static str;
 
@@ -457,6 +625,8 @@ fn peepmatic_ty_to_ir_ty(ty: Type, dfg: &DataFlowGraph, root: Inst) -> types::Ty
 unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
     type Context = FuncCursor<'b>;
 
+    type Operator = Opcode;
+
     type Instruction = ValueOrInst;
 
     fn replace_instruction(
@@ -524,7 +694,7 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
         let mut part = Part::Instruction(root);
         for p in path.0[1..].iter().copied() {
             let inst = part.as_instruction()?.resolve_inst(&pos.func.dfg)?;
-            let operator = pos.func.dfg[inst].opcode().to_peepmatic_operator()?;
+            let operator = pos.func.dfg[inst].opcode();
 
             if p < operator.immediates_arity() {
                 part = get_immediate(&pos.func.dfg, inst, p as usize);
@@ -541,16 +711,16 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
         Some(part)
     }
 
-    fn operator(&self, pos: &mut FuncCursor<'b>, value_or_inst: ValueOrInst) -> Option<Operator> {
+    fn operator(&self, pos: &mut FuncCursor<'b>, value_or_inst: ValueOrInst) -> Option<Opcode> {
         let inst = value_or_inst.resolve_inst(&pos.func.dfg)?;
-        pos.func.dfg[inst].opcode().to_peepmatic_operator()
+        Some(pos.func.dfg[inst].opcode())
     }
 
     fn make_inst_1(
         &self,
         pos: &mut FuncCursor<'b>,
         root: ValueOrInst,
-        operator: Operator,
+        operator: Opcode,
         r#type: Type,
         a: Part<ValueOrInst>,
     ) -> ValueOrInst {
@@ -558,32 +728,32 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
 
         let root = root.resolve_inst(&pos.func.dfg).unwrap();
         match operator {
-            Operator::AdjustSpDown => {
+            Opcode::AdjustSpDown => {
                 let a = part_to_value(pos, root, a).unwrap();
                 pos.ins().adjust_sp_down(a).into()
             }
-            Operator::AdjustSpDownImm => {
+            Opcode::AdjustSpDownImm => {
                 let c = a.unwrap_constant();
                 let imm = Imm64::try_from(c).unwrap();
                 pos.ins().adjust_sp_down_imm(imm).into()
             }
-            Operator::Bconst => {
+            Opcode::Bconst => {
                 let c = a.unwrap_constant();
                 let val = const_to_value(pos.ins(), c, root);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Bint => {
+            Opcode::Bint => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let ty = peepmatic_ty_to_ir_ty(r#type, &pos.func.dfg, root);
                 let val = pos.ins().bint(ty, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Bnot => {
+            Opcode::Bnot => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let val = pos.ins().bnot(a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Brnz => {
+            Opcode::Brnz => {
                 let a = part_to_value(pos, root, a).unwrap();
 
                 // NB: branching instructions must be the root of an
@@ -595,37 +765,37 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
 
                 pos.ins().brnz(a, block, &args).into()
             }
-            Operator::Brz => {
+            Opcode::Brz => {
                 let a = part_to_value(pos, root, a).unwrap();
 
-                // See the comment in the `Operator::Brnz` match argm.
+                // See the comment in the `Opcode::Brnz` match argm.
                 let block = pos.func.dfg[root].branch_destination().unwrap();
                 let args = pos.func.dfg.inst_args(root)[1..].to_vec();
 
                 pos.ins().brz(a, block, &args).into()
             }
-            Operator::Iconst => {
+            Opcode::Iconst => {
                 let a = a.unwrap_constant();
                 let val = const_to_value(pos.ins(), a, root);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Ireduce => {
+            Opcode::Ireduce => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let ty = peepmatic_ty_to_ir_ty(r#type, &pos.func.dfg, root);
                 let val = pos.ins().ireduce(ty, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Sextend => {
+            Opcode::Sextend => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let ty = peepmatic_ty_to_ir_ty(r#type, &pos.func.dfg, root);
                 let val = pos.ins().sextend(ty, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Trapnz => {
+            Opcode::Trapnz => {
                 let a = part_to_value(pos, root, a).unwrap();
 
                 // NB: similar to branching instructions (see comment in the
-                // `Operator::Brnz` match arm) trapping instructions must be the
+                // `Opcode::Brnz` match arm) trapping instructions must be the
                 // root of an optimization's right-hand side, and we get the
                 // trap code from the root of the left-hand side. Peepmatic
                 // doesn't currently represent trap codes.
@@ -633,13 +803,13 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
 
                 pos.ins().trapnz(a, code).into()
             }
-            Operator::Trapz => {
+            Opcode::Trapz => {
                 let a = part_to_value(pos, root, a).unwrap();
-                // See comment in the `Operator::Trapnz` match arm.
+                // See comment in the `Opcode::Trapnz` match arm.
                 let code = pos.func.dfg[root].trap_code().unwrap();
                 pos.ins().trapz(a, code).into()
             }
-            Operator::Uextend => {
+            Opcode::Uextend => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let ty = peepmatic_ty_to_ir_ty(r#type, &pos.func.dfg, root);
                 let val = pos.ins().uextend(ty, a);
@@ -653,7 +823,7 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
         &self,
         pos: &mut FuncCursor<'b>,
         root: ValueOrInst,
-        operator: Operator,
+        operator: Opcode,
         _: Type,
         a: Part<ValueOrInst>,
         b: Part<ValueOrInst>,
@@ -662,193 +832,193 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
 
         let root = root.resolve_inst(&pos.func.dfg).unwrap();
         match operator {
-            Operator::Band => {
+            Opcode::Band => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().band(a, b);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::BandImm => {
+            Opcode::BandImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().band_imm(b, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Bor => {
+            Opcode::Bor => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().bor(a, b);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::BorImm => {
+            Opcode::BorImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().bor_imm(b, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Bxor => {
+            Opcode::Bxor => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().bxor(a, b);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::BxorImm => {
+            Opcode::BxorImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().bxor_imm(b, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Iadd => {
+            Opcode::Iadd => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().iadd(a, b);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::IaddImm => {
+            Opcode::IaddImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().iadd_imm(b, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Ifcmp => {
+            Opcode::Ifcmp => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().ifcmp(a, b);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::IfcmpImm => {
+            Opcode::IfcmpImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().ifcmp_imm(b, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Imul => {
+            Opcode::Imul => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().imul(a, b);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::ImulImm => {
+            Opcode::ImulImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().imul_imm(b, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::IrsubImm => {
+            Opcode::IrsubImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().irsub_imm(b, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Ishl => {
+            Opcode::Ishl => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().ishl(a, b);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::IshlImm => {
+            Opcode::IshlImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().ishl_imm(b, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Isub => {
+            Opcode::Isub => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().isub(a, b);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Rotl => {
+            Opcode::Rotl => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().rotl(a, b);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::RotlImm => {
+            Opcode::RotlImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().rotl_imm(b, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Rotr => {
+            Opcode::Rotr => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().rotr(a, b);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::RotrImm => {
+            Opcode::RotrImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().rotr_imm(b, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Sdiv => {
+            Opcode::Sdiv => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().sdiv(a, b);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::SdivImm => {
+            Opcode::SdivImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().sdiv_imm(b, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Srem => {
+            Opcode::Srem => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().srem(a, b);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::SremImm => {
+            Opcode::SremImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().srem_imm(b, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Sshr => {
+            Opcode::Sshr => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().sshr(a, b);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::SshrImm => {
+            Opcode::SshrImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().sshr_imm(b, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Udiv => {
+            Opcode::Udiv => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().udiv(a, b);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::UdivImm => {
+            Opcode::UdivImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().udiv_imm(b, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Urem => {
+            Opcode::Urem => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().urem(a, b);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::UremImm => {
+            Opcode::UremImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().urem_imm(b, a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Ushr => {
+            Opcode::Ushr => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().ushr(a, b);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::UshrImm => {
+            Opcode::UshrImm => {
                 let a = part_to_imm64(pos, a);
                 let b = part_to_value(pos, root, b).unwrap();
                 let val = pos.ins().ushr_imm(b, a);
@@ -862,7 +1032,7 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
         &self,
         pos: &mut FuncCursor<'b>,
         root: ValueOrInst,
-        operator: Operator,
+        operator: Opcode,
         _: Type,
         a: Part<ValueOrInst>,
         b: Part<ValueOrInst>,
@@ -872,7 +1042,7 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
 
         let root = root.resolve_inst(&pos.func.dfg).unwrap();
         match operator {
-            Operator::Icmp => {
+            Opcode::Icmp => {
                 let cond = a.unwrap_condition_code();
                 let cond = peepmatic_to_intcc(cond);
                 let b = part_to_value(pos, root, b).unwrap();
@@ -880,7 +1050,7 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
                 let val = pos.ins().icmp(cond, b, c);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::IcmpImm => {
+            Opcode::IcmpImm => {
                 let cond = a.unwrap_condition_code();
                 let cond = peepmatic_to_intcc(cond);
                 let imm = part_to_imm64(pos, b);
@@ -888,7 +1058,7 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
                 let val = pos.ins().icmp_imm(cond, c, imm);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
-            Operator::Select => {
+            Opcode::Select => {
                 let a = part_to_value(pos, root, a).unwrap();
                 let b = part_to_value(pos, root, b).unwrap();
                 let c = part_to_value(pos, root, c).unwrap();

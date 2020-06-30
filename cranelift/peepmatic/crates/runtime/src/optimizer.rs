@@ -2,10 +2,10 @@
 
 use crate::instruction_set::InstructionSet;
 use crate::linear::{bool_to_match_result, Action, Else, MatchOp, MatchResult};
-use crate::operator::UnquoteOperator;
 use crate::optimizations::PeepholeOptimizations;
 use crate::part::{Constant, Part};
 use crate::r#type::{BitWidth, Type};
+use crate::unquote::UnquoteOperator;
 use peepmatic_automata::State;
 use std::convert::TryFrom;
 use std::fmt::{self, Debug};
@@ -21,20 +21,20 @@ use std::num::NonZeroU32;
 /// Reusing an instance when applying peephole optimizations to different
 /// instruction sequences means that you reuse internal allocations that are
 /// used to match left-hand sides and build up right-hand sides.
-pub struct PeepholeOptimizer<'peep, 'ctx, I>
+pub struct PeepholeOptimizer<'peep, 'ctx, TInstructionSet>
 where
-    I: InstructionSet<'ctx>,
+    TInstructionSet: InstructionSet<'ctx>,
 {
-    pub(crate) peep_opt: &'peep PeepholeOptimizations,
-    pub(crate) instr_set: I,
-    pub(crate) right_hand_sides: Vec<Part<I::Instruction>>,
-    pub(crate) actions: Vec<Action>,
+    pub(crate) peep_opt: &'peep PeepholeOptimizations<TInstructionSet::Operator>,
+    pub(crate) instr_set: TInstructionSet,
+    pub(crate) right_hand_sides: Vec<Part<TInstructionSet::Instruction>>,
+    pub(crate) actions: Vec<Action<TInstructionSet::Operator>>,
     pub(crate) backtracking_states: Vec<(State, usize)>,
 }
 
-impl<'peep, 'ctx, I> Debug for PeepholeOptimizer<'peep, 'ctx, I>
+impl<'peep, 'ctx, TInstructionSet> Debug for PeepholeOptimizer<'peep, 'ctx, TInstructionSet>
 where
-    I: InstructionSet<'ctx>,
+    TInstructionSet: InstructionSet<'ctx>,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let PeepholeOptimizer {
@@ -54,9 +54,9 @@ where
     }
 }
 
-impl<'peep, 'ctx, I> PeepholeOptimizer<'peep, 'ctx, I>
+impl<'peep, 'ctx, TInstructionSet> PeepholeOptimizer<'peep, 'ctx, TInstructionSet>
 where
-    I: InstructionSet<'ctx>,
+    TInstructionSet: InstructionSet<'ctx>,
 {
     fn eval_unquote_1(&self, operator: UnquoteOperator, a: Constant) -> Constant {
         use Constant::*;
@@ -107,7 +107,11 @@ where
         }
     }
 
-    fn eval_actions(&mut self, context: &mut I::Context, root: I::Instruction) {
+    fn eval_actions(
+        &mut self,
+        context: &mut TInstructionSet::Context,
+        root: TInstructionSet::Instruction,
+    ) {
         let mut actions = mem::replace(&mut self.actions, vec![]);
 
         for action in actions.drain(..) {
@@ -272,8 +276,8 @@ where
 
     fn eval_match_op(
         &mut self,
-        context: &mut I::Context,
-        root: I::Instruction,
+        context: &mut TInstructionSet::Context,
+        root: TInstructionSet::Instruction,
         match_op: MatchOp,
     ) -> MatchResult {
         use crate::linear::MatchOp::*;
@@ -288,13 +292,7 @@ where
                     .ok_or(Else)?;
                 let inst = part.as_instruction().ok_or(Else)?;
                 let op = self.instr_set.operator(context, inst).ok_or(Else)?;
-                let op = op as u32;
-                debug_assert!(
-                    op != 0,
-                    "`Operator` doesn't have any variant represented
-        with zero"
-                );
-                Ok(unsafe { NonZeroU32::new_unchecked(op as u32) })
+                Ok(op.into())
             }
             IsConst { path } => {
                 let path = self.peep_opt.paths.lookup(path);
@@ -477,9 +475,9 @@ where
     /// untouched and `None` is returned.
     pub fn apply_one(
         &mut self,
-        context: &mut I::Context,
-        root: I::Instruction,
-    ) -> Option<I::Instruction> {
+        context: &mut TInstructionSet::Context,
+        root: TInstructionSet::Instruction,
+    ) -> Option<TInstructionSet::Instruction> {
         log::trace!("PeepholeOptimizer::apply_one");
 
         self.backtracking_states.clear();
@@ -566,7 +564,11 @@ where
 
     /// Keep applying peephole optimizations to the given instruction until none
     /// can be applied anymore.
-    pub fn apply_all(&mut self, context: &mut I::Context, mut inst: I::Instruction) {
+    pub fn apply_all(
+        &mut self,
+        context: &mut TInstructionSet::Context,
+        mut inst: TInstructionSet::Instruction,
+    ) {
         loop {
             if let Some(new_inst) = self.apply_one(context, inst) {
                 inst = new_inst;

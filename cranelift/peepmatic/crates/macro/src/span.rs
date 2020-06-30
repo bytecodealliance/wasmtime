@@ -45,6 +45,9 @@ pub fn derive_span(input: &DeriveInput) -> Result<impl quote::ToTokens> {
 fn add_span_trait_bounds(mut generics: Generics) -> Generics {
     for param in &mut generics.params {
         if let GenericParam::Type(ref mut type_param) = *param {
+            if type_param.ident == "TOperator" {
+                continue;
+            }
             type_param.bounds.push(parse_quote!(Span));
         }
     }

@@ -9,8 +9,8 @@ pub fn derive_child_nodes(input: &DeriveInput) -> Result<impl quote::ToTokens> {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     Ok(quote! {
-        impl #impl_generics ChildNodes<'a, 'a> for #name #ty_generics #where_clause {
-            fn child_nodes(&'a self, children: &mut impl Extend<DynAstRef<'a>>) {
+        impl #impl_generics ChildNodes<'a, 'a, TOperator> for #name #ty_generics #where_clause {
+            fn child_nodes(&'a self, children: &mut impl Extend<DynAstRef<'a, TOperator>>) {
                 #children
             }
         }
@@ -103,7 +103,12 @@ fn get_child_nodes(data: &syn::Data) -> Result<impl quote::ToTokens> {
 fn add_trait_bounds(mut generics: Generics) -> Generics {
     for param in &mut generics.params {
         if let GenericParam::Type(type_param) = param {
-            type_param.bounds.push(parse_quote!(ChildNodes<'a, 'a>));
+            if type_param.ident == "TOperator" {
+                continue;
+            }
+            type_param
+                .bounds
+                .push(parse_quote!(ChildNodes<'a, 'a, TOperator>));
         }
     }
     generics

@@ -8,6 +8,8 @@ use crate::optimizer::PeepholeOptimizer;
 use crate::paths::PathInterner;
 use peepmatic_automata::Automaton;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
+use std::hash::Hash;
 
 #[cfg(feature = "construct")]
 use std::fs;
@@ -19,7 +21,10 @@ use std::path::Path;
 /// This is the compilation result of the `peepmatic` crate, after its taken a
 /// bunch of optimizations written in the DSL and lowered and combined them.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct PeepholeOptimizations {
+pub struct PeepholeOptimizations<TOperator>
+where
+    TOperator: 'static + Copy + Debug + Eq + Hash,
+{
     /// The instruction paths referenced by the peephole optimizations.
     pub paths: PathInterner,
 
@@ -29,12 +34,18 @@ pub struct PeepholeOptimizations {
 
     /// The underlying automata for matching optimizations' left-hand sides, and
     /// building up the corresponding right-hand side.
-    pub automata: Automaton<MatchResult, MatchOp, Box<[Action]>>,
+    pub automata: Automaton<MatchResult, MatchOp, Box<[Action<TOperator>]>>,
 }
 
-impl PeepholeOptimizations {
+impl<TOperator> PeepholeOptimizations<TOperator>
+where
+    TOperator: 'static + Copy + Debug + Eq + Hash,
+{
     /// Deserialize a `PeepholeOptimizations` from bytes.
-    pub fn deserialize(serialized: &[u8]) -> Result<Self> {
+    pub fn deserialize<'a>(serialized: &'a [u8]) -> Result<Self>
+    where
+        TOperator: serde::Deserialize<'a>,
+    {
         let peep_opt: Self = bincode::deserialize(serialized)?;
         Ok(peep_opt)
     }
@@ -43,12 +54,20 @@ impl PeepholeOptimizations {
     ///
     /// Requires that the `"construct"` cargo feature is enabled.
     #[cfg(feature = "construct")]
-    pub fn serialize_to_file(&self, path: &Path) -> Result<()> {
+    pub fn serialize_to_file(&self, path: &Path) -> Result<()>
+    where
+        TOperator: serde::Serialize,
+    {
         let file = fs::File::create(path)?;
         bincode::serialize_into(file, self)?;
         Ok(())
     }
+}
 
+impl<TOperator> PeepholeOptimizations<TOperator>
+where
+    TOperator: 'static + Copy + Debug + Eq + Hash,
+{
     /// Create a new peephole optimizer instance from this set of peephole
     /// optimizations.
     ///
@@ -58,9 +77,13 @@ impl PeepholeOptimizations {
     /// instance, rather than create a new one for each instruction. Reusing the
     /// peephole optimizer instance allows the reuse of a few internal
     /// allocations.
-    pub fn optimizer<'peep, 'ctx, I>(&'peep self, instr_set: I) -> PeepholeOptimizer<'peep, 'ctx, I>
+    pub fn optimizer<'peep, 'ctx, TInstructionSet>(
+        &'peep self,
+        instr_set: TInstructionSet,
+    ) -> PeepholeOptimizer<'peep, 'ctx, TInstructionSet>
     where
-        I: InstructionSet<'ctx>,
+        TInstructionSet: InstructionSet<'ctx, Operator = TOperator>,
+        TOperator: Into<std::num::NonZeroU32>,
     {
         PeepholeOptimizer {
             peep_opt: self,

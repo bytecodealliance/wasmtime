@@ -386,11 +386,13 @@ dependencies = [
  "log",
  "peepmatic",
  "peepmatic-runtime",
+ "peepmatic-traits",
  "regalloc",
  "serde",
  "smallvec",
  "target-lexicon",
  "thiserror",
+ "wast 15.0.0",
 ]
 
 [[package]]
@@ -1298,20 +1300,23 @@ dependencies = [
  "peepmatic-automata",
  "peepmatic-macro",
  "peepmatic-runtime",
+ "peepmatic-test-operator",
+ "peepmatic-traits",
+ "serde",
  "wast 15.0.0",
  "z3",
 ]
 
 [[package]]
 name = "peepmatic-automata"
-version = "0.2.0"
+version = "0.66.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "peepmatic-fuzzing"
-version = "0.2.0"
+version = "0.66.0"
 dependencies = [
  "arbitrary",
  "bincode",
@@ -1322,6 +1327,8 @@ dependencies = [
  "peepmatic-automata",
  "peepmatic-runtime",
  "peepmatic-test",
+ "peepmatic-test-operator",
+ "peepmatic-traits",
  "rand 0.7.3",
  "serde",
  "wast 15.0.0",
@@ -1329,7 +1336,7 @@ dependencies = [
 
 [[package]]
 name = "peepmatic-macro"
-version = "0.2.0"
+version = "0.66.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1338,13 +1345,14 @@ dependencies = [
 
 [[package]]
 name = "peepmatic-runtime"
-version = "0.2.0"
+version = "0.66.0"
 dependencies = [
  "bincode",
  "bumpalo",
  "log",
  "peepmatic-automata",
- "peepmatic-macro",
+ "peepmatic-test-operator",
+ "peepmatic-traits",
  "serde",
  "serde_test",
  "thiserror",
@@ -1359,7 +1367,22 @@ dependencies = [
  "log",
  "peepmatic",
  "peepmatic-runtime",
+ "peepmatic-test-operator",
+ "peepmatic-traits",
 ]
+
+[[package]]
+name = "peepmatic-test-operator"
+version = "0.66.0"
+dependencies = [
+ "peepmatic-traits",
+ "serde",
+ "wast 15.0.0",
+]
+
+[[package]]
+name = "peepmatic-traits"
+version = "0.66.0"
 
 [[package]]
 name = "plain"

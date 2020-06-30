@@ -5,11 +5,12 @@
 use peepmatic_runtime::{
     cc::ConditionCode,
     instruction_set::InstructionSet,
-    operator::Operator,
     part::{Constant, Part},
     paths::Path,
     r#type::{BitWidth, Kind, Type},
 };
+use peepmatic_test_operator::TestOperator;
+use peepmatic_traits::TypingRules;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
@@ -19,7 +20,7 @@ pub struct Instruction(pub usize);
 
 #[derive(Debug)]
 pub struct InstructionData {
-    pub operator: Operator,
+    pub operator: TestOperator,
     pub r#type: Type,
     pub immediates: Vec<Immediate>,
     pub arguments: Vec<Instruction>,
@@ -174,7 +175,7 @@ impl Program {
 
     pub fn new_instruction(
         &mut self,
-        operator: Operator,
+        operator: TestOperator,
         r#type: Type,
         immediates: Vec<Immediate>,
         arguments: Vec<Instruction>,
@@ -188,11 +189,11 @@ impl Program {
             immediates.len(),
         );
         assert_eq!(
-            operator.params_arity() as usize,
+            operator.parameters_arity() as usize,
             arguments.len(),
             "wrong number of arguments for {:?}: expected {}, found {}",
             operator,
-            operator.params_arity(),
+            operator.parameters_arity(),
             arguments.len(),
         );
 
@@ -222,7 +223,7 @@ impl Program {
         assert!(!root_bit_width.is_polymorphic());
         match c {
             Constant::Bool(_, bit_width) => self.new_instruction(
-                Operator::Bconst,
+                TestOperator::Bconst,
                 if bit_width.is_polymorphic() {
                     Type {
                         kind: Kind::Bool,
@@ -238,7 +239,7 @@ impl Program {
                 vec![],
             ),
             Constant::Int(_, bit_width) => self.new_instruction(
-                Operator::Iconst,
+                TestOperator::Iconst,
                 if bit_width.is_polymorphic() {
                     Type {
                         kind: Kind::Int,
@@ -259,12 +260,12 @@ impl Program {
     fn instruction_to_constant(&mut self, inst: Instruction) -> Option<Constant> {
         match self.data(inst) {
             InstructionData {
-                operator: Operator::Iconst,
+                operator: TestOperator::Iconst,
                 immediates,
                 ..
             } => Some(immediates[0].unwrap_constant()),
             InstructionData {
-                operator: Operator::Bconst,
+                operator: TestOperator::Bconst,
                 immediates,
                 ..
             } => Some(immediates[0].unwrap_constant()),
@@ -310,6 +311,8 @@ pub struct TestIsa {
 // Unsafe because we must ensure that `instruction_result_bit_width` never
 // returns zero.
 unsafe impl<'a> InstructionSet<'a> for TestIsa {
+    type Operator = TestOperator;
+
     type Context = Program;
 
     type Instruction = Instruction;
@@ -360,7 +363,7 @@ unsafe impl<'a> InstructionSet<'a> for TestIsa {
         Some(part)
     }
 
-    fn operator(&self, program: &mut Program, instr: Instruction) -> Option<Operator> {
+    fn operator(&self, program: &mut Program, instr: Instruction) -> Option<TestOperator> {
         log::debug!("operator({:?})", instr);
         let data = program.data(instr);
         Some(data.operator)
@@ -370,7 +373,7 @@ unsafe impl<'a> InstructionSet<'a> for TestIsa {
         &self,
         program: &mut Program,
         root: Instruction,
-        operator: Operator,
+        operator: TestOperator,
         r#type: Type,
         a: Part<Instruction>,
     ) -> Instruction {
@@ -383,11 +386,11 @@ unsafe impl<'a> InstructionSet<'a> for TestIsa {
 
         let (imms, args) = match operator.immediates_arity() {
             0 => {
-                assert_eq!(operator.params_arity(), 1);
+                assert_eq!(operator.parameters_arity(), 1);
                 (vec![], vec![program.part_to_instruction(root, a).unwrap()])
             }
             1 => {
-                assert_eq!(operator.params_arity(), 0);
+                assert_eq!(operator.parameters_arity(), 0);
                 (vec![program.part_to_immediate(a).unwrap()], vec![])
             }
             _ => unreachable!(),
@@ -399,7 +402,7 @@ unsafe impl<'a> InstructionSet<'a> for TestIsa {
         &self,
         program: &mut Program,
         root: Instruction,
-        operator: Operator,
+        operator: TestOperator,
         r#type: Type,
         a: Part<Instruction>,
         b: Part<Instruction>,
@@ -414,7 +417,7 @@ unsafe impl<'a> InstructionSet<'a> for TestIsa {
 
         let (imms, args) = match operator.immediates_arity() {
             0 => {
-                assert_eq!(operator.params_arity(), 2);
+                assert_eq!(operator.parameters_arity(), 2);
                 (
                     vec![],
                     vec![
@@ -424,14 +427,14 @@ unsafe impl<'a> InstructionSet<'a> for TestIsa {
                 )
             }
             1 => {
-                assert_eq!(operator.params_arity(), 1);
+                assert_eq!(operator.parameters_arity(), 1);
                 (
                     vec![program.part_to_immediate(a).unwrap()],
                     vec![program.part_to_instruction(root, b).unwrap()],
                 )
             }
             2 => {
-                assert_eq!(operator.params_arity(), 0);
+                assert_eq!(operator.parameters_arity(), 0);
                 (
                     vec![
                         program.part_to_immediate(a).unwrap(),
@@ -449,7 +452,7 @@ unsafe impl<'a> InstructionSet<'a> for TestIsa {
         &self,
         program: &mut Program,
         root: Instruction,
-        operator: Operator,
+        operator: TestOperator,
         r#type: Type,
         a: Part<Instruction>,
         b: Part<Instruction>,
@@ -465,7 +468,7 @@ unsafe impl<'a> InstructionSet<'a> for TestIsa {
         );
         let (imms, args) = match operator.immediates_arity() {
             0 => {
-                assert_eq!(operator.params_arity(), 3);
+                assert_eq!(operator.parameters_arity(), 3);
                 (
                     vec![],
                     vec![
@@ -476,7 +479,7 @@ unsafe impl<'a> InstructionSet<'a> for TestIsa {
                 )
             }
             1 => {
-                assert_eq!(operator.params_arity(), 2);
+                assert_eq!(operator.parameters_arity(), 2);
                 (
                     vec![program.part_to_immediate(a).unwrap()],
                     vec![
@@ -486,7 +489,7 @@ unsafe impl<'a> InstructionSet<'a> for TestIsa {
                 )
             }
             2 => {
-                assert_eq!(operator.params_arity(), 1);
+                assert_eq!(operator.parameters_arity(), 1);
                 (
                     vec![
                         program.part_to_immediate(a).unwrap(),
@@ -496,7 +499,7 @@ unsafe impl<'a> InstructionSet<'a> for TestIsa {
                 )
             }
             3 => {
-                assert_eq!(operator.params_arity(), 0);
+                assert_eq!(operator.parameters_arity(), 0);
                 (
                     vec![
                         program.part_to_immediate(a).unwrap(),

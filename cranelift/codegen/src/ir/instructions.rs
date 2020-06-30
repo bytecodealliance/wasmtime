@@ -7,7 +7,9 @@
 //! directory.
 
 use alloc::vec::Vec;
+use core::convert::{TryFrom, TryInto};
 use core::fmt::{self, Display, Formatter};
+use core::num::NonZeroU32;
 use core::ops::{Deref, DerefMut};
 use core::str::FromStr;
 
@@ -66,6 +68,24 @@ impl Opcode {
             Opcode::ResumableTrap | Opcode::ResumableTrapnz => true,
             _ => false,
         }
+    }
+}
+
+impl TryFrom<NonZeroU32> for Opcode {
+    type Error = ();
+
+    #[inline]
+    fn try_from(x: NonZeroU32) -> Result<Self, ()> {
+        let x: u16 = x.get().try_into().map_err(|_| ())?;
+        Self::try_from(x)
+    }
+}
+
+impl From<Opcode> for NonZeroU32 {
+    #[inline]
+    fn from(op: Opcode) -> NonZeroU32 {
+        let x = op as u8;
+        NonZeroU32::new(x as u32).unwrap()
     }
 }
 
