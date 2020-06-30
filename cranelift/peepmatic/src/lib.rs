@@ -112,6 +112,7 @@ pub fn compile_str(source: &str, filename: &Path) -> anyhow::Result<PeepholeOpti
     remove_unnecessary_nops(&mut opts);
     match_in_same_order(&mut opts);
     sort_lexicographically(&mut opts);
+    remove_unused_paths(&mut opts);
 
     let automata = automatize(&opts);
     let paths = opts.paths;

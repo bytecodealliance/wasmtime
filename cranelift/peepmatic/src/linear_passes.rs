@@ -283,6 +283,59 @@ pub fn remove_unnecessary_nops(opts: &mut linear::Optimizations) {
     }
 }
 
+/// Remove unused paths from the `PathInterner` that are generated in previous
+/// passes.
+///
+/// During linearization, we can intern paths in the `PatternPreOrder` traversal
+/// that don't ultimately get used by any LHS match ops or RHS actions. However,
+/// we serialize the whole `PathInterner` with all of its interned paths,
+/// including those unused paths. This makes the serialized form a bit bigger than
+/// it need be, and also implies a bit of memory overhead on deserialized peephole
+/// optimizations.
+pub fn remove_unused_paths(opts: &mut linear::Optimizations) {
+    let mut compactor = opts.paths.compact();
+
+    // Rewrite all `PathId`s found in the list of optimizations
+    for opt in &mut opts.optimizations {
+        for incr in &mut opt.increments {
+            use linear::MatchOp::*;
+
+            // Rewrite operation
+            match &mut incr.operation {
+                ConditionCode { path }
+                | BooleanValue { path }
+                | IntegerValue { path }
+                | Opcode { path }
+                | IsConst { path }
+                | IsPowerOfTwo { path }
+                | BitWidth { path }
+                | FitsInNativeWord { path } => {
+                    *path = compactor.map(*path);
+                }
+                Eq { path_a, path_b } => {
+                    *path_a = compactor.map(*path_a);
+                    *path_b = compactor.map(*path_b);
+                }
+                Nop => {}
+            }
+
+            for ref mut action in &mut incr.actions {
+                use linear::Action::*;
+                // Rewrite operations
+
+                match action {
+                    GetLhs { path } => {
+                        *path = compactor.map(*path);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    opts.paths = compactor.finish();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
