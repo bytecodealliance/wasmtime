@@ -71,3 +71,19 @@ macro_rules! impl_is_minus_one {
 }
 
 impl_is_minus_one! { i32 i64 isize }
+
+/// Convert an `AsRef<Path>` into a `CString`.
+fn cstr<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<std::ffi::CString> {
+    #[cfg(target_os = "hermit")]
+    use std::os::hermit::ext::ffi::OsStrExt;
+    #[cfg(unix)]
+    use std::os::unix::ffi::OsStrExt;
+    #[cfg(target_os = "vxworks")]
+    use std::os::vxworks::ext::ffi::OsStrExt;
+    #[cfg(target_os = "wasi")]
+    use std::os::wasi::ffi::OsStrExt;
+
+    Ok(std::ffi::CString::new(
+        path.as_ref().as_os_str().as_bytes(),
+    )?)
+}

@@ -1,7 +1,7 @@
 //! This module consists of helper types and functions for dealing
 //! with setting the file times specific to BSD-style *nixes.
 use crate::filetime::FileTime;
-use crate::from_success_code;
+use crate::{cstr, from_success_code};
 use std::ffi::CStr;
 use std::fs::File;
 use std::io::Result;
@@ -21,7 +21,6 @@ pub fn utimensat(
     symlink_nofollow: bool,
 ) -> Result<()> {
     use crate::filetime::to_timespec;
-    use std::ffi::CString;
     use std::os::unix::prelude::*;
 
     // Attempt to use the `utimensat` syscall, but if it's not supported by the
@@ -33,10 +32,10 @@ pub fn utimensat(
             0
         };
 
-        let p = CString::new(path.as_bytes())?;
+        let path = cstr(path)?;
         let times = [to_timespec(&atime)?, to_timespec(&mtime)?];
         return from_success_code(unsafe {
-            func(dirfd.as_raw_fd(), p.as_ptr(), times.as_ptr(), flags)
+            func(dirfd.as_raw_fd(), path.as_ptr(), times.as_ptr(), flags)
         });
     }
 
