@@ -1,7 +1,7 @@
 use crate::old::snapshot_0::wasi::{self, WasiResult};
 use std::convert::TryFrom;
 
-pub(crate) const O_RSYNC: yanix::file::OFlag = yanix::file::OFlag::SYNC;
+pub(crate) const O_RSYNC: yanix::file::OFlags = yanix::file::OFlags::SYNC;
 
 pub(crate) fn stdev_from_nix(dev: libc::dev_t) -> WasiResult<wasi::__wasi_device_t> {
     wasi::__wasi_device_t::try_from(dev).map_err(Into::into)

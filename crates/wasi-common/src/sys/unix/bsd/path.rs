@@ -3,8 +3,8 @@ use crate::wasi::{Errno, Result};
 use std::os::unix::prelude::AsRawFd;
 
 pub(crate) fn unlink_file(dirfd: &OsDir, path: &str) -> Result<()> {
-    use yanix::file::{unlinkat, AtFlag};
-    match unsafe { unlinkat(dirfd.as_raw_fd(), path, AtFlag::empty()) } {
+    use yanix::file::{unlinkat, AtFlags};
+    match unsafe { unlinkat(dirfd.as_raw_fd(), path, AtFlags::empty()) } {
         Err(err) => {
             let raw_errno = err.raw_os_error().unwrap();
             // Non-Linux implementations may return EPERM when attempting to remove a
@@ -17,7 +17,7 @@ pub(crate) fn unlink_file(dirfd: &OsDir, path: &str) -> Result<()> {
             use yanix::file::{fstatat, FileType};
 
             if raw_errno == libc::EPERM {
-                match unsafe { fstatat(dirfd.as_raw_fd(), path, AtFlag::SYMLINK_NOFOLLOW) } {
+                match unsafe { fstatat(dirfd.as_raw_fd(), path, AtFlags::SYMLINK_NOFOLLOW) } {
                     Ok(stat) => {
                         if FileType::from_stat_st_mode(stat.st_mode) == FileType::Directory {
                             return Err(Errno::Isdir);
@@ -36,7 +36,7 @@ pub(crate) fn unlink_file(dirfd: &OsDir, path: &str) -> Result<()> {
 }
 
 pub(crate) fn symlink(old_path: &str, new_dirfd: &OsDir, new_path: &str) -> Result<()> {
-    use yanix::file::{fstatat, symlinkat, AtFlag};
+    use yanix::file::{fstatat, symlinkat, AtFlags};
 
     log::debug!("path_symlink old_path = {:?}", old_path);
     log::debug!(
@@ -54,7 +54,7 @@ pub(crate) fn symlink(old_path: &str, new_dirfd: &OsDir, new_path: &str) -> Resu
                 // the trailing slash and check if the path exists, and
                 // adjust the error code appropriately.
                 let new_path = new_path.trim_end_matches('/');
-                match unsafe { fstatat(new_dirfd.as_raw_fd(), new_path, AtFlag::SYMLINK_NOFOLLOW) }
+                match unsafe { fstatat(new_dirfd.as_raw_fd(), new_path, AtFlags::SYMLINK_NOFOLLOW) }
                 {
                     Ok(_) => return Err(Errno::Exist),
                     Err(err) => {
@@ -74,7 +74,7 @@ pub(crate) fn rename(
     new_dirfd: &OsDir,
     new_path: &str,
 ) -> Result<()> {
-    use yanix::file::{fstatat, renameat, AtFlag};
+    use yanix::file::{fstatat, renameat, AtFlags};
     match unsafe {
         renameat(
             old_dirfd.as_raw_fd(),
@@ -95,7 +95,7 @@ pub(crate) fn rename(
             // Verify on other BSD-based OSes.
             if err.raw_os_error().unwrap() == libc::ENOENT {
                 // check if the source path exists
-                match unsafe { fstatat(old_dirfd.as_raw_fd(), old_path, AtFlag::SYMLINK_NOFOLLOW) }
+                match unsafe { fstatat(old_dirfd.as_raw_fd(), old_path, AtFlags::SYMLINK_NOFOLLOW) }
                 {
                     Ok(_) => {
                         // check if destination contains a trailing slash

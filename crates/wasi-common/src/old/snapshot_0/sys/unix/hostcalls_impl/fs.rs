@@ -72,14 +72,14 @@ pub(crate) fn path_create_directory(resolved: PathGet) -> WasiResult<()> {
 }
 
 pub(crate) fn path_link(resolved_old: PathGet, resolved_new: PathGet) -> WasiResult<()> {
-    use yanix::file::{linkat, AtFlag};
+    use yanix::file::{linkat, AtFlags};
     unsafe {
         linkat(
             resolved_old.dirfd().as_raw_fd(),
             resolved_old.path(),
             resolved_new.dirfd().as_raw_fd(),
             resolved_new.path(),
-            AtFlag::SYMLINK_FOLLOW,
+            AtFlags::SYMLINK_FOLLOW,
         )
     }
     .map_err(Into::into)
@@ -92,18 +92,18 @@ pub(crate) fn path_open(
     oflags: wasi::__wasi_oflags_t,
     fs_flags: wasi::__wasi_fdflags_t,
 ) -> WasiResult<File> {
-    use yanix::file::{fstatat, openat, AtFlag, FileType, Mode, OFlag};
+    use yanix::file::{fstatat, openat, AtFlags, FileType, Mode, OFlags};
 
     let mut nix_all_oflags = if read && write {
-        OFlag::RDWR
+        OFlags::RDWR
     } else if write {
-        OFlag::WRONLY
+        OFlags::WRONLY
     } else {
-        OFlag::RDONLY
+        OFlags::RDONLY
     };
 
     // on non-Capsicum systems, we always want nofollow
-    nix_all_oflags.insert(OFlag::NOFOLLOW);
+    nix_all_oflags.insert(OFlags::NOFOLLOW);
 
     // convert open flags
     nix_all_oflags.insert(host_impl::nix_from_oflags(oflags));
@@ -135,7 +135,7 @@ pub(crate) fn path_open(
                         fstatat(
                             resolved.dirfd().as_raw_fd(),
                             resolved.path(),
-                            AtFlag::SYMLINK_NOFOLLOW,
+                            AtFlags::SYMLINK_NOFOLLOW,
                         )
                     } {
                         Ok(stat) => {
@@ -151,13 +151,13 @@ pub(crate) fn path_open(
                 // Linux returns ENOTDIR instead of ELOOP when using O_NOFOLLOW|O_DIRECTORY
                 // on a symlink.
                 libc::ENOTDIR
-                    if !(nix_all_oflags & (OFlag::NOFOLLOW | OFlag::DIRECTORY)).is_empty() =>
+                    if !(nix_all_oflags & (OFlags::NOFOLLOW | OFlags::DIRECTORY)).is_empty() =>
                 {
                     match unsafe {
                         fstatat(
                             resolved.dirfd().as_raw_fd(),
                             resolved.path(),
-                            AtFlag::SYMLINK_NOFOLLOW,
+                            AtFlags::SYMLINK_NOFOLLOW,
                         )
                     } {
                         Ok(stat) => {
@@ -172,7 +172,7 @@ pub(crate) fn path_open(
                 }
                 // FreeBSD returns EMLINK instead of ELOOP when using O_NOFOLLOW on
                 // a symlink.
-                libc::EMLINK if !(nix_all_oflags & OFlag::NOFOLLOW).is_empty() => {
+                libc::EMLINK if !(nix_all_oflags & OFlags::NOFOLLOW).is_empty() => {
                     return Err(WasiError::ELOOP);
                 }
                 _ => {}
@@ -212,10 +212,10 @@ pub(crate) fn path_filestat_get(
     resolved: PathGet,
     dirflags: wasi::__wasi_lookupflags_t,
 ) -> WasiResult<wasi::__wasi_filestat_t> {
-    use yanix::file::{fstatat, AtFlag};
+    use yanix::file::{fstatat, AtFlags};
     let atflags = match dirflags {
-        0 => AtFlag::empty(),
-        _ => AtFlag::SYMLINK_NOFOLLOW,
+        0 => AtFlags::empty(),
+        _ => AtFlags::SYMLINK_NOFOLLOW,
     };
     unsafe { fstatat(resolved.dirfd().as_raw_fd(), resolved.path(), atflags) }
         .map_err(Into::into)
@@ -270,12 +270,12 @@ pub(crate) fn path_filestat_set_times(
 }
 
 pub(crate) fn path_remove_directory(resolved: PathGet) -> WasiResult<()> {
-    use yanix::file::{unlinkat, AtFlag};
+    use yanix::file::{unlinkat, AtFlags};
     unsafe {
         unlinkat(
             resolved.dirfd().as_raw_fd(),
             resolved.path(),
-            AtFlag::REMOVEDIR,
+            AtFlags::REMOVEDIR,
         )
     }
     .map_err(Into::into)
