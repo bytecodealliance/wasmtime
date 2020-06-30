@@ -2,7 +2,16 @@
 //!
 //! Creates ELF image based on `Compilation` information. The ELF contains
 //! functions and trampolines in the ".text" section. It also contains all
-//! relocation records for linking stage.
+//! relocation records for linking stage. If DWARF sections exist, their
+//! content will be written as well.
+//!
+//! The object file has symbols for each function and trampoline, as well as
+//! symbols that refer libcalls.
+//!
+//! The function symbol names have format "_wasm_function_N", where N is
+//! `FuncIndex`. The defined wasm function symbols refer to a JIT compiled
+//! function body, the imported wasm function do not. The trampolines symbol
+//! names have format "_trampoline_N", where N is `SignatureIndex`.
 
 use super::trampoline::build_trampoline;
 use cranelift_codegen::binemit::Reloc;

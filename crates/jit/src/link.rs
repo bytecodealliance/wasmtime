@@ -13,12 +13,18 @@ use wasmtime_runtime::VMFunctionBody;
 /// Links a module that has been compiled with `compiled_module` in `wasmtime-environ`.
 ///
 /// Performs all required relocations inside the function code, provided the necessary metadata.
+/// The relocations data provided in the object file, see object.rs for details.
+///
+/// Currently, the produce ELF image can be trusted.
+/// TODO refactor logic to remove panics and add defensive code the image data
+/// becomes untrusted.
 pub fn link_module(
     obj: &File,
     module: &Module,
     code_range: &mut [u8],
     finished_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
 ) {
+    // Read the ".text" section and process its relocations.
     let text_section = obj.section_by_name(".text").unwrap();
     let body = code_range.as_ptr() as *const VMFunctionBody;
 
@@ -37,6 +43,8 @@ fn apply_reloc(
 ) {
     let target_func_address: usize = match r.target() {
         RelocationTarget::Symbol(i) => {
+            // Processing relocation target is a named symbols that is compiled
+            // wasm function or runtime libcall.
             let sym = obj.symbol_by_index(i).unwrap();
             match sym.name() {
                 Some(name) => {
