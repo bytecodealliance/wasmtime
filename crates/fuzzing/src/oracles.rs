@@ -13,12 +13,15 @@
 pub mod dummy;
 
 use dummy::dummy_imports;
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 use wasmtime_wast::WastContext;
 
+static CNT: AtomicUsize = AtomicUsize::new(0);
+
 fn log_wasm(wasm: &[u8]) {
-    static CNT: AtomicUsize = AtomicUsize::new(0);
     if !log::log_enabled!(log::Level::Debug) {
         return;
     }
@@ -31,6 +34,16 @@ fn log_wasm(wasm: &[u8]) {
         let name = format!("testcase{}.wat", i);
         std::fs::write(&name, s).expect("failed to write wat file");
     }
+}
+
+fn log_wat(wat: &str) {
+    if !log::log_enabled!(log::Level::Debug) {
+        return;
+    }
+
+    let i = CNT.fetch_add(1, SeqCst);
+    let name = format!("testcase{}.wat", i);
+    std::fs::write(&name, wat).expect("failed to write wat file");
 }
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
@@ -399,4 +412,56 @@ pub fn spectest(config: crate::generators::Config, test: crate::generators::Spec
     wast_context
         .run_buffer(test.file, test.contents.as_bytes())
         .unwrap();
+}
+
+/// Execute a series of `table.get` and `table.set` operations.
+pub fn table_ops(config: crate::generators::Config, ops: crate::generators::table_ops::TableOps) {
+    let _ = env_logger::try_init();
+
+    let num_dropped = Rc::new(Cell::new(0));
+
+    {
+        let mut config = config.to_wasmtime();
+        config.wasm_reference_types(true);
+        let engine = Engine::new(&config);
+        let store = Store::new(&engine);
+
+        let wat = ops.to_wat_string();
+        log_wat(&wat);
+        let module = match Module::new(&engine, &wat) {
+            Ok(m) => m,
+            Err(_) => return,
+        };
+
+        // To avoid timeouts, limit the number of explicit GCs we perform per
+        // test case.
+        const MAX_GCS: usize = 5;
+
+        let num_gcs = Cell::new(0);
+        let gc = Func::wrap(&store, move |caller: Caller| {
+            if num_gcs.get() < MAX_GCS {
+                caller.store().gc();
+                num_gcs.set(num_gcs.get() + 1);
+            }
+        });
+
+        let instance = Instance::new(&store, &module, &[gc.into()]).unwrap();
+        let run = instance.get_func("run").unwrap();
+
+        let args: Vec<_> = (0..ops.num_params())
+            .map(|_| Val::ExternRef(Some(ExternRef::new(CountDrops(num_dropped.clone())))))
+            .collect();
+        let _ = run.call(&args);
+    }
+
+    assert_eq!(num_dropped.get(), ops.num_params());
+    return;
+
+    struct CountDrops(Rc<Cell<u8>>);
+
+    impl Drop for CountDrops {
+        fn drop(&mut self) {
+            self.0.set(self.0.get().checked_add(1).unwrap());
+        }
+    }
 }

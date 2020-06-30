@@ -49,6 +49,8 @@ jobs:
   doc_api:
     name: Doc - build the API documentation
     runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -Dintra-doc-link-resolution-failure
     steps:
     - uses: actions/checkout@v2
       with:

@@ -60,6 +60,7 @@ use crate::externref::VMExternRef;
 use crate::table::Table;
 use crate::traphandlers::raise_lib_trap;
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
+use std::ptr::NonNull;
 use wasmtime_environ::wasm::{
     DataIndex, DefinedMemoryIndex, ElemIndex, MemoryIndex, TableElementType, TableIndex,
 };
@@ -408,4 +409,24 @@ pub unsafe extern "C" fn wasmtime_data_drop(vmctx: *mut VMContext, data_index: u
     let data_index = DataIndex::from_u32(data_index);
     let instance = (&mut *vmctx).instance();
     instance.data_drop(data_index)
+}
+
+/// Drop a `VMExternRef`.
+pub unsafe extern "C" fn wasmtime_drop_externref(externref: *mut u8) {
+    let externref = externref as *mut crate::externref::VMExternData;
+    let externref = NonNull::new(externref).unwrap();
+    crate::externref::VMExternData::drop_and_dealloc(externref);
+}
+
+/// Do a GC and insert the given `externref` into the
+/// `VMExternRefActivationsTable`.
+pub unsafe extern "C" fn wasmtime_activations_table_insert_with_gc(
+    vmctx: *mut VMContext,
+    externref: *mut u8,
+) {
+    let externref = VMExternRef::clone_from_raw(externref);
+    let instance = (&mut *vmctx).instance();
+    let activations_table = &**instance.externref_activations_table();
+    let registry = &**instance.stack_map_registry();
+    activations_table.insert_with_gc(externref, registry);
 }

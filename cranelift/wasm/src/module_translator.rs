@@ -71,6 +71,11 @@ pub fn translate_module<'data>(
                 environ.reserve_passive_data(count)?;
             }
 
+            SectionContent::Module(_)
+            | SectionContent::ModuleCode(_)
+            | SectionContent::Instance(_)
+            | SectionContent::Alias(_) => unimplemented!("module linking not implemented yet"),
+
             SectionContent::Custom {
                 name,
                 binary,

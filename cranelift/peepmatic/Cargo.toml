@@ -14,4 +14,4 @@ peepmatic-automata = { version = "0.2.0", path = "crates/automata", features = [
 peepmatic-macro = { version = "0.2.0", path = "crates/macro" }
 peepmatic-runtime = { version = "0.2.0", path = "crates/runtime", features = ["construct"] }
 wast = "15.0.0"
-z3 = { version = "0.5.1", features = ["static-link-z3"] }
+z3 = { version = "0.6.0", features = ["static-link-z3"] }

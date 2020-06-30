@@ -1186,19 +1186,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let table_index = TableIndex::from_u32(*index);
             let table = state.get_or_create_table(builder.func, *index, environ)?;
             let index = state.pop1();
-            state.push1(environ.translate_table_get(
-                builder.cursor(),
-                table_index,
-                table,
-                index,
-            )?);
+            state.push1(environ.translate_table_get(builder, table_index, table, index)?);
         }
         Operator::TableSet { table: index } => {
             let table_index = TableIndex::from_u32(*index);
             let table = state.get_or_create_table(builder.func, *index, environ)?;
             let value = state.pop1();
             let index = state.pop1();
-            environ.translate_table_set(builder.cursor(), table_index, table, value, index)?;
+            environ.translate_table_set(builder, table_index, table, value, index)?;
         }
         Operator::TableCopy {
             dst_table: dst_table_index,
@@ -1391,6 +1386,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().ineg(a))
         }
+        Operator::I8x16Abs | Operator::I16x8Abs | Operator::I32x4Abs => {
+            let a = pop1_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().iabs(a))
+        }
         Operator::I16x8Mul | Operator::I32x4Mul | Operator::I64x2Mul => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().imul(a, b))
@@ -1561,9 +1560,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(builder.ins().fcvt_to_sint_sat(I32X4, a))
         }
         Operator::I32x4TruncSatF32x4U
-        | Operator::I8x16Abs
-        | Operator::I16x8Abs
-        | Operator::I32x4Abs
         | Operator::I8x16NarrowI16x8S { .. }
         | Operator::I8x16NarrowI16x8U { .. }
         | Operator::I16x8NarrowI32x4S { .. }
@@ -1575,7 +1571,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I32x4WidenLowI16x8S { .. }
         | Operator::I32x4WidenHighI16x8S { .. }
         | Operator::I32x4WidenLowI16x8U { .. }
-        | Operator::I32x4WidenHighI16x8U { .. } => {
+        | Operator::I32x4WidenHighI16x8U { .. }
+        | Operator::I8x16Bitmask
+        | Operator::I16x8Bitmask
+        | Operator::I32x4Bitmask => {
             return Err(wasm_unsupported!("proposed SIMD operator {:?}", op));
         }
 
@@ -1992,6 +1991,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I8x16GeS
         | Operator::I8x16GeU
         | Operator::I8x16Neg
+        | Operator::I8x16Abs
         | Operator::I8x16AnyTrue
         | Operator::I8x16AllTrue
         | Operator::I8x16Shl
@@ -2007,7 +2007,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I8x16MinU
         | Operator::I8x16MaxS
         | Operator::I8x16MaxU
-        | Operator::I8x16RoundingAverageU => I8X16,
+        | Operator::I8x16RoundingAverageU
+        | Operator::I8x16Bitmask => I8X16,
 
         Operator::I16x8Splat
         | Operator::V16x8LoadSplat { .. }
@@ -2025,6 +2026,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I16x8GeS
         | Operator::I16x8GeU
         | Operator::I16x8Neg
+        | Operator::I16x8Abs
         | Operator::I16x8AnyTrue
         | Operator::I16x8AllTrue
         | Operator::I16x8Shl
@@ -2041,7 +2043,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I16x8MaxS
         | Operator::I16x8MaxU
         | Operator::I16x8RoundingAverageU
-        | Operator::I16x8Mul => I16X8,
+        | Operator::I16x8Mul
+        | Operator::I16x8Bitmask => I16X8,
 
         Operator::I32x4Splat
         | Operator::V32x4LoadSplat { .. }
@@ -2058,6 +2061,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I32x4GeS
         | Operator::I32x4GeU
         | Operator::I32x4Neg
+        | Operator::I32x4Abs
         | Operator::I32x4AnyTrue
         | Operator::I32x4AllTrue
         | Operator::I32x4Shl
@@ -2071,7 +2075,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I32x4MaxS
         | Operator::I32x4MaxU
         | Operator::F32x4ConvertI32x4S
-        | Operator::F32x4ConvertI32x4U => I32X4,
+        | Operator::F32x4ConvertI32x4U
+        | Operator::I32x4Bitmask => I32X4,
 
         Operator::I64x2Splat
         | Operator::V64x2LoadSplat { .. }

@@ -66,7 +66,7 @@ pub enum GlobalValueData {
         ///
         /// If `true`, some backends may use relocation forms that have limited range: for example,
         /// a +/- 2^27-byte range on AArch64. See the documentation for
-        /// [`RelocDistance`](machinst::RelocDistance) for more details.
+        /// [`RelocDistance`](crate::machinst::RelocDistance) for more details.
         colocated: bool,
 
         /// Does this symbol refer to a thread local storage value?

@@ -86,9 +86,9 @@
 //!   formal arguments, would:
 //!   - Accept a pointer P to the struct return area in x0 on entry.
 //!   - Return v3 in x0.
-//!   - Return v2 in memory at [P].
-//!   - Return v1 in memory at [P+8].
-//!   - Return v0 in memory at [P+16].
+//!   - Return v2 in memory at `[P]`.
+//!   - Return v1 in memory at `[P+8]`.
+//!   - Return v0 in memory at `[P+16]`.
 
 use crate::ir;
 use crate::ir::types;

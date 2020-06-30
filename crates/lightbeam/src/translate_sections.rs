@@ -5,14 +5,18 @@ use cranelift_codegen::{binemit, ir};
 use wasmparser::{
     CodeSectionReader, DataSectionReader, ElementSectionReader, ExportSectionReader, FuncType,
     FunctionSectionReader, GlobalSectionReader, ImportSectionReader, MemorySectionReader,
-    MemoryType, TableSectionReader, TableType, TypeSectionReader,
+    MemoryType, TableSectionReader, TableType, TypeDef, TypeSectionReader,
 };
 
 /// Parses the Type section of the wasm module.
 pub fn type_(types_reader: TypeSectionReader) -> Result<Vec<FuncType>, Error> {
     types_reader
         .into_iter()
-        .map(|r| r.map_err(Into::into))
+        .map(|r| match r {
+            Ok(TypeDef::Func(ft)) => Ok(ft),
+            Ok(_) => unimplemented!("module linking is not implemented yet"),
+            Err(e) => Err(e.into()),
+        })
         .collect()
 }
 

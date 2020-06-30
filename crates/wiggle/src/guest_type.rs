@@ -85,7 +85,7 @@ macro_rules! primitives {
                     start: offset,
                     len: size,
                 };
-                if ptr.borrow_checker().is_borrowed(region) {
+                if ptr.mem().is_borrowed(region) {
                     return Err(GuestError::PtrBorrowed(region));
                 }
                 Ok(unsafe { *host_ptr.cast::<Self>() })
@@ -104,7 +104,7 @@ macro_rules! primitives {
                     start: offset,
                     len: size,
                 };
-                if ptr.borrow_checker().is_borrowed(region) {
+                if ptr.mem().is_borrowed(region) {
                     return Err(GuestError::PtrBorrowed(region));
                 }
                 unsafe {

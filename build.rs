@@ -200,28 +200,20 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", "simd_load") => return true, // FIXME Unsupported feature: proposed SIMD operator I32x4TruncSatF32x4S
             ("simd", "simd_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator I32x4TruncSatF32x4S
 
-            // not parsed in wasmparser yet
-            ("simd", "simd_i32x4_arith2") => return true,
-            ("simd", "simd_i16x8_arith2") => return true,
-            ("simd", "simd_i8x16_arith2") => return true,
-
-            // waiting for the upstream spec to get updated with new binary
-            // encodings of operations and for that to propagate to the
-            // testsuite repo.
-            ("simd", "simd_const") => return true,
-
-            ("reference_types", "table_copy_on_imported_tables")
-            | ("reference_types", "externref_id_function")
-            | ("reference_types", "table_size")
-            | ("reference_types", "simple_ref_is_null")
-            | ("reference_types", "table_grow_with_funcref") => {
-                // TODO(#1886): Ignore if this isn't x64, because Cranelift only
-                // supports reference types on x64.
-                return env::var("CARGO_CFG_TARGET_ARCH").unwrap() != "x86_64";
+            // Still working on implementing these. See #929.
+            ("reference_types", "global")
+            | ("reference_types", "linking")
+            | ("reference_types", "ref_func")
+            | ("reference_types", "ref_null")
+            | ("reference_types", "table_fill") => {
+                return true;
             }
 
-            // Still working on implementing these. See #929.
-            ("reference_types", _) => return true,
+            // TODO(#1886): Ignore reference types tests if this isn't x64,
+            // because Cranelift only supports reference types on x64.
+            ("reference_types", _) => {
+                return env::var("CARGO_CFG_TARGET_ARCH").unwrap() != "x86_64";
+            }
 
             _ => {}
         },

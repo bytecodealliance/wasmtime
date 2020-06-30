@@ -232,6 +232,32 @@ impl PerCpuModeEncodings {
     }
 
     /// Add encodings for `inst.r32` to X86_32.
+    /// Add encodings for `inst.r32` to X86_64 with and without REX.
+    /// Add encodings for `inst.r64` to X86_64 with a REX.W prefix.
+    fn enc_r32_r64_instp(
+        &mut self,
+        inst: &Instruction,
+        template: Template,
+        instp: InstructionPredicateNode,
+    ) {
+        self.enc32_func(inst.bind(R32), template.nonrex(), |builder| {
+            builder.inst_predicate(instp.clone())
+        });
+
+        // REX-less encoding must come after REX encoding so we don't use it by default. Otherwise
+        // reg-alloc would never use r8 and up.
+        self.enc64_func(inst.bind(R32), template.rex(), |builder| {
+            builder.inst_predicate(instp.clone())
+        });
+        self.enc64_func(inst.bind(R32), template.nonrex(), |builder| {
+            builder.inst_predicate(instp.clone())
+        });
+        self.enc64_func(inst.bind(R64), template.rex().w(), |builder| {
+            builder.inst_predicate(instp)
+        });
+    }
+
+    /// Add encodings for `inst.r32` to X86_32.
     /// Add encodings for `inst.r64` to X86_64 with a REX.W prefix.
     fn enc_r32_r64_rex_only(&mut self, inst: impl Into<InstSpec>, template: Template) {
         let inst: InstSpec = inst.into();
@@ -810,6 +836,11 @@ fn define_memory(
             recipe.opcodes(&MOV_LOAD),
             is_load_complex_length_two.clone(),
         );
+        e.enc_r32_r64_instp(
+            load_complex,
+            recipe.opcodes(&MOV_LOAD),
+            is_load_complex_length_two.clone(),
+        );
         e.enc_x86_64_instp(
             uload32_complex,
             recipe.opcodes(&MOV_LOAD),
@@ -851,6 +882,11 @@ fn define_memory(
 
     for recipe in &[rec_stWithIndex, rec_stWithIndexDisp8, rec_stWithIndexDisp32] {
         e.enc_i32_i64_instp(
+            store_complex,
+            recipe.opcodes(&MOV_STORE),
+            is_store_complex_length_three.clone(),
+        );
+        e.enc_r32_r64_instp(
             store_complex,
             recipe.opcodes(&MOV_STORE),
             is_store_complex_length_three.clone(),
@@ -947,6 +983,10 @@ fn define_memory(
     for &ty in &[F64, F32] {
         e.enc64_rec(fill_nop.bind(ty), rec_ffillnull, 0);
         e.enc32_rec(fill_nop.bind(ty), rec_ffillnull, 0);
+    }
+    for &ty in &[R64, R32] {
+        e.enc64_rec(fill_nop.bind(ty), rec_fillnull, 0);
+        e.enc32_rec(fill_nop.bind(ty), rec_fillnull, 0);
     }
 
     // Load 32 bits from `b1`, `i8` and `i16` spill slots. See `spill.b1` above.
@@ -1598,6 +1638,7 @@ fn define_simd(
     let fill_nop = shared.by_name("fill_nop");
     let fmul = shared.by_name("fmul");
     let fsub = shared.by_name("fsub");
+    let iabs = shared.by_name("iabs");
     let iadd = shared.by_name("iadd");
     let icmp = shared.by_name("icmp");
     let imul = shared.by_name("imul");
@@ -2142,6 +2183,12 @@ fn define_simd(
     for (ty, opcodes) in &[(I8, &PAVGB[..]), (I16, &PAVGW[..])] {
         let avgr = avg_round.bind(vector(*ty, sse_vector_size));
         e.enc_both_inferred(avgr, rec_fa.opcodes(opcodes));
+    }
+
+    // SIMD integer absolute value.
+    for (ty, opcodes) in &[(I8, &PABSB[..]), (I16, &PABSW[..]), (I32, &PABSD)] {
+        let iabs = iabs.bind(vector(*ty, sse_vector_size));
+        e.enc_both_inferred_maybe_isap(iabs, rec_furm.opcodes(opcodes), Some(use_ssse3_simd));
     }
 
     // SIMD logical operations

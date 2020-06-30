@@ -58,6 +58,12 @@ test = false
 doc = false
 
 [[bin]]
+name = "table_ops"
+path = "fuzz_targets/table_ops.rs"
+test = false
+doc = false
+
+[[bin]]
 name = "peepmatic_simple_automata"
 path = "fuzz_targets/peepmatic_simple_automata.rs"
 test = false

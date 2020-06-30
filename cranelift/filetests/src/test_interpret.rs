@@ -1,6 +1,7 @@
 //! Test command for interpreting CLIF files and verifying their results
 //!
-//! The `interpret` test command interprets each function on the host machine using [RunCommand]s.
+//! The `interpret` test command interprets each function on the host machine
+//! using [RunCommand](cranelift_reader::RunCommand)s.
 
 use crate::subtest::{Context, SubTest, SubtestResult};
 use cranelift_codegen::{self, ir};

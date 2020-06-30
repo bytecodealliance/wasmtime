@@ -185,7 +185,6 @@ int main(int argc, const char* argv[]) {
 
   // Try cloning.
   wasm_memory_t* copy = wasm_memory_copy(memory);
-  assert(wasm_memory_same(memory, copy));
   wasm_memory_delete(copy);
 
   // Check initial memory.
