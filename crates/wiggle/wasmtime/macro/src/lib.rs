@@ -212,13 +212,7 @@ fn generate_func(
                             #handle_early_error
                         }
                     };
-                    // Wiggle does not expose any methods for functions to re-enter the WebAssembly
-                    // instance, or expose the memory via non-wiggle mechanisms. However, the
-                    // user-defined code may end up re-entering the instance, in which case this
-                    // is an incorrect implementation - we require exactly one BorrowChecker exist
-                    // per instance.
-                    let bc = #runtime::BorrowChecker::new();
-                    let mem = #runtime::WasmtimeGuestMemory::new( mem, bc );
+                    let mem = #runtime::WasmtimeGuestMemory::new(mem);
                     #target_module::#name_ident(
                         &mut my_cx.borrow_mut(),
                         &mem,
