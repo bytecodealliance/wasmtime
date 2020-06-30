@@ -160,7 +160,7 @@ impl X64ABIBody {
         let call_conv = f.signature.call_conv;
         debug_assert!(
             call_conv == isa::CallConv::SystemV || call_conv.extends_baldrdash(),
-            "unsupported or unimplemented calling convetion {}",
+            "unsupported or unimplemented calling convention {}",
             call_conv
         );
 
@@ -695,12 +695,18 @@ fn compute_arg_locs(
                 ArgsOrRets::Args => get_intreg_for_arg_systemv(next_gpr),
                 ArgsOrRets::Rets => get_intreg_for_retval_systemv(next_gpr),
             };
+            debug_assert!(candidate
+                .map(|r| r.get_class() == RegClass::I64)
+                .unwrap_or(true));
             (&mut next_gpr, candidate)
         } else {
             let candidate = match args_or_rets {
-                ArgsOrRets::Args => get_fltreg_for_arg_systemv(next_gpr),
-                ArgsOrRets::Rets => get_fltreg_for_retval_systemv(next_gpr),
+                ArgsOrRets::Args => get_fltreg_for_arg_systemv(next_vreg),
+                ArgsOrRets::Rets => get_fltreg_for_retval_systemv(next_vreg),
             };
+            debug_assert!(candidate
+                .map(|r| r.get_class() == RegClass::V128)
+                .unwrap_or(true));
             (&mut next_vreg, candidate)
         };
 
