@@ -217,7 +217,11 @@ pub unsafe fn symlinkat<P: AsRef<OsStr>>(old_path: P, new_dirfd: RawFd, new_path
     ))
 }
 
-pub unsafe fn fstatat<P: AsRef<OsStr>>(dirfd: RawFd, path: P, flags: AtFlags) -> Result<libc::stat> {
+pub unsafe fn fstatat<P: AsRef<OsStr>>(
+    dirfd: RawFd,
+    path: P,
+    flags: AtFlags,
+) -> Result<libc::stat> {
     use std::mem::MaybeUninit;
     let path = CString::new(path.as_ref().as_bytes())?;
     let mut filestat = MaybeUninit::<libc::stat>::uninit();
