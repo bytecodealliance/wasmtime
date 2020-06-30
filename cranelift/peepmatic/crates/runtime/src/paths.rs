@@ -31,6 +31,7 @@ use std::convert::TryInto;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 /// A path through the data-flow graph from the root instruction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -65,7 +66,7 @@ pub struct PathInterner {
 
     /// Bump allocation arena for path data. The bump arena ensures that these
     /// allocations never move, and are therefore safe for self-references.
-    arena: bumpalo::Bump,
+    arena: Arc<bumpalo::Bump>,
 }
 
 impl PathInterner {
@@ -73,6 +74,22 @@ impl PathInterner {
     #[inline]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    fn with_capacity(capacity: usize) -> Self {
+        PathInterner {
+            map: HashMap::with_capacity(capacity),
+            paths: Vec::with_capacity(capacity),
+            arena: Arc::new(bumpalo::Bump::new()),
+        }
+    }
+
+    fn with_capacity_and_arena(capacity: usize, arena: Arc<bumpalo::Bump>) -> Self {
+        PathInterner {
+            map: HashMap::with_capacity(capacity),
+            paths: Vec::with_capacity(capacity),
+            arena,
+        }
     }
 
     /// Intern a path into this `PathInterner`, returning its canonical
@@ -93,34 +110,46 @@ impl PathInterner {
 
     #[inline(never)]
     fn intern_new<'a>(&mut self, path: Path<'a>) -> PathId {
-        let id: u16 = self
-            .paths
-            .len()
-            .try_into()
-            .expect("too many paths interned");
-        let id = PathId(id);
+        let id = self.next_id();
 
         let our_path = self.arena.alloc_slice_copy(&path.0);
         let unsafe_path = unsafe { UnsafePath::from_slice(&our_path) };
 
-        self.paths.push(unsafe_path.clone());
-        let old = self.map.insert(unsafe_path, id);
+        self.insert_path_with_id(id, unsafe_path.clone());
 
-        debug_assert!(old.is_none());
         debug_assert_eq!(self.lookup(id), path);
         debug_assert_eq!(self.intern(path), id);
 
         id
     }
 
+    fn next_id(&self) -> PathId {
+        let id: u16 = self
+            .paths
+            .len()
+            .try_into()
+            .expect("too many paths interned");
+        PathId(id)
+    }
+
+    fn insert_path_with_id(&mut self, id: PathId, unsafe_path: UnsafePath) {
+        self.paths.push(unsafe_path.clone());
+        let old = self.map.insert(unsafe_path, id);
+
+        debug_assert!(old.is_none());
+    }
+
     /// Lookup a previously interned path by id.
     #[inline]
     pub fn lookup<'a>(&'a self, id: PathId) -> Path<'a> {
-        let unsafe_path = self
-            .paths
-            .get(id.0 as usize)
-            .unwrap_or_else(|| Self::lookup_failure());
+        let unsafe_path = self.lookup_unsafe_path(id);
         unsafe { unsafe_path.as_path() }
+    }
+
+    fn lookup_unsafe_path(&self, id: PathId) -> &UnsafePath {
+        self.paths
+            .get(id.0 as usize)
+            .unwrap_or_else(|| Self::lookup_failure())
     }
 
     #[inline(never)]
@@ -129,6 +158,56 @@ impl PathInterner {
             "no path for the given id; this can only happen when mixing `PathId`s with different \
              `PathInterner`s"
         )
+    }
+
+    /// Create a `PathInternerCompactor` that can be used to trim unused `Path`s from
+    /// this `PathInterner`.
+    pub fn compact(&self) -> PathInternerCompactor {
+        PathInternerCompactor::new(self)
+    }
+}
+
+/// A struct used to incrementally build up a new PathInterner
+#[derive(Debug)]
+pub struct PathInternerCompactor<'old> {
+    old: &'old PathInterner,
+    new: PathInterner,
+}
+
+impl<'old> PathInternerCompactor<'old> {
+    fn new(old: &'old PathInterner) -> Self {
+        let new = PathInterner::with_capacity_and_arena(old.paths.len(), Arc::clone(&old.arena));
+
+        Self { old, new }
+    }
+
+    /// Convert a `PathId` from an old `PathInterner` to a new `PathId`.
+    pub fn map(&mut self, old_id: PathId) -> PathId {
+        // Check for an existing id, if not pull the `UnsafePath` data
+        // from the old interner and correctly insert it into the new
+        // interner. This should reuse the allocation of the
+        // old `bumpalo::Bump`.
+
+        let unsafe_path = self.old.lookup_unsafe_path(old_id);
+        if let Some(new_id) = self.new.map.get(&unsafe_path) {
+            return *new_id;
+        }
+
+        let new_id = self.new.next_id();
+
+        self.new.insert_path_with_id(new_id, unsafe_path.clone());
+
+        new_id
+    }
+
+    /// Consume the compactor and produce a new `PathInterner`.
+    pub fn finish(self) -> PathInterner {
+        log::debug!(
+            "Creating new PathInterner that {} fewer interned values.",
+            self.old.paths.len() - self.new.paths.len()
+        );
+
+        self.new
     }
 }
 
@@ -175,11 +254,7 @@ impl<'de> Visitor<'de> for PathInternerVisitor {
         const DEFAULT_CAPACITY: usize = 16;
         let capacity = access.size_hint().unwrap_or(DEFAULT_CAPACITY);
 
-        let mut interner = PathInterner {
-            map: HashMap::with_capacity(capacity),
-            paths: Vec::with_capacity(capacity),
-            arena: bumpalo::Bump::new(),
-        };
+        let mut interner = PathInterner::with_capacity(capacity);
 
         while let Some(path) = access.next_element::<Path>()? {
             interner.intern(path);
@@ -286,6 +361,61 @@ mod tests {
         .map(|(i, _)| i)
     }
 
+    fn fill_interner(interner: &mut PathInterner, num_paths: usize) -> Vec<PathId> {
+        let full_path: Vec<u8> = fib_iter(20, num_paths)
+            .map(|i| u8::try_from(i % 256).unwrap())
+            .collect();
+
+        (1..=num_paths)
+            .map(|path_len| {
+                let path = &full_path[..path_len];
+
+                interner.intern(Path(&path))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_compact_interner() {
+        let mut original_interner = PathInterner::new();
+        let path_ids = fill_interner(&mut original_interner, 10);
+
+        let mut compactor = original_interner.compact();
+
+        let new_path_ids = &[
+            (path_ids[1], compactor.map(path_ids[1])),
+            (path_ids[3], compactor.map(path_ids[3])),
+            (path_ids[5], compactor.map(path_ids[5])),
+            (path_ids[7], compactor.map(path_ids[7])),
+            (path_ids[9], compactor.map(path_ids[9])),
+        ];
+
+        let new_interner = compactor.finish();
+
+        // Check that the paths that were `map`ped are still present
+        for (old_id, new_id) in new_path_ids {
+            assert_eq!(
+                original_interner.lookup(*old_id),
+                new_interner.lookup(*new_id)
+            );
+        }
+
+        // Check that the `PathId`s that were not `map`ped are not present
+        for unused_path_id in &[
+            path_ids[0],
+            path_ids[2],
+            path_ids[4],
+            path_ids[6],
+            path_ids[8],
+        ] {
+            let old_unsafe_path = original_interner.lookup_unsafe_path(*unused_path_id);
+
+            // TODO: this test is rather intrusive to the internals of the PathInterner,
+            // maybe there is a better way to do this.
+            assert!(matches!(new_interner.map.get(old_unsafe_path), None));
+        }
+    }
+
     #[test]
     fn test_ser_de_empty_interner() {
         let interner = PathInterner::new();
@@ -299,15 +429,7 @@ mod tests {
     #[test]
     fn test_ser_de_fib_path_interner() {
         let mut interner = PathInterner::new();
-        let full_path: Vec<u8> = fib_iter(20, 4)
-            .map(|i| u8::try_from(i % 256).unwrap())
-            .collect();
-
-        for path_len in 1..5 {
-            let path = &full_path[..path_len];
-
-            interner.intern(Path(&path));
-        }
+        fill_interner(&mut interner, 4);
 
         // NOTE: The serialized and deserialized forms are different
         // for somewhat unknown reasons.
