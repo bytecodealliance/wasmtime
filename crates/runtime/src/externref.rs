@@ -21,7 +21,7 @@
 //! The `VMExternData` struct is *preceded* by the dynamically-sized value boxed
 //! up and referenced by one or more `VMExternRef`s:
 //!
-//! ```ignore
+//! ```text
 //!      ,-------------------------------------------------------.
 //!      |                                                       |
 //!      V                                                       |

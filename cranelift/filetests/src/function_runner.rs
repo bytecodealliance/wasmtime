@@ -39,7 +39,8 @@ pub struct SingleFunctionCompiler {
 
 impl SingleFunctionCompiler {
     /// Build a [SingleFunctionCompiler] from a [TargetIsa]. For functions to be runnable on the
-    /// host machine, this [TargetISA] must match the host machine's ISA (see [with_host_isa]).
+    /// host machine, this [TargetIsa] must match the host machine's ISA (see
+    /// [SingleFunctionCompiler::with_host_isa]).
     pub fn new(isa: Box<dyn TargetIsa>) -> Self {
         let trampolines = HashMap::new();
         Self { isa, trampolines }
