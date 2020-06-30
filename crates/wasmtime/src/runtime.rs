@@ -89,6 +89,7 @@ impl Config {
                     enable_simd: false,
                     enable_multi_value: true,
                     enable_tail_call: false,
+                    enable_module_linking: false,
                 },
             },
             flags,
