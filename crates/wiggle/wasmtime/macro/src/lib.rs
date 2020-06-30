@@ -21,7 +21,7 @@ use config::{MissingMemoryConf, ModuleConf, TargetConf};
 ///   where the macro is invoked. `witx_literal` takes a string of the witx document, e.g.
 ///   `"(typename $foo u8)"`.
 /// * `ctx`: The context struct used for the Wiggle implementation. This must be the same
-///   type as the [`wasmtime_wiggle::from_witx`] macro at `target` was invoked with. However, it
+///   type as the `wasmtime_wiggle::from_witx` macro at `target` was invoked with. However, it
 ///   must be imported to the current scope so that it is a bare identifier e.g. `CtxType`, not
 ///   `path::to::CtxType`.
 /// * `modules`: Describes how any modules in the witx document will be implemented as Wasmtime

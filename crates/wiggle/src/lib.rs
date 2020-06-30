@@ -61,7 +61,7 @@ pub use region::Region;
 /// See the safety guarantees of [`BorrowChecker`], which asserts that exactly
 /// one `BorrowChecker` may be constructed for each WebAssembly memory.
 ///
-/// The [`GuestMemory::as_slice`] or [`GuestPtr::as_str`] will return smart
+/// The [`GuestPtr::as_slice`] or [`GuestPtr::as_str`] will return smart
 /// pointers [`GuestSlice`] and [`GuestStr`]. These types, which implement
 /// [`std::ops::Deref`] and [`std::ops::DerefMut`], provide mutable references
 /// into the memory region given by a `GuestMemory`.
