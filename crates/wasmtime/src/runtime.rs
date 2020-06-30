@@ -813,8 +813,8 @@ pub(crate) struct StoreInner {
     instances: RefCell<Vec<InstanceHandle>>,
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
     jit_code_ranges: RefCell<Vec<(usize, usize)>>,
-    externref_activations_table: Rc<VMExternRefActivationsTable>,
-    stack_map_registry: Rc<StackMapRegistry>,
+    externref_activations_table: VMExternRefActivationsTable,
+    stack_map_registry: StackMapRegistry,
 }
 
 struct HostInfoKey(VMExternRef);
@@ -854,8 +854,8 @@ impl Store {
                 instances: RefCell::new(Vec::new()),
                 signal_handler: RefCell::new(None),
                 jit_code_ranges: RefCell::new(Vec::new()),
-                externref_activations_table: Rc::new(VMExternRefActivationsTable::new()),
-                stack_map_registry: Rc::new(StackMapRegistry::default()),
+                externref_activations_table: VMExternRefActivationsTable::new(),
+                stack_map_registry: StackMapRegistry::default(),
             }),
         }
     }
@@ -1091,11 +1091,11 @@ impl Store {
         }
     }
 
-    pub(crate) fn externref_activations_table(&self) -> &Rc<VMExternRefActivationsTable> {
+    pub(crate) fn externref_activations_table(&self) -> &VMExternRefActivationsTable {
         &self.inner.externref_activations_table
     }
 
-    pub(crate) fn stack_map_registry(&self) -> &Rc<StackMapRegistry> {
+    pub(crate) fn stack_map_registry(&self) -> &StackMapRegistry {
         &self.inner.stack_map_registry
     }
 
@@ -1106,8 +1106,8 @@ impl Store {
         // used with this store in `self.inner.stack_map_registry`.
         unsafe {
             wasmtime_runtime::gc(
-                &*self.inner.stack_map_registry,
-                &*self.inner.externref_activations_table,
+                &self.inner.stack_map_registry,
+                &self.inner.externref_activations_table,
             );
         }
     }

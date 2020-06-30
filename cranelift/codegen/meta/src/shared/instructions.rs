@@ -211,7 +211,7 @@ fn define_control_flow(
     let iAddr = &TypeVar::new(
         "iAddr",
         "An integer address type",
-        TypeSetBuilder::new().ints(32..64).build(),
+        TypeSetBuilder::new().ints(32..64).refs(32..64).build(),
     );
 
     {
@@ -744,7 +744,7 @@ pub(crate) fn define(
     let iAddr = &TypeVar::new(
         "iAddr",
         "An integer address type",
-        TypeSetBuilder::new().ints(32..64).build(),
+        TypeSetBuilder::new().ints(32..64).refs(32..64).build(),
     );
 
     let Ref = &TypeVar::new(

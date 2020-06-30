@@ -206,6 +206,11 @@ impl<'a> FunctionBuilder<'a> {
         }
     }
 
+    /// Get the block that this builder is currently at.
+    pub fn current_block(&self) -> Option<Block> {
+        self.position.expand()
+    }
+
     /// Set the source location that should be assigned to all new instructions.
     pub fn set_srcloc(&mut self, srcloc: ir::SourceLoc) {
         self.srcloc = srcloc;
@@ -221,6 +226,11 @@ impl<'a> FunctionBuilder<'a> {
             user_param_count: 0,
         };
         block
+    }
+
+    /// Insert `block` in the layout *after* the existing block `after`.
+    pub fn insert_block_after(&mut self, block: Block, after: Block) {
+        self.func.layout.insert_block_after(block, after);
     }
 
     /// After the call to this function, new instructions will be inserted into the designated

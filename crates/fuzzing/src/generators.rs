@@ -11,6 +11,8 @@
 #[cfg(feature = "binaryen")]
 pub mod api;
 
+pub mod table_ops;
+
 use arbitrary::{Arbitrary, Unstructured};
 
 /// A Wasm test case generator that is powered by Binaryen's `wasm-opt -ttf`.

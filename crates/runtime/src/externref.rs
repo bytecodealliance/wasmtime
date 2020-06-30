@@ -168,7 +168,7 @@ use wasmtime_environ::{ir::Stackmap, StackMapInformation};
 pub struct VMExternRef(NonNull<VMExternData>);
 
 #[repr(C)]
-struct VMExternData {
+pub(crate) struct VMExternData {
     // Implicit, dynamically-sized member that always preceded an
     // `VMExternData`.
     //
@@ -237,7 +237,7 @@ impl VMExternData {
     }
 
     /// Drop the inner value and then free this `VMExternData` heap allocation.
-    unsafe fn drop_and_dealloc(mut data: NonNull<VMExternData>) {
+    pub(crate) unsafe fn drop_and_dealloc(mut data: NonNull<VMExternData>) {
         // Note: we introduce a block scope so that we drop the live
         // reference to the data before we free the heap allocation it
         // resides within after this block.
@@ -614,17 +614,39 @@ impl VMExternRefActivationsTable {
         }
     }
 
-    fn insert_precise_stack_root(&self, root: NonNull<VMExternData>) {
-        let mut precise_stack_roots = self.precise_stack_roots.borrow_mut();
+    fn insert_precise_stack_root(
+        precise_stack_roots: &mut HashSet<VMExternRefWithTraits>,
+        root: NonNull<VMExternData>,
+    ) {
         let root = unsafe { VMExternRef::clone_from_raw(root.as_ptr() as *mut _) };
         precise_stack_roots.insert(VMExternRefWithTraits(root));
     }
 
     /// Sweep the bump allocation table after we've discovered our precise stack
     /// roots.
-    fn sweep(&self) {
+    fn sweep(&self, precise_stack_roots: &mut HashSet<VMExternRefWithTraits>) {
+        // Swap out the over-approximated set so we can distinguish between the
+        // over-approximation before we started sweeping, and any new elements
+        // we might insert into the table because of re-entering Wasm via an
+        // `externref`'s destructor. The new elements must be kept alive for
+        // memory safety, but we keep this set around because we likely want to
+        // reuse its allocation/capacity for the new `precise_stack_roots` in
+        // the next GC cycle.
+        let mut old_over_approximated = mem::replace(
+            &mut *self.over_approximated_stack_roots.borrow_mut(),
+            Default::default(),
+        );
+
         // Sweep our bump chunk.
+        //
+        // Just in case an `externref` destructor calls back into Wasm, passing
+        // more `externref`s into that Wasm, which requires the `externref`s to
+        // be inserted into this `VMExternRefActivationsTable`, make sure `next
+        // == end` so that they go into the over-approximation hash set.
         let num_filled = self.num_filled_in_bump_chunk();
+        unsafe {
+            *self.next.get() = self.end;
+        }
         for slot in self.chunk.iter().take(num_filled) {
             unsafe {
                 *slot.get() = None;
@@ -637,22 +659,35 @@ impl VMExternRefActivationsTable {
             "after sweeping the bump chunk, all slots should be `None`"
         );
 
-        // Reset our `next` bump allocation finger.
+        // Reset our `next` finger to the start of the bump allocation chunk.
         unsafe {
             let next = self.chunk.as_ptr() as *mut TableElem;
             debug_assert!(!next.is_null());
             *self.next.get() = NonNull::new_unchecked(next);
         }
 
-        // The current `precise_roots` becomes our new over-appoximated set for
-        // the next GC cycle.
-        let mut precise_roots = self.precise_stack_roots.borrow_mut();
+        // The current `precise_stack_roots` becomes our new over-appoximated
+        // set for the next GC cycle.
         let mut over_approximated = self.over_approximated_stack_roots.borrow_mut();
-        mem::swap(&mut *precise_roots, &mut *over_approximated);
+        mem::swap(&mut *precise_stack_roots, &mut *over_approximated);
 
-        // And finally, the new `precise_roots` should be cleared and remain
-        // empty until the next GC cycle.
-        precise_roots.clear();
+        // And finally, the new `precise_stack_roots` should be cleared and
+        // remain empty until the next GC cycle.
+        //
+        // However, if an `externref` destructor called re-entered Wasm with
+        // more `externref`s, then the temp over-approximated set we were using
+        // during sweeping (now `precise_stack_roots`) is not empty, and we need
+        // to keep its references alive in our new over-approximated set.
+        over_approximated.extend(precise_stack_roots.drain());
+
+        // If we didn't re-enter Wasm during destructors (likely),
+        // `precise_stack_roots` has zero capacity, and the old
+        // over-approximated has a bunch of capacity. Reuse whichever set has
+        // most capacity.
+        if old_over_approximated.capacity() > precise_stack_roots.capacity() {
+            old_over_approximated.clear();
+            *precise_stack_roots = old_over_approximated;
+        }
     }
 
     /// Set the stack canary around a call into Wasm.
@@ -866,18 +901,14 @@ impl StackMapRegistry {
             // Exact hit.
             Ok(i) => i,
 
-            Err(n) => {
-                // `Err(0)` means that the associated stack map would have been
-                // the first element in the array if this pc had an associated
-                // stack map, but this pc does not have an associated stack
-                // map. That doesn't make sense since every call and trap inside
-                // Wasm is a GC safepoint and should have a stack map, and the
-                // only way to have Wasm frames under this native frame is if we
-                // are at a call or a trap.
-                debug_assert!(n != 0);
+            // `Err(0)` means that the associated stack map would have been the
+            // first element in the array if this pc had an associated stack
+            // map, but this pc does not have an associated stack map. This can
+            // only happen inside a Wasm frame if there are no live refs at this
+            // pc.
+            Err(0) => return None,
 
-                n - 1
-            }
+            Err(n) => n - 1,
         };
 
         let stack_map = stack_maps.pc_to_stack_map[index].1.clone();
@@ -944,6 +975,20 @@ pub unsafe fn gc(
     stack_maps_registry: &StackMapRegistry,
     externref_activations_table: &VMExternRefActivationsTable,
 ) {
+    // We borrow the precise stack roots `RefCell` for the whole duration of
+    // GC. Whether it is dynamically borrowed serves as a flag for detecting
+    // re-entrancy into GC. Re-entrancy can occur if we do a GC, drop an
+    // `externref`, and that `externref`'s destructor then triggers another
+    // GC. Whenever we detect re-entrancy, we return and give the first,
+    // outermost GC call priority.
+    let mut precise_stack_roots = match externref_activations_table
+        .precise_stack_roots
+        .try_borrow_mut()
+    {
+        Err(_) => return,
+        Ok(roots) => roots,
+    };
+
     log::debug!("start GC");
 
     debug_assert!({
@@ -952,7 +997,6 @@ pub unsafe fn gc(
         // into the activations table's bump-allocated space at the
         // end. Therefore, it should always be empty upon entering this
         // function.
-        let precise_stack_roots = externref_activations_table.precise_stack_roots.borrow();
         precise_stack_roots.is_empty()
     });
 
@@ -971,7 +1015,7 @@ pub unsafe fn gc(
                     true
                 });
             }
-            externref_activations_table.sweep();
+            externref_activations_table.sweep(&mut precise_stack_roots);
             log::debug!("end GC");
             return;
         }
@@ -1029,7 +1073,10 @@ pub unsafe fn gc(
                          have an entry in the VMExternRefActivationsTable"
                     );
                     if let Some(r) = NonNull::new(r) {
-                        externref_activations_table.insert_precise_stack_root(r);
+                        VMExternRefActivationsTable::insert_precise_stack_root(
+                            &mut precise_stack_roots,
+                            r,
+                        );
                     }
                 }
             }
@@ -1056,11 +1103,10 @@ pub unsafe fn gc(
     // would free those missing roots while they are still in use, leading to
     // use-after-free.
     if found_canary {
-        externref_activations_table.sweep();
+        externref_activations_table.sweep(&mut precise_stack_roots);
     } else {
         log::warn!("did not find stack canary; skipping GC sweep");
-        let mut roots = externref_activations_table.precise_stack_roots.borrow_mut();
-        roots.clear();
+        precise_stack_roots.clear();
     }
 
     log::debug!("end GC");
