@@ -240,3 +240,132 @@ impl UnsafePath {
         Path(self.as_slice())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_test::{assert_de_tokens, assert_ser_tokens, assert_tokens, Token};
+    use std::convert::TryFrom;
+    use std::iter::successors;
+
+    #[derive(Serialize, Deserialize)]
+    #[serde(transparent)]
+    pub struct OrderedPathInterner(PathInterner);
+
+    impl PartialEq for OrderedPathInterner {
+        fn eq(&self, other: &OrderedPathInterner) -> bool {
+            let lhs_iter = self.0.paths.iter().map(|p| unsafe { p.as_path() });
+            let rhs_iter = other.0.paths.iter().map(|p| unsafe { p.as_path() });
+
+            lhs_iter.eq(rhs_iter)
+        }
+    }
+
+    impl fmt::Debug for OrderedPathInterner {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.debug_struct("OrderedPathInterner")
+                .field(
+                    "paths",
+                    &self
+                        .0
+                        .paths
+                        .iter()
+                        .map(|p| unsafe { p.as_path() })
+                        .collect::<Vec<_>>(),
+                )
+                .finish()
+        }
+    }
+
+    fn fib_iter(skip: usize, take: usize) -> impl Iterator<Item = u64> {
+        successors(Some((0, 1)), |(a, b): &(u64, u64)| {
+            a.checked_add(*b).map(|c| (*b, c))
+        })
+        .skip(skip)
+        .take(take)
+        .map(|(i, _)| i)
+    }
+
+    #[test]
+    fn test_ser_de_empty_interner() {
+        let interner = PathInterner::new();
+
+        assert_tokens(
+            &OrderedPathInterner(interner),
+            &[Token::Seq { len: Some(0) }, Token::SeqEnd],
+        );
+    }
+
+    #[test]
+    fn test_ser_de_fib_path_interner() {
+        let mut interner = PathInterner::new();
+        let full_path: Vec<u8> = fib_iter(20, 4)
+            .map(|i| u8::try_from(i % 256).unwrap())
+            .collect();
+
+        for path_len in 1..5 {
+            let path = &full_path[..path_len];
+
+            interner.intern(Path(&path));
+        }
+
+        // NOTE: The serialized and deserialized forms are different
+        // for somewhat unknown reasons.
+
+        assert_ser_tokens(
+            &interner,
+            &[
+                Token::Seq { len: Some(4) },
+                // first path
+                Token::NewtypeStruct { name: "Path" },
+                Token::Seq { len: Some(1) },
+                Token::U8(109),
+                Token::SeqEnd,
+                // second path
+                Token::NewtypeStruct { name: "Path" },
+                Token::Seq { len: Some(2) },
+                Token::U8(109),
+                Token::U8(194),
+                Token::SeqEnd,
+                // third path
+                Token::NewtypeStruct { name: "Path" },
+                Token::Seq { len: Some(3) },
+                Token::U8(109),
+                Token::U8(194),
+                Token::U8(47),
+                Token::SeqEnd,
+                // first path
+                Token::NewtypeStruct { name: "Path" },
+                Token::Seq { len: Some(4) },
+                Token::U8(109),
+                Token::U8(194),
+                Token::U8(47),
+                Token::U8(241),
+                Token::SeqEnd,
+                // end
+                Token::SeqEnd,
+            ],
+        );
+
+        assert_de_tokens(
+            &OrderedPathInterner(interner),
+            &[
+                Token::Seq { len: Some(4) },
+                // first path
+                Token::NewtypeStruct { name: "Path" },
+                Token::BorrowedBytes(&[109]),
+                // second path
+                Token::NewtypeStruct { name: "Path" },
+                Token::BorrowedBytes(&[109, 194]),
+                // third path
+                Token::NewtypeStruct { name: "Path" },
+                Token::BorrowedBytes(&[109, 194, 47]),
+                // first path
+                Token::NewtypeStruct { name: "Path" },
+                Token::BorrowedBytes(&[109, 194, 47, 241]),
+                // end
+                Token::SeqEnd,
+            ],
+        );
+    }
+}
