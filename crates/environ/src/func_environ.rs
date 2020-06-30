@@ -735,22 +735,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let gc_block = builder.create_block();
                 let no_gc_block = builder.create_block();
                 let current_block = builder.current_block().unwrap();
-                builder
-                    .func
-                    .layout
-                    .insert_block_after(non_null_elem_block, current_block);
-                builder
-                    .func
-                    .layout
-                    .insert_block_after(no_gc_block, non_null_elem_block);
-                builder
-                    .func
-                    .layout
-                    .insert_block_after(gc_block, no_gc_block);
-                builder
-                    .func
-                    .layout
-                    .insert_block_after(continue_block, gc_block);
+                builder.insert_block_after(non_null_elem_block, current_block);
+                builder.insert_block_after(no_gc_block, non_null_elem_block);
+                builder.insert_block_after(gc_block, no_gc_block);
+                builder.insert_block_after(continue_block, gc_block);
 
                 // Load the table element.
                 let elem_addr = builder.ins().table_addr(pointer_type, table, index, 0);
@@ -893,30 +881,15 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
                 let current_block = builder.current_block().unwrap();
                 let inc_ref_count_block = builder.create_block();
-                builder
-                    .func
-                    .layout
-                    .insert_block_after(inc_ref_count_block, current_block);
+                builder.insert_block_after(inc_ref_count_block, current_block);
                 let check_current_elem_block = builder.create_block();
-                builder
-                    .func
-                    .layout
-                    .insert_block_after(check_current_elem_block, inc_ref_count_block);
+                builder.insert_block_after(check_current_elem_block, inc_ref_count_block);
                 let dec_ref_count_block = builder.create_block();
-                builder
-                    .func
-                    .layout
-                    .insert_block_after(dec_ref_count_block, check_current_elem_block);
+                builder.insert_block_after(dec_ref_count_block, check_current_elem_block);
                 let drop_block = builder.create_block();
-                builder
-                    .func
-                    .layout
-                    .insert_block_after(drop_block, dec_ref_count_block);
+                builder.insert_block_after(drop_block, dec_ref_count_block);
                 let continue_block = builder.create_block();
-                builder
-                    .func
-                    .layout
-                    .insert_block_after(continue_block, drop_block);
+                builder.insert_block_after(continue_block, drop_block);
 
                 // Calculate the table address of the current element and do
                 // bounds checks. This is the first thing we do, because we
