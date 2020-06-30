@@ -21,6 +21,9 @@ bitflags! {
         const REMOVEDIR = libc::AT_REMOVEDIR;
         const SYMLINK_FOLLOW = libc::AT_SYMLINK_FOLLOW;
         const SYMLINK_NOFOLLOW = libc::AT_SYMLINK_NOFOLLOW;
+        #[cfg(any(target_os = "linux",
+                  target_os = "fuchsia"))]
+        const EMPTY_PATH = libc::AT_EMPTY_PATH;
     }
 }
 
