@@ -1338,6 +1338,7 @@ dependencies = [
  "peepmatic-automata",
  "peepmatic-macro",
  "serde",
+ "serde_test",
  "thiserror",
  "wast 15.0.0",
 ]
@@ -1878,6 +1879,15 @@ checksum = "ec2c5d7e739bc07a3e73381a39d61fdb5f671c60c1df26a130690665803d8226"
 dependencies = [
  "itoa",
  "ryu",
+ "serde",
+]
+
+[[package]]
+name = "serde_test"
+version = "1.0.114"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f58190d074af17bd48118303db08afadbd506bc2ba511b4582cebd8f882a9b8d"
+dependencies = [
  "serde",
 ]
 
