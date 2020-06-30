@@ -595,7 +595,7 @@ dependencies = [
  "serde",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.57.0",
+ "wasmparser 0.58.0",
  "wat",
 ]
 
@@ -1123,7 +1123,7 @@ dependencies = [
  "staticvec",
  "thiserror",
  "typemap",
- "wasmparser 0.57.0",
+ "wasmparser 0.58.0",
  "wat",
 ]
 
@@ -1338,6 +1338,7 @@ dependencies = [
  "peepmatic-automata",
  "peepmatic-macro",
  "serde",
+ "serde_test",
  "thiserror",
  "wast 15.0.0",
 ]
@@ -1882,6 +1883,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_test"
+version = "1.0.114"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f58190d074af17bd48118303db08afadbd506bc2ba511b4582cebd8f882a9b8d"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "sha2"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2299,9 +2309,9 @@ checksum = "af931e2e1960c53f4a28b063fec4cacd036f35acbec8ff3a4739125b17382a87"
 
 [[package]]
 name = "wasmparser"
-version = "0.57.0"
+version = "0.58.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32fddd575d477c6e9702484139cf9f23dcd554b06d185ed0f56c857dd3a47aa6"
+checksum = "721a8d79483738d7aef6397edcf8f04cd862640b1ad5973adf5bb50fc10e86db"
 
 [[package]]
 name = "wasmprinter"
@@ -2327,7 +2337,7 @@ dependencies = [
  "rustc-demangle",
  "target-lexicon",
  "tempfile",
- "wasmparser 0.57.0",
+ "wasmparser 0.58.0",
  "wasmtime-environ",
  "wasmtime-jit",
  "wasmtime-profiling",
@@ -2400,7 +2410,7 @@ dependencies = [
  "object 0.19.0",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.57.0",
+ "wasmparser 0.58.0",
  "wasmtime-environ",
 ]
 
@@ -2431,7 +2441,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml",
- "wasmparser 0.57.0",
+ "wasmparser 0.58.0",
  "winapi",
  "zstd",
 ]
@@ -2460,7 +2470,7 @@ dependencies = [
  "env_logger",
  "log",
  "rayon",
- "wasmparser 0.57.0",
+ "wasmparser 0.58.0",
  "wasmprinter",
  "wasmtime",
  "wasmtime-wast",
@@ -2484,7 +2494,7 @@ dependencies = [
  "region",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.57.0",
+ "wasmparser 0.58.0",
  "wasmtime-debug",
  "wasmtime-environ",
  "wasmtime-profiling",
@@ -2770,9 +2780,9 @@ dependencies = [
 
 [[package]]
 name = "z3"
-version = "0.5.1"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ded00cd90f8e3a7ea3155bddd72573f2b099ea201877542d924e47b58dd04e72"
+checksum = "f0354c65dfe00e08c4ab30581732906874f97156f424bfb390cf0cca2cb6ac29"
 dependencies = [
  "lazy_static",
  "log",
@@ -2781,9 +2791,9 @@ dependencies = [
 
 [[package]]
 name = "z3-sys"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4002d8a1facb54d02dbfb86151281e5450618ab330936bc2f3acaab31eae11ae"
+checksum = "e1863cafae8eb86dd7d69c9218421b288594e8836346e93d4f36ade427195a21"
 dependencies = [
  "cmake",
 ]

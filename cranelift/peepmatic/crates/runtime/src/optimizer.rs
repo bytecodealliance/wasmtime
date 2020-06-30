@@ -16,7 +16,7 @@ use std::num::NonZeroU32;
 /// optimizations to instructions.
 ///
 /// These are created from a set of peephole optimizations with the
-/// [`PeepholeOptimizer::instance`][crate::PeepholeOptimizer::instance] method.
+/// [`PeepholeOptimizations::optimizer`] method.
 ///
 /// Reusing an instance when applying peephole optimizations to different
 /// instruction sequences means that you reuse internal allocations that are

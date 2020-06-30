@@ -205,11 +205,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", "simd_i16x8_arith2") => return true,
             ("simd", "simd_i8x16_arith2") => return true,
 
-            // waiting for the upstream spec to get updated with new binary
-            // encodings of operations and for that to propagate to the
-            // testsuite repo.
-            ("simd", "simd_const") => return true,
-
             ("reference_types", "table_copy_on_imported_tables")
             | ("reference_types", "externref_id_function")
             | ("reference_types", "table_size")

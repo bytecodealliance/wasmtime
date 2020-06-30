@@ -383,7 +383,7 @@ pub struct ExtFuncData {
     /// flag is best used when the target is known to be in the same unit of code generation, such
     /// as a Wasm module.
     ///
-    /// See the documentation for [`RelocDistance`](machinst::RelocDistance) for more details. A
+    /// See the documentation for [`RelocDistance`](crate::machinst::RelocDistance) for more details. A
     /// `colocated` flag value of `true` implies `RelocDistance::Near`.
     pub colocated: bool,
 }

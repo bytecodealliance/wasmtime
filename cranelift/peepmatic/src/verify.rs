@@ -255,7 +255,7 @@ impl<'a> TypingContext<'a> {
         let is_void = self.is_void(&root_ty);
         let is_cpu_flags = self.is_cpu_flags(&root_ty);
         self.constraints.push((
-            is_int.or(&[&is_bool, &is_void, &is_cpu_flags]),
+            z3::ast::Bool::or(&self.z3, &[&is_int, &is_bool, &is_void, &is_cpu_flags]),
             span,
             Some(
                 "the root of an optimization must be an integer, a boolean, void, or CPU flags"
@@ -719,7 +719,7 @@ impl<'a> TypingContextTrait<'a> for TypingContext<'a> {
             .as_bool()
             .unwrap();
         self.constraints.push((
-            is_int.or(&[&is_bool]),
+            z3::ast::Bool::or(&self.z3, &[&is_int, &is_bool]),
             span,
             Some("type error: must be either an int or a bool type".into()),
         ));
