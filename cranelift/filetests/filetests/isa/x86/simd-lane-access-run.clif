@@ -212,3 +212,10 @@ block0(v0: i32x4, v1: i32x4):
     return v2
 }
 ; run: %snarrow([0 1 -1 0x0001ffff], [4 5 -6 0xffffffff]) == [0 1 -1 0x7fff 4 5 -6 0xffff]
+
+function %unarrow(i32x4, i32x4) -> i16x8 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = unarrow v0, v1
+    return v2
+}
+; run: %unarrow([0 1 -1 0x0001ffff], [4 5 -6 0xffffffff]) == [0 1 0 0xffff 4 5 0 0]

@@ -3914,6 +3914,26 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    ig.push(
+        Inst::new(
+            "unarrow",
+            r#"
+        Combine `x` and `y` into a vector with twice the lanes but half the integer width while 
+        saturating overflowing values to the unsigned maximum and minimum.
+        
+        Note that all input lanes are considered signed: any negative lanes will overflow and be
+        replaced with the unsigned minimum, `0x00`.
+        
+        The lanes will be concatenated after narrowing. For example, when `x` and `y` are `i32x4`
+        and `x = [x3, x2, x1, x0]` and `y = [y3, y2, y1, y0]`, then after narrowing the value
+        returned is an `i16x8`: `a = [y3', y2', y1', y0', x3', x2', x1', x0']`.
+            "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
     let IntTo = &TypeVar::new(
         "IntTo",
         "A larger integer type with the same number of lanes",
