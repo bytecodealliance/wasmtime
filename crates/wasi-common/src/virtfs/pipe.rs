@@ -11,7 +11,6 @@
 //! real pipes exactly.
 use crate::handle::{Handle, HandleRights};
 use crate::wasi::{types, Errno, Result};
-use log::trace;
 use std::any::Any;
 use std::cell::{Cell, Ref, RefCell};
 use std::io::{self, Read, Write};
@@ -48,14 +47,13 @@ impl<R: Read + Any> ReadPipe<R> {
     pub fn from_shared(reader: Rc<RefCell<R>>) -> Self {
         use types::Rights;
         Self {
-            rights: Cell::new(HandleRights::new(
+            rights: Cell::new(HandleRights::from_base(
                 Rights::FD_DATASYNC
                     | Rights::FD_FDSTAT_SET_FLAGS
                     | Rights::FD_READ
                     | Rights::FD_SYNC
                     | Rights::FD_FILESTAT_GET
                     | Rights::POLL_FD_READWRITE,
-                Rights::empty(),
             )),
             reader,
         }
@@ -171,7 +169,6 @@ impl<R: Read + Any> Handle for ReadPipe<R> {
     }
 
     fn read_vectored(&self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
-        trace!("read_vectored(iovs={:?})", iovs);
         Ok(self.reader.borrow_mut().read_vectored(iovs)?)
     }
 
@@ -246,14 +243,13 @@ impl<W: Write + Any> WritePipe<W> {
     pub fn from_shared(writer: Rc<RefCell<W>>) -> Self {
         use types::Rights;
         Self {
-            rights: Cell::new(HandleRights::new(
+            rights: Cell::new(HandleRights::from_base(
                 Rights::FD_DATASYNC
                     | Rights::FD_FDSTAT_SET_FLAGS
                     | Rights::FD_SYNC
                     | Rights::FD_WRITE
                     | Rights::FD_FILESTAT_GET
                     | Rights::POLL_FD_READWRITE,
-                Rights::empty(),
             )),
             writer,
         }
@@ -357,7 +353,6 @@ impl<W: Write + Any> Handle for WritePipe<W> {
     }
 
     fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
-        trace!("write_vectored(iovs={:?})", iovs);
         Ok(self.writer.borrow_mut().write_vectored(iovs)?)
     }
 
