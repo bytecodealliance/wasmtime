@@ -200,6 +200,10 @@ pub enum Inst {
         not_taken: BranchTarget,
     },
 
+    /// A one-way conditional branch, invisible to the CFG processing; used *only* as part of
+    /// straight-line sequences in code to be emitted.
+    OneWayJmpCond { cc: CC, dst: BranchTarget },
+
     /// Indirect jump: jmpq (reg mem).
     JmpUnknown { target: RegMem },
 
@@ -634,7 +638,11 @@ impl ShowWithRRU for Inst {
                 taken.show_rru(mb_rru),
                 not_taken.show_rru(mb_rru)
             ),
-            //
+            Inst::OneWayJmpCond { cc, dst } => format!(
+                "{} {}",
+                ljustify2("j".to_string(), cc.to_string()),
+                dst.show_rru(mb_rru),
+            ),
             Inst::JmpUnknown { target } => format!(
                 "{} *{}",
                 ljustify("jmp".to_string()),
@@ -757,6 +765,7 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         | Inst::EpiloguePlaceholder
         | Inst::JmpKnown { .. }
         | Inst::JmpCond { .. }
+        | Inst::OneWayJmpCond { .. }
         | Inst::Nop { .. }
         | Inst::JmpUnknown { .. }
         | Inst::VirtualSPOffsetAdj { .. }
@@ -970,6 +979,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         | Inst::EpiloguePlaceholder
         | Inst::JmpKnown { .. }
         | Inst::JmpCond { .. }
+        | Inst::OneWayJmpCond { .. }
         | Inst::Nop { .. }
         | Inst::JmpUnknown { .. }
         | Inst::VirtualSPOffsetAdj { .. }
