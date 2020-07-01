@@ -784,11 +784,25 @@ impl Default for Engine {
 
 // Store
 
-/// A `Store` is a shared cache of information between WebAssembly modules.
+/// A `Store` is a collection of WebAssembly instances and host-defined items.
 ///
-/// Each `Module` is compiled into a `Store` and a `Store` is associated with an
-/// [`Engine`]. You'll use a `Store` to attach to a number of global items in
-/// the production of various items for wasm modules.
+/// All WebAssembly instances and items will be attached to and refer to a
+/// `Store`. For example instances, functions, globals, and tables are all
+/// attached to a `Store`. Instances are created by instantiating a [`Module`]
+/// within a `Store`.
+///
+/// `Store` is not thread-safe and cannot be sent to other threads. All items
+/// which refer to a `Store` additionally are not threadsafe and can only be
+/// used on the original thread that they were created on.
+///
+/// A `Store` is not intended to be a long-lived object in a program. No form of
+/// GC is implemented at this time so once an instance is created within a
+/// `Store` it will not be deallocated until all references to the `Store` have
+/// gone away (this includes all references to items in the store). This makes
+/// `Store` unsuitable for creating an unbounded number of instances in it
+/// because `Store` will never release this memory. It's instead recommended to
+/// have a long-lived [`Engine`] and instead create a `Store` for a more scoped
+/// portion of your application.
 ///
 /// # Stores and `Clone`
 ///
