@@ -1021,6 +1021,18 @@ pub(crate) fn emit(
             sink.put4(nt_disp);
         }
 
+        Inst::OneWayJmpCond { cc, dst } => {
+            let cond_start = sink.cur_offset();
+            let cond_disp_off = cond_start + 2;
+            if let Some(l) = dst.as_label() {
+                sink.use_label_at_offset(cond_disp_off, l, LabelUse::JmpRel32);
+            }
+            let dst_disp = dst.as_offset32_or_zero() as u32;
+            sink.put1(0x0F);
+            sink.put1(0x80 + cc.get_enc());
+            sink.put4(dst_disp);
+        }
+
         Inst::JmpUnknown { target } => {
             match target {
                 RegMem::Reg { reg } => {
