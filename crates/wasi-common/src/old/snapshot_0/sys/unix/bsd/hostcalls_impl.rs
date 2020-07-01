@@ -3,12 +3,12 @@ use crate::old::snapshot_0::wasi::{WasiError, WasiResult};
 use std::os::unix::prelude::AsRawFd;
 
 pub(crate) fn path_unlink_file(resolved: PathGet) -> WasiResult<()> {
-    use yanix::file::{unlinkat, AtFlag};
+    use yanix::file::{unlinkat, AtFlags};
     match unsafe {
         unlinkat(
             resolved.dirfd().as_raw_fd(),
             resolved.path(),
-            AtFlag::empty(),
+            AtFlags::empty(),
         )
     } {
         Err(err) => {
@@ -27,7 +27,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> WasiResult<()> {
                     fstatat(
                         resolved.dirfd().as_raw_fd(),
                         resolved.path(),
-                        AtFlag::SYMLINK_NOFOLLOW,
+                        AtFlags::SYMLINK_NOFOLLOW,
                     )
                 } {
                     Ok(stat) => {
@@ -48,7 +48,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> WasiResult<()> {
 }
 
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> WasiResult<()> {
-    use yanix::file::{fstatat, symlinkat, AtFlag};
+    use yanix::file::{fstatat, symlinkat, AtFlags};
 
     log::debug!("path_symlink old_path = {:?}", old_path);
     log::debug!("path_symlink resolved = {:?}", resolved);
@@ -66,7 +66,7 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> WasiResult<()> 
                     fstatat(
                         resolved.dirfd().as_raw_fd(),
                         new_path,
-                        AtFlag::SYMLINK_NOFOLLOW,
+                        AtFlags::SYMLINK_NOFOLLOW,
                     )
                 } {
                     Ok(_) => return Err(WasiError::EEXIST),
@@ -82,7 +82,7 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> WasiResult<()> 
 }
 
 pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> WasiResult<()> {
-    use yanix::file::{fstatat, renameat, AtFlag};
+    use yanix::file::{fstatat, renameat, AtFlags};
     match unsafe {
         renameat(
             resolved_old.dirfd().as_raw_fd(),
@@ -107,7 +107,7 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> WasiR
                     fstatat(
                         resolved_old.dirfd().as_raw_fd(),
                         resolved_old.path(),
-                        AtFlag::SYMLINK_NOFOLLOW,
+                        AtFlags::SYMLINK_NOFOLLOW,
                     )
                 } {
                     Ok(_) => {

@@ -3,8 +3,8 @@ use crate::wasi::Result;
 use std::os::unix::prelude::AsRawFd;
 
 pub(crate) fn unlink_file(dirfd: &OsDir, path: &str) -> Result<()> {
-    use yanix::file::{unlinkat, AtFlag};
-    unsafe { unlinkat(dirfd.as_raw_fd(), path, AtFlag::empty())? };
+    use yanix::file::{unlinkat, AtFlags};
+    unsafe { unlinkat(dirfd.as_raw_fd(), path, AtFlags::empty())? };
     Ok(())
 }
 
