@@ -1471,12 +1471,20 @@ impl MachInstEmit for Inst {
                 }
                 sink.put4(enc_jump26(0b000101, not_taken.as_offset26_or_zero()));
             }
-            &Inst::OneWayCondBr { target, kind } => {
+            &Inst::TrapIf { kind, trap_info } => {
+                // condbr KIND, LABEL
                 let off = sink.cur_offset();
-                if let Some(l) = target.as_label() {
-                    sink.use_label_at_offset(off, l, LabelUse::Branch19);
-                }
-                sink.put4(enc_conditional_br(target, kind));
+                let label = sink.get_label();
+                sink.put4(enc_conditional_br(
+                    BranchTarget::Label(label),
+                    kind.invert(),
+                ));
+                sink.use_label_at_offset(off, label, LabelUse::Branch19);
+                // udf
+                let trap = Inst::Udf { trap_info };
+                trap.emit(sink, flags, state);
+                // LABEL:
+                sink.bind_label(label);
             }
             &Inst::IndirectBr { rn, .. } => {
                 sink.put4(enc_br(rn));
@@ -1514,6 +1522,17 @@ impl MachInstEmit for Inst {
                 // This sequence is *one* instruction in the vcode, and is expanded only here at
                 // emission time, because we cannot allow the regalloc to insert spills/reloads in
                 // the middle; we depend on hardcoded PC-rel addressing below.
+
+                // Branch to default when condition code from prior comparison indicates.
+                let br = enc_conditional_br(info.default_target, CondBrKind::Cond(Cond::Hs));
+                // No need to inform the sink's branch folding logic about this branch, because it
+                // will not be merged with any other branch, flipped, or elided (it is not preceded
+                // or succeeded by any other branch). Just emit it with the label use.
+                let default_br_offset = sink.cur_offset();
+                if let BranchTarget::Label(l) = info.default_target {
+                    sink.use_label_at_offset(default_br_offset, l, LabelUse::Branch19);
+                }
+                sink.put4(br);
 
                 // Save index in a tmp (the live range of ridx only goes to start of this
                 // sequence; rtmp1 or rtmp2 may overwrite it).

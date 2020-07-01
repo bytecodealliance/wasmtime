@@ -426,16 +426,13 @@ block0(v0: f32):
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
 ; nextln:  fcmp s0, s0
-; nextln:  b.vc 8
-; nextln:  udf
+; nextln:  b.vc 8 ; udf
 ; nextln:  ldr s1, pc+8 ; b 8 ; data.f32 -1
 ; nextln:  fcmp s0, s1
-; nextln:  b.gt 8
-; nextln:  udf
+; nextln:  b.gt 8 ; udf
 ; nextln:  ldr s1, pc+8 ; b 8 ; data.f32 4294967300
 ; nextln:  fcmp s0, s1
-; nextln:  b.mi 8
-; nextln:  udf
+; nextln:  b.mi 8 ; udf
 ; nextln:  fcvtzu w0, s0
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
@@ -450,16 +447,13 @@ block0(v0: f32):
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
 ; nextln:  fcmp s0, s0
-; nextln:  b.vc 8
-; nextln:  udf
+; nextln:  b.vc 8 ; udf
 ; nextln:  ldr s1, pc+8 ; b 8 ; data.f32 -2147483600
 ; nextln:  fcmp s0, s1
-; nextln:  b.ge 8
-; nextln:  udf
+; nextln:  b.ge 8 ; udf
 ; nextln:  ldr s1, pc+8 ; b 8 ; data.f32 2147483600
 ; nextln:  fcmp s0, s1
-; nextln:  b.mi
-; nextln:  udf
+; nextln:  b.mi 8 ; udf
 ; nextln:  fcvtzs w0, s0
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
@@ -474,16 +468,13 @@ block0(v0: f32):
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
 ; nextln:  fcmp s0, s0
-; nextln:  b.vc 8
-; nextln:  udf
+; nextln:  b.vc 8 ; udf
 ; nextln:  ldr s1, pc+8 ; b 8 ; data.f32 -1
 ; nextln:  fcmp s0, s1
-; nextln:  b.gt 8
-; nextln:  udf
+; nextln:  b.gt 8 ; udf
 ; nextln:  ldr s1, pc+8 ; b 8 ; data.f32 18446744000000000000
 ; nextln:  fcmp s0, s1
-; nextln:  b.mi 8
-; nextln:  udf
+; nextln:  b.mi 8 ; udf
 ; nextln:  fcvtzu x0, s0
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
@@ -498,16 +489,13 @@ block0(v0: f32):
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
 ; nextln:  fcmp s0, s0
-; nextln:  b.vc 8
-; nextln:  udf
+; nextln:  b.vc 8 ; udf
 ; nextln:  ldr s1, pc+8 ; b 8 ; data.f32 -9223372000000000000
 ; nextln:  fcmp s0, s1
-; nextln:  b.ge 8
-; nextln:  udf
+; nextln:  b.ge 8 ; udf
 ; nextln:  ldr s1, pc+8 ; b 8 ; data.f32 9223372000000000000
 ; nextln:  fcmp s0, s1
-; nextln:  b.mi 8
-; nextln:  udf
+; nextln:  b.mi 8 ; udf
 ; nextln:  fcvtzs x0, s0
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
@@ -522,16 +510,13 @@ block0(v0: f64):
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
 ; nextln:  fcmp d0, d0
-; nextln:  b.vc 8
-; nextln:  udf
+; nextln:  b.vc 8 ; udf
 ; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 -1
 ; nextln:  fcmp d0, d1
-; nextln:  b.gt 8
-; nextln:  udf
+; nextln:  b.gt 8 ; udf
 ; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 4294967296
 ; nextln:  fcmp d0, d1
-; nextln:  b.mi 8
-; nextln:  udf
+; nextln:  b.mi 8 ; udf
 ; nextln:  fcvtzu w0, d0
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
@@ -546,16 +531,13 @@ block0(v0: f64):
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
 ; nextln:  fcmp d0, d0
-; nextln:  b.vc 8
-; nextln:  udf
+; nextln:  b.vc 8 ; udf
 ; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 -2147483649
 ; nextln:  fcmp d0, d1
-; nextln:  b.gt 8
-; nextln:  udf
+; nextln:  b.gt 8 ; udf
 ; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 2147483648
 ; nextln:  fcmp d0, d1
-; nextln:  b.mi 8
-; nextln:  udf
+; nextln:  b.mi 8 ; udf
 ; nextln:  fcvtzs w0, d0
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
@@ -570,16 +552,13 @@ block0(v0: f64):
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
 ; nextln:  fcmp d0, d0
-; nextln:  b.vc 8
-; nextln:  udf
+; nextln:  b.vc 8 ; udf
 ; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 -1
 ; nextln:  fcmp d0, d1
-; nextln:  b.gt 8
-; nextln:  udf
+; nextln:  b.gt 8 ; udf
 ; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 18446744073709552000
 ; nextln:  fcmp d0, d1
-; nextln:  b.mi 8
-; nextln:  udf
+; nextln:  b.mi 8 ; udf
 ; nextln:  fcvtzu x0, d0
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
@@ -594,16 +573,13 @@ block0(v0: f64):
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
 ; nextln:  fcmp d0, d0
-; nextln:  b.vc 8
-; nextln:  udf
+; nextln:  b.vc 8 ; udf
 ; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 -9223372036854776000
 ; nextln:  fcmp d0, d1
-; nextln:  b.ge 8
-; nextln:  udf
+; nextln:  b.ge 8 ; udf
 ; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 9223372036854776000
 ; nextln:  fcmp d0, d1
-; nextln:  b.mi 8
-; nextln:  udf
+; nextln:  b.mi 8 ; udf
 ; nextln:  fcvtzs x0, d0
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16

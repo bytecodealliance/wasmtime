@@ -1390,7 +1390,9 @@ mod test {
         inst.emit(&mut buf, &flags, &mut state);
 
         buf.bind_label(label(1));
-        let inst = Inst::Nop4;
+        let inst = Inst::Udf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
+        };
         inst.emit(&mut buf, &flags, &mut state);
 
         buf.bind_label(label(2));
@@ -1403,13 +1405,12 @@ mod test {
 
         let mut buf2 = MachBuffer::new();
         let mut state = Default::default();
-        let inst = Inst::OneWayCondBr {
-            kind: CondBrKind::Zero(xreg(0)),
-            target: BranchTarget::ResolvedOffset(8),
+        let inst = Inst::TrapIf {
+            kind: CondBrKind::NotZero(xreg(0)),
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
         };
         inst.emit(&mut buf2, &flags, &mut state);
         let inst = Inst::Nop4;
-        inst.emit(&mut buf2, &flags, &mut state);
         inst.emit(&mut buf2, &flags, &mut state);
 
         let buf2 = buf2.finish();
