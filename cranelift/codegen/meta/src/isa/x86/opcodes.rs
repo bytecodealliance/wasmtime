@@ -314,13 +314,21 @@ pub static PABSD: [u8; 4] = [0x66, 0x0f, 0x38, 0x1e];
 /// xmm1 (SSSE3).
 pub static PABSW: [u8; 4] = [0x66, 0x0f, 0x38, 0x1d];
 
-/// Converts 8 packed signed word integers from xmm1 and from xxm2/m128 into 16 packed signed byte
+/// Converts 8 packed signed word integers from xmm1 and from xmm2/m128 into 16 packed signed byte
 /// integers in xmm1 using signed saturation (SSE2).
 pub static PACKSSWB: [u8; 3] = [0x66, 0x0f, 0x63];
 
 /// Converts 4 packed signed doubleword integers from xmm1 and from xmm2/m128 into 8 packed signed
 /// word integers in xmm1 using signed saturation (SSE2).
 pub static PACKSSDW: [u8; 3] = [0x66, 0x0f, 0x6b];
+
+/// Converts 8 packed signed word integers from xmm1 and from xmm2/m128 into 16 packed unsigned byte
+/// integers in xmm1 using unsigned saturation (SSE2).
+pub static PACKUSWB: [u8; 3] = [0x66, 0x0f, 0x67];
+
+/// Converts 4 packed signed doubleword integers from xmm1 and from xmm2/m128 into 8 unpacked signed
+/// word integers in xmm1 using unsigned saturation (SSE4.1).
+pub static PACKUSDW: [u8; 4] = [0x66, 0x0f, 0x38, 0x2b];
 
 /// Add packed byte integers from xmm2/m128 and xmm1 (SSE2).
 pub static PADDB: [u8; 3] = [0x66, 0x0f, 0xfc];
