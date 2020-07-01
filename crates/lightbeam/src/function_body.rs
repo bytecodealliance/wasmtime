@@ -467,20 +467,20 @@ where
                         to_drop: Option<RangeInclusive<u32>>,
                     ) -> impl Iterator<Item = Option<ValueLocation>> + Clone + '_
                     {
-                        let (end, count) = to_drop
+                        let (start, count) = to_drop
                             .as_ref()
-                            .map(|to_drop| (*to_drop.end() as usize, to_drop.clone().count()))
+                            .map(|to_drop| (*to_drop.start() as usize, to_drop.clone().count()))
                             .unwrap_or_default();
                         let len = cc.arguments.locs.len();
-                        let end = len.saturating_sub(end);
+                        let start = len.saturating_sub(start);
 
                         let extra = (params as usize).checked_sub(len + count).unwrap();
 
                         std::iter::repeat(None)
                             .take(extra)
-                            .chain(cc.arguments.locs[..end].iter().cloned().map(Some))
+                            .chain(cc.arguments.locs[..start].iter().cloned().map(Some))
                             .chain(std::iter::repeat(None).take(count))
-                            .chain(cc.arguments.locs[end..].iter().cloned().map(Some))
+                            .chain(cc.arguments.locs[start..].iter().cloned().map(Some))
                             .chain(std::iter::once(None))
                     }
 
@@ -643,7 +643,8 @@ where
                             //       serialized for blocks where `!block.should_serialize_args()`.
                             let locs = cc_to_param_locs(params, &cc, to_drop.clone())
                                 .map(|loc| {
-                                    loc.and_then(|loc| CCLoc::try_from(loc).ok())
+                                    loc
+                                        .and_then(|loc| CCLoc::try_from(loc).ok())
                                         .map(MaybeCCLoc::Concrete)
                                         .unwrap_or(should_serialize)
                                 })
@@ -684,17 +685,24 @@ where
                         let block = blocks.get_mut(&target.target).unwrap();
 
                         if let Some(block_calling_convention) = &mut block.calling_convention {
-                            debug_assert_eq!(block_calling_convention.arguments.locs, {
-                                let mut cc = cc.clone();
+                            debug_assert_eq!(
+                                block_calling_convention.arguments.locs,
+                                {
+                                    let mut cc = cc.clone();
 
-                                if let Some(to_drop) = target.to_drop.clone() {
-                                    drop_elements(&mut cc.arguments.locs, to_drop);
-                                }
+                                    if let Some(to_drop) = target.to_drop.clone() {
+                                        drop_elements(&mut cc.arguments.locs, to_drop);
+                                    }
 
-                                debug_assert_eq!(cc.arguments.locs.len(), block.params as usize);
+                                    debug_assert_eq!(
+                                        cc.arguments.locs.len(),
+                                        block.params as usize
+                                    );
 
-                                cc.arguments.locs
-                            });
+                                    cc.arguments.locs
+                                },
+                                "Calling convention doesn't match"
+                            );
 
                             match (&cc.depth, &block_calling_convention.depth) {
                                 (Some(a), Some(b)) if a == b => {}
