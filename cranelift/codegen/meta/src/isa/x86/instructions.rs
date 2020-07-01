@@ -454,35 +454,6 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let I16xN = &TypeVar::new(
-        "I16xN",
-        "A SIMD vector type containing integers 16-bits wide and up",
-        TypeSetBuilder::new()
-            .ints(16..32)
-            .simd_lanes(4..8)
-            .includes_scalars(false)
-            .build(),
-    );
-
-    let x = &Operand::new("x", I16xN);
-    let y = &Operand::new("y", I16xN);
-    let a = &Operand::new("a", &I16xN.split_lanes());
-
-    ig.push(
-        Inst::new(
-            "x86_packss",
-            r#"
-        Convert packed signed integers the lanes of ``x`` and ``y`` into half-width integers, using
-        signed saturation to handle overflows. For example, with notional i16x2 vectors, where 
-        ``x = [x1, x0]`` and ``y = [y1, y0]``, this operation would result in 
-        ``a = [y1', y0', x1', x0']`` (using the Intel manual's right-to-left lane ordering).
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
-    );
-
     let x = &Operand::new("x", FxN);
     let y = &Operand::new("y", FxN);
     let a = &Operand::new("a", FxN);

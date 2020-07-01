@@ -3883,6 +3883,37 @@ pub(crate) fn define(
         .constraints(vec![WiderOrEq(Int.clone(), IntTo.clone())]),
     );
 
+    let I16xN = &TypeVar::new(
+        "I16xN",
+        "A SIMD vector type containing integers 16-bits wide and up",
+        TypeSetBuilder::new()
+            .ints(16..32)
+            .simd_lanes(4..8)
+            .includes_scalars(false)
+            .build(),
+    );
+
+    let x = &Operand::new("x", I16xN);
+    let y = &Operand::new("y", I16xN);
+    let a = &Operand::new("a", &I16xN.split_lanes());
+
+    ig.push(
+        Inst::new(
+            "snarrow",
+            r#"
+        Combine `x` and `y` into a vector with twice the lanes but half the integer width while 
+        saturating overflowing values to the signed maximum and minimum.
+        
+        The lanes will be concatenated after narrowing. For example, when `x` and `y` are `i32x4`
+        and `x = [x3, x2, x1, x0]` and `y = [y3, y2, y1, y0]`, then after narrowing the value
+        returned is an `i16x8`: `a = [y3', y2', y1', y0', x3', x2', x1', x0']`.
+            "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
     let IntTo = &TypeVar::new(
         "IntTo",
         "A larger integer type with the same number of lanes",

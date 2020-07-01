@@ -118,8 +118,8 @@ block0(v0: i32x4 [%xmm7], v1: i32x4 [%xmm6]):
             return
 }
 
-function %packss_i16x8(i16x8, i16x8) {
+function %snarrow_i16x8(i16x8, i16x8) {
 block0(v0: i16x8 [%xmm7], v1: i16x8 [%xmm8]):
-[-, %xmm7]  v2 = x86_packss v0, v1          ; bin: 66 41 0f 63 f8
+[-, %xmm7]  v2 = snarrow v0, v1             ; bin: 66 41 0f 63 f8
             return
 }
