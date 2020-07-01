@@ -39,8 +39,16 @@ unsafe fn test_fd_read_on_dirfd(dir_fd: wasi::Fd) {
     wasi::fd_close(fd).expect("closing an fd");
 
     // Now, open as file
-    let fd = wasi::path_open(dir_fd, 0, "subdir", 0, wasi::RIGHTS_FD_READ, 0, 0)
-        .expect("open subdir as file for reading");
+    let fd = wasi::path_open(
+        dir_fd,
+        0,
+        "subdir",
+        0,
+        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_SEEK,
+        0,
+        0,
+    )
+    .expect("open subdir as file for reading");
     // Try reading from it
     let contents = &mut [0u8; 4];
     let iovec = wasi::Iovec {

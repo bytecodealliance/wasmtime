@@ -31,9 +31,8 @@ unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
         wasi::FILETYPE_DIRECTORY,
         "expected the scratch directory to be a directory",
     );
-    assert_eq!(
-        (fdstat.fs_rights_base & wasi::RIGHTS_FD_SEEK),
-        0,
+    assert!(
+        fdstat.fs_rights_base & wasi::RIGHTS_FD_SEEK != 0,
         "directory has the seek right",
     );
 
