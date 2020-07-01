@@ -2060,7 +2060,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::X86Pminu
         | Opcode::X86Pmullq
         | Opcode::X86Pmuludq
-        | Opcode::X86Packss
         | Opcode::X86Punpckh
         | Opcode::X86Punpckl
         | Opcode::X86Vcvtudq2ps
@@ -2069,8 +2068,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("x86-specific opcode in supposedly arch-neutral IR!");
         }
 
-        Opcode::Iabs => unimplemented!(),
         Opcode::AvgRound => unimplemented!(),
+        Opcode::Iabs => unimplemented!(),
+        Opcode::Snarrow => unimplemented!(),
         Opcode::TlsValue => unimplemented!(),
     }
 

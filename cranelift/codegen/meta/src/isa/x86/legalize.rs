@@ -405,6 +405,7 @@ fn define_simd(
     let uadd_sat = insts.by_name("uadd_sat");
     let umax = insts.by_name("umax");
     let umin = insts.by_name("umin");
+    let snarrow = insts.by_name("snarrow");
     let ushr_imm = insts.by_name("ushr_imm");
     let ushr = insts.by_name("ushr");
     let vconst = insts.by_name("vconst");
@@ -412,7 +413,6 @@ fn define_simd(
     let vany_true = insts.by_name("vany_true");
     let vselect = insts.by_name("vselect");
 
-    let x86_packss = x86_instructions.by_name("x86_packss");
     let x86_pmaxs = x86_instructions.by_name("x86_pmaxs");
     let x86_pmaxu = x86_instructions.by_name("x86_pmaxu");
     let x86_pmins = x86_instructions.by_name("x86_pmins");
@@ -575,7 +575,7 @@ fn define_simd(
                 def!(g = raw_bitcast_i16x8_again(f)),
                 def!(h = x86_psra(g, b)),
                 // Re-pack the vector.
-                def!(z = x86_packss(e, h)),
+                def!(z = snarrow(e, h)),
             ],
         );
     }

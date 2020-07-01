@@ -34,7 +34,7 @@ block0:
     ; nextln: v9 = raw_bitcast.i16x8 v8
     ; nextln: v10 = x86_psra v9, v4
 
-    ; nextln: v2 = x86_packss v7, v10
+    ; nextln: v2 = snarrow v7, v10
     return v2
 }
 

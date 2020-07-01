@@ -1676,6 +1676,7 @@ fn define_simd(
     let uload16x4_complex = shared.by_name("uload16x4_complex");
     let uload32x2 = shared.by_name("uload32x2");
     let uload32x2_complex = shared.by_name("uload32x2_complex");
+    let snarrow = shared.by_name("snarrow");
     let ushr_imm = shared.by_name("ushr_imm");
     let usub_sat = shared.by_name("usub_sat");
     let vconst = shared.by_name("vconst");
@@ -1686,7 +1687,6 @@ fn define_simd(
     let x86_fmin = x86.by_name("x86_fmin");
     let x86_movlhps = x86.by_name("x86_movlhps");
     let x86_movsd = x86.by_name("x86_movsd");
-    let x86_packss = x86.by_name("x86_packss");
     let x86_pblendw = x86.by_name("x86_pblendw");
     let x86_pextr = x86.by_name("x86_pextr");
     let x86_pinsr = x86.by_name("x86_pinsr");
@@ -1901,8 +1901,8 @@ fn define_simd(
         );
     }
     for (ty, opcodes) in &[(I16, &PACKSSWB), (I32, &PACKSSDW)] {
-        let x86_packss = x86_packss.bind(vector(*ty, sse_vector_size));
-        e.enc_both_inferred(x86_packss, rec_fa.opcodes(*opcodes));
+        let snarrow = snarrow.bind(vector(*ty, sse_vector_size));
+        e.enc_both_inferred(snarrow, rec_fa.opcodes(*opcodes));
     }
 
     // SIMD bitcast all 128-bit vectors to each other (for legalizing splat.x16x8).
