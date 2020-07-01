@@ -1395,6 +1395,7 @@ fn define_alu(
     let rotr = shared.by_name("rotr");
     let rotr_imm = shared.by_name("rotr_imm");
     let selectif = shared.by_name("selectif");
+    let selectif_spectre_guard = shared.by_name("selectif_spectre_guard");
     let sshr = shared.by_name("sshr");
     let sshr_imm = shared.by_name("sshr_imm");
     let trueff = shared.by_name("trueff");
@@ -1608,6 +1609,11 @@ fn define_alu(
 
     // Conditional move (a.k.a integer select).
     e.enc_i32_i64(selectif, rec_cmov.opcodes(&CMOV_OVERFLOW));
+    // A Spectre-guard integer select is exactly the same as a selectif, but
+    // is not associated with any other legalization rules and is not
+    // recognized by any optimizations, so it must arrive here unmodified
+    // and in its original place.
+    e.enc_i32_i64(selectif_spectre_guard, rec_cmov.opcodes(&CMOV_OVERFLOW));
 }
 
 #[inline(never)]

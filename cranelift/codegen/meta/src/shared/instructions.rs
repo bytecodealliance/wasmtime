@@ -1748,6 +1748,34 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    ig.push(
+        Inst::new(
+            "selectif_spectre_guard",
+            r#"
+            Conditional select intended for Spectre guards.
+
+            This operation is semantically equivalent to a selectif instruction.
+            However, it is guaranteed to not be removed or otherwise altered by any
+            optimization pass, and is guaranteed to result in a conditional-move
+            instruction, not a branch-based lowering.  As such, it is suitable
+            for use when producing Spectre guards. For example, a bounds-check
+            may guard against unsafe speculation past a bounds-check conditional
+            branch by passing the address or index to be accessed through a
+            conditional move, also gated on the same condition. Because no
+            Spectre-vulnerable processors are known to perform speculation on
+            conditional move instructions, this is guaranteed to pick the
+            correct input. If the selected input in case of overflow is a "safe"
+            value, for example a null pointer that causes an exception in the
+            speculative path, this ensures that no Spectre vulnerability will
+            exist.
+            "#,
+            &formats.int_select,
+        )
+        .operands_in(vec![cc, flags, x, y])
+        .operands_out(vec![a])
+        .other_side_effects(true),
+    );
+
     let c = &Operand::new("c", Any).with_doc("Controlling value to test");
     ig.push(
         Inst::new(

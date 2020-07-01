@@ -1,5 +1,6 @@
 ; Test the legalization of memory objects.
 test legalizer
+set enable_heap_access_spectre_mitigation=false
 target x86_64
 
 ; regex: V=v\d+
