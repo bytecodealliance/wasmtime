@@ -211,7 +211,16 @@ impl Backend for FaerieBackend {
             ref data_decls,
             ref function_relocs,
             ref data_relocs,
+            ref custom_segment_section,
         } = data_ctx.description();
+
+        if let Some((segment, section)) = custom_segment_section {
+            return Err(cranelift_module::ModuleError::Backend(anyhow::anyhow!(
+                "Custom section not supported by cranelift-faerie: `{}:{}`",
+                segment,
+                section
+            )));
+        }
 
         for &(offset, id) in function_relocs {
             let to = &namespace.get_function_decl(&function_decls[id]).name;

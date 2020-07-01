@@ -39,11 +39,6 @@ pub fn define_wasi_struct(args: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-pub fn define_wasi_struct_for_wiggle(args: TokenStream) -> TokenStream {
-    wasi::define_struct_for_wiggle(args.into()).into()
-}
-
-#[proc_macro]
 pub fn define_hostcalls(args: TokenStream) -> TokenStream {
     hostcalls::define(args.into()).into()
 }

@@ -361,6 +361,20 @@ fn enc_vec_rr_misc(bits_12_16: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
     bits | bits_12_16 << 12 | machreg_to_vec(rn) << 5 | machreg_to_vec(rd.to_reg())
 }
 
+fn enc_vec_lanes(q: u32, u: u32, size: u32, opcode: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
+    debug_assert_eq!(q & 0b1, q);
+    debug_assert_eq!(u & 0b1, u);
+    debug_assert_eq!(size & 0b11, size);
+    debug_assert_eq!(opcode & 0b11111, opcode);
+    0b0_0_0_01110_00_11000_0_0000_10_00000_00000
+        | q << 30
+        | u << 29
+        | size << 22
+        | opcode << 12
+        | machreg_to_vec(rn) << 5
+        | machreg_to_vec(rd.to_reg())
+}
+
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
@@ -707,6 +721,16 @@ impl MachInstEmit for Inst {
                             op, r1, r2, /* scaled = */ true, extendop, rd,
                         ));
                     }
+                    &MemArg::RegExtended(r1, r2, extendop) => {
+                        sink.put4(enc_ldst_reg(
+                            op,
+                            r1,
+                            r2,
+                            /* scaled = */ false,
+                            Some(extendop),
+                            rd,
+                        ));
+                    }
                     &MemArg::Label(ref label) => {
                         let offset = match label {
                             // cast i32 to u32 (two's-complement)
@@ -831,6 +855,16 @@ impl MachInstEmit for Inst {
                         };
                         sink.put4(enc_ldst_reg(
                             op, r1, r2, /* scaled = */ true, extendop, rd,
+                        ));
+                    }
+                    &MemArg::RegExtended(r1, r2, extendop) => {
+                        sink.put4(enc_ldst_reg(
+                            op,
+                            r1,
+                            r2,
+                            /* scaled = */ false,
+                            Some(extendop),
+                            rd,
                         ));
                     }
                     &MemArg::Label(..) => {
@@ -1041,6 +1075,18 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_vec_rr_misc(bits_12_16, rd, rn));
             }
+            &Inst::VecLanes { op, rd, rn, ty } => {
+                let (q, size) = match ty {
+                    I8X16 => (0b1, 0b00),
+                    I16X8 => (0b1, 0b01),
+                    I32X4 => (0b1, 0b10),
+                    _ => unreachable!(),
+                };
+                let (u, opcode) = match op {
+                    VecLanesOp::Uminv => (0b1, 0b11010),
+                };
+                sink.put4(enc_vec_lanes(q, u, size, opcode, rd, rn));
+            }
             &Inst::FpuCmp32 { rn, rm } => {
                 sink.put4(enc_fcmp(InstSize::Size32, rn, rm));
             }
@@ -1227,10 +1273,15 @@ impl MachInstEmit for Inst {
                 alu_op,
                 ty,
             } => {
-                let enc_size_for_cmp = match ty {
+                let enc_size = match ty {
                     I8X16 => 0b00,
                     I16X8 => 0b01,
                     I32X4 => 0b10,
+                    _ => 0,
+                };
+                let enc_size_for_fcmp = match ty {
+                    F32X4 => 0b0,
+                    F64X2 => 0b1,
                     _ => 0,
                 };
 
@@ -1251,12 +1302,15 @@ impl MachInstEmit for Inst {
                         debug_assert_eq!(I64, ty);
                         (0b011_11110_11_1, 0b001011)
                     }
-                    VecALUOp::Cmeq => (0b011_01110_00_1 | enc_size_for_cmp << 1, 0b100011),
-                    VecALUOp::Cmge => (0b010_01110_00_1 | enc_size_for_cmp << 1, 0b001111),
-                    VecALUOp::Cmgt => (0b010_01110_00_1 | enc_size_for_cmp << 1, 0b001101),
-                    VecALUOp::Cmhi => (0b011_01110_00_1 | enc_size_for_cmp << 1, 0b001101),
-                    VecALUOp::Cmhs => (0b011_01110_00_1 | enc_size_for_cmp << 1, 0b001111),
-                    // The following instructions operate on bytes, so are not encoded differently
+                    VecALUOp::Cmeq => (0b011_01110_00_1 | enc_size << 1, 0b100011),
+                    VecALUOp::Cmge => (0b010_01110_00_1 | enc_size << 1, 0b001111),
+                    VecALUOp::Cmgt => (0b010_01110_00_1 | enc_size << 1, 0b001101),
+                    VecALUOp::Cmhi => (0b011_01110_00_1 | enc_size << 1, 0b001101),
+                    VecALUOp::Cmhs => (0b011_01110_00_1 | enc_size << 1, 0b001111),
+                    VecALUOp::Fcmeq => (0b010_01110_00_1 | enc_size_for_fcmp << 1, 0b111001),
+                    VecALUOp::Fcmgt => (0b011_01110_10_1 | enc_size_for_fcmp << 1, 0b111001),
+                    VecALUOp::Fcmge => (0b011_01110_00_1 | enc_size_for_fcmp << 1, 0b111001),
+                    // The following logical instructions operate on bytes, so are not encoded differently
                     // for the different vector types.
                     VecALUOp::And => {
                         debug_assert_eq!(128, ty_bits(ty));
@@ -1278,6 +1332,7 @@ impl MachInstEmit for Inst {
                         debug_assert_eq!(128, ty_bits(ty));
                         (0b011_01110_01_1, 0b000111)
                     }
+                    VecALUOp::Umaxp => (0b011_01110_00_1 | enc_size << 1, 0b101001),
                 };
                 sink.put4(enc_vec_rrr(top11, rm, bit15_10, rn, rd));
             }

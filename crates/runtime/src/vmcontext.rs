@@ -3,8 +3,9 @@
 
 use crate::instance::Instance;
 use std::any::Any;
+use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
-use std::{ptr, u32};
+use std::u32;
 use wasmtime_environ::BuiltinFunctionIndex;
 
 /// An imported function.
@@ -12,7 +13,7 @@ use wasmtime_environ::BuiltinFunctionIndex;
 #[repr(C)]
 pub struct VMFunctionImport {
     /// A pointer to the imported function body.
-    pub body: *const VMFunctionBody,
+    pub body: NonNull<VMFunctionBody>,
 
     /// A pointer to the `VMContext` that owns the function.
     pub vmctx: *mut VMContext,
@@ -475,7 +476,7 @@ impl Default for VMSharedSignatureIndex {
 #[repr(C)]
 pub struct VMCallerCheckedAnyfunc {
     /// Function body.
-    pub func_ptr: *const VMFunctionBody,
+    pub func_ptr: NonNull<VMFunctionBody>,
     /// Function signature id.
     pub type_index: VMSharedSignatureIndex,
     /// Function `VMContext`.
@@ -513,16 +514,6 @@ mod test_vmcaller_checked_anyfunc {
     }
 }
 
-impl Default for VMCallerCheckedAnyfunc {
-    fn default() -> Self {
-        Self {
-            func_ptr: ptr::null_mut(),
-            type_index: Default::default(),
-            vmctx: ptr::null_mut(),
-        }
-    }
-}
-
 /// An array that stores addresses of builtin functions. We translate code
 /// to use indirect calls. This way, we don't have to patch the code.
 #[repr(C)]
@@ -540,39 +531,36 @@ impl VMBuiltinFunctionsArray {
 
         let mut ptrs = [0; Self::len()];
 
-        ptrs[BuiltinFunctionIndex::get_memory32_grow_index().index() as usize] =
+        ptrs[BuiltinFunctionIndex::memory32_grow().index() as usize] =
             wasmtime_memory32_grow as usize;
-        ptrs[BuiltinFunctionIndex::get_imported_memory32_grow_index().index() as usize] =
+        ptrs[BuiltinFunctionIndex::imported_memory32_grow().index() as usize] =
             wasmtime_imported_memory32_grow as usize;
-
-        ptrs[BuiltinFunctionIndex::get_memory32_size_index().index() as usize] =
+        ptrs[BuiltinFunctionIndex::memory32_size().index() as usize] =
             wasmtime_memory32_size as usize;
-        ptrs[BuiltinFunctionIndex::get_imported_memory32_size_index().index() as usize] =
+        ptrs[BuiltinFunctionIndex::imported_memory32_size().index() as usize] =
             wasmtime_imported_memory32_size as usize;
-
-        ptrs[BuiltinFunctionIndex::get_table_copy_index().index() as usize] =
-            wasmtime_table_copy as usize;
-
-        ptrs[BuiltinFunctionIndex::get_table_init_index().index() as usize] =
-            wasmtime_table_init as usize;
-        ptrs[BuiltinFunctionIndex::get_elem_drop_index().index() as usize] =
-            wasmtime_elem_drop as usize;
-
-        ptrs[BuiltinFunctionIndex::get_defined_memory_copy_index().index() as usize] =
+        ptrs[BuiltinFunctionIndex::table_copy().index() as usize] = wasmtime_table_copy as usize;
+        ptrs[BuiltinFunctionIndex::table_grow_funcref().index() as usize] =
+            wasmtime_table_grow as usize;
+        ptrs[BuiltinFunctionIndex::table_grow_externref().index() as usize] =
+            wasmtime_table_grow as usize;
+        ptrs[BuiltinFunctionIndex::table_init().index() as usize] = wasmtime_table_init as usize;
+        ptrs[BuiltinFunctionIndex::elem_drop().index() as usize] = wasmtime_elem_drop as usize;
+        ptrs[BuiltinFunctionIndex::defined_memory_copy().index() as usize] =
             wasmtime_defined_memory_copy as usize;
-        ptrs[BuiltinFunctionIndex::get_imported_memory_copy_index().index() as usize] =
+        ptrs[BuiltinFunctionIndex::imported_memory_copy().index() as usize] =
             wasmtime_imported_memory_copy as usize;
-        ptrs[BuiltinFunctionIndex::get_memory_fill_index().index() as usize] =
-            wasmtime_memory_fill as usize;
-        ptrs[BuiltinFunctionIndex::get_imported_memory_fill_index().index() as usize] =
+        ptrs[BuiltinFunctionIndex::memory_fill().index() as usize] = wasmtime_memory_fill as usize;
+        ptrs[BuiltinFunctionIndex::imported_memory_fill().index() as usize] =
             wasmtime_imported_memory_fill as usize;
-        ptrs[BuiltinFunctionIndex::get_memory_init_index().index() as usize] =
-            wasmtime_memory_init as usize;
-        ptrs[BuiltinFunctionIndex::get_data_drop_index().index() as usize] =
-            wasmtime_data_drop as usize;
+        ptrs[BuiltinFunctionIndex::memory_init().index() as usize] = wasmtime_memory_init as usize;
+        ptrs[BuiltinFunctionIndex::data_drop().index() as usize] = wasmtime_data_drop as usize;
 
-        debug_assert!(ptrs.iter().cloned().all(|p| p != 0));
-
+        if cfg!(debug_assertions) {
+            for i in 0..ptrs.len() {
+                debug_assert!(ptrs[i] != 0, "index {} is not initialized", i);
+            }
+        }
         Self { ptrs }
     }
 }

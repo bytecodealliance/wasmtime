@@ -1,0 +1,35 @@
+[package]
+name = "wasmtime-wiggle"
+version = "0.18.0"
+authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkonk@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
+edition = "2018"
+license = "Apache-2.0 WITH LLVM-exception"
+description = "Integrate Wiggle code generator with Wasmtime"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+repository = "https://github.com/bytecodealliance/wasmtime"
+include = ["src/**/*", "LICENSE"]
+
+[dependencies]
+wasmtime = { path = "../../wasmtime", version = "0.18.0" }
+wasmtime-wiggle-macro = { path = "./macro", version = "0.18.0" }
+witx = { path = "../../wasi-common/WASI/tools/witx", version = "0.8.5", optional = true }
+wiggle = { path = "..", version = "0.18.0" }
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[features]
+# The wiggle proc-macro emits some code (inside `pub mod metadata`) guarded
+# by the `wiggle_metadata` feature flag. We use this feature flag so that
+# users of wiggle are not forced to take a direct dependency on the `witx`
+# crate unless they want it.
+wiggle_metadata = ['witx', "wiggle/wiggle_metadata"]
+
+# The `tracing` crate can use the `log` ecosystem of backends with this
+# non-default feature. We don't need to provide this by default, but its
+# useful for users that don't want to use `tracing-subscriber` to get
+# the logs out of wiggle-generated libraries.
+tracing_log = [ "wiggle/tracing_log" ]
+
+default = ["wiggle_metadata" ]

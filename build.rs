@@ -179,7 +179,11 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         },
         "Cranelift" => match (testsuite, testname) {
             ("simd", "simd_address") => return false,
+            ("simd", "simd_align") => return false,
             ("simd", "simd_bitwise") => return false,
+            ("simd", "simd_boolean") => return false,
+            ("simd", "simd_f32x4_cmp") => return false,
+            ("simd", "simd_f64x2_cmp") => return false,
             ("simd", "simd_i8x16_cmp") => return false,
             ("simd", "simd_i16x8_cmp") => return false,
             ("simd", "simd_i32x4_cmp") => return false,
@@ -207,9 +211,17 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             // testsuite repo.
             ("simd", "simd_const") => return true,
 
+            ("reference_types", "table_copy_on_imported_tables")
+            | ("reference_types", "externref_id_function")
+            | ("reference_types", "table_size")
+            | ("reference_types", "simple_ref_is_null")
+            | ("reference_types", "table_grow_with_funcref") => {
+                // TODO(#1886): Ignore if this isn't x64, because Cranelift only
+                // supports reference types on x64.
+                return env::var("CARGO_CFG_TARGET_ARCH").unwrap() != "x86_64";
+            }
+
             // Still working on implementing these. See #929.
-            ("reference_types", "table_copy_on_imported_tables") => return false,
-            ("reference_types", "externref_id_function") => return false,
             ("reference_types", _) => return true,
 
             _ => {}

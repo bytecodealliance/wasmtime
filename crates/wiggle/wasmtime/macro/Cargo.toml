@@ -1,0 +1,26 @@
+[package]
+name = "wasmtime-wiggle-macro"
+version = "0.18.0"
+authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkonk@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
+edition = "2018"
+license = "Apache-2.0 WITH LLVM-exception"
+description = "Macro for integrating Wiggle code generator with Wasmtime"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+repository = "https://github.com/bytecodealliance/wasmtime"
+include = ["src/**/*", "LICENSE"]
+
+[lib]
+proc-macro = true
+test = false
+
+[dependencies]
+witx = { path = "../../../wasi-common/WASI/tools/witx", version = "0.8.5" }
+wiggle-generate = { path = "../../generate", version = "0.18.0" }
+quote = "1.0"
+syn = { version = "1.0", features = ["full"] }
+proc-macro2 = "1.0"
+
+[badges]
+maintenance = { status = "actively-developed" }
+

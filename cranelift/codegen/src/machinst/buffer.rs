@@ -1024,7 +1024,7 @@ impl<I: VCodeInst> MachBuffer<I> {
                 let veneer_offset = self.cur_offset();
                 trace!("making a veneer at {}", veneer_offset);
                 let slice = &mut self.data[start..end];
-                // Patch the original label use to refer to teh veneer.
+                // Patch the original label use to refer to the veneer.
                 trace!(
                     "patching original at offset {} to veneer offset {}",
                     offset,

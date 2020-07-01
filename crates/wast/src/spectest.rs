@@ -35,7 +35,7 @@ pub fn link_spectest(linker: &mut Linker) -> Result<()> {
     linker.define("spectest", "global_f64", g)?;
 
     let ty = TableType::new(ValType::FuncRef, Limits::new(10, Some(20)));
-    let table = Table::new(linker.store(), ty, Val::ExternRef(None))?;
+    let table = Table::new(linker.store(), ty, Val::FuncRef(None))?;
     linker.define("spectest", "table", table)?;
 
     let ty = MemoryType::new(Limits::new(1, Some(2)));

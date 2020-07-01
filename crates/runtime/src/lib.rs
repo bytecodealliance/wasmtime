@@ -37,14 +37,14 @@ pub mod debug_builtins;
 pub mod libcalls;
 
 pub use crate::export::*;
-pub use crate::externref::VMExternRef;
+pub use crate::externref::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{InstanceHandle, InstantiationError, LinkError};
 pub use crate::jit_int::GdbJitImageRegistration;
 pub use crate::memory::{RuntimeLinearMemory, RuntimeMemoryCreator};
 pub use crate::mmap::Mmap;
 pub use crate::sig_registry::SignatureRegistry;
-pub use crate::table::Table;
+pub use crate::table::{Table, TableElement};
 pub use crate::traphandlers::{
     catch_traps, init_traps, raise_lib_trap, raise_user_trap, resume_panic, SignalHandler, Trap,
 };
@@ -56,3 +56,14 @@ pub use crate::vmcontext::{
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The Cranelift IR type used for reference types for this target architecture.
+pub fn ref_type() -> wasmtime_environ::ir::Type {
+    if cfg!(target_pointer_width = "32") {
+        wasmtime_environ::ir::types::R32
+    } else if cfg!(target_pointer_width = "64") {
+        wasmtime_environ::ir::types::R64
+    } else {
+        unreachable!()
+    }
+}

@@ -133,6 +133,9 @@ pub enum MemArg {
     /// first.
     RegScaledExtended(Reg, Reg, Type, ExtendOp),
 
+    /// Register plus register offset, with index sign- or zero-extended first.
+    RegExtended(Reg, Reg, ExtendOp),
+
     /// Unscaled signed 9-bit immediate offset from reg.
     Unscaled(Reg, SImm9),
 
@@ -410,6 +413,19 @@ impl ShowWithRRU for MemArg {
                     show_ireg_sized(r2, mb_rru, size),
                     op,
                     shift
+                )
+            }
+            &MemArg::RegExtended(r1, r2, op) => {
+                let size = match op {
+                    ExtendOp::SXTW | ExtendOp::UXTW => InstSize::Size32,
+                    _ => InstSize::Size64,
+                };
+                let op = op.show_rru(mb_rru);
+                format!(
+                    "[{}, {}, {}]",
+                    r1.show_rru(mb_rru),
+                    show_ireg_sized(r2, mb_rru, size),
+                    op,
                 )
             }
             &MemArg::Label(ref label) => label.show_rru(mb_rru),

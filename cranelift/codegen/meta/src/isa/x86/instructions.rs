@@ -145,6 +145,37 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let f32x4 = &TypeVar::new(
+        "f32x4",
+        "A floating point number",
+        TypeSetBuilder::new()
+            .floats(32..32)
+            .simd_lanes(4..4)
+            .build(),
+    );
+    let i32x4 = &TypeVar::new(
+        "i32x4",
+        "An integer type with the same number of lanes",
+        TypeSetBuilder::new().ints(32..32).simd_lanes(4..4).build(),
+    );
+    let x = &Operand::new("x", i32x4);
+    let a = &Operand::new("a", f32x4);
+
+    ig.push(
+        Inst::new(
+            "x86_vcvtudq2ps",
+            r#"
+        Convert unsigned integer to floating point.
+
+        Convert packed doubleword unsigned integers to packed single-precision floating-point 
+        values. This instruction does not trap.
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
     let x = &Operand::new("x", Float);
     let a = &Operand::new("a", Float);
     let y = &Operand::new("y", Float);
@@ -299,6 +330,20 @@ pub(crate) fn define(
             &formats.binary,
         )
         .operands_in(vec![a, b]) // TODO allow re-ordering from memory here (need more permissive type than TxN)
+        .operands_out(vec![a]),
+    );
+
+    let mask = &Operand::new("mask", uimm8).with_doc("mask to select lanes from b");
+    ig.push(
+        Inst::new(
+            "x86_pblendw",
+            r#"
+    Blend packed words using an immediate mask. Each bit of the 8-bit immediate corresponds to a 
+    lane in ``b``: if the bit is set, the lane is copied into ``a``.
+    "#,
+            &formats.ternary_imm8,
+        )
+        .operands_in(vec![a, b, mask])
         .operands_out(vec![a]),
     );
 

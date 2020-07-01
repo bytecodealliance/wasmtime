@@ -427,7 +427,7 @@ impl Linker {
 
                     Ok(())
                 });
-                self.insert(module_name, export.name(), Extern::Func(func))?;
+                self.insert(module_name, export.name(), func.into())?;
             } else if export.name() == "memory" && export.ty().memory().is_some() {
                 // Allow an exported "memory" memory for now.
             } else if export.name() == "__indirect_function_table" && export.ty().table().is_some()

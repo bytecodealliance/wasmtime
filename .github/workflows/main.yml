@@ -123,11 +123,11 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly
-    - run: cargo install cargo-fuzz --vers "^0.7"
+        toolchain: nightly-2020-06-03
+    - run: cargo install cargo-fuzz --vers "^0.8"
     - run: cargo fetch
       working-directory: ./fuzz
-    - run: cargo fuzz build --features binaryen
+    - run: cargo fuzz build --dev --features binaryen
 
   rebuild_peephole_optimizers:
     name: Rebuild Peephole Optimizers
@@ -241,9 +241,9 @@ jobs:
     # Build and test lightbeam if we're using the nightly toolchain. Note that
     # Lightbeam tests fail right now, but we don't want to block on that.
     - run: cargo build --package lightbeam
-      if: matrix.rust == 'nightly-2020-06-03'
+      if: matrix.build == 'nightly'
     - run: cargo test --package lightbeam
-      if: matrix.rust == 'nightly-2020-06-03'
+      if: matrix.build == 'nightly'
       continue-on-error: true
       env:
         RUST_BACKTRACE: 1
@@ -282,7 +282,7 @@ jobs:
         - build: x86_64-mingw
           os: windows-latest
           target: x86_64-pc-windows-gnu
-          rust: nightly     # needs rust-lang/rust#69351 to ride to stable
+          rust: beta        # needs rust-lang/rust#69351 to ride to stable
         - build: aarch64-linux
           os: ubuntu-latest
           rust: stable
@@ -327,6 +327,10 @@ jobs:
         upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
         echo ::set-env name=CARGO_TARGET_${upcase}_RUNNER::$HOME/qemu/bin/${{ matrix.qemu }}
         echo ::set-env name=CARGO_TARGET_${upcase}_LINKER::${{ matrix.gcc }}
+
+        # See comments in the source for why we enable this during QEMU
+        # emulation.
+        echo ::set-env name=WASMTIME_TEST_NO_HOG_MEMORY::1
       if: matrix.target != '' && matrix.os == 'ubuntu-latest'
 
     # Install wasm32-wasi target in order to build wasi-common's integration

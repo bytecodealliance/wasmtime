@@ -81,7 +81,7 @@ pub extern "C" fn wasmtime_linker_define_instance(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_linker_instantiate(
+pub extern "C" fn wasmtime_linker_instantiate(
     linker: &wasmtime_linker_t,
     module: &wasm_module_t,
     instance_ptr: &mut *mut wasm_instance_t,
@@ -92,7 +92,7 @@ pub unsafe extern "C" fn wasmtime_linker_instantiate(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_linker_module(
+pub extern "C" fn wasmtime_linker_module(
     linker: &mut wasmtime_linker_t,
     name: &wasm_name_t,
     module: &wasm_module_t,
@@ -106,17 +106,45 @@ pub unsafe extern "C" fn wasmtime_linker_module(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_linker_get_default(
-    linker: &mut wasmtime_linker_t,
+pub extern "C" fn wasmtime_linker_get_default(
+    linker: &wasmtime_linker_t,
     name: &wasm_name_t,
     func: &mut *mut wasm_func_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let linker = &mut linker.linker;
+    let linker = &linker.linker;
     let name = match str::from_utf8(name.as_slice()) {
         Ok(s) => s,
         Err(_) => return bad_utf8(),
     };
     handle_result(linker.get_default(name), |f| {
         *func = Box::into_raw(Box::new(HostRef::new(linker.store(), f).into()))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_linker_get_one_by_name(
+    linker: &wasmtime_linker_t,
+    module: &wasm_name_t,
+    name: &wasm_name_t,
+    item_ptr: &mut *mut wasm_extern_t,
+) -> Option<Box<wasmtime_error_t>> {
+    let linker = &linker.linker;
+    let module = match str::from_utf8(module.as_slice()) {
+        Ok(s) => s,
+        Err(_) => return bad_utf8(),
+    };
+    let name = match str::from_utf8(name.as_slice()) {
+        Ok(s) => s,
+        Err(_) => return bad_utf8(),
+    };
+    handle_result(linker.get_one_by_name(module, name), |item| {
+        let store = linker.store();
+        let which = match item {
+            Extern::Func(f) => ExternHost::Func(HostRef::new(&store, f)),
+            Extern::Global(g) => ExternHost::Global(HostRef::new(&store, g)),
+            Extern::Memory(m) => ExternHost::Memory(HostRef::new(&store, m)),
+            Extern::Table(t) => ExternHost::Table(HostRef::new(&store, t)),
+        };
+        *item_ptr = Box::into_raw(Box::new(wasm_extern_t { which }))
     })
 }

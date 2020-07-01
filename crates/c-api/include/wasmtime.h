@@ -39,7 +39,7 @@ enum wasmtime_opt_level_enum { // OptLevel
 };
 
 typedef uint8_t wasmtime_profiling_strategy_t;
-enum wasmtime_profiling_strategy_t { // ProfilingStrategy
+enum wasmtime_profiling_strategy_enum { // ProfilingStrategy
   WASMTIME_PROFILING_STRATEGY_NONE,
   WASMTIME_PROFILING_STRATEGY_JITDUMP,
   WASMTIME_PROFILING_STRATEGY_VTUNE,
@@ -129,6 +129,13 @@ WASM_API_EXTERN own wasmtime_error_t* wasmtime_linker_get_default(
     own wasm_func_t **func
 );
 
+WASM_API_EXTERN own wasmtime_error_t* wasmtime_linker_get_one_by_name(
+    const wasmtime_linker_t *linker,
+    const wasm_name_t *module,
+    const wasm_name_t *name,
+    own wasm_extern_t **item
+);
+
 ///////////////////////////////////////////////////////////////////////////////
 //
 // wasmtime_caller_t extension, binding the `Caller` type in the Rust API
@@ -166,6 +173,15 @@ WASMTIME_DECLARE_OWN(interrupt_handle)
 WASM_API_EXTERN own wasmtime_interrupt_handle_t *wasmtime_interrupt_handle_new(wasm_store_t *store);
 
 WASM_API_EXTERN void wasmtime_interrupt_handle_interrupt(wasmtime_interrupt_handle_t *handle);
+
+///////////////////////////////////////////////////////////////////////////////
+//
+// Extensions to `wasm_trap_t`
+
+// Returns `true` if the trap is a WASI "exit" trap and has a return status. If
+// `true` is returned then the exit status is returned through the `status`
+// pointer. If `false` is returned then this is not a wasi exit trap.
+WASM_API_EXTERN bool wasmtime_trap_exit_status(const wasm_trap_t*, int *status);
 
 ///////////////////////////////////////////////////////////////////////////////
 //

@@ -51,42 +51,52 @@ fn main() {
             .arg("--example")
             .arg(&example));
 
-        println!("======== C example `{}` ============", example);
-        let mut cmd = cc::Build::new()
-            .opt_level(0)
-            .cargo_metadata(false)
-            .target(env!("TARGET"))
-            .host(env!("TARGET"))
-            .include("crates/c-api/include")
-            .include("crates/c-api/wasm-c-api/include")
-            .define("WASM_API_EXTERN", Some("")) // static linkage, not dynamic
-            .warnings(false)
-            .get_compiler()
-            .to_command();
-        if is_dir {
-            cmd.arg(format!("examples/{}/main.c", example));
-        } else {
-            cmd.arg(format!("examples/{}.c", example));
-        }
-        let exe = if cfg!(windows) {
-            cmd.arg("target/debug/wasmtime.lib")
-                .arg("ws2_32.lib")
-                .arg("advapi32.lib")
-                .arg("userenv.lib")
-                .arg("ntdll.lib")
-                .arg("shell32.lib")
-                .arg("ole32.lib");
-            "./main.exe"
-        } else {
-            cmd.arg("target/debug/libwasmtime.a").arg("-o").arg("foo");
-            "./foo"
-        };
-        if cfg!(target_os = "linux") {
-            cmd.arg("-lpthread").arg("-ldl").arg("-lm");
-        }
-        run(&mut cmd);
+        println!("======== C/C++ example `{}` ============", example);
+        for extension in ["c", "cc"].iter() {
+            let mut cmd = cc::Build::new()
+                .opt_level(0)
+                .cargo_metadata(false)
+                .target(env!("TARGET"))
+                .host(env!("TARGET"))
+                .include("crates/c-api/include")
+                .include("crates/c-api/wasm-c-api/include")
+                .define("WASM_API_EXTERN", Some("")) // static linkage, not dynamic
+                .warnings(false)
+                .get_compiler()
+                .to_command();
 
-        run(&mut Command::new(exe));
+            let file = if is_dir {
+                format!("examples/{}/main.{}", example, extension)
+            } else {
+                format!("examples/{}.{}", example, extension)
+            };
+
+            if extension == &"cc" && !std::path::Path::new(&file).exists() {
+                // cc files are optional so we can skip them.
+                continue;
+            }
+
+            cmd.arg(file);
+            let exe = if cfg!(windows) {
+                cmd.arg("target/debug/wasmtime.lib")
+                    .arg("ws2_32.lib")
+                    .arg("advapi32.lib")
+                    .arg("userenv.lib")
+                    .arg("ntdll.lib")
+                    .arg("shell32.lib")
+                    .arg("ole32.lib");
+                "./main.exe"
+            } else {
+                cmd.arg("target/debug/libwasmtime.a").arg("-o").arg("foo");
+                "./foo"
+            };
+            if cfg!(target_os = "linux") {
+                cmd.arg("-lpthread").arg("-ldl").arg("-lm");
+            }
+            run(&mut cmd);
+
+            run(&mut Command::new(exe));
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::vmcontext::{
-    VMContext, VMFunctionBody, VMGlobalDefinition, VMMemoryDefinition, VMSharedSignatureIndex,
-    VMTableDefinition,
+    VMCallerCheckedAnyfunc, VMContext, VMGlobalDefinition, VMMemoryDefinition, VMTableDefinition,
 };
+use std::ptr::NonNull;
 use wasmtime_environ::wasm::Global;
 use wasmtime_environ::{MemoryPlan, TablePlan};
 
@@ -24,14 +24,11 @@ pub enum Export {
 /// A function export value.
 #[derive(Debug, Clone)]
 pub struct ExportFunction {
-    /// The address of the native-code function.
-    pub address: *const VMFunctionBody,
-    /// Pointer to the containing `VMContext`.
-    pub vmctx: *mut VMContext,
-    /// The function signature declaration, used for compatibilty checking.
+    /// The `VMCallerCheckedAnyfunc` for this exported function.
     ///
-    /// Note that this indexes within the module associated with `vmctx`.
-    pub signature: VMSharedSignatureIndex,
+    /// Note that exported functions cannot be a null funcref, so this is a
+    /// non-null pointer.
+    pub anyfunc: NonNull<VMCallerCheckedAnyfunc>,
 }
 
 impl From<ExportFunction> for Export {

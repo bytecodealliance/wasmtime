@@ -7,11 +7,11 @@ use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature};
-use cranelift_codegen::isa::TargetFrontendConfig;
+use cranelift_codegen::isa::{self, TargetFrontendConfig};
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{
     self, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableIndex,
-    TargetEnvironment, WasmError, WasmResult,
+    TargetEnvironment, WasmError, WasmResult, WasmType,
 };
 #[cfg(feature = "lightbeam")]
 use cranelift_wasm::{DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex};
@@ -26,65 +26,152 @@ pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
 #[derive(Copy, Clone, Debug)]
 pub struct BuiltinFunctionIndex(u32);
 
-impl BuiltinFunctionIndex {
+macro_rules! declare_builtin_functions {
+    (
+        $(
+            $( #[$attr:meta] )*
+            $name:ident( $( $param:ident ),* ) -> ( $( $result:ident ),* );
+        )*
+    ) => {
+        /// A struct with an `Option<ir::SigRef>` member for every builtin
+        /// function, to de-duplicate constructing/getting its signature.
+        struct BuiltinFunctionSignatures {
+            pointer_type: ir::Type,
+            reference_type: ir::Type,
+            call_conv: isa::CallConv,
+            $(
+                $name: Option<ir::SigRef>,
+            )*
+        }
+
+        impl BuiltinFunctionSignatures {
+            fn new(
+                pointer_type: ir::Type,
+                reference_type: ir::Type,
+                call_conv: isa::CallConv,
+            ) -> Self {
+                Self {
+                    pointer_type,
+                    reference_type,
+                    call_conv,
+                    $(
+                        $name: None,
+                    )*
+                }
+            }
+
+            fn vmctx(&self) -> AbiParam {
+                AbiParam::special(self.pointer_type, ArgumentPurpose::VMContext)
+            }
+
+            fn reference(&self) -> AbiParam {
+                AbiParam::new(self.reference_type)
+            }
+
+            fn pointer(&self) -> AbiParam {
+                AbiParam::new(self.pointer_type)
+            }
+
+            fn i32(&self) -> AbiParam {
+                AbiParam::new(I32)
+            }
+
+            $(
+                fn $name(&mut self, func: &mut Function) -> ir::SigRef {
+                    let sig = self.$name.unwrap_or_else(|| {
+                        func.import_signature(Signature {
+                            params: vec![ $( self.$param() ),* ],
+                            returns: vec![ $( self.$result() ),* ],
+                            call_conv: self.call_conv,
+                        })
+                    });
+                    self.$name = Some(sig);
+                    sig
+                }
+            )*
+        }
+
+        impl BuiltinFunctionIndex {
+            declare_builtin_functions!(
+                @indices;
+                0;
+                $( $( #[$attr] )* $name; )*
+            );
+        }
+    };
+
+    // Base case: no more indices to declare, so define the total number of
+    // function indices.
+    (
+        @indices;
+        $len:expr;
+    ) => {
+        /// Returns the total number of builtin functions.
+        pub const fn builtin_functions_total_number() -> u32 {
+            $len
+        }
+    };
+
+    // Recursive case: declare the next index, and then keep declaring the rest of
+    // the indices.
+    (
+         @indices;
+         $index:expr;
+         $( #[$this_attr:meta] )*
+         $this_name:ident;
+         $(
+             $( #[$rest_attr:meta] )*
+             $rest_name:ident;
+         )*
+    ) => {
+        $( #[$this_attr] )*
+        pub const fn $this_name() -> Self {
+            Self($index)
+        }
+
+        declare_builtin_functions!(
+            @indices;
+            ($index + 1);
+            $( $( #[$rest_attr] )* $rest_name; )*
+        );
+    }
+}
+
+declare_builtin_functions! {
     /// Returns an index for wasm's `memory.grow` builtin function.
-    pub const fn get_memory32_grow_index() -> Self {
-        Self(0)
-    }
+    memory32_grow(vmctx, i32, i32) -> (i32);
     /// Returns an index for wasm's imported `memory.grow` builtin function.
-    pub const fn get_imported_memory32_grow_index() -> Self {
-        Self(1)
-    }
+    imported_memory32_grow(vmctx, i32, i32) -> (i32);
     /// Returns an index for wasm's `memory.size` builtin function.
-    pub const fn get_memory32_size_index() -> Self {
-        Self(2)
-    }
+    memory32_size(vmctx, i32) -> (i32);
     /// Returns an index for wasm's imported `memory.size` builtin function.
-    pub const fn get_imported_memory32_size_index() -> Self {
-        Self(3)
-    }
+    imported_memory32_size(vmctx, i32) -> (i32);
     /// Returns an index for wasm's `table.copy` when both tables are locally
     /// defined.
-    pub const fn get_table_copy_index() -> Self {
-        Self(4)
-    }
+    table_copy(vmctx, i32, i32, i32, i32, i32) -> ();
     /// Returns an index for wasm's `table.init`.
-    pub const fn get_table_init_index() -> Self {
-        Self(5)
-    }
+    table_init(vmctx, i32, i32, i32, i32, i32) -> ();
     /// Returns an index for wasm's `elem.drop`.
-    pub const fn get_elem_drop_index() -> Self {
-        Self(6)
-    }
+    elem_drop(vmctx, i32) -> ();
     /// Returns an index for wasm's `memory.copy` for locally defined memories.
-    pub const fn get_defined_memory_copy_index() -> Self {
-        Self(7)
-    }
+    defined_memory_copy(vmctx, i32, i32, i32, i32) -> ();
     /// Returns an index for wasm's `memory.copy` for imported memories.
-    pub const fn get_imported_memory_copy_index() -> Self {
-        Self(8)
-    }
+    imported_memory_copy(vmctx, i32, i32, i32, i32) -> ();
     /// Returns an index for wasm's `memory.fill` for locally defined memories.
-    pub const fn get_memory_fill_index() -> Self {
-        Self(9)
-    }
+    memory_fill(vmctx, i32, i32, i32, i32) -> ();
     /// Returns an index for wasm's `memory.fill` for imported memories.
-    pub const fn get_imported_memory_fill_index() -> Self {
-        Self(10)
-    }
+    imported_memory_fill(vmctx, i32, i32, i32, i32) -> ();
     /// Returns an index for wasm's `memory.init` instruction.
-    pub const fn get_memory_init_index() -> Self {
-        Self(11)
-    }
+    memory_init(vmctx, i32, i32, i32, i32, i32) -> ();
     /// Returns an index for wasm's `data.drop` instruction.
-    pub const fn get_data_drop_index() -> Self {
-        Self(12)
-    }
-    /// Returns the total number of builtin functions.
-    pub const fn builtin_functions_total_number() -> u32 {
-        13
-    }
+    data_drop(vmctx, i32) -> ();
+    /// Returns an index for Wasm's `table.grow` instruction for `funcref`s.
+    table_grow_funcref(vmctx, i32, i32, pointer) -> (i32);
+    /// Returns an index for Wasm's `table.grow` instruction for `externref`s.
+    table_grow_externref(vmctx, i32, i32, reference) -> (i32);
+}
 
+impl BuiltinFunctionIndex {
     /// Create a new `BuiltinFunctionIndex` from its index
     pub const fn from_u32(i: u32) -> Self {
         Self(i)
@@ -107,37 +194,8 @@ pub struct FuncEnvironment<'module_environment> {
     /// The Cranelift global holding the vmctx address.
     vmctx: Option<ir::GlobalValue>,
 
-    /// The external function signature for implementing wasm's `memory.size`
-    /// for locally-defined 32-bit memories.
-    memory32_size_sig: Option<ir::SigRef>,
-
-    /// The external function signature for implementing wasm's `memory.grow`
-    /// for locally-defined memories.
-    memory_grow_sig: Option<ir::SigRef>,
-
-    /// The external function signature for implementing wasm's `table.copy`
-    /// (it's the same for both local and imported tables).
-    table_copy_sig: Option<ir::SigRef>,
-
-    /// The external function signature for implementing wasm's `table.init`.
-    table_init_sig: Option<ir::SigRef>,
-
-    /// The external function signature for implementing wasm's `elem.drop`.
-    elem_drop_sig: Option<ir::SigRef>,
-
-    /// The external function signature for implementing wasm's `memory.copy`
-    /// (it's the same for both local and imported memories).
-    memory_copy_sig: Option<ir::SigRef>,
-
-    /// The external function signature for implementing wasm's `memory.fill`
-    /// (it's the same for both local and imported memories).
-    memory_fill_sig: Option<ir::SigRef>,
-
-    /// The external function signature for implementing wasm's `memory.init`.
-    memory_init_sig: Option<ir::SigRef>,
-
-    /// The external function signature for implementing wasm's `data.drop`.
-    data_drop_sig: Option<ir::SigRef>,
+    /// Caches of signatures for builtin functions.
+    builtin_function_signatures: BuiltinFunctionSignatures,
 
     /// Offsets to struct fields accessed by JIT code.
     pub(crate) offsets: VMOffsets,
@@ -151,19 +209,20 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         module: &'module_environment ModuleLocal,
         tunables: &'module_environment Tunables,
     ) -> Self {
+        let builtin_function_signatures = BuiltinFunctionSignatures::new(
+            target_config.pointer_type(),
+            match target_config.pointer_type() {
+                ir::types::I32 => ir::types::R32,
+                ir::types::I64 => ir::types::R64,
+                _ => panic!(),
+            },
+            target_config.default_call_conv,
+        );
         Self {
             target_config,
             module,
             vmctx: None,
-            memory32_size_sig: None,
-            memory_grow_sig: None,
-            table_copy_sig: None,
-            table_init_sig: None,
-            elem_drop_sig: None,
-            memory_copy_sig: None,
-            memory_fill_sig: None,
-            memory_init_sig: None,
-            data_drop_sig: None,
+            builtin_function_signatures,
             offsets: VMOffsets::new(target_config.pointer_bytes(), module),
             tunables,
         }
@@ -181,22 +240,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         })
     }
 
-    fn get_memory_grow_sig(&mut self, func: &mut Function) -> ir::SigRef {
-        let sig = self.memory_grow_sig.unwrap_or_else(|| {
-            func.import_signature(Signature {
-                params: vec![
-                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
-                    AbiParam::new(I32),
-                    AbiParam::new(I32),
-                ],
-                returns: vec![AbiParam::new(I32)],
-                call_conv: self.target_config.default_call_conv,
-            })
-        });
-        self.memory_grow_sig = Some(sig);
-        sig
-    }
-
     /// Return the memory.grow function signature to call for the given index, along with the
     /// translated index value to pass to it and its index in `VMBuiltinFunctionsArray`.
     fn get_memory_grow_func(
@@ -206,32 +249,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
         if self.module.is_imported_memory(index) {
             (
-                self.get_memory_grow_sig(func),
+                self.builtin_function_signatures
+                    .imported_memory32_grow(func),
                 index.index(),
-                BuiltinFunctionIndex::get_imported_memory32_grow_index(),
+                BuiltinFunctionIndex::imported_memory32_grow(),
             )
         } else {
             (
-                self.get_memory_grow_sig(func),
+                self.builtin_function_signatures.memory32_grow(func),
                 self.module.defined_memory_index(index).unwrap().index(),
-                BuiltinFunctionIndex::get_memory32_grow_index(),
+                BuiltinFunctionIndex::memory32_grow(),
             )
         }
-    }
-
-    fn get_memory32_size_sig(&mut self, func: &mut Function) -> ir::SigRef {
-        let sig = self.memory32_size_sig.unwrap_or_else(|| {
-            func.import_signature(Signature {
-                params: vec![
-                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
-                    AbiParam::new(I32),
-                ],
-                returns: vec![AbiParam::new(I32)],
-                call_conv: self.target_config.default_call_conv,
-            })
-        });
-        self.memory32_size_sig = Some(sig);
-        sig
     }
 
     /// Return the memory.size function signature to call for the given index, along with the
@@ -243,41 +272,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
         if self.module.is_imported_memory(index) {
             (
-                self.get_memory32_size_sig(func),
+                self.builtin_function_signatures
+                    .imported_memory32_size(func),
                 index.index(),
-                BuiltinFunctionIndex::get_imported_memory32_size_index(),
+                BuiltinFunctionIndex::imported_memory32_size(),
             )
         } else {
             (
-                self.get_memory32_size_sig(func),
+                self.builtin_function_signatures.memory32_size(func),
                 self.module.defined_memory_index(index).unwrap().index(),
-                BuiltinFunctionIndex::get_memory32_size_index(),
+                BuiltinFunctionIndex::memory32_size(),
             )
         }
-    }
-
-    fn get_table_copy_sig(&mut self, func: &mut Function) -> ir::SigRef {
-        let sig = self.table_copy_sig.unwrap_or_else(|| {
-            func.import_signature(Signature {
-                params: vec![
-                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
-                    // Destination table index.
-                    AbiParam::new(I32),
-                    // Source table index.
-                    AbiParam::new(I32),
-                    // Index within destination table.
-                    AbiParam::new(I32),
-                    // Index within source table.
-                    AbiParam::new(I32),
-                    // Number of elements to copy.
-                    AbiParam::new(I32),
-                ],
-                returns: vec![],
-                call_conv: self.target_config.default_call_conv,
-            })
-        });
-        self.table_copy_sig = Some(sig);
-        sig
     }
 
     fn get_table_copy_func(
@@ -286,37 +292,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         dst_table_index: TableIndex,
         src_table_index: TableIndex,
     ) -> (ir::SigRef, usize, usize, BuiltinFunctionIndex) {
-        let sig = self.get_table_copy_sig(func);
+        let sig = self.builtin_function_signatures.table_copy(func);
         (
             sig,
             dst_table_index.as_u32() as usize,
             src_table_index.as_u32() as usize,
-            BuiltinFunctionIndex::get_table_copy_index(),
+            BuiltinFunctionIndex::table_copy(),
         )
-    }
-
-    fn get_table_init_sig(&mut self, func: &mut Function) -> ir::SigRef {
-        let sig = self.table_init_sig.unwrap_or_else(|| {
-            func.import_signature(Signature {
-                params: vec![
-                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
-                    // Table index.
-                    AbiParam::new(I32),
-                    // Segment index.
-                    AbiParam::new(I32),
-                    // Destination index within table.
-                    AbiParam::new(I32),
-                    // Source index within segment.
-                    AbiParam::new(I32),
-                    // Number of elements to initialize.
-                    AbiParam::new(I32),
-                ],
-                returns: vec![],
-                call_conv: self.target_config.default_call_conv,
-            })
-        });
-        self.table_init_sig = Some(sig);
-        sig
     }
 
     fn get_table_init_func(
@@ -324,56 +306,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         func: &mut Function,
         table_index: TableIndex,
     ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
-        let sig = self.get_table_init_sig(func);
+        let sig = self.builtin_function_signatures.table_init(func);
         let table_index = table_index.as_u32() as usize;
-        (
-            sig,
-            table_index,
-            BuiltinFunctionIndex::get_table_init_index(),
-        )
-    }
-
-    fn get_elem_drop_sig(&mut self, func: &mut Function) -> ir::SigRef {
-        let sig = self.elem_drop_sig.unwrap_or_else(|| {
-            func.import_signature(Signature {
-                params: vec![
-                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
-                    // Element index.
-                    AbiParam::new(I32),
-                ],
-                returns: vec![],
-                call_conv: self.target_config.default_call_conv,
-            })
-        });
-        self.elem_drop_sig = Some(sig);
-        sig
+        (sig, table_index, BuiltinFunctionIndex::table_init())
     }
 
     fn get_elem_drop_func(&mut self, func: &mut Function) -> (ir::SigRef, BuiltinFunctionIndex) {
-        let sig = self.get_elem_drop_sig(func);
-        (sig, BuiltinFunctionIndex::get_elem_drop_index())
-    }
-
-    fn get_memory_copy_sig(&mut self, func: &mut Function) -> ir::SigRef {
-        let sig = self.memory_copy_sig.unwrap_or_else(|| {
-            func.import_signature(Signature {
-                params: vec![
-                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
-                    // Memory index.
-                    AbiParam::new(I32),
-                    // Destination address.
-                    AbiParam::new(I32),
-                    // Source address.
-                    AbiParam::new(I32),
-                    // Length.
-                    AbiParam::new(I32),
-                ],
-                returns: vec![],
-                call_conv: self.target_config.default_call_conv,
-            })
-        });
-        self.memory_copy_sig = Some(sig);
-        sig
+        let sig = self.builtin_function_signatures.elem_drop(func);
+        (sig, BuiltinFunctionIndex::elem_drop())
     }
 
     fn get_memory_copy_func(
@@ -381,42 +321,19 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         func: &mut Function,
         memory_index: MemoryIndex,
     ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
-        let sig = self.get_memory_copy_sig(func);
         if let Some(defined_memory_index) = self.module.defined_memory_index(memory_index) {
             (
-                sig,
+                self.builtin_function_signatures.defined_memory_copy(func),
                 defined_memory_index.index(),
-                BuiltinFunctionIndex::get_defined_memory_copy_index(),
+                BuiltinFunctionIndex::defined_memory_copy(),
             )
         } else {
             (
-                sig,
+                self.builtin_function_signatures.imported_memory_copy(func),
                 memory_index.index(),
-                BuiltinFunctionIndex::get_imported_memory_copy_index(),
+                BuiltinFunctionIndex::imported_memory_copy(),
             )
         }
-    }
-
-    fn get_memory_fill_sig(&mut self, func: &mut Function) -> ir::SigRef {
-        let sig = self.memory_fill_sig.unwrap_or_else(|| {
-            func.import_signature(Signature {
-                params: vec![
-                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
-                    // Memory index.
-                    AbiParam::new(I32),
-                    // Destination address.
-                    AbiParam::new(I32),
-                    // Value.
-                    AbiParam::new(I32),
-                    // Length.
-                    AbiParam::new(I32),
-                ],
-                returns: vec![],
-                call_conv: self.target_config.default_call_conv,
-            })
-        });
-        self.memory_fill_sig = Some(sig);
-        sig
     }
 
     fn get_memory_fill_func(
@@ -424,70 +341,33 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         func: &mut Function,
         memory_index: MemoryIndex,
     ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
-        let sig = self.get_memory_fill_sig(func);
         if let Some(defined_memory_index) = self.module.defined_memory_index(memory_index) {
             (
-                sig,
+                self.builtin_function_signatures.memory_fill(func),
                 defined_memory_index.index(),
-                BuiltinFunctionIndex::get_memory_fill_index(),
+                BuiltinFunctionIndex::memory_fill(),
             )
         } else {
             (
-                sig,
+                self.builtin_function_signatures.imported_memory_fill(func),
                 memory_index.index(),
-                BuiltinFunctionIndex::get_imported_memory_fill_index(),
+                BuiltinFunctionIndex::imported_memory_fill(),
             )
         }
     }
 
-    fn get_memory_init_sig(&mut self, func: &mut Function) -> ir::SigRef {
-        let sig = self.memory_init_sig.unwrap_or_else(|| {
-            func.import_signature(Signature {
-                params: vec![
-                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
-                    // Memory index.
-                    AbiParam::new(I32),
-                    // Data index.
-                    AbiParam::new(I32),
-                    // Destination address.
-                    AbiParam::new(I32),
-                    // Source index within the data segment.
-                    AbiParam::new(I32),
-                    // Length.
-                    AbiParam::new(I32),
-                ],
-                returns: vec![],
-                call_conv: self.target_config.default_call_conv,
-            })
-        });
-        self.memory_init_sig = Some(sig);
-        sig
-    }
-
     fn get_memory_init_func(&mut self, func: &mut Function) -> (ir::SigRef, BuiltinFunctionIndex) {
-        let sig = self.get_memory_init_sig(func);
-        (sig, BuiltinFunctionIndex::get_memory_init_index())
-    }
-
-    fn get_data_drop_sig(&mut self, func: &mut Function) -> ir::SigRef {
-        let sig = self.data_drop_sig.unwrap_or_else(|| {
-            func.import_signature(Signature {
-                params: vec![
-                    AbiParam::special(self.pointer_type(), ArgumentPurpose::VMContext),
-                    // Data index.
-                    AbiParam::new(I32),
-                ],
-                returns: vec![],
-                call_conv: self.target_config.default_call_conv,
-            })
-        });
-        self.data_drop_sig = Some(sig);
-        sig
+        (
+            self.builtin_function_signatures.memory_init(func),
+            BuiltinFunctionIndex::memory_init(),
+        )
     }
 
     fn get_data_drop_func(&mut self, func: &mut Function) -> (ir::SigRef, BuiltinFunctionIndex) {
-        let sig = self.get_data_drop_sig(func);
-        (sig, BuiltinFunctionIndex::get_data_drop_index())
+        (
+            self.builtin_function_signatures.data_drop(func),
+            BuiltinFunctionIndex::data_drop(),
+        )
     }
 
     /// Translates load of builtin function and returns a pair of values `vmctx`
@@ -659,11 +539,8 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
         self.target_config
     }
 
-    fn reference_type(&self) -> ir::Type {
-        // For now, the only reference types we support are `externref`, which
-        // don't require tracing GC and stack maps. So we just use the target's
-        // pointer type. This will have to change once we move to tracing GC.
-        self.pointer_type()
+    fn reference_type(&self, ty: WasmType) -> ir::Type {
+        crate::reference_type(ty, self.pointer_type())
     }
 }
 
@@ -717,9 +594,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         });
 
         let element_size = match self.module.table_plans[index].style {
-            TableStyle::CallerChecksSignature => {
-                u64::from(self.offsets.size_of_vmcaller_checked_anyfunc())
-            }
+            TableStyle::CallerChecksSignature => u64::from(self.pointer_type().bytes()),
         };
 
         Ok(func.create_table(ir::TableData {
@@ -733,20 +608,47 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_table_grow(
         &mut self,
-        _: cranelift_codegen::cursor::FuncCursor<'_>,
-        _: TableIndex,
-        _: ir::Value,
-        _: ir::Value,
+        mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
+        table_index: TableIndex,
+        _table: ir::Table,
+        delta: ir::Value,
+        init_value: ir::Value,
     ) -> WasmResult<ir::Value> {
-        Err(WasmError::Unsupported(
-            "the `table.grow` instruction is not supported yet".into(),
-        ))
+        let (func_idx, func_sig) =
+            match self.module.table_plans[table_index].table.wasm_ty {
+                WasmType::FuncRef => (
+                    BuiltinFunctionIndex::table_grow_funcref(),
+                    self.builtin_function_signatures
+                        .table_grow_funcref(&mut pos.func),
+                ),
+                WasmType::ExternRef => (
+                    BuiltinFunctionIndex::table_grow_externref(),
+                    self.builtin_function_signatures
+                        .table_grow_externref(&mut pos.func),
+                ),
+                _ => return Err(WasmError::Unsupported(
+                    "`table.grow` with a table element type that is not `funcref` or `externref`"
+                        .into(),
+                )),
+            };
+
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        let table_index_arg = pos.ins().iconst(I32, table_index.as_u32() as i64);
+        let call_inst = pos.ins().call_indirect(
+            func_sig,
+            func_addr,
+            &[vmctx, table_index_arg, delta, init_value],
+        );
+
+        Ok(pos.func.dfg.first_result(call_inst))
     }
 
     fn translate_table_get(
         &mut self,
         _: cranelift_codegen::cursor::FuncCursor<'_>,
         _: TableIndex,
+        _: ir::Table,
         _: ir::Value,
     ) -> WasmResult<ir::Value> {
         Err(WasmError::Unsupported(
@@ -758,6 +660,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         &mut self,
         _: cranelift_codegen::cursor::FuncCursor<'_>,
         _: TableIndex,
+        _: ir::Table,
         _: ir::Value,
         _: ir::Value,
     ) -> WasmResult<()> {
@@ -779,14 +682,50 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         ))
     }
 
+    fn translate_ref_null(
+        &mut self,
+        mut pos: cranelift_codegen::cursor::FuncCursor,
+        ty: WasmType,
+    ) -> WasmResult<ir::Value> {
+        Ok(match ty {
+            WasmType::FuncRef => pos.ins().iconst(self.pointer_type(), 0),
+            WasmType::ExternRef => pos.ins().null(self.reference_type(ty)),
+            _ => {
+                return Err(WasmError::Unsupported(
+                    "`ref.null T` that is not a `funcref` or an `externref`".into(),
+                ));
+            }
+        })
+    }
+
+    fn translate_ref_is_null(
+        &mut self,
+        mut pos: cranelift_codegen::cursor::FuncCursor,
+        value: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        let bool_is_null = match pos.func.dfg.value_type(value) {
+            // `externref`
+            ty if ty.is_ref() => pos.ins().is_null(value),
+            // `funcref`
+            ty if ty == self.pointer_type() => {
+                pos.ins()
+                    .icmp_imm(cranelift_codegen::ir::condcodes::IntCC::Equal, value, 0)
+            }
+            _ => unreachable!(),
+        };
+
+        Ok(pos.ins().bint(ir::types::I32, bool_is_null))
+    }
+
     fn translate_ref_func(
         &mut self,
-        _: cranelift_codegen::cursor::FuncCursor<'_>,
-        _: u32,
+        mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
+        func_index: FuncIndex,
     ) -> WasmResult<ir::Value> {
-        Err(WasmError::Unsupported(
-            "the `ref.func` instruction is not supported yet".into(),
-        ))
+        let vmctx = self.vmctx(&mut pos.func);
+        let vmctx = pos.ins().global_value(self.pointer_type(), vmctx);
+        let offset = self.offsets.vmctx_anyfunc(func_index);
+        Ok(pos.ins().iadd_imm(vmctx, i64::from(offset)))
     }
 
     fn translate_custom_global_get(
@@ -956,17 +895,24 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let table_entry_addr = pos.ins().table_addr(pointer_type, table, callee, 0);
 
-        // Dereference table_entry_addr to get the function address.
+        // Dereference the table entry to get the pointer to the
+        // `VMCallerCheckedAnyfunc`.
+        let anyfunc_ptr =
+            pos.ins()
+                .load(pointer_type, ir::MemFlags::trusted(), table_entry_addr, 0);
+
+        // Check for whether the table element is null, and trap if so.
+        pos.ins()
+            .trapz(anyfunc_ptr, ir::TrapCode::IndirectCallToNull);
+
+        // Dereference anyfunc pointer to get the function address.
         let mem_flags = ir::MemFlags::trusted();
         let func_addr = pos.ins().load(
             pointer_type,
             mem_flags,
-            table_entry_addr,
+            anyfunc_ptr,
             i32::from(self.offsets.vmcaller_checked_anyfunc_func_ptr()),
         );
-
-        // Check whether `func_addr` is null.
-        pos.ins().trapz(func_addr, ir::TrapCode::IndirectCallToNull);
 
         // If necessary, check the signature.
         match self.module.table_plans[table_index].style {
@@ -988,7 +934,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let callee_sig_id = pos.ins().load(
                     sig_id_type,
                     mem_flags,
-                    table_entry_addr,
+                    anyfunc_ptr,
                     i32::from(self.offsets.vmcaller_checked_anyfunc_type_index()),
                 );
 
@@ -1005,7 +951,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let vmctx = pos.ins().load(
             pointer_type,
             mem_flags,
-            table_entry_addr,
+            anyfunc_ptr,
             i32::from(self.offsets.vmcaller_checked_anyfunc_vmctx()),
         );
         real_call_args.push(vmctx);
@@ -1187,13 +1133,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_table_size(
         &mut self,
-        _pos: FuncCursor,
-        _index: TableIndex,
-        _table: ir::Table,
+        mut pos: FuncCursor,
+        _table_index: TableIndex,
+        table: ir::Table,
     ) -> WasmResult<ir::Value> {
-        Err(WasmError::Unsupported(
-            "bulk memory: `table.size`".to_string(),
-        ))
+        let size_gv = pos.func.tables[table].bound_gv;
+        Ok(pos.ins().global_value(ir::types::I32, size_gv))
     }
 
     fn translate_table_copy(

@@ -340,7 +340,21 @@ fn define_control_flow(
                 r#"
         Trap when non-zero.
 
-        if ``c`` is zero, execution continues at the following instruction.
+        If ``c`` is zero, execution continues at the following instruction.
+        "#,
+                &formats.cond_trap,
+            )
+            .operands_in(vec![c, code])
+            .can_trap(true),
+        );
+
+        ig.push(
+            Inst::new(
+                "resumable_trapnz",
+                r#"
+        A resumable trap to be called when the passed condition is non-zero.
+
+        If ``c`` is zero, execution continues at the following instruction.
         "#,
                 &formats.cond_trap,
             )
@@ -535,9 +549,9 @@ fn define_simd_lane_access(
             r#"
         Vector swizzle.
 
-        Returns a new vector with byte-width lanes selected from the lanes of the first input 
-        vector ``x`` specified in the second input vector ``s``. The indices ``i`` in range 
-        ``[0, 15]`` select the ``i``-th element of ``x``. For indices outside of the range the 
+        Returns a new vector with byte-width lanes selected from the lanes of the first input
+        vector ``x`` specified in the second input vector ``s``. The indices ``i`` in range
+        ``[0, 15]`` select the ``i``-th element of ``x``. For indices outside of the range the
         resulting lane is 0. Note that this operates on byte-width lanes.
         "#,
             &formats.binary,
@@ -1162,7 +1176,7 @@ pub(crate) fn define(
         Inst::new(
             "uload8x8",
             r#"
-        Load an 8x8 vector (64 bits) from memory at ``p + Offset`` and zero-extend into an i16x8 
+        Load an 8x8 vector (64 bits) from memory at ``p + Offset`` and zero-extend into an i16x8
         vector.
         "#,
             &formats.load,
@@ -1176,7 +1190,7 @@ pub(crate) fn define(
         Inst::new(
             "uload8x8_complex",
             r#"
-        Load an 8x8 vector (64 bits) from memory at ``sum(args) + Offset`` and zero-extend into an 
+        Load an 8x8 vector (64 bits) from memory at ``sum(args) + Offset`` and zero-extend into an
         i16x8 vector.
         "#,
             &formats.load_complex,
@@ -1190,7 +1204,7 @@ pub(crate) fn define(
         Inst::new(
             "sload8x8",
             r#"
-        Load an 8x8 vector (64 bits) from memory at ``p + Offset`` and sign-extend into an i16x8 
+        Load an 8x8 vector (64 bits) from memory at ``p + Offset`` and sign-extend into an i16x8
         vector.
         "#,
             &formats.load,
@@ -1204,7 +1218,7 @@ pub(crate) fn define(
         Inst::new(
             "sload8x8_complex",
             r#"
-        Load an 8x8 vector (64 bits) from memory at ``sum(args) + Offset`` and sign-extend into an 
+        Load an 8x8 vector (64 bits) from memory at ``sum(args) + Offset`` and sign-extend into an
         i16x8 vector.
         "#,
             &formats.load_complex,
@@ -1229,7 +1243,7 @@ pub(crate) fn define(
         Inst::new(
             "uload16x4",
             r#"
-        Load a 16x4 vector (64 bits) from memory at ``p + Offset`` and zero-extend into an i32x4 
+        Load a 16x4 vector (64 bits) from memory at ``p + Offset`` and zero-extend into an i32x4
         vector.
         "#,
             &formats.load,
@@ -1243,7 +1257,7 @@ pub(crate) fn define(
         Inst::new(
             "uload16x4_complex",
             r#"
-        Load a 16x4 vector (64 bits) from memory at ``sum(args) + Offset`` and zero-extend into an 
+        Load a 16x4 vector (64 bits) from memory at ``sum(args) + Offset`` and zero-extend into an
         i32x4 vector.
         "#,
             &formats.load_complex,
@@ -1257,7 +1271,7 @@ pub(crate) fn define(
         Inst::new(
             "sload16x4",
             r#"
-        Load a 16x4 vector (64 bits) from memory at ``p + Offset`` and sign-extend into an i32x4 
+        Load a 16x4 vector (64 bits) from memory at ``p + Offset`` and sign-extend into an i32x4
         vector.
         "#,
             &formats.load,
@@ -1271,7 +1285,7 @@ pub(crate) fn define(
         Inst::new(
             "sload16x4_complex",
             r#"
-        Load a 16x4 vector (64 bits) from memory at ``sum(args) + Offset`` and sign-extend into an 
+        Load a 16x4 vector (64 bits) from memory at ``sum(args) + Offset`` and sign-extend into an
         i32x4 vector.
         "#,
             &formats.load_complex,
@@ -1296,7 +1310,7 @@ pub(crate) fn define(
         Inst::new(
             "uload32x2",
             r#"
-        Load an 32x2 vector (64 bits) from memory at ``p + Offset`` and zero-extend into an i64x2 
+        Load an 32x2 vector (64 bits) from memory at ``p + Offset`` and zero-extend into an i64x2
         vector.
         "#,
             &formats.load,
@@ -1310,7 +1324,7 @@ pub(crate) fn define(
         Inst::new(
             "uload32x2_complex",
             r#"
-        Load a 32x2 vector (64 bits) from memory at ``sum(args) + Offset`` and zero-extend into an 
+        Load a 32x2 vector (64 bits) from memory at ``sum(args) + Offset`` and zero-extend into an
         i64x2 vector.
         "#,
             &formats.load_complex,
@@ -1324,7 +1338,7 @@ pub(crate) fn define(
         Inst::new(
             "sload32x2",
             r#"
-        Load a 32x2 vector (64 bits) from memory at ``p + Offset`` and sign-extend into an i64x2 
+        Load a 32x2 vector (64 bits) from memory at ``p + Offset`` and sign-extend into an i64x2
         vector.
         "#,
             &formats.load,
@@ -1338,7 +1352,7 @@ pub(crate) fn define(
         Inst::new(
             "sload32x2_complex",
             r#"
-        Load a 32x2 vector (64 bits) from memory at ``sum(args) + Offset`` and sign-extend into an 
+        Load a 32x2 vector (64 bits) from memory at ``sum(args) + Offset`` and sign-extend into an
         i64x2 vector.
         "#,
             &formats.load_complex,

@@ -304,6 +304,14 @@ impl Imm12 {
         }
     }
 
+    /// Create a zero immediate of this format.
+    pub fn zero() -> Self {
+        Imm12 {
+            bits: 0,
+            shift12: false,
+        }
+    }
+
     /// Bits for 2-bit "shift" field in e.g. AddI.
     pub fn shift_bits(&self) -> u32 {
         if self.shift12 {

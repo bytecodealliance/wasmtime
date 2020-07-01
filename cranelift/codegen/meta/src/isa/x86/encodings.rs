@@ -1635,10 +1635,12 @@ fn define_simd(
     let usub_sat = shared.by_name("usub_sat");
     let vconst = shared.by_name("vconst");
     let vselect = shared.by_name("vselect");
+    let x86_cvtt2si = x86.by_name("x86_cvtt2si");
     let x86_insertps = x86.by_name("x86_insertps");
     let x86_movlhps = x86.by_name("x86_movlhps");
     let x86_movsd = x86.by_name("x86_movsd");
     let x86_packss = x86.by_name("x86_packss");
+    let x86_pblendw = x86.by_name("x86_pblendw");
     let x86_pextr = x86.by_name("x86_pextr");
     let x86_pinsr = x86.by_name("x86_pinsr");
     let x86_pmaxs = x86.by_name("x86_pmaxs");
@@ -1655,10 +1657,12 @@ fn define_simd(
     let x86_ptest = x86.by_name("x86_ptest");
     let x86_punpckh = x86.by_name("x86_punpckh");
     let x86_punpckl = x86.by_name("x86_punpckl");
+    let x86_vcvtudq2ps = x86.by_name("x86_vcvtudq2ps");
 
     // Shorthands for recipes.
     let rec_blend = r.template("blend");
     let rec_evex_reg_vvvv_rm_128 = r.template("evex_reg_vvvv_rm_128");
+    let rec_evex_reg_rm_128 = r.template("evex_reg_rm_128");
     let rec_f_ib = r.template("f_ib");
     let rec_fa = r.template("fa");
     let rec_fa_ib = r.template("fa_ib");
@@ -1702,6 +1706,7 @@ fn define_simd(
     let use_sse41_simd = settings.predicate_by_name("use_sse41_simd");
     let use_sse42_simd = settings.predicate_by_name("use_sse42_simd");
     let use_avx512dq_simd = settings.predicate_by_name("use_avx512dq_simd");
+    let use_avx512vl_simd = settings.predicate_by_name("use_avx512vl_simd");
 
     // SIMD vector size: eventually multiple vector sizes may be supported but for now only
     // SSE-sized vectors are available.
@@ -1738,6 +1743,13 @@ fn define_simd(
         };
         let instruction = vselect.bind(vector(ty, sse_vector_size));
         let template = rec_blend.opcodes(opcode);
+        e.enc_both_inferred_maybe_isap(instruction, template, Some(use_sse41_simd));
+    }
+
+    // PBLENDW, select lanes using a u8 immediate.
+    for ty in ValueType::all_lane_types().filter(|t| t.lane_bits() == 16) {
+        let instruction = x86_pblendw.bind(vector(ty, sse_vector_size));
+        let template = rec_fa_ib.opcodes(&PBLENDW);
         e.enc_both_inferred_maybe_isap(instruction, template, Some(use_sse41_simd));
     }
 
@@ -1885,6 +1897,19 @@ fn define_simd(
             .bind(vector(F32, sse_vector_size))
             .bind(vector(I32, sse_vector_size));
         e.enc_both(fcvt_from_sint_32, rec_furm.opcodes(&CVTDQ2PS));
+
+        e.enc_32_64_maybe_isap(
+            x86_vcvtudq2ps,
+            rec_evex_reg_rm_128.opcodes(&VCVTUDQ2PS),
+            Some(use_avx512vl_simd), // TODO need an OR predicate to join with AVX512F
+        );
+
+        e.enc_both_inferred(
+            x86_cvtt2si
+                .bind(vector(I32, sse_vector_size))
+                .bind(vector(F32, sse_vector_size)),
+            rec_furm.opcodes(&CVTTPS2DQ),
+        );
     }
 
     // SIMD vconst for special cases (all zeroes, all ones)

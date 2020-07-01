@@ -103,6 +103,10 @@ pub static CVTSI2SS: [u8; 3] = [0xf3, 0x0f, 0x2a];
 /// float-point value.
 pub static CVTSS2SD: [u8; 3] = [0xf3, 0x0f, 0x5a];
 
+/// Convert four packed single-precision floating-point values from xmm2/mem to four packed signed
+/// doubleword values in xmm1 using truncation (SSE2).
+pub static CVTTPS2DQ: [u8; 3] = [0xf3, 0x0f, 0x5b];
+
 /// Convert with truncation scalar double-precision floating-point value to signed
 /// integer.
 pub static CVTTSD2SI: [u8; 3] = [0xf2, 0x0f, 0x2c];
@@ -346,6 +350,10 @@ pub static PAVGW: [u8; 3] = [0x66, 0x0f, 0xE3];
 /// Select byte values from xmm1 and xmm2/m128 from mask specified in the high bit of each byte
 /// in XMM0 and store the values into xmm1 (SSE4.1).
 pub static PBLENDVB: [u8; 4] = [0x66, 0x0f, 0x38, 0x10];
+
+/// Select words from xmm1 and xmm2/m128 from mask specified in imm8 and store the values into xmm1
+/// (SSE4.1).
+pub static PBLENDW: [u8; 4] = [0x66, 0x0f, 0x3a, 0x0e];
 
 /// Compare packed data for equal (SSE2).
 pub static PCMPEQB: [u8; 3] = [0x66, 0x0f, 0x74];
@@ -664,6 +672,12 @@ pub static UCOMISS: [u8; 2] = [0x0f, 0x2e];
 
 /// Raise invalid opcode instruction.
 pub static UNDEFINED2: [u8; 2] = [0x0f, 0x0b];
+
+/// Convert four packed unsigned doubleword integers from xmm2/m128/m32bcst to packed
+/// single-precision floating-point values in xmm1 with writemask k1. Rounding behavior
+/// is controlled by MXCSR but can be overriden by EVEX.L'L in static rounding mode
+/// (AVX512VL, AVX512F).
+pub static VCVTUDQ2PS: [u8; 3] = [0xf2, 0x0f, 0x7a];
 
 /// imm{16,32} XOR r/m{16,32,64}, possibly sign-extended.
 pub static XOR_IMM: [u8; 1] = [0x81];

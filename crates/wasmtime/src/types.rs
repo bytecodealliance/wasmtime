@@ -106,17 +106,7 @@ impl ValType {
             ValType::F32 => Some(ir::types::F32),
             ValType::F64 => Some(ir::types::F64),
             ValType::V128 => Some(ir::types::I8X16),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn from_wasmtime_type(ty: ir::Type) -> Option<ValType> {
-        match ty {
-            ir::types::I32 => Some(ValType::I32),
-            ir::types::I64 => Some(ValType::I64),
-            ir::types::F32 => Some(ValType::F32),
-            ir::types::F64 => Some(ValType::F64),
-            ir::types::I8X16 => Some(ValType::V128),
+            ValType::ExternRef => Some(wasmtime_runtime::ref_type()),
             _ => None,
         }
     }
@@ -345,7 +335,7 @@ impl GlobalType {
     /// Returns `None` if the wasmtime global has a type that we can't
     /// represent, but that should only very rarely happen and indicate a bug.
     pub(crate) fn from_wasmtime_global(global: &wasm::Global) -> Option<GlobalType> {
-        let ty = ValType::from_wasmtime_type(global.ty)?;
+        let ty = ValType::from_wasm_type(&global.wasm_ty)?;
         let mutability = if global.mutability {
             Mutability::Var
         } else {
@@ -386,12 +376,14 @@ impl TableType {
     }
 
     pub(crate) fn from_wasmtime_table(table: &wasm::Table) -> TableType {
-        assert!(if let wasm::TableElementType::Func = table.ty {
-            true
-        } else {
-            false
-        });
-        let ty = ValType::FuncRef;
+        let ty = match table.ty {
+            wasm::TableElementType::Func => ValType::FuncRef,
+            #[cfg(target_pointer_width = "64")]
+            wasm::TableElementType::Val(ir::types::R64) => ValType::ExternRef,
+            #[cfg(target_pointer_width = "32")]
+            wasm::TableElementType::Val(ir::types::R32) => ValType::ExternRef,
+            _ => panic!("only `funcref` and `externref` tables supported"),
+        };
         let limits = Limits::new(table.minimum, table.maximum);
         TableType::new(ty, limits)
     }

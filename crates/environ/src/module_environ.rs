@@ -93,11 +93,8 @@ impl<'data> TargetEnvironment for ModuleEnvironment<'data> {
         self.result.target_config
     }
 
-    fn reference_type(&self) -> ir::Type {
-        // For now, the only reference types we support are `externref`, which
-        // don't require tracing GC and stack maps. So we just use the target's
-        // pointer type. This will have to change once we move to tracing GC.
-        self.pointer_type()
+    fn reference_type(&self, ty: cranelift_wasm::WasmType) -> ir::Type {
+        crate::reference_type(ty, self.pointer_type())
     }
 }
 
