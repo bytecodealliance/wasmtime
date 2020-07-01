@@ -387,12 +387,32 @@ impl ABIBody for X64ABIBody {
         unimplemented!("store_stackslot")
     }
 
-    fn load_spillslot(&self, _slot: SpillSlot, _ty: Type, _into_reg: Writable<Reg>) -> Inst {
-        unimplemented!("load_spillslot")
+    fn load_spillslot(&self, slot: SpillSlot, ty: Type, into_reg: Writable<Reg>) -> Inst {
+        // Offset from beginning of spillslot area, which is at nominal-SP + stackslots_size.
+        let islot = slot.get() as i64;
+        let spill_off = islot * 8;
+        let sp_off = self.stack_slots_size as i64 + spill_off;
+        debug_assert!(sp_off <= u32::max_value() as i64, "large spill offsets NYI");
+        trace!("load_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
+        load_stack(
+            SyntheticAmode::nominal_sp_offset(sp_off as u32),
+            into_reg,
+            ty,
+        )
     }
 
-    fn store_spillslot(&self, _slot: SpillSlot, _ty: Type, _from_reg: Reg) -> Inst {
-        unimplemented!("store_spillslot")
+    fn store_spillslot(&self, slot: SpillSlot, ty: Type, from_reg: Reg) -> Inst {
+        // Offset from beginning of spillslot area, which is at nominal-SP + stackslots_size.
+        let islot = slot.get() as i64;
+        let spill_off = islot * 8;
+        let sp_off = self.stack_slots_size as i64 + spill_off;
+        debug_assert!(sp_off <= u32::max_value() as i64, "large spill offsets NYI");
+        trace!("store_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
+        store_stack(
+            SyntheticAmode::nominal_sp_offset(sp_off as u32),
+            from_reg,
+            ty,
+        )
     }
 
     fn gen_prologue(&mut self) -> Vec<Inst> {
@@ -543,12 +563,12 @@ impl ABIBody for X64ABIBody {
         }
     }
 
-    fn gen_spill(&self, _to_slot: SpillSlot, _from_reg: RealReg, _ty: Type) -> Inst {
-        unimplemented!()
+    fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg, ty: Type) -> Inst {
+        self.store_spillslot(to_slot, ty, from_reg.to_reg())
     }
 
-    fn gen_reload(&self, _to_reg: Writable<RealReg>, _from_slot: SpillSlot, _ty: Type) -> Inst {
-        unimplemented!()
+    fn gen_reload(&self, to_reg: Writable<RealReg>, from_slot: SpillSlot, ty: Type) -> Inst {
+        self.load_spillslot(from_slot, ty, to_reg.map(|r| r.to_reg()))
     }
 }
 
@@ -828,7 +848,7 @@ fn adjust_stack<C: LowerCtx<I = Inst>>(ctx: &mut C, amount: u64, is_sub: bool) {
     }
 }
 
-fn load_stack(mem: Amode, into_reg: Writable<Reg>, ty: Type) -> Inst {
+fn load_stack(mem: impl Into<SyntheticAmode>, into_reg: Writable<Reg>, ty: Type) -> Inst {
     let ext_mode = match ty {
         types::B1 | types::B8 | types::I8 => Some(ExtMode::BQ),
         types::B16 | types::I16 => Some(ExtMode::WQ),
@@ -839,13 +859,14 @@ fn load_stack(mem: Amode, into_reg: Writable<Reg>, ty: Type) -> Inst {
         _ => unimplemented!("load_stack({})", ty),
     };
 
+    let mem = mem.into();
     match ext_mode {
         Some(ext_mode) => Inst::movsx_rm_r(ext_mode, RegMem::mem(mem), into_reg),
         None => Inst::mov64_m_r(mem, into_reg),
     }
 }
 
-fn store_stack(mem: Amode, from_reg: Reg, ty: Type) -> Inst {
+fn store_stack(mem: impl Into<SyntheticAmode>, from_reg: Reg, ty: Type) -> Inst {
     let (is_int, size) = match ty {
         types::B1 | types::B8 | types::I8 => (true, 1),
         types::B16 | types::I16 => (true, 2),
@@ -855,6 +876,7 @@ fn store_stack(mem: Amode, from_reg: Reg, ty: Type) -> Inst {
         types::F64 => (false, 8),
         _ => unimplemented!("store_stack({})", ty),
     };
+    let mem = mem.into();
     if is_int {
         Inst::mov_r_m(size, from_reg, mem)
     } else {
