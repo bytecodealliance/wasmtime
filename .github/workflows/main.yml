@@ -65,6 +65,21 @@ jobs:
         name: doc-api
         path: target/doc
 
+  doc_capi:
+    name: Doc - build the C API documentation
+    runs-on: ubuntu-latest
+    container: ubuntu:20.04
+    steps:
+    - run: apt-get update && apt-get install -y doxygen git
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - run: cd crates/c-api && doxygen doxygen.conf
+    - uses: actions/upload-artifact@v1
+      with:
+        name: doc-c-api
+        path: crates/c-api/html
+
   # Quick checks of various feature combinations and whether things
   # compile. The goal here isn't to run tests, mostly just serve as a
   # double-check that Rust code compiles and is likely to work everywhere else.
@@ -437,6 +452,10 @@ jobs:
       uses: actions/download-artifact@v1
       with:
         name: doc-api
+    - name: Download C API docs
+      uses: actions/download-artifact@v1
+      with:
+        name: doc-c-api
     - name: Download x86_64 macOS binaries
       uses: actions/download-artifact@v1
       with:
@@ -462,6 +481,7 @@ jobs:
       run: |
         mv doc-book gh-pages
         mv doc-api gh-pages/api
+        mv doc-c-api gh-pages/c-api
 
     # If this is a push to the main branch push to the `gh-pages` using a
     # deploy key. Note that a deploy key is necessary for now because otherwise
