@@ -12,9 +12,8 @@
 use crate::handle::{Handle, HandleRights};
 use crate::wasi::{types, Errno, Result};
 use std::any::Any;
-use std::cell::{Cell, Ref, RefCell};
 use std::io::{self, Read, Write};
-use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 
 /// A virtual pipe read end.
 ///
@@ -29,8 +28,8 @@ use std::rc::Rc;
 /// ```
 #[derive(Clone, Debug)]
 pub struct ReadPipe<R: Read + Any> {
-    rights: Cell<HandleRights>,
-    reader: Rc<RefCell<R>>,
+    rights: Arc<RwLock<HandleRights>>,
+    reader: Arc<RwLock<R>>,
 }
 
 impl<R: Read + Any> ReadPipe<R> {
@@ -38,23 +37,23 @@ impl<R: Read + Any> ReadPipe<R> {
     ///
     /// All `Handle` read operations delegate to reading from this underlying reader.
     pub fn new(r: R) -> Self {
-        Self::from_shared(Rc::new(RefCell::new(r)))
+        Self::from_shared(Arc::new(RwLock::new(r)))
     }
 
     /// Create a new pipe from a shareable `Read` type.
     ///
     /// All `Handle` read operations delegate to reading from this underlying reader.
-    pub fn from_shared(reader: Rc<RefCell<R>>) -> Self {
+    pub fn from_shared(reader: Arc<RwLock<R>>) -> Self {
         use types::Rights;
         Self {
-            rights: Cell::new(HandleRights::from_base(
+            rights: Arc::new(RwLock::new(HandleRights::from_base(
                 Rights::FD_DATASYNC
                     | Rights::FD_FDSTAT_SET_FLAGS
                     | Rights::FD_READ
                     | Rights::FD_SYNC
                     | Rights::FD_FILESTAT_GET
                     | Rights::POLL_FD_READWRITE,
-            )),
+            ))),
             reader,
         }
     }
@@ -63,8 +62,8 @@ impl<R: Read + Any> ReadPipe<R> {
     ///
     /// This will fail with `Err(self)` if multiple references to the underlying `R` exist.
     pub fn try_into_inner(mut self) -> std::result::Result<R, Self> {
-        match Rc::try_unwrap(self.reader) {
-            Ok(rc) => Ok(RefCell::into_inner(rc)),
+        match Arc::try_unwrap(self.reader) {
+            Ok(rc) => Ok(RwLock::into_inner(rc).unwrap()),
             Err(reader) => {
                 self.reader = reader;
                 Err(self)
@@ -114,11 +113,11 @@ impl<R: Read + Any> Handle for ReadPipe<R> {
     }
 
     fn get_rights(&self) -> HandleRights {
-        self.rights.get()
+        self.rights.read().unwrap().clone()
     }
 
     fn set_rights(&self, rights: HandleRights) {
-        self.rights.set(rights)
+        *self.rights.write().unwrap() = rights;
     }
 
     fn advise(
@@ -161,7 +160,7 @@ impl<R: Read + Any> Handle for ReadPipe<R> {
         if offset != 0 {
             return Err(Errno::Spipe);
         }
-        Ok(self.reader.borrow_mut().read_vectored(buf)?)
+        Ok(self.reader.write().unwrap().read_vectored(buf)?)
     }
 
     fn seek(&self, _offset: io::SeekFrom) -> Result<types::Filesize> {
@@ -169,7 +168,7 @@ impl<R: Read + Any> Handle for ReadPipe<R> {
     }
 
     fn read_vectored(&self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
-        Ok(self.reader.borrow_mut().read_vectored(iovs)?)
+        Ok(self.reader.write().unwrap().read_vectored(iovs)?)
     }
 
     fn create_directory(&self, _path: &str) -> Result<()> {
@@ -225,8 +224,8 @@ impl<R: Read + Any> Handle for ReadPipe<R> {
 /// A virtual pipe write end.
 #[derive(Clone, Debug)]
 pub struct WritePipe<W: Write + Any> {
-    rights: Cell<HandleRights>,
-    writer: Rc<RefCell<W>>,
+    rights: Arc<RwLock<HandleRights>>,
+    writer: Arc<RwLock<W>>,
 }
 
 impl<W: Write + Any> WritePipe<W> {
@@ -234,23 +233,23 @@ impl<W: Write + Any> WritePipe<W> {
     ///
     /// All `Handle` write operations delegate to writing to this underlying writer.
     pub fn new(w: W) -> Self {
-        Self::from_shared(Rc::new(RefCell::new(w)))
+        Self::from_shared(Arc::new(RwLock::new(w)))
     }
 
     /// Create a new pipe from a shareable `Write` type.
     ///
     /// All `Handle` write operations delegate to writing to this underlying writer.
-    pub fn from_shared(writer: Rc<RefCell<W>>) -> Self {
+    pub fn from_shared(writer: Arc<RwLock<W>>) -> Self {
         use types::Rights;
         Self {
-            rights: Cell::new(HandleRights::from_base(
+            rights: Arc::new(RwLock::new(HandleRights::from_base(
                 Rights::FD_DATASYNC
                     | Rights::FD_FDSTAT_SET_FLAGS
                     | Rights::FD_SYNC
                     | Rights::FD_WRITE
                     | Rights::FD_FILESTAT_GET
                     | Rights::POLL_FD_READWRITE,
-            )),
+            ))),
             writer,
         }
     }
@@ -259,8 +258,8 @@ impl<W: Write + Any> WritePipe<W> {
     ///
     /// This will fail with `Err(self)` if multiple references to the underlying `W` exist.
     pub fn try_into_inner(mut self) -> std::result::Result<W, Self> {
-        match Rc::try_unwrap(self.writer) {
-            Ok(rc) => Ok(RefCell::into_inner(rc)),
+        match Arc::try_unwrap(self.writer) {
+            Ok(rc) => Ok(RwLock::into_inner(rc).unwrap()),
             Err(writer) => {
                 self.writer = writer;
                 Err(self)
@@ -273,11 +272,6 @@ impl WritePipe<io::Cursor<Vec<u8>>> {
     /// Create a new writable virtual pipe backed by a `Vec<u8>` buffer.
     pub fn new_in_memory() -> Self {
         Self::new(io::Cursor::new(vec![]))
-    }
-
-    /// Get a reference to the bytes contained in the underlying `Vec<u8>` buffer.
-    pub fn as_slice(&self) -> Ref<[u8]> {
-        Ref::map(self.writer.borrow(), |c| c.get_ref().as_slice())
     }
 }
 
@@ -298,11 +292,11 @@ impl<W: Write + Any> Handle for WritePipe<W> {
     }
 
     fn get_rights(&self) -> HandleRights {
-        self.rights.get()
+        self.rights.read().unwrap().clone()
     }
 
     fn set_rights(&self, rights: HandleRights) {
-        self.rights.set(rights)
+        *self.rights.write().unwrap() = rights;
     }
 
     fn advise(
@@ -345,7 +339,7 @@ impl<W: Write + Any> Handle for WritePipe<W> {
         if offset != 0 {
             return Err(Errno::Spipe);
         }
-        Ok(self.writer.borrow_mut().write_vectored(buf)?)
+        Ok(self.writer.write().unwrap().write_vectored(buf)?)
     }
 
     fn seek(&self, _offset: io::SeekFrom) -> Result<types::Filesize> {
@@ -353,7 +347,7 @@ impl<W: Write + Any> Handle for WritePipe<W> {
     }
 
     fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
-        Ok(self.writer.borrow_mut().write_vectored(iovs)?)
+        Ok(self.writer.write().unwrap().write_vectored(iovs)?)
     }
 
     fn create_directory(&self, _path: &str) -> Result<()> {
