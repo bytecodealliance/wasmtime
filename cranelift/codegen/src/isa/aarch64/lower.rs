@@ -435,8 +435,10 @@ pub(crate) fn put_input_in_rs_immlogic<C: LowerCtx<I = Inst>>(
 pub(crate) fn put_input_in_reg_immshift<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     input: InsnInput,
+    shift_width_bits: usize,
 ) -> ResultRegImmShift {
     if let Some(imm_value) = input_to_const(ctx, input) {
+        let imm_value = imm_value & ((shift_width_bits - 1) as u64);
         if let Some(immshift) = ImmShift::maybe_from_u64(imm_value) {
             return ResultRegImmShift::ImmShift(immshift);
         }

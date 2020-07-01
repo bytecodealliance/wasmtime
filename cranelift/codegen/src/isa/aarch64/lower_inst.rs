@@ -460,7 +460,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             };
             let rd = get_output_reg(ctx, outputs[0]);
             let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
-            let rm = put_input_in_reg_immshift(ctx, inputs[1]);
+            let rm = put_input_in_reg_immshift(ctx, inputs[1], ty_bits(ty));
             let alu_op = match op {
                 Opcode::Ishl => choose_32_64(ty, ALUOp::Lsl32, ALUOp::Lsl64),
                 Opcode::Ushr => choose_32_64(ty, ALUOp::Lsr32, ALUOp::Lsr64),
@@ -513,7 +513,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     NarrowValueMode::ZeroExtend64
                 },
             );
-            let rm = put_input_in_reg_immshift(ctx, inputs[1]);
+            let rm = put_input_in_reg_immshift(ctx, inputs[1], ty_bits(ty));
 
             if ty_bits_size == 32 || ty_bits_size == 64 {
                 let alu_op = choose_32_64(ty, ALUOp::RotR32, ALUOp::RotR64);
