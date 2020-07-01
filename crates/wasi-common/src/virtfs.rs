@@ -11,6 +11,8 @@ use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+pub mod pipe;
+
 /// An entry in a virtual filesystem
 pub enum VirtualDirEntry {
     /// The contents of a child directory
