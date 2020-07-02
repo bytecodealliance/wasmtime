@@ -324,14 +324,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 //   msub rd, rd, rm, rn  ; rd = rn - rd * rm
 
                 // Check for divide by 0.
-                let branch_size = 8;
-                ctx.emit(Inst::OneWayCondBr {
-                    target: BranchTarget::ResolvedOffset(branch_size),
-                    kind: CondBrKind::NotZero(rm),
-                });
-
                 let trap_info = (ctx.srcloc(insn), TrapCode::IntegerDivisionByZero);
-                ctx.emit(Inst::Udf { trap_info });
+                ctx.emit(Inst::TrapIf {
+                    trap_info,
+                    kind: CondBrKind::Zero(rm),
+                });
 
                 ctx.emit(Inst::AluRRRR {
                     alu_op: ALUOp::MSub64,
@@ -342,17 +339,17 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 });
             } else {
                 if div_op == ALUOp::SDiv64 {
-                    //   cbz rm, #20
+                    //   cbnz rm, #8
+                    //   udf ; divide by zero
                     //   cmn rm, 1
                     //   ccmp rn, 1, #nzcv, eq
-                    //   b.vc 12
+                    //   b.vc #8
                     //   udf ; signed overflow
-                    //   udf ; divide by zero
 
                     // Check for divide by 0.
-                    let branch_size = 20;
-                    ctx.emit(Inst::OneWayCondBr {
-                        target: BranchTarget::ResolvedOffset(branch_size),
+                    let trap_info = (ctx.srcloc(insn), TrapCode::IntegerDivisionByZero);
+                    ctx.emit(Inst::TrapIf {
+                        trap_info,
                         kind: CondBrKind::Zero(rm),
                     });
 
@@ -378,27 +375,22 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         nzcv: NZCV::new(false, false, false, false),
                         cond: Cond::Eq,
                     });
-                    ctx.emit(Inst::OneWayCondBr {
-                        target: BranchTarget::ResolvedOffset(12),
-                        kind: CondBrKind::Cond(Cond::Vc),
-                    });
-
                     let trap_info = (ctx.srcloc(insn), TrapCode::IntegerOverflow);
-                    ctx.emit(Inst::Udf { trap_info });
+                    ctx.emit(Inst::TrapIf {
+                        trap_info,
+                        kind: CondBrKind::Cond(Cond::Vs),
+                    });
                 } else {
                     //   cbnz rm, #8
                     //   udf ; divide by zero
 
                     // Check for divide by 0.
-                    let branch_size = 8;
-                    ctx.emit(Inst::OneWayCondBr {
-                        target: BranchTarget::ResolvedOffset(branch_size),
-                        kind: CondBrKind::NotZero(rm),
+                    let trap_info = (ctx.srcloc(insn), TrapCode::IntegerDivisionByZero);
+                    ctx.emit(Inst::TrapIf {
+                        trap_info,
+                        kind: CondBrKind::Zero(rm),
                     });
                 }
-
-                let trap_info = (ctx.srcloc(insn), TrapCode::IntegerDivisionByZero);
-                ctx.emit(Inst::Udf { trap_info });
             }
         }
 
@@ -1366,15 +1358,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 cond
             };
 
-            // Branch around the break instruction with inverted cond. Go straight to lowered
-            // one-target form; this is logically part of a single-in single-out template lowering.
-            let cond = cond.invert();
-            ctx.emit(Inst::OneWayCondBr {
-                target: BranchTarget::ResolvedOffset(8),
+            ctx.emit(Inst::TrapIf {
+                trap_info,
                 kind: CondBrKind::Cond(cond),
             });
-
-            ctx.emit(Inst::Udf { trap_info })
         }
 
         Opcode::Safepoint => {
@@ -1753,12 +1740,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 ctx.emit(Inst::FpuCmp64 { rn, rm: rn });
             }
-            ctx.emit(Inst::OneWayCondBr {
-                target: BranchTarget::ResolvedOffset(8),
-                kind: CondBrKind::Cond(lower_fp_condcode(FloatCC::Ordered)),
-            });
             let trap_info = (ctx.srcloc(insn), TrapCode::BadConversionToInteger);
-            ctx.emit(Inst::Udf { trap_info });
+            ctx.emit(Inst::TrapIf {
+                trap_info,
+                kind: CondBrKind::Cond(lower_fp_condcode(FloatCC::Unordered)),
+            });
 
             let tmp = ctx.alloc_tmp(RegClass::V128, I128);
 
@@ -1794,12 +1780,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rn,
                     rm: tmp.to_reg(),
                 });
-                ctx.emit(Inst::OneWayCondBr {
-                    target: BranchTarget::ResolvedOffset(8),
-                    kind: CondBrKind::Cond(lower_fp_condcode(low_cond)),
-                });
                 let trap_info = (ctx.srcloc(insn), TrapCode::IntegerOverflow);
-                ctx.emit(Inst::Udf { trap_info });
+                ctx.emit(Inst::TrapIf {
+                    trap_info,
+                    kind: CondBrKind::Cond(lower_fp_condcode(low_cond).invert()),
+                });
 
                 // <= high_bound
                 lower_constant_f32(ctx, tmp, high_bound);
@@ -1807,12 +1792,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rn,
                     rm: tmp.to_reg(),
                 });
-                ctx.emit(Inst::OneWayCondBr {
-                    target: BranchTarget::ResolvedOffset(8),
-                    kind: CondBrKind::Cond(lower_fp_condcode(FloatCC::LessThan)),
-                });
                 let trap_info = (ctx.srcloc(insn), TrapCode::IntegerOverflow);
-                ctx.emit(Inst::Udf { trap_info });
+                ctx.emit(Inst::TrapIf {
+                    trap_info,
+                    kind: CondBrKind::Cond(lower_fp_condcode(FloatCC::LessThan).invert()),
+                });
             } else {
                 // From float64.
                 let (low_bound, low_cond, high_bound) = match (signed, out_bits) {
@@ -1837,12 +1821,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rn,
                     rm: tmp.to_reg(),
                 });
-                ctx.emit(Inst::OneWayCondBr {
-                    target: BranchTarget::ResolvedOffset(8),
-                    kind: CondBrKind::Cond(lower_fp_condcode(low_cond)),
-                });
                 let trap_info = (ctx.srcloc(insn), TrapCode::IntegerOverflow);
-                ctx.emit(Inst::Udf { trap_info });
+                ctx.emit(Inst::TrapIf {
+                    trap_info,
+                    kind: CondBrKind::Cond(lower_fp_condcode(low_cond).invert()),
+                });
 
                 // <= high_bound
                 lower_constant_f64(ctx, tmp, high_bound);
@@ -1850,12 +1833,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rn,
                     rm: tmp.to_reg(),
                 });
-                ctx.emit(Inst::OneWayCondBr {
-                    target: BranchTarget::ResolvedOffset(8),
-                    kind: CondBrKind::Cond(lower_fp_condcode(FloatCC::LessThan)),
-                });
                 let trap_info = (ctx.srcloc(insn), TrapCode::IntegerOverflow);
-                ctx.emit(Inst::Udf { trap_info });
+                ctx.emit(Inst::TrapIf {
+                    trap_info,
+                    kind: CondBrKind::Cond(lower_fp_condcode(FloatCC::LessThan).invert()),
+                });
             };
 
             // Do the conversion.
@@ -2349,7 +2331,8 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                 let rtmp1 = ctx.alloc_tmp(RegClass::I64, I32);
                 let rtmp2 = ctx.alloc_tmp(RegClass::I64, I32);
 
-                // Bounds-check and branch to default.
+                // Bounds-check, leaving condition codes for JTSequence's
+                // branch to default target below.
                 if let Some(imm12) = Imm12::maybe_from_u64(jt_size as u64) {
                     ctx.emit(Inst::AluRRImm12 {
                         alu_op: ALUOp::SubS32,
@@ -2366,14 +2349,10 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                         rm: rtmp1.to_reg(),
                     });
                 }
-                let default_target = BranchTarget::Label(targets[0]);
-                ctx.emit(Inst::OneWayCondBr {
-                    target: default_target.clone(),
-                    kind: CondBrKind::Cond(Cond::Hs), // unsigned >=
-                });
 
                 // Emit the compound instruction that does:
                 //
+                // b.hs default
                 // adr rA, jt
                 // ldrsw rB, [rA, rIndex, UXTW 2]
                 // add rA, rA, rB
@@ -2392,6 +2371,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     .skip(1)
                     .map(|bix| BranchTarget::Label(*bix))
                     .collect();
+                let default_target = BranchTarget::Label(targets[0]);
                 let targets_for_term: Vec<MachLabel> = targets.to_vec();
                 ctx.emit(Inst::JTSequence {
                     ridx,
@@ -2399,6 +2379,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                     rtmp2,
                     info: Box::new(JTSequenceInfo {
                         targets: jt_targets,
+                        default_target,
                         targets_for_term: targets_for_term,
                     }),
                 });

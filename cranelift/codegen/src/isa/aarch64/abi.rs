@@ -631,14 +631,11 @@ impl AArch64ABIBody {
                 rn: stack_reg(),
                 rm: stack_limit,
             });
-            insts.push(Inst::OneWayCondBr {
-                target: BranchTarget::ResolvedOffset(8),
-                // Here `Hs` == "higher or same" when interpreting the two
-                // operands as unsigned integers.
-                kind: CondBrKind::Cond(Cond::Hs),
-            });
-            insts.push(Inst::Udf {
+            insts.push(Inst::TrapIf {
                 trap_info: (ir::SourceLoc::default(), ir::TrapCode::StackOverflow),
+                // Here `Lo` == "less than" when interpreting the two
+                // operands as unsigned integers.
+                kind: CondBrKind::Cond(Cond::Lo),
             });
         }
     }

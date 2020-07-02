@@ -17,8 +17,7 @@ block0(v0: i64):
 }
 
 ; check: subs xzr, x0, #42
-; nextln: b.ne 8
-; nextln: udf
+; nextln: b.ne 8 ; udf
 
 function %h() {
 block0:
