@@ -1,4 +1,91 @@
 /**
+ * \mainpage Wasmtime C API
+ *
+ * This documentation is an overview and API reference for the C API of
+ * Wasmtime. The C API is spread between three different header files:
+ *
+ * * \ref wasm.h
+ * * \ref wasi.h
+ * * \ref wasmtime.h
+ *
+ * The \ref wasm.h header file comes directly from the
+ * [WebAssembly/wasm-c-api](https://github.com/WebAssembly/wasm-c-api)
+ * repository. At this time the upstream header file does not have documentation
+ * so Wasmtime provides documentation here. It should be noted, however, that
+ * some semantics may be Wasmtime-specific and may not be portable to other
+ * engines. The Wasmtime project intends to assist in the development of the
+ * upstream C API.
+ *
+ * The \ref wasi.h and \ref wasmtime.h header files are specific to the Wasmtime
+ * project. It's hoped to standardize \ref wasi.h in the WASI standard
+ * eventually, but \ref wasmtime.h provides Wasmtime-specific extensions to the
+ * C API which are not intended to standardize.
+ *
+ * ## Installing the C API
+ *
+ * To install the C API from precompiled binaries you can download the
+ * appropriate binary from the [releases page of
+ * Wasmtime](https://github.com/bytecodealliance/wasmtime/releases). Artifacts
+ * for the C API all end in "-c-api" for the filename.
+ *
+ * Each archive contains an `include` directory with necessary headers, as well
+ * as a `lib` directory with both a static archive and a dynamic library of
+ * Wasmtime. You can link to either of them as you see fit.
+ *
+ * ## Linking against the C API
+ *
+ * You'll want to arrange the `include` directory of the C API to be in your
+ * compiler's header path (e.g. the `-I` flag). If you're compiling for Windows
+ * and you're using the static library then you'll also need to pass
+ * `-DWASM_API_EXTERN=` and `-DWASI_API_EXTERN=` to disable dllimport.
+ *
+ * Your final artifact can then be linked with `-lwasmtime`. If you're linking
+ * against the static library you may need to pass other system libraries
+ * depending on your platform:
+ *
+ * * Linux - `-lpthread -ldl -lm`
+ * * macOS - no extra flags needed
+ * * Windows - `ws2_32.lib advapi32.lib userenv.lib ntdll.lib shell32.lib ole32.lib`
+ *
+ * ## Building from Source
+ *
+ * The C API is located in the
+ * [`crates/c-api`](https://github.com/bytecodealliance/wasmtime/tree/main/crates/c-api)
+ * directory of the [Wasmtime
+ * repository](https://github.com/bytecodealliance/wasmtime). To build from
+ * source you'll need a Rust compiler and a checkout of the `wasmtime` project.
+ * Afterwards you can execute:
+ *
+ * ```
+ * $ cargo build --release -p wasmtime-c-api
+ * ```
+ *
+ * This will place the final artifacts in `target/release`, with names depending
+ * on what platform you're compiling for.
+ *
+ * ## Other resources
+ *
+ * Some other handy resources you might find useful when exploring the C API
+ * documentation are:
+ *
+ * * [Rust `wasmtime` crate
+ *   documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/) -
+ *   although this documentation is for Rust and not C, you'll find that many
+ *   functions mirror one another and there may be extra documentation in Rust
+ *   you find helpful. If you find yourself having to frequently do this,
+ *   though, please feel free to [file an
+ *   issue](https://github.com/bytecodealliance/wasmtime/issues/new).
+ *
+ * * [C embedding
+ *   examples](https://bytecodealliance.github.io/wasmtime/examples-c-embed.html)
+ *   are available online and are tested from the Wasmtime repository itself.
+ *
+ * * [Contribution documentation for
+ *   Wasmtime](https://bytecodealliance.github.io/wasmtime/contributing.html) in
+ *   case you're interested in helping out!
+ */
+
+/**
  * \file wasm.h
  *
  * Embedding API for WebAssembly.
