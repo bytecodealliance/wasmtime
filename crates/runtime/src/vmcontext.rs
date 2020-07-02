@@ -1,6 +1,7 @@
 //! This file declares `VMContext` and several related structs which contain
 //! fields that compiled wasm code accesses directly.
 
+use crate::externref::VMExternRef;
 use crate::instance::Instance;
 use std::any::Any;
 use std::ptr::NonNull;
@@ -267,6 +268,7 @@ pub struct VMGlobalDefinition {
 #[cfg(test)]
 mod test_vmglobal_definition {
     use super::VMGlobalDefinition;
+    use crate::externref::VMExternRef;
     use more_asserts::assert_ge;
     use std::mem::{align_of, size_of};
     use wasmtime_environ::{Module, VMOffsets};
@@ -295,6 +297,11 @@ mod test_vmglobal_definition {
         let module = Module::new();
         let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module.local);
         assert_eq!(offsets.vmctx_globals_begin() % 16, 0);
+    }
+
+    #[test]
+    fn check_vmglobal_can_contain_externref() {
+        assert!(size_of::<VMExternRef>() <= size_of::<VMGlobalDefinition>());
     }
 }
 
@@ -422,6 +429,30 @@ impl VMGlobalDefinition {
     #[allow(clippy::cast_ptr_alignment)]
     pub unsafe fn as_u128_bits_mut(&mut self) -> &mut [u8; 16] {
         &mut *(self.storage.as_mut().as_mut_ptr() as *mut [u8; 16])
+    }
+
+    /// Return a reference to the value as an externref.
+    #[allow(clippy::cast_ptr_alignment)]
+    pub unsafe fn as_externref(&self) -> &Option<VMExternRef> {
+        &*(self.storage.as_ref().as_ptr() as *const Option<VMExternRef>)
+    }
+
+    /// Return a mutable reference to the value as an externref.
+    #[allow(clippy::cast_ptr_alignment)]
+    pub unsafe fn as_externref_mut(&mut self) -> &mut Option<VMExternRef> {
+        &mut *(self.storage.as_mut().as_mut_ptr() as *mut Option<VMExternRef>)
+    }
+
+    /// Return a reference to the value as an anyfunc.
+    #[allow(clippy::cast_ptr_alignment)]
+    pub unsafe fn as_anyfunc(&self) -> *const VMCallerCheckedAnyfunc {
+        *(self.storage.as_ref().as_ptr() as *const *const VMCallerCheckedAnyfunc)
+    }
+
+    /// Return a mutable reference to the value as an anyfunc.
+    #[allow(clippy::cast_ptr_alignment)]
+    pub unsafe fn as_anyfunc_mut(&mut self) -> &mut *const VMCallerCheckedAnyfunc {
+        &mut *(self.storage.as_mut().as_mut_ptr() as *mut *const VMCallerCheckedAnyfunc)
     }
 }
 
@@ -559,6 +590,10 @@ impl VMBuiltinFunctionsArray {
             wasmtime_drop_externref as usize;
         ptrs[BuiltinFunctionIndex::activations_table_insert_with_gc().index() as usize] =
             wasmtime_activations_table_insert_with_gc as usize;
+        ptrs[BuiltinFunctionIndex::externref_global_get().index() as usize] =
+            wasmtime_externref_global_get as usize;
+        ptrs[BuiltinFunctionIndex::externref_global_set().index() as usize] =
+            wasmtime_externref_global_set as usize;
 
         if cfg!(debug_assertions) {
             for i in 0..ptrs.len() {

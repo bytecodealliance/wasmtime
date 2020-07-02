@@ -517,3 +517,97 @@ fn pass_externref_into_wasm_during_destructor_in_gc() -> anyhow::Result<()> {
         }
     }
 }
+
+#[test]
+fn gc_on_drop_in_mutable_externref_global() -> anyhow::Result<()> {
+    let (store, module) = ref_types_module(
+        r#"
+            (module
+                (global $g (mut externref) (ref.null extern))
+
+                (func (export "set-g") (param externref)
+                  (global.set $g (local.get 0))
+                )
+            )
+        "#,
+    )?;
+
+    let instance = Instance::new(&store, &module, &[])?;
+    let set_g = instance.get_func("set-g").unwrap();
+
+    let gc_count = Rc::new(Cell::new(0));
+
+    // Put a `GcOnDrop` into the global.
+    {
+        let args = vec![Val::ExternRef(Some(ExternRef::new(GcOnDrop {
+            store: store.clone(),
+            gc_count: gc_count.clone(),
+        })))];
+        set_g.call(&args)?;
+    }
+
+    // Remove the `GcOnDrop` from the `VMExternRefActivationsTable`.
+    store.gc();
+
+    // Overwrite the `GcOnDrop` global value, causing it to be dropped, and
+    // triggering a GC.
+    assert_eq!(gc_count.get(), 0);
+    set_g.call(&[Val::ExternRef(None)])?;
+    assert_eq!(gc_count.get(), 1);
+
+    Ok(())
+}
+
+#[test]
+fn touch_own_externref_global_on_drop() -> anyhow::Result<()> {
+    let (store, module) = ref_types_module(
+        r#"
+            (module
+                (global $g (export "g") (mut externref) (ref.null extern))
+
+                (func (export "set-g") (param externref)
+                  (global.set $g (local.get 0))
+                )
+            )
+        "#,
+    )?;
+
+    let instance = Instance::new(&store, &module, &[])?;
+    let g = instance.get_global("g").unwrap();
+    let set_g = instance.get_func("set-g").unwrap();
+
+    let touched = Rc::new(Cell::new(false));
+
+    {
+        let args = vec![Val::ExternRef(Some(ExternRef::new(TouchGlobalOnDrop {
+            g,
+            touched: touched.clone(),
+        })))];
+        set_g.call(&args)?;
+    }
+
+    // Remove the `TouchGlobalOnDrop` from the `VMExternRefActivationsTable`.
+    store.gc();
+
+    assert!(!touched.get());
+    set_g.call(&[Val::ExternRef(Some(ExternRef::new("hello".to_string())))])?;
+    assert!(touched.get());
+
+    return Ok(());
+
+    struct TouchGlobalOnDrop {
+        g: Global,
+        touched: Rc<Cell<bool>>,
+    }
+
+    impl Drop for TouchGlobalOnDrop {
+        fn drop(&mut self) {
+            // From the `Drop` implementation, we see the new global value, not
+            // `self`.
+            let r = self.g.get().unwrap_externref().unwrap();
+            assert!(r.data().is::<String>());
+            assert_eq!(r.data().downcast_ref::<String>().unwrap(), "hello");
+            self.touched.set(true);
+        }
+    }
+}

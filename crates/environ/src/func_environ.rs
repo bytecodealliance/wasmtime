@@ -175,6 +175,10 @@ declare_builtin_functions! {
     /// Returns an index to do a GC and then insert a `VMExternRef` into the
     /// `VMExternRefActivationsTable`.
     activations_table_insert_with_gc(vmctx, reference) -> ();
+    /// Returns an index for Wasm's `global.get` instruction for `externref`s.
+    externref_global_get(vmctx, i32) -> (reference);
+    /// Returns an index for Wasm's `global.get` instruction for `externref`s.
+    externref_global_set(vmctx, i32, reference) -> ();
 }
 
 impl BuiltinFunctionIndex {
@@ -431,6 +435,28 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         );
 
         new_ref_count
+    }
+
+    fn get_global_location(
+        &mut self,
+        func: &mut ir::Function,
+        index: GlobalIndex,
+    ) -> (ir::GlobalValue, i32) {
+        let pointer_type = self.pointer_type();
+        let vmctx = self.vmctx(func);
+        if let Some(def_index) = self.module.defined_global_index(index) {
+            let offset = i32::try_from(self.offsets.vmctx_vmglobal_definition(def_index)).unwrap();
+            (vmctx, offset)
+        } else {
+            let from_offset = self.offsets.vmctx_vmglobal_import_from(index);
+            let global = func.create_global_value(ir::GlobalValueData::Load {
+                base: vmctx,
+                offset: Offset32::new(i32::try_from(from_offset).unwrap()),
+                global_type: pointer_type,
+                readonly: true,
+            });
+            (global, 0)
+        }
     }
 }
 
@@ -1042,19 +1068,56 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_custom_global_get(
         &mut self,
-        _: cranelift_codegen::cursor::FuncCursor<'_>,
-        _: cranelift_wasm::GlobalIndex,
+        mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
+        index: cranelift_wasm::GlobalIndex,
     ) -> WasmResult<ir::Value> {
-        unreachable!("we don't make any custom globals")
+        debug_assert_eq!(
+            self.module.globals[index].wasm_ty,
+            WasmType::ExternRef,
+            "We only use GlobalVariable::Custom for externref"
+        );
+
+        let builtin_index = BuiltinFunctionIndex::externref_global_get();
+        let builtin_sig = self
+            .builtin_function_signatures
+            .externref_global_get(&mut pos.func);
+
+        let (vmctx, builtin_addr) =
+            self.translate_load_builtin_function_address(&mut pos, builtin_index);
+
+        let global_index_arg = pos.ins().iconst(I32, index.as_u32() as i64);
+        let call_inst =
+            pos.ins()
+                .call_indirect(builtin_sig, builtin_addr, &[vmctx, global_index_arg]);
+
+        Ok(pos.func.dfg.first_result(call_inst))
     }
 
     fn translate_custom_global_set(
         &mut self,
-        _: cranelift_codegen::cursor::FuncCursor<'_>,
-        _: cranelift_wasm::GlobalIndex,
-        _: ir::Value,
+        mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
+        index: cranelift_wasm::GlobalIndex,
+        value: ir::Value,
     ) -> WasmResult<()> {
-        unreachable!("we don't make any custom globals")
+        debug_assert_eq!(
+            self.module.globals[index].wasm_ty,
+            WasmType::ExternRef,
+            "We only use GlobalVariable::Custom for externref"
+        );
+
+        let builtin_index = BuiltinFunctionIndex::externref_global_set();
+        let builtin_sig = self
+            .builtin_function_signatures
+            .externref_global_set(&mut pos.func);
+
+        let (vmctx, builtin_addr) =
+            self.translate_load_builtin_function_address(&mut pos, builtin_index);
+
+        let global_index_arg = pos.ins().iconst(I32, index.as_u32() as i64);
+        pos.ins()
+            .call_indirect(builtin_sig, builtin_addr, &[vmctx, global_index_arg, value]);
+
+        Ok(())
     }
 
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<ir::Heap> {
@@ -1141,28 +1204,19 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: GlobalIndex,
     ) -> WasmResult<GlobalVariable> {
-        let pointer_type = self.pointer_type();
+        // Although `ExternRef`s live at the same memory location as any other
+        // type of global at the same index would, getting or setting them
+        // requires ref counting barriers. Therefore, we need to use
+        // `GlobalVariable::Custom`, as that is the only kind of
+        // `GlobalVariable` for which `cranelift-wasm` supports custom access
+        // translation.
+        if self.module.globals[index].wasm_ty == WasmType::ExternRef {
+            return Ok(GlobalVariable::Custom);
+        }
 
-        let (ptr, offset) = {
-            let vmctx = self.vmctx(func);
-            if let Some(def_index) = self.module.defined_global_index(index) {
-                let offset =
-                    i32::try_from(self.offsets.vmctx_vmglobal_definition(def_index)).unwrap();
-                (vmctx, offset)
-            } else {
-                let from_offset = self.offsets.vmctx_vmglobal_import_from(index);
-                let global = func.create_global_value(ir::GlobalValueData::Load {
-                    base: vmctx,
-                    offset: Offset32::new(i32::try_from(from_offset).unwrap()),
-                    global_type: pointer_type,
-                    readonly: true,
-                });
-                (global, 0)
-            }
-        };
-
+        let (gv, offset) = self.get_global_location(func, index);
         Ok(GlobalVariable::Memory {
-            gv: ptr,
+            gv,
             offset: offset.into(),
             ty: self.module.globals[index].ty,
         })
