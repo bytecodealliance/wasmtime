@@ -67,3 +67,14 @@ pub fn ref_type() -> wasmtime_environ::ir::Type {
         unreachable!()
     }
 }
+
+/// The Cranelift IR type used for pointer types for this target architecture.
+pub fn pointer_type() -> wasmtime_environ::ir::Type {
+    if cfg!(target_pointer_width = "32") {
+        wasmtime_environ::ir::types::I32
+    } else if cfg!(target_pointer_width = "64") {
+        wasmtime_environ::ir::types::I64
+    } else {
+        unreachable!()
+    }
+}

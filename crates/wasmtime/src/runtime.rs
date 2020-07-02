@@ -900,6 +900,17 @@ impl Store {
             .expect("failed to lookup signature")
     }
 
+    pub(crate) fn lookup_wasm_and_native_signatures(
+        &self,
+        sig_index: VMSharedSignatureIndex,
+    ) -> (wasm::WasmFuncType, ir::Signature) {
+        self.inner
+            .signatures
+            .borrow()
+            .lookup_wasm_and_native_signatures(sig_index)
+            .expect("failed to lookup signature")
+    }
+
     pub(crate) fn register_signature(
         &self,
         wasm_sig: wasm::WasmFuncType,

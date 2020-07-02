@@ -3,7 +3,7 @@
 use super::create_handle::create_handle;
 use crate::trampoline::StoreInstanceHandle;
 use crate::{FuncType, Store, Trap};
-use anyhow::{bail, Result};
+use anyhow::Result;
 use std::any::Any;
 use std::cmp;
 use std::collections::HashMap;
@@ -211,10 +211,7 @@ pub fn create_handle_with_function(
     let isa = store.engine().config().target_isa();
 
     let pointer_type = isa.pointer_type();
-    let sig = match ft.get_wasmtime_signature(pointer_type) {
-        Some(sig) => sig,
-        None => bail!("not a supported core wasm signature {:?}", ft),
-    };
+    let sig = ft.get_wasmtime_signature(pointer_type);
 
     let mut fn_builder_ctx = FunctionBuilderContext::new();
     let mut module = Module::new();
@@ -259,6 +256,7 @@ pub fn create_handle_with_function(
         finished_functions,
         trampolines,
         Box::new(trampoline_state),
+        PrimaryMap::new(),
     )
     .map(|instance| (instance, trampoline))
 }
@@ -277,10 +275,7 @@ pub unsafe fn create_handle_with_raw_function(
     };
 
     let pointer_type = isa.pointer_type();
-    let sig = match ft.get_wasmtime_signature(pointer_type) {
-        Some(sig) => sig,
-        None => bail!("not a supported core wasm signature {:?}", ft),
-    };
+    let sig = ft.get_wasmtime_signature(pointer_type);
 
     let mut module = Module::new();
     let mut finished_functions = PrimaryMap::new();
@@ -298,5 +293,12 @@ pub unsafe fn create_handle_with_raw_function(
     let sig_id = store.register_signature(ft.to_wasm_func_type(), sig);
     trampolines.insert(sig_id, trampoline);
 
-    create_handle(module, store, finished_functions, trampolines, state)
+    create_handle(
+        module,
+        store,
+        finished_functions,
+        trampolines,
+        state,
+        PrimaryMap::new(),
+    )
 }

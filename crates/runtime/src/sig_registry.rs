@@ -65,4 +65,18 @@ impl SignatureRegistry {
     pub fn lookup_wasm(&self, idx: VMSharedSignatureIndex) -> Option<WasmFuncType> {
         self.index2wasm.get(&idx).cloned()
     }
+
+    /// Looks up both a shared Wasm function signature and its associated native
+    /// `ir::Signature` within this registry.
+    ///
+    /// Note that for this operation to be semantically correct the `idx` must
+    /// have previously come from a call to `register` of this same object.
+    pub fn lookup_wasm_and_native_signatures(
+        &self,
+        idx: VMSharedSignatureIndex,
+    ) -> Option<(WasmFuncType, ir::Signature)> {
+        let wasm = self.lookup_wasm(idx)?;
+        let native = self.lookup_native(idx)?;
+        Some((wasm, native))
+    }
 }

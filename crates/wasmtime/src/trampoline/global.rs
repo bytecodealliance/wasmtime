@@ -1,17 +1,19 @@
 use super::create_handle::create_handle;
 use crate::trampoline::StoreInstanceHandle;
 use crate::{GlobalType, Mutability, Store, Val};
-use anyhow::{bail, Result};
+use anyhow::Result;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::{wasm, EntityIndex, Module};
+use wasmtime_runtime::VMFunctionImport;
 
 pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<StoreInstanceHandle> {
+    let mut module = Module::new();
+    let mut func_imports = PrimaryMap::new();
+    let mut externref_init = None;
+
     let global = wasm::Global {
         wasm_ty: gt.content().to_wasm_type(),
-        ty: match gt.content().get_wasmtime_type() {
-            Some(t) => t,
-            None => bail!("cannot support {:?} as a wasm global type", gt.content()),
-        },
+        ty: gt.content().get_wasmtime_type(),
         mutability: match gt.mutability() {
             Mutability::Const => false,
             Mutability::Var => true,
@@ -21,10 +23,42 @@ pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<StoreIn
             Val::I64(i) => wasm::GlobalInit::I64Const(i),
             Val::F32(f) => wasm::GlobalInit::F32Const(f),
             Val::F64(f) => wasm::GlobalInit::F64Const(f),
+            Val::ExternRef(None) | Val::FuncRef(None) => wasm::GlobalInit::RefNullConst,
+            Val::ExternRef(Some(x)) => {
+                // There is no `GlobalInit` variant for using an existing
+                // `externref` that isn't an import (because Wasm can't create
+                // an `externref` by itself). Therefore, initialize the global
+                // as null, and then monkey patch it after instantiation below.
+                externref_init = Some(x);
+                wasm::GlobalInit::RefNullConst
+            }
+            Val::FuncRef(Some(f)) => {
+                // Add a function import to the stub module, and then initialize
+                // our global with a `ref.func` to grab that imported function.
+                let shared_sig_index = f.sig_index();
+                let local_sig_index = module
+                    .local
+                    .signatures
+                    .push(store.lookup_wasm_and_native_signatures(shared_sig_index));
+                let func_index = module.local.functions.push(local_sig_index);
+                module.local.num_imported_funcs = 1;
+                module
+                    .imports
+                    .push(("".into(), "".into(), EntityIndex::Function(func_index)));
+
+                let f = f.caller_checked_anyfunc();
+                let f = unsafe { f.as_ref() };
+                func_imports.push(VMFunctionImport {
+                    body: f.func_ptr,
+                    vmctx: f.vmctx,
+                });
+
+                wasm::GlobalInit::RefFunc(func_index)
+            }
             _ => unimplemented!("create_global for {:?}", gt),
         },
     };
-    let mut module = Module::new();
+
     let global_id = module.local.globals.push(global);
     module
         .exports
@@ -35,6 +69,17 @@ pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<StoreIn
         PrimaryMap::new(),
         Default::default(),
         Box::new(()),
+        func_imports,
     )?;
+
+    if let Some(x) = externref_init {
+        match handle.lookup("global").unwrap() {
+            wasmtime_runtime::Export::Global(g) => unsafe {
+                *(*g.definition).as_externref_mut() = Some(x.inner);
+            },
+            _ => unreachable!(),
+        }
+    }
+
     Ok(handle)
 }
