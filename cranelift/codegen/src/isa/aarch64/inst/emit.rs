@@ -1591,6 +1591,10 @@ impl MachInstEmit for Inst {
                 let jt_off = sink.cur_offset();
                 for &target in info.targets.iter() {
                     let word_off = sink.cur_offset();
+                    // off_into_table is an addend here embedded in the label to be later patched
+                    // at the end of codegen. The offset is initially relative to this jump table
+                    // entry; with the extra addend, it'll be relative to the jump table's start,
+                    // after patching.
                     let off_into_table = word_off - jt_off;
                     sink.use_label_at_offset(
                         word_off,

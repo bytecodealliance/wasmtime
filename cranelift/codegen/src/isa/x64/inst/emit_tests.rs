@@ -1155,6 +1155,55 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
+    // Div
+    insns.push((
+        Inst::div(
+            4,
+            true, /*signed*/
+            RegMem::reg(regs::rsi()),
+            SourceLoc::default(),
+        ),
+        "F7FE",
+        "idiv    %esi",
+    ));
+    insns.push((
+        Inst::div(
+            8,
+            true, /*signed*/
+            RegMem::reg(regs::r15()),
+            SourceLoc::default(),
+        ),
+        "49F7FF",
+        "idiv    %r15",
+    ));
+    insns.push((
+        Inst::div(
+            4,
+            false, /*signed*/
+            RegMem::reg(regs::r14()),
+            SourceLoc::default(),
+        ),
+        "41F7F6",
+        "div     %r14d",
+    ));
+    insns.push((
+        Inst::div(
+            8,
+            false, /*signed*/
+            RegMem::reg(regs::rdi()),
+            SourceLoc::default(),
+        ),
+        "48F7F7",
+        "div     %rdi",
+    ));
+
+    // ========================================================
+    // cdq family: SignExtendRaxRdx
+    insns.push((Inst::sign_extend_rax_to_rdx(2), "6699", "cwd"));
+    insns.push((Inst::sign_extend_rax_to_rdx(4), "99", "cdq"));
+    insns.push((Inst::sign_extend_rax_to_rdx(8), "4899", "cqo"));
+
+    // ========================================================
     // Imm_R
     //
     insns.push((
@@ -1532,7 +1581,7 @@ fn test_x64_emit() {
     insns.push((
         Inst::lea(Amode::rip_relative(BranchTarget::ResolvedOffset(0)), w_rdi),
         "488D3D00000000",
-        "lea     (offset 0)(%rip), %rdi",
+        "lea     0(%rip), %rdi",
     ));
     insns.push((
         Inst::lea(
@@ -1540,7 +1589,7 @@ fn test_x64_emit() {
             w_r15,
         ),
         "4C8D3D39050000",
-        "lea     (offset 1337)(%rip), %r15",
+        "lea     1337(%rip), %r15",
     ));
 
     // ========================================================
