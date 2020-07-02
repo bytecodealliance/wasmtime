@@ -392,18 +392,48 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             assert!(from_bits <= to_bits);
             if from_bits < to_bits {
                 let signed = op == Opcode::Sextend;
-                // If we reach this point, we weren't able to incorporate the extend as
-                // a register-mode on another instruction, so we have a 'None'
-                // narrow-value/extend mode here, and we emit the explicit instruction.
-                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
                 let rd = get_output_reg(ctx, outputs[0]);
-                ctx.emit(Inst::Extend {
-                    rd,
-                    rn,
-                    signed,
-                    from_bits,
-                    to_bits,
-                });
+
+                if let Some(extract_insn) = maybe_input_insn(ctx, inputs[0], Opcode::Extractlane) {
+                    let idx =
+                        if let InstructionData::BinaryImm8 { imm, .. } = ctx.data(extract_insn) {
+                            *imm
+                        } else {
+                            unreachable!();
+                        };
+                    let input = InsnInput {
+                        insn: extract_insn,
+                        input: 0,
+                    };
+                    let rn = put_input_in_reg(ctx, input, NarrowValueMode::None);
+                    let size = VectorSize::from_ty(ctx.input_ty(extract_insn, 0));
+
+                    if signed {
+                        let scalar_size = OperandSize::from_ty(output_ty);
+
+                        ctx.emit(Inst::MovFromVecSigned {
+                            rd,
+                            rn,
+                            idx,
+                            size,
+                            scalar_size,
+                        });
+                    } else {
+                        ctx.emit(Inst::MovFromVec { rd, rn, idx, size });
+                    }
+                } else {
+                    // If we reach this point, we weren't able to incorporate the extend as
+                    // a register-mode on another instruction, so we have a 'None'
+                    // narrow-value/extend mode here, and we emit the explicit instruction.
+                    let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+                    ctx.emit(Inst::Extend {
+                        rd,
+                        rn,
+                        signed,
+                        from_bits,
+                        to_bits,
+                    });
+                }
             }
         }
 

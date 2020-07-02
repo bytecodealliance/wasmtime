@@ -1877,6 +1877,50 @@ fn test_aarch64_binemit() {
         "mov x21, v20.d[0]",
     ));
     insns.push((
+        Inst::MovFromVecSigned {
+            rd: writable_xreg(0),
+            rn: vreg(0),
+            idx: 15,
+            size: VectorSize::Size8x16,
+            scalar_size: OperandSize::Size32,
+        },
+        "002C1F0E",
+        "smov w0, v0.b[15]",
+    ));
+    insns.push((
+        Inst::MovFromVecSigned {
+            rd: writable_xreg(12),
+            rn: vreg(13),
+            idx: 7,
+            size: VectorSize::Size8x8,
+            scalar_size: OperandSize::Size64,
+        },
+        "AC2D0F4E",
+        "smov x12, v13.b[7]",
+    ));
+    insns.push((
+        Inst::MovFromVecSigned {
+            rd: writable_xreg(23),
+            rn: vreg(31),
+            idx: 7,
+            size: VectorSize::Size16x8,
+            scalar_size: OperandSize::Size32,
+        },
+        "F72F1E0E",
+        "smov w23, v31.h[7]",
+    ));
+    insns.push((
+        Inst::MovFromVecSigned {
+            rd: writable_xreg(24),
+            rn: vreg(5),
+            idx: 1,
+            size: VectorSize::Size32x2,
+            scalar_size: OperandSize::Size64,
+        },
+        "B82C0C4E",
+        "smov x24, v5.s[1]",
+    ));
+    insns.push((
         Inst::MovToNZCV { rn: xreg(13) },
         "0D421BD5",
         "msr nzcv, x13",
