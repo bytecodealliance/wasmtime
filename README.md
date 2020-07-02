@@ -95,7 +95,7 @@ the implementation:
 * **[C]** - the [`wasm.h`, `wasi.h`, and `wasmtime.h` headers][c-headers]
 * **[Python]** - the [`wasmtime` PyPI package]
 * **[.NET]** - the [`Wasmtime` NuGet package]
-* **[Go]** - the [wasmtime-go repository]
+* **[Go]** - the [`wasmtime-go` repository]
 
 [Rust]: https://bytecodealliance.github.io/wasmtime/lang-rust.html
 [C]: https://bytecodealliance.github.io/wasmtime/examples-c-embed.html
@@ -106,7 +106,7 @@ the implementation:
 [.NET]: https://bytecodealliance.github.io/wasmtime/lang-dotnet.html
 [`Wasmtime` NuGet package]: https://www.nuget.org/packages/Wasmtime
 [Go]: https://bytecodealliance.github.io/wasmtime/lang-go.html
-[wasmtime-go repository]: https://pkg.go.dev/github.com/bytecodealliance/wasmtime-go
+[`wasmtime-go` repository]: https://pkg.go.dev/github.com/bytecodealliance/wasmtime-go
 
 ## Documentation
 
