@@ -2,6 +2,7 @@ use crate::runtime::StoreInner;
 use crate::trampoline::StoreInstanceHandle;
 use crate::{Extern, FuncType, Memory, Store, Trap, Val, ValType};
 use anyhow::{bail, ensure, Context as _, Result};
+use smallvec::{smallvec, SmallVec};
 use std::cmp::max;
 use std::fmt;
 use std::mem;
@@ -247,14 +248,21 @@ impl Func {
             // We have a dynamic guarantee that `values_vec` has the right
             // number of arguments and the right types of arguments. As a result
             // we should be able to safely run through them all and read them.
-            let mut args = Vec::with_capacity(ty_clone.params().len());
+            const STACK_ARGS: usize = 4;
+            const STACK_RETURNS: usize = 2;
+            let mut args: SmallVec<[Val; STACK_ARGS]> =
+                SmallVec::with_capacity(ty_clone.params().len());
             let store = Store::upgrade(&store_weak).unwrap();
             for (i, ty) in ty_clone.params().iter().enumerate() {
                 unsafe {
-                    args.push(Val::read_value_from(&store, values_vec.add(i), ty));
+                    let val = Val::read_value_from(&store, values_vec.add(i), ty);
+                    args.push(val);
                 }
             }
-            let mut returns = vec![Val::null(); ty_clone.results().len()];
+
+            let mut returns: SmallVec<[Val; STACK_RETURNS]> =
+                smallvec![Val::null(); ty_clone.results().len()];
+
             func(
                 Caller {
                     store: &store_weak,

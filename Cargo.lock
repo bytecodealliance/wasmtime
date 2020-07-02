@@ -2329,6 +2329,7 @@ dependencies = [
  "log",
  "region",
  "rustc-demangle",
+ "smallvec",
  "target-lexicon",
  "tempfile",
  "wasmparser 0.58.0",
