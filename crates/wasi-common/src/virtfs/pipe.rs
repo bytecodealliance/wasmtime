@@ -26,10 +26,19 @@ use std::sync::{Arc, RwLock};
 /// let stdin = ReadPipe::from("hello from stdin!");
 /// ctx.stdin(stdin);
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ReadPipe<R: Read + Any> {
-    rights: Arc<RwLock<HandleRights>>,
+    rights: RwLock<HandleRights>,
     reader: Arc<RwLock<R>>,
+}
+
+impl<R: Read + Any> Clone for ReadPipe<R> {
+    fn clone(&self) -> Self {
+        Self {
+            rights: RwLock::new(*self.rights.read().unwrap()),
+            reader: self.reader.clone(),
+        }
+    }
 }
 
 impl<R: Read + Any> ReadPipe<R> {
@@ -46,14 +55,14 @@ impl<R: Read + Any> ReadPipe<R> {
     pub fn from_shared(reader: Arc<RwLock<R>>) -> Self {
         use types::Rights;
         Self {
-            rights: Arc::new(RwLock::new(HandleRights::from_base(
+            rights: RwLock::new(HandleRights::from_base(
                 Rights::FD_DATASYNC
                     | Rights::FD_FDSTAT_SET_FLAGS
                     | Rights::FD_READ
                     | Rights::FD_SYNC
                     | Rights::FD_FILESTAT_GET
                     | Rights::POLL_FD_READWRITE,
-            ))),
+            )),
             reader,
         }
     }
@@ -102,10 +111,7 @@ impl<R: Read + Any> Handle for ReadPipe<R> {
     }
 
     fn try_clone(&self) -> io::Result<Box<dyn Handle>> {
-        Ok(Box::new(Self {
-            rights: self.rights.clone(),
-            reader: self.reader.clone(),
-        }))
+        Ok(Box::new(self.clone()))
     }
 
     fn get_file_type(&self) -> types::Filetype {
@@ -113,7 +119,7 @@ impl<R: Read + Any> Handle for ReadPipe<R> {
     }
 
     fn get_rights(&self) -> HandleRights {
-        self.rights.read().unwrap().clone()
+        *self.rights.read().unwrap()
     }
 
     fn set_rights(&self, rights: HandleRights) {
@@ -222,10 +228,19 @@ impl<R: Read + Any> Handle for ReadPipe<R> {
 }
 
 /// A virtual pipe write end.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct WritePipe<W: Write + Any> {
-    rights: Arc<RwLock<HandleRights>>,
+    rights: RwLock<HandleRights>,
     writer: Arc<RwLock<W>>,
+}
+
+impl<W: Write + Any> Clone for WritePipe<W> {
+    fn clone(&self) -> Self {
+        Self {
+            rights: RwLock::new(*self.rights.read().unwrap()),
+            writer: self.writer.clone(),
+        }
+    }
 }
 
 impl<W: Write + Any> WritePipe<W> {
@@ -242,14 +257,14 @@ impl<W: Write + Any> WritePipe<W> {
     pub fn from_shared(writer: Arc<RwLock<W>>) -> Self {
         use types::Rights;
         Self {
-            rights: Arc::new(RwLock::new(HandleRights::from_base(
+            rights: RwLock::new(HandleRights::from_base(
                 Rights::FD_DATASYNC
                     | Rights::FD_FDSTAT_SET_FLAGS
                     | Rights::FD_SYNC
                     | Rights::FD_WRITE
                     | Rights::FD_FILESTAT_GET
                     | Rights::POLL_FD_READWRITE,
-            ))),
+            )),
             writer,
         }
     }
@@ -281,10 +296,7 @@ impl<W: Write + Any> Handle for WritePipe<W> {
     }
 
     fn try_clone(&self) -> io::Result<Box<dyn Handle>> {
-        Ok(Box::new(Self {
-            rights: self.rights.clone(),
-            writer: self.writer.clone(),
-        }))
+        Ok(Box::new(self.clone()))
     }
 
     fn get_file_type(&self) -> types::Filetype {
@@ -292,7 +304,7 @@ impl<W: Write + Any> Handle for WritePipe<W> {
     }
 
     fn get_rights(&self) -> HandleRights {
-        self.rights.read().unwrap().clone()
+        *self.rights.read().unwrap()
     }
 
     fn set_rights(&self, rights: HandleRights) {
