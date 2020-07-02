@@ -243,13 +243,21 @@ pub enum VecALUOp {
     Bsl,
     /// Unsigned maximum pairwise
     Umaxp,
+    /// Add
+    Add,
+    /// Subtract
+    Sub,
+    /// Multiply
+    Mul,
 }
 
 /// A Vector miscellaneous operation with two registers.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum VecMisc2 {
-    /// Bitwise NOT.
+    /// Bitwise NOT
     Not,
+    /// Negate
+    Neg,
 }
 
 /// An operation across the lanes of vectors.
@@ -2737,6 +2745,9 @@ impl ShowWithRRU for Inst {
                     VecALUOp::Eor => ("eor", true, I8X16),
                     VecALUOp::Bsl => ("bsl", true, I8X16),
                     VecALUOp::Umaxp => ("umaxp", true, ty),
+                    VecALUOp::Add => ("add", true, ty),
+                    VecALUOp::Sub => ("sub", true, ty),
+                    VecALUOp::Mul => ("mul", true, ty),
                 };
 
                 let show_vreg_fn: fn(Reg, Option<&RealRegUniverse>, Type) -> String = if vector {
@@ -2750,14 +2761,10 @@ impl ShowWithRRU for Inst {
                 let rm = show_vreg_fn(rm, mb_rru, ty);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
-            &Inst::VecMisc {
-                op,
-                rd,
-                rn,
-                ty: _ty,
-            } => {
+            &Inst::VecMisc { op, rd, rn, ty } => {
                 let (op, ty) = match op {
                     VecMisc2::Not => ("mvn", I8X16),
+                    VecMisc2::Neg => ("neg", ty),
                 };
 
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, ty);

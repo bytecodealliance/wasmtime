@@ -58,18 +58,40 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Iadd => {
             let rd = get_output_reg(ctx, outputs[0]);
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rm = put_input_in_rse_imm12(ctx, inputs[1], NarrowValueMode::None);
             let ty = ty.unwrap();
-            let alu_op = choose_32_64(ty, ALUOp::Add32, ALUOp::Add64);
-            ctx.emit(alu_inst_imm12(alu_op, rd, rn, rm));
+            if ty_bits(ty) < 128 {
+                let rm = put_input_in_rse_imm12(ctx, inputs[1], NarrowValueMode::None);
+                let alu_op = choose_32_64(ty, ALUOp::Add32, ALUOp::Add64);
+                ctx.emit(alu_inst_imm12(alu_op, rd, rn, rm));
+            } else {
+                let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+                ctx.emit(Inst::VecRRR {
+                    rd,
+                    rn,
+                    rm,
+                    alu_op: VecALUOp::Add,
+                    ty,
+                });
+            }
         }
         Opcode::Isub => {
             let rd = get_output_reg(ctx, outputs[0]);
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rm = put_input_in_rse_imm12(ctx, inputs[1], NarrowValueMode::None);
             let ty = ty.unwrap();
-            let alu_op = choose_32_64(ty, ALUOp::Sub32, ALUOp::Sub64);
-            ctx.emit(alu_inst_imm12(alu_op, rd, rn, rm));
+            if ty_bits(ty) < 128 {
+                let rm = put_input_in_rse_imm12(ctx, inputs[1], NarrowValueMode::None);
+                let alu_op = choose_32_64(ty, ALUOp::Sub32, ALUOp::Sub64);
+                ctx.emit(alu_inst_imm12(alu_op, rd, rn, rm));
+            } else {
+                let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+                ctx.emit(Inst::VecRRR {
+                    rd,
+                    rn,
+                    rm,
+                    alu_op: VecALUOp::Sub,
+                    ty,
+                });
+            }
         }
         Opcode::UaddSat | Opcode::SaddSat => {
             // We use the vector instruction set's saturating adds (UQADD /
@@ -143,11 +165,21 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Ineg => {
             let rd = get_output_reg(ctx, outputs[0]);
-            let rn = zero_reg();
-            let rm = put_input_in_rse_imm12(ctx, inputs[0], NarrowValueMode::None);
             let ty = ty.unwrap();
-            let alu_op = choose_32_64(ty, ALUOp::Sub32, ALUOp::Sub64);
-            ctx.emit(alu_inst_imm12(alu_op, rd, rn, rm));
+            if ty_bits(ty) < 128 {
+                let rn = zero_reg();
+                let rm = put_input_in_rse_imm12(ctx, inputs[0], NarrowValueMode::None);
+                let alu_op = choose_32_64(ty, ALUOp::Sub32, ALUOp::Sub64);
+                ctx.emit(alu_inst_imm12(alu_op, rd, rn, rm));
+            } else {
+                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+                ctx.emit(Inst::VecMisc {
+                    op: VecMisc2::Neg,
+                    rd,
+                    rn,
+                    ty,
+                });
+            }
         }
 
         Opcode::Imul => {
@@ -155,14 +187,24 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
             let ty = ty.unwrap();
-            let alu_op = choose_32_64(ty, ALUOp::MAdd32, ALUOp::MAdd64);
-            ctx.emit(Inst::AluRRRR {
-                alu_op,
-                rd,
-                rn,
-                rm,
-                ra: zero_reg(),
-            });
+            if ty_bits(ty) < 128 {
+                let alu_op = choose_32_64(ty, ALUOp::MAdd32, ALUOp::MAdd64);
+                ctx.emit(Inst::AluRRRR {
+                    alu_op,
+                    rd,
+                    rn,
+                    rm,
+                    ra: zero_reg(),
+                });
+            } else {
+                ctx.emit(Inst::VecRRR {
+                    alu_op: VecALUOp::Mul,
+                    rd,
+                    rn,
+                    rm,
+                    ty,
+                });
+            }
         }
 
         Opcode::Umulhi | Opcode::Smulhi => {
