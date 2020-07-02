@@ -92,7 +92,7 @@ You can use Wasmtime from a variety of different languages through embeddings of
 the implementation:
 
 * **[Rust]** - the [`wasmtime` crate]
-* **[C]** - the [`wasm.h`], [`wasi.h`], and [`wasmtime.h`] headers
+* **[C]** - the [`wasm.h`, `wasi.h`, and `wasmtime.h` headers][c-headers]
 * **[Python]** - the [`wasmtime` PyPI package]
 * **[.NET]** - the [`Wasmtime` NuGet package]
 * **[Go]** - the [wasmtime-go repository]
@@ -100,9 +100,7 @@ the implementation:
 [Rust]: https://bytecodealliance.github.io/wasmtime/lang-rust.html
 [C]: https://bytecodealliance.github.io/wasmtime/examples-c-embed.html
 [`wasmtime` crate]: https://crates.io/crates/wasmtime
-[`wasm.h`]: https://github.com/WebAssembly/wasm-c-api/blob/master/include/wasm.h
-[`wasi.h`]: https://github.com/bytecodealliance/wasmtime/blob/main/crates/c-api/include/wasi.h
-[`wasmtime.h`]: https://github.com/bytecodealliance/wasmtime/blob/main/crates/c-api/include/wasmtime.h
+[c-headers]: https://bytecodealliance.github.io/wasmtime/c-api/
 [Python]: https://bytecodealliance.github.io/wasmtime/lang-python.html
 [`wasmtime` PyPI package]: https://pypi.org/project/wasmtime/
 [.NET]: https://bytecodealliance.github.io/wasmtime/lang-dotnet.html
