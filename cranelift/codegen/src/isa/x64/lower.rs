@@ -210,7 +210,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
             let dst = output_to_reg(ctx, outputs[0]);
 
-            // TODO For add, try to commute the operands if one is an immediate.
+            // TODO For commutative operations (add, mul, and, or, xor), try to commute the
+            // operands if one is an immediate.
 
             let is_64 = int_ty_is_64(ty.unwrap());
             let alu_op = match op {
@@ -622,7 +623,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(inst);
         }
 
-        Opcode::Select | Opcode::Selectif => {
+        Opcode::Select | Opcode::Selectif | Opcode::SelectifSpectreGuard => {
             let cc = if op == Opcode::Select {
                 // The input is a boolean value, compare it against zero.
                 let size = ctx.input_ty(insn, 0).bytes() as u8;
@@ -663,56 +664,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::Udiv | Opcode::Urem => {
-            let input_ty = ctx.input_ty(insn, 0);
-            let size = input_ty.bytes() as u8;
+        Opcode::Udiv | Opcode::Urem | Opcode::Sdiv | Opcode::Srem => {
+            let is_div = op == Opcode::Udiv || op == Opcode::Sdiv;
+            let is_signed = op == Opcode::Sdiv || op == Opcode::Srem;
 
-            let dividend = input_to_reg(ctx, inputs[0]);
-            let dst = output_to_reg(ctx, outputs[0]);
-
-            let divisor = if flags.avoid_div_traps() {
-                let srcloc = ctx.srcloc(insn);
-                let divisor = input_to_reg(ctx, inputs[1]);
-
-                // Check that divisor isn't zero, or trap otherwise.
-                let after_trap = BranchTarget::ResolvedOffset(Inst::size_of_trap() as isize);
-                ctx.emit(Inst::cmp_rmi_r(size, RegMemImm::imm(0), divisor));
-                ctx.emit(Inst::one_way_jmp(CC::NZ, after_trap));
-                ctx.emit(Inst::trap(srcloc, TrapCode::IntegerDivisionByZero));
-
-                RegMem::reg(divisor)
-            } else {
-                input_to_reg_mem(ctx, inputs[1])
-            };
-
-            ctx.emit(Inst::gen_move(
-                Writable::from_reg(regs::rax()),
-                dividend,
-                input_ty,
-            ));
-
-            // Fill in the "high" parts: unsigned means we put 0 in there.
-            ctx.emit(Inst::imm_r(true, 0, Writable::from_reg(regs::rdx())));
-
-            // Emit the actual idiv.
-            ctx.emit(Inst::div(
-                size,
-                false, /* signed */
-                divisor,
-                ctx.srcloc(insn),
-            ));
-
-            // Move the result back into the destination reg.
-            if op == Opcode::Udiv {
-                // The quotient is in rax.
-                ctx.emit(Inst::gen_move(dst, regs::rax(), input_ty));
-            } else {
-                // The remainder is in rdx.
-                ctx.emit(Inst::gen_move(dst, regs::rdx(), input_ty));
-            }
-        }
-
-        Opcode::Sdiv | Opcode::Srem => {
             let input_ty = ctx.input_ty(insn, 0);
             let size = input_ty.bytes() as u8;
 
@@ -727,15 +682,17 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ));
 
             if flags.avoid_div_traps() {
-                // Lowering all the inline checks and special behavior is a bit complicated, so
-                // this is implemented as a vcode meta-instruction.
+                // A vcode meta-instruction is used to lower the inline checks, since they embed
+                // pc-relative offsets that must not change, thus requiring regalloc to not
+                // interfere by introducing spills and reloads.
                 //
                 // Note it keeps the result in $rax (if is_div) or $rdx (if !is_div), so that
                 // regalloc is aware of the coalescing opportunity between rax/rdx and the
                 // destination register.
                 let divisor = input_to_reg(ctx, inputs[1]);
-                ctx.emit(Inst::SignedDivOrRem {
-                    is_div: op == Opcode::Sdiv,
+                ctx.emit(Inst::CheckedDivOrRemSeq {
+                    is_div,
+                    is_signed,
                     size,
                     divisor,
                     loc: srcloc,
@@ -743,20 +700,25 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 let divisor = input_to_reg_mem(ctx, inputs[1]);
 
-                // Fill in the "high" parts: sign-extend the sign-bit of rax into rdx.
-                ctx.emit(Inst::sign_extend_rax_to_rdx(size));
+                // Fill in the high parts:
+                if is_signed {
+                    // sign-extend the sign-bit of rax into rdx, for signed opcodes.
+                    ctx.emit(Inst::sign_extend_rax_to_rdx(size));
+                } else {
+                    // zero for unsigned opcodes.
+                    ctx.emit(Inst::imm_r(
+                        true, /* is_64 */
+                        0,
+                        Writable::from_reg(regs::rdx()),
+                    ));
+                }
 
                 // Emit the actual idiv.
-                ctx.emit(Inst::div(
-                    size,
-                    true, /* signed */
-                    divisor,
-                    ctx.srcloc(insn),
-                ));
+                ctx.emit(Inst::div(size, is_signed, divisor, ctx.srcloc(insn)));
             }
 
             // Move the result back into the destination reg.
-            if op == Opcode::Sdiv {
+            if is_div {
                 // The quotient is in rax.
                 ctx.emit(Inst::gen_move(dst, regs::rax(), input_ty));
             } else {
@@ -914,12 +876,12 @@ impl LowerBackend for X64Backend {
                     assert!(jt_size <= u32::max_value() as usize);
                     let jt_size = jt_size as u32;
 
-                    let idx_size = ctx.input_ty(branches[0], 0).bits();
+                    let idx_size_bits = ctx.input_ty(branches[0], 0).bits();
 
                     // Zero-extend to 32-bits if needed.
                     // TODO consider factoring this out?
-                    let idx = if idx_size < 32 {
-                        let ext_mode = match idx_size {
+                    let idx = if idx_size_bits < 32 {
+                        let ext_mode = match idx_size_bits {
                             1 | 8 => ExtMode::BL,
                             16 => ExtMode::WL,
                             _ => unreachable!(),
@@ -947,12 +909,6 @@ impl LowerBackend for X64Backend {
                     // Bounds-check (compute flags from idx - jt_size) and branch to default.
                     ctx.emit(Inst::cmp_rmi_r(4, RegMemImm::imm(jt_size), idx));
 
-                    let default_target = BranchTarget::Label(targets[0]);
-                    ctx.emit(Inst::OneWayJmpCond {
-                        dst: default_target,
-                        cc: CC::NB, // unsigned >=
-                    });
-
                     // Emit the compound instruction that does:
                     //
                     // lea $jt, %rA
@@ -970,17 +926,20 @@ impl LowerBackend for X64Backend {
                     let tmp1 = ctx.alloc_tmp(RegClass::I64, I32);
                     let tmp2 = ctx.alloc_tmp(RegClass::I64, I32);
 
+                    let targets_for_term: Vec<MachLabel> = targets.to_vec();
+                    let default_target = BranchTarget::Label(targets[0]);
+
                     let jt_targets: Vec<BranchTarget> = targets
                         .iter()
                         .skip(1)
                         .map(|bix| BranchTarget::Label(*bix))
                         .collect();
 
-                    let targets_for_term: Vec<MachLabel> = targets.to_vec();
-                    ctx.emit(Inst::JmpTable {
+                    ctx.emit(Inst::JmpTableSeq {
                         idx,
                         tmp1,
                         tmp2,
+                        default_target,
                         targets: jt_targets,
                         targets_for_term,
                     });

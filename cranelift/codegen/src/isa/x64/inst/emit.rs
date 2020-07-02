@@ -1,6 +1,8 @@
 use log::debug;
 use regalloc::Reg;
 
+use std::convert::TryFrom;
+
 use crate::binemit::Reloc;
 use crate::isa::x64::inst::*;
 
@@ -284,11 +286,9 @@ fn emit_std_enc_mem(
                     sink.put4(0);
                 }
                 BranchTarget::ResolvedOffset(offset) => {
-                    assert!(
-                        offset <= u32::max_value() as isize,
-                        "rip-relative can't hold >= U32_MAX values"
-                    );
-                    sink.put4(offset as u32);
+                    let offset =
+                        u32::try_from(offset).expect("rip-relative can't hold >= U32_MAX values");
+                    sink.put4(offset);
                 }
             }
         }
@@ -368,6 +368,16 @@ fn emit_simm(sink: &mut MachBuffer<Inst>, size: u8, simm32: u32) {
         1 => sink.put1(simm32 as u8),
         _ => unreachable!(),
     }
+}
+
+/// Emits a one way conditional jump if CC is set (true).
+fn one_way_jmp(sink: &mut MachBuffer<Inst>, cc: CC, label: MachLabel) {
+    let cond_start = sink.cur_offset();
+    let cond_disp_off = cond_start + 2;
+    sink.use_label_at_offset(cond_disp_off, label, LabelUse::JmpRel32);
+    sink.put1(0x0F);
+    sink.put1(0x80 + cc.get_enc());
+    sink.put4(0x0);
 }
 
 /// The top-level emit function.
@@ -580,88 +590,115 @@ pub(crate) fn emit(
         }
 
         Inst::SignExtendRaxRdx { size } => {
-            let (prefix, rex_flags) = match size {
-                2 => (LegacyPrefix::_66, RexFlags::clear_w()),
-                4 => (LegacyPrefix::None, RexFlags::clear_w()),
-                8 => (LegacyPrefix::None, RexFlags::set_w()),
+            match size {
+                2 => sink.put1(0x66),
+                4 => {}
+                8 => sink.put1(0x48),
                 _ => unreachable!(),
-            };
-            prefix.emit(sink);
-            rex_flags.emit_two_op(sink, 0, 0);
+            }
             sink.put1(0x99);
         }
 
-        Inst::SignedDivOrRem {
+        Inst::CheckedDivOrRemSeq {
             is_div,
+            is_signed,
             size,
             divisor,
             loc,
         } => {
+            // Generates the following code sequence:
+            //
+            // ;; check divide by zero:
+            // cmp 0 %divisor
+            // jnz $after_trap
+            // ud2
+            // $after_trap:
+            //
+            // ;; for signed modulo/div:
+            // cmp -1 %divisor
+            // jnz $do_op
+            // ;;   for signed modulo, result is 0
+            //    mov #0, %rdx
+            //    j $done
+            // ;;   for signed div, check for integer overflow against INT_MIN of the right size
+            // cmp INT_MIN, %rax
+            // jnz $do_op
+            // ud2
+            //
+            // $do_op:
+            // ;; if signed
+            //     cdq ;; sign-extend from rax into rdx
+            // ;; else
+            //     mov #0, %rdx
+            // idiv %divisor
+            //
+            // $done:
             debug_assert!(flags.avoid_div_traps());
 
             // Check if the divisor is zero, first.
             let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0), *divisor);
             inst.emit(sink, flags, state);
 
-            let inst = Inst::one_way_jmp(
-                CC::NZ,
-                BranchTarget::ResolvedOffset(Inst::size_of_trap() as isize),
-            );
+            let inst = Inst::trap_if(CC::Z, TrapCode::IntegerDivisionByZero, *loc);
             inst.emit(sink, flags, state);
 
-            let inst = Inst::trap(*loc, TrapCode::IntegerDivisionByZero);
-            inst.emit(sink, flags, state);
-
-            // Now check if the divisor is -1.
-            let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0xffffffff), *divisor);
-            inst.emit(sink, flags, state);
-
-            let do_op = sink.get_label();
-            // If not equal, jump to do-op.
-            let inst = Inst::one_way_jmp(CC::NZ, BranchTarget::Label(do_op));
-            inst.emit(sink, flags, state);
-
-            // Here, divisor == -1.
-            let done_label = if !*is_div {
-                // x % -1 = 0; put the result into the destination, $rdx.
-                let done_label = sink.get_label();
-
-                let inst = Inst::imm_r(*size == 8, 0, Writable::from_reg(regs::rdx()));
+            let (do_op, done_label) = if *is_signed {
+                // Now check if the divisor is -1.
+                let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0xffffffff), *divisor);
                 inst.emit(sink, flags, state);
 
-                let inst = Inst::jmp_known(BranchTarget::Label(done_label));
-                inst.emit(sink, flags, state);
+                let do_op = sink.get_label();
 
-                Some(done_label)
+                // If not equal, jump to do-op.
+                one_way_jmp(sink, CC::NZ, do_op);
+
+                // Here, divisor == -1.
+                if !*is_div {
+                    // x % -1 = 0; put the result into the destination, $rdx.
+                    let done_label = sink.get_label();
+
+                    let inst = Inst::imm_r(*size == 8, 0, Writable::from_reg(regs::rdx()));
+                    inst.emit(sink, flags, state);
+
+                    let inst = Inst::jmp_known(BranchTarget::Label(done_label));
+                    inst.emit(sink, flags, state);
+
+                    (Some(do_op), Some(done_label))
+                } else {
+                    // Check for integer overflow.
+                    let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0x80000000), regs::rax());
+                    inst.emit(sink, flags, state);
+
+                    // If not equal, jump over the trap.
+                    let inst = Inst::trap_if(CC::Z, TrapCode::IntegerOverflow, *loc);
+                    inst.emit(sink, flags, state);
+
+                    (Some(do_op), None)
+                }
             } else {
-                // Check for integer overflow.
-                let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0x80000000), regs::rax());
-                inst.emit(sink, flags, state);
-
-                // If not equal, jump over the trap.
-                let inst = Inst::one_way_jmp(
-                    CC::NZ,
-                    BranchTarget::ResolvedOffset(Inst::size_of_trap() as isize),
-                );
-                inst.emit(sink, flags, state);
-
-                let inst = Inst::trap(*loc, TrapCode::IntegerOverflow);
-                inst.emit(sink, flags, state);
-
-                None
+                (None, None)
             };
 
-            sink.bind_label(do_op);
+            if let Some(do_op) = do_op {
+                sink.bind_label(do_op);
+            }
 
-            // Fill in the "high" parts: sign-extend the sign-bit of rax into rdx.
-            let inst = Inst::sign_extend_rax_to_rdx(*size);
+            // Fill in the high parts:
+            if *is_signed {
+                // sign-extend the sign-bit of rax into rdx, for signed opcodes.
+                let inst = Inst::sign_extend_rax_to_rdx(*size);
+                inst.emit(sink, flags, state);
+            } else {
+                // zero for unsigned opcodes.
+                let inst = Inst::imm_r(true /* is_64 */, 0, Writable::from_reg(regs::rdx()));
+                inst.emit(sink, flags, state);
+            }
+
+            let inst = Inst::div(*size, *is_signed, RegMem::reg(*divisor), *loc);
             inst.emit(sink, flags, state);
 
-            let inst = Inst::div(*size, true /*signed*/, RegMem::reg(*divisor), *loc);
-            inst.emit(sink, flags, state);
-
-            // The lowering takes care of moving the result back into the right register, see
-            // comment there.
+            // Lowering takes care of moving the result back into the right register, see comment
+            // there.
 
             if let Some(done) = done_label {
                 sink.bind_label(done);
@@ -1173,18 +1210,6 @@ pub(crate) fn emit(
             sink.put4(nt_disp);
         }
 
-        Inst::OneWayJmpCond { cc, dst } => {
-            let cond_start = sink.cur_offset();
-            let cond_disp_off = cond_start + 2;
-            if let Some(l) = dst.as_label() {
-                sink.use_label_at_offset(cond_disp_off, l, LabelUse::JmpRel32);
-            }
-            let dst_disp = dst.as_offset32_or_zero() as u32;
-            sink.put1(0x0F);
-            sink.put1(0x80 + cc.get_enc());
-            sink.put4(dst_disp);
-        }
-
         Inst::JmpUnknown { target } => {
             match target {
                 RegMem::Reg { reg } => {
@@ -1215,19 +1240,41 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::JmpTable {
+        Inst::JmpTableSeq {
             idx,
             tmp1,
             tmp2,
             ref targets,
+            default_target,
             ..
         } => {
             // This sequence is *one* instruction in the vcode, and is expanded only here at
             // emission time, because we cannot allow the regalloc to insert spills/reloads in
             // the middle; we depend on hardcoded PC-rel addressing below.
+            //
+            // We don't have to worry about emitting islands, because the only label-use type has a
+            // maximum range of 2 GB. If we later consider using shorter-range label references,
+            // this will need to be revisited.
 
             // Save index in a tmp (the live range of ridx only goes to start of this
             // sequence; rtmp1 or rtmp2 may overwrite it).
+
+            // We generate the following sequence:
+            // ;; generated by lowering: cmp #jmp_table_size, %idx
+            // jnb $default_target
+            // mov %idx, %tmp2
+            // lea start_of_jump_table_offset(%rip), %tmp1
+            // movzlq [%tmp1, %tmp2], %tmp2
+            // addq %tmp2, %tmp1
+            // j *%tmp1
+            // $start_of_jump_table:
+            // -- jump table entries
+            let default_label = match default_target {
+                BranchTarget::Label(label) => label,
+                _ => unreachable!(),
+            };
+            one_way_jmp(sink, CC::NB, *default_label); // idx unsigned >= jmp table size
+
             let inst = Inst::gen_move(*tmp2, *idx, I64);
             inst.emit(sink, flags, state);
 
@@ -1265,10 +1312,31 @@ pub(crate) fn emit(
             let jt_off = sink.cur_offset();
             for &target in targets.iter() {
                 let word_off = sink.cur_offset();
+                // off_into_table is an addend here embedded in the label to be later patched at
+                // the end of codegen. The offset is initially relative to this jump table entry;
+                // with the extra addend, it'll be relative to the jump table's start, after
+                // patching.
                 let off_into_table = word_off - jt_off;
                 sink.use_label_at_offset(word_off, target.as_label().unwrap(), LabelUse::PCRel32);
                 sink.put4(off_into_table);
             }
+        }
+
+        Inst::TrapIf {
+            cc,
+            trap_code,
+            srcloc,
+        } => {
+            let else_label = sink.get_label();
+
+            // Jump over if the invert of CC is set (i.e. CC is not set).
+            one_way_jmp(sink, cc.invert(), else_label);
+
+            // Trap!
+            let inst = Inst::trap(*srcloc, *trap_code);
+            inst.emit(sink, flags, state);
+
+            sink.bind_label(else_label);
         }
 
         Inst::XMM_Mov_RM_R {
@@ -1343,14 +1411,8 @@ pub(crate) fn emit(
 
         Inst::Ud2 { trap_info } => {
             sink.add_trap(trap_info.0, trap_info.1);
-            let cur_offset = sink.cur_offset();
             sink.put1(0x0f);
             sink.put1(0x0b);
-            assert_eq!(
-                sink.cur_offset() - cur_offset,
-                Inst::size_of_trap(),
-                "invalid trap size"
-            );
         }
 
         Inst::VirtualSPOffsetAdj { offset } => {

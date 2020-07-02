@@ -57,12 +57,15 @@ pub enum Inst {
         loc: SourceLoc,
     },
 
-    /// A synthetic sequence to implement the right inline checks for signed remainder and modulo,
+    /// A synthetic sequence to implement the right inline checks for remainder and division,
     /// assuming the dividend is in $rax.
     /// Puts the result back into $rax if is_div, $rdx if !is_div, to mimic what the div
     /// instruction does.
-    SignedDivOrRem {
+    /// The generated code sequence is described in the emit's function match arm for this
+    /// instruction.
+    CheckedDivOrRemSeq {
         is_div: bool,
+        is_signed: bool,
         size: u8,
         divisor: Reg,
         loc: SourceLoc,
@@ -224,21 +227,27 @@ pub enum Inst {
         not_taken: BranchTarget,
     },
 
-    /// A one-way conditional branch, invisible to the CFG processing; used *only* as part of
-    /// straight-line sequences in code to be emitted.
-    OneWayJmpCond { cc: CC, dst: BranchTarget },
-
     /// Jump-table sequence, as one compound instruction (see note in lower.rs for rationale).
-    JmpTable {
+    /// The generated code sequence is described in the emit's function match arm for this
+    /// instruction.
+    JmpTableSeq {
         idx: Reg,
         tmp1: Writable<Reg>,
         tmp2: Writable<Reg>,
+        default_target: BranchTarget,
         targets: Vec<BranchTarget>,
         targets_for_term: Vec<MachLabel>,
     },
 
     /// Indirect jump: jmpq (reg mem).
     JmpUnknown { target: RegMem },
+
+    /// Traps if the condition code is set.
+    TrapIf {
+        cc: CC,
+        trap_code: TrapCode,
+        srcloc: SourceLoc,
+    },
 
     /// A debug trap.
     Hlt,
@@ -411,14 +420,6 @@ impl Inst {
             trap_info: (srcloc, trap_code),
         }
     }
-    /// Returns the size of a trap instruction, which must be fixed. Asserted during codegen.
-    pub(crate) fn size_of_trap() -> u32 {
-        2
-    }
-
-    pub(crate) fn one_way_jmp(cc: CC, dst: BranchTarget) -> Inst {
-        Inst::OneWayJmpCond { cc, dst }
-    }
 
     pub(crate) fn setcc(cc: CC, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
@@ -494,6 +495,14 @@ impl Inst {
     pub(crate) fn jmp_unknown(target: RegMem) -> Inst {
         Inst::JmpUnknown { target }
     }
+
+    pub(crate) fn trap_if(cc: CC, trap_code: TrapCode, srcloc: SourceLoc) -> Inst {
+        Inst::TrapIf {
+            cc,
+            trap_code,
+            srcloc,
+        }
+    }
 }
 
 //=============================================================================
@@ -564,13 +573,15 @@ impl ShowWithRRU for Inst {
                 }),
                 divisor.show_rru_sized(mb_rru, *size)
             ),
-            Inst::SignedDivOrRem {
+            Inst::CheckedDivOrRemSeq {
                 is_div,
+                is_signed,
                 size,
                 divisor,
                 ..
             } => format!(
-                "s{} $rax:$rdx, {}",
+                "{}{} $rax:$rdx, {}",
+                if *is_signed { "s" } else { "u" },
                 if *is_div { "div " } else { "rem " },
                 show_ireg_sized(*divisor, mb_rru, *size),
             ),
@@ -730,12 +741,7 @@ impl ShowWithRRU for Inst {
                 taken.show_rru(mb_rru),
                 not_taken.show_rru(mb_rru)
             ),
-            Inst::OneWayJmpCond { cc, dst } => format!(
-                "{} {}",
-                ljustify2("j".to_string(), cc.to_string()),
-                dst.show_rru(mb_rru),
-            ),
-            Inst::JmpTable { idx, .. } => {
+            Inst::JmpTableSeq { idx, .. } => {
                 format!("{} {}", ljustify("br_table".into()), idx.show_rru(mb_rru))
             }
             //
@@ -744,6 +750,9 @@ impl ShowWithRRU for Inst {
                 ljustify("jmp".to_string()),
                 target.show_rru(mb_rru)
             ),
+            Inst::TrapIf { cc, trap_code, .. } => {
+                format!("j{} ; ud2 {} ;", cc.invert().to_string(), trap_code)
+            }
             Inst::VirtualSPOffsetAdj { offset } => format!("virtual_sp_offset_adjust {}", offset),
             Inst::Hlt => "hlt".into(),
             Inst::Ud2 { trap_info } => format!("ud2 {}", trap_info.1),
@@ -779,7 +788,7 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_mod(Writable::from_reg(regs::rdx()));
             divisor.get_regs_as_uses(collector);
         }
-        Inst::SignedDivOrRem { divisor, .. } => {
+        Inst::CheckedDivOrRemSeq { divisor, .. } => {
             collector.add_mod(Writable::from_reg(regs::rax()));
             collector.add_mod(Writable::from_reg(regs::rdx()));
             collector.add_use(*divisor);
@@ -871,7 +880,7 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             dest.get_regs_as_uses(collector);
         }
 
-        Inst::JmpTable {
+        Inst::JmpTableSeq {
             ref idx,
             ref tmp1,
             ref tmp2,
@@ -886,9 +895,9 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         | Inst::EpiloguePlaceholder
         | Inst::JmpKnown { .. }
         | Inst::JmpCond { .. }
-        | Inst::OneWayJmpCond { .. }
         | Inst::Nop { .. }
         | Inst::JmpUnknown { .. }
+        | Inst::TrapIf { .. }
         | Inst::VirtualSPOffsetAdj { .. }
         | Inst::Hlt
         | Inst::Ud2 { .. } => {
@@ -977,7 +986,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_mod(mapper, dst);
         }
         Inst::Div { divisor, .. } => divisor.map_uses(mapper),
-        Inst::SignedDivOrRem { divisor, .. } => {
+        Inst::CheckedDivOrRemSeq { divisor, .. } => {
             map_use(mapper, divisor);
         }
         Inst::SignExtendRaxRdx { .. } => {}
@@ -1104,7 +1113,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             dest.map_uses(mapper);
         }
 
-        Inst::JmpTable {
+        Inst::JmpTableSeq {
             ref mut idx,
             ref mut tmp1,
             ref mut tmp2,
@@ -1119,9 +1128,9 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         | Inst::EpiloguePlaceholder
         | Inst::JmpKnown { .. }
         | Inst::JmpCond { .. }
-        | Inst::OneWayJmpCond { .. }
         | Inst::Nop { .. }
         | Inst::JmpUnknown { .. }
+        | Inst::TrapIf { .. }
         | Inst::VirtualSPOffsetAdj { .. }
         | Inst::Ud2 { .. }
         | Inst::Hlt => {
@@ -1182,7 +1191,7 @@ impl MachInst for Inst {
                 taken,
                 not_taken,
             } => MachTerminator::Cond(taken.as_label().unwrap(), not_taken.as_label().unwrap()),
-            &Self::JmpTable {
+            &Self::JmpTableSeq {
                 ref targets_for_term,
                 ..
             } => MachTerminator::Indirect(&targets_for_term[..]),

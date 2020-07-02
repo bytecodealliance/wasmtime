@@ -90,7 +90,13 @@ impl ShowWithRRU for Amode {
                 index.show_rru(mb_rru),
                 1 << shift
             ),
-            Amode::RipRelative { ref target } => format!("{}(%rip)", target.show_rru(mb_rru)),
+            Amode::RipRelative { ref target } => format!(
+                "{}(%rip)",
+                match target {
+                    BranchTarget::Label(label) => format!("label{}", label.get()),
+                    BranchTarget::ResolvedOffset(offset) => offset.to_string(),
+                }
+            ),
         }
     }
 }
