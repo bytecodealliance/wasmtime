@@ -111,3 +111,73 @@ fn cross_store() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn get_set_externref_globals_via_api() -> anyhow::Result<()> {
+    let mut cfg = Config::new();
+    cfg.wasm_reference_types(true);
+    let engine = Engine::new(&cfg);
+    let store = Store::new(&engine);
+
+    // Initialize with a null externref.
+
+    let global = Global::new(
+        &store,
+        GlobalType::new(ValType::ExternRef, Mutability::Var),
+        Val::ExternRef(None),
+    )?;
+    assert!(global.get().unwrap_externref().is_none());
+
+    global.set(Val::ExternRef(Some(ExternRef::new("hello".to_string()))))?;
+    let r = global.get().unwrap_externref().unwrap();
+    assert!(r.data().is::<String>());
+    assert_eq!(r.data().downcast_ref::<String>().unwrap(), "hello");
+
+    // Initialize with a non-null externref.
+
+    let global = Global::new(
+        &store,
+        GlobalType::new(ValType::ExternRef, Mutability::Const),
+        Val::ExternRef(Some(ExternRef::new(42_i32))),
+    )?;
+    let r = global.get().unwrap_externref().unwrap();
+    assert!(r.data().is::<i32>());
+    assert_eq!(r.data().downcast_ref::<i32>().copied().unwrap(), 42);
+
+    Ok(())
+}
+
+#[test]
+fn get_set_funcref_globals_via_api() -> anyhow::Result<()> {
+    let mut cfg = Config::new();
+    cfg.wasm_reference_types(true);
+    let engine = Engine::new(&cfg);
+    let store = Store::new(&engine);
+
+    let f = Func::wrap(&store, || {});
+
+    // Initialize with a null funcref.
+
+    let global = Global::new(
+        &store,
+        GlobalType::new(ValType::FuncRef, Mutability::Var),
+        Val::FuncRef(None),
+    )?;
+    assert!(global.get().unwrap_funcref().is_none());
+
+    global.set(Val::FuncRef(Some(f.clone())))?;
+    let f2 = global.get().unwrap_funcref().cloned().unwrap();
+    assert_eq!(f.ty(), f2.ty());
+
+    // Initialize with a non-null funcref.
+
+    let global = Global::new(
+        &store,
+        GlobalType::new(ValType::FuncRef, Mutability::Var),
+        Val::FuncRef(Some(f.clone())),
+    )?;
+    let f2 = global.get().unwrap_funcref().cloned().unwrap();
+    assert_eq!(f.ty(), f2.ty());
+
+    Ok(())
+}

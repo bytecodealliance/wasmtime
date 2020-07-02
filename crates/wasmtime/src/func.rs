@@ -10,7 +10,8 @@ use std::panic::{self, AssertUnwindSafe};
 use std::ptr::{self, NonNull};
 use std::rc::Weak;
 use wasmtime_runtime::{
-    raise_user_trap, Export, InstanceHandle, VMContext, VMFunctionBody, VMTrampoline,
+    raise_user_trap, Export, InstanceHandle, VMContext, VMFunctionBody, VMSharedSignatureIndex,
+    VMTrampoline,
 };
 
 /// A WebAssembly function which can be called.
@@ -494,19 +495,20 @@ impl Func {
         func.into_func(store)
     }
 
+    pub(crate) fn sig_index(&self) -> VMSharedSignatureIndex {
+        unsafe { self.export.anyfunc.as_ref().type_index }
+    }
+
     /// Returns the underlying wasm type that this `Func` has.
     pub fn ty(&self) -> FuncType {
         // Signatures should always be registered in the store's registry of
         // shared signatures, so we should be able to unwrap safely here.
-        let sig = self
-            .instance
-            .store
-            .lookup_signature(unsafe { self.export.anyfunc.as_ref().type_index });
+        let wft = self.instance.store.lookup_signature(self.sig_index());
 
         // This is only called with `Export::Function`, and since it's coming
         // from wasmtime_runtime itself we should support all the types coming
         // out of it, so assert such here.
-        FuncType::from_wasm_func_type(&sig).expect("core wasm signature should be supported")
+        FuncType::from_wasm_func_type(&wft).expect("core wasm signature should be supported")
     }
 
     /// Returns the number of parameters that this function takes.

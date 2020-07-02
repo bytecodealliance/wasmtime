@@ -35,6 +35,7 @@ pub fn create_handle_with_memory(
         PrimaryMap::new(),
         Default::default(),
         Box::new(()),
+        PrimaryMap::new(),
     )
 }
 

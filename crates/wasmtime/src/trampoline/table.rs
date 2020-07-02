@@ -32,5 +32,6 @@ pub fn create_handle_with_table(store: &Store, table: &TableType) -> Result<Stor
         PrimaryMap::new(),
         Default::default(),
         Box::new(()),
+        PrimaryMap::new(),
     )
 }

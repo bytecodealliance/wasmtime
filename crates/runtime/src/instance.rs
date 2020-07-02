@@ -29,7 +29,7 @@ use wasmtime_environ::entity::{packed_option::ReservedValue, BoxedSlice, EntityR
 use wasmtime_environ::wasm::{
     DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
     ElemIndex, FuncIndex, GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableElementType,
-    TableIndex,
+    TableIndex, WasmType,
 };
 use wasmtime_environ::{ir, DataInitializer, EntityIndex, Module, TableElements, VMOffsets};
 
@@ -224,6 +224,21 @@ impl Instance {
     fn global_ptr(&self, index: DefinedGlobalIndex) -> *mut VMGlobalDefinition {
         let index = usize::try_from(index.as_u32()).unwrap();
         unsafe { self.globals_ptr().add(index) }
+    }
+
+    /// Get a raw pointer to the global at the given index regardless whether it
+    /// is defined locally or imported from another module.
+    ///
+    /// Panics if the index is out of bound or is the reserved value.
+    pub(crate) fn defined_or_imported_global_ptr(
+        &self,
+        index: GlobalIndex,
+    ) -> *mut VMGlobalDefinition {
+        if let Some(index) = self.module.local.defined_global_index(index) {
+            self.global_ptr(index)
+        } else {
+            self.imported_global(index).from
+        }
     }
 
     /// Return a pointer to the `VMGlobalDefinition`s.
@@ -1390,8 +1405,16 @@ fn initialize_globals(instance: &Instance) {
                     };
                     *to = from;
                 }
+                GlobalInit::RefFunc(f) => {
+                    *(*to).as_anyfunc_mut() = instance.get_caller_checked_anyfunc(f).unwrap()
+                        as *const VMCallerCheckedAnyfunc;
+                }
+                GlobalInit::RefNullConst => match global.wasm_ty {
+                    WasmType::FuncRef => *(*to).as_anyfunc_mut() = ptr::null(),
+                    WasmType::ExternRef => *(*to).as_externref_mut() = None,
+                    ty => panic!("unsupported reference type for global: {:?}", ty),
+                },
                 GlobalInit::Import => panic!("locally-defined global initialized as import"),
-                GlobalInit::RefNullConst | GlobalInit::RefFunc(_) => unimplemented!(),
             }
         }
     }

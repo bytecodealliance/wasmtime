@@ -204,11 +204,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", "simd_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator I32x4TruncSatF32x4S
 
             // Still working on implementing these. See #929.
-            ("reference_types", "global")
-            | ("reference_types", "linking")
-            | ("reference_types", "ref_func")
-            | ("reference_types", "ref_null")
-            | ("reference_types", "table_fill") => {
+            ("reference_types", "table_fill") => {
                 return true;
             }
 
