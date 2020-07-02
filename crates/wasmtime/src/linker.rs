@@ -445,6 +445,11 @@ impl Linker {
                 // which use --export-dynamic, which unfortunately doesn't work the way
                 // we want it to.
                 warn!("command module exporting '__heap_base' is deprecated");
+            } else if export.name() == "__dso_handle" && export.ty().global().is_some() {
+                // Allow an exported "__dso_handle" memory for compatibility with toolchains
+                // which use --export-dynamic, which unfortunately doesn't work the way
+                // we want it to.
+                warn!("command module exporting '__dso_handle' is deprecated")
             } else if export.name() == "__rtti_base" && export.ty().global().is_some() {
                 // Allow an exported "__rtti_base" memory for compatibility with
                 // AssemblyScript.
