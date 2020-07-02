@@ -25,6 +25,7 @@ rustc-demangle = "0.1.16"
 lazy_static = "1.4"
 log = "0.4.8"
 wat = { version = "1.0.18", optional = true }
+smallvec = "1.4.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = "0.3.7"
