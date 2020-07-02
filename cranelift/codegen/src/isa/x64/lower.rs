@@ -515,7 +515,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) -> Codeg
                 }
                 (_, true) => {
                     ctx.emit(match elem_ty {
-                        F32 => Inst::xmm_mov_rm_r(SseOpcode::Movd, RegMem::mem(addr), dst),
+                        F32 => Inst::xmm_mov_rm_r(SseOpcode::Movss, RegMem::mem(addr), dst),
                         _ => unimplemented!("FP load not 32-bit"),
                     });
                 }
