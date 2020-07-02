@@ -594,6 +594,10 @@ impl VMBuiltinFunctionsArray {
             wasmtime_externref_global_get as usize;
         ptrs[BuiltinFunctionIndex::externref_global_set().index() as usize] =
             wasmtime_externref_global_set as usize;
+        ptrs[BuiltinFunctionIndex::table_fill_externref().index() as usize] =
+            wasmtime_table_fill as usize;
+        ptrs[BuiltinFunctionIndex::table_fill_funcref().index() as usize] =
+            wasmtime_table_fill as usize;
 
         if cfg!(debug_assertions) {
             for i in 0..ptrs.len() {
