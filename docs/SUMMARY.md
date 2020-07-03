@@ -25,7 +25,7 @@
     - [Linking modules](./examples-c-linking.md)
     - [Debugging](./examples-c-debugging.md)
     - [Using multi-value](./examples-c-multi-value.md)
-- [Using WebAssembly from your lanugage](./lang.md)
+- [Using WebAssembly from your language](./lang.md)
   - [Rust](./lang-rust.md)
   - [C](./lang-c.md)
   - [Python](./lang-python.md)
