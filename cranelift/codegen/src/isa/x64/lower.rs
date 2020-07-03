@@ -150,7 +150,7 @@ fn input_to_reg_mem_imm(ctx: Ctx, spec: InsnInput) -> RegMemImm {
     }
 }
 
-fn output_to_reg<'a>(ctx: Ctx<'a>, spec: InsnOutput) -> Writable<Reg> {
+fn output_to_reg(ctx: Ctx, spec: InsnOutput) -> Writable<Reg> {
     ctx.get_output(spec.insn, spec.output)
 }
 
@@ -228,28 +228,43 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::alu_rmi_r(is_64, alu_op, rhs, dst));
         }
 
-        Opcode::Ishl | Opcode::Ushr | Opcode::Sshr => {
-            // TODO: implement imm shift value into insn
+        Opcode::Ishl | Opcode::Ushr | Opcode::Sshr | Opcode::Rotl | Opcode::Rotr => {
             let dst_ty = ctx.output_ty(insn, 0);
-            assert_eq!(ctx.input_ty(insn, 0), dst_ty);
-            assert!(dst_ty == types::I32 || dst_ty == types::I64);
+            debug_assert_eq!(ctx.input_ty(insn, 0), dst_ty);
+            debug_assert!(dst_ty == types::I32 || dst_ty == types::I64);
 
             let lhs = input_to_reg(ctx, inputs[0]);
-            let rhs = input_to_reg(ctx, inputs[1]);
+
+            let (count, rhs) = if let Some(cst) = ctx.get_constant(inputs[1].insn) {
+                let cst = if op == Opcode::Rotl || op == Opcode::Rotr {
+                    // Mask rotation count, according to Cranelift's semantics.
+                    (cst as u8) & (dst_ty.bits() as u8 - 1)
+                } else {
+                    cst as u8
+                };
+                (Some(cst), None)
+            } else {
+                (None, Some(input_to_reg(ctx, inputs[1])))
+            };
+
             let dst = output_to_reg(ctx, outputs[0]);
 
             let shift_kind = match op {
                 Opcode::Ishl => ShiftKind::Left,
                 Opcode::Ushr => ShiftKind::RightZ,
                 Opcode::Sshr => ShiftKind::RightS,
+                Opcode::Rotl => ShiftKind::RotateLeft,
+                Opcode::Rotr => ShiftKind::RotateRight,
                 _ => unreachable!(),
             };
 
             let is_64 = dst_ty == types::I64;
             let w_rcx = Writable::from_reg(regs::rcx());
             ctx.emit(Inst::mov_r_r(true, lhs, dst));
-            ctx.emit(Inst::mov_r_r(true, rhs, w_rcx));
-            ctx.emit(Inst::shift_r(is_64, shift_kind, None /*%cl*/, dst));
+            if count.is_none() {
+                ctx.emit(Inst::mov_r_r(true, rhs.unwrap(), w_rcx));
+            }
+            ctx.emit(Inst::shift_r(is_64, shift_kind, count, dst));
         }
 
         Opcode::Uextend
