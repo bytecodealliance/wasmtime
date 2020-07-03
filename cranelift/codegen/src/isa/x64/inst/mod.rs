@@ -356,6 +356,14 @@ impl Inst {
         }
     }
 
+    /// A convenience function to be able to use a RegMem as the source of a move.
+    pub(crate) fn mov64_rm_r(src: RegMem, dst: Writable<Reg>) -> Inst {
+        match src {
+            RegMem::Reg { reg } => Self::mov_r_r(true, reg, dst),
+            RegMem::Mem { addr } => Self::mov64_m_r(addr, dst),
+        }
+    }
+
     pub(crate) fn movsx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
         Inst::MovSX_RM_R { ext_mode, src, dst }
