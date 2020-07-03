@@ -589,6 +589,32 @@ pub(crate) fn emit(
             }
         }
 
+        Inst::MulHi { size, signed, rhs } => {
+            let (prefix, rex_flags) = match size {
+                2 => (LegacyPrefix::_66, RexFlags::clear_w()),
+                4 => (LegacyPrefix::None, RexFlags::clear_w()),
+                8 => (LegacyPrefix::None, RexFlags::set_w()),
+                _ => unreachable!(),
+            };
+
+            let subopcode = if *signed { 5 } else { 4 };
+            match rhs {
+                RegMem::Reg { reg } => {
+                    let src = int_reg_enc(*reg);
+                    emit_std_enc_enc(sink, prefix, 0xF7, 1, subopcode, src, rex_flags)
+                }
+                RegMem::Mem { addr: src } => emit_std_enc_mem(
+                    sink,
+                    prefix,
+                    0xF7,
+                    1,
+                    subopcode,
+                    &src.finalize(state),
+                    rex_flags,
+                ),
+            }
+        }
+
         Inst::SignExtendRaxRdx { size } => {
             match size {
                 2 => sink.put1(0x66),

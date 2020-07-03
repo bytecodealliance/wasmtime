@@ -1198,6 +1198,29 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
+    // MulHi
+    insns.push((
+        Inst::mul_hi(4, true /*signed*/, RegMem::reg(regs::rsi())),
+        "F7EE",
+        "imul    %esi",
+    ));
+    insns.push((
+        Inst::mul_hi(8, true /*signed*/, RegMem::reg(regs::r15())),
+        "49F7EF",
+        "imul    %r15",
+    ));
+    insns.push((
+        Inst::mul_hi(4, false /*signed*/, RegMem::reg(regs::r14())),
+        "41F7E6",
+        "mul     %r14d",
+    ));
+    insns.push((
+        Inst::mul_hi(8, false /*signed*/, RegMem::reg(regs::rdi())),
+        "48F7E7",
+        "mul     %rdi",
+    ));
+
+    // ========================================================
     // cdq family: SignExtendRaxRdx
     insns.push((Inst::sign_extend_rax_to_rdx(2), "6699", "cwd"));
     insns.push((Inst::sign_extend_rax_to_rdx(4), "99", "cdq"));

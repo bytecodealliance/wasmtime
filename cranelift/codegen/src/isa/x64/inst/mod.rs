@@ -57,6 +57,9 @@ pub enum Inst {
         loc: SourceLoc,
     },
 
+    /// The high result of a (un)signed multiply: imul/mul using RAX:RDX.
+    MulHi { size: u8, signed: bool, rhs: RegMem },
+
     /// A synthetic sequence to implement the right inline checks for remainder and division,
     /// assuming the dividend is in $rax.
     /// Puts the result back into $rax if is_div, $rdx if !is_div, to mimic what the div
@@ -301,6 +304,12 @@ impl Inst {
             loc,
         }
     }
+
+    pub(crate) fn mul_hi(size: u8, signed: bool, rhs: RegMem) -> Inst {
+        debug_assert!(size == 8 || size == 4 || size == 2 || size == 1);
+        Inst::MulHi { size, signed, rhs }
+    }
+
     pub(crate) fn sign_extend_rax_to_rdx(size: u8) -> Inst {
         debug_assert!(size == 8 || size == 4 || size == 2);
         Inst::SignExtendRaxRdx { size }
@@ -581,6 +590,17 @@ impl ShowWithRRU for Inst {
                 }),
                 divisor.show_rru_sized(mb_rru, *size)
             ),
+            Inst::MulHi {
+                size, signed, rhs, ..
+            } => format!(
+                "{} {}",
+                ljustify(if *signed {
+                    "imul".to_string()
+                } else {
+                    "mul".to_string()
+                }),
+                rhs.show_rru_sized(mb_rru, *size)
+            ),
             Inst::CheckedDivOrRemSeq {
                 is_div,
                 is_signed,
@@ -796,6 +816,11 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_mod(Writable::from_reg(regs::rdx()));
             divisor.get_regs_as_uses(collector);
         }
+        Inst::MulHi { rhs, .. } => {
+            collector.add_mod(Writable::from_reg(regs::rax()));
+            collector.add_def(Writable::from_reg(regs::rdx()));
+            rhs.get_regs_as_uses(collector);
+        }
         Inst::CheckedDivOrRemSeq { divisor, .. } => {
             collector.add_mod(Writable::from_reg(regs::rax()));
             collector.add_mod(Writable::from_reg(regs::rdx()));
@@ -994,6 +1019,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_mod(mapper, dst);
         }
         Inst::Div { divisor, .. } => divisor.map_uses(mapper),
+        Inst::MulHi { rhs, .. } => rhs.map_uses(mapper),
         Inst::CheckedDivOrRemSeq { divisor, .. } => {
             map_use(mapper, divisor);
         }
