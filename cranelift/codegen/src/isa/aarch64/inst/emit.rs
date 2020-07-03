@@ -1352,6 +1352,8 @@ impl MachInstEmit for Inst {
                         debug_assert_ne!(I64X2, ty);
                         (0b010_01110_00_1 | enc_size << 1, 0b100111)
                     }
+                    VecALUOp::Sshl => (0b010_01110_00_1 | enc_size << 1, 0b010001),
+                    VecALUOp::Ushl => (0b011_01110_00_1 | enc_size << 1, 0b010001),
                 };
                 sink.put4(enc_vec_rrr(top11, rm, bit15_10, rn, rd));
             }

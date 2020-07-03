@@ -183,6 +183,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", "simd_address") => return false,
             ("simd", "simd_align") => return false,
             ("simd", "simd_bitwise") => return false,
+            ("simd", "simd_bit_shift") => return false,
             ("simd", "simd_boolean") => return false,
             ("simd", "simd_f32x4_cmp") => return false,
             ("simd", "simd_f64x2_cmp") => return false,
