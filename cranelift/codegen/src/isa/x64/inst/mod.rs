@@ -49,6 +49,14 @@ pub enum Inst {
         dst: Writable<Reg>,
     },
 
+    /// Instructions on GPR that only read src and defines dst (dst is not modified): bsr, etc.
+    ReadOnly_Gpr_Rm_R {
+        size: u8, // 2, 4 or 8
+        op: ReadOnlyGprRmROpcode,
+        src: RegMem,
+        dst: Writable<Reg>,
+    },
+
     /// Integer quotient and remainder: (div idiv) $rax $rdx (reg addr)
     Div {
         size: u8, // 1, 2, 4 or 8
@@ -295,6 +303,17 @@ impl Inst {
         }
     }
 
+    pub(crate) fn read_only_gpr_rm_r(
+        size: u8,
+        op: ReadOnlyGprRmROpcode,
+        src: RegMem,
+        dst: Writable<Reg>,
+    ) -> Self {
+        debug_assert!(dst.to_reg().get_class() == RegClass::I64);
+        debug_assert!(size == 8 || size == 4 || size == 2);
+        Self::ReadOnly_Gpr_Rm_R { size, op, src, dst }
+    }
+
     pub(crate) fn div(size: u8, signed: bool, divisor: RegMem, loc: SourceLoc) -> Inst {
         debug_assert!(size == 8 || size == 4 || size == 2 || size == 1);
         Inst::Div {
@@ -357,6 +376,11 @@ impl Inst {
         Inst::MovZX_RM_R { ext_mode, src, dst }
     }
 
+    pub(crate) fn movsx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
+        debug_assert!(dst.to_reg().get_class() == RegClass::I64);
+        Inst::MovSX_RM_R { ext_mode, src, dst }
+    }
+
     pub(crate) fn mov64_m_r(src: impl Into<SyntheticAmode>, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
         Inst::Mov64_M_R {
@@ -371,11 +395,6 @@ impl Inst {
             RegMem::Reg { reg } => Self::mov_r_r(true, reg, dst),
             RegMem::Mem { addr } => Self::mov64_m_r(addr, dst),
         }
-    }
-
-    pub(crate) fn movsx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
-        debug_assert!(dst.to_reg().get_class() == RegClass::I64);
-        Inst::MovSX_RM_R { ext_mode, src, dst }
     }
 
     pub(crate) fn mov_r_m(
@@ -565,6 +584,7 @@ impl ShowWithRRU for Inst {
 
         match self {
             Inst::Nop { len } => format!("{} len={}", ljustify("nop".to_string()), len),
+
             Inst::Alu_RMI_R {
                 is_64,
                 op,
@@ -576,6 +596,14 @@ impl ShowWithRRU for Inst {
                 src.show_rru_sized(mb_rru, sizeLQ(*is_64)),
                 show_ireg_sized(dst.to_reg(), mb_rru, sizeLQ(*is_64)),
             ),
+
+            Inst::ReadOnly_Gpr_Rm_R { src, dst, op, size } => format!(
+                "{} {}, {}",
+                ljustify2(op.to_string(), suffixBWLQ(*size)),
+                src.show_rru_sized(mb_rru, *size),
+                show_ireg_sized(dst.to_reg(), mb_rru, *size),
+            ),
+
             Inst::Div {
                 size,
                 signed,
@@ -830,7 +858,7 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(regs::rax());
             collector.add_mod(Writable::from_reg(regs::rdx()));
         }
-        Inst::XMM_Mov_RM_R { src, dst, .. } => {
+        Inst::ReadOnly_Gpr_Rm_R { src, dst, .. } | Inst::XMM_Mov_RM_R { src, dst, .. } => {
             src.get_regs_as_uses(collector);
             collector.add_def(*dst);
         }
@@ -1010,10 +1038,9 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
     match inst {
         // ** Nop
         Inst::Alu_RMI_R {
-            is_64: _,
-            op: _,
             ref mut src,
             ref mut dst,
+            ..
         } => {
             src.map_uses(mapper);
             map_mod(mapper, dst);
@@ -1025,6 +1052,11 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         }
         Inst::SignExtendRaxRdx { .. } => {}
         Inst::XMM_Mov_RM_R {
+            ref mut src,
+            ref mut dst,
+            ..
+        }
+        | Inst::ReadOnly_Gpr_Rm_R {
             ref mut src,
             ref mut dst,
             ..

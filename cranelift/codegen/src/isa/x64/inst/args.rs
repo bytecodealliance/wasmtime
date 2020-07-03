@@ -289,6 +289,26 @@ impl ToString for AluRmiROpcode {
     }
 }
 
+#[derive(Clone, PartialEq)]
+pub enum ReadOnlyGprRmROpcode {
+    /// Bit-scan reverse.
+    Bsr,
+}
+
+impl fmt::Debug for ReadOnlyGprRmROpcode {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ReadOnlyGprRmROpcode::Bsr => write!(fmt, "bsr"),
+        }
+    }
+}
+
+impl ToString for ReadOnlyGprRmROpcode {
+    fn to_string(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
 pub(crate) enum InstructionSet {
     SSE,
     SSE2,

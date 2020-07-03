@@ -120,10 +120,49 @@ struct InsnOutput {
     output: usize,
 }
 
-fn input_to_reg<'a>(ctx: Ctx<'a>, spec: InsnInput) -> Reg {
+fn input_to_reg(ctx: Ctx, spec: InsnInput) -> Reg {
     let inputs = ctx.get_input(spec.insn, spec.input);
     ctx.use_input_reg(inputs);
     inputs.reg
+}
+
+enum ExtSpec {
+    ZeroExtend32,
+    ZeroExtend64,
+    SignExtend32,
+    SignExtend64,
+}
+
+fn extend_input_to_reg(ctx: Ctx, spec: InsnInput, ext_spec: ExtSpec) -> Reg {
+    let requested_size = match ext_spec {
+        ExtSpec::ZeroExtend32 | ExtSpec::SignExtend32 => 32,
+        ExtSpec::ZeroExtend64 | ExtSpec::SignExtend64 => 64,
+    };
+    let input_size = ctx.input_ty(spec.insn, spec.input).bits();
+
+    let ext_mode = match (input_size, requested_size) {
+        (a, b) if a == b => return input_to_reg(ctx, spec),
+        (a, 32) if a == 1 || a == 8 => ExtMode::BL,
+        (a, 64) if a == 1 || a == 8 => ExtMode::BQ,
+        (16, 32) => ExtMode::WL,
+        (16, 64) => ExtMode::WQ,
+        (32, 64) => ExtMode::LQ,
+        _ => unreachable!(),
+    };
+
+    let requested_ty = if requested_size == 32 { I32 } else { I64 };
+
+    let src = input_to_reg_mem(ctx, spec);
+    let dst = ctx.alloc_tmp(RegClass::I64, requested_ty);
+    match ext_spec {
+        ExtSpec::ZeroExtend32 | ExtSpec::ZeroExtend64 => {
+            ctx.emit(Inst::movzx_rm_r(ext_mode, src, dst))
+        }
+        ExtSpec::SignExtend32 | ExtSpec::SignExtend64 => {
+            ctx.emit(Inst::movsx_rm_r(ext_mode, src, dst))
+        }
+    }
+    dst.to_reg()
 }
 
 fn input_to_reg_mem(ctx: Ctx, spec: InsnInput) -> RegMem {
@@ -265,6 +304,60 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::mov_r_r(true, rhs.unwrap(), w_rcx));
             }
             ctx.emit(Inst::shift_r(is_64, shift_kind, count, dst));
+        }
+
+        Opcode::Clz => {
+            // TODO when the x86 flags have use_lzcnt, we can use LZCNT.
+
+            // General formula using bit-scan reverse (BSR):
+            // mov -1, %dst
+            // bsr %src, %tmp
+            // cmovz %dst, %tmp
+            // mov $(size_bits - 1), %dst
+            // sub %tmp, %dst
+
+            let (ext_spec, ty) = match ctx.input_ty(insn, 0) {
+                I8 | I16 => (Some(ExtSpec::ZeroExtend32), I32),
+                a if a == I32 || a == I64 => (None, a),
+                _ => unreachable!(),
+            };
+
+            let src = if let Some(ext_spec) = ext_spec {
+                RegMem::reg(extend_input_to_reg(ctx, inputs[0], ext_spec))
+            } else {
+                input_to_reg_mem(ctx, inputs[0])
+            };
+            let dst = output_to_reg(ctx, outputs[0]);
+
+            let tmp = ctx.alloc_tmp(RegClass::I64, ty);
+            ctx.emit(Inst::imm_r(ty == I64, u64::max_value(), dst));
+
+            ctx.emit(Inst::read_only_gpr_rm_r(
+                ty.bytes() as u8,
+                ReadOnlyGprRmROpcode::Bsr,
+                src,
+                tmp,
+            ));
+
+            ctx.emit(Inst::cmove(
+                ty.bytes() as u8,
+                CC::Z,
+                RegMem::reg(dst.to_reg()),
+                tmp,
+            ));
+
+            ctx.emit(Inst::imm_r(
+                ty == I64,
+                ty.bits() as u64 - 1,
+                dst,
+            ));
+
+            ctx.emit(Inst::alu_rmi_r(
+                ty == I64,
+                AluRmiROpcode::Sub,
+                RegMemImm::reg(tmp.to_reg()),
+                dst,
+            ));
         }
 
         Opcode::Uextend
@@ -636,7 +729,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             };
             let dst = output_to_reg(ctx, outputs[0]);
             let offset: i32 = offset.into();
-            println!("stackslot_addr: {:?} @ off{}", stack_slot, offset);
             let inst = ctx
                 .abi()
                 .stackslot_addr(stack_slot, u32::try_from(offset).unwrap(), dst);
@@ -919,35 +1011,14 @@ impl LowerBackend for X64Backend {
                     assert!(jt_size <= u32::max_value() as usize);
                     let jt_size = jt_size as u32;
 
-                    let idx_size_bits = ctx.input_ty(branches[0], 0).bits();
-
-                    // Zero-extend to 32-bits if needed.
-                    // TODO consider factoring this out?
-                    let idx = if idx_size_bits < 32 {
-                        let ext_mode = match idx_size_bits {
-                            1 | 8 => ExtMode::BL,
-                            16 => ExtMode::WL,
-                            _ => unreachable!(),
-                        };
-                        let idx = input_to_reg_mem(
-                            ctx,
-                            InsnInput {
-                                insn: branches[0],
-                                input: 0,
-                            },
-                        );
-                        let tmp_idx = ctx.alloc_tmp(RegClass::I64, I32);
-                        ctx.emit(Inst::movzx_rm_r(ext_mode, idx, tmp_idx));
-                        tmp_idx.to_reg()
-                    } else {
-                        input_to_reg(
-                            ctx,
-                            InsnInput {
-                                insn: branches[0],
-                                input: 0,
-                            },
-                        )
-                    };
+                    let idx = extend_input_to_reg(
+                        ctx,
+                        InsnInput {
+                            insn: branches[0],
+                            input: 0,
+                        },
+                        ExtSpec::ZeroExtend32,
+                    );
 
                     // Bounds-check (compute flags from idx - jt_size) and branch to default.
                     ctx.emit(Inst::cmp_rmi_r(4, RegMemImm::imm(jt_size), idx));

@@ -556,6 +556,40 @@ pub(crate) fn emit(
             }
         }
 
+        Inst::ReadOnly_Gpr_Rm_R { size, op, src, dst } => {
+            let (prefix, rex_flags) = match size {
+                2 => (LegacyPrefix::_66, RexFlags::clear_w()),
+                4 => (LegacyPrefix::None, RexFlags::clear_w()),
+                8 => (LegacyPrefix::None, RexFlags::set_w()),
+                _ => unreachable!(),
+            };
+
+            let (opcode, num_opcodes) = match op {
+                ReadOnlyGprRmROpcode::Bsr => (0x0fbd, 2),
+            };
+
+            match src {
+                RegMem::Reg { reg: src } => emit_std_reg_reg(
+                    sink,
+                    prefix,
+                    opcode,
+                    num_opcodes,
+                    dst.to_reg(),
+                    *src,
+                    rex_flags,
+                ),
+                RegMem::Mem { addr: src } => emit_std_reg_mem(
+                    sink,
+                    prefix,
+                    opcode,
+                    num_opcodes,
+                    dst.to_reg(),
+                    &src.finalize(state),
+                    rex_flags,
+                ),
+            }
+        }
+
         Inst::Div {
             size,
             signed,

@@ -1155,6 +1155,20 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
+    // ReadOnly_Gpr_Rm_R
+
+    insns.push((
+        Inst::read_only_gpr_rm_r(4, ReadOnlyGprRmROpcode::Bsr, RegMem::reg(rsi), w_rdi),
+        "0FBDFE",
+        "bsrl    %esi, %edi",
+    ));
+    insns.push((
+        Inst::read_only_gpr_rm_r(8, ReadOnlyGprRmROpcode::Bsr, RegMem::reg(r15), w_rax),
+        "490FBDC7",
+        "bsrq    %r15, %rax",
+    ));
+
+    // ========================================================
     // Div
     insns.push((
         Inst::div(
