@@ -3,7 +3,7 @@
 [Wasmtime][github], a [Bytecode Alliance][BA] project, is used to run
 [Webassembly][Wasm] (Wasm) programs [without a web browser].  
 Typically, an application calls embedded Wasmtime to load and run Wasm
-modules. Or, the Wasmtime command line utility can run standalone Wasm
+[modules]. Or, the Wasmtime command line utility can run standalone Wasm
 programs.
 
 [Webassembly][Wasm] (Wasm) is an assembly language for a [virtual
@@ -38,3 +38,4 @@ contributions are welcome!
 [without a web browser]: https://webassembly.org/docs/non-web/
 [Wasm-bindgen]: https://rustwasm.github.io/docs/wasm-bindgen/
 [issue]: https://github.com/bytecodealliance/wasmtime/issues/new
+[modules]: https://doc.rust-lang.org/book/ch07-02-defining-modules-to-control-scope-and-privacy.html
