@@ -77,6 +77,7 @@ where
             | UnquoteOperator::Bor
             | UnquoteOperator::Bxor
             | UnquoteOperator::Iadd
+            | UnquoteOperator::Isub
             | UnquoteOperator::Imul => unreachable!("not a unary unquote operator: {:?}", operator),
         }
     }
@@ -98,6 +99,7 @@ where
             UnquoteOperator::Bor => fold_ints!(a, b, |x, y| x | y),
             UnquoteOperator::Bxor => fold_ints!(a, b, |x, y| x ^ y),
             UnquoteOperator::Iadd => fold_ints!(a, b, |x, y| x.wrapping_add(y)),
+            UnquoteOperator::Isub => fold_ints!(a, b, |x, y| x.wrapping_sub(y)),
             UnquoteOperator::Imul => fold_ints!(a, b, |x, y| x.wrapping_mul(y)),
             UnquoteOperator::Log2 | UnquoteOperator::Neg => {
                 unreachable!("not a binary unquote operator: {:?}", operator)

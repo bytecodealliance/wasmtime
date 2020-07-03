@@ -233,6 +233,10 @@ pub enum UnquoteOperator {
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Iadd,
 
+    /// Compile-time `iadd` of two constant values.
+    #[peepmatic(params(iNN, iNN), result(iNN))]
+    Isub,
+
     /// Compile-time `imul` of two constant values.
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Imul,

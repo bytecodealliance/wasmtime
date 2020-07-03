@@ -195,4 +195,4 @@
 ;; Reminder by a power of two -> bitwise and with decreased by one constant.
 (=> (when (urem_imm $C $x)
           (is-power-of-two $C))
-    (band_imm $(iadd -1 $C) $x))
+    (band_imm $(isub 1 $C) $x))
