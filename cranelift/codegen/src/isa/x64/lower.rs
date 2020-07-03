@@ -747,6 +747,29 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::Umulhi | Opcode::Smulhi => {
+            let input_ty = ctx.input_ty(insn, 0);
+            let size = input_ty.bytes() as u8;
+
+            let lhs = input_to_reg(ctx, inputs[0]);
+            let rhs = input_to_reg_mem(ctx, inputs[1]);
+            let dst = output_to_reg(ctx, outputs[0]);
+
+            // Move lhs in %rax.
+            ctx.emit(Inst::gen_move(
+                Writable::from_reg(regs::rax()),
+                lhs,
+                input_ty,
+            ));
+
+            // Emit the actual mul or imul.
+            let signed = op == Opcode::Smulhi;
+            ctx.emit(Inst::mul_hi(size, signed, rhs));
+
+            // Read the result from the high part (stored in %rdx).
+            ctx.emit(Inst::gen_move(dst, regs::rdx(), input_ty));
+        }
+
         Opcode::IaddImm
         | Opcode::ImulImm
         | Opcode::UdivImm
