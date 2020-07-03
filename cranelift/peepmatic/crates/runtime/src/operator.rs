@@ -233,7 +233,7 @@ pub enum UnquoteOperator {
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Iadd,
 
-    /// Compile-time `iadd` of two constant values.
+    /// Compile-time `isub` of two constant values.
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Isub,
 
