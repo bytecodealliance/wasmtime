@@ -509,6 +509,8 @@ pub enum ShiftKind {
     Left,
     RightZ,
     RightS,
+    RotateLeft,
+    RotateRight,
 }
 
 impl fmt::Debug for ShiftKind {
@@ -517,6 +519,8 @@ impl fmt::Debug for ShiftKind {
             ShiftKind::Left => "shl",
             ShiftKind::RightZ => "shr",
             ShiftKind::RightS => "sar",
+            ShiftKind::RotateLeft => "rol",
+            ShiftKind::RotateRight => "ror",
         };
         write!(fmt, "{}", name)
     }

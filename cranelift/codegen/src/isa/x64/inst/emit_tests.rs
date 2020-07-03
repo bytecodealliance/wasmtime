@@ -2258,6 +2258,26 @@ fn test_x64_emit() {
         "49C1FD3F",
         "sarq    $63, %r13",
     ));
+    insns.push((
+        Inst::shift_r(true, ShiftKind::RotateLeft, None, w_r8),
+        "49D3C0",
+        "rolq    %cl, %r8",
+    ));
+    insns.push((
+        Inst::shift_r(false, ShiftKind::RotateLeft, Some(3), w_r9),
+        "41C1C103",
+        "roll    $3, %r9d",
+    ));
+    insns.push((
+        Inst::shift_r(false, ShiftKind::RotateRight, None, w_rsi),
+        "D3CE",
+        "rorl    %cl, %esi",
+    ));
+    insns.push((
+        Inst::shift_r(true, ShiftKind::RotateRight, Some(5), w_r15),
+        "49C1CF05",
+        "rorq    $5, %r15",
+    ));
 
     // ========================================================
     // CmpRMIR

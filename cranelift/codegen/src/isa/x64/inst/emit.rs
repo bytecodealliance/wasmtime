@@ -925,6 +925,8 @@ pub(crate) fn emit(
         } => {
             let enc_dst = int_reg_enc(dst.to_reg());
             let subopcode = match kind {
+                ShiftKind::RotateLeft => 0,
+                ShiftKind::RotateRight => 1,
                 ShiftKind::Left => 4,
                 ShiftKind::RightZ => 5,
                 ShiftKind::RightS => 7,
