@@ -11,17 +11,13 @@ block0:
 ; sameln:                version: 1
 ; nextln:                  flags: 0
 ; nextln:          prologue size: 4
-; nextln:         frame register: 5
+; nextln:         frame register: 0
 ; nextln:  frame register offset: 0
-; nextln:           unwind codes: 2
+; nextln:           unwind codes: 1
 ; nextln:  
 ; nextln:                 offset: 1
 ; nextln:                     op: PushNonvolatileRegister
 ; nextln:                   info: 5
-; nextln:  
-; nextln:                 offset: 4
-; nextln:                     op: SetFramePointer
-; nextln:                   info: 0
 
 ; check the unwind information with a non-leaf function with no args
 function %no_args() windows_fastcall {
@@ -33,17 +29,13 @@ block0:
 ; sameln:                version: 1
 ; nextln:                  flags: 0
 ; nextln:          prologue size: 8
-; nextln:         frame register: 5
+; nextln:         frame register: 0
 ; nextln:  frame register offset: 0
-; nextln:           unwind codes: 3
+; nextln:           unwind codes: 2
 ; nextln:  
 ; nextln:                 offset: 1
 ; nextln:                     op: PushNonvolatileRegister
 ; nextln:                   info: 5
-; nextln:  
-; nextln:                 offset: 4
-; nextln:                     op: SetFramePointer
-; nextln:                   info: 0
 ; nextln:  
 ; nextln:                 offset: 8
 ; nextln:                     op: SmallStackAlloc
@@ -58,18 +50,14 @@ block0:
 ; sameln:               version: 1
 ; nextln:                 flags: 0
 ; nextln:         prologue size: 17
-; nextln:        frame register: 5
+; nextln:        frame register: 0
 ; nextln: frame register offset: 0
-; nextln:          unwind codes: 3
+; nextln:          unwind codes: 2
 ; nextln: 
 ; nextln:                offset: 1
 ; nextln:                    op: PushNonvolatileRegister
 ; nextln:                  info: 5
-; nextln: 
-; nextln:                offset: 4
-; nextln:                    op: SetFramePointer
-; nextln:                  info: 0
-; nextln: 
+; nextln:  
 ; nextln:                offset: 17
 ; nextln:                    op: LargeStackAlloc
 ; nextln:                  info: 0
@@ -84,17 +72,13 @@ block0:
 ; sameln:                version: 1
 ; nextln:                  flags: 0
 ; nextln:          prologue size: 17
-; nextln:         frame register: 5
+; nextln:         frame register: 0
 ; nextln:  frame register offset: 0
-; nextln:           unwind codes: 3
+; nextln:           unwind codes: 2
 ; nextln:  
 ; nextln:                 offset: 1
 ; nextln:                     op: PushNonvolatileRegister
 ; nextln:                   info: 5
-; nextln:  
-; nextln:                 offset: 4
-; nextln:                     op: SetFramePointer
-; nextln:                   info: 0
 ; nextln:  
 ; nextln:                 offset: 17
 ; nextln:                     op: LargeStackAlloc
@@ -136,17 +120,13 @@ block0(v0: i64, v1: i64):
 ; sameln:                version: 1
 ; nextln:                  flags: 0 
 ; nextln:          prologue size: 22
-; nextln:         frame register: 5
-; nextln:  frame register offset: 2
-; nextln:           unwind codes: 5
+; nextln:         frame register: 0
+; nextln:  frame register offset: 0
+; nextln:           unwind codes: 4
 ; nextln:  
 ; nextln:                 offset: 1
 ; nextln:                     op: PushNonvolatileRegister
 ; nextln:                   info: 5
-; nextln:  
-; nextln:                 offset: 4
-; nextln:                     op: SetFramePointer
-; nextln:                   info: 0
 ; nextln:  
 ; nextln:                 offset: 6
 ; nextln:                     op: PushNonvolatileRegister
@@ -160,7 +140,7 @@ block0(v0: i64, v1: i64):
 ; nextln:                 offset: 22
 ; nextln:                     op: SaveXmm128
 ; nextln:                   info: 15
-; nextln:                  value: 0 (u16)
+; nextln:                  value: 10 (u16)
 
 ; check a function that has CSRs
 function %lots_of_registers(i64, i64) windows_fastcall {
@@ -214,17 +194,13 @@ block0(v0: i64, v1: i64):
 ; sameln:                version: 1
 ; nextln:                  flags: 0
 ; nextln:          prologue size: 35
-; nextln:         frame register: 5
-; nextln:  frame register offset: 7
-; nextln:           unwind codes: 13
+; nextln:         frame register: 0
+; nextln:  frame register offset: 0
+; nextln:           unwind codes: 12
 ; nextln:  
 ; nextln:                 offset: 1
 ; nextln:                     op: PushNonvolatileRegister
 ; nextln:                   info: 5
-; nextln:  
-; nextln:                 offset: 4
-; nextln:                     op: SetFramePointer
-; nextln:                   info: 0
 ; nextln:  
 ; nextln:                 offset: 5
 ; nextln:                     op: PushNonvolatileRegister
@@ -261,14 +237,14 @@ block0(v0: i64, v1: i64):
 ; nextln:                 offset: 24
 ; nextln:                     op: SaveXmm128
 ; nextln:                   info: 6
-; nextln:                  value: 2 (u16)
+; nextln:                  value: 3 (u16)
 ; nextln:  
 ; nextln:                 offset: 29
 ; nextln:                     op: SaveXmm128
 ; nextln:                   info: 7
-; nextln:                  value: 1 (u16)
+; nextln:                  value: 2 (u16)
 ; nextln:  
 ; nextln:                 offset: 35
 ; nextln:                     op: SaveXmm128
 ; nextln:                   info: 8
-; nextln:                  value: 0 (u16)
+; nextln:                  value: 1 (u16)

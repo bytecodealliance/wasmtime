@@ -57,10 +57,6 @@ pub(crate) enum UnwindCode {
         offset: u8,
         size: u32,
     },
-    SetFramePointer {
-        offset: u8,
-        sp_offset: u8,
-    },
 }
 
 impl UnwindCode {
@@ -69,7 +65,6 @@ impl UnwindCode {
             PushNonvolatileRegister = 0,
             LargeStackAlloc = 1,
             SmallStackAlloc = 2,
-            SetFramePointer = 3,
             SaveXmm128 = 8,
             SaveXmm128Far = 9,
         }
@@ -112,10 +107,6 @@ impl UnwindCode {
                     writer.write_u8((1 << 4) | (UnwindOperation::LargeStackAlloc as u8));
                     writer.write_u32::<LittleEndian>(*size);
                 }
-            }
-            Self::SetFramePointer { offset, sp_offset } => {
-                writer.write_u8(*offset);
-                writer.write_u8((*sp_offset << 4) | (UnwindOperation::SetFramePointer as u8));
             }
         };
     }
