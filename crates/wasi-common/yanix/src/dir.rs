@@ -4,7 +4,10 @@ use crate::{
 };
 use std::convert::TryInto;
 use std::io::{Error, Result};
+#[cfg(unix)]
 use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
+#[cfg(target_os = "wasi")]
+use std::os::wasi::io::{AsRawFd, IntoRawFd, RawFd};
 use std::{ffi::CStr, io, ops::Deref, ptr};
 
 pub use crate::sys::EntryExt;

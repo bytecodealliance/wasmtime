@@ -1,11 +1,14 @@
 use crate::{from_result, from_success_code};
 use bitflags::bitflags;
 use cfg_if::cfg_if;
+#[cfg(unix)]
+use std::os::unix::prelude::*;
+#[cfg(target_os = "wasi")]
+use std::os::wasi::prelude::*;
 use std::{
     convert::TryInto,
     ffi::{CString, OsStr, OsString},
     io::Result,
-    os::unix::prelude::*,
 };
 
 pub use crate::sys::file::*;
@@ -62,6 +65,7 @@ bitflags! {
                              target_os = "macos",
                              target_os = "netbsd",
                              target_os = "openbsd",
+                             target_os = "wasi",
                              target_os = "emscripten"))] {
                     libc::O_DSYNC
                 } else if #[cfg(target_os = "freebsd")] {
@@ -87,6 +91,7 @@ bitflags! {
         #[cfg(any(target_os = "linux",
                   target_os = "netbsd",
                   target_os = "openbsd",
+                  target_os = "wasi",
                   target_os = "emscripten"))]
         const RSYNC = libc::O_RSYNC;
         const SYNC = libc::O_SYNC;
@@ -189,11 +194,11 @@ pub unsafe fn mkdirat<P: AsRef<OsStr>>(dirfd: RawFd, path: P, mode: Mode) -> Res
     from_success_code(libc::mkdirat(dirfd, path.as_ptr(), mode.bits()))
 }
 
-pub unsafe fn linkat<P: AsRef<OsStr>>(
+pub unsafe fn linkat<P: AsRef<OsStr>, Q: AsRef<OsStr>>(
     old_dirfd: RawFd,
     old_path: P,
     new_dirfd: RawFd,
-    new_path: P,
+    new_path: Q,
     flags: AtFlags,
 ) -> Result<()> {
     let old_path = CString::new(old_path.as_ref().as_bytes())?;
@@ -212,11 +217,11 @@ pub unsafe fn unlinkat<P: AsRef<OsStr>>(dirfd: RawFd, path: P, flags: AtFlags) -
     from_success_code(libc::unlinkat(dirfd, path.as_ptr(), flags.bits()))
 }
 
-pub unsafe fn renameat<P: AsRef<OsStr>>(
+pub unsafe fn renameat<P: AsRef<OsStr>, Q: AsRef<OsStr>>(
     old_dirfd: RawFd,
     old_path: P,
     new_dirfd: RawFd,
-    new_path: P,
+    new_path: Q,
 ) -> Result<()> {
     let old_path = CString::new(old_path.as_ref().as_bytes())?;
     let new_path = CString::new(new_path.as_ref().as_bytes())?;
@@ -228,7 +233,11 @@ pub unsafe fn renameat<P: AsRef<OsStr>>(
     ))
 }
 
-pub unsafe fn symlinkat<P: AsRef<OsStr>>(old_path: P, new_dirfd: RawFd, new_path: P) -> Result<()> {
+pub unsafe fn symlinkat<P: AsRef<OsStr>, Q: AsRef<OsStr>>(
+    old_path: P,
+    new_dirfd: RawFd,
+    new_path: Q,
+) -> Result<()> {
     let old_path = CString::new(old_path.as_ref().as_bytes())?;
     let new_path = CString::new(new_path.as_ref().as_bytes())?;
     from_success_code(libc::symlinkat(
