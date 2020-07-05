@@ -3,7 +3,10 @@ use crate::{
     from_result, from_success_code,
 };
 use std::io::Result;
+#[cfg(unix)]
 use std::os::unix::prelude::*;
+#[cfg(target_os = "wasi")]
+use std::os::wasi::prelude::*;
 
 pub unsafe fn dup_fd(fd: RawFd, close_on_exec: bool) -> Result<RawFd> {
     // Both fcntl commands expect a RawFd arg which will specify
