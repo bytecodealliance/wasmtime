@@ -295,14 +295,14 @@ impl ABIBody for X64ABIBody {
                     (ArgumentExtension::Uext, Some(ext_mode)) => {
                         ret.push(Inst::movzx_rm_r(
                             ext_mode,
-                            RegMem::reg(r.to_reg()),
+                            RegMem::reg(from_reg.to_reg()),
                             dest_reg,
                         ));
                     }
                     (ArgumentExtension::Sext, Some(ext_mode)) => {
                         ret.push(Inst::movsx_rm_r(
                             ext_mode,
-                            RegMem::reg(r.to_reg()),
+                            RegMem::reg(from_reg.to_reg()),
                             dest_reg,
                         ));
                     }
