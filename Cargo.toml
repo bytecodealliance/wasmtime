@@ -72,7 +72,7 @@ members = [
 ]
 
 [features]
-default = ["jitdump", "wasmtime/wat"]
+default = ["jitdump", "wasmtime/wat", "wasmtime/parallel-compilation"]
 lightbeam = [
     "wasmtime-environ/lightbeam",
     "wasmtime-jit/lightbeam",

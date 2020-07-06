@@ -38,7 +38,7 @@ wasmtime-wasi = { path = "../wasi" }
 maintenance = { status = "actively-developed" }
 
 [features]
-default = ['wat', 'jitdump']
+default = ['wat', 'jitdump', 'parallel-compilation']
 
 # Enables experimental support for the lightbeam codegen backend, an alternative
 # to cranelift. Requires Nightly Rust currently, and this is not enabled by
@@ -50,3 +50,6 @@ jitdump = ["wasmtime-jit/jitdump"]
 
 # Enables support for the `VTune` profiler
 vtune = ["wasmtime-jit/vtune"]
+
+# Enables parallel compilation of WebAssembly code
+parallel-compilation = ["wasmtime-environ/parallel-compilation"]
