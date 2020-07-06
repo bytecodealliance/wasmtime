@@ -10,7 +10,6 @@ use crate::link::link_module;
 use crate::object::ObjectUnwindInfo;
 use crate::resolver::Resolver;
 use object::File as ObjectFile;
-use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -53,9 +52,7 @@ pub enum SetupError {
 }
 
 // Contains all compilation artifacts.
-#[derive(Serialize, Deserialize)]
 struct CompilationArtifacts {
-    #[serde(with = "module_serde")]
     module: Module,
     obj: Box<[u8]>,
     unwind_info: Box<[ObjectUnwindInfo]>,
@@ -302,7 +299,6 @@ impl CompiledModule {
 
 /// Similar to `DataInitializer`, but owns its own copy of the data rather
 /// than holding a slice of the original module.
-#[derive(Serialize, Deserialize)]
 pub struct OwnedDataInitializer {
     /// The location where the initialization is to be performed.
     location: DataInitializerLocation,
@@ -381,22 +377,4 @@ fn build_code_memory(
     code_memory.publish(isa);
 
     Ok((code_memory, code_range, finished_functions, trampolines))
-}
-
-mod module_serde {
-    // TODO implement module serialization
-    use serde::{Deserializer, Serializer};
-    use wasmtime_environ::Module;
-    pub fn serialize<S>(_: &Module, _: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        unimplemented!();
-    }
-    pub fn deserialize<'de, D>(_: D) -> Result<Module, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        unimplemented!();
-    }
 }

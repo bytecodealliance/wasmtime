@@ -2495,7 +2495,6 @@ dependencies = [
  "more-asserts",
  "object",
  "region",
- "serde",
  "target-lexicon",
  "thiserror",
  "wasmparser 0.58.0",

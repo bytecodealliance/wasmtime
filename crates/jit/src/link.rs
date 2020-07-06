@@ -15,7 +15,7 @@ use wasmtime_runtime::VMFunctionBody;
 /// Performs all required relocations inside the function code, provided the necessary metadata.
 /// The relocations data provided in the object file, see object.rs for details.
 ///
-/// Currently, the produce ELF image can be trusted.
+/// Currently, the produced ELF image can be trusted.
 /// TODO refactor logic to remove panics and add defensive code the image data
 /// becomes untrusted.
 pub fn link_module(

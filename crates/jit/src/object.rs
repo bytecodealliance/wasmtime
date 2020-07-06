@@ -25,7 +25,6 @@ use object::{
     elf, Architecture, BinaryFormat, Endianness, RelocationEncoding, RelocationKind, SectionKind,
     SymbolFlags, SymbolKind, SymbolScope,
 };
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use wasmtime_debug::{DwarfSection, DwarfSectionRelocTarget};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
@@ -111,7 +110,7 @@ fn to_object_architecture(
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
 /// Unwind information for object files functions (including trampolines).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ObjectUnwindInfo {
     Func(FuncIndex, UnwindInfo),
     Trampoline(SignatureIndex, UnwindInfo),
