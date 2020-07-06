@@ -237,6 +237,10 @@ pub enum UnquoteOperator {
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Imul,
 
+    /// Compile-time `isub` of two constant values.
+    #[peepmatic(params(iNN, iNN), result(iNN))]
+    Isub,
+
     /// Take the base-2 log of a power of two integer.
     #[peepmatic(params(iNN), result(iNN))]
     Log2,
