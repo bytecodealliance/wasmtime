@@ -293,12 +293,15 @@ impl ToString for AluRmiROpcode {
 pub enum ReadOnlyGprRmROpcode {
     /// Bit-scan reverse.
     Bsr,
+    /// Bit-scan forward.
+    Bsf,
 }
 
 impl fmt::Debug for ReadOnlyGprRmROpcode {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ReadOnlyGprRmROpcode::Bsr => write!(fmt, "bsr"),
+            ReadOnlyGprRmROpcode::Bsf => write!(fmt, "bsf"),
         }
     }
 }

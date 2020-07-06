@@ -566,6 +566,7 @@ pub(crate) fn emit(
 
             let (opcode, num_opcodes) = match op {
                 ReadOnlyGprRmROpcode::Bsr => (0x0fbd, 2),
+                ReadOnlyGprRmROpcode::Bsf => (0x0fbc, 2),
             };
 
             match src {
