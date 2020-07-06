@@ -322,10 +322,10 @@ fn set_table_item(
     instance: &InstanceHandle,
     table_index: wasm::DefinedTableIndex,
     item_index: u32,
-    item: *mut wasmtime_runtime::VMCallerCheckedAnyfunc,
+    item: runtime::TableElement,
 ) -> Result<()> {
     instance
-        .table_set(table_index, item_index, item.into())
+        .table_set(table_index, item_index, item)
         .map_err(|()| anyhow!("table element index out of bounds"))
 }
 
@@ -342,14 +342,25 @@ impl Table {
     ///
     /// Returns an error if `init` does not match the element type of the table.
     pub fn new(store: &Store, ty: TableType, init: Val) -> Result<Table> {
-        let item = into_checked_anyfunc(init, store)?;
         let (instance, wasmtime_export) = generate_table_export(store, &ty)?;
+
+        let init: runtime::TableElement = match ty.element() {
+            ValType::FuncRef => into_checked_anyfunc(init, store)?.into(),
+            ValType::ExternRef => init
+                .externref()
+                .ok_or_else(|| {
+                    anyhow!("table initialization value does not have expected type `externref`")
+                })?
+                .map(|x| x.inner)
+                .into(),
+            ty => bail!("unsupported table element type: {:?}", ty),
+        };
 
         // Initialize entries with the init value.
         let definition = unsafe { &*wasmtime_export.definition };
         let index = instance.table_index(definition);
         for i in 0..definition.current_elements {
-            set_table_item(&instance, index, i, item)?;
+            set_table_item(&instance, index, i, init.clone())?;
         }
 
         Ok(Table {
@@ -392,9 +403,16 @@ impl Table {
     /// Returns an error if `index` is out of bounds or if `val` does not have
     /// the right type to be stored in this table.
     pub fn set(&self, index: u32, val: Val) -> Result<()> {
+        if !val.comes_from_same_store(&self.instance.store) {
+            bail!("cross-`Store` values are not supported in tables");
+        }
         let table_index = self.wasmtime_table_index();
-        let item = into_checked_anyfunc(val, &self.instance.store)?;
-        set_table_item(&self.instance, table_index, index, item)
+        set_table_item(
+            &self.instance,
+            table_index,
+            index,
+            val.into_table_element()?,
+        )
     }
 
     /// Returns the current size of this table.
@@ -470,6 +488,32 @@ impl Table {
 
         runtime::Table::copy(dst_table, src_table, dst_index, src_index, len)
             .map_err(Trap::from_runtime)?;
+        Ok(())
+    }
+
+    /// Fill `table[dst..(dst + len)]` with the given value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if
+    ///
+    /// * `val` is not of the same type as this table's
+    ///   element type,
+    ///
+    /// * the region to be filled is out of bounds, or
+    ///
+    /// * `val` comes from a different `Store` from this table.
+    pub fn fill(&self, dst: u32, val: Val, len: u32) -> Result<()> {
+        if !val.comes_from_same_store(&self.instance.store) {
+            bail!("cross-`Store` table fills are not supported");
+        }
+
+        let table_index = self.wasmtime_table_index();
+        self.instance
+            .handle
+            .defined_table_fill(table_index, dst, val.into_table_element()?, len)
+            .map_err(Trap::from_runtime)?;
+
         Ok(())
     }
 
