@@ -494,6 +494,16 @@ impl Instance {
         }
     }
 
+    pub(crate) fn defined_table_fill(
+        &self,
+        table_index: DefinedTableIndex,
+        dst: u32,
+        val: TableElement,
+        len: u32,
+    ) -> Result<(), Trap> {
+        self.tables.get(table_index).unwrap().fill(dst, val, len)
+    }
+
     // Get table element by index.
     fn table_get(&self, table_index: DefinedTableIndex, index: u32) -> Option<TableElement> {
         self.tables
@@ -1113,6 +1123,21 @@ impl InstanceHandle {
         val: TableElement,
     ) -> Result<(), ()> {
         self.instance().table_set(table_index, index, val)
+    }
+
+    /// Fill a region of the table.
+    ///
+    /// Returns an error if the region is out of bounds or val is not of the
+    /// correct type.
+    pub fn defined_table_fill(
+        &self,
+        table_index: DefinedTableIndex,
+        dst: u32,
+        val: TableElement,
+        len: u32,
+    ) -> Result<(), Trap> {
+        self.instance()
+            .defined_table_fill(table_index, dst, val, len)
     }
 
     /// Get a table defined locally within this module.

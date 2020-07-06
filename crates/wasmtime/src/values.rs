@@ -174,6 +174,18 @@ impl Val {
         self.externref().expect("expected externref")
     }
 
+    pub(crate) fn into_table_element(self) -> Result<runtime::TableElement> {
+        match self {
+            Val::FuncRef(Some(f)) => Ok(runtime::TableElement::FuncRef(
+                f.caller_checked_anyfunc().as_ptr(),
+            )),
+            Val::FuncRef(None) => Ok(runtime::TableElement::FuncRef(ptr::null_mut())),
+            Val::ExternRef(Some(x)) => Ok(runtime::TableElement::ExternRef(Some(x.inner))),
+            Val::ExternRef(None) => Ok(runtime::TableElement::ExternRef(None)),
+            _ => bail!("value does not match table element type"),
+        }
+    }
+
     pub(crate) fn comes_from_same_store(&self, store: &Store) -> bool {
         match self {
             Val::FuncRef(Some(f)) => Store::same(store, f.store()),
