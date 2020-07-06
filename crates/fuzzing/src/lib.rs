@@ -39,6 +39,7 @@ pub(crate) fn fuzz_default_config(
     config
         .cranelift_nan_canonicalization(true)
         .wasm_bulk_memory(true)
+        .wasm_reference_types(true)
         .strategy(strategy)?;
     Ok(config)
 }
