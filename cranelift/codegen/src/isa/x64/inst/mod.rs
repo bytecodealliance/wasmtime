@@ -273,14 +273,12 @@ pub enum Inst {
     VirtualSPOffsetAdj { offset: i64 },
 }
 
-// Handy constructors for Insts.
-
-// For various sizes, will some number of lowest bits sign extend to be the
-// same as the whole value?
-pub(crate) fn low32willSXto64(x: u64) -> bool {
+pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
     let xs = x as i64;
     xs == ((xs << 32) >> 32)
 }
+
+// Handy constructors for Insts.
 
 impl Inst {
     pub(crate) fn nop(len: u8) -> Self {
@@ -337,7 +335,11 @@ impl Inst {
     pub(crate) fn imm_r(dst_is_64: bool, simm64: u64, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
         if !dst_is_64 {
-            debug_assert!(low32willSXto64(simm64));
+            debug_assert!(
+                low32_will_sign_extend_to_64(simm64),
+                "{} won't sign-extend to 64 bits!",
+                simm64
+            );
         }
         Inst::Imm_R {
             dst_is_64,
@@ -1309,10 +1311,11 @@ impl MachInst for Inst {
         Inst::jmp_known(BranchTarget::Label(label))
     }
 
-    fn gen_constant(to_reg: Writable<Reg>, value: u64, _: Type) -> SmallVec<[Self; 4]> {
+    fn gen_constant(to_reg: Writable<Reg>, value: u64, ty: Type) -> SmallVec<[Self; 4]> {
         let mut ret = SmallVec::new();
-        let is64 = value > 0xffff_ffff;
-        ret.push(Inst::imm_r(is64, value, to_reg));
+        debug_assert!(ty.is_int(), "float constants NYI");
+        let is_64 = ty == I64 && value > 0x7fffffff;
+        ret.push(Inst::imm_r(is_64, value, to_reg));
         ret
     }
 
