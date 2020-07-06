@@ -199,7 +199,7 @@ impl RegMemImm {
         match self {
             Self::Reg { reg } => collector.add_use(*reg),
             Self::Mem { addr } => addr.get_regs_as_uses(collector),
-            Self::Imm { simm32: _ } => {}
+            Self::Imm { .. } => {}
         }
     }
 }

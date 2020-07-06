@@ -666,6 +666,7 @@ pub(crate) fn emit(
             size,
             divisor,
             loc,
+            tmp,
         } => {
             // Generates the following code sequence:
             //
@@ -727,8 +728,18 @@ pub(crate) fn emit(
                     (Some(do_op), Some(done_label))
                 } else {
                     // Check for integer overflow.
-                    let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0x80000000), regs::rax());
-                    inst.emit(sink, flags, state);
+                    if *size == 8 {
+                        let tmp = tmp.expect("temporary for i64 sdiv");
+
+                        let inst = Inst::imm_r(true, 0x8000000000000000, tmp);
+                        inst.emit(sink, flags, state);
+
+                        let inst = Inst::cmp_rmi_r(8, RegMemImm::reg(tmp.to_reg()), regs::rax());
+                        inst.emit(sink, flags, state);
+                    } else {
+                        let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0x80000000), regs::rax());
+                        inst.emit(sink, flags, state);
+                    }
 
                     // If not equal, jump over the trap.
                     let inst = Inst::trap_if(CC::Z, TrapCode::IntegerOverflow, *loc);
