@@ -1151,6 +1151,20 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::gen_move(dst, regs::rdx(), input_ty));
         }
 
+        Opcode::GetPinnedReg => {
+            let dst = output_to_reg(ctx, outputs[0]);
+            ctx.emit(Inst::gen_move(dst, regs::pinned_reg(), I64));
+        }
+
+        Opcode::SetPinnedReg => {
+            let src = input_to_reg(ctx, inputs[0]);
+            ctx.emit(Inst::gen_move(
+                Writable::from_reg(regs::pinned_reg()),
+                src,
+                I64,
+            ));
+        }
+
         Opcode::IaddImm
         | Opcode::ImulImm
         | Opcode::UdivImm
@@ -1353,5 +1367,9 @@ impl LowerBackend for X64Backend {
         }
 
         Ok(())
+    }
+
+    fn maybe_pinned_reg(&self) -> Option<Reg> {
+        Some(regs::pinned_reg())
     }
 }

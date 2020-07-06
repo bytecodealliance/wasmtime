@@ -7,7 +7,7 @@ use std::mem;
 
 use crate::binemit::Stackmap;
 use crate::ir::{self, types, types::*, ArgumentExtension, StackSlot, Type};
-use crate::isa::{self, x64::inst::*};
+use crate::isa::{x64::inst::*, CallConv};
 use crate::machinst::*;
 use crate::settings;
 use crate::{CodegenError, CodegenResult};
@@ -40,7 +40,7 @@ struct ABISig {
     /// Index in `args` of the stack-return-value-area argument.
     stack_ret_arg: Option<usize>,
     /// Calling convention used.
-    call_conv: isa::CallConv,
+    call_conv: CallConv,
 }
 
 pub(crate) struct X64ABIBody {
@@ -65,7 +65,7 @@ pub(crate) struct X64ABIBody {
     /// which RSP is adjusted downwards to allocate the spill area.
     frame_size_bytes: Option<usize>,
 
-    call_conv: isa::CallConv,
+    call_conv: CallConv,
 
     /// The settings controlling this function's compilation.
     flags: settings::Flags,
@@ -93,7 +93,11 @@ fn in_vec_reg(ty: types::Type) -> bool {
     }
 }
 
-fn get_intreg_for_arg_systemv(idx: usize) -> Option<Reg> {
+fn get_intreg_for_arg_systemv(call_conv: &CallConv, idx: usize) -> Option<Reg> {
+    assert!(match call_conv {
+        CallConv::SystemV | CallConv::BaldrdashSystemV => true,
+        _ => false,
+    });
     match idx {
         0 => Some(regs::rdi()),
         1 => Some(regs::rsi()),
@@ -105,7 +109,11 @@ fn get_intreg_for_arg_systemv(idx: usize) -> Option<Reg> {
     }
 }
 
-fn get_fltreg_for_arg_systemv(idx: usize) -> Option<Reg> {
+fn get_fltreg_for_arg_systemv(call_conv: &CallConv, idx: usize) -> Option<Reg> {
+    assert!(match call_conv {
+        CallConv::SystemV | CallConv::BaldrdashSystemV => true,
+        _ => false,
+    });
     match idx {
         0 => Some(regs::xmm0()),
         1 => Some(regs::xmm1()),
@@ -119,19 +127,39 @@ fn get_fltreg_for_arg_systemv(idx: usize) -> Option<Reg> {
     }
 }
 
-fn get_intreg_for_retval_systemv(idx: usize) -> Option<Reg> {
-    match idx {
-        0 => Some(regs::rax()),
-        1 => Some(regs::rdx()),
-        _ => None,
+fn get_intreg_for_retval_systemv(call_conv: &CallConv, idx: usize) -> Option<Reg> {
+    match call_conv {
+        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match idx {
+            0 => Some(regs::rax()),
+            1 => Some(regs::rdx()),
+            _ => None,
+        },
+        CallConv::BaldrdashSystemV => {
+            if idx == 0 {
+                Some(regs::rax())
+            } else {
+                None
+            }
+        }
+        CallConv::WindowsFastcall | CallConv::BaldrdashWindows | CallConv::Probestack => todo!(),
     }
 }
 
-fn get_fltreg_for_retval_systemv(idx: usize) -> Option<Reg> {
-    match idx {
-        0 => Some(regs::xmm0()),
-        1 => Some(regs::xmm1()),
-        _ => None,
+fn get_fltreg_for_retval_systemv(call_conv: &CallConv, idx: usize) -> Option<Reg> {
+    match call_conv {
+        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match idx {
+            0 => Some(regs::xmm0()),
+            1 => Some(regs::xmm1()),
+            _ => None,
+        },
+        CallConv::BaldrdashSystemV => {
+            if idx == 0 {
+                Some(regs::xmm0())
+            } else {
+                None
+            }
+        }
+        CallConv::WindowsFastcall | CallConv::BaldrdashWindows | CallConv::Probestack => todo!(),
     }
 }
 
@@ -147,10 +175,39 @@ fn is_callee_save_systemv(r: RealReg) -> bool {
     }
 }
 
-fn get_callee_saves(regs: Vec<Writable<RealReg>>) -> Vec<Writable<RealReg>> {
-    regs.into_iter()
-        .filter(|r| is_callee_save_systemv(r.to_reg()))
-        .collect()
+fn is_callee_save_baldrdash(r: RealReg) -> bool {
+    use regs::*;
+    match r.get_class() {
+        RegClass::I64 => {
+            if r.get_hw_encoding() as u8 == ENC_R14 {
+                // r14 is the WasmTlsReg and is preserved implicitly.
+                false
+            } else {
+                // Defer to native for the other ones.
+                is_callee_save_systemv(r)
+            }
+        }
+        RegClass::V128 => false,
+        _ => unimplemented!(),
+    }
+}
+
+fn get_callee_saves(call_conv: &CallConv, regs: Vec<Writable<RealReg>>) -> Vec<Writable<RealReg>> {
+    match call_conv {
+        CallConv::BaldrdashSystemV => regs
+            .into_iter()
+            .filter(|r| is_callee_save_baldrdash(r.to_reg()))
+            .collect(),
+        CallConv::BaldrdashWindows => {
+            todo!("baldrdash windows");
+        }
+        CallConv::Fast | CallConv::Cold | CallConv::SystemV => regs
+            .into_iter()
+            .filter(|r| is_callee_save_systemv(r.to_reg()))
+            .collect(),
+        CallConv::WindowsFastcall => todo!("windows fastcall"),
+        CallConv::Probestack => todo!("probestack?"),
+    }
 }
 
 impl X64ABIBody {
@@ -160,7 +217,7 @@ impl X64ABIBody {
 
         let call_conv = f.signature.call_conv;
         debug_assert!(
-            call_conv == isa::CallConv::SystemV || call_conv.extends_baldrdash(),
+            call_conv == CallConv::SystemV || call_conv.extends_baldrdash(),
             "unsupported or unimplemented calling convention {}",
             call_conv
         );
@@ -268,7 +325,18 @@ impl ABIBody for X64ABIBody {
     }
 
     fn gen_retval_area_setup(&self) -> Option<Inst> {
-        None
+        if let Some(i) = self.sig.stack_ret_arg {
+            let inst = self.gen_copy_arg_to_reg(i, self.ret_area_ptr.unwrap());
+            trace!(
+                "gen_retval_area_setup: inst {:?}; ptr reg is {:?}",
+                inst,
+                self.ret_area_ptr.unwrap().to_reg()
+            );
+            Some(inst)
+        } else {
+            trace!("gen_retval_area_setup: not needed");
+            None
+        }
     }
 
     fn gen_copy_reg_to_retval(
@@ -436,7 +504,7 @@ impl ABIBody for X64ABIBody {
             insts.push(Inst::mov_r_r(true, r_rsp, w_rbp));
         }
 
-        let clobbered = get_callee_saves(self.clobbered.to_vec());
+        let clobbered = get_callee_saves(&self.call_conv, self.clobbered.to_vec());
         let callee_saved_used: usize = clobbered
             .iter()
             .map(|reg| match reg.to_reg().get_class() {
@@ -480,7 +548,7 @@ impl ABIBody for X64ABIBody {
 
         // Save callee saved registers that we trash. Keep track of how much space we've used, so
         // as to know what we have to do to get the base of the spill area 0 % 16.
-        let clobbered = get_callee_saves(self.clobbered.to_vec());
+        let clobbered = get_callee_saves(&self.call_conv, self.clobbered.to_vec());
         for reg in clobbered {
             let r_reg = reg.to_reg();
             match r_reg.get_class() {
@@ -510,7 +578,7 @@ impl ABIBody for X64ABIBody {
         // Undo what we did in the prologue.
 
         // Restore regs.
-        let clobbered = get_callee_saves(self.clobbered.to_vec());
+        let clobbered = get_callee_saves(&self.call_conv, self.clobbered.to_vec());
         for wreg in clobbered.into_iter().rev() {
             let rreg = wreg.to_reg();
             match rreg.get_class() {
@@ -607,7 +675,7 @@ fn ty_from_ty_hint_or_reg_class(r: Reg, ty: Option<Type>) -> Type {
     }
 }
 
-fn get_caller_saves(call_conv: isa::CallConv) -> Vec<Writable<Reg>> {
+fn get_caller_saves(call_conv: CallConv) -> Vec<Writable<Reg>> {
     let mut caller_saved = Vec::new();
 
     // Systemv calling convention:
@@ -621,6 +689,14 @@ fn get_caller_saves(call_conv: isa::CallConv) -> Vec<Writable<Reg>> {
     caller_saved.push(Writable::from_reg(regs::r9()));
     caller_saved.push(Writable::from_reg(regs::r10()));
     caller_saved.push(Writable::from_reg(regs::r11()));
+
+    if call_conv.extends_baldrdash() {
+        caller_saved.push(Writable::from_reg(regs::r12()));
+        caller_saved.push(Writable::from_reg(regs::r13()));
+        // Not r14; implicitly preserved in the entry.
+        caller_saved.push(Writable::from_reg(regs::r15()));
+        caller_saved.push(Writable::from_reg(regs::rbx()));
+    }
 
     // - XMM: all the registers!
     caller_saved.push(Writable::from_reg(regs::xmm0()));
@@ -639,10 +715,6 @@ fn get_caller_saves(call_conv: isa::CallConv) -> Vec<Writable<Reg>> {
     caller_saved.push(Writable::from_reg(regs::xmm13()));
     caller_saved.push(Writable::from_reg(regs::xmm14()));
     caller_saved.push(Writable::from_reg(regs::xmm15()));
-
-    if call_conv.extends_baldrdash() {
-        todo!("add the baldrdash caller saved")
-    }
 
     caller_saved
 }
@@ -670,7 +742,7 @@ fn abisig_to_uses_and_defs(sig: &ABISig) -> (Vec<Reg>, Vec<Writable<Reg>>) {
 }
 
 /// Try to fill a Baldrdash register, returning it if it was found.
-fn try_fill_baldrdash_reg(call_conv: isa::CallConv, param: &ir::AbiParam) -> Option<ABIArg> {
+fn try_fill_baldrdash_reg(call_conv: CallConv, param: &ir::AbiParam) -> Option<ABIArg> {
     if call_conv.extends_baldrdash() {
         match &param.purpose {
             &ir::ArgumentPurpose::VMContext => {
@@ -704,15 +776,12 @@ enum ArgsOrRets {
 /// to a 16-byte-aligned boundary), and if `add_ret_area_ptr` was passed, the
 /// index of the extra synthetic arg that was added.
 fn compute_arg_locs(
-    call_conv: isa::CallConv,
+    call_conv: CallConv,
     params: &[ir::AbiParam],
     args_or_rets: ArgsOrRets,
     add_ret_area_ptr: bool,
 ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
     let is_baldrdash = call_conv.extends_baldrdash();
-
-    // XXX assume SystemV at the moment.
-    debug_assert!(!is_baldrdash, "baldrdash nyi");
 
     let mut next_gpr = 0;
     let mut next_vreg = 0;
@@ -747,8 +816,8 @@ fn compute_arg_locs(
 
         let (next_reg, candidate) = if intreg {
             let candidate = match args_or_rets {
-                ArgsOrRets::Args => get_intreg_for_arg_systemv(next_gpr),
-                ArgsOrRets::Rets => get_intreg_for_retval_systemv(next_gpr),
+                ArgsOrRets::Args => get_intreg_for_arg_systemv(&call_conv, next_gpr),
+                ArgsOrRets::Rets => get_intreg_for_retval_systemv(&call_conv, next_gpr),
             };
             debug_assert!(candidate
                 .map(|r| r.get_class() == RegClass::I64)
@@ -756,8 +825,8 @@ fn compute_arg_locs(
             (&mut next_gpr, candidate)
         } else {
             let candidate = match args_or_rets {
-                ArgsOrRets::Args => get_fltreg_for_arg_systemv(next_vreg),
-                ArgsOrRets::Rets => get_fltreg_for_retval_systemv(next_vreg),
+                ArgsOrRets::Args => get_fltreg_for_arg_systemv(&call_conv, next_vreg),
+                ArgsOrRets::Rets => get_fltreg_for_retval_systemv(&call_conv, next_vreg),
             };
             debug_assert!(candidate
                 .map(|r| r.get_class() == RegClass::V128)
@@ -790,7 +859,7 @@ fn compute_arg_locs(
 
     let extra_arg = if add_ret_area_ptr {
         debug_assert!(args_or_rets == ArgsOrRets::Args);
-        if let Some(reg) = get_intreg_for_arg_systemv(next_gpr) {
+        if let Some(reg) = get_intreg_for_arg_systemv(&call_conv, next_gpr) {
             ret.push(ABIArg::Reg(reg.to_real_reg(), ir::types::I64));
         } else {
             ret.push(ABIArg::Stack(next_stack as i64, ir::types::I64));
