@@ -170,6 +170,10 @@ declare_builtin_functions! {
     table_grow_funcref(vmctx, i32, i32, pointer) -> (i32);
     /// Returns an index for Wasm's `table.grow` instruction for `externref`s.
     table_grow_externref(vmctx, i32, i32, reference) -> (i32);
+    /// Returns an index for Wasm's `table.fill` instruction for `externref`s.
+    table_fill_externref(vmctx, i32, i32, reference, i32) -> ();
+    /// Returns an index for Wasm's `table.fill` instruction for `funcref`s.
+    table_fill_funcref(vmctx, i32, i32, pointer, i32) -> ();
     /// Returns an index to drop a `VMExternRef`.
     drop_externref(pointer) -> ();
     /// Returns an index to do a GC and then insert a `VMExternRef` into the
@@ -1009,15 +1013,41 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_table_fill(
         &mut self,
-        _: cranelift_codegen::cursor::FuncCursor<'_>,
-        _: TableIndex,
-        _: ir::Value,
-        _: ir::Value,
-        _: ir::Value,
+        mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
+        table_index: TableIndex,
+        dst: ir::Value,
+        val: ir::Value,
+        len: ir::Value,
     ) -> WasmResult<()> {
-        Err(WasmError::Unsupported(
-            "the `table.fill` instruction is not supported yet".into(),
-        ))
+        let (builtin_idx, builtin_sig) =
+            match self.module.table_plans[table_index].table.wasm_ty {
+                WasmType::FuncRef => (
+                    BuiltinFunctionIndex::table_fill_funcref(),
+                    self.builtin_function_signatures
+                        .table_fill_funcref(&mut pos.func),
+                ),
+                WasmType::ExternRef => (
+                    BuiltinFunctionIndex::table_fill_externref(),
+                    self.builtin_function_signatures
+                        .table_fill_externref(&mut pos.func),
+                ),
+                _ => return Err(WasmError::Unsupported(
+                    "`table.fill` with a table element type that is not `funcref` or `externref`"
+                        .into(),
+                )),
+            };
+
+        let (vmctx, builtin_addr) =
+            self.translate_load_builtin_function_address(&mut pos, builtin_idx);
+
+        let table_index_arg = pos.ins().iconst(I32, table_index.as_u32() as i64);
+        pos.ins().call_indirect(
+            builtin_sig,
+            builtin_addr,
+            &[vmctx, table_index_arg, dst, val, len],
+        );
+
+        Ok(())
     }
 
     fn translate_ref_null(

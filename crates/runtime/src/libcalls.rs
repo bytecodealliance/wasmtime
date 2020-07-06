@@ -265,6 +265,41 @@ pub unsafe extern "C" fn wasmtime_table_grow(
     }
 }
 
+/// Implementation of `table.fill`.
+pub unsafe extern "C" fn wasmtime_table_fill(
+    vmctx: *mut VMContext,
+    table_index: u32,
+    dst: u32,
+    // NB: we don't know whether this is a `VMExternRef` or a pointer to a
+    // `VMCallerCheckedAnyfunc` until we look at the table's element type.
+    val: *mut u8,
+    len: u32,
+) {
+    let result = {
+        let instance = (&mut *vmctx).instance();
+        let table_index = TableIndex::from_u32(table_index);
+        let table = instance.get_table(table_index);
+        match table.element_type() {
+            TableElementType::Func => {
+                let val = val as *mut VMCallerCheckedAnyfunc;
+                table.fill(dst, val.into(), len)
+            }
+            TableElementType::Val(ty) => {
+                debug_assert_eq!(ty, crate::ref_type());
+                let val = if val.is_null() {
+                    None
+                } else {
+                    Some(VMExternRef::clone_from_raw(val))
+                };
+                table.fill(dst, val.into(), len)
+            }
+        }
+    };
+    if let Err(trap) = result {
+        raise_lib_trap(trap);
+    }
+}
+
 /// Implementation of `table.copy`.
 pub unsafe extern "C" fn wasmtime_table_copy(
     vmctx: *mut VMContext,
