@@ -825,11 +825,18 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // regalloc is aware of the coalescing opportunity between rax/rdx and the
                 // destination register.
                 let divisor = input_to_reg(ctx, inputs[1]);
+                let tmp = if op == Opcode::Sdiv && size == 8 {
+                    Some(ctx.alloc_tmp(RegClass::I64, I64))
+                } else {
+                    None
+                };
+                ctx.emit(Inst::imm_r(true, 0, Writable::from_reg(regs::rdx())));
                 ctx.emit(Inst::CheckedDivOrRemSeq {
                     is_div,
                     is_signed,
                     size,
                     divisor,
+                    tmp,
                     loc: srcloc,
                 });
             } else {

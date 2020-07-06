@@ -69,16 +69,20 @@ pub enum Inst {
     MulHi { size: u8, signed: bool, rhs: RegMem },
 
     /// A synthetic sequence to implement the right inline checks for remainder and division,
-    /// assuming the dividend is in $rax.
-    /// Puts the result back into $rax if is_div, $rdx if !is_div, to mimic what the div
+    /// assuming the dividend is in %rax.
+    /// Puts the result back into %rax if is_div, %rdx if !is_div, to mimic what the div
     /// instruction does.
     /// The generated code sequence is described in the emit's function match arm for this
     /// instruction.
+    ///
+    /// Note: %rdx is marked as modified by this instruction, to avoid an early clobber problem
+    /// with the temporary and divisor. Make sure to zero %rdx right before this instruction!
     CheckedDivOrRemSeq {
         is_div: bool,
         is_signed: bool,
         size: u8,
         divisor: Reg,
+        tmp: Option<Writable<Reg>>,
         loc: SourceLoc,
     },
 
@@ -846,10 +850,16 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(Writable::from_reg(regs::rdx()));
             rhs.get_regs_as_uses(collector);
         }
-        Inst::CheckedDivOrRemSeq { divisor, .. } => {
+        Inst::CheckedDivOrRemSeq { divisor, tmp, .. } => {
+            // Mark both fixed registers as mods, to avoid an early clobber problem in codegen
+            // (i.e. the temporary is allocated one of the fixed registers). This requires writing
+            // the rdx register *before* the instruction, which is not too bad.
             collector.add_mod(Writable::from_reg(regs::rax()));
             collector.add_mod(Writable::from_reg(regs::rdx()));
             collector.add_use(*divisor);
+            if let Some(tmp) = tmp {
+                collector.add_def(*tmp);
+            }
         }
         Inst::SignExtendRaxRdx { .. } => {
             collector.add_use(regs::rax());
@@ -1038,8 +1048,11 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         }
         Inst::Div { divisor, .. } => divisor.map_uses(mapper),
         Inst::MulHi { rhs, .. } => rhs.map_uses(mapper),
-        Inst::CheckedDivOrRemSeq { divisor, .. } => {
+        Inst::CheckedDivOrRemSeq { divisor, tmp, .. } => {
             map_use(mapper, divisor);
+            if let Some(tmp) = tmp {
+                map_def(mapper, tmp)
+            }
         }
         Inst::SignExtendRaxRdx { .. } => {}
         Inst::XMM_Mov_RM_R {
