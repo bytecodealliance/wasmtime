@@ -99,6 +99,7 @@ use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{binemit, isa, Context};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, ModuleTranslationState};
+#[cfg(feature = "parallel-compilation")]
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
@@ -318,132 +319,149 @@ fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError
     let mut traps = PrimaryMap::with_capacity(env.function_body_inputs.len());
     let mut stack_maps = PrimaryMap::with_capacity(env.function_body_inputs.len());
 
-    env.function_body_inputs
-        .into_iter()
-        .collect::<Vec<(DefinedFuncIndex, &FunctionBodyData<'_>)>>()
-        .par_iter()
-        .map_init(FuncTranslator::new, |func_translator, (i, input)| {
-            let func_index = env.local.func_index(*i);
-            let mut context = Context::new();
-            context.func.name = get_func_name(func_index);
-            context.func.signature = env.local.native_func_signature(func_index).clone();
-            if env.tunables.debug_info {
-                context.func.collect_debug_info();
-            }
+    type FunctionBodyInput<'a> = (DefinedFuncIndex, &'a FunctionBodyData<'a>);
 
-            let mut func_env = FuncEnvironment::new(isa.frontend_config(), env.local, env.tunables);
+    let compile_function = |func_translator: &mut FuncTranslator,
+                            (i, input): &FunctionBodyInput| {
+        let func_index = env.local.func_index(*i);
+        let mut context = Context::new();
+        context.func.name = get_func_name(func_index);
+        context.func.signature = env.local.native_func_signature(func_index).clone();
+        if env.tunables.debug_info {
+            context.func.collect_debug_info();
+        }
 
-            // We use these as constant offsets below in
-            // `stack_limit_from_arguments`, so assert their values here. This
-            // allows the closure below to get coerced to a function pointer, as
-            // needed by `ir::Function`.
-            //
-            // Otherwise our stack limit is specially calculated from the vmctx
-            // argument, where we need to load the `*const VMInterrupts`
-            // pointer, and then from that pointer we need to load the stack
-            // limit itself. Note that manual register allocation is needed here
-            // too due to how late in the process this codegen happens.
-            //
-            // For more information about interrupts and stack checks, see the
-            // top of this file.
-            let vmctx = context
-                .func
-                .create_global_value(ir::GlobalValueData::VMContext);
-            let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
-                base: vmctx,
-                offset: i32::try_from(func_env.offsets.vmctx_interrupts())
-                    .unwrap()
-                    .into(),
-                global_type: isa.pointer_type(),
-                readonly: true,
-            });
-            let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
-                base: interrupts_ptr,
-                offset: i32::try_from(func_env.offsets.vminterrupts_stack_limit())
-                    .unwrap()
-                    .into(),
-                global_type: isa.pointer_type(),
-                readonly: false,
-            });
-            context.func.stack_limit = Some(stack_limit);
-            func_translator.translate(
-                env.module_translation.0,
-                input.data,
-                input.module_offset,
-                &mut context.func,
-                &mut func_env,
-            )?;
+        let mut func_env = FuncEnvironment::new(isa.frontend_config(), env.local, env.tunables);
 
-            let mut code_buf: Vec<u8> = Vec::new();
-            let mut reloc_sink = RelocSink::new(func_index);
-            let mut trap_sink = TrapSink::new();
-            let mut stack_map_sink = StackMapSink::default();
-            context
-                .compile_and_emit(
-                    isa,
-                    &mut code_buf,
-                    &mut reloc_sink,
-                    &mut trap_sink,
-                    &mut stack_map_sink,
-                )
-                .map_err(|error| {
-                    CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
-                })?;
+        // We use these as constant offsets below in
+        // `stack_limit_from_arguments`, so assert their values here. This
+        // allows the closure below to get coerced to a function pointer, as
+        // needed by `ir::Function`.
+        //
+        // Otherwise our stack limit is specially calculated from the vmctx
+        // argument, where we need to load the `*const VMInterrupts`
+        // pointer, and then from that pointer we need to load the stack
+        // limit itself. Note that manual register allocation is needed here
+        // too due to how late in the process this codegen happens.
+        //
+        // For more information about interrupts and stack checks, see the
+        // top of this file.
+        let vmctx = context
+            .func
+            .create_global_value(ir::GlobalValueData::VMContext);
+        let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
+            base: vmctx,
+            offset: i32::try_from(func_env.offsets.vmctx_interrupts())
+                .unwrap()
+                .into(),
+            global_type: isa.pointer_type(),
+            readonly: true,
+        });
+        let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
+            base: interrupts_ptr,
+            offset: i32::try_from(func_env.offsets.vminterrupts_stack_limit())
+                .unwrap()
+                .into(),
+            global_type: isa.pointer_type(),
+            readonly: false,
+        });
+        context.func.stack_limit = Some(stack_limit);
+        func_translator.translate(
+            env.module_translation.0,
+            input.data,
+            input.module_offset,
+            &mut context.func,
+            &mut func_env,
+        )?;
 
-            let unwind_info = context.create_unwind_info(isa).map_err(|error| {
+        let mut code_buf: Vec<u8> = Vec::new();
+        let mut reloc_sink = RelocSink::new(func_index);
+        let mut trap_sink = TrapSink::new();
+        let mut stack_map_sink = StackMapSink::default();
+        context
+            .compile_and_emit(
+                isa,
+                &mut code_buf,
+                &mut reloc_sink,
+                &mut trap_sink,
+                &mut stack_map_sink,
+            )
+            .map_err(|error| {
                 CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
             })?;
 
-            let address_transform = get_function_address_map(&context, input, code_buf.len(), isa);
+        let unwind_info = context.create_unwind_info(isa).map_err(|error| {
+            CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
+        })?;
 
-            let ranges = if env.tunables.debug_info {
-                let ranges = context.build_value_labels_ranges(isa).map_err(|error| {
-                    CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
-                })?;
-                Some(ranges)
+        let address_transform = get_function_address_map(&context, input, code_buf.len(), isa);
+
+        let ranges = if env.tunables.debug_info {
+            let ranges = context.build_value_labels_ranges(isa).map_err(|error| {
+                CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
+            })?;
+            Some(ranges)
+        } else {
+            None
+        };
+
+        Ok((
+            code_buf,
+            context.func.jt_offsets,
+            reloc_sink.func_relocs,
+            address_transform,
+            ranges,
+            context.func.stack_slots,
+            trap_sink.traps,
+            unwind_info,
+            stack_map_sink.finish(),
+        ))
+    };
+
+    let inputs: Vec<FunctionBodyInput> = env.function_body_inputs.into_iter().collect();
+
+    let results: Result<Vec<_>, CompileError> = {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "parallel-compilation")] {
+                inputs
+                    .par_iter()
+                    .map_init(FuncTranslator::new, compile_function)
+                    .collect()
             } else {
-                None
-            };
+                let mut func_translator = FuncTranslator::new();
+                inputs
+                    .iter()
+                    .map(|input| compile_function(&mut func_translator, input))
+                    .collect()
+            }
+        }
+    };
 
-            Ok((
-                code_buf,
-                context.func.jt_offsets,
-                reloc_sink.func_relocs,
-                address_transform,
-                ranges,
-                context.func.stack_slots,
-                trap_sink.traps,
+    results?.into_iter().for_each(
+        |(
+            function,
+            func_jt_offsets,
+            relocs,
+            address_transform,
+            ranges,
+            sss,
+            function_traps,
+            unwind_info,
+            stack_map,
+        )| {
+            functions.push(CompiledFunction {
+                body: function,
+                jt_offsets: func_jt_offsets,
                 unwind_info,
-                stack_map_sink.finish(),
-            ))
-        })
-        .collect::<Result<Vec<_>, CompileError>>()?
-        .into_iter()
-        .for_each(
-            |(
-                function,
-                func_jt_offsets,
-                relocs,
-                address_transform,
-                ranges,
-                sss,
-                function_traps,
-                unwind_info,
-                stack_map,
-            )| {
-                functions.push(CompiledFunction {
-                    body: function,
-                    jt_offsets: func_jt_offsets,
-                    unwind_info,
-                });
-                relocations.push(relocs);
-                address_transforms.push(address_transform);
-                value_ranges.push(ranges.unwrap_or_default());
-                stack_slots.push(sss);
-                traps.push(function_traps);
-                stack_maps.push(stack_map);
-            },
-        );
+            });
+            relocations.push(relocs);
+            address_transforms.push(address_transform);
+            value_ranges.push(ranges.unwrap_or_default());
+            stack_slots.push(sss);
+            traps.push(function_traps);
+            stack_maps.push(stack_map);
+        },
+    );
 
     // TODO: Reorganize where we create the Vec for the resolved imports.
 

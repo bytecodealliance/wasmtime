@@ -36,12 +36,12 @@ pub(crate) unsafe fn determine_type_and_access_rights<Fd: AsRawFd>(
 )> {
     let (file_type, mut rights_base, rights_inheriting) = determine_type_rights(fd)?;
 
-    use yanix::{fcntl, file::OFlag};
+    use yanix::{fcntl, file::OFlags};
     let flags = fcntl::get_status_flags(fd.as_raw_fd())?;
-    let accmode = flags & OFlag::ACCMODE;
-    if accmode == OFlag::RDONLY {
+    let accmode = flags & OFlags::ACCMODE;
+    if accmode == OFlags::RDONLY {
         rights_base &= !wasi::__WASI_RIGHTS_FD_WRITE;
-    } else if accmode == OFlag::WRONLY {
+    } else if accmode == OFlags::WRONLY {
         rights_base &= !wasi::__WASI_RIGHTS_FD_READ;
     }
 

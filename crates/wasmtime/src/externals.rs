@@ -7,6 +7,8 @@ use crate::{
     ValType,
 };
 use anyhow::{anyhow, bail, Result};
+use std::mem;
+use std::ptr;
 use std::slice;
 use wasmtime_environ::wasm;
 use wasmtime_runtime::{self as runtime, InstanceHandle};
@@ -227,6 +229,15 @@ impl Global {
                 ValType::I64 => Val::from(*definition.as_i64()),
                 ValType::F32 => Val::F32(*definition.as_u32()),
                 ValType::F64 => Val::F64(*definition.as_u64()),
+                ValType::ExternRef => Val::ExternRef(
+                    definition
+                        .as_externref()
+                        .clone()
+                        .map(|inner| ExternRef { inner }),
+                ),
+                ValType::FuncRef => {
+                    from_checked_anyfunc(definition.as_anyfunc() as *mut _, &self.instance.store)
+                }
                 ty => unimplemented!("Global::get for {:?}", ty),
             }
         }
@@ -256,6 +267,19 @@ impl Global {
                 Val::I64(i) => *definition.as_i64_mut() = i,
                 Val::F32(f) => *definition.as_u32_mut() = f,
                 Val::F64(f) => *definition.as_u64_mut() = f,
+                Val::FuncRef(f) => {
+                    *definition.as_anyfunc_mut() = f.map_or(ptr::null(), |f| {
+                        f.caller_checked_anyfunc().as_ptr() as *const _
+                    });
+                }
+                Val::ExternRef(x) => {
+                    // In case the old value's `Drop` implementation is
+                    // re-entrant and tries to touch this global again, do a
+                    // replace, and then drop. This way no one can observe a
+                    // halfway-deinitialized value.
+                    let old = mem::replace(definition.as_externref_mut(), x.map(|x| x.inner));
+                    drop(old);
+                }
                 _ => unimplemented!("Global::set for {:?}", val.ty()),
             }
         }

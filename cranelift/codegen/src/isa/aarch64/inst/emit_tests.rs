@@ -2342,6 +2342,138 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Add,
+            rd: writable_vreg(5),
+            rn: vreg(1),
+            rm: vreg(1),
+            ty: I8X16,
+        },
+        "2584214E",
+        "add v5.16b, v1.16b, v1.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Add,
+            rd: writable_vreg(7),
+            rn: vreg(13),
+            rm: vreg(2),
+            ty: I16X8,
+        },
+        "A785624E",
+        "add v7.8h, v13.8h, v2.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Add,
+            rd: writable_vreg(18),
+            rn: vreg(9),
+            rm: vreg(6),
+            ty: I32X4,
+        },
+        "3285A64E",
+        "add v18.4s, v9.4s, v6.4s",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Add,
+            rd: writable_vreg(1),
+            rn: vreg(3),
+            rm: vreg(2),
+            ty: I64X2,
+        },
+        "6184E24E",
+        "add v1.2d, v3.2d, v2.2d",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sub,
+            rd: writable_vreg(5),
+            rn: vreg(1),
+            rm: vreg(1),
+            ty: I8X16,
+        },
+        "2584216E",
+        "sub v5.16b, v1.16b, v1.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sub,
+            rd: writable_vreg(7),
+            rn: vreg(13),
+            rm: vreg(2),
+            ty: I16X8,
+        },
+        "A785626E",
+        "sub v7.8h, v13.8h, v2.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sub,
+            rd: writable_vreg(18),
+            rn: vreg(9),
+            rm: vreg(6),
+            ty: I32X4,
+        },
+        "3285A66E",
+        "sub v18.4s, v9.4s, v6.4s",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sub,
+            rd: writable_vreg(18),
+            rn: vreg(0),
+            rm: vreg(8),
+            ty: I64X2,
+        },
+        "1284E86E",
+        "sub v18.2d, v0.2d, v8.2d",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Mul,
+            rd: writable_vreg(25),
+            rn: vreg(9),
+            rm: vreg(8),
+            ty: I8X16,
+        },
+        "399D284E",
+        "mul v25.16b, v9.16b, v8.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Mul,
+            rd: writable_vreg(30),
+            rn: vreg(30),
+            rm: vreg(12),
+            ty: I16X8,
+        },
+        "DE9F6C4E",
+        "mul v30.8h, v30.8h, v12.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Mul,
+            rd: writable_vreg(18),
+            rn: vreg(18),
+            rm: vreg(18),
+            ty: I32X4,
+        },
+        "529EB24E",
+        "mul v18.4s, v18.4s, v18.4s",
+    ));
+
+    insns.push((
         Inst::VecMisc {
             op: VecMisc2::Not,
             rd: writable_vreg(2),
@@ -2350,6 +2482,50 @@ fn test_aarch64_binemit() {
         },
         "2258206E",
         "mvn v2.16b, v1.16b",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Neg,
+            rd: writable_vreg(8),
+            rn: vreg(12),
+            ty: I8X16,
+        },
+        "88B9206E",
+        "neg v8.16b, v12.16b",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Neg,
+            rd: writable_vreg(0),
+            rn: vreg(31),
+            ty: I16X8,
+        },
+        "E0BB606E",
+        "neg v0.8h, v31.8h",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Neg,
+            rd: writable_vreg(2),
+            rn: vreg(3),
+            ty: I32X4,
+        },
+        "62B8A06E",
+        "neg v2.4s, v3.4s",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Neg,
+            rd: writable_vreg(10),
+            rn: vreg(8),
+            ty: I64X2,
+        },
+        "0AB9E06E",
+        "neg v10.2d, v8.2d",
     ));
 
     insns.push((
@@ -2505,149 +2681,148 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
-            kind: CondBrKind::Zero(xreg(8)),
-        },
-        "080200B4",
-        "cbz x8, 64",
-    ));
-    insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
             kind: CondBrKind::NotZero(xreg(8)),
         },
-        "080200B5",
-        "cbnz x8, 64",
+        "480000B40000A0D4",
+        "cbz x8, 8 ; udf",
     ));
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
-            kind: CondBrKind::Cond(Cond::Eq),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
+            kind: CondBrKind::Zero(xreg(8)),
         },
-        "00020054",
-        "b.eq 64",
+        "480000B50000A0D4",
+        "cbnz x8, 8 ; udf",
     ));
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
             kind: CondBrKind::Cond(Cond::Ne),
         },
-        "01020054",
-        "b.ne 64",
+        "400000540000A0D4",
+        "b.eq 8 ; udf",
     ));
-
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
-            kind: CondBrKind::Cond(Cond::Hs),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
+            kind: CondBrKind::Cond(Cond::Eq),
         },
-        "02020054",
-        "b.hs 64",
+        "410000540000A0D4",
+        "b.ne 8 ; udf",
     ));
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
             kind: CondBrKind::Cond(Cond::Lo),
         },
-        "03020054",
-        "b.lo 64",
+        "420000540000A0D4",
+        "b.hs 8 ; udf",
     ));
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
-            kind: CondBrKind::Cond(Cond::Mi),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
+            kind: CondBrKind::Cond(Cond::Hs),
         },
-        "04020054",
-        "b.mi 64",
+        "430000540000A0D4",
+        "b.lo 8 ; udf",
     ));
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
             kind: CondBrKind::Cond(Cond::Pl),
         },
-        "05020054",
-        "b.pl 64",
+        "440000540000A0D4",
+        "b.mi 8 ; udf",
     ));
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
-            kind: CondBrKind::Cond(Cond::Vs),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
+            kind: CondBrKind::Cond(Cond::Mi),
         },
-        "06020054",
-        "b.vs 64",
+        "450000540000A0D4",
+        "b.pl 8 ; udf",
     ));
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
             kind: CondBrKind::Cond(Cond::Vc),
         },
-        "07020054",
-        "b.vc 64",
+        "460000540000A0D4",
+        "b.vs 8 ; udf",
     ));
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
-            kind: CondBrKind::Cond(Cond::Hi),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
+            kind: CondBrKind::Cond(Cond::Vs),
         },
-        "08020054",
-        "b.hi 64",
+        "470000540000A0D4",
+        "b.vc 8 ; udf",
     ));
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
             kind: CondBrKind::Cond(Cond::Ls),
         },
-        "09020054",
-        "b.ls 64",
+        "480000540000A0D4",
+        "b.hi 8 ; udf",
     ));
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
-            kind: CondBrKind::Cond(Cond::Ge),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
+            kind: CondBrKind::Cond(Cond::Hi),
         },
-        "0A020054",
-        "b.ge 64",
+        "490000540000A0D4",
+        "b.ls 8 ; udf",
     ));
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
             kind: CondBrKind::Cond(Cond::Lt),
         },
-        "0B020054",
-        "b.lt 64",
+        "4A0000540000A0D4",
+        "b.ge 8 ; udf",
     ));
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
-            kind: CondBrKind::Cond(Cond::Gt),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
+            kind: CondBrKind::Cond(Cond::Ge),
         },
-        "0C020054",
-        "b.gt 64",
+        "4B0000540000A0D4",
+        "b.lt 8 ; udf",
     ));
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
             kind: CondBrKind::Cond(Cond::Le),
         },
-        "0D020054",
-        "b.le 64",
+        "4C0000540000A0D4",
+        "b.gt 8 ; udf",
     ));
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
-            kind: CondBrKind::Cond(Cond::Al),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
+            kind: CondBrKind::Cond(Cond::Gt),
         },
-        "0E020054",
-        "b.al 64",
+        "4D0000540000A0D4",
+        "b.le 8 ; udf",
     ));
     insns.push((
-        Inst::OneWayCondBr {
-            target: BranchTarget::ResolvedOffset(64),
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
             kind: CondBrKind::Cond(Cond::Nv),
         },
-        "0F020054",
-        "b.nv 64",
+        "4E0000540000A0D4",
+        "b.al 8 ; udf",
+    ));
+    insns.push((
+        Inst::TrapIf {
+            trap_info: (SourceLoc::default(), TrapCode::Interrupt),
+            kind: CondBrKind::Cond(Cond::Al),
+        },
+        "4F0000540000A0D4",
+        "b.nv 8 ; udf",
     ));
 
     insns.push((

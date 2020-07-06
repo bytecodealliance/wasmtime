@@ -36,7 +36,7 @@ use std::mem::ManuallyDrop;
 use std::os::unix::prelude::{AsRawFd, FileTypeExt, FromRawFd};
 use std::path::Path;
 use yanix::clock::ClockId;
-use yanix::file::{AtFlag, OFlag};
+use yanix::file::{AtFlags, OFlags};
 
 pub(crate) use sys_impl::*;
 
@@ -80,7 +80,7 @@ pub(super) fn get_file_type(file: &File) -> io::Result<types::Filetype> {
 }
 
 pub(super) fn get_rights(file: &File, file_type: &types::Filetype) -> io::Result<HandleRights> {
-    use yanix::{fcntl, file::OFlag};
+    use yanix::{fcntl, file::OFlags};
     let (base, inheriting) = match file_type {
         types::Filetype::BlockDevice => (
             types::Rights::block_device_base(),
@@ -116,10 +116,10 @@ pub(super) fn get_rights(file: &File, file_type: &types::Filetype) -> io::Result
     };
     let mut rights = HandleRights::new(base, inheriting);
     let flags = unsafe { fcntl::get_status_flags(file.as_raw_fd())? };
-    let accmode = flags & OFlag::ACCMODE;
-    if accmode == OFlag::RDONLY {
+    let accmode = flags & OFlags::ACCMODE;
+    if accmode == OFlags::RDONLY {
         rights.base &= !types::Rights::FD_WRITE;
-    } else if accmode == OFlag::WRONLY {
+    } else if accmode == OFlags::WRONLY {
         rights.base &= !types::Rights::FD_READ;
     }
     Ok(rights)
@@ -233,7 +233,7 @@ impl From<io::Error> for Errno {
     }
 }
 
-impl From<types::Fdflags> for OFlag {
+impl From<types::Fdflags> for OFlags {
     fn from(fdflags: types::Fdflags) -> Self {
         let mut nix_flags = Self::empty();
         if fdflags.contains(&types::Fdflags::APPEND) {
@@ -255,29 +255,29 @@ impl From<types::Fdflags> for OFlag {
     }
 }
 
-impl From<OFlag> for types::Fdflags {
-    fn from(oflags: OFlag) -> Self {
+impl From<OFlags> for types::Fdflags {
+    fn from(oflags: OFlags) -> Self {
         let mut fdflags = Self::empty();
-        if oflags.contains(OFlag::APPEND) {
+        if oflags.contains(OFlags::APPEND) {
             fdflags |= Self::APPEND;
         }
-        if oflags.contains(OFlag::DSYNC) {
+        if oflags.contains(OFlags::DSYNC) {
             fdflags |= Self::DSYNC;
         }
-        if oflags.contains(OFlag::NONBLOCK) {
+        if oflags.contains(OFlags::NONBLOCK) {
             fdflags |= Self::NONBLOCK;
         }
         if oflags.contains(O_RSYNC) {
             fdflags |= Self::RSYNC;
         }
-        if oflags.contains(OFlag::SYNC) {
+        if oflags.contains(OFlags::SYNC) {
             fdflags |= Self::SYNC;
         }
         fdflags
     }
 }
 
-impl From<types::Oflags> for OFlag {
+impl From<types::Oflags> for OFlags {
     fn from(oflags: types::Oflags) -> Self {
         let mut nix_flags = Self::empty();
         if oflags.contains(&types::Oflags::CREAT) {
@@ -355,7 +355,7 @@ impl From<yanix::file::FileType> for types::Filetype {
     }
 }
 
-impl From<types::Lookupflags> for AtFlag {
+impl From<types::Lookupflags> for AtFlags {
     fn from(flags: types::Lookupflags) -> Self {
         match flags {
             types::Lookupflags::SYMLINK_FOLLOW => Self::empty(),

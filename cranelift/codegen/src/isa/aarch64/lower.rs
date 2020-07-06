@@ -435,8 +435,10 @@ pub(crate) fn put_input_in_rs_immlogic<C: LowerCtx<I = Inst>>(
 pub(crate) fn put_input_in_reg_immshift<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     input: InsnInput,
+    shift_width_bits: usize,
 ) -> ResultRegImmShift {
     if let Some(imm_value) = input_to_const(ctx, input) {
+        let imm_value = imm_value & ((shift_width_bits - 1) as u64);
         if let Some(immshift) = ImmShift::maybe_from_u64(imm_value) {
             return ResultRegImmShift::ImmShift(immshift);
         }
@@ -986,16 +988,7 @@ pub(crate) fn lower_icmp_or_ifcmp_to_flags<C: LowerCtx<I = Inst>>(
         (false, true) => NarrowValueMode::SignExtend64,
         (false, false) => NarrowValueMode::ZeroExtend64,
     };
-    let inputs = [
-        InsnInput {
-            insn: insn,
-            input: 0,
-        },
-        InsnInput {
-            insn: insn,
-            input: 1,
-        },
-    ];
+    let inputs = [InsnInput { insn, input: 0 }, InsnInput { insn, input: 1 }];
     let ty = ctx.input_ty(insn, 0);
     let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
     let rm = put_input_in_rse_imm12(ctx, inputs[1], narrow_mode);
@@ -1008,16 +1001,7 @@ pub(crate) fn lower_icmp_or_ifcmp_to_flags<C: LowerCtx<I = Inst>>(
 pub(crate) fn lower_fcmp_or_ffcmp_to_flags<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
     let ty = ctx.input_ty(insn, 0);
     let bits = ty_bits(ty);
-    let inputs = [
-        InsnInput {
-            insn: insn,
-            input: 0,
-        },
-        InsnInput {
-            insn: insn,
-            input: 1,
-        },
-    ];
+    let inputs = [InsnInput { insn, input: 0 }, InsnInput { insn, input: 1 }];
     let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
     let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
     match bits {

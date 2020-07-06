@@ -355,10 +355,11 @@ fn enc_fround(top22: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
     (top22 << 10) | (machreg_to_vec(rn) << 5) | machreg_to_vec(rd.to_reg())
 }
 
-fn enc_vec_rr_misc(bits_12_16: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
+fn enc_vec_rr_misc(size: u32, bits_12_16: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
+    debug_assert_eq!(size & 0b11, size);
     debug_assert_eq!(bits_12_16 & 0b11111, bits_12_16);
     let bits = 0b0_1_1_01110_00_10000_00000_10_00000_00000;
-    bits | bits_12_16 << 12 | machreg_to_vec(rn) << 5 | machreg_to_vec(rd.to_reg())
+    bits | size << 22 | bits_12_16 << 12 | machreg_to_vec(rn) << 5 | machreg_to_vec(rd.to_reg())
 }
 
 fn enc_vec_lanes(q: u32, u: u32, size: u32, opcode: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
@@ -1067,13 +1068,24 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_fpurrrr(top17, rd, rn, rm, ra));
             }
             &Inst::VecMisc { op, rd, rn, ty } => {
-                let bits_12_16 = match op {
+                let enc_size = match ty {
+                    I8X16 => 0b00,
+                    I16X8 => 0b01,
+                    I32X4 => 0b10,
+                    I64X2 => 0b11,
+                    _ => 0,
+                };
+                let (bits_12_16, size) = match op {
                     VecMisc2::Not => {
                         debug_assert_eq!(128, ty_bits(ty));
-                        0b00101
+                        (0b00101, 0b00)
+                    }
+                    VecMisc2::Neg => {
+                        debug_assert_eq!(128, ty_bits(ty));
+                        (0b01011, enc_size)
                     }
                 };
-                sink.put4(enc_vec_rr_misc(bits_12_16, rd, rn));
+                sink.put4(enc_vec_rr_misc(size, bits_12_16, rd, rn));
             }
             &Inst::VecLanes { op, rd, rn, ty } => {
                 let (q, size) = match ty {
@@ -1277,6 +1289,7 @@ impl MachInstEmit for Inst {
                     I8X16 => 0b00,
                     I16X8 => 0b01,
                     I32X4 => 0b10,
+                    I64X2 => 0b11,
                     _ => 0,
                 };
                 let enc_size_for_fcmp = match ty {
@@ -1333,6 +1346,12 @@ impl MachInstEmit for Inst {
                         (0b011_01110_01_1, 0b000111)
                     }
                     VecALUOp::Umaxp => (0b011_01110_00_1 | enc_size << 1, 0b101001),
+                    VecALUOp::Add => (0b010_01110_00_1 | enc_size << 1, 0b100001),
+                    VecALUOp::Sub => (0b011_01110_00_1 | enc_size << 1, 0b100001),
+                    VecALUOp::Mul => {
+                        debug_assert_ne!(I64X2, ty);
+                        (0b010_01110_00_1 | enc_size << 1, 0b100111)
+                    }
                 };
                 sink.put4(enc_vec_rrr(top11, rm, bit15_10, rn, rd));
             }
@@ -1471,12 +1490,20 @@ impl MachInstEmit for Inst {
                 }
                 sink.put4(enc_jump26(0b000101, not_taken.as_offset26_or_zero()));
             }
-            &Inst::OneWayCondBr { target, kind } => {
+            &Inst::TrapIf { kind, trap_info } => {
+                // condbr KIND, LABEL
                 let off = sink.cur_offset();
-                if let Some(l) = target.as_label() {
-                    sink.use_label_at_offset(off, l, LabelUse::Branch19);
-                }
-                sink.put4(enc_conditional_br(target, kind));
+                let label = sink.get_label();
+                sink.put4(enc_conditional_br(
+                    BranchTarget::Label(label),
+                    kind.invert(),
+                ));
+                sink.use_label_at_offset(off, label, LabelUse::Branch19);
+                // udf
+                let trap = Inst::Udf { trap_info };
+                trap.emit(sink, flags, state);
+                // LABEL:
+                sink.bind_label(label);
             }
             &Inst::IndirectBr { rn, .. } => {
                 sink.put4(enc_br(rn));
@@ -1514,6 +1541,17 @@ impl MachInstEmit for Inst {
                 // This sequence is *one* instruction in the vcode, and is expanded only here at
                 // emission time, because we cannot allow the regalloc to insert spills/reloads in
                 // the middle; we depend on hardcoded PC-rel addressing below.
+
+                // Branch to default when condition code from prior comparison indicates.
+                let br = enc_conditional_br(info.default_target, CondBrKind::Cond(Cond::Hs));
+                // No need to inform the sink's branch folding logic about this branch, because it
+                // will not be merged with any other branch, flipped, or elided (it is not preceded
+                // or succeeded by any other branch). Just emit it with the label use.
+                let default_br_offset = sink.cur_offset();
+                if let BranchTarget::Label(l) = info.default_target {
+                    sink.use_label_at_offset(default_br_offset, l, LabelUse::Branch19);
+                }
+                sink.put4(br);
 
                 // Save index in a tmp (the live range of ridx only goes to start of this
                 // sequence; rtmp1 or rtmp2 may overwrite it).
@@ -1553,6 +1591,10 @@ impl MachInstEmit for Inst {
                 let jt_off = sink.cur_offset();
                 for &target in info.targets.iter() {
                     let word_off = sink.cur_offset();
+                    // off_into_table is an addend here embedded in the label to be later patched
+                    // at the end of codegen. The offset is initially relative to this jump table
+                    // entry; with the extra addend, it'll be relative to the jump table's start,
+                    // after patching.
                     let off_into_table = word_off - jt_off;
                     sink.use_label_at_offset(
                         word_off,

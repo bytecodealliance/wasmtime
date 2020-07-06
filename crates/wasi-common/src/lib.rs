@@ -32,7 +32,7 @@ mod poll;
 mod sandboxed_tty_writer;
 pub mod snapshots;
 mod sys;
-mod virtfs;
+pub mod virtfs;
 pub mod wasi;
 
 pub use ctx::{WasiCtx, WasiCtxBuilder, WasiCtxBuilderError};

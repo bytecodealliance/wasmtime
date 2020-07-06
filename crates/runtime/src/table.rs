@@ -67,6 +67,26 @@ impl Table {
         }
     }
 
+    /// Fill `table[dst..dst + len]` with `val`.
+    ///
+    /// Returns a trap error on out-of-bounds accesses.
+    pub fn fill(&self, dst: u32, val: TableElement, len: u32) -> Result<(), Trap> {
+        let start = dst;
+        let end = start
+            .checked_add(len)
+            .ok_or_else(|| Trap::wasm(ir::TrapCode::TableOutOfBounds))?;
+
+        if end > self.size() {
+            return Err(Trap::wasm(ir::TrapCode::TableOutOfBounds));
+        }
+
+        for i in start..end {
+            self.set(i, val.clone()).unwrap();
+        }
+
+        Ok(())
+    }
+
     /// Grow table by the specified amount of elements.
     ///
     /// Returns the previous size of the table if growth is successful.

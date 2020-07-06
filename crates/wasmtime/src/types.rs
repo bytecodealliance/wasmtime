@@ -99,15 +99,15 @@ impl ValType {
         }
     }
 
-    pub(crate) fn get_wasmtime_type(&self) -> Option<ir::Type> {
+    pub(crate) fn get_wasmtime_type(&self) -> ir::Type {
         match self {
-            ValType::I32 => Some(ir::types::I32),
-            ValType::I64 => Some(ir::types::I64),
-            ValType::F32 => Some(ir::types::F32),
-            ValType::F64 => Some(ir::types::F64),
-            ValType::V128 => Some(ir::types::I8X16),
-            ValType::ExternRef => Some(wasmtime_runtime::ref_type()),
-            _ => None,
+            ValType::I32 => ir::types::I32,
+            ValType::I64 => ir::types::I64,
+            ValType::F32 => ir::types::F32,
+            ValType::F64 => ir::types::F64,
+            ValType::V128 => ir::types::I8X16,
+            ValType::ExternRef => wasmtime_runtime::ref_type(),
+            ValType::FuncRef => wasmtime_runtime::pointer_type(),
         }
     }
 
@@ -248,34 +248,32 @@ impl FuncType {
         }
     }
 
-    /// Returns `Some` if this function signature was compatible with cranelift,
-    /// or `None` if one of the types/results wasn't supported or compatible
-    /// with cranelift.
-    pub(crate) fn get_wasmtime_signature(&self, pointer_type: ir::Type) -> Option<ir::Signature> {
+    /// Get the Cranelift-compatible function signature.
+    pub(crate) fn get_wasmtime_signature(&self, pointer_type: ir::Type) -> ir::Signature {
         use wasmtime_environ::ir::{AbiParam, ArgumentPurpose, Signature};
         use wasmtime_jit::native;
         let call_conv = native::call_conv();
         let mut params = self
             .params
             .iter()
-            .map(|p| p.get_wasmtime_type().map(AbiParam::new))
-            .collect::<Option<Vec<_>>>()?;
+            .map(|p| AbiParam::new(p.get_wasmtime_type()))
+            .collect::<Vec<_>>();
         let returns = self
             .results
             .iter()
-            .map(|p| p.get_wasmtime_type().map(AbiParam::new))
-            .collect::<Option<Vec<_>>>()?;
+            .map(|p| AbiParam::new(p.get_wasmtime_type()))
+            .collect::<Vec<_>>();
         params.insert(
             0,
             AbiParam::special(pointer_type, ArgumentPurpose::VMContext),
         );
         params.insert(1, AbiParam::new(pointer_type));
 
-        Some(Signature {
+        Signature {
             params,
             returns,
             call_conv,
-        })
+        }
     }
 
     /// Returns `None` if any types in the signature can't be converted to the

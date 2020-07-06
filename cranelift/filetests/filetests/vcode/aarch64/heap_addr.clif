@@ -1,4 +1,5 @@
 test compile
+set enable_heap_access_spectre_mitigation=true
 target aarch64
 
 function %dynamic_heap_check(i64 vmctx, i32) -> i64 {
@@ -11,20 +12,23 @@ block0(v0: i64, v1: i32):
     return v2
 }
 
-; check:   stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; nextln:  ldur w2, [x0]
-; nextln:  add w2, w2, #0
-; nextln:  subs wzr, w1, w2
-; nextln:  b.ls label1 ; b label2
-; nextln:  Block 1:
-; check:   add x0, x0, x1, UXTW
-; nextln:  mov sp, fp
-; nextln:  ldp fp, lr, [sp], #16
-; nextln:  ret
-; nextln:  Block 2:
-; check:  udf
-
+; check: Block 0:
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: ldur w2, [x0]
+; nextln: add w2, w2, #0
+; nextln: subs wzr, w1, w2
+; nextln: b.ls label1 ; b label2
+; check: Block 1:
+; check: add x0, x0, x1, UXTW
+; nextln: subs wzr, w1, w2
+; nextln: movz x1, #0
+; nextln: csel x0, x1, x0, hi
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+; check: Block 2:
+; check: udf
 
 function %static_heap_check(i64 vmctx, i32) -> i64 {
     gv0 = vmctx
@@ -35,15 +39,18 @@ block0(v0: i64, v1: i32):
     return v2
 }
 
-; check:   stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; nextln:  subs wzr, w1, #65536
-; nextln:  b.ls label1 ; b label2
-; nextln:  Block 1:
-; check:   add x0, x0, x1, UXTW
-; nextln:  mov sp, fp
-; nextln:  ldp fp, lr, [sp], #16
-; nextln:  ret
-; nextln:  Block 2:
-; check:   udf
-
+; check: Block 0:
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs wzr, w1, #65536
+; nextln: b.ls label1 ; b label2
+; check: Block 1:
+; check: add x0, x0, x1, UXTW
+; nextln: subs wzr, w1, #65536
+; nextln: movz x1, #0
+; nextln: csel x0, x1, x0, hi
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+; check: Block 2:
+; check: udf

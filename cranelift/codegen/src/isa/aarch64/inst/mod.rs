@@ -243,13 +243,21 @@ pub enum VecALUOp {
     Bsl,
     /// Unsigned maximum pairwise
     Umaxp,
+    /// Add
+    Add,
+    /// Subtract
+    Sub,
+    /// Multiply
+    Mul,
 }
 
 /// A Vector miscellaneous operation with two registers.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum VecMisc2 {
-    /// Bitwise NOT.
+    /// Bitwise NOT
     Not,
+    /// Negate
+    Neg,
 }
 
 /// An operation across the lanes of vectors.
@@ -334,6 +342,7 @@ pub struct CallIndInfo {
 #[derive(Clone, Debug)]
 pub struct JTSequenceInfo {
     pub targets: Vec<BranchTarget>,
+    pub default_target: BranchTarget,
     pub targets_for_term: Vec<MachLabel>, // needed for MachTerminator.
 }
 
@@ -817,20 +826,17 @@ pub enum Inst {
         kind: CondBrKind,
     },
 
-    /// A one-way conditional branch, invisible to the CFG processing; used *only* as part of
-    /// straight-line sequences in code to be emitted.
+    /// A conditional trap: execute a `udf` if the condition is true. This is
+    /// one VCode instruction because it uses embedded control flow; it is
+    /// logically a single-in, single-out region, but needs to appear as one
+    /// unit to the register allocator.
     ///
-    /// In more detail:
-    /// - This branch is lowered to a branch at the machine-code level, but does not end a basic
-    ///   block, and does not create edges in the CFG seen by regalloc.
-    /// - Thus, it is *only* valid to use as part of a single-in, single-out sequence that is
-    ///   lowered from a single CLIF instruction. For example, certain arithmetic operations may
-    ///   use these branches to handle certain conditions, such as overflows, traps, etc.
-    ///
-    /// See, e.g., the lowering of `trapif` (conditional trap) for an example.
-    OneWayCondBr {
-        target: BranchTarget,
+    /// The `CondBrKind` gives the conditional-branch condition that will
+    /// *execute* the embedded `Inst`. (In the emitted code, we use the inverse
+    /// of this condition in a branch that skips the trap instruction.)
+    TrapIf {
         kind: CondBrKind,
+        trap_info: (SourceLoc, TrapCode),
     },
 
     /// An indirect branch through a register, augmented with set of all
@@ -869,8 +875,7 @@ pub enum Inst {
         data: u64,
     },
 
-    /// Jump-table sequence, as one compound instruction (see note in lower.rs
-    /// for rationale).
+    /// Jump-table sequence, as one compound instruction (see note in lower_inst.rs for rationale).
     JTSequence {
         info: Box<JTSequenceInfo>,
         ridx: Reg,
@@ -1346,7 +1351,7 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_defs(&*info.defs);
             collector.add_use(info.rn);
         }
-        &Inst::CondBr { ref kind, .. } | &Inst::OneWayCondBr { ref kind, .. } => match kind {
+        &Inst::CondBr { ref kind, .. } => match kind {
             CondBrKind::Zero(rt) | CondBrKind::NotZero(rt) => {
                 collector.add_use(*rt);
             }
@@ -1358,6 +1363,12 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::Nop0 | Inst::Nop4 => {}
         &Inst::Brk => {}
         &Inst::Udf { .. } => {}
+        &Inst::TrapIf { ref kind, .. } => match kind {
+            CondBrKind::Zero(rt) | CondBrKind::NotZero(rt) => {
+                collector.add_use(*rt);
+            }
+            CondBrKind::Cond(_) => {}
+        },
         &Inst::Adr { rd, .. } => {
             collector.add_def(rd);
         }
@@ -1949,13 +1960,16 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             }
             map_use(mapper, &mut info.rn);
         }
-        &mut Inst::CondBr { ref mut kind, .. } | &mut Inst::OneWayCondBr { ref mut kind, .. } => {
+        &mut Inst::CondBr { ref mut kind, .. } => {
             map_br(mapper, kind);
         }
         &mut Inst::IndirectBr { ref mut rn, .. } => {
             map_use(mapper, rn);
         }
         &mut Inst::Nop0 | &mut Inst::Nop4 | &mut Inst::Brk | &mut Inst::Udf { .. } => {}
+        &mut Inst::TrapIf { ref mut kind, .. } => {
+            map_br(mapper, kind);
+        }
         &mut Inst::Adr { ref mut rd, .. } => {
             map_def(mapper, rd);
         }
@@ -2026,10 +2040,6 @@ impl MachInst for Inst {
             &Inst::CondBr {
                 taken, not_taken, ..
             } => MachTerminator::Cond(taken.as_label().unwrap(), not_taken.as_label().unwrap()),
-            &Inst::OneWayCondBr { .. } => {
-                // Explicitly invisible to CFG processing.
-                MachTerminator::None
-            }
             &Inst::IndirectBr { ref targets, .. } => MachTerminator::Indirect(&targets[..]),
             &Inst::JTSequence { ref info, .. } => {
                 MachTerminator::Indirect(&info.targets_for_term[..])
@@ -2737,6 +2747,9 @@ impl ShowWithRRU for Inst {
                     VecALUOp::Eor => ("eor", true, I8X16),
                     VecALUOp::Bsl => ("bsl", true, I8X16),
                     VecALUOp::Umaxp => ("umaxp", true, ty),
+                    VecALUOp::Add => ("add", true, ty),
+                    VecALUOp::Sub => ("sub", true, ty),
+                    VecALUOp::Mul => ("mul", true, ty),
                 };
 
                 let show_vreg_fn: fn(Reg, Option<&RealRegUniverse>, Type) -> String = if vector {
@@ -2750,14 +2763,10 @@ impl ShowWithRRU for Inst {
                 let rm = show_vreg_fn(rm, mb_rru, ty);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
-            &Inst::VecMisc {
-                op,
-                rd,
-                rn,
-                ty: _ty,
-            } => {
+            &Inst::VecMisc { op, rd, rn, ty } => {
                 let (op, ty) = match op {
                     VecMisc2::Not => ("mvn", I8X16),
+                    VecMisc2::Neg => ("neg", ty),
                 };
 
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, ty);
@@ -2880,32 +2889,26 @@ impl ShowWithRRU for Inst {
                     }
                 }
             }
-            &Inst::OneWayCondBr {
-                ref target,
-                ref kind,
-            } => {
-                let target = target.show_rru(mb_rru);
-                match kind {
-                    &CondBrKind::Zero(reg) => {
-                        let reg = reg.show_rru(mb_rru);
-                        format!("cbz {}, {}", reg, target)
-                    }
-                    &CondBrKind::NotZero(reg) => {
-                        let reg = reg.show_rru(mb_rru);
-                        format!("cbnz {}, {}", reg, target)
-                    }
-                    &CondBrKind::Cond(c) => {
-                        let c = c.show_rru(mb_rru);
-                        format!("b.{} {}", c, target)
-                    }
-                }
-            }
             &Inst::IndirectBr { rn, .. } => {
                 let rn = rn.show_rru(mb_rru);
                 format!("br {}", rn)
             }
             &Inst::Brk => "brk #0".to_string(),
             &Inst::Udf { .. } => "udf".to_string(),
+            &Inst::TrapIf { ref kind, .. } => match kind {
+                &CondBrKind::Zero(reg) => {
+                    let reg = reg.show_rru(mb_rru);
+                    format!("cbnz {}, 8 ; udf", reg)
+                }
+                &CondBrKind::NotZero(reg) => {
+                    let reg = reg.show_rru(mb_rru);
+                    format!("cbz {}, 8 ; udf", reg)
+                }
+                &CondBrKind::Cond(c) => {
+                    let c = c.invert().show_rru(mb_rru);
+                    format!("b.{} 8 ; udf", c)
+                }
+            },
             &Inst::Adr { rd, off } => {
                 let rd = rd.show_rru(mb_rru);
                 format!("adr {}, pc+{}", rd, off)
@@ -2922,15 +2925,26 @@ impl ShowWithRRU for Inst {
                 let ridx = ridx.show_rru(mb_rru);
                 let rtmp1 = rtmp1.show_rru(mb_rru);
                 let rtmp2 = rtmp2.show_rru(mb_rru);
+                let default_target = info.default_target.show_rru(mb_rru);
                 format!(
                     concat!(
+                        "b.hs {} ; ",
                         "adr {}, pc+16 ; ",
                         "ldrsw {}, [{}, {}, LSL 2] ; ",
                         "add {}, {}, {} ; ",
                         "br {} ; ",
                         "jt_entries {:?}"
                     ),
-                    rtmp1, rtmp2, rtmp1, ridx, rtmp1, rtmp1, rtmp2, rtmp1, info.targets
+                    default_target,
+                    rtmp1,
+                    rtmp2,
+                    rtmp1,
+                    ridx,
+                    rtmp1,
+                    rtmp1,
+                    rtmp2,
+                    rtmp1,
+                    info.targets
                 )
             }
             &Inst::LoadConst64 { rd, const_data } => {

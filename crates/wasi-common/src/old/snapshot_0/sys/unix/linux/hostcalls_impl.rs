@@ -3,12 +3,12 @@ use crate::old::snapshot_0::wasi::WasiResult;
 use std::os::unix::prelude::AsRawFd;
 
 pub(crate) fn path_unlink_file(resolved: PathGet) -> WasiResult<()> {
-    use yanix::file::{unlinkat, AtFlag};
+    use yanix::file::{unlinkat, AtFlags};
     unsafe {
         unlinkat(
             resolved.dirfd().as_raw_fd(),
             resolved.path(),
-            AtFlag::empty(),
+            AtFlags::empty(),
         )
     }
     .map_err(Into::into)

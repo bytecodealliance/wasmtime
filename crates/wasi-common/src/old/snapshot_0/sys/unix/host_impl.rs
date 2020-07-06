@@ -8,7 +8,7 @@ use crate::old::snapshot_0::{helpers, sys::unix::sys_impl};
 use std::ffi::OsStr;
 use std::io;
 use std::os::unix::prelude::OsStrExt;
-use yanix::file::OFlag;
+use yanix::file::OFlags;
 
 pub(crate) use sys_impl::host_impl::*;
 
@@ -104,59 +104,59 @@ impl From<io::Error> for WasiError {
     }
 }
 
-pub(crate) fn nix_from_fdflags(fdflags: wasi::__wasi_fdflags_t) -> OFlag {
-    let mut nix_flags = OFlag::empty();
+pub(crate) fn nix_from_fdflags(fdflags: wasi::__wasi_fdflags_t) -> OFlags {
+    let mut nix_flags = OFlags::empty();
     if fdflags & wasi::__WASI_FDFLAGS_APPEND != 0 {
-        nix_flags.insert(OFlag::APPEND);
+        nix_flags.insert(OFlags::APPEND);
     }
     if fdflags & wasi::__WASI_FDFLAGS_DSYNC != 0 {
-        nix_flags.insert(OFlag::DSYNC);
+        nix_flags.insert(OFlags::DSYNC);
     }
     if fdflags & wasi::__WASI_FDFLAGS_NONBLOCK != 0 {
-        nix_flags.insert(OFlag::NONBLOCK);
+        nix_flags.insert(OFlags::NONBLOCK);
     }
     if fdflags & wasi::__WASI_FDFLAGS_RSYNC != 0 {
         nix_flags.insert(O_RSYNC);
     }
     if fdflags & wasi::__WASI_FDFLAGS_SYNC != 0 {
-        nix_flags.insert(OFlag::SYNC);
+        nix_flags.insert(OFlags::SYNC);
     }
     nix_flags
 }
 
-pub(crate) fn fdflags_from_nix(oflags: OFlag) -> wasi::__wasi_fdflags_t {
+pub(crate) fn fdflags_from_nix(oflags: OFlags) -> wasi::__wasi_fdflags_t {
     let mut fdflags = 0;
-    if oflags.contains(OFlag::APPEND) {
+    if oflags.contains(OFlags::APPEND) {
         fdflags |= wasi::__WASI_FDFLAGS_APPEND;
     }
-    if oflags.contains(OFlag::DSYNC) {
+    if oflags.contains(OFlags::DSYNC) {
         fdflags |= wasi::__WASI_FDFLAGS_DSYNC;
     }
-    if oflags.contains(OFlag::NONBLOCK) {
+    if oflags.contains(OFlags::NONBLOCK) {
         fdflags |= wasi::__WASI_FDFLAGS_NONBLOCK;
     }
     if oflags.contains(O_RSYNC) {
         fdflags |= wasi::__WASI_FDFLAGS_RSYNC;
     }
-    if oflags.contains(OFlag::SYNC) {
+    if oflags.contains(OFlags::SYNC) {
         fdflags |= wasi::__WASI_FDFLAGS_SYNC;
     }
     fdflags
 }
 
-pub(crate) fn nix_from_oflags(oflags: wasi::__wasi_oflags_t) -> OFlag {
-    let mut nix_flags = OFlag::empty();
+pub(crate) fn nix_from_oflags(oflags: wasi::__wasi_oflags_t) -> OFlags {
+    let mut nix_flags = OFlags::empty();
     if oflags & wasi::__WASI_OFLAGS_CREAT != 0 {
-        nix_flags.insert(OFlag::CREAT);
+        nix_flags.insert(OFlags::CREAT);
     }
     if oflags & wasi::__WASI_OFLAGS_DIRECTORY != 0 {
-        nix_flags.insert(OFlag::DIRECTORY);
+        nix_flags.insert(OFlags::DIRECTORY);
     }
     if oflags & wasi::__WASI_OFLAGS_EXCL != 0 {
-        nix_flags.insert(OFlag::EXCL);
+        nix_flags.insert(OFlags::EXCL);
     }
     if oflags & wasi::__WASI_OFLAGS_TRUNC != 0 {
-        nix_flags.insert(OFlag::TRUNC);
+        nix_flags.insert(OFlags::TRUNC);
     }
     nix_flags
 }

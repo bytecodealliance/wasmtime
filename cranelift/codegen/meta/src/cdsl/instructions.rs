@@ -62,7 +62,7 @@ impl InstructionGroup {
         self.instructions
             .iter()
             .find(|inst| inst.name == name)
-            .unwrap_or_else(|| panic!("unexisting instruction with name {}", name))
+            .unwrap_or_else(|| panic!("instruction with name '{}' does not exist", name))
     }
 }
 
@@ -598,7 +598,7 @@ fn verify_format(inst_name: &str, operands_in: &[Operand], format: &InstructionF
 
     assert_eq!(
         num_values, format.num_value_operands,
-        "inst {} doesnt' have as many value input operand as its format {} declares; you may need \
+        "inst {} doesn't have as many value input operands as its format {} declares; you may need \
          to use a different format.",
         inst_name, format.name
     );

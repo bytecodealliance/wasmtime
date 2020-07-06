@@ -1,9 +1,12 @@
 use crate::{
-    file::{FdFlag, OFlag},
+    file::{FdFlags, OFlags},
     from_result, from_success_code,
 };
 use std::io::Result;
+#[cfg(unix)]
 use std::os::unix::prelude::*;
+#[cfg(target_os = "wasi")]
+use std::os::wasi::prelude::*;
 
 pub unsafe fn dup_fd(fd: RawFd, close_on_exec: bool) -> Result<RawFd> {
     // Both fcntl commands expect a RawFd arg which will specify
@@ -17,18 +20,18 @@ pub unsafe fn dup_fd(fd: RawFd, close_on_exec: bool) -> Result<RawFd> {
     })
 }
 
-pub unsafe fn get_fd_flags(fd: RawFd) -> Result<FdFlag> {
-    from_result(libc::fcntl(fd, libc::F_GETFD)).map(FdFlag::from_bits_truncate)
+pub unsafe fn get_fd_flags(fd: RawFd) -> Result<FdFlags> {
+    from_result(libc::fcntl(fd, libc::F_GETFD)).map(FdFlags::from_bits_truncate)
 }
 
-pub unsafe fn set_fd_flags(fd: RawFd, flags: FdFlag) -> Result<()> {
+pub unsafe fn set_fd_flags(fd: RawFd, flags: FdFlags) -> Result<()> {
     from_success_code(libc::fcntl(fd, libc::F_SETFD, flags.bits()))
 }
 
-pub unsafe fn get_status_flags(fd: RawFd) -> Result<OFlag> {
-    from_result(libc::fcntl(fd, libc::F_GETFL)).map(OFlag::from_bits_truncate)
+pub unsafe fn get_status_flags(fd: RawFd) -> Result<OFlags> {
+    from_result(libc::fcntl(fd, libc::F_GETFL)).map(OFlags::from_bits_truncate)
 }
 
-pub unsafe fn set_status_flags(fd: RawFd, flags: OFlag) -> Result<()> {
+pub unsafe fn set_status_flags(fd: RawFd, flags: OFlags) -> Result<()> {
     from_success_code(libc::fcntl(fd, libc::F_SETFL, flags.bits()))
 }

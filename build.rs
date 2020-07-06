@@ -186,8 +186,11 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", "simd_boolean") => return false,
             ("simd", "simd_f32x4_cmp") => return false,
             ("simd", "simd_f64x2_cmp") => return false,
+            ("simd", "simd_i8x16_arith") => return false,
             ("simd", "simd_i8x16_cmp") => return false,
+            ("simd", "simd_i16x8_arith") => return false,
             ("simd", "simd_i16x8_cmp") => return false,
+            ("simd", "simd_i32x4_arith") => return false,
             ("simd", "simd_i32x4_cmp") => return false,
             ("simd", "simd_load_extend") => return false,
             ("simd", "simd_load_splat") => return false,
@@ -199,15 +202,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", "simd_conversions") => return true, // FIXME Unsupported feature: proposed SIMD operator I32x4TruncSatF32x4S
             ("simd", "simd_load") => return true, // FIXME Unsupported feature: proposed SIMD operator I32x4TruncSatF32x4S
             ("simd", "simd_splat") => return true, // FIXME Unsupported feature: proposed SIMD operator I32x4TruncSatF32x4S
-
-            // Still working on implementing these. See #929.
-            ("reference_types", "global")
-            | ("reference_types", "linking")
-            | ("reference_types", "ref_func")
-            | ("reference_types", "ref_null")
-            | ("reference_types", "table_fill") => {
-                return true;
-            }
 
             // TODO(#1886): Ignore reference types tests if this isn't x64,
             // because Cranelift only supports reference types on x64.

@@ -7,7 +7,7 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::os::unix::prelude::{AsRawFd, FromRawFd, OsStrExt};
 use std::str;
-use yanix::file::OFlag;
+use yanix::file::OFlags;
 
 pub(crate) use super::sys_impl::path::*;
 
@@ -30,20 +30,20 @@ pub(crate) fn open_rights(
     let mut needed_inheriting = input_rights.base | input_rights.inheriting;
 
     // convert open flags
-    let oflags: OFlag = oflags.into();
-    if oflags.contains(OFlag::CREAT) {
+    let oflags: OFlags = oflags.into();
+    if oflags.contains(OFlags::CREAT) {
         needed_base |= types::Rights::PATH_CREATE_FILE;
     }
-    if oflags.contains(OFlag::TRUNC) {
+    if oflags.contains(OFlags::TRUNC) {
         needed_base |= types::Rights::PATH_FILESTAT_SET_SIZE;
     }
 
     // convert file descriptor flags
-    let fdflags: OFlag = fs_flags.into();
-    if fdflags.contains(OFlag::DSYNC) {
+    let fdflags: OFlags = fs_flags.into();
+    if fdflags.contains(OFlags::DSYNC) {
         needed_inheriting |= types::Rights::FD_DATASYNC;
     }
-    if fdflags.intersects(super::O_RSYNC | OFlag::SYNC) {
+    if fdflags.intersects(super::O_RSYNC | OFlags::SYNC) {
         needed_inheriting |= types::Rights::FD_SYNC;
     }
 
@@ -74,11 +74,11 @@ pub(crate) fn link(
     new_path: &str,
     follow_symlinks: bool,
 ) -> Result<()> {
-    use yanix::file::{linkat, AtFlag};
+    use yanix::file::{linkat, AtFlags};
     let flags = if follow_symlinks {
-        AtFlag::SYMLINK_FOLLOW
+        AtFlags::SYMLINK_FOLLOW
     } else {
-        AtFlag::empty()
+        AtFlags::empty()
     };
     unsafe {
         linkat(
@@ -100,18 +100,18 @@ pub(crate) fn open(
     oflags: types::Oflags,
     fs_flags: types::Fdflags,
 ) -> Result<Box<dyn Handle>> {
-    use yanix::file::{fstatat, openat, AtFlag, FileType, Mode, OFlag};
+    use yanix::file::{fstatat, openat, AtFlags, FileType, Mode, OFlags};
 
     let mut nix_all_oflags = if read && write {
-        OFlag::RDWR
+        OFlags::RDWR
     } else if write {
-        OFlag::WRONLY
+        OFlags::WRONLY
     } else {
-        OFlag::RDONLY
+        OFlags::RDONLY
     };
 
     // on non-Capsicum systems, we always want nofollow
-    nix_all_oflags.insert(OFlag::NOFOLLOW);
+    nix_all_oflags.insert(OFlags::NOFOLLOW);
 
     // convert open flags
     nix_all_oflags.insert(oflags.into());
@@ -141,7 +141,7 @@ pub(crate) fn open(
             match e.raw_os_error().unwrap() {
                 // Linux returns ENXIO instead of EOPNOTSUPP when opening a socket
                 libc::ENXIO => {
-                    match unsafe { fstatat(dirfd.as_raw_fd(), path, AtFlag::SYMLINK_NOFOLLOW) } {
+                    match unsafe { fstatat(dirfd.as_raw_fd(), path, AtFlags::SYMLINK_NOFOLLOW) } {
                         Ok(stat) => {
                             if FileType::from_stat_st_mode(stat.st_mode) == FileType::Socket {
                                 return Err(Errno::Notsup);
@@ -155,9 +155,9 @@ pub(crate) fn open(
                 // Linux returns ENOTDIR instead of ELOOP when using O_NOFOLLOW|O_DIRECTORY
                 // on a symlink.
                 libc::ENOTDIR
-                    if !(nix_all_oflags & (OFlag::NOFOLLOW | OFlag::DIRECTORY)).is_empty() =>
+                    if !(nix_all_oflags & (OFlags::NOFOLLOW | OFlags::DIRECTORY)).is_empty() =>
                 {
-                    match unsafe { fstatat(dirfd.as_raw_fd(), path, AtFlag::SYMLINK_NOFOLLOW) } {
+                    match unsafe { fstatat(dirfd.as_raw_fd(), path, AtFlags::SYMLINK_NOFOLLOW) } {
                         Ok(stat) => {
                             if FileType::from_stat_st_mode(stat.st_mode) == FileType::Symlink {
                                 return Err(Errno::Loop);
@@ -170,7 +170,7 @@ pub(crate) fn open(
                 }
                 // FreeBSD returns EMLINK instead of ELOOP when using O_NOFOLLOW on
                 // a symlink.
-                libc::EMLINK if !(nix_all_oflags & OFlag::NOFOLLOW).is_empty() => {
+                libc::EMLINK if !(nix_all_oflags & OFlags::NOFOLLOW).is_empty() => {
                     return Err(Errno::Loop);
                 }
                 _ => {}
@@ -201,17 +201,17 @@ pub(crate) fn readlink(dirfd: &OsDir, path: &str, buf: &mut [u8]) -> Result<usiz
 }
 
 pub(crate) fn remove_directory(dirfd: &OsDir, path: &str) -> Result<()> {
-    use yanix::file::{unlinkat, AtFlag};
-    unsafe { unlinkat(dirfd.as_raw_fd(), path, AtFlag::REMOVEDIR)? };
+    use yanix::file::{unlinkat, AtFlags};
+    unsafe { unlinkat(dirfd.as_raw_fd(), path, AtFlags::REMOVEDIR)? };
     Ok(())
 }
 
 pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str, follow: bool) -> Result<types::Filestat> {
-    use yanix::file::{fstatat, AtFlag};
+    use yanix::file::{fstatat, AtFlags};
     let flags = if follow {
-        AtFlag::empty()
+        AtFlags::empty()
     } else {
-        AtFlag::SYMLINK_NOFOLLOW
+        AtFlags::SYMLINK_NOFOLLOW
     };
     let stat = unsafe { fstatat(dirfd.as_raw_fd(), path, flags)? };
     let stat = stat.try_into()?;

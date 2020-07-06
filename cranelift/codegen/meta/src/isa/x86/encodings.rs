@@ -1395,6 +1395,7 @@ fn define_alu(
     let rotr = shared.by_name("rotr");
     let rotr_imm = shared.by_name("rotr_imm");
     let selectif = shared.by_name("selectif");
+    let selectif_spectre_guard = shared.by_name("selectif_spectre_guard");
     let sshr = shared.by_name("sshr");
     let sshr_imm = shared.by_name("sshr_imm");
     let trueff = shared.by_name("trueff");
@@ -1608,6 +1609,11 @@ fn define_alu(
 
     // Conditional move (a.k.a integer select).
     e.enc_i32_i64(selectif, rec_cmov.opcodes(&CMOV_OVERFLOW));
+    // A Spectre-guard integer select is exactly the same as a selectif, but
+    // is not associated with any other legalization rules and is not
+    // recognized by any optimizations, so it must arrive here unmodified
+    // and in its original place.
+    e.enc_i32_i64(selectif_spectre_guard, rec_cmov.opcodes(&CMOV_OVERFLOW));
 }
 
 #[inline(never)]
@@ -1670,6 +1676,8 @@ fn define_simd(
     let uload16x4_complex = shared.by_name("uload16x4_complex");
     let uload32x2 = shared.by_name("uload32x2");
     let uload32x2_complex = shared.by_name("uload32x2_complex");
+    let snarrow = shared.by_name("snarrow");
+    let unarrow = shared.by_name("unarrow");
     let ushr_imm = shared.by_name("ushr_imm");
     let usub_sat = shared.by_name("usub_sat");
     let vconst = shared.by_name("vconst");
@@ -1680,7 +1688,6 @@ fn define_simd(
     let x86_fmin = x86.by_name("x86_fmin");
     let x86_movlhps = x86.by_name("x86_movlhps");
     let x86_movsd = x86.by_name("x86_movsd");
-    let x86_packss = x86.by_name("x86_packss");
     let x86_pblendw = x86.by_name("x86_pblendw");
     let x86_pextr = x86.by_name("x86_pextr");
     let x86_pinsr = x86.by_name("x86_pinsr");
@@ -1895,8 +1902,15 @@ fn define_simd(
         );
     }
     for (ty, opcodes) in &[(I16, &PACKSSWB), (I32, &PACKSSDW)] {
-        let x86_packss = x86_packss.bind(vector(*ty, sse_vector_size));
-        e.enc_both_inferred(x86_packss, rec_fa.opcodes(*opcodes));
+        let snarrow = snarrow.bind(vector(*ty, sse_vector_size));
+        e.enc_both_inferred(snarrow, rec_fa.opcodes(*opcodes));
+    }
+    for (ty, opcodes, isap) in &[
+        (I16, &PACKUSWB[..], None),
+        (I32, &PACKUSDW[..], Some(use_sse41_simd)),
+    ] {
+        let unarrow = unarrow.bind(vector(*ty, sse_vector_size));
+        e.enc_both_inferred_maybe_isap(unarrow, rec_fa.opcodes(*opcodes), *isap);
     }
 
     // SIMD bitcast all 128-bit vectors to each other (for legalizing splat.x16x8).

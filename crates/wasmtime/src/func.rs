@@ -2,6 +2,7 @@ use crate::runtime::StoreInner;
 use crate::trampoline::StoreInstanceHandle;
 use crate::{Extern, FuncType, Memory, Store, Trap, Val, ValType};
 use anyhow::{bail, ensure, Context as _, Result};
+use smallvec::{smallvec, SmallVec};
 use std::cmp::max;
 use std::fmt;
 use std::mem;
@@ -9,7 +10,8 @@ use std::panic::{self, AssertUnwindSafe};
 use std::ptr::{self, NonNull};
 use std::rc::Weak;
 use wasmtime_runtime::{
-    raise_user_trap, Export, InstanceHandle, VMContext, VMFunctionBody, VMTrampoline,
+    raise_user_trap, Export, InstanceHandle, VMContext, VMFunctionBody, VMSharedSignatureIndex,
+    VMTrampoline,
 };
 
 /// A WebAssembly function which can be called.
@@ -247,14 +249,21 @@ impl Func {
             // We have a dynamic guarantee that `values_vec` has the right
             // number of arguments and the right types of arguments. As a result
             // we should be able to safely run through them all and read them.
-            let mut args = Vec::with_capacity(ty_clone.params().len());
+            const STACK_ARGS: usize = 4;
+            const STACK_RETURNS: usize = 2;
+            let mut args: SmallVec<[Val; STACK_ARGS]> =
+                SmallVec::with_capacity(ty_clone.params().len());
             let store = Store::upgrade(&store_weak).unwrap();
             for (i, ty) in ty_clone.params().iter().enumerate() {
                 unsafe {
-                    args.push(Val::read_value_from(&store, values_vec.add(i), ty));
+                    let val = Val::read_value_from(&store, values_vec.add(i), ty);
+                    args.push(val);
                 }
             }
-            let mut returns = vec![Val::null(); ty_clone.results().len()];
+
+            let mut returns: SmallVec<[Val; STACK_RETURNS]> =
+                smallvec![Val::null(); ty_clone.results().len()];
+
             func(
                 Caller {
                     store: &store_weak,
@@ -486,19 +495,20 @@ impl Func {
         func.into_func(store)
     }
 
+    pub(crate) fn sig_index(&self) -> VMSharedSignatureIndex {
+        unsafe { self.export.anyfunc.as_ref().type_index }
+    }
+
     /// Returns the underlying wasm type that this `Func` has.
     pub fn ty(&self) -> FuncType {
         // Signatures should always be registered in the store's registry of
         // shared signatures, so we should be able to unwrap safely here.
-        let sig = self
-            .instance
-            .store
-            .lookup_signature(unsafe { self.export.anyfunc.as_ref().type_index });
+        let wft = self.instance.store.lookup_signature(self.sig_index());
 
         // This is only called with `Export::Function`, and since it's coming
         // from wasmtime_runtime itself we should support all the types coming
         // out of it, so assert such here.
-        FuncType::from_wasm_func_type(&sig).expect("core wasm signature should be supported")
+        FuncType::from_wasm_func_type(&wft).expect("core wasm signature should be supported")
     }
 
     /// Returns the number of parameters that this function takes.

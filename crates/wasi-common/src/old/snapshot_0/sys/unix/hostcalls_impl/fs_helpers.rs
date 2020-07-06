@@ -3,7 +3,7 @@
 use crate::old::snapshot_0::sys::host_impl;
 use crate::old::snapshot_0::wasi::{self, WasiResult};
 use std::fs::File;
-use yanix::file::OFlag;
+use yanix::file::OFlags;
 
 pub(crate) fn path_open_rights(
     rights_base: wasi::__wasi_rights_t,
@@ -17,19 +17,19 @@ pub(crate) fn path_open_rights(
 
     // convert open flags
     let oflags = host_impl::nix_from_oflags(oflags);
-    if oflags.contains(OFlag::CREAT) {
+    if oflags.contains(OFlags::CREAT) {
         needed_base |= wasi::__WASI_RIGHTS_PATH_CREATE_FILE;
     }
-    if oflags.contains(OFlag::TRUNC) {
+    if oflags.contains(OFlags::TRUNC) {
         needed_base |= wasi::__WASI_RIGHTS_PATH_FILESTAT_SET_SIZE;
     }
 
     // convert file descriptor flags
     let fdflags = host_impl::nix_from_fdflags(fs_flags);
-    if fdflags.contains(OFlag::DSYNC) {
+    if fdflags.contains(OFlags::DSYNC) {
         needed_inheriting |= wasi::__WASI_RIGHTS_FD_DATASYNC;
     }
-    if fdflags.intersects(host_impl::O_RSYNC | OFlag::SYNC) {
+    if fdflags.intersects(host_impl::O_RSYNC | OFlags::SYNC) {
         needed_inheriting |= wasi::__WASI_RIGHTS_FD_SYNC;
     }
 
@@ -46,7 +46,7 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> WasiResult<File> {
         openat(
             dirfd.as_raw_fd(),
             path,
-            OFlag::RDONLY | OFlag::DIRECTORY | OFlag::NOFOLLOW,
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW,
             Mode::empty(),
         )
     }

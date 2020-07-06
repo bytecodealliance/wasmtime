@@ -5,6 +5,8 @@
 use log::trace;
 use regalloc::{Reg, RegClass, Writable};
 use smallvec::SmallVec;
+
+use alloc::vec::Vec;
 use std::convert::TryFrom;
 
 use crate::ir::types;
@@ -15,6 +17,7 @@ use crate::ir::{condcodes::IntCC, InstructionData, Opcode, TrapCode, Type};
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
+use crate::settings::Flags;
 
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
@@ -123,6 +126,11 @@ fn input_to_reg<'a>(ctx: Ctx<'a>, spec: InsnInput) -> Reg {
     inputs.reg
 }
 
+fn input_to_reg_mem(ctx: Ctx, spec: InsnInput) -> RegMem {
+    // TODO handle memory.
+    RegMem::reg(input_to_reg(ctx, spec))
+}
+
 /// Try to use an immediate for constant inputs, and a register otherwise.
 /// TODO: handle memory as well!
 fn input_to_reg_mem_imm(ctx: Ctx, spec: InsnInput) -> RegMemImm {
@@ -146,11 +154,29 @@ fn output_to_reg<'a>(ctx: Ctx<'a>, spec: InsnOutput) -> Writable<Reg> {
     ctx.get_output(spec.insn, spec.output)
 }
 
+fn emit_cmp(ctx: Ctx, insn: IRInst) {
+    let ty = ctx.input_ty(insn, 0);
+
+    let inputs = [InsnInput { insn, input: 0 }, InsnInput { insn, input: 1 }];
+
+    // TODO Try to commute the operands (and invert the condition) if one is an immediate.
+    let lhs = input_to_reg(ctx, inputs[0]);
+    let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
+
+    // Cranelift's icmp semantics want to compare lhs - rhs, while Intel gives
+    // us dst - src at the machine instruction level, so invert operands.
+    ctx.emit(Inst::cmp_rmi_r(ty.bytes() as u8, rhs, lhs));
+}
+
 //=============================================================================
 // Top-level instruction lowering entry point, for one instruction.
 
 /// Actually codegen an instruction's results into registers.
-fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) -> CodegenResult<()> {
+fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    insn: IRInst,
+    flags: &Flags,
+) -> CodegenResult<()> {
     let op = ctx.data(insn).opcode();
 
     let inputs: SmallVec<[InsnInput; 4]> = (0..ctx.num_inputs(insn))
@@ -179,18 +205,23 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) -> Codeg
             }
         }
 
-        Opcode::Iadd | Opcode::Isub => {
+        Opcode::Iadd | Opcode::Isub | Opcode::Imul | Opcode::Band | Opcode::Bor | Opcode::Bxor => {
             let lhs = input_to_reg(ctx, inputs[0]);
             let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
             let dst = output_to_reg(ctx, outputs[0]);
 
-            // TODO For add, try to commute the operands if one is an immediate.
+            // TODO For commutative operations (add, mul, and, or, xor), try to commute the
+            // operands if one is an immediate.
 
             let is_64 = int_ty_is_64(ty.unwrap());
-            let alu_op = if op == Opcode::Iadd {
-                AluRmiROpcode::Add
-            } else {
-                AluRmiROpcode::Sub
+            let alu_op = match op {
+                Opcode::Iadd => AluRmiROpcode::Add,
+                Opcode::Isub => AluRmiROpcode::Sub,
+                Opcode::Imul => AluRmiROpcode::Mul,
+                Opcode::Band => AluRmiROpcode::And,
+                Opcode::Bor => AluRmiROpcode::Or,
+                Opcode::Bxor => AluRmiROpcode::Xor,
+                _ => unreachable!(),
             };
 
             ctx.emit(Inst::mov_r_r(true, lhs, dst));
@@ -265,18 +296,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) -> Codeg
         }
 
         Opcode::Icmp => {
+            emit_cmp(ctx, insn);
+
             let condcode = inst_condcode(ctx.data(insn));
             let cc = CC::from_intcc(condcode);
-            let ty = ctx.input_ty(insn, 0);
-
-            // TODO Try to commute the operands (and invert the condition) if one is an immediate.
-            let lhs = input_to_reg(ctx, inputs[0]);
-            let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
             let dst = output_to_reg(ctx, outputs[0]);
-
-            // Cranelift's icmp semantics want to compare lhs - rhs, while Intel gives
-            // us dst - src at the machine instruction level, so invert operands.
-            ctx.emit(Inst::cmp_rmi_r(ty.bytes() as u8, rhs, lhs));
             ctx.emit(Inst::setcc(cc, dst));
         }
 
@@ -513,7 +537,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) -> Codeg
                         ctx.emit(Inst::movzx_rm_r(ext_mode.unwrap(), RegMem::mem(addr), dst))
                     }
                 }
-                (_, true) => unimplemented!("FPU loads"),
+                (_, true) => {
+                    ctx.emit(match elem_ty {
+                        F32 => Inst::xmm_mov_rm_r(SseOpcode::Movss, RegMem::mem(addr), dst),
+                        _ => unimplemented!("FP load not 32-bit"),
+                    });
+                }
             }
         }
 
@@ -567,7 +596,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) -> Codeg
             let src = input_to_reg(ctx, inputs[0]);
 
             if is_float {
-                unimplemented!("FPU stores");
+                ctx.emit(match elem_ty {
+                    F32 => Inst::xmm_mov_r_m(SseOpcode::Movss, src, addr),
+                    _ => unimplemented!("FP store not 32-bit"),
+                });
             } else {
                 ctx.emit(Inst::mov_r_m(elem_ty.bytes() as u8, src, addr));
             }
@@ -589,6 +621,110 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) -> Codeg
                 .abi()
                 .stackslot_addr(stack_slot, u32::try_from(offset).unwrap(), dst);
             ctx.emit(inst);
+        }
+
+        Opcode::Select | Opcode::Selectif | Opcode::SelectifSpectreGuard => {
+            let cc = if op == Opcode::Select {
+                // The input is a boolean value, compare it against zero.
+                let size = ctx.input_ty(insn, 0).bytes() as u8;
+                let test = input_to_reg(ctx, inputs[0]);
+                ctx.emit(Inst::cmp_rmi_r(size, RegMemImm::imm(0), test));
+
+                CC::NZ
+            } else {
+                // Verification ensures that the input is always a single-def ifcmp.
+                let cmp_insn = ctx
+                    .get_input(inputs[0].insn, inputs[0].input)
+                    .inst
+                    .unwrap()
+                    .0;
+                debug_assert_eq!(ctx.data(cmp_insn).opcode(), Opcode::Ifcmp);
+                emit_cmp(ctx, cmp_insn);
+
+                CC::from_intcc(inst_condcode(ctx.data(insn)))
+            };
+
+            let lhs = input_to_reg_mem(ctx, inputs[1]);
+            let rhs = input_to_reg(ctx, inputs[2]);
+            let dst = output_to_reg(ctx, outputs[0]);
+
+            let ty = ctx.output_ty(insn, 0);
+            assert!(is_int_ty(ty), "float cmov NYI");
+
+            let size = ty.bytes() as u8;
+            if size == 1 {
+                // Sign-extend operands to 32, then do a cmove of size 4.
+                let lhs_se = ctx.alloc_tmp(RegClass::I64, I32);
+                ctx.emit(Inst::movsx_rm_r(ExtMode::BL, lhs, lhs_se));
+                ctx.emit(Inst::movsx_rm_r(ExtMode::BL, RegMem::reg(rhs), dst));
+                ctx.emit(Inst::cmove(4, cc, RegMem::reg(lhs_se.to_reg()), dst));
+            } else {
+                ctx.emit(Inst::gen_move(dst, rhs, ty));
+                ctx.emit(Inst::cmove(size, cc, lhs, dst));
+            }
+        }
+
+        Opcode::Udiv | Opcode::Urem | Opcode::Sdiv | Opcode::Srem => {
+            let is_div = op == Opcode::Udiv || op == Opcode::Sdiv;
+            let is_signed = op == Opcode::Sdiv || op == Opcode::Srem;
+
+            let input_ty = ctx.input_ty(insn, 0);
+            let size = input_ty.bytes() as u8;
+
+            let dividend = input_to_reg(ctx, inputs[0]);
+            let dst = output_to_reg(ctx, outputs[0]);
+
+            let srcloc = ctx.srcloc(insn);
+            ctx.emit(Inst::gen_move(
+                Writable::from_reg(regs::rax()),
+                dividend,
+                input_ty,
+            ));
+
+            if flags.avoid_div_traps() {
+                // A vcode meta-instruction is used to lower the inline checks, since they embed
+                // pc-relative offsets that must not change, thus requiring regalloc to not
+                // interfere by introducing spills and reloads.
+                //
+                // Note it keeps the result in $rax (if is_div) or $rdx (if !is_div), so that
+                // regalloc is aware of the coalescing opportunity between rax/rdx and the
+                // destination register.
+                let divisor = input_to_reg(ctx, inputs[1]);
+                ctx.emit(Inst::CheckedDivOrRemSeq {
+                    is_div,
+                    is_signed,
+                    size,
+                    divisor,
+                    loc: srcloc,
+                });
+            } else {
+                let divisor = input_to_reg_mem(ctx, inputs[1]);
+
+                // Fill in the high parts:
+                if is_signed {
+                    // sign-extend the sign-bit of rax into rdx, for signed opcodes.
+                    ctx.emit(Inst::sign_extend_rax_to_rdx(size));
+                } else {
+                    // zero for unsigned opcodes.
+                    ctx.emit(Inst::imm_r(
+                        true, /* is_64 */
+                        0,
+                        Writable::from_reg(regs::rdx()),
+                    ));
+                }
+
+                // Emit the actual idiv.
+                ctx.emit(Inst::div(size, is_signed, divisor, ctx.srcloc(insn)));
+            }
+
+            // Move the result back into the destination reg.
+            if is_div {
+                // The quotient is in rax.
+                ctx.emit(Inst::gen_move(dst, regs::rax(), input_ty));
+            } else {
+                // The remainder is in rdx.
+                ctx.emit(Inst::gen_move(dst, regs::rdx(), input_ty));
+            }
         }
 
         Opcode::IaddImm
@@ -633,7 +769,7 @@ impl LowerBackend for X64Backend {
     type MInst = Inst;
 
     fn lower<C: LowerCtx<I = Inst>>(&self, ctx: &mut C, ir_inst: IRInst) -> CodegenResult<()> {
-        lower_insn_to_regs(ctx, ir_inst)
+        lower_insn_to_regs(ctx, ir_inst, &self.flags)
     }
 
     fn lower_branch_group<C: LowerCtx<I = Inst>>(
@@ -734,7 +870,82 @@ impl LowerBackend for X64Backend {
                 Opcode::Jump | Opcode::Fallthrough => {
                     ctx.emit(Inst::jmp_known(BranchTarget::Label(targets[0])));
                 }
-                _ => panic!("Unknown branch type!"),
+
+                Opcode::BrTable => {
+                    let jt_size = targets.len() - 1;
+                    assert!(jt_size <= u32::max_value() as usize);
+                    let jt_size = jt_size as u32;
+
+                    let idx_size_bits = ctx.input_ty(branches[0], 0).bits();
+
+                    // Zero-extend to 32-bits if needed.
+                    // TODO consider factoring this out?
+                    let idx = if idx_size_bits < 32 {
+                        let ext_mode = match idx_size_bits {
+                            1 | 8 => ExtMode::BL,
+                            16 => ExtMode::WL,
+                            _ => unreachable!(),
+                        };
+                        let idx = input_to_reg_mem(
+                            ctx,
+                            InsnInput {
+                                insn: branches[0],
+                                input: 0,
+                            },
+                        );
+                        let tmp_idx = ctx.alloc_tmp(RegClass::I64, I32);
+                        ctx.emit(Inst::movzx_rm_r(ext_mode, idx, tmp_idx));
+                        tmp_idx.to_reg()
+                    } else {
+                        input_to_reg(
+                            ctx,
+                            InsnInput {
+                                insn: branches[0],
+                                input: 0,
+                            },
+                        )
+                    };
+
+                    // Bounds-check (compute flags from idx - jt_size) and branch to default.
+                    ctx.emit(Inst::cmp_rmi_r(4, RegMemImm::imm(jt_size), idx));
+
+                    // Emit the compound instruction that does:
+                    //
+                    // lea $jt, %rA
+                    // movsbl [%rA, %rIndex, 2], %rB
+                    // add %rB, %rA
+                    // j *%rA
+                    // [jt entries]
+                    //
+                    // This must be *one* instruction in the vcode because we cannot allow regalloc
+                    // to insert any spills/fills in the middle of the sequence; otherwise, the
+                    // lea PC-rel offset to the jumptable would be incorrect.  (The alternative
+                    // is to introduce a relocation pass for inlined jumptables, which is much
+                    // worse.)
+
+                    let tmp1 = ctx.alloc_tmp(RegClass::I64, I32);
+                    let tmp2 = ctx.alloc_tmp(RegClass::I64, I32);
+
+                    let targets_for_term: Vec<MachLabel> = targets.to_vec();
+                    let default_target = BranchTarget::Label(targets[0]);
+
+                    let jt_targets: Vec<BranchTarget> = targets
+                        .iter()
+                        .skip(1)
+                        .map(|bix| BranchTarget::Label(*bix))
+                        .collect();
+
+                    ctx.emit(Inst::JmpTableSeq {
+                        idx,
+                        tmp1,
+                        tmp2,
+                        default_target,
+                        targets: jt_targets,
+                        targets_for_term,
+                    });
+                }
+
+                _ => panic!("Unknown branch type {:?}", op),
             }
         }
 

@@ -18,6 +18,9 @@ cfg_if! {
                         target_os = "dragonfly"))] {
         mod bsd;
         pub(crate) use bsd::*;
+    } else if #[cfg(target_os = "wasi")] {
+        mod wasi;
+        pub(crate) use wasi::*;
     } else {
         compile_error!("yanix doesn't compile for this platform yet");
     }
