@@ -832,12 +832,7 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
     // regalloc.rs will "fix" this for us by removing the the modified set from the use and def
     // sets.
     match inst {
-        Inst::Alu_RMI_R {
-            is_64: _,
-            op: _,
-            src,
-            dst,
-        } => {
+        Inst::Alu_RMI_R { src, dst, .. } => {
             src.get_regs_as_uses(collector);
             collector.add_mod(*dst);
         }
@@ -895,18 +890,13 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(*src);
             dst.get_regs_as_uses(collector);
         }
-        Inst::Shift_R {
-            is_64: _,
-            kind: _,
-            num_bits,
-            dst,
-        } => {
+        Inst::Shift_R { num_bits, dst, .. } => {
             if num_bits.is_none() {
                 collector.add_use(regs::rcx());
             }
             collector.add_mod(*dst);
         }
-        Inst::Cmp_RMI_R { size: _, src, dst } => {
+        Inst::Cmp_RMI_R { src, dst, .. } => {
             src.get_regs_as_uses(collector);
             collector.add_use(*dst); // yes, really `add_use`
         }
@@ -954,12 +944,15 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(*tmp2);
         }
 
+        Inst::JmpUnknown { target } => {
+            target.get_regs_as_uses(collector);
+        }
+
         Inst::Ret
         | Inst::EpiloguePlaceholder
         | Inst::JmpKnown { .. }
         | Inst::JmpCond { .. }
         | Inst::Nop { .. }
-        | Inst::JmpUnknown { .. }
         | Inst::TrapIf { .. }
         | Inst::VirtualSPOffsetAdj { .. }
         | Inst::Hlt
@@ -996,15 +989,11 @@ fn map_mod<RUM: RegUsageMapper>(m: &RUM, r: &mut Writable<Reg>) {
 impl Amode {
     fn map_uses<RUM: RegUsageMapper>(&mut self, map: &RUM) {
         match self {
-            Amode::ImmReg {
-                simm32: _,
-                ref mut base,
-            } => map_use(map, base),
+            Amode::ImmReg { ref mut base, .. } => map_use(map, base),
             Amode::ImmRegRegShift {
-                simm32: _,
                 ref mut base,
                 ref mut index,
-                shift: _,
+                ..
             } => {
                 map_use(map, base);
                 map_use(map, index);
@@ -1021,7 +1010,7 @@ impl RegMemImm {
         match self {
             RegMemImm::Reg { ref mut reg } => map_use(map, reg),
             RegMemImm::Mem { ref mut addr } => addr.map_uses(map),
-            RegMemImm::Imm { simm32: _ } => {}
+            RegMemImm::Imm { .. } => {}
         }
     }
 }
@@ -1082,15 +1071,11 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, src);
             dst.map_uses(mapper);
         }
-        Inst::Imm_R {
-            dst_is_64: _,
-            simm64: _,
-            ref mut dst,
-        } => map_def(mapper, dst),
+        Inst::Imm_R { ref mut dst, .. } => map_def(mapper, dst),
         Inst::Mov_R_R {
-            is_64: _,
             ref mut src,
             ref mut dst,
+            ..
         } => {
             map_use(mapper, src);
             map_def(mapper, dst);
@@ -1123,18 +1108,13 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, src);
             dst.map_uses(mapper);
         }
-        Inst::Shift_R {
-            is_64: _,
-            kind: _,
-            num_bits: _,
-            ref mut dst,
-        } => {
+        Inst::Shift_R { ref mut dst, .. } => {
             map_mod(mapper, dst);
         }
         Inst::Cmp_RMI_R {
-            size: _,
             ref mut src,
             ref mut dst,
+            ..
         } => {
             src.map_uses(mapper);
             map_use(mapper, dst);
@@ -1192,12 +1172,13 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_def(mapper, tmp2);
         }
 
+        Inst::JmpUnknown { ref mut target } => target.map_uses(mapper),
+
         Inst::Ret
         | Inst::EpiloguePlaceholder
         | Inst::JmpKnown { .. }
         | Inst::JmpCond { .. }
         | Inst::Nop { .. }
-        | Inst::JmpUnknown { .. }
         | Inst::TrapIf { .. }
         | Inst::VirtualSPOffsetAdj { .. }
         | Inst::Ud2 { .. }
@@ -1255,9 +1236,7 @@ impl MachInst for Inst {
             &Self::Ret | &Self::EpiloguePlaceholder => MachTerminator::Ret,
             &Self::JmpKnown { dst } => MachTerminator::Uncond(dst.as_label().unwrap()),
             &Self::JmpCond {
-                cc: _,
-                taken,
-                not_taken,
+                taken, not_taken, ..
             } => MachTerminator::Cond(taken.as_label().unwrap(), not_taken.as_label().unwrap()),
             &Self::JmpTableSeq {
                 ref targets_for_term,
