@@ -905,7 +905,7 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         }
         Inst::Cmove { src, dst, .. } => {
             src.get_regs_as_uses(collector);
-            collector.add_def(*dst);
+            collector.add_mod(*dst);
         }
         Inst::Push64 { src } => {
             src.get_regs_as_uses(collector);
@@ -1126,7 +1126,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ..
         } => {
             src.map_uses(mapper);
-            map_def(mapper, dst)
+            map_mod(mapper, dst)
         }
         Inst::Push64 { ref mut src } => src.map_uses(mapper),
         Inst::Pop64 { ref mut dst } => {
