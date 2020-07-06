@@ -33,46 +33,55 @@ fn gpr(enc: u8, index: u8) -> Reg {
 }
 
 pub(crate) fn r12() -> Reg {
-    gpr(ENC_R12, 0)
+    gpr(ENC_R12, 16)
 }
 pub(crate) fn r13() -> Reg {
-    gpr(ENC_R13, 1)
+    gpr(ENC_R13, 17)
 }
 pub(crate) fn r14() -> Reg {
-    gpr(ENC_R14, 2)
-}
-pub(crate) fn r15() -> Reg {
-    gpr(ENC_R15, 3)
+    gpr(ENC_R14, 18)
 }
 pub(crate) fn rbx() -> Reg {
-    gpr(ENC_RBX, 4)
+    gpr(ENC_RBX, 19)
 }
 pub(crate) fn rsi() -> Reg {
-    gpr(6, 5)
+    gpr(6, 20)
 }
 pub(crate) fn rdi() -> Reg {
-    gpr(7, 6)
+    gpr(7, 21)
 }
 pub(crate) fn rax() -> Reg {
-    gpr(0, 7)
+    gpr(0, 22)
 }
 pub(crate) fn rcx() -> Reg {
-    gpr(1, 8)
+    gpr(1, 23)
 }
 pub(crate) fn rdx() -> Reg {
-    gpr(2, 9)
+    gpr(2, 24)
 }
 pub(crate) fn r8() -> Reg {
-    gpr(8, 10)
+    gpr(8, 25)
 }
 pub(crate) fn r9() -> Reg {
-    gpr(9, 11)
+    gpr(9, 26)
 }
 pub(crate) fn r10() -> Reg {
-    gpr(10, 12)
+    gpr(10, 27)
 }
 pub(crate) fn r11() -> Reg {
-    gpr(11, 13)
+    gpr(11, 28)
+}
+
+pub(crate) fn r15() -> Reg {
+    // r15 is put aside since this is the pinned register.
+    gpr(ENC_R15, 29)
+}
+
+/// The pinned register on this architecture.
+/// It must be the same as Spidermonkey's HeapReg, as found in this file.
+/// https://searchfox.org/mozilla-central/source/js/src/jit/x64/Assembler-x64.h#99
+pub(crate) fn pinned_reg() -> Reg {
+    r15()
 }
 
 fn fpr(enc: u8, index: u8) -> Reg {
@@ -80,52 +89,52 @@ fn fpr(enc: u8, index: u8) -> Reg {
 }
 
 pub(crate) fn xmm0() -> Reg {
-    fpr(0, 14)
+    fpr(0, 0)
 }
 pub(crate) fn xmm1() -> Reg {
-    fpr(1, 15)
+    fpr(1, 1)
 }
 pub(crate) fn xmm2() -> Reg {
-    fpr(2, 16)
+    fpr(2, 2)
 }
 pub(crate) fn xmm3() -> Reg {
-    fpr(3, 17)
+    fpr(3, 3)
 }
 pub(crate) fn xmm4() -> Reg {
-    fpr(4, 18)
+    fpr(4, 4)
 }
 pub(crate) fn xmm5() -> Reg {
-    fpr(5, 19)
+    fpr(5, 5)
 }
 pub(crate) fn xmm6() -> Reg {
-    fpr(6, 20)
+    fpr(6, 6)
 }
 pub(crate) fn xmm7() -> Reg {
-    fpr(7, 21)
+    fpr(7, 7)
 }
 pub(crate) fn xmm8() -> Reg {
-    fpr(8, 22)
+    fpr(8, 8)
 }
 pub(crate) fn xmm9() -> Reg {
-    fpr(9, 23)
+    fpr(9, 9)
 }
 pub(crate) fn xmm10() -> Reg {
-    fpr(10, 24)
+    fpr(10, 10)
 }
 pub(crate) fn xmm11() -> Reg {
-    fpr(11, 25)
+    fpr(11, 11)
 }
 pub(crate) fn xmm12() -> Reg {
-    fpr(12, 26)
+    fpr(12, 12)
 }
 pub(crate) fn xmm13() -> Reg {
-    fpr(13, 27)
+    fpr(13, 13)
 }
 pub(crate) fn xmm14() -> Reg {
-    fpr(14, 28)
+    fpr(14, 14)
 }
 pub(crate) fn xmm15() -> Reg {
-    fpr(15, 29)
+    fpr(15, 15)
 }
 
 pub(crate) fn rsp() -> Reg {
@@ -139,39 +148,14 @@ pub(crate) fn rbp() -> Reg {
 ///
 /// The ordering of registers matters, as commented in the file doc comment: assumes the
 /// calling-convention is SystemV, at the moment.
-pub(crate) fn create_reg_universe_systemv(_flags: &settings::Flags) -> RealRegUniverse {
+pub(crate) fn create_reg_universe_systemv(flags: &settings::Flags) -> RealRegUniverse {
     let mut regs = Vec::<(RealReg, String)>::new();
     let mut allocable_by_class = [None; NUM_REG_CLASSES];
 
-    // Integer regs.
-    let mut base = regs.len();
-
-    // Callee-saved, in the SystemV x86_64 ABI.
-    regs.push((r12().to_real_reg(), "%r12".into()));
-    regs.push((r13().to_real_reg(), "%r13".into()));
-    regs.push((r14().to_real_reg(), "%r14".into()));
-    regs.push((r15().to_real_reg(), "%r15".into()));
-    regs.push((rbx().to_real_reg(), "%rbx".into()));
-
-    // Caller-saved, in the SystemV x86_64 ABI.
-    regs.push((rsi().to_real_reg(), "%rsi".into()));
-    regs.push((rdi().to_real_reg(), "%rdi".into()));
-    regs.push((rax().to_real_reg(), "%rax".into()));
-    regs.push((rcx().to_real_reg(), "%rcx".into()));
-    regs.push((rdx().to_real_reg(), "%rdx".into()));
-    regs.push((r8().to_real_reg(), "%r8".into()));
-    regs.push((r9().to_real_reg(), "%r9".into()));
-    regs.push((r10().to_real_reg(), "%r10".into()));
-    regs.push((r11().to_real_reg(), "%r11".into()));
-
-    allocable_by_class[RegClass::I64.rc_to_usize()] = Some(RegClassInfo {
-        first: base,
-        last: regs.len() - 1,
-        suggested_scratch: Some(r12().get_index()),
-    });
+    let use_pinned_reg = flags.enable_pinned_reg();
 
     // XMM registers
-    base = regs.len();
+    let first_fpr = regs.len();
     regs.push((xmm0().to_real_reg(), "%xmm0".into()));
     regs.push((xmm1().to_real_reg(), "%xmm1".into()));
     regs.push((xmm2().to_real_reg(), "%xmm2".into()));
@@ -188,17 +172,61 @@ pub(crate) fn create_reg_universe_systemv(_flags: &settings::Flags) -> RealRegUn
     regs.push((xmm13().to_real_reg(), "%xmm13".into()));
     regs.push((xmm14().to_real_reg(), "%xmm14".into()));
     regs.push((xmm15().to_real_reg(), "%xmm15".into()));
+    let last_fpr = regs.len() - 1;
 
+    // Integer regs.
+    let first_gpr = regs.len();
+
+    // Callee-saved, in the SystemV x86_64 ABI.
+    regs.push((r12().to_real_reg(), "%r12".into()));
+    regs.push((r13().to_real_reg(), "%r13".into()));
+    regs.push((r14().to_real_reg(), "%r14".into()));
+
+    regs.push((rbx().to_real_reg(), "%rbx".into()));
+
+    // Caller-saved, in the SystemV x86_64 ABI.
+    regs.push((rsi().to_real_reg(), "%rsi".into()));
+    regs.push((rdi().to_real_reg(), "%rdi".into()));
+    regs.push((rax().to_real_reg(), "%rax".into()));
+    regs.push((rcx().to_real_reg(), "%rcx".into()));
+    regs.push((rdx().to_real_reg(), "%rdx".into()));
+    regs.push((r8().to_real_reg(), "%r8".into()));
+    regs.push((r9().to_real_reg(), "%r9".into()));
+    regs.push((r10().to_real_reg(), "%r10".into()));
+    regs.push((r11().to_real_reg(), "%r11".into()));
+
+    // Other regs, not available to the allocator.
+    debug_assert_eq!(r15(), pinned_reg());
+    let allocable = if use_pinned_reg {
+        // The pinned register is not allocatable in this case, so record the length before adding
+        // it.
+        let len = regs.len();
+        regs.push((r15().to_real_reg(), "%r15/pinned".into()));
+        len
+    } else {
+        regs.push((r15().to_real_reg(), "%r15".into()));
+        regs.len()
+    };
+    let last_gpr = allocable - 1;
+
+    regs.push((rsp().to_real_reg(), "%rsp".into()));
+    regs.push((rbp().to_real_reg(), "%rbp".into()));
+
+    allocable_by_class[RegClass::I64.rc_to_usize()] = Some(RegClassInfo {
+        first: first_gpr,
+        last: last_gpr,
+        suggested_scratch: Some(r12().get_index()),
+    });
     allocable_by_class[RegClass::V128.rc_to_usize()] = Some(RegClassInfo {
-        first: base,
-        last: regs.len() - 1,
+        first: first_fpr,
+        last: last_fpr,
         suggested_scratch: Some(xmm15().get_index()),
     });
 
-    // Other regs, not available to the allocator.
-    let allocable = regs.len();
-    regs.push((rsp().to_real_reg(), "%rsp".into()));
-    regs.push((rbp().to_real_reg(), "%rbp".into()));
+    // Sanity-check: the index passed to the Reg ctor must match the order in the register list.
+    for (i, reg) in regs.iter().enumerate() {
+        assert_eq!(i, reg.0.get_index());
+    }
 
     RealRegUniverse {
         regs,
