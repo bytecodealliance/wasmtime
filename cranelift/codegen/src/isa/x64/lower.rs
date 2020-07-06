@@ -358,6 +358,38 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ));
         }
 
+        Opcode::Ctz => {
+            // TODO when the x86 flags have use_bmi1, we can use TZCNT.
+
+            // General formula using bit-scan forward (BSF):
+            // bsf %src, %dst
+            // mov $(size_bits), %tmp
+            // cmovz %tmp, %dst
+            let ty = ctx.input_ty(insn, 0);
+            let ty = if ty.bits() < 32 { I32 } else { ty };
+            debug_assert!(ty == I32 || ty == I64);
+
+            let src = input_to_reg_mem(ctx, inputs[0]);
+            let dst = output_to_reg(ctx, outputs[0]);
+
+            let tmp = ctx.alloc_tmp(RegClass::I64, ty);
+            ctx.emit(Inst::imm_r(false /* 64 bits */, ty.bits() as u64, tmp));
+
+            ctx.emit(Inst::read_only_gpr_rm_r(
+                ty.bytes() as u8,
+                ReadOnlyGprRmROpcode::Bsf,
+                src,
+                dst,
+            ));
+
+            ctx.emit(Inst::cmove(
+                ty.bytes() as u8,
+                CC::Z,
+                RegMem::reg(tmp.to_reg()),
+                dst,
+            ));
+        }
+
         Opcode::Uextend
         | Opcode::Sextend
         | Opcode::Bint
