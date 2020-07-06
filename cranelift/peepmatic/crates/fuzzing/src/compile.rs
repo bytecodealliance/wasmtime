@@ -4,9 +4,16 @@ use peepmatic_runtime::PeepholeOptimizations;
 use std::path::Path;
 use std::str;
 
+// To avoid timeouts, don't deal with inputs larger than this.
+const MAX_LEN: usize = 2048;
+
 /// Attempt to interpret the given bytes as UTF-8 and then compile them as if
 /// they were source text of our DSL.
 pub fn compile(data: &[u8]) {
+    if data.len() > MAX_LEN {
+        return;
+    }
+
     let source = match str::from_utf8(data) {
         Err(_) => return,
         Ok(s) => s,
