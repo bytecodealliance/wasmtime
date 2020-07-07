@@ -160,35 +160,16 @@ fn many_live_refs() -> anyhow::Result<()> {
 
     let live_refs = Rc::new(Cell::new(0));
 
-    let make_ref = Func::new(
-        &store,
-        FuncType::new(
-            vec![].into_boxed_slice(),
-            vec![ValType::ExternRef].into_boxed_slice(),
-        ),
-        {
-            let live_refs = live_refs.clone();
-            move |_caller, _params, results| {
-                results[0] =
-                    Val::ExternRef(Some(ExternRef::new(CountLiveRefs::new(live_refs.clone()))));
-                Ok(())
-            }
-        },
-    );
+    let make_ref = Func::wrap(&store, {
+        let live_refs = live_refs.clone();
+        move || Some(ExternRef::new(CountLiveRefs::new(live_refs.clone())))
+    });
 
-    let observe_ref = Func::new(
-        &store,
-        FuncType::new(
-            vec![ValType::ExternRef].into_boxed_slice(),
-            vec![].into_boxed_slice(),
-        ),
-        |_caller, params, _results| {
-            let r = params[0].externref().unwrap().unwrap();
-            let r = r.data().downcast_ref::<CountLiveRefs>().unwrap();
-            assert!(r.live_refs.get() > 0);
-            Ok(())
-        },
-    );
+    let observe_ref = Func::wrap(&store, |r: Option<ExternRef>| {
+        let r = r.unwrap();
+        let r = r.data().downcast_ref::<CountLiveRefs>().unwrap();
+        assert!(r.live_refs.get() > 0);
+    });
 
     let instance = Instance::new(&store, &module, &[make_ref.into(), observe_ref.into()])?;
     let many_live_refs = instance.get_func("many_live_refs").unwrap();
@@ -413,14 +394,7 @@ fn gc_during_gc_from_many_table_gets() -> anyhow::Result<()> {
         "#,
     )?;
 
-    let observe_ref = Func::new(
-        &store,
-        FuncType::new(
-            vec![ValType::ExternRef].into_boxed_slice(),
-            vec![].into_boxed_slice(),
-        ),
-        |_caller, _params, _results| Ok(()),
-    );
+    let observe_ref = Func::wrap(&store, |_: Option<ExternRef>| {});
 
     let instance = Instance::new(&store, &module, &[observe_ref.into()])?;
     let init = instance.get_func("init").unwrap();

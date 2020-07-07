@@ -1,7 +1,7 @@
 use crate::r#ref::ExternRef;
 use crate::{Func, Store, ValType};
 use anyhow::{bail, Result};
-use std::ptr::{self, NonNull};
+use std::ptr;
 use wasmtime_runtime::{self as runtime, VMExternRef};
 
 /// Possible runtime values that a WebAssembly module can either consume or
@@ -270,17 +270,5 @@ pub(crate) unsafe fn from_checked_anyfunc(
     anyfunc: *mut wasmtime_runtime::VMCallerCheckedAnyfunc,
     store: &Store,
 ) -> Val {
-    let anyfunc = match NonNull::new(anyfunc) {
-        None => return Val::FuncRef(None),
-        Some(f) => f,
-    };
-
-    debug_assert!(
-        anyfunc.as_ref().type_index != wasmtime_runtime::VMSharedSignatureIndex::default()
-    );
-    let instance_handle = wasmtime_runtime::InstanceHandle::from_vmctx(anyfunc.as_ref().vmctx);
-    let export = wasmtime_runtime::ExportFunction { anyfunc };
-    let instance = store.existing_instance_handle(instance_handle);
-    let f = Func::from_wasmtime_function(export, instance);
-    Val::FuncRef(Some(f))
+    Val::FuncRef(Func::from_caller_checked_anyfunc(store, anyfunc))
 }

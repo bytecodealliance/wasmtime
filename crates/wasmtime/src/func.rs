@@ -1,6 +1,6 @@
 use crate::runtime::StoreInner;
 use crate::trampoline::StoreInstanceHandle;
-use crate::{Extern, FuncType, Memory, Store, Trap, Val, ValType};
+use crate::{Extern, ExternRef, FuncType, Memory, Store, Trap, Val, ValType};
 use anyhow::{bail, ensure, Context as _, Result};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::max;
@@ -193,17 +193,37 @@ macro_rules! getters {
                         unsafe extern "C" fn(
                             *mut VMContext,
                             *mut VMContext,
-                            $($args,)*
-                        ) -> R,
+                            $( $args::Abi, )*
+                        ) -> R::Abi,
                     >(anyfunc.as_ref().func_ptr.as_ptr());
+
                     let mut ret = None;
-                    $(let $args = $args.into_abi();)*
+
+                    let weak_store = instance.store.weak();
+                    let weak_store = WeakStore(&weak_store);
+
+                    $(
+                        // Because this returned closure is not marked `unsafe`,
+                        // we have to check that incoming values are compatible
+                        // with our store.
+                        if !$args.compatible_with_store(weak_store) {
+                            return Err(Trap::new(
+                                "attempt to pass cross-`Store` value to Wasm as function argument"
+                            ));
+                        }
+
+                        let $args = $args.into_abi_for_arg(weak_store);
+                    )*
 
                     invoke_wasm_and_catch_traps(anyfunc.as_ref().vmctx, &instance.store, || {
-                        ret = Some(fnptr(anyfunc.as_ref().vmctx, ptr::null_mut(), $($args,)*));
+                        ret = Some(fnptr(
+                            anyfunc.as_ref().vmctx,
+                            ptr::null_mut(),
+                            $( $args, )*
+                        ));
                     })?;
 
-                    Ok(ret.unwrap())
+                    Ok(R::from_abi(ret.unwrap(), weak_store))
                 }
             })
         }
@@ -298,6 +318,22 @@ impl Func {
         }
     }
 
+    pub(crate) unsafe fn from_caller_checked_anyfunc(
+        store: &Store,
+        anyfunc: *mut wasmtime_runtime::VMCallerCheckedAnyfunc,
+    ) -> Option<Self> {
+        let anyfunc = NonNull::new(anyfunc)?;
+        debug_assert!(
+            anyfunc.as_ref().type_index != wasmtime_runtime::VMSharedSignatureIndex::default()
+        );
+
+        let instance_handle = wasmtime_runtime::InstanceHandle::from_vmctx(anyfunc.as_ref().vmctx);
+        let export = wasmtime_runtime::ExportFunction { anyfunc };
+        let instance = store.existing_instance_handle(instance_handle);
+        let f = Func::from_wasmtime_function(export, instance);
+        Some(f)
+    }
+
     /// Creates a new `Func` from the given Rust closure.
     ///
     /// This function will create a new `Func` which, when called, will
@@ -305,16 +341,17 @@ impl Func {
     /// function being called is known statically so the type signature can
     /// be inferred. Rust types will map to WebAssembly types as follows:
     ///
-    /// | Rust Argument Type | WebAssembly Type |
-    /// |--------------------|------------------|
-    /// | `i32`              | `i32`            |
-    /// | `u32`              | `i32`            |
-    /// | `i64`              | `i64`            |
-    /// | `u64`              | `i64`            |
-    /// | `f32`              | `f32`            |
-    /// | `f64`              | `f64`            |
-    /// | (not supported)    | `v128`           |
-    /// | (not supported)    | `externref`         |
+    /// | Rust Argument Type  | WebAssembly Type |
+    /// |---------------------|------------------|
+    /// | `i32`               | `i32`            |
+    /// | `u32`               | `i32`            |
+    /// | `i64`               | `i64`            |
+    /// | `u64`               | `i64`            |
+    /// | `f32`               | `f32`            |
+    /// | `f64`               | `f64`            |
+    /// | (not supported)     | `v128`           |
+    /// | `Option<Func>`      | `funcref`        |
+    /// | `Option<ExternRef>` | `externref`      |
     ///
     /// Any of the Rust types can be returned from the closure as well, in
     /// addition to some extra types
@@ -783,6 +820,12 @@ pub(crate) fn invoke_wasm_and_catch_traps(
     }
 }
 
+// Public (but hidden) wrapper around a `Weak<StoreInner>` so that we can use it
+// in public (but hidden) trait methods.
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+pub struct WeakStore<'a>(&'a Weak<StoreInner>);
+
 /// A trait implemented for types which can be arguments to closures passed to
 /// [`Func::wrap`] and friends.
 ///
@@ -791,160 +834,44 @@ pub(crate) fn invoke_wasm_and_catch_traps(
 /// stable over time.
 ///
 /// For more information see [`Func::wrap`]
-pub unsafe trait WasmTy: Copy {
+pub unsafe trait WasmTy {
+    // The raw ABI representation of this type inside Wasm.
+    #[doc(hidden)]
+    type Abi: Copy;
+
+    // Is this value compatible with the given store?
+    #[doc(hidden)]
+    fn compatible_with_store<'a>(&self, store: WeakStore<'a>) -> bool;
+
+    // Convert this value into its ABI representation, when passing a value into
+    // Wasm as an argument.
+    #[doc(hidden)]
+    fn into_abi_for_arg<'a>(self, store: WeakStore<'a>) -> Self::Abi;
+
+    // Convert from the raw ABI representation back into `Self`, when receiving
+    // a value from Wasm.
+    //
+    // Safety: The abi value *must* have be valid for this type (e.g. for
+    // `externref`, it must be a valid raw `VMExternRef` pointer, not some
+    // random, dangling pointer).
+    #[doc(hidden)]
+    unsafe fn from_abi<'a>(abi: Self::Abi, store: WeakStore<'a>) -> Self;
+
+    // Add this type to the given vec of expected valtypes.
     #[doc(hidden)]
     fn push(dst: &mut Vec<ValType>);
+
+    // Does the next valtype(s) match this type?
     #[doc(hidden)]
     fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()>;
+
+    // Load this type's raw ABI representation from an args array.
     #[doc(hidden)]
-    unsafe fn load(ptr: &mut *const u128) -> Self;
+    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi;
+
+    // Store this type's raw ABI representation into an args array.
     #[doc(hidden)]
-    unsafe fn store(abi: Self, ptr: *mut u128);
-}
-
-unsafe impl WasmTy for () {
-    fn push(_dst: &mut Vec<ValType>) {}
-    fn matches(_tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        Ok(())
-    }
-    #[inline]
-    unsafe fn load(_ptr: &mut *const u128) -> Self {}
-    #[inline]
-    unsafe fn store(_abi: Self, _ptr: *mut u128) {}
-}
-
-unsafe impl WasmTy for i32 {
-    fn push(dst: &mut Vec<ValType>) {
-        dst.push(ValType::I32);
-    }
-    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        let next = tys.next();
-        ensure!(
-            next == Some(ValType::I32),
-            "Type mismatch, expected i32, got {:?}",
-            next
-        );
-        Ok(())
-    }
-    #[inline]
-    unsafe fn load(ptr: &mut *const u128) -> Self {
-        let ret = **ptr as Self;
-        *ptr = (*ptr).add(1);
-        return ret;
-    }
-    #[inline]
-    unsafe fn store(abi: Self, ptr: *mut u128) {
-        *ptr = abi as u128;
-    }
-}
-
-unsafe impl WasmTy for u32 {
-    fn push(dst: &mut Vec<ValType>) {
-        <i32 as WasmTy>::push(dst)
-    }
-    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        <i32 as WasmTy>::matches(tys)
-    }
-    #[inline]
-    unsafe fn load(ptr: &mut *const u128) -> Self {
-        <i32 as WasmTy>::load(ptr) as Self
-    }
-    #[inline]
-    unsafe fn store(abi: Self, ptr: *mut u128) {
-        <i32 as WasmTy>::store(abi as i32, ptr)
-    }
-}
-
-unsafe impl WasmTy for i64 {
-    fn push(dst: &mut Vec<ValType>) {
-        dst.push(ValType::I64);
-    }
-    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        let next = tys.next();
-        ensure!(
-            next == Some(ValType::I64),
-            "Type mismatch, expected i64, got {:?}",
-            next
-        );
-        Ok(())
-    }
-    #[inline]
-    unsafe fn load(ptr: &mut *const u128) -> Self {
-        let ret = **ptr as Self;
-        *ptr = (*ptr).add(1);
-        return ret;
-    }
-    #[inline]
-    unsafe fn store(abi: Self, ptr: *mut u128) {
-        *ptr = abi as u128;
-    }
-}
-
-unsafe impl WasmTy for u64 {
-    fn push(dst: &mut Vec<ValType>) {
-        <i64 as WasmTy>::push(dst)
-    }
-    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        <i64 as WasmTy>::matches(tys)
-    }
-    #[inline]
-    unsafe fn load(ptr: &mut *const u128) -> Self {
-        <i64 as WasmTy>::load(ptr) as Self
-    }
-    #[inline]
-    unsafe fn store(abi: Self, ptr: *mut u128) {
-        <i64 as WasmTy>::store(abi as i64, ptr)
-    }
-}
-
-unsafe impl WasmTy for f32 {
-    fn push(dst: &mut Vec<ValType>) {
-        dst.push(ValType::F32);
-    }
-    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        let next = tys.next();
-        ensure!(
-            next == Some(ValType::F32),
-            "Type mismatch, expected f32, got {:?}",
-            next
-        );
-        Ok(())
-    }
-    #[inline]
-    unsafe fn load(ptr: &mut *const u128) -> Self {
-        let ret = f32::from_bits(**ptr as u32);
-        *ptr = (*ptr).add(1);
-        return ret;
-    }
-    #[inline]
-    unsafe fn store(abi: Self, ptr: *mut u128) {
-        *ptr = abi.to_bits() as u128;
-    }
-}
-
-unsafe impl WasmTy for f64 {
-    fn push(dst: &mut Vec<ValType>) {
-        dst.push(ValType::F64);
-    }
-    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        let next = tys.next();
-        ensure!(
-            next == Some(ValType::F64),
-            "Type mismatch, expected f64, got {:?}",
-            next
-        );
-        Ok(())
-    }
-    #[inline]
-    unsafe fn load(ptr: &mut *const u128) -> Self {
-        let ret = f64::from_bits(**ptr as u64);
-        *ptr = (*ptr).add(1);
-        return ret;
-    }
-    #[inline]
-    unsafe fn store(abi: Self, ptr: *mut u128) {
-        *ptr = abi.to_bits() as u128;
-    }
+    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128);
 }
 
 /// A trait implemented for types which can be returned from closures passed to
@@ -956,64 +883,527 @@ unsafe impl WasmTy for f64 {
 ///
 /// For more information see [`Func::wrap`]
 pub unsafe trait WasmRet {
+    // Same as `WasmTy::Abi`.
     #[doc(hidden)]
-    type Abi;
+    type Abi: Copy;
+
+    // Same as `WasmTy::compatible_with_store`.
+    #[doc(hidden)]
+    fn compatible_with_store<'a>(&self, store: WeakStore<'a>) -> bool;
+
+    // Similar to `WasmTy::into_abi_for_arg` but used when host code is
+    // returning a value into Wasm, rather than host code passing an argument to
+    // a Wasm call. Unlike `into_abi_for_arg`, implementors of this method can
+    // raise traps, which means that callers must ensure that
+    // `invoke_wasm_and_catch_traps` is on the stack, and therefore this method
+    // is unsafe.
+    #[doc(hidden)]
+    unsafe fn into_abi_for_ret<'a>(self, store: WeakStore<'a>) -> Self::Abi;
+
+    // Same as `WasmTy::from_abi`.
+    #[doc(hidden)]
+    unsafe fn from_abi<'a>(abi: Self::Abi, store: WeakStore<'a>) -> Self;
+
+    // Same as `WasmTy::push`.
     #[doc(hidden)]
     fn push(dst: &mut Vec<ValType>);
+
+    // Same as `WasmTy::matches`.
     #[doc(hidden)]
     fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()>;
+
+    // Same as `WasmTy::load_from_args`.
     #[doc(hidden)]
-    fn into_abi(self) -> Self::Abi;
+    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi;
+
+    // Same as `WasmTy::store_to_args`.
     #[doc(hidden)]
-    unsafe fn store(abi: Self::Abi, ptr: *mut u128);
+    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128);
 }
 
-unsafe impl<T: WasmTy> WasmRet for T {
-    type Abi = T;
-    fn push(dst: &mut Vec<ValType>) {
-        T::push(dst)
-    }
+unsafe impl WasmTy for () {
+    type Abi = Self;
 
-    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        T::matches(tys)
+    #[inline]
+    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+        true
     }
 
     #[inline]
-    fn into_abi(self) -> Self::Abi {
+    fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {}
+
+    #[inline]
+    unsafe fn from_abi<'a>(_abi: Self::Abi, _store: WeakStore<'a>) -> Self {}
+
+    fn push(_dst: &mut Vec<ValType>) {}
+
+    fn matches(_tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    #[inline]
+    unsafe fn load_from_args(_ptr: &mut *const u128) -> Self::Abi {}
+
+    #[inline]
+    unsafe fn store_to_args(_abi: Self::Abi, _ptr: *mut u128) {}
+}
+
+unsafe impl WasmTy for i32 {
+    type Abi = Self;
+
+    #[inline]
+    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+        true
+    }
+
+    #[inline]
+    fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {
         self
     }
 
     #[inline]
-    unsafe fn store(abi: Self::Abi, ptr: *mut u128) {
-        T::store(abi, ptr);
+    unsafe fn from_abi<'a>(abi: Self::Abi, _store: WeakStore<'a>) -> Self {
+        abi
+    }
+
+    fn push(dst: &mut Vec<ValType>) {
+        dst.push(ValType::I32);
+    }
+
+    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        let next = tys.next();
+        ensure!(
+            next == Some(ValType::I32),
+            "Type mismatch, expected i32, got {:?}",
+            next
+        );
+        Ok(())
+    }
+
+    #[inline]
+    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
+        let ret = **ptr as Self;
+        *ptr = (*ptr).add(1);
+        return ret;
+    }
+
+    #[inline]
+    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
+        *ptr = abi as u128;
     }
 }
 
-unsafe impl<T: WasmTy> WasmRet for Result<T, Trap> {
-    type Abi = T;
+unsafe impl WasmTy for u32 {
+    type Abi = <i32 as WasmTy>::Abi;
+
+    #[inline]
+    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+        true
+    }
+
+    #[inline]
+    fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {
+        self as i32
+    }
+
+    #[inline]
+    unsafe fn from_abi<'a>(abi: Self::Abi, _store: WeakStore<'a>) -> Self {
+        abi as Self
+    }
+
     fn push(dst: &mut Vec<ValType>) {
-        T::push(dst)
+        <i32 as WasmTy>::push(dst)
     }
 
     fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        T::matches(tys)
+        <i32 as WasmTy>::matches(tys)
     }
 
     #[inline]
-    fn into_abi(self) -> Self::Abi {
+    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
+        <i32 as WasmTy>::load_from_args(ptr)
+    }
+
+    #[inline]
+    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
+        <i32 as WasmTy>::store_to_args(abi, ptr)
+    }
+}
+
+unsafe impl WasmTy for i64 {
+    type Abi = Self;
+
+    #[inline]
+    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+        true
+    }
+
+    #[inline]
+    fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {
+        self
+    }
+
+    #[inline]
+    unsafe fn from_abi<'a>(abi: Self::Abi, _store: WeakStore<'a>) -> Self {
+        abi
+    }
+
+    fn push(dst: &mut Vec<ValType>) {
+        dst.push(ValType::I64);
+    }
+
+    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        let next = tys.next();
+        ensure!(
+            next == Some(ValType::I64),
+            "Type mismatch, expected i64, got {:?}",
+            next
+        );
+        Ok(())
+    }
+
+    #[inline]
+    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
+        let ret = **ptr as Self;
+        *ptr = (*ptr).add(1);
+        return ret;
+    }
+
+    #[inline]
+    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
+        *ptr = abi as u128;
+    }
+}
+
+unsafe impl WasmTy for u64 {
+    type Abi = <i64 as WasmTy>::Abi;
+
+    #[inline]
+    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+        true
+    }
+
+    #[inline]
+    fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {
+        self as i64
+    }
+
+    #[inline]
+    unsafe fn from_abi<'a>(abi: Self::Abi, _store: WeakStore<'a>) -> Self {
+        abi as Self
+    }
+
+    fn push(dst: &mut Vec<ValType>) {
+        <i64 as WasmTy>::push(dst)
+    }
+
+    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        <i64 as WasmTy>::matches(tys)
+    }
+
+    #[inline]
+    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
+        <i64 as WasmTy>::load_from_args(ptr)
+    }
+
+    #[inline]
+    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
+        <i64 as WasmTy>::store_to_args(abi, ptr)
+    }
+}
+
+unsafe impl WasmTy for f32 {
+    type Abi = Self;
+
+    #[inline]
+    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+        true
+    }
+
+    #[inline]
+    fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {
+        self
+    }
+
+    #[inline]
+    unsafe fn from_abi<'a>(abi: Self::Abi, _store: WeakStore<'a>) -> Self {
+        abi
+    }
+
+    fn push(dst: &mut Vec<ValType>) {
+        dst.push(ValType::F32);
+    }
+
+    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        let next = tys.next();
+        ensure!(
+            next == Some(ValType::F32),
+            "Type mismatch, expected f32, got {:?}",
+            next
+        );
+        Ok(())
+    }
+
+    #[inline]
+    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
+        let ret = f32::from_bits(**ptr as u32);
+        *ptr = (*ptr).add(1);
+        return ret;
+    }
+
+    #[inline]
+    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
+        *ptr = abi.to_bits() as u128;
+    }
+}
+
+unsafe impl WasmTy for f64 {
+    type Abi = Self;
+
+    #[inline]
+    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+        true
+    }
+
+    #[inline]
+    fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {
+        self
+    }
+
+    #[inline]
+    unsafe fn from_abi<'a>(abi: Self::Abi, _store: WeakStore<'a>) -> Self {
+        abi
+    }
+
+    fn push(dst: &mut Vec<ValType>) {
+        dst.push(ValType::F64);
+    }
+
+    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        let next = tys.next();
+        ensure!(
+            next == Some(ValType::F64),
+            "Type mismatch, expected f64, got {:?}",
+            next
+        );
+        Ok(())
+    }
+
+    #[inline]
+    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
+        let ret = f64::from_bits(**ptr as u64);
+        *ptr = (*ptr).add(1);
+        return ret;
+    }
+
+    #[inline]
+    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
+        *ptr = abi.to_bits() as u128;
+    }
+}
+
+unsafe impl WasmTy for Option<ExternRef> {
+    type Abi = *mut u8;
+
+    #[inline]
+    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+        true
+    }
+
+    #[inline]
+    fn into_abi_for_arg<'a>(self, store: WeakStore<'a>) -> Self::Abi {
+        if let Some(x) = self {
+            let store = Store::upgrade(store.0).unwrap();
+            let abi = x.inner.as_raw();
+            unsafe {
+                store
+                    .externref_activations_table()
+                    .insert_with_gc(x.inner, store.stack_map_registry());
+            }
+            abi
+        } else {
+            ptr::null_mut()
+        }
+    }
+
+    #[inline]
+    unsafe fn from_abi<'a>(abi: Self::Abi, _store: WeakStore<'a>) -> Self {
+        if abi.is_null() {
+            None
+        } else {
+            Some(ExternRef {
+                inner: wasmtime_runtime::VMExternRef::clone_from_raw(abi),
+            })
+        }
+    }
+
+    fn push(dst: &mut Vec<ValType>) {
+        dst.push(ValType::ExternRef);
+    }
+
+    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        let next = tys.next();
+        ensure!(
+            next == Some(ValType::ExternRef),
+            "Type mismatch, expected externref, got {:?}",
+            next
+        );
+        Ok(())
+    }
+
+    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
+        let ret = **ptr as usize as *mut u8;
+        *ptr = (*ptr).add(1);
+        ret
+    }
+
+    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
+        ptr::write(ptr, abi as usize as u128);
+    }
+}
+
+unsafe impl WasmTy for Option<Func> {
+    type Abi = *mut wasmtime_runtime::VMCallerCheckedAnyfunc;
+
+    #[inline]
+    fn compatible_with_store<'a>(&self, store: WeakStore<'a>) -> bool {
+        if let Some(f) = self {
+            let store = Store::upgrade(store.0).unwrap();
+            Store::same(&store, f.store())
+        } else {
+            true
+        }
+    }
+
+    #[inline]
+    fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {
+        if let Some(f) = self {
+            f.caller_checked_anyfunc().as_ptr()
+        } else {
+            ptr::null_mut()
+        }
+    }
+
+    #[inline]
+    unsafe fn from_abi<'a>(abi: Self::Abi, store: WeakStore<'a>) -> Self {
+        let store = Store::upgrade(store.0).unwrap();
+        Func::from_caller_checked_anyfunc(&store, abi)
+    }
+
+    fn push(dst: &mut Vec<ValType>) {
+        dst.push(ValType::FuncRef);
+    }
+
+    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        let next = tys.next();
+        ensure!(
+            next == Some(ValType::FuncRef),
+            "Type mismatch, expected funcref, got {:?}",
+            next
+        );
+        Ok(())
+    }
+
+    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
+        let ret = **ptr as usize as *mut wasmtime_runtime::VMCallerCheckedAnyfunc;
+        *ptr = (*ptr).add(1);
+        ret
+    }
+
+    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
+        ptr::write(ptr, abi as usize as u128);
+    }
+}
+
+unsafe impl<T> WasmRet for T
+where
+    T: WasmTy,
+{
+    type Abi = <T as WasmTy>::Abi;
+
+    #[inline]
+    fn compatible_with_store<'a>(&self, store: WeakStore<'a>) -> bool {
+        <Self as WasmTy>::compatible_with_store(self, store)
+    }
+
+    #[inline]
+    unsafe fn into_abi_for_ret<'a>(self, store: WeakStore<'a>) -> Self::Abi {
+        <Self as WasmTy>::into_abi_for_arg(self, store)
+    }
+
+    #[inline]
+    unsafe fn from_abi<'a>(abi: Self::Abi, store: WeakStore<'a>) -> Self {
+        <Self as WasmTy>::from_abi(abi, store)
+    }
+
+    #[inline]
+    fn push(dst: &mut Vec<ValType>) {
+        <Self as WasmTy>::push(dst)
+    }
+
+    #[inline]
+    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        <Self as WasmTy>::matches(tys)
+    }
+
+    #[inline]
+    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
+        <Self as WasmTy>::load_from_args(ptr)
+    }
+
+    #[inline]
+    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
+        <Self as WasmTy>::store_to_args(abi, ptr)
+    }
+}
+
+unsafe impl<T> WasmRet for Result<T, Trap>
+where
+    T: WasmTy,
+{
+    type Abi = <T as WasmTy>::Abi;
+
+    #[inline]
+    fn compatible_with_store<'a>(&self, store: WeakStore<'a>) -> bool {
         match self {
-            Ok(val) => return T::into_abi(val),
+            Ok(x) => <T as WasmTy>::compatible_with_store(x, store),
+            Err(_) => true,
+        }
+    }
+
+    #[inline]
+    unsafe fn into_abi_for_ret<'a>(self, store: WeakStore<'a>) -> Self::Abi {
+        match self {
+            Ok(val) => return <T as WasmTy>::into_abi_for_arg(val, store),
             Err(trap) => handle_trap(trap),
         }
 
-        fn handle_trap(trap: Trap) -> ! {
-            unsafe { raise_user_trap(trap.into()) }
+        unsafe fn handle_trap(trap: Trap) -> ! {
+            raise_user_trap(trap.into())
         }
     }
 
     #[inline]
-    unsafe fn store(abi: Self::Abi, ptr: *mut u128) {
-        T::store(abi, ptr);
+    unsafe fn from_abi<'a>(abi: Self::Abi, store: WeakStore<'a>) -> Self {
+        Ok(<T as WasmTy>::from_abi(abi, store))
+    }
+
+    fn push(dst: &mut Vec<ValType>) {
+        <T as WasmTy>::push(dst)
+    }
+
+    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        <T as WasmTy>::matches(tys)
+    }
+
+    #[inline]
+    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
+        <T as WasmTy>::load_from_args(ptr)
+    }
+
+    #[inline]
+    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
+        <T as WasmTy>::store_to_args(abi, ptr);
     }
 }
 
@@ -1112,6 +1502,27 @@ impl Caller<'_> {
     }
 }
 
+#[inline(never)]
+#[cold]
+unsafe fn raise_cross_store_trap() -> ! {
+    #[derive(Debug)]
+    struct CrossStoreError;
+
+    impl std::error::Error for CrossStoreError {}
+
+    impl fmt::Display for CrossStoreError {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(
+                f,
+                "host function attempted to return cross-`Store` \
+                 value to Wasm",
+            )
+        }
+    }
+
+    raise_user_trap(Box::new(CrossStoreError));
+}
+
 macro_rules! impl_into_func {
     ($(
         ($($args:ident)*)
@@ -1141,40 +1552,62 @@ macro_rules! impl_into_func {
             R: WasmRet,
         {
             fn into_func(self, store: &Store) -> Func {
-                // Note that this shim's ABI must match that expected by
-                // cranelift, since cranelift is generating raw function calls
-                // directly to this function.
-                unsafe extern "C" fn shim<F, $($args,)* R>(
+                /// This shim is called by Wasm code, constructs a `Caller`,
+                /// calls the wrapped host function, and returns the translated
+                /// result back to Wasm.
+                ///
+                /// Note that this shim's ABI must *exactly* match that expected
+                /// by Cranelift, since Cranelift is generating raw function
+                /// calls directly to this function.
+                unsafe extern "C" fn wasm_to_host_shim<F, $($args,)* R>(
                     vmctx: *mut VMContext,
                     caller_vmctx: *mut VMContext,
-                    $($args: $args,)*
+                    $( $args: $args::Abi, )*
                 ) -> R::Abi
                 where
-                    F: Fn(Caller<'_>, $($args),*) -> R + 'static,
-                    $($args: WasmTy,)*
+                    F: Fn(Caller<'_>, $( $args ),*) -> R + 'static,
+                    $( $args: WasmTy, )*
                     R: WasmRet,
                 {
+                    let state = (*vmctx).host_state();
+                    // Double-check ourselves in debug mode, but we control
+                    // the `Any` here so an unsafe downcast should also
+                    // work.
+                    debug_assert!(state.is::<(F, Weak<StoreInner>)>());
+                    let (func, store) = &*(state as *const _ as *const (F, Weak<StoreInner>));
+                    let weak_store = WeakStore(store);
+
                     let ret = {
-                        let state = (*vmctx).host_state();
-                        // Double-check ourselves in debug mode, but we control
-                        // the `Any` here so an unsafe downcast should also
-                        // work.
-                        debug_assert!(state.is::<(F, Weak<StoreInner>)>());
-                        let (func, store) = &*(state as *const _ as *const (F, Weak<StoreInner>));
                         panic::catch_unwind(AssertUnwindSafe(|| {
                             func(
                                 Caller { store, caller_vmctx },
-                                $($args,)*
+                                $( $args::from_abi($args, weak_store), )*
                             )
                         }))
                     };
                     match ret {
-                        Ok(ret) => ret.into_abi(),
                         Err(panic) => wasmtime_runtime::resume_panic(panic),
+                        Ok(ret) => {
+                            // Because the wrapped function is not `unsafe`, we
+                            // can't assume it returned a value that is
+                            // compatible with this store.
+                            if !ret.compatible_with_store(weak_store) {
+                                raise_cross_store_trap();
+                            }
+
+                            ret.into_abi_for_ret(weak_store)
+                        }
                     }
                 }
 
-                unsafe extern "C" fn trampoline<$($args,)* R>(
+                /// This trampoline allows host code to indirectly call the
+                /// wrapped function (e.g. via `Func::call` on a `funcref` that
+                /// happens to reference our wrapped function).
+                ///
+                /// It reads the arguments out of the incoming `args` array,
+                /// calls the given function pointer, and then stores the result
+                /// back into the `args` array.
+                unsafe extern "C" fn host_trampoline<$($args,)* R>(
                     callee_vmctx: *mut VMContext,
                     caller_vmctx: *mut VMContext,
                     ptr: *const VMFunctionBody,
@@ -1189,14 +1622,14 @@ macro_rules! impl_into_func {
                         unsafe extern "C" fn(
                             *mut VMContext,
                             *mut VMContext,
-                            $($args,)*
+                            $( $args::Abi, )*
                         ) -> R::Abi,
                     >(ptr);
 
                     let mut _next = args as *const u128;
-                    $(let $args = $args::load(&mut _next);)*
-                    let ret = ptr(callee_vmctx, caller_vmctx, $($args),*);
-                    R::store(ret, args);
+                    $( let $args = $args::load_from_args(&mut _next); )*
+                    let ret = ptr(callee_vmctx, caller_vmctx, $( $args ),*);
+                    R::store_to_args(ret, args);
                 }
 
                 let mut _args = Vec::new();
@@ -1204,13 +1637,14 @@ macro_rules! impl_into_func {
                 let mut ret = Vec::new();
                 R::push(&mut ret);
                 let ty = FuncType::new(_args.into(), ret.into());
+
                 let store_weak = store.weak();
-                let trampoline = trampoline::<$($args,)* R>;
+                let trampoline = host_trampoline::<$($args,)* R>;
                 let (instance, export) = unsafe {
                     crate::trampoline::generate_raw_func_export(
                         &ty,
                         std::slice::from_raw_parts_mut(
-                            shim::<F, $($args,)* R> as *mut _,
+                            wasm_to_host_shim::<F, $($args,)* R> as *mut _,
                             0,
                         ),
                         trampoline,
@@ -1219,6 +1653,7 @@ macro_rules! impl_into_func {
                     )
                     .expect("failed to generate export")
                 };
+
                 Func {
                     instance,
                     export,
