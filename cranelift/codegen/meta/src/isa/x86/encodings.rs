@@ -1669,6 +1669,7 @@ fn define_simd(
     let ssub_sat = shared.by_name("ssub_sat");
     let store = shared.by_name("store");
     let store_complex = shared.by_name("store_complex");
+    let swiden_low = shared.by_name("swiden_low");
     let uadd_sat = shared.by_name("uadd_sat");
     let uload8x8 = shared.by_name("uload8x8");
     let uload8x8_complex = shared.by_name("uload8x8_complex");
@@ -1678,6 +1679,7 @@ fn define_simd(
     let uload32x2_complex = shared.by_name("uload32x2_complex");
     let snarrow = shared.by_name("snarrow");
     let unarrow = shared.by_name("unarrow");
+    let uwiden_low = shared.by_name("uwiden_low");
     let ushr_imm = shared.by_name("ushr_imm");
     let usub_sat = shared.by_name("usub_sat");
     let vconst = shared.by_name("vconst");
@@ -1914,6 +1916,16 @@ fn define_simd(
     ] {
         let unarrow = unarrow.bind(vector(*ty, sse_vector_size));
         e.enc_both_inferred_maybe_isap(unarrow, rec_fa.opcodes(*opcodes), *isap);
+    }
+    for (ty, swiden_opcode, uwiden_opcode) in &[
+        (I8, &PMOVSXBW[..], &PMOVZXBW[..]),
+        (I16, &PMOVSXWD[..], &PMOVZXWD[..]),
+    ] {
+        let isap = Some(use_sse41_simd);
+        let swiden_low = swiden_low.bind(vector(*ty, sse_vector_size));
+        e.enc_both_inferred_maybe_isap(swiden_low, rec_furm.opcodes(*swiden_opcode), isap);
+        let uwiden_low = uwiden_low.bind(vector(*ty, sse_vector_size));
+        e.enc_both_inferred_maybe_isap(uwiden_low, rec_furm.opcodes(*uwiden_opcode), isap);
     }
     for ty in &[I8, I16, I32, I64] {
         e.enc_both_inferred_maybe_isap(
