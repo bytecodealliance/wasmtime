@@ -307,6 +307,22 @@ impl Func {
         }
     }
 
+    pub(crate) unsafe fn from_caller_checked_anyfunc(
+        store: &Store,
+        anyfunc: *mut wasmtime_runtime::VMCallerCheckedAnyfunc,
+    ) -> Option<Self> {
+        let anyfunc = NonNull::new(anyfunc)?;
+        debug_assert!(
+            anyfunc.as_ref().type_index != wasmtime_runtime::VMSharedSignatureIndex::default()
+        );
+
+        let instance_handle = wasmtime_runtime::InstanceHandle::from_vmctx(anyfunc.as_ref().vmctx);
+        let export = wasmtime_runtime::ExportFunction { anyfunc };
+        let instance = store.existing_instance_handle(instance_handle);
+        let f = Func::from_wasmtime_function(export, instance);
+        Some(f)
+    }
+
     /// Creates a new `Func` from the given Rust closure.
     ///
     /// This function will create a new `Func` which, when called, will
@@ -1177,6 +1193,49 @@ unsafe impl WasmTy for Option<ExternRef> {
 
     unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
         let ret = **ptr as usize as *mut u8;
+        *ptr = (*ptr).add(1);
+        ret
+    }
+
+    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
+        ptr::write(ptr, abi as usize as u128);
+    }
+}
+
+unsafe impl WasmTy for Option<Func> {
+    type Abi = *mut wasmtime_runtime::VMCallerCheckedAnyfunc;
+
+    #[inline]
+    fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {
+        if let Some(f) = self {
+            f.caller_checked_anyfunc().as_ptr()
+        } else {
+            ptr::null_mut()
+        }
+    }
+
+    #[inline]
+    unsafe fn from_abi<'a>(abi: Self::Abi, store: WeakStore<'a>) -> Self {
+        let store = Store::upgrade(store.0).unwrap();
+        Func::from_caller_checked_anyfunc(&store, abi)
+    }
+
+    fn push(dst: &mut Vec<ValType>) {
+        dst.push(ValType::FuncRef);
+    }
+
+    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        let next = tys.next();
+        ensure!(
+            next == Some(ValType::FuncRef),
+            "Type mismatch, expected funcref, got {:?}",
+            next
+        );
+        Ok(())
+    }
+
+    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
+        let ret = **ptr as usize as *mut wasmtime_runtime::VMCallerCheckedAnyfunc;
         *ptr = (*ptr).add(1);
         ret
     }
