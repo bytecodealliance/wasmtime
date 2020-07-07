@@ -129,10 +129,10 @@ fn process_unwind_info(info: &UnwindInfo, obj: &mut Object, code_section: Sectio
 // Builds ELF image from the module `Compilation`.
 pub(crate) fn build_object(
     isa: &dyn TargetIsa,
-    compilation: &Compilation,
-    relocations: &Relocations,
     module: &Module,
-    dwarf_sections: &[DwarfSection],
+    compilation: Compilation,
+    relocations: Relocations,
+    dwarf_sections: Vec<DwarfSection>,
 ) -> Result<(Object, Vec<ObjectUnwindInfo>), anyhow::Error> {
     const CODE_SECTION_ALIGNMENT: u64 = 0x1000;
     assert_eq!(
@@ -228,7 +228,7 @@ pub(crate) fn build_object(
     // If we have DWARF data, write it in the object file.
     let (debug_bodies, debug_relocs) = dwarf_sections
         .into_iter()
-        .map(|s| ((s.name, &s.body), (s.name, &s.relocs)))
+        .map(|s| ((s.name, s.body), (s.name, s.relocs)))
         .unzip::<_, _, Vec<_>, Vec<_>>();
     let mut dwarf_sections_ids = HashMap::new();
     for (name, body) in debug_bodies {

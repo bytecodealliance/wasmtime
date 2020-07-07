@@ -162,7 +162,7 @@ pub fn compile_to_obj(
             &address_transform,
             &module_vmctx_info,
             &value_ranges,
-            &compilation,
+            &compilation.unwind_info(),
         )
         .context("failed to emit debug sections")?;
         write_debugsections(&mut obj, sections).context("failed to emit debug sections")?;

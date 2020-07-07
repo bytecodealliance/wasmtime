@@ -96,6 +96,12 @@ impl CompilationArtifacts {
             .collect::<Vec<_>>()
             .into_boxed_slice();
 
+        let obj = obj.write().map_err(|_| {
+            SetupError::Instantiate(InstantiationError::Resource(
+                "failed to create image memory".to_string(),
+            ))
+        })?;
+
         Ok(Self {
             module,
             obj: obj.into_boxed_slice(),

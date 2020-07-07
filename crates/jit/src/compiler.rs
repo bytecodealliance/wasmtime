@@ -3,15 +3,15 @@
 use crate::instantiate::SetupError;
 use crate::object::{build_object, ObjectUnwindInfo};
 use cranelift_codegen::ir;
+use object::write::Object;
 use wasmtime_debug::{emit_dwarf, DebugInfoData, DwarfSection};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
-use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
+use wasmtime_environ::isa::{unwind::UnwindInfo, TargetFrontendConfig, TargetIsa};
 use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex};
 use wasmtime_environ::{
     CacheConfig, Compiler as _C, Module, ModuleAddressMap, ModuleMemoryOffset, ModuleTranslation,
     ModuleVmctxInfo, StackMaps, Traps, Tunables, VMOffsets, ValueLabelsRanges,
 };
-use wasmtime_runtime::InstantiationError;
 
 /// Select which kind of compilation to use.
 #[derive(Copy, Clone, Debug)]
@@ -67,11 +67,11 @@ fn _assert_compiler_send_sync() {
 fn transform_dwarf_data(
     isa: &dyn TargetIsa,
     module: &Module,
-    debug_data: &DebugInfoData,
+    debug_data: DebugInfoData,
     address_transform: &ModuleAddressMap,
     value_ranges: &ValueLabelsRanges,
     stack_slots: PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
-    compilation: &wasmtime_environ::Compilation,
+    unwind_info: PrimaryMap<DefinedFuncIndex, &Option<UnwindInfo>>,
 ) -> Result<Vec<DwarfSection>, SetupError> {
     let target_config = isa.frontend_config();
     let ofs = VMOffsets::new(target_config.pointer_bytes(), &module.local);
@@ -92,18 +92,18 @@ fn transform_dwarf_data(
     };
     emit_dwarf(
         isa,
-        debug_data,
+        &debug_data,
         &address_transform,
         &module_vmctx_info,
         &value_ranges,
-        &compilation,
+        &unwind_info,
     )
     .map_err(SetupError::DebugInfo)
 }
 
 #[allow(missing_docs)]
 pub struct Compilation {
-    pub obj: Vec<u8>,
+    pub obj: Object,
     pub unwind_info: Vec<ObjectUnwindInfo>,
     pub traps: Traps,
     pub stack_maps: StackMaps,
@@ -162,14 +162,15 @@ impl Compiler {
         .map_err(SetupError::Compile)?;
 
         let dwarf_sections = if debug_data.is_some() && !compilation.is_empty() {
+            let unwind_info = compilation.unwind_info();
             transform_dwarf_data(
                 &*self.isa,
                 &translation.module,
-                debug_data.as_ref().unwrap(),
+                debug_data.unwrap(),
                 &address_transform,
                 &value_ranges,
                 stack_slots,
-                &compilation,
+                unwind_info,
             )?
         } else {
             vec![]
@@ -177,16 +178,11 @@ impl Compiler {
 
         let (obj, unwind_info) = build_object(
             &*self.isa,
-            &compilation,
-            &relocations,
             &translation.module,
-            &dwarf_sections,
+            compilation,
+            relocations,
+            dwarf_sections,
         )?;
-        let obj = obj.write().map_err(|_| {
-            SetupError::Instantiate(InstantiationError::Resource(
-                "failed to create image memory".to_string(),
-            ))
-        })?;
 
         Ok(Compilation {
             obj,
