@@ -202,7 +202,18 @@ macro_rules! getters {
                     let weak_store = instance.store.weak();
                     let weak_store = WeakStore(&weak_store);
 
-                    $( let $args = $args.into_abi_for_arg(weak_store); )*
+                    $(
+                        // Because this returned closure is not marked `unsafe`,
+                        // we have to check that incoming values are compatible
+                        // with our store.
+                        if !$args.compatible_with_store(weak_store) {
+                            return Err(Trap::new(
+                                "attempt to pass cross-`Store` value to Wasm as function argument"
+                            ));
+                        }
+
+                        let $args = $args.into_abi_for_arg(weak_store);
+                    )*
 
                     invoke_wasm_and_catch_traps(anyfunc.as_ref().vmctx, &instance.store, || {
                         ret = Some(fnptr(
@@ -827,6 +838,10 @@ pub unsafe trait WasmTy {
     #[doc(hidden)]
     type Abi: Copy;
 
+    // Is this value compatible with the given store?
+    #[doc(hidden)]
+    fn compatible_with_store<'a>(&self, store: WeakStore<'a>) -> bool;
+
     // Convert this value into its ABI representation, when passing a value into
     // Wasm as an argument.
     #[doc(hidden)]
@@ -871,6 +886,10 @@ pub unsafe trait WasmRet {
     #[doc(hidden)]
     type Abi: Copy;
 
+    // Same as `WasmTy::compatible_with_store`.
+    #[doc(hidden)]
+    fn compatible_with_store<'a>(&self, store: WeakStore<'a>) -> bool;
+
     // Similar to `WasmTy::into_abi_for_arg` but used when host code is
     // returning a value into Wasm, rather than host code passing an argument to
     // a Wasm call. Unlike `into_abi_for_arg`, implementors of this method can
@@ -905,6 +924,11 @@ unsafe impl WasmTy for () {
     type Abi = Self;
 
     #[inline]
+    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+        true
+    }
+
+    #[inline]
     fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {}
 
     #[inline]
@@ -925,6 +949,11 @@ unsafe impl WasmTy for () {
 
 unsafe impl WasmTy for i32 {
     type Abi = Self;
+
+    #[inline]
+    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+        true
+    }
 
     #[inline]
     fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {
@@ -967,6 +996,11 @@ unsafe impl WasmTy for u32 {
     type Abi = <i32 as WasmTy>::Abi;
 
     #[inline]
+    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+        true
+    }
+
+    #[inline]
     fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {
         self as i32
     }
@@ -997,6 +1031,11 @@ unsafe impl WasmTy for u32 {
 
 unsafe impl WasmTy for i64 {
     type Abi = Self;
+
+    #[inline]
+    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+        true
+    }
 
     #[inline]
     fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {
@@ -1039,6 +1078,11 @@ unsafe impl WasmTy for u64 {
     type Abi = <i64 as WasmTy>::Abi;
 
     #[inline]
+    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+        true
+    }
+
+    #[inline]
     fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {
         self as i64
     }
@@ -1069,6 +1113,11 @@ unsafe impl WasmTy for u64 {
 
 unsafe impl WasmTy for f32 {
     type Abi = Self;
+
+    #[inline]
+    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+        true
+    }
 
     #[inline]
     fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {
@@ -1111,6 +1160,11 @@ unsafe impl WasmTy for f64 {
     type Abi = Self;
 
     #[inline]
+    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+        true
+    }
+
+    #[inline]
     fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {
         self
     }
@@ -1149,6 +1203,11 @@ unsafe impl WasmTy for f64 {
 
 unsafe impl WasmTy for Option<ExternRef> {
     type Abi = *mut u8;
+
+    #[inline]
+    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+        true
+    }
 
     #[inline]
     fn into_abi_for_arg<'a>(self, store: WeakStore<'a>) -> Self::Abi {
@@ -1206,6 +1265,16 @@ unsafe impl WasmTy for Option<Func> {
     type Abi = *mut wasmtime_runtime::VMCallerCheckedAnyfunc;
 
     #[inline]
+    fn compatible_with_store<'a>(&self, store: WeakStore<'a>) -> bool {
+        if let Some(f) = self {
+            let store = Store::upgrade(store.0).unwrap();
+            Store::same(&store, f.store())
+        } else {
+            true
+        }
+    }
+
+    #[inline]
     fn into_abi_for_arg<'a>(self, _store: WeakStore<'a>) -> Self::Abi {
         if let Some(f) = self {
             f.caller_checked_anyfunc().as_ptr()
@@ -1252,6 +1321,11 @@ where
     type Abi = <T as WasmTy>::Abi;
 
     #[inline]
+    fn compatible_with_store<'a>(&self, store: WeakStore<'a>) -> bool {
+        <Self as WasmTy>::compatible_with_store(self, store)
+    }
+
+    #[inline]
     unsafe fn into_abi_for_ret<'a>(self, store: WeakStore<'a>) -> Self::Abi {
         <Self as WasmTy>::into_abi_for_arg(self, store)
     }
@@ -1287,6 +1361,14 @@ where
     T: WasmTy,
 {
     type Abi = <T as WasmTy>::Abi;
+
+    #[inline]
+    fn compatible_with_store<'a>(&self, store: WeakStore<'a>) -> bool {
+        match self {
+            Ok(x) => <T as WasmTy>::compatible_with_store(x, store),
+            Err(_) => true,
+        }
+    }
 
     #[inline]
     unsafe fn into_abi_for_ret<'a>(self, store: WeakStore<'a>) -> Self::Abi {
@@ -1419,6 +1501,27 @@ impl Caller<'_> {
     }
 }
 
+#[inline(never)]
+#[cold]
+unsafe fn raise_cross_store_trap() -> ! {
+    #[derive(Debug)]
+    struct CrossStoreError;
+
+    impl std::error::Error for CrossStoreError {}
+
+    impl fmt::Display for CrossStoreError {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(
+                f,
+                "host function attempted to return cross-`Store` \
+                 value to Wasm",
+            )
+        }
+    }
+
+    raise_user_trap(Box::new(CrossStoreError));
+}
+
 macro_rules! impl_into_func {
     ($(
         ($($args:ident)*)
@@ -1482,8 +1585,17 @@ macro_rules! impl_into_func {
                         }))
                     };
                     match ret {
-                        Ok(ret) => ret.into_abi_for_ret(weak_store),
                         Err(panic) => wasmtime_runtime::resume_panic(panic),
+                        Ok(ret) => {
+                            // Because the wrapped function is not `unsafe`, we
+                            // can't assume it returned a value that is
+                            // compatible with this store.
+                            if !ret.compatible_with_store(weak_store) {
+                                raise_cross_store_trap();
+                            }
+
+                            ret.into_abi_for_ret(weak_store)
+                        }
                     }
                 }
 

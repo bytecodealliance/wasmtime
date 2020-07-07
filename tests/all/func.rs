@@ -442,3 +442,68 @@ fn func_write_nothing() -> anyhow::Result<()> {
         .contains("function attempted to return an incompatible value"));
     Ok(())
 }
+
+#[test]
+// Note: Cranelift only supports refrerence types (used in the wasm in this
+// test) on x64.
+#[cfg(target_arch = "x86_64")]
+fn return_cross_store_value() -> anyhow::Result<()> {
+    let wasm = wat::parse_str(
+        r#"
+            (import "" "" (func (result funcref)))
+
+            (func (export "run") (result funcref)
+                call 0
+            )
+        "#,
+    )?;
+    let mut config = Config::new();
+    config.wasm_reference_types(true);
+    let engine = Engine::new(&config);
+    let module = Module::new(&engine, &wasm)?;
+
+    let store1 = Store::new(&engine);
+    let store2 = Store::new(&engine);
+
+    let store2_func = Func::wrap(&store2, || {});
+    let return_cross_store_func = Func::wrap(&store1, move || Some(store2_func.clone()));
+
+    let instance = Instance::new(&store1, &module, &[return_cross_store_func.into()])?;
+
+    let run = instance.get_func("run").unwrap();
+    let result = run.call(&[]);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("cross-`Store`"));
+
+    Ok(())
+}
+
+#[test]
+// Note: Cranelift only supports refrerence types (used in the wasm in this
+// test) on x64.
+#[cfg(target_arch = "x86_64")]
+fn pass_cross_store_arg() -> anyhow::Result<()> {
+    let mut config = Config::new();
+    config.wasm_reference_types(true);
+    let engine = Engine::new(&config);
+
+    let store1 = Store::new(&engine);
+    let store2 = Store::new(&engine);
+
+    let store1_func = Func::wrap(&store1, |_: Option<Func>| {});
+    let store2_func = Func::wrap(&store2, || {});
+
+    // Using regular `.call` fails with cross-Store arguments.
+    assert!(store1_func
+        .call(&[Val::FuncRef(Some(store2_func.clone()))])
+        .is_err());
+
+    // And using `.get` followed by a function call also fails with cross-Store
+    // arguments.
+    let f = store1_func.get1::<Option<Func>, ()>()?;
+    let result = f(Some(store2_func));
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("cross-`Store`"));
+
+    Ok(())
+}
