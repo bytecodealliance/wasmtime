@@ -407,13 +407,18 @@ fn define_simd(
     let umax = insts.by_name("umax");
     let umin = insts.by_name("umin");
     let snarrow = insts.by_name("snarrow");
+    let swiden_high = insts.by_name("swiden_high");
+    let swiden_low = insts.by_name("swiden_low");
     let ushr_imm = insts.by_name("ushr_imm");
     let ushr = insts.by_name("ushr");
+    let uwiden_high = insts.by_name("uwiden_high");
+    let uwiden_low = insts.by_name("uwiden_low");
     let vconst = insts.by_name("vconst");
     let vall_true = insts.by_name("vall_true");
     let vany_true = insts.by_name("vany_true");
     let vselect = insts.by_name("vselect");
 
+    let x86_palignr = x86_instructions.by_name("x86_palignr");
     let x86_pmaxs = x86_instructions.by_name("x86_pmaxs");
     let x86_pmaxu = x86_instructions.by_name("x86_pmaxu");
     let x86_pmins = x86_instructions.by_name("x86_pmins");
@@ -782,6 +787,26 @@ fn define_simd(
                 def!(d = ushr_imm(c, uimm8_one)), // Create a mask of all 1s except the MSB.
                 def!(e = bitcast_to_float(d)),    // Cast mask to the floating-point type.
                 def!(b = band(a, e)),             // Unset the MSB.
+            ],
+        );
+    }
+
+    // SIMD widen
+    for ty in &[I8, I16] {
+        let swiden_high = swiden_high.bind(vector(*ty, sse_vector_size));
+        narrow.legalize(
+            def!(b = swiden_high(a)),
+            vec![
+                def!(c = x86_palignr(a, a, uimm8_eight)),
+                def!(b = swiden_low(c)),
+            ],
+        );
+        let uwiden_high = uwiden_high.bind(vector(*ty, sse_vector_size));
+        narrow.legalize(
+            def!(b = uwiden_high(a)),
+            vec![
+                def!(c = x86_palignr(a, a, uimm8_eight)),
+                def!(b = uwiden_low(c)),
             ],
         );
     }
