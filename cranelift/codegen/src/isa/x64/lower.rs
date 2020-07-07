@@ -6,6 +6,7 @@ use log::trace;
 use regalloc::{Reg, RegClass, Writable};
 use smallvec::SmallVec;
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use std::convert::TryFrom;
 
@@ -971,6 +972,32 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 ctx.emit(Inst::mov_r_m(elem_ty.bytes() as u8, src, addr));
             }
+        }
+
+        Opcode::FuncAddr => {
+            let dst = output_to_reg(ctx, outputs[0]);
+            let (extname, _) = ctx.call_target(insn).unwrap();
+            let extname = extname.clone();
+            let loc = ctx.srcloc(insn);
+            ctx.emit(Inst::LoadExtName {
+                dst,
+                name: Box::new(extname),
+                srcloc: loc,
+                offset: 0,
+            });
+        }
+
+        Opcode::SymbolValue => {
+            let dst = output_to_reg(ctx, outputs[0]);
+            let (extname, _, offset) = ctx.symbol_value(insn).unwrap();
+            let extname = extname.clone();
+            let loc = ctx.srcloc(insn);
+            ctx.emit(Inst::LoadExtName {
+                dst,
+                name: Box::new(extname),
+                srcloc: loc,
+                offset,
+            });
         }
 
         Opcode::StackAddr => {

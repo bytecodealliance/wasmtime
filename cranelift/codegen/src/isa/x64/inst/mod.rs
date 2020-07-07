@@ -4,13 +4,14 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
-use smallvec::SmallVec;
 use std::fmt;
 use std::string::{String, ToString};
 
 use regalloc::RegUsageCollector;
 use regalloc::{RealRegUniverse, Reg, RegClass, RegUsageMapper, SpillSlot, VirtualReg, Writable};
+use smallvec::SmallVec;
 
 use crate::binemit::CodeOffset;
 use crate::ir::types::{B1, B128, B16, B32, B64, B8, F32, F64, I128, I16, I32, I64, I8};
@@ -269,6 +270,14 @@ pub enum Inst {
 
     /// An instruction that will always trigger the illegal instruction exception.
     Ud2 { trap_info: (SourceLoc, TrapCode) },
+
+    /// Loads an external symbol in a register, with a relocation.
+    LoadExtName {
+        dst: Writable<Reg>,
+        name: Box<ExternalName>,
+        srcloc: SourceLoc,
+        offset: i64,
+    },
 
     // =====================================
     // Meta-instructions generating no code.
@@ -815,6 +824,15 @@ impl ShowWithRRU for Inst {
             Inst::TrapIf { cc, trap_code, .. } => {
                 format!("j{} ; ud2 {} ;", cc.invert().to_string(), trap_code)
             }
+            Inst::LoadExtName {
+                dst, name, offset, ..
+            } => format!(
+                "{} {}+{}, {}",
+                ljustify("movaps".into()),
+                name,
+                offset,
+                show_ireg_sized(dst.to_reg(), mb_rru, 8),
+            ),
             Inst::VirtualSPOffsetAdj { offset } => format!("virtual_sp_offset_adjust {}", offset),
             Inst::Hlt => "hlt".into(),
             Inst::Ud2 { trap_info } => format!("ud2 {}", trap_info.1),
@@ -956,6 +974,10 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
 
         Inst::JmpUnknown { target } => {
             target.get_regs_as_uses(collector);
+        }
+
+        Inst::LoadExtName { dst, .. } => {
+            collector.add_def(*dst);
         }
 
         Inst::Ret
@@ -1186,6 +1208,8 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         }
 
         Inst::JmpUnknown { ref mut target } => target.map_uses(mapper),
+
+        Inst::LoadExtName { ref mut dst, .. } => map_def(mapper, dst),
 
         Inst::Ret
         | Inst::EpiloguePlaceholder

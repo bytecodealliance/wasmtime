@@ -1479,6 +1479,25 @@ pub(crate) fn emit(
             let dst = &dst.finalize(state);
             emit_std_reg_mem(sink, prefix, opcode, 2, *src, dst, rex);
         }
+
+        Inst::LoadExtName {
+            dst,
+            name,
+            offset,
+            srcloc,
+        } => {
+            // The full address can be encoded in the register, with a relocation.
+            let enc_dst = int_reg_enc(dst.to_reg());
+            sink.put1(0x48 | ((enc_dst >> 3) & 1));
+            sink.put1(0xB8 | (enc_dst & 7));
+            sink.add_reloc(*srcloc, Reloc::Abs8, name, *offset);
+            if flags.emit_all_ones_funcaddrs() {
+                sink.put8(u64::max_value());
+            } else {
+                sink.put8(0);
+            }
+        }
+
         Inst::Hlt => {
             sink.put1(0xcc);
         }
