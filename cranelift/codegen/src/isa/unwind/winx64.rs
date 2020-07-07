@@ -80,13 +80,13 @@ impl UnwindCode {
                 stack_offset,
             } => {
                 writer.write_u8(*offset);
-                let stack_offset = stack_offset / 16;
-                if stack_offset <= core::u16::MAX as u32 {
+                let scaled_stack_offset = stack_offset / 16;
+                if scaled_stack_offset <= core::u16::MAX as u32 {
                     writer.write_u8((*reg << 4) | (UnwindOperation::SaveXmm128 as u8));
-                    writer.write_u16::<LittleEndian>(stack_offset as u16);
+                    writer.write_u16::<LittleEndian>(scaled_stack_offset as u16);
                 } else {
                     writer.write_u8((*reg << 4) | (UnwindOperation::SaveXmm128Far as u8));
-                    writer.write_u16::<LittleEndian>(stack_offset as u16);
+                    writer.write_u16::<LittleEndian>(*stack_offset as u16);
                     writer.write_u16::<LittleEndian>((stack_offset >> 16) as u16);
                 }
             }
