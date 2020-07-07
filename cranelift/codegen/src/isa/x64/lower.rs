@@ -390,6 +390,238 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ));
         }
 
+        Opcode::Popcnt => {
+            // TODO when the x86 flags have use_popcnt, we can use the popcnt instruction.
+
+            let (ext_spec, ty) = match ctx.input_ty(insn, 0) {
+                I8 | I16 => (Some(ExtSpec::ZeroExtend32), I32),
+                a if a == I32 || a == I64 => (None, a),
+                _ => unreachable!(),
+            };
+
+            let src = if let Some(ext_spec) = ext_spec {
+                RegMem::reg(extend_input_to_reg(ctx, inputs[0], ext_spec))
+            } else {
+                input_to_reg_mem(ctx, inputs[0])
+            };
+            let dst = output_to_reg(ctx, outputs[0]);
+
+            if ty == I64 {
+                let is_64 = true;
+
+                let tmp1 = ctx.alloc_tmp(RegClass::I64, I64);
+                let tmp2 = ctx.alloc_tmp(RegClass::I64, I64);
+                let cst = ctx.alloc_tmp(RegClass::I64, I64);
+
+                // mov src, tmp1
+                ctx.emit(Inst::mov64_rm_r(src.clone(), tmp1));
+
+                // shr $1, tmp1
+                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(1), tmp1));
+
+                // mov 0x7777_7777_7777_7777, cst
+                ctx.emit(Inst::imm_r(is_64, 0x7777777777777777, cst));
+
+                // andq cst, tmp1
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::And,
+                    RegMemImm::reg(cst.to_reg()),
+                    tmp1,
+                ));
+
+                // mov src, tmp2
+                ctx.emit(Inst::mov64_rm_r(src, tmp2));
+
+                // sub tmp1, tmp2
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::Sub,
+                    RegMemImm::reg(tmp1.to_reg()),
+                    tmp2,
+                ));
+
+                // shr $1, tmp1
+                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(1), tmp1));
+
+                // and cst, tmp1
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::And,
+                    RegMemImm::reg(cst.to_reg()),
+                    tmp1,
+                ));
+
+                // sub tmp1, tmp2
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::Sub,
+                    RegMemImm::reg(tmp1.to_reg()),
+                    tmp2,
+                ));
+
+                // shr $1, tmp1
+                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(1), tmp1));
+
+                // and cst, tmp1
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::And,
+                    RegMemImm::reg(cst.to_reg()),
+                    tmp1,
+                ));
+
+                // sub tmp1, tmp2
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::Sub,
+                    RegMemImm::reg(tmp1.to_reg()),
+                    tmp2,
+                ));
+
+                // mov tmp2, dst
+                ctx.emit(Inst::mov64_rm_r(RegMem::reg(tmp2.to_reg()), dst));
+
+                // shr $4, dst
+                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(4), dst));
+
+                // add tmp2, dst
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::Add,
+                    RegMemImm::reg(tmp2.to_reg()),
+                    dst,
+                ));
+
+                // mov $0x0F0F_0F0F_0F0F_0F0F, cst
+                ctx.emit(Inst::imm_r(is_64, 0x0F0F0F0F0F0F0F0F, cst));
+
+                // and cst, dst
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::And,
+                    RegMemImm::reg(cst.to_reg()),
+                    dst,
+                ));
+
+                // mov $0x0101_0101_0101_0101, cst
+                ctx.emit(Inst::imm_r(is_64, 0x0101010101010101, cst));
+
+                // mul cst, dst
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::Mul,
+                    RegMemImm::reg(cst.to_reg()),
+                    dst,
+                ));
+
+                // shr $56, dst
+                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(56), dst));
+            } else {
+                debug_assert_eq!(ty, I32);
+                let is_64 = false;
+
+                let tmp1 = ctx.alloc_tmp(RegClass::I64, I64);
+                let tmp2 = ctx.alloc_tmp(RegClass::I64, I64);
+
+                // mov src, tmp1
+                ctx.emit(Inst::mov64_rm_r(src.clone(), tmp1));
+
+                // shr $1, tmp1
+                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(1), tmp1));
+
+                // andq $0x7777_7777, tmp1
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::And,
+                    RegMemImm::imm(0x77777777),
+                    tmp1,
+                ));
+
+                // mov src, tmp2
+                ctx.emit(Inst::mov64_rm_r(src, tmp2));
+
+                // sub tmp1, tmp2
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::Sub,
+                    RegMemImm::reg(tmp1.to_reg()),
+                    tmp2,
+                ));
+
+                // shr $1, tmp1
+                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(1), tmp1));
+
+                // and 0x7777_7777, tmp1
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::And,
+                    RegMemImm::imm(0x77777777),
+                    tmp1,
+                ));
+
+                // sub tmp1, tmp2
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::Sub,
+                    RegMemImm::reg(tmp1.to_reg()),
+                    tmp2,
+                ));
+
+                // shr $1, tmp1
+                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(1), tmp1));
+
+                // and $0x7777_7777, tmp1
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::And,
+                    RegMemImm::imm(0x77777777),
+                    tmp1,
+                ));
+
+                // sub tmp1, tmp2
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::Sub,
+                    RegMemImm::reg(tmp1.to_reg()),
+                    tmp2,
+                ));
+
+                // mov tmp2, dst
+                ctx.emit(Inst::mov64_rm_r(RegMem::reg(tmp2.to_reg()), dst));
+
+                // shr $4, dst
+                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(4), dst));
+
+                // add tmp2, dst
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::Add,
+                    RegMemImm::reg(tmp2.to_reg()),
+                    dst,
+                ));
+
+                // and $0x0F0F_0F0F, dst
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::And,
+                    RegMemImm::imm(0x0F0F0F0F),
+                    dst,
+                ));
+
+                // mul $0x0101_0101, dst
+                ctx.emit(Inst::alu_rmi_r(
+                    is_64,
+                    AluRmiROpcode::Mul,
+                    RegMemImm::imm(0x01010101),
+                    dst,
+                ));
+
+                // shr $24, dst
+                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(24), dst));
+            }
+        }
+
         Opcode::Uextend
         | Opcode::Sextend
         | Opcode::Bint
