@@ -341,16 +341,17 @@ impl Func {
     /// function being called is known statically so the type signature can
     /// be inferred. Rust types will map to WebAssembly types as follows:
     ///
-    /// | Rust Argument Type | WebAssembly Type |
-    /// |--------------------|------------------|
-    /// | `i32`              | `i32`            |
-    /// | `u32`              | `i32`            |
-    /// | `i64`              | `i64`            |
-    /// | `u64`              | `i64`            |
-    /// | `f32`              | `f32`            |
-    /// | `f64`              | `f64`            |
-    /// | (not supported)    | `v128`           |
-    /// | (not supported)    | `externref`         |
+    /// | Rust Argument Type  | WebAssembly Type |
+    /// |---------------------|------------------|
+    /// | `i32`               | `i32`            |
+    /// | `u32`               | `i32`            |
+    /// | `i64`               | `i64`            |
+    /// | `u64`               | `i64`            |
+    /// | `f32`               | `f32`            |
+    /// | `f64`               | `f64`            |
+    /// | (not supported)     | `v128`           |
+    /// | `Option<Func>`      | `funcref`        |
+    /// | `Option<ExternRef>` | `externref`      |
     ///
     /// Any of the Rust types can be returned from the closure as well, in
     /// addition to some extra types
