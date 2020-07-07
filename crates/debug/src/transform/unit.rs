@@ -82,20 +82,31 @@ where
     Ok(String::from("??"))
 }
 
+enum WebAssemblyPtrKind {
+    Reference,
+    Pointer,
+}
+
 /// Replaces WebAssembly pointer type DIE with the wrapper
 /// which natively represented by offset in a Wasm memory.
 ///
-/// `pointer_type_entry` is an DW_TAG_pointer_type entry (e.g. `T*`),
-/// which refers its base type (e.g. `T`).
+/// `pointer_type_entry` is a DW_TAG_pointer_type entry (e.g. `T*`),
+/// which refers its base type (e.g. `T`), or is a
+/// DW_TAG_reference_type (e.g. `T&`).
 ///
 /// The generated wrapper is a structure that contains only the
 /// `__ptr` field. The utility operators overloads is added to
 /// provide better debugging experience.
 ///
+/// Wrappers of pointer and reference types are identical except for
+/// their name -- they are formatted and accessed from a debugger
+/// the same way.
+///
 /// Notice that "resolve_vmctx_memory_ptr" is external/builtin
 /// subprogram that is not part of Wasm code.
 fn replace_pointer_type<R>(
     parent_id: write::UnitEntryId,
+    kind: WebAssemblyPtrKind,
     comp_unit: &mut write::Unit,
     wp_die_id: write::UnitEntryId,
     pointer_type_entry: &DebuggingInformationEntry<R>,
@@ -121,11 +132,18 @@ where
     // Build DW_TAG_structure_type for the wrapper:
     //  .. DW_AT_name = "WebAssemblyPtrWrapper<T>",
     //  .. DW_AT_byte_size = 4,
-    add_tag!(parent_id, gimli::DW_TAG_structure_type => wrapper_die as wrapper_die_id {
-        gimli::DW_AT_name = write::AttributeValue::StringRef(out_strings.add(format!(
+    let name = match kind {
+        WebAssemblyPtrKind::Pointer => format!(
             "WebAssemblyPtrWrapper<{}>",
             get_base_type_name(pointer_type_entry, unit, context)?
-        ).as_str())),
+        ),
+        WebAssemblyPtrKind::Reference => format!(
+            "WebAssemblyRefWrapper<{}>",
+            get_base_type_name(pointer_type_entry, unit, context)?
+        ),
+    };
+    add_tag!(parent_id, gimli::DW_TAG_structure_type => wrapper_die as wrapper_die_id {
+        gimli::DW_AT_name = write::AttributeValue::StringRef(out_strings.add(name.as_str())),
         gimli::DW_AT_byte_size = write::AttributeValue::Data1(WASM_PTR_LEN)
     });
 
@@ -393,11 +411,17 @@ where
 
         let parent = stack.last().unwrap();
 
-        if entry.tag() == gimli::DW_TAG_pointer_type {
+        if entry.tag() == gimli::DW_TAG_pointer_type || entry.tag() == gimli::DW_TAG_reference_type
+        {
             // Wrap pointer types.
-            // TODO reference types?
+            let pointer_kind = match entry.tag() {
+                gimli::DW_TAG_pointer_type => WebAssemblyPtrKind::Pointer,
+                gimli::DW_TAG_reference_type => WebAssemblyPtrKind::Reference,
+                _ => panic!(),
+            };
             let die_id = replace_pointer_type(
                 *parent,
+                pointer_kind,
                 comp_unit,
                 wp_die_id,
                 entry,
