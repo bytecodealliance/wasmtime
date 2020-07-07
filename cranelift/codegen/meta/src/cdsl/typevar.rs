@@ -211,6 +211,24 @@ impl TypeVar {
                     "can't double 256 lanes"
                 );
             }
+            DerivedFunc::MergeLanes => {
+                assert!(
+                    ts.ints.is_empty() || *ts.ints.iter().max().unwrap() < MAX_BITS,
+                    "can't double all integer types"
+                );
+                assert!(
+                    ts.floats.is_empty() || *ts.floats.iter().max().unwrap() < MAX_FLOAT_BITS,
+                    "can't double all float types"
+                );
+                assert!(
+                    ts.bools.is_empty() || *ts.bools.iter().max().unwrap() < MAX_BITS,
+                    "can't double all boolean types"
+                );
+                assert!(
+                    *ts.lanes.iter().min().unwrap() > 1,
+                    "can't halve a scalar type"
+                );
+            }
             DerivedFunc::LaneOf | DerivedFunc::AsBool => { /* no particular assertions */ }
         }
 
@@ -247,6 +265,9 @@ impl TypeVar {
     }
     pub fn split_lanes(&self) -> TypeVar {
         self.derived(DerivedFunc::SplitLanes)
+    }
+    pub fn merge_lanes(&self) -> TypeVar {
+        self.derived(DerivedFunc::MergeLanes)
     }
 
     /// Constrain the range of types this variable can assume to a subset of those in the typeset
@@ -355,6 +376,7 @@ pub(crate) enum DerivedFunc {
     HalfVector,
     DoubleVector,
     SplitLanes,
+    MergeLanes,
 }
 
 impl DerivedFunc {
@@ -367,6 +389,7 @@ impl DerivedFunc {
             DerivedFunc::HalfVector => "half_vector",
             DerivedFunc::DoubleVector => "double_vector",
             DerivedFunc::SplitLanes => "split_lanes",
+            DerivedFunc::MergeLanes => "merge_lanes",
         }
     }
 
@@ -377,6 +400,8 @@ impl DerivedFunc {
             DerivedFunc::DoubleWidth => Some(DerivedFunc::HalfWidth),
             DerivedFunc::HalfVector => Some(DerivedFunc::DoubleVector),
             DerivedFunc::DoubleVector => Some(DerivedFunc::HalfVector),
+            DerivedFunc::MergeLanes => Some(DerivedFunc::SplitLanes),
+            DerivedFunc::SplitLanes => Some(DerivedFunc::MergeLanes),
             _ => None,
         }
     }
@@ -462,6 +487,7 @@ impl TypeSet {
             DerivedFunc::HalfVector => self.half_vector(),
             DerivedFunc::DoubleVector => self.double_vector(),
             DerivedFunc::SplitLanes => self.half_width().double_vector(),
+            DerivedFunc::MergeLanes => self.double_width().half_vector(),
         }
     }
 
@@ -601,7 +627,8 @@ impl TypeSet {
             DerivedFunc::DoubleWidth => self.half_width(),
             DerivedFunc::HalfVector => self.double_vector(),
             DerivedFunc::DoubleVector => self.half_vector(),
-            DerivedFunc::SplitLanes => self.half_vector().double_width(),
+            DerivedFunc::SplitLanes => self.double_width().half_vector(),
+            DerivedFunc::MergeLanes => self.half_width().double_vector(),
         }
     }
 
