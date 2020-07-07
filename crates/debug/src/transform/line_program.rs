@@ -121,7 +121,7 @@ where
             dirs.push(dir_id);
         }
         let mut files = Vec::new();
-        // since we are outputting DWARF-4, perform base change
+        // Since we are outputting DWARF-4, perform base change.
         let directory_index_correction = if header.version() >= 5 { 1 } else { 0 };
         for file_entry in header.file_names() {
             let dir_index = file_entry.directory_index() + directory_index_correction;
