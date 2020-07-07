@@ -13,12 +13,16 @@ fn func_constructors() {
     Func::wrap(&store, || -> i64 { 0 });
     Func::wrap(&store, || -> f32 { 0.0 });
     Func::wrap(&store, || -> f64 { 0.0 });
+    Func::wrap(&store, || -> Option<ExternRef> { None });
+    Func::wrap(&store, || -> Option<Func> { None });
 
     Func::wrap(&store, || -> Result<(), Trap> { loop {} });
     Func::wrap(&store, || -> Result<i32, Trap> { loop {} });
     Func::wrap(&store, || -> Result<i64, Trap> { loop {} });
     Func::wrap(&store, || -> Result<f32, Trap> { loop {} });
     Func::wrap(&store, || -> Result<f64, Trap> { loop {} });
+    Func::wrap(&store, || -> Result<Option<ExternRef>, Trap> { loop {} });
+    Func::wrap(&store, || -> Result<Option<Func>, Trap> { loop {} });
 }
 
 #[test]
@@ -95,9 +99,12 @@ fn signatures_match() {
     assert_eq!(f.ty().params(), &[]);
     assert_eq!(f.ty().results(), &[ValType::F64]);
 
-    let f = Func::wrap(&store, |_: f32, _: f64, _: i32, _: i64, _: i32| -> f64 {
-        loop {}
-    });
+    let f = Func::wrap(
+        &store,
+        |_: f32, _: f64, _: i32, _: i64, _: i32, _: Option<ExternRef>, _: Option<Func>| -> f64 {
+            loop {}
+        },
+    );
     assert_eq!(
         f.ty().params(),
         &[
@@ -105,13 +112,18 @@ fn signatures_match() {
             ValType::F64,
             ValType::I32,
             ValType::I64,
-            ValType::I32
+            ValType::I32,
+            ValType::ExternRef,
+            ValType::FuncRef,
         ]
     );
     assert_eq!(f.ty().results(), &[ValType::F64]);
 }
 
 #[test]
+// Note: Cranelift only supports refrerence types (used in the wasm in this
+// test) on x64.
+#[cfg(target_arch = "x86_64")]
 fn import_works() -> Result<()> {
     static HITS: AtomicUsize = AtomicUsize::new(0);
 
@@ -120,9 +132,9 @@ fn import_works() -> Result<()> {
             (import "" "" (func))
             (import "" "" (func (param i32) (result i32)))
             (import "" "" (func (param i32) (param i64)))
-            (import "" "" (func (param i32 i64 i32 f32 f64)))
+            (import "" "" (func (param i32 i64 i32 f32 f64 externref funcref)))
 
-            (func $foo
+            (func (export "run") (param externref funcref)
                 call 0
                 i32.const 0
                 call 1
@@ -136,14 +148,18 @@ fn import_works() -> Result<()> {
                 i32.const 300
                 f32.const 400
                 f64.const 500
+                local.get 0
+                local.get 1
                 call 3
             )
-            (start $foo)
         "#,
     )?;
-    let store = Store::default();
-    let module = Module::new(store.engine(), &wasm)?;
-    Instance::new(
+    let mut config = Config::new();
+    config.wasm_reference_types(true);
+    let engine = Engine::new(&config);
+    let store = Store::new(&engine);
+    let module = Module::new(&engine, &wasm)?;
+    let instance = Instance::new(
         &store,
         &module,
         &[
@@ -163,17 +179,31 @@ fn import_works() -> Result<()> {
                 assert_eq!(HITS.fetch_add(1, SeqCst), 2);
             })
             .into(),
-            Func::wrap(&store, |a: i32, b: i64, c: i32, d: f32, e: f64| {
-                assert_eq!(a, 100);
-                assert_eq!(b, 200);
-                assert_eq!(c, 300);
-                assert_eq!(d, 400.0);
-                assert_eq!(e, 500.0);
-                assert_eq!(HITS.fetch_add(1, SeqCst), 3);
-            })
+            Func::wrap(
+                &store,
+                |a: i32, b: i64, c: i32, d: f32, e: f64, f: Option<ExternRef>, g: Option<Func>| {
+                    assert_eq!(a, 100);
+                    assert_eq!(b, 200);
+                    assert_eq!(c, 300);
+                    assert_eq!(d, 400.0);
+                    assert_eq!(e, 500.0);
+                    assert_eq!(
+                        f.as_ref().unwrap().data().downcast_ref::<String>().unwrap(),
+                        "hello"
+                    );
+                    assert_eq!(g.as_ref().unwrap().call(&[]).unwrap()[0].unwrap_i32(), 42);
+                    assert_eq!(HITS.fetch_add(1, SeqCst), 3);
+                },
+            )
             .into(),
         ],
     )?;
+    let run = instance.get_func("run").unwrap();
+    run.call(&[
+        Val::ExternRef(Some(ExternRef::new("hello".to_string()))),
+        Val::FuncRef(Some(Func::wrap(&store, || -> i32 { 42 }))),
+    ])?;
+    assert_eq!(HITS.load(SeqCst), 4);
     Ok(())
 }
 
@@ -228,6 +258,10 @@ fn get_from_wrapper() {
     assert!(f.get0::<f32>().is_ok());
     let f = Func::wrap(&store, || -> f64 { loop {} });
     assert!(f.get0::<f64>().is_ok());
+    let f = Func::wrap(&store, || -> Option<ExternRef> { loop {} });
+    assert!(f.get0::<Option<ExternRef>>().is_ok());
+    let f = Func::wrap(&store, || -> Option<Func> { loop {} });
+    assert!(f.get0::<Option<Func>>().is_ok());
 
     let f = Func::wrap(&store, |_: i32| {});
     assert!(f.get1::<i32, ()>().is_ok());
@@ -240,6 +274,10 @@ fn get_from_wrapper() {
     assert!(f.get1::<f32, ()>().is_ok());
     let f = Func::wrap(&store, |_: f64| {});
     assert!(f.get1::<f64, ()>().is_ok());
+    let f = Func::wrap(&store, |_: Option<ExternRef>| {});
+    assert!(f.get1::<Option<ExternRef>, ()>().is_ok());
+    let f = Func::wrap(&store, |_: Option<Func>| {});
+    assert!(f.get1::<Option<Func>, ()>().is_ok());
 }
 
 #[test]
