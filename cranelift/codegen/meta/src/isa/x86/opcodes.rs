@@ -354,6 +354,10 @@ pub static PADDUSB: [u8; 3] = [0x66, 0x0f, 0xdc];
 /// Add packed unsigned word integers from xmm2/m128 and xmm1 saturate the results (SSE).
 pub static PADDUSW: [u8; 3] = [0x66, 0x0f, 0xdd];
 
+/// Concatenate destination and source operands, extract a byte-aligned result into xmm1 that is
+/// shifted to the right by the constant number of bytes in imm8 (SSSE3).
+pub static PALIGNR: [u8; 4] = [0x66, 0x0f, 0x3a, 0x0f];
+
 /// Bitwise AND of xmm2/m128 and xmm1 (SSE2).
 pub static PAND: [u8; 3] = [0x66, 0x0f, 0xdb];
 

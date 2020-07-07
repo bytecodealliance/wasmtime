@@ -2133,6 +2133,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::X86Insertps
         | Opcode::X86Movsd
         | Opcode::X86Movlhps
+        | Opcode::X86Palignr
         | Opcode::X86Psll
         | Opcode::X86Psrl
         | Opcode::X86Psra

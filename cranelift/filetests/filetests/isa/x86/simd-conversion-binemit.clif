@@ -1,5 +1,6 @@
 test binemit
-target x86_64
+set enable_simd
+target x86_64 has_ssse3=true
 
 ; Ensure raw_bitcast emits no instructions.
 function %raw_bitcast_i16x8_to_b32x4() {
@@ -10,8 +11,9 @@ block0:
             return
 }
 
-function %fcvt_32(i32x4) {
-block0(v0: i32x4 [%xmm6]):
-[-, %xmm2]  v1 = fcvt_from_sint.f32x4 v0    ; bin: 40 0f 5b d6
+function %conversions_i32x4(i32x4, i32x4) {
+block0(v0: i32x4 [%xmm6], v1: i32x4 [%xmm4]):
+[-, %xmm2]  v2 = fcvt_from_sint.f32x4 v0    ; bin: 40 0f 5b d6
+[-, %xmm6]  v3 = x86_palignr v0, v1, 3      ; bin: 66 0f 3a 0f f4 03
             return
 }

@@ -1697,6 +1697,7 @@ fn define_simd(
     let x86_pminu = x86.by_name("x86_pminu");
     let x86_pmullq = x86.by_name("x86_pmullq");
     let x86_pmuludq = x86.by_name("x86_pmuludq");
+    let x86_palignr = x86.by_name("x86_palignr");
     let x86_pshufb = x86.by_name("x86_pshufb");
     let x86_pshufd = x86.by_name("x86_pshufd");
     let x86_psll = x86.by_name("x86_psll");
@@ -1901,6 +1902,8 @@ fn define_simd(
             rec_fa.opcodes(low),
         );
     }
+
+    // SIMD narrow/widen
     for (ty, opcodes) in &[(I16, &PACKSSWB), (I32, &PACKSSDW)] {
         let snarrow = snarrow.bind(vector(*ty, sse_vector_size));
         e.enc_both_inferred(snarrow, rec_fa.opcodes(*opcodes));
@@ -1911,6 +1914,13 @@ fn define_simd(
     ] {
         let unarrow = unarrow.bind(vector(*ty, sse_vector_size));
         e.enc_both_inferred_maybe_isap(unarrow, rec_fa.opcodes(*opcodes), *isap);
+    }
+    for ty in &[I8, I16, I32, I64] {
+        e.enc_both_inferred_maybe_isap(
+            x86_palignr.bind(vector(*ty, sse_vector_size)),
+            rec_fa_ib.opcodes(&PALIGNR[..]),
+            Some(use_ssse3_simd),
+        );
     }
 
     // SIMD bitcast all 128-bit vectors to each other (for legalizing splat.x16x8).
