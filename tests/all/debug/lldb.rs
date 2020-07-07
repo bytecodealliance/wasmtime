@@ -166,3 +166,37 @@ check: resuming
     )?;
     Ok(())
 }
+
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
+pub fn test_debug_dwarf_ref() -> Result<()> {
+    let output = lldb_with_script(
+        &[
+            "-g",
+            "--opt-level",
+            "0",
+            "tests/all/debug/testsuite/fraction-norm.wasm",
+        ],
+        r#"b fraction-norm.cc:26
+r
+p __vmctx->set(),n->denominator
+c"#,
+    )?;
+
+    check_lldb_output(
+        &output,
+        r#"
+check: Breakpoint 1: no locations (pending)
+check: stop reason = breakpoint 1.1
+check: frame #0
+sameln: norm(n=(__ptr =
+check: = 27
+check: resuming
+"#,
+    )?;
+    Ok(())
+}

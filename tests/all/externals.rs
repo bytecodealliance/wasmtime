@@ -101,13 +101,24 @@ fn cross_store() -> anyhow::Result<()> {
     let t1 = Table::new(&store2, ty.clone(), store2val.clone())?;
     assert!(t1.set(0, store1val.clone()).is_err());
     assert!(t1.grow(0, store1val.clone()).is_err());
+    assert!(t1.fill(0, store1val.clone(), 1).is_err());
     let t2 = Table::new(&store1, ty.clone(), store1val.clone())?;
     assert!(Table::copy(&t1, 0, &t2, 0, 0).is_err());
 
     // ============ Cross-store funcs ==============
 
-    // TODO: need to actually fill this out once we support externref params/locals
-    // let module = Module::new(&engine, r#"(module (func (export "a") (param funcref)))"#)?;
+    let module = Module::new(&engine, r#"(module (func (export "f") (param funcref)))"#)?;
+    let s1_inst = Instance::new(&store1, &module, &[])?;
+    let s2_inst = Instance::new(&store2, &module, &[])?;
+    let s1_f = s1_inst.get_func("f").unwrap();
+    let s2_f = s2_inst.get_func("f").unwrap();
+
+    assert!(s1_f.call(&[Val::FuncRef(None)]).is_ok());
+    assert!(s2_f.call(&[Val::FuncRef(None)]).is_ok());
+    assert!(s1_f.call(&[Val::FuncRef(Some(s1_f.clone()))]).is_ok());
+    assert!(s1_f.call(&[Val::FuncRef(Some(s2_f.clone()))]).is_err());
+    assert!(s2_f.call(&[Val::FuncRef(Some(s1_f.clone()))]).is_err());
+    assert!(s2_f.call(&[Val::FuncRef(Some(s2_f.clone()))]).is_ok());
 
     Ok(())
 }
@@ -178,6 +189,154 @@ fn get_set_funcref_globals_via_api() -> anyhow::Result<()> {
     )?;
     let f2 = global.get().unwrap_funcref().cloned().unwrap();
     assert_eq!(f.ty(), f2.ty());
+
+    Ok(())
+}
+
+#[test]
+fn create_get_set_funcref_tables_via_api() -> anyhow::Result<()> {
+    let mut cfg = Config::new();
+    cfg.wasm_reference_types(true);
+    let engine = Engine::new(&cfg);
+    let store = Store::new(&engine);
+
+    let table_ty = TableType::new(ValType::FuncRef, Limits::at_least(10));
+    let table = Table::new(
+        &store,
+        table_ty,
+        Val::FuncRef(Some(Func::wrap(&store, || {}))),
+    )?;
+
+    assert!(table.get(5).unwrap().unwrap_funcref().is_some());
+    table.set(5, Val::FuncRef(None))?;
+    assert!(table.get(5).unwrap().unwrap_funcref().is_none());
+
+    Ok(())
+}
+
+#[test]
+fn fill_funcref_tables_via_api() -> anyhow::Result<()> {
+    let mut cfg = Config::new();
+    cfg.wasm_reference_types(true);
+    let engine = Engine::new(&cfg);
+    let store = Store::new(&engine);
+
+    let table_ty = TableType::new(ValType::FuncRef, Limits::at_least(10));
+    let table = Table::new(&store, table_ty, Val::FuncRef(None))?;
+
+    for i in 0..10 {
+        assert!(table.get(i).unwrap().unwrap_funcref().is_none());
+    }
+
+    table.fill(2, Val::FuncRef(Some(Func::wrap(&store, || {}))), 4)?;
+
+    for i in (0..2).chain(7..10) {
+        assert!(table.get(i).unwrap().unwrap_funcref().is_none());
+    }
+    for i in 2..6 {
+        assert!(table.get(i).unwrap().unwrap_funcref().is_some());
+    }
+
+    Ok(())
+}
+
+#[test]
+fn grow_funcref_tables_via_api() -> anyhow::Result<()> {
+    let mut cfg = Config::new();
+    cfg.wasm_reference_types(true);
+    let engine = Engine::new(&cfg);
+    let store = Store::new(&engine);
+
+    let table_ty = TableType::new(ValType::FuncRef, Limits::at_least(10));
+    let table = Table::new(&store, table_ty, Val::FuncRef(None))?;
+
+    assert_eq!(table.size(), 10);
+    table.grow(3, Val::FuncRef(None))?;
+    assert_eq!(table.size(), 13);
+
+    Ok(())
+}
+
+#[test]
+fn create_get_set_externref_tables_via_api() -> anyhow::Result<()> {
+    let mut cfg = Config::new();
+    cfg.wasm_reference_types(true);
+    let engine = Engine::new(&cfg);
+    let store = Store::new(&engine);
+
+    let table_ty = TableType::new(ValType::ExternRef, Limits::at_least(10));
+    let table = Table::new(
+        &store,
+        table_ty,
+        Val::ExternRef(Some(ExternRef::new(42_usize))),
+    )?;
+
+    assert_eq!(
+        *table
+            .get(5)
+            .unwrap()
+            .unwrap_externref()
+            .unwrap()
+            .data()
+            .downcast_ref::<usize>()
+            .unwrap(),
+        42
+    );
+    table.set(5, Val::ExternRef(None))?;
+    assert!(table.get(5).unwrap().unwrap_externref().is_none());
+
+    Ok(())
+}
+
+#[test]
+fn fill_externref_tables_via_api() -> anyhow::Result<()> {
+    let mut cfg = Config::new();
+    cfg.wasm_reference_types(true);
+    let engine = Engine::new(&cfg);
+    let store = Store::new(&engine);
+
+    let table_ty = TableType::new(ValType::ExternRef, Limits::at_least(10));
+    let table = Table::new(&store, table_ty, Val::ExternRef(None))?;
+
+    for i in 0..10 {
+        assert!(table.get(i).unwrap().unwrap_externref().is_none());
+    }
+
+    table.fill(2, Val::ExternRef(Some(ExternRef::new(42_usize))), 4)?;
+
+    for i in (0..2).chain(7..10) {
+        assert!(table.get(i).unwrap().unwrap_externref().is_none());
+    }
+    for i in 2..6 {
+        assert_eq!(
+            *table
+                .get(i)
+                .unwrap()
+                .unwrap_externref()
+                .unwrap()
+                .data()
+                .downcast_ref::<usize>()
+                .unwrap(),
+            42
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn grow_externref_tables_via_api() -> anyhow::Result<()> {
+    let mut cfg = Config::new();
+    cfg.wasm_reference_types(true);
+    let engine = Engine::new(&cfg);
+    let store = Store::new(&engine);
+
+    let table_ty = TableType::new(ValType::ExternRef, Limits::at_least(10));
+    let table = Table::new(&store, table_ty, Val::ExternRef(None))?;
+
+    assert_eq!(table.size(), 10);
+    table.grow(3, Val::ExternRef(None))?;
+    assert_eq!(table.size(), 13);
 
     Ok(())
 }

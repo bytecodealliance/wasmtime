@@ -1,4 +1,4 @@
-//! System V ABI unwind information.
+//! Windows x64 ABI unwind information.
 
 use alloc::vec::Vec;
 use byteorder::{ByteOrder, LittleEndian};
@@ -57,10 +57,6 @@ pub(crate) enum UnwindCode {
         offset: u8,
         size: u32,
     },
-    SetFramePointer {
-        offset: u8,
-        sp_offset: u8,
-    },
 }
 
 impl UnwindCode {
@@ -69,7 +65,6 @@ impl UnwindCode {
             PushNonvolatileRegister = 0,
             LargeStackAlloc = 1,
             SmallStackAlloc = 2,
-            SetFramePointer = 3,
             SaveXmm128 = 8,
             SaveXmm128Far = 9,
         }
@@ -85,13 +80,13 @@ impl UnwindCode {
                 stack_offset,
             } => {
                 writer.write_u8(*offset);
-                let stack_offset = stack_offset / 16;
-                if stack_offset <= core::u16::MAX as u32 {
+                let scaled_stack_offset = stack_offset / 16;
+                if scaled_stack_offset <= core::u16::MAX as u32 {
                     writer.write_u8((*reg << 4) | (UnwindOperation::SaveXmm128 as u8));
-                    writer.write_u16::<LittleEndian>(stack_offset as u16);
+                    writer.write_u16::<LittleEndian>(scaled_stack_offset as u16);
                 } else {
                     writer.write_u8((*reg << 4) | (UnwindOperation::SaveXmm128Far as u8));
-                    writer.write_u16::<LittleEndian>(stack_offset as u16);
+                    writer.write_u16::<LittleEndian>(*stack_offset as u16);
                     writer.write_u16::<LittleEndian>((stack_offset >> 16) as u16);
                 }
             }
@@ -112,10 +107,6 @@ impl UnwindCode {
                     writer.write_u8((1 << 4) | (UnwindOperation::LargeStackAlloc as u8));
                     writer.write_u32::<LittleEndian>(*size);
                 }
-            }
-            Self::SetFramePointer { offset, sp_offset } => {
-                writer.write_u8(*offset);
-                writer.write_u8((*sp_offset << 4) | (UnwindOperation::SetFramePointer as u8));
             }
         };
     }

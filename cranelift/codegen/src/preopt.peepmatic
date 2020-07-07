@@ -191,3 +191,9 @@
 (=> (when (udiv_imm $C $x)
           (is-power-of-two $C))
     (ushr_imm $(log2 $C) $x))
+
+;; Remainder by a power of two -> bitwise and with decreased by one constant.
+(=> (when (urem_imm $C $x)
+          (is-power-of-two $C)
+          (fits-in-native-word $C))
+    (band_imm $(isub $C 1) $x))

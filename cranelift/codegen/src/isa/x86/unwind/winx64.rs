@@ -13,7 +13,6 @@ use log::warn;
 pub(crate) fn create_unwind_info(
     func: &Function,
     isa: &dyn TargetIsa,
-    frame_register: Option<RegUnit>,
 ) -> CodegenResult<Option<UnwindInfo>> {
     // Only Windows fastcall is supported for unwind information
     if func.signature.call_conv != CallConv::WindowsFastcall || func.prologue_end.is_none() {
@@ -28,7 +27,6 @@ pub(crate) fn create_unwind_info(
     let mut prologue_size = 0;
     let mut unwind_codes = Vec::new();
     let mut found_end = false;
-    let mut xmm_save_count: u8 = 0;
 
     for (offset, inst, size) in func.inst_offsets(entry_block, &isa.encoding_info()) {
         // x64 ABI prologues cannot exceed 255 bytes in length
@@ -62,16 +60,6 @@ pub(crate) fn create_unwind_info(
                         });
                     }
                     _ => {}
-                }
-            }
-            InstructionData::CopySpecial { src, dst, .. } => {
-                if let Some(frame_register) = frame_register {
-                    if src == (RU::rsp as RegUnit) && dst == frame_register {
-                        unwind_codes.push(UnwindCode::SetFramePointer {
-                            offset: unwind_offset,
-                            sp_offset: 0,
-                        });
-                    }
                 }
             }
             InstructionData::UnaryImm { opcode, imm } => {
@@ -112,7 +100,6 @@ pub(crate) fn create_unwind_info(
                 {
                     // If this is a save of an FPR, record an unwind operation
                     // Note: the stack_offset here is relative to an adjusted SP
-                    // This will be fixed up later to be based on the frame pointer offset
                     if dst == (RU::rsp as RegUnit) && FPR.contains(src) {
                         let offset: i32 = offset.into();
                         unwind_codes.push(UnwindCode::SaveXmm {
@@ -120,8 +107,6 @@ pub(crate) fn create_unwind_info(
                             reg: src as u8,
                             stack_offset: offset as u32,
                         });
-
-                        xmm_save_count += 1;
                     }
                 }
             }
@@ -136,45 +121,11 @@ pub(crate) fn create_unwind_info(
 
     assert!(found_end);
 
-    // When using a frame register, certain unwind operations, such as XMM saves, are relative to the frame
-    // register minus some offset, forming a "base address". This attempts to calculate the frame register offset
-    // while updating the XMM save offsets to be relative from this "base address" rather than RSP.
-    let mut frame_register_offset = 0;
-    if frame_register.is_some() && xmm_save_count > 0 {
-        // Determine the number of 16-byte slots used for all CSRs (including GPRs)
-        // The "frame register offset" will point at the last slot used (i.e. the last saved FPR)
-        // Assumption: each FPR is stored at a lower address than the previous one
-        let mut last_stack_offset = None;
-        let mut fpr_save_count: u8 = 0;
-        let mut gpr_push_count: u8 = 0;
-        for code in unwind_codes.iter_mut() {
-            match code {
-                UnwindCode::SaveXmm { stack_offset, .. } => {
-                    if let Some(last) = last_stack_offset {
-                        assert!(last > *stack_offset);
-                    }
-                    last_stack_offset = Some(*stack_offset);
-                    fpr_save_count += 1;
-                    *stack_offset = (xmm_save_count - fpr_save_count) as u32 * 16;
-                }
-                UnwindCode::PushRegister { .. } => {
-                    gpr_push_count += 1;
-                }
-                _ => {}
-            }
-        }
-        assert_eq!(fpr_save_count, xmm_save_count);
-
-        // Account for alignment space when there's an odd number of GPR pushes
-        // Assumption: an FPR (16 bytes) is twice the size of a GPR (8 bytes), hence the (rounded-up) integer division
-        frame_register_offset = fpr_save_count + ((gpr_push_count + 1) / 2);
-    }
-
     Ok(Some(UnwindInfo {
         flags: 0, // this assumes cranelift functions have no SEH handlers
         prologue_size: prologue_size as u8,
-        frame_register: frame_register.map(|r| GPR.index_of(r) as u8),
-        frame_register_offset,
+        frame_register: None,
+        frame_register_offset: 0,
         unwind_codes,
     }))
 }
@@ -201,7 +152,7 @@ mod tests {
         context.compile(&*isa).expect("expected compilation");
 
         assert_eq!(
-            create_unwind_info(&context.func, &*isa, None).expect("can create unwind info"),
+            create_unwind_info(&context.func, &*isa).expect("can create unwind info"),
             None
         );
     }
@@ -219,7 +170,7 @@ mod tests {
 
         context.compile(&*isa).expect("expected compilation");
 
-        let unwind = create_unwind_info(&context.func, &*isa, Some(RU::rbp.into()))
+        let unwind = create_unwind_info(&context.func, &*isa)
             .expect("can create unwind info")
             .expect("expected unwind info");
 
@@ -228,16 +179,12 @@ mod tests {
             UnwindInfo {
                 flags: 0,
                 prologue_size: 9,
-                frame_register: Some(GPR.index_of(RU::rbp.into()) as u8),
+                frame_register: None,
                 frame_register_offset: 0,
                 unwind_codes: vec![
                     UnwindCode::PushRegister {
                         offset: 2,
                         reg: GPR.index_of(RU::rbp.into()) as u8
-                    },
-                    UnwindCode::SetFramePointer {
-                        offset: 5,
-                        sp_offset: 0
                     },
                     UnwindCode::StackAlloc {
                         offset: 9,
@@ -247,9 +194,9 @@ mod tests {
             }
         );
 
-        assert_eq!(unwind.emit_size(), 12);
+        assert_eq!(unwind.emit_size(), 8);
 
-        let mut buf = [0u8; 12];
+        let mut buf = [0u8; 8];
         unwind.emit(&mut buf);
 
         assert_eq!(
@@ -257,16 +204,12 @@ mod tests {
             [
                 0x01, // Version and flags (version 1, no flags)
                 0x09, // Prologue size
-                0x03, // Unwind code count (1 for stack alloc, 1 for save frame reg, 1 for push reg)
-                0x05, // Frame register + offset (RBP with 0 offset)
+                0x02, // Unwind code count (1 for stack alloc, 1 for push reg)
+                0x00, // Frame register + offset (no frame register)
                 0x09, // Prolog offset
                 0x72, // Operation 2 (small stack alloc), size = 0xB slots (e.g. (0x7 * 8) + 8 = 64 bytes)
-                0x05, // Prolog offset
-                0x03, // Operation 3 (save frame register), stack pointer offset = 0
                 0x02, // Prolog offset
                 0x50, // Operation 0 (save nonvolatile register), reg = 5 (RBP)
-                0x00, // Padding byte
-                0x00, // Padding byte
             ]
         );
     }
@@ -284,7 +227,7 @@ mod tests {
 
         context.compile(&*isa).expect("expected compilation");
 
-        let unwind = create_unwind_info(&context.func, &*isa, Some(RU::rbp.into()))
+        let unwind = create_unwind_info(&context.func, &*isa)
             .expect("can create unwind info")
             .expect("expected unwind info");
 
@@ -293,16 +236,12 @@ mod tests {
             UnwindInfo {
                 flags: 0,
                 prologue_size: 27,
-                frame_register: Some(GPR.index_of(RU::rbp.into()) as u8),
+                frame_register: None,
                 frame_register_offset: 0,
                 unwind_codes: vec![
                     UnwindCode::PushRegister {
                         offset: 2,
                         reg: GPR.index_of(RU::rbp.into()) as u8
-                    },
-                    UnwindCode::SetFramePointer {
-                        offset: 5,
-                        sp_offset: 0
                     },
                     UnwindCode::StackAlloc {
                         offset: 27,
@@ -322,16 +261,16 @@ mod tests {
             [
                 0x01, // Version and flags (version 1, no flags)
                 0x1B, // Prologue size
-                0x04, // Unwind code count (2 for stack alloc, 1 for save frame reg, 1 for push reg)
-                0x05, // Frame register + offset (RBP with 0 offset)
+                0x03, // Unwind code count (2 for stack alloc, 1 for push reg)
+                0x00, // Frame register + offset (no frame register)
                 0x1B, // Prolog offset
                 0x01, // Operation 1 (large stack alloc), size is scaled 16-bits (info = 0)
                 0xE2, // Low size byte
                 0x04, // High size byte (e.g. 0x04E2 * 8 = 10000 bytes)
-                0x05, // Prolog offset
-                0x03, // Operation 3 (save frame register), stack pointer offset = 0
                 0x02, // Prolog offset
                 0x50, // Operation 0 (push nonvolatile register), reg = 5 (RBP)
+                0x00, // Padding
+                0x00, // Padding
             ]
         );
     }
@@ -349,7 +288,7 @@ mod tests {
 
         context.compile(&*isa).expect("expected compilation");
 
-        let unwind = create_unwind_info(&context.func, &*isa, Some(RU::rbp.into()))
+        let unwind = create_unwind_info(&context.func, &*isa)
             .expect("can create unwind info")
             .expect("expected unwind info");
 
@@ -358,16 +297,12 @@ mod tests {
             UnwindInfo {
                 flags: 0,
                 prologue_size: 27,
-                frame_register: Some(GPR.index_of(RU::rbp.into()) as u8),
+                frame_register: None,
                 frame_register_offset: 0,
                 unwind_codes: vec![
                     UnwindCode::PushRegister {
                         offset: 2,
                         reg: GPR.index_of(RU::rbp.into()) as u8
-                    },
-                    UnwindCode::SetFramePointer {
-                        offset: 5,
-                        sp_offset: 0
                     },
                     UnwindCode::StackAlloc {
                         offset: 27,
@@ -377,9 +312,9 @@ mod tests {
             }
         );
 
-        assert_eq!(unwind.emit_size(), 16);
+        assert_eq!(unwind.emit_size(), 12);
 
-        let mut buf = [0u8; 16];
+        let mut buf = [0u8; 12];
         unwind.emit(&mut buf);
 
         assert_eq!(
@@ -387,20 +322,16 @@ mod tests {
             [
                 0x01, // Version and flags (version 1, no flags)
                 0x1B, // Prologue size
-                0x05, // Unwind code count (3 for stack alloc, 1 for save frame reg, 1 for push reg)
-                0x05, // Frame register + offset (RBP with 0 offset)
+                0x04, // Unwind code count (3 for stack alloc, 1 for push reg)
+                0x00, // Frame register + offset (no frame register)
                 0x1B, // Prolog offset
                 0x11, // Operation 1 (large stack alloc), size is unscaled 32-bits (info = 1)
                 0x40, // Byte 1 of size
                 0x42, // Byte 2 of size
                 0x0F, // Byte 3 of size
                 0x00, // Byte 4 of size (size is 0xF4240 = 1000000 bytes)
-                0x05, // Prolog offset
-                0x03, // Operation 3 (save frame register), stack pointer offset = 0
                 0x02, // Prolog offset
                 0x50, // Operation 0 (push nonvolatile register), reg = 5 (RBP)
-                0x00, // Padding byte
-                0x00, // Padding byte
             ]
         );
     }

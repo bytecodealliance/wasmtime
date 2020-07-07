@@ -15,6 +15,7 @@ pub fn create_handle_with_table(store: &Store, table: &TableType) -> Result<Stor
         maximum: table.limits().max(),
         ty: match table.element() {
             ValType::FuncRef => wasm::TableElementType::Func,
+            ValType::ExternRef => wasm::TableElementType::Val(wasmtime_runtime::ref_type()),
             _ => bail!("cannot support {:?} as a table element", table.element()),
         },
     };

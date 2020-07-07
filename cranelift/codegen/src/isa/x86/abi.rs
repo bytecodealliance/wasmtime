@@ -1071,8 +1071,7 @@ pub fn create_unwind_info(
                 .map(|u| UnwindInfo::SystemV(u))
         }
         CallConv::WindowsFastcall => {
-            super::unwind::winx64::create_unwind_info(func, isa, Some(RU::rbp.into()))?
-                .map(|u| UnwindInfo::WindowsX64(u))
+            super::unwind::winx64::create_unwind_info(func, isa)?.map(|u| UnwindInfo::WindowsX64(u))
         }
         _ => None,
     })
