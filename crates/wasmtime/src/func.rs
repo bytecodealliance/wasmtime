@@ -1,6 +1,6 @@
 use crate::runtime::StoreInner;
 use crate::trampoline::StoreInstanceHandle;
-use crate::{Extern, FuncType, Memory, Store, Trap, Val, ValType};
+use crate::{Extern, ExternRef, FuncType, Memory, Store, Trap, Val, ValType};
 use anyhow::{bail, ensure, Context as _, Result};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::max;
@@ -1128,6 +1128,61 @@ unsafe impl WasmTy for f64 {
     #[inline]
     unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
         *ptr = abi.to_bits() as u128;
+    }
+}
+
+unsafe impl WasmTy for Option<ExternRef> {
+    type Abi = *mut u8;
+
+    #[inline]
+    fn into_abi_for_arg<'a>(self, store: WeakStore<'a>) -> Self::Abi {
+        if let Some(x) = self {
+            let store = Store::upgrade(store.0).unwrap();
+            let abi = x.inner.as_raw();
+            unsafe {
+                store
+                    .externref_activations_table()
+                    .insert_with_gc(x.inner, store.stack_map_registry());
+            }
+            abi
+        } else {
+            ptr::null_mut()
+        }
+    }
+
+    #[inline]
+    unsafe fn from_abi<'a>(abi: Self::Abi, _store: WeakStore<'a>) -> Self {
+        if abi.is_null() {
+            None
+        } else {
+            Some(ExternRef {
+                inner: wasmtime_runtime::VMExternRef::clone_from_raw(abi),
+            })
+        }
+    }
+
+    fn push(dst: &mut Vec<ValType>) {
+        dst.push(ValType::ExternRef);
+    }
+
+    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+        let next = tys.next();
+        ensure!(
+            next == Some(ValType::ExternRef),
+            "Type mismatch, expected externref, got {:?}",
+            next
+        );
+        Ok(())
+    }
+
+    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
+        let ret = **ptr as usize as *mut u8;
+        *ptr = (*ptr).add(1);
+        ret
+    }
+
+    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
+        ptr::write(ptr, abi as usize as u128);
     }
 }
 
