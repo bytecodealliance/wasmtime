@@ -350,3 +350,14 @@ fn greeter_preload_callable_command() -> Result<()> {
     assert_eq!(stdout, "Hello _start\nHello callable greet\nHello done\n");
     Ok(())
 }
+
+// Ensure successful WASI exit call with FPR saving frames on stack for Windows x64
+// See https://github.com/bytecodealliance/wasmtime/issues/1967
+#[test]
+fn exit_with_saved_fprs() -> Result<()> {
+    let wasm = build_wasm("tests/wasm/exit_with_saved_fprs.wat")?;
+    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
+    assert_eq!(output.status.code().unwrap(), 0);
+    assert!(output.stdout.is_empty());
+    Ok(())
+}
