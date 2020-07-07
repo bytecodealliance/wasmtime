@@ -284,10 +284,21 @@ impl Type {
 
     /// Split the lane width in half and double the number of lanes to maintain the same bit-width.
     ///
-    /// If this is a scalar type of n bits, it produces a SIMD vector type of (n/2)x2.
+    /// If this is a scalar type of `n` bits, it produces a SIMD vector type of `(n/2)x2`.
     pub fn split_lanes(self) -> Option<Self> {
         match self.half_width() {
             Some(half_width) => half_width.by(2),
+            None => None,
+        }
+    }
+
+    /// Merge lanes to half the number of lanes and double the lane width to maintain the same
+    /// bit-width.
+    ///
+    /// If this is a scalar type, it will return `None`.
+    pub fn merge_lanes(self) -> Option<Self> {
+        match self.double_width() {
+            Some(double_width) => double_width.half_vector(),
             None => None,
         }
     }
