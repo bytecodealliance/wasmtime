@@ -228,6 +228,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", "simd_i32x4_arith") => return false,
             ("simd", "simd_i32x4_arith2") => return false,
             ("simd", "simd_i32x4_cmp") => return false,
+            ("simd", "simd_lane") => return false,
             ("simd", "simd_load_extend") => return false,
             ("simd", "simd_load_splat") => return false,
             ("simd", "simd_store") => return false,

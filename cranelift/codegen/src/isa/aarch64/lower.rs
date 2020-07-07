@@ -142,28 +142,26 @@ pub(crate) fn input_to_shiftimm<C: LowerCtx<I = Inst>>(
     input_to_const(ctx, input).and_then(ShiftOpShiftImm::maybe_from_shift)
 }
 
-pub(crate) fn output_to_const_f128<C: LowerCtx<I = Inst>>(
+pub(crate) fn const_param_to_u128<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
-    out: InsnOutput,
+    inst: IRInst,
 ) -> Option<u128> {
-    if out.output > 0 {
-        None
-    } else {
-        let inst_data = ctx.data(out.insn);
+    let data = match ctx.data(inst) {
+        &InstructionData::Shuffle { mask, .. } => ctx.get_immediate(mask),
+        &InstructionData::UnaryConst {
+            constant_handle, ..
+        } => ctx.get_constant_data(constant_handle),
+        _ => return None,
+    };
+    let data = data.clone().into_vec();
 
-        match inst_data {
-            &InstructionData::UnaryConst {
-                opcode: _,
-                constant_handle,
-            } => {
-                let mut bytes = [0u8; 16];
-                let c = ctx.get_constant_data(constant_handle).clone().into_vec();
-                assert_eq!(c.len(), 16);
-                bytes.copy_from_slice(&c);
-                Some(u128::from_le_bytes(bytes))
-            }
-            _ => None,
-        }
+    if data.len() == 16 {
+        let mut bytes = [0u8; 16];
+
+        bytes.copy_from_slice(&data);
+        Some(u128::from_le_bytes(bytes))
+    } else {
+        None
     }
 }
 
@@ -1016,7 +1014,8 @@ pub fn ty_bits(ty: Type) -> usize {
 pub(crate) fn ty_is_int(ty: Type) -> bool {
     match ty {
         B1 | B8 | I8 | B16 | I16 | B32 | I32 | B64 | I64 | R32 | R64 => true,
-        F32 | F64 | B128 | I128 | I8X8 | I8X16 | I16X4 | I16X8 | I32X2 | I32X4 | I64X2 => false,
+        F32 | F64 | B128 | F32X2 | F32X4 | F64X2 | I128 | I8X8 | I8X16 | I16X4 | I16X8 | I32X2
+        | I32X4 | I64X2 => false,
         IFLAGS | FFLAGS => panic!("Unexpected flags type"),
         _ => panic!("ty_is_int() on unknown type: {:?}", ty),
     }

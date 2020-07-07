@@ -141,8 +141,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let vb = ctx.alloc_tmp(RegClass::V128, I128);
                 let ra = put_input_in_reg(ctx, inputs[0], narrow_mode);
                 let rb = put_input_in_reg(ctx, inputs[1], narrow_mode);
-                ctx.emit(Inst::MovToVec64 { rd: va, rn: ra });
-                ctx.emit(Inst::MovToVec64 { rd: vb, rn: rb });
+                ctx.emit(Inst::MovToFpu { rd: va, rn: ra });
+                ctx.emit(Inst::MovToFpu { rd: vb, rn: rb });
                 ctx.emit(Inst::FpuRRR {
                     fpu_op,
                     rd: va,
@@ -1537,7 +1537,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
                 (false, true) => {
                     let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::ZeroExtend64);
-                    ctx.emit(Inst::MovToVec64 { rd, rn });
+                    ctx.emit(Inst::MovToFpu { rd, rn });
                 }
                 (true, false) => {
                     let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
@@ -1789,7 +1789,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Vconst => {
-            let value = output_to_const_f128(ctx, outputs[0]).unwrap();
+            let value = const_param_to_u128(ctx, insn).expect("Invalid immediate bytes");
             let rd = get_output_reg(ctx, outputs[0]);
             lower_constant_f128(ctx, rd, value);
         }
@@ -1819,6 +1819,34 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
             } else {
                 unreachable!();
+            }
+        }
+
+        Opcode::Insertlane => {
+            let idx = if let InstructionData::TernaryImm8 { imm, .. } = ctx.data(insn) {
+                *imm
+            } else {
+                unreachable!();
+            };
+            let input_ty = ctx.input_ty(insn, 1);
+            let rd = get_output_reg(ctx, outputs[0]);
+            let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let rn = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+            let ty = ty.unwrap();
+            let size = VectorSize::from_ty(ty);
+
+            ctx.emit(Inst::gen_move(rd, rm, ty));
+
+            if ty_is_int(input_ty) {
+                ctx.emit(Inst::MovToVec { rd, rn, idx, size });
+            } else {
+                ctx.emit(Inst::VecMovElement {
+                    rd,
+                    rn,
+                    idx1: idx,
+                    idx2: 0,
+                    size,
+                });
             }
         }
 
@@ -1885,12 +1913,51 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             normalize_bool_result(ctx, insn, rd);
         }
 
-        Opcode::Shuffle
-        | Opcode::Vsplit
+        Opcode::Shuffle => {
+            let mask = const_param_to_u128(ctx, insn).expect("Invalid immediate mask bytes");
+            let rd = get_output_reg(ctx, outputs[0]);
+            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let rn2 = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+            // 2 register table vector lookups require consecutive table registers;
+            // we satisfy this constraint by hardcoding the usage of v29 and v30.
+            let temp = writable_vreg(29);
+            let temp2 = writable_vreg(30);
+            let input_ty = ctx.input_ty(insn, 0);
+            assert_eq!(input_ty, ctx.input_ty(insn, 1));
+            // Make sure that both inputs are in virtual registers, since it is
+            // not guaranteed that we can get them safely to the temporaries if
+            // either is in a real register.
+            let rn = ctx.ensure_in_vreg(rn, input_ty);
+            let rn2 = ctx.ensure_in_vreg(rn2, input_ty);
+
+            lower_constant_f128(ctx, rd, mask);
+            ctx.emit(Inst::gen_move(temp, rn, input_ty));
+            ctx.emit(Inst::gen_move(temp2, rn2, input_ty));
+            ctx.emit(Inst::VecTbl2 {
+                rd,
+                rn: temp.to_reg(),
+                rn2: temp2.to_reg(),
+                rm: rd.to_reg(),
+                is_extension: false,
+            });
+        }
+
+        Opcode::Swizzle => {
+            let rd = get_output_reg(ctx, outputs[0]);
+            let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+
+            ctx.emit(Inst::VecTbl {
+                rd,
+                rn,
+                rm,
+                is_extension: false,
+            });
+        }
+
+        Opcode::Vsplit
         | Opcode::Vconcat
-        | Opcode::Insertlane
         | Opcode::ScalarToVector
-        | Opcode::Swizzle
         | Opcode::Uload8x8Complex
         | Opcode::Sload8x8Complex
         | Opcode::Uload16x4Complex

@@ -1829,9 +1829,29 @@ fn test_aarch64_binemit() {
         "ccmp w3, #30, #NZCV, gt",
     ));
     insns.push((
-        Inst::MovToVec64 {
+        Inst::MovToFpu {
+            rd: writable_vreg(31),
+            rn: xreg(0),
+        },
+        "1F00679E",
+        "fmov d31, x0",
+    ));
+    insns.push((
+        Inst::MovToVec {
+            rd: writable_vreg(0),
+            rn: xreg(0),
+            idx: 7,
+            size: VectorSize::Size8x8,
+        },
+        "001C0F4E",
+        "mov v0.b[7], w0",
+    ));
+    insns.push((
+        Inst::MovToVec {
             rd: writable_vreg(20),
             rn: xreg(21),
+            idx: 0,
+            size: VectorSize::Size64x2,
         },
         "B41E084E",
         "mov v20.d[0], x21",
@@ -2039,6 +2059,30 @@ fn test_aarch64_binemit() {
         },
         "5CA4202F",
         "uxtl v28.2d, v2.2s",
+    ));
+
+    insns.push((
+        Inst::VecMovElement {
+            rd: writable_vreg(0),
+            rn: vreg(31),
+            idx1: 7,
+            idx2: 7,
+            size: VectorSize::Size16x8,
+        },
+        "E0771E6E",
+        "mov v0.h[7], v31.h[7]",
+    ));
+
+    insns.push((
+        Inst::VecMovElement {
+            rd: writable_vreg(31),
+            rn: vreg(16),
+            idx1: 1,
+            idx2: 0,
+            size: VectorSize::Size32x2,
+        },
+        "1F060C6E",
+        "mov v31.s[1], v16.s[0]",
     ));
 
     insns.push((
@@ -3188,6 +3232,52 @@ fn test_aarch64_binemit() {
         },
         "92A8B16E",
         "uminv s18, v4.4s",
+    ));
+
+    insns.push((
+        Inst::VecTbl {
+            rd: writable_vreg(0),
+            rn: vreg(31),
+            rm: vreg(16),
+            is_extension: false,
+        },
+        "E003104E",
+        "tbl v0.16b, { v31.16b }, v16.16b",
+    ));
+
+    insns.push((
+        Inst::VecTbl {
+            rd: writable_vreg(4),
+            rn: vreg(12),
+            rm: vreg(23),
+            is_extension: true,
+        },
+        "8411174E",
+        "tbx v4.16b, { v12.16b }, v23.16b",
+    ));
+
+    insns.push((
+        Inst::VecTbl2 {
+            rd: writable_vreg(16),
+            rn: vreg(31),
+            rn2: vreg(0),
+            rm: vreg(26),
+            is_extension: false,
+        },
+        "F0231A4E",
+        "tbl v16.16b, { v31.16b, v0.16b }, v26.16b",
+    ));
+
+    insns.push((
+        Inst::VecTbl2 {
+            rd: writable_vreg(3),
+            rn: vreg(11),
+            rn2: vreg(12),
+            rm: vreg(19),
+            is_extension: true,
+        },
+        "6331134E",
+        "tbx v3.16b, { v11.16b, v12.16b }, v19.16b",
     ));
 
     insns.push((
