@@ -732,7 +732,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::Hlt);
         }
 
-        Opcode::Trap => {
+        Opcode::Trap | Opcode::ResumableTrap => {
             let trap_info = (ctx.srcloc(insn), inst_trapcode(ctx.data(insn)).unwrap());
             ctx.emit(Inst::Ud2 { trap_info })
         }
