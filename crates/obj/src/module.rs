@@ -1,3 +1,4 @@
+use crate::builder::ObjectBuilderTarget;
 use crate::context::layout_vmcontext;
 use crate::data_segment::{declare_data_segment, emit_data_segment};
 use crate::function::{declare_functions, emit_functions};
@@ -5,6 +6,7 @@ use crate::table::{declare_table, emit_table};
 use anyhow::Result;
 use object::write::{Object, Relocation, StandardSection, Symbol, SymbolSection};
 use object::{RelocationEncoding, RelocationKind, SymbolFlags, SymbolKind, SymbolScope};
+use wasmtime_debug::{write_debugsections, DwarfSection};
 use wasmtime_environ::isa::TargetFrontendConfig;
 use wasmtime_environ::{Compilation, DataInitializer, Module, Relocations};
 
@@ -48,13 +50,17 @@ fn emit_vmcontext_init(
 /// Emits a module that has been emitted with the `wasmtime-environ` environment
 /// implementation to a native object file.
 pub fn emit_module(
-    obj: &mut Object,
+    target: ObjectBuilderTarget,
     module: &Module,
     compilation: &Compilation,
     relocations: &Relocations,
     data_initializers: &[DataInitializer],
     target_config: &TargetFrontendConfig,
-) -> Result<()> {
+    dwarf_sections: Vec<DwarfSection>,
+) -> Result<Object> {
+    let mut result = Object::new(target.binary_format, target.architecture, target.endianness);
+    let obj = &mut result;
+
     declare_functions(obj, module, relocations)?;
 
     for (i, initializer) in data_initializers.iter().enumerate() {
@@ -77,5 +83,7 @@ pub fn emit_module(
 
     emit_vmcontext_init(obj, module, target_config)?;
 
-    Ok(())
+    write_debugsections(obj, dwarf_sections)?;
+
+    Ok(result)
 }

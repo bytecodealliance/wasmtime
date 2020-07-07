@@ -2503,6 +2503,7 @@ dependencies = [
  "wasmparser 0.58.0",
  "wasmtime-debug",
  "wasmtime-environ",
+ "wasmtime-obj",
  "wasmtime-profiling",
  "wasmtime-runtime",
  "winapi",
@@ -2515,6 +2516,8 @@ dependencies = [
  "anyhow",
  "more-asserts",
  "object",
+ "target-lexicon",
+ "wasmtime-debug",
  "wasmtime-environ",
 ]
 

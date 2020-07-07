@@ -23,12 +23,14 @@
     )
 )]
 
+mod builder;
 mod context;
 mod data_segment;
 mod function;
 mod module;
 mod table;
 
+pub use crate::builder::{utils, ObjectBuilder, ObjectBuilderTarget};
 pub use crate::module::emit_module;
 
 /// Version number of this crate.
