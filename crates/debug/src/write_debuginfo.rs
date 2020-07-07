@@ -6,15 +6,21 @@ use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
 use wasmtime_environ::{Compilation, ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
 
 #[derive(Clone)]
+pub enum DwarfSectionRelocTarget {
+    Func(usize),
+    Section(&'static str),
+}
+
+#[derive(Clone)]
 pub struct DwarfSectionReloc {
-    pub target: String,
+    pub target: DwarfSectionRelocTarget,
     pub offset: u32,
     pub addend: i32,
     pub size: u8,
 }
 
 pub struct DwarfSection {
-    pub name: String,
+    pub name: &'static str,
     pub body: Vec<u8>,
     pub relocs: Vec<DwarfSectionReloc>,
 }
@@ -31,7 +37,7 @@ fn emit_dwarf_sections(
 
     let mut result = Vec::new();
     sections.for_each_mut(|id, s| -> anyhow::Result<()> {
-        let name = id.name().to_string();
+        let name = id.name();
         let body = s.writer.take();
         let mut relocs = vec![];
         ::std::mem::swap(&mut relocs, &mut s.relocs);
@@ -80,10 +86,9 @@ impl Writer for WriterRelocate {
         match address {
             Address::Constant(val) => self.write_udata(val, size),
             Address::Symbol { symbol, addend } => {
-                let target = format!("_wasm_function_{}", symbol);
                 let offset = self.len() as u32;
                 self.relocs.push(DwarfSectionReloc {
-                    target,
+                    target: DwarfSectionRelocTarget::Func(symbol),
                     offset,
                     size,
                     addend: addend as i32,
@@ -95,7 +100,7 @@ impl Writer for WriterRelocate {
 
     fn write_offset(&mut self, val: usize, section: SectionId, size: u8) -> Result<()> {
         let offset = self.len() as u32;
-        let target = section.name().to_string();
+        let target = DwarfSectionRelocTarget::Section(section.name());
         self.relocs.push(DwarfSectionReloc {
             target,
             offset,
@@ -112,7 +117,7 @@ impl Writer for WriterRelocate {
         section: SectionId,
         size: u8,
     ) -> Result<()> {
-        let target = section.name().to_string();
+        let target = DwarfSectionRelocTarget::Section(section.name());
         self.relocs.push(DwarfSectionReloc {
             target,
             offset: offset as u32,

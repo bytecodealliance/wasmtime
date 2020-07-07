@@ -16,7 +16,7 @@ use wasmtime_jit::trampoline::ir::{
     ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind,
 };
 use wasmtime_jit::trampoline::{
-    binemit, pretty_error, Context, FunctionBuilder, FunctionBuilderContext,
+    self, binemit, pretty_error, Context, FunctionBuilder, FunctionBuilderContext,
 };
 use wasmtime_jit::{native, CodeMemory};
 use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody, VMTrampoline};
@@ -172,7 +172,7 @@ fn make_trampoline(
     }
 
     let mut code_buf: Vec<u8> = Vec::new();
-    let mut reloc_sink = binemit::TrampolineRelocSink::default();
+    let mut reloc_sink = trampoline::TrampolineRelocSink::default();
     let mut trap_sink = binemit::NullTrapSink {};
     let mut stackmap_sink = binemit::NullStackmapSink {};
     context
@@ -191,15 +191,13 @@ fn make_trampoline(
         .map_err(|error| pretty_error(&context.func, Some(isa), error))
         .expect("create unwind information");
 
+    assert!(reloc_sink.relocs().is_empty());
     code_memory
-        .allocate_for_function(
-            &CompiledFunction {
-                body: code_buf,
-                jt_offsets: context.func.jt_offsets,
-                unwind_info,
-            },
-            reloc_sink.relocs().iter(),
-        )
+        .allocate_for_function(&CompiledFunction {
+            body: code_buf,
+            jt_offsets: context.func.jt_offsets,
+            unwind_info,
+        })
         .expect("allocate_for_function")
 }
 
@@ -235,7 +233,7 @@ pub fn create_handle_with_function(
     // ... and then we also need a trampoline with the standard "trampoline ABI"
     // which enters into the ABI specified by `ft`. Note that this is only used
     // if `Func::call` is called on an object created by `Func::new`.
-    let trampoline = wasmtime_jit::make_trampoline(
+    let trampoline = trampoline::make_trampoline(
         &*isa,
         &mut code_memory,
         &mut fn_builder_ctx,

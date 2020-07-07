@@ -7,12 +7,14 @@ use crate::code_memory::CodeMemory;
 use crate::compiler::{Compilation, Compiler};
 use crate::imports::resolve_imports;
 use crate::link::link_module;
+use crate::object::ObjectUnwindInfo;
 use crate::resolver::Resolver;
+use object::File as ObjectFile;
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
-use wasmtime_debug::{read_debuginfo, write_debugsections_image, DwarfSection};
+use wasmtime_debug::{create_gdbjit_image, read_debuginfo};
 use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
@@ -49,6 +51,63 @@ pub enum SetupError {
     DebugInfo(#[from] anyhow::Error),
 }
 
+// Contains all compilation artifacts.
+struct CompilationArtifacts {
+    module: Module,
+    obj: Box<[u8]>,
+    unwind_info: Box<[ObjectUnwindInfo]>,
+    data_initializers: Box<[OwnedDataInitializer]>,
+    traps: Traps,
+    stack_maps: StackMaps,
+    address_transform: ModuleAddressMap,
+}
+
+impl CompilationArtifacts {
+    fn new(compiler: &Compiler, data: &[u8]) -> Result<Self, SetupError> {
+        let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
+
+        let translation = environ
+            .translate(data)
+            .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
+
+        let mut debug_data = None;
+        if compiler.tunables().debug_info {
+            // TODO Do we want to ignore invalid DWARF data?
+            debug_data = Some(read_debuginfo(&data)?);
+        }
+
+        let Compilation {
+            obj,
+            unwind_info,
+            traps,
+            stack_maps,
+            address_transform,
+        } = compiler.compile(&translation, debug_data)?;
+
+        let ModuleTranslation {
+            module,
+            data_initializers,
+            ..
+        } = translation;
+
+        let data_initializers = data_initializers
+            .into_iter()
+            .map(OwnedDataInitializer::new)
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+
+        Ok(Self {
+            module,
+            obj: obj.into_boxed_slice(),
+            unwind_info: unwind_info.into_boxed_slice(),
+            data_initializers,
+            traps,
+            stack_maps,
+            address_transform,
+        })
+    }
+}
+
 struct FinishedFunctions(BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>);
 
 unsafe impl Send for FinishedFunctions {}
@@ -80,55 +139,31 @@ impl CompiledModule {
         data: &'data [u8],
         profiler: &dyn ProfilingAgent,
     ) -> Result<Self, SetupError> {
-        let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
+        let artifacts = CompilationArtifacts::new(compiler, data)?;
 
-        let translation = environ
-            .translate(data)
-            .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
-
-        let mut debug_data = None;
-        if compiler.tunables().debug_info {
-            // TODO Do we want to ignore invalid DWARF data?
-            debug_data = Some(read_debuginfo(&data)?);
-        }
-
-        let Compilation {
-            mut code_memory,
-            finished_functions,
-            code_range,
-            trampolines,
-            jt_offsets,
-            dwarf_sections,
+        let CompilationArtifacts {
+            module,
+            obj,
+            unwind_info,
+            data_initializers,
             traps,
             stack_maps,
             address_transform,
-        } = compiler.compile(&translation, debug_data)?;
+        } = artifacts;
 
-        let ModuleTranslation {
-            module,
-            data_initializers,
-            ..
-        } = translation;
-
-        link_module(&mut code_memory, &module, &finished_functions, &jt_offsets);
-
-        // Make all code compiled thus far executable.
-        code_memory.publish(compiler.isa());
-
-        let data_initializers = data_initializers
-            .into_iter()
-            .map(OwnedDataInitializer::new)
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
+        // Allocate all of the compiled functions into executable memory,
+        // copying over their contents.
+        let (code_memory, code_range, finished_functions, trampolines) =
+            build_code_memory(compiler.isa(), &obj, &module, unwind_info).map_err(|message| {
+                SetupError::Instantiate(InstantiationError::Resource(format!(
+                    "failed to build code memory for functions: {}",
+                    message
+                )))
+            })?;
 
         // Register GDB JIT images; initialize profiler and load the wasm module.
-        let dbg_jit_registration = if !dwarf_sections.is_empty() {
-            let bytes = create_dbg_image(
-                dwarf_sections,
-                compiler.isa(),
-                code_range,
-                &finished_functions,
-            )?;
+        let dbg_jit_registration = if compiler.tunables().debug_info {
+            let bytes = create_dbg_image(obj.to_vec(), code_range, &module, &finished_functions)?;
 
             profiler.module_load(&module, &finished_functions, Some(&bytes));
 
@@ -282,15 +317,64 @@ impl OwnedDataInitializer {
 }
 
 fn create_dbg_image(
-    dwarf_sections: Vec<DwarfSection>,
-    isa: &dyn TargetIsa,
+    obj: Vec<u8>,
     code_range: (*const u8, usize),
+    module: &Module,
     finished_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
 ) -> Result<Vec<u8>, SetupError> {
     let funcs = finished_functions
         .values()
         .map(|allocated: &*mut [VMFunctionBody]| (*allocated) as *const u8)
         .collect::<Vec<_>>();
-    write_debugsections_image(isa, dwarf_sections, code_range, &funcs)
+    create_gdbjit_image(obj, code_range, module.local.num_imported_funcs, &funcs)
         .map_err(SetupError::DebugInfo)
+}
+
+fn build_code_memory(
+    isa: &dyn TargetIsa,
+    obj: &[u8],
+    module: &Module,
+    unwind_info: Box<[ObjectUnwindInfo]>,
+) -> Result<
+    (
+        CodeMemory,
+        (*const u8, usize),
+        PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+        PrimaryMap<SignatureIndex, VMTrampoline>,
+    ),
+    String,
+> {
+    let obj = ObjectFile::parse(obj).map_err(|_| "Unable to read obj".to_string())?;
+
+    let mut code_memory = CodeMemory::new();
+
+    let allocation = code_memory.allocate_for_object(&obj, &unwind_info)?;
+
+    // Second, create a PrimaryMap from result vector of pointers.
+    let mut finished_functions = PrimaryMap::new();
+    for (i, fat_ptr) in allocation.funcs() {
+        let fat_ptr: *mut [VMFunctionBody] = fat_ptr;
+        assert_eq!(
+            Some(finished_functions.push(fat_ptr)),
+            module.local.defined_func_index(i)
+        );
+    }
+
+    let mut trampolines = PrimaryMap::new();
+    for (i, fat_ptr) in allocation.trampolines() {
+        let fat_ptr =
+            unsafe { std::mem::transmute::<*const VMFunctionBody, VMTrampoline>(fat_ptr.as_ptr()) };
+        assert_eq!(trampolines.push(fat_ptr), i);
+    }
+
+    let code_range = allocation.code_range();
+
+    link_module(&obj, &module, code_range, &finished_functions);
+
+    let code_range = (code_range.as_ptr(), code_range.len());
+
+    // Make all code compiled thus far executable.
+    code_memory.publish(isa);
+
+    Ok((code_memory, code_range, finished_functions, trampolines))
 }
