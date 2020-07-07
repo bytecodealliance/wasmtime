@@ -195,7 +195,6 @@ impl X64ABIBody {
         if self.call_conv.extends_baldrdash() {
             let num_words = self.flags.baldrdash_prologue_words() as i64;
             debug_assert!(num_words > 0, "baldrdash must set baldrdash_prologue_words");
-            debug_assert_eq!(num_words % 2, 0, "stack must be 16-aligned");
             num_words * 8
         } else {
             16 // frame pointer + return address.
