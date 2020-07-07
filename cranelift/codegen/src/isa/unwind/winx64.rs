@@ -1,4 +1,4 @@
-//! System V ABI unwind information.
+//! Windows x64 ABI unwind information.
 
 use alloc::vec::Vec;
 use byteorder::{ByteOrder, LittleEndian};
