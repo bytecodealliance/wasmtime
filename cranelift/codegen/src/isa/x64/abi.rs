@@ -364,6 +364,7 @@ impl ABIBody for X64ABIBody {
                             ext_mode,
                             RegMem::reg(from_reg.to_reg()),
                             dest_reg,
+                            /* infallible load */ None,
                         ));
                     }
                     (ArgumentExtension::Sext, Some(ext_mode)) => {
@@ -371,6 +372,7 @@ impl ABIBody for X64ABIBody {
                             ext_mode,
                             RegMem::reg(from_reg.to_reg()),
                             dest_reg,
+                            /* infallible load */ None,
                         ));
                     }
                     _ => ret.push(Inst::gen_move(dest_reg, from_reg.to_reg(), ty)),
@@ -394,6 +396,7 @@ impl ABIBody for X64ABIBody {
                             ext_mode,
                             RegMem::reg(from_reg.to_reg()),
                             from_reg,
+                            /* infallible load */ None,
                         ));
                     }
                     (ArgumentExtension::Sext, Some(ext_mode)) => {
@@ -401,6 +404,7 @@ impl ABIBody for X64ABIBody {
                             ext_mode,
                             RegMem::reg(from_reg.to_reg()),
                             from_reg,
+                            /* infallible load */ None,
                         ));
                     }
                     _ => {}
@@ -965,8 +969,13 @@ fn load_stack(mem: impl Into<SyntheticAmode>, into_reg: Writable<Reg>, ty: Type)
 
     let mem = mem.into();
     match ext_mode {
-        Some(ext_mode) => Inst::movsx_rm_r(ext_mode, RegMem::mem(mem), into_reg),
-        None => Inst::mov64_m_r(mem, into_reg),
+        Some(ext_mode) => Inst::movsx_rm_r(
+            ext_mode,
+            RegMem::mem(mem),
+            into_reg,
+            /* infallible load */ None,
+        ),
+        None => Inst::mov64_m_r(mem, into_reg, None /* infallible */),
     }
 }
 
@@ -982,7 +991,7 @@ fn store_stack(mem: impl Into<SyntheticAmode>, from_reg: Reg, ty: Type) -> Inst 
     };
     let mem = mem.into();
     if is_int {
-        Inst::mov_r_m(size, from_reg, mem)
+        Inst::mov_r_m(size, from_reg, mem, /* infallible store */ None)
     } else {
         unimplemented!("f32/f64 store_stack");
     }

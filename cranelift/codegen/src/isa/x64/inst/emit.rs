@@ -807,7 +807,12 @@ pub(crate) fn emit(
             emit_std_reg_reg(sink, LegacyPrefix::None, 0x89, 1, *src, dst.to_reg(), rex);
         }
 
-        Inst::MovZX_RM_R { ext_mode, src, dst } => {
+        Inst::MovZX_RM_R {
+            ext_mode,
+            src,
+            dst,
+            srcloc,
+        } => {
             let (opcodes, num_opcodes, rex_flags) = match ext_mode {
                 ExtMode::BL => {
                     // MOVZBL is (REX.W==0) 0F B6 /r
@@ -849,27 +854,45 @@ pub(crate) fn emit(
                     *src,
                     rex_flags,
                 ),
-                RegMem::Mem { addr: src } => emit_std_reg_mem(
-                    sink,
-                    LegacyPrefix::None,
-                    opcodes,
-                    num_opcodes,
-                    dst.to_reg(),
-                    &src.finalize(state),
-                    rex_flags,
-                ),
+                RegMem::Mem { addr: src } => {
+                    let src = &src.finalize(state);
+
+                    if let Some(srcloc) = *srcloc {
+                        // Register the offset at which the actual load instruction starts.
+                        sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                    }
+
+                    emit_std_reg_mem(
+                        sink,
+                        LegacyPrefix::None,
+                        opcodes,
+                        num_opcodes,
+                        dst.to_reg(),
+                        src,
+                        rex_flags,
+                    )
+                }
             }
         }
 
-        Inst::Mov64_M_R { src, dst } => emit_std_reg_mem(
-            sink,
-            LegacyPrefix::None,
-            0x8B,
-            1,
-            dst.to_reg(),
-            &src.finalize(state),
-            RexFlags::set_w(),
-        ),
+        Inst::Mov64_M_R { src, dst, srcloc } => {
+            let src = &src.finalize(state);
+
+            if let Some(srcloc) = *srcloc {
+                // Register the offset at which the actual load instruction starts.
+                sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+            }
+
+            emit_std_reg_mem(
+                sink,
+                LegacyPrefix::None,
+                0x8B,
+                1,
+                dst.to_reg(),
+                src,
+                RexFlags::set_w(),
+            )
+        }
 
         Inst::LoadEffectiveAddress { addr, dst } => emit_std_reg_mem(
             sink,
@@ -881,7 +904,12 @@ pub(crate) fn emit(
             RexFlags::set_w(),
         ),
 
-        Inst::MovSX_RM_R { ext_mode, src, dst } => {
+        Inst::MovSX_RM_R {
+            ext_mode,
+            src,
+            dst,
+            srcloc,
+        } => {
             let (opcodes, num_opcodes, rex_flags) = match ext_mode {
                 ExtMode::BL => {
                     // MOVSBL is (REX.W==0) 0F BE /r
@@ -915,20 +943,40 @@ pub(crate) fn emit(
                     *src,
                     rex_flags,
                 ),
-                RegMem::Mem { addr: src } => emit_std_reg_mem(
-                    sink,
-                    LegacyPrefix::None,
-                    opcodes,
-                    num_opcodes,
-                    dst.to_reg(),
-                    &src.finalize(state),
-                    rex_flags,
-                ),
+
+                RegMem::Mem { addr: src } => {
+                    let src = &src.finalize(state);
+
+                    if let Some(srcloc) = *srcloc {
+                        // Register the offset at which the actual load instruction starts.
+                        sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                    }
+
+                    emit_std_reg_mem(
+                        sink,
+                        LegacyPrefix::None,
+                        opcodes,
+                        num_opcodes,
+                        dst.to_reg(),
+                        src,
+                        rex_flags,
+                    )
+                }
             }
         }
 
-        Inst::Mov_R_M { size, src, dst } => {
+        Inst::Mov_R_M {
+            size,
+            src,
+            dst,
+            srcloc,
+        } => {
             let dst = &dst.finalize(state);
+
+            if let Some(srcloc) = *srcloc {
+                // Register the offset at which the actual load instruction starts.
+                sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+            }
 
             match size {
                 1 => {
@@ -1350,7 +1398,7 @@ pub(crate) fn emit(
             one_way_jmp(sink, CC::NB, *default_label); // idx unsigned >= jmp table size
 
             // Copy the index (and make sure to clear the high 32-bits lane of tmp2).
-            let inst = Inst::movzx_rm_r(ExtMode::LQ, RegMem::reg(*idx), *tmp2);
+            let inst = Inst::movzx_rm_r(ExtMode::LQ, RegMem::reg(*idx), *tmp2, None);
             inst.emit(sink, flags, state);
 
             // Load base address of jump table.
@@ -1366,6 +1414,7 @@ pub(crate) fn emit(
                 ExtMode::LQ,
                 RegMem::mem(Amode::imm_reg_reg_shift(0, tmp1.to_reg(), tmp2.to_reg(), 2)),
                 *tmp2,
+                None,
             );
             inst.emit(sink, flags, state);
 
@@ -1418,6 +1467,7 @@ pub(crate) fn emit(
             op,
             src: src_e,
             dst: reg_g,
+            srcloc,
         } => {
             let rex = RexFlags::clear_w();
             let (prefix, opcode) = match op {
@@ -1432,9 +1482,12 @@ pub(crate) fn emit(
                 RegMem::Reg { reg: reg_e } => {
                     emit_std_reg_reg(sink, prefix, opcode, 2, reg_g.to_reg(), *reg_e, rex);
                 }
-
                 RegMem::Mem { addr } => {
                     let addr = &addr.finalize(state);
+                    if let Some(srcloc) = *srcloc {
+                        // Register the offset at which the actual load instruction starts.
+                        sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                    }
                     emit_std_reg_mem(sink, prefix, opcode, 2, reg_g.to_reg(), addr, rex);
                 }
             }
@@ -1462,14 +1515,19 @@ pub(crate) fn emit(
                 RegMem::Reg { reg: reg_e } => {
                     emit_std_reg_reg(sink, prefix, opcode, 2, reg_g.to_reg(), *reg_e, rex);
                 }
-
                 RegMem::Mem { addr } => {
                     let addr = &addr.finalize(state);
                     emit_std_reg_mem(sink, prefix, opcode, 2, reg_g.to_reg(), addr, rex);
                 }
             }
         }
-        Inst::XMM_Mov_R_M { op, src, dst } => {
+
+        Inst::XMM_Mov_R_M {
+            op,
+            src,
+            dst,
+            srcloc,
+        } => {
             let rex = RexFlags::clear_w();
             let (prefix, opcode) = match op {
                 SseOpcode::Movd => (LegacyPrefix::_66, 0x0F7E),
@@ -1478,6 +1536,10 @@ pub(crate) fn emit(
             };
 
             let dst = &dst.finalize(state);
+            if let Some(srcloc) = *srcloc {
+                // Register the offset at which the actual load instruction starts.
+                sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+            }
             emit_std_reg_mem(sink, prefix, opcode, 2, *src, dst, rex);
         }
 
