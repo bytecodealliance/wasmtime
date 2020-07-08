@@ -1,10 +1,11 @@
+use crate::builder::{ObjectBuilder, ObjectBuilderTarget};
 use crate::context::layout_vmcontext;
 use crate::data_segment::{declare_data_segment, emit_data_segment};
-use crate::function::{declare_functions, emit_functions};
 use crate::table::{declare_table, emit_table};
 use anyhow::Result;
 use object::write::{Object, Relocation, StandardSection, Symbol, SymbolSection};
 use object::{RelocationEncoding, RelocationKind, SymbolFlags, SymbolKind, SymbolScope};
+use wasmtime_debug::DwarfSection;
 use wasmtime_environ::isa::TargetFrontendConfig;
 use wasmtime_environ::{Compilation, DataInitializer, Module, Relocations};
 
@@ -48,34 +49,38 @@ fn emit_vmcontext_init(
 /// Emits a module that has been emitted with the `wasmtime-environ` environment
 /// implementation to a native object file.
 pub fn emit_module(
-    obj: &mut Object,
+    target: ObjectBuilderTarget,
     module: &Module,
-    compilation: &Compilation,
-    relocations: &Relocations,
-    data_initializers: &[DataInitializer],
     target_config: &TargetFrontendConfig,
-) -> Result<()> {
-    declare_functions(obj, module, relocations)?;
+    compilation: Compilation,
+    relocations: Relocations,
+    dwarf_sections: Vec<DwarfSection>,
+    data_initializers: &[DataInitializer],
+) -> Result<Object> {
+    let mut builder = ObjectBuilder::new(target, module);
+    builder.set_compilation(compilation, relocations);
+    builder.set_dwarf_sections(dwarf_sections);
+    let mut obj = builder.build()?;
+
+    // Append data, table and vmcontext_init code to the object file.
 
     for (i, initializer) in data_initializers.iter().enumerate() {
-        declare_data_segment(obj, initializer, i)?;
+        declare_data_segment(&mut obj, initializer, i)?;
     }
 
     for i in 0..module.local.table_plans.len() {
-        declare_table(obj, i)?;
+        declare_table(&mut obj, i)?;
     }
 
-    emit_functions(obj, module, compilation, relocations)?;
-
     for (i, initializer) in data_initializers.iter().enumerate() {
-        emit_data_segment(obj, initializer, i)?;
+        emit_data_segment(&mut obj, initializer, i)?;
     }
 
     for i in 0..module.local.table_plans.len() {
-        emit_table(obj, i)?;
+        emit_table(&mut obj, i)?;
     }
 
-    emit_vmcontext_init(obj, module, target_config)?;
+    emit_vmcontext_init(&mut obj, module, target_config)?;
 
-    Ok(())
+    Ok(obj)
 }

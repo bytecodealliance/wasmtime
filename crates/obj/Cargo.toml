@@ -15,6 +15,8 @@ anyhow = "1.0"
 wasmtime-environ = { path = "../environ", version = "0.18.0" }
 object = { version = "0.20", default-features = false, features = ["write"] }
 more-asserts = "0.2.1"
+target-lexicon = { version = "0.10.0", default-features = false }
+wasmtime-debug = { path = "../debug", version = "0.18.0" }
 
 [badges]
 maintenance = { status = "experimental" }

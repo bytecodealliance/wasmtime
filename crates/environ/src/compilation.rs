@@ -71,6 +71,14 @@ impl Compilation {
         self.functions.is_empty()
     }
 
+    /// Returns unwind info for all defined functions.
+    pub fn unwind_info(&self) -> PrimaryMap<DefinedFuncIndex, &Option<UnwindInfo>> {
+        self.functions
+            .iter()
+            .map(|(_, func)| &func.unwind_info)
+            .collect::<PrimaryMap<DefinedFuncIndex, _>>()
+    }
+
     /// Gets functions jump table offsets.
     pub fn get_jt_offsets(&self) -> PrimaryMap<DefinedFuncIndex, ir::JumpTableOffsets> {
         self.functions

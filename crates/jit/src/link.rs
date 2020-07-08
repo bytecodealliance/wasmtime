@@ -133,7 +133,7 @@ fn apply_reloc(
 
 fn to_libcall_address(name: &str) -> Option<usize> {
     use self::libcalls::*;
-    use crate::for_each_libcall;
+    use wasmtime_environ::for_each_libcall;
     macro_rules! add_libcall_symbol {
         [$(($libcall:ident, $export:ident)),*] => {
             Some(match name {

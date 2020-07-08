@@ -2,7 +2,7 @@ use anyhow::{anyhow, bail, Context as _, Result};
 use object::write::Object;
 use target_lexicon::Triple;
 use wasmtime::Strategy;
-use wasmtime_debug::{emit_dwarf, read_debuginfo, write_debugsections};
+use wasmtime_debug::{emit_dwarf, read_debuginfo};
 #[cfg(feature = "lightbeam")]
 use wasmtime_environ::Lightbeam;
 use wasmtime_environ::{
@@ -11,43 +11,7 @@ use wasmtime_environ::{
     ModuleVmctxInfo, Tunables, VMOffsets,
 };
 use wasmtime_jit::native;
-use wasmtime_obj::emit_module;
-
-fn to_obj_format(
-    triple: &Triple,
-) -> Result<(
-    object::BinaryFormat,
-    object::Architecture,
-    object::Endianness,
-)> {
-    let binary_format = match triple.binary_format {
-        target_lexicon::BinaryFormat::Elf => object::BinaryFormat::Elf,
-        target_lexicon::BinaryFormat::Coff => object::BinaryFormat::Coff,
-        target_lexicon::BinaryFormat::Macho => object::BinaryFormat::MachO,
-        target_lexicon::BinaryFormat::Wasm => {
-            bail!("binary format wasm is unsupported");
-        }
-        target_lexicon::BinaryFormat::Unknown => {
-            bail!("binary format is unknown");
-        }
-    };
-    let architecture = match triple.architecture {
-        target_lexicon::Architecture::I386
-        | target_lexicon::Architecture::I586
-        | target_lexicon::Architecture::I686 => object::Architecture::I386,
-        target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
-        target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
-        target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
-        architecture => {
-            bail!("target architecture {:?} is unsupported", architecture,);
-        }
-    };
-    let endian = match triple.endianness().unwrap() {
-        target_lexicon::Endianness::Little => object::Endianness::Little,
-        target_lexicon::Endianness::Big => object::Endianness::Big,
-    };
-    Ok((binary_format, architecture, endian))
-}
+use wasmtime_obj::{emit_module, ObjectBuilderTarget};
 
 /// Creates object file from binary wasm data.
 pub fn compile_to_obj(
@@ -86,8 +50,7 @@ pub fn compile_to_obj(
 
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
 
-    let (obj_format, obj_arch, obj_endian) = to_obj_format(isa.triple())?;
-    let mut obj = Object::new(obj_format, obj_arch, obj_endian);
+    let target = ObjectBuilderTarget::from_triple(isa.triple())?;
 
     // TODO: Expose the tunables as command-line flags.
     let mut tunables = Tunables::default();
@@ -143,29 +106,30 @@ pub fn compile_to_obj(
         }
     };
 
-    emit_module(
-        &mut obj,
-        &translation.module,
-        &compilation,
-        &relocations,
-        &translation.data_initializers,
-        &translation.target_config,
-    )
-    .map_err(|e| anyhow!(e))
-    .context("failed to emit module")?;
-
-    if debug_info {
+    let dwarf_sections = if debug_info {
         let debug_data = read_debuginfo(wasm).context("failed to emit DWARF")?;
-        let sections = emit_dwarf(
+        emit_dwarf(
             &*isa,
             &debug_data,
             &address_transform,
             &module_vmctx_info,
             &value_ranges,
-            &compilation,
+            &compilation.unwind_info(),
         )
-        .context("failed to emit debug sections")?;
-        write_debugsections(&mut obj, sections).context("failed to emit debug sections")?;
-    }
-    Ok(obj)
+        .context("failed to emit debug sections")?
+    } else {
+        vec![]
+    };
+
+    Ok(emit_module(
+        target,
+        &translation.module,
+        &translation.target_config,
+        compilation,
+        relocations,
+        dwarf_sections,
+        &translation.data_initializers,
+    )
+    .map_err(|e| anyhow!(e))
+    .context("failed to emit module")?)
 }
