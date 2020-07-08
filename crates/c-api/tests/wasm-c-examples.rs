@@ -146,3 +146,18 @@ fn test_run_multi_example() {
 fn test_run_gcd_example() {
     run_c_example("gcd", "gcd(6, 27) = 3\n");
 }
+
+#[test]
+fn test_run_externref_example() {
+    run_c_example(
+        "externref",
+        "Initializing...\n\
+         Compiling module...\n\
+         Instantiating module...\n\
+         Creating new `externref`...\n\
+         Touching `externref` table...\n\
+         Touching `externref` global...\n\
+         Calling `externref` func...\n\
+         All finished!\n",
+    );
+}
