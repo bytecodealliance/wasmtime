@@ -651,6 +651,9 @@ WASM_API_EXTERN const wasm_name_t *wasmtime_frame_module_name(const wasm_frame_t
  *
  * The `trap` pointer cannot be `NULL`. The `args` and `results` pointers may be
  * `NULL` if the corresponding length is zero.
+ *
+ * Does not take ownership of `wasm_val_t` arguments. Gives ownership of
+ * `wasm_val_t` results.
  */
 WASM_API_EXTERN own wasmtime_error_t *wasmtime_func_call(
     wasm_func_t *func,

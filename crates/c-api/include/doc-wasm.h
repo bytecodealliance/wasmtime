@@ -1147,19 +1147,22 @@
 
 /**
  * \struct wasm_ref_t
- * \brief Unimplemented and used in Wasmtime right now.
+ * \brief A reference type: either a funcref or an externref.
  *
  * \typedef wasm_ref_t
  * \brief Convenience alias for #wasm_ref_t
  *
  * \fn void wasm_ref_delete(own wasm_ref_t *v);
- * \brief Deletes a reference.
+ * \brief Delete a reference.
  *
  * \fn own wasm_ref_t *wasm_ref_copy(const wasm_ref_t *)
- * \brief Unimplemented in Wasmtime, aborts the process if called.
+ * \brief Copy a reference.
  *
  * \fn bool wasm_ref_same(const wasm_ref_t *, const wasm_ref_t *)
- * \brief Unimplemented in Wasmtime, aborts the process if called.
+ * \brief Are the given references pointing to the same externref?
+ *
+ * > Note: Wasmtime does not support checking funcrefs for equality, and this
+ * > function will always return false for funcrefs.
  *
  * \fn void* wasm_ref_get_host_info(const wasm_ref_t *);
  * \brief Unimplemented in Wasmtime, always returns `NULL`.
@@ -1614,6 +1617,9 @@
  * If a trap happens during execution or some other error then a non-`NULL` trap
  * is returned. In this situation the `results` are is unmodified.
  *
+ * Does not take ownership of `wasm_val_t` arguments. Gives ownership of
+ * `wasm_val_t` results.
+ *
  * > Note: to avoid the UB associated with passing the wrong number of results
  * > or parameters by accident, or to distinguish between traps and other
  * > errors, it's recommended to use #wasmtime_func_call.
@@ -1759,9 +1765,6 @@
  * table provided or if it comes from a different store than the one provided.
  *
  * > Note: for funcref tables you can use #wasmtime_funcref_table_new as well.
- * >
- * > Additionally the #wasm_ref_t does not have much support in Wasmtime, so you
- * > may not be able to create an appropriate initial value.
  *
  * \fn wasm_tabletype_t *wasm_table_type(const wasm_table_t *);
  * \brief Returns the type of this table.
@@ -1774,12 +1777,10 @@
  * Attempts to get a value at an index in this table. This function returns
  * `NULL` if the index is out of bounds.
  *
+ * Gives ownership of the resulting `wasm_ref_t*`.
+ *
  * > Note: for funcref tables you can use #wasmtime_funcref_table_get to learn
  * > about out-of-bounds errors.
- * >
- * > Additionally the #wasm_ref_t does not have much
- * > support in Wasmtime, so you may not be able to do much with the returned
- * > value.
  *
  * \fn void wasm_table_set(wasm_table_t *, wasm_table_size_t index, wasm_ref_t *);
  * \brief Sets an element in this table.
@@ -1791,11 +1792,10 @@
  * * The #wasm_ref_t comes from a different store than the table provided.
  * * The #wasm_ref_t does not have an appropriate type to store in this table.
  *
+ * Takes ownership of the given `wasm_ref_t*`.
+ *
  * > Note: for funcref tables you can use #wasmtime_funcref_table_set to learn
  * > about errors.
- * >
- * > Additionally the #wasm_ref_t does not have much support in Wasmtime, so you
- * > may not be able to create an appropriate initial value.
  *
  * \fn wasm_table_size_t wasm_table_size(const wasm_table_t *);
  * \brief Gets the current size, in elements, of this table.
@@ -1814,9 +1814,6 @@
  * * The #wasm_ref_t does not have an appropriate type to store in this table.
  *
  * > Note: for funcref tables you can use #wasmtime_funcref_table_grow as well.
- * >
- * > Additionally the #wasm_ref_t does not have much support in Wasmtime, so you
- * > may not be able to create an appropriate initial value.
  */
 
 /**
