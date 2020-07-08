@@ -175,11 +175,11 @@ fn input_to_reg_mem(ctx: Ctx, spec: InsnInput) -> RegMem {
 /// TODO: handle memory as well!
 fn input_to_reg_mem_imm(ctx: Ctx, spec: InsnInput) -> RegMemImm {
     let imm = ctx.get_input(spec.insn, spec.input).constant.and_then(|x| {
-        let as_u32 = x as u32;
-        let extended = as_u32 as u64;
-        // If the truncation and sign-extension don't change the value, use it.
-        if extended == x {
-            Some(as_u32)
+        // For i64 instructions (prefixed with REX.W), require that the immediate will sign-extend
+        // to 64 bits. For other sizes, it doesn't matter and we can just use the plain
+        // constant.
+        if ctx.input_ty(spec.insn, spec.input).bytes() != 8 || low32_will_sign_extend_to_64(x) {
+            Some(x as u32)
         } else {
             None
         }
