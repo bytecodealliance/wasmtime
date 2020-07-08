@@ -161,7 +161,6 @@ int main() {
   wasm_module_delete(module);
   wasm_store_delete(store);
   wasm_engine_delete(engine);
-  wasm_config_delete(config);
   return ret;
 }
 
