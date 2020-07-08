@@ -836,6 +836,60 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_funcref_table_grow(
     wasm_table_size_t *prev_size
 );
 
+/**
+ * \brief Create a new `externref` value.
+ *
+ * Creates a new `externref` value wrapping the provided data.
+ *
+ * This function does not take an associated finalizer to clean up the data when
+ * the reference is reclaimed. If you need a finalizer to clean up the data,
+ * then use #wasmtime_externref_new_with_finalizer.
+ */
+WASM_API_EXTERN wasm_val_t wasmtime_externref_new(void *data);
+
+/**
+ * \brief A finalizer for an `externref`'s wrapped data.
+ *
+ * A finalizer callback to clean up an `externref`'s wrapped data after the
+ * `externref` has been reclaimed. This is an opportunity to run destructors,
+ * free dynamically allocated memory, close file handles, etc.
+ */
+typedef void (*wasmtime_externref_finalizer_t)(void*);
+
+/**
+ * \brief Create a new `externref` value with a finalizer.
+ *
+ * Creates a new `externref` value wrapping the provided data.
+ *
+ * When the reference is reclaimed, the wrapped data is cleaned up with the
+ * provided finalizer. If you do not need to clean up the wrapped data, then use
+ * #wasmtime_externref_new.
+ */
+WASM_API_EXTERN wasm_val_t wasmtime_externref_new_with_finalizer(
+    void *data,
+    wasmtime_externref_finalizer_t finalizer
+);
+
+/**
+ * \brief Get an `externref`'s wrapped data
+ *
+ * If the given value is a reference to a non-null `externref`, writes the
+ * wrapped data that was passed into #wasmtime_externref_new or
+ * #wasmtime_externref_new_with_finalizer when creating the given `externref` to
+ * `datap`, and returns `true`.
+ *
+ * If the value is a reference to a null `externref`, writes `NULL` to `datap`
+ * and returns `true`.
+ *
+ * If the given value is not an `externref`, returns `false` and leaves `datap`
+ * unmodified.
+ *
+ * Does not take ownership of `val`.
+ *
+ * Both `val` and `datap` must not be `NULL`.
+ */
+WASM_API_EXTERN bool wasmtime_externref_data(wasm_val_t* val, void** datap);
+
 #undef own
 
 #ifdef __cplusplus
