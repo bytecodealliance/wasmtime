@@ -448,7 +448,9 @@ impl<'a> ObjectBuilder<'a> {
             let section_id = *dwarf_sections_ids.get(name).unwrap();
             for reloc in relocs {
                 let target_symbol = match reloc.target {
-                    DwarfSectionRelocTarget::Func(index) => func_symbols[FuncIndex::new(index)],
+                    DwarfSectionRelocTarget::Func(index) => {
+                        func_symbols[module.local.func_index(DefinedFuncIndex::new(index))]
+                    }
                     DwarfSectionRelocTarget::Section(name) => {
                         obj.section_symbol(*dwarf_sections_ids.get(name).unwrap())
                     }
