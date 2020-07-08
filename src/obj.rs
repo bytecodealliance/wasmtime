@@ -124,11 +124,11 @@ pub fn compile_to_obj(
     Ok(emit_module(
         target,
         &translation.module,
-        &compilation,
-        &relocations,
-        &translation.data_initializers,
         &translation.target_config,
+        compilation,
+        relocations,
         dwarf_sections,
+        &translation.data_initializers,
     )
     .map_err(|e| anyhow!(e))
     .context("failed to emit module")?)

@@ -26,7 +26,6 @@
 mod builder;
 mod context;
 mod data_segment;
-mod function;
 mod module;
 mod table;
 

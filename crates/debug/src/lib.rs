@@ -3,8 +3,7 @@
 #![allow(clippy::cast_ptr_alignment)]
 
 use anyhow::{bail, ensure, Error};
-use object::write::{Object, Relocation, StandardSegment};
-use object::{RelocationEncoding, RelocationKind, SectionKind};
+use object::{RelocationEncoding, RelocationKind};
 use std::collections::HashMap;
 
 pub use crate::read_debuginfo::{read_debuginfo, DebugInfoData, WasmFileInfo};
@@ -14,46 +13,6 @@ mod gc;
 mod read_debuginfo;
 mod transform;
 mod write_debuginfo;
-
-pub fn write_debugsections(obj: &mut Object, sections: Vec<DwarfSection>) -> Result<(), Error> {
-    let (bodies, relocs) = sections
-        .into_iter()
-        .map(|s| ((s.name.clone(), s.body), (s.name, s.relocs)))
-        .unzip::<_, _, Vec<_>, Vec<_>>();
-    let mut ids = HashMap::new();
-    for (name, body) in bodies {
-        let segment = obj.segment_name(StandardSegment::Debug).to_vec();
-        let section_id = obj.add_section(segment, name.as_bytes().to_vec(), SectionKind::Debug);
-        ids.insert(name, section_id);
-        obj.append_section_data(section_id, &body, 1);
-    }
-    for (name, relocs) in relocs {
-        let section_id = *ids.get(&name).unwrap();
-        for reloc in relocs {
-            let target_symbol = match reloc.target {
-                DwarfSectionRelocTarget::Func(id) => obj
-                    .symbol_id(format!("_wasm_function_{}", id).as_bytes())
-                    .unwrap(),
-                DwarfSectionRelocTarget::Section(name) => {
-                    obj.section_symbol(*ids.get(name).unwrap())
-                }
-            };
-            obj.add_relocation(
-                section_id,
-                Relocation {
-                    offset: u64::from(reloc.offset),
-                    size: reloc.size << 3,
-                    kind: RelocationKind::Absolute,
-                    encoding: RelocationEncoding::Generic,
-                    symbol: target_symbol,
-                    addend: i64::from(reloc.addend),
-                },
-            )?;
-        }
-    }
-
-    Ok(())
-}
 
 pub fn create_gdbjit_image(
     mut bytes: Vec<u8>,
