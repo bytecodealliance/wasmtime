@@ -1,3 +1,4 @@
+use crate::r#ref::{ref_to_val, WasmRefInner};
 use crate::{from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t, WASM_I32};
 use std::mem::MaybeUninit;
 use std::ptr;
@@ -80,7 +81,17 @@ impl wasm_val_t {
             Val::ExternRef(r) => wasm_val_t {
                 kind: from_valtype(&ValType::ExternRef),
                 of: wasm_val_union {
-                    ref_: Box::into_raw(Box::new(wasm_ref_t { r })),
+                    ref_: Box::into_raw(Box::new(wasm_ref_t {
+                        r: WasmRefInner::ExternRef(r),
+                    })),
+                },
+            },
+            Val::FuncRef(f) => wasm_val_t {
+                kind: from_valtype(&ValType::FuncRef),
+                of: wasm_val_union {
+                    ref_: Box::into_raw(Box::new(wasm_ref_t {
+                        r: WasmRefInner::FuncRef(f),
+                    })),
                 },
             },
             _ => unimplemented!("wasm_val_t::from_val {:?}", val),
@@ -93,7 +104,7 @@ impl wasm_val_t {
             ValType::I64 => Val::from(unsafe { self.of.i64 }),
             ValType::F32 => Val::from(unsafe { self.of.f32 }),
             ValType::F64 => Val::from(unsafe { self.of.f64 }),
-            ValType::ExternRef => Val::ExternRef(unsafe { (*self.of.ref_).r.clone() }),
+            ValType::ExternRef | ValType::FuncRef => ref_to_val(unsafe { &*self.of.ref_ }),
             _ => unimplemented!("wasm_val_t::val {:?}", self.kind),
         }
     }
@@ -104,9 +115,12 @@ pub unsafe extern "C" fn wasm_val_copy(out: &mut MaybeUninit<wasm_val_t>, source
     ptr::write(
         out.as_mut_ptr(),
         match into_valtype(source.kind) {
-            ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64 | ValType::ExternRef => {
-                source.clone()
-            }
+            ValType::I32
+            | ValType::I64
+            | ValType::F32
+            | ValType::F64
+            | ValType::ExternRef
+            | ValType::FuncRef => source.clone(),
             _ => unimplemented!("wasm_val_copy arg"),
         },
     );

@@ -1,7 +1,8 @@
+use crate::r#ref::{ref_into_val, val_into_ref};
 use crate::{handle_result, wasm_func_t, wasm_ref_t, wasmtime_error_t};
 use crate::{wasm_extern_t, wasm_store_t, wasm_tabletype_t};
 use std::ptr;
-use wasmtime::{Extern, Table, Val};
+use wasmtime::{Extern, Table, TableType, Val, ValType};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -29,16 +30,21 @@ impl wasm_table_t {
     }
 }
 
+fn ref_into_val_for_table(r: Option<Box<wasm_ref_t>>, table_ty: &TableType) -> Val {
+    ref_into_val(r).unwrap_or_else(|| match table_ty.element() {
+        ValType::FuncRef => Val::FuncRef(None),
+        ValType::ExternRef => Val::ExternRef(None),
+        ty => panic!("unsupported table element type: {:?}", ty),
+    })
+}
+
 #[no_mangle]
 pub extern "C" fn wasm_table_new(
     store: &wasm_store_t,
     tt: &wasm_tabletype_t,
     init: Option<Box<wasm_ref_t>>,
 ) -> Option<Box<wasm_table_t>> {
-    let init: Val = match init {
-        Some(init) => init.r.into(),
-        None => Val::FuncRef(None),
-    };
+    let init = ref_into_val_for_table(init, &tt.ty().ty);
     let table = Table::new(&store.store, tt.ty().ty.clone(), init).ok()?;
     Some(Box::new(wasm_table_t {
         ext: wasm_extern_t {
@@ -77,11 +83,12 @@ pub extern "C" fn wasm_table_type(t: &wasm_table_t) -> Box<wasm_tabletype_t> {
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_table_get(t: &wasm_table_t, index: wasm_table_size_t) -> *mut wasm_ref_t {
-    match t.table().get(index) {
-        Some(val) => into_funcref(val),
-        None => into_funcref(Val::FuncRef(None)),
-    }
+pub extern "C" fn wasm_table_get(
+    t: &wasm_table_t,
+    index: wasm_table_size_t,
+) -> Option<Box<wasm_ref_t>> {
+    let val = t.table().get(index)?;
+    Some(val_into_ref(val).unwrap())
 }
 
 #[no_mangle]
@@ -108,9 +115,9 @@ pub extern "C" fn wasmtime_funcref_table_get(
 pub unsafe extern "C" fn wasm_table_set(
     t: &wasm_table_t,
     index: wasm_table_size_t,
-    r: *mut wasm_ref_t,
+    r: Option<Box<wasm_ref_t>>,
 ) -> bool {
-    let val = from_funcref(r);
+    let val = ref_into_val_for_table(r, &t.table().ty());
     t.table().set(index, val).is_ok()
 }
 
@@ -127,26 +134,6 @@ pub extern "C" fn wasmtime_funcref_table_set(
     handle_result(t.table().set(index, val), |()| {})
 }
 
-fn into_funcref(val: Val) -> *mut wasm_ref_t {
-    if let Val::FuncRef(None) = val {
-        return ptr::null_mut();
-    }
-    let externref = match val.externref() {
-        Some(externref) => externref,
-        None => return ptr::null_mut(),
-    };
-    let r = Box::new(wasm_ref_t { r: externref });
-    Box::into_raw(r)
-}
-
-unsafe fn from_funcref(r: *mut wasm_ref_t) -> Val {
-    if !r.is_null() {
-        Box::from_raw(r).r.into()
-    } else {
-        Val::FuncRef(None)
-    }
-}
-
 #[no_mangle]
 pub extern "C" fn wasm_table_size(t: &wasm_table_t) -> wasm_table_size_t {
     t.table().size()
@@ -156,9 +143,9 @@ pub extern "C" fn wasm_table_size(t: &wasm_table_t) -> wasm_table_size_t {
 pub unsafe extern "C" fn wasm_table_grow(
     t: &wasm_table_t,
     delta: wasm_table_size_t,
-    init: *mut wasm_ref_t,
+    init: Option<Box<wasm_ref_t>>,
 ) -> bool {
-    let init = from_funcref(init);
+    let init = ref_into_val_for_table(init, &t.table().ty());
     t.table().grow(delta, init).is_ok()
 }
 

@@ -1,13 +1,60 @@
 use std::os::raw::c_void;
-use wasmtime::ExternRef;
+use wasmtime::{ExternRef, Func, Val};
 
-#[repr(C)]
+/// `*mut wasm_ref_t` is a reference type (`externref` or `funcref`), as seen by
+/// the C API. Because we do not have a uniform representation for `funcref`s
+/// and `externref`s, a `*mut wasm_ref_t` is morally a
+/// `Option<Box<Either<Option<ExternRef>, Option<Func>>>>`.
+///
+/// A null `*mut wasm_ref_t` is either a null `funcref` or a null `externref`
+/// depending on context (e.g. the table's element type that it is going into or
+/// coming out of).
+///
+/// Note: this is not `#[repr(C)]` because it is an opaque type in the header,
+/// and only ever referenced as `*mut wasm_ref_t`. This also lets us use a
+/// regular, non-`repr(C)` `enum` to define `WasmRefInner`.
 #[derive(Clone)]
 pub struct wasm_ref_t {
-    pub(crate) r: Option<ExternRef>,
+    pub(crate) r: WasmRefInner,
+}
+
+#[derive(Clone)]
+pub(crate) enum WasmRefInner {
+    ExternRef(Option<ExternRef>),
+    FuncRef(Option<Func>),
 }
 
 wasmtime_c_api_macros::declare_own!(wasm_ref_t);
+
+pub(crate) fn ref_into_val(r: Option<Box<wasm_ref_t>>) -> Option<Val> {
+    // Let callers decide whether to treat this as a null `funcref` or a
+    // null `externref`.
+    let r = r?;
+
+    Some(match r.r {
+        WasmRefInner::ExternRef(x) => Val::ExternRef(x),
+        WasmRefInner::FuncRef(x) => Val::FuncRef(x),
+    })
+}
+
+pub(crate) fn ref_to_val(r: &wasm_ref_t) -> Val {
+    match &r.r {
+        WasmRefInner::ExternRef(x) => Val::ExternRef(x.clone()),
+        WasmRefInner::FuncRef(x) => Val::FuncRef(x.clone()),
+    }
+}
+
+pub(crate) fn val_into_ref(val: Val) -> Option<Box<wasm_ref_t>> {
+    match val {
+        Val::ExternRef(x) => Some(Box::new(wasm_ref_t {
+            r: WasmRefInner::ExternRef(x),
+        })),
+        Val::FuncRef(x) => Some(Box::new(wasm_ref_t {
+            r: WasmRefInner::FuncRef(x),
+        })),
+        _ => None,
+    }
+}
 
 #[no_mangle]
 pub extern "C" fn wasm_ref_copy(r: &wasm_ref_t) -> Box<wasm_ref_t> {
@@ -16,9 +63,11 @@ pub extern "C" fn wasm_ref_copy(r: &wasm_ref_t) -> Box<wasm_ref_t> {
 
 #[no_mangle]
 pub extern "C" fn wasm_ref_same(a: &wasm_ref_t, b: &wasm_ref_t) -> bool {
-    match (a.r.as_ref(), b.r.as_ref()) {
-        (Some(a), Some(b)) => a.ptr_eq(b),
-        (None, None) => true,
+    match (&a.r, &b.r) {
+        (WasmRefInner::ExternRef(Some(a)), WasmRefInner::ExternRef(Some(b))) => a.ptr_eq(b),
+        (WasmRefInner::ExternRef(None), WasmRefInner::ExternRef(None)) => true,
+        // Note: we don't support equality for `Func`, so we always return
+        // `false` for `funcref`s.
         _ => false,
     }
 }
