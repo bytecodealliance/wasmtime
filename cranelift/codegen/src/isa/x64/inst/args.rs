@@ -234,12 +234,11 @@ impl RegMem {
     pub(crate) fn mem(addr: impl Into<SyntheticAmode>) -> Self {
         Self::Mem { addr: addr.into() }
     }
-
     /// Add the regs mentioned by `self` to `collector`.
     pub(crate) fn get_regs_as_uses(&self, collector: &mut RegUsageCollector) {
         match self {
             RegMem::Reg { reg } => collector.add_use(*reg),
-            RegMem::Mem { addr } => addr.get_regs_as_uses(collector),
+            RegMem::Mem { addr, .. } => addr.get_regs_as_uses(collector),
         }
     }
 }
@@ -252,7 +251,7 @@ impl ShowWithRRU for RegMem {
     fn show_rru_sized(&self, mb_rru: Option<&RealRegUniverse>, size: u8) -> String {
         match self {
             RegMem::Reg { reg } => show_ireg_sized(*reg, mb_rru, size),
-            RegMem::Mem { addr } => addr.show_rru(mb_rru),
+            RegMem::Mem { addr, .. } => addr.show_rru(mb_rru),
         }
     }
 }
