@@ -1,8 +1,9 @@
 use crate::{from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t, WASM_I32};
+use std::mem::MaybeUninit;
+use std::ptr;
 use wasmtime::{Val, ValType};
 
 #[repr(C)]
-#[derive(Copy, Clone)]
 pub struct wasm_val_t {
     pub kind: wasm_valkind_t,
     pub of: wasm_val_union,
@@ -20,6 +21,34 @@ pub union wasm_val_union {
     pub ref_: *mut wasm_ref_t,
 }
 
+impl Drop for wasm_val_t {
+    fn drop(&mut self) {
+        match into_valtype(self.kind) {
+            ValType::ExternRef => unsafe {
+                drop(Box::from_raw(self.of.ref_));
+            },
+            _ => {}
+        }
+    }
+}
+
+impl Clone for wasm_val_t {
+    fn clone(&self) -> Self {
+        match into_valtype(self.kind) {
+            ValType::ExternRef => wasm_val_t {
+                kind: self.kind,
+                of: wasm_val_union {
+                    ref_: unsafe { Box::into_raw(Box::new((*self.of.ref_).clone())) },
+                },
+            },
+            _ => wasm_val_t {
+                kind: self.kind,
+                of: self.of,
+            },
+        }
+    }
+}
+
 impl Default for wasm_val_t {
     fn default() -> Self {
         wasm_val_t {
@@ -30,46 +59,30 @@ impl Default for wasm_val_t {
 }
 
 impl wasm_val_t {
-    pub fn from_val(val: &Val) -> wasm_val_t {
+    pub fn from_val(val: Val) -> wasm_val_t {
         match val {
             Val::I32(i) => wasm_val_t {
                 kind: from_valtype(&ValType::I32),
-                of: wasm_val_union { i32: *i },
+                of: wasm_val_union { i32: i },
             },
             Val::I64(i) => wasm_val_t {
                 kind: from_valtype(&ValType::I64),
-                of: wasm_val_union { i64: *i },
+                of: wasm_val_union { i64: i },
             },
             Val::F32(f) => wasm_val_t {
                 kind: from_valtype(&ValType::F32),
-                of: wasm_val_union { u32: *f },
+                of: wasm_val_union { u32: f },
             },
             Val::F64(f) => wasm_val_t {
                 kind: from_valtype(&ValType::F64),
-                of: wasm_val_union { u64: *f },
+                of: wasm_val_union { u64: f },
             },
-            _ => unimplemented!("wasm_val_t::from_val {:?}", val),
-        }
-    }
-
-    pub fn set(&mut self, val: Val) {
-        match val {
-            Val::I32(i) => {
-                self.kind = from_valtype(&ValType::I32);
-                self.of = wasm_val_union { i32: i };
-            }
-            Val::I64(i) => {
-                self.kind = from_valtype(&ValType::I64);
-                self.of = wasm_val_union { i64: i };
-            }
-            Val::F32(f) => {
-                self.kind = from_valtype(&ValType::F32);
-                self.of = wasm_val_union { u32: f };
-            }
-            Val::F64(f) => {
-                self.kind = from_valtype(&ValType::F64);
-                self.of = wasm_val_union { u64: f };
-            }
+            Val::ExternRef(r) => wasm_val_t {
+                kind: from_valtype(&ValType::ExternRef),
+                of: wasm_val_union {
+                    ref_: Box::into_raw(Box::new(wasm_ref_t { r })),
+                },
+            },
             _ => unimplemented!("wasm_val_t::from_val {:?}", val),
         }
     }
@@ -80,20 +93,26 @@ impl wasm_val_t {
             ValType::I64 => Val::from(unsafe { self.of.i64 }),
             ValType::F32 => Val::from(unsafe { self.of.f32 }),
             ValType::F64 => Val::from(unsafe { self.of.f64 }),
+            ValType::ExternRef => Val::ExternRef(unsafe { (*self.of.ref_).r.clone() }),
             _ => unimplemented!("wasm_val_t::val {:?}", self.kind),
         }
     }
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasm_val_copy(out: *mut wasm_val_t, source: &wasm_val_t) {
-    *out = match into_valtype(source.kind) {
-        ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64 => *source,
-        _ => unimplemented!("wasm_val_copy arg"),
-    };
+pub unsafe extern "C" fn wasm_val_copy(out: &mut MaybeUninit<wasm_val_t>, source: &wasm_val_t) {
+    ptr::write(
+        out.as_mut_ptr(),
+        match into_valtype(source.kind) {
+            ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64 | ValType::ExternRef => {
+                source.clone()
+            }
+            _ => unimplemented!("wasm_val_copy arg"),
+        },
+    );
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_val_delete(_val: &mut wasm_val_t) {
-    // currently we only support integers/floats which need no deletion
+pub unsafe extern "C" fn wasm_val_delete(val: *mut wasm_val_t) {
+    ptr::drop_in_place(val);
 }

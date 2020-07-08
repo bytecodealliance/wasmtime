@@ -2,6 +2,7 @@ use crate::{wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t};
 use crate::{wasm_name_t, wasm_trap_t, wasmtime_error_t};
 use anyhow::anyhow;
 use std::ffi::c_void;
+use std::mem::MaybeUninit;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::str;
@@ -89,6 +90,7 @@ fn create_function(
     let func = Func::new(store, ty, move |caller, params, results| {
         let params = params
             .iter()
+            .cloned()
             .map(|p| wasm_val_t::from_val(p))
             .collect::<Vec<_>>();
         let mut out_results = vec![wasm_val_t::default(); results.len()];
@@ -163,7 +165,7 @@ pub extern "C" fn wasmtime_func_new_with_env(
 pub unsafe extern "C" fn wasm_func_call(
     wasm_func: &wasm_func_t,
     args: *const wasm_val_t,
-    results: *mut wasm_val_t,
+    results: *mut MaybeUninit<wasm_val_t>,
 ) -> *mut wasm_trap_t {
     let func = wasm_func.func();
     let mut trap = ptr::null_mut();
@@ -186,7 +188,7 @@ pub unsafe extern "C" fn wasmtime_func_call(
     func: &wasm_func_t,
     args: *const wasm_val_t,
     num_args: usize,
-    results: *mut wasm_val_t,
+    results: *mut MaybeUninit<wasm_val_t>,
     num_results: usize,
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
@@ -201,7 +203,7 @@ pub unsafe extern "C" fn wasmtime_func_call(
 fn _wasmtime_func_call(
     func: &wasm_func_t,
     args: &[wasm_val_t],
-    results: &mut [wasm_val_t],
+    results: &mut [MaybeUninit<wasm_val_t>],
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
     let func = func.func();
@@ -217,8 +219,13 @@ fn _wasmtime_func_call(
     let result = panic::catch_unwind(AssertUnwindSafe(|| func.call(&params)));
     match result {
         Ok(Ok(out)) => {
-            for (slot, val) in results.iter_mut().zip(out.iter()) {
-                *slot = wasm_val_t::from_val(val);
+            for (slot, val) in results.iter_mut().zip(out.into_vec().into_iter()) {
+                unsafe {
+                    // NB: The results array is likely uninitialized memory, so
+                    // use `ptr::write` rather than assignment (which tries to
+                    // run destructors).
+                    ptr::write(slot.as_mut_ptr(), wasm_val_t::from_val(val));
+                }
             }
             None
         }
