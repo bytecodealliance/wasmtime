@@ -153,7 +153,9 @@ pub fn type_to_type<PE: TargetEnvironment + ?Sized>(
         wasmparser::Type::F32 => Ok(ir::types::F32),
         wasmparser::Type::F64 => Ok(ir::types::F64),
         wasmparser::Type::V128 => Ok(ir::types::I8X16),
-        wasmparser::Type::ExternRef | wasmparser::Type::FuncRef => Ok(environ.reference_type(ty)),
+        wasmparser::Type::ExternRef | wasmparser::Type::FuncRef => {
+            Ok(environ.reference_type(ty.into()))
+        }
         ty => Err(wasm_unsupported!("type_to_type: wasm type {:?}", ty)),
     }
 }
@@ -170,7 +172,7 @@ pub fn tabletype_to_type<PE: TargetEnvironment + ?Sized>(
         wasmparser::Type::F32 => Ok(Some(ir::types::F32)),
         wasmparser::Type::F64 => Ok(Some(ir::types::F64)),
         wasmparser::Type::V128 => Ok(Some(ir::types::I8X16)),
-        wasmparser::Type::ExternRef => Ok(Some(environ.reference_type(ty))),
+        wasmparser::Type::ExternRef => Ok(Some(environ.reference_type(ty.into()))),
         wasmparser::Type::FuncRef => Ok(None),
         ty => Err(wasm_unsupported!(
             "tabletype_to_type: table wasm type {:?}",
@@ -226,7 +228,7 @@ pub fn block_with_params<PE: TargetEnvironment + ?Sized>(
                 builder.append_block_param(block, ir::types::F64);
             }
             wasmparser::Type::ExternRef | wasmparser::Type::FuncRef => {
-                builder.append_block_param(block, environ.reference_type(*ty));
+                builder.append_block_param(block, environ.reference_type((*ty).into()));
             }
             wasmparser::Type::V128 => {
                 builder.append_block_param(block, ir::types::I8X16);

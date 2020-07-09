@@ -196,7 +196,7 @@ fn declare_locals<FE: FuncEnvironment + ?Sized>(
             let constant_handle = builder.func.dfg.constants.insert([0; 16].to_vec().into());
             builder.ins().vconst(ir::types::I8X16, constant_handle)
         }
-        ExternRef | FuncRef => environ.translate_ref_null(builder.cursor(), wasm_type)?,
+        ExternRef | FuncRef => environ.translate_ref_null(builder.cursor(), wasm_type.into())?,
         ty => return Err(wasm_unsupported!("unsupported local type {:?}", ty)),
     };
 

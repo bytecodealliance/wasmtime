@@ -110,14 +110,10 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         Ok(())
     }
 
-    fn declare_signature(&mut self, wasm: &WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
+    fn declare_signature(&mut self, wasm: WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
         let sig = translate_signature(sig, self.pointer_type());
         // TODO: Deduplicate signatures.
-        self.result
-            .module
-            .local
-            .signatures
-            .push((wasm.clone(), sig));
+        self.result.module.local.signatures.push((wasm, sig));
         Ok(())
     }
 

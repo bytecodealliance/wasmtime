@@ -202,13 +202,11 @@ impl Global {
         // The original export is coming from wasmtime_runtime itself we should
         // support all the types coming out of it, so assert such here.
         GlobalType::from_wasmtime_global(&self.wasmtime_export.global)
-            .expect("core wasm global type should be supported")
     }
 
     /// Returns the value type of this `global`.
     pub fn val_type(&self) -> ValType {
         ValType::from_wasm_type(&self.wasmtime_export.global.wasm_ty)
-            .expect("core wasm type should be supported")
     }
 
     /// Returns the underlying mutability of this `global`.

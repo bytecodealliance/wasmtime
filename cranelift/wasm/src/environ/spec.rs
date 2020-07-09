@@ -21,13 +21,73 @@ use std::boxed::Box;
 use thiserror::Error;
 use wasmparser::BinaryReaderError;
 use wasmparser::Operator;
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
 
-// Re-export `wasmparser`'s function and value types so that consumers can
-// associate this the original Wasm signature with each compiled function. This
-// is often necessary because while each Wasm signature gets compiled down into
-// a single native signature, multiple Wasm signatures might compile down into
-// the same native signature.
-pub use wasmparser::{FuncType as WasmFuncType, Type as WasmType};
+/// Equivalent of `wasmparser`'s FuncType.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct WasmFuncType {
+    /// Function params types.
+    pub params: Box<[WasmType]>,
+    /// Returns params types.
+    pub returns: Box<[WasmType]>,
+}
+
+impl From<wasmparser::FuncType> for WasmFuncType {
+    fn from(ty: wasmparser::FuncType) -> Self {
+        Self {
+            params: ty
+                .params
+                .into_vec()
+                .into_iter()
+                .map(WasmType::from)
+                .collect(),
+            returns: ty
+                .returns
+                .into_vec()
+                .into_iter()
+                .map(WasmType::from)
+                .collect(),
+        }
+    }
+}
+
+/// Equivalent of `wasmparser`'s Type.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub enum WasmType {
+    /// I32 type
+    I32,
+    /// I64 type
+    I64,
+    /// F32 type
+    F32,
+    /// F64 type
+    F64,
+    /// V128 type
+    V128,
+    /// FuncRef type
+    FuncRef,
+    /// ExternRef type
+    ExternRef,
+}
+
+impl From<wasmparser::Type> for WasmType {
+    fn from(ty: wasmparser::Type) -> Self {
+        use wasmparser::Type::*;
+        match ty {
+            I32 => WasmType::I32,
+            I64 => WasmType::I64,
+            F32 => WasmType::F32,
+            F64 => WasmType::F64,
+            V128 => WasmType::V128,
+            FuncRef => WasmType::FuncRef,
+            ExternRef => WasmType::ExternRef,
+            EmptyBlockType | Func => panic!(),
+        }
+    }
+}
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
@@ -524,7 +584,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
     /// Declares a function signature to the environment.
     fn declare_signature(
         &mut self,
-        wasm_func_type: &WasmFuncType,
+        wasm_func_type: WasmFuncType,
         sig: ir::Signature,
     ) -> WasmResult<()>;
 

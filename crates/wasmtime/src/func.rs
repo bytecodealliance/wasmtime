@@ -545,7 +545,7 @@ impl Func {
         // This is only called with `Export::Function`, and since it's coming
         // from wasmtime_runtime itself we should support all the types coming
         // out of it, so assert such here.
-        FuncType::from_wasm_func_type(&wft).expect("core wasm signature should be supported")
+        FuncType::from_wasm_func_type(&wft)
     }
 
     /// Returns the number of parameters that this function takes.

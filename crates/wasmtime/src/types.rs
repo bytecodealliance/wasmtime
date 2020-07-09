@@ -123,16 +123,15 @@ impl ValType {
         }
     }
 
-    pub(crate) fn from_wasm_type(ty: &wasm::WasmType) -> Option<Self> {
+    pub(crate) fn from_wasm_type(ty: &wasm::WasmType) -> Self {
         match ty {
-            wasm::WasmType::I32 => Some(Self::I32),
-            wasm::WasmType::I64 => Some(Self::I64),
-            wasm::WasmType::F32 => Some(Self::F32),
-            wasm::WasmType::F64 => Some(Self::F64),
-            wasm::WasmType::V128 => Some(Self::V128),
-            wasm::WasmType::FuncRef => Some(Self::FuncRef),
-            wasm::WasmType::ExternRef => Some(Self::ExternRef),
-            wasm::WasmType::Func | wasm::WasmType::EmptyBlockType => None,
+            wasm::WasmType::I32 => Self::I32,
+            wasm::WasmType::I64 => Self::I64,
+            wasm::WasmType::F32 => Self::F32,
+            wasm::WasmType::F64 => Self::F64,
+            wasm::WasmType::V128 => Self::V128,
+            wasm::WasmType::FuncRef => Self::FuncRef,
+            wasm::WasmType::ExternRef => Self::ExternRef,
         }
     }
 }
@@ -279,21 +278,21 @@ impl FuncType {
     /// Returns `None` if any types in the signature can't be converted to the
     /// types in this crate, but that should very rarely happen and largely only
     /// indicate a bug in our cranelift integration.
-    pub(crate) fn from_wasm_func_type(signature: &wasm::WasmFuncType) -> Option<FuncType> {
+    pub(crate) fn from_wasm_func_type(signature: &wasm::WasmFuncType) -> FuncType {
         let params = signature
             .params
             .iter()
             .map(|p| ValType::from_wasm_type(p))
-            .collect::<Option<Vec<_>>>()?;
+            .collect::<Vec<_>>();
         let results = signature
             .returns
             .iter()
             .map(|r| ValType::from_wasm_type(r))
-            .collect::<Option<Vec<_>>>()?;
-        Some(FuncType {
+            .collect::<Vec<_>>();
+        FuncType {
             params: params.into_boxed_slice(),
             results: results.into_boxed_slice(),
-        })
+        }
     }
 }
 
@@ -332,14 +331,14 @@ impl GlobalType {
 
     /// Returns `None` if the wasmtime global has a type that we can't
     /// represent, but that should only very rarely happen and indicate a bug.
-    pub(crate) fn from_wasmtime_global(global: &wasm::Global) -> Option<GlobalType> {
-        let ty = ValType::from_wasm_type(&global.wasm_ty)?;
+    pub(crate) fn from_wasmtime_global(global: &wasm::Global) -> GlobalType {
+        let ty = ValType::from_wasm_type(&global.wasm_ty);
         let mutability = if global.mutability {
             Mutability::Var
         } else {
             Mutability::Const
         };
-        Some(GlobalType::new(ty, mutability))
+        GlobalType::new(ty, mutability)
     }
 }
 
@@ -451,14 +450,10 @@ impl<'module> EntityType<'module> {
     /// Convert this `EntityType` to an `ExternType`.
     pub(crate) fn extern_type(&self) -> ExternType {
         match self {
-            EntityType::Function(sig) => FuncType::from_wasm_func_type(sig)
-                .expect("core wasm function type should be supported")
-                .into(),
+            EntityType::Function(sig) => FuncType::from_wasm_func_type(sig).into(),
             EntityType::Table(table) => TableType::from_wasmtime_table(table).into(),
             EntityType::Memory(memory) => MemoryType::from_wasmtime_memory(memory).into(),
-            EntityType::Global(global) => GlobalType::from_wasmtime_global(global)
-                .expect("core wasm global type should be supported")
-                .into(),
+            EntityType::Global(global) => GlobalType::from_wasmtime_global(global).into(),
         }
     }
 }
