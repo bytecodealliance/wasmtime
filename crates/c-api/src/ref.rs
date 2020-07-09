@@ -113,10 +113,7 @@ impl Drop for CExternRef {
 
 #[no_mangle]
 pub extern "C" fn wasmtime_externref_new(data: *mut c_void) -> wasm_val_t {
-    wasm_val_t::from_val(Val::ExternRef(Some(ExternRef::new(CExternRef {
-        data,
-        finalizer: None,
-    }))))
+    wasmtime_externref_new_with_finalizer(data, None)
 }
 
 #[no_mangle]
