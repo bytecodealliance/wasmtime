@@ -516,7 +516,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         // Now, finally, deal with the moves whose sources are constants.
         for (ty, dst_reg, const_u64) in &const_bundles {
-            for inst in I::gen_constant(*dst_reg, *const_u64, *ty).into_iter() {
+            for inst in I::gen_constant(*dst_reg, *const_u64, *ty, |reg_class, ty| {
+                self.alloc_tmp(reg_class, ty)
+            })
+            .into_iter()
+            {
                 self.emit(inst);
             }
         }

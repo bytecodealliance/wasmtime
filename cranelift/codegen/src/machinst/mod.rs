@@ -154,7 +154,12 @@ pub trait MachInst: Clone + Debug {
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self;
 
     /// Generate a constant into a reg.
-    fn gen_constant(to_reg: Writable<Reg>, value: u64, ty: Type) -> SmallVec<[Self; 4]>;
+    fn gen_constant<F: FnMut(RegClass, Type) -> Writable<Reg>>(
+        to_reg: Writable<Reg>,
+        value: u64,
+        ty: Type,
+        alloc_tmp: F,
+    ) -> SmallVec<[Self; 4]>;
 
     /// Generate a zero-length no-op.
     fn gen_zero_len_nop() -> Self;

@@ -1183,6 +1183,28 @@ pub(crate) fn emit(
             }
         }
 
+        Inst::XmmCmove {
+            is_64,
+            cc,
+            src,
+            dst,
+        } => {
+            let next = sink.get_label();
+
+            // Jump if cc is *not* set.
+            one_way_jmp(sink, cc.invert(), next);
+
+            let op = if *is_64 {
+                SseOpcode::Movsd
+            } else {
+                SseOpcode::Movss
+            };
+            let inst = Inst::xmm_unary_rm_r(op, src.clone(), *dst);
+            inst.emit(sink, flags, state);
+
+            sink.bind_label(next);
+        }
+
         Inst::Push64 { src } => {
             match src {
                 RegMemImm::Reg { reg } => {
@@ -1462,18 +1484,22 @@ pub(crate) fn emit(
             sink.bind_label(else_label);
         }
 
-        Inst::XMM_Mov_RM_R {
+        Inst::XmmUnaryRmR {
             op,
             src: src_e,
             dst: reg_g,
             srcloc,
         } => {
             let rex = RexFlags::clear_w();
+
             let (prefix, opcode) = match op {
                 SseOpcode::Movaps => (LegacyPrefix::None, 0x0F28),
-                SseOpcode::Movd => (LegacyPrefix::_66, 0x0F6E),
                 SseOpcode::Movsd => (LegacyPrefix::_F2, 0x0F10),
                 SseOpcode::Movss => (LegacyPrefix::_F3, 0x0F10),
+                SseOpcode::Sqrtss => (LegacyPrefix::_F3, 0x0F51),
+                SseOpcode::Sqrtsd => (LegacyPrefix::_F2, 0x0F51),
+                SseOpcode::Cvtss2sd => (LegacyPrefix::_F3, 0x0F5A),
+                SseOpcode::Cvtsd2ss => (LegacyPrefix::_F2, 0x0F5A),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
 
@@ -1489,7 +1515,7 @@ pub(crate) fn emit(
                     }
                     emit_std_reg_mem(sink, prefix, opcode, 2, reg_g.to_reg(), addr, rex);
                 }
-            }
+            };
         }
 
         Inst::XMM_RM_R {
@@ -1500,13 +1526,20 @@ pub(crate) fn emit(
             let rex = RexFlags::clear_w();
             let (prefix, opcode) = match op {
                 SseOpcode::Addss => (LegacyPrefix::_F3, 0x0F58),
+                SseOpcode::Addsd => (LegacyPrefix::_F2, 0x0F58),
                 SseOpcode::Andps => (LegacyPrefix::None, 0x0F54),
                 SseOpcode::Andnps => (LegacyPrefix::None, 0x0F55),
-                SseOpcode::Divss => (LegacyPrefix::_F3, 0x0F5E),
                 SseOpcode::Mulss => (LegacyPrefix::_F3, 0x0F59),
+                SseOpcode::Mulsd => (LegacyPrefix::_F2, 0x0F59),
                 SseOpcode::Orps => (LegacyPrefix::None, 0x0F56),
                 SseOpcode::Subss => (LegacyPrefix::_F3, 0x0F5C),
-                SseOpcode::Sqrtss => (LegacyPrefix::_F3, 0x0F51),
+                SseOpcode::Subsd => (LegacyPrefix::_F2, 0x0F5C),
+                SseOpcode::Minss => (LegacyPrefix::_F3, 0x0F5D),
+                SseOpcode::Minsd => (LegacyPrefix::_F2, 0x0F5D),
+                SseOpcode::Divss => (LegacyPrefix::_F3, 0x0F5E),
+                SseOpcode::Divsd => (LegacyPrefix::_F2, 0x0F5E),
+                SseOpcode::Maxss => (LegacyPrefix::_F3, 0x0F5F),
+                SseOpcode::Maxsd => (LegacyPrefix::_F2, 0x0F5F),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
 
@@ -1521,25 +1554,53 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::XMM_Mov_R_M {
+        Inst::Xmm_Mov_R_M {
             op,
             src,
             dst,
             srcloc,
         } => {
-            let rex = RexFlags::clear_w();
             let (prefix, opcode) = match op {
-                SseOpcode::Movd => (LegacyPrefix::_66, 0x0F7E),
                 SseOpcode::Movss => (LegacyPrefix::_F3, 0x0F11),
-                _ => unimplemented!("Emit xmm mov r m"),
+                SseOpcode::Movsd => (LegacyPrefix::_F2, 0x0F11),
+                _ => unimplemented!("Opcode {:?} not implemented", op),
             };
-
             let dst = &dst.finalize(state);
             if let Some(srcloc) = *srcloc {
                 // Register the offset at which the actual load instruction starts.
                 sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
             }
-            emit_std_reg_mem(sink, prefix, opcode, 2, *src, dst, rex);
+            emit_std_reg_mem(sink, prefix, opcode, 2, *src, dst, RexFlags::clear_w());
+        }
+
+        Inst::XmmToGpr { op, src, dst } => {
+            let (rex, prefix, opcode) = match op {
+                SseOpcode::Movd => (RexFlags::clear_w(), LegacyPrefix::_66, 0x0F7E),
+                SseOpcode::Movq => (RexFlags::set_w(), LegacyPrefix::_66, 0x0F7E),
+                _ => panic!("unexpected opcode {:?}", op),
+            };
+            emit_std_reg_reg(sink, prefix, opcode, 2, *src, dst.to_reg(), rex);
+        }
+
+        Inst::GprToXmm {
+            op,
+            src: src_e,
+            dst: reg_g,
+        } => {
+            let (rex, prefix, opcode) = match op {
+                SseOpcode::Movd => (RexFlags::clear_w(), LegacyPrefix::_66, 0x0F6E),
+                SseOpcode::Movq => (RexFlags::set_w(), LegacyPrefix::_66, 0x0F6E),
+                _ => panic!("unexpected opcode {:?}", op),
+            };
+            match src_e {
+                RegMem::Reg { reg: reg_e } => {
+                    emit_std_reg_reg(sink, prefix, opcode, 2, reg_g.to_reg(), *reg_e, rex);
+                }
+                RegMem::Mem { addr } => {
+                    let addr = &addr.finalize(state);
+                    emit_std_reg_mem(sink, prefix, opcode, 2, reg_g.to_reg(), addr, rex);
+                }
+            }
         }
 
         Inst::LoadExtName {
