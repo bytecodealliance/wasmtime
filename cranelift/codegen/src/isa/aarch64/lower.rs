@@ -219,7 +219,11 @@ pub(crate) fn put_input_in_reg<C: LowerCtx<I = Inst>>(
         };
         // Generate constants fresh at each use to minimize long-range register pressure.
         let to_reg = ctx.alloc_tmp(Inst::rc_for_type(ty).unwrap(), ty);
-        for inst in Inst::gen_constant(to_reg, masked, ty).into_iter() {
+        for inst in Inst::gen_constant(to_reg, masked, ty, |reg_class, ty| {
+            ctx.alloc_tmp(reg_class, ty)
+        })
+        .into_iter()
+        {
             ctx.emit(inst);
         }
         to_reg.to_reg()

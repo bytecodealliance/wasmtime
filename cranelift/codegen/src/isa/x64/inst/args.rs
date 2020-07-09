@@ -194,6 +194,13 @@ impl RegMemImm {
         Self::Imm { simm32 }
     }
 
+    /// Asserts that in register mode, the reg class is the one that's expected.
+    pub(crate) fn assert_regclass_is(&self, expected_reg_class: RegClass) {
+        if let Self::Reg { reg } = self {
+            debug_assert_eq!(reg.get_class(), expected_reg_class);
+        }
+    }
+
     /// Add the regs mentioned by `self` to `collector`.
     pub(crate) fn get_regs_as_uses(&self, collector: &mut RegUsageCollector) {
         match self {
@@ -233,6 +240,12 @@ impl RegMem {
     }
     pub(crate) fn mem(addr: impl Into<SyntheticAmode>) -> Self {
         Self::Mem { addr: addr.into() }
+    }
+    /// Asserts that in register mode, the reg class is the one that's expected.
+    pub(crate) fn assert_regclass_is(&self, expected_reg_class: RegClass) {
+        if let Self::Reg { reg } = self {
+            debug_assert_eq!(reg.get_class(), expected_reg_class);
+        }
     }
     /// Add the regs mentioned by `self` to `collector`.
     pub(crate) fn get_regs_as_uses(&self, collector: &mut RegUsageCollector) {
@@ -346,6 +359,7 @@ pub enum SseOpcode {
     Minsd,
     Movaps,
     Movd,
+    Movq,
     Movss,
     Movsd,
     Mulss,
@@ -399,6 +413,7 @@ impl SseOpcode {
             | SseOpcode::Maxsd
             | SseOpcode::Minsd
             | SseOpcode::Movd
+            | SseOpcode::Movq
             | SseOpcode::Movsd
             | SseOpcode::Mulsd
             | SseOpcode::Sqrtsd
@@ -411,7 +426,7 @@ impl SseOpcode {
         }
     }
 
-    /// Returns the src operand size for an instruction
+    /// Returns the src operand size for an instruction.
     pub(crate) fn src_size(&self) -> u8 {
         match self {
             SseOpcode::Movd => 4,
@@ -445,6 +460,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Minsd => "minsd",
             SseOpcode::Movaps => "movaps",
             SseOpcode::Movd => "movd",
+            SseOpcode::Movq => "movq",
             SseOpcode::Movss => "movss",
             SseOpcode::Movsd => "movsd",
             SseOpcode::Mulss => "mulss",

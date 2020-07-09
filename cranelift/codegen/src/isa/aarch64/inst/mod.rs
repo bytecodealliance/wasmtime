@@ -2065,7 +2065,12 @@ impl MachInst for Inst {
         Inst::mov(to_reg, from_reg)
     }
 
-    fn gen_constant(to_reg: Writable<Reg>, value: u64, ty: Type) -> SmallVec<[Inst; 4]> {
+    fn gen_constant<F: FnMut(RegClass, Type) -> Writable<Reg>>(
+        to_reg: Writable<Reg>,
+        value: u64,
+        ty: Type,
+        _alloc_tmp: F,
+    ) -> SmallVec<[Inst; 4]> {
         if ty == F64 {
             let mut ret = SmallVec::new();
             ret.push(Inst::load_fp_constant64(to_reg, f64::from_bits(value)));
