@@ -98,12 +98,13 @@ fn apply_reloc(
             write_unaligned(reloc_address as *mut u32, reloc_delta_u32);
         },
         #[cfg(target_pointer_width = "64")]
-        (RelocationKind::Relative, RelocationEncoding::X86Branch, 32) => unsafe {
+        (RelocationKind::Relative, RelocationEncoding::Generic, 32) => unsafe {
             let reloc_address = body.add(offset as usize) as usize;
             let reloc_addend = r.addend() as isize;
             let reloc_delta_u64 = (target_func_address as u64)
                 .wrapping_sub(reloc_address as u64)
                 .wrapping_add(reloc_addend as u64);
+            // TODO implement far calls mode in x64 new backend.
             assert!(
                 reloc_delta_u64 as isize <= i32::max_value() as isize,
                 "relocation too large to fit in i32"

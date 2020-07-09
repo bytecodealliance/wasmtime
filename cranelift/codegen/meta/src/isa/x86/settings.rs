@@ -3,12 +3,6 @@ use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
 pub(crate) fn define(shared: &SettingGroup) -> SettingGroup {
     let mut settings = SettingGroupBuilder::new("x86");
 
-    settings.add_bool(
-        "use_new_backend",
-        "Whether to use the new codegen backend using the new isel",
-        false,
-    );
-
     // CPUID.01H:ECX
     let has_sse3 = settings.add_bool("has_sse3", "SSE3: CPUID.01H:ECX.SSE3[bit 0]", false);
     let has_ssse3 = settings.add_bool("has_ssse3", "SSSE3: CPUID.01H:ECX.SSSE3[bit 9]", false);
