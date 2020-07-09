@@ -57,20 +57,12 @@ fn isa_constructor(
 
     let isa_flags = settings::Flags::new(&shared_flags, builder);
 
-    if isa_flags.use_new_backend() {
-        #[cfg(not(feature = "x64"))]
-        panic!("new backend x86 support not included by cargo features!");
-
-        #[cfg(feature = "x64")]
-        super::x64::isa_builder(triple).finish(shared_flags)
-    } else {
-        Box::new(Isa {
-            triple,
-            isa_flags,
-            shared_flags,
-            cpumode: level1,
-        })
-    }
+    Box::new(Isa {
+        triple,
+        isa_flags,
+        shared_flags,
+        cpumode: level1,
+    })
 }
 
 impl TargetIsa for Isa {

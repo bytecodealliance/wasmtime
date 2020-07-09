@@ -11,28 +11,33 @@ use crate::isa::Builder as IsaBuilder;
 use crate::machinst::pretty_print::ShowWithRRU;
 use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter, VCode};
 use crate::result::CodegenResult;
-use crate::settings::{self, Flags};
+use crate::settings::{self as shared_settings, Flags};
 
-use crate::isa::x64::inst::regs::create_reg_universe_systemv;
+use crate::isa::x64::{inst::regs::create_reg_universe_systemv, settings as x64_settings};
+
+use super::TargetIsa;
 
 mod abi;
 mod inst;
 mod lower;
+mod settings;
 
 /// An X64 backend.
 pub(crate) struct X64Backend {
     triple: Triple,
     flags: Flags,
+    _x64_flags: x64_settings::Flags,
     reg_universe: RealRegUniverse,
 }
 
 impl X64Backend {
     /// Create a new X64 backend with the given (shared) flags.
-    fn new_with_flags(triple: Triple, flags: Flags) -> Self {
+    fn new_with_flags(triple: Triple, flags: Flags, x64_flags: x64_settings::Flags) -> Self {
         let reg_universe = create_reg_universe_systemv(&flags);
         Self {
             triple,
             flags,
+            _x64_flags: x64_flags,
             reg_universe,
         }
     }
@@ -103,10 +108,17 @@ impl MachBackend for X64Backend {
 pub(crate) fn isa_builder(triple: Triple) -> IsaBuilder {
     IsaBuilder {
         triple,
-        setup: settings::builder(),
-        constructor: |triple: Triple, flags: Flags, _arch_flag_builder: settings::Builder| {
-            let backend = X64Backend::new_with_flags(triple, flags);
-            Box::new(TargetIsaAdapter::new(backend))
-        },
+        setup: x64_settings::builder(),
+        constructor: isa_constructor,
     }
+}
+
+fn isa_constructor(
+    triple: Triple,
+    shared_flags: Flags,
+    builder: shared_settings::Builder,
+) -> Box<dyn TargetIsa> {
+    let isa_flags = x64_settings::Flags::new(&shared_flags, builder);
+    let backend = X64Backend::new_with_flags(triple, shared_flags, isa_flags);
+    Box::new(TargetIsaAdapter::new(backend))
 }
