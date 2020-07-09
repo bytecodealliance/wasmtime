@@ -39,31 +39,37 @@ entity_impl!(DefinedGlobalIndex);
 
 /// Index type of a table (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct TableIndex(u32);
 entity_impl!(TableIndex);
 
 /// Index type of a global variable (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct GlobalIndex(u32);
 entity_impl!(GlobalIndex);
 
 /// Index type of a linear memory (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct MemoryIndex(u32);
 entity_impl!(MemoryIndex);
 
 /// Index type of a signature (imported or defined) inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct SignatureIndex(u32);
 entity_impl!(SignatureIndex);
 
 /// Index type of a passive data segment inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct DataIndex(u32);
 entity_impl!(DataIndex);
 
 /// Index type of a passive element segment inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ElemIndex(u32);
 entity_impl!(ElemIndex);
 
@@ -75,6 +81,7 @@ entity_impl!(ElemIndex);
 /// Wasm `i64` and a `funcref` might be represented with a Cranelift `i64` on
 /// 64-bit architectures, and when GC is not required for func refs.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Global {
     /// The Wasm type of the value stored in the global.
     pub wasm_ty: crate::WasmType,
@@ -88,6 +95,7 @@ pub struct Global {
 
 /// Globals are initialized via the `const` operators or by referring to another import.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum GlobalInit {
     /// An `i32.const`.
     I32Const(i32),
@@ -111,6 +119,7 @@ pub enum GlobalInit {
 
 /// WebAssembly table.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Table {
     /// The table elements' Wasm type.
     pub wasm_ty: WasmType,
@@ -124,6 +133,7 @@ pub struct Table {
 
 /// WebAssembly table element. Can be a function or a scalar type.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum TableElementType {
     /// A scalar type.
     Val(ir::Type),
@@ -133,6 +143,7 @@ pub enum TableElementType {
 
 /// WebAssembly linear memory.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Memory {
     /// The minimum number of pages in the memory.
     pub minimum: u32,

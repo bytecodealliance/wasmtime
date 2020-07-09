@@ -19,7 +19,7 @@ cranelift-frontend = { path = "../../cranelift/frontend", version = "0.65.0" }
 cranelift-wasm = { path = "../../cranelift/wasm", version = "0.65.0", features = ["enable-serde"] }
 wasmparser = "0.58.0"
 lightbeam = { path = "../lightbeam", optional = true, version = "0.18.0" }
-indexmap = "1.0.2"
+indexmap = { version = "1.0.2", features = ["serde-1"] }
 rayon = { version = "1.2.1", optional = true }
 thiserror = "1.0.4"
 directories = "2.0.1"

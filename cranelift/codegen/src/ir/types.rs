@@ -3,6 +3,8 @@
 use core::default::Default;
 use core::fmt::{self, Debug, Display, Formatter};
 use cranelift_codegen_shared::constants;
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
 use target_lexicon::{PointerWidth, Triple};
 
 /// The type of an SSA value.
@@ -21,6 +23,7 @@ use target_lexicon::{PointerWidth, Triple};
 /// SIMD vector types have power-of-two lanes, up to 256. Lanes can be any int/float/bool type.
 ///
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Type(u8);
 
 /// Not a valid type. Can't be loaded or stored. Can't be part of a SIMD vector.

@@ -17,12 +17,12 @@ use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_frontend::FunctionBuilder;
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
 use std::boxed::Box;
 use thiserror::Error;
 use wasmparser::BinaryReaderError;
 use wasmparser::Operator;
-#[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
 
 /// Equivalent of `wasmparser`'s FuncType.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]

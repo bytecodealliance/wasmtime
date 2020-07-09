@@ -8,6 +8,8 @@ use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
 use core::str::FromStr;
 use core::{i32, u32};
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
 
 /// Convert a type into a vector of bytes; all implementors in this file must use little-endian
 /// orderings of bytes to match WebAssembly's little-endianness.
@@ -325,6 +327,7 @@ impl FromStr for Uimm32 {
 ///
 /// This is used as an immediate value in SIMD instructions.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct V128Imm(pub [u8; 16]);
 
 impl V128Imm {
