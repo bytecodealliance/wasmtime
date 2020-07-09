@@ -1,6 +1,6 @@
 // Compile with:
-//   clang++ --target=wasm32 fraction-norm.cc -o fraction-norm.wasm -g \
-//     -O0 -nostdlib -fdebug-prefix-map=$PWD=.
+//   clang++ --target=wasm32-wasi fraction-norm.cc -o fraction-norm.wasm -g \
+//     -O0 -fdebug-prefix-map=$PWD=.
 
 struct Fraction {
   long numerator;
@@ -32,9 +32,9 @@ void norm(Fraction &n)
   }
 }
 
-extern "C"
-void _start()
+int main()
 {
   Fraction c = {6, 27};
   norm(c);
+  return 0;
 }
