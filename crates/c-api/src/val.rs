@@ -78,7 +78,13 @@ impl wasm_val_t {
                 kind: from_valtype(&ValType::F64),
                 of: wasm_val_union { u64: f },
             },
-            Val::ExternRef(r) => wasm_val_t {
+            Val::ExternRef(None) => wasm_val_t {
+                kind: from_valtype(&ValType::ExternRef),
+                of: wasm_val_union {
+                    ref_: ptr::null_mut(),
+                },
+            },
+            Val::ExternRef(Some(r)) => wasm_val_t {
                 kind: from_valtype(&ValType::ExternRef),
                 of: wasm_val_union {
                     ref_: Box::into_raw(Box::new(wasm_ref_t {
@@ -86,7 +92,13 @@ impl wasm_val_t {
                     })),
                 },
             },
-            Val::FuncRef(f) => wasm_val_t {
+            Val::FuncRef(None) => wasm_val_t {
+                kind: from_valtype(&ValType::FuncRef),
+                of: wasm_val_union {
+                    ref_: ptr::null_mut(),
+                },
+            },
+            Val::FuncRef(Some(f)) => wasm_val_t {
                 kind: from_valtype(&ValType::FuncRef),
                 of: wasm_val_union {
                     ref_: Box::into_raw(Box::new(wasm_ref_t {
