@@ -6,4 +6,5 @@ edition = "2018"
 publish = false
 
 [dependencies]
+anyhow = "1.0.31"
 cc = "1.0"
