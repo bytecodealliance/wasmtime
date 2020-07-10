@@ -9,6 +9,7 @@ use crate::environ::{FuncEnvironment, ReturnMode, WasmResult};
 use crate::state::{FuncTranslationState, ModuleTranslationState};
 use crate::translation_utils::get_vmctx_value_label;
 use crate::wasm_unsupported;
+use core::convert::TryInto;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
@@ -196,7 +197,9 @@ fn declare_locals<FE: FuncEnvironment + ?Sized>(
             let constant_handle = builder.func.dfg.constants.insert([0; 16].to_vec().into());
             builder.ins().vconst(ir::types::I8X16, constant_handle)
         }
-        ExternRef | FuncRef => environ.translate_ref_null(builder.cursor(), wasm_type)?,
+        ExternRef | FuncRef => {
+            environ.translate_ref_null(builder.cursor(), wasm_type.try_into()?)?
+        }
         ty => return Err(wasm_unsupported!("unsupported local type {:?}", ty)),
     };
 

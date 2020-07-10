@@ -547,7 +547,7 @@ impl TargetEnvironment for DummyEnvironment {
 }
 
 impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
-    fn declare_signature(&mut self, _wasm: &WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
+    fn declare_signature(&mut self, _wasm: WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
         self.info.signatures.push(sig);
         Ok(())
     }

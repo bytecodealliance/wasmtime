@@ -11,6 +11,7 @@ use cranelift_wasm::{
 };
 use indexmap::IndexMap;
 use more_asserts::assert_ge;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{
     atomic::{AtomicUsize, Ordering::SeqCst},
@@ -18,7 +19,7 @@ use std::sync::{
 };
 
 /// A WebAssembly table initializer.
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Debug, Hash, Serialize, Deserialize)]
 pub struct TableElements {
     /// The index of a table to initialize.
     pub table_index: TableIndex,
@@ -31,7 +32,7 @@ pub struct TableElements {
 }
 
 /// An index of an entity.
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum EntityIndex {
     /// Function index.
     Function(FuncIndex),
@@ -44,7 +45,7 @@ pub enum EntityIndex {
 }
 
 /// Implemenation styles for WebAssembly linear memory.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Hash, Serialize, Deserialize)]
 pub enum MemoryStyle {
     /// The actual memory can be resized and moved.
     Dynamic,
@@ -80,7 +81,7 @@ impl MemoryStyle {
 
 /// A WebAssembly linear memory description along with our chosen style for
 /// implementing it.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Hash, Serialize, Deserialize)]
 pub struct MemoryPlan {
     /// The WebAssembly linear memory description.
     pub memory: Memory,
@@ -103,7 +104,7 @@ impl MemoryPlan {
 }
 
 /// Implemenation styles for WebAssembly tables.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Hash, Serialize, Deserialize)]
 pub enum TableStyle {
     /// Signatures are stored in the table and checked in the caller.
     CallerChecksSignature,
@@ -118,7 +119,7 @@ impl TableStyle {
 
 /// A WebAssembly table description along with our chosen style for
 /// implementing it.
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, Hash, Serialize, Deserialize)]
 pub struct TablePlan {
     /// The WebAssembly table description.
     pub table: cranelift_wasm::Table,
@@ -136,9 +137,10 @@ impl TablePlan {
 
 /// A translated WebAssembly module, excluding the function bodies and
 /// memory initializers.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Module {
     /// A unique identifier (within this process) for this module.
+    #[serde(skip_serializing, default = "Module::next_id")]
     pub id: usize,
 
     /// The name of this wasm module, often found in the wasm file.
@@ -166,6 +168,7 @@ pub struct Module {
     pub passive_elements: HashMap<ElemIndex, Box<[FuncIndex]>>,
 
     /// WebAssembly passive data segments.
+    #[serde(with = "passive_data_serde")]
     pub passive_data: HashMap<DataIndex, Arc<[u8]>>,
 
     /// WebAssembly table initializers.
@@ -178,7 +181,7 @@ pub struct Module {
 /// This is stored within a `Module` and it implements `Hash`, unlike `Module`,
 /// and is used as part of the cache key when we load compiled modules from the
 /// global cache.
-#[derive(Debug, Hash)]
+#[derive(Debug, Hash, Serialize, Deserialize)]
 pub struct ModuleLocal {
     /// Unprocessed signatures exactly as provided by `declare_signature()`.
     pub signatures: PrimaryMap<SignatureIndex, (WasmFuncType, ir::Signature)>,
@@ -211,10 +214,8 @@ pub struct ModuleLocal {
 impl Module {
     /// Allocates the module data structures.
     pub fn new() -> Self {
-        static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
-
         Self {
-            id: NEXT_ID.fetch_add(1, SeqCst),
+            id: Self::next_id(),
             name: None,
             imports: Vec::new(),
             exports: IndexMap::new(),
@@ -240,6 +241,11 @@ impl Module {
     /// Get the given passive element, if it exists.
     pub fn get_passive_element(&self, index: ElemIndex) -> Option<&[FuncIndex]> {
         self.passive_elements.get(&index).map(|es| &**es)
+    }
+
+    fn next_id() -> usize {
+        static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
+        NEXT_ID.fetch_add(1, SeqCst)
     }
 }
 
@@ -342,5 +348,51 @@ impl ModuleLocal {
     /// function.
     pub fn wasm_func_type(&self, func_index: FuncIndex) -> &WasmFuncType {
         &self.signatures[self.functions[func_index]].0
+    }
+}
+
+mod passive_data_serde {
+    use super::{Arc, DataIndex, HashMap};
+    use serde::{de::MapAccess, de::Visitor, ser::SerializeMap, Deserializer, Serializer};
+    use std::fmt;
+
+    pub(super) fn serialize<S>(
+        data: &HashMap<DataIndex, Arc<[u8]>>,
+        ser: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = ser.serialize_map(Some(data.len()))?;
+        for (k, v) in data {
+            map.serialize_entry(k, v.as_ref())?;
+        }
+        map.end()
+    }
+
+    struct PassiveDataVisitor;
+    impl<'de> Visitor<'de> for PassiveDataVisitor {
+        type Value = HashMap<DataIndex, Arc<[u8]>>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a passive_data map")
+        }
+        fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+        where
+            M: MapAccess<'de>,
+        {
+            let mut map = HashMap::with_capacity(access.size_hint().unwrap_or(0));
+            while let Some((key, value)) = access.next_entry::<_, Vec<u8>>()? {
+                map.insert(key, value.into());
+            }
+            Ok(map)
+        }
+    }
+
+    pub(super) fn deserialize<'de, D>(de: D) -> Result<HashMap<DataIndex, Arc<[u8]>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        de.deserialize_map(PassiveDataVisitor)
     }
 }

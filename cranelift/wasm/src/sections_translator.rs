@@ -15,6 +15,7 @@ use crate::translation_utils::{
 };
 use crate::{wasm_unsupported, HashMap};
 use core::convert::TryFrom;
+use core::convert::TryInto;
 use cranelift_codegen::ir::immediates::V128Imm;
 use cranelift_codegen::ir::{self, AbiParam, Signature};
 use cranelift_entity::packed_option::ReservedValue;
@@ -53,7 +54,7 @@ pub fn parse_type_section(
                     .expect("only numeric types are supported in function signatures");
                 AbiParam::new(cret_arg)
             }));
-            environ.declare_signature(&wasm_func_ty, sig)?;
+            environ.declare_signature(wasm_func_ty.clone().try_into()?, sig)?;
             module_translation_state
                 .wasm_types
                 .push((wasm_func_ty.params, wasm_func_ty.returns));
@@ -104,7 +105,7 @@ pub fn parse_import_section<'data>(
             ImportSectionEntryType::Global(ref ty) => {
                 environ.declare_global_import(
                     Global {
-                        wasm_ty: ty.content_type,
+                        wasm_ty: ty.content_type.try_into()?,
                         ty: type_to_type(ty.content_type, environ).unwrap(),
                         mutability: ty.mutable,
                         initializer: GlobalInit::Import,
@@ -116,7 +117,7 @@ pub fn parse_import_section<'data>(
             ImportSectionEntryType::Table(ref tab) => {
                 environ.declare_table_import(
                     Table {
-                        wasm_ty: tab.element_type,
+                        wasm_ty: tab.element_type.try_into()?,
                         ty: match tabletype_to_type(tab.element_type, environ)? {
                             Some(t) => TableElementType::Val(t),
                             None => TableElementType::Func,
@@ -166,7 +167,7 @@ pub fn parse_table_section(
     for entry in tables {
         let table = entry?;
         environ.declare_table(Table {
-            wasm_ty: table.element_type,
+            wasm_ty: table.element_type.try_into()?,
             ty: match tabletype_to_type(table.element_type, environ)? {
                 Some(t) => TableElementType::Val(t),
                 None => TableElementType::Func,
@@ -237,7 +238,7 @@ pub fn parse_global_section(
             }
         };
         let global = Global {
-            wasm_ty: content_type,
+            wasm_ty: content_type.try_into()?,
             ty: type_to_type(content_type, environ).unwrap(),
             mutability: mutable,
             initializer,

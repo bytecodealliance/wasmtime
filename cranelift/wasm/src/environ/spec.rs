@@ -12,22 +12,89 @@ use crate::translation_utils::{
     Table, TableIndex,
 };
 use core::convert::From;
+use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_frontend::FunctionBuilder;
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
 use std::boxed::Box;
+use std::string::ToString;
 use thiserror::Error;
 use wasmparser::BinaryReaderError;
 use wasmparser::Operator;
 
-// Re-export `wasmparser`'s function and value types so that consumers can
-// associate this the original Wasm signature with each compiled function. This
-// is often necessary because while each Wasm signature gets compiled down into
-// a single native signature, multiple Wasm signatures might compile down into
-// the same native signature.
-pub use wasmparser::{FuncType as WasmFuncType, Type as WasmType};
+/// WebAssembly value type -- equivalent of `wasmparser`'s Type.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub enum WasmType {
+    /// I32 type
+    I32,
+    /// I64 type
+    I64,
+    /// F32 type
+    F32,
+    /// F64 type
+    F64,
+    /// V128 type
+    V128,
+    /// FuncRef type
+    FuncRef,
+    /// ExternRef type
+    ExternRef,
+}
+
+impl TryFrom<wasmparser::Type> for WasmType {
+    type Error = WasmError;
+    fn try_from(ty: wasmparser::Type) -> Result<Self, Self::Error> {
+        use wasmparser::Type::*;
+        match ty {
+            I32 => Ok(WasmType::I32),
+            I64 => Ok(WasmType::I64),
+            F32 => Ok(WasmType::F32),
+            F64 => Ok(WasmType::F64),
+            V128 => Ok(WasmType::V128),
+            FuncRef => Ok(WasmType::FuncRef),
+            ExternRef => Ok(WasmType::ExternRef),
+            EmptyBlockType | Func => Err(WasmError::InvalidWebAssembly {
+                message: "unexpected value type".to_string(),
+                offset: 0,
+            }),
+        }
+    }
+}
+
+/// WebAssembly function type -- equivalent of `wasmparser`'s FuncType.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct WasmFuncType {
+    /// Function params types.
+    pub params: Box<[WasmType]>,
+    /// Returns params types.
+    pub returns: Box<[WasmType]>,
+}
+
+impl TryFrom<wasmparser::FuncType> for WasmFuncType {
+    type Error = WasmError;
+    fn try_from(ty: wasmparser::FuncType) -> Result<Self, Self::Error> {
+        Ok(Self {
+            params: ty
+                .params
+                .into_vec()
+                .into_iter()
+                .map(WasmType::try_from)
+                .collect::<Result<_, Self::Error>>()?,
+            returns: ty
+                .returns
+                .into_vec()
+                .into_iter()
+                .map(WasmType::try_from)
+                .collect::<Result<_, Self::Error>>()?,
+        })
+    }
+}
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
@@ -524,7 +591,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
     /// Declares a function signature to the environment.
     fn declare_signature(
         &mut self,
-        wasm_func_type: &WasmFuncType,
+        wasm_func_type: WasmFuncType,
         sig: ir::Signature,
     ) -> WasmResult<()>;
 
