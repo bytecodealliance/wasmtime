@@ -1764,6 +1764,8 @@
  * Returns an error if the #wasm_ref_t does not match the element type of the
  * table provided or if it comes from a different store than the one provided.
  *
+ * Does not take ownship of the `init` value.
+ *
  * > Note: for funcref tables you can use #wasmtime_funcref_table_new as well.
  *
  * \fn wasm_tabletype_t *wasm_table_type(const wasm_table_t *);
@@ -1792,7 +1794,7 @@
  * * The #wasm_ref_t comes from a different store than the table provided.
  * * The #wasm_ref_t does not have an appropriate type to store in this table.
  *
- * Takes ownership of the given `wasm_ref_t*`.
+ * Does not take ownership of the given `wasm_ref_t*`.
  *
  * > Note: for funcref tables you can use #wasmtime_funcref_table_set to learn
  * > about errors.
@@ -1812,6 +1814,8 @@
  * * The table's limits do not allow growth by `delta`.
  * * The #wasm_ref_t comes from a different store than the table provided.
  * * The #wasm_ref_t does not have an appropriate type to store in this table.
+ *
+ * Does not take ownership of the givein `init` value.
  *
  * > Note: for funcref tables you can use #wasmtime_funcref_table_grow as well.
  */

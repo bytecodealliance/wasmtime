@@ -1,4 +1,4 @@
-use crate::r#ref::{ref_into_val, val_into_ref};
+use crate::r#ref::{ref_to_val, val_into_ref};
 use crate::{handle_result, wasm_func_t, wasm_ref_t, wasmtime_error_t};
 use crate::{wasm_extern_t, wasm_store_t, wasm_tabletype_t};
 use std::ptr;
@@ -30,21 +30,24 @@ impl wasm_table_t {
     }
 }
 
-fn ref_into_val_for_table(r: Option<Box<wasm_ref_t>>, table_ty: &TableType) -> Val {
-    ref_into_val(r).unwrap_or_else(|| match table_ty.element() {
-        ValType::FuncRef => Val::FuncRef(None),
-        ValType::ExternRef => Val::ExternRef(None),
-        ty => panic!("unsupported table element type: {:?}", ty),
-    })
+fn ref_to_val_for_table(r: Option<&wasm_ref_t>, table_ty: &TableType) -> Val {
+    r.map_or_else(
+        || match table_ty.element() {
+            ValType::FuncRef => Val::FuncRef(None),
+            ValType::ExternRef => Val::ExternRef(None),
+            ty => panic!("unsupported table element type: {:?}", ty),
+        },
+        |r| ref_to_val(r),
+    )
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_table_new(
     store: &wasm_store_t,
     tt: &wasm_tabletype_t,
-    init: Option<Box<wasm_ref_t>>,
+    init: Option<&wasm_ref_t>,
 ) -> Option<Box<wasm_table_t>> {
-    let init = ref_into_val_for_table(init, &tt.ty().ty);
+    let init = ref_to_val_for_table(init, &tt.ty().ty);
     let table = Table::new(&store.store, tt.ty().ty.clone(), init).ok()?;
     Some(Box::new(wasm_table_t {
         ext: wasm_extern_t {
@@ -115,9 +118,9 @@ pub extern "C" fn wasmtime_funcref_table_get(
 pub unsafe extern "C" fn wasm_table_set(
     t: &wasm_table_t,
     index: wasm_table_size_t,
-    r: Option<Box<wasm_ref_t>>,
+    r: Option<&wasm_ref_t>,
 ) -> bool {
-    let val = ref_into_val_for_table(r, &t.table().ty());
+    let val = ref_to_val_for_table(r, &t.table().ty());
     t.table().set(index, val).is_ok()
 }
 
@@ -143,9 +146,9 @@ pub extern "C" fn wasm_table_size(t: &wasm_table_t) -> wasm_table_size_t {
 pub unsafe extern "C" fn wasm_table_grow(
     t: &wasm_table_t,
     delta: wasm_table_size_t,
-    init: Option<Box<wasm_ref_t>>,
+    init: Option<&wasm_ref_t>,
 ) -> bool {
-    let init = ref_into_val_for_table(init, &t.table().ty());
+    let init = ref_to_val_for_table(init, &t.table().ty());
     t.table().grow(delta, init).is_ok()
 }
 

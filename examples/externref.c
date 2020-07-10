@@ -107,9 +107,9 @@ int main() {
   assert(elem.kind == WASM_ANYREF);
   ok = wasm_table_set(table, 3, elem.of.ref);
   assert(ok);
-  elem.of.ref = NULL;
 
   // `table[3]` should now be our `externref`.
+  wasm_ref_delete(elem.of.ref);
   elem.of.ref = wasm_table_get(table, 3);
   assert(elem.of.ref != NULL);
   assert(wasm_ref_same(elem.of.ref, externref.of.ref));

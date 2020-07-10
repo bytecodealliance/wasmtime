@@ -30,17 +30,6 @@ pub(crate) enum WasmRefInner {
 
 wasmtime_c_api_macros::declare_own!(wasm_ref_t);
 
-pub(crate) fn ref_into_val(r: Option<Box<wasm_ref_t>>) -> Option<Val> {
-    // Let callers decide whether to treat this as a null `funcref` or a
-    // null `externref`.
-    let r = r?;
-
-    Some(match r.r {
-        WasmRefInner::ExternRef(x) => Val::ExternRef(Some(x)),
-        WasmRefInner::FuncRef(f) => Val::FuncRef(Some(f)),
-    })
-}
-
 pub(crate) fn ref_to_val(r: &wasm_ref_t) -> Val {
     match &r.r {
         WasmRefInner::ExternRef(x) => Val::ExternRef(Some(x.clone())),
