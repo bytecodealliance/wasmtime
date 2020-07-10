@@ -231,6 +231,8 @@ jobs:
 
     # Ensure all our examples build and execute
     - run: cargo run -p run-examples
+      env:
+        RUST_BACKTRACE: 1
 
     # Build and test all features except for lightbeam
     - run: |
