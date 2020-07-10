@@ -62,16 +62,3 @@ pub struct wasm_foreign_t {
 pub struct wasm_shared_module_t {
     _unused: [u8; 0],
 }
-
-struct HostInfoState {
-    info: *mut std::ffi::c_void,
-    finalizer: Option<extern "C" fn(arg1: *mut std::ffi::c_void)>,
-}
-
-impl Drop for HostInfoState {
-    fn drop(&mut self) {
-        if let Some(f) = &self.finalizer {
-            f(self.info);
-        }
-    }
-}
