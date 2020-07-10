@@ -224,7 +224,7 @@ pub(crate) fn open(
     let mut opts = OpenOptions::new();
     match oflags.into() {
         CreationDisposition::CREATE_ALWAYS => {
-            opts.create(true).write(true);
+            opts.create(true).truncate(true).write(true);
         }
         CreationDisposition::CREATE_NEW => {
             opts.create_new(true).write(true);
