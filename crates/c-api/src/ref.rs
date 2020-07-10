@@ -1,5 +1,6 @@
 use crate::wasm_val_t;
 use std::any::Any;
+use std::mem::MaybeUninit;
 use std::os::raw::c_void;
 use std::ptr;
 use wasmtime::{ExternRef, Func, Val};
@@ -112,19 +113,25 @@ impl Drop for CExternRef {
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_externref_new(data: *mut c_void) -> wasm_val_t {
-    wasmtime_externref_new_with_finalizer(data, None)
+pub extern "C" fn wasmtime_externref_new(data: *mut c_void, valp: &mut MaybeUninit<wasm_val_t>) {
+    wasmtime_externref_new_with_finalizer(data, None, valp)
 }
 
 #[no_mangle]
 pub extern "C" fn wasmtime_externref_new_with_finalizer(
     data: *mut c_void,
     finalizer: Option<wasmtime_externref_finalizer_t>,
-) -> wasm_val_t {
-    wasm_val_t::from_val(Val::ExternRef(Some(ExternRef::new(CExternRef {
-        data,
-        finalizer,
-    }))))
+    valp: &mut MaybeUninit<wasm_val_t>,
+) {
+    unsafe {
+        ptr::write(
+            valp.as_mut_ptr(),
+            wasm_val_t::from_val(Val::ExternRef(Some(ExternRef::new(CExternRef {
+                data,
+                finalizer,
+            })))),
+        )
+    }
 }
 
 #[no_mangle]

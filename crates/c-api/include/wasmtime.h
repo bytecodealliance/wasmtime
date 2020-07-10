@@ -839,13 +839,14 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_funcref_table_grow(
 /**
  * \brief Create a new `externref` value.
  *
- * Creates a new `externref` value wrapping the provided data.
+ * Creates a new `externref` value wrapping the provided data, and writes it to
+ * `valp`.
  *
  * This function does not take an associated finalizer to clean up the data when
  * the reference is reclaimed. If you need a finalizer to clean up the data,
  * then use #wasmtime_externref_new_with_finalizer.
  */
-WASM_API_EXTERN wasm_val_t wasmtime_externref_new(void *data);
+WASM_API_EXTERN void wasmtime_externref_new(void *data, wasm_val_t *valp);
 
 /**
  * \brief A finalizer for an `externref`'s wrapped data.
@@ -859,15 +860,17 @@ typedef void (*wasmtime_externref_finalizer_t)(void*);
 /**
  * \brief Create a new `externref` value with a finalizer.
  *
- * Creates a new `externref` value wrapping the provided data.
+ * Creates a new `externref` value wrapping the provided data, and writes it to
+ * `valp`.
  *
  * When the reference is reclaimed, the wrapped data is cleaned up with the
  * provided finalizer. If you do not need to clean up the wrapped data, then use
  * #wasmtime_externref_new.
  */
-WASM_API_EXTERN wasm_val_t wasmtime_externref_new_with_finalizer(
+WASM_API_EXTERN void wasmtime_externref_new_with_finalizer(
     void *data,
-    wasmtime_externref_finalizer_t finalizer
+    wasmtime_externref_finalizer_t finalizer,
+    wasm_val_t *valp
 );
 
 /**

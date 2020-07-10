@@ -82,7 +82,8 @@ int main() {
   printf("Creating new `externref`...\n");
 
   // Create a new `externref` value.
-  wasm_val_t externref = wasmtime_externref_new("Hello, World!");
+  wasm_val_t externref;
+  wasmtime_externref_new("Hello, World!", &externref);
   assert(externref.kind == WASM_ANYREF);
 
   // The `externref`'s wrapped data should be the string "Hello, World!".
