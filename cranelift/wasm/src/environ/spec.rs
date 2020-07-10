@@ -12,6 +12,7 @@ use crate::translation_utils::{
     Table, TableIndex,
 };
 use core::convert::From;
+use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{self, InstBuilder};
@@ -20,40 +21,12 @@ use cranelift_frontend::FunctionBuilder;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 use std::boxed::Box;
+use std::string::ToString;
 use thiserror::Error;
 use wasmparser::BinaryReaderError;
 use wasmparser::Operator;
 
-/// Equivalent of `wasmparser`'s FuncType.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct WasmFuncType {
-    /// Function params types.
-    pub params: Box<[WasmType]>,
-    /// Returns params types.
-    pub returns: Box<[WasmType]>,
-}
-
-impl From<wasmparser::FuncType> for WasmFuncType {
-    fn from(ty: wasmparser::FuncType) -> Self {
-        Self {
-            params: ty
-                .params
-                .into_vec()
-                .into_iter()
-                .map(WasmType::from)
-                .collect(),
-            returns: ty
-                .returns
-                .into_vec()
-                .into_iter()
-                .map(WasmType::from)
-                .collect(),
-        }
-    }
-}
-
-/// Equivalent of `wasmparser`'s Type.
+/// WebAssembly value type -- equivalent of `wasmparser`'s Type.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum WasmType {
@@ -73,19 +46,53 @@ pub enum WasmType {
     ExternRef,
 }
 
-impl From<wasmparser::Type> for WasmType {
-    fn from(ty: wasmparser::Type) -> Self {
+impl TryFrom<wasmparser::Type> for WasmType {
+    type Error = WasmError;
+    fn try_from(ty: wasmparser::Type) -> Result<Self, Self::Error> {
         use wasmparser::Type::*;
         match ty {
-            I32 => WasmType::I32,
-            I64 => WasmType::I64,
-            F32 => WasmType::F32,
-            F64 => WasmType::F64,
-            V128 => WasmType::V128,
-            FuncRef => WasmType::FuncRef,
-            ExternRef => WasmType::ExternRef,
-            EmptyBlockType | Func => panic!(),
+            I32 => Ok(WasmType::I32),
+            I64 => Ok(WasmType::I64),
+            F32 => Ok(WasmType::F32),
+            F64 => Ok(WasmType::F64),
+            V128 => Ok(WasmType::V128),
+            FuncRef => Ok(WasmType::FuncRef),
+            ExternRef => Ok(WasmType::ExternRef),
+            EmptyBlockType | Func => Err(WasmError::InvalidWebAssembly {
+                message: "unexpected value type".to_string(),
+                offset: 0,
+            }),
         }
+    }
+}
+
+/// WebAssembly function type -- equivalent of `wasmparser`'s FuncType.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct WasmFuncType {
+    /// Function params types.
+    pub params: Box<[WasmType]>,
+    /// Returns params types.
+    pub returns: Box<[WasmType]>,
+}
+
+impl TryFrom<wasmparser::FuncType> for WasmFuncType {
+    type Error = WasmError;
+    fn try_from(ty: wasmparser::FuncType) -> Result<Self, Self::Error> {
+        Ok(Self {
+            params: ty
+                .params
+                .into_vec()
+                .into_iter()
+                .map(WasmType::try_from)
+                .collect::<Result<_, Self::Error>>()?,
+            returns: ty
+                .returns
+                .into_vec()
+                .into_iter()
+                .map(WasmType::try_from)
+                .collect::<Result<_, Self::Error>>()?,
+        })
     }
 }
 
