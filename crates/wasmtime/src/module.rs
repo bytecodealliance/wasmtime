@@ -4,7 +4,7 @@ use crate::types::{EntityType, ExportType, ExternType, ImportType};
 use anyhow::Result;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use wasmtime_jit::CompiledModule;
+use wasmtime_jit::{CompilationArtifacts, CompiledModule};
 
 /// A compiled WebAssembly module, ready to be instantiated.
 ///
@@ -301,6 +301,36 @@ impl Module {
 
     unsafe fn compile(engine: &Engine, binary: &[u8]) -> Result<Self> {
         let compiled = CompiledModule::new(engine.compiler(), binary, &*engine.config().profiler)?;
+
+        Ok(Module {
+            engine: engine.clone(),
+            compiled: Arc::new(compiled),
+            frame_info_registration: Arc::new(Mutex::new(None)),
+        })
+    }
+
+    /// Compile and write artifacts in I/O.
+    pub fn compile_and_serialize(
+        engine: &Engine,
+        bytes: impl AsRef<[u8]>,
+        w: impl std::io::Write,
+    ) -> Result<()> {
+        #[cfg(feature = "wat")]
+        let bytes = wat::parse_bytes(bytes.as_ref())?;
+        Self::validate(engine, bytes.as_ref())?;
+        let artifacts = CompilationArtifacts::build(engine.compiler(), bytes.as_ref())?;
+        Ok(serde_yaml::to_writer(w, &artifacts)?)
+    }
+
+    /// Read compiled module from I/O.
+    pub unsafe fn deserialize(engine: &Engine, r: impl std::io::Read) -> Result<Module> {
+        let artifacts = serde_yaml::from_reader(r)?;
+
+        let compiled = CompiledModule::from_artifacts(
+            artifacts,
+            engine.compiler().isa(),
+            &*engine.config().profiler,
+        )?;
 
         Ok(Module {
             engine: engine.clone(),

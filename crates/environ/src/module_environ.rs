@@ -9,6 +9,7 @@ use cranelift_wasm::{
     Memory, MemoryIndex, ModuleTranslationState, SignatureIndex, Table, TableIndex,
     TargetEnvironment, WasmError, WasmFuncType, WasmResult,
 };
+use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::sync::Arc;
 
@@ -450,7 +451,7 @@ pub fn translate_signature(mut sig: ir::Signature, pointer_type: ir::Type) -> ir
 
 /// A memory index and offset within that memory where a data initialization
 /// should is to be performed.
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct DataInitializerLocation {
     /// The index of the memory to initialize.
     pub memory_index: MemoryIndex,
