@@ -124,8 +124,8 @@ impl wasm_val_t {
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_val_copy(out: &mut MaybeUninit<wasm_val_t>, source: &wasm_val_t) {
-    ptr::write(
-        out.as_mut_ptr(),
+    crate::initialize(
+        out,
         match into_valtype(source.kind) {
             ValType::I32
             | ValType::I64

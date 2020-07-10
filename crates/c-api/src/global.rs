@@ -74,9 +74,7 @@ pub extern "C" fn wasm_global_type(g: &wasm_global_t) -> Box<wasm_globaltype_t> 
 
 #[no_mangle]
 pub extern "C" fn wasm_global_get(g: &wasm_global_t, out: &mut MaybeUninit<wasm_val_t>) {
-    unsafe {
-        ptr::write(out.as_mut_ptr(), wasm_val_t::from_val(g.global().get()));
-    }
+    crate::initialize(out, wasm_val_t::from_val(g.global().get()));
 }
 
 #[no_mangle]

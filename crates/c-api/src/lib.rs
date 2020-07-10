@@ -62,3 +62,14 @@ pub struct wasm_foreign_t {
 pub struct wasm_shared_module_t {
     _unused: [u8; 0],
 }
+
+/// Initialize a `MaybeUninit<T>`
+///
+/// TODO: Replace calls to this function with
+/// https://doc.rust-lang.org/nightly/std/mem/union.MaybeUninit.html#method.write
+/// once it is stable.
+pub(crate) fn initialize<T>(dst: &mut std::mem::MaybeUninit<T>, val: T) {
+    unsafe {
+        std::ptr::write(dst.as_mut_ptr(), val);
+    }
+}

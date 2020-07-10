@@ -123,24 +123,23 @@ pub extern "C" fn wasmtime_externref_new_with_finalizer(
     finalizer: Option<wasmtime_externref_finalizer_t>,
     valp: &mut MaybeUninit<wasm_val_t>,
 ) {
-    unsafe {
-        ptr::write(
-            valp.as_mut_ptr(),
-            wasm_val_t::from_val(Val::ExternRef(Some(ExternRef::new(CExternRef {
-                data,
-                finalizer,
-            })))),
-        )
-    }
+    crate::initialize(
+        valp,
+        wasm_val_t::from_val(Val::ExternRef(Some(ExternRef::new(CExternRef {
+            data,
+            finalizer,
+        })))),
+    );
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_externref_data(val: &wasm_val_t, datap: *mut *mut c_void) -> bool {
+pub extern "C" fn wasmtime_externref_data(
+    val: &wasm_val_t,
+    datap: &mut MaybeUninit<*mut c_void>,
+) -> bool {
     match val.val() {
         Val::ExternRef(None) => {
-            unsafe {
-                ptr::write(datap, ptr::null_mut());
-            }
+            crate::initialize(datap, ptr::null_mut());
             true
         }
         Val::ExternRef(Some(x)) => {
@@ -148,9 +147,7 @@ pub extern "C" fn wasmtime_externref_data(val: &wasm_val_t, datap: *mut *mut c_v
                 Some(r) => r.data,
                 None => x.data() as *const dyn Any as *mut c_void,
             };
-            unsafe {
-                ptr::write(datap, data);
-            }
+            crate::initialize(datap, data);
             true
         }
         _ => false,

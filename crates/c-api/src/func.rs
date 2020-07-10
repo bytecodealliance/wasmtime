@@ -220,12 +220,7 @@ fn _wasmtime_func_call(
     match result {
         Ok(Ok(out)) => {
             for (slot, val) in results.iter_mut().zip(out.into_vec().into_iter()) {
-                unsafe {
-                    // NB: The results array is likely uninitialized memory, so
-                    // use `ptr::write` rather than assignment (which tries to
-                    // run destructors).
-                    ptr::write(slot.as_mut_ptr(), wasm_val_t::from_val(val));
-                }
+                crate::initialize(slot, wasm_val_t::from_val(val));
             }
             None
         }
