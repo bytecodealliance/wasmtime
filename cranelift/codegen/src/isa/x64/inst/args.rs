@@ -5,7 +5,7 @@ use std::string::{String, ToString};
 
 use regalloc::{RealRegUniverse, Reg, RegClass, RegUsageCollector, RegUsageMapper};
 
-use crate::ir::condcodes::IntCC;
+use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::machinst::*;
 
 use super::{
@@ -636,6 +636,12 @@ pub enum CC {
     LE = 14,
     /// > signed
     NLE = 15,
+
+    /// parity
+    P = 10,
+
+    /// not parity
+    NP = 11,
 }
 
 impl CC {
@@ -678,6 +684,33 @@ impl CC {
 
             CC::LE => CC::NLE,
             CC::NLE => CC::LE,
+
+            CC::P => CC::NP,
+            CC::NP => CC::P,
+        }
+    }
+
+    pub(crate) fn from_floatcc(floatcc: FloatCC) -> Self {
+        match floatcc {
+            FloatCC::Ordered => CC::NP,
+            FloatCC::Unordered => CC::P,
+            // Alias for NE
+            FloatCC::NotEqual | FloatCC::OrderedNotEqual => CC::NZ,
+            // Alias for E
+            FloatCC::UnorderedOrEqual => CC::Z,
+            // Alias for A
+            FloatCC::GreaterThan => CC::NBE,
+            // Alias for AE
+            FloatCC::GreaterThanOrEqual => CC::NB,
+            FloatCC::UnorderedOrLessThan => CC::B,
+            FloatCC::UnorderedOrLessThanOrEqual => CC::BE,
+            FloatCC::Equal
+            | FloatCC::LessThan
+            | FloatCC::LessThanOrEqual
+            | FloatCC::UnorderedOrGreaterThan
+            | FloatCC::UnorderedOrGreaterThanOrEqual => unimplemented!(
+                "No single condition code to guarantee ordered. Treat as special case."
+            ),
         }
     }
 
@@ -703,6 +736,8 @@ impl fmt::Debug for CC {
             CC::NL => "nl",
             CC::LE => "le",
             CC::NLE => "nle",
+            CC::P => "p",
+            CC::NP => "np",
         };
         write!(fmt, "{}", name)
     }

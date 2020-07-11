@@ -244,6 +244,13 @@ pub enum Inst {
         dst: Writable<Reg>,
     },
 
+    /// Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
+    XMM_Cmp_RM_R {
+        op: SseOpcode,
+        src: RegMem,
+        dst: Reg,
+    },
+
     // =====================================
     // Control flow instructions.
     /// Direct call: call simm32.
@@ -478,6 +485,12 @@ impl Inst {
         src.assert_regclass_is(RegClass::I64);
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
         Inst::GprToXmm { op, src, dst }
+    }
+
+    pub(crate) fn xmm_cmp_rm_r(op: SseOpcode, src: RegMem, dst: Reg) -> Inst {
+        //TODO:: Add assert_reg_type helper
+        debug_assert!(dst.get_class() == RegClass::V128);
+        Inst::XMM_Cmp_RM_R { op, src, dst }
     }
 
     pub(crate) fn movzx_rm_r(
@@ -859,6 +872,12 @@ impl ShowWithRRU for Inst {
                 )
             }
 
+            Inst::XMM_Cmp_RM_R { op, src, dst } => format!(
+                "{} {}, {}",
+                ljustify(op.to_string()),
+                src.show_rru_sized(mb_rru, 8),
+                show_ireg_sized(*dst, mb_rru, 8),
+            ),
             Inst::Imm_R {
                 dst_is_64,
                 simm64,
@@ -1117,6 +1136,10 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(*src);
             dst.get_regs_as_uses(collector);
         }
+        Inst::XMM_Cmp_RM_R { src, dst, .. } => {
+            src.get_regs_as_uses(collector);
+            collector.add_use(*dst);
+        }
         Inst::Imm_R { dst, .. } => {
             collector.add_def(*dst);
         }
@@ -1331,6 +1354,14 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         } => {
             map_use(mapper, src);
             dst.map_uses(mapper);
+        }
+        Inst::XMM_Cmp_RM_R {
+            ref mut src,
+            ref mut dst,
+            ..
+        } => {
+            src.map_uses(mapper);
+            map_use(mapper, dst);
         }
         Inst::Imm_R { ref mut dst, .. } => map_def(mapper, dst),
         Inst::Mov_R_R {
