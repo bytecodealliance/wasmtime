@@ -6,14 +6,14 @@ use log::trace;
 use regalloc::{Reg, RegClass, Writable};
 use smallvec::SmallVec;
 
-use alloc::boxed::Box;
-use alloc::vec::Vec;
-use std::convert::TryFrom;
-
 use crate::ir::types;
 use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
-use crate::ir::{condcodes::IntCC, InstructionData, Opcode, TrapCode, Type};
+use crate::ir::{condcodes::FloatCC, condcodes::IntCC, InstructionData, Opcode, TrapCode, Type};
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use cranelift_codegen_shared::condcodes::CondCode;
+use std::convert::TryFrom;
 
 use crate::machinst::lower::*;
 use crate::machinst::*;
@@ -92,6 +92,16 @@ fn inst_condcode(data: &InstructionData) -> IntCC {
         | &InstructionData::IntSelect { cond, .. }
         | &InstructionData::IntCompareImm { cond, .. } => cond,
         _ => panic!("inst_condcode(x64): unhandled: {:?}", data),
+    }
+}
+
+fn inst_fp_condcode(data: &InstructionData) -> Option<FloatCC> {
+    match data {
+        &InstructionData::BranchFloat { cond, .. }
+        | &InstructionData::FloatCompare { cond, .. }
+        | &InstructionData::FloatCond { cond, .. }
+        | &InstructionData::FloatCondTrap { cond, .. } => Some(cond),
+        _ => None,
     }
 }
 
@@ -732,6 +742,77 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let cc = CC::from_intcc(condcode);
             let dst = output_to_reg(ctx, outputs[0]);
             ctx.emit(Inst::setcc(cc, dst));
+        }
+
+        Opcode::Fcmp => {
+            let condcode = inst_fp_condcode(ctx.data(insn)).unwrap();
+            let input_ty = ctx.input_ty(insn, 0);
+            let op = match input_ty {
+                F32 => SseOpcode::Ucomiss,
+                F64 => SseOpcode::Ucomisd,
+                _ => panic!("Bad input type to Fcmp"),
+            };
+
+            // Unordered is returned by setting ZF, PF, CF <- 111
+            // Greater than by ZF, PF, CF <- 000
+            // Less than by ZF, PF, CF <- 001
+            // Equal by ZF, PF, CF <- 100
+            //
+            // Checking the result of comiss is somewhat annoying because you don't
+            // have setcc instructions that explicitly check simultaneously for the condition
+            // (i.e. eq, le, gt, etc) and orderedness. So that might mean we need more
+            // than one setcc check and then a logical "and" or "or" to determine both.
+            // However knowing that if the parity bit is set, then the result was
+            // considered unordered and knowing that if the parity bit is set, then both
+            // the ZF and CF flag bits must also be set we can getaway with using one setcc
+            // for most condition codes.
+            match condcode {
+                // setb and setbe for ordered LessThan and LessThanOrEqual check if CF = 1 which
+                // doesn't exclude unorderdness. To get around this we can reverse the operands
+                // and the cc test to instead check if CF and ZF are 0 which would also excludes
+                // unorderedness. Using similiar logic we also reverse UnorderedOrGreaterThan and
+                // UnorderedOrGreaterThanOrEqual and assure that ZF or CF is 1 to exclude orderedness.
+                FloatCC::LessThan
+                | FloatCC::LessThanOrEqual
+                | FloatCC::UnorderedOrGreaterThan
+                | FloatCC::UnorderedOrGreaterThanOrEqual => {
+                    let lhs = input_to_reg_mem(ctx, inputs[0]);
+                    let rhs = input_to_reg(ctx, inputs[1]);
+                    let dst = output_to_reg(ctx, outputs[0]);
+                    ctx.emit(Inst::xmm_cmp_rm_r(op, lhs, rhs));
+                    let condcode = condcode.reverse();
+                    let cc = CC::from_floatcc(condcode);
+                    ctx.emit(Inst::setcc(cc, dst));
+                }
+                // Outlier case where we cannot get around checking the parity bit to determine
+                // if the result was ordered.
+                FloatCC::Equal => {
+                    let lhs = input_to_reg(ctx, inputs[0]);
+                    let rhs = input_to_reg_mem(ctx, inputs[1]);
+                    let dst = output_to_reg(ctx, outputs[0]);
+                    let tmp_gpr1 = ctx.alloc_tmp(RegClass::I64, I32);
+                    ctx.emit(Inst::xmm_cmp_rm_r(op, rhs, lhs));
+                    ctx.emit(Inst::setcc(CC::NP, tmp_gpr1));
+                    ctx.emit(Inst::setcc(CC::Z, dst));
+                    ctx.emit(Inst::alu_rmi_r(
+                        false,
+                        AluRmiROpcode::And,
+                        RegMemImm::reg(tmp_gpr1.to_reg()),
+                        dst,
+                    ));
+                }
+                // For all remaining condition codes we can handle things with one check. Condition
+                // ordered NotEqual for example does not need a separate check for the parity bit because
+                // the setnz checks that the zero flag is 0 which is impossible with an unordered result.
+                _ => {
+                    let lhs = input_to_reg(ctx, inputs[0]);
+                    let rhs = input_to_reg_mem(ctx, inputs[1]);
+                    let dst = output_to_reg(ctx, outputs[0]);
+                    let cc = CC::from_floatcc(condcode);
+                    ctx.emit(Inst::xmm_cmp_rm_r(op, rhs, lhs));
+                    ctx.emit(Inst::setcc(cc, dst));
+                }
+            }
         }
 
         Opcode::FallthroughReturn | Opcode::Return => {

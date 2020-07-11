@@ -2711,7 +2711,8 @@ fn test_x64_emit() {
     insns.push((Inst::setcc(CC::NLE, w_rsi), "400F9FC6", "setnle  %sil"));
     insns.push((Inst::setcc(CC::Z, w_r14), "410F94C6", "setz    %r14b"));
     insns.push((Inst::setcc(CC::LE, w_r14), "410F9EC6", "setle   %r14b"));
-
+    insns.push((Inst::setcc(CC::P, w_r9), "410F9AC1", "setp    %r9b"));
+    insns.push((Inst::setcc(CC::NP, w_r8), "410F9BC0", "setnp   %r8b"));
     // ========================================================
     // Cmove
     insns.push((
@@ -2874,6 +2875,33 @@ fn test_x64_emit() {
         Inst::jmp_unknown(RegMem::mem(Amode::imm_reg_reg_shift(321, r10, rdx, 2))),
         "41FFA49241010000",
         "jmp     *321(%r10,%rdx,4)",
+    ));
+
+    // ========================================================
+    // XMM_CMP_RM_R
+
+    insns.push((
+        Inst::xmm_cmp_rm_r(SseOpcode::Ucomiss, RegMem::reg(xmm1), xmm2),
+        "0F2ED1",
+        "ucomiss %xmm1, %xmm2",
+    ));
+
+    insns.push((
+        Inst::xmm_cmp_rm_r(SseOpcode::Ucomiss, RegMem::reg(xmm0), xmm9),
+        "440F2EC8",
+        "ucomiss %xmm0, %xmm9",
+    ));
+
+    insns.push((
+        Inst::xmm_cmp_rm_r(SseOpcode::Ucomisd, RegMem::reg(xmm13), xmm4),
+        "66410F2EE5",
+        "ucomisd %xmm13, %xmm4",
+    ));
+
+    insns.push((
+        Inst::xmm_cmp_rm_r(SseOpcode::Ucomisd, RegMem::reg(xmm11), xmm12),
+        "66450F2EE3",
+        "ucomisd %xmm11, %xmm12",
     ));
 
     // ========================================================

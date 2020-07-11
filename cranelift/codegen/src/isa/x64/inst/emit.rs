@@ -1603,6 +1603,25 @@ pub(crate) fn emit(
             }
         }
 
+        Inst::XMM_Cmp_RM_R { op, src, dst } => {
+            let rex = RexFlags::clear_w();
+            let (prefix, opcode) = match op {
+                SseOpcode::Ucomisd => (LegacyPrefix::_66, 0x0F2E),
+                SseOpcode::Ucomiss => (LegacyPrefix::None, 0x0F2E),
+                _ => unimplemented!("Emit xmm cmp rm r"),
+            };
+
+            match src {
+                RegMem::Reg { reg } => {
+                    emit_std_reg_reg(sink, prefix, opcode, 2, *dst, *reg, rex);
+                }
+                RegMem::Mem { addr } => {
+                    let addr = &addr.finalize(state);
+                    emit_std_reg_mem(sink, prefix, opcode, 2, *dst, addr, rex);
+                }
+            }
+        }
+
         Inst::LoadExtName {
             dst,
             name,
