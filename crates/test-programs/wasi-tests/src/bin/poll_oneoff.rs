@@ -42,9 +42,7 @@ unsafe fn test_timeout() {
         userdata: CLOCK_ID,
         u: wasi::SubscriptionU {
             tag: wasi::EVENTTYPE_CLOCK,
-            u: wasi::SubscriptionUU {
-                clock
-            }
+            u: wasi::SubscriptionUU { clock },
         },
     }];
     let out = poll_oneoff_impl(&r#in, 1);
@@ -80,9 +78,7 @@ unsafe fn test_stdin_read() {
             userdata: CLOCK_ID,
             u: wasi::SubscriptionU {
                 tag: wasi::EVENTTYPE_CLOCK,
-                u: wasi::SubscriptionUU {
-                    clock
-                }
+                u: wasi::SubscriptionUU { clock },
             },
         },
         // Make sure that timeout is returned only once even if there are multiple read events
@@ -91,8 +87,8 @@ unsafe fn test_stdin_read() {
             u: wasi::SubscriptionU {
                 tag: wasi::EVENTTYPE_FD_READ,
                 u: wasi::SubscriptionUU {
-                    fd_read: fd_readwrite
-                }
+                    fd_read: fd_readwrite,
+                },
             },
         },
     ];
@@ -127,7 +123,7 @@ unsafe fn test_stdout_stderr_write() {
             u: wasi::SubscriptionU {
                 tag: wasi::EVENTTYPE_FD_WRITE,
                 u: wasi::SubscriptionUU {
-                    fd_write: stdout_readwrite
+                    fd_write: stdout_readwrite,
                 },
             },
         },
@@ -136,8 +132,8 @@ unsafe fn test_stdout_stderr_write() {
             u: wasi::SubscriptionU {
                 tag: wasi::EVENTTYPE_FD_WRITE,
                 u: wasi::SubscriptionUU {
-                    fd_write: stderr_readwrite
-                }
+                    fd_write: stderr_readwrite,
+                },
             },
         },
     ];
@@ -182,8 +178,8 @@ unsafe fn test_fd_readwrite(fd: wasi::Fd, error_code: wasi::Errno) {
             u: wasi::SubscriptionU {
                 tag: wasi::EVENTTYPE_FD_READ,
                 u: wasi::SubscriptionUU {
-                    fd_read: fd_readwrite
-                }
+                    fd_read: fd_readwrite,
+                },
             },
         },
         wasi::Subscription {
@@ -191,8 +187,8 @@ unsafe fn test_fd_readwrite(fd: wasi::Fd, error_code: wasi::Errno) {
             u: wasi::SubscriptionU {
                 tag: wasi::EVENTTYPE_FD_WRITE,
                 u: wasi::SubscriptionUU {
-                    fd_write: fd_readwrite
-                }
+                    fd_write: fd_readwrite,
+                },
             },
         },
     ];

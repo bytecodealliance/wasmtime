@@ -218,6 +218,8 @@ mod wasi_tests {
                         // TODO: virtfs does not support rename yet.
                         "path_rename_trailing_slashes_virtualfs" |
                         "path_rename_virtualfs" => true,
+                        // TODO: virtfs does not support truncation yet.
+                        "file_truncation_virtualfs" => true,
                         _ => false,
                     }
                 } else {
@@ -250,6 +252,8 @@ mod wasi_tests {
                         // TODO: virtfs does not support rename yet.
                         "path_rename_trailing_slashes_virtualfs" |
                         "path_rename_virtualfs" => true,
+                        // TODO: virtfs does not support truncation yet.
+                        "file_truncation_virtualfs" => true,
                         _ => false,
                     }
                 } else {
