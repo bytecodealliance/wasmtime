@@ -6,7 +6,7 @@ use gimli::{
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
-use wasmparser::{self, ModuleReader, SectionCode, TypeDef};
+use wasmparser::{self, NameSectionReader, Parser, Payload, TypeDef};
 
 trait Reader: gimli::Reader<Offset = usize, Endian = LittleEndian> {}
 
@@ -155,7 +155,6 @@ fn read_name_section(reader: wasmparser::NameSectionReader) -> wasmparser::Resul
 }
 
 pub fn read_debuginfo(data: &[u8]) -> Result<DebugInfoData> {
-    let mut reader = ModuleReader::new(data)?;
     let mut sections = HashMap::new();
     let mut name_section = None;
     let mut code_section_offset = 0;
@@ -165,26 +164,25 @@ pub fn read_debuginfo(data: &[u8]) -> Result<DebugInfoData> {
     let mut func_params_refs: Vec<usize> = Vec::new();
     let mut func_locals: Vec<Box<[(u32, WasmType)]>> = Vec::new();
 
-    while !reader.eof() {
-        let section = reader.read()?;
-        match section.code {
-            SectionCode::Custom { name, .. } => {
+    for payload in Parser::new(0).parse_all(data) {
+        match payload? {
+            Payload::CustomSection {
+                name,
+                data,
+                data_offset,
+            } => {
                 if name.starts_with(".debug_") {
-                    let mut reader = section.get_binary_reader();
-                    let len = reader.bytes_remaining();
-                    sections.insert(name, reader.read_bytes(len)?);
-                }
-                if name == "name" {
-                    if let Ok(reader) = section.get_name_section_reader() {
+                    sections.insert(name, data);
+                } else if name == "name" {
+                    if let Ok(reader) = NameSectionReader::new(data, data_offset) {
                         if let Ok(section) = read_name_section(reader) {
                             name_section = Some(section);
                         }
                     }
                 }
             }
-            SectionCode::Type => {
-                signatures_params = section
-                    .get_type_section_reader()?
+            Payload::TypeSection(s) => {
+                signatures_params = s
                     .into_iter()
                     .map(|ft| {
                         if let Ok(TypeDef::Func(ft)) = ft {
@@ -195,33 +193,29 @@ pub fn read_debuginfo(data: &[u8]) -> Result<DebugInfoData> {
                     })
                     .collect::<Result<Vec<_>>>()?;
             }
-            SectionCode::Import => {
-                for i in section.get_import_section_reader()? {
+            Payload::ImportSection(s) => {
+                for i in s {
                     if let wasmparser::ImportSectionEntryType::Function(_) = i?.ty {
                         imported_func_count += 1;
                     }
                 }
             }
-            SectionCode::Function => {
-                func_params_refs = section
-                    .get_function_section_reader()?
+            Payload::FunctionSection(s) => {
+                func_params_refs = s
                     .into_iter()
                     .map(|index| Ok(index? as usize))
                     .collect::<Result<Vec<_>>>()?;
             }
-            SectionCode::Code => {
-                code_section_offset = section.range().start as u64;
-                func_locals = section
-                    .get_code_section_reader()?
+            Payload::CodeSectionStart { range, .. } => {
+                code_section_offset = range.start as u64;
+            }
+            Payload::CodeSectionEntry(body) => {
+                let locals = body.get_locals_reader()?;
+                let locals = locals
                     .into_iter()
-                    .map(|body| {
-                        let locals = body?.get_locals_reader()?;
-                        Ok(locals
-                            .into_iter()
-                            .collect::<Result<Vec<_>, _>>()?
-                            .into_boxed_slice())
-                    })
-                    .collect::<Result<Vec<_>>>()?;
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_boxed_slice();
+                func_locals.push(locals);
             }
             _ => (),
         }

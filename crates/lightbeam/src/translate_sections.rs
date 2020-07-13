@@ -108,6 +108,7 @@ impl binemit::RelocSink for UnimplementedRelocSink {
 }
 
 /// Parses the Code section of the wasm module.
+#[allow(dead_code)]
 pub fn code(
     _code: CodeSectionReader,
     _translation_ctx: &SimpleContext,

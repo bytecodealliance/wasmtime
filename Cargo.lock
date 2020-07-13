@@ -595,7 +595,7 @@ dependencies = [
  "serde",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.58.0",
+ "wasmparser 0.59.0",
  "wat",
 ]
 
@@ -1124,7 +1124,7 @@ dependencies = [
  "staticvec",
  "thiserror",
  "typemap",
- "wasmparser 0.58.0",
+ "wasmparser 0.59.0",
  "wat",
 ]
 
@@ -2300,30 +2300,24 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.55.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af931e2e1960c53f4a28b063fec4cacd036f35acbec8ff3a4739125b17382a87"
-
-[[package]]
-name = "wasmparser"
 version = "0.57.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32fddd575d477c6e9702484139cf9f23dcd554b06d185ed0f56c857dd3a47aa6"
 
 [[package]]
 name = "wasmparser"
-version = "0.58.0"
+version = "0.59.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "721a8d79483738d7aef6397edcf8f04cd862640b1ad5973adf5bb50fc10e86db"
+checksum = "a950e6a618f62147fd514ff445b2a0b53120d382751960797f85f058c7eda9b9"
 
 [[package]]
 name = "wasmprinter"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c93ba310101ec5ee980db66b47b3d276577c8310df1570e19994347137650454"
+checksum = "334551eb8b0b1be16cf366a54ce9b541ac32a96e9b51e67ebbae1696f108f112"
 dependencies = [
  "anyhow",
- "wasmparser 0.55.0",
+ "wasmparser 0.59.0",
 ]
 
 [[package]]
@@ -2341,7 +2335,7 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "tempfile",
- "wasmparser 0.58.0",
+ "wasmparser 0.59.0",
  "wasmtime-environ",
  "wasmtime-jit",
  "wasmtime-profiling",
@@ -2415,7 +2409,7 @@ dependencies = [
  "object",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.58.0",
+ "wasmparser 0.59.0",
  "wasmtime-environ",
 ]
 
@@ -2448,7 +2442,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "toml",
- "wasmparser 0.58.0",
+ "wasmparser 0.59.0",
  "winapi",
  "zstd",
 ]
@@ -2477,7 +2471,7 @@ dependencies = [
  "env_logger",
  "log",
  "rayon",
- "wasmparser 0.58.0",
+ "wasmparser 0.59.0",
  "wasmprinter",
  "wasmtime",
  "wasmtime-wast",
@@ -2502,7 +2496,7 @@ dependencies = [
  "region",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.58.0",
+ "wasmparser 0.59.0",
  "wasmtime-debug",
  "wasmtime-environ",
  "wasmtime-obj",
@@ -2599,7 +2593,7 @@ version = "0.18.0"
 dependencies = [
  "anyhow",
  "wasmtime",
- "wast 18.0.0",
+ "wast 21.0.0",
 ]
 
 [[package]]
@@ -2643,20 +2637,20 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "18.0.0"
+version = "21.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01b1f23531740a81f9300bd2febd397a95c76bfa4aa4bfaf4ca8b1ee3438f337"
+checksum = "0b1844f66a2bc8526d71690104c0e78a8e59ffa1597b7245769d174ebb91deb5"
 dependencies = [
  "leb128",
 ]
 
 [[package]]
 name = "wat"
-version = "1.0.19"
+version = "1.0.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4006d418d59293172aebfeeadb7673459dc151874a79135946ea7996b6a98515"
+checksum = "ce85d72b74242c340e9e3492cfb602652d7bb324c3172dd441b5577e39a2e18c"
 dependencies = [
- "wast 18.0.0",
+ "wast 21.0.0",
 ]
 
 [[package]]

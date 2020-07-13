@@ -10,7 +10,7 @@ use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
-use wasmparser::{OperatorValidatorConfig, ValidatingParserConfig};
+use wasmparser::Validator;
 use wasmtime_environ::settings::{self, Configurable, SetError};
 use wasmtime_environ::{ir, isa, isa::TargetIsa, wasm, CacheConfig, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
@@ -34,13 +34,17 @@ use wasmtime_runtime::{
 pub struct Config {
     pub(crate) flags: settings::Builder,
     pub(crate) isa_flags: isa::Builder,
-    pub(crate) validating_config: ValidatingParserConfig,
     pub(crate) tunables: Tunables,
     pub(crate) strategy: CompilationStrategy,
     pub(crate) cache_config: CacheConfig,
     pub(crate) profiler: Arc<dyn ProfilingAgent>,
     pub(crate) memory_creator: Option<MemoryCreatorProxy>,
     pub(crate) max_wasm_stack: usize,
+    wasm_threads: bool,
+    wasm_reference_types: bool,
+    pub(crate) wasm_bulk_memory: bool,
+    wasm_simd: bool,
+    wasm_multi_value: bool,
 }
 
 impl Config {
@@ -81,17 +85,6 @@ impl Config {
 
         Config {
             tunables,
-            validating_config: ValidatingParserConfig {
-                operator_config: OperatorValidatorConfig {
-                    enable_threads: false,
-                    enable_reference_types: false,
-                    enable_bulk_memory: false,
-                    enable_simd: false,
-                    enable_multi_value: true,
-                    enable_tail_call: false,
-                    enable_module_linking: false,
-                },
-            },
             flags,
             isa_flags: native::builder(),
             strategy: CompilationStrategy::Auto,
@@ -99,6 +92,11 @@ impl Config {
             profiler: Arc::new(NullProfilerAgent),
             memory_creator: None,
             max_wasm_stack: 1 << 20,
+            wasm_threads: false,
+            wasm_reference_types: false,
+            wasm_bulk_memory: false,
+            wasm_simd: false,
+            wasm_multi_value: true,
         }
     }
 
@@ -163,7 +161,7 @@ impl Config {
     ///
     /// [threads]: https://github.com/webassembly/threads
     pub fn wasm_threads(&mut self, enable: bool) -> &mut Self {
-        self.validating_config.operator_config.enable_threads = enable;
+        self.wasm_threads = enable;
         // The threads proposal depends on the bulk memory proposal
         if enable {
             self.wasm_bulk_memory(true);
@@ -193,9 +191,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/reference-types
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
-        self.validating_config
-            .operator_config
-            .enable_reference_types = enable;
+        self.wasm_reference_types = enable;
 
         self.flags
             .set("enable_safepoints", if enable { "true" } else { "false" })
@@ -230,7 +226,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/simd
     pub fn wasm_simd(&mut self, enable: bool) -> &mut Self {
-        self.validating_config.operator_config.enable_simd = enable;
+        self.wasm_simd = enable;
         let val = if enable { "true" } else { "false" };
         self.flags
             .set("enable_simd", val)
@@ -254,7 +250,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/bulk-memory-operations
     pub fn wasm_bulk_memory(&mut self, enable: bool) -> &mut Self {
-        self.validating_config.operator_config.enable_bulk_memory = enable;
+        self.wasm_bulk_memory = enable;
         self
     }
 
@@ -268,7 +264,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/multi-value
     pub fn wasm_multi_value(&mut self, enable: bool) -> &mut Self {
-        self.validating_config.operator_config.enable_multi_value = enable;
+        self.wasm_multi_value = enable;
         self
     }
 
@@ -613,6 +609,16 @@ impl Config {
             .finish(settings::Flags::new(self.flags.clone()))
     }
 
+    pub(crate) fn validator(&self) -> Validator {
+        let mut ret = Validator::new();
+        ret.wasm_threads(self.wasm_threads)
+            .wasm_bulk_memory(self.wasm_bulk_memory)
+            .wasm_multi_value(self.wasm_multi_value)
+            .wasm_reference_types(self.wasm_reference_types)
+            .wasm_simd(self.wasm_simd);
+        return ret;
+    }
+
     fn build_compiler(&self) -> Compiler {
         let isa = self.target_isa();
         Compiler::new(
@@ -640,15 +646,14 @@ impl Default for Config {
 
 impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let features = &self.validating_config.operator_config;
         f.debug_struct("Config")
             .field("debug_info", &self.tunables.debug_info)
             .field("strategy", &self.strategy)
-            .field("wasm_threads", &features.enable_threads)
-            .field("wasm_reference_types", &features.enable_reference_types)
-            .field("wasm_bulk_memory", &features.enable_bulk_memory)
-            .field("wasm_simd", &features.enable_simd)
-            .field("wasm_multi_value", &features.enable_multi_value)
+            .field("wasm_threads", &self.wasm_threads)
+            .field("wasm_reference_types", &self.wasm_reference_types)
+            .field("wasm_bulk_memory", &self.wasm_bulk_memory)
+            .field("wasm_simd", &self.wasm_simd)
+            .field("wasm_multi_value", &self.wasm_multi_value)
             .field(
                 "flags",
                 &settings::Flags::new(self.flags.clone()).to_string(),

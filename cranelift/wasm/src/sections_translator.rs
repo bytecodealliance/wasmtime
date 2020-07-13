@@ -23,11 +23,11 @@ use cranelift_entity::EntityRef;
 use std::boxed::Box;
 use std::vec::Vec;
 use wasmparser::{
-    self, CodeSectionReader, Data, DataKind, DataSectionReader, Element, ElementItem, ElementItems,
-    ElementKind, ElementSectionReader, Export, ExportSectionReader, ExternalKind,
-    FunctionSectionReader, GlobalSectionReader, GlobalType, ImportSectionEntryType,
-    ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader, Naming, NamingReader,
-    Operator, TableSectionReader, Type, TypeDef, TypeSectionReader,
+    self, Data, DataKind, DataSectionReader, Element, ElementItem, ElementItems, ElementKind,
+    ElementSectionReader, Export, ExportSectionReader, ExternalKind, FunctionSectionReader,
+    GlobalSectionReader, GlobalType, ImportSectionEntryType, ImportSectionReader,
+    MemorySectionReader, MemoryType, NameSectionReader, Naming, NamingReader, Operator,
+    TableSectionReader, Type, TypeDef, TypeSectionReader,
 };
 
 /// Parses the Type section of the wasm module.
@@ -354,21 +354,6 @@ pub fn parse_element_section<'data>(
                 // Nothing to do here.
             }
         }
-    }
-    Ok(())
-}
-
-/// Parses the Code section of the wasm module.
-pub fn parse_code_section<'data>(
-    code: CodeSectionReader<'data>,
-    module_translation_state: &ModuleTranslationState,
-    environ: &mut dyn ModuleEnvironment<'data>,
-) -> WasmResult<()> {
-    for body in code {
-        let mut reader = body?.get_binary_reader();
-        let size = reader.bytes_remaining();
-        let offset = reader.original_position();
-        environ.define_function_body(module_translation_state, reader.read_bytes(size)?, offset)?;
     }
     Ok(())
 }
