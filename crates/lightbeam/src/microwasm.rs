@@ -2130,7 +2130,7 @@ where
             WasmOperator::RefNull { ty: _ } => {
                 return Err(Error::Microwasm("RefNull unimplemented".into()))
             }
-            WasmOperator::RefIsNull { ty: _ } => {
+            WasmOperator::RefIsNull => {
                 return Err(Error::Microwasm("RefIsNull unimplemented".into()))
             }
             WasmOperator::I32Eqz => one(Operator::Eqz(Size::_32)),

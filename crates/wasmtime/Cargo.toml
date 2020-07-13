@@ -14,7 +14,7 @@ wasmtime-runtime = { path = "../runtime", version = "0.18.0" }
 wasmtime-environ = { path = "../environ", version = "0.18.0" }
 wasmtime-jit = { path = "../jit", version = "0.18.0" }
 wasmtime-profiling = { path = "../profiling", version = "0.18.0" }
-wasmparser = "0.58.0"
+wasmparser = "0.59.0"
 target-lexicon = { version = "0.10.0", default-features = false }
 anyhow = "1.0.19"
 region = "2.2.0"

@@ -66,7 +66,7 @@ fn instantiate(
         let instance = store.add_instance(instance);
         instance
             .initialize(
-                config.validating_config.operator_config.enable_bulk_memory,
+                config.wasm_bulk_memory,
                 &compiled_module.data_initializers(),
             )
             .map_err(|e| -> Error {

@@ -213,14 +213,12 @@ fn arbitrary_config(
 /// it'll free up new slots to start making new instances.
 fn predict_rss(wasm: &[u8]) -> Result<usize> {
     let mut prediction = 0;
-    let mut reader = ModuleReader::new(wasm)?;
-    while !reader.eof() {
-        let section = reader.read()?;
-        match section.code {
+    for payload in Parser::new(0).parse_all(wasm) {
+        match payload? {
             // For each declared memory we'll have to map that all in, so add in
             // the minimum amount of memory to our predicted rss.
-            SectionCode::Memory => {
-                for entry in section.get_memory_section_reader()? {
+            Payload::MemorySection(s) => {
+                for entry in s {
                     let initial = entry?.limits.initial as usize;
                     prediction += initial * 64 * 1024;
                 }
@@ -228,8 +226,8 @@ fn predict_rss(wasm: &[u8]) -> Result<usize> {
 
             // We'll need to allocate tables and space for table elements, and
             // currently this is 3 pointers per table entry.
-            SectionCode::Table => {
-                for entry in section.get_table_section_reader()? {
+            Payload::TableSection(s) => {
+                for entry in s {
                     let initial = entry?.limits.initial as usize;
                     prediction += initial * 3 * mem::size_of::<usize>();
                 }

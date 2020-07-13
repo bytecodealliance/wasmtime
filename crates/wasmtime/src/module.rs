@@ -1,10 +1,9 @@
 use crate::frame_info::GlobalFrameInfoRegistration;
 use crate::runtime::Engine;
 use crate::types::{EntityType, ExportType, ExternType, ImportType};
-use anyhow::{Error, Result};
+use anyhow::Result;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use wasmparser::validate;
 use wasmtime_jit::CompiledModule;
 
 /// A compiled WebAssembly module, ready to be instantiated.
@@ -296,8 +295,8 @@ impl Module {
     ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     pub fn validate(engine: &Engine, binary: &[u8]) -> Result<()> {
-        let config = engine.config().validating_config.clone();
-        validate(binary, Some(config)).map_err(Error::new)
+        engine.config().validator().validate_all(binary)?;
+        Ok(())
     }
 
     unsafe fn compile(engine: &Engine, binary: &[u8]) -> Result<Self> {

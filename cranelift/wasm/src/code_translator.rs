@@ -1043,7 +1043,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::RefNull { ty } => {
             state.push1(environ.translate_ref_null(builder.cursor(), (*ty).try_into()?)?)
         }
-        Operator::RefIsNull { ty: _ } => {
+        Operator::RefIsNull => {
             let value = state.pop1();
             state.push1(environ.translate_ref_is_null(builder.cursor(), value)?);
         }
