@@ -534,8 +534,16 @@ impl MachInstEmit for Inst {
                     ALUOp::Lsr64 => (0b1101001101, u32::from(amt), 0b111111),
                     ALUOp::Asr32 => (0b0001001100, u32::from(amt), 0b011111),
                     ALUOp::Asr64 => (0b1001001101, u32::from(amt), 0b111111),
-                    ALUOp::Lsl32 => (0b0101001100, u32::from(32 - amt), u32::from(31 - amt)),
-                    ALUOp::Lsl64 => (0b1101001101, u32::from(64 - amt), u32::from(63 - amt)),
+                    ALUOp::Lsl32 => (
+                        0b0101001100,
+                        u32::from((32 - amt) % 32),
+                        u32::from(31 - amt),
+                    ),
+                    ALUOp::Lsl64 => (
+                        0b1101001101,
+                        u32::from((64 - amt) % 64),
+                        u32::from(63 - amt),
+                    ),
                     _ => unimplemented!("{:?}", alu_op),
                 };
                 sink.put4(

@@ -934,6 +934,26 @@ fn test_aarch64_binemit() {
         "280141D3",
         "lsl x8, x9, #63",
     ));
+    insns.push((
+        Inst::AluRRImmShift {
+            alu_op: ALUOp::Lsl32,
+            rd: writable_xreg(10),
+            rn: xreg(11),
+            immshift: ImmShift::maybe_from_u64(0).unwrap(),
+        },
+        "6A7D0053",
+        "lsl w10, w11, #0",
+    ));
+    insns.push((
+        Inst::AluRRImmShift {
+            alu_op: ALUOp::Lsl64,
+            rd: writable_xreg(10),
+            rn: xreg(11),
+            immshift: ImmShift::maybe_from_u64(0).unwrap(),
+        },
+        "6AFD40D3",
+        "lsl x10, x11, #0",
+    ));
 
     insns.push((
         Inst::AluRRImmLogic {
