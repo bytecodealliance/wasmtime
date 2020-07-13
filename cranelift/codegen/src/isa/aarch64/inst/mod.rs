@@ -249,6 +249,10 @@ pub enum VecALUOp {
     Sub,
     /// Multiply
     Mul,
+    /// Signed shift left
+    Sshl,
+    /// Unsigned shift left
+    Ushl,
 }
 
 /// A Vector miscellaneous operation with two registers.
@@ -2750,6 +2754,8 @@ impl ShowWithRRU for Inst {
                     VecALUOp::Add => ("add", true, ty),
                     VecALUOp::Sub => ("sub", true, ty),
                     VecALUOp::Mul => ("mul", true, ty),
+                    VecALUOp::Sshl => ("sshl", true, ty),
+                    VecALUOp::Ushl => ("ushl", true, ty),
                 };
 
                 let show_vreg_fn: fn(Reg, Option<&RealRegUniverse>, Type) -> String = if vector {

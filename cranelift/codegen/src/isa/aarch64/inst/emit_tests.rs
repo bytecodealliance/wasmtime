@@ -2474,6 +2474,102 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Ushl,
+            rd: writable_vreg(18),
+            rn: vreg(18),
+            rm: vreg(18),
+            ty: I8X16,
+        },
+        "5246326E",
+        "ushl v18.16b, v18.16b, v18.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Ushl,
+            rd: writable_vreg(18),
+            rn: vreg(18),
+            rm: vreg(18),
+            ty: I16X8,
+        },
+        "5246726E",
+        "ushl v18.8h, v18.8h, v18.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Ushl,
+            rd: writable_vreg(18),
+            rn: vreg(1),
+            rm: vreg(21),
+            ty: I32X4,
+        },
+        "3244B56E",
+        "ushl v18.4s, v1.4s, v21.4s",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Ushl,
+            rd: writable_vreg(5),
+            rn: vreg(7),
+            rm: vreg(19),
+            ty: I64X2,
+        },
+        "E544F36E",
+        "ushl v5.2d, v7.2d, v19.2d",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sshl,
+            rd: writable_vreg(18),
+            rn: vreg(18),
+            rm: vreg(18),
+            ty: I8X16,
+        },
+        "5246324E",
+        "sshl v18.16b, v18.16b, v18.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sshl,
+            rd: writable_vreg(30),
+            rn: vreg(1),
+            rm: vreg(29),
+            ty: I16X8,
+        },
+        "3E447D4E",
+        "sshl v30.8h, v1.8h, v29.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sshl,
+            rd: writable_vreg(8),
+            rn: vreg(22),
+            rm: vreg(21),
+            ty: I32X4,
+        },
+        "C846B54E",
+        "sshl v8.4s, v22.4s, v21.4s",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sshl,
+            rd: writable_vreg(8),
+            rn: vreg(22),
+            rm: vreg(2),
+            ty: I64X2,
+        },
+        "C846E24E",
+        "sshl v8.2d, v22.2d, v2.2d",
+    ));
+
+    insns.push((
         Inst::VecMisc {
             op: VecMisc2::Not,
             rd: writable_vreg(2),

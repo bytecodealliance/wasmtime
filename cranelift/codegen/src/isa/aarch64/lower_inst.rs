@@ -484,24 +484,60 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Ishl | Opcode::Ushr | Opcode::Sshr => {
             let ty = ty.unwrap();
             let size = InstSize::from_bits(ty_bits(ty));
-            let narrow_mode = match (op, size) {
-                (Opcode::Ishl, _) => NarrowValueMode::None,
-                (Opcode::Ushr, InstSize::Size64) => NarrowValueMode::ZeroExtend64,
-                (Opcode::Ushr, InstSize::Size32) => NarrowValueMode::ZeroExtend32,
-                (Opcode::Sshr, InstSize::Size64) => NarrowValueMode::SignExtend64,
-                (Opcode::Sshr, InstSize::Size32) => NarrowValueMode::SignExtend32,
-                _ => unreachable!(),
-            };
             let rd = get_output_reg(ctx, outputs[0]);
-            let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
-            let rm = put_input_in_reg_immshift(ctx, inputs[1], ty_bits(ty));
-            let alu_op = match op {
-                Opcode::Ishl => choose_32_64(ty, ALUOp::Lsl32, ALUOp::Lsl64),
-                Opcode::Ushr => choose_32_64(ty, ALUOp::Lsr32, ALUOp::Lsr64),
-                Opcode::Sshr => choose_32_64(ty, ALUOp::Asr32, ALUOp::Asr64),
-                _ => unreachable!(),
-            };
-            ctx.emit(alu_inst_immshift(alu_op, rd, rn, rm));
+            if ty_bits(ty) < 128 {
+                let narrow_mode = match (op, size) {
+                    (Opcode::Ishl, _) => NarrowValueMode::None,
+                    (Opcode::Ushr, InstSize::Size64) => NarrowValueMode::ZeroExtend64,
+                    (Opcode::Ushr, InstSize::Size32) => NarrowValueMode::ZeroExtend32,
+                    (Opcode::Sshr, InstSize::Size64) => NarrowValueMode::SignExtend64,
+                    (Opcode::Sshr, InstSize::Size32) => NarrowValueMode::SignExtend32,
+                    _ => unreachable!(),
+                };
+                let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
+                let rm = put_input_in_reg_immshift(ctx, inputs[1], ty_bits(ty));
+                let alu_op = match op {
+                    Opcode::Ishl => choose_32_64(ty, ALUOp::Lsl32, ALUOp::Lsl64),
+                    Opcode::Ushr => choose_32_64(ty, ALUOp::Lsr32, ALUOp::Lsr64),
+                    Opcode::Sshr => choose_32_64(ty, ALUOp::Asr32, ALUOp::Asr64),
+                    _ => unreachable!(),
+                };
+                ctx.emit(alu_inst_immshift(alu_op, rd, rn, rm));
+            } else {
+                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+
+                let (alu_op, is_right_shift) = match op {
+                    Opcode::Ishl => (VecALUOp::Sshl, false),
+                    Opcode::Ushr => (VecALUOp::Ushl, true),
+                    Opcode::Sshr => (VecALUOp::Sshl, true),
+                    _ => unreachable!(),
+                };
+
+                let rm = if is_right_shift {
+                    // Right shifts are implemented with a negative left shift.
+                    let tmp = ctx.alloc_tmp(RegClass::I64, I32);
+                    let rm = put_input_in_rse_imm12(ctx, inputs[1], NarrowValueMode::None);
+                    let rn = zero_reg();
+                    ctx.emit(alu_inst_imm12(ALUOp::Sub32, tmp, rn, rm));
+                    tmp.to_reg()
+                } else {
+                    put_input_in_reg(ctx, inputs[1], NarrowValueMode::None)
+                };
+
+                ctx.emit(Inst::VecDup {
+                    rd,
+                    rn: rm,
+                    ty: ty.lane_type(),
+                });
+
+                ctx.emit(Inst::VecRRR {
+                    alu_op,
+                    rd,
+                    rn,
+                    rm: rd.to_reg(),
+                    ty,
+                });
+            }
         }
 
         Opcode::Rotr | Opcode::Rotl => {
