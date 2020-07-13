@@ -84,10 +84,14 @@ fn main() -> anyhow::Result<()> {
                     .arg("ntdll.lib")
                     .arg("shell32.lib")
                     .arg("ole32.lib");
-                "./main.exe"
+                if is_dir {
+                    "main.exe".to_string()
+                } else {
+                    format!("./{}.exe", example)
+                }
             } else {
                 cmd.arg("target/debug/libwasmtime.a").arg("-o").arg("foo");
-                "./foo"
+                "./foo".to_string()
             };
             if cfg!(target_os = "linux") {
                 cmd.arg("-lpthread").arg("-ldl").arg("-lm");
