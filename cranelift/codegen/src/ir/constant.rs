@@ -166,7 +166,7 @@ pub type ConstantOffset = u32;
 /// function body); because the function is not yet compiled when constants are inserted,
 /// [`set_offset`](crate::ir::ConstantPool::set_offset) must be called once a constant's offset
 /// from the beginning of the function is known (see
-/// [`relaxation.rs`](crate::binemit::relaxation)).
+/// `relaxation` in `relaxation.rs`).
 #[derive(Clone)]
 pub struct ConstantPoolEntry {
     data: ConstantData,

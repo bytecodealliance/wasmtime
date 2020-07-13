@@ -1923,9 +1923,9 @@ checksum = "dba1a27d3efae4351c8051072d619e3ade2820635c3958d826bfea39d59b54c8"
 
 [[package]]
 name = "staticvec"
-version = "0.10.0"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c0968d58741ac061880be1ca69c5ca6f27a1942ed456f08fd987e9c9013cead"
+checksum = "ba02879e2cff631c9dad99168c191fa75201a263e159cc9669d3df58cb242093"
 
 [[package]]
 name = "string-interner"

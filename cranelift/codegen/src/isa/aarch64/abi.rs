@@ -23,7 +23,7 @@
 //! being adjusted to set up a call, we implement a "nominal SP" tracking
 //! feature by which a fixup (distance between actual SP and a "nominal" SP) is
 //! known at each instruction. See the documentation for
-//! [MemArg::NominalSPOffset] for more on this.
+//! `MemArg::NominalSPOffset` for more on this.
 //!
 //! The stack looks like:
 //!

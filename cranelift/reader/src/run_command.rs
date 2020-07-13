@@ -14,8 +14,7 @@ use thiserror::Error;
 
 /// A run command appearing in a test file.
 ///
-/// For parsing, see
-/// [Parser::parse_run_command](crate::parser::Parser::parse_run_command).
+/// For parsing, see `Parser::parse_run_command`
 #[derive(PartialEq, Debug)]
 pub enum RunCommand {
     /// Invoke a function and print its result.

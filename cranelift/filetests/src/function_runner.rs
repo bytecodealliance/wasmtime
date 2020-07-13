@@ -17,7 +17,7 @@ use thiserror::Error;
 ///
 /// Several Cranelift functions need the ability to run Cranelift IR (e.g. `test_run`); this
 /// [SingleFunctionCompiler] provides a way for compiling Cranelift [Function]s to
-/// [CompiledFunction]s and subsequently calling them through the use of a [Trampoline]. As its
+/// `CompiledFunction`s and subsequently calling them through the use of a `Trampoline`. As its
 /// name indicates, this compiler is limited: any functionality that requires knowledge of things
 /// outside the [Function] will likely not work (e.g. global values, calls). For an example of this
 /// "outside-of-function" functionality, see `cranelift_simplejit::backend::SimpleJITBackend`.
@@ -60,10 +60,10 @@ impl SingleFunctionCompiler {
         Self::with_host_isa(flags)
     }
 
-    /// Compile the passed [Function] to a [CompiledFunction]. This function will:
+    /// Compile the passed [Function] to a `CompiledFunction`. This function will:
     ///  - check that the default ISA calling convention is used (to ensure it can be called)
     ///  - compile the [Function]
-    ///  - compile a [Trampoline] for the [Function]'s signature (or used a cached [Trampoline];
+    ///  - compile a `Trampoline` for the [Function]'s signature (or used a cached `Trampoline`;
     ///    this makes it possible to call functions when the signature is not known until runtime.
     pub fn compile(&mut self, function: Function) -> Result<CompiledFunction, CompilationError> {
         let signature = function.signature.clone();
