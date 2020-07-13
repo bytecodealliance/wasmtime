@@ -1,5 +1,6 @@
 use crate::{handle_result, wasmtime_error_t};
 use crate::{wasm_extern_t, wasm_globaltype_t, wasm_store_t, wasm_val_t};
+use std::mem::MaybeUninit;
 use std::ptr;
 use wasmtime::{Extern, Global};
 
@@ -72,8 +73,8 @@ pub extern "C" fn wasm_global_type(g: &wasm_global_t) -> Box<wasm_globaltype_t> 
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_global_get(g: &wasm_global_t, out: &mut wasm_val_t) {
-    out.set(g.global().get());
+pub extern "C" fn wasm_global_get(g: &wasm_global_t, out: &mut MaybeUninit<wasm_val_t>) {
+    crate::initialize(out, wasm_val_t::from_val(g.global().get()));
 }
 
 #[no_mangle]

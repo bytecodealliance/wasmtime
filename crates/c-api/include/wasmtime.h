@@ -651,6 +651,9 @@ WASM_API_EXTERN const wasm_name_t *wasmtime_frame_module_name(const wasm_frame_t
  *
  * The `trap` pointer cannot be `NULL`. The `args` and `results` pointers may be
  * `NULL` if the corresponding length is zero.
+ *
+ * Does not take ownership of `wasm_val_t` arguments. Gives ownership of
+ * `wasm_val_t` results.
  */
 WASM_API_EXTERN own wasmtime_error_t *wasmtime_func_call(
     wasm_func_t *func,
@@ -832,6 +835,63 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_funcref_table_grow(
     const wasm_func_t *init,
     wasm_table_size_t *prev_size
 );
+
+/**
+ * \brief Create a new `externref` value.
+ *
+ * Creates a new `externref` value wrapping the provided data, and writes it to
+ * `valp`.
+ *
+ * This function does not take an associated finalizer to clean up the data when
+ * the reference is reclaimed. If you need a finalizer to clean up the data,
+ * then use #wasmtime_externref_new_with_finalizer.
+ */
+WASM_API_EXTERN void wasmtime_externref_new(void *data, wasm_val_t *valp);
+
+/**
+ * \brief A finalizer for an `externref`'s wrapped data.
+ *
+ * A finalizer callback to clean up an `externref`'s wrapped data after the
+ * `externref` has been reclaimed. This is an opportunity to run destructors,
+ * free dynamically allocated memory, close file handles, etc.
+ */
+typedef void (*wasmtime_externref_finalizer_t)(void*);
+
+/**
+ * \brief Create a new `externref` value with a finalizer.
+ *
+ * Creates a new `externref` value wrapping the provided data, and writes it to
+ * `valp`.
+ *
+ * When the reference is reclaimed, the wrapped data is cleaned up with the
+ * provided finalizer. If you do not need to clean up the wrapped data, then use
+ * #wasmtime_externref_new.
+ */
+WASM_API_EXTERN void wasmtime_externref_new_with_finalizer(
+    void *data,
+    wasmtime_externref_finalizer_t finalizer,
+    wasm_val_t *valp
+);
+
+/**
+ * \brief Get an `externref`'s wrapped data
+ *
+ * If the given value is a reference to a non-null `externref`, writes the
+ * wrapped data that was passed into #wasmtime_externref_new or
+ * #wasmtime_externref_new_with_finalizer when creating the given `externref` to
+ * `datap`, and returns `true`.
+ *
+ * If the value is a reference to a null `externref`, writes `NULL` to `datap`
+ * and returns `true`.
+ *
+ * If the given value is not an `externref`, returns `false` and leaves `datap`
+ * unmodified.
+ *
+ * Does not take ownership of `val`.
+ *
+ * Both `val` and `datap` must not be `NULL`.
+ */
+WASM_API_EXTERN bool wasmtime_externref_data(wasm_val_t* val, void** datap);
 
 #undef own
 
