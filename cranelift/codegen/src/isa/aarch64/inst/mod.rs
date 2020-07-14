@@ -209,12 +209,16 @@ pub enum VecExtendOp {
 pub enum VecALUOp {
     /// Signed saturating add
     SQAddScalar,
+    Sqadd,
     /// Unsigned saturating add
     UQAddScalar,
+    Uqadd,
     /// Signed saturating subtract
     SQSubScalar,
+    Sqsub,
     /// Unsigned saturating subtract
     UQSubScalar,
+    Uqsub,
     /// Compare bitwise equal
     Cmeq,
     /// Compare signed greater than or equal
@@ -2755,9 +2759,13 @@ impl Inst {
             } => {
                 let (op, vector, ty) = match alu_op {
                     VecALUOp::SQAddScalar => ("sqadd", false, ty),
+                    VecALUOp::Sqadd => ("sqadd", true, ty),
                     VecALUOp::UQAddScalar => ("uqadd", false, ty),
+                    VecALUOp::Uqadd => ("uqadd", true, ty),
                     VecALUOp::SQSubScalar => ("sqsub", false, ty),
+                    VecALUOp::Sqsub => ("sqsub", true, ty),
                     VecALUOp::UQSubScalar => ("uqsub", false, ty),
+                    VecALUOp::Uqsub => ("uqsub", true, ty),
                     VecALUOp::Cmeq => ("cmeq", true, ty),
                     VecALUOp::Cmge => ("cmge", true, ty),
                     VecALUOp::Cmgt => ("cmgt", true, ty),
