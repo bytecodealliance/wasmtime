@@ -2509,7 +2509,7 @@ impl Inst {
                     ScalarSize::Size64 => F64,
                     _ => unimplemented!(),
                 };
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, size);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, size);
                 let rn = show_vreg_element(rn, mb_rru, idx, vector_type);
                 format!("mov {}, {}", rd, rn)
             }
@@ -2524,8 +2524,8 @@ impl Inst {
                     FPUOp1::Cvt32To64 => ("fcvt", ScalarSize::Size32, ScalarSize::Size64),
                     FPUOp1::Cvt64To32 => ("fcvt", ScalarSize::Size64, ScalarSize::Size32),
                 };
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, sizedest);
-                let rn = show_freg_sized(rn, mb_rru, sizesrc);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, sizedest);
+                let rn = show_vreg_scalar(rn, mb_rru, sizesrc);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::FpuRRR { fpu_op, rd, rn, rm } => {
@@ -2543,9 +2543,9 @@ impl Inst {
                     FPUOp2::Min32 => ("fmin", ScalarSize::Size32),
                     FPUOp2::Min64 => ("fmin", ScalarSize::Size64),
                 };
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, size);
-                let rn = show_freg_sized(rn, mb_rru, size);
-                let rm = show_freg_sized(rm, mb_rru, size);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, size);
+                let rn = show_vreg_scalar(rn, mb_rru, size);
+                let rm = show_vreg_scalar(rm, mb_rru, size);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
             &Inst::FpuRRI { fpu_op, rd, rn } => {
@@ -2559,7 +2559,7 @@ impl Inst {
                 let show_vreg_fn: fn(Reg, Option<&RealRegUniverse>) -> String = if vector {
                     |reg, mb_rru| show_vreg_vector(reg, mb_rru, F32X2)
                 } else {
-                    |reg, mb_rru| show_vreg_scalar(reg, mb_rru, F64)
+                    |reg, mb_rru| show_vreg_scalar(reg, mb_rru, ScalarSize::Size64)
                 };
                 let rd = show_vreg_fn(rd.to_reg(), mb_rru);
                 let rn = show_vreg_fn(rn, mb_rru);
@@ -2576,30 +2576,30 @@ impl Inst {
                     FPUOp3::MAdd32 => ("fmadd", ScalarSize::Size32),
                     FPUOp3::MAdd64 => ("fmadd", ScalarSize::Size64),
                 };
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, size);
-                let rn = show_freg_sized(rn, mb_rru, size);
-                let rm = show_freg_sized(rm, mb_rru, size);
-                let ra = show_freg_sized(ra, mb_rru, size);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, size);
+                let rn = show_vreg_scalar(rn, mb_rru, size);
+                let rm = show_vreg_scalar(rm, mb_rru, size);
+                let ra = show_vreg_scalar(ra, mb_rru, size);
                 format!("{} {}, {}, {}, {}", op, rd, rn, rm, ra)
             }
             &Inst::FpuCmp32 { rn, rm } => {
-                let rn = show_freg_sized(rn, mb_rru, ScalarSize::Size32);
-                let rm = show_freg_sized(rm, mb_rru, ScalarSize::Size32);
+                let rn = show_vreg_scalar(rn, mb_rru, ScalarSize::Size32);
+                let rm = show_vreg_scalar(rm, mb_rru, ScalarSize::Size32);
                 format!("fcmp {}, {}", rn, rm)
             }
             &Inst::FpuCmp64 { rn, rm } => {
-                let rn = show_freg_sized(rn, mb_rru, ScalarSize::Size64);
-                let rm = show_freg_sized(rm, mb_rru, ScalarSize::Size64);
+                let rn = show_vreg_scalar(rn, mb_rru, ScalarSize::Size64);
+                let rm = show_vreg_scalar(rm, mb_rru, ScalarSize::Size64);
                 format!("fcmp {}, {}", rn, rm)
             }
             &Inst::FpuLoad32 { rd, ref mem, .. } => {
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, ScalarSize::Size32);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, ScalarSize::Size32);
                 let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
                 let mem = mem.show_rru(mb_rru);
                 format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuLoad64 { rd, ref mem, .. } => {
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, ScalarSize::Size64);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, ScalarSize::Size64);
                 let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
                 let mem = mem.show_rru(mb_rru);
                 format!("{}ldr {}, {}", mem_str, rd, mem)
@@ -2612,13 +2612,13 @@ impl Inst {
                 format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore32 { rd, ref mem, .. } => {
-                let rd = show_freg_sized(rd, mb_rru, ScalarSize::Size32);
+                let rd = show_vreg_scalar(rd, mb_rru, ScalarSize::Size32);
                 let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
                 let mem = mem.show_rru(mb_rru);
                 format!("{}str {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore64 { rd, ref mem, .. } => {
-                let rd = show_freg_sized(rd, mb_rru, ScalarSize::Size64);
+                let rd = show_vreg_scalar(rd, mb_rru, ScalarSize::Size64);
                 let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
                 let mem = mem.show_rru(mb_rru);
                 format!("{}str {}, {}", mem_str, rd, mem)
@@ -2631,15 +2631,15 @@ impl Inst {
                 format!("{}str {}, {}", mem_str, rd, mem)
             }
             &Inst::LoadFpuConst32 { rd, const_data } => {
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, ScalarSize::Size32);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, ScalarSize::Size32);
                 format!("ldr {}, pc+8 ; b 8 ; data.f32 {}", rd, const_data)
             }
             &Inst::LoadFpuConst64 { rd, const_data } => {
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, ScalarSize::Size64);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, ScalarSize::Size64);
                 format!("ldr {}, pc+8 ; b 12 ; data.f64 {}", rd, const_data)
             }
             &Inst::LoadFpuConst128 { rd, const_data } => {
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, ScalarSize::Size128);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, ScalarSize::Size128);
                 format!("ldr {}, pc+8 ; b 20 ; data.f128 0x{:032x}", rd, const_data)
             }
             &Inst::FpuToInt { op, rd, rn } => {
@@ -2654,7 +2654,7 @@ impl Inst {
                     FpuToIntOp::F64ToU64 => ("fcvtzu", ScalarSize::Size64, OperandSize::Size64),
                 };
                 let rd = show_ireg_sized(rd.to_reg(), mb_rru, sizedest);
-                let rn = show_freg_sized(rn, mb_rru, sizesrc);
+                let rn = show_vreg_scalar(rn, mb_rru, sizesrc);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::IntToFpu { op, rd, rn } => {
@@ -2668,21 +2668,21 @@ impl Inst {
                     IntToFpuOp::I64ToF64 => ("scvtf", OperandSize::Size64, ScalarSize::Size64),
                     IntToFpuOp::U64ToF64 => ("ucvtf", OperandSize::Size64, ScalarSize::Size64),
                 };
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, sizedest);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, sizedest);
                 let rn = show_ireg_sized(rn, mb_rru, sizesrc);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::FpuCSel32 { rd, rn, rm, cond } => {
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, ScalarSize::Size32);
-                let rn = show_freg_sized(rn, mb_rru, ScalarSize::Size32);
-                let rm = show_freg_sized(rm, mb_rru, ScalarSize::Size32);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, ScalarSize::Size32);
+                let rn = show_vreg_scalar(rn, mb_rru, ScalarSize::Size32);
+                let rm = show_vreg_scalar(rm, mb_rru, ScalarSize::Size32);
                 let cond = cond.show_rru(mb_rru);
                 format!("fcsel {}, {}, {}, {}", rd, rn, rm, cond)
             }
             &Inst::FpuCSel64 { rd, rn, rm, cond } => {
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, ScalarSize::Size64);
-                let rn = show_freg_sized(rn, mb_rru, ScalarSize::Size64);
-                let rm = show_freg_sized(rm, mb_rru, ScalarSize::Size64);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, ScalarSize::Size64);
+                let rn = show_vreg_scalar(rn, mb_rru, ScalarSize::Size64);
+                let rm = show_vreg_scalar(rm, mb_rru, ScalarSize::Size64);
                 let cond = cond.show_rru(mb_rru);
                 format!("fcsel {}, {}, {}, {}", rd, rn, rm, cond)
             }
@@ -2697,8 +2697,8 @@ impl Inst {
                     FpuRoundMode::Nearest32 => ("frintn", ScalarSize::Size32),
                     FpuRoundMode::Nearest64 => ("frintn", ScalarSize::Size64),
                 };
-                let rd = show_freg_sized(rd.to_reg(), mb_rru, size);
-                let rn = show_freg_sized(rn, mb_rru, size);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, size);
+                let rn = show_vreg_scalar(rn, mb_rru, size);
                 format!("{} {}, {}", inst, rd, rn)
             }
             &Inst::MovToVec64 { rd, rn } => {
@@ -2790,7 +2790,7 @@ impl Inst {
                 let show_vreg_fn: fn(Reg, Option<&RealRegUniverse>, Type) -> String = if vector {
                     |reg, mb_rru, ty| show_vreg_vector(reg, mb_rru, ty)
                 } else {
-                    |reg, mb_rru, _ty| show_vreg_scalar(reg, mb_rru, I64)
+                    |reg, mb_rru, _ty| show_vreg_scalar(reg, mb_rru, ScalarSize::Size64)
                 };
 
                 let rd = show_vreg_fn(rd.to_reg(), mb_rru, ty);
@@ -2812,8 +2812,14 @@ impl Inst {
                 let op = match op {
                     VecLanesOp::Uminv => "uminv",
                 };
+                let size = match ty {
+                    I8X16 => ScalarSize::Size8,
+                    I16X8 => ScalarSize::Size16,
+                    I32X4 => ScalarSize::Size32,
+                    _ => unimplemented!(),
+                };
 
-                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, ty);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, size);
                 let rn = show_vreg_vector(rn, mb_rru, ty);
                 format!("{} {}, {}", op, rd, rn)
             }

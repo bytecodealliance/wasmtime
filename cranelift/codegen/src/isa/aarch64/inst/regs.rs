@@ -277,25 +277,8 @@ pub fn show_ireg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, size: Operand
     s
 }
 
-/// Show a vector register.
-pub fn show_freg_sized(reg: Reg, mb_rru: Option<&RealRegUniverse>, size: ScalarSize) -> String {
-    let mut s = reg.show_rru(mb_rru);
-    if reg.get_class() != RegClass::V128 {
-        return s;
-    }
-    let prefix = match size {
-        ScalarSize::Size8 => "b",
-        ScalarSize::Size16 => "h",
-        ScalarSize::Size32 => "s",
-        ScalarSize::Size64 => "d",
-        ScalarSize::Size128 => "q",
-    };
-    s.replace_range(0..1, prefix);
-    s
-}
-
 /// Show a vector register used in a scalar context.
-pub fn show_vreg_scalar(reg: Reg, mb_rru: Option<&RealRegUniverse>, ty: Type) -> String {
+pub fn show_vreg_scalar(reg: Reg, mb_rru: Option<&RealRegUniverse>, size: ScalarSize) -> String {
     let mut s = reg.show_rru(mb_rru);
     if reg.get_class() != RegClass::V128 {
         // We can't do any better.
@@ -304,13 +287,13 @@ pub fn show_vreg_scalar(reg: Reg, mb_rru: Option<&RealRegUniverse>, ty: Type) ->
 
     if reg.is_real() {
         // Change (eg) "v0" into "d0".
-        if reg.get_class() == RegClass::V128 && s.starts_with("v") {
-            let replacement = match ty {
-                I64 | F64 => "d",
-                I8X16 => "b",
-                I16X8 => "h",
-                I32X4 => "s",
-                _ => unimplemented!(),
+        if s.starts_with("v") {
+            let replacement = match size {
+                ScalarSize::Size8 => "b",
+                ScalarSize::Size16 => "h",
+                ScalarSize::Size32 => "s",
+                ScalarSize::Size64 => "d",
+                ScalarSize::Size128 => "q",
             };
             s.replace_range(0..1, replacement);
         }
