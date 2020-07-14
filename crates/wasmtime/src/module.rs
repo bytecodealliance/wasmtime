@@ -1,7 +1,7 @@
 use crate::frame_info::GlobalFrameInfoRegistration;
-use crate::runtime::Engine;
+use crate::runtime::{Config, Engine};
 use crate::types::{EntityType, ExportType, ExternType, ImportType};
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use wasmtime_jit::{CompilationArtifacts, CompiledModule};
@@ -309,22 +309,16 @@ impl Module {
         })
     }
 
-    /// Compile and write artifacts in I/O.
-    pub fn compile_and_serialize(
-        engine: &Engine,
-        bytes: impl AsRef<[u8]>,
-        w: impl std::io::Write,
-    ) -> Result<()> {
-        #[cfg(feature = "wat")]
-        let bytes = wat::parse_bytes(bytes.as_ref())?;
-        Self::validate(engine, bytes.as_ref())?;
-        let artifacts = CompilationArtifacts::build(engine.compiler(), bytes.as_ref())?;
-        Ok(serde_yaml::to_writer(w, &artifacts)?)
-    }
-
     /// Read compiled module from I/O.
     pub unsafe fn deserialize(engine: &Engine, r: impl std::io::Read) -> Result<Module> {
-        let artifacts = serde_yaml::from_reader(r)?;
+        let expected_fingerprint = compiler_fingerprint(engine.config());
+
+        let (fingerprint, artifacts) =
+            bincode::deserialize_from::<_, (u64, CompilationArtifacts)>(r)
+                .context("Deserialize compilation artifacts")?;
+        if fingerprint != expected_fingerprint {
+            bail!("Incompatible compilation artifact");
+        }
 
         let compiled = CompiledModule::from_artifacts(
             artifacts,
@@ -563,6 +557,33 @@ impl Module {
         *info = Some(ret.clone());
         return ret;
     }
+}
+
+fn compiler_fingerprint(config: &Config) -> u64 {
+    use std::hash::Hasher;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    config.compiler_fingerprint(&mut hasher);
+    hasher.finish()
+}
+
+/// Compile and write artifacts in I/O.
+pub fn compile_and_serialize(
+    engine: &Engine,
+    bytes: impl AsRef<[u8]>,
+    w: impl std::io::Write,
+) -> Result<()> {
+    #[cfg(feature = "wat")]
+    let bytes = wat::parse_bytes(bytes.as_ref())?;
+
+    Module::validate(engine, bytes.as_ref())?;
+    let artifacts = (
+        compiler_fingerprint(engine.config()),
+        CompilationArtifacts::build(engine.compiler(), bytes.as_ref())?,
+    );
+
+    bincode::serialize_into(w, &artifacts)?;
+
+    Ok(())
 }
 
 fn _assert_send_sync() {

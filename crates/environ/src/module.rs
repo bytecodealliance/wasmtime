@@ -140,7 +140,7 @@ impl TablePlan {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Module {
     /// A unique identifier (within this process) for this module.
-    #[serde(skip_serializing, default = "Module::next_id")]
+    #[serde(skip_serializing, skip_deserializing, default = "Module::next_id")]
     pub id: usize,
 
     /// The name of this wasm module, often found in the wasm file.
