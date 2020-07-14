@@ -193,7 +193,7 @@ pub trait MachInst: Clone + Debug {
 
     /// What is the register class used for reference types (GC-observable pointers)? Can
     /// be dependent on compilation flags.
-    fn ref_type_rc(_flags: &Flags) -> RegClass;
+    fn ref_type_regclass(_flags: &Flags) -> RegClass;
 
     /// A label-use kind: a type that describes the types of label references that
     /// can occur in an instruction.

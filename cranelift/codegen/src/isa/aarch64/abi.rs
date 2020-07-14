@@ -404,7 +404,8 @@ fn in_int_reg(ty: ir::Type) -> bool {
     match ty {
         types::I8 | types::I16 | types::I32 | types::I64 => true,
         types::B1 | types::B8 | types::B16 | types::B32 | types::B64 => true,
-        types::R32 | types::R64 => true,
+        types::R64 => true,
+        types::R32 => panic!("Unexpected 32-bit reference on a 64-bit platform!"),
         _ => false,
     }
 }
@@ -1134,7 +1135,8 @@ impl ABIBody for AArch64ABIBody {
         }
 
         // N.B.: "nominal SP", which we use to refer to stackslots and
-        // spillslots, is right here.
+        // spillslots, is defined to be equal to the stack pointer at this point
+        // in the prologue.
         //
         // If we push any clobbers below, we emit a virtual-SP adjustment
         // meta-instruction so that the nominal-SP references behave as if SP
@@ -1322,9 +1324,21 @@ impl ABIBody for AArch64ABIBody {
     }
 }
 
+/// Return a type either from an optional type hint, or if not, from the default
+/// type associated with the given register's class. This is used to generate
+/// loads/spills appropriately given the type of value loaded/stored (which may
+/// be narrower than the spillslot). We usually have the type because the
+/// regalloc usually provides the vreg being spilled/reloaded, and we know every
+/// vreg's type. However, the regalloc *can* request a spill/reload without an
+/// associated vreg when needed to satisfy a safepoint (which requires all
+/// ref-typed values, even those in real registers in the original vcode, to be
+/// in spillslots).
 fn ty_from_ty_hint_or_reg_class(r: Reg, ty: Option<Type>) -> Type {
     match (ty, r.get_class()) {
+        // If the type is provided
         (Some(t), _) => t,
+        // If no type is provided, this should be a register spill for a
+        // safepoint, so we only expect I64 (integer) registers.
         (None, RegClass::I64) => I64,
         _ => panic!("Unexpected register class!"),
     }

@@ -1258,7 +1258,7 @@ impl MachInst for Inst {
         15
     }
 
-    fn ref_type_rc(_: &settings::Flags) -> RegClass {
+    fn ref_type_regclass(_: &settings::Flags) -> RegClass {
         RegClass::I64
     }
 

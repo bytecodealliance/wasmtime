@@ -588,9 +588,21 @@ impl ABIBody for X64ABIBody {
     }
 }
 
+/// Return a type either from an optional type hint, or if not, from the default
+/// type associated with the given register's class. This is used to generate
+/// loads/spills appropriately given the type of value loaded/stored (which may
+/// be narrower than the spillslot). We usually have the type because the
+/// regalloc usually provides the vreg being spilled/reloaded, and we know every
+/// vreg's type. However, the regalloc *can* request a spill/reload without an
+/// associated vreg when needed to satisfy a safepoint (which requires all
+/// ref-typed values, even those in real registers in the original vcode, to be
+/// in spillslots).
 fn ty_from_ty_hint_or_reg_class(r: Reg, ty: Option<Type>) -> Type {
     match (ty, r.get_class()) {
+        // If the type is provided
         (Some(t), _) => t,
+        // If no type is provided, this should be a register spill for a
+        // safepoint, so we only expect I64 (integer) registers.
         (None, RegClass::I64) => I64,
         _ => panic!("Unexpected register class!"),
     }

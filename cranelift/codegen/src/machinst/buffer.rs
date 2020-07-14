@@ -1318,8 +1318,9 @@ pub struct MachSrcLoc {
 pub struct MachStackMap {
     /// The code offset at which this stackmap applies.
     pub offset: CodeOffset,
-    /// The code offset at the *end* of the instruction at which this stackmap
-    /// applies.
+    /// The code offset just past the "end" of the instruction: that is, the
+    /// offset of the first byte of the following instruction, or equivalently,
+    /// the start offset plus the instruction length.
     pub offset_end: CodeOffset,
     /// The Stackmap itself.
     pub stackmap: Stackmap,

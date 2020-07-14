@@ -12,18 +12,7 @@ block0(v0: r64):
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
-function %f1(r32) -> r32 {
-block0(v0: r32):
-  return v0
-}
-
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: mov sp, fp
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
-
-function %f2(r64) -> b1 {
+function %f1(r64) -> b1 {
 block0(v0: r64):
   v1 = is_null v0
   return v1
@@ -37,7 +26,7 @@ block0(v0: r64):
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
-function %f3(r64) -> b1 {
+function %f2(r64) -> b1 {
 block0(v0: r64):
   v1 = is_invalid v0
   return v1
@@ -51,7 +40,7 @@ block0(v0: r64):
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
-function %f4() -> r64 {
+function %f3() -> r64 {
 block0:
   v0 = null.r64
   return v0
@@ -64,7 +53,7 @@ block0:
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
-function %f5(r64, r64) -> r64, r64, r64 {
+function %f4(r64, r64) -> r64, r64, r64 {
     fn0 = %f(r64) -> b1
     ss0 = explicit_slot 8
 

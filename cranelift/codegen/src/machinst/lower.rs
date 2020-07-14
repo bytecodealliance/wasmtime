@@ -4,7 +4,6 @@
 
 use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
-use crate::inst_predicates::is_safepoint;
 use crate::inst_predicates::{has_side_effect_or_load, is_constant_64bit};
 use crate::ir::instructions::BranchInfo;
 use crate::ir::types::I64;
@@ -94,8 +93,6 @@ pub trait LowerCtx {
     /// every side-effecting op; the backend should not try to merge across
     /// side-effect colors unless the op being merged is known to be pure.
     fn inst_color(&self, ir_inst: Inst) -> InstColor;
-    /// Determine whether an instruction is a safepoint.
-    fn is_safepoint(&self, ir_inst: Inst) -> bool;
 
     // Instruction input/output queries:
 
@@ -897,13 +894,6 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
 
     fn inst_color(&self, ir_inst: Inst) -> InstColor {
         self.inst_colors[ir_inst]
-    }
-
-    fn is_safepoint(&self, ir_inst: Inst) -> bool {
-        // There is no safepoint metadata at all if we have no reftyped values
-        // in this function; lack of metadata implies "nothing to trace", and
-        // avoids overhead.
-        self.vcode.have_ref_values() && is_safepoint(self.f, ir_inst)
     }
 
     fn num_inputs(&self, ir_inst: Inst) -> usize {

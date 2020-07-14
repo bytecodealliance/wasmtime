@@ -132,7 +132,7 @@ pub struct VCodeBuilder<I: VCodeInst> {
 impl<I: VCodeInst> VCodeBuilder<I> {
     /// Create a new VCodeBuilder.
     pub fn new(abi: Box<dyn ABIBody<I = I>>, block_order: BlockLoweringOrder) -> VCodeBuilder<I> {
-        let reftype_class = I::ref_type_rc(abi.flags());
+        let reftype_class = I::ref_type_regclass(abi.flags());
         let vcode = VCode::new(abi, block_order);
         let stackmap_info = StackmapRequestInfo {
             reftype_class,
@@ -257,7 +257,7 @@ fn is_redundant_move<I: VCodeInst>(insn: &I) -> bool {
 
 /// Is this type a reference type?
 fn is_reftype(ty: Type) -> bool {
-    ty == types::R32 || ty == types::R64
+    ty == types::R64 || ty == types::R32
 }
 
 impl<I: VCodeInst> VCode<I> {
