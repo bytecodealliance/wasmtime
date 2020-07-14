@@ -82,9 +82,13 @@ struct FunctionInfo {
 impl CompilationArtifacts {
     /// Builds compilation artifacts.
     pub fn build(compiler: &Compiler, data: &[u8]) -> Result<Self, SetupError> {
-        let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
+        let environ = ModuleEnvironment::new(
+            compiler.frontend_config(),
+            compiler.tunables(),
+            compiler.features(),
+        );
 
-        let translation = environ
+        let mut translation = environ
             .translate(data)
             .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
 
@@ -92,7 +96,7 @@ impl CompilationArtifacts {
             obj,
             unwind_info,
             funcs,
-        } = compiler.compile(&translation)?;
+        } = compiler.compile(&mut translation)?;
 
         let ModuleTranslation {
             module,

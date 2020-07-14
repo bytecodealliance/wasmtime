@@ -4,9 +4,6 @@ use cranelift_codegen::settings::{self, Flags};
 use cranelift_codegen::verifier;
 use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ReturnMode};
 use std::fs;
-use std::fs::File;
-use std::io;
-use std::io::prelude::*;
 use std::path::Path;
 use std::str::FromStr;
 use target_lexicon::triple;
@@ -69,20 +66,13 @@ fn use_name_section() {
     );
 }
 
-fn read_file(path: &Path) -> io::Result<Vec<u8>> {
-    let mut buf: Vec<u8> = Vec::new();
-    let mut file = File::open(path)?;
-    file.read_to_end(&mut buf)?;
-    Ok(buf)
-}
-
 fn read_module(path: &Path) -> Vec<u8> {
     match path.extension() {
         None => {
             panic!("the file extension is not wasm or wat");
         }
         Some(ext) => match ext.to_str() {
-            Some("wasm") => read_file(path).expect("error reading wasm file"),
+            Some("wasm") => std::fs::read(path).expect("error reading wasm file"),
             Some("wat") => wat::parse_file(path)
                 .map_err(|e| e.to_string())
                 .expect("failed to parse wat"),

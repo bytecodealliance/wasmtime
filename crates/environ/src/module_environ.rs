@@ -15,12 +15,14 @@ use std::convert::TryFrom;
 use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::Type as WasmType;
+use wasmparser::{FuncValidator, FunctionBody, ValidatorResources, WasmFeatures};
 
 /// Object containing the standalone environment information.
 pub struct ModuleEnvironment<'data> {
     /// The result to be filled in.
     result: ModuleTranslation<'data>,
     code_index: u32,
+    features: WasmFeatures,
 }
 
 /// The result of translating via `ModuleEnvironment`. Function bodies are not
@@ -50,13 +52,11 @@ pub struct ModuleTranslation<'data> {
 }
 
 /// Contains function data: byte code and its offset in the module.
-#[derive(Hash)]
 pub struct FunctionBodyData<'a> {
-    /// Body byte code.
-    pub data: &'a [u8],
-
-    /// Body offset in the module file.
-    pub module_offset: usize,
+    /// The body of the function, containing code and locals.
+    pub body: FunctionBody<'a>,
+    /// Validator for the function body
+    pub validator: FuncValidator<ValidatorResources>,
 }
 
 #[derive(Debug, Default)]
@@ -102,7 +102,11 @@ pub struct FunctionMetadata {
 
 impl<'data> ModuleEnvironment<'data> {
     /// Allocates the environment data structures.
-    pub fn new(target_config: TargetFrontendConfig, tunables: &Tunables) -> Self {
+    pub fn new(
+        target_config: TargetFrontendConfig,
+        tunables: &Tunables,
+        features: &WasmFeatures,
+    ) -> Self {
         Self {
             result: ModuleTranslation {
                 target_config,
@@ -118,6 +122,7 @@ impl<'data> ModuleEnvironment<'data> {
                 },
             },
             code_index: 0,
+            features: *features,
         }
     }
 
@@ -442,21 +447,15 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
 
     fn define_function_body(
         &mut self,
-        _module_translation: &ModuleTranslationState,
-        body_bytes: &'data [u8],
-        body_offset: usize,
+        validator: FuncValidator<ValidatorResources>,
+        body: FunctionBody<'data>,
     ) -> WasmResult<()> {
-        self.result.function_body_inputs.push(FunctionBodyData {
-            data: body_bytes,
-            module_offset: body_offset,
-        });
         if let Some(info) = &mut self.result.debuginfo {
             let func_index = self.code_index + self.result.module.num_imported_funcs as u32;
             let func_index = FuncIndex::from_u32(func_index);
             let sig_index = self.result.module.functions[func_index];
             let sig = &self.result.module.signatures[sig_index];
             let mut locals = Vec::new();
-            let body = wasmparser::FunctionBody::new(body_offset, body_bytes);
             for pair in body.get_locals_reader()? {
                 locals.push(pair?);
             }
@@ -465,6 +464,9 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
                 params: sig.0.params.iter().cloned().map(|i| i.into()).collect(),
             });
         }
+        self.result
+            .function_body_inputs
+            .push(FunctionBodyData { validator, body });
         self.code_index += 1;
         Ok(())
     }
@@ -563,6 +565,10 @@ and for re-adding support for interface types you can see this issue:
             // skip other sections
             _ => Ok(()),
         }
+    }
+
+    fn wasm_features(&self) -> WasmFeatures {
+        self.features
     }
 }
 

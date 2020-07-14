@@ -26,7 +26,7 @@ use wasmparser::{
     self, Data, DataKind, DataSectionReader, Element, ElementItem, ElementItems, ElementKind,
     ElementSectionReader, Export, ExportSectionReader, ExternalKind, FunctionSectionReader,
     GlobalSectionReader, GlobalType, ImportSectionEntryType, ImportSectionReader,
-    MemorySectionReader, MemoryType, NameSectionReader, Naming, Operator, TableSectionReader, Type,
+    MemorySectionReader, MemoryType, NameSectionReader, Naming, Operator, TableSectionReader,
     TypeDef, TypeSectionReader,
 };
 
@@ -88,7 +88,7 @@ pub fn parse_import_section<'data>(
             ImportSectionEntryType::Module(_sig) | ImportSectionEntryType::Instance(_sig) => {
                 unimplemented!("module linking not implemented yet")
             }
-            ImportSectionEntryType::Memory(MemoryType {
+            ImportSectionEntryType::Memory(MemoryType::M32 {
                 limits: ref memlimits,
                 shared,
             }) => {
@@ -101,6 +101,9 @@ pub fn parse_import_section<'data>(
                     module_name,
                     field_name,
                 )?;
+            }
+            ImportSectionEntryType::Memory(MemoryType::M64 { .. }) => {
+                unimplemented!();
             }
             ImportSectionEntryType::Global(ref ty) => {
                 environ.declare_global_import(
@@ -189,11 +192,16 @@ pub fn parse_memory_section(
 
     for entry in memories {
         let memory = entry?;
-        environ.declare_memory(Memory {
-            minimum: memory.limits.initial,
-            maximum: memory.limits.maximum,
-            shared: memory.shared,
-        })?;
+        match memory {
+            MemoryType::M32 { limits, shared } => {
+                environ.declare_memory(Memory {
+                    minimum: limits.initial,
+                    maximum: limits.maximum,
+                    shared: shared,
+                })?;
+            }
+            MemoryType::M64 { .. } => unimplemented!(),
+        }
     }
 
     Ok(())
@@ -313,13 +321,7 @@ pub fn parse_element_section<'data>(
     environ.reserve_table_elements(elements.get_count())?;
 
     for (index, entry) in elements.into_iter().enumerate() {
-        let Element { kind, items, ty } = entry?;
-        if ty != Type::FuncRef {
-            return Err(wasm_unsupported!(
-                "unsupported table element type: {:?}",
-                ty
-            ));
-        }
+        let Element { kind, items, ty: _ } = entry?;
         let segments = read_elems(&items)?;
         match kind {
             ElementKind::Active {

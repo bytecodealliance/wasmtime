@@ -103,7 +103,7 @@ pub trait Compiler: Send + Sync {
         &self,
         translation: &ModuleTranslation<'_>,
         index: DefinedFuncIndex,
-        data: &FunctionBodyData<'_>,
+        data: FunctionBodyData<'_>,
         isa: &dyn isa::TargetIsa,
     ) -> Result<CompiledFunction, CompileError>;
 }

@@ -24,7 +24,7 @@ impl Compiler for Lightbeam {
         &self,
         translation: &ModuleTranslation,
         i: DefinedFuncIndex,
-        function_body: &FunctionBodyData<'_>,
+        function_body: FunctionBodyData<'_>,
         isa: &dyn isa::TargetIsa,
     ) -> Result<CompiledFunction, CompileError> {
         if translation.tunables.debug_info {
@@ -49,7 +49,7 @@ impl Compiler for Lightbeam {
                 offsets: &mut NullOffsetSink,
             },
             i.as_u32(),
-            wasmparser::FunctionBody::new(0, function_body.data),
+            function_body.body,
         )
         .map_err(|e| CompileError::Codegen(format!("Failed to translate function: {}", e)))?;
 

@@ -6,7 +6,7 @@
 //!
 //! [Wasmtime]: https://github.com/bytecodealliance/wasmtime
 
-use crate::state::{FuncTranslationState, ModuleTranslationState};
+use crate::state::FuncTranslationState;
 use crate::translation_utils::{
     DataIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex,
     Table, TableIndex,
@@ -23,8 +23,8 @@ use serde::{Deserialize, Serialize};
 use std::boxed::Box;
 use std::string::ToString;
 use thiserror::Error;
-use wasmparser::BinaryReaderError;
-use wasmparser::Operator;
+use wasmparser::ValidatorResources;
+use wasmparser::{BinaryReaderError, FuncValidator, FunctionBody, Operator, WasmFeatures};
 
 /// WebAssembly value type -- equivalent of `wasmparser`'s Type.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -798,9 +798,8 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
     /// Provides the contents of a function body.
     fn define_function_body(
         &mut self,
-        module_translation_state: &ModuleTranslationState,
-        body_bytes: &'data [u8],
-        body_offset: usize,
+        validator: FuncValidator<ValidatorResources>,
+        body: FunctionBody<'data>,
     ) -> WasmResult<()>;
 
     /// Provides the number of data initializers up front. By default this does nothing, but
@@ -840,5 +839,10 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
     /// Indicates that a custom section has been found in the wasm file
     fn custom_section(&mut self, _name: &'data str, _data: &'data [u8]) -> WasmResult<()> {
         Ok(())
+    }
+
+    /// Returns the list of enabled wasm features this translation will be using.
+    fn wasm_features(&self) -> WasmFeatures {
+        WasmFeatures::default()
     }
 }
