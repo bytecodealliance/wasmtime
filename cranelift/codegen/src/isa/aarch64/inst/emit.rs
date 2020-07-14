@@ -1311,18 +1311,22 @@ impl MachInstEmit for Inst {
                         debug_assert_eq!(I64, ty);
                         (0b010_11110_11_1, 0b000011)
                     }
+                    VecALUOp::Sqadd => (0b010_01110_00_1 | enc_size << 1, 0b000011),
                     VecALUOp::SQSubScalar => {
                         debug_assert_eq!(I64, ty);
                         (0b010_11110_11_1, 0b001011)
                     }
+                    VecALUOp::Sqsub => (0b010_01110_00_1 | enc_size << 1, 0b001011),
                     VecALUOp::UQAddScalar => {
                         debug_assert_eq!(I64, ty);
                         (0b011_11110_11_1, 0b000011)
                     }
+                    VecALUOp::Uqadd => (0b011_01110_00_1 | enc_size << 1, 0b000011),
                     VecALUOp::UQSubScalar => {
                         debug_assert_eq!(I64, ty);
                         (0b011_11110_11_1, 0b001011)
                     }
+                    VecALUOp::Uqsub => (0b011_01110_00_1 | enc_size << 1, 0b001011),
                     VecALUOp::Cmeq => (0b011_01110_00_1 | enc_size << 1, 0b100011),
                     VecALUOp::Cmge => (0b010_01110_00_1 | enc_size << 1, 0b001111),
                     VecALUOp::Cmgt => (0b010_01110_00_1 | enc_size << 1, 0b001101),

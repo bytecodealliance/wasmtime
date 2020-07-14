@@ -2051,6 +2051,198 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::VecRRR {
+            alu_op: VecALUOp::Sqadd,
+            rd: writable_vreg(1),
+            rn: vreg(2),
+            rm: vreg(8),
+            ty: I8X16,
+        },
+        "410C284E",
+        "sqadd v1.16b, v2.16b, v8.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sqadd,
+            rd: writable_vreg(1),
+            rn: vreg(12),
+            rm: vreg(28),
+            ty: I16X8,
+        },
+        "810D7C4E",
+        "sqadd v1.8h, v12.8h, v28.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sqadd,
+            rd: writable_vreg(12),
+            rn: vreg(2),
+            rm: vreg(6),
+            ty: I32X4,
+        },
+        "4C0CA64E",
+        "sqadd v12.4s, v2.4s, v6.4s",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sqadd,
+            rd: writable_vreg(20),
+            rn: vreg(7),
+            rm: vreg(13),
+            ty: I64X2,
+        },
+        "F40CED4E",
+        "sqadd v20.2d, v7.2d, v13.2d",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sqsub,
+            rd: writable_vreg(1),
+            rn: vreg(2),
+            rm: vreg(8),
+            ty: I8X16,
+        },
+        "412C284E",
+        "sqsub v1.16b, v2.16b, v8.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sqsub,
+            rd: writable_vreg(1),
+            rn: vreg(12),
+            rm: vreg(28),
+            ty: I16X8,
+        },
+        "812D7C4E",
+        "sqsub v1.8h, v12.8h, v28.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sqsub,
+            rd: writable_vreg(12),
+            rn: vreg(2),
+            rm: vreg(6),
+            ty: I32X4,
+        },
+        "4C2CA64E",
+        "sqsub v12.4s, v2.4s, v6.4s",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sqsub,
+            rd: writable_vreg(20),
+            rn: vreg(7),
+            rm: vreg(13),
+            ty: I64X2,
+        },
+        "F42CED4E",
+        "sqsub v20.2d, v7.2d, v13.2d",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Uqadd,
+            rd: writable_vreg(1),
+            rn: vreg(2),
+            rm: vreg(8),
+            ty: I8X16,
+        },
+        "410C286E",
+        "uqadd v1.16b, v2.16b, v8.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Uqadd,
+            rd: writable_vreg(1),
+            rn: vreg(12),
+            rm: vreg(28),
+            ty: I16X8,
+        },
+        "810D7C6E",
+        "uqadd v1.8h, v12.8h, v28.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Uqadd,
+            rd: writable_vreg(12),
+            rn: vreg(2),
+            rm: vreg(6),
+            ty: I32X4,
+        },
+        "4C0CA66E",
+        "uqadd v12.4s, v2.4s, v6.4s",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Uqadd,
+            rd: writable_vreg(20),
+            rn: vreg(7),
+            rm: vreg(13),
+            ty: I64X2,
+        },
+        "F40CED6E",
+        "uqadd v20.2d, v7.2d, v13.2d",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Uqsub,
+            rd: writable_vreg(1),
+            rn: vreg(2),
+            rm: vreg(8),
+            ty: I8X16,
+        },
+        "412C286E",
+        "uqsub v1.16b, v2.16b, v8.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Uqsub,
+            rd: writable_vreg(1),
+            rn: vreg(12),
+            rm: vreg(28),
+            ty: I16X8,
+        },
+        "812D7C6E",
+        "uqsub v1.8h, v12.8h, v28.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Uqsub,
+            rd: writable_vreg(12),
+            rn: vreg(2),
+            rm: vreg(6),
+            ty: I32X4,
+        },
+        "4C2CA66E",
+        "uqsub v12.4s, v2.4s, v6.4s",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Uqsub,
+            rd: writable_vreg(20),
+            rn: vreg(7),
+            rm: vreg(13),
+            ty: I64X2,
+        },
+        "F42CED6E",
+        "uqsub v20.2d, v7.2d, v13.2d",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
             alu_op: VecALUOp::Cmeq,
             rd: writable_vreg(3),
             rn: vreg(23),
