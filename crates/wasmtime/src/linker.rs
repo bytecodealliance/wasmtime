@@ -402,34 +402,53 @@ impl Linker {
     fn command(&mut self, module_name: &str, module: &Module) -> Result<&mut Self> {
         for export in module.exports() {
             if let Some(func_ty) = export.ty().func() {
-                let imports = self.compute_imports(module)?;
-                let store = self.store.clone();
+                let imports = self
+                    .compute_imports(module)?
+                    .into_iter()
+                    .map(|e| e.wasmtime_export())
+                    .collect::<Vec<_>>();
                 let module = module.clone();
                 let export_name = export.name().to_owned();
-                let func = Func::new(&self.store, func_ty.clone(), move |_, params, results| {
-                    // Create a new instance for this command execution.
-                    let instance = Instance::new(&store, &module, &imports)?;
+                let func = Func::new(
+                    &self.store,
+                    func_ty.clone(),
+                    move |caller, params, results| {
+                        let store = caller.store();
 
-                    // `unwrap()` everything here because we know the instance contains a
-                    // function export with the given name and signature because we're
-                    // iterating over the module it was instantiated from.
-                    let command_results = instance
-                        .get_export(&export_name)
-                        .unwrap()
-                        .into_func()
-                        .unwrap()
-                        .call(params)
-                        .map_err(|error| error.downcast::<Trap>().unwrap())?;
+                        // Note that the unsafety here is due to the validity of
+                        // `i` and the validity of `i` within `store`. For our
+                        // case though these items all come from `imports` above
+                        // so they're all valid. They're also all kept alive by
+                        // the store itself used here so this should be safe.
+                        let imports = imports
+                            .iter()
+                            .map(|i| unsafe { Extern::from_wasmtime_export(&i, &store) })
+                            .collect::<Vec<_>>();
 
-                    // Copy the return values into the output slice.
-                    for (result, command_result) in
-                        results.iter_mut().zip(command_results.into_vec())
-                    {
-                        *result = command_result;
-                    }
+                        // Create a new instance for this command execution.
+                        let instance = Instance::new(&store, &module, &imports)?;
 
-                    Ok(())
-                });
+                        // `unwrap()` everything here because we know the instance contains a
+                        // function export with the given name and signature because we're
+                        // iterating over the module it was instantiated from.
+                        let command_results = instance
+                            .get_export(&export_name)
+                            .unwrap()
+                            .into_func()
+                            .unwrap()
+                            .call(params)
+                            .map_err(|error| error.downcast::<Trap>().unwrap())?;
+
+                        // Copy the return values into the output slice.
+                        for (result, command_result) in
+                            results.iter_mut().zip(command_results.into_vec())
+                        {
+                            *result = command_result;
+                        }
+
+                        Ok(())
+                    },
+                );
                 self.insert(module_name, export.name(), func.into())?;
             } else if export.name() == "memory" && export.ty().memory().is_some() {
                 // Allow an exported "memory" memory for now.
