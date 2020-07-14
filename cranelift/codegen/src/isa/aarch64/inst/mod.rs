@@ -6,7 +6,7 @@
 use crate::binemit::CodeOffset;
 use crate::ir::types::{
     B1, B16, B16X8, B32, B32X4, B64, B64X2, B8, B8X16, F32, F32X2, F32X4, F64, F64X2, FFLAGS, I16,
-    I16X4, I16X8, I32, I32X2, I32X4, I64, I64X2, I8, I8X16, I8X8, IFLAGS,
+    I16X4, I16X8, I32, I32X2, I32X4, I64, I64X2, I8, I8X16, I8X8, IFLAGS, R32, R64,
 };
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
@@ -1346,11 +1346,11 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(rn);
         }
         &Inst::Jump { .. } | &Inst::Ret | &Inst::EpiloguePlaceholder => {}
-        &Inst::Call { ref info } => {
+        &Inst::Call { ref info, .. } => {
             collector.add_uses(&*info.uses);
             collector.add_defs(&*info.defs);
         }
-        &Inst::CallInd { ref info } => {
+        &Inst::CallInd { ref info, .. } => {
             collector.add_uses(&*info.uses);
             collector.add_defs(&*info.defs);
             collector.add_use(info.rn);
@@ -2081,6 +2081,8 @@ impl MachInst for Inst {
                     || ty == B32
                     || ty == I64
                     || ty == B64
+                    || ty == R32
+                    || ty == R64
             );
             Inst::load_constant(to_reg, value)
         }
@@ -2102,7 +2104,7 @@ impl MachInst for Inst {
 
     fn rc_for_type(ty: Type) -> CodegenResult<RegClass> {
         match ty {
-            I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 => Ok(RegClass::I64),
+            I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 | R32 | R64 => Ok(RegClass::I64),
             F32 | F64 => Ok(RegClass::V128),
             IFLAGS | FFLAGS => Ok(RegClass::I64),
             B8X16 | I8X16 | B16X8 | I16X8 | B32X4 | I32X4 | B64X2 | I64X2 | F32X4 | F64X2 => {
@@ -2135,13 +2137,21 @@ impl MachInst for Inst {
         // feasible for other reasons).
         44
     }
+
+    fn ref_type_regclass(_: &settings::Flags) -> RegClass {
+        RegClass::I64
+    }
 }
 
 //=============================================================================
 // Pretty-printing of instructions.
 
-fn mem_finalize_for_show(mem: &MemArg, mb_rru: Option<&RealRegUniverse>) -> (String, MemArg) {
-    let (mem_insts, mem) = mem_finalize(0, mem, &mut Default::default());
+fn mem_finalize_for_show(
+    mem: &MemArg,
+    mb_rru: Option<&RealRegUniverse>,
+    state: &EmitState,
+) -> (String, MemArg) {
+    let (mem_insts, mem) = mem_finalize(0, mem, state);
     let mut mem_str = mem_insts
         .into_iter()
         .map(|inst| inst.show_rru(mb_rru))
@@ -2156,6 +2166,12 @@ fn mem_finalize_for_show(mem: &MemArg, mb_rru: Option<&RealRegUniverse>) -> (Str
 
 impl ShowWithRRU for Inst {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
+        self.pretty_print(mb_rru, &mut EmitState::default())
+    }
+}
+
+impl Inst {
+    fn print_with_state(&self, mb_rru: Option<&RealRegUniverse>, state: &mut EmitState) -> String {
         fn op_name_size(alu_op: ALUOp) -> (&'static str, OperandSize) {
             match alu_op {
                 ALUOp::Add32 => ("add", OperandSize::Size32),
@@ -2342,7 +2358,7 @@ impl ShowWithRRU for Inst {
                 srcloc: _srcloc,
                 ..
             } => {
-                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
 
                 let is_unscaled = match &mem {
                     &MemArg::Unscaled(..) => true,
@@ -2390,7 +2406,7 @@ impl ShowWithRRU for Inst {
                 srcloc: _srcloc,
                 ..
             } => {
-                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
 
                 let is_unscaled = match &mem {
                     &MemArg::Unscaled(..) => true,
@@ -2574,39 +2590,39 @@ impl ShowWithRRU for Inst {
             }
             &Inst::FpuLoad32 { rd, ref mem, .. } => {
                 let rd = show_freg_sized(rd.to_reg(), mb_rru, ScalarSize::Size32);
-                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
                 let mem = mem.show_rru(mb_rru);
                 format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuLoad64 { rd, ref mem, .. } => {
                 let rd = show_freg_sized(rd.to_reg(), mb_rru, ScalarSize::Size64);
-                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
                 let mem = mem.show_rru(mb_rru);
                 format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuLoad128 { rd, ref mem, .. } => {
                 let rd = rd.to_reg().show_rru(mb_rru);
                 let rd = "q".to_string() + &rd[1..];
-                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
                 let mem = mem.show_rru(mb_rru);
                 format!("{}ldr {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore32 { rd, ref mem, .. } => {
                 let rd = show_freg_sized(rd, mb_rru, ScalarSize::Size32);
-                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
                 let mem = mem.show_rru(mb_rru);
                 format!("{}str {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore64 { rd, ref mem, .. } => {
                 let rd = show_freg_sized(rd, mb_rru, ScalarSize::Size64);
-                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
                 let mem = mem.show_rru(mb_rru);
                 format!("{}str {}, {}", mem_str, rd, mem)
             }
             &Inst::FpuStore128 { rd, ref mem, .. } => {
                 let rd = rd.show_rru(mb_rru);
                 let rd = "q".to_string() + &rd[1..];
-                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru);
+                let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
                 let mem = mem.show_rru(mb_rru);
                 format!("{}str {}, {}", mem_str, rd, mem)
             }
@@ -2976,7 +2992,7 @@ impl ShowWithRRU for Inst {
                 // this logic between `emit()` and `show_rru()` -- a separate 1-to-N
                 // expansion stage (i.e., legalization, but without the slow edit-in-place
                 // of the existing legalization framework).
-                let (mem_insts, mem) = mem_finalize(0, mem, &EmitState::default());
+                let (mem_insts, mem) = mem_finalize(0, mem, state);
                 let mut ret = String::new();
                 for inst in mem_insts.into_iter() {
                     ret.push_str(&inst.show_rru(mb_rru));
@@ -3023,7 +3039,10 @@ impl ShowWithRRU for Inst {
                 }
                 ret
             }
-            &Inst::VirtualSPOffsetAdj { offset } => format!("virtual_sp_offset_adjust {}", offset),
+            &Inst::VirtualSPOffsetAdj { offset } => {
+                state.virtual_sp_offset += offset;
+                format!("virtual_sp_offset_adjust {}", offset)
+            }
             &Inst::EmitIsland { needed_space } => format!("emit_island {}", needed_space),
         }
     }

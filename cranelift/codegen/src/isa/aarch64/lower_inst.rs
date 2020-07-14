@@ -1204,7 +1204,26 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::IsNull | Opcode::IsInvalid => {
-            panic!("Reference types not supported");
+            // Null references are represented by the constant value 0; invalid references are
+            // represented by the constant value -1. See `define_reftypes()` in
+            // `meta/src/isa/x86/encodings.rs` to confirm.
+            let rd = get_output_reg(ctx, outputs[0]);
+            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let ty = ctx.input_ty(insn, 0);
+            let (alu_op, const_value) = match op {
+                Opcode::IsNull => {
+                    // cmp rn, #0
+                    (choose_32_64(ty, ALUOp::SubS32, ALUOp::SubS64), 0)
+                }
+                Opcode::IsInvalid => {
+                    // cmn rn, #1
+                    (choose_32_64(ty, ALUOp::AddS32, ALUOp::AddS64), 1)
+                }
+                _ => unreachable!(),
+            };
+            let const_value = ResultRSEImm12::Imm12(Imm12::maybe_from_u64(const_value).unwrap());
+            ctx.emit(alu_inst_imm12(alu_op, writable_zero_reg(), rn, const_value));
+            ctx.emit(Inst::CSet { rd, cond: Cond::Eq });
         }
 
         Opcode::Copy => {
@@ -1215,6 +1234,21 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Bint | Opcode::Breduce | Opcode::Bextend | Opcode::Ireduce => {
+            // If this is a Bint from a Trueif/Trueff/IsNull/IsInvalid, then the result is already
+            // 64-bit-zero-extended, even if the CLIF type doesn't say so, because it was produced
+            // by a CSet. In this case, we do not need to do any zero-extension.
+            let input_info = ctx.get_input(insn, 0);
+            let src_op = input_info
+                .inst
+                .map(|(src_inst, _)| ctx.data(src_inst).opcode());
+            let narrow_mode = match (src_op, op) {
+                (Some(Opcode::Trueif), Opcode::Bint)
+                | (Some(Opcode::Trueff), Opcode::Bint)
+                | (Some(Opcode::IsNull), Opcode::Bint)
+                | (Some(Opcode::IsInvalid), Opcode::Bint) => NarrowValueMode::None,
+                _ => NarrowValueMode::ZeroExtend64,
+            };
+
             // All of these ops are simply a move from a zero-extended source.
             // Here is why this works, in each case:
             //
@@ -1227,7 +1261,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // - Ireduce: changing width of an integer. Smaller ints are stored
             //   with undefined high-order bits, so we can simply do a copy.
 
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::ZeroExtend64);
+            let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
             let rd = get_output_reg(ctx, outputs[0]);
             let ty = ctx.input_ty(insn, 0);
             ctx.emit(Inst::gen_move(rd, rn, ty));
@@ -1360,7 +1394,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Trap | Opcode::ResumableTrap => {
             let trap_info = (ctx.srcloc(insn), inst_trapcode(ctx.data(insn)).unwrap());
-            ctx.emit(Inst::Udf { trap_info })
+            ctx.emit_safepoint(Inst::Udf { trap_info });
         }
 
         Opcode::Trapif | Opcode::Trapff => {
@@ -1398,10 +1432,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 trap_info,
                 kind: CondBrKind::Cond(cond),
             });
+            ctx.emit_safepoint(Inst::Udf { trap_info })
         }
 
         Opcode::Safepoint => {
-            panic!("safepoint support not implemented!");
+            panic!("safepoint instructions not used by new backend's safepoints!");
         }
 
         Opcode::Trapz | Opcode::Trapnz | Opcode::ResumableTrapnz => {

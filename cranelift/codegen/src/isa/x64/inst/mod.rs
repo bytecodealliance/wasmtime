@@ -1258,6 +1258,10 @@ impl MachInst for Inst {
         15
     }
 
+    fn ref_type_regclass(_: &settings::Flags) -> RegClass {
+        RegClass::I64
+    }
+
     type LabelUse = LabelUse;
 }
 
@@ -1272,6 +1276,18 @@ impl MachInstEmit for Inst {
 
     fn emit(&self, sink: &mut MachBuffer<Inst>, flags: &settings::Flags, state: &mut Self::State) {
         emit::emit(self, sink, flags, state);
+    }
+
+    fn pretty_print(&self, mb_rru: Option<&RealRegUniverse>, _: &mut Self::State) -> String {
+        self.show_rru(mb_rru)
+    }
+}
+
+impl MachInstEmitState<Inst> for EmitState {
+    fn new(_: &dyn ABIBody<I = Inst>) -> Self {
+        EmitState {
+            virtual_sp_offset: 0,
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 use crate::cursor::{Cursor, FuncCursor};
 use crate::dominator_tree::DominatorTree;
-use crate::ir::{Function, InstBuilder, Opcode};
+use crate::inst_predicates::is_safepoint;
+use crate::ir::{Function, InstBuilder};
 use crate::isa::TargetIsa;
 use crate::regalloc::live_value_tracker::LiveValueTracker;
 use crate::regalloc::liveness::Liveness;
@@ -51,12 +52,8 @@ pub fn emit_stackmaps(
         pos.goto_top(block);
 
         while let Some(inst) = pos.next_inst() {
-            if pos.func.dfg[inst].opcode().is_resumable_trap() {
+            if is_safepoint(&pos.func, inst) {
                 insert_and_encode_safepoint(&mut pos, tracker, isa);
-            } else if pos.func.dfg[inst].opcode().is_call() {
-                insert_and_encode_safepoint(&mut pos, tracker, isa);
-            } else if pos.func.dfg[inst].opcode() == Opcode::Safepoint {
-                panic!("safepoint instruction can only be used by the compiler!");
             }
 
             // Process the instruction and get rid of dead values.

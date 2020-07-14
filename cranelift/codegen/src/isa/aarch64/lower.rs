@@ -829,8 +829,8 @@ pub fn ty_bits(ty: Type) -> usize {
         B1 => 1,
         B8 | I8 => 8,
         B16 | I16 => 16,
-        B32 | I32 | F32 => 32,
-        B64 | I64 | F64 => 64,
+        B32 | I32 | F32 | R32 => 32,
+        B64 | I64 | F64 | R64 => 64,
         B128 | I128 => 128,
         IFLAGS | FFLAGS => 32,
         B8X8 | I8X8 | B16X4 | I16X4 | B32X2 | I32X2 => 64,
@@ -842,7 +842,7 @@ pub fn ty_bits(ty: Type) -> usize {
 
 pub(crate) fn ty_is_int(ty: Type) -> bool {
     match ty {
-        B1 | B8 | I8 | B16 | I16 | B32 | I32 | B64 | I64 => true,
+        B1 | B8 | I8 | B16 | I16 | B32 | I32 | B64 | I64 | R32 | R64 => true,
         F32 | F64 | B128 | I128 | I8X8 | I8X16 | I16X4 | I16X8 | I32X2 | I32X4 | I64X2 => false,
         IFLAGS | FFLAGS => panic!("Unexpected flags type"),
         _ => panic!("ty_is_int() on unknown type: {:?}", ty),

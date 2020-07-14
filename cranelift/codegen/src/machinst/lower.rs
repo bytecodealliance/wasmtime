@@ -17,7 +17,7 @@ use crate::machinst::{
 };
 use crate::CodegenResult;
 
-use regalloc::{Reg, RegClass, VirtualReg, Writable};
+use regalloc::{Reg, RegClass, StackmapRequestInfo, VirtualReg, Writable};
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -146,6 +146,8 @@ pub trait LowerCtx {
     fn alloc_tmp(&mut self, rc: RegClass, ty: Type) -> Writable<Reg>;
     /// Emit a machine instruction.
     fn emit(&mut self, mach_inst: Self::I);
+    /// Emit a machine instruction that is a safepoint.
+    fn emit_safepoint(&mut self, mach_inst: Self::I);
     /// Indicate that the given input uses the register returned by
     /// `get_input()`. Codegen may not happen otherwise for the producing
     /// instruction if it has no side effects and no uses.
@@ -206,6 +208,14 @@ pub trait LowerBackend {
     }
 }
 
+/// A pending instruction to insert and auxiliary information about it: its source location and
+/// whether it is a safepoint.
+struct InstTuple<I: VCodeInst> {
+    loc: SourceLoc,
+    is_safepoint: bool,
+    inst: I,
+}
+
 /// Machine-independent lowering driver / machine-instruction container. Maintains a correspondence
 /// from original Inst to MachInsts.
 pub struct Lower<'func, I: VCodeInst> {
@@ -237,17 +247,17 @@ pub struct Lower<'func, I: VCodeInst> {
     next_vreg: u32,
 
     /// Insts in reverse block order, before final copy to vcode.
-    block_insts: Vec<(SourceLoc, I)>,
+    block_insts: Vec<InstTuple<I>>,
 
     /// Ranges in `block_insts` constituting BBs.
     block_ranges: Vec<(usize, usize)>,
 
     /// Instructions collected for the BB in progress, in reverse order, with
     /// source-locs attached.
-    bb_insts: Vec<(SourceLoc, I)>,
+    bb_insts: Vec<InstTuple<I>>,
 
     /// Instructions collected for the CLIF inst in progress, in forward order.
-    ir_insts: Vec<I>,
+    ir_insts: Vec<InstTuple<I>>,
 
     /// The register to use for GetPinnedReg, if any, on this architecture.
     pinned_reg: Option<Reg>,
@@ -276,6 +286,7 @@ fn alloc_vreg(
         let v = *next_vreg;
         *next_vreg += 1;
         value_regs[value] = Reg::new_virtual(regclass, v);
+        debug!("value {} gets vreg {:?}", value, v);
     }
     value_regs[value].as_virtual_reg().unwrap()
 }
@@ -579,15 +590,18 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     fn finish_ir_inst(&mut self, loc: SourceLoc) {
-        for inst in self.ir_insts.drain(..).rev() {
-            self.bb_insts.push((loc, inst));
+        // `bb_insts` is kept in reverse order, so emit the instructions in
+        // reverse order.
+        for mut tuple in self.ir_insts.drain(..).rev() {
+            tuple.loc = loc;
+            self.bb_insts.push(tuple);
         }
     }
 
     fn finish_bb(&mut self) {
         let start = self.block_insts.len();
-        for pair in self.bb_insts.drain(..).rev() {
-            self.block_insts.push(pair);
+        for tuple in self.bb_insts.drain(..).rev() {
+            self.block_insts.push(tuple);
         }
         let end = self.block_insts.len();
         self.block_ranges.push((start, end));
@@ -595,9 +609,14 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
     fn copy_bbs_to_vcode(&mut self) {
         for &(start, end) in self.block_ranges.iter().rev() {
-            for &(loc, ref inst) in &self.block_insts[start..end] {
+            for &InstTuple {
+                loc,
+                is_safepoint,
+                ref inst,
+            } in &self.block_insts[start..end]
+            {
                 self.vcode.set_srcloc(loc);
-                self.vcode.push(inst.clone());
+                self.vcode.push(inst.clone(), is_safepoint);
             }
             self.vcode.end_bb();
         }
@@ -645,7 +664,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     /// Lower the function.
-    pub fn lower<B: LowerBackend<MInst = I>>(mut self, backend: &B) -> CodegenResult<VCode<I>> {
+    pub fn lower<B: LowerBackend<MInst = I>>(
+        mut self,
+        backend: &B,
+    ) -> CodegenResult<(VCode<I>, StackmapRequestInfo)> {
         debug!("about to lower function: {:?}", self.f);
 
         // Initialize the ABI object, giving it a temp if requested.
@@ -730,10 +752,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         self.copy_bbs_to_vcode();
 
         // Now that we've emitted all instructions into the VCodeBuilder, let's build the VCode.
-        let vcode = self.vcode.build();
+        let (vcode, stackmap_info) = self.vcode.build();
         debug!("built vcode: {:?}", vcode);
 
-        Ok(vcode)
+        Ok((vcode, stackmap_info))
     }
 
     /// Get the actual inputs for a value. This is the implementation for
@@ -916,7 +938,19 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
     }
 
     fn emit(&mut self, mach_inst: I) {
-        self.ir_insts.push(mach_inst);
+        self.ir_insts.push(InstTuple {
+            loc: SourceLoc::default(),
+            is_safepoint: false,
+            inst: mach_inst,
+        });
+    }
+
+    fn emit_safepoint(&mut self, mach_inst: I) {
+        self.ir_insts.push(InstTuple {
+            loc: SourceLoc::default(),
+            is_safepoint: true,
+            inst: mach_inst,
+        });
     }
 
     fn use_input_reg(&mut self, input: LowerInput) {

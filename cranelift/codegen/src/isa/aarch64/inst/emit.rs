@@ -1,6 +1,6 @@
 //! AArch64 ISA: binary code emission.
 
-use crate::binemit::{CodeOffset, Reloc};
+use crate::binemit::{CodeOffset, Reloc, Stackmap};
 use crate::ir::constant::ConstantData;
 use crate::ir::types::*;
 use crate::ir::TrapCode;
@@ -376,7 +376,37 @@ fn enc_vec_lanes(q: u32, u: u32, size: u32, opcode: u32, rd: Writable<Reg>, rn: 
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
-    virtual_sp_offset: i64,
+    /// Addend to convert nominal-SP offsets to real-SP offsets at the current
+    /// program point.
+    pub(crate) virtual_sp_offset: i64,
+    /// Offset of FP from nominal-SP.
+    pub(crate) nominal_sp_to_fp: i64,
+    /// Safepoint stackmap for upcoming instruction, as provided to `pre_safepoint()`.
+    stackmap: Option<Stackmap>,
+}
+
+impl MachInstEmitState<Inst> for EmitState {
+    fn new(abi: &dyn ABIBody<I = Inst>) -> Self {
+        EmitState {
+            virtual_sp_offset: 0,
+            nominal_sp_to_fp: abi.frame_size() as i64,
+            stackmap: None,
+        }
+    }
+
+    fn pre_safepoint(&mut self, stackmap: Stackmap) {
+        self.stackmap = Some(stackmap);
+    }
+}
+
+impl EmitState {
+    fn take_stackmap(&mut self) -> Option<Stackmap> {
+        self.stackmap.take()
+    }
+
+    fn clear_post_insn(&mut self) {
+        self.stackmap = None;
+    }
 }
 
 impl MachInstEmit for Inst {
@@ -1463,6 +1493,9 @@ impl MachInstEmit for Inst {
                 // Noop; this is just a placeholder for epilogues.
             }
             &Inst::Call { ref info } => {
+                if let Some(s) = state.take_stackmap() {
+                    sink.add_stackmap(4, s);
+                }
                 sink.add_reloc(info.loc, Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b100101, 0));
                 if info.opcode.is_call() {
@@ -1470,6 +1503,9 @@ impl MachInstEmit for Inst {
                 }
             }
             &Inst::CallInd { ref info } => {
+                if let Some(s) = state.take_stackmap() {
+                    sink.add_stackmap(4, s);
+                }
                 sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(info.rn) << 5));
                 if info.opcode.is_call() {
                     sink.add_call_site(info.loc, info.opcode);
@@ -1525,6 +1561,9 @@ impl MachInstEmit for Inst {
             &Inst::Udf { trap_info } => {
                 let (srcloc, code) = trap_info;
                 sink.add_trap(srcloc, code);
+                if let Some(s) = state.take_stackmap() {
+                    sink.add_stackmap(4, s);
+                }
                 sink.put4(0xd4a00000);
             }
             &Inst::Adr { rd, off } => {
@@ -1709,7 +1748,7 @@ impl MachInstEmit for Inst {
                 debug!(
                     "virtual sp offset adjusted by {} -> {}",
                     offset,
-                    state.virtual_sp_offset + offset
+                    state.virtual_sp_offset + offset,
                 );
                 state.virtual_sp_offset += offset;
             }
@@ -1728,5 +1767,11 @@ impl MachInstEmit for Inst {
 
         let end_off = sink.cur_offset();
         debug_assert!((end_off - start_off) <= Inst::worst_case_size());
+
+        state.clear_post_insn();
+    }
+
+    fn pretty_print(&self, mb_rru: Option<&RealRegUniverse>, state: &mut EmitState) -> String {
+        self.print_with_state(mb_rru, state)
     }
 }
