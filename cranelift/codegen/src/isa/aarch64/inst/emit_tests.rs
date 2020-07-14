@@ -1808,7 +1808,7 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::CCmpImm {
-            size: InstSize::Size64,
+            size: OperandSize::Size64,
             rn: xreg(22),
             imm: UImm5::maybe_from_u8(5).unwrap(),
             nzcv: NZCV::new(false, false, true, true),
@@ -1819,7 +1819,7 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::CCmpImm {
-            size: InstSize::Size32,
+            size: OperandSize::Size32,
             rn: xreg(3),
             imm: UImm5::maybe_from_u8(30).unwrap(),
             nzcv: NZCV::new(true, true, true, true),
@@ -3022,7 +3022,7 @@ fn test_aarch64_binemit() {
             rd: writable_vreg(1),
             rn: vreg(30),
             idx: 2,
-            ty: F32,
+            size: ScalarSize::Size32,
         },
         "C107145E",
         "mov s1, v30.s[2]",
@@ -3033,7 +3033,7 @@ fn test_aarch64_binemit() {
             rd: writable_vreg(23),
             rn: vreg(11),
             idx: 0,
-            ty: F64,
+            size: ScalarSize::Size64,
         },
         "7705085E",
         "mov d23, v11.d[0]",

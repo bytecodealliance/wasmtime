@@ -4,7 +4,7 @@
 #[allow(dead_code)]
 use crate::ir::types::*;
 use crate::ir::Type;
-use crate::isa::aarch64::inst::InstSize;
+use crate::isa::aarch64::inst::OperandSize;
 use crate::machinst::*;
 
 use regalloc::RealRegUniverse;
@@ -340,7 +340,7 @@ pub struct ImmLogic {
     /// `R` field: rotate amount.
     pub s: u8,
     /// Was this constructed for a 32-bit or 64-bit instruction?
-    pub size: InstSize,
+    pub size: OperandSize,
 }
 
 impl ImmLogic {
@@ -351,7 +351,7 @@ impl ImmLogic {
         if ty != I64 && ty != I32 {
             return None;
         }
-        let inst_size = InstSize::from_ty(ty);
+        let operand_size = OperandSize::from_ty(ty);
 
         let original_value = value;
 
@@ -532,7 +532,7 @@ impl ImmLogic {
             n: out_n != 0,
             r: r as u8,
             s: s as u8,
-            size: inst_size,
+            size: operand_size,
         })
     }
 
@@ -732,7 +732,7 @@ mod test {
                 n: true,
                 r: 0,
                 s: 0,
-                size: InstSize::Size64,
+                size: OperandSize::Size64,
             }),
             ImmLogic::maybe_from_u64(1, I64)
         );
@@ -743,7 +743,7 @@ mod test {
                 n: true,
                 r: 63,
                 s: 0,
-                size: InstSize::Size64,
+                size: OperandSize::Size64,
             }),
             ImmLogic::maybe_from_u64(2, I64)
         );
@@ -758,7 +758,7 @@ mod test {
                 n: true,
                 r: 61,
                 s: 4,
-                size: InstSize::Size64,
+                size: OperandSize::Size64,
             }),
             ImmLogic::maybe_from_u64(248, I64)
         );
@@ -771,7 +771,7 @@ mod test {
                 n: true,
                 r: 57,
                 s: 3,
-                size: InstSize::Size64,
+                size: OperandSize::Size64,
             }),
             ImmLogic::maybe_from_u64(1920, I64)
         );
@@ -782,7 +782,7 @@ mod test {
                 n: true,
                 r: 63,
                 s: 13,
-                size: InstSize::Size64,
+                size: OperandSize::Size64,
             }),
             ImmLogic::maybe_from_u64(0x7ffe, I64)
         );
@@ -793,7 +793,7 @@ mod test {
                 n: true,
                 r: 48,
                 s: 1,
-                size: InstSize::Size64,
+                size: OperandSize::Size64,
             }),
             ImmLogic::maybe_from_u64(0x30000, I64)
         );
@@ -804,7 +804,7 @@ mod test {
                 n: true,
                 r: 44,
                 s: 0,
-                size: InstSize::Size64,
+                size: OperandSize::Size64,
             }),
             ImmLogic::maybe_from_u64(0x100000, I64)
         );
@@ -815,7 +815,7 @@ mod test {
                 n: true,
                 r: 63,
                 s: 62,
-                size: InstSize::Size64,
+                size: OperandSize::Size64,
             }),
             ImmLogic::maybe_from_u64(u64::max_value() - 1, I64)
         );
@@ -826,7 +826,7 @@ mod test {
                 n: false,
                 r: 1,
                 s: 60,
-                size: InstSize::Size64,
+                size: OperandSize::Size64,
             }),
             ImmLogic::maybe_from_u64(0xaaaaaaaaaaaaaaaa, I64)
         );
@@ -837,7 +837,7 @@ mod test {
                 n: false,
                 r: 1,
                 s: 49,
-                size: InstSize::Size64,
+                size: OperandSize::Size64,
             }),
             ImmLogic::maybe_from_u64(0x8181818181818181, I64)
         );
@@ -848,7 +848,7 @@ mod test {
                 n: false,
                 r: 10,
                 s: 43,
-                size: InstSize::Size64,
+                size: OperandSize::Size64,
             }),
             ImmLogic::maybe_from_u64(0xffc3ffc3ffc3ffc3, I64)
         );
@@ -859,7 +859,7 @@ mod test {
                 n: false,
                 r: 0,
                 s: 0,
-                size: InstSize::Size64,
+                size: OperandSize::Size64,
             }),
             ImmLogic::maybe_from_u64(0x100000001, I64)
         );
@@ -870,7 +870,7 @@ mod test {
                 n: false,
                 r: 0,
                 s: 56,
-                size: InstSize::Size64,
+                size: OperandSize::Size64,
             }),
             ImmLogic::maybe_from_u64(0x1111111111111111, I64)
         );

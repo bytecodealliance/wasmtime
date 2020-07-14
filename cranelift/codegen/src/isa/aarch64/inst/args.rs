@@ -403,8 +403,8 @@ impl ShowWithRRU for MemArg {
             &MemArg::RegScaledExtended(r1, r2, ty, op) => {
                 let shift = shift_for_type(ty);
                 let size = match op {
-                    ExtendOp::SXTW | ExtendOp::UXTW => InstSize::Size32,
-                    _ => InstSize::Size64,
+                    ExtendOp::SXTW | ExtendOp::UXTW => OperandSize::Size32,
+                    _ => OperandSize::Size64,
                 };
                 let op = op.show_rru(mb_rru);
                 format!(
@@ -417,8 +417,8 @@ impl ShowWithRRU for MemArg {
             }
             &MemArg::RegExtended(r1, r2, op) => {
                 let size = match op {
-                    ExtendOp::SXTW | ExtendOp::UXTW => InstSize::Size32,
-                    _ => InstSize::Size64,
+                    ExtendOp::SXTW | ExtendOp::UXTW => OperandSize::Size32,
+                    _ => OperandSize::Size64,
                 };
                 let op = op.show_rru(mb_rru);
                 format!(
@@ -492,67 +492,98 @@ impl ShowWithRRU for BranchTarget {
 }
 
 /// Type used to communicate the operand size of a machine instruction, as AArch64 has 32- and
-/// 64-bit variants of many instructions (and integer and floating-point registers) and 128-bit
-/// variants of vector instructions.
-/// TODO: Create a separate type for SIMD & floating-point operands.
+/// 64-bit variants of many instructions (and integer registers).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum InstSize {
+pub enum OperandSize {
     Size32,
     Size64,
-    Size128,
 }
 
-impl InstSize {
+impl OperandSize {
     /// 32-bit case?
     pub fn is32(self) -> bool {
-        self == InstSize::Size32
+        self == OperandSize::Size32
     }
     /// 64-bit case?
     pub fn is64(self) -> bool {
-        self == InstSize::Size64
+        self == OperandSize::Size64
     }
-    /// Convert from an `is32` boolean flag to an `InstSize`.
-    pub fn from_is32(is32: bool) -> InstSize {
+    /// Convert from an `is32` boolean flag to an `OperandSize`.
+    pub fn from_is32(is32: bool) -> OperandSize {
         if is32 {
-            InstSize::Size32
+            OperandSize::Size32
         } else {
-            InstSize::Size64
+            OperandSize::Size64
         }
     }
     /// Convert from a needed width to the smallest size that fits.
-    pub fn from_bits<I: Into<usize>>(bits: I) -> InstSize {
+    pub fn from_bits<I: Into<usize>>(bits: I) -> OperandSize {
         let bits: usize = bits.into();
-        assert!(bits <= 128);
+        assert!(bits <= 64);
         if bits <= 32 {
-            InstSize::Size32
-        } else if bits <= 64 {
-            InstSize::Size64
+            OperandSize::Size32
         } else {
-            InstSize::Size128
+            OperandSize::Size64
         }
     }
 
     /// Convert from an integer type into the smallest size that fits.
-    pub fn from_ty(ty: Type) -> InstSize {
+    pub fn from_ty(ty: Type) -> OperandSize {
         Self::from_bits(ty_bits(ty))
     }
 
     /// Convert to I32, I64, or I128.
     pub fn to_ty(self) -> Type {
         match self {
-            InstSize::Size32 => I32,
-            InstSize::Size64 => I64,
-            InstSize::Size128 => I128,
+            OperandSize::Size32 => I32,
+            OperandSize::Size64 => I64,
         }
     }
 
     pub fn sf_bit(&self) -> u32 {
         match self {
-            InstSize::Size32 => 0,
-            InstSize::Size64 => 1,
-            _ => {
-                panic!("Unexpected size");
-            }
+            OperandSize::Size32 => 0,
+            OperandSize::Size64 => 1,
+        }
+    }
+}
+
+/// Type used to communicate the size of a scalar SIMD & FP operand.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScalarSize {
+    Size8,
+    Size16,
+    Size32,
+    Size64,
+    Size128,
+}
+
+impl ScalarSize {
+    /// Convert from a needed width to the smallest size that fits.
+    pub fn from_bits<I: Into<usize>>(bits: I) -> ScalarSize {
+        match bits.into().next_power_of_two() {
+            8 => ScalarSize::Size8,
+            16 => ScalarSize::Size16,
+            32 => ScalarSize::Size32,
+            64 => ScalarSize::Size64,
+            128 => ScalarSize::Size128,
+            _ => panic!("Unexpected type width"),
+        }
+    }
+
+    /// Convert from a type into the smallest size that fits.
+    pub fn from_ty(ty: Type) -> ScalarSize {
+        Self::from_bits(ty_bits(ty))
+    }
+
+    /// Return the encoding bits that are used by some scalar FP instructions
+    /// for a particular operand size.
+    pub fn ftype(&self) -> u32 {
+        match self {
+            ScalarSize::Size16 => 0b11,
+            ScalarSize::Size32 => 0b00,
+            ScalarSize::Size64 => 0b01,
+            _ => panic!("Unexpected scalar FP operand size"),
         }
     }
 }

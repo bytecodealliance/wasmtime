@@ -282,14 +282,13 @@ fn enc_csel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond) -> u32 {
         | (cond.bits() << 12)
 }
 
-fn enc_fcsel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond, size: InstSize) -> u32 {
-    let ty_bit = if size.is32() { 0 } else { 1 };
+fn enc_fcsel(rd: Writable<Reg>, rn: Reg, rm: Reg, cond: Cond, size: ScalarSize) -> u32 {
     0b000_11110_00_1_00000_0000_11_00000_00000
+        | (size.ftype() << 22)
         | (machreg_to_vec(rm) << 16)
         | (machreg_to_vec(rn) << 5)
         | machreg_to_vec(rd.to_reg())
         | (cond.bits() << 12)
-        | (ty_bit << 22)
 }
 
 fn enc_cset(rd: Writable<Reg>, cond: Cond) -> u32 {
@@ -298,7 +297,7 @@ fn enc_cset(rd: Writable<Reg>, cond: Cond) -> u32 {
         | (cond.invert().bits() << 12)
 }
 
-fn enc_ccmp_imm(size: InstSize, rn: Reg, imm: UImm5, nzcv: NZCV, cond: Cond) -> u32 {
+fn enc_ccmp_imm(size: OperandSize, rn: Reg, imm: UImm5, nzcv: NZCV, cond: Cond) -> u32 {
     0b0_1_1_11010010_00000_0000_10_00000_0_0000
         | size.sf_bit() << 31
         | imm.bits() << 16
@@ -334,13 +333,11 @@ fn enc_fpurrrr(top17: u32, rd: Writable<Reg>, rn: Reg, rm: Reg, ra: Reg) -> u32 
         | machreg_to_vec(rd.to_reg())
 }
 
-fn enc_fcmp(size: InstSize, rn: Reg, rm: Reg) -> u32 {
-    let bits = if size.is32() {
-        0b000_11110_00_1_00000_00_1000_00000_00000
-    } else {
-        0b000_11110_01_1_00000_00_1000_00000_00000
-    };
-    bits | (machreg_to_vec(rm) << 16) | (machreg_to_vec(rn) << 5)
+fn enc_fcmp(size: ScalarSize, rn: Reg, rm: Reg) -> u32 {
+    0b000_11110_00_1_00000_00_1000_00000_00000
+        | (size.ftype() << 22)
+        | (machreg_to_vec(rm) << 16)
+        | (machreg_to_vec(rn) << 5)
 }
 
 fn enc_fputoint(top16: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
@@ -613,7 +610,7 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::BitRR { op, rd, rn, .. } => {
-                let size = if op.inst_size().is32() { 0b0 } else { 0b1 };
+                let size = if op.operand_size().is32() { 0b0 } else { 0b1 };
                 let (op1, op2) = match op {
                     BitOp::RBit32 | BitOp::RBit64 => (0b00000, 0b000000),
                     BitOp::Clz32 | BitOp::Clz64 => (0b00000, 0b000100),
@@ -979,10 +976,10 @@ impl MachInstEmit for Inst {
             &Inst::FpuMove128 { rd, rn } => {
                 sink.put4(enc_vecmov(/* 16b = */ true, rd, rn));
             }
-            &Inst::FpuMoveFromVec { rd, rn, idx, ty } => {
-                let (imm5, shift, mask) = match ty {
-                    F32 => (0b00100, 3, 0b011),
-                    F64 => (0b01000, 4, 0b001),
+            &Inst::FpuMoveFromVec { rd, rn, idx, size } => {
+                let (imm5, shift, mask) = match size {
+                    ScalarSize::Size32 => (0b00100, 3, 0b011),
+                    ScalarSize::Size64 => (0b01000, 4, 0b001),
                     _ => unimplemented!(),
                 };
                 debug_assert_eq!(idx & mask, idx);
@@ -1108,10 +1105,10 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_vec_lanes(q, u, size, opcode, rd, rn));
             }
             &Inst::FpuCmp32 { rn, rm } => {
-                sink.put4(enc_fcmp(InstSize::Size32, rn, rm));
+                sink.put4(enc_fcmp(ScalarSize::Size32, rn, rm));
             }
             &Inst::FpuCmp64 { rn, rm } => {
-                sink.put4(enc_fcmp(InstSize::Size64, rn, rm));
+                sink.put4(enc_fcmp(ScalarSize::Size64, rn, rm));
             }
             &Inst::FpuToInt { op, rd, rn } => {
                 let top16 = match op {
@@ -1198,10 +1195,10 @@ impl MachInstEmit for Inst {
                 }
             }
             &Inst::FpuCSel32 { rd, rn, rm, cond } => {
-                sink.put4(enc_fcsel(rd, rn, rm, cond, InstSize::Size32));
+                sink.put4(enc_fcsel(rd, rn, rm, cond, ScalarSize::Size32));
             }
             &Inst::FpuCSel64 { rd, rn, rm, cond } => {
-                sink.put4(enc_fcsel(rd, rn, rm, cond, InstSize::Size64));
+                sink.put4(enc_fcsel(rd, rn, rm, cond, ScalarSize::Size64));
             }
             &Inst::FpuRound { op, rd, rn } => {
                 let top22 = match op {
