@@ -91,7 +91,7 @@ pub extern "C" fn wasm_table_get(
     index: wasm_table_size_t,
 ) -> Option<Box<wasm_ref_t>> {
     let val = t.table().get(index)?;
-    Some(val_into_ref(val).unwrap())
+    val_into_ref(val)
 }
 
 #[no_mangle]
