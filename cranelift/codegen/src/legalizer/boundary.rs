@@ -609,20 +609,14 @@ fn convert_to_abi<PutArg>(
 
 /// Check if a sequence of arguments match a desired sequence of argument types.
 fn check_arg_types(dfg: &DataFlowGraph, args: &[Value], types: &[AbiParam]) -> bool {
-    let mut args = args.iter();
-    let mut types = types.iter();
-    loop {
-        match (args.next(), types.next()) {
-            (Some(&v), Some(at)) => {
-                if let ArgumentPurpose::StructArgument(_) = at.purpose {
-                } else if dfg.value_type(v) != at.value_type {
-                    return false;
-                }
+    args.len() == types.len()
+        && args.iter().zip(types.iter()).all(|(v, at)| {
+            if let ArgumentPurpose::StructArgument(_) = at.purpose {
+                true
+            } else {
+                dfg.value_type(*v) == at.value_type
             }
-            (Some(_), None) | (None, Some(_)) => return false,
-            (None, None) => return true,
-        }
-    }
+        })
 }
 
 /// Check if the arguments of the call `inst` match the signature.
@@ -1094,6 +1088,30 @@ fn spill_call_arguments(pos: &mut FuncCursor, isa: &dyn TargetIsa) -> bool {
         return false;
     }
 
+    let mut libc_memcpy = None;
+    let mut import_memcpy = |func: &mut Function, pointer_type| {
+        if let Some(libc_memcpy) = libc_memcpy {
+            return libc_memcpy;
+        }
+
+        let signature = {
+            let mut s = Signature::new(isa.default_call_conv());
+            s.params.push(AbiParam::new(pointer_type));
+            s.params.push(AbiParam::new(pointer_type));
+            s.params.push(AbiParam::new(pointer_type));
+            legalize_libcall_signature(&mut s, isa);
+            func.import_signature(s)
+        };
+
+        let func = func.import_function(ExtFuncData {
+            name: ExternalName::LibCall(LibCall::Memcpy),
+            signature,
+            colocated: false,
+        });
+        libc_memcpy = Some(func);
+        func
+    };
+
     // Insert the spill instructions and rewrite call arguments.
     for (idx, arg, ss, size) in arglist {
         let stack_val = if let Some(size) = size {
@@ -1102,21 +1120,8 @@ fn spill_call_arguments(pos: &mut FuncCursor, isa: &dyn TargetIsa) -> bool {
             let src = arg;
             let dest = pos.ins().stack_addr(pointer_type, ss, 0);
             let size = pos.ins().iconst(pointer_type, i64::from(size));
-            let signature = {
-                let mut s = Signature::new(isa.default_call_conv());
-                s.params.push(AbiParam::new(pointer_type));
-                s.params.push(AbiParam::new(pointer_type));
-                s.params.push(AbiParam::new(pointer_type));
-                legalize_libcall_signature(&mut s, isa);
-                pos.func.import_signature(s)
-            };
 
-            let libc_memcpy = pos.func.import_function(ExtFuncData {
-                name: ExternalName::LibCall(LibCall::Memcpy),
-                signature,
-                colocated: false,
-            });
-
+            let libc_memcpy = import_memcpy(pos.func, pointer_type);
             pos.ins().call(libc_memcpy, &[dest, src, size]);
             pos.ins().dummy_sarg__()
         } else {
