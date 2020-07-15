@@ -127,7 +127,7 @@ fn legalize_entry_params(func: &mut Function, entry: Block) {
                 let dummy = pos
                     .func
                     .dfg
-                    .append_block_param(entry, crate::ir::types::SARG__);
+                    .append_block_param(entry, crate::ir::types::SARG_T);
                 pos.func.locations[dummy] = ValueLoc::Stack(ss);
                 abi_arg += 1;
                 continue;
@@ -1127,7 +1127,7 @@ fn spill_call_arguments(pos: &mut FuncCursor, isa: &dyn TargetIsa) -> bool {
 
             let libc_memcpy = import_memcpy(pos.func, pointer_type);
             pos.ins().call(libc_memcpy, &[dest, src, size]);
-            pos.ins().dummy_sarg__()
+            pos.ins().dummy_sarg_t()
         } else {
             // Non struct argument
             pos.ins().spill(arg)

@@ -1271,7 +1271,7 @@ pub(crate) fn define<'shared>(
     }
 
     recipes.add_recipe(
-        EncodingRecipeBuilder::new("dummy_sarg__", &formats.nullary, 0)
+        EncodingRecipeBuilder::new("dummy_sarg_t", &formats.nullary, 0)
             .operands_out(vec![Stack::new(gpr)])
             .emit(""),
     );

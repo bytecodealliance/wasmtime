@@ -424,7 +424,7 @@ impl SpecialType {
                 flags can be tested with a :type:`floatcc` condition code.",
             ),
             SpecialType::StructArgument => {
-                String::from("After legalization sarg__ arguments will get this type.")
+                String::from("After legalization sarg_t arguments will get this type.")
             }
         }
     }
@@ -452,7 +452,7 @@ impl fmt::Display for SpecialType {
         match *self {
             SpecialType::Flag(shared_types::Flag::IFlags) => write!(f, "iflags"),
             SpecialType::Flag(shared_types::Flag::FFlags) => write!(f, "fflags"),
-            SpecialType::StructArgument => write!(f, "sarg__"),
+            SpecialType::StructArgument => write!(f, "sarg_t"),
         }
     }
 }
