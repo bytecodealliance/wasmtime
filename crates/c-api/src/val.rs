@@ -26,7 +26,9 @@ impl Drop for wasm_val_t {
     fn drop(&mut self) {
         match into_valtype(self.kind) {
             ValType::ExternRef => unsafe {
-                drop(Box::from_raw(self.of.ref_));
+                if !self.of.ref_.is_null() {
+                    drop(Box::from_raw(self.of.ref_));
+                }
             },
             _ => {}
         }
