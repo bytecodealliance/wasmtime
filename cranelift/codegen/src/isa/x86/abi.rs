@@ -118,7 +118,7 @@ impl ArgAssigner for Args {
             let loc = ArgumentLoc::Stack(self.offset as i32);
             self.offset += size;
             debug_assert!(self.offset <= i32::MAX as u32);
-            return ArgAction::AssignAndChangeType(loc, types::SARG__);
+            return ArgAction::AssignAndChangeType(loc, types::SARG_T);
         }
 
         let ty = arg.value_type;

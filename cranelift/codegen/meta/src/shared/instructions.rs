@@ -1870,14 +1870,14 @@ pub(crate) fn define(
             .specials(vec![crate::cdsl::types::SpecialType::StructArgument])
             .build(),
     );
-    let sarg__ = &Operand::new("sarg__", Sarg);
+    let sarg_t = &Operand::new("sarg_t", Sarg);
 
     // FIXME remove once the old style codegen backends are removed.
     ig.push(
         Inst::new(
-            "dummy_sarg__",
+            "dummy_sarg_t",
             r#"
-        This creates a sarg__
+        This creates a sarg_t
 
         This instruction is internal and should not be created by
         Cranelift users.
@@ -1885,7 +1885,7 @@ pub(crate) fn define(
             &formats.nullary,
         )
         .operands_in(vec![])
-        .operands_out(vec![sarg__]),
+        .operands_out(vec![sarg_t]),
     );
 
     let src = &Operand::new("src", &imm.regunit);

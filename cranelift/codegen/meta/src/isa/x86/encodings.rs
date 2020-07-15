@@ -465,7 +465,7 @@ fn define_moves(e: &mut PerCpuModeEncodings, shared_defs: &SharedDefinitions, r:
     let sextend = shared.by_name("sextend");
     let set_pinned_reg = shared.by_name("set_pinned_reg");
     let uextend = shared.by_name("uextend");
-    let dummy_sarg__ = shared.by_name("dummy_sarg__");
+    let dummy_sarg_t = shared.by_name("dummy_sarg_t");
 
     // Shorthands for recipes.
     let rec_copysp = r.template("copysp");
@@ -483,7 +483,7 @@ fn define_moves(e: &mut PerCpuModeEncodings, shared_defs: &SharedDefinitions, r:
     let rec_umr_reg_to_ssa = r.template("umr_reg_to_ssa");
     let rec_urm_noflags = r.template("urm_noflags");
     let rec_urm_noflags_abcd = r.template("urm_noflags_abcd");
-    let rec_dummy_sarg__ = r.recipe("dummy_sarg__");
+    let rec_dummy_sarg_t = r.recipe("dummy_sarg_t");
 
     // The pinned reg is fixed to a certain value entirely user-controlled, so it generates nothing!
     e.enc64_rec(get_pinned_reg.bind(I64), rec_get_pinned_reg, 0);
@@ -750,7 +750,7 @@ fn define_moves(e: &mut PerCpuModeEncodings, shared_defs: &SharedDefinitions, r:
         rec_furm_reg_to_ssa.opcodes(&MOVSS_LOAD),
     );
 
-    e.enc_32_64_rec(dummy_sarg__, rec_dummy_sarg__, 0);
+    e.enc_32_64_rec(dummy_sarg_t, rec_dummy_sarg_t, 0);
 }
 
 #[inline(never)]

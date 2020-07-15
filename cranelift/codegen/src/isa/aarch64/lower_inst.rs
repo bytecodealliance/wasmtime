@@ -2152,7 +2152,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("x86-specific opcode in supposedly arch-neutral IR!");
         }
 
-        Opcode::DummySarg => unreachable!(),
+        Opcode::DummySargT => unreachable!(),
 
         Opcode::AvgRound => unimplemented!(),
         Opcode::Iabs => unimplemented!(),
