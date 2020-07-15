@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-runtime"
-version = "0.18.0"
+version = "0.19.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Runtime library support for Wasmtime"
 documentation = "https://docs.rs/wasmtime-runtime"
@@ -12,7 +12,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-wasmtime-environ = { path = "../environ", version = "0.18.0" }
+wasmtime-environ = { path = "../environ", version = "0.19.0" }
 region = "2.1.0"
 libc = { version = "0.2.70", default-features = false }
 log = "0.4.8"

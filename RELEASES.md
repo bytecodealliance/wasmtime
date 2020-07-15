@@ -4,13 +4,78 @@
 
 ## 0.19.0
 
-Unreleased.
+Released 2020-07-14.
 
 ### Added
 
+* The [WebAssembly reference-types proposal][reftypes] is now supported in
+  Wasmtime and the C API.
+  [#1832](https://github.com/bytecodealliance/wasmtime/pull/1832),
+  [#1882](https://github.com/bytecodealliance/wasmtime/pull/1882),
+  [#1894](https://github.com/bytecodealliance/wasmtime/pull/1894),
+  [#1901](https://github.com/bytecodealliance/wasmtime/pull/1901),
+  [#1923](https://github.com/bytecodealliance/wasmtime/pull/1923),
+  [#1969](https://github.com/bytecodealliance/wasmtime/pull/1969),
+  [#1973](https://github.com/bytecodealliance/wasmtime/pull/1973),
+  [#1982](https://github.com/bytecodealliance/wasmtime/pull/1982),
+  [#1984](https://github.com/bytecodealliance/wasmtime/pull/1984),
+  [#1991](https://github.com/bytecodealliance/wasmtime/pull/1991),
+  [#1996](https://github.com/bytecodealliance/wasmtime/pull/1996)
+
+* The [WebAssembly simd proposal's][simd] spec tests now pass in Wasmtime.
+  [#1765](https://github.com/bytecodealliance/wasmtime/pull/1765),
+  [#1876](https://github.com/bytecodealliance/wasmtime/pull/1876),
+  [#1941](https://github.com/bytecodealliance/wasmtime/pull/1941),
+  [#1957](https://github.com/bytecodealliance/wasmtime/pull/1957),
+  [#1990](https://github.com/bytecodealliance/wasmtime/pull/1990),
+  [#1994](https://github.com/bytecodealliance/wasmtime/pull/1994)
+
+* Wasmtime can now be compiled without the usage of threads for parallel
+  compilation, although this is still enabled by default.
+  [#1903](https://github.com/bytecodealliance/wasmtime/pull/1903)
+
+* The C API is [now
+  documented](https://bytecodealliance.github.io/wasmtime/c-api/).
+  [#1928](https://github.com/bytecodealliance/wasmtime/pull/1928),
+  [#1959](https://github.com/bytecodealliance/wasmtime/pull/1959),
+  [#1968](https://github.com/bytecodealliance/wasmtime/pull/1968)
+
+* A `wasmtime_linker_get_one_by_name` function was added to the C API.
+  [#1897](https://github.com/bytecodealliance/wasmtime/pull/1897)
+
+* A `wasmtime_trap_exit_status` function was added to the C API.
+  [#1912](https://github.com/bytecodealliance/wasmtime/pull/1912)
+
+* Compilation for the `aarch64-linux-android` target should now work, although
+  keep in mind this platform is not fully tested still.
+  [#2002](https://github.com/bytecodealliance/wasmtime/pull/2002)
+
+[reftypes]: https://github.com/WebAssembly/reference-types
+
+### Fixed
+
+* Runtime warnings when using Wasmtime on musl have been fixed.
+  [#1914](https://github.com/bytecodealliance/wasmtime/pull/1914)
+
+* A bug affecting Windows unwind information with functions that have spilled
+  floating point registers has been fixed.
+  [#1983](https://github.com/bytecodealliance/wasmtime/pull/1983)
+
 ### Changed
 
+* Wasmtime's default branch and development now happens on the `main` branch
+  instead of `master`.
+  [#1924](https://github.com/bytecodealliance/wasmtime/pull/1924)
+
 ### Removed
+
+* The "host info" support in the C API has been removed since it was never fully
+  or correctly implemented.
+  [#1922](https://github.com/bytecodealliance/wasmtime/pull/1922)
+
+* Support for the `*_same` functions in the C API has been removed in the same
+  vein as the host info APIs.
+  [#1926](https://github.com/bytecodealliance/wasmtime/pull/1926)
 
 --------------------------------------------------------------------------------
 
