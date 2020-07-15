@@ -152,8 +152,8 @@ mod tests {
         assert_eq!(layout_stack(sss, is_leaf, 16), Ok(0));
 
         // Same for incoming arguments with non-negative offsets.
-        let in0 = sss.make_incoming_arg(types::I64, 0);
-        let in1 = sss.make_incoming_arg(types::I64, 8);
+        let in0 = sss.make_incoming_arg(8, 0);
+        let in1 = sss.make_incoming_arg(8, 8);
 
         assert_eq!(layout_stack(sss, is_leaf, 1), Ok(0));
         assert_eq!(layout_stack(sss, is_leaf, 16), Ok(0));
@@ -178,7 +178,7 @@ mod tests {
 
         // An incoming argument with negative offset counts towards the total frame size, but it
         // should still pack nicely with the spill slots.
-        let in2 = sss.make_incoming_arg(types::I32, -4);
+        let in2 = sss.make_incoming_arg(4, -4);
 
         assert_eq!(layout_stack(sss, is_leaf, 1), Ok(16));
         assert_eq!(sss[in0].offset, Some(0));
@@ -195,7 +195,7 @@ mod tests {
         assert_eq!(sss[ss1].offset, Some(-8));
 
         // Finally, make sure there is room for the outgoing args.
-        let out0 = sss.get_outgoing_arg(types::I32, 0);
+        let out0 = sss.get_outgoing_arg(4, 0);
 
         assert_eq!(layout_stack(sss, is_leaf, 1), Ok(20));
         assert_eq!(sss[in0].offset, Some(0));
@@ -214,7 +214,7 @@ mod tests {
         assert_eq!(sss[out0].offset, Some(0));
 
         // Also test that an unsupported offset is rejected.
-        sss.get_outgoing_arg(types::I8, StackOffset::max_value() - 1);
+        sss.get_outgoing_arg(1, StackOffset::max_value() - 1);
         assert_eq!(
             layout_stack(sss, is_leaf, 1),
             Err(CodegenError::ImplLimitExceeded)
