@@ -369,6 +369,7 @@ impl FromStr for ArgumentPurpose {
                 if !s.ends_with(")") {
                     return Err(());
                 }
+                // Parse 'sarg(size)'
                 let size: u32 = s["sarg(".len()..s.len() - 1].parse().map_err(|_| ())?;
                 Ok(Self::StructArgument(size))
             }

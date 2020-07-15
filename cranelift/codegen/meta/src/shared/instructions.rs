@@ -1865,7 +1865,7 @@ pub(crate) fn define(
 
     let Sarg = &TypeVar::new(
         "Sarg",
-        "Any scalar or vector type with as most 128 lanes",
+        "Any scalar or vector type with at most 128 lanes",
         TypeSetBuilder::new()
             .specials(vec![crate::cdsl::types::SpecialType::StructArgument])
             .build(),
