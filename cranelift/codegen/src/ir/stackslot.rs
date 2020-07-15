@@ -286,12 +286,7 @@ impl StackSlots {
     }
 
     /// Create a stack slot representing an incoming function argument.
-    pub fn make_incoming_arg(&mut self, ty: Type, offset: StackOffset) -> StackSlot {
-        self.make_incoming_struct_arg(ty.bytes(), offset)
-    }
-
-    /// Create a stack slot representing an incoming struct function argument.
-    pub fn make_incoming_struct_arg(&mut self, size: u32, offset: StackOffset) -> StackSlot {
+    pub fn make_incoming_arg(&mut self, size: u32, offset: StackOffset) -> StackSlot {
         let mut data = StackSlotData::new(StackSlotKind::IncomingArg, size);
         debug_assert!(offset <= StackOffset::max_value() - data.size as StackOffset);
         data.offset = Some(offset);
@@ -305,12 +300,7 @@ impl StackSlots {
     ///
     /// The requested offset is relative to this function's stack pointer immediately before making
     /// the call.
-    pub fn get_outgoing_arg(&mut self, ty: Type, offset: StackOffset) -> StackSlot {
-        self.get_outgoing_struct_arg(ty.bytes(), offset)
-    }
-
-    /// FIXME
-    pub fn get_outgoing_struct_arg(&mut self, size: u32, offset: StackOffset) -> StackSlot {
+    pub fn get_outgoing_arg(&mut self, size: u32, offset: StackOffset) -> StackSlot {
         // Look for an existing outgoing stack slot with the same offset and size.
         let inspos = match self.outgoing.binary_search_by_key(&(offset, size), |&ss| {
             (self[ss].offset.unwrap(), self[ss].size)
@@ -395,9 +385,9 @@ mod tests {
     fn outgoing() {
         let mut sss = StackSlots::new();
 
-        let ss0 = sss.get_outgoing_arg(types::I32, 8);
-        let ss1 = sss.get_outgoing_arg(types::I32, 4);
-        let ss2 = sss.get_outgoing_arg(types::I64, 8);
+        let ss0 = sss.get_outgoing_arg(4, 8);
+        let ss1 = sss.get_outgoing_arg(4, 4);
+        let ss2 = sss.get_outgoing_arg(8, 8);
 
         assert_eq!(sss[ss0].offset, Some(8));
         assert_eq!(sss[ss0].size, 4);
@@ -408,9 +398,9 @@ mod tests {
         assert_eq!(sss[ss2].offset, Some(8));
         assert_eq!(sss[ss2].size, 8);
 
-        assert_eq!(sss.get_outgoing_arg(types::I32, 8), ss0);
-        assert_eq!(sss.get_outgoing_arg(types::I32, 4), ss1);
-        assert_eq!(sss.get_outgoing_arg(types::I64, 8), ss2);
+        assert_eq!(sss.get_outgoing_arg(4, 8), ss0);
+        assert_eq!(sss.get_outgoing_arg(4, 4), ss1);
+        assert_eq!(sss.get_outgoing_arg(8, 8), ss2);
     }
 
     #[test]

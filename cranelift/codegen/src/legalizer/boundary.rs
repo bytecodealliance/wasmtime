@@ -121,7 +121,7 @@ fn legalize_entry_params(func: &mut Function, entry: Block) {
                 } else {
                     unreachable!("StructArgument must already have a Stack ArgumentLoc assigned");
                 };
-                let ss = pos.func.stack_slots.make_incoming_struct_arg(size, offset);
+                let ss = pos.func.stack_slots.make_incoming_arg(size, offset);
                 let struct_arg = pos.ins().stack_addr(arg_type, ss, 0);
                 pos.func.dfg.change_to_alias(arg, struct_arg);
                 let dummy = pos
@@ -1024,7 +1024,9 @@ fn spill_entry_params(func: &mut Function, entry: Block) {
     {
         if let ArgumentPurpose::StructArgument(_) = abi.purpose {
         } else if let ArgumentLoc::Stack(offset) = abi.location {
-            let ss = func.stack_slots.make_incoming_arg(abi.value_type, offset);
+            let ss = func
+                .stack_slots
+                .make_incoming_arg(abi.value_type.bytes(), offset);
             func.locations[arg] = ValueLoc::Stack(ss);
         }
     }
@@ -1066,11 +1068,13 @@ fn spill_call_arguments(pos: &mut FuncCursor, isa: &dyn TargetIsa) -> bool {
                         // slot. The legalization needs to be idempotent, so we should see a
                         // correct outgoing slot on the second pass.
                         let (ss, size) = match abi.purpose {
-                            ArgumentPurpose::StructArgument(size) => (
-                                stack_slots.get_outgoing_struct_arg(size, offset),
-                                Some(size),
+                            ArgumentPurpose::StructArgument(size) => {
+                                (stack_slots.get_outgoing_arg(size, offset), Some(size))
+                            }
+                            _ => (
+                                stack_slots.get_outgoing_arg(abi.value_type.bytes(), offset),
+                                None,
                             ),
-                            _ => (stack_slots.get_outgoing_arg(abi.value_type, offset), None),
                         };
                         if locations[arg] != ValueLoc::Stack(ss) {
                             Some((idx, arg, ss, size))
