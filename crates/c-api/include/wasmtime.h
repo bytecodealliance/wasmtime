@@ -740,7 +740,7 @@ WASM_API_EXTERN own wasmtime_error_t *wasmtime_instance_new(
  * returned error and module are owned by the caller.
  */
 WASM_API_EXTERN own wasmtime_error_t *wasmtime_module_new(
-    wasm_store_t *store,
+    wasm_engine_t *engine,
     const wasm_byte_vec_t *binary,
     own wasm_module_t **ret
 );

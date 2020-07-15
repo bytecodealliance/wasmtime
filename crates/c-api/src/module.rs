@@ -1,6 +1,6 @@
 use crate::{
-    handle_result, wasm_byte_vec_t, wasm_exporttype_t, wasm_exporttype_vec_t, wasm_importtype_t,
-    wasm_importtype_vec_t, wasm_store_t, wasmtime_error_t,
+    handle_result, wasm_byte_vec_t, wasm_engine_t, wasm_exporttype_t, wasm_exporttype_vec_t,
+    wasm_importtype_t, wasm_importtype_vec_t, wasm_store_t, wasmtime_error_t,
 };
 use std::ptr;
 use wasmtime::{Engine, Module};
@@ -29,7 +29,10 @@ pub extern "C" fn wasm_module_new(
     binary: &wasm_byte_vec_t,
 ) -> Option<Box<wasm_module_t>> {
     let mut ret = ptr::null_mut();
-    match wasmtime_module_new(store, binary, &mut ret) {
+    let engine = wasm_engine_t {
+        engine: store.store.engine().clone(),
+    };
+    match wasmtime_module_new(&engine, binary, &mut ret) {
         Some(_err) => None,
         None => {
             assert!(!ret.is_null());
@@ -40,13 +43,12 @@ pub extern "C" fn wasm_module_new(
 
 #[no_mangle]
 pub extern "C" fn wasmtime_module_new(
-    store: &wasm_store_t,
+    engine: &wasm_engine_t,
     binary: &wasm_byte_vec_t,
     ret: &mut *mut wasm_module_t,
 ) -> Option<Box<wasmtime_error_t>> {
     let binary = binary.as_slice();
-    let store = &store.store;
-    handle_result(Module::from_binary(store.engine(), binary), |module| {
+    handle_result(Module::from_binary(&engine.engine, binary), |module| {
         let imports = module
             .imports()
             .map(|i| wasm_importtype_t::new(i.module().to_owned(), i.name().to_owned(), i.ty()))

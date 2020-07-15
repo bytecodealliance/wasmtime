@@ -66,7 +66,7 @@ int main() {
   // Now that we've got our binary webassembly we can compile our module.
   printf("Compiling module...\n");
   wasm_module_t *module = NULL;
-  error = wasmtime_module_new(store, &wasm, &module);
+  error = wasmtime_module_new(engine, &wasm, &module);
   wasm_byte_vec_delete(&wasm);
   if (error != NULL)
     exit_with_error("failed to compile module", error, NULL);
