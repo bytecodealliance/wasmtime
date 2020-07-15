@@ -3,7 +3,7 @@ use crate::{
     wasm_importtype_t, wasm_importtype_vec_t, wasm_store_t, wasmtime_error_t,
 };
 use std::ptr;
-use wasmtime::{Engine, Module};
+use wasmtime::{compile_and_serialize, Engine, Module};
 
 #[repr(C)]
 #[derive(Clone)]
@@ -129,4 +129,46 @@ pub extern "C" fn wasm_module_obtain(
         imports,
         exports,
     }))
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_compile_and_serialize(
+    engine: &wasm_engine_t,
+    binary: &wasm_byte_vec_t,
+    ret: &mut wasm_byte_vec_t,
+) -> Option<Box<wasmtime_error_t>> {
+    let mut result = Vec::new();
+    handle_result(
+        compile_and_serialize(&engine.engine, binary.as_slice(), &mut result),
+        |()| {
+            ret.set_buffer(result);
+        },
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_module_deserialize(
+    store: &wasm_store_t,
+    binary: &wasm_byte_vec_t,
+    ret: &mut *mut wasm_module_t,
+) -> Option<Box<wasmtime_error_t>> {
+    handle_result(
+        Module::deserialize(&store.store.engine(), binary.as_slice()),
+        |module| {
+            let imports = module
+                .imports()
+                .map(|i| wasm_importtype_t::new(i.module().to_owned(), i.name().to_owned(), i.ty()))
+                .collect::<Vec<_>>();
+            let exports = module
+                .exports()
+                .map(|e| wasm_exporttype_t::new(e.name().to_owned(), e.ty()))
+                .collect::<Vec<_>>();
+            let module = Box::new(wasm_module_t {
+                module: module,
+                imports,
+                exports,
+            });
+            *ret = Box::into_raw(module);
+        },
+    )
 }
