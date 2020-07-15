@@ -74,11 +74,10 @@ raised about `#![no_std]`:
   WebAssembly runtime than switching a few crates, however. Maintaining a
   `#![no_std]` library over time has a number of costs associated with it:
 
-  * There needs to be CI to ensure that when compiled with the right flags the
-    library does not actually use the Rust standard library. Currently there is
-    no stable way to do this in Rust, meaning that although a library may be
-    `#![no_std]` at one point in time it's easy to add a dependency that
-    accidentally sneaks in the `std` crate later.
+  * Rust has no stable way to diagnose `no_std` errors in an otherwise `std`
+    build, which means that to supoprt this feature it must be tested on CI with
+    a `no_std` target. This is costly in terms of CI time, CI maintenance, and
+    developers having to do extra builds to avoid CI errors.
 
   * Idioms in `#![no_std]` are quite different than normal Rust code. You'll
     import from different crates (`core` instead of `std`) and data structures
@@ -103,9 +102,7 @@ raised about `#![no_std]`:
   are very much aware of this! Wasmtime is intended to be configurable where
   many of these features are compile-time or runtime options. For example caches
   can be disabled, JITs can be removed and replaced with interpreters, or users
-  could provide a callback to allocate memory instead of using the OS. The
-  ambitious goals of Wasmtime take time and energy to implement, however, so we
-  need help from others in order to prioritize what's most important to tackle.
+  could provide a callback to allocate memory instead of using the OS.
   This is sort of a long-winded way of saying that Wasmtime on the surface may
   today look like it won't support `#![no_std]`, but this is almost always
   simply a matter of time and development priorities rather than a fundamental
