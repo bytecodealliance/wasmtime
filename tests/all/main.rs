@@ -3,7 +3,9 @@ mod custom_signal_handler;
 mod debug;
 mod externals;
 mod func;
+mod funcref;
 mod fuzzing;
+mod gc;
 mod globals;
 mod iloop;
 mod import_calling_export;
@@ -19,14 +21,6 @@ mod traps;
 mod use_after_drop;
 mod wast;
 
-// TODO(#1886): Cranelift only supports reference types on x64.
-#[cfg(target_arch = "x86_64")]
-mod funcref;
-#[cfg(target_arch = "x86_64")]
-mod gc;
-
-/// A helper to compile a module in a new store with reference types enabled.
-#[cfg(target_arch = "x86_64")]
 pub(crate) fn ref_types_module(
     source: &str,
 ) -> anyhow::Result<(wasmtime::Store, wasmtime::Module)> {

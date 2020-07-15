@@ -202,12 +202,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             // to be a big chunk of work to implement them all there!
             ("simd", _) if target.contains("aarch64") => return true,
 
-            // TODO(#1886): Ignore reference types tests if this isn't x64,
-            // because Cranelift only supports reference types on x64.
-            ("reference_types", _) => {
-                return env::var("CARGO_CFG_TARGET_ARCH").unwrap() != "x86_64";
-            }
-
             _ => {}
         },
         _ => panic!("unrecognized strategy"),
