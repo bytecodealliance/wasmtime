@@ -6,7 +6,7 @@ use std::mem::MaybeUninit;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::str;
-use wasmtime::{Caller, Extern, Func, Trap};
+use wasmtime::{Caller, Extern, Func, Trap, Val};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -274,4 +274,22 @@ pub extern "C" fn wasmtime_caller_export_get(
     let name = str::from_utf8(name.as_slice()).ok()?;
     let which = caller.caller.get_export(name)?;
     Some(Box::new(wasm_extern_t { which }))
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_func_as_funcref(
+    func: &wasm_func_t,
+    funcrefp: &mut MaybeUninit<wasm_val_t>,
+) {
+    let funcref = wasm_val_t::from_val(Val::FuncRef(Some(func.func().clone())));
+    crate::initialize(funcrefp, funcref);
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_funcref_as_func(val: &wasm_val_t) -> Option<Box<wasm_func_t>> {
+    if let Val::FuncRef(Some(f)) = val.val() {
+        Some(Box::new(f.into()))
+    } else {
+        None
+    }
 }
