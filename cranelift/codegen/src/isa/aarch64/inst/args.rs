@@ -3,6 +3,7 @@
 // Some variants are never constructed, but we still want them as options in the future.
 #![allow(dead_code)]
 
+use crate::ir::types::{F32X2, F32X4, F64X2, I16X4, I16X8, I32X2, I32X4, I64X2, I8X16, I8X8};
 use crate::ir::Type;
 use crate::isa::aarch64::inst::*;
 use crate::isa::aarch64::lower::ty_bits;
@@ -584,6 +585,58 @@ impl ScalarSize {
             ScalarSize::Size32 => 0b00,
             ScalarSize::Size64 => 0b01,
             _ => panic!("Unexpected scalar FP operand size"),
+        }
+    }
+}
+
+/// Type used to communicate the size of a vector operand.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VectorSize {
+    Size8x8,
+    Size8x16,
+    Size16x4,
+    Size16x8,
+    Size32x2,
+    Size32x4,
+    Size64x2,
+}
+
+impl VectorSize {
+    /// Convert from a type into a vector operand size.
+    pub fn from_ty(ty: Type) -> VectorSize {
+        match ty {
+            F32X2 => VectorSize::Size32x2,
+            F32X4 => VectorSize::Size32x4,
+            F64X2 => VectorSize::Size64x2,
+            I8X8 => VectorSize::Size8x8,
+            I8X16 => VectorSize::Size8x16,
+            I16X4 => VectorSize::Size16x4,
+            I16X8 => VectorSize::Size16x8,
+            I32X2 => VectorSize::Size32x2,
+            I32X4 => VectorSize::Size32x4,
+            I64X2 => VectorSize::Size64x2,
+            _ => unimplemented!(),
+        }
+    }
+
+    /// Get the integer operand size that corresponds to a lane of a vector with a certain size.
+    pub fn operand_size(&self) -> OperandSize {
+        match self {
+            VectorSize::Size64x2 => OperandSize::Size64,
+            _ => OperandSize::Size32,
+        }
+    }
+
+    /// Get the scalar operand size that corresponds to a lane of a vector with a certain size.
+    pub fn lane_size(&self) -> ScalarSize {
+        match self {
+            VectorSize::Size8x8 => ScalarSize::Size8,
+            VectorSize::Size8x16 => ScalarSize::Size8,
+            VectorSize::Size16x4 => ScalarSize::Size16,
+            VectorSize::Size16x8 => ScalarSize::Size16,
+            VectorSize::Size32x2 => ScalarSize::Size32,
+            VectorSize::Size32x4 => ScalarSize::Size32,
+            VectorSize::Size64x2 => ScalarSize::Size64,
         }
     }
 }

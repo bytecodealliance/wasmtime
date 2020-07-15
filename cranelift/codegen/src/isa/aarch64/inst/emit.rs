@@ -1007,7 +1007,7 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_vecmov(/* 16b = */ true, rd, rn));
             }
             &Inst::FpuMoveFromVec { rd, rn, idx, size } => {
-                let (imm5, shift, mask) = match size {
+                let (imm5, shift, mask) = match size.lane_size() {
                     ScalarSize::Size32 => (0b00100, 3, 0b011),
                     ScalarSize::Size64 => (0b01000, 4, 0b001),
                     _ => unimplemented!(),
@@ -1048,6 +1048,10 @@ impl MachInstEmit for Inst {
                     FPUOp2::Max64 => 0b000_11110_01_1_00000_010010,
                     FPUOp2::Min32 => 0b000_11110_00_1_00000_010110,
                     FPUOp2::Min64 => 0b000_11110_01_1_00000_010110,
+                    FPUOp2::Sqadd64 => 0b010_11110_11_1_00000_000011,
+                    FPUOp2::Uqadd64 => 0b011_11110_11_1_00000_000011,
+                    FPUOp2::Sqsub64 => 0b010_11110_11_1_00000_001011,
+                    FPUOp2::Uqsub64 => 0b011_11110_11_1_00000_001011,
                 };
                 sink.put4(enc_fpurrr(top22, rd, rn, rm));
             }
@@ -1102,31 +1106,25 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_fpurrrr(top17, rd, rn, rm, ra));
             }
-            &Inst::VecMisc { op, rd, rn, ty } => {
-                let enc_size = match ty {
-                    I8X16 => 0b00,
-                    I16X8 => 0b01,
-                    I32X4 => 0b10,
-                    I64X2 => 0b11,
-                    _ => 0,
+            &Inst::VecMisc { op, rd, rn, size } => {
+                let enc_size = match size {
+                    VectorSize::Size8x16 => 0b00,
+                    VectorSize::Size16x8 => 0b01,
+                    VectorSize::Size32x4 => 0b10,
+                    VectorSize::Size64x2 => 0b11,
+                    _ => unimplemented!(),
                 };
                 let (bits_12_16, size) = match op {
-                    VecMisc2::Not => {
-                        debug_assert_eq!(128, ty_bits(ty));
-                        (0b00101, 0b00)
-                    }
-                    VecMisc2::Neg => {
-                        debug_assert_eq!(128, ty_bits(ty));
-                        (0b01011, enc_size)
-                    }
+                    VecMisc2::Not => (0b00101, 0b00),
+                    VecMisc2::Neg => (0b01011, enc_size),
                 };
                 sink.put4(enc_vec_rr_misc(size, bits_12_16, rd, rn));
             }
-            &Inst::VecLanes { op, rd, rn, ty } => {
-                let (q, size) = match ty {
-                    I8X16 => (0b1, 0b00),
-                    I16X8 => (0b1, 0b01),
-                    I32X4 => (0b1, 0b10),
+            &Inst::VecLanes { op, rd, rn, size } => {
+                let (q, size) = match size {
+                    VectorSize::Size8x16 => (0b1, 0b00),
+                    VectorSize::Size16x8 => (0b1, 0b01),
+                    VectorSize::Size32x4 => (0b1, 0b10),
                     _ => unreachable!(),
                 };
                 let (u, opcode) = match op {
@@ -1250,12 +1248,12 @@ impl MachInstEmit for Inst {
                         | machreg_to_vec(rd.to_reg()),
                 );
             }
-            &Inst::MovFromVec { rd, rn, idx, ty } => {
-                let (q, imm5, shift, mask) = match ty {
-                    I8 => (0b0, 0b00001, 1, 0b1111),
-                    I16 => (0b0, 0b00010, 2, 0b0111),
-                    I32 => (0b0, 0b00100, 3, 0b0011),
-                    I64 => (0b1, 0b01000, 4, 0b0001),
+            &Inst::MovFromVec { rd, rn, idx, size } => {
+                let (q, imm5, shift, mask) = match size {
+                    VectorSize::Size8x16 => (0b0, 0b00001, 1, 0b1111),
+                    VectorSize::Size16x8 => (0b0, 0b00010, 2, 0b0111),
+                    VectorSize::Size32x4 => (0b0, 0b00100, 3, 0b0011),
+                    VectorSize::Size64x2 => (0b1, 0b01000, 4, 0b0001),
                     _ => unreachable!(),
                 };
                 debug_assert_eq!(idx & mask, idx);
@@ -1268,12 +1266,12 @@ impl MachInstEmit for Inst {
                         | machreg_to_gpr(rd.to_reg()),
                 );
             }
-            &Inst::VecDup { rd, rn, ty } => {
-                let imm5 = match ty {
-                    I8 => 0b00001,
-                    I16 => 0b00010,
-                    I32 => 0b00100,
-                    I64 => 0b01000,
+            &Inst::VecDup { rd, rn, size } => {
+                let imm5 = match size {
+                    VectorSize::Size8x16 => 0b00001,
+                    VectorSize::Size16x8 => 0b00010,
+                    VectorSize::Size32x4 => 0b00100,
+                    VectorSize::Size64x2 => 0b01000,
                     _ => unimplemented!(),
                 };
                 sink.put4(
@@ -1283,10 +1281,10 @@ impl MachInstEmit for Inst {
                         | machreg_to_vec(rd.to_reg()),
                 );
             }
-            &Inst::VecDupFromFpu { rd, rn, ty } => {
-                let imm5 = match ty {
-                    F32 => 0b00100,
-                    F64 => 0b01000,
+            &Inst::VecDupFromFpu { rd, rn, size } => {
+                let imm5 = match size {
+                    VectorSize::Size32x4 => 0b00100,
+                    VectorSize::Size64x2 => 0b01000,
                     _ => unimplemented!(),
                 };
                 sink.put4(
@@ -1318,41 +1316,25 @@ impl MachInstEmit for Inst {
                 rn,
                 rm,
                 alu_op,
-                ty,
+                size,
             } => {
-                let enc_size = match ty {
-                    I8X16 => 0b00,
-                    I16X8 => 0b01,
-                    I32X4 => 0b10,
-                    I64X2 => 0b11,
+                let enc_size = match size {
+                    VectorSize::Size8x16 => 0b00,
+                    VectorSize::Size16x8 => 0b01,
+                    VectorSize::Size32x4 => 0b10,
+                    VectorSize::Size64x2 => 0b11,
                     _ => 0,
                 };
-                let enc_size_for_fcmp = match ty {
-                    F32X4 => 0b0,
-                    F64X2 => 0b1,
+                let enc_size_for_fcmp = match size {
+                    VectorSize::Size32x4 => 0b0,
+                    VectorSize::Size64x2 => 0b1,
                     _ => 0,
                 };
 
                 let (top11, bit15_10) = match alu_op {
-                    VecALUOp::SQAddScalar => {
-                        debug_assert_eq!(I64, ty);
-                        (0b010_11110_11_1, 0b000011)
-                    }
                     VecALUOp::Sqadd => (0b010_01110_00_1 | enc_size << 1, 0b000011),
-                    VecALUOp::SQSubScalar => {
-                        debug_assert_eq!(I64, ty);
-                        (0b010_11110_11_1, 0b001011)
-                    }
                     VecALUOp::Sqsub => (0b010_01110_00_1 | enc_size << 1, 0b001011),
-                    VecALUOp::UQAddScalar => {
-                        debug_assert_eq!(I64, ty);
-                        (0b011_11110_11_1, 0b000011)
-                    }
                     VecALUOp::Uqadd => (0b011_01110_00_1 | enc_size << 1, 0b000011),
-                    VecALUOp::UQSubScalar => {
-                        debug_assert_eq!(I64, ty);
-                        (0b011_11110_11_1, 0b001011)
-                    }
                     VecALUOp::Uqsub => (0b011_01110_00_1 | enc_size << 1, 0b001011),
                     VecALUOp::Cmeq => (0b011_01110_00_1 | enc_size << 1, 0b100011),
                     VecALUOp::Cmge => (0b010_01110_00_1 | enc_size << 1, 0b001111),
@@ -1364,31 +1346,16 @@ impl MachInstEmit for Inst {
                     VecALUOp::Fcmge => (0b011_01110_00_1 | enc_size_for_fcmp << 1, 0b111001),
                     // The following logical instructions operate on bytes, so are not encoded differently
                     // for the different vector types.
-                    VecALUOp::And => {
-                        debug_assert_eq!(128, ty_bits(ty));
-                        (0b010_01110_00_1, 0b000111)
-                    }
-                    VecALUOp::Bic => {
-                        debug_assert_eq!(128, ty_bits(ty));
-                        (0b010_01110_01_1, 0b000111)
-                    }
-                    VecALUOp::Orr => {
-                        debug_assert_eq!(128, ty_bits(ty));
-                        (0b010_01110_10_1, 0b000111)
-                    }
-                    VecALUOp::Eor => {
-                        debug_assert_eq!(128, ty_bits(ty));
-                        (0b011_01110_00_1, 0b000111)
-                    }
-                    VecALUOp::Bsl => {
-                        debug_assert_eq!(128, ty_bits(ty));
-                        (0b011_01110_01_1, 0b000111)
-                    }
+                    VecALUOp::And => (0b010_01110_00_1, 0b000111),
+                    VecALUOp::Bic => (0b010_01110_01_1, 0b000111),
+                    VecALUOp::Orr => (0b010_01110_10_1, 0b000111),
+                    VecALUOp::Eor => (0b011_01110_00_1, 0b000111),
+                    VecALUOp::Bsl => (0b011_01110_01_1, 0b000111),
                     VecALUOp::Umaxp => (0b011_01110_00_1 | enc_size << 1, 0b101001),
                     VecALUOp::Add => (0b010_01110_00_1 | enc_size << 1, 0b100001),
                     VecALUOp::Sub => (0b011_01110_00_1 | enc_size << 1, 0b100001),
                     VecALUOp::Mul => {
-                        debug_assert_ne!(I64X2, ty);
+                        debug_assert_ne!(size, VectorSize::Size64x2);
                         (0b010_01110_00_1 | enc_size << 1, 0b100111)
                     }
                     VecALUOp::Sshl => (0b010_01110_00_1 | enc_size << 1, 0b010001),
