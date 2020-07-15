@@ -45,6 +45,10 @@ pub enum Operator {
     #[peepmatic(params(bNN), result(iNN))]
     Bint,
 
+    /// `bnot`
+    #[peepmatic(params(iNN), result(iNN))]
+    Bnot,
+
     /// `bor`
     #[peepmatic(params(iNN, iNN), result(iNN))]
     Bor,

@@ -237,6 +237,7 @@ impl Opcode {
             BandImm,
             Bconst,
             Bint,
+            Bnot,
             Bor,
             BorImm,
             Brnz,
@@ -547,6 +548,11 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
                 let a = part_to_value(pos, root, a).unwrap();
                 let ty = peepmatic_ty_to_ir_ty(r#type, &pos.func.dfg, root);
                 let val = pos.ins().bint(ty, a);
+                pos.func.dfg.value_def(val).unwrap_inst().into()
+            }
+            Operator::Bnot => {
+                let a = part_to_value(pos, root, a).unwrap();
+                let val = pos.ins().bnot(a);
                 pos.func.dfg.value_def(val).unwrap_inst().into()
             }
             Operator::Brnz => {

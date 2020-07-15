@@ -112,6 +112,7 @@
 
 ;; Replace with negative 1.
 (=> (bor_imm -1 $x) -1)
+(=> (bxor_imm -1 $x) (bnot $x))
 
 ;; Transform `[(x << N) >> N]` into a (un)signed-extending move.
 ;;
