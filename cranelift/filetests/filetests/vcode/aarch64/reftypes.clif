@@ -84,12 +84,13 @@ block3(v7: r64, v8: r64):
 ; nextln: mov x20, x1
 ; nextln: mov x0, x19
 ; nextln: ldr x16, 8 ; b 12 ; data
-; nextln: stur x19, [sp, #24]
-; nextln: stur x20, [sp, #32]
-; nextln: (safepoint: slots [S0, S1]
+; nextln: stur x0, [sp, #24]
+; nextln: stur x19, [sp, #32]
+; nextln: stur x20, [sp, #40]
+; nextln: (safepoint: slots [S0, S1, S2]
 ; nextln: blr x16
-; nextln: ldur x19, [sp, #24]
-; nextln: ldur x20, [sp, #32]
+; nextln: ldur x19, [sp, #32]
+; nextln: ldur x20, [sp, #40]
 ; nextln: add x1, sp, #16
 ; nextln: stur x19, [x1]
 ; nextln: and w0, w0, #1
