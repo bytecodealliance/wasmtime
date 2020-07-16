@@ -4,7 +4,10 @@ use regalloc::Reg;
 use std::convert::TryFrom;
 
 use crate::binemit::Reloc;
-use crate::isa::x64::inst::*;
+use crate::{
+    ir::immediates::{Ieee32, Ieee64},
+    isa::x64::inst::*,
+};
 
 fn low8_will_sign_extend_to_64(x: u32) -> bool {
     let xs = (x as i32) as i64;
@@ -1573,24 +1576,49 @@ pub(crate) fn emit(
             emit_std_reg_mem(sink, prefix, opcode, 2, *src, dst, RexFlags::clear_w());
         }
 
-        Inst::XmmToGpr { op, src, dst } => {
-            let (rex, prefix, opcode) = match op {
-                SseOpcode::Movd => (RexFlags::clear_w(), LegacyPrefix::_66, 0x0F7E),
-                SseOpcode::Movq => (RexFlags::set_w(), LegacyPrefix::_66, 0x0F7E),
+        Inst::XmmToGpr {
+            op,
+            src,
+            dst,
+            dst_size,
+        } => {
+            let (prefix, opcode, dst_first) = match op {
+                SseOpcode::Movd => (LegacyPrefix::_66, 0x0F7E, false),
+                SseOpcode::Movq => (LegacyPrefix::_66, 0x0F7E, false),
+                SseOpcode::Cvttss2si => (LegacyPrefix::_F3, 0x0F2C, true),
+                SseOpcode::Cvttsd2si => (LegacyPrefix::_F2, 0x0F2C, true),
                 _ => panic!("unexpected opcode {:?}", op),
             };
-            emit_std_reg_reg(sink, prefix, opcode, 2, *src, dst.to_reg(), rex);
+            let rex = match dst_size {
+                OperandSize::Size32 => RexFlags::clear_w(),
+                OperandSize::Size64 => RexFlags::set_w(),
+            };
+
+            let (src, dst) = if dst_first {
+                (dst.to_reg(), *src)
+            } else {
+                (*src, dst.to_reg())
+            };
+
+            emit_std_reg_reg(sink, prefix, opcode, 2, src, dst, rex);
         }
 
         Inst::GprToXmm {
             op,
             src: src_e,
             dst: reg_g,
+            src_size,
         } => {
-            let (rex, prefix, opcode) = match op {
-                SseOpcode::Movd => (RexFlags::clear_w(), LegacyPrefix::_66, 0x0F6E),
-                SseOpcode::Movq => (RexFlags::set_w(), LegacyPrefix::_66, 0x0F6E),
+            let (prefix, opcode) = match op {
+                SseOpcode::Movd => (LegacyPrefix::_66, 0x0F6E),
+                SseOpcode::Movq => (LegacyPrefix::_66, 0x0F6E),
+                SseOpcode::Cvtsi2ss => (LegacyPrefix::_F3, 0x0F2A),
+                SseOpcode::Cvtsi2sd => (LegacyPrefix::_F2, 0x0F2A),
                 _ => panic!("unexpected opcode {:?}", op),
+            };
+            let rex = match *src_size {
+                OperandSize::Size32 => RexFlags::clear_w(),
+                OperandSize::Size64 => RexFlags::set_w(),
             };
             match src_e {
                 RegMem::Reg { reg: reg_e } => {
@@ -1620,6 +1648,405 @@ pub(crate) fn emit(
                     emit_std_reg_mem(sink, prefix, opcode, 2, *dst, addr, rex);
                 }
             }
+        }
+
+        Inst::CvtUint64ToFloatSeq {
+            to_f64,
+            src,
+            dst,
+            tmp_gpr1,
+            tmp_gpr2,
+        } => {
+            // Emit the following sequence:
+            //
+            //  cmp 0, %src
+            //  jl handle_negative
+            //
+            //  ;; handle positive, which can't overflow
+            //  cvtsi2sd/cvtsi2ss %src, %dst
+            //  j done
+            //
+            //  handle_negative:
+            //  mov %src, %tmp_gpr1
+            //  shr $1, %tmp_gpr1
+            //  mov %src, %tmp_gpr2
+            //  and $1, %tmp_gpr2
+            //  or %tmp_gpr1, %tmp_gpr2
+            //  ctsi2sd/cvtsi2ss %tmp_gpr2, %dst
+            //  addsd/addss %dst, %dst
+            //
+            //  done:
+
+            // A small helper to generate a signed conversion instruction, that helps deduplicating
+            // code below.
+            let emit_signed_cvt = |sink: &mut MachBuffer<Inst>,
+                                   flags: &settings::Flags,
+                                   state: &mut EmitState,
+                                   src: Reg,
+                                   dst: Writable<Reg>,
+                                   to_f64: bool| {
+                // Handle an unsigned int, which is the "easy" case: a signed conversion will do the
+                // right thing.
+                let op = if to_f64 {
+                    SseOpcode::Cvtsi2sd
+                } else {
+                    SseOpcode::Cvtsi2ss
+                };
+                let inst = Inst::gpr_to_xmm(op, RegMem::reg(src), OperandSize::Size64, dst);
+                inst.emit(sink, flags, state);
+            };
+
+            let handle_negative = sink.get_label();
+            let done = sink.get_label();
+
+            // If x seen as a signed int is not negative, a signed-conversion will do the right
+            // thing.
+            // TODO use tst src, src here.
+            let inst = Inst::cmp_rmi_r(8, RegMemImm::imm(0), *src);
+            inst.emit(sink, flags, state);
+
+            one_way_jmp(sink, CC::L, handle_negative);
+
+            // Handle an unsigned int, which is the "easy" case: a signed conversion will do the
+            // right thing.
+            emit_signed_cvt(sink, flags, state, *src, *dst, *to_f64);
+
+            let inst = Inst::jmp_known(BranchTarget::Label(done));
+            inst.emit(sink, flags, state);
+
+            sink.bind_label(handle_negative);
+
+            // Divide x by two to get it in range for the signed conversion, keep the LSB, and
+            // scale it back up on the FP side.
+            if tmp_gpr1.to_reg() != *src {
+                let inst = Inst::gen_move(*tmp_gpr1, *src, I64);
+                inst.emit(sink, flags, state);
+            }
+
+            // tmp_gpr1 := src >> 1
+            let inst = Inst::shift_r(
+                /*is_64*/ true,
+                ShiftKind::ShiftRightLogical,
+                Some(1),
+                *tmp_gpr1,
+            );
+            inst.emit(sink, flags, state);
+
+            if tmp_gpr2.to_reg() != *src {
+                let inst = Inst::gen_move(*tmp_gpr2, *src, I64);
+                inst.emit(sink, flags, state);
+            }
+
+            let inst = Inst::alu_rmi_r(
+                true, /* 64bits */
+                AluRmiROpcode::And,
+                RegMemImm::imm(1),
+                *tmp_gpr2,
+            );
+            inst.emit(sink, flags, state);
+
+            let inst = Inst::alu_rmi_r(
+                true, /* 64bits */
+                AluRmiROpcode::Or,
+                RegMemImm::reg(tmp_gpr1.to_reg()),
+                *tmp_gpr2,
+            );
+            inst.emit(sink, flags, state);
+
+            emit_signed_cvt(sink, flags, state, tmp_gpr2.to_reg(), *dst, *to_f64);
+
+            let add_op = if *to_f64 {
+                SseOpcode::Addsd
+            } else {
+                SseOpcode::Addss
+            };
+            let inst = Inst::xmm_rm_r(add_op, RegMem::reg(dst.to_reg()), *dst);
+            inst.emit(sink, flags, state);
+
+            sink.bind_label(done);
+        }
+
+        Inst::CvtFloatToSintSeq {
+            src_size,
+            dst_size,
+            src,
+            dst,
+            tmp_gpr,
+            tmp_xmm,
+            srcloc,
+        } => {
+            // Emits the following sequence:
+            //
+            // cvttss2si/cvttsd2si %src, %dst
+            // cmp $INT_MIN, %dst ;; 2 instructions (movaps + reg cmp) for 64-bits ints
+            // jnz done
+            //
+            // ;; check for NaN
+            // cmpss/cmpsd %src, %src
+            // jnp check_if_correct
+            // ud2 trap BadConversionToInteger
+            //
+            // ;; check if INT_MIN was the correct result, against a magic constant:
+            // check_if_correct:
+            // movaps/mov $magic, %tmp_gpr
+            // movq/movd %tmp_gpr, %tmp_xmm
+            // cmpss/cmpsd %tmp_xmm, %src
+            // jnb/jnbe $check_positive
+            // ud2 trap IntegerOverflow
+            //
+            // ;; if positive, it was a real overflow
+            // check_positive:
+            // mov 0, %tmp_gpr
+            // movd/movq %tmp_gpr, %tmp_xmm
+            // cmpss/cmpsd %src, %tmp_xmm
+            // jnb done
+            // ud2 trap IntegerOverflow
+            //
+            // done:
+
+            let src = src.to_reg();
+
+            let (cast_op, cmp_op, trunc_op) = match src_size {
+                OperandSize::Size64 => (SseOpcode::Movq, SseOpcode::Ucomisd, SseOpcode::Cvttsd2si),
+                OperandSize::Size32 => (SseOpcode::Movd, SseOpcode::Ucomiss, SseOpcode::Cvttss2si),
+            };
+
+            let done = sink.get_label();
+
+            let inst = Inst::xmm_to_gpr(trunc_op, src, *dst, *dst_size);
+            inst.emit(sink, flags, state);
+
+            // Generate constant INT_MIN, and compare against it.
+            if *dst_size == OperandSize::Size64 {
+                let inst = Inst::imm_r(true, 0x8000000000000000, *tmp_gpr);
+                inst.emit(sink, flags, state);
+
+                let inst = Inst::cmp_rmi_r(8, RegMemImm::reg(tmp_gpr.to_reg()), dst.to_reg());
+                inst.emit(sink, flags, state);
+            } else {
+                // Emit a simple comparison.
+                let inst = Inst::cmp_rmi_r(4, RegMemImm::imm(0x80000000), dst.to_reg());
+                inst.emit(sink, flags, state);
+            }
+
+            one_way_jmp(sink, CC::NZ, done); // == (int)
+
+            // Check for NaN.
+
+            let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), src);
+            inst.emit(sink, flags, state);
+
+            let check_if_correct = sink.get_label();
+            one_way_jmp(sink, CC::NP, check_if_correct); // jump over trap if not a NaN
+
+            let inst = Inst::trap(*srcloc, TrapCode::BadConversionToInteger);
+            inst.emit(sink, flags, state);
+
+            // Check if INT_MIN was the correct result: determine the smallest floating point
+            // number that would convert to INT_MIN, put it in a temporary register, and compare
+            // against the src register.
+            // If the src register is less (or in some cases, less-or-equal) than the threshold,
+            // trap!
+
+            sink.bind_label(check_if_correct);
+
+            let mut no_overflow_cc = CC::NB; // >=
+            let output_bits = dst_size.to_bits();
+            match *src_size {
+                OperandSize::Size32 => {
+                    let cst = Ieee32::pow2(output_bits - 1).neg().bits();
+                    let inst = Inst::imm32_r_unchecked(cst as u64, *tmp_gpr);
+                    inst.emit(sink, flags, state);
+                }
+                OperandSize::Size64 => {
+                    // An f64 can represent `i32::min_value() - 1` exactly with precision to spare, so
+                    // there are values less than -2^(N-1) that convert correctly to INT_MIN.
+                    let cst = if output_bits < 64 {
+                        no_overflow_cc = CC::NBE; // >
+                        Ieee64::fcvt_to_sint_negative_overflow(output_bits)
+                    } else {
+                        Ieee64::pow2(output_bits - 1).neg()
+                    };
+                    let inst = Inst::imm_r(true, cst.bits(), *tmp_gpr);
+                    inst.emit(sink, flags, state);
+                }
+            }
+
+            let inst =
+                Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, *tmp_xmm);
+            inst.emit(sink, flags, state);
+
+            let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(tmp_xmm.to_reg()), src);
+            inst.emit(sink, flags, state);
+
+            let check_positive = sink.get_label();
+            one_way_jmp(sink, no_overflow_cc, check_positive); // jump over trap if src >= or > threshold
+
+            let inst = Inst::trap(*srcloc, TrapCode::IntegerOverflow);
+            inst.emit(sink, flags, state);
+
+            // If positive, it was a real overflow.
+
+            sink.bind_label(check_positive);
+
+            // TODO use xorpd
+            let inst = Inst::imm_r(false, 0, *tmp_gpr);
+            inst.emit(sink, flags, state);
+
+            let inst =
+                Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, *tmp_xmm);
+            inst.emit(sink, flags, state);
+
+            let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), tmp_xmm.to_reg());
+            inst.emit(sink, flags, state);
+
+            one_way_jmp(sink, CC::NB, done); // jump over trap if 0 >= src
+
+            let inst = Inst::trap(*srcloc, TrapCode::IntegerOverflow);
+            inst.emit(sink, flags, state);
+
+            sink.bind_label(done);
+        }
+
+        Inst::CvtFloatToUintSeq {
+            src_size,
+            dst_size,
+            src,
+            dst,
+            tmp_gpr,
+            tmp_xmm,
+            srcloc,
+        } => {
+            // Emits the following sequence:
+            //
+            // movaps/mov 2**(int_width - 1), %tmp_gpr
+            // movq/movd %tmp_gpr, %tmp_xmm
+            // cmpss/cmpsd %tmp_xmm, %src
+            // jnb is_large
+            //
+            // ;; check for NaN inputs
+            // jnp next
+            // ud2 trap BadConversionToInteger
+            //
+            // next:
+            // cvttss2si/cvttsd2si %src, %dst
+            // cmp 0, %dst
+            // jnl done
+            // ud2 trap IntegerOverflow
+            //
+            // is_large:
+            // subss/subsd %tmp_xmm, %src ; <-- we clobber %src here
+            // cvttss2si/cvttss2sd %tmp_x, %dst
+            // cmp 0, %dst
+            // jnl next_is_large
+            // ud2 trap IntegerOverflow
+            //
+            // next_is_large:
+            // add 2**(int_width -1), %dst ;; 2 instructions for 64-bits integers
+            //
+            // done:
+
+            assert!(tmp_xmm != src, "tmp_xmm clobbers src!");
+
+            let (sub_op, cast_op, cmp_op, trunc_op) = if *src_size == OperandSize::Size64 {
+                (
+                    SseOpcode::Subsd,
+                    SseOpcode::Movq,
+                    SseOpcode::Ucomisd,
+                    SseOpcode::Cvttsd2si,
+                )
+            } else {
+                (
+                    SseOpcode::Subss,
+                    SseOpcode::Movd,
+                    SseOpcode::Ucomiss,
+                    SseOpcode::Cvttss2si,
+                )
+            };
+
+            let done = sink.get_label();
+
+            if *src_size == OperandSize::Size64 {
+                let cst = Ieee64::pow2(dst_size.to_bits() - 1).bits();
+                let inst = Inst::imm_r(true, cst, *tmp_gpr);
+                inst.emit(sink, flags, state);
+            } else {
+                let cst = Ieee32::pow2(dst_size.to_bits() - 1).bits() as u64;
+                let inst = Inst::imm32_r_unchecked(cst, *tmp_gpr);
+                inst.emit(sink, flags, state);
+            }
+
+            let inst =
+                Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, *tmp_xmm);
+            inst.emit(sink, flags, state);
+
+            let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(tmp_xmm.to_reg()), src.to_reg());
+            inst.emit(sink, flags, state);
+
+            let handle_large = sink.get_label();
+            one_way_jmp(sink, CC::NB, handle_large); // jump to handle_large if src >= large_threshold
+
+            let next = sink.get_label();
+            one_way_jmp(sink, CC::NP, next); // jump over trap if not NaN
+
+            let inst = Inst::trap(*srcloc, TrapCode::BadConversionToInteger);
+            inst.emit(sink, flags, state);
+
+            sink.bind_label(next);
+
+            // Actual truncation for small inputs: if the result is not positive, then we had an
+            // overflow.
+
+            let inst = Inst::xmm_to_gpr(trunc_op, src.to_reg(), *dst, *dst_size);
+            inst.emit(sink, flags, state);
+
+            let inst = Inst::cmp_rmi_r(dst_size.to_bytes(), RegMemImm::imm(0), dst.to_reg());
+            inst.emit(sink, flags, state);
+
+            one_way_jmp(sink, CC::NL, done); // if dst >= 0, jump to done
+
+            let inst = Inst::trap(*srcloc, TrapCode::IntegerOverflow);
+            inst.emit(sink, flags, state);
+
+            // Now handle large inputs.
+
+            sink.bind_label(handle_large);
+
+            let inst = Inst::xmm_rm_r(sub_op, RegMem::reg(tmp_xmm.to_reg()), *src);
+            inst.emit(sink, flags, state);
+
+            let inst = Inst::xmm_to_gpr(trunc_op, src.to_reg(), *dst, *dst_size);
+            inst.emit(sink, flags, state);
+
+            let inst = Inst::cmp_rmi_r(dst_size.to_bytes(), RegMemImm::imm(0), dst.to_reg());
+            inst.emit(sink, flags, state);
+
+            let next_is_large = sink.get_label();
+            one_way_jmp(sink, CC::NL, next_is_large); // if dst >= 0, jump to next_is_large
+
+            let inst = Inst::trap(*srcloc, TrapCode::IntegerOverflow);
+            inst.emit(sink, flags, state);
+
+            sink.bind_label(next_is_large);
+
+            if *dst_size == OperandSize::Size64 {
+                let inst = Inst::imm_r(true, 1 << 63, *tmp_gpr);
+                inst.emit(sink, flags, state);
+
+                let inst = Inst::alu_rmi_r(
+                    true,
+                    AluRmiROpcode::Add,
+                    RegMemImm::reg(tmp_gpr.to_reg()),
+                    *dst,
+                );
+                inst.emit(sink, flags, state);
+            } else {
+                let inst =
+                    Inst::alu_rmi_r(false, AluRmiROpcode::Add, RegMemImm::imm(1 << 31), *dst);
+                inst.emit(sink, flags, state);
+            }
+
+            sink.bind_label(done);
         }
 
         Inst::LoadExtName {

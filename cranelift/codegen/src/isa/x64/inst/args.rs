@@ -332,7 +332,7 @@ pub(crate) enum InstructionSet {
 
 /// Some scalar SSE operations requiring 2 operands r/m and r.
 /// TODO: Below only includes scalar operations. To be seen if packed will be added here.
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum SseOpcode {
     Addss,
     Addsd,
@@ -794,6 +794,29 @@ impl BranchTarget {
                 off as i32
             }
             _ => 0,
+        }
+    }
+}
+
+/// An operand's size in bits.
+#[derive(Clone, Copy, PartialEq)]
+pub enum OperandSize {
+    Size32,
+    Size64,
+}
+
+impl OperandSize {
+    pub(crate) fn to_bytes(&self) -> u8 {
+        match self {
+            Self::Size32 => 4,
+            Self::Size64 => 8,
+        }
+    }
+
+    pub(crate) fn to_bits(&self) -> u8 {
+        match self {
+            Self::Size32 => 32,
+            Self::Size64 => 64,
         }
     }
 }
