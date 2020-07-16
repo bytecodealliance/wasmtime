@@ -114,26 +114,24 @@ fn legalize_entry_params(func: &mut Function, entry: Block) {
 
         let abi_type = pos.func.signature.params[abi_arg];
         let arg_type = pos.func.dfg.value_type(arg);
-        match abi_type.purpose {
-            ArgumentPurpose::StructArgument(size) => {
-                let offset = if let ArgumentLoc::Stack(offset) = abi_type.location {
-                    offset
-                } else {
-                    unreachable!("StructArgument must already have a Stack ArgumentLoc assigned");
-                };
-                let ss = pos.func.stack_slots.make_incoming_arg(size, offset);
-                let struct_arg = pos.ins().stack_addr(arg_type, ss, 0);
-                pos.func.dfg.change_to_alias(arg, struct_arg);
-                let dummy = pos
-                    .func
-                    .dfg
-                    .append_block_param(entry, crate::ir::types::SARG_T);
-                pos.func.locations[dummy] = ValueLoc::Stack(ss);
-                abi_arg += 1;
-                continue;
-            }
-            _ => {}
+        if let ArgumentPurpose::StructArgument(size) = abi_type.purpose {
+            let offset = if let ArgumentLoc::Stack(offset) = abi_type.location {
+                offset
+            } else {
+                unreachable!("StructArgument must already have a Stack ArgumentLoc assigned");
+            };
+            let ss = pos.func.stack_slots.make_incoming_arg(size, offset);
+            let struct_arg = pos.ins().stack_addr(arg_type, ss, 0);
+            pos.func.dfg.change_to_alias(arg, struct_arg);
+            let dummy = pos
+                .func
+                .dfg
+                .append_block_param(entry, crate::ir::types::SARG_T);
+            pos.func.locations[dummy] = ValueLoc::Stack(ss);
+            abi_arg += 1;
+            continue;
         }
+
         if arg_type == abi_type.value_type {
             // No value translation is necessary, this argument matches the ABI type.
             // Just use the original block argument value. This is the most common case.
@@ -1023,6 +1021,7 @@ fn spill_entry_params(func: &mut Function, entry: Block) {
         .zip(func.dfg.block_params(entry))
     {
         if let ArgumentPurpose::StructArgument(_) = abi.purpose {
+            // Location has already been assigned during legalization.
         } else if let ArgumentLoc::Stack(offset) = abi.location {
             let ss = func
                 .stack_slots
@@ -1102,6 +1101,8 @@ fn spill_call_arguments(pos: &mut FuncCursor, isa: &dyn TargetIsa) -> bool {
             let mut s = Signature::new(isa.default_call_conv());
             s.params.push(AbiParam::new(pointer_type));
             s.params.push(AbiParam::new(pointer_type));
+            // The last argument of `memcpy` is a `size_t`. This is the same size as a pointer on
+            // all architectures we are interested in.
             s.params.push(AbiParam::new(pointer_type));
             legalize_libcall_signature(&mut s, isa);
             func.import_signature(s)
