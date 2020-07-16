@@ -128,16 +128,16 @@ fn input_to_reg(ctx: Ctx, spec: InsnInput) -> Reg {
 }
 
 enum ExtSpec {
-    ZeroExtend32,
-    ZeroExtend64,
-    SignExtend32,
-    SignExtend64,
+    ZeroExtendTo32,
+    ZeroExtendTo64,
+    SignExtendTo32,
+    SignExtendTo64,
 }
 
 fn extend_input_to_reg(ctx: Ctx, spec: InsnInput, ext_spec: ExtSpec) -> Reg {
     let requested_size = match ext_spec {
-        ExtSpec::ZeroExtend32 | ExtSpec::SignExtend32 => 32,
-        ExtSpec::ZeroExtend64 | ExtSpec::SignExtend64 => 64,
+        ExtSpec::ZeroExtendTo32 | ExtSpec::SignExtendTo32 => 32,
+        ExtSpec::ZeroExtendTo64 | ExtSpec::SignExtendTo64 => 64,
     };
     let input_size = ctx.input_ty(spec.insn, spec.input).bits();
 
@@ -156,12 +156,12 @@ fn extend_input_to_reg(ctx: Ctx, spec: InsnInput, ext_spec: ExtSpec) -> Reg {
     let src = input_to_reg_mem(ctx, spec);
     let dst = ctx.alloc_tmp(RegClass::I64, requested_ty);
     match ext_spec {
-        ExtSpec::ZeroExtend32 | ExtSpec::ZeroExtend64 => {
+        ExtSpec::ZeroExtendTo32 | ExtSpec::ZeroExtendTo64 => {
             ctx.emit(Inst::movzx_rm_r(
                 ext_mode, src, dst, /* infallible */ None,
             ))
         }
-        ExtSpec::SignExtend32 | ExtSpec::SignExtend64 => {
+        ExtSpec::SignExtendTo32 | ExtSpec::SignExtendTo64 => {
             ctx.emit(Inst::movsx_rm_r(
                 ext_mode, src, dst, /* infallible */ None,
             ))
@@ -292,9 +292,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let dst = output_to_reg(ctx, outputs[0]);
 
             let shift_kind = match op {
-                Opcode::Ishl => ShiftKind::Left,
-                Opcode::Ushr => ShiftKind::RightZ,
-                Opcode::Sshr => ShiftKind::RightS,
+                Opcode::Ishl => ShiftKind::ShiftLeft,
+                Opcode::Ushr => ShiftKind::ShiftRightLogical,
+                Opcode::Sshr => ShiftKind::ShiftRightArithmetic,
                 Opcode::Rotl => ShiftKind::RotateLeft,
                 Opcode::Rotr => ShiftKind::RotateRight,
                 _ => unreachable!(),
@@ -320,7 +320,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // sub %tmp, %dst
 
             let (ext_spec, ty) = match ctx.input_ty(insn, 0) {
-                I8 | I16 => (Some(ExtSpec::ZeroExtend32), I32),
+                I8 | I16 => (Some(ExtSpec::ZeroExtendTo32), I32),
                 a if a == I32 || a == I64 => (None, a),
                 _ => unreachable!(),
             };
@@ -335,9 +335,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let tmp = ctx.alloc_tmp(RegClass::I64, ty);
             ctx.emit(Inst::imm_r(ty == I64, u64::max_value(), dst));
 
-            ctx.emit(Inst::read_only_gpr_rm_r(
+            ctx.emit(Inst::unary_rm_r(
                 ty.bytes() as u8,
-                ReadOnlyGprRmROpcode::Bsr,
+                UnaryRmROpcode::Bsr,
                 src,
                 tmp,
             ));
@@ -376,9 +376,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let tmp = ctx.alloc_tmp(RegClass::I64, ty);
             ctx.emit(Inst::imm_r(false /* 64 bits */, ty.bits() as u64, tmp));
 
-            ctx.emit(Inst::read_only_gpr_rm_r(
+            ctx.emit(Inst::unary_rm_r(
                 ty.bytes() as u8,
-                ReadOnlyGprRmROpcode::Bsf,
+                UnaryRmROpcode::Bsf,
                 src,
                 dst,
             ));
@@ -395,7 +395,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // TODO when the x86 flags have use_popcnt, we can use the popcnt instruction.
 
             let (ext_spec, ty) = match ctx.input_ty(insn, 0) {
-                I8 | I16 => (Some(ExtSpec::ZeroExtend32), I32),
+                I8 | I16 => (Some(ExtSpec::ZeroExtendTo32), I32),
                 a if a == I32 || a == I64 => (None, a),
                 _ => unreachable!(),
             };
@@ -418,7 +418,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::mov64_rm_r(src.clone(), tmp1, None));
 
                 // shr $1, tmp1
-                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(1), tmp1));
+                ctx.emit(Inst::shift_r(
+                    is_64,
+                    ShiftKind::ShiftRightLogical,
+                    Some(1),
+                    tmp1,
+                ));
 
                 // mov 0x7777_7777_7777_7777, cst
                 ctx.emit(Inst::imm_r(is_64, 0x7777777777777777, cst));
@@ -443,7 +448,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ));
 
                 // shr $1, tmp1
-                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(1), tmp1));
+                ctx.emit(Inst::shift_r(
+                    is_64,
+                    ShiftKind::ShiftRightLogical,
+                    Some(1),
+                    tmp1,
+                ));
 
                 // and cst, tmp1
                 ctx.emit(Inst::alu_rmi_r(
@@ -462,7 +472,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ));
 
                 // shr $1, tmp1
-                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(1), tmp1));
+                ctx.emit(Inst::shift_r(
+                    is_64,
+                    ShiftKind::ShiftRightLogical,
+                    Some(1),
+                    tmp1,
+                ));
 
                 // and cst, tmp1
                 ctx.emit(Inst::alu_rmi_r(
@@ -484,7 +499,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::mov64_rm_r(RegMem::reg(tmp2.to_reg()), dst, None));
 
                 // shr $4, dst
-                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(4), dst));
+                ctx.emit(Inst::shift_r(
+                    is_64,
+                    ShiftKind::ShiftRightLogical,
+                    Some(4),
+                    dst,
+                ));
 
                 // add tmp2, dst
                 ctx.emit(Inst::alu_rmi_r(
@@ -517,9 +537,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ));
 
                 // shr $56, dst
-                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(56), dst));
+                ctx.emit(Inst::shift_r(
+                    is_64,
+                    ShiftKind::ShiftRightLogical,
+                    Some(56),
+                    dst,
+                ));
             } else {
-                debug_assert_eq!(ty, I32);
+                assert_eq!(ty, I32);
                 let is_64 = false;
 
                 let tmp1 = ctx.alloc_tmp(RegClass::I64, I64);
@@ -529,7 +554,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::mov64_rm_r(src.clone(), tmp1, None));
 
                 // shr $1, tmp1
-                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(1), tmp1));
+                ctx.emit(Inst::shift_r(
+                    is_64,
+                    ShiftKind::ShiftRightLogical,
+                    Some(1),
+                    tmp1,
+                ));
 
                 // andq $0x7777_7777, tmp1
                 ctx.emit(Inst::alu_rmi_r(
@@ -551,7 +581,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ));
 
                 // shr $1, tmp1
-                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(1), tmp1));
+                ctx.emit(Inst::shift_r(
+                    is_64,
+                    ShiftKind::ShiftRightLogical,
+                    Some(1),
+                    tmp1,
+                ));
 
                 // and 0x7777_7777, tmp1
                 ctx.emit(Inst::alu_rmi_r(
@@ -570,7 +605,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ));
 
                 // shr $1, tmp1
-                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(1), tmp1));
+                ctx.emit(Inst::shift_r(
+                    is_64,
+                    ShiftKind::ShiftRightLogical,
+                    Some(1),
+                    tmp1,
+                ));
 
                 // and $0x7777_7777, tmp1
                 ctx.emit(Inst::alu_rmi_r(
@@ -592,7 +632,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::mov64_rm_r(RegMem::reg(tmp2.to_reg()), dst, None));
 
                 // shr $4, dst
-                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(4), dst));
+                ctx.emit(Inst::shift_r(
+                    is_64,
+                    ShiftKind::ShiftRightLogical,
+                    Some(4),
+                    dst,
+                ));
 
                 // add tmp2, dst
                 ctx.emit(Inst::alu_rmi_r(
@@ -619,7 +664,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ));
 
                 // shr $24, dst
-                ctx.emit(Inst::shift_r(is_64, ShiftKind::RightZ, Some(24), dst));
+                ctx.emit(Inst::shift_r(
+                    is_64,
+                    ShiftKind::ShiftRightLogical,
+                    Some(24),
+                    dst,
+                ));
             }
         }
 
@@ -1085,8 +1135,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Udiv | Opcode::Urem | Opcode::Sdiv | Opcode::Srem => {
-            let is_div = op == Opcode::Udiv || op == Opcode::Sdiv;
-            let is_signed = op == Opcode::Sdiv || op == Opcode::Srem;
+            let kind = match op {
+                Opcode::Udiv => DivOrRemKind::UnsignedDiv,
+                Opcode::Sdiv => DivOrRemKind::SignedDiv,
+                Opcode::Urem => DivOrRemKind::UnsignedRem,
+                Opcode::Srem => DivOrRemKind::SignedRem,
+                _ => unreachable!(),
+            };
+            let is_div = kind.is_div();
 
             let input_ty = ctx.input_ty(insn, 0);
             let size = input_ty.bytes() as u8;
@@ -1106,7 +1162,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // pc-relative offsets that must not change, thus requiring regalloc to not
                 // interfere by introducing spills and reloads.
                 //
-                // Note it keeps the result in $rax (if is_div) or $rdx (if !is_div), so that
+                // Note it keeps the result in $rax (for divide) or $rdx (for rem), so that
                 // regalloc is aware of the coalescing opportunity between rax/rdx and the
                 // destination register.
                 let divisor = input_to_reg(ctx, inputs[1]);
@@ -1117,8 +1173,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 };
                 ctx.emit(Inst::imm_r(true, 0, Writable::from_reg(regs::rdx())));
                 ctx.emit(Inst::CheckedDivOrRemSeq {
-                    is_div,
-                    is_signed,
+                    kind,
                     size,
                     divisor,
                     tmp,
@@ -1128,7 +1183,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let divisor = input_to_reg_mem(ctx, inputs[1]);
 
                 // Fill in the high parts:
-                if is_signed {
+                if kind.is_signed() {
                     // sign-extend the sign-bit of rax into rdx, for signed opcodes.
                     ctx.emit(Inst::sign_extend_rax_to_rdx(size));
                 } else {
@@ -1141,7 +1196,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
 
                 // Emit the actual idiv.
-                ctx.emit(Inst::div(size, is_signed, divisor, ctx.srcloc(insn)));
+                ctx.emit(Inst::div(size, kind.is_signed(), divisor, ctx.srcloc(insn)));
             }
 
             // Move the result back into the destination reg.
@@ -1346,7 +1401,7 @@ impl LowerBackend for X64Backend {
                             insn: branches[0],
                             input: 0,
                         },
-                        ExtSpec::ZeroExtend32,
+                        ExtSpec::ZeroExtendTo32,
                     );
 
                     // Bounds-check (compute flags from idx - jt_size) and branch to default.

@@ -556,7 +556,7 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::ReadOnly_Gpr_Rm_R { size, op, src, dst } => {
+        Inst::UnaryRmR { size, op, src, dst } => {
             let (prefix, rex_flags) = match size {
                 2 => (LegacyPrefix::_66, RexFlags::clear_w()),
                 4 => (LegacyPrefix::None, RexFlags::clear_w()),
@@ -565,8 +565,8 @@ pub(crate) fn emit(
             };
 
             let (opcode, num_opcodes) = match op {
-                ReadOnlyGprRmROpcode::Bsr => (0x0fbd, 2),
-                ReadOnlyGprRmROpcode::Bsf => (0x0fbc, 2),
+                UnaryRmROpcode::Bsr => (0x0fbd, 2),
+                UnaryRmROpcode::Bsf => (0x0fbc, 2),
             };
 
             match src {
@@ -661,8 +661,7 @@ pub(crate) fn emit(
         }
 
         Inst::CheckedDivOrRemSeq {
-            is_div,
-            is_signed,
+            kind,
             size,
             divisor,
             loc,
@@ -704,7 +703,7 @@ pub(crate) fn emit(
             let inst = Inst::trap_if(CC::Z, TrapCode::IntegerDivisionByZero, *loc);
             inst.emit(sink, flags, state);
 
-            let (do_op, done_label) = if *is_signed {
+            let (do_op, done_label) = if kind.is_signed() {
                 // Now check if the divisor is -1.
                 let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0xffffffff), *divisor);
                 inst.emit(sink, flags, state);
@@ -715,7 +714,7 @@ pub(crate) fn emit(
                 one_way_jmp(sink, CC::NZ, do_op);
 
                 // Here, divisor == -1.
-                if !*is_div {
+                if !kind.is_div() {
                     // x % -1 = 0; put the result into the destination, $rdx.
                     let done_label = sink.get_label();
 
@@ -756,7 +755,7 @@ pub(crate) fn emit(
             }
 
             // Fill in the high parts:
-            if *is_signed {
+            if kind.is_signed() {
                 // sign-extend the sign-bit of rax into rdx, for signed opcodes.
                 let inst = Inst::sign_extend_rax_to_rdx(*size);
                 inst.emit(sink, flags, state);
@@ -766,7 +765,7 @@ pub(crate) fn emit(
                 inst.emit(sink, flags, state);
             }
 
-            let inst = Inst::div(*size, *is_signed, RegMem::reg(*divisor), *loc);
+            let inst = Inst::div(*size, kind.is_signed(), RegMem::reg(*divisor), *loc);
             inst.emit(sink, flags, state);
 
             // Lowering takes care of moving the result back into the right register, see comment
@@ -1047,9 +1046,9 @@ pub(crate) fn emit(
             let subopcode = match kind {
                 ShiftKind::RotateLeft => 0,
                 ShiftKind::RotateRight => 1,
-                ShiftKind::Left => 4,
-                ShiftKind::RightZ => 5,
-                ShiftKind::RightS => 7,
+                ShiftKind::ShiftLeft => 4,
+                ShiftKind::ShiftRightLogical => 5,
+                ShiftKind::ShiftRightArithmetic => 7,
             };
 
             let rex = if *is_64 {
@@ -1550,6 +1549,7 @@ pub(crate) fn emit(
             srcloc,
         } => {
             // The full address can be encoded in the register, with a relocation.
+            // Generates: movabsq $name, %dst
             let enc_dst = int_reg_enc(dst.to_reg());
             sink.put1(0x48 | ((enc_dst >> 3) & 1));
             sink.put1(0xB8 | (enc_dst & 7));

@@ -94,10 +94,10 @@ fn in_vec_reg(ty: types::Type) -> bool {
 }
 
 fn get_intreg_for_arg_systemv(call_conv: &CallConv, idx: usize) -> Option<Reg> {
-    assert!(match call_conv {
-        CallConv::SystemV | CallConv::BaldrdashSystemV => true,
-        _ => false,
-    });
+    match call_conv {
+        CallConv::Fast | CallConv::Cold | CallConv::SystemV | CallConv::BaldrdashSystemV => {}
+        _ => panic!("int args only supported for SysV calling convention"),
+    };
     match idx {
         0 => Some(regs::rdi()),
         1 => Some(regs::rsi()),
@@ -110,10 +110,10 @@ fn get_intreg_for_arg_systemv(call_conv: &CallConv, idx: usize) -> Option<Reg> {
 }
 
 fn get_fltreg_for_arg_systemv(call_conv: &CallConv, idx: usize) -> Option<Reg> {
-    assert!(match call_conv {
-        CallConv::SystemV | CallConv::BaldrdashSystemV => true,
-        _ => false,
-    });
+    match call_conv {
+        CallConv::Fast | CallConv::Cold | CallConv::SystemV | CallConv::BaldrdashSystemV => {}
+        _ => panic!("float args only supported for SysV calling convention"),
+    };
     match idx {
         0 => Some(regs::xmm0()),
         1 => Some(regs::xmm1()),

@@ -282,32 +282,32 @@ impl fmt::Debug for AluRmiROpcode {
     }
 }
 
-impl ToString for AluRmiROpcode {
-    fn to_string(&self) -> String {
-        format!("{:?}", self)
+impl fmt::Display for AluRmiROpcode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
     }
 }
 
 #[derive(Clone, PartialEq)]
-pub enum ReadOnlyGprRmROpcode {
+pub enum UnaryRmROpcode {
     /// Bit-scan reverse.
     Bsr,
     /// Bit-scan forward.
     Bsf,
 }
 
-impl fmt::Debug for ReadOnlyGprRmROpcode {
+impl fmt::Debug for UnaryRmROpcode {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ReadOnlyGprRmROpcode::Bsr => write!(fmt, "bsr"),
-            ReadOnlyGprRmROpcode::Bsf => write!(fmt, "bsf"),
+            UnaryRmROpcode::Bsr => write!(fmt, "bsr"),
+            UnaryRmROpcode::Bsf => write!(fmt, "bsf"),
         }
     }
 }
 
-impl ToString for ReadOnlyGprRmROpcode {
-    fn to_string(&self) -> String {
-        format!("{:?}", self)
+impl fmt::Display for UnaryRmROpcode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
     }
 }
 
@@ -468,9 +468,9 @@ impl fmt::Debug for SseOpcode {
     }
 }
 
-impl ToString for SseOpcode {
-    fn to_string(&self) -> String {
-        format!("{:?}", self)
+impl fmt::Display for SseOpcode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
     }
 }
 
@@ -519,18 +519,20 @@ impl fmt::Debug for ExtMode {
     }
 }
 
-impl ToString for ExtMode {
-    fn to_string(&self) -> String {
-        format!("{:?}", self)
+impl fmt::Display for ExtMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
     }
 }
 
-/// These indicate the form of a scalar shift: left, signed right, unsigned right.
+/// These indicate the form of a scalar shift/rotate: left, signed right, unsigned right.
 #[derive(Clone)]
 pub enum ShiftKind {
-    Left,
-    RightZ,
-    RightS,
+    ShiftLeft,
+    /// Inserts zeros in the most significant bits.
+    ShiftRightLogical,
+    /// Replicates the sign bit in the most significant bits.
+    ShiftRightArithmetic,
     RotateLeft,
     RotateRight,
 }
@@ -538,9 +540,9 @@ pub enum ShiftKind {
 impl fmt::Debug for ShiftKind {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let name = match self {
-            ShiftKind::Left => "shl",
-            ShiftKind::RightZ => "shr",
-            ShiftKind::RightS => "sar",
+            ShiftKind::ShiftLeft => "shl",
+            ShiftKind::ShiftRightLogical => "shr",
+            ShiftKind::ShiftRightArithmetic => "sar",
             ShiftKind::RotateLeft => "rol",
             ShiftKind::RotateRight => "ror",
         };
@@ -548,9 +550,34 @@ impl fmt::Debug for ShiftKind {
     }
 }
 
-impl ToString for ShiftKind {
-    fn to_string(&self) -> String {
-        format!("{:?}", self)
+impl fmt::Display for ShiftKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
+}
+
+/// What kind of division or remainer instruction this is?
+#[derive(Clone)]
+pub enum DivOrRemKind {
+    SignedDiv,
+    UnsignedDiv,
+    SignedRem,
+    UnsignedRem,
+}
+
+impl DivOrRemKind {
+    pub(crate) fn is_signed(&self) -> bool {
+        match self {
+            DivOrRemKind::SignedDiv | DivOrRemKind::SignedRem => true,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn is_div(&self) -> bool {
+        match self {
+            DivOrRemKind::SignedDiv | DivOrRemKind::UnsignedDiv => true,
+            _ => false,
+        }
     }
 }
 
@@ -665,9 +692,9 @@ impl fmt::Debug for CC {
     }
 }
 
-impl ToString for CC {
-    fn to_string(&self) -> String {
-        format!("{:?}", self)
+impl fmt::Display for CC {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
     }
 }
 
