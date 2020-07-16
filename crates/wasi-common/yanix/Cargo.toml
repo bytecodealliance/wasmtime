@@ -1,6 +1,6 @@
 [package]
 name = "yanix"
-version = "0.18.0"
+version = "0.19.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Yet Another Nix crate: a Unix API helper library"
 documentation = "https://docs.rs/yanix"

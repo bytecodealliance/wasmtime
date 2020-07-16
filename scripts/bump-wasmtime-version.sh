@@ -9,7 +9,7 @@ topdir=$(dirname "$0")/..
 cd "$topdir"
 
 # All the wasmtime-* crates have the same version number
-short_version="18"
+short_version="19"
 version="0.$short_version.0"
 
 # Update the version numbers of the crates to $version. Skip crates with
