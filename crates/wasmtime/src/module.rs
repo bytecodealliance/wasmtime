@@ -322,7 +322,7 @@ impl Module {
     }
 
     /// Read compiled module from I/O.
-    pub unsafe fn deserialize(engine: &Engine, r: impl std::io::Read) -> Result<Module> {
+    pub fn deserialize(engine: &Engine, r: impl std::io::Read) -> Result<Module> {
         let expected_fingerprint = compiler_fingerprint(engine.config());
 
         let (fingerprint, artifacts) =

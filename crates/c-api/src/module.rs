@@ -143,7 +143,7 @@ pub extern "C" fn wasmtime_module_serialize(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_module_deserialize(
+pub extern "C" fn wasmtime_module_deserialize(
     engine: &wasm_engine_t,
     binary: &wasm_byte_vec_t,
     ret: &mut *mut wasm_module_t,
