@@ -1,17 +1,16 @@
 use crate::cdsl::cpu_modes::CpuMode;
 use crate::cdsl::instructions::{InstructionGroupBuilder, InstructionPredicateMap};
 use crate::cdsl::isa::TargetIsa;
-use crate::cdsl::recipes::{EncodingRecipeBuilder, EncodingRecipeNumber, Recipes, Stack};
+use crate::cdsl::recipes::Recipes;
 use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
-use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
+use crate::cdsl::settings::SettingGroupBuilder;
 
 use crate::shared::Definitions as SharedDefinitions;
 
-pub(crate) fn define_recipes(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> Recipes {
-    let formats = &shared_defs.formats;
-
+pub(crate) fn define_recipes(_shared_defs: &SharedDefinitions, _regs: &IsaRegs) -> Recipes {
     // Register classes shorthands.
-    let gpr = regs.class_by_name("GPR");
+    // let formats = &shared_defs.formats;
+    // let gpr = regs.class_by_name("GPR");
 
     Recipes::new()
 }
@@ -37,7 +36,7 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
 
     let inst_group = InstructionGroupBuilder::new(&mut shared_defs.all_instructions).build();
 
-    let mut glcompute = CpuMode::new("GLCompute");
+    let glcompute = CpuMode::new("GLCompute");
 
     let recipes = define_recipes(shared_defs, &regs);
 

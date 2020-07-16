@@ -51,7 +51,6 @@ impl fmt::Display for Isa {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Isa::Riscv => write!(f, "riscv"),
-            Isa::Spirv => write!(f, "spirv"),
             Isa::X86 => write!(f, "x86"),
             Isa::Arm32 => write!(f, "arm32"),
             Isa::Arm64 => write!(f, "arm64"),
