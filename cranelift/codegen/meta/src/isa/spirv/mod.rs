@@ -1,12 +1,11 @@
 use crate::cdsl::cpu_modes::CpuMode;
-use crate::cdsl::instructions::{InstructionPredicateMap, InstructionGroupBuilder};
+use crate::cdsl::instructions::{InstructionGroupBuilder, InstructionPredicateMap};
 use crate::cdsl::isa::TargetIsa;
+use crate::cdsl::recipes::{EncodingRecipeBuilder, EncodingRecipeNumber, Recipes, Stack};
 use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
 use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
-use crate::cdsl::recipes::{EncodingRecipeBuilder, EncodingRecipeNumber, Recipes, Stack};
 
 use crate::shared::Definitions as SharedDefinitions;
-
 
 pub(crate) fn define_recipes(shared_defs: &SharedDefinitions, regs: &IsaRegs) -> Recipes {
     let formats = &shared_defs.formats;

@@ -6,8 +6,8 @@ use std::fmt;
 mod arm32;
 mod arm64;
 mod riscv;
-pub(crate) mod x86;
 mod spirv;
+pub(crate) mod x86;
 
 /// Represents known ISA target.
 #[derive(PartialEq, Copy, Clone)]

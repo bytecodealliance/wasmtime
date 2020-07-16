@@ -1,19 +1,19 @@
-use alloc::vec::Vec;
-use crate::ir::{ArgumentExtension, ArgumentPurpose, StackSlot};
+use crate::binemit::Stackmap;
 use crate::ir::types::Type;
+use crate::ir::Function;
+use crate::ir::{ArgumentExtension, ArgumentPurpose, StackSlot};
+use crate::isa::spirv::inst::EmitState;
 use crate::isa::spirv::inst::Inst;
 use crate::machinst::abi::ABIBody;
 use crate::settings;
-use crate::ir::Function;
-use crate::isa::spirv::inst::EmitState;
-use crate::binemit::Stackmap;
+use alloc::vec::Vec;
 
 use regalloc::*;
 
+use rspirv::dr::{Instruction, Operand};
 use spirv_headers::Op;
-use rspirv::dr::{Operand, Instruction};
 
-use std::sync::atomic::{Ordering, AtomicU32};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 struct SpirvReturn {
     id: u32,
@@ -78,13 +78,13 @@ impl SpirvABIBody {
 
                             rets.push(SpirvReturn {
                                 id,
-                                real_reg: spirv_real_reg(id).to_real_reg() // jb-todo: index is wrong here 
+                                real_reg: spirv_real_reg(id).to_real_reg(), // jb-todo: index is wrong here
                             });
-                        },
+                        }
                         _ => unimplemented!("Invalid return type"),
                     }
-                },
-                _ => unimplemented!("Not all types are supported")
+                }
+                _ => unimplemented!("Not all types are supported"),
             }
         }
 
@@ -109,7 +109,7 @@ impl ABIBody for SpirvABIBody {
     fn gen_retval_area_setup(&self) -> Option<Inst> {
         None
     }
-    
+
     fn temp_needed(&self) -> bool {
         false
     }
@@ -122,14 +122,14 @@ impl ABIBody for SpirvABIBody {
         unimplemented!("I need to be computed!")
     }
 
-    fn init(&mut self, maybe_tmp: Option<Writable<Reg>>) {
-    }
+    fn init(&mut self, maybe_tmp: Option<Writable<Reg>>) {}
 
     fn flags(&self) -> &settings::Flags {
         &self.flags
     }
 
-    fn num_args(&self) -> usize {0
+    fn num_args(&self) -> usize {
+        0
         //self.sig.args.len()
     }
 
@@ -188,13 +188,9 @@ impl ABIBody for SpirvABIBody {
         unimplemented!()
     }
 
-    fn set_num_spillslots(&mut self, slots: usize) {
-        
-    }
+    fn set_num_spillslots(&mut self, slots: usize) {}
 
-    fn set_clobbered(&mut self, clobbered: Set<Writable<RealReg>>) {
-        
-    }
+    fn set_clobbered(&mut self, clobbered: Set<Writable<RealReg>>) {}
 
     fn stackslot_addr(&self, _slot: StackSlot, _offset: u32, _into_reg: Writable<Reg>) -> Inst {
         unimplemented!()
@@ -242,7 +238,12 @@ impl ABIBody for SpirvABIBody {
         unimplemented!()
     }
 
-    fn gen_reload(&self, _to_reg: Writable<RealReg>, _from_slot: SpillSlot, _ty: Option<Type>) -> Inst {
+    fn gen_reload(
+        &self,
+        _to_reg: Writable<RealReg>,
+        _from_slot: SpillSlot,
+        _ty: Option<Type>,
+    ) -> Inst {
         unimplemented!()
     }
 }

@@ -3,27 +3,27 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 
-mod inst;
 mod abi;
+mod inst;
 mod lower;
 
-use alloc::boxed::Box;
 use crate::binemit::CodeOffset;
 use crate::ir::condcodes::IntCC;
-use crate::ir::Function;
 use crate::ir::types::Type;
+use crate::ir::Function;
 use crate::isa::Builder as IsaBuilder;
-use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter, VCode};
-use crate::machinst::{MachBuffer, MachInst, MachInstEmit};
 use crate::machinst::buffer::MachLabel;
+use crate::machinst::pretty_print::ShowWithRRU;
 use crate::machinst::MachInstLabelUse;
 use crate::machinst::MachTerminator;
-use crate::machinst::pretty_print::ShowWithRRU;
-use crate::result::{CodegenResult, CodegenError};
+use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter, VCode};
+use crate::machinst::{MachBuffer, MachInst, MachInstEmit};
+use crate::result::{CodegenError, CodegenResult};
 use crate::settings::{self, Flags};
+use alloc::boxed::Box;
 
 use inst::Inst;
-use regalloc::NUM_REG_CLASSES;
+use log::debug;
 use regalloc::RealRegUniverse;
 use regalloc::Reg;
 use regalloc::RegClass;
@@ -32,11 +32,10 @@ use regalloc::RegUsageMapper;
 use regalloc::SpillSlot;
 use regalloc::VirtualReg;
 use regalloc::Writable;
+use regalloc::NUM_REG_CLASSES;
 use smallvec::SmallVec;
 use target_lexicon::Architecture;
 use target_lexicon::Triple;
-use log::debug;
-
 
 pub(crate) struct SpirvBackend {
     triple: Triple,
@@ -73,11 +72,11 @@ impl MachBackend for SpirvBackend {
         func: &Function,
         want_disasm: bool,
     ) -> CodegenResult<MachCompileResult> {
-         let flags = self.flags();
-         let vcode = self.compile_vcode(func, flags.clone())?;
-         let buffer = vcode.emit();
-         let buffer = buffer.finish();
-         let frame_size = vcode.frame_size();
+        let flags = self.flags();
+        let vcode = self.compile_vcode(func, flags.clone())?;
+        let buffer = vcode.emit();
+        let buffer = buffer.finish();
+        let frame_size = vcode.frame_size();
 
         // let disasm = if want_disasm {
         //     Some(vcode.show_rru(Some(&create_reg_universe_systemv(flags))))
@@ -85,7 +84,6 @@ impl MachBackend for SpirvBackend {
         //     None
         // };
 
-        
         Ok(MachCompileResult {
             buffer,
             frame_size,
@@ -117,7 +115,6 @@ impl MachBackend for SpirvBackend {
         IntCC::UnsignedGreaterThanOrEqual
     }
 }
-
 
 /// Create a new `isa::Builder`.
 pub fn isa_builder(triple: Triple) -> IsaBuilder {

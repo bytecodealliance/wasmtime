@@ -1,40 +1,39 @@
-
 use alloc::boxed::Box;
 use alloc::string::String;
 
 use regalloc::RealRegUniverse;
 use target_lexicon::Triple;
 
+use crate::binemit::CodeOffset;
+use crate::ir::types::Type;
+use crate::ir::types::{B1, B128, B16, B32, B64, B8, F32, F64, I128, I16, I32, I64, I8};
 use crate::ir::Function;
 use crate::isa::Builder as IsaBuilder;
+use crate::machinst::abi::ABIBody;
+use crate::machinst::buffer::MachLabel;
 use crate::machinst::pretty_print::ShowWithRRU;
+use crate::machinst::MachInstLabelUse;
 use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter, VCode};
-use crate::settings::{self, Flags};
-use crate::result::{CodegenResult, CodegenError};
 use crate::machinst::{MachBuffer, MachInst, MachInstEmit};
 use crate::machinst::{MachInstEmitState, MachTerminator};
-use crate::machinst::buffer::MachLabel;
-use crate::machinst::abi::ABIBody;
-use crate::ir::types::Type;
-use crate::binemit::CodeOffset;
-use crate::machinst::MachInstLabelUse;
-use crate::ir::types::{B1, B128, B16, B32, B64, B8, F32, F64, I128, I16, I32, I64, I8};
+use crate::result::{CodegenError, CodegenResult};
+use crate::settings::{self, Flags};
 
-use regalloc::NUM_REG_CLASSES;
+use regalloc::Reg;
+use regalloc::RegClass;
 use regalloc::RegUsageCollector;
 use regalloc::RegUsageMapper;
-use regalloc::Writable;
-use regalloc::Reg;
 use regalloc::SpillSlot;
-use regalloc::RegClass;
 use regalloc::VirtualReg;
+use regalloc::Writable;
+use regalloc::NUM_REG_CLASSES;
 
-use smallvec::SmallVec;
-use target_lexicon::Architecture;
-use spirv_headers::Op;
-use rspirv::dr::Operand;
-use rspirv::binary::Assemble;
 use alloc::vec::Vec;
+use rspirv::binary::Assemble;
+use rspirv::dr::Operand;
+use smallvec::SmallVec;
+use spirv_headers::Op;
+use target_lexicon::Architecture;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Inst {
@@ -45,19 +44,22 @@ pub(crate) struct Inst {
 }
 
 impl Inst {
-    pub(crate) fn new(op: Op, result_type: Option<u32>, result_id: Option<Writable<Reg>>, operands: Vec<Reg>) -> Self {
+    pub(crate) fn new(
+        op: Op,
+        result_type: Option<u32>,
+        result_id: Option<Writable<Reg>>,
+        operands: Vec<Reg>,
+    ) -> Self {
         Self {
-            op, result_type, result_id, operands
+            op,
+            result_type,
+            result_id,
+            operands,
         }
     }
 
     pub(crate) fn type_void(result_id: Option<Writable<Reg>>) -> Inst {
-        Inst::new(
-            Op::TypeVoid,
-            None,
-            result_id,
-            vec![],
-        )
+        Inst::new(Op::TypeVoid, None, result_id, vec![])
     }
 }
 
@@ -68,9 +70,7 @@ impl MachInstEmitState<Inst> for EmitState {
 }
 
 #[derive(Debug, Default, Clone)]
-pub(crate) struct EmitState {
-
-}
+pub(crate) struct EmitState {}
 
 impl MachInstEmit for Inst {
     type State = EmitState;
@@ -81,12 +81,12 @@ impl MachInstEmit for Inst {
     /// as the SPIR-V register index for now.
     fn emit(&self, sink: &mut MachBuffer<Self>, flags: &Flags, state: &mut Self::State) {
         let mut operands = vec![];
-        
+
         for operand in &self.operands {
             let idx = operand.get_index();
-            operands.push(idx as u32); 
+            operands.push(idx as u32);
         }
-        
+
         let mut opcode_len = 1 + operands.len() as u32;
         if self.result_type.is_some() {
             opcode_len += 1;
@@ -111,13 +111,12 @@ impl MachInstEmit for Inst {
             sink.put4(op);
         }
     }
-    
+
     fn pretty_print(&self, mb_rru: Option<&RealRegUniverse>, state: &mut EmitState) -> String {
         use crate::alloc::string::ToString;
         "".to_string()
     }
 }
-
 
 impl MachInst for Inst {
     fn get_regs(&self, collector: &mut RegUsageCollector) {
@@ -143,8 +142,8 @@ impl MachInst for Inst {
     fn is_term<'a>(&'a self) -> MachTerminator<'a> {
         match self.op {
             Op::Return | Op::ReturnValue => MachTerminator::Ret,
-            _ => MachTerminator::None
-        } 
+            _ => MachTerminator::None,
+        }
     }
 
     fn is_epilogue_placeholder(&self) -> bool {
@@ -169,7 +168,7 @@ impl MachInst for Inst {
 
     fn rc_for_type(ty: Type) -> CodegenResult<RegClass> {
         match ty {
-            I8 | I16 | I32 | B1 | B8 | B16| B32 | F32 => Ok(RegClass::F32),
+            I8 | I16 | I32 | B1 | B8 | B16 | B32 | F32 => Ok(RegClass::F32),
             F64 | B64 | I64 => Ok(RegClass::I64),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
@@ -177,7 +176,6 @@ impl MachInst for Inst {
             ))),
         }
     }
-
 
     fn gen_jump(target: MachLabel) -> Self {
         Inst::new(Op::Nop, None, None, vec![])
@@ -204,7 +202,7 @@ impl MachInst for Inst {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum LabelUse {
-    Standard
+    Standard,
 }
 
 impl MachInstLabelUse for LabelUse {
@@ -222,9 +220,7 @@ impl MachInstLabelUse for LabelUse {
         4
     }
 
-    fn patch(self, buffer: &mut [u8], use_offset: CodeOffset, label_offset: CodeOffset) {
-        
-    }
+    fn patch(self, buffer: &mut [u8], use_offset: CodeOffset, label_offset: CodeOffset) {}
 
     fn supports_veneer(self) -> bool {
         false
