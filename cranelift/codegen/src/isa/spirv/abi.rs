@@ -9,8 +9,10 @@ use crate::isa::spirv::inst::EmitState;
 use crate::binemit::Stackmap;
 
 use regalloc::*;
+
 use spirv_headers::Op;
 use rspirv::dr::{Operand, Instruction};
+
 use std::sync::atomic::{Ordering, AtomicU32};
 
 struct SpirvReturn {

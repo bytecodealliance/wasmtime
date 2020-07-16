@@ -84,6 +84,7 @@ mod x64;
 #[cfg(feature = "arm32")]
 mod arm32;
 
+#[cfg(feature = "spirv")]
 mod spirv;
 
 #[cfg(feature = "arm64")]
