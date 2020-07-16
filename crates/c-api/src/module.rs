@@ -136,9 +136,8 @@ pub extern "C" fn wasmtime_module_serialize(
     module: &wasm_module_t,
     ret: &mut wasm_byte_vec_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let mut result = Vec::new();
-    handle_result(module.module.serialize(&mut result), |()| {
-        ret.set_buffer(result);
+    handle_result(module.module.serialize(), |buf| {
+        ret.set_buffer(buf);
     })
 }
 

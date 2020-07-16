@@ -310,23 +310,24 @@ impl Module {
     }
 
     /// Serialize artifacts in I/O.
-    pub fn serialize(&self, w: impl std::io::Write) -> Result<()> {
+    pub fn serialize(&self) -> Result<Vec<u8>> {
         let artifacts = (
             compiler_fingerprint(self.engine.config()),
             self.compiled.to_compilation_artifacts(),
         );
 
-        bincode::serialize_into(w, &artifacts)?;
+        let mut buffer = Vec::new();
+        bincode::serialize_into(&mut buffer, &artifacts)?;
 
-        Ok(())
+        Ok(buffer)
     }
 
     /// Read compiled module from I/O.
-    pub fn deserialize(engine: &Engine, r: impl std::io::Read) -> Result<Module> {
+    pub fn deserialize(engine: &Engine, serialized: &[u8]) -> Result<Module> {
         let expected_fingerprint = compiler_fingerprint(engine.config());
 
         let (fingerprint, artifacts) =
-            bincode::deserialize_from::<_, (u64, CompilationArtifacts)>(r)
+            bincode::deserialize_from::<_, (u64, CompilationArtifacts)>(serialized)
                 .context("Deserialize compilation artifacts")?;
         if fingerprint != expected_fingerprint {
             bail!("Incompatible compilation artifact");

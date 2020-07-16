@@ -4,11 +4,9 @@
 // You can execute this example with `cargo run --example serialize`
 
 use anyhow::Result;
-use std::fs::File;
-use std::io::{Seek, SeekFrom};
 use wasmtime::*;
 
-fn serialize() -> Result<File> {
+fn serialize() -> Result<Vec<u8>> {
     // Configure the initial compilation environment, creating the global
     // `Store` structure. Note that you can also tweak configuration settings
     // with a `Config` and an `Engine` if desired.
@@ -18,16 +16,13 @@ fn serialize() -> Result<File> {
     // Compile the wasm binary into an in-memory instance of a `Module`.
     println!("Compiling module...");
     let module = Module::from_file(&engine, "examples/hello.wat")?;
-    let mut file = tempfile::tempfile()?;
-    module.serialize(file.try_clone()?)?;
-
-    file.seek(SeekFrom::Start(0))?;
+    let serialized = module.serialize()?;
 
     println!("Serialized.");
-    Ok(file)
+    Ok(serialized)
 }
 
-fn deserialize(file: File) -> Result<()> {
+fn deserialize(buffer: &[u8]) -> Result<()> {
     // Configure the initial compilation environment, creating the global
     // `Store` structure. Note that you can also tweak configuration settings
     // with a `Config` and an `Engine` if desired.
@@ -36,7 +31,7 @@ fn deserialize(file: File) -> Result<()> {
 
     // Compile the wasm binary into an in-memory instance of a `Module`.
     println!("Deserialize module...");
-    let module = Module::deserialize(store.engine(), file)?;
+    let module = Module::deserialize(store.engine(), buffer)?;
 
     // Here we handle the imports of the module, which in this case is our
     // `HelloCallback` type and its associated implementation of `Callback.
@@ -70,5 +65,5 @@ fn deserialize(file: File) -> Result<()> {
 
 fn main() -> Result<()> {
     let file = serialize()?;
-    deserialize(file)
+    deserialize(&file)
 }
