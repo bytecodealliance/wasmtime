@@ -2,6 +2,8 @@
 //! [Wasm C API](https://github.com/WebAssembly/wasm-c-api).
 
 #![allow(non_snake_case, non_camel_case_types, non_upper_case_globals)]
+#![allow(unknown_lints)]
+#![allow(improper_ctypes_definitions)]
 
 // TODO complete the C API
 
