@@ -190,7 +190,7 @@ jobs:
             rust: beta
           - build: nightly
             os: ubuntu-latest
-            rust: nightly
+            rust: nightly-2020-07-12
           - build: macos
             os: macos-latest
             rust: stable
