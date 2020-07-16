@@ -3072,34 +3072,95 @@ fn test_x64_emit() {
     // Xmm to int conversions, and conversely.
 
     insns.push((
-        Inst::xmm_to_gpr(SseOpcode::Movd, xmm0, w_rsi),
+        Inst::xmm_to_gpr(SseOpcode::Movd, xmm0, w_rsi, OperandSize::Size32),
         "660F7EC6",
         "movd    %xmm0, %esi",
     ));
     insns.push((
-        Inst::xmm_to_gpr(SseOpcode::Movq, xmm2, w_rdi),
+        Inst::xmm_to_gpr(SseOpcode::Movq, xmm2, w_rdi, OperandSize::Size64),
         "66480F7ED7",
         "movq    %xmm2, %rdi",
     ));
     insns.push((
-        Inst::gpr_to_xmm(SseOpcode::Movd, RegMem::reg(rax), w_xmm15),
+        Inst::xmm_to_gpr(SseOpcode::Cvttss2si, xmm0, w_rsi, OperandSize::Size32),
+        "F30F2CF0",
+        "cvttss2si %xmm0, %esi",
+    ));
+    insns.push((
+        Inst::xmm_to_gpr(SseOpcode::Cvttss2si, xmm0, w_rdi, OperandSize::Size64),
+        "F3480F2CF8",
+        "cvttss2si %xmm0, %rdi",
+    ));
+    insns.push((
+        Inst::xmm_to_gpr(SseOpcode::Cvttsd2si, xmm0, w_rax, OperandSize::Size32),
+        "F20F2CC0",
+        "cvttsd2si %xmm0, %eax",
+    ));
+    insns.push((
+        Inst::xmm_to_gpr(SseOpcode::Cvttsd2si, xmm0, w_r15, OperandSize::Size64),
+        "F24C0F2CF8",
+        "cvttsd2si %xmm0, %r15",
+    ));
+
+    insns.push((
+        Inst::gpr_to_xmm(
+            SseOpcode::Movd,
+            RegMem::reg(rax),
+            OperandSize::Size32,
+            w_xmm15,
+        ),
         "66440F6EF8",
         "movd    %eax, %xmm15",
     ));
     insns.push((
-        Inst::gpr_to_xmm(SseOpcode::Movd, RegMem::mem(Amode::imm_reg(2, r10)), w_xmm9),
+        Inst::gpr_to_xmm(
+            SseOpcode::Movd,
+            RegMem::mem(Amode::imm_reg(2, r10)),
+            OperandSize::Size32,
+            w_xmm9,
+        ),
         "66450F6E4A02",
         "movd    2(%r10), %xmm9",
     ));
     insns.push((
-        Inst::gpr_to_xmm(SseOpcode::Movd, RegMem::reg(rsi), w_xmm1),
+        Inst::gpr_to_xmm(
+            SseOpcode::Movd,
+            RegMem::reg(rsi),
+            OperandSize::Size32,
+            w_xmm1,
+        ),
         "660F6ECE",
         "movd    %esi, %xmm1",
     ));
     insns.push((
-        Inst::gpr_to_xmm(SseOpcode::Movq, RegMem::reg(rdi), w_xmm15),
+        Inst::gpr_to_xmm(
+            SseOpcode::Movq,
+            RegMem::reg(rdi),
+            OperandSize::Size64,
+            w_xmm15,
+        ),
         "664C0F6EFF",
         "movq    %rdi, %xmm15",
+    ));
+    insns.push((
+        Inst::gpr_to_xmm(
+            SseOpcode::Cvtsi2ss,
+            RegMem::reg(rdi),
+            OperandSize::Size32,
+            w_xmm15,
+        ),
+        "F3440F2AFF",
+        "cvtsi2ss %edi, %xmm15",
+    ));
+    insns.push((
+        Inst::gpr_to_xmm(
+            SseOpcode::Cvtsi2sd,
+            RegMem::reg(rsi),
+            OperandSize::Size64,
+            w_xmm1,
+        ),
+        "F2480F2ACE",
+        "cvtsi2sd %rsi, %xmm1",
     ));
 
     // ========================================================

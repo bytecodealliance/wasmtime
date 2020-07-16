@@ -953,6 +953,110 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::xmm_unary_rm_r(SseOpcode::Cvtsd2ss, src, dst));
         }
 
+        Opcode::FcvtFromSint => {
+            let (ext_spec, src_size) = match ctx.input_ty(insn, 0) {
+                I8 | I16 => (Some(ExtSpec::SignExtendTo32), OperandSize::Size32),
+                I32 => (None, OperandSize::Size32),
+                I64 => (None, OperandSize::Size64),
+                _ => unreachable!(),
+            };
+
+            let src = match ext_spec {
+                Some(ext_spec) => RegMem::reg(extend_input_to_reg(ctx, inputs[0], ext_spec)),
+                None => input_to_reg_mem(ctx, inputs[0]),
+            };
+
+            let output_ty = ty.unwrap();
+            let opcode = if output_ty == F32 {
+                SseOpcode::Cvtsi2ss
+            } else {
+                assert_eq!(output_ty, F64);
+                SseOpcode::Cvtsi2sd
+            };
+
+            let dst = output_to_reg(ctx, outputs[0]);
+            ctx.emit(Inst::gpr_to_xmm(opcode, src, src_size, dst));
+        }
+
+        Opcode::FcvtFromUint => {
+            let dst = output_to_reg(ctx, outputs[0]);
+            let ty = ty.unwrap();
+
+            let input_ty = ctx.input_ty(insn, 0);
+            match input_ty {
+                I8 | I16 | I32 => {
+                    // Conversion from an unsigned int smaller than 64-bit is easy: zero-extend +
+                    // do a signed conversion (which won't overflow).
+                    let opcode = if ty == F32 {
+                        SseOpcode::Cvtsi2ss
+                    } else {
+                        assert_eq!(ty, F64);
+                        SseOpcode::Cvtsi2sd
+                    };
+
+                    let src =
+                        RegMem::reg(extend_input_to_reg(ctx, inputs[0], ExtSpec::ZeroExtendTo64));
+                    ctx.emit(Inst::gpr_to_xmm(opcode, src, OperandSize::Size64, dst));
+                }
+
+                I64 => {
+                    let src = input_to_reg(ctx, inputs[0]);
+                    let tmp_gpr1 = ctx.alloc_tmp(RegClass::I64, I64);
+                    let tmp_gpr2 = ctx.alloc_tmp(RegClass::I64, I64);
+                    ctx.emit(Inst::cvt_u64_to_float_seq(
+                        ty == F64,
+                        src,
+                        tmp_gpr1,
+                        tmp_gpr2,
+                        dst,
+                    ));
+                }
+
+                _ => panic!("unexpected input type for FcvtFromUint: {:?}", input_ty),
+            };
+        }
+
+        Opcode::FcvtToUint | Opcode::FcvtToSint => {
+            let src = input_to_reg(ctx, inputs[0]);
+            let dst = output_to_reg(ctx, outputs[0]);
+
+            let input_ty = ctx.input_ty(insn, 0);
+            let src_size = if input_ty == F32 {
+                OperandSize::Size32
+            } else {
+                assert_eq!(input_ty, F64);
+                OperandSize::Size64
+            };
+
+            let output_ty = ty.unwrap();
+            let dst_size = if output_ty == I32 {
+                OperandSize::Size32
+            } else {
+                assert_eq!(output_ty, I64);
+                OperandSize::Size64
+            };
+
+            let to_signed = op == Opcode::FcvtToSint;
+
+            let src_copy = ctx.alloc_tmp(RegClass::V128, input_ty);
+            ctx.emit(Inst::gen_move(src_copy, src, input_ty));
+
+            let srcloc = ctx.srcloc(insn);
+            if to_signed {
+                let tmp_xmm = ctx.alloc_tmp(RegClass::V128, input_ty);
+                let tmp_gpr = ctx.alloc_tmp(RegClass::I64, output_ty);
+                ctx.emit(Inst::cvt_float_to_sint_seq(
+                    src_size, dst_size, src_copy, dst, tmp_xmm, tmp_gpr, srcloc,
+                ));
+            } else {
+                let tmp_xmm = ctx.alloc_tmp(RegClass::V128, input_ty);
+                let tmp_gpr = ctx.alloc_tmp(RegClass::I64, output_ty);
+                ctx.emit(Inst::cvt_float_to_uint_seq(
+                    src_size, dst_size, src_copy, dst, tmp_gpr, tmp_xmm, srcloc,
+                ));
+            }
+        }
+
         Opcode::Bitcast => {
             let input_ty = ctx.input_ty(insn, 0);
             let output_ty = ctx.output_ty(insn, 0);
@@ -960,22 +1064,42 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 (F32, I32) => {
                     let src = input_to_reg(ctx, inputs[0]);
                     let dst = output_to_reg(ctx, outputs[0]);
-                    ctx.emit(Inst::xmm_to_gpr(SseOpcode::Movd, src, dst));
+                    ctx.emit(Inst::xmm_to_gpr(
+                        SseOpcode::Movd,
+                        src,
+                        dst,
+                        OperandSize::Size32,
+                    ));
                 }
                 (I32, F32) => {
                     let src = input_to_reg_mem(ctx, inputs[0]);
                     let dst = output_to_reg(ctx, outputs[0]);
-                    ctx.emit(Inst::gpr_to_xmm(SseOpcode::Movd, src, dst));
+                    ctx.emit(Inst::gpr_to_xmm(
+                        SseOpcode::Movd,
+                        src,
+                        OperandSize::Size32,
+                        dst,
+                    ));
                 }
                 (F64, I64) => {
                     let src = input_to_reg(ctx, inputs[0]);
                     let dst = output_to_reg(ctx, outputs[0]);
-                    ctx.emit(Inst::xmm_to_gpr(SseOpcode::Movq, src, dst));
+                    ctx.emit(Inst::xmm_to_gpr(
+                        SseOpcode::Movq,
+                        src,
+                        dst,
+                        OperandSize::Size64,
+                    ));
                 }
                 (I64, F64) => {
                     let src = input_to_reg_mem(ctx, inputs[0]);
                     let dst = output_to_reg(ctx, outputs[0]);
-                    ctx.emit(Inst::gpr_to_xmm(SseOpcode::Movq, src, dst));
+                    ctx.emit(Inst::gpr_to_xmm(
+                        SseOpcode::Movq,
+                        src,
+                        OperandSize::Size64,
+                        dst,
+                    ));
                 }
                 _ => unreachable!("invalid bitcast from {:?} to {:?}", input_ty, output_ty),
             }
@@ -1000,6 +1124,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::gpr_to_xmm(
                     SseOpcode::Movd,
                     RegMem::reg(tmp_gpr1.to_reg()),
+                    OperandSize::Size32,
                     tmp_xmm1,
                 ));
                 ctx.emit(Inst::xmm_mov(
