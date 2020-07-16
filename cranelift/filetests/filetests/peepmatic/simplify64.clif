@@ -324,17 +324,3 @@ block0(v0: i32):
 ; nextln:    v1 = iadd_imm v0, 42
 ; nextln:    nop
 ; nextln:    return v2
-
-function %bxor_imm_32(i32) -> i32 {
-block0(v0: i32):
-    v1 = bxor_imm v0, -1
-    ; check: bnot v0
-    return v1
-}
-
-function %bxor_imm_64(i64) -> i64 {
-block0(v0: i64):
-    v1 = bxor_imm v0, -1
-    ; check: bnot v0
-    return v1
-}
