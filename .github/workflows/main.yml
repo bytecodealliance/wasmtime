@@ -558,3 +558,19 @@ jobs:
     - run: |
         cargo install --root ${{ runner.tool_cache }}/cargo-audit --version ${{ env.CARGO_AUDIT_VERSION }} cargo-audit
         cargo audit
+
+  verify-publish:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - run: rustup update stable && rustup default stable
+    - run: |
+        cd ${{ runner.tool_cache }}
+        curl -L https://github.com/mozilla/sccache/releases/download/0.2.13/sccache-0.2.13-x86_64-unknown-linux-musl.tar.gz | tar xzf -
+        echo "::add-path::`pwd`/sccache-0.2.13-x86_64-unknown-linux-musl"
+        echo ::set-env name=RUSTC_WRAPPER::sccache
+    - run: |
+        rustc scripts/publish.rs
+        ./publish verify

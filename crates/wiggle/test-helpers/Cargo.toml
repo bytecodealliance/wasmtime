@@ -9,6 +9,7 @@ categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 include = ["src/**/*", "LICENSE"]
+publish = false
 
 [dependencies]
 proptest = "0.9"
