@@ -88,11 +88,11 @@ impl MachInstEmit for Inst {
         }
         
         let mut opcode_len = 1 + operands.len() as u32;
-        if let Some(r) = self.result_type {
+        if self.result_type.is_some() {
             opcode_len += 1;
         }
 
-        if let Some(r) = self.result_id {
+        if self.result_id.is_some() {
             opcode_len += 1;
         }
 
@@ -121,7 +121,7 @@ impl MachInstEmit for Inst {
 
 impl MachInst for Inst {
     fn get_regs(&self, collector: &mut RegUsageCollector) {
-        if let Some(result) = self.result_id{
+        if let Some(result) = self.result_id {
             collector.add_def(result);
         }
 
