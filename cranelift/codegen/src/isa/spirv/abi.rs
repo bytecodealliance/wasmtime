@@ -27,7 +27,6 @@ pub(crate) struct SpirvABIBody {
 
 fn spirv_real_reg(id: u32) -> Reg {
     use core::convert::TryInto;
-    dbg!(id);
     Reg::new_real(RegClass::I64, 0, id.try_into().unwrap())
 }
 
@@ -59,16 +58,9 @@ impl SpirvABIBody {
         //     }
         // }
 
-        dbg!(&func.signature.params);
-        dbg!(&func.signature.returns);
-
         let next_id = AtomicU32::new(1);
         let mut global_values = vec![];
         let mut rets = vec![];
-
-        for v in func.dfg.values() {
-            dbg!(func.dfg.value_type(v));
-        }
 
         for ret in &func.signature.returns {
             match ret.purpose {

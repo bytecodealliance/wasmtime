@@ -152,14 +152,10 @@ impl MachInst for Inst {
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self {
-        dbg!(to_reg);
-        dbg!(from_reg);
         Inst::new(Op::Nop, None, None, vec![])
     }
 
     fn gen_constant(to_reg: Writable<Reg>, value: u64, ty: Type) -> SmallVec<[Self; 4]> {
-        dbg!(to_reg);
-        dbg!(value);
         SmallVec::new()
     }
 
@@ -168,8 +164,6 @@ impl MachInst for Inst {
     }
 
     fn maybe_direct_reload(&self, reg: VirtualReg, slot: SpillSlot) -> Option<Self> {
-        dbg!(reg);
-        dbg!(slot);
         None
     }
 
@@ -186,12 +180,10 @@ impl MachInst for Inst {
 
 
     fn gen_jump(target: MachLabel) -> Self {
-        dbg!(target);
         Inst::new(Op::Nop, None, None, vec![])
     }
 
     fn gen_nop(preferred_size: usize) -> Self {
-        dbg!(preferred_size);
         Inst::new(Op::Nop, None, None, vec![])
     }
 

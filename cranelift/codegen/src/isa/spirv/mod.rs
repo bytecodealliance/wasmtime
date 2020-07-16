@@ -62,7 +62,6 @@ impl SpirvBackend {
     fn compile_vcode(&self, func: &Function, flags: Flags) -> CodegenResult<VCode<Inst>> {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
-        debug!("Hoi");
         let abi = Box::new(abi::SpirvABIBody::new(func, flags));
         compile::compile::<Self>(&func, self, abi)
     }
