@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-wasi"
-version = "0.19.0"
+version = "0.19.1"
 authors = ["The Cranelift Project Developers"]
 description = "WASI API support for Wasmtime"
 documentation = "https://docs.rs/wasmtime-wasi"

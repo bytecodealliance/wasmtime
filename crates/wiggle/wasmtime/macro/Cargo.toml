@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-wiggle-macro"
-version = "0.19.0"
+version = "0.19.1"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkonk@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"

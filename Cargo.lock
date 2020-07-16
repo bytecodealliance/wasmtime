@@ -2292,7 +2292,7 @@ checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
 
 [[package]]
 name = "wasi-common"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -2587,7 +2587,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wasi"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "anyhow",
  "log",
@@ -2620,7 +2620,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wiggle-macro"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "proc-macro2",
  "quote",
