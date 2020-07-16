@@ -515,8 +515,7 @@ typedef own wasm_trap_t* (*wasmtime_func_callback_t)(const wasmtime_caller_t* ca
  *
  * This function is the same as #wasm_func_callback_with_env_t except that its
  * first argument is a #wasmtime_caller_t which allows learning information
- * about the
- * caller.
+ * about the caller.
  */
 typedef own wasm_trap_t* (*wasmtime_func_callback_with_env_t)(const wasmtime_caller_t* caller, void* env, const wasm_val_t args[], wasm_val_t results[]);
 
@@ -543,6 +542,28 @@ WASM_API_EXTERN own wasm_func_t* wasmtime_func_new_with_env(
   void* env,
   void (*finalizer)(void*)
 );
+
+/**
+ * \brief Creates a new `funcref` value referencing `func`.
+ *
+ * Create a `funcref` value that references `func` and writes it to `funcrefp`.
+ *
+ * Gives ownership fo the `funcref` value written to `funcrefp`.
+ *
+ * Both `func` and `funcrefp` must not be NULL.
+ */
+WASM_API_EXTERN void wasmtime_func_as_funcref(const wasm_func_t* func, wasm_val_t* funcrefp);
+
+/**
+ * \brief Get the `wasm_func_t*` referenced by the given `funcref` value.
+ *
+ * Gets an owning handle to the `wasm_func_t*` that the given `funcref` value is
+ * referencing. Returns NULL if the value is not a `funcref`, or if the value is
+ * a null function reference.
+ *
+ * The `val` pointer must not be NULL.
+ */
+WASM_API_EXTERN own wasm_func_t* wasmtime_funcref_as_func(const wasm_val_t* val);
 
 /**
  * \brief Loads a #wasm_extern_t from the caller's context
@@ -845,8 +866,10 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_funcref_table_grow(
  * This function does not take an associated finalizer to clean up the data when
  * the reference is reclaimed. If you need a finalizer to clean up the data,
  * then use #wasmtime_externref_new_with_finalizer.
+ *
+ * Gives ownership of the newly created `externref` value.
  */
-WASM_API_EXTERN void wasmtime_externref_new(void *data, wasm_val_t *valp);
+WASM_API_EXTERN void wasmtime_externref_new(own void *data, wasm_val_t *valp);
 
 /**
  * \brief A finalizer for an `externref`'s wrapped data.
@@ -866,9 +889,11 @@ typedef void (*wasmtime_externref_finalizer_t)(void*);
  * When the reference is reclaimed, the wrapped data is cleaned up with the
  * provided finalizer. If you do not need to clean up the wrapped data, then use
  * #wasmtime_externref_new.
+ *
+ * Gives ownership of the newly created `externref` value.
  */
 WASM_API_EXTERN void wasmtime_externref_new_with_finalizer(
-    void *data,
+    own void *data,
     wasmtime_externref_finalizer_t finalizer,
     wasm_val_t *valp
 );
@@ -887,7 +912,8 @@ WASM_API_EXTERN void wasmtime_externref_new_with_finalizer(
  * If the given value is not an `externref`, returns `false` and leaves `datap`
  * unmodified.
  *
- * Does not take ownership of `val`.
+ * Does not take ownership of `val`. Does not give up ownership of the `void*`
+ * data written to `datap`.
  *
  * Both `val` and `datap` must not be `NULL`.
  */
