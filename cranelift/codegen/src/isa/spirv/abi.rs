@@ -156,7 +156,7 @@ impl ABIBody for SpirvABIBody {
         for ret in &self.rets {
             set.insert(ret.real_reg.clone());
         }
-        dbg!(set)
+        set
     }
 
     fn gen_copy_arg_to_reg(&self, idx: usize, to_reg: Writable<Reg>) -> Inst {
@@ -169,8 +169,6 @@ impl ABIBody for SpirvABIBody {
         from_reg: Writable<Reg>,
         ext: ArgumentExtension,
     ) -> Vec<Inst> {
-        dbg!(idx);
-        dbg!(from_reg);
         vec![
            // Inst::new(Op::Nop, None, None, vec![])
         ]
