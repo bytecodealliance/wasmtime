@@ -10,6 +10,7 @@ snapshot of what the current state of the world looks like.
 All features of `wasmtime` should work on the following platforms:
 
 * Linux x86\_64
+* Linux aarch64
 * macOS x86\_64
 * Windows x86\_64
 
@@ -18,9 +19,8 @@ sections below!
 
 ## JIT compiler support
 
-The JIT compiler, backed by either `lightbeam` or `cranelift` supports only the
-x86\_64 architecture at this time. Support for at least ARM, AArch64, and x86 is
-planned at this time.
+The JIT compiler, backed by Cranelift, supports the x86\_64 and aarch64
+architectures at this time. Support for at least ARM and x86 is planned as well.
 
 Usage of the JIT compiler will require a host operating system which supports
 creating executable memory pages on-the-fly. In Rust terms this generally means
@@ -39,5 +39,6 @@ much else will be needed.
 The `wasmtime` project does not currently use `#[no_std]` for its crates, but
 this is not because it won't support it! At this time we're still gathering use
 cases for for what `#[no_std]` might entail, so if you're interested in this
-we'd love to hear about your use case! Feel free to open an issue on the
+we'd love to hear about your use case! Feel free to [open an
+issue](https://github.com/bytecodealliance/wasmtime/issues/new) on the
 `wasmtime` repository to discuss this.

@@ -70,7 +70,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rn,
                     rm,
                     alu_op: VecALUOp::Add,
-                    ty,
+                    size: VectorSize::from_ty(ty),
                 });
             }
         }
@@ -89,13 +89,13 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rn,
                     rm,
                     alu_op: VecALUOp::Sub,
-                    ty,
+                    size: VectorSize::from_ty(ty),
                 });
             }
         }
         Opcode::UaddSat | Opcode::SaddSat | Opcode::UsubSat | Opcode::SsubSat => {
-            // We use the vector instruction set's saturating adds (UQADD /
-            // SQADD), which require vector registers.
+            // We use the scalar SIMD & FP saturating additions and subtractions
+            // (SQADD / UQADD / SQSUB / UQSUB), which require scalar FP registers.
             let is_signed = op == Opcode::SaddSat || op == Opcode::SsubSat;
             let ty = ty.unwrap();
             let rd = get_output_reg(ctx, outputs[0]);
@@ -105,11 +105,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 } else {
                     NarrowValueMode::ZeroExtend64
                 };
-                let alu_op = match op {
-                    Opcode::UaddSat => VecALUOp::UQAddScalar,
-                    Opcode::SaddSat => VecALUOp::SQAddScalar,
-                    Opcode::UsubSat => VecALUOp::UQSubScalar,
-                    Opcode::SsubSat => VecALUOp::SQSubScalar,
+                let fpu_op = match op {
+                    Opcode::UaddSat => FPUOp2::Uqadd64,
+                    Opcode::SaddSat => FPUOp2::Sqadd64,
+                    Opcode::UsubSat => FPUOp2::Uqsub64,
+                    Opcode::SsubSat => FPUOp2::Sqsub64,
                     _ => unreachable!(),
                 };
                 let va = ctx.alloc_tmp(RegClass::V128, I128);
@@ -118,18 +118,17 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let rb = put_input_in_reg(ctx, inputs[1], narrow_mode);
                 ctx.emit(Inst::MovToVec64 { rd: va, rn: ra });
                 ctx.emit(Inst::MovToVec64 { rd: vb, rn: rb });
-                ctx.emit(Inst::VecRRR {
+                ctx.emit(Inst::FpuRRR {
+                    fpu_op,
                     rd: va,
                     rn: va.to_reg(),
                     rm: vb.to_reg(),
-                    alu_op,
-                    ty: I64,
                 });
                 ctx.emit(Inst::MovFromVec {
                     rd,
                     rn: va.to_reg(),
                     idx: 0,
-                    ty: I64,
+                    size: VectorSize::Size64x2,
                 });
             } else {
                 let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
@@ -148,7 +147,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rn,
                     rm,
                     alu_op,
-                    ty,
+                    size: VectorSize::from_ty(ty),
                 });
             }
         }
@@ -167,7 +166,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     op: VecMisc2::Neg,
                     rd,
                     rn,
-                    ty,
+                    size: VectorSize::from_ty(ty),
                 });
             }
         }
@@ -192,7 +191,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rd,
                     rn,
                     rm,
-                    ty,
+                    size: VectorSize::from_ty(ty),
                 });
             }
         }
@@ -422,7 +421,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     op: VecMisc2::Not,
                     rd,
                     rn: rm,
-                    ty,
+                    size: VectorSize::from_ty(ty),
                 });
             }
         }
@@ -466,7 +465,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rd,
                     rn,
                     rm,
-                    ty,
+                    size: VectorSize::from_ty(ty),
                 });
             }
         }
@@ -495,7 +494,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(alu_inst_immshift(alu_op, rd, rn, rm));
             } else {
                 let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-
+                let size = VectorSize::from_ty(ty);
                 let (alu_op, is_right_shift) = match op {
                     Opcode::Ishl => (VecALUOp::Sshl, false),
                     Opcode::Ushr => (VecALUOp::Ushl, true),
@@ -514,18 +513,14 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     put_input_in_reg(ctx, inputs[1], NarrowValueMode::None)
                 };
 
-                ctx.emit(Inst::VecDup {
-                    rd,
-                    rn: rm,
-                    ty: ty.lane_type(),
-                });
+                ctx.emit(Inst::VecDup { rd, rn: rm, size });
 
                 ctx.emit(Inst::VecRRR {
                     alu_op,
                     rd,
                     rn,
                     rm: rd.to_reg(),
-                    ty,
+                    size,
                 });
             }
         }
@@ -1167,7 +1162,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rd,
                     rn,
                     rm,
-                    ty,
+                    size: VectorSize::from_ty(ty),
                 });
             }
         }
@@ -1297,7 +1292,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         rd,
                         rn,
                         idx: 0,
-                        ty: I64,
+                        size: VectorSize::Size64x2,
                     });
                 }
             }
@@ -1557,15 +1552,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let idx = *imm;
                 let rd = get_output_reg(ctx, outputs[0]);
                 let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+                let size = VectorSize::from_ty(ctx.input_ty(insn, 0));
                 let ty = ty.unwrap();
 
                 if ty_is_int(ty) {
-                    ctx.emit(Inst::MovFromVec { rd, rn, idx, ty });
+                    ctx.emit(Inst::MovFromVec { rd, rn, idx, size });
                 // Plain moves are faster on some processors.
                 } else if idx == 0 {
                     ctx.emit(Inst::gen_move(rd, rn, ty));
                 } else {
-                    let size = ScalarSize::from_ty(ty);
                     ctx.emit(Inst::FpuMoveFromVec { rd, rn, idx, size });
                 }
             } else {
@@ -1576,11 +1571,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Splat => {
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let rd = get_output_reg(ctx, outputs[0]);
-            let ty = ctx.input_ty(insn, 0);
-            let inst = if ty_is_int(ty) {
-                Inst::VecDup { rd, rn, ty }
+            let input_ty = ctx.input_ty(insn, 0);
+            let size = VectorSize::from_ty(ty.unwrap());
+            let inst = if ty_is_int(input_ty) {
+                Inst::VecDup { rd, rn, size }
             } else {
-                Inst::VecDupFromFpu { rd, rn, ty }
+                Inst::VecDupFromFpu { rd, rn, size }
             };
             ctx.emit(inst);
         }
@@ -1598,21 +1594,22 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // cmp xm, #0
             // cset xm, ne
 
-            let input_ty = ctx.input_ty(insn, 0);
+            let size = VectorSize::from_ty(ctx.input_ty(insn, 0));
+
             if op == Opcode::VanyTrue {
                 ctx.emit(Inst::VecRRR {
                     alu_op: VecALUOp::Umaxp,
                     rd: tmp,
                     rn: rm,
                     rm: rm,
-                    ty: input_ty,
+                    size,
                 });
             } else {
                 ctx.emit(Inst::VecLanes {
                     op: VecLanesOp::Uminv,
                     rd: tmp,
                     rn: rm,
-                    ty: input_ty,
+                    size,
                 });
             };
 
@@ -1620,7 +1617,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 rd,
                 rn: tmp.to_reg(),
                 idx: 0,
-                ty: I64,
+                size: VectorSize::Size64x2,
             });
 
             ctx.emit(Inst::AluRRImm12 {
@@ -2136,6 +2133,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::X86Insertps
         | Opcode::X86Movsd
         | Opcode::X86Movlhps
+        | Opcode::X86Palignr
         | Opcode::X86Psll
         | Opcode::X86Psrl
         | Opcode::X86Psra
@@ -2156,7 +2154,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::AvgRound => unimplemented!(),
         Opcode::Iabs => unimplemented!(),
-        Opcode::Snarrow | Opcode::Unarrow => unimplemented!(),
+        Opcode::Snarrow
+        | Opcode::Unarrow
+        | Opcode::SwidenLow
+        | Opcode::SwidenHigh
+        | Opcode::UwidenLow
+        | Opcode::UwidenHigh => unimplemented!(),
         Opcode::TlsValue => unimplemented!(),
     }
 

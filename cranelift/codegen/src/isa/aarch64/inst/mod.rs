@@ -5,8 +5,8 @@
 
 use crate::binemit::CodeOffset;
 use crate::ir::types::{
-    B1, B16, B16X8, B32, B32X4, B64, B64X2, B8, B8X16, F32, F32X2, F32X4, F64, F64X2, FFLAGS, I16,
-    I16X4, I16X8, I32, I32X2, I32X4, I64, I64X2, I8, I8X16, I8X8, IFLAGS, R32, R64,
+    B1, B16, B16X8, B32, B32X4, B64, B64X2, B8, B8X16, F32, F32X4, F64, F64X2, FFLAGS, I16, I16X8,
+    I32, I32X4, I64, I64X2, I8, I8X16, IFLAGS, R32, R64,
 };
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
@@ -125,6 +125,14 @@ pub enum FPUOp2 {
     Max64,
     Min32,
     Min64,
+    /// Signed saturating add
+    Sqadd64,
+    /// Unsigned saturating add
+    Uqadd64,
+    /// Signed saturating subtract
+    Sqsub64,
+    /// Unsigned saturating subtract
+    Uqsub64,
 }
 
 /// A floating-point unit (FPU) operation with two args, a register and an immediate.
@@ -208,16 +216,12 @@ pub enum VecExtendOp {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum VecALUOp {
     /// Signed saturating add
-    SQAddScalar,
     Sqadd,
     /// Unsigned saturating add
-    UQAddScalar,
     Uqadd,
     /// Signed saturating subtract
-    SQSubScalar,
     Sqsub,
     /// Unsigned saturating subtract
-    UQSubScalar,
     Uqsub,
     /// Compare bitwise equal
     Cmeq,
@@ -590,7 +594,7 @@ pub enum Inst {
         rd: Writable<Reg>,
         rn: Reg,
         idx: u8,
-        size: ScalarSize,
+        size: VectorSize,
     },
 
     /// 1-op FPU instruction.
@@ -734,21 +738,21 @@ pub enum Inst {
         rd: Writable<Reg>,
         rn: Reg,
         idx: u8,
-        ty: Type,
+        size: VectorSize,
     },
 
     /// Duplicate general-purpose register to vector.
     VecDup {
         rd: Writable<Reg>,
         rn: Reg,
-        ty: Type,
+        size: VectorSize,
     },
 
     /// Duplicate scalar to vector.
     VecDupFromFpu {
         rd: Writable<Reg>,
         rn: Reg,
-        ty: Type,
+        size: VectorSize,
     },
 
     /// Vector extend.
@@ -764,7 +768,7 @@ pub enum Inst {
         rd: Writable<Reg>,
         rn: Reg,
         rm: Reg,
-        ty: Type,
+        size: VectorSize,
     },
 
     /// Vector two register miscellaneous instruction.
@@ -772,7 +776,7 @@ pub enum Inst {
         op: VecMisc2,
         rd: Writable<Reg>,
         rn: Reg,
-        ty: Type,
+        size: VectorSize,
     },
 
     /// Vector instruction across lanes.
@@ -780,7 +784,7 @@ pub enum Inst {
         op: VecLanesOp,
         rd: Writable<Reg>,
         rn: Reg,
-        ty: Type,
+        size: VectorSize,
     },
 
     /// Move to the NZCV flags (actually a `MSR NZCV, Xn` insn).
@@ -2504,13 +2508,8 @@ impl Inst {
                 format!("mov {}.16b, {}.16b", rd, rn)
             }
             &Inst::FpuMoveFromVec { rd, rn, idx, size } => {
-                let vector_type = match size {
-                    ScalarSize::Size32 => F32,
-                    ScalarSize::Size64 => F64,
-                    _ => unimplemented!(),
-                };
-                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, size);
-                let rn = show_vreg_element(rn, mb_rru, idx, vector_type);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, size.lane_size());
+                let rn = show_vreg_element(rn, mb_rru, idx, size);
                 format!("mov {}, {}", rd, rn)
             }
             &Inst::FpuRR { fpu_op, rd, rn } => {
@@ -2542,6 +2541,10 @@ impl Inst {
                     FPUOp2::Max64 => ("fmax", ScalarSize::Size64),
                     FPUOp2::Min32 => ("fmin", ScalarSize::Size32),
                     FPUOp2::Min64 => ("fmin", ScalarSize::Size64),
+                    FPUOp2::Sqadd64 => ("sqadd", ScalarSize::Size64),
+                    FPUOp2::Uqadd64 => ("uqadd", ScalarSize::Size64),
+                    FPUOp2::Sqsub64 => ("sqsub", ScalarSize::Size64),
+                    FPUOp2::Uqsub64 => ("uqsub", ScalarSize::Size64),
                 };
                 let rd = show_vreg_scalar(rd.to_reg(), mb_rru, size);
                 let rn = show_vreg_scalar(rn, mb_rru, size);
@@ -2557,7 +2560,7 @@ impl Inst {
                 };
 
                 let show_vreg_fn: fn(Reg, Option<&RealRegUniverse>) -> String = if vector {
-                    |reg, mb_rru| show_vreg_vector(reg, mb_rru, F32X2)
+                    |reg, mb_rru| show_vreg_vector(reg, mb_rru, VectorSize::Size32x2)
                 } else {
                     |reg, mb_rru| show_vreg_scalar(reg, mb_rru, ScalarSize::Size64)
                 };
@@ -2706,45 +2709,36 @@ impl Inst {
                 let rn = rn.show_rru(mb_rru);
                 format!("mov {}.d[0], {}", rd, rn)
             }
-            &Inst::MovFromVec { rd, rn, idx, ty } => {
-                let op = match ty {
-                    I32 | I64 => "mov",
-                    _ => "umov",
+            &Inst::MovFromVec { rd, rn, idx, size } => {
+                let op = match size {
+                    VectorSize::Size8x16 => "umov",
+                    VectorSize::Size16x8 => "umov",
+                    VectorSize::Size32x4 => "mov",
+                    VectorSize::Size64x2 => "mov",
+                    _ => unimplemented!(),
                 };
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, OperandSize::from_ty(ty));
-                let rn = show_vreg_element(rn, mb_rru, idx, ty);
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, size.operand_size());
+                let rn = show_vreg_element(rn, mb_rru, idx, size);
                 format!("{} {}, {}", op, rd, rn)
             }
-            &Inst::VecDup { rd, rn, ty } => {
-                let vector_type = match ty {
-                    I8 => I8X16,
-                    I16 => I16X8,
-                    I32 => I32X4,
-                    I64 => I64X2,
-                    _ => unimplemented!(),
-                };
-                let rd = show_vreg_vector(rd.to_reg(), mb_rru, vector_type);
-                let rn = show_ireg_sized(rn, mb_rru, OperandSize::from_ty(ty));
+            &Inst::VecDup { rd, rn, size } => {
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
+                let rn = show_ireg_sized(rn, mb_rru, size.operand_size());
                 format!("dup {}, {}", rd, rn)
             }
-            &Inst::VecDupFromFpu { rd, rn, ty } => {
-                let vector_type = match ty {
-                    F32 => F32X4,
-                    F64 => F64X2,
-                    _ => unimplemented!(),
-                };
-                let rd = show_vreg_vector(rd.to_reg(), mb_rru, vector_type);
-                let rn = show_vreg_element(rn, mb_rru, 0, ty);
+            &Inst::VecDupFromFpu { rd, rn, size } => {
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
+                let rn = show_vreg_element(rn, mb_rru, 0, size);
                 format!("dup {}, {}", rd, rn)
             }
             &Inst::VecExtend { t, rd, rn } => {
                 let (op, dest, src) = match t {
-                    VecExtendOp::Sxtl8 => ("sxtl", I16X8, I8X8),
-                    VecExtendOp::Sxtl16 => ("sxtl", I32X4, I16X4),
-                    VecExtendOp::Sxtl32 => ("sxtl", I64X2, I32X2),
-                    VecExtendOp::Uxtl8 => ("uxtl", I16X8, I8X8),
-                    VecExtendOp::Uxtl16 => ("uxtl", I32X4, I16X4),
-                    VecExtendOp::Uxtl32 => ("uxtl", I64X2, I32X2),
+                    VecExtendOp::Sxtl8 => ("sxtl", VectorSize::Size16x8, VectorSize::Size8x8),
+                    VecExtendOp::Sxtl16 => ("sxtl", VectorSize::Size32x4, VectorSize::Size16x4),
+                    VecExtendOp::Sxtl32 => ("sxtl", VectorSize::Size64x2, VectorSize::Size32x2),
+                    VecExtendOp::Uxtl8 => ("uxtl", VectorSize::Size16x8, VectorSize::Size8x8),
+                    VecExtendOp::Uxtl16 => ("uxtl", VectorSize::Size32x4, VectorSize::Size16x4),
+                    VecExtendOp::Uxtl32 => ("uxtl", VectorSize::Size64x2, VectorSize::Size32x2),
                 };
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, dest);
                 let rn = show_vreg_vector(rn, mb_rru, src);
@@ -2755,72 +2749,54 @@ impl Inst {
                 rn,
                 rm,
                 alu_op,
-                ty,
+                size,
             } => {
-                let (op, vector, ty) = match alu_op {
-                    VecALUOp::SQAddScalar => ("sqadd", false, ty),
-                    VecALUOp::Sqadd => ("sqadd", true, ty),
-                    VecALUOp::UQAddScalar => ("uqadd", false, ty),
-                    VecALUOp::Uqadd => ("uqadd", true, ty),
-                    VecALUOp::SQSubScalar => ("sqsub", false, ty),
-                    VecALUOp::Sqsub => ("sqsub", true, ty),
-                    VecALUOp::UQSubScalar => ("uqsub", false, ty),
-                    VecALUOp::Uqsub => ("uqsub", true, ty),
-                    VecALUOp::Cmeq => ("cmeq", true, ty),
-                    VecALUOp::Cmge => ("cmge", true, ty),
-                    VecALUOp::Cmgt => ("cmgt", true, ty),
-                    VecALUOp::Cmhs => ("cmhs", true, ty),
-                    VecALUOp::Cmhi => ("cmhi", true, ty),
-                    VecALUOp::Fcmeq => ("fcmeq", true, ty),
-                    VecALUOp::Fcmgt => ("fcmgt", true, ty),
-                    VecALUOp::Fcmge => ("fcmge", true, ty),
-                    VecALUOp::And => ("and", true, I8X16),
-                    VecALUOp::Bic => ("bic", true, I8X16),
-                    VecALUOp::Orr => ("orr", true, I8X16),
-                    VecALUOp::Eor => ("eor", true, I8X16),
-                    VecALUOp::Bsl => ("bsl", true, I8X16),
-                    VecALUOp::Umaxp => ("umaxp", true, ty),
-                    VecALUOp::Add => ("add", true, ty),
-                    VecALUOp::Sub => ("sub", true, ty),
-                    VecALUOp::Mul => ("mul", true, ty),
-                    VecALUOp::Sshl => ("sshl", true, ty),
-                    VecALUOp::Ushl => ("ushl", true, ty),
+                let (op, size) = match alu_op {
+                    VecALUOp::Sqadd => ("sqadd", size),
+                    VecALUOp::Uqadd => ("uqadd", size),
+                    VecALUOp::Sqsub => ("sqsub", size),
+                    VecALUOp::Uqsub => ("uqsub", size),
+                    VecALUOp::Cmeq => ("cmeq", size),
+                    VecALUOp::Cmge => ("cmge", size),
+                    VecALUOp::Cmgt => ("cmgt", size),
+                    VecALUOp::Cmhs => ("cmhs", size),
+                    VecALUOp::Cmhi => ("cmhi", size),
+                    VecALUOp::Fcmeq => ("fcmeq", size),
+                    VecALUOp::Fcmgt => ("fcmgt", size),
+                    VecALUOp::Fcmge => ("fcmge", size),
+                    VecALUOp::And => ("and", VectorSize::Size8x16),
+                    VecALUOp::Bic => ("bic", VectorSize::Size8x16),
+                    VecALUOp::Orr => ("orr", VectorSize::Size8x16),
+                    VecALUOp::Eor => ("eor", VectorSize::Size8x16),
+                    VecALUOp::Bsl => ("bsl", VectorSize::Size8x16),
+                    VecALUOp::Umaxp => ("umaxp", size),
+                    VecALUOp::Add => ("add", size),
+                    VecALUOp::Sub => ("sub", size),
+                    VecALUOp::Mul => ("mul", size),
+                    VecALUOp::Sshl => ("sshl", size),
+                    VecALUOp::Ushl => ("ushl", size),
                 };
-
-                let show_vreg_fn: fn(Reg, Option<&RealRegUniverse>, Type) -> String = if vector {
-                    |reg, mb_rru, ty| show_vreg_vector(reg, mb_rru, ty)
-                } else {
-                    |reg, mb_rru, _ty| show_vreg_scalar(reg, mb_rru, ScalarSize::Size64)
-                };
-
-                let rd = show_vreg_fn(rd.to_reg(), mb_rru, ty);
-                let rn = show_vreg_fn(rn, mb_rru, ty);
-                let rm = show_vreg_fn(rm, mb_rru, ty);
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
+                let rn = show_vreg_vector(rn, mb_rru, size);
+                let rm = show_vreg_vector(rm, mb_rru, size);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
-            &Inst::VecMisc { op, rd, rn, ty } => {
-                let (op, ty) = match op {
-                    VecMisc2::Not => ("mvn", I8X16),
-                    VecMisc2::Neg => ("neg", ty),
+            &Inst::VecMisc { op, rd, rn, size } => {
+                let (op, size) = match op {
+                    VecMisc2::Not => ("mvn", VectorSize::Size8x16),
+                    VecMisc2::Neg => ("neg", size),
                 };
 
-                let rd = show_vreg_vector(rd.to_reg(), mb_rru, ty);
-                let rn = show_vreg_vector(rn, mb_rru, ty);
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
+                let rn = show_vreg_vector(rn, mb_rru, size);
                 format!("{} {}, {}", op, rd, rn)
             }
-            &Inst::VecLanes { op, rd, rn, ty } => {
+            &Inst::VecLanes { op, rd, rn, size } => {
                 let op = match op {
                     VecLanesOp::Uminv => "uminv",
                 };
-                let size = match ty {
-                    I8X16 => ScalarSize::Size8,
-                    I16X8 => ScalarSize::Size16,
-                    I32X4 => ScalarSize::Size32,
-                    _ => unimplemented!(),
-                };
-
-                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, size);
-                let rn = show_vreg_vector(rn, mb_rru, ty);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, size.lane_size());
+                let rn = show_vreg_vector(rn, mb_rru, size);
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::MovToNZCV { rn } => {

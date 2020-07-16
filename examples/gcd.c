@@ -59,7 +59,7 @@ int main() {
 
   // Compile and instantiate our module
   wasm_module_t *module = NULL;
-  error = wasmtime_module_new(store, &wasm, &module);
+  error = wasmtime_module_new(engine, &wasm, &module);
   if (module == NULL)
     exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&wasm);

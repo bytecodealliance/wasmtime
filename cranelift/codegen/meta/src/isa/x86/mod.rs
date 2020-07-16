@@ -14,7 +14,7 @@ mod legalize;
 mod opcodes;
 mod recipes;
 mod registers;
-mod settings;
+pub(crate) mod settings;
 
 pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     let settings = settings::define(&shared_defs.settings);

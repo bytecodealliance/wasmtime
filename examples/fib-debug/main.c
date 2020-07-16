@@ -43,7 +43,7 @@ int main(int argc, const char* argv[]) {
   // Compile.
   printf("Compiling module...\n");
   wasm_module_t *module = NULL;
-  wasmtime_error_t* error = wasmtime_module_new(store, &binary, &module);
+  wasmtime_error_t* error = wasmtime_module_new(engine, &binary, &module);
   if (!module)
     exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&binary);

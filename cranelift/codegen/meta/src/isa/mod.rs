@@ -6,10 +6,10 @@ use std::fmt;
 mod arm32;
 mod arm64;
 mod riscv;
-mod x86;
+pub(crate) mod x86;
 
 /// Represents known ISA target.
-#[derive(Copy, Clone)]
+#[derive(PartialEq, Copy, Clone)]
 pub enum Isa {
     Riscv,
     X86,

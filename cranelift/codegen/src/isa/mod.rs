@@ -121,7 +121,11 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
     match triple.architecture {
         Architecture::Riscv32 | Architecture::Riscv64 => isa_builder!(riscv, "riscv", triple),
         Architecture::I386 | Architecture::I586 | Architecture::I686 | Architecture::X86_64 => {
-            isa_builder!(x86, "x86", triple)
+            if cfg!(feature = "x64") {
+                isa_builder!(x64, "x64", triple)
+            } else {
+                isa_builder!(x86, "x86", triple)
+            }
         }
         Architecture::Arm { .. } => isa_builder!(arm32, "arm32", triple),
         Architecture::Aarch64 { .. } => isa_builder!(aarch64, "arm64", triple),

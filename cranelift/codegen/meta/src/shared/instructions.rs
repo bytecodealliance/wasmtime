@@ -3883,9 +3883,9 @@ pub(crate) fn define(
         .constraints(vec![WiderOrEq(Int.clone(), IntTo.clone())]),
     );
 
-    let I16xN = &TypeVar::new(
-        "I16xN",
-        "A SIMD vector type containing integers 16-bits wide and up",
+    let I16or32xN = &TypeVar::new(
+        "I16or32xN",
+        "A SIMD vector type containing integer lanes 16 or 32 bits wide",
         TypeSetBuilder::new()
             .ints(16..32)
             .simd_lanes(4..8)
@@ -3893,9 +3893,9 @@ pub(crate) fn define(
             .build(),
     );
 
-    let x = &Operand::new("x", I16xN);
-    let y = &Operand::new("y", I16xN);
-    let a = &Operand::new("a", &I16xN.split_lanes());
+    let x = &Operand::new("x", I16or32xN);
+    let y = &Operand::new("y", I16or32xN);
+    let a = &Operand::new("a", &I16or32xN.split_lanes());
 
     ig.push(
         Inst::new(
@@ -3931,6 +3931,75 @@ pub(crate) fn define(
             &formats.binary,
         )
         .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    let I8or16xN = &TypeVar::new(
+        "I8or16xN",
+        "A SIMD vector type containing integer lanes 8 or 16 bits wide.",
+        TypeSetBuilder::new()
+            .ints(8..16)
+            .simd_lanes(8..16)
+            .includes_scalars(false)
+            .build(),
+    );
+
+    let x = &Operand::new("x", I8or16xN);
+    let a = &Operand::new("a", &I8or16xN.merge_lanes());
+
+    ig.push(
+        Inst::new(
+            "swiden_low",
+            r#"
+        Widen the low lanes of `x` using signed extension.
+        
+        This will double the lane width and halve the number of lanes.
+            "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "swiden_high",
+            r#"
+        Widen the high lanes of `x` using signed extension.
+        
+        This will double the lane width and halve the number of lanes.
+            "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "uwiden_low",
+            r#"
+        Widen the low lanes of `x` using unsigned extension.
+        
+        This will double the lane width and halve the number of lanes.
+            "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "uwiden_high",
+            r#"
+        Widen the high lanes of `x` using unsigned extension.
+        
+        This will double the lane width and halve the number of lanes.
+            "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
         .operands_out(vec![a]),
     );
 

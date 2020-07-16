@@ -26,7 +26,9 @@ impl Drop for wasm_val_t {
     fn drop(&mut self) {
         match into_valtype(self.kind) {
             ValType::ExternRef => unsafe {
-                drop(Box::from_raw(self.of.ref_));
+                if !self.of.ref_.is_null() {
+                    drop(Box::from_raw(self.of.ref_));
+                }
             },
             _ => {}
         }
@@ -116,7 +118,20 @@ impl wasm_val_t {
             ValType::I64 => Val::from(unsafe { self.of.i64 }),
             ValType::F32 => Val::from(unsafe { self.of.f32 }),
             ValType::F64 => Val::from(unsafe { self.of.f64 }),
-            ValType::ExternRef | ValType::FuncRef => ref_to_val(unsafe { &*self.of.ref_ }),
+            ValType::ExternRef => unsafe {
+                if self.of.ref_.is_null() {
+                    Val::ExternRef(None)
+                } else {
+                    ref_to_val(&*self.of.ref_)
+                }
+            },
+            ValType::FuncRef => unsafe {
+                if self.of.ref_.is_null() {
+                    Val::FuncRef(None)
+                } else {
+                    ref_to_val(&*self.of.ref_)
+                }
+            },
             _ => unimplemented!("wasm_val_t::val {:?}", self.kind),
         }
     }

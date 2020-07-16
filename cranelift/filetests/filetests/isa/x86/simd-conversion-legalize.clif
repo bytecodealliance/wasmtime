@@ -52,3 +52,19 @@ block0(v0:f32x4):
     ; nextln: v1 = iadd v12, v11
     return v1
 }
+
+function %uwiden_high(i8x16) -> i16x8 {
+block0(v0: i8x16):
+    v1 = uwiden_high v0
+    ; check: v2 = x86_palignr v0, v0, 8
+    ; nextln: v1 = uwiden_low v2
+    return v1
+}
+
+function %swiden_high(i16x8) -> i32x4 {
+block0(v0: i16x8):
+    v1 = swiden_high v0
+    ; check: v2 = x86_palignr v0, v0, 8
+    ; nextln: v1 = swiden_low v2
+    return v1
+}

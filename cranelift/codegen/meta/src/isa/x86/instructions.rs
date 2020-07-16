@@ -664,6 +664,21 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let c = &Operand::new("c", uimm8)
+        .with_doc("The number of bytes to shift right; see PALIGNR in Intel manual for details");
+    ig.push(
+        Inst::new(
+            "x86_palignr",
+            r#"
+        Concatenate destination and source operands, extracting a byte-aligned result shifted to 
+        the right by `c`.
+        "#,
+            &formats.ternary_imm8,
+        )
+        .operands_in(vec![x, y, c])
+        .operands_out(vec![a]),
+    );
+
     let i64_t = &TypeVar::new(
         "i64_t",
         "A scalar 64bit integer",

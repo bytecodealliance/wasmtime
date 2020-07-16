@@ -584,6 +584,9 @@ enum OperandConstraint {
 
     /// This operand is `ctrlType.split_lanes()`.
     SplitLanes,
+
+    /// This operand is `ctrlType.merge_lanes()`.
+    MergeLanes,
 }
 
 impl OperandConstraint {
@@ -614,6 +617,11 @@ impl OperandConstraint {
                 ctrl_type
                     .split_lanes()
                     .expect("invalid type for split_lanes"),
+            ),
+            MergeLanes => Bound(
+                ctrl_type
+                    .merge_lanes()
+                    .expect("invalid type for merge_lanes"),
             ),
         }
     }

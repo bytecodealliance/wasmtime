@@ -1582,17 +1582,39 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, I32X4, builder);
             state.push1(builder.ins().unarrow(a, b))
         }
-        Operator::I16x8WidenLowI8x16S { .. }
-        | Operator::I16x8WidenHighI8x16S { .. }
-        | Operator::I16x8WidenLowI8x16U { .. }
-        | Operator::I16x8WidenHighI8x16U { .. }
-        | Operator::I32x4WidenLowI16x8S { .. }
-        | Operator::I32x4WidenHighI16x8S { .. }
-        | Operator::I32x4WidenLowI16x8U { .. }
-        | Operator::I32x4WidenHighI16x8U { .. }
-        | Operator::I8x16Bitmask
-        | Operator::I16x8Bitmask
-        | Operator::I32x4Bitmask => {
+        Operator::I16x8WidenLowI8x16S => {
+            let a = pop1_with_bitcast(state, I8X16, builder);
+            state.push1(builder.ins().swiden_low(a))
+        }
+        Operator::I16x8WidenHighI8x16S => {
+            let a = pop1_with_bitcast(state, I8X16, builder);
+            state.push1(builder.ins().swiden_high(a))
+        }
+        Operator::I16x8WidenLowI8x16U => {
+            let a = pop1_with_bitcast(state, I8X16, builder);
+            state.push1(builder.ins().uwiden_low(a))
+        }
+        Operator::I16x8WidenHighI8x16U => {
+            let a = pop1_with_bitcast(state, I8X16, builder);
+            state.push1(builder.ins().uwiden_high(a))
+        }
+        Operator::I32x4WidenLowI16x8S => {
+            let a = pop1_with_bitcast(state, I16X8, builder);
+            state.push1(builder.ins().swiden_low(a))
+        }
+        Operator::I32x4WidenHighI16x8S => {
+            let a = pop1_with_bitcast(state, I16X8, builder);
+            state.push1(builder.ins().swiden_high(a))
+        }
+        Operator::I32x4WidenLowI16x8U => {
+            let a = pop1_with_bitcast(state, I16X8, builder);
+            state.push1(builder.ins().uwiden_low(a))
+        }
+        Operator::I32x4WidenHighI16x8U => {
+            let a = pop1_with_bitcast(state, I16X8, builder);
+            state.push1(builder.ins().uwiden_high(a))
+        }
+        Operator::I8x16Bitmask | Operator::I16x8Bitmask | Operator::I32x4Bitmask => {
             return Err(wasm_unsupported!("proposed SIMD operator {:?}", op));
         }
 

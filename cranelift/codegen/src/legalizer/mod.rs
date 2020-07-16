@@ -19,10 +19,24 @@ use crate::flowgraph::ControlFlowGraph;
 use crate::ir::types::{I32, I64};
 use crate::ir::{self, InstBuilder, MemFlags};
 use crate::isa::TargetIsa;
+
+#[cfg(any(
+    feature = "x86",
+    feature = "arm32",
+    feature = "arm64",
+    feature = "riscv"
+))]
 use crate::predicates;
+#[cfg(any(
+    feature = "x86",
+    feature = "arm32",
+    feature = "arm64",
+    feature = "riscv"
+))]
+use alloc::vec::Vec;
+
 use crate::timing;
 use alloc::collections::BTreeSet;
-use alloc::vec::Vec;
 
 mod boundary;
 mod call;
