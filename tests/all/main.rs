@@ -12,6 +12,7 @@ mod instance;
 mod invoke_func_via_table;
 mod linker;
 mod memory_creator;
+mod module_serialize;
 mod name;
 mod stack_overflow;
 mod table;
