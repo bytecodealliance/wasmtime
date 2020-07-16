@@ -132,6 +132,29 @@ pub extern "C" fn wasm_module_obtain(
 }
 
 #[no_mangle]
+pub extern "C" fn wasm_module_serialize(module: &wasm_module_t, ret: &mut wasm_byte_vec_t) {
+    drop(wasmtime_module_serialize(module, ret));
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_module_deserialize(
+    store: &wasm_store_t,
+    binary: &wasm_byte_vec_t,
+) -> Option<Box<wasm_module_t>> {
+    let mut ret = ptr::null_mut();
+    let engine = wasm_engine_t {
+        engine: store.store.engine().clone(),
+    };
+    match wasmtime_module_deserialize(&engine, binary, &mut ret) {
+        Some(_err) => None,
+        None => {
+            assert!(!ret.is_null());
+            Some(unsafe { Box::from_raw(ret) })
+        }
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn wasmtime_module_serialize(
     module: &wasm_module_t,
     ret: &mut wasm_byte_vec_t,

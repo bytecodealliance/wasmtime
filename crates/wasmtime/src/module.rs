@@ -309,7 +309,7 @@ impl Module {
         })
     }
 
-    /// Serialize artifacts in I/O.
+    /// Serialize compilation artifacts to the buffer. See also `deseriaize`.
     pub fn serialize(&self) -> Result<Vec<u8>> {
         let artifacts = (
             compiler_fingerprint(self.engine.config()),
@@ -322,7 +322,15 @@ impl Module {
         Ok(buffer)
     }
 
-    /// Read compiled module from I/O.
+    /// Deserializes and creates a module from the compilatio nartifacts.
+    /// The `serialize` saves the compilation artifacts along with the host
+    /// fingerprint, which consists of target, compiler flags, and wasmtime
+    /// package version.
+    ///
+    /// The method will fail if fingerprints of current host and serialized
+    /// one are different. The method does not verify the serialized artifacts
+    /// for modifications or curruptions. All responsibily of signing and its
+    /// verification falls on the embedder.
     pub fn deserialize(engine: &Engine, serialized: &[u8]) -> Result<Module> {
         let expected_fingerprint = compiler_fingerprint(engine.config());
 
