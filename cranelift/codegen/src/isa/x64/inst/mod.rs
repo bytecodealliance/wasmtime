@@ -51,9 +51,9 @@ pub enum Inst {
     },
 
     /// Instructions on GPR that only read src and defines dst (dst is not modified): bsr, etc.
-    ReadOnly_Gpr_Rm_R {
+    UnaryRmR {
         size: u8, // 2, 4 or 8
-        op: ReadOnlyGprRmROpcode,
+        op: UnaryRmROpcode,
         src: RegMem,
         dst: Writable<Reg>,
     },
@@ -66,7 +66,7 @@ pub enum Inst {
         loc: SourceLoc,
     },
 
-    /// The high result of a (un)signed multiply: imul/mul using RAX:RDX.
+    /// The high bits (RDX) of a (un)signed multiply: RDX:RAX := RAX * rhs.
     MulHi { size: u8, signed: bool, rhs: RegMem },
 
     /// A synthetic sequence to implement the right inline checks for remainder and division,
@@ -77,10 +77,11 @@ pub enum Inst {
     /// instruction.
     ///
     /// Note: %rdx is marked as modified by this instruction, to avoid an early clobber problem
-    /// with the temporary and divisor. Make sure to zero %rdx right before this instruction!
+    /// with the temporary and divisor registers. Make sure to zero %rdx right before this
+    /// instruction, or you might run into regalloc failures where %rdx is live before its first
+    /// def!
     CheckedDivOrRemSeq {
-        is_div: bool,
-        is_signed: bool,
+        kind: DivOrRemKind,
         size: u8,
         divisor: Reg,
         tmp: Option<Writable<Reg>>,
@@ -283,7 +284,7 @@ pub enum Inst {
     /// An instruction that will always trigger the illegal instruction exception.
     Ud2 { trap_info: (SourceLoc, TrapCode) },
 
-    /// Loads an external symbol in a register, with a relocation.
+    /// Loads an external symbol in a register, with a relocation: movabsq $name, dst
     LoadExtName {
         dst: Writable<Reg>,
         name: Box<ExternalName>,
@@ -326,15 +327,15 @@ impl Inst {
         }
     }
 
-    pub(crate) fn read_only_gpr_rm_r(
+    pub(crate) fn unary_rm_r(
         size: u8,
-        op: ReadOnlyGprRmROpcode,
+        op: UnaryRmROpcode,
         src: RegMem,
         dst: Writable<Reg>,
     ) -> Self {
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
         debug_assert!(size == 8 || size == 4 || size == 2);
-        Self::ReadOnly_Gpr_Rm_R { size, op, src, dst }
+        Self::UnaryRmR { size, op, src, dst }
     }
 
     pub(crate) fn div(size: u8, signed: bool, divisor: RegMem, loc: SourceLoc) -> Inst {
@@ -667,7 +668,7 @@ impl ShowWithRRU for Inst {
                 show_ireg_sized(dst.to_reg(), mb_rru, sizeLQ(*is_64)),
             ),
 
-            Inst::ReadOnly_Gpr_Rm_R { src, dst, op, size } => format!(
+            Inst::UnaryRmR { src, dst, op, size } => format!(
                 "{} {}, {}",
                 ljustify2(op.to_string(), suffixBWLQ(*size)),
                 src.show_rru_sized(mb_rru, *size),
@@ -700,15 +701,18 @@ impl ShowWithRRU for Inst {
                 rhs.show_rru_sized(mb_rru, *size)
             ),
             Inst::CheckedDivOrRemSeq {
-                is_div,
-                is_signed,
+                kind,
                 size,
                 divisor,
                 ..
             } => format!(
-                "{}{} $rax:$rdx, {}",
-                if *is_signed { "s" } else { "u" },
-                if *is_div { "div " } else { "rem " },
+                "{} $rax:$rdx, {}",
+                match kind {
+                    DivOrRemKind::SignedDiv => "sdiv",
+                    DivOrRemKind::UnsignedDiv => "udiv",
+                    DivOrRemKind::SignedRem => "srem",
+                    DivOrRemKind::UnsignedRem => "urem",
+                },
                 show_ireg_sized(*divisor, mb_rru, *size),
             ),
             Inst::SignExtendRaxRdx { size } => match size {
@@ -942,7 +946,7 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(regs::rax());
             collector.add_mod(Writable::from_reg(regs::rdx()));
         }
-        Inst::ReadOnly_Gpr_Rm_R { src, dst, .. } | Inst::XMM_Mov_RM_R { src, dst, .. } => {
+        Inst::UnaryRmR { src, dst, .. } | Inst::XMM_Mov_RM_R { src, dst, .. } => {
             src.get_regs_as_uses(collector);
             collector.add_def(*dst);
         }
@@ -1141,7 +1145,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut dst,
             ..
         }
-        | Inst::ReadOnly_Gpr_Rm_R {
+        | Inst::UnaryRmR {
             ref mut src,
             ref mut dst,
             ..

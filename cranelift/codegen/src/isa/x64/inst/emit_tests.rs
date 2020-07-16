@@ -1227,15 +1227,15 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
-    // ReadOnly_Gpr_Rm_R
+    // UnaryRmR
 
     insns.push((
-        Inst::read_only_gpr_rm_r(4, ReadOnlyGprRmROpcode::Bsr, RegMem::reg(rsi), w_rdi),
+        Inst::unary_rm_r(4, UnaryRmROpcode::Bsr, RegMem::reg(rsi), w_rdi),
         "0FBDFE",
         "bsrl    %esi, %edi",
     ));
     insns.push((
-        Inst::read_only_gpr_rm_r(8, ReadOnlyGprRmROpcode::Bsr, RegMem::reg(r15), w_rax),
+        Inst::unary_rm_r(8, UnaryRmROpcode::Bsr, RegMem::reg(r15), w_rax),
         "490FBDC7",
         "bsrq    %r15, %rax",
     ));
@@ -2303,107 +2303,107 @@ fn test_x64_emit() {
     // ========================================================
     // Shift_R
     insns.push((
-        Inst::shift_r(false, ShiftKind::Left, None, w_rdi),
+        Inst::shift_r(false, ShiftKind::ShiftLeft, None, w_rdi),
         "D3E7",
         "shll    %cl, %edi",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::Left, None, w_r12),
+        Inst::shift_r(false, ShiftKind::ShiftLeft, None, w_r12),
         "41D3E4",
         "shll    %cl, %r12d",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::Left, Some(2), w_r8),
+        Inst::shift_r(false, ShiftKind::ShiftLeft, Some(2), w_r8),
         "41C1E002",
         "shll    $2, %r8d",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::Left, Some(31), w_r13),
+        Inst::shift_r(false, ShiftKind::ShiftLeft, Some(31), w_r13),
         "41C1E51F",
         "shll    $31, %r13d",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::Left, None, w_r13),
+        Inst::shift_r(true, ShiftKind::ShiftLeft, None, w_r13),
         "49D3E5",
         "shlq    %cl, %r13",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::Left, None, w_rdi),
+        Inst::shift_r(true, ShiftKind::ShiftLeft, None, w_rdi),
         "48D3E7",
         "shlq    %cl, %rdi",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::Left, Some(2), w_r8),
+        Inst::shift_r(true, ShiftKind::ShiftLeft, Some(2), w_r8),
         "49C1E002",
         "shlq    $2, %r8",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::Left, Some(3), w_rbx),
+        Inst::shift_r(true, ShiftKind::ShiftLeft, Some(3), w_rbx),
         "48C1E303",
         "shlq    $3, %rbx",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::Left, Some(63), w_r13),
+        Inst::shift_r(true, ShiftKind::ShiftLeft, Some(63), w_r13),
         "49C1E53F",
         "shlq    $63, %r13",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::RightZ, None, w_rdi),
+        Inst::shift_r(false, ShiftKind::ShiftRightLogical, None, w_rdi),
         "D3EF",
         "shrl    %cl, %edi",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::RightZ, Some(2), w_r8),
+        Inst::shift_r(false, ShiftKind::ShiftRightLogical, Some(2), w_r8),
         "41C1E802",
         "shrl    $2, %r8d",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::RightZ, Some(31), w_r13),
+        Inst::shift_r(false, ShiftKind::ShiftRightLogical, Some(31), w_r13),
         "41C1ED1F",
         "shrl    $31, %r13d",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::RightZ, None, w_rdi),
+        Inst::shift_r(true, ShiftKind::ShiftRightLogical, None, w_rdi),
         "48D3EF",
         "shrq    %cl, %rdi",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::RightZ, Some(2), w_r8),
+        Inst::shift_r(true, ShiftKind::ShiftRightLogical, Some(2), w_r8),
         "49C1E802",
         "shrq    $2, %r8",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::RightZ, Some(63), w_r13),
+        Inst::shift_r(true, ShiftKind::ShiftRightLogical, Some(63), w_r13),
         "49C1ED3F",
         "shrq    $63, %r13",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::RightS, None, w_rdi),
+        Inst::shift_r(false, ShiftKind::ShiftRightArithmetic, None, w_rdi),
         "D3FF",
         "sarl    %cl, %edi",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::RightS, Some(2), w_r8),
+        Inst::shift_r(false, ShiftKind::ShiftRightArithmetic, Some(2), w_r8),
         "41C1F802",
         "sarl    $2, %r8d",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::RightS, Some(31), w_r13),
+        Inst::shift_r(false, ShiftKind::ShiftRightArithmetic, Some(31), w_r13),
         "41C1FD1F",
         "sarl    $31, %r13d",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::RightS, None, w_rdi),
+        Inst::shift_r(true, ShiftKind::ShiftRightArithmetic, None, w_rdi),
         "48D3FF",
         "sarq    %cl, %rdi",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::RightS, Some(2), w_r8),
+        Inst::shift_r(true, ShiftKind::ShiftRightArithmetic, Some(2), w_r8),
         "49C1F802",
         "sarq    $2, %r8",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::RightS, Some(63), w_r13),
+        Inst::shift_r(true, ShiftKind::ShiftRightArithmetic, Some(63), w_r13),
         "49C1FD3F",
         "sarq    $63, %r13",
     ));
