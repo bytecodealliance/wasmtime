@@ -123,7 +123,8 @@ pub fn legalize_args<AA: ArgAssigner>(args: &[AbiParam], aa: &mut AA) -> Option<
                 args.to_mut()[argno].location = loc;
                 argno += 1;
             }
-            // Assign argument to a location, change type to `INVALID` and move on to the next one.
+            // Assign argument to a location, change type to the requested one and move on to the
+            // next one.
             ArgAction::AssignAndChangeType(loc, ty) => {
                 let arg = &mut args.to_mut()[argno];
                 arg.location = loc;
