@@ -1,6 +1,6 @@
 use crate::{
-    handle_result, wasm_byte_vec_t, wasm_exporttype_t, wasm_exporttype_vec_t, wasm_importtype_t,
-    wasm_importtype_vec_t, wasm_store_t, wasmtime_error_t,
+    handle_result, wasm_byte_vec_t, wasm_engine_t, wasm_exporttype_t, wasm_exporttype_vec_t,
+    wasm_importtype_t, wasm_importtype_vec_t, wasm_store_t, wasmtime_error_t,
 };
 use std::ptr;
 use wasmtime::{Engine, Module};
@@ -144,12 +144,12 @@ pub extern "C" fn wasmtime_module_serialize(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_module_deserialize(
-    store: &wasm_store_t,
+    engine: &wasm_engine_t,
     binary: &wasm_byte_vec_t,
     ret: &mut *mut wasm_module_t,
 ) -> Option<Box<wasmtime_error_t>> {
     handle_result(
-        Module::deserialize(&store.store.engine(), binary.as_slice()),
+        Module::deserialize(&engine.engine, binary.as_slice()),
         |module| {
             let imports = module
                 .imports()

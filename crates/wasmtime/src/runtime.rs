@@ -639,8 +639,11 @@ impl Config {
         self.flags.hash(state);
         self.tunables.hash(state);
 
-        let tripple = Triple::host();
-        tripple.hash(state);
+        let triple = Triple::host();
+        triple.hash(state);
+
+        // Catch accidental bugs of reusing across wasmtime versions.
+        env!("CARGO_PKG_VERSION").hash(state);
     }
 }
 

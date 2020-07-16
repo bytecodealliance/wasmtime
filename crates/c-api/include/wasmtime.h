@@ -945,7 +945,7 @@ WASM_API_EXTERN own wasmtime_error_t* wasmtime_module_serialize(
  * returned error and module are owned by the caller.
  */
 WASM_API_EXTERN own wasmtime_error_t *wasmtime_module_deserialize(
-    wasm_store_t *store,
+    wasm_engine_t *engine,
     const wasm_byte_vec_t *serialized,
     own wasm_module_t **ret
 );
