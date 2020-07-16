@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime"
-version = "0.18.0"
+version = "0.19.0"
 authors = ["The Wasmtime Project Developers"]
 description = "High-level API to expose the Wasmtime runtime"
 documentation = "https://docs.rs/wasmtime"
@@ -10,10 +10,10 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-wasmtime-runtime = { path = "../runtime", version = "0.18.0" }
-wasmtime-environ = { path = "../environ", version = "0.18.0" }
-wasmtime-jit = { path = "../jit", version = "0.18.0" }
-wasmtime-profiling = { path = "../profiling", version = "0.18.0" }
+wasmtime-runtime = { path = "../runtime", version = "0.19.0" }
+wasmtime-environ = { path = "../environ", version = "0.19.0" }
+wasmtime-jit = { path = "../jit", version = "0.19.0" }
+wasmtime-profiling = { path = "../profiling", version = "0.19.0" }
 wasmparser = "0.59.0"
 target-lexicon = { version = "0.10.0", default-features = false }
 anyhow = "1.0.19"
