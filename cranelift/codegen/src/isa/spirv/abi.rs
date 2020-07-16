@@ -5,6 +5,8 @@ use crate::isa::spirv::inst::Inst;
 use crate::machinst::abi::ABIBody;
 use crate::settings;
 use crate::ir::Function;
+use crate::isa::spirv::inst::EmitState;
+use crate::binemit::Stackmap;
 
 use regalloc::*;
 use spirv_headers::Op;
@@ -109,6 +111,25 @@ impl SpirvABIBody {
 
 impl ABIBody for SpirvABIBody {
     type I = Inst;
+
+    fn gen_retval_area_setup(&self) -> Option<Inst> {
+        None
+    }
+    
+    fn temp_needed(&self) -> bool {
+        false
+    }
+
+    fn spillslots_to_stackmap(&self, _slots: &[SpillSlot], _state: &EmitState) -> Stackmap {
+        unimplemented!("spillslots_to_stackmap")
+    }
+
+    fn stack_args_size(&self) -> u32 {
+        unimplemented!("I need to be computed!")
+    }
+
+    fn init(&mut self, maybe_tmp: Option<Writable<Reg>>) {
+    }
 
     fn flags(&self) -> &settings::Flags {
         &self.flags
@@ -225,11 +246,11 @@ impl ABIBody for SpirvABIBody {
         0
     }
 
-    fn gen_spill(&self, _to_slot: SpillSlot, _from_reg: RealReg, _ty: Type) -> Inst {
+    fn gen_spill(&self, _to_slot: SpillSlot, _from_reg: RealReg, _ty: Option<Type>) -> Inst {
         unimplemented!()
     }
 
-    fn gen_reload(&self, _to_reg: Writable<RealReg>, _from_slot: SpillSlot, _ty: Type) -> Inst {
+    fn gen_reload(&self, _to_reg: Writable<RealReg>, _from_slot: SpillSlot, _ty: Option<Type>) -> Inst {
         unimplemented!()
     }
 }

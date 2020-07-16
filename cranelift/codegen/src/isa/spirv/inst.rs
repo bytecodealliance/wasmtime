@@ -12,8 +12,9 @@ use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter,
 use crate::settings::{self, Flags};
 use crate::result::{CodegenResult, CodegenError};
 use crate::machinst::{MachBuffer, MachInst, MachInstEmit};
-use crate::machinst::MachTerminator;
+use crate::machinst::{MachInstEmitState, MachTerminator};
 use crate::machinst::buffer::MachLabel;
+use crate::machinst::abi::ABIBody;
 use crate::ir::types::Type;
 use crate::binemit::CodeOffset;
 use crate::machinst::MachInstLabelUse;
@@ -60,13 +61,19 @@ impl Inst {
     }
 }
 
+impl MachInstEmitState<Inst> for EmitState {
+    fn new(_: &dyn ABIBody<I = Inst>) -> Self {
+        EmitState {}
+    }
+}
+
 #[derive(Debug, Default, Clone)]
-pub(crate) struct MachInstEmitState {
+pub(crate) struct EmitState {
 
 }
 
 impl MachInstEmit for Inst {
-    type State = MachInstEmitState;
+    type State = EmitState;
 
     /// Unlike most ISA's, SPIR-V is relatively straight forward, all opcodes have the exact same
     /// binary representation. Since SPIR-V already has virtual registers, there is no real need
@@ -104,6 +111,11 @@ impl MachInstEmit for Inst {
             sink.put4(op);
         }
     }
+    
+    fn pretty_print(&self, mb_rru: Option<&RealRegUniverse>, state: &mut EmitState) -> String {
+        use crate::alloc::string::ToString;
+        "".to_string()
+    }
 }
 
 
@@ -116,6 +128,10 @@ impl MachInst for Inst {
         for reg in &self.operands {
             collector.add_use(*reg)
         }
+    }
+
+    fn ref_type_regclass(_: &settings::Flags) -> RegClass {
+        RegClass::I64
     }
 
     fn map_regs<RUM: RegUsageMapper>(&mut self, maps: &RUM) {}

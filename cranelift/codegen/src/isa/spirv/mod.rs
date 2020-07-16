@@ -9,6 +9,7 @@ mod lower;
 
 use alloc::boxed::Box;
 use crate::binemit::CodeOffset;
+use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
 use crate::ir::types::Type;
 use crate::isa::Builder as IsaBuilder;
@@ -20,6 +21,7 @@ use crate::machinst::MachTerminator;
 use crate::machinst::pretty_print::ShowWithRRU;
 use crate::result::{CodegenResult, CodegenError};
 use crate::settings::{self, Flags};
+
 use inst::Inst;
 use regalloc::NUM_REG_CLASSES;
 use regalloc::RealRegUniverse;
@@ -106,6 +108,14 @@ impl MachBackend for SpirvBackend {
 
     fn reg_universe(&self) -> &RealRegUniverse {
         &self.reg_universe
+    }
+
+    fn unsigned_add_overflow_condition(&self) -> IntCC {
+        IntCC::UnsignedLessThan
+    }
+
+    fn unsigned_sub_overflow_condition(&self) -> IntCC {
+        IntCC::UnsignedGreaterThanOrEqual
     }
 }
 
