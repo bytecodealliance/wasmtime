@@ -158,6 +158,8 @@ pub struct CompiledModule {
     traps: Traps,
     stack_maps: StackMaps,
     address_transform: ModuleAddressMap,
+    obj: Box<[u8]>,
+    unwind_info: Box<[ObjectUnwindInfo]>,
 }
 
 impl CompiledModule {
@@ -191,7 +193,7 @@ impl CompiledModule {
         // Allocate all of the compiled functions into executable memory,
         // copying over their contents.
         let (code_memory, code_range, finished_functions, trampolines) =
-            build_code_memory(isa, &obj, &module, unwind_info).map_err(|message| {
+            build_code_memory(isa, &obj, &module, &unwind_info).map_err(|message| {
                 SetupError::Instantiate(InstantiationError::Resource(format!(
                     "failed to build code memory for functions: {}",
                     message
@@ -225,7 +227,23 @@ impl CompiledModule {
             traps,
             stack_maps,
             address_transform,
+            obj,
+            unwind_info,
         })
+    }
+
+    /// Extracts `CompilationArtifacts` from the compiled module.
+    pub fn to_compilation_artifacts(&self) -> CompilationArtifacts {
+        CompilationArtifacts {
+            module: (*self.module).clone(),
+            obj: self.obj.clone(),
+            unwind_info: self.unwind_info.clone(),
+            data_initializers: self.data_initializers.clone(),
+            traps: self.traps.clone(),
+            stack_maps: self.stack_maps.clone(),
+            address_transform: self.address_transform.clone(),
+            debug_info: self.code.dbg_jit_registration.is_some(),
+        }
     }
 
     /// Crate an `Instance` from this `CompiledModule`.
@@ -336,7 +354,7 @@ impl CompiledModule {
 
 /// Similar to `DataInitializer`, but owns its own copy of the data rather
 /// than holding a slice of the original module.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct OwnedDataInitializer {
     /// The location where the initialization is to be performed.
     location: DataInitializerLocation,
@@ -372,7 +390,7 @@ fn build_code_memory(
     isa: &dyn TargetIsa,
     obj: &[u8],
     module: &Module,
-    unwind_info: Box<[ObjectUnwindInfo]>,
+    unwind_info: &Box<[ObjectUnwindInfo]>,
 ) -> Result<
     (
         CodeMemory,
@@ -386,7 +404,7 @@ fn build_code_memory(
 
     let mut code_memory = CodeMemory::new();
 
-    let allocation = code_memory.allocate_for_object(&obj, &unwind_info)?;
+    let allocation = code_memory.allocate_for_object(&obj, unwind_info)?;
 
     // Second, create a PrimaryMap from result vector of pointers.
     let mut finished_functions = PrimaryMap::new();

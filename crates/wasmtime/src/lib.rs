@@ -251,7 +251,7 @@ pub use crate::frame_info::FrameInfo;
 pub use crate::func::*;
 pub use crate::instance::Instance;
 pub use crate::linker::*;
-pub use crate::module::{compile_and_serialize, Module};
+pub use crate::module::Module;
 pub use crate::r#ref::ExternRef;
 pub use crate::runtime::*;
 pub use crate::trap::Trap;

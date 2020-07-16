@@ -920,24 +920,21 @@ WASM_API_EXTERN void wasmtime_externref_new_with_finalizer(
 WASM_API_EXTERN bool wasmtime_externref_data(wasm_val_t* val, void** datap);
 
 /**
- * \brief This function will compile a WebAssembly binary and saves artifacts
+ * \brief This function serializes compiled module artifacts
  *   as blob data.
  *
- * \param engine this is engine that will provide the compiler.
- * \param binary this it the input buffer with the WebAssembly Binary Format inside of
- *   it. This will be parsed and converted to the binary format.
+ * \param module the module
  * \param ret if the conversion is successful, this byte vector is filled in with
  *   the serialized compiled module.
  *
  * \return a non-null error if parsing fails, or returns `NULL`. If parsing
  * fails then `ret` isn't touched.
  *
- * This function does not take ownership of `binary` or `engine`, and the caller is
+ * This function does not take ownership of `module`, and the caller is
  * expected to deallocate the returned #wasmtime_error_t and #wasm_byte_vec_t.
  */
-WASM_API_EXTERN own wasmtime_error_t* wasmtime_compile_and_serialize(
-    wasm_engine_t* engine,
-    const wasm_byte_vec_t* binary,
+WASM_API_EXTERN own wasmtime_error_t* wasmtime_module_serialize(
+    wasm_module_t* module,
     own wasm_byte_vec_t *ret
 );
 

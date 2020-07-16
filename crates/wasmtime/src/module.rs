@@ -309,6 +309,18 @@ impl Module {
         })
     }
 
+    /// Serialize artifacts in I/O.
+    pub fn serialize(&self, w: impl std::io::Write) -> Result<()> {
+        let artifacts = (
+            compiler_fingerprint(self.engine.config()),
+            self.compiled.to_compilation_artifacts(),
+        );
+
+        bincode::serialize_into(w, &artifacts)?;
+
+        Ok(())
+    }
+
     /// Read compiled module from I/O.
     pub unsafe fn deserialize(engine: &Engine, r: impl std::io::Read) -> Result<Module> {
         let expected_fingerprint = compiler_fingerprint(engine.config());
@@ -564,26 +576,6 @@ fn compiler_fingerprint(config: &Config) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     config.compiler_fingerprint(&mut hasher);
     hasher.finish()
-}
-
-/// Compile and write artifacts in I/O.
-pub fn compile_and_serialize(
-    engine: &Engine,
-    bytes: impl AsRef<[u8]>,
-    w: impl std::io::Write,
-) -> Result<()> {
-    #[cfg(feature = "wat")]
-    let bytes = wat::parse_bytes(bytes.as_ref())?;
-
-    Module::validate(engine, bytes.as_ref())?;
-    let artifacts = (
-        compiler_fingerprint(engine.config()),
-        CompilationArtifacts::build(engine.compiler(), bytes.as_ref())?,
-    );
-
-    bincode::serialize_into(w, &artifacts)?;
-
-    Ok(())
 }
 
 fn _assert_send_sync() {

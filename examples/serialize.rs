@@ -4,7 +4,7 @@
 // You can execute this example with `cargo run --example serialize`
 
 use anyhow::Result;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::{Seek, SeekFrom};
 use wasmtime::*;
 
@@ -17,9 +17,9 @@ fn serialize() -> Result<File> {
 
     // Compile the wasm binary into an in-memory instance of a `Module`.
     println!("Compiling module...");
-    let wasm = fs::read("examples/hello.wat")?;
+    let module = Module::from_file(&engine, "examples/hello.wat")?;
     let mut file = tempfile::tempfile()?;
-    compile_and_serialize(&engine, wasm, file.try_clone()?)?;
+    module.serialize(file.try_clone()?)?;
 
     file.seek(SeekFrom::Start(0))?;
 
@@ -35,7 +35,7 @@ fn deserialize(file: File) -> Result<()> {
     let store = Store::default();
 
     // Compile the wasm binary into an in-memory instance of a `Module`.
-    println!("Compiling module...");
+    println!("Deserialize module...");
     let module = unsafe { Module::deserialize(store.engine(), file)? };
 
     // Here we handle the imports of the module, which in this case is our

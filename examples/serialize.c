@@ -40,6 +40,11 @@ int serialize(wasm_byte_vec_t* buffer) {
   wasm_engine_t *engine = wasm_engine_new();
   assert(engine != NULL);
 
+  // With an engine we can create a *store* which is a long-lived group of wasm
+  // modules.
+  wasm_store_t *store = wasm_store_new(engine);
+  assert(store != NULL);
+
   // Read our input file, which in this case is a wasm text file.
   FILE* file = fopen("examples/hello.wat", "r");
   assert(file != NULL);
@@ -62,10 +67,14 @@ int serialize(wasm_byte_vec_t* buffer) {
   // and serialize into buffer.
   printf("Compiling and serializing module...\n");
   wasm_module_t *module = NULL;
-  error = wasmtime_compile_and_serialize(engine, &wasm, buffer);
+  error = wasmtime_module_new(store, &wasm, &module);
   wasm_byte_vec_delete(&wasm);
   if (error != NULL)
     exit_with_error("failed to compile module", error, NULL);
+  error = wasmtime_module_serialize(module, buffer);
+  wasm_module_delete(module);
+  if (error != NULL)
+    exit_with_error("failed to serialize module", error, NULL);
 
   printf("Serialized.\n");
 
