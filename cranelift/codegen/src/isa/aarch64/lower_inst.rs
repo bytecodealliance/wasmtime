@@ -1078,8 +1078,24 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // Nothing.
         }
 
-        Opcode::Select | Opcode::Selectif | Opcode::SelectifSpectreGuard => {
-            let cond = if op == Opcode::Select {
+        Opcode::Select => {
+            let flag_input = inputs[0];
+            let cond = if let Some(icmp_insn) =
+                maybe_input_insn_via_conv(ctx, flag_input, Opcode::Icmp, Opcode::Bint)
+            {
+                let condcode = inst_condcode(ctx.data(icmp_insn)).unwrap();
+                let cond = lower_condcode(condcode);
+                let is_signed = condcode_is_signed(condcode);
+                lower_icmp_or_ifcmp_to_flags(ctx, icmp_insn, is_signed);
+                cond
+            } else if let Some(fcmp_insn) =
+                maybe_input_insn_via_conv(ctx, flag_input, Opcode::Fcmp, Opcode::Bint)
+            {
+                let condcode = inst_fp_condcode(ctx.data(fcmp_insn)).unwrap();
+                let cond = lower_fp_condcode(condcode);
+                lower_fcmp_or_ffcmp_to_flags(ctx, fcmp_insn);
+                cond
+            } else {
                 let (cmp_op, narrow_mode) = if ty_bits(ctx.input_ty(insn, 0)) > 32 {
                     (ALUOp::SubS64, NarrowValueMode::ZeroExtend64)
                 } else {
@@ -1095,16 +1111,31 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rm: zero_reg(),
                 });
                 Cond::Ne
-            } else {
-                let condcode = inst_condcode(ctx.data(insn)).unwrap();
-                let cond = lower_condcode(condcode);
-                let is_signed = condcode_is_signed(condcode);
-                // Verification ensures that the input is always a
-                // single-def ifcmp.
-                let ifcmp_insn = maybe_input_insn(ctx, inputs[0], Opcode::Ifcmp).unwrap();
-                lower_icmp_or_ifcmp_to_flags(ctx, ifcmp_insn, is_signed);
-                cond
             };
+
+            // csel.cond rd, rn, rm
+            let rd = get_output_reg(ctx, outputs[0]);
+            let rn = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+            let rm = put_input_in_reg(ctx, inputs[2], NarrowValueMode::None);
+            let ty = ctx.output_ty(insn, 0);
+            let bits = ty_bits(ty);
+            if ty_is_float(ty) && bits == 32 {
+                ctx.emit(Inst::FpuCSel32 { cond, rd, rn, rm });
+            } else if ty_is_float(ty) && bits == 64 {
+                ctx.emit(Inst::FpuCSel64 { cond, rd, rn, rm });
+            } else {
+                ctx.emit(Inst::CSel { cond, rd, rn, rm });
+            }
+        }
+
+        Opcode::Selectif | Opcode::SelectifSpectreGuard => {
+            let condcode = inst_condcode(ctx.data(insn)).unwrap();
+            let cond = lower_condcode(condcode);
+            let is_signed = condcode_is_signed(condcode);
+            // Verification ensures that the input is always a
+            // single-def ifcmp.
+            let ifcmp_insn = maybe_input_insn(ctx, inputs[0], Opcode::Ifcmp).unwrap();
+            lower_icmp_or_ifcmp_to_flags(ctx, ifcmp_insn, is_signed);
 
             // csel.COND rd, rn, rm
             let rd = get_output_reg(ctx, outputs[0]);
