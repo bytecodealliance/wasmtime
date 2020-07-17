@@ -352,11 +352,16 @@ fn enc_fround(top22: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
     (top22 << 10) | (machreg_to_vec(rn) << 5) | machreg_to_vec(rd.to_reg())
 }
 
-fn enc_vec_rr_misc(size: u32, bits_12_16: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
+fn enc_vec_rr_misc(u: u32, size: u32, bits_12_16: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
+    debug_assert_eq!(u & 0b1, u);
     debug_assert_eq!(size & 0b11, size);
     debug_assert_eq!(bits_12_16 & 0b11111, bits_12_16);
-    let bits = 0b0_1_1_01110_00_10000_00000_10_00000_00000;
-    bits | size << 22 | bits_12_16 << 12 | machreg_to_vec(rn) << 5 | machreg_to_vec(rd.to_reg())
+    let bits = 0b0_1_0_01110_00_10000_00000_10_00000_00000;
+    bits | u << 29
+        | size << 22
+        | bits_12_16 << 12
+        | machreg_to_vec(rn) << 5
+        | machreg_to_vec(rd.to_reg())
 }
 
 fn enc_vec_lanes(q: u32, u: u32, size: u32, opcode: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
@@ -1114,11 +1119,12 @@ impl MachInstEmit for Inst {
                     VectorSize::Size64x2 => 0b11,
                     _ => unimplemented!(),
                 };
-                let (bits_12_16, size) = match op {
-                    VecMisc2::Not => (0b00101, 0b00),
-                    VecMisc2::Neg => (0b01011, enc_size),
+                let (u, bits_12_16, size) = match op {
+                    VecMisc2::Not => (0b1, 0b00101, 0b00),
+                    VecMisc2::Neg => (0b1, 0b01011, enc_size),
+                    VecMisc2::Abs => (0b0, 0b01011, enc_size),
                 };
-                sink.put4(enc_vec_rr_misc(size, bits_12_16, rd, rn));
+                sink.put4(enc_vec_rr_misc(u, size, bits_12_16, rd, rn));
             }
             &Inst::VecLanes { op, rd, rn, size } => {
                 let (q, size) = match size {
@@ -1360,6 +1366,11 @@ impl MachInstEmit for Inst {
                     }
                     VecALUOp::Sshl => (0b010_01110_00_1 | enc_size << 1, 0b010001),
                     VecALUOp::Ushl => (0b011_01110_00_1 | enc_size << 1, 0b010001),
+                    VecALUOp::Umin => (0b011_01110_00_1 | enc_size << 1, 0b011011),
+                    VecALUOp::Smin => (0b010_01110_00_1 | enc_size << 1, 0b011011),
+                    VecALUOp::Umax => (0b011_01110_00_1 | enc_size << 1, 0b011001),
+                    VecALUOp::Smax => (0b010_01110_00_1 | enc_size << 1, 0b011001),
+                    VecALUOp::Urhadd => (0b011_01110_00_1 | enc_size << 1, 0b000101),
                 };
                 sink.put4(enc_vec_rrr(top11, rm, bit15_10, rn, rd));
             }
