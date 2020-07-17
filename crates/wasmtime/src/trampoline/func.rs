@@ -206,7 +206,10 @@ pub fn create_handle_with_function(
     func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
     store: &Store,
 ) -> Result<(StoreInstanceHandle, VMTrampoline)> {
-    let isa = store.engine().config().target_isa();
+    // Note that we specifically enable reference types here in our ISA because
+    // `Func::new` is intended to be infallible, but our signature may use
+    // reference types which requires safepoints.
+    let isa = store.engine().config().target_isa_with_reference_types();
 
     let pointer_type = isa.pointer_type();
     let sig = ft.get_wasmtime_signature(pointer_type);

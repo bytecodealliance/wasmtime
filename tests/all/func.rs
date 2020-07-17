@@ -507,3 +507,18 @@ fn pass_cross_store_arg() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn externref_signature_no_reference_types() -> anyhow::Result<()> {
+    let store = Store::default();
+    Func::wrap(&store, |_: Option<Func>| {});
+    Func::new(
+        &store,
+        FuncType::new(
+            Box::new([ValType::FuncRef, ValType::ExternRef]),
+            Box::new([ValType::FuncRef, ValType::ExternRef]),
+        ),
+        |_, _, _| Ok(()),
+    );
+    Ok(())
+}
