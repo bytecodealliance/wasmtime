@@ -1,7 +1,5 @@
 //! A Constant-Phi-Node removal pass.
 
-use log::info;
-
 use crate::dominator_tree::DominatorTree;
 use crate::entity::EntityList;
 use crate::fx::FxHashMap;
@@ -384,7 +382,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
         }
     }
 
-    info!(
+    log::debug!(
         "do_remove_constant_phis: done, {} iters.   {} formals, of which {} const.",
         iter_no,
         state.absvals.len(),
