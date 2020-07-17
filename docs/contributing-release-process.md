@@ -11,10 +11,11 @@ whimsical currently, or on request from others) then the following steps need to
 be executed to make the release:
 
 1. `git pull` - make sure you've got the latest changes
-1. Update the version numbers in `Cargo.toml` for all crates
-  * Edit `scripts/bump-wasmtime-version.sh`, notable the `version` variable
-  * Run the script
-  * Commit the changes
+1. Run `rustc scripts/publish.rs`
+1. Run `./publish bump`
+  * Review and commit the changes
+  * Note that this bumps all cranelift/wasmtime versions as a major version bump
+    at this time. See the `bump_version` function in `publish.rs` to tweak this.
 1. Make sure `RELEASES.md` is up-to-date, and fill it out if it doesn't have an
    entry yet for the current release.
 1. Send this version update as a PR to the `wasmtime` repository, wait for a merge
@@ -22,6 +23,11 @@ be executed to make the release:
 1. Push the tag to the repository
   * This will trigger the release CI which will create all release artifacts and
     publish them to GitHub releases.
-1. Run `scripts/publish-wasmtime.sh` to publish all crates to crates.io
+1. Run `./publish publish`
+  * This will fail on some crates, but that's expected.
+  * Keep running this script until all crates are published. Note that crates.io
+    won't let you publish something twice so rerunning is only for crates which
+    need the index to be udpated and if it hasn't yet. It's recommended to wait
+    a bit between runs of the script.
 
 And that's it, then you've done a Wasmtime release.
