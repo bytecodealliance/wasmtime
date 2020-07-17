@@ -609,6 +609,12 @@ impl Config {
             .finish(settings::Flags::new(self.flags.clone()))
     }
 
+    pub(crate) fn target_isa_with_reference_types(&self) -> Box<dyn TargetIsa> {
+        let mut flags = self.flags.clone();
+        flags.set("enable_safepoints", "true").unwrap();
+        self.isa_flags.clone().finish(settings::Flags::new(flags))
+    }
+
     pub(crate) fn validator(&self) -> Validator {
         let mut ret = Validator::new();
         ret.wasm_threads(self.wasm_threads)
