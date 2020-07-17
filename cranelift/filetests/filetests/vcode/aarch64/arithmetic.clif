@@ -365,3 +365,18 @@ block0(v0: i64, v1: i64):
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
+
+function %f25(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = iconst.i32 53
+  v3 = ishl.i32 v0, v2
+  v4 = isub.i32 v1, v3
+  return v4
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  sub w0, w1, w0, LSL 21
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret

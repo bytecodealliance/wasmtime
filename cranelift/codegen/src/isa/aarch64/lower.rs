@@ -321,8 +321,12 @@ fn put_input_in_rs<C: LowerCtx<I = Inst>>(
 
             // Can we get the shift amount as an immediate?
             if let Some(shiftimm) = input_to_shiftimm(ctx, shift_amt) {
-                let reg = put_input_in_reg(ctx, shiftee, narrow_mode);
-                return ResultRS::RegShift(reg, ShiftOpAndAmt::new(ShiftOp::LSL, shiftimm));
+                let shiftee_bits = ty_bits(ctx.input_ty(insn, 0));
+                if shiftee_bits <= u8::MAX as usize {
+                    let shiftimm = shiftimm.mask(shiftee_bits as u8);
+                    let reg = put_input_in_reg(ctx, shiftee, narrow_mode);
+                    return ResultRS::RegShift(reg, ShiftOpAndAmt::new(ShiftOp::LSL, shiftimm));
+                }
             }
         }
     }
