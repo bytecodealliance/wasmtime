@@ -63,7 +63,7 @@ If you're interested in contributing to Cranelift: thank you! We have a
 [contributing guide] which will help you getting involved in the Cranelift
 project.
 
-[contributing guide](https://bytecodealliance.github.io/wasmtime/contributing.html)
+[contributing guide]: https://bytecodealliance.github.io/wasmtime/contributing.html
 
 Planned uses
 ------------
