@@ -1,6 +1,8 @@
 //! Traversals over the AST.
 
 use crate::ast::*;
+use std::fmt::Debug;
+use std::hash::Hash;
 
 /// A low-level DFS traversal event: either entering or exiting the traversal of
 /// an AST node.
@@ -32,13 +34,16 @@ pub enum TraversalEvent {
 /// the AST, because the `new` constructor takes anything that can convert into
 /// a `DynAstRef`.
 #[derive(Debug, Clone)]
-pub struct Dfs<'a> {
-    stack: Vec<(TraversalEvent, DynAstRef<'a>)>,
+pub struct Dfs<'a, TOperator> {
+    stack: Vec<(TraversalEvent, DynAstRef<'a, TOperator>)>,
 }
 
-impl<'a> Dfs<'a> {
+impl<'a, TOperator> Dfs<'a, TOperator>
+where
+    TOperator: Copy + Debug + Eq + Hash,
+{
     /// Construct a new `Dfs` traversal starting at the given `start` AST node.
-    pub fn new(start: impl Into<DynAstRef<'a>>) -> Self {
+    pub fn new(start: impl Into<DynAstRef<'a, TOperator>>) -> Self {
         let start = start.into();
         Dfs {
             stack: vec![
@@ -49,15 +54,18 @@ impl<'a> Dfs<'a> {
     }
 
     /// Peek at the next traversal event and AST node pair, if any.
-    pub fn peek(&self) -> Option<(TraversalEvent, DynAstRef<'a>)> {
-        self.stack.last().cloned()
+    pub fn peek(&self) -> Option<(TraversalEvent, DynAstRef<'a, TOperator>)> {
+        self.stack.last().copied()
     }
 }
 
-impl<'a> Iterator for Dfs<'a> {
-    type Item = (TraversalEvent, DynAstRef<'a>);
+impl<'a, TOperator> Iterator for Dfs<'a, TOperator>
+where
+    TOperator: Copy,
+{
+    type Item = (TraversalEvent, DynAstRef<'a, TOperator>);
 
-    fn next(&mut self) -> Option<(TraversalEvent, DynAstRef<'a>)> {
+    fn next(&mut self) -> Option<(TraversalEvent, DynAstRef<'a, TOperator>)> {
         let (event, node) = self.stack.pop()?;
         if let TraversalEvent::Enter = event {
             let mut enqueue_children = EnqueueChildren(self);
@@ -65,15 +73,16 @@ impl<'a> Iterator for Dfs<'a> {
         }
         return Some((event, node));
 
-        struct EnqueueChildren<'a, 'b>(&'b mut Dfs<'a>)
+        struct EnqueueChildren<'a, 'b, TOperator>(&'b mut Dfs<'a, TOperator>)
         where
             'a: 'b;
 
-        impl<'a, 'b> Extend<DynAstRef<'a>> for EnqueueChildren<'a, 'b>
+        impl<'a, 'b, TOperator> Extend<DynAstRef<'a, TOperator>> for EnqueueChildren<'a, 'b, TOperator>
         where
             'a: 'b,
+            TOperator: Copy,
         {
-            fn extend<T: IntoIterator<Item = DynAstRef<'a>>>(&mut self, iter: T) {
+            fn extend<T: IntoIterator<Item = DynAstRef<'a, TOperator>>>(&mut self, iter: T) {
                 let iter = iter.into_iter();
 
                 let (min, max) = iter.size_hint();
@@ -97,6 +106,7 @@ impl<'a> Iterator for Dfs<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use peepmatic_test_operator::TestOperator;
     use DynAstRef::*;
 
     #[test]
@@ -107,7 +117,7 @@ mod tests {
     (ishl $x $(log2 $C)))
 ";
         let buf = wast::parser::ParseBuffer::new(input).expect("input should lex OK");
-        let ast = match wast::parser::parse::<crate::ast::Optimizations>(&buf) {
+        let ast = match wast::parser::parse::<crate::ast::Optimizations<TestOperator>>(&buf) {
             Ok(ast) => ast,
             Err(e) => panic!("expected to parse OK, got error:\n\n{}", e),
         };

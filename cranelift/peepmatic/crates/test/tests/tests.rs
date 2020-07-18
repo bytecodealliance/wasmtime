@@ -1,10 +1,10 @@
 use peepmatic_runtime::{
     cc::ConditionCode,
-    operator::Operator,
     part::Constant,
     r#type::{BitWidth, Type},
 };
 use peepmatic_test::*;
+use peepmatic_test_operator::TestOperator;
 
 const TEST_ISA: TestIsa = TestIsa {
     native_word_size_in_bits: 32,
@@ -26,13 +26,13 @@ fn opcode() {
     let mut program = Program::default();
     let five = program.r#const(Constant::Int(5, BitWidth::ThirtyTwo), BitWidth::ThirtyTwo);
     let zero = program.r#const(Constant::Int(0, BitWidth::ThirtyTwo), BitWidth::ThirtyTwo);
-    let add = program.new_instruction(Operator::Iadd, Type::i32(), vec![], vec![five, zero]);
+    let add = program.new_instruction(TestOperator::Iadd, Type::i32(), vec![], vec![five, zero]);
 
     let new = optimizer.apply_one(&mut program, add);
     let new = new.expect("optimization should have applied");
     assert!(program.structurally_eq(new, five));
 
-    let add = program.new_instruction(Operator::Iadd, Type::i32(), vec![], vec![five, five]);
+    let add = program.new_instruction(TestOperator::Iadd, Type::i32(), vec![], vec![five, five]);
     let replacement = optimizer.apply_one(&mut program, add);
     assert!(replacement.is_none());
 }
@@ -45,10 +45,10 @@ fn constant() {
     let mut program = Program::default();
     let five = program.r#const(Constant::Int(5, BitWidth::ThirtyTwo), BitWidth::ThirtyTwo);
     let zero = program.r#const(Constant::Int(0, BitWidth::ThirtyTwo), BitWidth::ThirtyTwo);
-    let add = program.new_instruction(Operator::Iadd, Type::i32(), vec![], vec![five, zero]);
+    let add = program.new_instruction(TestOperator::Iadd, Type::i32(), vec![], vec![five, zero]);
 
     let expected = program.new_instruction(
-        Operator::IaddImm,
+        TestOperator::IaddImm,
         Type::i32(),
         vec![Constant::Int(5, BitWidth::ThirtyTwo).into()],
         vec![zero],
@@ -58,8 +58,8 @@ fn constant() {
     let new = new.expect("optimization should have applied");
     assert!(program.structurally_eq(new, expected));
 
-    let mul = program.new_instruction(Operator::Imul, Type::i32(), vec![], vec![five, zero]);
-    let add = program.new_instruction(Operator::Imul, Type::i32(), vec![], vec![mul, five]);
+    let mul = program.new_instruction(TestOperator::Imul, Type::i32(), vec![], vec![five, zero]);
+    let add = program.new_instruction(TestOperator::Imul, Type::i32(), vec![], vec![mul, five]);
     let replacement = optimizer.apply_one(&mut program, add);
     assert!(replacement.is_none());
 }
@@ -71,7 +71,7 @@ fn boolean() {
 
     let mut program = Program::default();
     let t = program.r#const(Constant::Bool(true, BitWidth::One), BitWidth::One);
-    let bint = program.new_instruction(Operator::Bint, Type::i1(), vec![], vec![t]);
+    let bint = program.new_instruction(TestOperator::Bint, Type::i1(), vec![], vec![t]);
     let one = program.r#const(Constant::Int(1, BitWidth::One), BitWidth::ThirtyTwo);
 
     let new = optimizer.apply_one(&mut program, bint);
@@ -79,7 +79,7 @@ fn boolean() {
     assert!(program.structurally_eq(new, one));
 
     let f = program.r#const(Constant::Bool(false, BitWidth::One), BitWidth::One);
-    let bint = program.new_instruction(Operator::Bint, Type::i1(), vec![], vec![f]);
+    let bint = program.new_instruction(TestOperator::Bint, Type::i1(), vec![], vec![f]);
     let replacement = optimizer.apply_one(&mut program, bint);
     assert!(replacement.is_none());
 }
@@ -92,7 +92,7 @@ fn condition_codes() {
     let mut program = Program::default();
     let five = program.r#const(Constant::Int(5, BitWidth::ThirtyTwo), BitWidth::One);
     let icmp_eq = program.new_instruction(
-        Operator::Icmp,
+        TestOperator::Icmp,
         Type::b1(),
         vec![ConditionCode::Eq.into()],
         vec![five, five],
@@ -104,7 +104,7 @@ fn condition_codes() {
     assert!(program.structurally_eq(new, t));
 
     let icmp_ne = program.new_instruction(
-        Operator::Icmp,
+        TestOperator::Icmp,
         Type::b1(),
         vec![ConditionCode::Ne.into()],
         vec![five, five],
@@ -128,17 +128,17 @@ fn is_power_of_two() {
     let mut program = Program::default();
     let five = program.r#const(Constant::Int(5, BitWidth::ThirtyTwo), BitWidth::ThirtyTwo);
     let two = program.r#const(Constant::Int(2, BitWidth::ThirtyTwo), BitWidth::ThirtyTwo);
-    let imul = program.new_instruction(Operator::Imul, Type::i32(), vec![], vec![five, two]);
+    let imul = program.new_instruction(TestOperator::Imul, Type::i32(), vec![], vec![five, two]);
 
     let one = program.r#const(Constant::Int(1, BitWidth::ThirtyTwo), BitWidth::ThirtyTwo);
-    let ishl = program.new_instruction(Operator::Ishl, Type::i32(), vec![], vec![five, one]);
+    let ishl = program.new_instruction(TestOperator::Ishl, Type::i32(), vec![], vec![five, one]);
 
     let new = optimizer.apply_one(&mut program, imul);
     let new = new.expect("optimization should have applied");
     assert!(program.structurally_eq(new, ishl));
 
     let three = program.r#const(Constant::Int(3, BitWidth::ThirtyTwo), BitWidth::ThirtyTwo);
-    let imul = program.new_instruction(Operator::Imul, Type::i32(), vec![], vec![five, three]);
+    let imul = program.new_instruction(TestOperator::Imul, Type::i32(), vec![], vec![five, three]);
 
     let replacement = optimizer.apply_one(&mut program, imul);
     assert!(replacement.is_none());
@@ -159,10 +159,10 @@ fn bit_width() {
     let mut program = Program::default();
     let five = program.r#const(Constant::Int(5, BitWidth::ThirtyTwo), BitWidth::ThirtyTwo);
     let two = program.r#const(Constant::Int(2, BitWidth::ThirtyTwo), BitWidth::ThirtyTwo);
-    let imul = program.new_instruction(Operator::Imul, Type::i32(), vec![], vec![five, two]);
+    let imul = program.new_instruction(TestOperator::Imul, Type::i32(), vec![], vec![five, two]);
 
     let imul_imm = program.new_instruction(
-        Operator::ImulImm,
+        TestOperator::ImulImm,
         Type::i32(),
         vec![Constant::Int(5, BitWidth::ThirtyTwo).into()],
         vec![two],
@@ -174,7 +174,7 @@ fn bit_width() {
 
     let five = program.r#const(Constant::Int(5, BitWidth::SixtyFour), BitWidth::SixtyFour);
     let two = program.r#const(Constant::Int(2, BitWidth::SixtyFour), BitWidth::SixtyFour);
-    let imul = program.new_instruction(Operator::Imul, Type::i32(), vec![], vec![five, two]);
+    let imul = program.new_instruction(TestOperator::Imul, Type::i32(), vec![], vec![five, two]);
 
     let replacement = optimizer.apply_one(&mut program, imul);
     assert!(replacement.is_none());
@@ -195,10 +195,10 @@ fn fits_in_native_word() {
     let mut program = Program::default();
     let five = program.r#const(Constant::Int(5, BitWidth::ThirtyTwo), BitWidth::ThirtyTwo);
     let two = program.r#const(Constant::Int(2, BitWidth::ThirtyTwo), BitWidth::ThirtyTwo);
-    let imul = program.new_instruction(Operator::Imul, Type::i32(), vec![], vec![five, two]);
+    let imul = program.new_instruction(TestOperator::Imul, Type::i32(), vec![], vec![five, two]);
 
     let imul_imm = program.new_instruction(
-        Operator::ImulImm,
+        TestOperator::ImulImm,
         Type::i32(),
         vec![Constant::Int(5, BitWidth::ThirtyTwo).into()],
         vec![two],
@@ -210,7 +210,7 @@ fn fits_in_native_word() {
 
     let five = program.r#const(Constant::Int(5, BitWidth::SixtyFour), BitWidth::SixtyFour);
     let two = program.r#const(Constant::Int(2, BitWidth::SixtyFour), BitWidth::SixtyFour);
-    let imul = program.new_instruction(Operator::Imul, Type::i64(), vec![], vec![five, two]);
+    let imul = program.new_instruction(TestOperator::Imul, Type::i64(), vec![], vec![five, two]);
 
     let replacement = optimizer.apply_one(&mut program, imul);
     assert!(replacement.is_none());
@@ -230,10 +230,10 @@ fn unquote_neg() {
     let mut program = Program::default();
     let five = program.r#const(Constant::Int(5, BitWidth::SixtyFour), BitWidth::SixtyFour);
     let two = program.r#const(Constant::Int(2, BitWidth::SixtyFour), BitWidth::SixtyFour);
-    let isub = program.new_instruction(Operator::Isub, Type::i64(), vec![], vec![five, two]);
+    let isub = program.new_instruction(TestOperator::Isub, Type::i64(), vec![], vec![five, two]);
 
     let iadd_imm = program.new_instruction(
-        Operator::IaddImm,
+        TestOperator::IaddImm,
         Type::i64(),
         vec![Constant::Int(-2 as _, BitWidth::SixtyFour).into()],
         vec![five],
@@ -276,13 +276,13 @@ fn subsumption() {
 
     log::debug!("(iadd (iadd (iadd w x) y) z) => (iadd (iadd w x) (iadd y z))");
 
-    let iadd = program.new_instruction(Operator::Iadd, Type::i64(), vec![], vec![w, x]);
-    let iadd = program.new_instruction(Operator::Iadd, Type::i64(), vec![], vec![iadd, y]);
-    let iadd = program.new_instruction(Operator::Iadd, Type::i64(), vec![], vec![iadd, z]);
-    let expected_lhs = program.new_instruction(Operator::Iadd, Type::i64(), vec![], vec![w, x]);
-    let expected_rhs = program.new_instruction(Operator::Iadd, Type::i64(), vec![], vec![y, z]);
+    let iadd = program.new_instruction(TestOperator::Iadd, Type::i64(), vec![], vec![w, x]);
+    let iadd = program.new_instruction(TestOperator::Iadd, Type::i64(), vec![], vec![iadd, y]);
+    let iadd = program.new_instruction(TestOperator::Iadd, Type::i64(), vec![], vec![iadd, z]);
+    let expected_lhs = program.new_instruction(TestOperator::Iadd, Type::i64(), vec![], vec![w, x]);
+    let expected_rhs = program.new_instruction(TestOperator::Iadd, Type::i64(), vec![], vec![y, z]);
     let expected = program.new_instruction(
-        Operator::Iadd,
+        TestOperator::Iadd,
         Type::i64(),
         vec![],
         vec![expected_lhs, expected_rhs],
@@ -294,17 +294,17 @@ fn subsumption() {
 
     log::debug!("(iadd w x) => y");
 
-    let iadd = program.new_instruction(Operator::Iadd, Type::i64(), vec![], vec![w, x]);
+    let iadd = program.new_instruction(TestOperator::Iadd, Type::i64(), vec![], vec![w, x]);
     let new = optimizer.apply_one(&mut program, iadd);
     let new = new.expect("optimization should have applied");
     assert!(program.structurally_eq(new, y));
 
     log::debug!("(iadd x (iadd y z)) => (iadd_imm x (iadd y z))");
 
-    let iadd_y_z = program.new_instruction(Operator::Iadd, Type::i64(), vec![], vec![y, z]);
-    let iadd = program.new_instruction(Operator::Iadd, Type::i64(), vec![], vec![x, iadd_y_z]);
+    let iadd_y_z = program.new_instruction(TestOperator::Iadd, Type::i64(), vec![], vec![y, z]);
+    let iadd = program.new_instruction(TestOperator::Iadd, Type::i64(), vec![], vec![x, iadd_y_z]);
     let iadd_imm = program.new_instruction(
-        Operator::IaddImm,
+        TestOperator::IaddImm,
         Type::i64(),
         vec![Constant::Int(22, BitWidth::SixtyFour).into()],
         vec![iadd_y_z],
@@ -316,19 +316,19 @@ fn subsumption() {
     log::debug!("(iadd (imul_imm x 1) (imul_imm x 1)) => (ishl_imm 1 (imul_imm x 1))");
 
     let imul_imm = program.new_instruction(
-        Operator::ImulImm,
+        TestOperator::ImulImm,
         Type::i64(),
         vec![Constant::Int(1, BitWidth::SixtyFour).into()],
         vec![x],
     );
     let iadd = program.new_instruction(
-        Operator::Iadd,
+        TestOperator::Iadd,
         Type::i64(),
         vec![],
         vec![imul_imm, imul_imm],
     );
     let ishl_imm = program.new_instruction(
-        Operator::IshlImm,
+        TestOperator::IshlImm,
         Type::i64(),
         vec![Constant::Int(1, BitWidth::SixtyFour).into()],
         vec![imul_imm],
@@ -339,10 +339,10 @@ fn subsumption() {
 
     log::debug!("(iadd (imul w x) (imul y z)) does not match any optimization.");
 
-    let imul_w_x = program.new_instruction(Operator::Imul, Type::i64(), vec![], vec![w, x]);
-    let imul_y_z = program.new_instruction(Operator::Imul, Type::i64(), vec![], vec![y, z]);
+    let imul_w_x = program.new_instruction(TestOperator::Imul, Type::i64(), vec![], vec![w, x]);
+    let imul_y_z = program.new_instruction(TestOperator::Imul, Type::i64(), vec![], vec![y, z]);
     let iadd = program.new_instruction(
-        Operator::Iadd,
+        TestOperator::Iadd,
         Type::i64(),
         vec![],
         vec![imul_w_x, imul_y_z],
@@ -363,9 +363,9 @@ fn polymorphic_bit_widths() {
 
     let x = program.r#const(Constant::Int(42, BitWidth::ThirtyTwo), BitWidth::ThirtyTwo);
     let y = program.r#const(Constant::Int(420, BitWidth::ThirtyTwo), BitWidth::ThirtyTwo);
-    let iadd = program.new_instruction(Operator::Iadd, Type::i32(), vec![], vec![x, y]);
+    let iadd = program.new_instruction(TestOperator::Iadd, Type::i32(), vec![], vec![x, y]);
     let iadd_imm = program.new_instruction(
-        Operator::IaddImm,
+        TestOperator::IaddImm,
         Type::i32(),
         vec![Constant::Int(42, BitWidth::ThirtyTwo).into()],
         vec![y],
@@ -379,9 +379,9 @@ fn polymorphic_bit_widths() {
 
     let x = program.r#const(Constant::Int(42, BitWidth::Sixteen), BitWidth::Sixteen);
     let y = program.r#const(Constant::Int(420, BitWidth::Sixteen), BitWidth::Sixteen);
-    let iadd = program.new_instruction(Operator::Iadd, Type::i16(), vec![], vec![x, y]);
+    let iadd = program.new_instruction(TestOperator::Iadd, Type::i16(), vec![], vec![x, y]);
     let iadd_imm = program.new_instruction(
-        Operator::IaddImm,
+        TestOperator::IaddImm,
         Type::i16(),
         vec![Constant::Int(42, BitWidth::Sixteen).into()],
         vec![y],

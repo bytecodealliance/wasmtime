@@ -6,12 +6,13 @@ use peepmatic::{
 };
 use peepmatic_runtime::{
     cc::ConditionCode,
-    operator::TypingContext as TypingContextTrait,
     part::Constant,
     r#type::BitWidth,
     r#type::{Kind, Type},
 };
 use peepmatic_test::{Program, TestIsa};
+use peepmatic_test_operator::TestOperator;
+use peepmatic_traits::{TypingContext as TypingContextTrait, TypingRules};
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::str;
@@ -37,7 +38,7 @@ pub fn interp(data: &[u8]) {
 
     // Okay, we know it compiles and verifies alright, so (re)parse the AST.
     let buf = wast::parser::ParseBuffer::new(&source).unwrap();
-    let ast = wast::parser::parse::<Optimizations>(&buf).unwrap();
+    let ast = wast::parser::parse::<Optimizations<TestOperator>>(&buf).unwrap();
 
     // And we need access to the assigned types, so re-verify it as well.
     peepmatic::verify(&ast).unwrap();
@@ -87,7 +88,7 @@ pub fn interp(data: &[u8]) {
                     // Generate this operation's immediates.
                     let mut imm_tys = vec![];
                     op.operator
-                        .immediate_types(&mut TypingContext, op.span(), &mut imm_tys);
+                        .immediate_types((), &mut TypingContext, &mut imm_tys);
                     let imms: Vec<_> = op
                         .operands
                         .iter()
@@ -121,7 +122,7 @@ pub fn interp(data: &[u8]) {
                     // this operation's arguments.
                     let mut arg_tys = vec![];
                     op.operator
-                        .param_types(&mut TypingContext, op.span(), &mut arg_tys);
+                        .parameter_types((), &mut TypingContext, &mut arg_tys);
                     let args: Vec<_> = op
                         .operands
                         .iter()
@@ -165,7 +166,7 @@ pub fn interp(data: &[u8]) {
                         })
                         .collect();
 
-                    let ty = match op.operator.result_type(&mut TypingContext, op.span()) {
+                    let ty = match op.operator.result_type((), &mut TypingContext) {
                         TypeOrConditionCode::Type(ty) => ty,
                         TypeOrConditionCode::ConditionCode => {
                             unreachable!("condition codes cannot be operation results")
@@ -206,41 +207,42 @@ enum TypeOrConditionCode {
 struct TypingContext;
 
 impl<'a> TypingContextTrait<'a> for TypingContext {
+    type Span = ();
     type TypeVariable = TypeOrConditionCode;
 
-    fn cc(&mut self, _: wast::Span) -> Self::TypeVariable {
+    fn cc(&mut self, _: ()) -> Self::TypeVariable {
         TypeOrConditionCode::ConditionCode
     }
 
-    fn bNN(&mut self, _: wast::Span) -> Self::TypeVariable {
+    fn bNN(&mut self, _: ()) -> Self::TypeVariable {
         TypeOrConditionCode::Type(Type::b1())
     }
 
-    fn iNN(&mut self, _: wast::Span) -> Self::TypeVariable {
+    fn iNN(&mut self, _: ()) -> Self::TypeVariable {
         TypeOrConditionCode::Type(Type::i32())
     }
 
-    fn iMM(&mut self, _: wast::Span) -> Self::TypeVariable {
+    fn iMM(&mut self, _: ()) -> Self::TypeVariable {
         TypeOrConditionCode::Type(Type::i32())
     }
 
-    fn cpu_flags(&mut self, _: wast::Span) -> Self::TypeVariable {
+    fn cpu_flags(&mut self, _: ()) -> Self::TypeVariable {
         TypeOrConditionCode::Type(Type::cpu_flags())
     }
 
-    fn b1(&mut self, _: wast::Span) -> Self::TypeVariable {
+    fn b1(&mut self, _: ()) -> Self::TypeVariable {
         TypeOrConditionCode::Type(Type::b1())
     }
 
-    fn void(&mut self, _: wast::Span) -> Self::TypeVariable {
+    fn void(&mut self, _: ()) -> Self::TypeVariable {
         TypeOrConditionCode::Type(Type::void())
     }
 
-    fn bool_or_int(&mut self, _: wast::Span) -> Self::TypeVariable {
+    fn bool_or_int(&mut self, _: ()) -> Self::TypeVariable {
         TypeOrConditionCode::Type(Type::b1())
     }
 
-    fn any_t(&mut self, _: wast::Span) -> Self::TypeVariable {
+    fn any_t(&mut self, _: ()) -> Self::TypeVariable {
         TypeOrConditionCode::Type(Type::i32())
     }
 }

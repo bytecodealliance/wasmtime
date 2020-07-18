@@ -2,14 +2,20 @@
 
 use peepmatic_automata::{Automaton, Builder};
 use peepmatic_runtime::linear;
+use std::fmt::Debug;
+use std::hash::Hash;
 
 /// Construct an automaton from a set of linear optimizations.
-pub fn automatize(
-    opts: &linear::Optimizations,
-) -> Automaton<linear::MatchResult, linear::MatchOp, Box<[linear::Action]>> {
+pub fn automatize<TOperator>(
+    opts: &linear::Optimizations<TOperator>,
+) -> Automaton<linear::MatchResult, linear::MatchOp, Box<[linear::Action<TOperator>]>>
+where
+    TOperator: Copy + Debug + Eq + Hash,
+{
     debug_assert!(crate::linear_passes::is_sorted_lexicographically(opts));
 
-    let mut builder = Builder::<linear::MatchResult, linear::MatchOp, Box<[linear::Action]>>::new();
+    let mut builder =
+        Builder::<linear::MatchResult, linear::MatchOp, Box<[linear::Action<TOperator>]>>::new();
 
     for opt in &opts.optimizations {
         let mut insertion = builder.insert();

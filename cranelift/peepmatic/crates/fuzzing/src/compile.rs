@@ -1,6 +1,7 @@
 //! Fuzz testing utilities related to AST pattern matching.
 
 use peepmatic_runtime::PeepholeOptimizations;
+use peepmatic_test_operator::TestOperator;
 use std::path::Path;
 use std::str;
 
@@ -19,18 +20,18 @@ pub fn compile(data: &[u8]) {
         Ok(s) => s,
     };
 
-    let opt = match peepmatic::compile_str(source, Path::new("fuzz")) {
+    let opt = match peepmatic::compile_str::<TestOperator>(source, Path::new("fuzz")) {
         Err(_) => return,
         Ok(o) => o,
     };
 
     // Should be able to serialize and deserialize the peephole optimizer.
     let opt_bytes = bincode::serialize(&opt).expect("should serialize peephole optimizations OK");
-    let _: PeepholeOptimizations =
+    let _: PeepholeOptimizations<TestOperator> =
         bincode::deserialize(&opt_bytes).expect("should deserialize peephole optimizations OK");
 
     // Compiling the same source text again should be deterministic.
-    let opt2 = peepmatic::compile_str(source, Path::new("fuzz"))
+    let opt2 = peepmatic::compile_str::<TestOperator>(source, Path::new("fuzz"))
         .expect("should be able to compile source text again, if it compiled OK the first time");
     let opt2_bytes =
         bincode::serialize(&opt2).expect("should serialize second peephole optimizations OK");

@@ -93,11 +93,17 @@ use peepmatic_runtime::{
 };
 use std::collections::BTreeMap;
 use std::convert::TryInto;
+use std::fmt::Debug;
+use std::hash::Hash;
+use std::marker::PhantomData;
 use std::num::NonZeroU32;
 use wast::Id;
 
 /// Translate the given AST optimizations into linear optimizations.
-pub fn linearize(opts: &Optimizations) -> linear::Optimizations {
+pub fn linearize<TOperator>(opts: &Optimizations<TOperator>) -> linear::Optimizations<TOperator>
+where
+    TOperator: Copy + Debug + Eq + Hash + Into<NonZeroU32>,
+{
     let mut optimizations = vec![];
     let mut paths = PathInterner::new();
     let mut integers = IntegerInterner::new();
@@ -113,12 +119,15 @@ pub fn linearize(opts: &Optimizations) -> linear::Optimizations {
 }
 
 /// Translate an AST optimization into a linear optimization!
-fn linearize_optimization(
+fn linearize_optimization<TOperator>(
     paths: &mut PathInterner,
     integers: &mut IntegerInterner,
-    opt: &Optimization,
-) -> linear::Optimization {
-    let mut increments: Vec<linear::Increment> = vec![];
+    opt: &Optimization<TOperator>,
+) -> linear::Optimization<TOperator>
+where
+    TOperator: Copy + Debug + Eq + Hash + Into<NonZeroU32>,
+{
+    let mut increments: Vec<linear::Increment<_>> = vec![];
 
     let mut lhs_id_to_path = LhsIdToPath::new();
 
@@ -175,20 +184,26 @@ fn linearize_optimization(
 ///
 /// Does not maintain any extra state about the traversal, such as where in the
 /// tree each yielded node comes from.
-struct RhsPostOrder<'a> {
-    dfs: Dfs<'a>,
+struct RhsPostOrder<'a, TOperator> {
+    dfs: Dfs<'a, TOperator>,
 }
 
-impl<'a> RhsPostOrder<'a> {
-    fn new(rhs: &'a Rhs<'a>) -> Self {
+impl<'a, TOperator> RhsPostOrder<'a, TOperator>
+where
+    TOperator: Copy + Debug + Eq + Hash,
+{
+    fn new(rhs: &'a Rhs<'a, TOperator>) -> Self {
         Self { dfs: Dfs::new(rhs) }
     }
 }
 
-impl<'a> Iterator for RhsPostOrder<'a> {
-    type Item = &'a Rhs<'a>;
+impl<'a, TOperator> Iterator for RhsPostOrder<'a, TOperator>
+where
+    TOperator: Copy,
+{
+    type Item = &'a Rhs<'a, TOperator>;
 
-    fn next(&mut self) -> Option<&'a Rhs<'a>> {
+    fn next(&mut self) -> Option<&'a Rhs<'a, TOperator>> {
         use crate::traversals::TraversalEvent as TE;
         loop {
             match self.dfs.next()? {
@@ -203,14 +218,17 @@ impl<'a> Iterator for RhsPostOrder<'a> {
 ///
 /// Keeps track of the path to each pattern, and yields it along side the
 /// pattern AST node.
-struct PatternPreOrder<'a> {
+struct PatternPreOrder<'a, TOperator> {
     last_child: Option<u8>,
     path: Vec<u8>,
-    dfs: Dfs<'a>,
+    dfs: Dfs<'a, TOperator>,
 }
 
-impl<'a> PatternPreOrder<'a> {
-    fn new(pattern: &'a Pattern<'a>) -> Self {
+impl<'a, TOperator> PatternPreOrder<'a, TOperator>
+where
+    TOperator: Copy + Debug + Eq + Hash,
+{
+    fn new(pattern: &'a Pattern<'a, TOperator>) -> Self {
         Self {
             last_child: None,
             path: vec![],
@@ -218,7 +236,7 @@ impl<'a> PatternPreOrder<'a> {
         }
     }
 
-    fn next(&mut self, paths: &mut PathInterner) -> Option<(PathId, &'a Pattern<'a>)> {
+    fn next(&mut self, paths: &mut PathInterner) -> Option<(PathId, &'a Pattern<'a, TOperator>)> {
         use crate::traversals::TraversalEvent as TE;
         loop {
             match self.dfs.next()? {
@@ -252,15 +270,17 @@ impl<'a> PatternPreOrder<'a> {
 
 /// A map from left-hand side identifiers to the path in the left-hand side
 /// where they first occurred.
-struct LhsIdToPath<'a> {
+struct LhsIdToPath<'a, TOperator> {
     id_to_path: BTreeMap<&'a str, PathId>,
+    _marker: PhantomData<&'a TOperator>,
 }
 
-impl<'a> LhsIdToPath<'a> {
+impl<'a, TOperator> LhsIdToPath<'a, TOperator> {
     /// Construct a new, empty `LhsIdToPath`.
     fn new() -> Self {
         Self {
             id_to_path: Default::default(),
+            _marker: PhantomData,
         }
     }
 
@@ -280,7 +300,7 @@ impl<'a> LhsIdToPath<'a> {
     }
 
     /// Remember the path to any LHS ids used in the given pattern.
-    fn remember_path_to_pattern_ids(&mut self, pattern: &'a Pattern<'a>, path: PathId) {
+    fn remember_path_to_pattern_ids(&mut self, pattern: &'a Pattern<'a, TOperator>, path: PathId) {
         match pattern {
             // If this is the first time we've seen an identifier defined on the
             // left-hand side, remember it.
@@ -294,10 +314,10 @@ impl<'a> LhsIdToPath<'a> {
 
 /// An `RhsBuilder` emits the actions for building the right-hand side
 /// instructions.
-struct RhsBuilder<'a> {
+struct RhsBuilder<'a, TOperator> {
     // We do a post order traversal of the RHS because an RHS instruction cannot
     // be created until after all of its operands are created.
-    rhs_post_order: RhsPostOrder<'a>,
+    rhs_post_order: RhsPostOrder<'a, TOperator>,
 
     // A map from a right-hand side's span to its `linear::RhsId`. This is used
     // by RHS-construction actions to reference operands. In practice the
@@ -306,9 +326,12 @@ struct RhsBuilder<'a> {
     rhs_span_to_id: BTreeMap<wast::Span, linear::RhsId>,
 }
 
-impl<'a> RhsBuilder<'a> {
+impl<'a, TOperator> RhsBuilder<'a, TOperator>
+where
+    TOperator: Copy + Debug + Eq + Hash,
+{
     /// Create a new builder for the given right-hand side.
-    fn new(rhs: &'a Rhs<'a>) -> Self {
+    fn new(rhs: &'a Rhs<'a, TOperator>) -> Self {
         let rhs_post_order = RhsPostOrder::new(rhs);
         let rhs_span_to_id = Default::default();
         Self {
@@ -323,7 +346,7 @@ impl<'a> RhsBuilder<'a> {
     ///
     /// Panics if we haven't already emitted the action for building this RHS's
     /// instruction.
-    fn get_rhs_id(&self, rhs: &Rhs) -> linear::RhsId {
+    fn get_rhs_id(&self, rhs: &Rhs<TOperator>) -> linear::RhsId {
         self.rhs_span_to_id[&rhs.span()]
     }
 
@@ -335,8 +358,8 @@ impl<'a> RhsBuilder<'a> {
     fn add_rhs_build_actions(
         &mut self,
         integers: &mut IntegerInterner,
-        lhs_id_to_path: &LhsIdToPath,
-        actions: &mut Vec<linear::Action>,
+        lhs_id_to_path: &LhsIdToPath<TOperator>,
+        actions: &mut Vec<linear::Action<TOperator>>,
     ) {
         while let Some(rhs) = self.rhs_post_order.next() {
             actions.push(self.rhs_to_linear_action(integers, lhs_id_to_path, rhs));
@@ -348,9 +371,9 @@ impl<'a> RhsBuilder<'a> {
     fn rhs_to_linear_action(
         &self,
         integers: &mut IntegerInterner,
-        lhs_id_to_path: &LhsIdToPath,
-        rhs: &Rhs,
-    ) -> linear::Action {
+        lhs_id_to_path: &LhsIdToPath<TOperator>,
+        rhs: &Rhs<TOperator>,
+    ) -> linear::Action<TOperator> {
         match rhs {
             Rhs::ValueLiteral(ValueLiteral::Integer(i)) => linear::Action::MakeIntegerConst {
                 value: integers.intern(i.value as u64),
@@ -425,9 +448,15 @@ impl<'a> RhsBuilder<'a> {
     }
 }
 
-impl Precondition<'_> {
+impl<TOperator> Precondition<'_, TOperator>
+where
+    TOperator: Copy + Debug + Eq + Hash + Into<NonZeroU32>,
+{
     /// Convert this precondition into a `linear::Increment`.
-    fn to_linear_increment(&self, lhs_id_to_path: &LhsIdToPath) -> linear::Increment {
+    fn to_linear_increment(
+        &self,
+        lhs_id_to_path: &LhsIdToPath<TOperator>,
+    ) -> linear::Increment<TOperator> {
         match self.constraint {
             Constraint::IsPowerOfTwo => {
                 let id = match &self.operands[0] {
@@ -484,7 +513,10 @@ impl Precondition<'_> {
     }
 }
 
-impl Pattern<'_> {
+impl<TOperator> Pattern<'_, TOperator>
+where
+    TOperator: Copy,
+{
     /// Convert this pattern into its linear match operation and the expected
     /// result of that operation.
     ///
@@ -493,9 +525,12 @@ impl Pattern<'_> {
     fn to_linear_match_op(
         &self,
         integers: &mut IntegerInterner,
-        lhs_id_to_path: &LhsIdToPath,
+        lhs_id_to_path: &LhsIdToPath<TOperator>,
         path: PathId,
-    ) -> (linear::MatchOp, linear::MatchResult) {
+    ) -> (linear::MatchOp, linear::MatchResult)
+    where
+        TOperator: Into<NonZeroU32>,
+    {
         match self {
             Pattern::ValueLiteral(ValueLiteral::Integer(Integer { value, .. })) => (
                 linear::MatchOp::IntegerValue { path },
@@ -543,9 +578,7 @@ impl Pattern<'_> {
                 }
             }
             Pattern::Operation(op) => {
-                let op = op.operator as u32;
-                debug_assert!(op != 0, "no `Operator` variants are zero");
-                let expected = Ok(unsafe { NonZeroU32::new_unchecked(op) });
+                let expected = Ok(op.operator.into());
                 (linear::MatchOp::Opcode { path }, expected)
             }
         }
@@ -558,9 +591,9 @@ mod tests {
     use peepmatic_runtime::{
         integer_interner::IntegerId,
         linear::{bool_to_match_result, Action::*, Else, MatchOp::*},
-        operator::Operator,
         r#type::{BitWidth, Kind, Type},
     };
+    use peepmatic_test_operator::TestOperator;
 
     macro_rules! linearizes_to {
         ($name:ident, $source:expr, $make_expected:expr $(,)* ) => {
@@ -568,7 +601,7 @@ mod tests {
             fn $name() {
                 let buf = wast::parser::ParseBuffer::new($source).expect("should lex OK");
 
-                let opts = match wast::parser::parse::<Optimizations>(&buf) {
+                let opts = match wast::parser::parse::<Optimizations<TestOperator>>(&buf) {
                     Ok(opts) => opts,
                     Err(mut e) => {
                         e.set_path(std::path::Path::new(stringify!($name)));
@@ -602,7 +635,7 @@ mod tests {
                 let make_expected: fn(
                     &mut dyn FnMut(&[u8]) -> PathId,
                     &mut dyn FnMut(u64) -> IntegerId,
-                ) -> Vec<linear::Increment> = $make_expected;
+                ) -> Vec<linear::Increment<TestOperator>> = $make_expected;
                 let expected = make_expected(&mut p, &mut i);
                 dbg!(&expected);
 
@@ -624,12 +657,12 @@ mod tests {
         |p, i| vec![
             linear::Increment {
                 operation: Opcode { path: p(&[0]) },
-                expected: Ok(NonZeroU32::new(Operator::Imul as _).unwrap()),
+                expected: Ok(TestOperator::Imul.into()),
                 actions: vec![
                     GetLhs { path: p(&[0, 0]) },
                     GetLhs { path: p(&[0, 1]) },
                     MakeBinaryInst {
-                        operator: Operator::Ishl,
+                        operator: TestOperator::Ishl,
                         r#type: Type {
                             kind: Kind::Int,
                             bit_width: BitWidth::Polymorphic,
@@ -702,11 +735,11 @@ mod tests {
         |p, i| vec![
             linear::Increment {
                 operation: Opcode { path: p(&[0]) },
-                expected: Ok(NonZeroU32::new(Operator::Iconst as _).unwrap()),
+                expected: Ok(TestOperator::Iconst.into()),
                 actions: vec![
                     GetLhs { path: p(&[0, 0]) },
                     MakeUnaryInst {
-                        operator: Operator::Iconst,
+                        operator: TestOperator::Iconst,
                         r#type: Type {
                             kind: Kind::Int,
                             bit_width: BitWidth::Polymorphic,
@@ -729,14 +762,14 @@ mod tests {
         |p, i| vec![
             linear::Increment {
                 operation: Opcode { path: p(&[0]) },
-                expected: Ok(NonZeroU32::new(Operator::Bor as _).unwrap()),
+                expected: Ok(TestOperator::Bor.into()),
                 actions: vec![
                     GetLhs { path: p(&[0, 0]) },
                     GetLhs {
                         path: p(&[0, 1, 1]),
                     },
                     MakeBinaryInst {
-                        operator: Operator::Bor,
+                        operator: TestOperator::Bor,
                         r#type: Type {
                             kind: Kind::Int,
                             bit_width: BitWidth::Polymorphic,
@@ -752,7 +785,7 @@ mod tests {
             },
             linear::Increment {
                 operation: Opcode { path: p(&[0, 1]) },
-                expected: Ok(NonZeroU32::new(Operator::Bor as _).unwrap()),
+                expected: Ok(TestOperator::Bor.into()),
                 actions: vec![],
             },
             linear::Increment {
@@ -791,7 +824,7 @@ mod tests {
         |p, i| vec![
             linear::Increment {
                 operation: Opcode { path: p(&[0]) },
-                expected: Ok(NonZeroU32::new(Operator::Ireduce as _).unwrap()),
+                expected: Ok(TestOperator::Ireduce.into()),
                 actions: vec![MakeIntegerConst {
                     value: i(0),
                     bit_width: BitWidth::ThirtyTwo,

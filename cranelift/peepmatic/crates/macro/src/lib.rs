@@ -11,13 +11,7 @@ use syn::{parse_macro_input, Ident, Result};
 
 mod child_nodes;
 mod into_dyn_ast_ref;
-mod operator;
 mod span;
-
-#[proc_macro_derive(PeepmaticOperator, attributes(peepmatic))]
-pub fn operator(input: TokenStream) -> TokenStream {
-    operator::derive_operator(input)
-}
 
 #[proc_macro_derive(Ast, attributes(peepmatic))]
 pub fn derive_ast(input: TokenStream) -> TokenStream {

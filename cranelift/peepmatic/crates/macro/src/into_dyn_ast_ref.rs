@@ -13,7 +13,7 @@ pub fn derive_into_dyn_ast_ref(input: &DeriveInput) -> Result<impl quote::ToToke
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     Ok(quote! {
-        impl #impl_generics From<&'a #ty #ty_generics> for DynAstRef<'a> #where_clause {
+        impl #impl_generics From<&'a #ty #ty_generics> for DynAstRef<'a, TOperator> #where_clause {
             #[inline]
             fn from(x: &'a #ty #ty_generics) -> Self {
                 Self::#ty(x)

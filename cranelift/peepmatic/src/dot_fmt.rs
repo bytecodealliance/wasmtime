@@ -7,17 +7,21 @@ use peepmatic_runtime::{
     cc::ConditionCode,
     integer_interner::{IntegerId, IntegerInterner},
     linear,
-    operator::Operator,
     paths::{PathId, PathInterner},
 };
 use std::convert::{TryFrom, TryInto};
+use std::fmt::Debug;
 use std::io::{self, Write};
-use std::num::NonZeroU16;
+use std::num::{NonZeroU16, NonZeroU32};
 
 #[derive(Debug)]
 pub(crate) struct PeepholeDotFmt<'a>(pub(crate) &'a PathInterner, pub(crate) &'a IntegerInterner);
 
-impl DotFmt<linear::MatchResult, linear::MatchOp, Box<[linear::Action]>> for PeepholeDotFmt<'_> {
+impl<TOperator> DotFmt<linear::MatchResult, linear::MatchOp, Box<[linear::Action<TOperator>]>>
+    for PeepholeDotFmt<'_>
+where
+    TOperator: Debug + TryFrom<NonZeroU32>,
+{
     fn fmt_transition(
         &self,
         w: &mut impl Write,
@@ -26,22 +30,23 @@ impl DotFmt<linear::MatchResult, linear::MatchOp, Box<[linear::Action]>> for Pee
         _to: Option<&linear::MatchOp>,
     ) -> io::Result<()> {
         let from = from.expect("we should have match op for every state");
-        if let Some(x) = input.ok().map(|x| x.get()) {
+        if let Some(x) = input.ok() {
             match from {
                 linear::MatchOp::Opcode { .. } => {
-                    let opcode =
-                        Operator::try_from(x).expect("we shouldn't generate non-opcode edges");
-                    write!(w, "{}", opcode)
+                    let opcode = TOperator::try_from(x)
+                        .map_err(|_| ())
+                        .expect("we shouldn't generate non-opcode edges");
+                    write!(w, "{:?}", opcode)
                 }
                 linear::MatchOp::ConditionCode { .. } => {
-                    let cc =
-                        ConditionCode::try_from(x).expect("we shouldn't generate non-CC edges");
+                    let cc = ConditionCode::try_from(x.get())
+                        .expect("we shouldn't generate non-CC edges");
                     write!(w, "{}", cc)
                 }
                 linear::MatchOp::IntegerValue { .. } => {
-                    let x = self
-                        .1
-                        .lookup(IntegerId(NonZeroU16::new(x.try_into().unwrap()).unwrap()));
+                    let x = self.1.lookup(IntegerId(
+                        NonZeroU16::new(x.get().try_into().unwrap()).unwrap(),
+                    ));
                     write!(w, "{}", x)
                 }
                 _ => write!(w, "Ok({})", x),
@@ -73,7 +78,11 @@ impl DotFmt<linear::MatchResult, linear::MatchOp, Box<[linear::Action]>> for Pee
         writeln!(w, "</font>")
     }
 
-    fn fmt_output(&self, w: &mut impl Write, actions: &Box<[linear::Action]>) -> io::Result<()> {
+    fn fmt_output(
+        &self,
+        w: &mut impl Write,
+        actions: &Box<[linear::Action<TOperator>]>,
+    ) -> io::Result<()> {
         use linear::Action::*;
 
         if actions.is_empty() {
@@ -88,11 +97,11 @@ impl DotFmt<linear::MatchResult, linear::MatchOp, Box<[linear::Action]>> for Pee
             match a {
                 GetLhs { path } => write!(w, "get-lhs @ {}<br/>", p(path))?,
                 UnaryUnquote { operator, operand } => {
-                    write!(w, "eval {} $rhs{}<br/>", operator, operand.0)?
+                    write!(w, "eval {:?} $rhs{}<br/>", operator, operand.0)?
                 }
                 BinaryUnquote { operator, operands } => write!(
                     w,
-                    "eval {} $rhs{}, $rhs{}<br/>",
+                    "eval {:?} $rhs{}, $rhs{}<br/>",
                     operator, operands[0].0, operands[1].0,
                 )?,
                 MakeIntegerConst {
@@ -108,14 +117,14 @@ impl DotFmt<linear::MatchResult, linear::MatchOp, Box<[linear::Action]>> for Pee
                     operand,
                     operator,
                     r#type: _,
-                } => write!(w, "make {} $rhs{}<br/>", operator, operand.0,)?,
+                } => write!(w, "make {:?} $rhs{}<br/>", operator, operand.0,)?,
                 MakeBinaryInst {
                     operator,
                     operands,
                     r#type: _,
                 } => write!(
                     w,
-                    "make {} $rhs{}, $rhs{}<br/>",
+                    "make {:?} $rhs{}, $rhs{}<br/>",
                     operator, operands[0].0, operands[1].0,
                 )?,
                 MakeTernaryInst {
@@ -124,7 +133,7 @@ impl DotFmt<linear::MatchResult, linear::MatchOp, Box<[linear::Action]>> for Pee
                     r#type: _,
                 } => write!(
                     w,
-                    "make {} $rhs{}, $rhs{}, $rhs{}<br/>",
+                    "make {:?} $rhs{}, $rhs{}, $rhs{}<br/>",
                     operator, operands[0].0, operands[1].0, operands[2].0,
                 )?,
             }

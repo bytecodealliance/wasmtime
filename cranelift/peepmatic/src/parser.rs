@@ -84,7 +84,10 @@ mod tok {
     custom_keyword!(nof);
 }
 
-impl<'a> Parse<'a> for Optimizations<'a> {
+impl<'a, TOperator> Parse<'a> for Optimizations<'a, TOperator>
+where
+    TOperator: Parse<'a>,
+{
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let span = p.cur_span();
         let mut optimizations = vec![];
@@ -98,7 +101,10 @@ impl<'a> Parse<'a> for Optimizations<'a> {
     }
 }
 
-impl<'a> Parse<'a> for Optimization<'a> {
+impl<'a, TOperator> Parse<'a> for Optimization<'a, TOperator>
+where
+    TOperator: Parse<'a>,
+{
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let span = p.cur_span();
         p.parens(|p| {
@@ -110,7 +116,10 @@ impl<'a> Parse<'a> for Optimization<'a> {
     }
 }
 
-impl<'a> Parse<'a> for Lhs<'a> {
+impl<'a, TOperator> Parse<'a> for Lhs<'a, TOperator>
+where
+    TOperator: Parse<'a>,
+{
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let span = p.cur_span();
         let mut preconditions = vec![];
@@ -139,30 +148,36 @@ impl<'a> Parse<'a> for Lhs<'a> {
     }
 }
 
-impl<'a> Parse<'a> for Pattern<'a> {
+impl<'a, TOperator> Parse<'a> for Pattern<'a, TOperator>
+where
+    TOperator: Parse<'a>,
+{
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
-        if p.peek::<ValueLiteral>() {
+        if p.peek::<ValueLiteral<TOperator>>() {
             return Ok(Pattern::ValueLiteral(p.parse()?));
         }
-        if p.peek::<Constant>() {
+        if p.peek::<Constant<TOperator>>() {
             return Ok(Pattern::Constant(p.parse()?));
         }
-        if p.peek::<Operation<Self>>() {
+        if p.peek::<Operation<TOperator, Self>>() {
             return Ok(Pattern::Operation(p.parse()?));
         }
-        if p.peek::<Variable>() {
+        if p.peek::<Variable<TOperator>>() {
             return Ok(Pattern::Variable(p.parse()?));
         }
         Err(p.error("expected a left-hand side pattern"))
     }
 }
 
-impl<'a> Peek for Pattern<'a> {
+impl<'a, TOperator> Peek for Pattern<'a, TOperator>
+where
+    TOperator: 'a,
+{
     fn peek(c: Cursor) -> bool {
-        ValueLiteral::peek(c)
-            || Constant::peek(c)
-            || Variable::peek(c)
-            || Operation::<Self>::peek(c)
+        ValueLiteral::<TOperator>::peek(c)
+            || Constant::<TOperator>::peek(c)
+            || Variable::<TOperator>::peek(c)
+            || Operation::<TOperator, Self>::peek(c)
     }
 
     fn display() -> &'static str {
@@ -170,24 +185,26 @@ impl<'a> Peek for Pattern<'a> {
     }
 }
 
-impl<'a> Parse<'a> for ValueLiteral<'a> {
+impl<'a, TOperator> Parse<'a> for ValueLiteral<'a, TOperator> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
-        if let Ok(b) = p.parse::<Boolean>() {
+        if let Ok(b) = p.parse::<Boolean<TOperator>>() {
             return Ok(ValueLiteral::Boolean(b));
         }
-        if let Ok(i) = p.parse::<Integer>() {
+        if let Ok(i) = p.parse::<Integer<TOperator>>() {
             return Ok(ValueLiteral::Integer(i));
         }
-        if let Ok(cc) = p.parse::<ConditionCode>() {
+        if let Ok(cc) = p.parse::<ConditionCode<TOperator>>() {
             return Ok(ValueLiteral::ConditionCode(cc));
         }
         Err(p.error("expected an integer or boolean or condition code literal"))
     }
 }
 
-impl<'a> Peek for ValueLiteral<'a> {
+impl<'a, TOperator> Peek for ValueLiteral<'a, TOperator> {
     fn peek(c: Cursor) -> bool {
-        c.integer().is_some() || Boolean::peek(c) || ConditionCode::peek(c)
+        c.integer().is_some()
+            || Boolean::<TOperator>::peek(c)
+            || ConditionCode::<TOperator>::peek(c)
     }
 
     fn display() -> &'static str {
@@ -195,7 +212,7 @@ impl<'a> Peek for ValueLiteral<'a> {
     }
 }
 
-impl<'a> Parse<'a> for Integer<'a> {
+impl<'a, TOperator> Parse<'a> for Integer<'a, TOperator> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let span = p.cur_span();
         p.step(|c| {
@@ -221,7 +238,7 @@ impl<'a> Parse<'a> for Integer<'a> {
     }
 }
 
-impl<'a> Parse<'a> for Boolean<'a> {
+impl<'a, TOperator> Parse<'a> for Boolean<'a, TOperator> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let span = p.cur_span();
         if p.parse::<tok::r#true>().is_ok() {
@@ -244,7 +261,7 @@ impl<'a> Parse<'a> for Boolean<'a> {
     }
 }
 
-impl<'a> Peek for Boolean<'a> {
+impl<'a, TOperator> Peek for Boolean<'a, TOperator> {
     fn peek(c: Cursor) -> bool {
         <tok::r#true as Peek>::peek(c) || <tok::r#false as Peek>::peek(c)
     }
@@ -254,7 +271,7 @@ impl<'a> Peek for Boolean<'a> {
     }
 }
 
-impl<'a> Parse<'a> for ConditionCode<'a> {
+impl<'a, TOperator> Parse<'a> for ConditionCode<'a, TOperator> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let span = p.cur_span();
 
@@ -292,7 +309,7 @@ impl<'a> Parse<'a> for ConditionCode<'a> {
     }
 }
 
-impl<'a> Peek for ConditionCode<'a> {
+impl<'a, TOperator> Peek for ConditionCode<'a, TOperator> {
     fn peek(c: Cursor) -> bool {
         macro_rules! peek_cc {
             ( $( $token:ident, )* ) => {
@@ -321,7 +338,7 @@ impl<'a> Peek for ConditionCode<'a> {
     }
 }
 
-impl<'a> Parse<'a> for Constant<'a> {
+impl<'a, TOperator> Parse<'a> for Constant<'a, TOperator> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let span = p.cur_span();
         let id = Id::parse(p)?;
@@ -330,7 +347,11 @@ impl<'a> Parse<'a> for Constant<'a> {
             .chars()
             .all(|c| !c.is_alphabetic() || c.is_uppercase())
         {
-            Ok(Constant { span, id })
+            Ok(Constant {
+                span,
+                id,
+                marker: PhantomData,
+            })
         } else {
             let upper = id
                 .name()
@@ -345,7 +366,7 @@ impl<'a> Parse<'a> for Constant<'a> {
     }
 }
 
-impl<'a> Peek for Constant<'a> {
+impl<'a, TOperator> Peek for Constant<'a, TOperator> {
     fn peek(c: Cursor) -> bool {
         if let Some((id, _rest)) = c.id() {
             id.chars().all(|c| !c.is_alphabetic() || c.is_uppercase())
@@ -359,7 +380,7 @@ impl<'a> Peek for Constant<'a> {
     }
 }
 
-impl<'a> Parse<'a> for Variable<'a> {
+impl<'a, TOperator> Parse<'a> for Variable<'a, TOperator> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let span = p.cur_span();
         let id = Id::parse(p)?;
@@ -368,7 +389,11 @@ impl<'a> Parse<'a> for Variable<'a> {
             .chars()
             .all(|c| !c.is_alphabetic() || c.is_lowercase())
         {
-            Ok(Variable { span, id })
+            Ok(Variable {
+                span,
+                id,
+                marker: PhantomData,
+            })
         } else {
             let lower = id
                 .name()
@@ -383,7 +408,7 @@ impl<'a> Parse<'a> for Variable<'a> {
     }
 }
 
-impl<'a> Peek for Variable<'a> {
+impl<'a, TOperator> Peek for Variable<'a, TOperator> {
     fn peek(c: Cursor) -> bool {
         if let Some((id, _rest)) = c.id() {
             id.chars().all(|c| !c.is_alphabetic() || c.is_lowercase())
@@ -397,10 +422,11 @@ impl<'a> Peek for Variable<'a> {
     }
 }
 
-impl<'a, T> Parse<'a> for Operation<'a, T>
+impl<'a, TOperator, TOperand> Parse<'a> for Operation<'a, TOperator, TOperand>
 where
-    T: 'a + Ast<'a> + Peek + Parse<'a>,
-    DynAstRef<'a>: From<&'a T>,
+    TOperator: Parse<'a>,
+    TOperand: 'a + Ast<'a, TOperator> + Peek + Parse<'a>,
+    DynAstRef<'a, TOperator>: From<&'a TOperand>,
 {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let span = p.cur_span();
@@ -417,7 +443,7 @@ where
             });
 
             let mut operands = vec![];
-            while p.peek::<T>() {
+            while p.peek::<TOperand>() {
                 operands.push(p.parse()?);
             }
             Ok(Operation {
@@ -431,10 +457,10 @@ where
     }
 }
 
-impl<'a, T> Peek for Operation<'a, T>
+impl<'a, TOperator, TOperand> Peek for Operation<'a, TOperator, TOperand>
 where
-    T: 'a + Ast<'a>,
-    DynAstRef<'a>: From<&'a T>,
+    TOperand: 'a + Ast<'a, TOperator>,
+    DynAstRef<'a, TOperator>: From<&'a TOperand>,
 {
     fn peek(c: Cursor) -> bool {
         wast::LParen::peek(c)
@@ -445,19 +471,20 @@ where
     }
 }
 
-impl<'a> Parse<'a> for Precondition<'a> {
+impl<'a, TOperator> Parse<'a> for Precondition<'a, TOperator> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let span = p.cur_span();
         p.parens(|p| {
             let constraint = p.parse()?;
             let mut operands = vec![];
-            while p.peek::<ConstraintOperand>() {
+            while p.peek::<ConstraintOperand<TOperator>>() {
                 operands.push(p.parse()?);
             }
             Ok(Precondition {
                 span,
                 constraint,
                 operands,
+                marker: PhantomData,
             })
         })
     }
@@ -481,24 +508,26 @@ impl<'a> Parse<'a> for Constraint {
     }
 }
 
-impl<'a> Parse<'a> for ConstraintOperand<'a> {
+impl<'a, TOperator> Parse<'a> for ConstraintOperand<'a, TOperator> {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
-        if p.peek::<ValueLiteral>() {
+        if p.peek::<ValueLiteral<TOperator>>() {
             return Ok(ConstraintOperand::ValueLiteral(p.parse()?));
         }
-        if p.peek::<Constant>() {
+        if p.peek::<Constant<TOperator>>() {
             return Ok(ConstraintOperand::Constant(p.parse()?));
         }
-        if p.peek::<Variable>() {
+        if p.peek::<Variable<TOperator>>() {
             return Ok(ConstraintOperand::Variable(p.parse()?));
         }
         Err(p.error("expected an operand for precondition constraint"))
     }
 }
 
-impl<'a> Peek for ConstraintOperand<'a> {
+impl<'a, TOperator> Peek for ConstraintOperand<'a, TOperator> {
     fn peek(c: Cursor) -> bool {
-        ValueLiteral::peek(c) || Constant::peek(c) || Variable::peek(c)
+        ValueLiteral::<TOperator>::peek(c)
+            || Constant::<TOperator>::peek(c)
+            || Variable::<TOperator>::peek(c)
     }
 
     fn display() -> &'static str {
@@ -506,34 +535,40 @@ impl<'a> Peek for ConstraintOperand<'a> {
     }
 }
 
-impl<'a> Parse<'a> for Rhs<'a> {
+impl<'a, TOperator> Parse<'a> for Rhs<'a, TOperator>
+where
+    TOperator: Parse<'a>,
+{
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
-        if p.peek::<ValueLiteral>() {
+        if p.peek::<ValueLiteral<TOperator>>() {
             return Ok(Rhs::ValueLiteral(p.parse()?));
         }
-        if p.peek::<Constant>() {
+        if p.peek::<Constant<TOperator>>() {
             return Ok(Rhs::Constant(p.parse()?));
         }
-        if p.peek::<Variable>() {
+        if p.peek::<Variable<TOperator>>() {
             return Ok(Rhs::Variable(p.parse()?));
         }
-        if p.peek::<Unquote>() {
+        if p.peek::<Unquote<TOperator>>() {
             return Ok(Rhs::Unquote(p.parse()?));
         }
-        if p.peek::<Operation<Self>>() {
+        if p.peek::<Operation<TOperator, Self>>() {
             return Ok(Rhs::Operation(p.parse()?));
         }
         Err(p.error("expected a right-hand side replacement"))
     }
 }
 
-impl<'a> Peek for Rhs<'a> {
+impl<'a, TOperator> Peek for Rhs<'a, TOperator>
+where
+    TOperator: 'a,
+{
     fn peek(c: Cursor) -> bool {
-        ValueLiteral::peek(c)
-            || Constant::peek(c)
-            || Variable::peek(c)
-            || Unquote::peek(c)
-            || Operation::<Self>::peek(c)
+        ValueLiteral::<TOperator>::peek(c)
+            || Constant::<TOperator>::peek(c)
+            || Variable::<TOperator>::peek(c)
+            || Unquote::<TOperator>::peek(c)
+            || Operation::<TOperator, Self>::peek(c)
     }
 
     fn display() -> &'static str {
@@ -541,26 +576,30 @@ impl<'a> Peek for Rhs<'a> {
     }
 }
 
-impl<'a> Parse<'a> for Unquote<'a> {
+impl<'a, TOperator> Parse<'a> for Unquote<'a, TOperator>
+where
+    TOperator: Parse<'a>,
+{
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
         let span = p.cur_span();
         p.parse::<tok::dollar>()?;
         p.parens(|p| {
             let operator = p.parse()?;
             let mut operands = vec![];
-            while p.peek::<Rhs>() {
+            while p.peek::<Rhs<TOperator>>() {
                 operands.push(p.parse()?);
             }
             Ok(Unquote {
                 span,
                 operator,
                 operands,
+                marker: PhantomData,
             })
         })
     }
 }
 
-impl<'a> Peek for Unquote<'a> {
+impl<'a, TOperator> Peek for Unquote<'a, TOperator> {
     fn peek(c: Cursor) -> bool {
         tok::dollar::peek(c)
     }
@@ -573,7 +612,7 @@ impl<'a> Peek for Unquote<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use peepmatic_runtime::operator::Operator;
+    use peepmatic_test_operator::TestOperator;
 
     macro_rules! test_parse {
         (
@@ -623,7 +662,7 @@ mod test {
     }
 
     test_parse! {
-        parse_boolean<Boolean> {
+        parse_boolean<Boolean<TestOperator>> {
             ok {
                 "true",
                 "false",
@@ -641,7 +680,7 @@ mod test {
                 "falsezzz",
             }
         }
-        parse_cc<ConditionCode> {
+        parse_cc<ConditionCode<TestOperator>> {
             ok {
                 "eq",
                 "ne",
@@ -661,7 +700,7 @@ mod test {
                 "neq",
             }
         }
-        parse_constant<Constant> {
+        parse_constant<Constant<TestOperator>> {
             ok {
                 "$C",
                 "$C1",
@@ -693,7 +732,7 @@ mod test {
                 "imul",
             }
         }
-        parse_constraint_operand<ConstraintOperand> {
+        parse_constraint_operand<ConstraintOperand<TestOperator>> {
             ok {
                 "1234",
                 "true",
@@ -707,7 +746,7 @@ mod test {
                 "(iadd 1 2)",
             }
         }
-        parse_integer<Integer> {
+        parse_integer<Integer<TestOperator>> {
             ok {
                 "0",
                 "1",
@@ -746,7 +785,7 @@ mod test {
                 "0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
             }
         }
-        parse_lhs<Lhs> {
+        parse_lhs<Lhs<TestOperator>> {
             ok {
                 "(when (imul $C1 $C2) (is-power-of-two $C1) (is-power-of-two $C2))",
                 "(when (imul $x $C) (is-power-of-two $C))",
@@ -762,7 +801,7 @@ mod test {
                 "abc",
             }
         }
-        parse_operation_pattern<Operation<Pattern>> {
+        parse_operation_pattern<Operation<TestOperator, Pattern<TestOperator>>> {
             ok {
                 "(iadd)",
                 "(iadd 1)",
@@ -779,7 +818,7 @@ mod test {
                 "(ishl $x $(log2 $C))",
             }
         }
-        parse_operation_rhs<Operation<Rhs>> {
+        parse_operation_rhs<Operation<TestOperator, Rhs<TestOperator>>> {
             ok {
                 "(iadd)",
                 "(iadd 1)",
@@ -793,7 +832,7 @@ mod test {
                 "$CONST",
             }
         }
-        parse_operator<Operator> {
+        parse_operator<TestOperator> {
             ok {
                 "bor",
                 "iadd",
@@ -812,7 +851,7 @@ mod test {
                 "iadd{i32}",
             }
         }
-        parse_optimization<Optimization> {
+        parse_optimization<Optimization<TestOperator>> {
             ok {
                 "(=> (when (iadd $x $C) (is-power-of-two $C) (is-power-of-two $C)) (iadd $C $x))",
                 "(=> (when (iadd $x $C)) (iadd $C $x))",
@@ -825,7 +864,7 @@ mod test {
                 "(=> () ())",
             }
         }
-        parse_optimizations<Optimizations> {
+        parse_optimizations<Optimizations<TestOperator>> {
             ok {
                 "",
                 r#"
@@ -844,7 +883,7 @@ mod test {
                 "#,
             }
         }
-        parse_pattern<Pattern> {
+        parse_pattern<Pattern<TestOperator>> {
             ok {
                 "1234",
                 "$C",
@@ -857,7 +896,7 @@ mod test {
                 "abc",
             }
         }
-        parse_precondition<Precondition> {
+        parse_precondition<Precondition<TestOperator>> {
             ok {
                 "(is-power-of-two)",
                 "(is-power-of-two $C)",
@@ -871,7 +910,7 @@ mod test {
                 "$CONST",
             }
         }
-        parse_rhs<Rhs> {
+        parse_rhs<Rhs<TestOperator>> {
             ok {
                 "5",
                 "$C",
@@ -884,7 +923,7 @@ mod test {
                 "()",
             }
         }
-        parse_unquote<Unquote> {
+        parse_unquote<Unquote<TestOperator>> {
             ok {
                 "$(log2)",
                 "$(log2 $C)",
@@ -899,7 +938,7 @@ mod test {
                 "$()",
             }
         }
-        parse_value_literal<ValueLiteral> {
+        parse_value_literal<ValueLiteral<TestOperator>> {
             ok {
                 "12345",
                 "true",
@@ -911,7 +950,7 @@ mod test {
                 "12.34",
             }
         }
-        parse_variable<Variable> {
+        parse_variable<Variable<TestOperator>> {
             ok {
                 "$v",
                 "$v1",

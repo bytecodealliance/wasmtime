@@ -22,8 +22,8 @@
 
 use peepmatic_macro::Ast;
 use peepmatic_runtime::{
-    operator::{Operator, UnquoteOperator},
     r#type::{BitWidth, Type},
+    unquote::UnquoteOperator,
 };
 use std::cell::Cell;
 use std::hash::{Hash, Hasher};
@@ -32,58 +32,58 @@ use wast::Id;
 
 /// A reference to any AST node.
 #[derive(Debug, Clone, Copy)]
-pub enum DynAstRef<'a> {
+pub enum DynAstRef<'a, TOperator> {
     /// A reference to an `Optimizations`.
-    Optimizations(&'a Optimizations<'a>),
+    Optimizations(&'a Optimizations<'a, TOperator>),
 
     /// A reference to an `Optimization`.
-    Optimization(&'a Optimization<'a>),
+    Optimization(&'a Optimization<'a, TOperator>),
 
     /// A reference to an `Lhs`.
-    Lhs(&'a Lhs<'a>),
+    Lhs(&'a Lhs<'a, TOperator>),
 
     /// A reference to an `Rhs`.
-    Rhs(&'a Rhs<'a>),
+    Rhs(&'a Rhs<'a, TOperator>),
 
     /// A reference to a `Pattern`.
-    Pattern(&'a Pattern<'a>),
+    Pattern(&'a Pattern<'a, TOperator>),
 
     /// A reference to a `Precondition`.
-    Precondition(&'a Precondition<'a>),
+    Precondition(&'a Precondition<'a, TOperator>),
 
     /// A reference to a `ConstraintOperand`.
-    ConstraintOperand(&'a ConstraintOperand<'a>),
+    ConstraintOperand(&'a ConstraintOperand<'a, TOperator>),
 
     /// A reference to a `ValueLiteral`.
-    ValueLiteral(&'a ValueLiteral<'a>),
+    ValueLiteral(&'a ValueLiteral<'a, TOperator>),
 
     /// A reference to a `Constant`.
-    Constant(&'a Constant<'a>),
+    Constant(&'a Constant<'a, TOperator>),
 
     /// A reference to a `PatternOperation`.
-    PatternOperation(&'a Operation<'a, Pattern<'a>>),
+    PatternOperation(&'a Operation<'a, TOperator, Pattern<'a, TOperator>>),
 
     /// A reference to a `Variable`.
-    Variable(&'a Variable<'a>),
+    Variable(&'a Variable<'a, TOperator>),
 
     /// A reference to an `Integer`.
-    Integer(&'a Integer<'a>),
+    Integer(&'a Integer<'a, TOperator>),
 
     /// A reference to a `Boolean`.
-    Boolean(&'a Boolean<'a>),
+    Boolean(&'a Boolean<'a, TOperator>),
 
     /// A reference to a `ConditionCode`.
-    ConditionCode(&'a ConditionCode<'a>),
+    ConditionCode(&'a ConditionCode<'a, TOperator>),
 
     /// A reference to an `Unquote`.
-    Unquote(&'a Unquote<'a>),
+    Unquote(&'a Unquote<'a, TOperator>),
 
     /// A reference to an `RhsOperation`.
-    RhsOperation(&'a Operation<'a, Rhs<'a>>),
+    RhsOperation(&'a Operation<'a, TOperator, Rhs<'a, TOperator>>),
 }
 
-impl<'a, 'b> ChildNodes<'a, 'b> for DynAstRef<'a> {
-    fn child_nodes(&'b self, sink: &mut impl Extend<DynAstRef<'a>>) {
+impl<'a, 'b, TOperator> ChildNodes<'a, 'b, TOperator> for DynAstRef<'a, TOperator> {
+    fn child_nodes(&'b self, sink: &mut impl Extend<DynAstRef<'a, TOperator>>) {
         match self {
             Self::Optimizations(x) => x.child_nodes(sink),
             Self::Optimization(x) => x.child_nodes(sink),
@@ -118,23 +118,28 @@ impl<'a, 'b> ChildNodes<'a, 'b> for DynAstRef<'a> {
 /// This trait is blanked implemented for everything that does those three
 /// things, and in practice those three thrings are all implemented by the
 /// `derive(Ast)` macro.
-pub trait Ast<'a>: 'a + ChildNodes<'a, 'a> + Span
+pub trait Ast<'a, TOperator>: 'a + ChildNodes<'a, 'a, TOperator> + Span
 where
-    DynAstRef<'a>: From<&'a Self>,
+    DynAstRef<'a, TOperator>: From<&'a Self>,
+    TOperator: 'a,
 {
 }
 
-impl<'a, T> Ast<'a> for T
+impl<'a, T, TOperator> Ast<'a, TOperator> for T
 where
-    T: 'a + ?Sized + ChildNodes<'a, 'a> + Span,
-    DynAstRef<'a>: From<&'a Self>,
+    T: 'a + ?Sized + ChildNodes<'a, 'a, TOperator> + Span,
+    DynAstRef<'a, TOperator>: From<&'a Self>,
+    TOperator: 'a,
 {
 }
 
 /// Enumerate the child AST nodes of a given node.
-pub trait ChildNodes<'a, 'b> {
+pub trait ChildNodes<'a, 'b, TOperator>
+where
+    TOperator: 'a,
+{
     /// Get each of this AST node's children, in order.
-    fn child_nodes(&'b self, sink: &mut impl Extend<DynAstRef<'a>>);
+    fn child_nodes(&'b self, sink: &mut impl Extend<DynAstRef<'a, TOperator>>);
 }
 
 /// A trait for getting the span where an AST node was defined.
@@ -147,30 +152,30 @@ pub trait Span {
 ///
 /// This is the root AST node.
 #[derive(Debug, Ast)]
-pub struct Optimizations<'a> {
+pub struct Optimizations<'a, TOperator> {
     /// Where these `Optimizations` were defined.
     #[peepmatic(skip_child)]
     pub span: wast::Span,
 
     /// The optimizations.
     #[peepmatic(flatten)]
-    pub optimizations: Vec<Optimization<'a>>,
+    pub optimizations: Vec<Optimization<'a, TOperator>>,
 }
 
 /// A complete optimization: a left-hand side to match against and a right-hand
 /// side replacement.
 #[derive(Debug, Ast)]
-pub struct Optimization<'a> {
+pub struct Optimization<'a, TOperator> {
     /// Where this `Optimization` was defined.
     #[peepmatic(skip_child)]
     pub span: wast::Span,
 
     /// The left-hand side that matches when this optimization applies.
-    pub lhs: Lhs<'a>,
+    pub lhs: Lhs<'a, TOperator>,
 
     /// The new sequence of instructions to replace an old sequence that matches
     /// the left-hand side with.
-    pub rhs: Rhs<'a>,
+    pub rhs: Rhs<'a, TOperator>,
 }
 
 /// A left-hand side describes what is required for a particular optimization to
@@ -180,58 +185,58 @@ pub struct Optimization<'a> {
 /// candidate instruction sequences, and zero or more preconditions that add
 /// additional constraints upon instruction sequences matched by the pattern.
 #[derive(Debug, Ast)]
-pub struct Lhs<'a> {
+pub struct Lhs<'a, TOperator> {
     /// Where this `Lhs` was defined.
     #[peepmatic(skip_child)]
     pub span: wast::Span,
 
     /// A pattern that describes sequences of instructions to match.
-    pub pattern: Pattern<'a>,
+    pub pattern: Pattern<'a, TOperator>,
 
     /// Additional constraints that a match must satisfy in addition to
     /// structually matching the pattern, e.g. some constant must be a power of
     /// two.
     #[peepmatic(flatten)]
-    pub preconditions: Vec<Precondition<'a>>,
+    pub preconditions: Vec<Precondition<'a, TOperator>>,
 }
 
 /// A structural pattern, potentially with wildcard variables for matching whole
 /// subtrees.
 #[derive(Debug, Ast)]
-pub enum Pattern<'a> {
+pub enum Pattern<'a, TOperator> {
     /// A specific value. These are written as `1234` or `0x1234` or `true` or
     /// `false`.
-    ValueLiteral(ValueLiteral<'a>),
+    ValueLiteral(ValueLiteral<'a, TOperator>),
 
     /// A constant that matches any constant value. This subsumes value
     /// patterns. These are upper-case identifiers like `$C`.
-    Constant(Constant<'a>),
+    Constant(Constant<'a, TOperator>),
 
     /// An operation pattern with zero or more operand patterns. These are
     /// s-expressions like `(iadd $x $y)`.
-    Operation(Operation<'a, Pattern<'a>>),
+    Operation(Operation<'a, TOperator, Pattern<'a, TOperator>>),
 
     /// A variable that matches any kind of subexpression. This subsumes all
     /// other patterns. These are lower-case identifiers like `$x`.
-    Variable(Variable<'a>),
+    Variable(Variable<'a, TOperator>),
 }
 
 /// An integer or boolean value literal.
 #[derive(Debug, Ast)]
-pub enum ValueLiteral<'a> {
+pub enum ValueLiteral<'a, TOperator> {
     /// An integer value.
-    Integer(Integer<'a>),
+    Integer(Integer<'a, TOperator>),
 
     /// A boolean value: `true` or `false`.
-    Boolean(Boolean<'a>),
+    Boolean(Boolean<'a, TOperator>),
 
     /// A condition code: `eq`, `ne`, etc...
-    ConditionCode(ConditionCode<'a>),
+    ConditionCode(ConditionCode<'a, TOperator>),
 }
 
 /// An integer literal.
 #[derive(Debug, PartialEq, Eq, Ast)]
-pub struct Integer<'a> {
+pub struct Integer<'a, TOperator> {
     /// Where this `Integer` was defined.
     #[peepmatic(skip_child)]
     pub span: wast::Span,
@@ -255,10 +260,10 @@ pub struct Integer<'a> {
 
     #[allow(missing_docs)]
     #[peepmatic(skip_child)]
-    pub marker: PhantomData<&'a ()>,
+    pub marker: PhantomData<&'a TOperator>,
 }
 
-impl Hash for Integer<'_> {
+impl<TOperator> Hash for Integer<'_, TOperator> {
     fn hash<H>(&self, state: &mut H)
     where
         H: Hasher,
@@ -278,7 +283,7 @@ impl Hash for Integer<'_> {
 
 /// A boolean literal.
 #[derive(Debug, PartialEq, Eq, Ast)]
-pub struct Boolean<'a> {
+pub struct Boolean<'a, TOperator> {
     /// Where this `Boolean` was defined.
     #[peepmatic(skip_child)]
     pub span: wast::Span,
@@ -299,10 +304,10 @@ pub struct Boolean<'a> {
 
     #[allow(missing_docs)]
     #[peepmatic(skip_child)]
-    pub marker: PhantomData<&'a ()>,
+    pub marker: PhantomData<&'a TOperator>,
 }
 
-impl Hash for Boolean<'_> {
+impl<TOperator> Hash for Boolean<'_, TOperator> {
     fn hash<H>(&self, state: &mut H)
     where
         H: Hasher,
@@ -322,7 +327,7 @@ impl Hash for Boolean<'_> {
 
 /// A condition code.
 #[derive(Debug, Ast)]
-pub struct ConditionCode<'a> {
+pub struct ConditionCode<'a, TOperator> {
     /// Where this `ConditionCode` was defined.
     #[peepmatic(skip_child)]
     pub span: wast::Span,
@@ -333,7 +338,7 @@ pub struct ConditionCode<'a> {
 
     #[allow(missing_docs)]
     #[peepmatic(skip_child)]
-    pub marker: PhantomData<&'a ()>,
+    pub marker: PhantomData<&'a TOperator>,
 }
 
 /// A symbolic constant.
@@ -341,7 +346,7 @@ pub struct ConditionCode<'a> {
 /// These are identifiers containing uppercase letters: `$C`, `$MY-CONST`,
 /// `$CONSTANT1`.
 #[derive(Debug, Ast)]
-pub struct Constant<'a> {
+pub struct Constant<'a, TOperator> {
     /// Where this `Constant` was defined.
     #[peepmatic(skip_child)]
     pub span: wast::Span,
@@ -349,6 +354,10 @@ pub struct Constant<'a> {
     /// This constant's identifier.
     #[peepmatic(skip_child)]
     pub id: Id<'a>,
+
+    #[allow(missing_docs)]
+    #[peepmatic(skip_child)]
+    pub marker: PhantomData<&'a TOperator>,
 }
 
 /// A variable that matches any subtree.
@@ -357,7 +366,7 @@ pub struct Constant<'a> {
 /// being the same as each other occurrence as well, e.g. `(iadd $x $x)` matches
 /// `(iadd 5 5)` but not `(iadd 1 2)`.
 #[derive(Debug, Ast)]
-pub struct Variable<'a> {
+pub struct Variable<'a, TOperator> {
     /// Where this `Variable` was defined.
     #[peepmatic(skip_child)]
     pub span: wast::Span,
@@ -365,15 +374,20 @@ pub struct Variable<'a> {
     /// This variable's identifier.
     #[peepmatic(skip_child)]
     pub id: Id<'a>,
+
+    #[allow(missing_docs)]
+    #[peepmatic(skip_child)]
+    pub marker: PhantomData<&'a TOperator>,
 }
 
 /// An operation with an operator, and operands of type `T`.
 #[derive(Debug, Ast)]
 #[peepmatic(no_into_dyn_node)]
-pub struct Operation<'a, T>
+pub struct Operation<'a, TOperator, TOperand>
 where
-    T: 'a + Ast<'a>,
-    DynAstRef<'a>: From<&'a T>,
+    TOperator: 'a,
+    TOperand: 'a + Ast<'a, TOperator>,
+    DynAstRef<'a, TOperator>: From<&'a TOperand>,
 {
     /// The span where this operation was written.
     #[peepmatic(skip_child)]
@@ -381,7 +395,7 @@ where
 
     /// The operator for this operation, e.g. `imul` or `iadd`.
     #[peepmatic(skip_child)]
-    pub operator: Operator,
+    pub operator: TOperator,
 
     /// An optional ascribed or inferred type for the operator.
     #[peepmatic(skip_child)]
@@ -393,23 +407,27 @@ where
     /// the operands. When `Operation is used in a right-hand side replacement,
     /// these are the sub-replacements for the operands.
     #[peepmatic(flatten)]
-    pub operands: Vec<T>,
+    pub operands: Vec<TOperand>,
 
     #[allow(missing_docs)]
     #[peepmatic(skip_child)]
     pub marker: PhantomData<&'a ()>,
 }
 
-impl<'a> From<&'a Operation<'a, Pattern<'a>>> for DynAstRef<'a> {
+impl<'a, TOperator> From<&'a Operation<'a, TOperator, Pattern<'a, TOperator>>>
+    for DynAstRef<'a, TOperator>
+{
     #[inline]
-    fn from(o: &'a Operation<'a, Pattern<'a>>) -> DynAstRef<'a> {
+    fn from(o: &'a Operation<'a, TOperator, Pattern<'a, TOperator>>) -> DynAstRef<'a, TOperator> {
         DynAstRef::PatternOperation(o)
     }
 }
 
-impl<'a> From<&'a Operation<'a, Rhs<'a>>> for DynAstRef<'a> {
+impl<'a, TOperator> From<&'a Operation<'a, TOperator, Rhs<'a, TOperator>>>
+    for DynAstRef<'a, TOperator>
+{
     #[inline]
-    fn from(o: &'a Operation<'a, Rhs<'a>>) -> DynAstRef<'a> {
+    fn from(o: &'a Operation<'a, TOperator, Rhs<'a, TOperator>>) -> DynAstRef<'a, TOperator> {
         DynAstRef::RhsOperation(o)
     }
 }
@@ -417,7 +435,7 @@ impl<'a> From<&'a Operation<'a, Rhs<'a>>> for DynAstRef<'a> {
 /// A precondition adds additional constraints to a pattern, such as "$C must be
 /// a power of two".
 #[derive(Debug, Ast)]
-pub struct Precondition<'a> {
+pub struct Precondition<'a, TOperator> {
     /// Where this `Precondition` was defined.
     #[peepmatic(skip_child)]
     pub span: wast::Span,
@@ -428,7 +446,11 @@ pub struct Precondition<'a> {
 
     /// The operands of the constraint.
     #[peepmatic(flatten)]
-    pub operands: Vec<ConstraintOperand<'a>>,
+    pub operands: Vec<ConstraintOperand<'a, TOperator>>,
+
+    #[allow(missing_docs)]
+    #[peepmatic(skip_child)]
+    pub marker: PhantomData<&'a TOperator>,
 }
 
 /// Contraint operators.
@@ -446,40 +468,40 @@ pub enum Constraint {
 
 /// An operand of a precondition's constraint.
 #[derive(Debug, Ast)]
-pub enum ConstraintOperand<'a> {
+pub enum ConstraintOperand<'a, TOperator> {
     /// A value literal operand.
-    ValueLiteral(ValueLiteral<'a>),
+    ValueLiteral(ValueLiteral<'a, TOperator>),
 
     /// A constant operand.
-    Constant(Constant<'a>),
+    Constant(Constant<'a, TOperator>),
 
     /// A variable operand.
-    Variable(Variable<'a>),
+    Variable(Variable<'a, TOperator>),
 }
 
 /// The right-hand side of an optimization that contains the instructions to
 /// replace any matched left-hand side with.
 #[derive(Debug, Ast)]
-pub enum Rhs<'a> {
+pub enum Rhs<'a, TOperator> {
     /// A value literal right-hand side.
-    ValueLiteral(ValueLiteral<'a>),
+    ValueLiteral(ValueLiteral<'a, TOperator>),
 
     /// A constant right-hand side (the constant must have been matched and
     /// bound in the left-hand side's pattern).
-    Constant(Constant<'a>),
+    Constant(Constant<'a, TOperator>),
 
     /// A variable right-hand side (the variable must have been matched and
     /// bound in the left-hand side's pattern).
-    Variable(Variable<'a>),
+    Variable(Variable<'a, TOperator>),
 
     /// An unquote expression that is evaluated while replacing the left-hand
     /// side with the right-hand side. The result of the evaluation is used in
     /// the replacement.
-    Unquote(Unquote<'a>),
+    Unquote(Unquote<'a, TOperator>),
 
     /// A compound right-hand side consisting of an operation and subsequent
     /// right-hand side operands.
-    Operation(Operation<'a, Rhs<'a>>),
+    Operation(Operation<'a, TOperator, Rhs<'a, TOperator>>),
 }
 
 /// An unquote operation.
@@ -493,7 +515,7 @@ pub enum Rhs<'a> {
 /// instructions that match its left-hand side with the compile-time result of
 /// `log2($C)` (the left-hand side must match and bind the constant `$C`).
 #[derive(Debug, Ast)]
-pub struct Unquote<'a> {
+pub struct Unquote<'a, TOperator> {
     /// Where this `Unquote` was defined.
     #[peepmatic(skip_child)]
     pub span: wast::Span,
@@ -504,5 +526,9 @@ pub struct Unquote<'a> {
 
     /// The operands for this unquote operation.
     #[peepmatic(flatten)]
-    pub operands: Vec<Rhs<'a>>,
+    pub operands: Vec<Rhs<'a, TOperator>>,
+
+    #[allow(missing_docs)]
+    #[peepmatic(skip_child)]
+    pub marker: PhantomData<&'a TOperator>,
 }

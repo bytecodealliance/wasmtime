@@ -23,20 +23,25 @@ pub use self::{
 };
 
 use peepmatic_runtime::PeepholeOptimizations;
+use peepmatic_traits::TypingRules;
+use std::convert::TryFrom;
+use std::fmt::Debug;
 use std::fs;
+use std::hash::Hash;
+use std::num::NonZeroU32;
 use std::path::Path;
 
 /// Compile the given DSL file into a compact peephole optimizations automaton!
 ///
 /// ## Example
 ///
-/// ```no_run
+/// ```ignore
 /// # fn main() -> anyhow::Result<()> {
 /// use std::path::Path;
 ///
-/// let peep_opts = peepmatic::compile_file(Path::new(
-///     "path/to/optimizations.peepmatic"
-/// ))?;
+/// let peep_opts = peepmatic::compile_file::<cranelift_codegen::ir::Opcode>(
+///     Path::new("path/to/optimizations.peepmatic")
+/// )?;
 ///
 /// // Use the peephole optimizations or serialize them into bytes here...
 /// # Ok(())
@@ -49,9 +54,19 @@ use std::path::Path;
 /// `PEEPMATIC_DOT` environment variable to a file path. A [GraphViz
 /// Dot]((https://graphviz.gitlab.io/_pages/pdf/dotguide.pdf)) file showing the
 /// peephole optimizer's automaton will be written to that file path.
-pub fn compile_file(filename: &Path) -> anyhow::Result<PeepholeOptimizations> {
+pub fn compile_file<TOperator>(filename: &Path) -> anyhow::Result<PeepholeOptimizations<TOperator>>
+where
+    TOperator: Copy
+        + Debug
+        + Eq
+        + Hash
+        + for<'a> wast::parser::Parse<'a>
+        + TypingRules
+        + Into<NonZeroU32>
+        + TryFrom<NonZeroU32>,
+{
     let source = fs::read_to_string(filename)?;
-    compile_str(&source, filename)
+    compile_str::<TOperator>(&source, filename)
 }
 
 /// Compile the given DSL source text down into a compact peephole optimizations
@@ -64,11 +79,11 @@ pub fn compile_file(filename: &Path) -> anyhow::Result<PeepholeOptimizations> {
 ///
 /// ## Example
 ///
-/// ```no_run
+/// ```ignore
 /// # fn main() -> anyhow::Result<()> {
 /// use std::path::Path;
 ///
-/// let peep_opts = peepmatic::compile_str(
+/// let peep_opts = peepmatic::compile_str::<cranelift_codegen::ir::Opcode>(
 ///     "
 ///     (=> (iadd $x 0) $x)
 ///     (=> (imul $x 0) 0)
@@ -88,14 +103,27 @@ pub fn compile_file(filename: &Path) -> anyhow::Result<PeepholeOptimizations> {
 /// `PEEPMATIC_DOT` environment variable to a file path. A [GraphViz
 /// Dot]((https://graphviz.gitlab.io/_pages/pdf/dotguide.pdf)) file showing the
 /// peephole optimizer's automaton will be written to that file path.
-pub fn compile_str(source: &str, filename: &Path) -> anyhow::Result<PeepholeOptimizations> {
+pub fn compile_str<TOperator>(
+    source: &str,
+    filename: &Path,
+) -> anyhow::Result<PeepholeOptimizations<TOperator>>
+where
+    TOperator: Copy
+        + Debug
+        + Eq
+        + Hash
+        + for<'a> wast::parser::Parse<'a>
+        + TypingRules
+        + Into<NonZeroU32>
+        + TryFrom<NonZeroU32>,
+{
     let buf = wast::parser::ParseBuffer::new(source).map_err(|mut e| {
         e.set_path(filename);
         e.set_text(source);
         e
     })?;
 
-    let opts = wast::parser::parse::<Optimizations>(&buf).map_err(|mut e| {
+    let opts = wast::parser::parse::<Optimizations<'_, TOperator>>(&buf).map_err(|mut e| {
         e.set_path(filename);
         e.set_text(source);
         e
@@ -137,9 +165,10 @@ pub fn compile_str(source: &str, filename: &Path) -> anyhow::Result<PeepholeOpti
 #[cfg(test)]
 mod tests {
     use super::*;
+    use peepmatic_test_operator::TestOperator;
 
     fn assert_compiles(path: &str) {
-        match compile_file(Path::new(path)) {
+        match compile_file::<TestOperator>(Path::new(path)) {
             Ok(_) => return,
             Err(e) => {
                 eprintln!("error: {}", e);

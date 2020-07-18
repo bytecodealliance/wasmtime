@@ -10,8 +10,13 @@ description = "DSL and compiler for generating peephole optimizers"
 
 [dependencies]
 anyhow = "1.0.27"
-peepmatic-automata = { version = "0.2.0", path = "crates/automata", features = ["dot"] }
-peepmatic-macro = { version = "0.2.0", path = "crates/macro" }
-peepmatic-runtime = { version = "0.2.0", path = "crates/runtime", features = ["construct"] }
+peepmatic-automata = { version = "0.66.0", path = "crates/automata", features = ["dot"] }
+peepmatic-macro = { version = "0.66.0", path = "crates/macro" }
+peepmatic-runtime = { version = "0.66.0", path = "crates/runtime", features = ["construct"] }
+peepmatic-traits = { version = "0.66.0", path = "crates/traits" }
+serde = { version = "1.0.105", features = ["derive"] }
 wast = "15.0.0"
 z3 = { version = "0.6.0", features = ["static-link-z3"] }
+
+[dev-dependencies]
+peepmatic-test-operator = { version = "0.66.0", path = "crates/test-operator" }

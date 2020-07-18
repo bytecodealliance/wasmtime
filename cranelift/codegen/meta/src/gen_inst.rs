@@ -407,7 +407,11 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
         All instructions from all supported ISAs are present.
     "#,
     );
+    fmt.line("#[repr(u16)]");
     fmt.line("#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]");
+    fmt.line(
+        r#"#[cfg_attr(feature = "enable-peepmatic", derive(serde::Serialize, serde::Deserialize))]"#
+    );
 
     // We explicitly set the discriminant of the first variant to 1, which allows us to take
     // advantage of the NonZero optimization, meaning that wrapping enums can use the 0
@@ -587,6 +591,24 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
     });
     fmtln!(fmt, "];");
     fmt.empty_line();
+}
+
+fn gen_try_from(all_inst: &AllInstructions, fmt: &mut Formatter) {
+    fmt.line("impl core::convert::TryFrom<u16> for Opcode {");
+    fmt.indent(|fmt| {
+        fmt.line("type Error = ();");
+        fmt.line("#[inline]");
+        fmt.line("fn try_from(x: u16) -> Result<Self, ()> {");
+        fmt.indent(|fmt| {
+            fmtln!(fmt, "if 0 < x && x <= {} {{", all_inst.len());
+            fmt.indent(|fmt| fmt.line("Ok(unsafe { core::mem::transmute(x) })"));
+            fmt.line("} else {");
+            fmt.indent(|fmt| fmt.line("Err(())"));
+            fmt.line("}");
+        });
+        fmt.line("}");
+    });
+    fmt.line("}");
 }
 
 /// Get the value type constraint for an SSA value operand, where
@@ -1147,7 +1169,10 @@ pub(crate) fn generate(
     gen_instruction_data_impl(&formats, &mut fmt);
     fmt.empty_line();
     gen_opcodes(all_inst, &mut fmt);
+    fmt.empty_line();
     gen_type_constraints(all_inst, &mut fmt);
+    fmt.empty_line();
+    gen_try_from(all_inst, &mut fmt);
     fmt.update_file(opcode_filename, out_dir)?;
 
     // Instruction builder.
