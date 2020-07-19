@@ -41,3 +41,14 @@ block0(v0: b1, v1: i8, v2: i8):
 
 ; check: subs wzr
 ; nextln: csel
+
+function %i(i32, i8, i8) -> i8 {
+block0(v0: i32, v1: i8, v2: i8):
+  v3 = iconst.i32 42
+  v4 = icmp.i32 eq v0, v3
+  v5 = select.i8 v4, v1, v2
+  return v5
+}
+
+; check: subs wzr, w0, #42
+; nextln: csel x0, x1, x2, eq
