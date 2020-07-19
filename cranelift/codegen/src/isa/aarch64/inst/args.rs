@@ -52,6 +52,11 @@ impl ShiftOpShiftImm {
     pub fn value(self) -> u8 {
         self.0
     }
+
+    /// Mask down to a given number of bits.
+    pub fn mask(self, bits: u8) -> ShiftOpShiftImm {
+        ShiftOpShiftImm(self.0 & (bits - 1))
+    }
 }
 
 /// A shift operator with an amount, guaranteed to be within range.
