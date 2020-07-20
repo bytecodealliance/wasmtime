@@ -10,7 +10,7 @@ wasmtime_wiggle::wasmtime_integration!({
     // The wiggle code to integrate with lives here:
     target: wasi_common::wasi,
     // This must be the same witx document as used above:
-    witx: ["phases/snapshot/witx/wasi_snapshot_preview1.witx"],
+    witx: ["phases/snapshot/witx/wasi_snapshot_preview1.witx", "phases/ephemeral/witx/wasi_ephemeral_nn.witx"],
     // This must be the same ctx type as used for the target:
     ctx: WasiCtx,
     // This macro will emit a struct to represent the instance,
@@ -30,6 +30,11 @@ resolution.",
             proc_exit => wasi_proc_exit
           }
         },
+        wasi_ephemeral_nn => {
+          name: WasiNN,
+          docs: "TODO",
+          function_override: {}
+        }
     },
     // Error to return when caller module is missing memory export:
     missing_memory: { wasi_common::wasi::Errno::Inval },

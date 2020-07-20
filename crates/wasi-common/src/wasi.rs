@@ -4,7 +4,7 @@
 use crate::WasiCtx;
 
 wiggle::from_witx!({
-    witx: ["WASI/phases/snapshot/witx/wasi_snapshot_preview1.witx"],
+    witx: ["WASI/phases/snapshot/witx/wasi_snapshot_preview1.witx", "WASI/phases/ephemeral/witx/wasi_ephemeral_nn.witx"],
     ctx: WasiCtx,
 });
 
