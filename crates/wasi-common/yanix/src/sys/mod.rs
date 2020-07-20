@@ -21,6 +21,9 @@ cfg_if! {
     } else if #[cfg(target_os = "wasi")] {
         mod wasi;
         pub(crate) use wasi::*;
+    } else if #[cfg(target_os = "fuchsia")] {
+        mod fuchsia;
+        pub(crate) use fuchsia::*;
     } else {
         compile_error!("yanix doesn't compile for this platform yet");
     }
