@@ -16,7 +16,7 @@ use std::os::unix::prelude::*;
 use std::os::wasi::prelude::*;
 use std::{
     convert::TryInto,
-    ffi::{OsStr, OsString},
+    ffi::{OsStr, OsString, CString},
     io::Result,
     path::Path,
 };
@@ -192,19 +192,27 @@ pub unsafe fn openat<P: AsRef<Path>>(
 
 pub unsafe fn readlinkat<P: AsRef<Path>>(dirfd: RawFd, path: P) -> Result<OsString> {
     let path = cstr(path)?;
-    let buffer = &mut [0u8; libc::PATH_MAX as usize + 1];
-    let nread = from_result(libc::readlinkat(
-        dirfd,
-        path.as_ptr(),
-        buffer.as_mut_ptr() as *mut _,
-        buffer.len(),
-    ))?;
-    // We can just unwrap() this, because readlinkat returns an ssize_t which is either -1
-    // (handled above) or non-negative and will fit in a size_t/usize, which is what we're
-    // converting it to here.
-    let nread = nread.try_into().unwrap();
-    let link = OsStr::from_bytes(&buffer[0..nread]);
-    Ok(link.into())
+    // Start with a buffer big enough for the vast majority of paths.
+    let mut buffer = Vec::with_capacity(256);
+    loop {
+        let nread = from_result(libc::readlinkat(
+            dirfd,
+            path.as_ptr(),
+            buffer.as_mut_ptr() as *mut _,
+            buffer.capacity(),
+        ))?;
+        // We can just unwrap() this, because readlinkat returns an ssize_t which is either -1
+        // (handled above) or non-negative and will fit in a size_t/usize, which is what we're
+        // converting it to here.
+        let nread = nread.try_into().unwrap();
+        buffer.set_len(nread);
+        if nread < buffer.capacity() {
+            return Ok(OsString::from_vec(buffer));
+        }
+        // This would be a good candidate for `try_reserve`.
+        // https://github.com/rust-lang/rust/issues/48043
+        buffer.reserve(buffer.capacity());
+    }
 }
 
 pub unsafe fn mkdirat<P: AsRef<Path>>(dirfd: RawFd, path: P, mode: Mode) -> Result<()> {
