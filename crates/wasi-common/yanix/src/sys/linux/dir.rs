@@ -1,4 +1,5 @@
 use crate::dir::{Dir, Entry, EntryExt, SeekLoc};
+use errno::{set_errno, Errno};
 use std::{
     io::{Error, Result},
     ops::Deref,
@@ -26,16 +27,12 @@ impl EntryExt for Entry {
 }
 
 pub(crate) fn iter_impl(dir: &Dir) -> Option<Result<EntryImpl>> {
-    let errno = Error::last_os_error();
+    set_errno(Errno(0));
     let dirent = unsafe { libc::readdir64(dir.as_raw().as_ptr()) };
     if dirent.is_null() {
         let curr_errno = Error::last_os_error();
-        if errno.raw_os_error() != curr_errno.raw_os_error() {
-            // TODO This should be verified on different BSD-flavours.
-            //
-            // According to 4.3BSD/POSIX.1-2001 man pages, there was an error
-            // if the errno value has changed at some point during the sequence
-            // of readdir calls.
+        if curr_errno.raw_os_error() != Some(0) {
+            // A non-zero errno value was produced, so an error occurred.
             Some(Err(curr_errno))
         } else {
             // Not an error. We've simply reached the end of the stream.

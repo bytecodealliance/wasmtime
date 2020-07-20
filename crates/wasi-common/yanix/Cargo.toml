@@ -11,6 +11,7 @@ edition = "2018"
 [dependencies]
 log = "0.4"
 libc = { version = "0.2", features = ["extra_traits"] }
+errno = "0.2.6"
 bitflags = "1.2"
 cfg-if = "0.1.9"
 filetime = "0.2.7"
