@@ -380,3 +380,45 @@ block0(v0: i32, v1: i32):
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
+
+function %f26(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 -1
+  v2 = iadd.i32 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  sub w0, w0, #1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f27(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 -1
+  v2 = isub.i32 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  add w0, w0, #1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f28(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 -1
+  v2 = isub.i64 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  add x0, x0, #1
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret

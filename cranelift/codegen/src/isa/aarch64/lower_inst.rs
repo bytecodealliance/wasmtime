@@ -60,8 +60,17 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let ty = ty.unwrap();
             if ty_bits(ty) < 128 {
-                let rm = put_input_in_rse_imm12(ctx, inputs[1], NarrowValueMode::None);
-                let alu_op = choose_32_64(ty, ALUOp::Add32, ALUOp::Add64);
+                let (rm, negated) = put_input_in_rse_imm12_maybe_negated(
+                    ctx,
+                    inputs[1],
+                    ty_bits(ty),
+                    NarrowValueMode::None,
+                );
+                let alu_op = if !negated {
+                    choose_32_64(ty, ALUOp::Add32, ALUOp::Add64)
+                } else {
+                    choose_32_64(ty, ALUOp::Sub32, ALUOp::Sub64)
+                };
                 ctx.emit(alu_inst_imm12(alu_op, rd, rn, rm));
             } else {
                 let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
@@ -79,8 +88,17 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let ty = ty.unwrap();
             if ty_bits(ty) < 128 {
-                let rm = put_input_in_rse_imm12(ctx, inputs[1], NarrowValueMode::None);
-                let alu_op = choose_32_64(ty, ALUOp::Sub32, ALUOp::Sub64);
+                let (rm, negated) = put_input_in_rse_imm12_maybe_negated(
+                    ctx,
+                    inputs[1],
+                    ty_bits(ty),
+                    NarrowValueMode::None,
+                );
+                let alu_op = if !negated {
+                    choose_32_64(ty, ALUOp::Sub32, ALUOp::Sub64)
+                } else {
+                    choose_32_64(ty, ALUOp::Add32, ALUOp::Add64)
+                };
                 ctx.emit(alu_inst_imm12(alu_op, rd, rn, rm));
             } else {
                 let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
