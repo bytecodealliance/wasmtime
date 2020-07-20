@@ -115,6 +115,9 @@ bitflags! {
                   target_os = "ios",
                   target_os = "redox"))]
         const CLOEXEC = libc::O_CLOEXEC;
+        #[cfg(any(target_os = "linux",
+                  target_os = "fuchsia"))]
+        const TMPFILE = libc::O_TMPFILE;
     }
 }
 
