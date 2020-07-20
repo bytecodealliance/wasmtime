@@ -16,12 +16,7 @@ use std::os::unix::prelude::*;
 use std::os::wasi::io::RawFd; // TODO: https://github.com/rust-lang/rust/pull/74075
 #[cfg(target_os = "wasi")]
 use std::os::wasi::prelude::*;
-use std::{
-    convert::TryInto,
-    ffi::OsString,
-    io::Result,
-    path::Path,
-};
+use std::{convert::TryInto, ffi::OsString, io::Result, path::Path};
 
 pub use crate::sys::file::*;
 
