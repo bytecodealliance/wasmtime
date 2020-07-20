@@ -182,7 +182,7 @@ pub unsafe fn openat<P: AsRef<Path>>(
     mode: Mode,
 ) -> Result<RawFd> {
     let path = cstr(path)?;
-    from_result(libc::openat64(
+    from_result(libc_openat(
         dirfd,
         path.as_ptr(),
         oflag.bits(),
@@ -265,10 +265,10 @@ pub unsafe fn symlinkat<P: AsRef<Path>, Q: AsRef<Path>>(
     ))
 }
 
-pub unsafe fn fstatat<P: AsRef<Path>>(dirfd: RawFd, path: P, flags: AtFlags) -> Result<libc::stat> {
+pub unsafe fn fstatat<P: AsRef<Path>>(dirfd: RawFd, path: P, flags: AtFlags) -> Result<stat> {
     use std::mem::MaybeUninit;
     let path = cstr(path)?;
-    let mut filestat = MaybeUninit::<libc::stat>::uninit();
+    let mut filestat = MaybeUninit::<stat>::uninit();
     from_result(libc_fstatat(
         dirfd,
         path.as_ptr(),
