@@ -14,7 +14,7 @@ wiggle::from_witx!({
 // The only test in this file is to verify that the witx document provided by the
 // proc macro in the `metadata` module is equal to the document on the disk.
 #[test]
-fn document_equivelant() {
+fn document_equivalent() {
     let macro_doc = metadata::document();
     let disk_doc = witx::load(&["tests/wasi.witx"]).expect("load wasi.witx from disk");
 
