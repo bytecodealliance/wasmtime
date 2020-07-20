@@ -26,9 +26,9 @@ pub mod fadvise {
     pub use super::sys::fadvise::*;
 }
 
+use std::ffi::CString;
 use std::io::{Error, Result};
 use std::path::Path;
-use std::ffi::CString;
 
 fn from_success_code<T: IsZero>(t: T) -> Result<()> {
     if t.is_zero() {
@@ -85,7 +85,5 @@ fn cstr<P: AsRef<Path>>(path: P) -> Result<CString> {
     #[cfg(target_os = "wasi")]
     use std::os::wasi::ffi::OsStrExt;
 
-    Ok(CString::new(
-        path.as_ref().as_os_str().as_bytes(),
-    )?)
+    Ok(CString::new(path.as_ref().as_os_str().as_bytes())?)
 }

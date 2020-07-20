@@ -248,11 +248,7 @@ pub unsafe fn symlinkat<P: AsRef<Path>, Q: AsRef<Path>>(
     ))
 }
 
-pub unsafe fn fstatat<P: AsRef<Path>>(
-    dirfd: RawFd,
-    path: P,
-    flags: AtFlags,
-) -> Result<libc::stat> {
+pub unsafe fn fstatat<P: AsRef<Path>>(dirfd: RawFd, path: P, flags: AtFlags) -> Result<libc::stat> {
     use std::mem::MaybeUninit;
     let path = cstr(path)?;
     let mut filestat = MaybeUninit::<libc::stat>::uninit();

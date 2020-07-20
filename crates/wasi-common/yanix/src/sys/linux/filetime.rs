@@ -1,7 +1,7 @@
 //! This module consists of helper types and functions for dealing
 //! with setting the file times specific to Linux.
 use crate::filetime::FileTime;
-use crate::{from_success_code, cstr};
+use crate::{cstr, from_success_code};
 use std::fs::File;
 use std::io::Result;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};

@@ -1,6 +1,6 @@
 use crate::filetime::FileTime;
 use crate::filetime::FileTimeExt;
-use crate::{from_success_code, cstr};
+use crate::{cstr, from_success_code};
 use std::fs;
 use std::io::Result;
 
