@@ -8,9 +8,11 @@
 //! [nix]: https://github.com/nix-rust/nix
 //! [wasi-common]: https://github.com/bytecodealliance/wasmtime/tree/main/crates/wasi-common
 #![cfg(any(unix, target_os = "wasi"))]
+#![cfg_attr(target_os = "wasi", feature(wasi_ext))]
 
 #[cfg(not(target_os = "wasi"))] // not implemented for WASI in yanix yet
 pub mod clock;
+#[cfg(not(target_os = "wasi"))] // not implemented for WASI in yanix yet
 pub mod dir;
 pub mod fcntl;
 pub mod file;

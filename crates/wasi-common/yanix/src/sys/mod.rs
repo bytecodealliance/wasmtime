@@ -1,3 +1,4 @@
+#[cfg(not(target_os = "wasi"))] // TODO: port this to WASI
 use crate::dir::SeekLoc;
 use cfg_if::cfg_if;
 use std::io::Result;
@@ -29,6 +30,7 @@ cfg_if! {
     }
 }
 
+#[cfg(not(target_os = "wasi"))] // TODO: port this to WASI
 pub trait EntryExt {
     fn ino(&self) -> u64;
     fn seek_loc(&self) -> Result<SeekLoc>;

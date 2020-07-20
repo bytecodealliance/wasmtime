@@ -6,8 +6,11 @@ use std::io::Result;
 #[cfg(unix)]
 use std::os::unix::prelude::*;
 #[cfg(target_os = "wasi")]
-use std::os::wasi::prelude::*;
+use std::os::wasi::io::RawFd;
+#[cfg(target_os = "wasi")]
+use std::os::wasi::prelude::*; // TODO: https://github.com/rust-lang/rust/pull/74075
 
+#[cfg(not(target_os = "wasi"))]
 pub unsafe fn dup_fd(fd: RawFd, close_on_exec: bool) -> Result<RawFd> {
     // Both fcntl commands expect a RawFd arg which will specify
     // the minimum duplicated RawFd number. In our case, I don't
@@ -21,17 +24,17 @@ pub unsafe fn dup_fd(fd: RawFd, close_on_exec: bool) -> Result<RawFd> {
 }
 
 pub unsafe fn get_fd_flags(fd: RawFd) -> Result<FdFlags> {
-    from_result(libc::fcntl(fd, libc::F_GETFD)).map(FdFlags::from_bits_truncate)
+    from_result(libc::fcntl(fd as libc::c_int, libc::F_GETFD)).map(FdFlags::from_bits_truncate)
 }
 
 pub unsafe fn set_fd_flags(fd: RawFd, flags: FdFlags) -> Result<()> {
-    from_success_code(libc::fcntl(fd, libc::F_SETFD, flags.bits()))
+    from_success_code(libc::fcntl(fd as libc::c_int, libc::F_SETFD, flags.bits()))
 }
 
 pub unsafe fn get_status_flags(fd: RawFd) -> Result<OFlags> {
-    from_result(libc::fcntl(fd, libc::F_GETFL)).map(OFlags::from_bits_truncate)
+    from_result(libc::fcntl(fd as libc::c_int, libc::F_GETFL)).map(OFlags::from_bits_truncate)
 }
 
 pub unsafe fn set_status_flags(fd: RawFd, flags: OFlags) -> Result<()> {
-    from_success_code(libc::fcntl(fd, libc::F_SETFL, flags.bits()))
+    from_success_code(libc::fcntl(fd as libc::c_int, libc::F_SETFL, flags.bits()))
 }

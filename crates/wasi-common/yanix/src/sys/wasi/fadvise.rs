@@ -1,6 +1,7 @@
 use crate::from_success_code;
 use std::io::Result;
-use std::os::wasi::prelude::*;
+use std::os::wasi::io::RawFd;
+use std::os::wasi::prelude::*; // TODO: https://github.com/rust-lang/rust/pull/74075
 
 #[derive(Debug, Copy, Clone)]
 #[repr(i32)]
@@ -19,5 +20,10 @@ pub unsafe fn posix_fadvise(
     len: libc::off_t,
     advice: PosixFadviseAdvice,
 ) -> Result<()> {
-    from_success_code(libc::posix_fadvise(fd, offset, len, advice as libc::c_int))
+    from_success_code(libc::posix_fadvise(
+        fd as libc::c_int,
+        offset,
+        len,
+        advice as libc::c_int,
+    ))
 }

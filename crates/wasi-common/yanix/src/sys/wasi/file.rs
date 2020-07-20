@@ -1,10 +1,11 @@
 use std::{
     io::{Error, Result},
+    os::wasi::io::RawFd, // TODO: https://github.com/rust-lang/rust/pull/74075
     os::wasi::prelude::*,
 };
 
 pub unsafe fn isatty(fd: RawFd) -> Result<bool> {
-    let res = libc::isatty(fd);
+    let res = libc::isatty(fd as libc::c_int);
     if res == 1 {
         // isatty() returns 1 if fd is an open file descriptor referring to a terminal...
         Ok(true)

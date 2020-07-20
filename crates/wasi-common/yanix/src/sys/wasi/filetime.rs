@@ -1,5 +1,6 @@
 use crate::filetime::FileTime;
 use crate::from_success_code;
+use crate::cstr;
 use std::fs::File;
 use std::io;
 
@@ -14,7 +15,7 @@ pub fn utimensat(
     use std::ffi::CString;
     use std::os::wasi::prelude::*;
 
-    let p = CString::new(path.as_bytes())?;
+    let path = cstr(path)?;
     let times = [to_timespec(&atime)?, to_timespec(&mtime)?];
     let flags = if symlink_nofollow {
         libc::AT_SYMLINK_NOFOLLOW
@@ -25,7 +26,7 @@ pub fn utimensat(
     from_success_code(unsafe {
         libc::utimensat(
             dirfd.as_raw_fd() as libc::c_int,
-            p.as_ptr(),
+            path.as_ptr(),
             times.as_ptr(),
             flags,
         )

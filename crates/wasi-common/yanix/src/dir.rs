@@ -25,12 +25,12 @@ impl Dir {
     }
 
     unsafe fn from_fd(fd: RawFd) -> Result<Self> {
-        let d = libc::fdopendir(fd);
+        let d = libc::fdopendir(fd as libc::c_int);
         if let Some(d) = ptr::NonNull::new(d) {
             Ok(Self(d))
         } else {
             let e = io::Error::last_os_error();
-            libc::close(fd);
+            libc::close(fd as libc::c_int);
             Err(e.into())
         }
     }
@@ -68,7 +68,7 @@ unsafe impl Send for Dir {}
 
 impl AsRawFd for Dir {
     fn as_raw_fd(&self) -> RawFd {
-        unsafe { libc::dirfd(self.0.as_ptr()) }
+        unsafe { libc::dirfd(self.0.as_ptr()) as RawFd }
     }
 }
 

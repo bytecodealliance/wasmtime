@@ -13,6 +13,8 @@ use libc::{
 #[cfg(unix)]
 use std::os::unix::prelude::*;
 #[cfg(target_os = "wasi")]
+use std::os::wasi::io::RawFd; // TODO: https://github.com/rust-lang/rust/pull/74075
+#[cfg(target_os = "wasi")]
 use std::os::wasi::prelude::*;
 use std::{
     convert::TryInto,
@@ -45,6 +47,7 @@ bitflags! {
     }
 }
 
+#[cfg(not(target_os = "wasi"))]
 bitflags! {
     pub struct Mode: libc::mode_t {
         const IRWXU = libc::S_IRWXU;
@@ -62,6 +65,16 @@ bitflags! {
         const ISUID = libc::S_ISUID as libc::mode_t;
         const ISGID = libc::S_ISGID as libc::mode_t;
         const ISVTX = libc::S_ISVTX as libc::mode_t;
+    }
+}
+
+#[cfg(target_os = "wasi")]
+pub struct Mode {}
+
+#[cfg(target_os = "wasi")]
+impl Mode {
+    pub fn bits(&self) -> u32 {
+        0
     }
 }
 
@@ -151,12 +164,14 @@ pub enum FileType {
 impl FileType {
     pub fn from_stat_st_mode(st_mode: libc::mode_t) -> Self {
         match st_mode & libc::S_IFMT {
+            #[cfg(not(target_os = "wasi"))] // Remove once WASI has S_IFIFO
             libc::S_IFIFO => Self::Fifo,
             libc::S_IFCHR => Self::CharacterDevice,
             libc::S_IFDIR => Self::Directory,
             libc::S_IFBLK => Self::BlockDevice,
             libc::S_IFREG => Self::RegularFile,
             libc::S_IFLNK => Self::Symlink,
+            #[cfg(not(target_os = "wasi"))] // Remove once WASI has S_IFSOCK
             libc::S_IFSOCK => Self::Socket,
             _ => Self::Unknown, // Should we actually panic here since this one *should* never happen?
         }
@@ -169,7 +184,9 @@ impl FileType {
             libc::DT_BLK => Self::BlockDevice,
             libc::DT_REG => Self::RegularFile,
             libc::DT_LNK => Self::Symlink,
+            #[cfg(not(target_os = "wasi"))] // Remove once WASI has DT_SOCK
             libc::DT_SOCK => Self::Socket,
+            #[cfg(not(target_os = "wasi"))] // Remove once WASI has DT_FIFO
             libc::DT_FIFO => Self::Fifo,
             /* libc::DT_UNKNOWN */ _ => Self::Unknown,
         }
@@ -183,12 +200,13 @@ pub unsafe fn openat<P: AsRef<Path>>(
     mode: Mode,
 ) -> Result<RawFd> {
     let path = cstr(path)?;
-    from_result(libc_openat(
-        dirfd,
+    let fd: libc::c_int = from_result(libc_openat(
+        dirfd as libc::c_int,
         path.as_ptr(),
         oflag.bits(),
         libc::c_uint::from(mode.bits()),
-    ))
+    ))?;
+    Ok(fd as RawFd)
 }
 
 pub unsafe fn readlinkat<P: AsRef<Path>>(dirfd: RawFd, path: P) -> Result<OsString> {
@@ -197,7 +215,7 @@ pub unsafe fn readlinkat<P: AsRef<Path>>(dirfd: RawFd, path: P) -> Result<OsStri
     let mut buffer = Vec::with_capacity(256);
     loop {
         let nread = from_result(libc::readlinkat(
-            dirfd,
+            dirfd as libc::c_int,
             path.as_ptr(),
             buffer.as_mut_ptr() as *mut _,
             buffer.capacity(),
@@ -218,7 +236,11 @@ pub unsafe fn readlinkat<P: AsRef<Path>>(dirfd: RawFd, path: P) -> Result<OsStri
 
 pub unsafe fn mkdirat<P: AsRef<Path>>(dirfd: RawFd, path: P, mode: Mode) -> Result<()> {
     let path = cstr(path)?;
-    from_success_code(libc::mkdirat(dirfd, path.as_ptr(), mode.bits()))
+    from_success_code(libc::mkdirat(
+        dirfd as libc::c_int,
+        path.as_ptr(),
+        mode.bits(),
+    ))
 }
 
 pub unsafe fn linkat<P: AsRef<Path>, Q: AsRef<Path>>(
@@ -231,9 +253,9 @@ pub unsafe fn linkat<P: AsRef<Path>, Q: AsRef<Path>>(
     let old_path = cstr(old_path)?;
     let new_path = cstr(new_path)?;
     from_success_code(libc::linkat(
-        old_dirfd,
+        old_dirfd as libc::c_int,
         old_path.as_ptr(),
-        new_dirfd,
+        new_dirfd as libc::c_int,
         new_path.as_ptr(),
         flags.bits(),
     ))
@@ -241,7 +263,11 @@ pub unsafe fn linkat<P: AsRef<Path>, Q: AsRef<Path>>(
 
 pub unsafe fn unlinkat<P: AsRef<Path>>(dirfd: RawFd, path: P, flags: AtFlags) -> Result<()> {
     let path = cstr(path)?;
-    from_success_code(libc::unlinkat(dirfd, path.as_ptr(), flags.bits()))
+    from_success_code(libc::unlinkat(
+        dirfd as libc::c_int,
+        path.as_ptr(),
+        flags.bits(),
+    ))
 }
 
 pub unsafe fn renameat<P: AsRef<Path>, Q: AsRef<Path>>(
@@ -253,9 +279,9 @@ pub unsafe fn renameat<P: AsRef<Path>, Q: AsRef<Path>>(
     let old_path = cstr(old_path)?;
     let new_path = cstr(new_path)?;
     from_success_code(libc::renameat(
-        old_dirfd,
+        old_dirfd as libc::c_int,
         old_path.as_ptr(),
-        new_dirfd,
+        new_dirfd as libc::c_int,
         new_path.as_ptr(),
     ))
 }
@@ -269,7 +295,7 @@ pub unsafe fn symlinkat<P: AsRef<Path>, Q: AsRef<Path>>(
     let new_path = cstr(new_path)?;
     from_success_code(libc::symlinkat(
         old_path.as_ptr(),
-        new_dirfd,
+        new_dirfd as libc::c_int,
         new_path.as_ptr(),
     ))
 }
@@ -279,7 +305,7 @@ pub unsafe fn fstatat<P: AsRef<Path>>(dirfd: RawFd, path: P, flags: AtFlags) -> 
     let path = cstr(path)?;
     let mut filestat = MaybeUninit::<stat>::uninit();
     from_result(libc_fstatat(
-        dirfd,
+        dirfd as libc::c_int,
         path.as_ptr(),
         filestat.as_mut_ptr(),
         flags.bits(),
@@ -290,14 +316,18 @@ pub unsafe fn fstatat<P: AsRef<Path>>(dirfd: RawFd, path: P, flags: AtFlags) -> 
 pub unsafe fn fstat(fd: RawFd) -> Result<stat> {
     use std::mem::MaybeUninit;
     let mut filestat = MaybeUninit::<stat>::uninit();
-    from_result(libc_fstat(fd, filestat.as_mut_ptr()))?;
+    from_result(libc_fstat(fd as libc::c_int, filestat.as_mut_ptr()))?;
     Ok(filestat.assume_init())
 }
 
 /// `fionread()` function, equivalent to `ioctl(fd, FIONREAD, *bytes)`.
 pub unsafe fn fionread(fd: RawFd) -> Result<u32> {
     let mut nread: libc::c_int = 0;
-    from_result(libc::ioctl(fd, libc::FIONREAD, &mut nread as *mut _))?;
+    from_result(libc::ioctl(
+        fd as libc::c_int,
+        libc::FIONREAD,
+        &mut nread as *mut _,
+    ))?;
     // FIONREAD returns a non-negative int if it doesn't fail, or it'll fit in a u32 if it does.
     //
     // For the future, if we want to be super cautious and avoid assuming int is 32-bit, we could
@@ -308,7 +338,7 @@ pub unsafe fn fionread(fd: RawFd) -> Result<u32> {
 /// This function is unsafe because it operates on a raw file descriptor.
 /// It's provided, because std::io::Seek requires a mutable borrow.
 pub unsafe fn tell(fd: RawFd) -> Result<u64> {
-    let offset = from_result(libc_lseek(fd, 0, libc::SEEK_CUR))?;
+    let offset = from_result(libc_lseek(fd as libc::c_int, 0, libc::SEEK_CUR))?;
     // lseek returns an off_t, which we can assume is a non-negative i64 if it doesn't fail.
     // So we can unwrap() this conversion.
     Ok(offset.try_into().unwrap())
