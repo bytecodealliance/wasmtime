@@ -4,6 +4,11 @@ use crate::{cstr, from_success_code};
 use std::fs;
 use std::io::Result;
 
+#[cfg(not(any(target_os = "linux", target_os = "emscripten", target_os = "l4re")))]
+use libc::openat as libc_openat;
+#[cfg(any(target_os = "linux", target_os = "emscripten", target_os = "l4re"))]
+use libc::openat64 as libc_openat;
+
 /// Combines `openat` with `utimes` to emulate `utimensat` on platforms where it is
 /// not available. The logic for setting file times is based on [filetime::unix::set_file_handles_times].
 ///
@@ -23,7 +28,7 @@ pub fn utimesat(
     if symlink_nofollow {
         flags |= libc::O_NOFOLLOW;
     }
-    let fd = unsafe { libc::openat64(dirfd.as_raw_fd(), path.as_ptr(), flags) };
+    let fd = unsafe { libc_openat(dirfd.as_raw_fd(), path.as_ptr(), flags) };
     let f = unsafe { fs::File::from_raw_fd(fd) };
     let (atime, mtime) = get_times(atime, mtime, || f.metadata().map_err(Into::into))?;
     let times = [to_timeval(atime)?, to_timeval(mtime)?];
