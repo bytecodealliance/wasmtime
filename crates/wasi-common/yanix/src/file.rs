@@ -18,7 +18,7 @@ use std::os::wasi::io::RawFd; // TODO: https://github.com/rust-lang/rust/pull/74
 use std::os::wasi::prelude::*;
 use std::{
     convert::TryInto,
-    ffi::{OsStr, OsString, CString},
+    ffi::OsString,
     io::Result,
     path::Path,
 };
