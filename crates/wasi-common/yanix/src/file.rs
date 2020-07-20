@@ -1,4 +1,4 @@
-use crate::{from_result, from_success_code};
+use crate::{cstr, from_result, from_success_code};
 use bitflags::bitflags;
 use cfg_if::cfg_if;
 #[cfg(unix)]
@@ -7,8 +7,9 @@ use std::os::unix::prelude::*;
 use std::os::wasi::prelude::*;
 use std::{
     convert::TryInto,
-    ffi::{CString, OsStr, OsString},
+    ffi::{OsStr, OsString},
     io::Result,
+    path::Path,
 };
 
 pub use crate::sys::file::*;
@@ -157,13 +158,13 @@ impl FileType {
     }
 }
 
-pub unsafe fn openat<P: AsRef<OsStr>>(
+pub unsafe fn openat<P: AsRef<Path>>(
     dirfd: RawFd,
     path: P,
     oflag: OFlags,
     mode: Mode,
 ) -> Result<RawFd> {
-    let path = CString::new(path.as_ref().as_bytes())?;
+    let path = cstr(path)?;
     from_result(libc::openat(
         dirfd,
         path.as_ptr(),
@@ -172,8 +173,8 @@ pub unsafe fn openat<P: AsRef<OsStr>>(
     ))
 }
 
-pub unsafe fn readlinkat<P: AsRef<OsStr>>(dirfd: RawFd, path: P) -> Result<OsString> {
-    let path = CString::new(path.as_ref().as_bytes())?;
+pub unsafe fn readlinkat<P: AsRef<Path>>(dirfd: RawFd, path: P) -> Result<OsString> {
+    let path = cstr(path)?;
     let buffer = &mut [0u8; libc::PATH_MAX as usize + 1];
     let nread = from_result(libc::readlinkat(
         dirfd,
@@ -189,20 +190,20 @@ pub unsafe fn readlinkat<P: AsRef<OsStr>>(dirfd: RawFd, path: P) -> Result<OsStr
     Ok(link.into())
 }
 
-pub unsafe fn mkdirat<P: AsRef<OsStr>>(dirfd: RawFd, path: P, mode: Mode) -> Result<()> {
-    let path = CString::new(path.as_ref().as_bytes())?;
+pub unsafe fn mkdirat<P: AsRef<Path>>(dirfd: RawFd, path: P, mode: Mode) -> Result<()> {
+    let path = cstr(path)?;
     from_success_code(libc::mkdirat(dirfd, path.as_ptr(), mode.bits()))
 }
 
-pub unsafe fn linkat<P: AsRef<OsStr>, Q: AsRef<OsStr>>(
+pub unsafe fn linkat<P: AsRef<Path>, Q: AsRef<Path>>(
     old_dirfd: RawFd,
     old_path: P,
     new_dirfd: RawFd,
     new_path: Q,
     flags: AtFlags,
 ) -> Result<()> {
-    let old_path = CString::new(old_path.as_ref().as_bytes())?;
-    let new_path = CString::new(new_path.as_ref().as_bytes())?;
+    let old_path = cstr(old_path)?;
+    let new_path = cstr(new_path)?;
     from_success_code(libc::linkat(
         old_dirfd,
         old_path.as_ptr(),
@@ -212,19 +213,19 @@ pub unsafe fn linkat<P: AsRef<OsStr>, Q: AsRef<OsStr>>(
     ))
 }
 
-pub unsafe fn unlinkat<P: AsRef<OsStr>>(dirfd: RawFd, path: P, flags: AtFlags) -> Result<()> {
-    let path = CString::new(path.as_ref().as_bytes())?;
+pub unsafe fn unlinkat<P: AsRef<Path>>(dirfd: RawFd, path: P, flags: AtFlags) -> Result<()> {
+    let path = cstr(path)?;
     from_success_code(libc::unlinkat(dirfd, path.as_ptr(), flags.bits()))
 }
 
-pub unsafe fn renameat<P: AsRef<OsStr>, Q: AsRef<OsStr>>(
+pub unsafe fn renameat<P: AsRef<Path>, Q: AsRef<Path>>(
     old_dirfd: RawFd,
     old_path: P,
     new_dirfd: RawFd,
     new_path: Q,
 ) -> Result<()> {
-    let old_path = CString::new(old_path.as_ref().as_bytes())?;
-    let new_path = CString::new(new_path.as_ref().as_bytes())?;
+    let old_path = cstr(old_path)?;
+    let new_path = cstr(new_path)?;
     from_success_code(libc::renameat(
         old_dirfd,
         old_path.as_ptr(),
@@ -233,13 +234,13 @@ pub unsafe fn renameat<P: AsRef<OsStr>, Q: AsRef<OsStr>>(
     ))
 }
 
-pub unsafe fn symlinkat<P: AsRef<OsStr>, Q: AsRef<OsStr>>(
+pub unsafe fn symlinkat<P: AsRef<Path>, Q: AsRef<Path>>(
     old_path: P,
     new_dirfd: RawFd,
     new_path: Q,
 ) -> Result<()> {
-    let old_path = CString::new(old_path.as_ref().as_bytes())?;
-    let new_path = CString::new(new_path.as_ref().as_bytes())?;
+    let old_path = cstr(old_path)?;
+    let new_path = cstr(new_path)?;
     from_success_code(libc::symlinkat(
         old_path.as_ptr(),
         new_dirfd,
@@ -247,13 +248,9 @@ pub unsafe fn symlinkat<P: AsRef<OsStr>, Q: AsRef<OsStr>>(
     ))
 }
 
-pub unsafe fn fstatat<P: AsRef<OsStr>>(
-    dirfd: RawFd,
-    path: P,
-    flags: AtFlags,
-) -> Result<libc::stat> {
+pub unsafe fn fstatat<P: AsRef<Path>>(dirfd: RawFd, path: P, flags: AtFlags) -> Result<libc::stat> {
     use std::mem::MaybeUninit;
-    let path = CString::new(path.as_ref().as_bytes())?;
+    let path = cstr(path)?;
     let mut filestat = MaybeUninit::<libc::stat>::uninit();
     from_result(libc::fstatat(
         dirfd,

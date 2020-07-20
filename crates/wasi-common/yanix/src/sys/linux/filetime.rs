@@ -1,7 +1,7 @@
 //! This module consists of helper types and functions for dealing
 //! with setting the file times specific to Linux.
 use crate::filetime::FileTime;
-use crate::from_success_code;
+use crate::{cstr, from_success_code};
 use std::fs::File;
 use std::io::Result;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
@@ -20,7 +20,6 @@ pub fn utimensat(
     symlink_nofollow: bool,
 ) -> Result<()> {
     use crate::filetime::to_timespec;
-    use std::ffi::CString;
     use std::os::unix::prelude::*;
 
     let flags = if symlink_nofollow {
@@ -33,13 +32,13 @@ pub fn utimensat(
     // current kernel then fall back to an older syscall.
     static INVALID: AtomicBool = AtomicBool::new(false);
     if !INVALID.load(Relaxed) {
-        let p = CString::new(path.as_bytes())?;
+        let path = cstr(path)?;
         let times = [to_timespec(&atime)?, to_timespec(&mtime)?];
         let res = from_success_code(unsafe {
             libc::syscall(
                 libc::SYS_utimensat,
                 dirfd.as_raw_fd(),
-                p.as_ptr(),
+                path.as_ptr(),
                 times.as_ptr(),
                 flags,
             )

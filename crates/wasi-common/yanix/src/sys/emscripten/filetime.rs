@@ -1,7 +1,7 @@
 //! This module consists of helper types and functions for dealing
 //! with setting the file times specific to Emscripten.
 use crate::filetime::FileTime;
-use crate::from_success_code;
+use crate::{cstr, from_success_code};
 use std::fs::File;
 use std::io::Result;
 
@@ -15,7 +15,6 @@ pub fn utimensat(
     symlink_nofollow: bool,
 ) -> Result<()> {
     use crate::filetime::to_timespec;
-    use std::ffi::CString;
     use std::os::unix::prelude::*;
 
     let flags = if symlink_nofollow {
@@ -23,9 +22,9 @@ pub fn utimensat(
     } else {
         0
     };
-    let p = CString::new(path.as_bytes())?;
+    let path = cstr(path)?;
     let times = [to_timespec(&atime)?, to_timespec(&mtime)?];
     from_success_code(unsafe {
-        libc::utimensat(dirfd.as_raw_fd(), p.as_ptr(), times.as_ptr(), flags)
+        libc::utimensat(dirfd.as_raw_fd(), path.as_ptr(), times.as_ptr(), flags)
     })
 }

@@ -26,7 +26,9 @@ pub mod fadvise {
     pub use super::sys::fadvise::*;
 }
 
+use std::ffi::CString;
 use std::io::{Error, Result};
+use std::path::Path;
 
 fn from_success_code<T: IsZero>(t: T) -> Result<()> {
     if t.is_zero() {
@@ -71,3 +73,17 @@ macro_rules! impl_is_minus_one {
 }
 
 impl_is_minus_one! { i32 i64 isize }
+
+/// Convert an `AsRef<Path>` into a `CString`.
+fn cstr<P: AsRef<Path>>(path: P) -> Result<CString> {
+    #[cfg(target_os = "hermit")]
+    use std::os::hermit::ext::ffi::OsStrExt;
+    #[cfg(unix)]
+    use std::os::unix::ffi::OsStrExt;
+    #[cfg(target_os = "vxworks")]
+    use std::os::vxworks::ext::ffi::OsStrExt;
+    #[cfg(target_os = "wasi")]
+    use std::os::wasi::ffi::OsStrExt;
+
+    Ok(CString::new(path.as_ref().as_os_str().as_bytes())?)
+}
