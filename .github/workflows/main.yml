@@ -129,6 +129,7 @@ jobs:
     - run: rustup install 1.41.0
     - run: cargo +1.41.0 check -p cranelift-codegen
     - run: cargo +1.41.0 check -p cranelift-wasm
+    - run: cargo +1.41.0 check -p cranelift-tools
 
 
   fuzz_targets:
