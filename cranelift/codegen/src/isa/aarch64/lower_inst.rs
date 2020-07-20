@@ -1679,8 +1679,26 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Isplit | Opcode::Iconcat => panic!("Vector ops not supported."),
-        Opcode::Imax | Opcode::Imin | Opcode::Umin | Opcode::Umax => {
-            panic!("Vector ops not supported.")
+
+        Opcode::Imax | Opcode::Umax | Opcode::Umin | Opcode::Imin => {
+            let alu_op = match op {
+                Opcode::Umin => VecALUOp::Umin,
+                Opcode::Imin => VecALUOp::Smin,
+                Opcode::Umax => VecALUOp::Umax,
+                Opcode::Imax => VecALUOp::Smax,
+                _ => unreachable!(),
+            };
+            let rd = get_output_reg(ctx, outputs[0]);
+            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+            let ty = ty.unwrap();
+            ctx.emit(Inst::VecRRR {
+                alu_op,
+                rd,
+                rn,
+                rm,
+                size: VectorSize::from_ty(ty),
+            });
         }
 
         Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv | Opcode::Fmin | Opcode::Fmax => {
@@ -2185,8 +2203,31 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::DummySargT => unreachable!(),
 
-        Opcode::AvgRound => unimplemented!(),
-        Opcode::Iabs => unimplemented!(),
+        Opcode::Iabs => {
+            let rd = get_output_reg(ctx, outputs[0]);
+            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let ty = ty.unwrap();
+            ctx.emit(Inst::VecMisc {
+                op: VecMisc2::Abs,
+                rd,
+                rn,
+                size: VectorSize::from_ty(ty),
+            });
+        }
+        Opcode::AvgRound => {
+            let rd = get_output_reg(ctx, outputs[0]);
+            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+            let ty = ty.unwrap();
+            ctx.emit(Inst::VecRRR {
+                alu_op: VecALUOp::Urhadd,
+                rd,
+                rn,
+                rm,
+                size: VectorSize::from_ty(ty),
+            });
+        }
+
         Opcode::Snarrow
         | Opcode::Unarrow
         | Opcode::SwidenLow

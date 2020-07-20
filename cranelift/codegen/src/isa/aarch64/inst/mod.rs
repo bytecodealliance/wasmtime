@@ -261,6 +261,16 @@ pub enum VecALUOp {
     Sshl,
     /// Unsigned shift left
     Ushl,
+    /// Unsigned minimum
+    Umin,
+    /// Signed minimum
+    Smin,
+    /// Unsigned maximum
+    Umax,
+    /// Signed maximum
+    Smax,
+    /// Unsigned rounding halving add
+    Urhadd,
 }
 
 /// A Vector miscellaneous operation with two registers.
@@ -270,6 +280,8 @@ pub enum VecMisc2 {
     Not,
     /// Negate
     Neg,
+    /// Absolute value
+    Abs,
 }
 
 /// An operation across the lanes of vectors.
@@ -2780,6 +2792,11 @@ impl Inst {
                     VecALUOp::Mul => ("mul", size),
                     VecALUOp::Sshl => ("sshl", size),
                     VecALUOp::Ushl => ("ushl", size),
+                    VecALUOp::Umin => ("umin", size),
+                    VecALUOp::Smin => ("smin", size),
+                    VecALUOp::Umax => ("umax", size),
+                    VecALUOp::Smax => ("smax", size),
+                    VecALUOp::Urhadd => ("urhadd", size),
                 };
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
                 let rn = show_vreg_vector(rn, mb_rru, size);
@@ -2790,6 +2807,7 @@ impl Inst {
                 let (op, size) = match op {
                     VecMisc2::Not => ("mvn", VectorSize::Size8x16),
                     VecMisc2::Neg => ("neg", size),
+                    VecMisc2::Abs => ("abs", size),
                 };
 
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
