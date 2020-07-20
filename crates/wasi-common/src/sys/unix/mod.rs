@@ -296,10 +296,10 @@ impl From<types::Oflags> for OFlags {
     }
 }
 
-impl TryFrom<libc::stat> for types::Filestat {
+impl TryFrom<yanix::file::stat> for types::Filestat {
     type Error = Errno;
 
-    fn try_from(filestat: libc::stat) -> Result<Self> {
+    fn try_from(filestat: yanix::file::stat) -> Result<Self> {
         fn filestat_to_timestamp(secs: u64, nsecs: u64) -> Result<types::Timestamp> {
             secs.checked_mul(1_000_000_000)
                 .and_then(|sec_nsec| sec_nsec.checked_add(nsecs))

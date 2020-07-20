@@ -1,6 +1,15 @@
 use crate::{cstr, from_result, from_success_code};
 use bitflags::bitflags;
 use cfg_if::cfg_if;
+#[cfg(not(any(target_os = "linux", target_os = "emscripten", target_os = "l4re")))]
+use libc::{
+    fstat as libc_fstat, fstatat as libc_fstatat, lseek as libc_lseek, openat as libc_openat,
+};
+#[cfg(any(target_os = "linux", target_os = "emscripten", target_os = "l4re"))]
+use libc::{
+    fstat64 as libc_fstat, fstatat64 as libc_fstatat, lseek64 as libc_lseek,
+    openat64 as libc_openat,
+};
 #[cfg(unix)]
 use std::os::unix::prelude::*;
 #[cfg(target_os = "wasi")]
@@ -13,6 +22,11 @@ use std::{
 };
 
 pub use crate::sys::file::*;
+
+#[cfg(not(any(target_os = "linux", target_os = "emscripten", target_os = "l4re")))]
+pub use libc::stat;
+#[cfg(any(target_os = "linux", target_os = "emscripten", target_os = "l4re"))]
+pub use libc::stat64 as stat;
 
 bitflags! {
     pub struct FdFlags: libc::c_int {
@@ -168,7 +182,7 @@ pub unsafe fn openat<P: AsRef<Path>>(
     mode: Mode,
 ) -> Result<RawFd> {
     let path = cstr(path)?;
-    from_result(libc::openat(
+    from_result(libc::openat64(
         dirfd,
         path.as_ptr(),
         oflag.bits(),
@@ -255,7 +269,7 @@ pub unsafe fn fstatat<P: AsRef<Path>>(dirfd: RawFd, path: P, flags: AtFlags) -> 
     use std::mem::MaybeUninit;
     let path = cstr(path)?;
     let mut filestat = MaybeUninit::<libc::stat>::uninit();
-    from_result(libc::fstatat(
+    from_result(libc_fstatat(
         dirfd,
         path.as_ptr(),
         filestat.as_mut_ptr(),
@@ -264,10 +278,10 @@ pub unsafe fn fstatat<P: AsRef<Path>>(dirfd: RawFd, path: P, flags: AtFlags) -> 
     Ok(filestat.assume_init())
 }
 
-pub unsafe fn fstat(fd: RawFd) -> Result<libc::stat> {
+pub unsafe fn fstat(fd: RawFd) -> Result<stat> {
     use std::mem::MaybeUninit;
-    let mut filestat = MaybeUninit::<libc::stat>::uninit();
-    from_result(libc::fstat(fd, filestat.as_mut_ptr()))?;
+    let mut filestat = MaybeUninit::<stat>::uninit();
+    from_result(libc_fstat(fd, filestat.as_mut_ptr()))?;
     Ok(filestat.assume_init())
 }
 
@@ -285,7 +299,7 @@ pub unsafe fn fionread(fd: RawFd) -> Result<u32> {
 /// This function is unsafe because it operates on a raw file descriptor.
 /// It's provided, because std::io::Seek requires a mutable borrow.
 pub unsafe fn tell(fd: RawFd) -> Result<u64> {
-    let offset = from_result(libc::lseek(fd, 0, libc::SEEK_CUR))?;
+    let offset = from_result(libc_lseek(fd, 0, libc::SEEK_CUR))?;
     // lseek returns an off_t, which we can assume is a non-negative i64 if it doesn't fail.
     // So we can unwrap() this conversion.
     Ok(offset.try_into().unwrap())

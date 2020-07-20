@@ -16,7 +16,7 @@ pub(crate) fn path_open_rights(
     let mut needed_inheriting = rights_base | rights_inheriting;
 
     // convert open flags
-    let oflags = host_impl::nix_from_oflags(oflags);
+    let oflags = host_impl::yanix_from_oflags(oflags);
     if oflags.contains(OFlags::CREAT) {
         needed_base |= wasi::__WASI_RIGHTS_PATH_CREATE_FILE;
     }
@@ -25,7 +25,7 @@ pub(crate) fn path_open_rights(
     }
 
     // convert file descriptor flags
-    let fdflags = host_impl::nix_from_fdflags(fs_flags);
+    let fdflags = host_impl::yanix_from_fdflags(fs_flags);
     if fdflags.contains(OFlags::DSYNC) {
         needed_inheriting |= wasi::__WASI_RIGHTS_FD_DATASYNC;
     }

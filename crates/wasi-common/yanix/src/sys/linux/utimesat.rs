@@ -23,7 +23,7 @@ pub fn utimesat(
     if symlink_nofollow {
         flags |= libc::O_NOFOLLOW;
     }
-    let fd = unsafe { libc::openat(dirfd.as_raw_fd(), path.as_ptr(), flags) };
+    let fd = unsafe { libc::openat64(dirfd.as_raw_fd(), path.as_ptr(), flags) };
     let f = unsafe { fs::File::from_raw_fd(fd) };
     let (atime, mtime) = get_times(atime, mtime, || f.metadata().map_err(Into::into))?;
     let times = [to_timeval(atime)?, to_timeval(mtime)?];

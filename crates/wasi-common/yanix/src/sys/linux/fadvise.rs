@@ -15,9 +15,10 @@ pub enum PosixFadviseAdvice {
 
 pub unsafe fn posix_fadvise(
     fd: RawFd,
-    offset: libc::off_t,
-    len: libc::off_t,
+    offset: libc::off64_t,
+    len: libc::off64_t,
     advice: PosixFadviseAdvice,
 ) -> Result<()> {
+    // TODO: Use `posix_fadvise64` once it's in `libc`.
     from_success_code(libc::posix_fadvise(fd, offset, len, advice as libc::c_int))
 }

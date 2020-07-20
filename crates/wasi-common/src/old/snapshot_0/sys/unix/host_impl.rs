@@ -104,7 +104,7 @@ impl From<io::Error> for WasiError {
     }
 }
 
-pub(crate) fn nix_from_fdflags(fdflags: wasi::__wasi_fdflags_t) -> OFlags {
+pub(crate) fn yanix_from_fdflags(fdflags: wasi::__wasi_fdflags_t) -> OFlags {
     let mut nix_flags = OFlags::empty();
     if fdflags & wasi::__WASI_FDFLAGS_APPEND != 0 {
         nix_flags.insert(OFlags::APPEND);
@@ -124,7 +124,7 @@ pub(crate) fn nix_from_fdflags(fdflags: wasi::__wasi_fdflags_t) -> OFlags {
     nix_flags
 }
 
-pub(crate) fn fdflags_from_nix(oflags: OFlags) -> wasi::__wasi_fdflags_t {
+pub(crate) fn fdflags_from_yanix(oflags: OFlags) -> wasi::__wasi_fdflags_t {
     let mut fdflags = 0;
     if oflags.contains(OFlags::APPEND) {
         fdflags |= wasi::__WASI_FDFLAGS_APPEND;
@@ -144,7 +144,7 @@ pub(crate) fn fdflags_from_nix(oflags: OFlags) -> wasi::__wasi_fdflags_t {
     fdflags
 }
 
-pub(crate) fn nix_from_oflags(oflags: wasi::__wasi_oflags_t) -> OFlags {
+pub(crate) fn yanix_from_oflags(oflags: wasi::__wasi_oflags_t) -> OFlags {
     let mut nix_flags = OFlags::empty();
     if oflags & wasi::__WASI_OFLAGS_CREAT != 0 {
         nix_flags.insert(OFlags::CREAT);
@@ -161,7 +161,7 @@ pub(crate) fn nix_from_oflags(oflags: wasi::__wasi_oflags_t) -> OFlags {
     nix_flags
 }
 
-pub(crate) fn filestat_from_nix(filestat: libc::stat) -> WasiResult<wasi::__wasi_filestat_t> {
+pub(crate) fn filestat_from_yanix(filestat: yanix::file::stat) -> WasiResult<wasi::__wasi_filestat_t> {
     use std::convert::TryInto;
 
     fn filestat_to_timestamp(secs: u64, nsecs: u64) -> WasiResult<wasi::__wasi_timestamp_t> {
@@ -171,8 +171,8 @@ pub(crate) fn filestat_from_nix(filestat: libc::stat) -> WasiResult<wasi::__wasi
     }
 
     let filetype = yanix::file::FileType::from_stat_st_mode(filestat.st_mode);
-    let dev = stdev_from_nix(filestat.st_dev)?;
-    let ino = stino_from_nix(filestat.st_ino)?;
+    let dev = stdev_from_yanix(filestat.st_dev)?;
+    let ino = stino_from_yanix(filestat.st_ino)?;
     let atim = filestat_to_timestamp(
         filestat.st_atime.try_into()?,
         filestat.st_atime_nsec.try_into()?,
@@ -189,7 +189,7 @@ pub(crate) fn filestat_from_nix(filestat: libc::stat) -> WasiResult<wasi::__wasi
     Ok(wasi::__wasi_filestat_t {
         dev,
         ino,
-        nlink: stnlink_from_nix(filestat.st_nlink)?,
+        nlink: stnlink_from_yanix(filestat.st_nlink)?,
         size: filestat.st_size as wasi::__wasi_filesize_t,
         atim,
         ctim,

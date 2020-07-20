@@ -29,12 +29,12 @@ pub(crate) fn fd_pwrite(
 
 pub(crate) fn fd_fdstat_get(fd: &File) -> WasiResult<wasi::__wasi_fdflags_t> {
     unsafe { yanix::fcntl::get_status_flags(fd.as_raw_fd()) }
-        .map(host_impl::fdflags_from_nix)
+        .map(host_impl::fdflags_from_yanix)
         .map_err(Into::into)
 }
 
 pub(crate) fn fd_fdstat_set_flags(fd: &File, fdflags: wasi::__wasi_fdflags_t) -> WasiResult<()> {
-    let nix_flags = host_impl::nix_from_fdflags(fdflags);
+    let nix_flags = host_impl::yanix_from_fdflags(fdflags);
     unsafe { yanix::fcntl::set_status_flags(fd.as_raw_fd(), nix_flags) }.map_err(Into::into)
 }
 
@@ -106,10 +106,10 @@ pub(crate) fn path_open(
     nix_all_oflags.insert(OFlags::NOFOLLOW);
 
     // convert open flags
-    nix_all_oflags.insert(host_impl::nix_from_oflags(oflags));
+    nix_all_oflags.insert(host_impl::yanix_from_oflags(oflags));
 
     // convert file descriptor flags
-    nix_all_oflags.insert(host_impl::nix_from_fdflags(fs_flags));
+    nix_all_oflags.insert(host_impl::yanix_from_fdflags(fs_flags));
 
     // Call openat. Use mode 0o666 so that we follow whatever the user's
     // umask is, but don't set the executable flag, because it isn't yet
@@ -205,7 +205,7 @@ pub(crate) fn fd_filestat_get(file: &std::fs::File) -> WasiResult<wasi::__wasi_f
     use yanix::file::fstat;
     unsafe { fstat(file.as_raw_fd()) }
         .map_err(Into::into)
-        .and_then(host_impl::filestat_from_nix)
+        .and_then(host_impl::filestat_from_yanix)
 }
 
 pub(crate) fn path_filestat_get(
@@ -219,7 +219,7 @@ pub(crate) fn path_filestat_get(
     };
     unsafe { fstatat(resolved.dirfd().as_raw_fd(), resolved.path(), atflags) }
         .map_err(Into::into)
-        .and_then(host_impl::filestat_from_nix)
+        .and_then(host_impl::filestat_from_yanix)
 }
 
 pub(crate) fn path_filestat_set_times(
