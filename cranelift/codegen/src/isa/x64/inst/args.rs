@@ -339,6 +339,7 @@ pub enum SseOpcode {
     Andps,
     Andpd,
     Andnps,
+    Andnpd,
     Comiss,
     Comisd,
     Cmpss,
@@ -359,6 +360,7 @@ pub enum SseOpcode {
     Minss,
     Minsd,
     Movaps,
+    Movapd,
     Movd,
     Movq,
     Movss,
@@ -410,6 +412,7 @@ impl SseOpcode {
 
             SseOpcode::Addsd
             | SseOpcode::Andpd
+            | SseOpcode::Andnpd
             | SseOpcode::Cvtsd2ss
             | SseOpcode::Cvtsd2si
             | SseOpcode::Cvtsi2sd
@@ -418,6 +421,7 @@ impl SseOpcode {
             | SseOpcode::Divsd
             | SseOpcode::Maxsd
             | SseOpcode::Minsd
+            | SseOpcode::Movapd
             | SseOpcode::Movd
             | SseOpcode::Movq
             | SseOpcode::Movsd
@@ -451,6 +455,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Andpd => "andpd",
             SseOpcode::Andps => "andps",
             SseOpcode::Andnps => "andnps",
+            SseOpcode::Andnpd => "andnpd",
             SseOpcode::Comiss => "comiss",
             SseOpcode::Comisd => "comisd",
             SseOpcode::Cvtsd2ss => "cvtsd2ss",
@@ -468,6 +473,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Minss => "minss",
             SseOpcode::Minsd => "minsd",
             SseOpcode::Movaps => "movaps",
+            SseOpcode::Movapd => "movapd",
             SseOpcode::Movd => "movd",
             SseOpcode::Movq => "movq",
             SseOpcode::Movss => "movss",

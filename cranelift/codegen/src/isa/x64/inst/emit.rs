@@ -1497,6 +1497,7 @@ pub(crate) fn emit(
 
             let (prefix, opcode) = match op {
                 SseOpcode::Movaps => (LegacyPrefix::None, 0x0F28),
+                SseOpcode::Movapd => (LegacyPrefix::_66, 0x0F28),
                 SseOpcode::Movsd => (LegacyPrefix::_F2, 0x0F10),
                 SseOpcode::Movss => (LegacyPrefix::_F3, 0x0F10),
                 SseOpcode::Sqrtss => (LegacyPrefix::_F3, 0x0F51),
@@ -1533,6 +1534,7 @@ pub(crate) fn emit(
                 SseOpcode::Andpd => (LegacyPrefix::_66, 0x0F54),
                 SseOpcode::Andps => (LegacyPrefix::None, 0x0F54),
                 SseOpcode::Andnps => (LegacyPrefix::None, 0x0F55),
+                SseOpcode::Andnpd => (LegacyPrefix::_66, 0x0F55),
                 SseOpcode::Mulss => (LegacyPrefix::_F3, 0x0F59),
                 SseOpcode::Mulsd => (LegacyPrefix::_F2, 0x0F59),
                 SseOpcode::Orpd => (LegacyPrefix::_66, 0x0F56),
