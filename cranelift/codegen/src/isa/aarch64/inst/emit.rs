@@ -1380,13 +1380,6 @@ impl MachInstEmit for Inst {
             &Inst::MovFromNZCV { rd } => {
                 sink.put4(0xd53b4200 | machreg_to_gpr(rd.to_reg()));
             }
-            &Inst::CondSet { rd, cond } => {
-                sink.put4(
-                    0b100_11010100_11111_0000_01_11111_00000
-                        | (cond.invert().bits() << 12)
-                        | machreg_to_gpr(rd.to_reg()),
-                );
-            }
             &Inst::Extend {
                 rd,
                 rn,

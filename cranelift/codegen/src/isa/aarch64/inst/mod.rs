@@ -809,12 +809,6 @@ pub enum Inst {
         rd: Writable<Reg>,
     },
 
-    /// Set a register to 1 if condition, else 0.
-    CondSet {
-        rd: Writable<Reg>,
-        cond: Cond,
-    },
-
     /// A machine call instruction. N.B.: this allows only a +/- 128MB offset (it uses a relocation
     /// of type `Reloc::Arm64Call`); if the destination distance is not `RelocDistance::Near`, the
     /// code should use a `LoadExtName` / `CallInd` sequence instead, allowing an arbitrary 64-bit
@@ -1356,9 +1350,6 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(rn);
         }
         &Inst::MovFromNZCV { rd } => {
-            collector.add_def(rd);
-        }
-        &Inst::CondSet { rd, .. } => {
             collector.add_def(rd);
         }
         &Inst::Extend { rd, rn, .. } => {
@@ -1952,9 +1943,6 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, rn);
         }
         &mut Inst::MovFromNZCV { ref mut rd } => {
-            map_def(mapper, rd);
-        }
-        &mut Inst::CondSet { ref mut rd, .. } => {
             map_def(mapper, rd);
         }
         &mut Inst::Extend {
@@ -2829,11 +2817,6 @@ impl Inst {
             &Inst::MovFromNZCV { rd } => {
                 let rd = rd.to_reg().show_rru(mb_rru);
                 format!("mrs {}, nzcv", rd)
-            }
-            &Inst::CondSet { rd, cond } => {
-                let rd = rd.to_reg().show_rru(mb_rru);
-                let cond = cond.show_rru(mb_rru);
-                format!("cset {}, {}", rd, cond)
             }
             &Inst::Extend {
                 rd,

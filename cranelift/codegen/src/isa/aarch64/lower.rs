@@ -1014,6 +1014,24 @@ pub(crate) fn lower_fcmp_or_ffcmp_to_flags<C: LowerCtx<I = Inst>>(ctx: &mut C, i
     }
 }
 
+/// Convert a 0 / 1 result, such as from a conditional-set instruction, into a 0
+/// / -1 (all-ones) result as expected for bool operations.
+pub(crate) fn normalize_bool_result<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    insn: IRInst,
+    rd: Writable<Reg>,
+) {
+    // A boolean is 0 / -1; if output width is > 1, negate.
+    if ty_bits(ctx.output_ty(insn, 0)) > 1 {
+        ctx.emit(Inst::AluRRR {
+            alu_op: ALUOp::Sub64,
+            rd,
+            rn: zero_reg(),
+            rm: rd.to_reg(),
+        });
+    }
+}
+
 //=============================================================================
 // Lowering-backend trait implementation.
 

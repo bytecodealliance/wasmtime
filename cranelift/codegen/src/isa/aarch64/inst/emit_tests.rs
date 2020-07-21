@@ -1889,14 +1889,6 @@ fn test_aarch64_binemit() {
         "mrs x27, nzcv",
     ));
     insns.push((
-        Inst::CondSet {
-            rd: writable_xreg(5),
-            cond: Cond::Hi,
-        },
-        "E5979F9A",
-        "cset x5, hi",
-    ));
-    insns.push((
         Inst::VecDup {
             rd: writable_vreg(25),
             rn: xreg(7),
