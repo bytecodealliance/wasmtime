@@ -1228,50 +1228,61 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let dst = output_to_reg(ctx, outputs[0]);
             let lhs = input_to_reg(ctx, inputs[0]);
             let rhs = input_to_reg(ctx, inputs[1]);
-            if !flt_ty_is_64(ty.unwrap()) {
-                // movabs   0x8000_0000, tmp_gpr1
-                // movd     tmp_gpr1, tmp_xmm1
-                // movaps   tmp_xmm1, dst
-                // andnps   src_1, dst
-                // movss    src_2, tmp_xmm2
-                // andps    tmp_xmm1, tmp_xmm2
-                // orps     tmp_xmm2, dst
-                let tmp_gpr1 = ctx.alloc_tmp(RegClass::I64, I32);
-                let tmp_xmm1 = ctx.alloc_tmp(RegClass::V128, F32);
-                let tmp_xmm2 = ctx.alloc_tmp(RegClass::V128, F32);
-                ctx.emit(Inst::imm_r(true, 0x8000_0000, tmp_gpr1));
-                ctx.emit(Inst::gpr_to_xmm(
-                    SseOpcode::Movd,
-                    RegMem::reg(tmp_gpr1.to_reg()),
-                    OperandSize::Size32,
-                    tmp_xmm1,
-                ));
-                ctx.emit(Inst::xmm_mov(
+
+            let ty = ty.unwrap();
+
+            // We're going to generate the following sequence:
+            //
+            // movabs     $INT_MIN, tmp_gpr1
+            // mov{d,q}   tmp_gpr1, tmp_xmm1
+            // movap{s,d} tmp_xmm1, dst
+            // andnp{s,d} src_1, dst
+            // movap{s,d} src_2, tmp_xmm2
+            // andp{s,d}  tmp_xmm1, tmp_xmm2
+            // orp{s,d}   tmp_xmm2, dst
+
+            let tmp_xmm1 = ctx.alloc_tmp(RegClass::V128, F32);
+            let tmp_xmm2 = ctx.alloc_tmp(RegClass::V128, F32);
+
+            let (sign_bit_cst, mov_op, and_not_op, and_op, or_op) = match ty {
+                F32 => (
+                    0x8000_0000,
                     SseOpcode::Movaps,
-                    RegMem::reg(tmp_xmm1.to_reg()),
-                    dst,
-                    None,
-                ));
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Andnps, RegMem::reg(lhs), dst));
-                ctx.emit(Inst::xmm_mov(
-                    SseOpcode::Movss,
-                    RegMem::reg(rhs),
-                    tmp_xmm2,
-                    None,
-                ));
-                ctx.emit(Inst::xmm_rm_r(
+                    SseOpcode::Andnps,
                     SseOpcode::Andps,
-                    RegMem::reg(tmp_xmm1.to_reg()),
-                    tmp_xmm2,
-                ));
-                ctx.emit(Inst::xmm_rm_r(
                     SseOpcode::Orps,
-                    RegMem::reg(tmp_xmm2.to_reg()),
-                    dst,
-                ));
-            } else {
-                unimplemented!("{:?} for non 32-bit destination is not supported", op);
+                ),
+                F64 => (
+                    0x8000_0000_0000_0000,
+                    SseOpcode::Movapd,
+                    SseOpcode::Andnpd,
+                    SseOpcode::Andpd,
+                    SseOpcode::Orpd,
+                ),
+                _ => {
+                    panic!("unexpected type {:?} for copysign", ty);
+                }
+            };
+
+            for inst in Inst::gen_constant(tmp_xmm1, sign_bit_cst, ty, |reg_class, ty| {
+                ctx.alloc_tmp(reg_class, ty)
+            }) {
+                ctx.emit(inst);
             }
+            ctx.emit(Inst::xmm_mov(
+                mov_op,
+                RegMem::reg(tmp_xmm1.to_reg()),
+                dst,
+                None,
+            ));
+            ctx.emit(Inst::xmm_rm_r(and_not_op, RegMem::reg(lhs), dst));
+            ctx.emit(Inst::xmm_mov(mov_op, RegMem::reg(rhs), tmp_xmm2, None));
+            ctx.emit(Inst::xmm_rm_r(
+                and_op,
+                RegMem::reg(tmp_xmm1.to_reg()),
+                tmp_xmm2,
+            ));
+            ctx.emit(Inst::xmm_rm_r(or_op, RegMem::reg(tmp_xmm2.to_reg()), dst));
         }
 
         Opcode::Ceil | Opcode::Floor | Opcode::Nearest | Opcode::Trunc => {
