@@ -377,6 +377,8 @@ pub enum SseOpcode {
     Subsd,
     Ucomiss,
     Ucomisd,
+    Xorps,
+    Xorpd,
 }
 
 impl SseOpcode {
@@ -403,7 +405,8 @@ impl SseOpcode {
             | SseOpcode::Ucomiss
             | SseOpcode::Sqrtss
             | SseOpcode::Comiss
-            | SseOpcode::Cmpss => SSE,
+            | SseOpcode::Cmpss
+            | SseOpcode::Xorps => SSE,
 
             SseOpcode::Addsd
             | SseOpcode::Andpd
@@ -424,7 +427,8 @@ impl SseOpcode {
             | SseOpcode::Subsd
             | SseOpcode::Ucomisd
             | SseOpcode::Comisd
-            | SseOpcode::Cmpsd => SSE2,
+            | SseOpcode::Cmpsd
+            | SseOpcode::Xorpd => SSE2,
 
             SseOpcode::Insertps | SseOpcode::Roundss | SseOpcode::Roundsd => SSE41,
         }
@@ -485,6 +489,8 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Cmpss => "cmpss",
             SseOpcode::Cmpsd => "cmpsd",
             SseOpcode::Insertps => "insertps",
+            SseOpcode::Xorps => "xorps",
+            SseOpcode::Xorpd => "xorpd",
         };
         write!(fmt, "{}", name)
     }

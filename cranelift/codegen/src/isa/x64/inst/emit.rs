@@ -1545,6 +1545,8 @@ pub(crate) fn emit(
                 SseOpcode::Divsd => (LegacyPrefix::_F2, 0x0F5E),
                 SseOpcode::Maxss => (LegacyPrefix::_F3, 0x0F5F),
                 SseOpcode::Maxsd => (LegacyPrefix::_F2, 0x0F5F),
+                SseOpcode::Xorps => (LegacyPrefix::None, 0x0F57),
+                SseOpcode::Xorpd => (LegacyPrefix::_66, 0x0F57),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
 
