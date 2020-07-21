@@ -300,6 +300,17 @@ WASM_API_EXTERN own wasmtime_error_t* wasmtime_wat2wasm(
 );
 
 /**
+ * \brief Perform garbage collection within the given store.
+ *
+ * Garbage collects `externref`s that are used within this store. Any
+ * `externref`s that are discovered to be unreachable by other code or objects
+ * will have their finalizers run.
+ *
+ * The `store` argument must not be NULL.
+ */
+WASM_API_EXTERN void wasmtime_store_gc(wasm_store_t* store);
+
+/**
  * \typedef wasmtime_linker_t
  * \brief Convenience alias for #wasmtime_linker_t
  *

@@ -17,6 +17,11 @@ pub extern "C" fn wasm_store_new(engine: &wasm_engine_t) -> Box<wasm_store_t> {
     })
 }
 
+#[no_mangle]
+pub extern "C" fn wasmtime_store_gc(store: &wasm_store_t) {
+    store.store.gc();
+}
+
 #[repr(C)]
 pub struct wasmtime_interrupt_handle_t {
     handle: InterruptHandle,

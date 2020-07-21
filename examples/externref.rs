@@ -46,6 +46,9 @@ fn main() -> Result<()> {
     assert!(ret.is_some());
     assert!(ret.unwrap().ptr_eq(&externref));
 
+    println!("GCing within the store...");
+    store.gc();
+
     println!("Done.");
     Ok(())
 }
