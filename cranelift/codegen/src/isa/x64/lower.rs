@@ -924,6 +924,21 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::xmm_rm_r(sse_op, RegMem::reg(rhs), dst));
         }
 
+        Opcode::Fmin | Opcode::Fmax => {
+            let lhs = input_to_reg(ctx, inputs[0]);
+            let rhs = input_to_reg(ctx, inputs[1]);
+            let dst = output_to_reg(ctx, outputs[0]);
+            let is_min = op == Opcode::Fmin;
+            let output_ty = ty.unwrap();
+            ctx.emit(Inst::gen_move(dst, rhs, output_ty));
+            let op_size = match output_ty {
+                F32 => OperandSize::Size32,
+                F64 => OperandSize::Size64,
+                _ => panic!("unexpected type {:?} for fmin/fmax", output_ty),
+            };
+            ctx.emit(Inst::xmm_min_max_seq(op_size, is_min, lhs, dst));
+        }
+
         Opcode::Sqrt => {
             let src = input_to_reg_mem(ctx, inputs[0]);
             let dst = output_to_reg(ctx, outputs[0]);

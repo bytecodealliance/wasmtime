@@ -278,6 +278,14 @@ pub enum Inst {
         srcloc: SourceLoc,
     },
 
+    /// A sequence to compute min/max with the proper NaN semantics for xmm registers.
+    XmmMinMaxSeq {
+        size: OperandSize,
+        is_min: bool,
+        lhs: Reg,
+        rhs_dst: Writable<Reg>,
+    },
+
     /// XMM (scalar) conditional move.
     /// Overwrites the destination register if cc is set.
     XmmCmove {
@@ -626,6 +634,22 @@ impl Inst {
             tmp_gpr,
             tmp_xmm,
             srcloc,
+        }
+    }
+
+    pub(crate) fn xmm_min_max_seq(
+        size: OperandSize,
+        is_min: bool,
+        lhs: Reg,
+        rhs_dst: Writable<Reg>,
+    ) -> Inst {
+        debug_assert_eq!(lhs.get_class(), RegClass::V128);
+        debug_assert_eq!(rhs_dst.to_reg().get_class(), RegClass::V128);
+        Inst::XmmMinMaxSeq {
+            size,
+            is_min,
+            lhs,
+            rhs_dst,
         }
     }
 
@@ -978,6 +1002,29 @@ impl ShowWithRRU for Inst {
                 ljustify(op.to_string()),
                 src.show_rru_sized(mb_rru, 8),
                 show_ireg_sized(dst.to_reg(), mb_rru, 8),
+            ),
+
+            Inst::XmmMinMaxSeq {
+                lhs,
+                rhs_dst,
+                is_min,
+                size,
+            } => format!(
+                "{} {}, {}",
+                ljustify2(
+                    if *is_min {
+                        "xmm min seq ".to_string()
+                    } else {
+                        "xmm max seq ".to_string()
+                    },
+                    match size {
+                        OperandSize::Size32 => "f32",
+                        OperandSize::Size64 => "f64",
+                    }
+                    .into()
+                ),
+                show_ireg_sized(*lhs, mb_rru, 8),
+                show_ireg_sized(rhs_dst.to_reg(), mb_rru, 8),
             ),
 
             Inst::XmmToGpr {
@@ -1333,6 +1380,10 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             src.get_regs_as_uses(collector);
             collector.add_mod(*dst);
         }
+        Inst::XmmMinMaxSeq { lhs, rhs_dst, .. } => {
+            collector.add_use(*lhs);
+            collector.add_mod(*rhs_dst);
+        }
         Inst::Xmm_Mov_R_M { src, dst, .. } => {
             collector.add_use(*src);
             dst.get_regs_as_uses(collector);
@@ -1578,6 +1629,14 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         } => {
             src.map_uses(mapper);
             map_mod(mapper, dst);
+        }
+        Inst::XmmMinMaxSeq {
+            ref mut lhs,
+            ref mut rhs_dst,
+            ..
+        } => {
+            map_use(mapper, lhs);
+            map_mod(mapper, rhs_dst);
         }
         Inst::Xmm_Mov_R_M {
             ref mut src,

@@ -337,6 +337,7 @@ pub enum SseOpcode {
     Addss,
     Addsd,
     Andps,
+    Andpd,
     Andnps,
     Comiss,
     Comisd,
@@ -365,6 +366,7 @@ pub enum SseOpcode {
     Mulss,
     Mulsd,
     Orps,
+    Orpd,
     Rcpss,
     Roundss,
     Roundsd,
@@ -404,6 +406,7 @@ impl SseOpcode {
             | SseOpcode::Cmpss => SSE,
 
             SseOpcode::Addsd
+            | SseOpcode::Andpd
             | SseOpcode::Cvtsd2ss
             | SseOpcode::Cvtsd2si
             | SseOpcode::Cvtsi2sd
@@ -416,6 +419,7 @@ impl SseOpcode {
             | SseOpcode::Movq
             | SseOpcode::Movsd
             | SseOpcode::Mulsd
+            | SseOpcode::Orpd
             | SseOpcode::Sqrtsd
             | SseOpcode::Subsd
             | SseOpcode::Ucomisd
@@ -440,6 +444,7 @@ impl fmt::Debug for SseOpcode {
         let name = match self {
             SseOpcode::Addss => "addss",
             SseOpcode::Addsd => "addsd",
+            SseOpcode::Andpd => "andpd",
             SseOpcode::Andps => "andps",
             SseOpcode::Andnps => "andnps",
             SseOpcode::Comiss => "comiss",
@@ -465,6 +470,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Movsd => "movsd",
             SseOpcode::Mulss => "mulss",
             SseOpcode::Mulsd => "mulsd",
+            SseOpcode::Orpd => "orpd",
             SseOpcode::Orps => "orps",
             SseOpcode::Rcpss => "rcpss",
             SseOpcode::Roundss => "roundss",
