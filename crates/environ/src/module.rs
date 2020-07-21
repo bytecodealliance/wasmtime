@@ -137,10 +137,10 @@ impl TablePlan {
 
 /// A translated WebAssembly module, excluding the function bodies and
 /// memory initializers.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Module {
     /// A unique identifier (within this process) for this module.
-    #[serde(skip_serializing, default = "Module::next_id")]
+    #[serde(skip_serializing, skip_deserializing, default = "Module::next_id")]
     pub id: usize,
 
     /// The name of this wasm module, often found in the wasm file.
@@ -181,7 +181,7 @@ pub struct Module {
 /// This is stored within a `Module` and it implements `Hash`, unlike `Module`,
 /// and is used as part of the cache key when we load compiled modules from the
 /// global cache.
-#[derive(Debug, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Hash, Serialize, Deserialize)]
 pub struct ModuleLocal {
     /// Unprocessed signatures exactly as provided by `declare_signature()`.
     pub signatures: PrimaryMap<SignatureIndex, (WasmFuncType, ir::Signature)>,

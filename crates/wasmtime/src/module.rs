@@ -1,10 +1,10 @@
 use crate::frame_info::GlobalFrameInfoRegistration;
-use crate::runtime::Engine;
+use crate::runtime::{Config, Engine};
 use crate::types::{EntityType, ExportType, ExternType, ImportType};
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use wasmtime_jit::CompiledModule;
+use wasmtime_jit::{CompilationArtifacts, CompiledModule};
 
 /// A compiled WebAssembly module, ready to be instantiated.
 ///
@@ -309,6 +309,51 @@ impl Module {
         })
     }
 
+    /// Serialize compilation artifacts to the buffer. See also `deseriaize`.
+    pub fn serialize(&self) -> Result<Vec<u8>> {
+        let artifacts = (
+            compiler_fingerprint(self.engine.config()),
+            self.compiled.to_compilation_artifacts(),
+        );
+
+        let mut buffer = Vec::new();
+        bincode::serialize_into(&mut buffer, &artifacts)?;
+
+        Ok(buffer)
+    }
+
+    /// Deserializes and creates a module from the compilatio nartifacts.
+    /// The `serialize` saves the compilation artifacts along with the host
+    /// fingerprint, which consists of target, compiler flags, and wasmtime
+    /// package version.
+    ///
+    /// The method will fail if fingerprints of current host and serialized
+    /// one are different. The method does not verify the serialized artifacts
+    /// for modifications or curruptions. All responsibily of signing and its
+    /// verification falls on the embedder.
+    pub fn deserialize(engine: &Engine, serialized: &[u8]) -> Result<Module> {
+        let expected_fingerprint = compiler_fingerprint(engine.config());
+
+        let (fingerprint, artifacts) =
+            bincode::deserialize_from::<_, (u64, CompilationArtifacts)>(serialized)
+                .context("Deserialize compilation artifacts")?;
+        if fingerprint != expected_fingerprint {
+            bail!("Incompatible compilation artifact");
+        }
+
+        let compiled = CompiledModule::from_artifacts(
+            artifacts,
+            engine.compiler().isa(),
+            &*engine.config().profiler,
+        )?;
+
+        Ok(Module {
+            engine: engine.clone(),
+            compiled: Arc::new(compiled),
+            frame_info_registration: Arc::new(Mutex::new(None)),
+        })
+    }
+
     pub(crate) fn compiled_module(&self) -> &CompiledModule {
         &self.compiled
     }
@@ -533,6 +578,13 @@ impl Module {
         *info = Some(ret.clone());
         return ret;
     }
+}
+
+fn compiler_fingerprint(config: &Config) -> u64 {
+    use std::hash::Hasher;
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    config.compiler_fingerprint(&mut hasher);
+    hasher.finish()
 }
 
 fn _assert_send_sync() {

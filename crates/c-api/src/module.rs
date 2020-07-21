@@ -130,3 +130,63 @@ pub extern "C" fn wasm_module_obtain(
         exports,
     }))
 }
+
+#[no_mangle]
+pub extern "C" fn wasm_module_serialize(module: &wasm_module_t, ret: &mut wasm_byte_vec_t) {
+    drop(wasmtime_module_serialize(module, ret));
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_module_deserialize(
+    store: &wasm_store_t,
+    binary: &wasm_byte_vec_t,
+) -> Option<Box<wasm_module_t>> {
+    let mut ret = ptr::null_mut();
+    let engine = wasm_engine_t {
+        engine: store.store.engine().clone(),
+    };
+    match wasmtime_module_deserialize(&engine, binary, &mut ret) {
+        Some(_err) => None,
+        None => {
+            assert!(!ret.is_null());
+            Some(unsafe { Box::from_raw(ret) })
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_module_serialize(
+    module: &wasm_module_t,
+    ret: &mut wasm_byte_vec_t,
+) -> Option<Box<wasmtime_error_t>> {
+    handle_result(module.module.serialize(), |buf| {
+        ret.set_buffer(buf);
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_module_deserialize(
+    engine: &wasm_engine_t,
+    binary: &wasm_byte_vec_t,
+    ret: &mut *mut wasm_module_t,
+) -> Option<Box<wasmtime_error_t>> {
+    handle_result(
+        Module::deserialize(&engine.engine, binary.as_slice()),
+        |module| {
+            let imports = module
+                .imports()
+                .map(|i| wasm_importtype_t::new(i.module().to_owned(), i.name().to_owned(), i.ty()))
+                .collect::<Vec<_>>();
+            let exports = module
+                .exports()
+                .map(|e| wasm_exporttype_t::new(e.name().to_owned(), e.ty()))
+                .collect::<Vec<_>>();
+            let module = Box::new(wasm_module_t {
+                module: module,
+                imports,
+                exports,
+            });
+            *ret = Box::into_raw(module);
+        },
+    )
+}

@@ -35,7 +35,7 @@ pub mod trampoline;
 
 pub use crate::code_memory::CodeMemory;
 pub use crate::compiler::{Compilation, CompilationStrategy, Compiler};
-pub use crate::instantiate::{CompiledModule, SetupError};
+pub use crate::instantiate::{CompilationArtifacts, CompiledModule, SetupError};
 pub use crate::link::link_module;
 pub use crate::resolver::{NullResolver, Resolver};
 

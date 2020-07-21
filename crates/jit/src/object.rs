@@ -3,6 +3,7 @@
 use super::trampoline::build_trampoline;
 use cranelift_frontend::FunctionBuilderContext;
 use object::write::Object;
+use serde::{Deserialize, Serialize};
 use wasmtime_debug::DwarfSection;
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
@@ -13,7 +14,7 @@ use wasmtime_obj::{ObjectBuilder, ObjectBuilderTarget};
 pub use wasmtime_obj::utils;
 
 /// Unwind information for object files functions (including trampolines).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ObjectUnwindInfo {
     Func(FuncIndex, UnwindInfo),
     Trampoline(SignatureIndex, UnwindInfo),

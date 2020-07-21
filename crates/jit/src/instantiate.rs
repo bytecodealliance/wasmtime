@@ -10,6 +10,7 @@ use crate::link::link_module;
 use crate::object::ObjectUnwindInfo;
 use crate::resolver::Resolver;
 use object::File as ObjectFile;
+use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -51,27 +52,47 @@ pub enum SetupError {
     DebugInfo(#[from] anyhow::Error),
 }
 
-// Contains all compilation artifacts.
-struct CompilationArtifacts {
+/// Contains all compilation artifacts.
+#[derive(Serialize, Deserialize)]
+pub struct CompilationArtifacts {
+    /// Module metadata.
     module: Module,
+
+    /// ELF image with functions code.
     obj: Box<[u8]>,
+
+    /// Unwind information for function code.
     unwind_info: Box<[ObjectUnwindInfo]>,
+
+    /// Data initiailizers.
     data_initializers: Box<[OwnedDataInitializer]>,
+
+    /// Traps descriptors.
     traps: Traps,
+
+    /// Stack map descriptors.
     stack_maps: StackMaps,
+
+    /// Wasm to function code address map.
     address_transform: ModuleAddressMap,
+
+    /// Debug info presence flags.
+    debug_info: bool,
 }
 
 impl CompilationArtifacts {
-    fn new(compiler: &Compiler, data: &[u8]) -> Result<Self, SetupError> {
+    /// Builds compilation artifacts.
+    pub fn build(compiler: &Compiler, data: &[u8]) -> Result<Self, SetupError> {
         let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
 
         let translation = environ
             .translate(data)
             .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
 
+        let debug_info = compiler.tunables().debug_info;
+
         let mut debug_data = None;
-        if compiler.tunables().debug_info {
+        if debug_info {
             // TODO Do we want to ignore invalid DWARF data?
             debug_data = Some(read_debuginfo(&data)?);
         }
@@ -110,6 +131,7 @@ impl CompilationArtifacts {
             traps,
             stack_maps,
             address_transform,
+            debug_info,
         })
     }
 }
@@ -136,6 +158,8 @@ pub struct CompiledModule {
     traps: Traps,
     stack_maps: StackMaps,
     address_transform: ModuleAddressMap,
+    obj: Box<[u8]>,
+    unwind_info: Box<[ObjectUnwindInfo]>,
 }
 
 impl CompiledModule {
@@ -145,8 +169,16 @@ impl CompiledModule {
         data: &'data [u8],
         profiler: &dyn ProfilingAgent,
     ) -> Result<Self, SetupError> {
-        let artifacts = CompilationArtifacts::new(compiler, data)?;
+        let artifacts = CompilationArtifacts::build(compiler, data)?;
+        Self::from_artifacts(artifacts, compiler.isa(), profiler)
+    }
 
+    /// Creates `CompiledModule` directly from `CompilationArtifacts`.
+    pub fn from_artifacts(
+        artifacts: CompilationArtifacts,
+        isa: &dyn TargetIsa,
+        profiler: &dyn ProfilingAgent,
+    ) -> Result<Self, SetupError> {
         let CompilationArtifacts {
             module,
             obj,
@@ -155,12 +187,13 @@ impl CompiledModule {
             traps,
             stack_maps,
             address_transform,
+            debug_info,
         } = artifacts;
 
         // Allocate all of the compiled functions into executable memory,
         // copying over their contents.
         let (code_memory, code_range, finished_functions, trampolines) =
-            build_code_memory(compiler.isa(), &obj, &module, unwind_info).map_err(|message| {
+            build_code_memory(isa, &obj, &module, &unwind_info).map_err(|message| {
                 SetupError::Instantiate(InstantiationError::Resource(format!(
                     "failed to build code memory for functions: {}",
                     message
@@ -168,7 +201,7 @@ impl CompiledModule {
             })?;
 
         // Register GDB JIT images; initialize profiler and load the wasm module.
-        let dbg_jit_registration = if compiler.tunables().debug_info {
+        let dbg_jit_registration = if debug_info {
             let bytes = create_dbg_image(obj.to_vec(), code_range, &module, &finished_functions)?;
 
             profiler.module_load(&module, &finished_functions, Some(&bytes));
@@ -194,7 +227,23 @@ impl CompiledModule {
             traps,
             stack_maps,
             address_transform,
+            obj,
+            unwind_info,
         })
+    }
+
+    /// Extracts `CompilationArtifacts` from the compiled module.
+    pub fn to_compilation_artifacts(&self) -> CompilationArtifacts {
+        CompilationArtifacts {
+            module: (*self.module).clone(),
+            obj: self.obj.clone(),
+            unwind_info: self.unwind_info.clone(),
+            data_initializers: self.data_initializers.clone(),
+            traps: self.traps.clone(),
+            stack_maps: self.stack_maps.clone(),
+            address_transform: self.address_transform.clone(),
+            debug_info: self.code.dbg_jit_registration.is_some(),
+        }
     }
 
     /// Crate an `Instance` from this `CompiledModule`.
@@ -305,6 +354,7 @@ impl CompiledModule {
 
 /// Similar to `DataInitializer`, but owns its own copy of the data rather
 /// than holding a slice of the original module.
+#[derive(Clone, Serialize, Deserialize)]
 pub struct OwnedDataInitializer {
     /// The location where the initialization is to be performed.
     location: DataInitializerLocation,
@@ -340,7 +390,7 @@ fn build_code_memory(
     isa: &dyn TargetIsa,
     obj: &[u8],
     module: &Module,
-    unwind_info: Box<[ObjectUnwindInfo]>,
+    unwind_info: &Box<[ObjectUnwindInfo]>,
 ) -> Result<
     (
         CodeMemory,
@@ -354,7 +404,7 @@ fn build_code_memory(
 
     let mut code_memory = CodeMemory::new();
 
-    let allocation = code_memory.allocate_for_object(&obj, &unwind_info)?;
+    let allocation = code_memory.allocate_for_object(&obj, unwind_info)?;
 
     // Second, create a PrimaryMap from result vector of pointers.
     let mut finished_functions = PrimaryMap::new();

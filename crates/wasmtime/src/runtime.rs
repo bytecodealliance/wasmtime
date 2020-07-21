@@ -10,6 +10,7 @@ use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
+use target_lexicon::Triple;
 use wasmparser::Validator;
 use wasmtime_environ::settings::{self, Configurable, SetError};
 use wasmtime_environ::{ir, isa, isa::TargetIsa, wasm, CacheConfig, Tunables};
@@ -633,6 +634,22 @@ impl Config {
             self.cache_config.clone(),
             self.tunables.clone(),
         )
+    }
+
+    /// Hashes/fingerprints compiler setting to ensure that compatible
+    /// compilation artifacts are used.
+    pub(crate) fn compiler_fingerprint<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        self.flags.hash(state);
+        self.tunables.hash(state);
+
+        let triple = Triple::host();
+        triple.hash(state);
+
+        // Catch accidental bugs of reusing across wasmtime versions.
+        env!("CARGO_PKG_VERSION").hash(state);
     }
 }
 

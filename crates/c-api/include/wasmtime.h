@@ -930,6 +930,37 @@ WASM_API_EXTERN void wasmtime_externref_new_with_finalizer(
  */
 WASM_API_EXTERN bool wasmtime_externref_data(wasm_val_t* val, void** datap);
 
+/**
+ * \brief This function serializes compiled module artifacts
+ *   as blob data.
+ *
+ * \param module the module
+ * \param ret if the conversion is successful, this byte vector is filled in with
+ *   the serialized compiled module.
+ *
+ * \return a non-null error if parsing fails, or returns `NULL`. If parsing
+ * fails then `ret` isn't touched.
+ *
+ * This function does not take ownership of `module`, and the caller is
+ * expected to deallocate the returned #wasmtime_error_t and #wasm_byte_vec_t.
+ */
+WASM_API_EXTERN own wasmtime_error_t* wasmtime_module_serialize(
+    wasm_module_t* module,
+    own wasm_byte_vec_t *ret
+);
+
+/**
+ * \brief Build a module from serialized data.
+ * *
+ * This function does not take ownership of any of its arguments, but the
+ * returned error and module are owned by the caller.
+ */
+WASM_API_EXTERN own wasmtime_error_t *wasmtime_module_deserialize(
+    wasm_engine_t *engine,
+    const wasm_byte_vec_t *serialized,
+    own wasm_module_t **ret
+);
+
 #undef own
 
 #ifdef __cplusplus
