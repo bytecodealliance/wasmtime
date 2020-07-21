@@ -1120,6 +1120,39 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::Fabs | Opcode::Fneg => {
+            let src = input_to_reg_mem(ctx, inputs[0]);
+            let dst = output_to_reg(ctx, outputs[0]);
+
+            // In both cases, generate a constant and apply a single binary instruction:
+            // - to compute the absolute value, set all bits to 1 but the MSB to 0, and bit-AND the
+            // src with it.
+            // - to compute the negated value, set all bits to 0 but the MSB to 1, and bit-XOR the
+            // src with it.
+            let output_ty = ty.unwrap();
+            let (val, opcode) = match output_ty {
+                F32 => match op {
+                    Opcode::Fabs => (0x7fffffff, SseOpcode::Andps),
+                    Opcode::Fneg => (0x80000000, SseOpcode::Xorps),
+                    _ => unreachable!(),
+                },
+                F64 => match op {
+                    Opcode::Fabs => (0x7fffffffffffffff, SseOpcode::Andpd),
+                    Opcode::Fneg => (0x8000000000000000, SseOpcode::Xorpd),
+                    _ => unreachable!(),
+                },
+                _ => panic!("unexpected type {:?} for Fabs", output_ty),
+            };
+
+            for inst in Inst::gen_constant(dst, val, output_ty, |reg_class, ty| {
+                ctx.alloc_tmp(reg_class, ty)
+            }) {
+                ctx.emit(inst);
+            }
+
+            ctx.emit(Inst::xmm_rm_r(opcode, src, dst));
+        }
+
         Opcode::Fcopysign => {
             let dst = output_to_reg(ctx, outputs[0]);
             let lhs = input_to_reg(ctx, inputs[0]);
