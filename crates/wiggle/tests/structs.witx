@@ -16,6 +16,12 @@
     (field $first (@witx const_pointer s32))
     (field $second s32)))
 
+(typename $some_bytes (array u8))
+
+(typename $struct_of_array
+  (struct
+    (field $arr $some_bytes)))
+
 (module $structs
   (@interface func (export "sum_of_pair")
     (param $an_pair $pair_ints)
@@ -37,4 +43,8 @@
     (param $second (@witx const_pointer s32))
     (result $error $errno)
     (result $an_pair $pair_int_ptrs))
+  (@interface func (export "sum_array")
+    (param $an_arr $struct_of_array)
+    (result $error $errno)
+    (result $doubled u16))
 )
