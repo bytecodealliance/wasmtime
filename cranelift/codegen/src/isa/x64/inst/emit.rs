@@ -1530,10 +1530,12 @@ pub(crate) fn emit(
             let (prefix, opcode) = match op {
                 SseOpcode::Addss => (LegacyPrefix::_F3, 0x0F58),
                 SseOpcode::Addsd => (LegacyPrefix::_F2, 0x0F58),
+                SseOpcode::Andpd => (LegacyPrefix::_66, 0x0F54),
                 SseOpcode::Andps => (LegacyPrefix::None, 0x0F54),
                 SseOpcode::Andnps => (LegacyPrefix::None, 0x0F55),
                 SseOpcode::Mulss => (LegacyPrefix::_F3, 0x0F59),
                 SseOpcode::Mulsd => (LegacyPrefix::_F2, 0x0F59),
+                SseOpcode::Orpd => (LegacyPrefix::_66, 0x0F56),
                 SseOpcode::Orps => (LegacyPrefix::None, 0x0F56),
                 SseOpcode::Subss => (LegacyPrefix::_F3, 0x0F5C),
                 SseOpcode::Subsd => (LegacyPrefix::_F2, 0x0F5C),
@@ -1555,6 +1557,92 @@ pub(crate) fn emit(
                     emit_std_reg_mem(sink, prefix, opcode, 2, reg_g.to_reg(), addr, rex);
                 }
             }
+        }
+
+        Inst::XmmMinMaxSeq {
+            size,
+            is_min,
+            lhs,
+            rhs_dst,
+        } => {
+            // Generates the following sequence:
+            // cmpss/cmpsd %lhs, %rhs_dst
+            // jnz do_min_max
+            // jp propagate_nan
+            //
+            // ;; ordered and equal: propagate the sign bit (for -0 vs 0):
+            // {and,or}{ss,sd} %lhs, %rhs_dst
+            // j done
+            //
+            // ;; to get the desired NaN behavior (signalling NaN transformed into a quiet NaN, the
+            // NaN value is returned), we add both inputs.
+            // propagate_nan:
+            // add{ss,sd} %lhs, %rhs_dst
+            // j done
+            //
+            // do_min_max:
+            // min{ss,sd} %lhs, %rhs_dst
+            //
+            // done:
+            let done = sink.get_label();
+            let propagate_nan = sink.get_label();
+            let do_min_max = sink.get_label();
+
+            let (add_op, cmp_op, and_op, or_op, min_max_op) = match size {
+                OperandSize::Size32 => (
+                    SseOpcode::Addss,
+                    SseOpcode::Ucomiss,
+                    SseOpcode::Andps,
+                    SseOpcode::Orps,
+                    if *is_min {
+                        SseOpcode::Minss
+                    } else {
+                        SseOpcode::Maxss
+                    },
+                ),
+                OperandSize::Size64 => (
+                    SseOpcode::Addsd,
+                    SseOpcode::Ucomisd,
+                    SseOpcode::Andpd,
+                    SseOpcode::Orpd,
+                    if *is_min {
+                        SseOpcode::Minsd
+                    } else {
+                        SseOpcode::Maxsd
+                    },
+                ),
+            };
+
+            let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(*lhs), rhs_dst.to_reg());
+            inst.emit(sink, flags, state);
+
+            one_way_jmp(sink, CC::NZ, do_min_max);
+            one_way_jmp(sink, CC::P, propagate_nan);
+
+            // Ordered and equal. The operands are bit-identical unless they are zero
+            // and negative zero. These instructions merge the sign bits in that
+            // case, and are no-ops otherwise.
+            let op = if *is_min { or_op } else { and_op };
+            let inst = Inst::xmm_rm_r(op, RegMem::reg(*lhs), *rhs_dst);
+            inst.emit(sink, flags, state);
+
+            let inst = Inst::jmp_known(BranchTarget::Label(done));
+            inst.emit(sink, flags, state);
+
+            // x86's min/max are not symmetric; if either operand is a NaN, they return the
+            // read-only operand: perform an addition between the two operands, which has the
+            // desired NaN propagation effects.
+            sink.bind_label(propagate_nan);
+            let inst = Inst::xmm_rm_r(add_op, RegMem::reg(*lhs), *rhs_dst);
+            inst.emit(sink, flags, state);
+
+            one_way_jmp(sink, CC::P, done);
+
+            sink.bind_label(do_min_max);
+            let inst = Inst::xmm_rm_r(min_max_op, RegMem::reg(*lhs), *rhs_dst);
+            inst.emit(sink, flags, state);
+
+            sink.bind_label(done);
         }
 
         Inst::Xmm_Mov_R_M {
