@@ -1,5 +1,4 @@
-use crate::isa::TargetIsa;
-use crate::settings::LibcallCallConv;
+use crate::settings::{self, LibcallCallConv};
 use core::fmt;
 use core::str;
 use target_lexicon::{CallingConvention, Triple};
@@ -39,10 +38,10 @@ impl CallConv {
         }
     }
 
-    /// Returns the calling convention used for libcalls for the given ISA.
-    pub fn for_libcall(isa: &dyn TargetIsa) -> Self {
-        match isa.flags().libcall_call_conv() {
-            LibcallCallConv::IsaDefault => isa.default_call_conv(),
+    /// Returns the calling convention used for libcalls according to the current flags.
+    pub fn for_libcall(flags: &settings::Flags, default_call_conv: CallConv) -> Self {
+        match flags.libcall_call_conv() {
+            LibcallCallConv::IsaDefault => default_call_conv,
             LibcallCallConv::Fast => Self::Fast,
             LibcallCallConv::Cold => Self::Cold,
             LibcallCallConv::SystemV => Self::SystemV,

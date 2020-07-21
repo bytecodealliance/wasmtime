@@ -1,8 +1,10 @@
 //! Implementation of the standard x64 ABI.
 
-use alloc::vec::Vec;
 use log::trace;
 use regalloc::{RealReg, Reg, RegClass, Set, SpillSlot, Writable};
+
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use std::mem;
 
 use crate::binemit::Stackmap;
@@ -1156,13 +1158,29 @@ impl ABICall for X64ABICall {
         }
 
         match &self.dest {
-            &CallDest::ExtName(ref name, ref _reloc_distance) => ctx.emit(Inst::call_known(
+            &CallDest::ExtName(ref name, RelocDistance::Near) => ctx.emit(Inst::call_known(
                 name.clone(),
                 uses,
                 defs,
                 self.loc,
                 self.opcode,
             )),
+            &CallDest::ExtName(ref name, RelocDistance::Far) => {
+                let tmp = ctx.alloc_tmp(RegClass::I64, I64);
+                ctx.emit(Inst::LoadExtName {
+                    dst: tmp,
+                    name: Box::new(name.clone()),
+                    offset: 0,
+                    srcloc: self.loc,
+                });
+                ctx.emit(Inst::call_unknown(
+                    RegMem::reg(tmp.to_reg()),
+                    uses,
+                    defs,
+                    self.loc,
+                    self.opcode,
+                ));
+            }
             &CallDest::Reg(reg) => ctx.emit(Inst::call_unknown(
                 RegMem::reg(reg),
                 uses,

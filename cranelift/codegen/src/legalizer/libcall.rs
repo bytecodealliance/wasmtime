@@ -19,7 +19,7 @@ pub fn expand_as_libcall(inst: ir::Inst, func: &mut ir::Function, isa: &dyn Targ
     let mut args = Vec::new();
     args.extend_from_slice(func.dfg.inst_args(inst));
 
-    let call_conv = CallConv::for_libcall(isa);
+    let call_conv = CallConv::for_libcall(isa.flags(), isa.default_call_conv());
     if call_conv.extends_baldrdash() {
         let vmctx = func
             .special_param(ir::ArgumentPurpose::VMContext)
