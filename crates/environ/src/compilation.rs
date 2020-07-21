@@ -1,7 +1,7 @@
 //! A `Compilation` contains the compiled function bodies for a WebAssembly
 //! module.
 
-use crate::cache::ModuleCacheDataTupleType;
+use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
 use crate::CacheConfig;
 use crate::ModuleTranslation;
 use cranelift_codegen::{binemit, ir, isa, isa::unwind::UnwindInfo};
@@ -184,6 +184,17 @@ pub enum CompileError {
     DebugInfoNotSupported,
 }
 
+/// A type alias for the result of `Compiler::compile_module`
+pub type CompileResult = (
+    Compilation,
+    Relocations,
+    ModuleAddressMap,
+    ValueLabelsRanges,
+    PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
+    Traps,
+    StackMaps,
+);
+
 /// An implementation of a compiler from parsed WebAssembly module to native code.
 pub trait Compiler {
     /// Compile a parsed module with the given `TargetIsa`.
@@ -191,5 +202,5 @@ pub trait Compiler {
         translation: &ModuleTranslation,
         isa: &dyn isa::TargetIsa,
         cache_config: &CacheConfig,
-    ) -> Result<ModuleCacheDataTupleType, CompileError>;
+    ) -> Result<CompileResult, CompileError>;
 }

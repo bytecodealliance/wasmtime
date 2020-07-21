@@ -86,11 +86,12 @@
 // assume no valid stack pointer will ever be `usize::max_value() - 32k`.
 
 use crate::address_map::{FunctionAddressMap, InstructionAddressMap};
-use crate::cache::{ModuleCacheDataTupleType, ModuleCacheEntry};
+use crate::cache::ModuleCacheEntry;
 use crate::compilation::{
     Compilation, CompileError, CompiledFunction, Relocation, RelocationTarget, StackMapInformation,
     TrapInformation,
 };
+use crate::compilation::{CompileResult, Compiler};
 use crate::func_environ::{get_func_name, FuncEnvironment};
 use crate::{CacheConfig, FunctionBodyData, ModuleLocal, ModuleTranslation, Tunables};
 use cranelift_codegen::ir::{self, ExternalName};
@@ -283,17 +284,17 @@ fn get_function_address_map<'data>(
 /// optimizing it and then translating to assembly.
 pub struct Cranelift;
 
-impl crate::compilation::Compiler for Cranelift {
+impl Compiler for Cranelift {
     /// Compile the module using Cranelift, producing a compilation result with
     /// associated relocations.
     fn compile_module(
         translation: &ModuleTranslation,
         isa: &dyn isa::TargetIsa,
         cache_config: &CacheConfig,
-    ) -> Result<ModuleCacheDataTupleType, CompileError> {
+    ) -> Result<CompileResult, CompileError> {
         let cache_entry = ModuleCacheEntry::new("cranelift", cache_config);
 
-        let data = cache_entry.get_data(
+        let result = cache_entry.get_data(
             CompileEnv {
                 local: &translation.module.local,
                 module_translation: HashedModuleTranslationState(
@@ -305,11 +306,11 @@ impl crate::compilation::Compiler for Cranelift {
             },
             compile,
         )?;
-        Ok(data.into_tuple())
+        Ok(result)
     }
 }
 
-fn compile(env: CompileEnv<'_>) -> Result<ModuleCacheDataTupleType, CompileError> {
+fn compile(env: CompileEnv<'_>) -> Result<CompileResult, CompileError> {
     let Isa(isa) = env.isa;
     let mut functions = PrimaryMap::with_capacity(env.function_body_inputs.len());
     let mut relocations = PrimaryMap::with_capacity(env.function_body_inputs.len());
