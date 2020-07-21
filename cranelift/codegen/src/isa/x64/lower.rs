@@ -9,7 +9,10 @@ use smallvec::SmallVec;
 use crate::ir::types;
 use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
-use crate::ir::{condcodes::FloatCC, condcodes::IntCC, InstructionData, Opcode, TrapCode, Type};
+use crate::ir::{
+    condcodes::FloatCC, condcodes::IntCC, AbiParam, ArgumentPurpose, ExternalName, InstructionData,
+    LibCall, Opcode, Signature, TrapCode, Type,
+};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use cranelift_codegen_shared::condcodes::CondCode;
@@ -23,7 +26,8 @@ use crate::settings::Flags;
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
-use crate::isa::x64::X64Backend;
+use crate::isa::{x64::X64Backend, CallConv};
+use target_lexicon::Triple;
 
 /// Context passed to all lowering functions.
 type Ctx<'a> = &'a mut dyn LowerCtx<I = Inst>;
@@ -222,6 +226,72 @@ fn emit_cmp(ctx: Ctx, insn: IRInst) {
     ctx.emit(Inst::cmp_rmi_r(ty.bytes() as u8, rhs, lhs));
 }
 
+fn make_libcall_sig(ctx: Ctx, insn: IRInst, call_conv: CallConv, ptr_ty: Type) -> Signature {
+    let mut sig = Signature::new(call_conv);
+    for i in 0..ctx.num_inputs(insn) {
+        sig.params.push(AbiParam::new(ctx.input_ty(insn, i)));
+    }
+    for i in 0..ctx.num_outputs(insn) {
+        sig.returns.push(AbiParam::new(ctx.output_ty(insn, i)));
+    }
+    if call_conv.extends_baldrdash() {
+        // Adds the special VMContext parameter to the signature.
+        sig.params
+            .push(AbiParam::special(ptr_ty, ArgumentPurpose::VMContext));
+    }
+    sig
+}
+
+fn emit_vm_call<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    flags: &Flags,
+    triple: &Triple,
+    libcall: LibCall,
+    insn: IRInst,
+    inputs: SmallVec<[InsnInput; 4]>,
+    outputs: SmallVec<[InsnOutput; 2]>,
+) -> CodegenResult<()> {
+    let extname = ExternalName::LibCall(libcall);
+
+    let dist = if flags.use_colocated_libcalls() {
+        RelocDistance::Near
+    } else {
+        RelocDistance::Far
+    };
+
+    // TODO avoid recreating signatures for every single Libcall function.
+    let call_conv = CallConv::for_libcall(flags, CallConv::triple_default(triple));
+    let sig = make_libcall_sig(ctx, insn, call_conv, I64);
+
+    let loc = ctx.srcloc(insn);
+    let mut abi = X64ABICall::from_func(&sig, &extname, dist, loc)?;
+
+    abi.emit_stack_pre_adjust(ctx);
+
+    let vm_context = if call_conv.extends_baldrdash() { 1 } else { 0 };
+    assert!(inputs.len() + vm_context == abi.num_args());
+
+    for (i, input) in inputs.iter().enumerate() {
+        let arg_reg = input_to_reg(ctx, *input);
+        abi.emit_copy_reg_to_arg(ctx, i, arg_reg);
+    }
+    if call_conv.extends_baldrdash() {
+        let vm_context_vreg = ctx
+            .get_vm_context()
+            .expect("should have a VMContext to pass to libcall funcs");
+        abi.emit_copy_reg_to_arg(ctx, inputs.len(), vm_context_vreg);
+    }
+
+    abi.emit_call(ctx);
+    for (i, output) in outputs.iter().enumerate() {
+        let retval_reg = output_to_reg(ctx, *output);
+        abi.emit_copy_retval_to_reg(ctx, i, retval_reg);
+    }
+    abi.emit_stack_post_adjust(ctx);
+
+    Ok(())
+}
+
 //=============================================================================
 // Top-level instruction lowering entry point, for one instruction.
 
@@ -230,6 +300,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     insn: IRInst,
     flags: &Flags,
+    triple: &Triple,
 ) -> CodegenResult<()> {
     let op = ctx.data(insn).opcode();
 
@@ -1203,6 +1274,29 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::Ceil | Opcode::Floor | Opcode::Nearest | Opcode::Trunc => {
+            // TODO use ROUNDSS/ROUNDSD after sse4.1.
+
+            // Lower to VM calls when there's no access to SSE4.1.
+            let ty = ty.unwrap();
+            let libcall = match (ty, op) {
+                (F32, Opcode::Ceil) => LibCall::CeilF32,
+                (F64, Opcode::Ceil) => LibCall::CeilF64,
+                (F32, Opcode::Floor) => LibCall::FloorF32,
+                (F64, Opcode::Floor) => LibCall::FloorF64,
+                (F32, Opcode::Nearest) => LibCall::NearestF32,
+                (F64, Opcode::Nearest) => LibCall::NearestF64,
+                (F32, Opcode::Trunc) => LibCall::TruncF32,
+                (F64, Opcode::Trunc) => LibCall::TruncF64,
+                _ => panic!(
+                    "unexpected type/opcode {:?}/{:?} in Ceil/Floor/Nearest/Trunc",
+                    ty, op
+                ),
+            };
+
+            emit_vm_call(ctx, flags, triple, libcall, insn, inputs, outputs)?;
+        }
+
         Opcode::Load
         | Opcode::Uload8
         | Opcode::Sload8
@@ -1630,7 +1724,7 @@ impl LowerBackend for X64Backend {
     type MInst = Inst;
 
     fn lower<C: LowerCtx<I = Inst>>(&self, ctx: &mut C, ir_inst: IRInst) -> CodegenResult<()> {
-        lower_insn_to_regs(ctx, ir_inst, &self.flags)
+        lower_insn_to_regs(ctx, ir_inst, &self.flags, &self.triple)
     }
 
     fn lower_branch_group<C: LowerCtx<I = Inst>>(

@@ -8,8 +8,9 @@ use crate::inst_predicates::{has_side_effect_or_load, is_constant_64bit};
 use crate::ir::instructions::BranchInfo;
 use crate::ir::types::I64;
 use crate::ir::{
-    ArgumentExtension, Block, Constant, ConstantData, ExternalName, Function, GlobalValueData,
-    Inst, InstructionData, MemFlags, Opcode, Signature, SourceLoc, Type, Value, ValueDef,
+    ArgumentExtension, ArgumentPurpose, Block, Constant, ConstantData, ExternalName, Function,
+    GlobalValueData, Inst, InstructionData, MemFlags, Opcode, Signature, SourceLoc, Type, Value,
+    ValueDef,
 };
 use crate::machinst::{
     ABIBody, BlockIndex, BlockLoweringOrder, LoweredBlock, MachLabel, VCode, VCodeBuilder,
@@ -67,6 +68,8 @@ pub trait LowerCtx {
     /// not allow the backend to specify its own result register for the return?
     /// Because there may be multiple return points.)
     fn retval(&self, idx: usize) -> Writable<Reg>;
+    /// Returns the vreg containing the VmContext parameter, if there's one.
+    fn get_vm_context(&self) -> Option<Reg>;
 
     // General instruction queries:
 
@@ -261,6 +264,10 @@ pub struct Lower<'func, I: VCodeInst> {
 
     /// The register to use for GetPinnedReg, if any, on this architecture.
     pinned_reg: Option<Reg>,
+
+    /// The vreg containing the special VmContext parameter, if it is present in the current
+    /// function's signature.
+    vm_context: Option<Reg>,
 }
 
 /// Notion of "relocation distance". This gives an estimate of how far away a symbol will be from a
@@ -331,6 +338,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
         }
 
+        let vm_context = f
+            .signature
+            .special_param_index(ArgumentPurpose::VMContext)
+            .map(|vm_context_index| {
+                let entry_block = f.layout.entry_block().unwrap();
+                let param = f.dfg.block_params(entry_block)[vm_context_index];
+                value_regs[param]
+            });
+
         // Assign a vreg to each return value.
         let mut retval_regs = vec![];
         for ret in &f.signature.returns {
@@ -387,6 +403,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             bb_insts: vec![],
             ir_insts: vec![],
             pinned_reg: None,
+            vm_context,
         })
     }
 
@@ -828,6 +845,10 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
 
     fn retval(&self, idx: usize) -> Writable<Reg> {
         Writable::from_reg(self.retval_regs[idx].0)
+    }
+
+    fn get_vm_context(&self) -> Option<Reg> {
+        self.vm_context
     }
 
     fn data(&self, ir_inst: Inst) -> &InstructionData {
