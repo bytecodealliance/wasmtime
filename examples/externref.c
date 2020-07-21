@@ -82,6 +82,9 @@ int main() {
   printf("Creating new `externref`...\n");
 
   // Create a new `externref` value.
+  //
+  // Note that if you need clean up for after the externref is reclaimed, you
+  // can use `wasmtime_externref_new_with_finalizer`.
   wasm_val_t externref;
   wasmtime_externref_new("Hello, World!", &externref);
   assert(externref.kind == WASM_ANYREF);
@@ -147,6 +150,11 @@ int main() {
   // `externref`.
   assert(results[0].kind == WASM_ANYREF);
   assert(wasm_ref_same(results[0].of.ref, externref.of.ref));
+
+  // We can GC any now-unused references to our externref that the store is
+  // holding.
+  printf("GCing within the store...\n");
+  wasmtime_store_gc(store);
 
   // Clean up after ourselves at this point
   printf("All finished!\n");
