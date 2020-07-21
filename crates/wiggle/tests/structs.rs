@@ -52,6 +52,10 @@ impl<'a> structs::Structs for WasiCtx<'a> {
             second: *second,
         })
     }
+
+    fn sum_array<'b>(&self, an_arr: &types::StructOfArray<'b>) -> Result<u16, types::Errno> {
+        Ok(0)
+    }
 }
 
 #[derive(Debug)]
