@@ -250,6 +250,7 @@ pub enum Inst {
     CvtFloatToSintSeq {
         dst_size: OperandSize,
         src_size: OperandSize,
+        is_saturating: bool,
         /// A copy of the source register, fed by lowering. It is marked as modified during
         /// register allocation to make sure that the temporary xmm register differs from the src
         /// register, since both registers are live at the same time in the generated code
@@ -265,6 +266,7 @@ pub enum Inst {
     CvtFloatToUintSeq {
         src_size: OperandSize,
         dst_size: OperandSize,
+        is_saturating: bool,
         /// A copy of the source register, fed by lowering, reused as a temporary. It is marked as
         /// modified during register allocation to make sure that the temporary xmm register
         /// differs from the src register, since both registers are live at the same time in the
@@ -578,10 +580,11 @@ impl Inst {
     pub(crate) fn cvt_float_to_sint_seq(
         src_size: OperandSize,
         dst_size: OperandSize,
+        is_saturating: bool,
         src: Writable<Reg>,
         dst: Writable<Reg>,
-        tmp_xmm: Writable<Reg>,
         tmp_gpr: Writable<Reg>,
+        tmp_xmm: Writable<Reg>,
         srcloc: SourceLoc,
     ) -> Inst {
         debug_assert!(src.to_reg().get_class() == RegClass::V128);
@@ -589,10 +592,11 @@ impl Inst {
         debug_assert!(tmp_gpr.to_reg().get_class() == RegClass::I64);
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
         Inst::CvtFloatToSintSeq {
-            src,
-            dst,
             src_size,
             dst_size,
+            is_saturating,
+            src,
+            dst,
             tmp_gpr,
             tmp_xmm,
             srcloc,
@@ -602,6 +606,7 @@ impl Inst {
     pub(crate) fn cvt_float_to_uint_seq(
         src_size: OperandSize,
         dst_size: OperandSize,
+        is_saturating: bool,
         src: Writable<Reg>,
         dst: Writable<Reg>,
         tmp_gpr: Writable<Reg>,
@@ -610,12 +615,14 @@ impl Inst {
     ) -> Inst {
         debug_assert!(src.to_reg().get_class() == RegClass::V128);
         debug_assert!(tmp_xmm.to_reg().get_class() == RegClass::V128);
+        debug_assert!(tmp_gpr.to_reg().get_class() == RegClass::I64);
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
         Inst::CvtFloatToUintSeq {
-            src,
-            dst,
             src_size,
             dst_size,
+            is_saturating,
+            src,
+            dst,
             tmp_gpr,
             tmp_xmm,
             srcloc,
@@ -1363,13 +1370,8 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             tmp_xmm,
             tmp_gpr,
             ..
-        } => {
-            collector.add_mod(*src);
-            collector.add_def(*dst);
-            collector.add_def(*tmp_xmm);
-            collector.add_def(*tmp_gpr);
         }
-        Inst::CvtFloatToUintSeq {
+        | Inst::CvtFloatToUintSeq {
             src,
             dst,
             tmp_gpr,
@@ -1633,13 +1635,8 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut tmp_xmm,
             ref mut tmp_gpr,
             ..
-        } => {
-            map_mod(mapper, src);
-            map_def(mapper, dst);
-            map_def(mapper, tmp_xmm);
-            map_def(mapper, tmp_gpr);
         }
-        Inst::CvtFloatToUintSeq {
+        | Inst::CvtFloatToUintSeq {
             ref mut src,
             ref mut dst,
             ref mut tmp_gpr,
