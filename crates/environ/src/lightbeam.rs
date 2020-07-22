@@ -1,7 +1,6 @@
 //! Support for compiling with Lightbeam.
 
-use crate::cache::ModuleCacheDataTupleType;
-use crate::compilation::{Compilation, CompileError};
+use crate::compilation::{Compilation, CompileError, CompileResult, Compiler};
 use crate::func_environ::FuncEnvironment;
 use crate::CacheConfig;
 use crate::ModuleTranslation;
@@ -15,14 +14,14 @@ use lightbeam::{CodeGenSession, NullOffsetSink, Sinks};
 /// A compiler that compiles a WebAssembly module with Lightbeam, directly translating the Wasm file.
 pub struct Lightbeam;
 
-impl crate::compilation::Compiler for Lightbeam {
+impl Compiler for Lightbeam {
     /// Compile the module using Lightbeam, producing a compilation result with
     /// associated relocations.
     fn compile_module(
         translation: &ModuleTranslation,
         isa: &dyn isa::TargetIsa,
         _cache_config: &CacheConfig,
-    ) -> Result<ModuleCacheDataTupleType, CompileError> {
+    ) -> Result<CompileResult, CompileError> {
         if translation.tunables.debug_info {
             return Err(CompileError::DebugInfoNotSupported);
         }

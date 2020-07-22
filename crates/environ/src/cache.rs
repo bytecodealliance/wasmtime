@@ -1,8 +1,3 @@
-use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
-use crate::compilation::{Compilation, Relocations, StackMaps, Traps};
-use cranelift_codegen::ir;
-use cranelift_entity::PrimaryMap;
-use cranelift_wasm::DefinedFuncIndex;
 use log::{debug, trace, warn};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -26,29 +21,6 @@ struct ModuleCacheEntryInner<'config> {
     cache_config: &'config CacheConfig,
 }
 
-/// Cached compilation data of a Wasm module.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-pub struct ModuleCacheData {
-    compilation: Compilation,
-    relocations: Relocations,
-    address_transforms: ModuleAddressMap,
-    value_ranges: ValueLabelsRanges,
-    stack_slots: PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
-    traps: Traps,
-    stack_maps: StackMaps,
-}
-
-/// A type alias over the module cache data as a tuple.
-pub type ModuleCacheDataTupleType = (
-    Compilation,
-    Relocations,
-    ModuleAddressMap,
-    ValueLabelsRanges,
-    PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
-    Traps,
-    StackMaps,
-);
-
 struct Sha256Hasher(Sha256);
 
 impl<'config> ModuleCacheEntry<'config> {
@@ -68,11 +40,11 @@ impl<'config> ModuleCacheEntry<'config> {
         Self(Some(inner))
     }
 
-    pub fn get_data<T: Hash, E>(
-        &self,
-        state: T,
-        compute: fn(T) -> Result<ModuleCacheDataTupleType, E>,
-    ) -> Result<ModuleCacheData, E> {
+    pub fn get_data<T, U, E>(&self, state: T, compute: fn(T) -> Result<U, E>) -> Result<U, E>
+    where
+        T: Hash,
+        U: Serialize + for<'a> Deserialize<'a>,
+    {
         let mut hasher = Sha256Hasher(Sha256::new());
         state.hash(&mut hasher);
         let hash: [u8; 32] = hasher.0.result().into();
@@ -81,7 +53,7 @@ impl<'config> ModuleCacheEntry<'config> {
 
         let inner = match &self.0 {
             Some(inner) => inner,
-            None => return compute(state).map(ModuleCacheData::from_tuple),
+            None => return compute(state),
         };
 
         if let Some(cached_val) = inner.get_data(&hash) {
@@ -89,7 +61,7 @@ impl<'config> ModuleCacheEntry<'config> {
             inner.cache_config.on_cache_get_async(&mod_cache_path); // call on success
             return Ok(cached_val);
         }
-        let val_to_cache = ModuleCacheData::from_tuple(compute(state)?);
+        let val_to_cache = compute(state)?;
         if inner.update_data(&hash, &val_to_cache).is_some() {
             let mod_cache_path = inner.root_path.join(&hash);
             inner.cache_config.on_cache_update_async(&mod_cache_path); // call on success
@@ -141,7 +113,10 @@ impl<'config> ModuleCacheEntryInner<'config> {
         }
     }
 
-    fn get_data(&self, hash: &str) -> Option<ModuleCacheData> {
+    fn get_data<T>(&self, hash: &str) -> Option<T>
+    where
+        T: for<'a> Deserialize<'a>,
+    {
         let mod_cache_path = self.root_path.join(hash);
         trace!("get_data() for path: {}", mod_cache_path.display());
         let compressed_cache_bytes = fs::read(&mod_cache_path).ok()?;
@@ -153,7 +128,7 @@ impl<'config> ModuleCacheEntryInner<'config> {
             .ok()
     }
 
-    fn update_data(&self, hash: &str, data: &ModuleCacheData) -> Option<()> {
+    fn update_data<T: Serialize>(&self, hash: &str, data: &T) -> Option<()> {
         let mod_cache_path = self.root_path.join(hash);
         trace!("update_data() for path: {}", mod_cache_path.display());
         let serialized_data = bincode::serialize(&data)
@@ -194,32 +169,6 @@ impl<'config> ModuleCacheEntryInner<'config> {
         } else {
             None
         }
-    }
-}
-
-impl ModuleCacheData {
-    pub fn from_tuple(data: ModuleCacheDataTupleType) -> Self {
-        Self {
-            compilation: data.0,
-            relocations: data.1,
-            address_transforms: data.2,
-            value_ranges: data.3,
-            stack_slots: data.4,
-            traps: data.5,
-            stack_maps: data.6,
-        }
-    }
-
-    pub fn into_tuple(self) -> ModuleCacheDataTupleType {
-        (
-            self.compilation,
-            self.relocations,
-            self.address_transforms,
-            self.value_ranges,
-            self.stack_slots,
-            self.traps,
-            self.stack_maps,
-        )
     }
 }
 
