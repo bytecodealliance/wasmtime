@@ -51,9 +51,19 @@ raised about `#![no_std]`:
   for the Rust standard library the JIT compiler of Wasmtime often won't run on
   the platform as well. The JIT compiler requires `mmap` (or an equivalent), and
   presence of `mmap` often implies presence of a libc which means Rust's `std`
-  library works. We're interested in running Wasmtime without a JIT compiler in
-  the future, but that is not implemented at this time. Implementing this will
-  require a lot more work than tagging crates `#![no_std]` as well! The Wasmtime
+  library works.
+
+  Cargo's [`-Z build-std` feature][zbuild-std] feature is also intended to help
+  easily build the standard library for all platforms. With this feature you can
+  recompile the standard library (using Nightly Rust for now) with a [custom
+  target specification][custom-target] if necessary. Additionally the intention
+  at this time is to get `std` building for all platforms, regardless of what
+  the platform actually supports. This change is taking time to implement, but
+  [rust-lang/rust#74033] is an example of this support growing over time.
+
+  We're also interested in running Wasmtime without a JIT compiler in the
+  future, but that is not implemented at this time. Implementing this will
+  require a lot more work than tagging crates `#![no_std]`. The Wasmtime
   developers are also very interested in supporting as many targets as possible,
   so if Wasmtime doesn't work on your platform yet we'd love to learn why and
   what we can do to support that platform, but the conversation here is
@@ -77,7 +87,9 @@ raised about `#![no_std]`:
   * Rust has no stable way to diagnose `no_std` errors in an otherwise `std`
     build, which means that to supoprt this feature it must be tested on CI with
     a `no_std` target. This is costly in terms of CI time, CI maintenance, and
-    developers having to do extra builds to avoid CI errors.
+    developers having to do extra builds to avoid CI errors. Note that this
+    isn't *more* costly than any other platform supported by Wasmtime, but it's
+    a cost nonetheless.
 
   * Idioms in `#![no_std]` are quite different than normal Rust code. You'll
     import from different crates (`core` instead of `std`) and data structures
@@ -94,6 +106,11 @@ raised about `#![no_std]`:
     the costs associated so we can plan accordingly. Effectively we need to have
     a goal in mind instead of taking on the costs of `#![no_std]` blindly.
 
+  * At this time it's not clear whether `#![no_std]` will be needed long-term,
+    so eating short-term costs may not pay off in the long run. Features like
+    Cargo's [`-Z build-std`][zbuild-std] may mean that `#![no_std]` is less and
+    less necessary over time.
+
 * **How can Wasmtime support `#![no_std]` if it uses X?** - Wasmtime as-is today
   is not suitable for many `#![no_std]` contexts. For example it might use
   `mmap` for allocating JIT code memory, leverage threads for caching, or use
@@ -107,3 +124,16 @@ raised about `#![no_std]`:
   today look like it won't support `#![no_std]`, but this is almost always
   simply a matter of time and development priorities rather than a fundamental
   reason why Wasmtime *couldn't* support `#![no_std]`.
+
+Note that at this time these guidelines apply not only to Wasmtime but also to
+some of its dependencies developed by the Bytecode Alliance such as the
+[wasm-tools repository](https://github.com/bytecodealliance/wasm-tools). These
+projects don't have the same runtime requirements as Wasmtime (e.g. `wasmparser`
+doesn't need `mmap`), but we're following the same guidelines above at this
+time. Patches to add `#![no_std]`, while possibly small, incur many of the same
+costs and also have an unclear longevity as features like [`-Z
+build-std`][zbuild-std] evolve.
+
+[zbuild-std]: https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#build-std
+[custom-target]: https://doc.rust-lang.org/rustc/targets/custom.html
+[rust-lang/rust#74033]: https://github.com/rust-lang/rust/pull/74033
