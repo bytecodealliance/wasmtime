@@ -1272,6 +1272,38 @@ impl MachInstEmit for Inst {
                         | machreg_to_gpr(rd.to_reg()),
                 );
             }
+            &Inst::MovFromVecSigned {
+                rd,
+                rn,
+                idx,
+                size,
+                scalar_size,
+            } => {
+                let (imm5, shift, half) = match size {
+                    VectorSize::Size8x8 => (0b00001, 1, true),
+                    VectorSize::Size8x16 => (0b00001, 1, false),
+                    VectorSize::Size16x4 => (0b00010, 2, true),
+                    VectorSize::Size16x8 => (0b00010, 2, false),
+                    VectorSize::Size32x2 => {
+                        debug_assert_ne!(scalar_size, OperandSize::Size32);
+                        (0b00100, 3, true)
+                    }
+                    VectorSize::Size32x4 => {
+                        debug_assert_ne!(scalar_size, OperandSize::Size32);
+                        (0b00100, 3, false)
+                    }
+                    _ => panic!("Unexpected vector operand size"),
+                };
+                debug_assert_eq!(idx & (0b11111 >> (half as u32 + shift)), idx);
+                let imm5 = imm5 | ((idx as u32) << shift);
+                sink.put4(
+                    0b000_01110000_00000_0_0101_1_00000_00000
+                        | (scalar_size.is64() as u32) << 30
+                        | (imm5 << 16)
+                        | (machreg_to_vec(rn) << 5)
+                        | machreg_to_gpr(rd.to_reg()),
+                );
+            }
             &Inst::VecDup { rd, rn, size } => {
                 let imm5 = match size {
                     VectorSize::Size8x16 => 0b00001,

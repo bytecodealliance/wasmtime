@@ -745,12 +745,21 @@ pub enum Inst {
         rn: Reg,
     },
 
-    /// Move to a GPR from a vector element.
+    /// Unsigned move from a vector element to a GPR.
     MovFromVec {
         rd: Writable<Reg>,
         rn: Reg,
         idx: u8,
         size: VectorSize,
+    },
+
+    /// Signed move from a vector element to a GPR.
+    MovFromVecSigned {
+        rd: Writable<Reg>,
+        rn: Reg,
+        idx: u8,
+        size: VectorSize,
+        scalar_size: OperandSize,
     },
 
     /// Duplicate general-purpose register to vector.
@@ -1319,7 +1328,7 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             collector.add_use(rn);
         }
-        &Inst::MovFromVec { rd, rn, .. } => {
+        &Inst::MovFromVec { rd, rn, .. } | &Inst::MovFromVecSigned { rd, rn, .. } => {
             collector.add_def(rd);
             collector.add_use(rn);
         }
@@ -1893,6 +1902,11 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, rn);
         }
         &mut Inst::MovFromVec {
+            ref mut rd,
+            ref mut rn,
+            ..
+        }
+        | &mut Inst::MovFromVecSigned {
             ref mut rd,
             ref mut rn,
             ..
@@ -2725,6 +2739,17 @@ impl Inst {
                 let rd = show_ireg_sized(rd.to_reg(), mb_rru, size.operand_size());
                 let rn = show_vreg_element(rn, mb_rru, idx, size);
                 format!("{} {}, {}", op, rd, rn)
+            }
+            &Inst::MovFromVecSigned {
+                rd,
+                rn,
+                idx,
+                size,
+                scalar_size,
+            } => {
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, scalar_size);
+                let rn = show_vreg_element(rn, mb_rru, idx, size);
+                format!("smov {}, {}", rd, rn)
             }
             &Inst::VecDup { rd, rn, size } => {
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
