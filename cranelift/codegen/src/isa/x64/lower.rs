@@ -1016,7 +1016,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             };
         }
 
-        Opcode::FcvtToUint | Opcode::FcvtToSint => {
+        Opcode::FcvtToUint | Opcode::FcvtToUintSat | Opcode::FcvtToSint | Opcode::FcvtToSintSat => {
             let src = input_to_reg(ctx, inputs[0]);
             let dst = output_to_reg(ctx, outputs[0]);
 
@@ -1036,23 +1036,23 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 OperandSize::Size64
             };
 
-            let to_signed = op == Opcode::FcvtToSint;
+            let to_signed = op == Opcode::FcvtToSint || op == Opcode::FcvtToSintSat;
+            let is_sat = op == Opcode::FcvtToUintSat || op == Opcode::FcvtToSintSat;
 
             let src_copy = ctx.alloc_tmp(RegClass::V128, input_ty);
             ctx.emit(Inst::gen_move(src_copy, src, input_ty));
 
+            let tmp_xmm = ctx.alloc_tmp(RegClass::V128, input_ty);
+            let tmp_gpr = ctx.alloc_tmp(RegClass::I64, output_ty);
+
             let srcloc = ctx.srcloc(insn);
             if to_signed {
-                let tmp_xmm = ctx.alloc_tmp(RegClass::V128, input_ty);
-                let tmp_gpr = ctx.alloc_tmp(RegClass::I64, output_ty);
                 ctx.emit(Inst::cvt_float_to_sint_seq(
-                    src_size, dst_size, src_copy, dst, tmp_xmm, tmp_gpr, srcloc,
+                    src_size, dst_size, is_sat, src_copy, dst, tmp_gpr, tmp_xmm, srcloc,
                 ));
             } else {
-                let tmp_xmm = ctx.alloc_tmp(RegClass::V128, input_ty);
-                let tmp_gpr = ctx.alloc_tmp(RegClass::I64, output_ty);
                 ctx.emit(Inst::cvt_float_to_uint_seq(
-                    src_size, dst_size, src_copy, dst, tmp_gpr, tmp_xmm, srcloc,
+                    src_size, dst_size, is_sat, src_copy, dst, tmp_gpr, tmp_xmm, srcloc,
                 ));
             }
         }

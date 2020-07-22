@@ -1672,7 +1672,7 @@ pub(crate) fn emit(
             //  mov %src, %tmp_gpr2
             //  and $1, %tmp_gpr2
             //  or %tmp_gpr1, %tmp_gpr2
-            //  ctsi2sd/cvtsi2ss %tmp_gpr2, %dst
+            //  cvtsi2sd/cvtsi2ss %tmp_gpr2, %dst
             //  addsd/addss %dst, %dst
             //
             //  done:
@@ -1769,25 +1769,45 @@ pub(crate) fn emit(
         Inst::CvtFloatToSintSeq {
             src_size,
             dst_size,
+            is_saturating,
             src,
             dst,
             tmp_gpr,
             tmp_xmm,
             srcloc,
         } => {
-            // Emits the following sequence:
+            // Emits the following common sequence:
             //
             // cvttss2si/cvttsd2si %src, %dst
-            // cmp $INT_MIN, %dst ;; 2 instructions (movaps + reg cmp) for 64-bits ints
-            // jnz done
+            // cmp %dst, 1
+            // jno done
+            //
+            // Then, for saturating conversions:
             //
             // ;; check for NaN
             // cmpss/cmpsd %src, %src
-            // jnp check_if_correct
+            // jnp not_nan
+            // xor %dst, %dst
+            //
+            // ;; positive inputs get saturated to INT_MAX; negative ones to INT_MIN, which is
+            // ;; already in %dst.
+            // mov 0, %tmp_gpr
+            // movd/movq %tmp_gpr, %tmp_xmm
+            // cmpss/cmpsd %src, %tmp_xmm
+            // jnb done
+            // mov/movaps $INT_MAX, %dst
+            //
+            // done:
+            //
+            // Then, for non-saturating conversions:
+            //
+            // ;; check for NaN
+            // cmpss/cmpsd %src, %src
+            // jnp not_nan
             // ud2 trap BadConversionToInteger
             //
             // ;; check if INT_MIN was the correct result, against a magic constant:
-            // check_if_correct:
+            // not_nan:
             // movaps/mov $magic, %tmp_gpr
             // movq/movd %tmp_gpr, %tmp_xmm
             // cmpss/cmpsd %tmp_xmm, %src
@@ -1812,98 +1832,131 @@ pub(crate) fn emit(
             };
 
             let done = sink.get_label();
+            let not_nan = sink.get_label();
 
+            // The truncation.
             let inst = Inst::xmm_to_gpr(trunc_op, src, *dst, *dst_size);
             inst.emit(sink, flags, state);
 
-            // Generate constant INT_MIN, and compare against it.
-            if *dst_size == OperandSize::Size64 {
-                let inst = Inst::imm_r(true, 0x8000000000000000, *tmp_gpr);
-                inst.emit(sink, flags, state);
+            // Compare against 1, in case of overflow the dst operand was INT_MIN.
+            let inst = Inst::cmp_rmi_r(dst_size.to_bytes(), RegMemImm::imm(1), dst.to_reg());
+            inst.emit(sink, flags, state);
 
-                let inst = Inst::cmp_rmi_r(8, RegMemImm::reg(tmp_gpr.to_reg()), dst.to_reg());
-                inst.emit(sink, flags, state);
-            } else {
-                // Emit a simple comparison.
-                let inst = Inst::cmp_rmi_r(4, RegMemImm::imm(0x80000000), dst.to_reg());
-                inst.emit(sink, flags, state);
-            }
-
-            one_way_jmp(sink, CC::NZ, done); // == (int)
+            one_way_jmp(sink, CC::NO, done); // no overflow => done
 
             // Check for NaN.
 
             let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), src);
             inst.emit(sink, flags, state);
 
-            let check_if_correct = sink.get_label();
-            one_way_jmp(sink, CC::NP, check_if_correct); // jump over trap if not a NaN
+            one_way_jmp(sink, CC::NP, not_nan); // go to not_nan if not a NaN
 
-            let inst = Inst::trap(*srcloc, TrapCode::BadConversionToInteger);
-            inst.emit(sink, flags, state);
+            if *is_saturating {
+                // For NaN, emit 0.
+                let inst = Inst::alu_rmi_r(
+                    *dst_size == OperandSize::Size64,
+                    AluRmiROpcode::Xor,
+                    RegMemImm::reg(dst.to_reg()),
+                    *dst,
+                );
+                inst.emit(sink, flags, state);
 
-            // Check if INT_MIN was the correct result: determine the smallest floating point
-            // number that would convert to INT_MIN, put it in a temporary register, and compare
-            // against the src register.
-            // If the src register is less (or in some cases, less-or-equal) than the threshold,
-            // trap!
+                let inst = Inst::jmp_known(BranchTarget::Label(done));
+                inst.emit(sink, flags, state);
 
-            sink.bind_label(check_if_correct);
+                sink.bind_label(not_nan);
 
-            let mut no_overflow_cc = CC::NB; // >=
-            let output_bits = dst_size.to_bits();
-            match *src_size {
-                OperandSize::Size32 => {
-                    let cst = Ieee32::pow2(output_bits - 1).neg().bits();
-                    let inst = Inst::imm32_r_unchecked(cst as u64, *tmp_gpr);
+                // If the input was positive, saturate to INT_MAX.
+                // TODO use xorps/xorpd here
+                let inst = Inst::imm_r(false, 0, *tmp_gpr); // rely on sign-extension to get 0 on 64-bits
+                inst.emit(sink, flags, state);
+                let inst =
+                    Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, *tmp_xmm);
+                inst.emit(sink, flags, state);
+
+                let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), tmp_xmm.to_reg());
+                inst.emit(sink, flags, state);
+
+                // Jump if >= to done.
+                one_way_jmp(sink, CC::NB, done);
+
+                // Otherwise, put INT_MAX.
+                if *dst_size == OperandSize::Size64 {
+                    let inst = Inst::imm_r(true, 0x7fffffffffffffff, *dst);
+                    inst.emit(sink, flags, state);
+                } else {
+                    let inst = Inst::imm_r(false, 0x7fffffff, *dst);
                     inst.emit(sink, flags, state);
                 }
-                OperandSize::Size64 => {
-                    // An f64 can represent `i32::min_value() - 1` exactly with precision to spare, so
-                    // there are values less than -2^(N-1) that convert correctly to INT_MIN.
-                    let cst = if output_bits < 64 {
-                        no_overflow_cc = CC::NBE; // >
-                        Ieee64::fcvt_to_sint_negative_overflow(output_bits)
-                    } else {
-                        Ieee64::pow2(output_bits - 1).neg()
-                    };
-                    let inst = Inst::imm_r(true, cst.bits(), *tmp_gpr);
-                    inst.emit(sink, flags, state);
+            } else {
+                let check_positive = sink.get_label();
+
+                let inst = Inst::trap(*srcloc, TrapCode::BadConversionToInteger);
+                inst.emit(sink, flags, state);
+
+                // Check if INT_MIN was the correct result: determine the smallest floating point
+                // number that would convert to INT_MIN, put it in a temporary register, and compare
+                // against the src register.
+                // If the src register is less (or in some cases, less-or-equal) than the threshold,
+                // trap!
+
+                sink.bind_label(not_nan);
+
+                let mut no_overflow_cc = CC::NB; // >=
+                let output_bits = dst_size.to_bits();
+                match *src_size {
+                    OperandSize::Size32 => {
+                        let cst = Ieee32::pow2(output_bits - 1).neg().bits();
+                        let inst = Inst::imm32_r_unchecked(cst as u64, *tmp_gpr);
+                        inst.emit(sink, flags, state);
+                    }
+                    OperandSize::Size64 => {
+                        // An f64 can represent `i32::min_value() - 1` exactly with precision to spare,
+                        // so there are values less than -2^(N-1) that convert correctly to INT_MIN.
+                        let cst = if output_bits < 64 {
+                            no_overflow_cc = CC::NBE; // >
+                            Ieee64::fcvt_to_sint_negative_overflow(output_bits)
+                        } else {
+                            Ieee64::pow2(output_bits - 1).neg()
+                        };
+                        let inst = Inst::imm_r(true, cst.bits(), *tmp_gpr);
+                        inst.emit(sink, flags, state);
+                    }
                 }
+
+                let inst =
+                    Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, *tmp_xmm);
+                inst.emit(sink, flags, state);
+
+                let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(tmp_xmm.to_reg()), src);
+                inst.emit(sink, flags, state);
+
+                // jump over trap if src >= or > threshold
+                one_way_jmp(sink, no_overflow_cc, check_positive);
+
+                let inst = Inst::trap(*srcloc, TrapCode::IntegerOverflow);
+                inst.emit(sink, flags, state);
+
+                // If positive, it was a real overflow.
+
+                sink.bind_label(check_positive);
+
+                // TODO use xorpd
+                let inst = Inst::imm_r(false, 0, *tmp_gpr);
+                inst.emit(sink, flags, state);
+
+                let inst =
+                    Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, *tmp_xmm);
+                inst.emit(sink, flags, state);
+
+                let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), tmp_xmm.to_reg());
+                inst.emit(sink, flags, state);
+
+                one_way_jmp(sink, CC::NB, done); // jump over trap if 0 >= src
+
+                let inst = Inst::trap(*srcloc, TrapCode::IntegerOverflow);
+                inst.emit(sink, flags, state);
             }
-
-            let inst =
-                Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, *tmp_xmm);
-            inst.emit(sink, flags, state);
-
-            let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(tmp_xmm.to_reg()), src);
-            inst.emit(sink, flags, state);
-
-            let check_positive = sink.get_label();
-            one_way_jmp(sink, no_overflow_cc, check_positive); // jump over trap if src >= or > threshold
-
-            let inst = Inst::trap(*srcloc, TrapCode::IntegerOverflow);
-            inst.emit(sink, flags, state);
-
-            // If positive, it was a real overflow.
-
-            sink.bind_label(check_positive);
-
-            // TODO use xorpd
-            let inst = Inst::imm_r(false, 0, *tmp_gpr);
-            inst.emit(sink, flags, state);
-
-            let inst =
-                Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, *tmp_xmm);
-            inst.emit(sink, flags, state);
-
-            let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), tmp_xmm.to_reg());
-            inst.emit(sink, flags, state);
-
-            one_way_jmp(sink, CC::NB, done); // jump over trap if 0 >= src
-
-            let inst = Inst::trap(*srcloc, TrapCode::IntegerOverflow);
-            inst.emit(sink, flags, state);
 
             sink.bind_label(done);
         }
@@ -1911,13 +1964,15 @@ pub(crate) fn emit(
         Inst::CvtFloatToUintSeq {
             src_size,
             dst_size,
+            is_saturating,
             src,
             dst,
             tmp_gpr,
             tmp_xmm,
             srcloc,
         } => {
-            // Emits the following sequence:
+            // The only difference in behavior between saturating and non-saturating is how we
+            // handle errors. Emits the following sequence:
             //
             // movaps/mov 2**(int_width - 1), %tmp_gpr
             // movq/movd %tmp_gpr, %tmp_xmm
@@ -1925,21 +1980,24 @@ pub(crate) fn emit(
             // jnb is_large
             //
             // ;; check for NaN inputs
-            // jnp next
-            // ud2 trap BadConversionToInteger
+            // jnp not_nan
+            // -- non-saturating: ud2 trap BadConversionToInteger
+            // -- saturating: xor %dst, %dst; j done
             //
-            // next:
+            // not_nan:
             // cvttss2si/cvttsd2si %src, %dst
             // cmp 0, %dst
             // jnl done
-            // ud2 trap IntegerOverflow
+            // -- non-saturating: ud2 trap IntegerOverflow
+            // -- saturating: xor %dst, %dst; j done
             //
             // is_large:
             // subss/subsd %tmp_xmm, %src ; <-- we clobber %src here
             // cvttss2si/cvttss2sd %tmp_x, %dst
             // cmp 0, %dst
             // jnl next_is_large
-            // ud2 trap IntegerOverflow
+            // -- non-saturating: ud2 trap IntegerOverflow
+            // -- saturating: movaps $UINT_MAX, %dst; j done
             //
             // next_is_large:
             // add 2**(int_width -1), %dst ;; 2 instructions for 64-bits integers
@@ -1986,13 +2044,28 @@ pub(crate) fn emit(
             let handle_large = sink.get_label();
             one_way_jmp(sink, CC::NB, handle_large); // jump to handle_large if src >= large_threshold
 
-            let next = sink.get_label();
-            one_way_jmp(sink, CC::NP, next); // jump over trap if not NaN
+            let not_nan = sink.get_label();
+            one_way_jmp(sink, CC::NP, not_nan); // jump over trap if not NaN
 
-            let inst = Inst::trap(*srcloc, TrapCode::BadConversionToInteger);
-            inst.emit(sink, flags, state);
+            if *is_saturating {
+                // Emit 0.
+                let inst = Inst::alu_rmi_r(
+                    *dst_size == OperandSize::Size64,
+                    AluRmiROpcode::Xor,
+                    RegMemImm::reg(dst.to_reg()),
+                    *dst,
+                );
+                inst.emit(sink, flags, state);
 
-            sink.bind_label(next);
+                let inst = Inst::jmp_known(BranchTarget::Label(done));
+                inst.emit(sink, flags, state);
+            } else {
+                // Trap.
+                let inst = Inst::trap(*srcloc, TrapCode::BadConversionToInteger);
+                inst.emit(sink, flags, state);
+            }
+
+            sink.bind_label(not_nan);
 
             // Actual truncation for small inputs: if the result is not positive, then we had an
             // overflow.
@@ -2005,8 +2078,24 @@ pub(crate) fn emit(
 
             one_way_jmp(sink, CC::NL, done); // if dst >= 0, jump to done
 
-            let inst = Inst::trap(*srcloc, TrapCode::IntegerOverflow);
-            inst.emit(sink, flags, state);
+            if *is_saturating {
+                // The input was "small" (< 2**(width -1)), so the only way to get an integer
+                // overflow is because the input was too small: saturate to the min value, i.e. 0.
+                let inst = Inst::alu_rmi_r(
+                    *dst_size == OperandSize::Size64,
+                    AluRmiROpcode::Xor,
+                    RegMemImm::reg(dst.to_reg()),
+                    *dst,
+                );
+                inst.emit(sink, flags, state);
+
+                let inst = Inst::jmp_known(BranchTarget::Label(done));
+                inst.emit(sink, flags, state);
+            } else {
+                // Trap.
+                let inst = Inst::trap(*srcloc, TrapCode::IntegerOverflow);
+                inst.emit(sink, flags, state);
+            }
 
             // Now handle large inputs.
 
@@ -2024,8 +2113,26 @@ pub(crate) fn emit(
             let next_is_large = sink.get_label();
             one_way_jmp(sink, CC::NL, next_is_large); // if dst >= 0, jump to next_is_large
 
-            let inst = Inst::trap(*srcloc, TrapCode::IntegerOverflow);
-            inst.emit(sink, flags, state);
+            if *is_saturating {
+                // The input was "large" (>= 2**(width -1)), so the only way to get an integer
+                // overflow is because the input was too large: saturate to the max value.
+                let inst = Inst::imm_r(
+                    true,
+                    if *dst_size == OperandSize::Size64 {
+                        u64::max_value()
+                    } else {
+                        u32::max_value() as u64
+                    },
+                    *dst,
+                );
+                inst.emit(sink, flags, state);
+
+                let inst = Inst::jmp_known(BranchTarget::Label(done));
+                inst.emit(sink, flags, state);
+            } else {
+                let inst = Inst::trap(*srcloc, TrapCode::IntegerOverflow);
+                inst.emit(sink, flags, state);
+            }
 
             sink.bind_label(next_is_large);
 
