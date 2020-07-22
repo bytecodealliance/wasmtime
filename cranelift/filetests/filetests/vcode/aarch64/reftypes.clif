@@ -92,7 +92,7 @@ block3(v7: r64, v8: r64):
 ; nextln: ldur x19, [sp, #32]
 ; nextln: ldur x20, [sp, #40]
 ; nextln: add x1, sp, #16
-; nextln: stur x19, [x1]
+; nextln: str x19, [x1]
 ; nextln: and w0, w0, #1
 ; nextln: cbz x0, label1 ; b label3
 ; check: Block 1:
@@ -108,7 +108,7 @@ block3(v7: r64, v8: r64):
 ; nextln: b label5
 ; check: Block 5:
 ; check: add x1, sp, #16
-; nextln: ldur x1, [x1]
+; nextln: ldr x1, [x1]
 ; nextln: mov x2, x1
 ; nextln: mov x1, x19
 ; nextln: ldp x19, x20, [sp], #16

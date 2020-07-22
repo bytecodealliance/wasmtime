@@ -2,9 +2,8 @@
 //!
 //! TODO: opportunities for better code generation:
 //!
-//! - Smarter use of addressing modes. Recognize a+SCALE*b patterns; recognize
-//!   and incorporate sign/zero extension on indices. Recognize pre/post-index
-//!   opportunities.
+//! - Smarter use of addressing modes. Recognize a+SCALE*b patterns. Recognize
+//!   pre/post-index opportunities.
 //!
 //! - Floating-point immediates (FIMM instruction).
 
@@ -21,8 +20,9 @@ use crate::isa::aarch64::AArch64Backend;
 
 use super::lower_inst;
 
-use log::debug;
+use log::{debug, trace};
 use regalloc::{Reg, RegClass, Writable};
+use smallvec::SmallVec;
 
 //============================================================================
 // Result enum types.
@@ -544,105 +544,251 @@ pub(crate) fn alu_inst_immshift(
 // Lowering: addressing mode support. Takes instruction directly, rather
 // than an `InsnInput`, to do more introspection.
 
+/// 32-bit addends that make up an address: an input, and an extension mode on that
+/// input.
+type AddressAddend32List = SmallVec<[(Reg, ExtendOp); 4]>;
+/// 64-bit addends that make up an address: just an input.
+type AddressAddend64List = SmallVec<[Reg; 4]>;
+
+/// Collect all addends that feed into an address computation, with extend-modes
+/// on each.  Note that a load/store may have multiple address components (and
+/// the CLIF semantics are that these components are added to form the final
+/// address), but sometimes the CLIF that we receive still has arguments that
+/// refer to `iadd` instructions. We also want to handle uextend/sextend below
+/// the add(s).
+///
+/// We match any 64-bit add (and descend into its inputs), and we match any
+/// 32-to-64-bit sign or zero extension. The returned addend-list will use
+/// NarrowValueMode values to indicate how to extend each input:
+///
+/// - NarrowValueMode::None: the associated input is 64 bits wide; no extend.
+/// - NarrowValueMode::SignExtend64: the associated input is 32 bits wide;
+///                                  do a sign-extension.
+/// - NarrowValueMode::ZeroExtend64: the associated input is 32 bits wide;
+///                                  do a zero-extension.
+///
+/// We do not descend further into the inputs of extensions, because supporting
+/// (e.g.) a 32-bit add that is later extended would require additional masking
+/// of high-order bits, which is too complex. So, in essence, we descend any
+/// number of adds from the roots, collecting all 64-bit address addends; then
+/// possibly support extensions at these leaves.
+fn collect_address_addends<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    roots: &[InsnInput],
+) -> (AddressAddend64List, AddressAddend32List, i64) {
+    let mut result32: AddressAddend32List = SmallVec::new();
+    let mut result64: AddressAddend64List = SmallVec::new();
+    let mut offset: i64 = 0;
+
+    let mut workqueue: SmallVec<[InsnInput; 4]> = roots.iter().cloned().collect();
+
+    while let Some(input) = workqueue.pop() {
+        debug_assert!(ty_bits(ctx.input_ty(input.insn, input.input)) == 64);
+        if let Some((op, insn)) = maybe_input_insn_multi(
+            ctx,
+            input,
+            &[
+                Opcode::Uextend,
+                Opcode::Sextend,
+                Opcode::Iadd,
+                Opcode::Iconst,
+            ],
+        ) {
+            match op {
+                Opcode::Uextend | Opcode::Sextend if ty_bits(ctx.input_ty(insn, 0)) == 32 => {
+                    let extendop = if op == Opcode::Uextend {
+                        ExtendOp::UXTW
+                    } else {
+                        ExtendOp::SXTW
+                    };
+                    let extendee_input = InsnInput { insn, input: 0 };
+                    let reg = put_input_in_reg(ctx, extendee_input, NarrowValueMode::None);
+                    result32.push((reg, extendop));
+                }
+                Opcode::Uextend | Opcode::Sextend => {
+                    let reg = put_input_in_reg(ctx, input, NarrowValueMode::None);
+                    result64.push(reg);
+                }
+                Opcode::Iadd => {
+                    for input in 0..ctx.num_inputs(insn) {
+                        let addend = InsnInput { insn, input };
+                        workqueue.push(addend);
+                    }
+                }
+                Opcode::Iconst => {
+                    let value: i64 = ctx.get_constant(insn).unwrap() as i64;
+                    offset += value;
+                }
+                _ => panic!("Unexpected opcode from maybe_input_insn_multi"),
+            }
+        } else {
+            let reg = put_input_in_reg(ctx, input, NarrowValueMode::ZeroExtend64);
+            result64.push(reg);
+        }
+    }
+
+    (result64, result32, offset)
+}
+
 /// Lower the address of a load or store.
 pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     elem_ty: Type,
-    addends: &[InsnInput],
+    roots: &[InsnInput],
     offset: i32,
 ) -> MemArg {
     // TODO: support base_reg + scale * index_reg. For this, we would need to pattern-match shl or
     // mul instructions (Load/StoreComplex don't include scale factors).
 
-    // Handle one reg and offset.
-    if addends.len() == 1 {
-        let reg = put_input_in_reg(ctx, addends[0], NarrowValueMode::ZeroExtend64);
-        return MemArg::RegOffset(reg, offset as i64, elem_ty);
-    }
+    // Collect addends through an arbitrary tree of 32-to-64-bit sign/zero
+    // extends and addition ops. We update these as we consume address
+    // components, so they represent the remaining addends not yet handled.
+    let (mut addends64, mut addends32, args_offset) = collect_address_addends(ctx, roots);
+    let mut offset = args_offset + (offset as i64);
 
-    // Handle two regs and a zero offset with built-in extend, if possible.
-    if addends.len() == 2 && offset == 0 {
-        // r1, r2 (to be extended), r2_bits, is_signed
-        let mut parts: Option<(Reg, Reg, usize, bool)> = None;
-        // Handle extension of either first or second addend.
-        for i in 0..2 {
-            if let Some((op, ext_insn)) =
-                maybe_input_insn_multi(ctx, addends[i], &[Opcode::Uextend, Opcode::Sextend])
-            {
-                // Non-extended addend.
-                let r1 = put_input_in_reg(ctx, addends[1 - i], NarrowValueMode::ZeroExtend64);
-                // Extended addend.
-                let r2 = put_input_in_reg(
-                    ctx,
-                    InsnInput {
-                        insn: ext_insn,
-                        input: 0,
-                    },
-                    NarrowValueMode::None,
-                );
-                let r2_bits = ty_bits(ctx.input_ty(ext_insn, 0));
-                parts = Some((
-                    r1,
-                    r2,
-                    r2_bits,
-                    /* is_signed = */ op == Opcode::Sextend,
-                ));
-                break;
-            }
+    trace!(
+        "lower_address: addends64 {:?}, addends32 {:?}, offset {}",
+        addends64,
+        addends32,
+        offset
+    );
+
+    // First, decide what the `MemArg` will be. Take one extendee and one 64-bit
+    // reg, or two 64-bit regs, or a 64-bit reg and a 32-bit reg with extension,
+    // or some other combination as appropriate.
+    let memarg = if addends64.len() > 0 {
+        if addends32.len() > 0 {
+            let (reg32, extendop) = addends32.pop().unwrap();
+            let reg64 = addends64.pop().unwrap();
+            MemArg::RegExtended(reg64, reg32, extendop)
+        } else if offset > 0 && offset < 0x1000 {
+            let reg64 = addends64.pop().unwrap();
+            let off = offset;
+            offset = 0;
+            MemArg::RegOffset(reg64, off, elem_ty)
+        } else if addends64.len() >= 2 {
+            let reg1 = addends64.pop().unwrap();
+            let reg2 = addends64.pop().unwrap();
+            MemArg::RegReg(reg1, reg2)
+        } else {
+            let reg1 = addends64.pop().unwrap();
+            MemArg::reg(reg1)
         }
-
-        if let Some((r1, r2, r2_bits, is_signed)) = parts {
-            match (r2_bits, is_signed) {
-                (32, false) => {
-                    return MemArg::RegExtended(r1, r2, ExtendOp::UXTW);
-                }
-                (32, true) => {
-                    return MemArg::RegExtended(r1, r2, ExtendOp::SXTW);
-                }
-                _ => {}
+    } else
+    /* addends64.len() == 0 */
+    {
+        if addends32.len() > 0 {
+            let tmp = ctx.alloc_tmp(RegClass::I64, I64);
+            let (reg1, extendop) = addends32.pop().unwrap();
+            let signed = match extendop {
+                ExtendOp::SXTW => true,
+                ExtendOp::UXTW => false,
+                _ => unreachable!(),
+            };
+            ctx.emit(Inst::Extend {
+                rd: tmp,
+                rn: reg1,
+                signed,
+                from_bits: 32,
+                to_bits: 64,
+            });
+            if let Some((reg2, extendop)) = addends32.pop() {
+                MemArg::RegExtended(tmp.to_reg(), reg2, extendop)
+            } else {
+                MemArg::reg(tmp.to_reg())
             }
+        } else
+        /* addends32.len() == 0 */
+        {
+            let off_reg = ctx.alloc_tmp(RegClass::I64, I64);
+            lower_constant_u64(ctx, off_reg, offset as u64);
+            offset = 0;
+            MemArg::reg(off_reg.to_reg())
         }
+    };
+
+    // At this point, if we have any remaining components, we need to allocate a
+    // temp, replace one of the registers in the MemArg with the temp, and emit
+    // instructions to add together the remaining components. Return immediately
+    // if this is *not* the case.
+    if offset == 0 && addends32.len() == 0 && addends64.len() == 0 {
+        return memarg;
     }
 
-    // Handle two regs and a zero offset in the general case, if possible.
-    if addends.len() == 2 && offset == 0 {
-        let ra = put_input_in_reg(ctx, addends[0], NarrowValueMode::ZeroExtend64);
-        let rb = put_input_in_reg(ctx, addends[1], NarrowValueMode::ZeroExtend64);
-        return MemArg::reg_plus_reg(ra, rb);
-    }
-
-    // Otherwise, generate add instructions.
+    // Allocate the temp and shoehorn it into the MemArg.
     let addr = ctx.alloc_tmp(RegClass::I64, I64);
+    let (reg, memarg) = match memarg {
+        MemArg::RegExtended(r1, r2, extendop) => {
+            (r1, MemArg::RegExtended(addr.to_reg(), r2, extendop))
+        }
+        MemArg::RegOffset(r, off, ty) => (r, MemArg::RegOffset(addr.to_reg(), off, ty)),
+        MemArg::RegReg(r1, r2) => (r2, MemArg::RegReg(addr.to_reg(), r1)),
+        MemArg::UnsignedOffset(r, imm) => (r, MemArg::UnsignedOffset(addr.to_reg(), imm)),
+        _ => unreachable!(),
+    };
 
-    // Get the const into a reg.
-    lower_constant_u64(ctx, addr.clone(), offset as u64);
+    // If there is any offset, load that first into `addr`, and add the `reg`
+    // that we kicked out of the `MemArg`; otherwise, start with that reg.
+    if offset != 0 {
+        // If we can fit offset or -offset in an imm12, use an add-imm
+        // to combine the reg and offset. Otherwise, load value first then add.
+        if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
+            ctx.emit(Inst::AluRRImm12 {
+                alu_op: ALUOp::Add64,
+                rd: addr,
+                rn: reg,
+                imm12,
+            });
+        } else if let Some(imm12) = Imm12::maybe_from_u64(offset.wrapping_neg() as u64) {
+            ctx.emit(Inst::AluRRImm12 {
+                alu_op: ALUOp::Sub64,
+                rd: addr,
+                rn: reg,
+                imm12,
+            });
+        } else {
+            lower_constant_u64(ctx, addr, offset as u64);
+            ctx.emit(Inst::AluRRR {
+                alu_op: ALUOp::Add64,
+                rd: addr,
+                rn: addr.to_reg(),
+                rm: reg,
+            });
+        }
+    } else {
+        ctx.emit(Inst::gen_move(addr, reg, I64));
+    }
 
-    // Add each addend to the address.
-    for addend in addends {
-        let reg = put_input_in_reg(ctx, *addend, NarrowValueMode::ZeroExtend64);
-
-        // In an addition, the stack register is the zero register, so divert it to another
-        // register just before doing the actual add.
+    // Now handle reg64 and reg32-extended components.
+    for reg in addends64 {
+        // If the register is the stack reg, we must move it to another reg
+        // before adding it.
         let reg = if reg == stack_reg() {
             let tmp = ctx.alloc_tmp(RegClass::I64, I64);
-            ctx.emit(Inst::Mov {
-                rd: tmp,
-                rm: stack_reg(),
-            });
+            ctx.emit(Inst::gen_move(tmp, stack_reg(), I64));
             tmp.to_reg()
         } else {
             reg
         };
-
         ctx.emit(Inst::AluRRR {
             alu_op: ALUOp::Add64,
-            rd: addr.clone(),
+            rd: addr,
             rn: addr.to_reg(),
-            rm: reg.clone(),
+            rm: reg,
+        });
+    }
+    for (reg, extendop) in addends32 {
+        assert!(reg != stack_reg());
+        ctx.emit(Inst::AluRRRExtend {
+            alu_op: ALUOp::Add64,
+            rd: addr,
+            rn: addr.to_reg(),
+            rm: reg,
+            extendop,
         });
     }
 
-    MemArg::reg(addr.to_reg())
+    memarg
 }
 
 pub(crate) fn lower_constant_u64<C: LowerCtx<I = Inst>>(

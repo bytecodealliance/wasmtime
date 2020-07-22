@@ -15,7 +15,7 @@ block0(v0: i64, v1: i32):
 ; check: Block 0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: ldur w2, [x0]
+; nextln: ldr w2, [x0]
 ; nextln: add w2, w2, #0
 ; nextln: subs wzr, w1, w2
 ; nextln: b.ls label1 ; b label2
