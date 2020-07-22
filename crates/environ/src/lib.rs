@@ -44,7 +44,7 @@ pub use crate::address_map::{
     ModuleVmctxInfo, ValueLabelsRanges,
 };
 pub use crate::cache::create_new_config as cache_create_new_config;
-pub use crate::cache::CacheConfig;
+pub use crate::cache::{CacheConfig, ModuleCacheEntry};
 pub use crate::compilation::{
     Compilation, CompileError, CompiledFunction, Compiler, Relocation, RelocationTarget,
     Relocations, StackMapInformation, StackMaps, TrapInformation, Traps,

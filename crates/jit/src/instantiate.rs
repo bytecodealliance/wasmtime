@@ -13,12 +13,14 @@ use object::File as ObjectFile;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_debug::{create_gdbjit_image, read_debuginfo};
 use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
+use wasmtime_environ::ModuleCacheEntry;
 use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleAddressMap,
     ModuleEnvironment, ModuleTranslation, StackMaps, Traps,
@@ -80,60 +82,82 @@ pub struct CompilationArtifacts {
     debug_info: bool,
 }
 
+struct HashedCompilationArtifactsEnv<'a>(&'a Compiler, &'a [u8]);
+impl<'a> Hash for HashedCompilationArtifactsEnv<'a> {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        let compiler = self.0;
+        compiler.strategy().hash(hasher);
+        compiler.frontend_config().hash(hasher);
+        compiler.tunables().hash(hasher);
+        self.1.hash(hasher);
+    }
+}
+
 impl CompilationArtifacts {
     /// Builds compilation artifacts.
     pub fn build(compiler: &Compiler, data: &[u8]) -> Result<Self, SetupError> {
-        let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
-
-        let translation = environ
-            .translate(data)
-            .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
-
-        let debug_info = compiler.tunables().debug_info;
-
-        let mut debug_data = None;
-        if debug_info {
-            // TODO Do we want to ignore invalid DWARF data?
-            debug_data = Some(read_debuginfo(&data)?);
-        }
-
-        let Compilation {
-            obj,
-            unwind_info,
-            traps,
-            stack_maps,
-            address_transform,
-        } = compiler.compile(&translation, debug_data)?;
-
-        let ModuleTranslation {
-            module,
-            data_initializers,
-            ..
-        } = translation;
-
-        let data_initializers = data_initializers
-            .into_iter()
-            .map(OwnedDataInitializer::new)
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-
-        let obj = obj.write().map_err(|_| {
-            SetupError::Instantiate(InstantiationError::Resource(
-                "failed to create image memory".to_string(),
-            ))
-        })?;
-
-        Ok(Self {
-            module,
-            obj: obj.into_boxed_slice(),
-            unwind_info: unwind_info.into_boxed_slice(),
-            data_initializers,
-            traps,
-            stack_maps,
-            address_transform,
-            debug_info,
-        })
+        let cache_entry = ModuleCacheEntry::new("wasmtime", compiler.cache_config());
+        let result = cache_entry.get_data(
+            HashedCompilationArtifactsEnv(compiler, data),
+            build_artifacts,
+        )?;
+        Ok(result)
     }
+}
+
+fn build_artifacts(
+    HashedCompilationArtifactsEnv(compiler, data): HashedCompilationArtifactsEnv,
+) -> Result<CompilationArtifacts, SetupError> {
+    let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
+
+    let translation = environ
+        .translate(data)
+        .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
+
+    let debug_info = compiler.tunables().debug_info;
+
+    let mut debug_data = None;
+    if debug_info {
+        // TODO Do we want to ignore invalid DWARF data?
+        debug_data = Some(read_debuginfo(&data)?);
+    }
+
+    let Compilation {
+        obj,
+        unwind_info,
+        traps,
+        stack_maps,
+        address_transform,
+    } = compiler.compile(&translation, debug_data)?;
+
+    let ModuleTranslation {
+        module,
+        data_initializers,
+        ..
+    } = translation;
+
+    let data_initializers = data_initializers
+        .into_iter()
+        .map(OwnedDataInitializer::new)
+        .collect::<Vec<_>>()
+        .into_boxed_slice();
+
+    let obj = obj.write().map_err(|_| {
+        SetupError::Instantiate(InstantiationError::Resource(
+            "failed to create image memory".to_string(),
+        ))
+    })?;
+
+    Ok(CompilationArtifacts {
+        module,
+        obj: obj.into_boxed_slice(),
+        unwind_info: unwind_info.into_boxed_slice(),
+        data_initializers,
+        traps,
+        stack_maps,
+        address_transform,
+        debug_info,
+    })
 }
 
 struct FinishedFunctions(BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>);

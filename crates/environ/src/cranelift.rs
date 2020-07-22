@@ -86,7 +86,6 @@
 // assume no valid stack pointer will ever be `usize::max_value() - 32k`.
 
 use crate::address_map::{FunctionAddressMap, InstructionAddressMap};
-use crate::cache::ModuleCacheEntry;
 use crate::compilation::{
     Compilation, CompileError, CompiledFunction, Relocation, RelocationTarget, StackMapInformation,
     TrapInformation,
@@ -290,23 +289,17 @@ impl Compiler for Cranelift {
     fn compile_module(
         translation: &ModuleTranslation,
         isa: &dyn isa::TargetIsa,
-        cache_config: &CacheConfig,
+        _cache_config: &CacheConfig,
     ) -> Result<CompileResult, CompileError> {
-        let cache_entry = ModuleCacheEntry::new("cranelift", cache_config);
-
-        let result = cache_entry.get_data(
-            CompileEnv {
-                local: &translation.module.local,
-                module_translation: HashedModuleTranslationState(
-                    translation.module_translation.as_ref().unwrap(),
-                ),
-                function_body_inputs: &translation.function_body_inputs,
-                isa: Isa(isa),
-                tunables: &translation.tunables,
-            },
-            compile,
-        )?;
-        Ok(result)
+        compile(CompileEnv {
+            local: &translation.module.local,
+            module_translation: HashedModuleTranslationState(
+                translation.module_translation.as_ref().unwrap(),
+            ),
+            function_body_inputs: &translation.function_body_inputs,
+            isa: Isa(isa),
+            tunables: &translation.tunables,
+        })
     }
 }
 

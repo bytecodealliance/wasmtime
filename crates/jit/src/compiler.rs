@@ -14,7 +14,7 @@ use wasmtime_environ::{
 };
 
 /// Select which kind of compilation to use.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Hash)]
 pub enum CompilationStrategy {
     /// Let Wasmtime pick the strategy.
     Auto,
@@ -124,6 +124,16 @@ impl Compiler {
     /// Return the tunables in use by this engine.
     pub fn tunables(&self) -> &Tunables {
         &self.tunables
+    }
+
+    /// Return the compilation strategy.
+    pub fn strategy(&self) -> CompilationStrategy {
+        self.strategy
+    }
+
+    /// Return the cache config.
+    pub fn cache_config(&self) -> &CacheConfig {
+        &self.cache_config
     }
 
     /// Compile the given function bodies.
