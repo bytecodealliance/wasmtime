@@ -20,7 +20,7 @@ use wasmtime_debug::{create_gdbjit_image, read_debuginfo};
 use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
-use wasmtime_environ::ModuleCacheEntry;
+use wasmtime_environ::{CacheConfig, ModuleCacheEntry};
 use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleAddressMap,
     ModuleEnvironment, ModuleTranslation, StackMaps, Traps,
@@ -95,8 +95,12 @@ impl<'a> Hash for HashedCompilationArtifactsEnv<'a> {
 
 impl CompilationArtifacts {
     /// Builds compilation artifacts.
-    pub fn build(compiler: &Compiler, data: &[u8]) -> Result<Self, SetupError> {
-        let cache_entry = ModuleCacheEntry::new("wasmtime", compiler.cache_config());
+    pub fn build(
+        compiler: &Compiler,
+        data: &[u8],
+        cache_config: &CacheConfig,
+    ) -> Result<Self, SetupError> {
+        let cache_entry = ModuleCacheEntry::new("wasmtime", cache_config);
         let result = cache_entry.get_data(
             HashedCompilationArtifactsEnv(compiler, data),
             build_artifacts,
@@ -192,8 +196,9 @@ impl CompiledModule {
         compiler: &Compiler,
         data: &'data [u8],
         profiler: &dyn ProfilingAgent,
+        cache_config: &CacheConfig,
     ) -> Result<Self, SetupError> {
-        let artifacts = CompilationArtifacts::build(compiler, data)?;
+        let artifacts = CompilationArtifacts::build(compiler, data, cache_config)?;
         Self::from_artifacts(artifacts, compiler.isa(), profiler)
     }
 

@@ -9,7 +9,7 @@ use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{unwind::UnwindInfo, TargetFrontendConfig, TargetIsa};
 use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex};
 use wasmtime_environ::{
-    CacheConfig, Compiler as _C, Module, ModuleAddressMap, ModuleMemoryOffset, ModuleTranslation,
+    Compiler as _C, Module, ModuleAddressMap, ModuleMemoryOffset, ModuleTranslation,
     ModuleVmctxInfo, StackMaps, Traps, Tunables, VMOffsets, ValueLabelsRanges,
 };
 
@@ -38,22 +38,15 @@ pub enum CompilationStrategy {
 pub struct Compiler {
     isa: Box<dyn TargetIsa>,
     strategy: CompilationStrategy,
-    cache_config: CacheConfig,
     tunables: Tunables,
 }
 
 impl Compiler {
     /// Construct a new `Compiler`.
-    pub fn new(
-        isa: Box<dyn TargetIsa>,
-        strategy: CompilationStrategy,
-        cache_config: CacheConfig,
-        tunables: Tunables,
-    ) -> Self {
+    pub fn new(isa: Box<dyn TargetIsa>, strategy: CompilationStrategy, tunables: Tunables) -> Self {
         Self {
             isa,
             strategy,
-            cache_config,
             tunables,
         }
     }
@@ -131,11 +124,6 @@ impl Compiler {
         self.strategy
     }
 
-    /// Return the cache config.
-    pub fn cache_config(&self) -> &CacheConfig {
-        &self.cache_config
-    }
-
     /// Compile the given function bodies.
     pub(crate) fn compile<'data>(
         &self,
@@ -154,19 +142,11 @@ impl Compiler {
             // For now, interpret `Auto` as `Cranelift` since that's the most stable
             // implementation.
             CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
-                wasmtime_environ::cranelift::Cranelift::compile_module(
-                    translation,
-                    &*self.isa,
-                    &self.cache_config,
-                )
+                wasmtime_environ::cranelift::Cranelift::compile_module(translation, &*self.isa)
             }
             #[cfg(feature = "lightbeam")]
             CompilationStrategy::Lightbeam => {
-                wasmtime_environ::lightbeam::Lightbeam::compile_module(
-                    translation,
-                    &*self.isa,
-                    &self.cache_config,
-                )
+                wasmtime_environ::lightbeam::Lightbeam::compile_module(translation, &*self.isa)
             }
         }
         .map_err(SetupError::Compile)?;

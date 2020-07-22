@@ -92,7 +92,7 @@ use crate::compilation::{
 };
 use crate::compilation::{CompileResult, Compiler};
 use crate::func_environ::{get_func_name, FuncEnvironment};
-use crate::{CacheConfig, FunctionBodyData, ModuleLocal, ModuleTranslation, Tunables};
+use crate::{FunctionBodyData, ModuleLocal, ModuleTranslation, Tunables};
 use cranelift_codegen::ir::{self, ExternalName};
 use cranelift_codegen::machinst::buffer::MachSrcLoc;
 use cranelift_codegen::print_errors::pretty_error;
@@ -289,7 +289,6 @@ impl Compiler for Cranelift {
     fn compile_module(
         translation: &ModuleTranslation,
         isa: &dyn isa::TargetIsa,
-        _cache_config: &CacheConfig,
     ) -> Result<CompileResult, CompileError> {
         compile(CompileEnv {
             local: &translation.module.local,

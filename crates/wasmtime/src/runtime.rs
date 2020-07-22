@@ -628,12 +628,7 @@ impl Config {
 
     fn build_compiler(&self) -> Compiler {
         let isa = self.target_isa();
-        Compiler::new(
-            isa,
-            self.strategy,
-            self.cache_config.clone(),
-            self.tunables.clone(),
-        )
+        Compiler::new(isa, self.strategy, self.tunables.clone())
     }
 
     /// Hashes/fingerprints compiler setting to ensure that compatible
@@ -796,6 +791,10 @@ impl Engine {
 
     pub(crate) fn compiler(&self) -> &Compiler {
         &self.inner.compiler
+    }
+
+    pub(crate) fn cache_config(&self) -> &CacheConfig {
+        &self.config().cache_config
     }
 
     /// Returns whether the engine `a` and `b` refer to the same configuration.

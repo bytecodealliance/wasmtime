@@ -2,7 +2,6 @@
 //! module.
 
 use crate::address_map::{ModuleAddressMap, ValueLabelsRanges};
-use crate::CacheConfig;
 use crate::ModuleTranslation;
 use cranelift_codegen::{binemit, ir, isa, isa::unwind::UnwindInfo};
 use cranelift_entity::PrimaryMap;
@@ -201,6 +200,5 @@ pub trait Compiler {
     fn compile_module(
         translation: &ModuleTranslation,
         isa: &dyn isa::TargetIsa,
-        cache_config: &CacheConfig,
     ) -> Result<CompileResult, CompileError>;
 }
