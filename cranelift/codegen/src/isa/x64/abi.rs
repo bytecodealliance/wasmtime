@@ -129,15 +129,19 @@ fn get_fltreg_for_arg_systemv(call_conv: &CallConv, idx: usize) -> Option<Reg> {
     }
 }
 
-fn get_intreg_for_retval_systemv(call_conv: &CallConv, idx: usize) -> Option<Reg> {
+fn get_intreg_for_retval_systemv(
+    call_conv: &CallConv,
+    intreg_idx: usize,
+    retval_idx: usize,
+) -> Option<Reg> {
     match call_conv {
-        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match idx {
+        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match intreg_idx {
             0 => Some(regs::rax()),
             1 => Some(regs::rdx()),
             _ => None,
         },
         CallConv::BaldrdashSystemV => {
-            if idx == 0 {
+            if intreg_idx == 0 && retval_idx == 0 {
                 Some(regs::rax())
             } else {
                 None
@@ -147,15 +151,19 @@ fn get_intreg_for_retval_systemv(call_conv: &CallConv, idx: usize) -> Option<Reg
     }
 }
 
-fn get_fltreg_for_retval_systemv(call_conv: &CallConv, idx: usize) -> Option<Reg> {
+fn get_fltreg_for_retval_systemv(
+    call_conv: &CallConv,
+    fltreg_idx: usize,
+    retval_idx: usize,
+) -> Option<Reg> {
     match call_conv {
-        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match idx {
+        CallConv::Fast | CallConv::Cold | CallConv::SystemV => match fltreg_idx {
             0 => Some(regs::xmm0()),
             1 => Some(regs::xmm1()),
             _ => None,
         },
         CallConv::BaldrdashSystemV => {
-            if idx == 0 {
+            if fltreg_idx == 0 && retval_idx == 0 {
                 Some(regs::xmm0())
             } else {
                 None
@@ -823,7 +831,7 @@ fn compute_arg_locs(
         let (next_reg, candidate) = if intreg {
             let candidate = match args_or_rets {
                 ArgsOrRets::Args => get_intreg_for_arg_systemv(&call_conv, next_gpr),
-                ArgsOrRets::Rets => get_intreg_for_retval_systemv(&call_conv, next_gpr),
+                ArgsOrRets::Rets => get_intreg_for_retval_systemv(&call_conv, next_gpr, i),
             };
             debug_assert!(candidate
                 .map(|r| r.get_class() == RegClass::I64)
@@ -832,7 +840,7 @@ fn compute_arg_locs(
         } else {
             let candidate = match args_or_rets {
                 ArgsOrRets::Args => get_fltreg_for_arg_systemv(&call_conv, next_vreg),
-                ArgsOrRets::Rets => get_fltreg_for_retval_systemv(&call_conv, next_vreg),
+                ArgsOrRets::Rets => get_fltreg_for_retval_systemv(&call_conv, next_vreg, i),
             };
             debug_assert!(candidate
                 .map(|r| r.get_class() == RegClass::V128)
