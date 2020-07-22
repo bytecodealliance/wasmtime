@@ -1182,9 +1182,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::Bitselect => {
+        Opcode::Bitselect | Opcode::Vselect => {
             let ty = ty.unwrap();
             if ty_bits(ty) < 128 {
+                debug_assert_ne!(Opcode::Vselect, op);
                 let tmp = ctx.alloc_tmp(RegClass::I64, I64);
                 let rd = get_output_reg(ctx, outputs[0]);
                 let rcond = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
@@ -1746,7 +1747,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Shuffle
         | Opcode::Vsplit
         | Opcode::Vconcat
-        | Opcode::Vselect
         | Opcode::Insertlane
         | Opcode::ScalarToVector
         | Opcode::Swizzle
