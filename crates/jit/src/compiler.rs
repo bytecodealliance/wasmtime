@@ -187,17 +187,23 @@ impl Compiler {
 
 impl Hash for Compiler {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
+        let Compiler {
+            strategy,
+            isa,
+            tunables,
+        } = self;
+
         // Hash compiler's flags: compilation strategy, isa, frontend config,
         // misc tunables.
-        self.strategy().hash(hasher);
-        self.isa().triple().hash(hasher);
+        strategy.hash(hasher);
+        isa.triple().hash(hasher);
         // TODO: if this `to_string()` is too expensive then we should upstream
         // a native hashing ability of flags into cranelift itself, but
         // compilation and/or cache loading is relatively expensive so seems
         // unlikely.
-        self.isa().flags().to_string().hash(hasher);
-        self.frontend_config().hash(hasher);
-        self.tunables().hash(hasher);
+        isa.flags().to_string().hash(hasher);
+        isa.frontend_config().hash(hasher);
+        tunables.hash(hasher);
 
         // TODO: ... and should we hash anything else? There's a lot of stuff in
         // `TargetIsa`, like registers/encodings/etc. Should we be hashing that
