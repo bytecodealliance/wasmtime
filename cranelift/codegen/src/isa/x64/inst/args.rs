@@ -726,9 +726,9 @@ impl CC {
             | FloatCC::LessThan
             | FloatCC::LessThanOrEqual
             | FloatCC::UnorderedOrGreaterThan
-            | FloatCC::UnorderedOrGreaterThanOrEqual => unimplemented!(
-                "No single condition code to guarantee ordered. Treat as special case."
-            ),
+            | FloatCC::UnorderedOrGreaterThanOrEqual => {
+                panic!("No single condition code to guarantee ordered. Treat as special case.")
+            }
         }
     }
 

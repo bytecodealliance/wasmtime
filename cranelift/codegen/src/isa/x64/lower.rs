@@ -135,6 +135,17 @@ struct InsnOutput {
     output: usize,
 }
 
+fn matches_input<C: LowerCtx<I = Inst>>(c: &mut C, input: InsnInput, op: Opcode) -> Option<IRInst> {
+    let inputs = c.get_input(input.insn, input.input);
+    if let Some((src_inst, _)) = inputs.inst {
+        let data = c.data(src_inst);
+        if data.opcode() == op {
+            return Some(src_inst);
+        }
+    }
+    None
+}
+
 fn input_to_reg(ctx: Ctx, spec: InsnInput) -> Reg {
     let inputs = ctx.get_input(spec.insn, spec.input);
     ctx.use_input_reg(inputs);
@@ -328,7 +339,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::Iadd | Opcode::Isub | Opcode::Imul | Opcode::Band | Opcode::Bor | Opcode::Bxor => {
+        Opcode::Iadd
+        | Opcode::IaddIfcout
+        | Opcode::Isub
+        | Opcode::Imul
+        | Opcode::Band
+        | Opcode::Bor
+        | Opcode::Bxor => {
             let lhs = input_to_reg(ctx, inputs[0]);
             let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
             let dst = output_to_reg(ctx, outputs[0]);
@@ -338,7 +355,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             let is_64 = int_ty_is_64(ty.unwrap());
             let alu_op = match op {
-                Opcode::Iadd => AluRmiROpcode::Add,
+                Opcode::Iadd | Opcode::IaddIfcout => AluRmiROpcode::Add,
                 Opcode::Isub => AluRmiROpcode::Sub,
                 Opcode::Imul => AluRmiROpcode::Mul,
                 Opcode::Band => AluRmiROpcode::And,
@@ -963,6 +980,64 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Trap | Opcode::ResumableTrap => {
             let trap_info = (ctx.srcloc(insn), inst_trapcode(ctx.data(insn)).unwrap());
             ctx.emit(Inst::Ud2 { trap_info })
+        }
+
+        Opcode::Trapif | Opcode::Trapff => {
+            let srcloc = ctx.srcloc(insn);
+            let trap_code = inst_trapcode(ctx.data(insn)).unwrap();
+
+            let cc = if matches_input(ctx, inputs[0], Opcode::IaddIfcout).is_some() {
+                let condcode = inst_condcode(ctx.data(insn));
+                // The flags must not have been clobbered by any other instruction between the
+                // iadd_ifcout and this instruction, as verified by the CLIF validator; so we can
+                // simply use the flags here.
+                CC::from_intcc(condcode)
+            } else if op == Opcode::Trapif {
+                let condcode = inst_condcode(ctx.data(insn));
+                let cc = CC::from_intcc(condcode);
+
+                // Verification ensures that the input is always a single-def ifcmp.
+                let ifcmp_insn = matches_input(ctx, inputs[0], Opcode::Ifcmp).unwrap();
+                emit_cmp(ctx, ifcmp_insn);
+                cc
+            } else {
+                let condcode = inst_fp_condcode(ctx.data(insn)).unwrap();
+                let cc = CC::from_floatcc(condcode);
+
+                // Verification ensures that the input is always a single-def ffcmp.
+                let ffcmp_insn = matches_input(ctx, inputs[0], Opcode::Ffcmp).unwrap();
+                {
+                    // The only valid CC constructed with `from_floatcc` can be put in the flag
+                    // register with a direct float comparison; do this here.
+                    let input_ty = ctx.input_ty(ffcmp_insn, 0);
+                    let op = match input_ty {
+                        F32 => SseOpcode::Ucomiss,
+                        F64 => SseOpcode::Ucomisd,
+                        _ => panic!("Bad input type to Fcmp"),
+                    };
+                    let inputs = &[
+                        InsnInput {
+                            insn: ffcmp_insn,
+                            input: 0,
+                        },
+                        InsnInput {
+                            insn: ffcmp_insn,
+                            input: 1,
+                        },
+                    ];
+                    let lhs = input_to_reg(ctx, inputs[0]);
+                    let rhs = input_to_reg_mem(ctx, inputs[1]);
+                    ctx.emit(Inst::xmm_cmp_rm_r(op, rhs, lhs));
+                }
+
+                cc
+            };
+
+            ctx.emit(Inst::TrapIf {
+                trap_code,
+                srcloc,
+                cc,
+            });
         }
 
         Opcode::F64const => {
@@ -1724,7 +1799,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::IaddCin
         | Opcode::IaddIfcin
         | Opcode::IaddCout
-        | Opcode::IaddIfcout
         | Opcode::IaddCarry
         | Opcode::IaddIfcarry
         | Opcode::IsubBin
