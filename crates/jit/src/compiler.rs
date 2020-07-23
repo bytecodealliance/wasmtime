@@ -4,17 +4,18 @@ use crate::instantiate::SetupError;
 use crate::object::{build_object, ObjectUnwindInfo};
 use cranelift_codegen::ir;
 use object::write::Object;
+use std::hash::{Hash, Hasher};
 use wasmtime_debug::{emit_dwarf, DebugInfoData, DwarfSection};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{unwind::UnwindInfo, TargetFrontendConfig, TargetIsa};
 use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex};
 use wasmtime_environ::{
-    CacheConfig, Compiler as _C, Module, ModuleAddressMap, ModuleMemoryOffset, ModuleTranslation,
+    Compiler as _C, Module, ModuleAddressMap, ModuleMemoryOffset, ModuleTranslation,
     ModuleVmctxInfo, StackMaps, Traps, Tunables, VMOffsets, ValueLabelsRanges,
 };
 
 /// Select which kind of compilation to use.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Hash)]
 pub enum CompilationStrategy {
     /// Let Wasmtime pick the strategy.
     Auto,
@@ -38,22 +39,15 @@ pub enum CompilationStrategy {
 pub struct Compiler {
     isa: Box<dyn TargetIsa>,
     strategy: CompilationStrategy,
-    cache_config: CacheConfig,
     tunables: Tunables,
 }
 
 impl Compiler {
     /// Construct a new `Compiler`.
-    pub fn new(
-        isa: Box<dyn TargetIsa>,
-        strategy: CompilationStrategy,
-        cache_config: CacheConfig,
-        tunables: Tunables,
-    ) -> Self {
+    pub fn new(isa: Box<dyn TargetIsa>, strategy: CompilationStrategy, tunables: Tunables) -> Self {
         Self {
             isa,
             strategy,
-            cache_config,
             tunables,
         }
     }
@@ -126,6 +120,11 @@ impl Compiler {
         &self.tunables
     }
 
+    /// Return the compilation strategy.
+    pub fn strategy(&self) -> CompilationStrategy {
+        self.strategy
+    }
+
     /// Compile the given function bodies.
     pub(crate) fn compile<'data>(
         &self,
@@ -144,19 +143,11 @@ impl Compiler {
             // For now, interpret `Auto` as `Cranelift` since that's the most stable
             // implementation.
             CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
-                wasmtime_environ::cranelift::Cranelift::compile_module(
-                    translation,
-                    &*self.isa,
-                    &self.cache_config,
-                )
+                wasmtime_environ::cranelift::Cranelift::compile_module(translation, &*self.isa)
             }
             #[cfg(feature = "lightbeam")]
             CompilationStrategy::Lightbeam => {
-                wasmtime_environ::lightbeam::Lightbeam::compile_module(
-                    translation,
-                    &*self.isa,
-                    &self.cache_config,
-                )
+                wasmtime_environ::lightbeam::Lightbeam::compile_module(translation, &*self.isa)
             }
         }
         .map_err(SetupError::Compile)?;
@@ -191,5 +182,32 @@ impl Compiler {
             stack_maps,
             address_transform,
         })
+    }
+}
+
+impl Hash for Compiler {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        let Compiler {
+            strategy,
+            isa,
+            tunables,
+        } = self;
+
+        // Hash compiler's flags: compilation strategy, isa, frontend config,
+        // misc tunables.
+        strategy.hash(hasher);
+        isa.triple().hash(hasher);
+        // TODO: if this `to_string()` is too expensive then we should upstream
+        // a native hashing ability of flags into cranelift itself, but
+        // compilation and/or cache loading is relatively expensive so seems
+        // unlikely.
+        isa.flags().to_string().hash(hasher);
+        isa.frontend_config().hash(hasher);
+        tunables.hash(hasher);
+
+        // TODO: ... and should we hash anything else? There's a lot of stuff in
+        // `TargetIsa`, like registers/encodings/etc. Should we be hashing that
+        // too? It seems like wasmtime doesn't configure it too too much, but
+        // this may become an issue at some point.
     }
 }

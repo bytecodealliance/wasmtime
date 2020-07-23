@@ -7,8 +7,8 @@ use wasmtime_debug::{emit_dwarf, read_debuginfo};
 use wasmtime_environ::Lightbeam;
 use wasmtime_environ::{
     entity::EntityRef, settings, settings::Configurable, wasm::DefinedMemoryIndex,
-    wasm::MemoryIndex, CacheConfig, Compiler, Cranelift, ModuleEnvironment, ModuleMemoryOffset,
-    ModuleVmctxInfo, Tunables, VMOffsets,
+    wasm::MemoryIndex, Compiler, Cranelift, ModuleEnvironment, ModuleMemoryOffset, ModuleVmctxInfo,
+    Tunables, VMOffsets,
 };
 use wasmtime_jit::native;
 use wasmtime_obj::{emit_module, ObjectBuilderTarget};
@@ -21,7 +21,6 @@ pub fn compile_to_obj(
     enable_simd: bool,
     opt_level: wasmtime::OptLevel,
     debug_info: bool,
-    cache_config: &CacheConfig,
 ) -> Result<Object> {
     let isa_builder = match target {
         Some(target) => native::lookup(target.clone())?,
@@ -72,11 +71,9 @@ pub fn compile_to_obj(
         _traps,
         _stack_maps,
     ) = match strategy {
-        Strategy::Auto | Strategy::Cranelift => {
-            Cranelift::compile_module(&translation, &*isa, cache_config)
-        }
+        Strategy::Auto | Strategy::Cranelift => Cranelift::compile_module(&translation, &*isa),
         #[cfg(feature = "lightbeam")]
-        Strategy::Lightbeam => Lightbeam::compile_module(&translation, &*isa, cache_config),
+        Strategy::Lightbeam => Lightbeam::compile_module(&translation, &*isa),
         #[cfg(not(feature = "lightbeam"))]
         Strategy::Lightbeam => bail!("lightbeam support not enabled"),
         other => bail!("unsupported compilation strategy {:?}", other),

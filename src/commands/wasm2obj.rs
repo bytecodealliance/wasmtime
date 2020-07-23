@@ -11,7 +11,6 @@ use std::{
 };
 use structopt::{clap::AppSettings, StructOpt};
 use target_lexicon::Triple;
-use wasmtime_environ::CacheConfig;
 
 /// The after help text for the `wasm2obj` command.
 pub const WASM2OBJ_AFTER_HELP: &str = "The translation is dependent on the environment chosen.\n\
@@ -60,11 +59,6 @@ impl WasmToObjCommand {
             pretty_env_logger::init();
         }
 
-        let cache_config = if self.common.disable_cache {
-            CacheConfig::new_cache_disabled()
-        } else {
-            CacheConfig::from_file(self.common.config.as_deref())?
-        };
         let strategy = pick_compilation_strategy(self.common.cranelift, self.common.lightbeam)?;
 
         let data = wat::parse_file(&self.module).context("failed to parse module")?;
@@ -76,7 +70,6 @@ impl WasmToObjCommand {
             self.common.enable_simd,
             self.common.opt_level(),
             self.common.debug_info,
-            &cache_config,
         )?;
 
         let mut file =

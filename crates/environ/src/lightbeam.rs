@@ -20,7 +20,6 @@ impl Compiler for Lightbeam {
     fn compile_module(
         translation: &ModuleTranslation,
         isa: &dyn isa::TargetIsa,
-        _cache_config: &CacheConfig,
     ) -> Result<CompileResult, CompileError> {
         if translation.tunables.debug_info {
             return Err(CompileError::DebugInfoNotSupported);

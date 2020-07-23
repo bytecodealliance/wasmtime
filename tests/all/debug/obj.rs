@@ -5,7 +5,6 @@ use std::path::Path;
 use target_lexicon::Triple;
 use wasmtime::Strategy;
 use wasmtime_cli::compile_to_obj;
-use wasmtime_environ::CacheConfig;
 
 pub fn compile_cranelift(
     wasm: &[u8],
@@ -19,7 +18,6 @@ pub fn compile_cranelift(
         false,
         wasmtime::OptLevel::None,
         true,
-        &CacheConfig::new_cache_disabled(),
     )?;
 
     let mut file = File::create(output).context("failed to create object file")?;

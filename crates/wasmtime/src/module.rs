@@ -4,6 +4,7 @@ use crate::types::{EntityType, ExportType, ExternType, ImportType};
 use anyhow::{bail, Context, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use wasmtime_environ::ModuleCacheEntry;
 use wasmtime_jit::{CompilationArtifacts, CompiledModule};
 
 /// A compiled WebAssembly module, ready to be instantiated.
@@ -300,7 +301,17 @@ impl Module {
     }
 
     unsafe fn compile(engine: &Engine, binary: &[u8]) -> Result<Self> {
-        let compiled = CompiledModule::new(engine.compiler(), binary, &*engine.config().profiler)?;
+        let cache_entry = ModuleCacheEntry::new("wasmtime", engine.cache_config());
+        let artifacts = cache_entry
+            .get_data((engine.compiler(), binary), |(compiler, binary)| {
+                CompilationArtifacts::build(compiler, binary)
+            })?;
+
+        let compiled = CompiledModule::from_artifacts(
+            artifacts,
+            engine.compiler().isa(),
+            &*engine.config().profiler,
+        )?;
 
         Ok(Module {
             engine: engine.clone(),
