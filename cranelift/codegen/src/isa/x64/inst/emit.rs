@@ -815,7 +815,7 @@ pub(crate) fn emit(
             dst,
             srcloc,
         } => {
-            let (opcodes, num_opcodes, rex_flags) = match ext_mode {
+            let (opcodes, num_opcodes, mut rex_flags) = match ext_mode {
                 ExtMode::BL => {
                     // MOVZBL is (REX.W==0) 0F B6 /r
                     (0x0FB6, 2, RexFlags::clear_w())
@@ -847,15 +847,28 @@ pub(crate) fn emit(
             };
 
             match src {
-                RegMem::Reg { reg: src } => emit_std_reg_reg(
-                    sink,
-                    LegacyPrefix::None,
-                    opcodes,
-                    num_opcodes,
-                    dst.to_reg(),
-                    *src,
-                    rex_flags,
-                ),
+                RegMem::Reg { reg: src } => {
+                    match ext_mode {
+                        ExtMode::BL | ExtMode::BQ => {
+                            // A redundant REX prefix must be emitted for certain register inputs.
+                            let enc_src = int_reg_enc(*src);
+                            if enc_src >= 4 && enc_src <= 7 {
+                                rex_flags.always_emit();
+                            };
+                        }
+                        _ => {}
+                    }
+                    emit_std_reg_reg(
+                        sink,
+                        LegacyPrefix::None,
+                        opcodes,
+                        num_opcodes,
+                        dst.to_reg(),
+                        *src,
+                        rex_flags,
+                    )
+                }
+
                 RegMem::Mem { addr: src } => {
                     let src = &src.finalize(state);
 
@@ -912,7 +925,7 @@ pub(crate) fn emit(
             dst,
             srcloc,
         } => {
-            let (opcodes, num_opcodes, rex_flags) = match ext_mode {
+            let (opcodes, num_opcodes, mut rex_flags) = match ext_mode {
                 ExtMode::BL => {
                     // MOVSBL is (REX.W==0) 0F BE /r
                     (0x0FBE, 2, RexFlags::clear_w())
@@ -936,15 +949,27 @@ pub(crate) fn emit(
             };
 
             match src {
-                RegMem::Reg { reg: src } => emit_std_reg_reg(
-                    sink,
-                    LegacyPrefix::None,
-                    opcodes,
-                    num_opcodes,
-                    dst.to_reg(),
-                    *src,
-                    rex_flags,
-                ),
+                RegMem::Reg { reg: src } => {
+                    match ext_mode {
+                        ExtMode::BL | ExtMode::BQ => {
+                            // A redundant REX prefix must be emitted for certain register inputs.
+                            let enc_src = int_reg_enc(*src);
+                            if enc_src >= 4 && enc_src <= 7 {
+                                rex_flags.always_emit();
+                            };
+                        }
+                        _ => {}
+                    }
+                    emit_std_reg_reg(
+                        sink,
+                        LegacyPrefix::None,
+                        opcodes,
+                        num_opcodes,
+                        dst.to_reg(),
+                        *src,
+                        rex_flags,
+                    )
+                }
 
                 RegMem::Mem { addr: src } => {
                     let src = &src.finalize(state);
