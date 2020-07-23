@@ -23,7 +23,10 @@ where
     // Build the lowering context.
     let lower = Lower::new(f, abi, block_order)?;
     // Lower the IR.
-    let (mut vcode, stackmap_request_info) = lower.lower(b)?;
+    let (mut vcode, stackmap_request_info) = {
+        let _tt = timing::vcode_lower();
+        lower.lower(b)?
+    };
 
     debug!(
         "vcode from lowering: \n{}",
@@ -92,7 +95,10 @@ where
 
     // Reorder vcode into final order and copy out final instruction sequence
     // all at once. This also inserts prologues/epilogues.
-    vcode.replace_insns_from_regalloc(result);
+    {
+        let _tt = timing::vcode_post_ra();
+        vcode.replace_insns_from_regalloc(result);
+    }
 
     debug!(
         "vcode after regalloc: final version:\n{}",

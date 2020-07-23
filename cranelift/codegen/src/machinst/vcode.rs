@@ -20,6 +20,7 @@
 use crate::ir::{self, types, SourceLoc};
 use crate::machinst::*;
 use crate::settings;
+use crate::timing;
 
 use regalloc::Function as RegallocFunction;
 use regalloc::Set as RegallocSet;
@@ -424,6 +425,7 @@ impl<I: VCodeInst> VCode<I> {
     where
         I: MachInstEmit,
     {
+        let _tt = timing::vcode_emit();
         let mut buffer = MachBuffer::new();
         let mut state = I::State::new(&*self.abi);
 
