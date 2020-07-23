@@ -122,6 +122,27 @@ impl IntCC {
         }
     }
 
+    /// Determines whether this condcode interprets inputs as signed or
+    /// unsigned.  See the documentation for the `icmp` instruction in
+    /// cranelift-codegen/meta/src/shared/instructions.rs for further insights
+    /// into this.
+    pub fn is_signed(&self) -> bool {
+        match self {
+            IntCC::Equal
+            | IntCC::UnsignedGreaterThanOrEqual
+            | IntCC::UnsignedGreaterThan
+            | IntCC::UnsignedLessThanOrEqual
+            | IntCC::UnsignedLessThan
+            | IntCC::NotEqual => false,
+            IntCC::SignedGreaterThanOrEqual
+            | IntCC::SignedGreaterThan
+            | IntCC::SignedLessThanOrEqual
+            | IntCC::SignedLessThan
+            | IntCC::Overflow
+            | IntCC::NotOverflow => true,
+        }
+    }
+
     /// Get the corresponding string condition code for the IntCC object.
     pub fn to_static_str(self) -> &'static str {
         use self::IntCC::*;
