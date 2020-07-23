@@ -1174,6 +1174,20 @@ impl<I: VCodeInst> MachBuffer<I> {
             stackmap,
         });
     }
+
+    /// Add stackmap metadata for this program point: a set of stack offsets
+    /// (from SP upward) that contain live references.
+    ///
+    /// Method variant of `add_stackmap` that is easier to manipulate for non-fixed-sizes
+    /// instructions.
+    pub fn add_stackmap_ending_at(&mut self, start_offset: CodeOffset, stackmap: Stackmap) {
+        let cur_offset = self.cur_offset();
+        self.stackmaps.push(MachStackMap {
+            offset: start_offset,
+            offset_end: cur_offset,
+            stackmap,
+        });
+    }
 }
 
 impl MachBufferFinalized {

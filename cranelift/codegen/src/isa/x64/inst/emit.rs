@@ -1282,6 +1282,9 @@ pub(crate) fn emit(
         Inst::CallKnown {
             dest, loc, opcode, ..
         } => {
+            if let Some(s) = state.take_stackmap() {
+                sink.add_stackmap(5, s);
+            }
             sink.put1(0xE8);
             // The addend adjusts for the difference between the end of the instruction and the
             // beginning of the immediate field.
@@ -1295,6 +1298,7 @@ pub(crate) fn emit(
         Inst::CallUnknown {
             dest, opcode, loc, ..
         } => {
+            let start_offset = sink.cur_offset();
             match dest {
                 RegMem::Reg { reg } => {
                     let reg_enc = int_reg_enc(*reg);
@@ -1321,6 +1325,9 @@ pub(crate) fn emit(
                         RexFlags::clear_w(),
                     );
                 }
+            }
+            if let Some(s) = state.take_stackmap() {
+                sink.add_stackmap_ending_at(start_offset, s);
             }
             if opcode.is_call() {
                 sink.add_call_site(*loc, *opcode);
@@ -2298,6 +2305,9 @@ pub(crate) fn emit(
 
         Inst::Ud2 { trap_info } => {
             sink.add_trap(trap_info.0, trap_info.1);
+            if let Some(s) = state.take_stackmap() {
+                sink.add_stackmap(2, s);
+            }
             sink.put1(0x0f);
             sink.put1(0x0b);
         }
@@ -2315,4 +2325,6 @@ pub(crate) fn emit(
             // Generate no code.
         }
     }
+
+    state.clear_post_insn();
 }
