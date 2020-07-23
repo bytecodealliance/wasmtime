@@ -4,6 +4,7 @@ use crate::instantiate::SetupError;
 use crate::object::{build_object, ObjectUnwindInfo};
 use cranelift_codegen::ir;
 use object::write::Object;
+use std::hash::{Hash, Hasher};
 use wasmtime_debug::{emit_dwarf, DebugInfoData, DwarfSection};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{unwind::UnwindInfo, TargetFrontendConfig, TargetIsa};
@@ -181,5 +182,26 @@ impl Compiler {
             stack_maps,
             address_transform,
         })
+    }
+}
+
+impl Hash for Compiler {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        // Hash compiler's flags: compilation strategy, isa, frontend config,
+        // misc tunables.
+        self.strategy().hash(hasher);
+        self.isa().triple().hash(hasher);
+        // TODO: if this `to_string()` is too expensive then we should upstream
+        // a native hashing ability of flags into cranelift itself, but
+        // compilation and/or cache loading is relatively expensive so seems
+        // unlikely.
+        self.isa().flags().to_string().hash(hasher);
+        self.frontend_config().hash(hasher);
+        self.tunables().hash(hasher);
+
+        // TODO: ... and should we hash anything else? There's a lot of stuff in
+        // `TargetIsa`, like registers/encodings/etc. Should we be hashing that
+        // too? It seems like wasmtime doesn't configure it too too much, but
+        // this may become an issue at some point.
     }
 }

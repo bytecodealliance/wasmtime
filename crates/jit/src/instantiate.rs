@@ -13,14 +13,12 @@ use object::File as ObjectFile;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_debug::{create_gdbjit_image, read_debuginfo};
 use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
-use wasmtime_environ::{CacheConfig, ModuleCacheEntry};
 use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, Module, ModuleAddressMap,
     ModuleEnvironment, ModuleTranslation, StackMaps, Traps,
@@ -82,103 +80,60 @@ pub struct CompilationArtifacts {
     debug_info: bool,
 }
 
-// A wrapper to hash compiler flags/tunables and data for cache key.
-struct HashedCompilationArtifactsEnv<'a>(&'a Compiler, &'a [u8]);
-
-impl<'a> Hash for HashedCompilationArtifactsEnv<'a> {
-    fn hash<H: Hasher>(&self, hasher: &mut H) {
-        // Hash compiler's flags: compilation strategy, isa, frontend config,
-        // misc tunables.
-        let compiler = self.0;
-        compiler.strategy().hash(hasher);
-        compiler.isa().triple().hash(hasher);
-        // TODO: if this `to_string()` is too expensive then we should upstream
-        // a native hashing ability of flags into cranelift itself, but
-        // compilation and/or cache loading is relatively expensive so seems
-        // unlikely.
-        compiler.isa().flags().to_string().hash(hasher);
-        compiler.frontend_config().hash(hasher);
-        compiler.tunables().hash(hasher);
-
-        // TODO: ... and should we hash anything else? There's a lot of stuff in
-        // `TargetIsa`, like registers/encodings/etc. Should we be hashing that
-        // too? It seems like wasmtime doesn't configure it too too much, but
-        // this may become an issue at some point.
-
-        // Hash entire module code + data
-        self.1.hash(hasher);
-    }
-}
-
 impl CompilationArtifacts {
     /// Builds compilation artifacts.
-    pub fn build(
-        compiler: &Compiler,
-        data: &[u8],
-        cache_config: &CacheConfig,
-    ) -> Result<Self, SetupError> {
-        let cache_entry = ModuleCacheEntry::new("wasmtime", cache_config);
-        let result = cache_entry.get_data(
-            HashedCompilationArtifactsEnv(compiler, data),
-            build_artifacts,
-        )?;
-        Ok(result)
+    pub fn build(compiler: &Compiler, data: &[u8]) -> Result<Self, SetupError> {
+        let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
+
+        let translation = environ
+            .translate(data)
+            .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
+
+        let debug_info = compiler.tunables().debug_info;
+
+        let mut debug_data = None;
+        if debug_info {
+            // TODO Do we want to ignore invalid DWARF data?
+            debug_data = Some(read_debuginfo(&data)?);
+        }
+
+        let Compilation {
+            obj,
+            unwind_info,
+            traps,
+            stack_maps,
+            address_transform,
+        } = compiler.compile(&translation, debug_data)?;
+
+        let ModuleTranslation {
+            module,
+            data_initializers,
+            ..
+        } = translation;
+
+        let data_initializers = data_initializers
+            .into_iter()
+            .map(OwnedDataInitializer::new)
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+
+        let obj = obj.write().map_err(|_| {
+            SetupError::Instantiate(InstantiationError::Resource(
+                "failed to create image memory".to_string(),
+            ))
+        })?;
+
+        Ok(Self {
+            module,
+            obj: obj.into_boxed_slice(),
+            unwind_info: unwind_info.into_boxed_slice(),
+            data_initializers,
+            traps,
+            stack_maps,
+            address_transform,
+            debug_info,
+        })
     }
-}
-
-fn build_artifacts(
-    HashedCompilationArtifactsEnv(compiler, data): HashedCompilationArtifactsEnv,
-) -> Result<CompilationArtifacts, SetupError> {
-    let environ = ModuleEnvironment::new(compiler.frontend_config(), compiler.tunables());
-
-    let translation = environ
-        .translate(data)
-        .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
-
-    let debug_info = compiler.tunables().debug_info;
-
-    let mut debug_data = None;
-    if debug_info {
-        // TODO Do we want to ignore invalid DWARF data?
-        debug_data = Some(read_debuginfo(&data)?);
-    }
-
-    let Compilation {
-        obj,
-        unwind_info,
-        traps,
-        stack_maps,
-        address_transform,
-    } = compiler.compile(&translation, debug_data)?;
-
-    let ModuleTranslation {
-        module,
-        data_initializers,
-        ..
-    } = translation;
-
-    let data_initializers = data_initializers
-        .into_iter()
-        .map(OwnedDataInitializer::new)
-        .collect::<Vec<_>>()
-        .into_boxed_slice();
-
-    let obj = obj.write().map_err(|_| {
-        SetupError::Instantiate(InstantiationError::Resource(
-            "failed to create image memory".to_string(),
-        ))
-    })?;
-
-    Ok(CompilationArtifacts {
-        module,
-        obj: obj.into_boxed_slice(),
-        unwind_info: unwind_info.into_boxed_slice(),
-        data_initializers,
-        traps,
-        stack_maps,
-        address_transform,
-        debug_info,
-    })
 }
 
 struct FinishedFunctions(BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>);
@@ -213,9 +168,8 @@ impl CompiledModule {
         compiler: &Compiler,
         data: &'data [u8],
         profiler: &dyn ProfilingAgent,
-        cache_config: &CacheConfig,
     ) -> Result<Self, SetupError> {
-        let artifacts = CompilationArtifacts::build(compiler, data, cache_config)?;
+        let artifacts = CompilationArtifacts::build(compiler, data)?;
         Self::from_artifacts(artifacts, compiler.isa(), profiler)
     }
 
