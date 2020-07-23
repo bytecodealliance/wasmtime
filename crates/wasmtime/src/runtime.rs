@@ -1,24 +1,27 @@
+use crate::debugger::{DebuggerAgent, EngineDebuggerContext, NullDebuggerAgent};
 use crate::externals::MemoryCreator;
 use crate::trampoline::{MemoryCreatorProxy, StoreInstanceHandle};
 use crate::Module;
 use anyhow::{bail, Result};
 use std::cell::RefCell;
 use std::cmp;
+use std::collections::BTreeSet;
 use std::convert::TryFrom;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 #[cfg(feature = "cache")]
 use std::path::Path;
 use std::rc::{Rc, Weak};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard, Weak as SyncWeak};
 use target_lexicon::Triple;
 use wasmparser::Validator;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::settings::{self, Configurable, SetError};
 use wasmtime_environ::{ir, isa, isa::TargetIsa, wasm, Tunables};
-use wasmtime_jit::{native, CompilationStrategy, Compiler};
+use wasmtime_jit::{native, CompilationStrategy, CompiledModule, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
+use wasmtime_runtime::debugger::DebuggerContext;
 use wasmtime_runtime::{
     debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, SignatureRegistry,
     StackMapRegistry, VMExternRef, VMExternRefActivationsTable, VMInterrupts,
@@ -42,6 +45,7 @@ pub struct Config {
     pub(crate) strategy: CompilationStrategy,
     #[cfg(feature = "cache")]
     pub(crate) cache_config: CacheConfig,
+    pub(crate) debugger: Arc<Mutex<dyn DebuggerAgent>>,
     pub(crate) profiler: Arc<dyn ProfilingAgent>,
     pub(crate) memory_creator: Option<MemoryCreatorProxy>,
     pub(crate) max_wasm_stack: usize,
@@ -95,6 +99,7 @@ impl Config {
             strategy: CompilationStrategy::Auto,
             #[cfg(feature = "cache")]
             cache_config: CacheConfig::new_cache_disabled(),
+            debugger: Arc::new(Mutex::new(NullDebuggerAgent)),
             profiler: Arc::new(NullProfilerAgent),
             memory_creator: None,
             max_wasm_stack: 1 << 20,
@@ -298,6 +303,12 @@ impl Config {
             ProfilingStrategy::None => Arc::new(NullProfilerAgent),
         };
         Ok(self)
+    }
+
+    /// Sets debugger.
+    pub fn debugger(&mut self, debugger: impl DebuggerAgent + 'static) -> &mut Self {
+        self.debugger = Arc::new(Mutex::new(debugger));
+        self
     }
 
     /// Configures whether the debug verifier of Cranelift is enabled or not.
@@ -765,9 +776,67 @@ pub struct Engine {
     inner: Arc<EngineInner>,
 }
 
-struct EngineInner {
+pub(crate) struct EngineInner {
     config: Config,
     compiler: Compiler,
+    debugger_context: Mutex<Option<Box<dyn DebuggerContext + Send + Sync + 'static>>>,
+    jit_code: EngineJitCode,
+}
+
+impl EngineInner {
+    pub(crate) fn config(&self) -> &Config {
+        &self.config
+    }
+    pub(crate) fn jit_code(&self) -> &EngineJitCode {
+        &self.jit_code
+    }
+}
+
+pub(crate) struct EngineJitCode {
+    jit_code_ranges: Arc<Mutex<Vec<(usize, usize, SyncWeak<CompiledModule>)>>>,
+}
+
+impl EngineJitCode {
+    fn new() -> Self {
+        Self {
+            jit_code_ranges: Arc::new(Mutex::new(vec![])),
+        }
+    }
+    pub(crate) fn lookup_jit_code_range<'a>(
+        &'a self,
+        addr: usize,
+    ) -> Option<(usize, usize, SyncWeak<CompiledModule>)> {
+        let ranges = self.jit_code_ranges.lock().unwrap();
+        ranges.iter().find(|r| r.0 <= addr && addr < r.1).cloned()
+    }
+    pub(crate) fn register_jit_code(
+        &self,
+        module: &Arc<CompiledModule>,
+    ) -> EngineJitCodeRegistration {
+        use std::iter::FromIterator;
+        let weak = Arc::downgrade(module);
+        let ranges = module
+            .jit_code_ranges()
+            .map(|(start, end)| (start, end, weak.clone()));
+        let mut jit_code_ranges = self.jit_code_ranges.lock().unwrap();
+        jit_code_ranges.extend(ranges);
+        EngineJitCodeRegistration {
+            jit_code_ranges: self.jit_code_ranges.clone(),
+            ranges: BTreeSet::from_iter(module.jit_code_ranges()),
+        }
+    }
+}
+
+pub(crate) struct EngineJitCodeRegistration {
+    jit_code_ranges: Arc<Mutex<Vec<(usize, usize, SyncWeak<CompiledModule>)>>>,
+    ranges: BTreeSet<(usize, usize)>,
+}
+
+impl Drop for EngineJitCodeRegistration {
+    fn drop(&mut self) {
+        let mut jit_code_ranges = self.jit_code_ranges.lock().unwrap();
+        jit_code_ranges.retain(|r| !self.ranges.contains(&(r.0, r.1)));
+    }
 }
 
 impl Engine {
@@ -779,6 +848,8 @@ impl Engine {
             inner: Arc::new(EngineInner {
                 config: config.clone(),
                 compiler: config.build_compiler(),
+                debugger_context: Mutex::new(None),
+                jit_code: EngineJitCode::new(),
             }),
         }
     }
@@ -797,6 +868,26 @@ impl Engine {
         &self.config().cache_config
     }
 
+    pub(crate) fn debugger_context(
+        &self,
+    ) -> &Mutex<Option<Box<dyn DebuggerContext + Send + Sync + 'static>>> {
+        &self.inner.debugger_context
+    }
+
+    pub(crate) fn ensure_engine_debugger_context(&self) -> EngineDebuggerContextGuard {
+        let mut lock = self.inner.debugger_context.lock().unwrap();
+        let _ = lock.get_or_insert_with(|| Box::new(EngineDebuggerContext::new(&self)));
+        EngineDebuggerContextGuard(lock)
+    }
+
+    pub(crate) fn weak(&self) -> SyncWeak<EngineInner> {
+        Arc::downgrade(&self.inner)
+    }
+
+    pub(crate) fn jit_code(&self) -> &EngineJitCode {
+        &self.inner.jit_code
+    }
+
     /// Returns whether the engine `a` and `b` refer to the same configuration.
     pub fn same(a: &Engine, b: &Engine) -> bool {
         Arc::ptr_eq(&a.inner, &b.inner)
@@ -806,6 +897,21 @@ impl Engine {
 impl Default for Engine {
     fn default() -> Engine {
         Engine::new(&Config::default())
+    }
+}
+
+pub(crate) struct EngineDebuggerContextGuard<'a>(
+    MutexGuard<'a, Option<Box<dyn DebuggerContext + Send + Sync + 'static>>>,
+);
+
+impl<'a> EngineDebuggerContextGuard<'a> {
+    pub fn get_mut(&mut self) -> &mut EngineDebuggerContext {
+        self.0
+            .as_mut()
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut()
+            .unwrap()
     }
 }
 

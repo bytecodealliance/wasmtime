@@ -128,6 +128,36 @@ impl RunCommand {
         if self.wasm_timeout.is_some() {
             config.interruptable(true);
         }
+
+        // EXAMPLE
+        config.debugger({
+            use wasmtime::debugger::*;
+            struct Dbg {
+                count: u32,
+            }
+            impl DebuggerAgent for Dbg {
+                fn pause(&mut self, kind: DebuggerPauseKind) -> DebuggerResumeAction {
+                    match kind {
+                        DebuggerPauseKind::Breakpoint(_) => {
+                            println!("!brk");
+                            DebuggerResumeAction::Step
+                        }
+                        DebuggerPauseKind::Step => {
+                            if self.count > 0 {
+                                self.count -= 1;
+                                let t = Trap::new("test");
+                                println!("!step {:?}", t.trace());
+                                DebuggerResumeAction::Step
+                            } else {
+                                DebuggerResumeAction::Continue
+                            }
+                        }
+                    }
+                }
+            }
+            Dbg { count: 5 }
+        });
+
         let engine = Engine::new(&config);
         let store = Store::new(&engine);
 
@@ -251,6 +281,9 @@ impl RunCommand {
         linker
             .module("", &module)
             .context(format!("failed to instantiate {:?}", self.module))?;
+
+        // EXAMPLE
+        module.set_breakpoint(0x45);
 
         // If a function to invoke was given, invoke it.
         if let Some(name) = self.invoke.as_ref() {
