@@ -143,6 +143,7 @@
 use crate::binemit::{Addend, CodeOffset, CodeSink, Reloc, Stackmap};
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode};
 use crate::machinst::{BlockIndex, MachInstLabelUse, VCodeInst};
+use crate::timing;
 
 use log::trace;
 use smallvec::SmallVec;
@@ -1074,6 +1075,8 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Finish any deferred emissions and/or fixups.
     pub fn finish(mut self) -> MachBufferFinalized {
+        let _tt = timing::vcode_emit_finish();
+
         // Ensure that all labels are defined. This is a full (release-mode)
         // assert because we must avoid looping indefinitely below; an
         // unresolved label will prevent the fixup_records vec from emptying.
