@@ -37,7 +37,8 @@ type Ctx<'a> = &'a mut dyn LowerCtx<I = Inst>;
 
 fn is_int_ty(ty: Type) -> bool {
     match ty {
-        types::I8 | types::I16 | types::I32 | types::I64 => true,
+        types::I8 | types::I16 | types::I32 | types::I64 | types::R64 => true,
+        types::R32 => panic!("shouldn't have 32-bits refs on x64"),
         _ => false,
     }
 }
@@ -45,6 +46,7 @@ fn is_int_ty(ty: Type) -> bool {
 fn is_bool_ty(ty: Type) -> bool {
     match ty {
         types::B1 | types::B8 | types::B16 | types::B32 | types::B64 => true,
+        types::R32 => panic!("shouldn't have 32-bits refs on x64"),
         _ => false,
     }
 }
@@ -52,6 +54,7 @@ fn is_bool_ty(ty: Type) -> bool {
 fn is_float_ty(ty: Type) -> bool {
     match ty {
         types::F32 | types::F64 => true,
+        types::R32 => panic!("shouldn't have 32-bits refs on x64"),
         _ => false,
     }
 }
@@ -329,7 +332,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     };
 
     match op {
-        Opcode::Iconst => {
+        Opcode::Iconst | Opcode::Null => {
             if let Some(w64) = iri_to_u64_imm(ctx, insn) {
                 let dst_is_64 = w64 > 0x7fffffff;
                 let dst = output_to_reg(ctx, outputs[0]);
@@ -771,6 +774,23 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::IsNull | Opcode::IsInvalid => {
+            // Null references are represented by the constant value 0; invalid references are
+            // represented by the constant value -1. See `define_reftypes()` in
+            // `meta/src/isa/x86/encodings.rs` to confirm.
+            let src = input_to_reg(ctx, inputs[0]);
+            let dst = output_to_reg(ctx, outputs[0]);
+            let ty = ctx.input_ty(insn, 0);
+            let imm = match op {
+                // TODO could use tst src, src for IsNull
+                Opcode::IsNull => 0,
+                Opcode::IsInvalid => 0xffffffff,
+                _ => unreachable!(),
+            };
+            ctx.emit(Inst::cmp_rmi_r(ty.bytes() as u8, RegMemImm::imm(imm), src));
+            ctx.emit(Inst::setcc(CC::Z, dst));
+        }
+
         Opcode::Uextend
         | Opcode::Sextend
         | Opcode::Bint
@@ -979,7 +999,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Trap | Opcode::ResumableTrap => {
             let trap_info = (ctx.srcloc(insn), inst_trapcode(ctx.data(insn)).unwrap());
-            ctx.emit(Inst::Ud2 { trap_info })
+            ctx.emit_safepoint(Inst::Ud2 { trap_info });
         }
 
         Opcode::Trapif | Opcode::Trapff => {
@@ -1033,7 +1053,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 cc
             };
 
-            ctx.emit(Inst::TrapIf {
+            ctx.emit_safepoint(Inst::TrapIf {
                 trap_code,
                 srcloc,
                 cc,
@@ -1658,7 +1678,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             let ty = ctx.output_ty(insn, 0);
 
-            if ty.is_int() {
+            if is_int_ty(ty) {
                 let size = ty.bytes() as u8;
                 if size == 1 {
                     // Sign-extend operands to 32, then do a cmove of size 4.

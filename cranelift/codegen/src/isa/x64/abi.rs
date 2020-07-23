@@ -83,7 +83,9 @@ fn in_int_reg(ty: types::Type) -> bool {
         | types::B8
         | types::B16
         | types::B32
-        | types::B64 => true,
+        | types::B64
+        | types::R64 => true,
+        types::R32 => panic!("unexpected 32-bits refs on x64!"),
         _ => false,
     }
 }
@@ -497,8 +499,26 @@ impl ABIBody for X64ABIBody {
         )
     }
 
-    fn spillslots_to_stackmap(&self, _slots: &[SpillSlot], _state: &EmitState) -> Stackmap {
-        unimplemented!("spillslots_to_stackmap")
+    fn spillslots_to_stackmap(&self, slots: &[SpillSlot], state: &EmitState) -> Stackmap {
+        assert!(state.virtual_sp_offset >= 0);
+        trace!(
+            "spillslots_to_stackmap: slots = {:?}, state = {:?}",
+            slots,
+            state
+        );
+        let map_size = (state.virtual_sp_offset + state.nominal_sp_to_fp) as u32;
+        let map_words = (map_size + 7) / 8;
+        let mut bits = std::iter::repeat(false)
+            .take(map_words as usize)
+            .collect::<Vec<bool>>();
+
+        let first_spillslot_word = (self.stack_slots_size + state.virtual_sp_offset as usize) / 8;
+        for &slot in slots {
+            let slot = slot.get() as usize;
+            bits[first_spillslot_word + slot] = true;
+        }
+
+        Stackmap::from_slice(&bits[..])
     }
 
     fn gen_prologue(&mut self) -> Vec<Inst> {
@@ -971,7 +991,7 @@ fn load_stack(mem: impl Into<SyntheticAmode>, into_reg: Writable<Reg>, ty: Type)
         types::B1 | types::B8 | types::I8 => (true, Some(ExtMode::BQ)),
         types::B16 | types::I16 => (true, Some(ExtMode::WQ)),
         types::B32 | types::I32 => (true, Some(ExtMode::LQ)),
-        types::B64 | types::I64 => (true, None),
+        types::B64 | types::I64 | types::R64 => (true, None),
         types::F32 | types::F64 => (false, None),
         _ => panic!("load_stack({})", ty),
     };
@@ -1008,7 +1028,7 @@ fn store_stack(mem: impl Into<SyntheticAmode>, from_reg: Reg, ty: Type) -> Inst 
         types::B1 | types::B8 | types::I8 => (true, 1),
         types::B16 | types::I16 => (true, 2),
         types::B32 | types::I32 => (true, 4),
-        types::B64 | types::I64 => (true, 8),
+        types::B64 | types::I64 | types::R64 => (true, 8),
         types::F32 => (false, 4),
         types::F64 => (false, 8),
         _ => unimplemented!("store_stack({})", ty),
@@ -1166,13 +1186,9 @@ impl ABICall for X64ABICall {
         }
 
         match &self.dest {
-            &CallDest::ExtName(ref name, RelocDistance::Near) => ctx.emit(Inst::call_known(
-                name.clone(),
-                uses,
-                defs,
-                self.loc,
-                self.opcode,
-            )),
+            &CallDest::ExtName(ref name, RelocDistance::Near) => ctx.emit_safepoint(
+                Inst::call_known(name.clone(), uses, defs, self.loc, self.opcode),
+            ),
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
                 let tmp = ctx.alloc_tmp(RegClass::I64, I64);
                 ctx.emit(Inst::LoadExtName {
@@ -1181,7 +1197,7 @@ impl ABICall for X64ABICall {
                     offset: 0,
                     srcloc: self.loc,
                 });
-                ctx.emit(Inst::call_unknown(
+                ctx.emit_safepoint(Inst::call_unknown(
                     RegMem::reg(tmp.to_reg()),
                     uses,
                     defs,
@@ -1189,7 +1205,7 @@ impl ABICall for X64ABICall {
                     self.opcode,
                 ));
             }
-            &CallDest::Reg(reg) => ctx.emit(Inst::call_unknown(
+            &CallDest::Reg(reg) => ctx.emit_safepoint(Inst::call_unknown(
                 RegMem::reg(reg),
                 uses,
                 defs,

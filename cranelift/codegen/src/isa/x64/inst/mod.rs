@@ -13,7 +13,7 @@ use regalloc::RegUsageCollector;
 use regalloc::{RealRegUniverse, Reg, RegClass, RegUsageMapper, SpillSlot, VirtualReg, Writable};
 use smallvec::SmallVec;
 
-use crate::binemit::CodeOffset;
+use crate::binemit::{CodeOffset, Stackmap};
 use crate::ir::types::*;
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
@@ -1913,7 +1913,7 @@ impl MachInst for Inst {
 
     fn rc_for_type(ty: Type) -> CodegenResult<RegClass> {
         match ty {
-            I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 => Ok(RegClass::I64),
+            I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 | R32 | R64 => Ok(RegClass::I64),
             F32 | F64 | I128 | B128 => Ok(RegClass::V128),
             IFLAGS | FFLAGS => Ok(RegClass::I64),
             _ => Err(CodegenError::Unsupported(format!(
@@ -1987,7 +1987,13 @@ impl MachInst for Inst {
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
-    virtual_sp_offset: i64,
+    /// Addend to convert nominal-SP offsets to real-SP offsets at the current
+    /// program point.
+    pub(crate) virtual_sp_offset: i64,
+    /// Offset of FP from nominal-SP.
+    pub(crate) nominal_sp_to_fp: i64,
+    /// Safepoint stackmap for upcoming instruction, as provided to `pre_safepoint()`.
+    stackmap: Option<Stackmap>,
 }
 
 impl MachInstEmit for Inst {
@@ -2003,10 +2009,26 @@ impl MachInstEmit for Inst {
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(_: &dyn ABIBody<I = Inst>) -> Self {
+    fn new(abi: &dyn ABIBody<I = Inst>) -> Self {
         EmitState {
             virtual_sp_offset: 0,
+            nominal_sp_to_fp: abi.frame_size() as i64,
+            stackmap: None,
         }
+    }
+
+    fn pre_safepoint(&mut self, stackmap: Stackmap) {
+        self.stackmap = Some(stackmap);
+    }
+}
+
+impl EmitState {
+    fn take_stackmap(&mut self) -> Option<Stackmap> {
+        self.stackmap.take()
+    }
+
+    fn clear_post_insn(&mut self) {
+        self.stackmap = None;
     }
 }
 
