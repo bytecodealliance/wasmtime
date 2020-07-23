@@ -1402,6 +1402,11 @@ fn test_x64_emit() {
     // ========================================================
     // MovZX_RM_R
     insns.push((
+        Inst::movzx_rm_r(ExtMode::BL, RegMem::reg(rdi), w_rdi, None),
+        "400FB6FF",
+        "movzbl  %dil, %edi",
+    ));
+    insns.push((
         Inst::movzx_rm_r(ExtMode::BL, RegMem::reg(rax), w_rsi, None),
         "0FB6F0",
         "movzbl  %al, %esi",
@@ -1723,6 +1728,11 @@ fn test_x64_emit() {
 
     // ========================================================
     // MovSX_RM_R
+    insns.push((
+        Inst::movsx_rm_r(ExtMode::BL, RegMem::reg(rdi), w_rdi, None),
+        "400FBEFF",
+        "movsbl  %dil, %edi",
+    ));
     insns.push((
         Inst::movsx_rm_r(ExtMode::BL, RegMem::reg(rcx), w_rsi, None),
         "0FBEF1",
