@@ -1327,27 +1327,72 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // - to compute the negated value, set all bits to 0 but the MSB to 1, and bit-XOR the
             // src with it.
             let output_ty = ty.unwrap();
-            let (val, opcode) = match output_ty {
-                F32 => match op {
-                    Opcode::Fabs => (0x7fffffff, SseOpcode::Andps),
-                    Opcode::Fneg => (0x80000000, SseOpcode::Xorps),
-                    _ => unreachable!(),
-                },
-                F64 => match op {
-                    Opcode::Fabs => (0x7fffffffffffffff, SseOpcode::Andpd),
-                    Opcode::Fneg => (0x8000000000000000, SseOpcode::Xorpd),
-                    _ => unreachable!(),
-                },
-                _ => panic!("unexpected type {:?} for Fabs", output_ty),
-            };
+            if !output_ty.is_vector() {
+                let (val, opcode) = match output_ty {
+                    F32 => match op {
+                        Opcode::Fabs => (0x7fffffff, SseOpcode::Andps),
+                        Opcode::Fneg => (0x80000000, SseOpcode::Xorps),
+                        _ => unreachable!(),
+                    },
+                    F64 => match op {
+                        Opcode::Fabs => (0x7fffffffffffffff, SseOpcode::Andpd),
+                        Opcode::Fneg => (0x8000000000000000, SseOpcode::Xorpd),
+                        _ => unreachable!(),
+                    },
+                    _ => panic!("unexpected type {:?} for Fabs", output_ty),
+                };
 
-            for inst in Inst::gen_constant(dst, val, output_ty, |reg_class, ty| {
-                ctx.alloc_tmp(reg_class, ty)
-            }) {
-                ctx.emit(inst);
+                for inst in Inst::gen_constant(dst, val, output_ty, |reg_class, ty| {
+                    ctx.alloc_tmp(reg_class, ty)
+                }) {
+                    ctx.emit(inst);
+                }
+
+                ctx.emit(Inst::xmm_rm_r(opcode, src, dst));
+            } else {
+                // Eventually vector constants should be available in `gen_constant` and this block
+                // can be merged with the one above (TODO).
+                if output_ty.bits() == 128 {
+                    // Move the `lhs` to the same register as `dst`; this may not emit an actual move
+                    // but ensures that the registers are the same to match x86's read-write operand
+                    // encoding.
+                    let src = input_to_reg(ctx, inputs[0]);
+                    ctx.emit(Inst::gen_move(dst, src, output_ty));
+
+                    // Generate an all 1s constant in an XMM register. This uses CMPPS but could
+                    // have used CMPPD with the same effect.
+                    let tmp = ctx.alloc_tmp(RegClass::V128, output_ty);
+                    let cond = FcmpImm::from(FloatCC::Equal);
+                    let cmpps = Inst::xmm_rm_r_imm(
+                        SseOpcode::Cmpps,
+                        RegMem::reg(tmp.to_reg()),
+                        tmp,
+                        cond.encode(),
+                    );
+                    ctx.emit(cmpps);
+
+                    // Shift the all 1s constant to generate the mask.
+                    let lane_bits = output_ty.lane_bits();
+                    let (shift_opcode, opcode, shift_by) = match (op, lane_bits) {
+                        (Opcode::Fabs, 32) => (SseOpcode::Psrld, SseOpcode::Andps, 1),
+                        (Opcode::Fabs, 64) => (SseOpcode::Psrlq, SseOpcode::Andpd, 1),
+                        (Opcode::Fneg, 32) => (SseOpcode::Pslld, SseOpcode::Xorps, 31),
+                        (Opcode::Fneg, 64) => (SseOpcode::Psllq, SseOpcode::Xorpd, 63),
+                        _ => unreachable!(
+                            "unexpected opcode and lane size: {:?}, {} bits",
+                            op, lane_bits
+                        ),
+                    };
+                    let shift = Inst::xmm_rmi_reg(shift_opcode, RegMemImm::imm(shift_by), tmp);
+                    ctx.emit(shift);
+
+                    // Apply shifted mask (XOR or AND).
+                    let mask = Inst::xmm_rm_r(opcode, RegMem::reg(tmp.to_reg()), dst);
+                    ctx.emit(mask);
+                } else {
+                    panic!("unexpected type {:?} for Fabs", output_ty);
+                }
             }
-
-            ctx.emit(Inst::xmm_rm_r(opcode, src, dst));
         }
 
         Opcode::Fcopysign => {
