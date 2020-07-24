@@ -93,6 +93,7 @@ fn in_int_reg(ty: types::Type) -> bool {
 fn in_vec_reg(ty: types::Type) -> bool {
     match ty {
         types::F32 | types::F64 => true,
+        _ if ty.is_vector() => true,
         _ => false,
     }
 }
@@ -365,7 +366,7 @@ impl ABIBody for X64ABIBody {
                     1 | 8 => Some(ExtMode::BQ),
                     16 => Some(ExtMode::WQ),
                     32 => Some(ExtMode::LQ),
-                    64 => None,
+                    64 | 128 => None,
                     _ => unreachable!(),
                 };
 

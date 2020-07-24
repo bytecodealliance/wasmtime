@@ -1475,8 +1475,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 _ => false,
             };
 
-            let is_float = is_float_ty(elem_ty);
-
             let addr = match op {
                 Opcode::Load
                 | Opcode::Uload8
@@ -1513,7 +1511,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let srcloc = Some(ctx.srcloc(insn));
 
             let dst = output_to_reg(ctx, outputs[0]);
-            match (sign_extend, is_float) {
+            let is_xmm = elem_ty.is_float() || elem_ty.is_vector();
+            match (sign_extend, is_xmm) {
                 (true, false) => {
                     // The load is sign-extended only when the output size is lower than 64 bits,
                     // so ext-mode is defined in this case.
@@ -1542,6 +1541,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     ctx.emit(match elem_ty {
                         F32 => Inst::xmm_mov(SseOpcode::Movss, RegMem::mem(addr), dst, srcloc),
                         F64 => Inst::xmm_mov(SseOpcode::Movsd, RegMem::mem(addr), dst, srcloc),
+                        _ if elem_ty.is_vector() && elem_ty.bits() == 128 => {
+                            Inst::xmm_mov(SseOpcode::Movups, RegMem::mem(addr), dst, srcloc)
+                        } // TODO Specialize for different types: MOVUPD, MOVDQU
                         _ => unreachable!("unexpected type for load: {:?}", elem_ty),
                     });
                 }
@@ -1565,7 +1567,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 Opcode::Store | Opcode::StoreComplex => ctx.input_ty(insn, 0),
                 _ => unreachable!(),
             };
-            let is_float = is_float_ty(elem_ty);
 
             let addr = match op {
                 Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
@@ -1599,15 +1600,15 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             let srcloc = Some(ctx.srcloc(insn));
 
-            if is_float {
-                ctx.emit(match elem_ty {
-                    F32 => Inst::xmm_mov_r_m(SseOpcode::Movss, src, addr, srcloc),
-                    F64 => Inst::xmm_mov_r_m(SseOpcode::Movsd, src, addr, srcloc),
-                    _ => panic!("unexpected type for store {:?}", elem_ty),
-                });
-            } else {
-                ctx.emit(Inst::mov_r_m(elem_ty.bytes() as u8, src, addr, srcloc));
-            }
+            ctx.emit(match elem_ty {
+                F32 => Inst::xmm_mov_r_m(SseOpcode::Movss, src, addr, srcloc),
+                F64 => Inst::xmm_mov_r_m(SseOpcode::Movsd, src, addr, srcloc),
+                _ if elem_ty.is_vector() && elem_ty.bits() == 128 => {
+                    // TODO Specialize for different types: MOVUPD, MOVDQU, etc.
+                    Inst::xmm_mov_r_m(SseOpcode::Movups, src, addr, srcloc)
+                }
+                _ => Inst::mov_r_m(elem_ty.bytes() as u8, src, addr, srcloc),
+            });
         }
 
         Opcode::FuncAddr => {
@@ -1813,6 +1814,17 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 src,
                 I64,
             ));
+        }
+
+        Opcode::RawBitcast => {
+            // A raw_bitcast is just a mechanism for correcting the type of V128 values (see
+            // https://github.com/bytecodealliance/wasmtime/issues/1147). As such, this IR
+            // instruction should emit no machine code but a move is necessary to give the register
+            // allocator a definition for the output virtual register.
+            let src = input_to_reg(ctx, inputs[0]);
+            let dst = output_to_reg(ctx, outputs[0]);
+            let ty = ty.unwrap();
+            ctx.emit(Inst::gen_move(dst, src, ty));
         }
 
         Opcode::IaddImm
