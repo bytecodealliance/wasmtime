@@ -1043,7 +1043,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::F64const => {
-            // TODO use xorpd for 0
+            // TODO use xorpd for 0 and cmpeqpd for all 1s.
             let value = ctx.get_constant(insn).unwrap();
             let dst = output_to_reg(ctx, outputs[0]);
             for inst in Inst::gen_constant(dst, value, F64, |reg_class, ty| {
@@ -1054,7 +1054,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::F32const => {
-            // TODO use xorps for 0.
+            // TODO use xorps for 0 and cmpeqps for all 1s.
             let value = ctx.get_constant(insn).unwrap();
             let dst = output_to_reg(ctx, outputs[0]);
             for inst in Inst::gen_constant(dst, value, F32, |reg_class, ty| {

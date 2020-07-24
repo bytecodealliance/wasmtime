@@ -1717,6 +1717,28 @@ pub(crate) fn emit(
             sink.bind_label(done);
         }
 
+        Inst::XmmRmRImm { op, src, dst, imm } => {
+            let prefix = match op {
+                SseOpcode::Cmpps => LegacyPrefix::_66,
+                SseOpcode::Cmppd => LegacyPrefix::None,
+                SseOpcode::Cmpss => LegacyPrefix::_F3,
+                SseOpcode::Cmpsd => LegacyPrefix::_F2,
+                _ => unimplemented!("Opcode {:?} not implemented", op),
+            };
+            let opcode = 0x0FC2;
+            let rex = RexFlags::clear_w();
+            match src {
+                RegMem::Reg { reg } => {
+                    emit_std_reg_reg(sink, prefix, opcode, 2, dst.to_reg(), *reg, rex);
+                }
+                RegMem::Mem { addr } => {
+                    let addr = &addr.finalize(state);
+                    emit_std_reg_mem(sink, prefix, opcode, 2, dst.to_reg(), addr, rex);
+                }
+            }
+            sink.put1(*imm)
+        }
+
         Inst::Xmm_Mov_R_M {
             op,
             src,
