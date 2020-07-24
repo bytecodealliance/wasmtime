@@ -51,27 +51,11 @@ fn is_bool_ty(ty: Type) -> bool {
     }
 }
 
-fn is_float_ty(ty: Type) -> bool {
-    match ty {
-        types::F32 | types::F64 => true,
-        types::R32 => panic!("shouldn't have 32-bits refs on x64"),
-        _ => false,
-    }
-}
-
 fn int_ty_is_64(ty: Type) -> bool {
     match ty {
         types::I8 | types::I16 | types::I32 => false,
         types::I64 => true,
         _ => panic!("type {} is none of I8, I16, I32 or I64", ty),
-    }
-}
-
-fn flt_ty_is_64(ty: Type) -> bool {
-    match ty {
-        types::F32 => false,
-        types::F64 => true,
-        _ => panic!("type {} is none of F32, F64", ty),
     }
 }
 
@@ -1081,32 +1065,54 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv => {
-            let lhs = input_to_reg_mem(ctx, inputs[0]);
-            let rhs = input_to_reg(ctx, inputs[1]);
+            let lhs = input_to_reg(ctx, inputs[0]);
+            let rhs = input_to_reg_mem(ctx, inputs[1]);
             let dst = output_to_reg(ctx, outputs[0]);
+            let ty = ty.unwrap();
+
+            // Move the `lhs` to the same register as `dst`; this may not emit an actual move
+            // but ensures that the registers are the same to match x86's read-write operand
+            // encoding.
+            ctx.emit(Inst::gen_move(dst, lhs, ty));
 
             // Note: min and max can't be handled here, because of the way Cranelift defines them:
             // if any operand is a NaN, they must return the NaN operand, while the x86 machine
-            // instruction will return the other operand.
-            let (f32_op, f64_op) = match op {
-                Opcode::Fadd => (SseOpcode::Addss, SseOpcode::Addsd),
-                Opcode::Fsub => (SseOpcode::Subss, SseOpcode::Subsd),
-                Opcode::Fmul => (SseOpcode::Mulss, SseOpcode::Mulsd),
-                Opcode::Fdiv => (SseOpcode::Divss, SseOpcode::Divsd),
-                _ => unreachable!(),
+            // instruction will return the second operand if either operand is a NaN.
+            let sse_op = match ty {
+                types::F32 => match op {
+                    Opcode::Fadd => SseOpcode::Addss,
+                    Opcode::Fsub => SseOpcode::Subss,
+                    Opcode::Fmul => SseOpcode::Mulss,
+                    Opcode::Fdiv => SseOpcode::Divss,
+                    _ => unreachable!(),
+                },
+                types::F64 => match op {
+                    Opcode::Fadd => SseOpcode::Addsd,
+                    Opcode::Fsub => SseOpcode::Subsd,
+                    Opcode::Fmul => SseOpcode::Mulsd,
+                    Opcode::Fdiv => SseOpcode::Divsd,
+                    _ => unreachable!(),
+                },
+                types::F32X4 => match op {
+                    Opcode::Fadd => SseOpcode::Addps,
+                    Opcode::Fsub => SseOpcode::Subps,
+                    Opcode::Fmul => SseOpcode::Mulps,
+                    Opcode::Fdiv => SseOpcode::Divps,
+                    _ => unreachable!(),
+                },
+                types::F64X2 => match op {
+                    Opcode::Fadd => SseOpcode::Addpd,
+                    Opcode::Fsub => SseOpcode::Subpd,
+                    Opcode::Fmul => SseOpcode::Mulpd,
+                    Opcode::Fdiv => SseOpcode::Divpd,
+                    _ => unreachable!(),
+                },
+                _ => panic!(
+                    "invalid type: expected one of [F32, F64, F32X4, F64X2], found {}",
+                    ty
+                ),
             };
-
-            let is_64 = flt_ty_is_64(ty.unwrap());
-
-            let mov_op = if is_64 {
-                SseOpcode::Movsd
-            } else {
-                SseOpcode::Movss
-            };
-            ctx.emit(Inst::xmm_mov(mov_op, lhs, dst, None));
-
-            let sse_op = if is_64 { f64_op } else { f32_op };
-            ctx.emit(Inst::xmm_rm_r(sse_op, RegMem::reg(rhs), dst));
+            ctx.emit(Inst::xmm_rm_r(sse_op, rhs, dst));
         }
 
         Opcode::Fmin | Opcode::Fmax => {
@@ -1127,17 +1133,19 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Sqrt => {
             let src = input_to_reg_mem(ctx, inputs[0]);
             let dst = output_to_reg(ctx, outputs[0]);
+            let ty = ty.unwrap();
 
-            let (f32_op, f64_op) = match op {
-                Opcode::Sqrt => (SseOpcode::Sqrtss, SseOpcode::Sqrtsd),
-                _ => unreachable!(),
+            let sse_op = match ty {
+                types::F32 => SseOpcode::Sqrtss,
+                types::F64 => SseOpcode::Sqrtsd,
+                types::F32X4 => SseOpcode::Sqrtps,
+                types::F64X2 => SseOpcode::Sqrtpd,
+                _ => panic!(
+                    "invalid type: expected one of [F32, F64, F32X4, F64X2], found {}",
+                    ty
+                ),
             };
 
-            let sse_op = if flt_ty_is_64(ty.unwrap()) {
-                f64_op
-            } else {
-                f32_op
-            };
             ctx.emit(Inst::xmm_unary_rm_r(sse_op, src, dst));
         }
 
