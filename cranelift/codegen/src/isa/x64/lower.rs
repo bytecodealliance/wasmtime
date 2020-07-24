@@ -240,6 +240,21 @@ fn emit_cmp(ctx: Ctx, insn: IRInst) {
     ctx.emit(Inst::cmp_rmi_r(ty.bytes() as u8, rhs, lhs));
 }
 
+fn emit_fcmp(ctx: Ctx, insn: IRInst) {
+    // The only valid CC constructed with `from_floatcc` can be put in the flag
+    // register with a direct float comparison; do this here.
+    let input_ty = ctx.input_ty(insn, 0);
+    let op = match input_ty {
+        F32 => SseOpcode::Ucomiss,
+        F64 => SseOpcode::Ucomisd,
+        _ => panic!("Bad input type to Fcmp"),
+    };
+    let inputs = &[InsnInput { insn, input: 0 }, InsnInput { insn, input: 1 }];
+    let lhs = input_to_reg(ctx, inputs[0]);
+    let rhs = input_to_reg_mem(ctx, inputs[1]);
+    ctx.emit(Inst::xmm_cmp_rm_r(op, rhs, lhs));
+}
+
 fn make_libcall_sig(ctx: Ctx, insn: IRInst, call_conv: CallConv, ptr_ty: Type) -> Signature {
     let mut sig = Signature::new(call_conv);
     for i in 0..ctx.num_inputs(insn) {
@@ -782,9 +797,15 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let dst = output_to_reg(ctx, outputs[0]);
             let ty = ctx.input_ty(insn, 0);
             let imm = match op {
-                // TODO could use tst src, src for IsNull
-                Opcode::IsNull => 0,
-                Opcode::IsInvalid => 0xffffffff,
+                Opcode::IsNull => {
+                    // TODO could use tst src, src for IsNull
+                    0
+                }
+                Opcode::IsInvalid => {
+                    // We can do a 32-bit comparison even in 64-bits mode, as the constant is then
+                    // sign-extended.
+                    0xffffffff
+                }
                 _ => unreachable!(),
             };
             ctx.emit(Inst::cmp_rmi_r(ty.bytes() as u8, RegMemImm::imm(imm), src));
@@ -1026,30 +1047,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 // Verification ensures that the input is always a single-def ffcmp.
                 let ffcmp_insn = matches_input(ctx, inputs[0], Opcode::Ffcmp).unwrap();
-                {
-                    // The only valid CC constructed with `from_floatcc` can be put in the flag
-                    // register with a direct float comparison; do this here.
-                    let input_ty = ctx.input_ty(ffcmp_insn, 0);
-                    let op = match input_ty {
-                        F32 => SseOpcode::Ucomiss,
-                        F64 => SseOpcode::Ucomisd,
-                        _ => panic!("Bad input type to Fcmp"),
-                    };
-                    let inputs = &[
-                        InsnInput {
-                            insn: ffcmp_insn,
-                            input: 0,
-                        },
-                        InsnInput {
-                            insn: ffcmp_insn,
-                            input: 1,
-                        },
-                    ];
-                    let lhs = input_to_reg(ctx, inputs[0]);
-                    let rhs = input_to_reg_mem(ctx, inputs[1]);
-                    ctx.emit(Inst::xmm_cmp_rm_r(op, rhs, lhs));
-                }
-
+                emit_fcmp(ctx, ffcmp_insn);
                 cc
             };
 
@@ -1203,11 +1201,15 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 I64 => {
                     let src = input_to_reg(ctx, inputs[0]);
+
+                    let src_copy = ctx.alloc_tmp(RegClass::I64, I64);
+                    ctx.emit(Inst::gen_move(src_copy, src, I64));
+
                     let tmp_gpr1 = ctx.alloc_tmp(RegClass::I64, I64);
                     let tmp_gpr2 = ctx.alloc_tmp(RegClass::I64, I64);
                     ctx.emit(Inst::cvt_u64_to_float_seq(
                         ty == F64,
-                        src,
+                        src_copy,
                         tmp_gpr1,
                         tmp_gpr2,
                         dst,
@@ -1729,19 +1731,23 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // regalloc is aware of the coalescing opportunity between rax/rdx and the
                 // destination register.
                 let divisor = input_to_reg(ctx, inputs[1]);
+
+                let divisor_copy = ctx.alloc_tmp(RegClass::I64, I64);
+                ctx.emit(Inst::gen_move(divisor_copy, divisor, I64));
+
                 let tmp = if op == Opcode::Sdiv && size == 8 {
                     Some(ctx.alloc_tmp(RegClass::I64, I64))
                 } else {
                     None
                 };
                 ctx.emit(Inst::imm_r(true, 0, Writable::from_reg(regs::rdx())));
-                ctx.emit(Inst::CheckedDivOrRemSeq {
+                ctx.emit(Inst::checked_div_or_rem_seq(
                     kind,
                     size,
-                    divisor,
+                    divisor_copy,
                     tmp,
-                    loc: srcloc,
-                });
+                    srcloc,
+                ));
             } else {
                 let divisor = input_to_reg_mem(ctx, inputs[1]);
 

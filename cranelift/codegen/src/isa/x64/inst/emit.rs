@@ -373,6 +373,26 @@ fn emit_simm(sink: &mut MachBuffer<Inst>, size: u8, simm32: u32) {
     }
 }
 
+/// A small helper to generate a signed conversion instruction.
+fn emit_signed_cvt(
+    sink: &mut MachBuffer<Inst>,
+    flags: &settings::Flags,
+    state: &mut EmitState,
+    src: Reg,
+    dst: Writable<Reg>,
+    to_f64: bool,
+) {
+    // Handle an unsigned int, which is the "easy" case: a signed conversion will do the
+    // right thing.
+    let op = if to_f64 {
+        SseOpcode::Cvtsi2sd
+    } else {
+        SseOpcode::Cvtsi2ss
+    };
+    let inst = Inst::gpr_to_xmm(op, RegMem::reg(src), OperandSize::Size64, dst);
+    inst.emit(sink, flags, state);
+}
+
 /// Emits a one way conditional jump if CC is set (true).
 fn one_way_jmp(sink: &mut MachBuffer<Inst>, cc: CC, label: MachLabel) {
     let cond_start = sink.cur_offset();
@@ -700,7 +720,7 @@ pub(crate) fn emit(
             debug_assert!(flags.avoid_div_traps());
 
             // Check if the divisor is zero, first.
-            let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0), *divisor);
+            let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0), divisor.to_reg());
             inst.emit(sink, flags, state);
 
             let inst = Inst::trap_if(CC::Z, TrapCode::IntegerDivisionByZero, *loc);
@@ -708,7 +728,7 @@ pub(crate) fn emit(
 
             let (do_op, done_label) = if kind.is_signed() {
                 // Now check if the divisor is -1.
-                let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0xffffffff), *divisor);
+                let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0xffffffff), divisor.to_reg());
                 inst.emit(sink, flags, state);
 
                 let do_op = sink.get_label();
@@ -768,7 +788,7 @@ pub(crate) fn emit(
                 inst.emit(sink, flags, state);
             }
 
-            let inst = Inst::div(*size, kind.is_signed(), RegMem::reg(*divisor), *loc);
+            let inst = Inst::div(*size, kind.is_signed(), RegMem::reg(divisor.to_reg()), *loc);
             inst.emit(sink, flags, state);
 
             // Lowering takes care of moving the result back into the right register, see comment
@@ -1283,7 +1303,7 @@ pub(crate) fn emit(
             dest, loc, opcode, ..
         } => {
             if let Some(s) = state.take_stackmap() {
-                sink.add_stackmap(5, s);
+                sink.add_stackmap(StackmapExtent::UpcomingBytes(5), s);
             }
             sink.put1(0xE8);
             // The addend adjusts for the difference between the end of the instruction and the
@@ -1327,7 +1347,7 @@ pub(crate) fn emit(
                 }
             }
             if let Some(s) = state.take_stackmap() {
-                sink.add_stackmap_ending_at(start_offset, s);
+                sink.add_stackmap(StackmapExtent::StartedAtOffset(start_offset), s);
             }
             if opcode.is_call() {
                 sink.add_call_site(*loc, *opcode);
@@ -1611,13 +1631,13 @@ pub(crate) fn emit(
             // j done
             //
             // ;; to get the desired NaN behavior (signalling NaN transformed into a quiet NaN, the
-            // NaN value is returned), we add both inputs.
+            // ;; NaN value is returned), we add both inputs.
             // propagate_nan:
             // add{ss,sd} %lhs, %rhs_dst
             // j done
             //
             // do_min_max:
-            // min{ss,sd} %lhs, %rhs_dst
+            // {min,max}{ss,sd} %lhs, %rhs_dst
             //
             // done:
             let done = sink.get_label();
@@ -1707,8 +1727,9 @@ pub(crate) fn emit(
             dst_size,
         } => {
             let (prefix, opcode, dst_first) = match op {
-                SseOpcode::Movd => (LegacyPrefix::_66, 0x0F7E, false),
-                SseOpcode::Movq => (LegacyPrefix::_66, 0x0F7E, false),
+                // Movd and movq use the same opcode; the presence of the REX prefix (set below)
+                // actually determines which is used.
+                SseOpcode::Movd | SseOpcode::Movq => (LegacyPrefix::_66, 0x0F7E, false),
                 SseOpcode::Cvttss2si => (LegacyPrefix::_F3, 0x0F2C, true),
                 SseOpcode::Cvttsd2si => (LegacyPrefix::_F2, 0x0F2C, true),
                 _ => panic!("unexpected opcode {:?}", op),
@@ -1734,8 +1755,9 @@ pub(crate) fn emit(
             src_size,
         } => {
             let (prefix, opcode) = match op {
-                SseOpcode::Movd => (LegacyPrefix::_66, 0x0F6E),
-                SseOpcode::Movq => (LegacyPrefix::_66, 0x0F6E),
+                // Movd and movq use the same opcode; the presence of the REX prefix (set below)
+                // actually determines which is used.
+                SseOpcode::Movd | SseOpcode::Movq => (LegacyPrefix::_66, 0x0F6E),
                 SseOpcode::Cvtsi2ss => (LegacyPrefix::_F3, 0x0F2A),
                 SseOpcode::Cvtsi2sd => (LegacyPrefix::_F2, 0x0F2A),
                 _ => panic!("unexpected opcode {:?}", op),
@@ -1781,6 +1803,9 @@ pub(crate) fn emit(
             tmp_gpr1,
             tmp_gpr2,
         } => {
+            // Note: this sequence is specific to 64-bit mode; a 32-bit mode would require a
+            // different sequence.
+            //
             // Emit the following sequence:
             //
             //  cmp 0, %src
@@ -1790,6 +1815,7 @@ pub(crate) fn emit(
             //  cvtsi2sd/cvtsi2ss %src, %dst
             //  j done
             //
+            //  ;; handle negative: see below for an explanation of what it's doing.
             //  handle_negative:
             //  mov %src, %tmp_gpr1
             //  shr $1, %tmp_gpr1
@@ -1801,39 +1827,24 @@ pub(crate) fn emit(
             //
             //  done:
 
-            // A small helper to generate a signed conversion instruction, that helps deduplicating
-            // code below.
-            let emit_signed_cvt = |sink: &mut MachBuffer<Inst>,
-                                   flags: &settings::Flags,
-                                   state: &mut EmitState,
-                                   src: Reg,
-                                   dst: Writable<Reg>,
-                                   to_f64: bool| {
-                // Handle an unsigned int, which is the "easy" case: a signed conversion will do the
-                // right thing.
-                let op = if to_f64 {
-                    SseOpcode::Cvtsi2sd
-                } else {
-                    SseOpcode::Cvtsi2ss
-                };
-                let inst = Inst::gpr_to_xmm(op, RegMem::reg(src), OperandSize::Size64, dst);
-                inst.emit(sink, flags, state);
-            };
+            assert!(src != tmp_gpr1);
+            assert!(src != tmp_gpr2);
+            assert!(tmp_gpr1 != tmp_gpr2);
 
             let handle_negative = sink.get_label();
             let done = sink.get_label();
 
-            // If x seen as a signed int is not negative, a signed-conversion will do the right
+            // If x seen as a signed int64 is not negative, a signed-conversion will do the right
             // thing.
             // TODO use tst src, src here.
-            let inst = Inst::cmp_rmi_r(8, RegMemImm::imm(0), *src);
+            let inst = Inst::cmp_rmi_r(8, RegMemImm::imm(0), src.to_reg());
             inst.emit(sink, flags, state);
 
             one_way_jmp(sink, CC::L, handle_negative);
 
-            // Handle an unsigned int, which is the "easy" case: a signed conversion will do the
+            // Handle a positive int64, which is the "easy" case: a signed conversion will do the
             // right thing.
-            emit_signed_cvt(sink, flags, state, *src, *dst, *to_f64);
+            emit_signed_cvt(sink, flags, state, src.to_reg(), *dst, *to_f64);
 
             let inst = Inst::jmp_known(BranchTarget::Label(done));
             inst.emit(sink, flags, state);
@@ -1842,10 +1853,8 @@ pub(crate) fn emit(
 
             // Divide x by two to get it in range for the signed conversion, keep the LSB, and
             // scale it back up on the FP side.
-            if tmp_gpr1.to_reg() != *src {
-                let inst = Inst::gen_move(*tmp_gpr1, *src, I64);
-                inst.emit(sink, flags, state);
-            }
+            let inst = Inst::gen_move(*tmp_gpr1, src.to_reg(), I64);
+            inst.emit(sink, flags, state);
 
             // tmp_gpr1 := src >> 1
             let inst = Inst::shift_r(
@@ -1856,10 +1865,8 @@ pub(crate) fn emit(
             );
             inst.emit(sink, flags, state);
 
-            if tmp_gpr2.to_reg() != *src {
-                let inst = Inst::gen_move(*tmp_gpr2, *src, I64);
-                inst.emit(sink, flags, state);
-            }
+            let inst = Inst::gen_move(*tmp_gpr2, src.to_reg(), I64);
+            inst.emit(sink, flags, state);
 
             let inst = Inst::alu_rmi_r(
                 true, /* 64bits */
@@ -2306,7 +2313,7 @@ pub(crate) fn emit(
         Inst::Ud2 { trap_info } => {
             sink.add_trap(trap_info.0, trap_info.1);
             if let Some(s) = state.take_stackmap() {
-                sink.add_stackmap(2, s);
+                sink.add_stackmap(StackmapExtent::UpcomingBytes(2), s);
             }
             sink.put1(0x0f);
             sink.put1(0x0b);

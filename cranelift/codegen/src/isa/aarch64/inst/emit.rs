@@ -1501,7 +1501,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::Call { ref info } => {
                 if let Some(s) = state.take_stackmap() {
-                    sink.add_stackmap(4, s);
+                    sink.add_stackmap(StackmapExtent::UpcomingBytes(4), s);
                 }
                 sink.add_reloc(info.loc, Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b100101, 0));
@@ -1511,7 +1511,7 @@ impl MachInstEmit for Inst {
             }
             &Inst::CallInd { ref info } => {
                 if let Some(s) = state.take_stackmap() {
-                    sink.add_stackmap(4, s);
+                    sink.add_stackmap(StackmapExtent::UpcomingBytes(4), s);
                 }
                 sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(info.rn) << 5));
                 if info.opcode.is_call() {
@@ -1569,7 +1569,7 @@ impl MachInstEmit for Inst {
                 let (srcloc, code) = trap_info;
                 sink.add_trap(srcloc, code);
                 if let Some(s) = state.take_stackmap() {
-                    sink.add_stackmap(4, s);
+                    sink.add_stackmap(StackmapExtent::UpcomingBytes(4), s);
                 }
                 sink.put4(0xd4a00000);
             }
