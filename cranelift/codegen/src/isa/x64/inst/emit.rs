@@ -1552,6 +1552,10 @@ pub(crate) fn emit(
                 SseOpcode::Movapd => (LegacyPrefix::_66, 0x0F28),
                 SseOpcode::Movsd => (LegacyPrefix::_F2, 0x0F10),
                 SseOpcode::Movss => (LegacyPrefix::_F3, 0x0F10),
+                SseOpcode::Movups => (LegacyPrefix::None, 0x0F10),
+                SseOpcode::Movupd => (LegacyPrefix::_66, 0x0F10),
+                SseOpcode::Sqrtps => (LegacyPrefix::None, 0x0F51),
+                SseOpcode::Sqrtpd => (LegacyPrefix::_66, 0x0F51),
                 SseOpcode::Sqrtss => (LegacyPrefix::_F3, 0x0F51),
                 SseOpcode::Sqrtsd => (LegacyPrefix::_F2, 0x0F51),
                 SseOpcode::Cvtss2sd => (LegacyPrefix::_F3, 0x0F5A),
@@ -1710,6 +1714,8 @@ pub(crate) fn emit(
             let (prefix, opcode) = match op {
                 SseOpcode::Movss => (LegacyPrefix::_F3, 0x0F11),
                 SseOpcode::Movsd => (LegacyPrefix::_F2, 0x0F11),
+                SseOpcode::Movaps => (LegacyPrefix::None, 0x0F29),
+                SseOpcode::Movups => (LegacyPrefix::None, 0x0F11),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
             let dst = &dst.finalize(state);

@@ -1921,6 +1921,10 @@ impl MachInst for Inst {
             RegClass::V128 => match ty {
                 F32 => Inst::xmm_mov(SseOpcode::Movss, RegMem::reg(src_reg), dst_reg, None),
                 F64 => Inst::xmm_mov(SseOpcode::Movsd, RegMem::reg(src_reg), dst_reg, None),
+                _ if ty.is_vector() && ty.bits() == 128 => {
+                    // TODO Specialize this move for different types: MOVUPD, MOVDQU, etc.
+                    Inst::xmm_mov(SseOpcode::Movups, RegMem::reg(src_reg), dst_reg, None)
+                }
                 _ => panic!("unexpected type {:?} in gen_move of regclass V128", ty),
             },
             _ => panic!("gen_move(x64): unhandled regclass"),
@@ -1942,7 +1946,8 @@ impl MachInst for Inst {
     fn rc_for_type(ty: Type) -> CodegenResult<RegClass> {
         match ty {
             I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 | R32 | R64 => Ok(RegClass::I64),
-            F32 | F64 | I128 | B128 => Ok(RegClass::V128),
+            F32 | F64 => Ok(RegClass::V128),
+            _ if ty.bits() == 128 => Ok(RegClass::V128),
             IFLAGS | FFLAGS => Ok(RegClass::I64),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",

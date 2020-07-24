@@ -226,7 +226,7 @@ impl ShowWithRRU for RegMemImm {
 }
 
 /// An operand which is either an integer Register or a value in Memory.  This can denote an 8, 16,
-/// 32 or 64 bit value.
+/// 32, 64, or 128 bit value.
 #[derive(Clone)]
 pub enum RegMem {
     Reg { reg: Reg },
@@ -330,8 +330,7 @@ pub(crate) enum InstructionSet {
     SSE41,
 }
 
-/// Some scalar SSE operations requiring 2 operands r/m and r.
-/// TODO: Below only includes scalar operations. To be seen if packed will be added here.
+/// Some SSE operations requiring 2 operands r/m and r.
 #[derive(Clone, Copy, PartialEq)]
 pub enum SseOpcode {
     Addss,
@@ -365,6 +364,10 @@ pub enum SseOpcode {
     Movq,
     Movss,
     Movsd,
+    Movups,
+    Movupd,
+    Mulps,
+    Mulpd,
     Mulss,
     Mulsd,
     Orps,
@@ -396,9 +399,11 @@ impl SseOpcode {
             | SseOpcode::Cvttss2si
             | SseOpcode::Divss
             | SseOpcode::Maxss
-            | SseOpcode::Movaps
             | SseOpcode::Minss
+            | SseOpcode::Movaps
             | SseOpcode::Movss
+            | SseOpcode::Movups
+            | SseOpcode::Mulps
             | SseOpcode::Mulss
             | SseOpcode::Orps
             | SseOpcode::Rcpss
@@ -425,6 +430,8 @@ impl SseOpcode {
             | SseOpcode::Movd
             | SseOpcode::Movq
             | SseOpcode::Movsd
+            | SseOpcode::Movupd
+            | SseOpcode::Mulpd
             | SseOpcode::Mulsd
             | SseOpcode::Orpd
             | SseOpcode::Sqrtsd
@@ -478,6 +485,10 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Movq => "movq",
             SseOpcode::Movss => "movss",
             SseOpcode::Movsd => "movsd",
+            SseOpcode::Movups => "movups",
+            SseOpcode::Movupd => "movupd",
+            SseOpcode::Mulps => "mulps",
+            SseOpcode::Mulpd => "mulpd",
             SseOpcode::Mulss => "mulss",
             SseOpcode::Mulsd => "mulsd",
             SseOpcode::Orpd => "orpd",
