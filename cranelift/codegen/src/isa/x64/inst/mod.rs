@@ -162,6 +162,13 @@ pub enum Inst {
         dst: Writable<Reg>,
     },
 
+    /// Arithmetic SIMD shifts.
+    XmmRmiReg {
+        opcode: SseOpcode,
+        src: RegMemImm,
+        dst: Writable<Reg>,
+    },
+
     /// Integer comparisons/tests: cmp (b w l q) (reg addr imm) reg.
     Cmp_RMI_R {
         size: u8, // 1, 2, 4 or 8
@@ -710,6 +717,12 @@ impl Inst {
             dst,
             srcloc,
         }
+    }
+
+    pub(crate) fn xmm_rmi_reg(opcode: SseOpcode, src: RegMemImm, dst: Writable<Reg>) -> Inst {
+        src.assert_regclass_is(RegClass::V128);
+        debug_assert!(dst.to_reg().get_class() == RegClass::V128);
+        Inst::XmmRmiReg { opcode, src, dst }
     }
 
     pub(crate) fn movsx_rm_r(
@@ -1276,6 +1289,13 @@ impl ShowWithRRU for Inst {
                 ),
             },
 
+            Inst::XmmRmiReg { opcode, src, dst } => format!(
+                "{} {}, {}",
+                ljustify(opcode.to_string()),
+                src.show_rru(mb_rru),
+                dst.to_reg().show_rru(mb_rru)
+            ),
+
             Inst::Cmp_RMI_R { size, src, dst } => format!(
                 "{} {}, {}",
                 ljustify2("cmp".to_string(), suffixBWLQ(*size)),
@@ -1457,6 +1477,10 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         Inst::XmmMinMaxSeq { lhs, rhs_dst, .. } => {
             collector.add_use(*lhs);
             collector.add_mod(*rhs_dst);
+        }
+        Inst::XmmRmiReg { src, dst, .. } => {
+            src.get_regs_as_uses(collector);
+            collector.add_mod(*dst);
         }
         Inst::Xmm_Mov_R_M { src, dst, .. } => {
             collector.add_use(*src);
@@ -1726,6 +1750,14 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             }
         }
         Inst::XMM_RM_R {
+            ref mut src,
+            ref mut dst,
+            ..
+        } => {
+            src.map_uses(mapper);
+            map_mod(mapper, dst);
+        }
+        Inst::XmmRmiReg {
             ref mut src,
             ref mut dst,
             ..
