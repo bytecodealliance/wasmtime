@@ -13,8 +13,6 @@ use libc::{
 #[cfg(unix)]
 use std::os::unix::prelude::*;
 #[cfg(target_os = "wasi")]
-use std::os::wasi::io::RawFd; // TODO: https://github.com/rust-lang/rust/pull/74075
-#[cfg(target_os = "wasi")]
 use std::os::wasi::prelude::*;
 use std::{convert::TryInto, ffi::OsString, io::Result, path::Path};
 

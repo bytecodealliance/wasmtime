@@ -1,7 +1,6 @@
 use crate::from_success_code;
 use std::io::Result;
 use std::os::wasi::io::RawFd;
-use std::os::wasi::prelude::*; // TODO: https://github.com/rust-lang/rust/pull/74075
 
 #[derive(Debug, Copy, Clone)]
 #[repr(i32)]

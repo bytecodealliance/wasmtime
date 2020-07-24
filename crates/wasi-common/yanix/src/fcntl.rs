@@ -6,9 +6,7 @@ use std::io::Result;
 #[cfg(unix)]
 use std::os::unix::prelude::*;
 #[cfg(target_os = "wasi")]
-use std::os::wasi::io::RawFd;
-#[cfg(target_os = "wasi")]
-use std::os::wasi::prelude::*; // TODO: https://github.com/rust-lang/rust/pull/74075
+use std::os::wasi::prelude::*;
 
 #[cfg(not(target_os = "wasi"))]
 pub unsafe fn dup_fd(fd: RawFd, close_on_exec: bool) -> Result<RawFd> {

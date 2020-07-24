@@ -1,6 +1,5 @@
 use std::{
     io::{Error, Result},
-    os::wasi::io::RawFd, // TODO: https://github.com/rust-lang/rust/pull/74075
     os::wasi::prelude::*,
 };
 
