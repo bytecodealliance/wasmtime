@@ -323,6 +323,7 @@ pub unsafe fn fstat(fd: RawFd) -> Result<stat> {
     Ok(filestat.assume_init())
 }
 
+#[cfg(not(target_os = "emscripten"))]
 pub unsafe fn faccessat<P: AsRef<Path>>(
     dirfd: RawFd,
     path: P,
@@ -336,6 +337,18 @@ pub unsafe fn faccessat<P: AsRef<Path>>(
         access.bits(),
         flags.bits(),
     ))?;
+    Ok(())
+}
+
+// In Web environments, we don't have Unix-style access control, so just
+// silently succeed.
+#[cfg(target_os = "emscripten")]
+pub unsafe fn faccessat<P: AsRef<Path>>(
+    _dirfd: RawFd,
+    _path: P,
+    _access: Access,
+    _flags: AtFlags,
+) -> Result<()> {
     Ok(())
 }
 
