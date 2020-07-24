@@ -46,6 +46,7 @@ bitflags! {
         #[cfg(any(target_os = "linux",
                   target_os = "fuchsia"))]
         const EMPTY_PATH = libc::AT_EMPTY_PATH;
+        const EACCESS = libc::AT_EACCESS;
     }
 }
 
