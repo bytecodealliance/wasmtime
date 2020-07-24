@@ -1,5 +1,5 @@
-//! This module defines x86_64-specific machine instruction types.
-
+//! This module defines x86_64-specific machine instruction types.an explanation of what it's
+//! doing.
 #![allow(dead_code)]
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
@@ -83,7 +83,9 @@ pub enum Inst {
     CheckedDivOrRemSeq {
         kind: DivOrRemKind,
         size: u8,
-        divisor: Reg,
+        /// The divisor operand. Note it's marked as modified so that it gets assigned a register
+        /// different from the temporary.
+        divisor: Writable<Reg>,
         tmp: Option<Writable<Reg>>,
         loc: SourceLoc,
     },
@@ -236,11 +238,15 @@ pub enum Inst {
         src_size: OperandSize,
     },
 
-    /// Converts an unsigned int64 to a float64.
+    /// Converts an unsigned int64 to a float32/float64.
     CvtUint64ToFloatSeq {
         /// Is the target a 64-bits or 32-bits register?
         to_f64: bool,
-        src: Reg,
+        /// A copy of the source register, fed by lowering. It is marked as modified during
+        /// register allocation to make sure that the temporary registers differ from the src
+        /// register, since both registers are live at the same time in the generated code
+        /// sequence.
+        src: Writable<Reg>,
         dst: Writable<Reg>,
         tmp_gpr1: Writable<Reg>,
         tmp_gpr2: Writable<Reg>,
@@ -442,6 +448,27 @@ impl Inst {
         Inst::MulHi { size, signed, rhs }
     }
 
+    pub(crate) fn checked_div_or_rem_seq(
+        kind: DivOrRemKind,
+        size: u8,
+        divisor: Writable<Reg>,
+        tmp: Option<Writable<Reg>>,
+        loc: SourceLoc,
+    ) -> Inst {
+        debug_assert!(size == 8 || size == 4 || size == 2 || size == 1);
+        debug_assert!(divisor.to_reg().get_class() == RegClass::I64);
+        debug_assert!(tmp
+            .map(|tmp| tmp.to_reg().get_class() == RegClass::I64)
+            .unwrap_or(true));
+        Inst::CheckedDivOrRemSeq {
+            kind,
+            size,
+            divisor,
+            tmp,
+            loc,
+        }
+    }
+
     pub(crate) fn sign_extend_rax_to_rdx(size: u8) -> Inst {
         debug_assert!(size == 8 || size == 4 || size == 2);
         Inst::SignExtendRaxRdx { size }
@@ -567,12 +594,12 @@ impl Inst {
 
     pub(crate) fn cvt_u64_to_float_seq(
         to_f64: bool,
-        src: Reg,
+        src: Writable<Reg>,
         tmp_gpr1: Writable<Reg>,
         tmp_gpr2: Writable<Reg>,
         dst: Writable<Reg>,
     ) -> Inst {
-        debug_assert!(src.get_class() == RegClass::I64);
+        debug_assert!(src.to_reg().get_class() == RegClass::I64);
         debug_assert!(tmp_gpr1.to_reg().get_class() == RegClass::I64);
         debug_assert!(tmp_gpr2.to_reg().get_class() == RegClass::I64);
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
@@ -972,7 +999,7 @@ impl ShowWithRRU for Inst {
                     DivOrRemKind::SignedRem => "srem",
                     DivOrRemKind::UnsignedRem => "urem",
                 },
-                show_ireg_sized(*divisor, mb_rru, *size),
+                show_ireg_sized(divisor.to_reg(), mb_rru, *size),
             ),
 
             Inst::SignExtendRaxRdx { size } => match size {
@@ -1072,7 +1099,7 @@ impl ShowWithRRU for Inst {
                     "u64_to_{}_seq",
                     if *to_f64 { "f64" } else { "f32" }
                 )),
-                show_ireg_sized(*src, mb_rru, 8),
+                show_ireg_sized(src.to_reg(), mb_rru, 8),
                 dst.show_rru(mb_rru),
             ),
 
@@ -1363,14 +1390,14 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             // the rdx register *before* the instruction, which is not too bad.
             collector.add_mod(Writable::from_reg(regs::rax()));
             collector.add_mod(Writable::from_reg(regs::rdx()));
-            collector.add_use(*divisor);
+            collector.add_mod(*divisor);
             if let Some(tmp) = tmp {
                 collector.add_def(*tmp);
             }
         }
         Inst::SignExtendRaxRdx { .. } => {
             collector.add_use(regs::rax());
-            collector.add_mod(Writable::from_reg(regs::rdx()));
+            collector.add_def(Writable::from_reg(regs::rdx()));
         }
         Inst::UnaryRmR { src, dst, .. } | Inst::XmmUnaryRmR { src, dst, .. } => {
             src.get_regs_as_uses(collector);
@@ -1410,7 +1437,7 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             tmp_gpr2,
             ..
         } => {
-            collector.add_use(*src);
+            collector.add_mod(*src);
             collector.add_def(*dst);
             collector.add_def(*tmp_gpr1);
             collector.add_def(*tmp_gpr2);
@@ -1603,7 +1630,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         Inst::Div { divisor, .. } => divisor.map_uses(mapper),
         Inst::MulHi { rhs, .. } => rhs.map_uses(mapper),
         Inst::CheckedDivOrRemSeq { divisor, tmp, .. } => {
-            map_use(mapper, divisor);
+            map_mod(mapper, divisor);
             if let Some(tmp) = tmp {
                 map_def(mapper, tmp)
             }
@@ -1683,7 +1710,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut tmp_gpr2,
             ..
         } => {
-            map_use(mapper, src);
+            map_mod(mapper, src);
             map_def(mapper, dst);
             map_def(mapper, tmp_gpr1);
             map_def(mapper, tmp_gpr2);

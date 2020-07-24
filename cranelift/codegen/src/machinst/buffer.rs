@@ -258,8 +258,20 @@ impl MachLabel {
     }
 }
 
+/// A stackmap extent, when creating a stackmap.
+pub enum StackmapExtent {
+    /// The stack map starts at this instruction, and ends after the number of upcoming bytes
+    /// (note: this is a code offset diff).
+    UpcomingBytes(CodeOffset),
+
+    /// The stack map started at the given offset and ends at the current one. This helps
+    /// architectures where the instruction size has not a fixed length.
+    StartedAtOffset(CodeOffset),
+}
+
 impl<I: VCodeInst> MachBuffer<I> {
-    /// Create a new section, known to start at `start_offset` and with a size limited to `length_limit`.
+    /// Create a new section, known to start at `start_offset` and with a size limited to
+    /// `length_limit`.
     pub fn new() -> MachBuffer<I> {
         MachBuffer {
             data: SmallVec::new(),
@@ -1159,32 +1171,27 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
     }
 
-    /// Add stackmap metadata for this program point: a set of stack offsets
-    /// (from SP upward) that contain live references.
+    /// Add stackmap metadata for this program point: a set of stack offsets (from SP upward) that
+    /// contain live references.
     ///
-    /// The `offset_to_fp` value is the offset from the nominal SP (at which the
-    /// `stack_offsets` are based) and the FP value. By subtracting
-    /// `offset_to_fp` from each `stack_offsets` element, one can obtain
-    /// live-reference offsets from FP instead.
-    pub fn add_stackmap(&mut self, insn_len: CodeOffset, stackmap: Stackmap) {
-        let offset = self.cur_offset();
+    /// The `offset_to_fp` value is the offset from the nominal SP (at which the `stack_offsets`
+    /// are based) and the FP value. By subtracting `offset_to_fp` from each `stack_offsets`
+    /// element, one can obtain live-reference offsets from FP instead.
+    pub fn add_stackmap(&mut self, extent: StackmapExtent, stackmap: Stackmap) {
+        let (start, end) = match extent {
+            StackmapExtent::UpcomingBytes(insn_len) => {
+                let start_offset = self.cur_offset();
+                (start_offset, start_offset + insn_len)
+            }
+            StackmapExtent::StartedAtOffset(start_offset) => {
+                let end_offset = self.cur_offset();
+                debug_assert!(end_offset >= start_offset);
+                (start_offset, end_offset)
+            }
+        };
         self.stackmaps.push(MachStackMap {
-            offset,
-            offset_end: offset + insn_len,
-            stackmap,
-        });
-    }
-
-    /// Add stackmap metadata for this program point: a set of stack offsets
-    /// (from SP upward) that contain live references.
-    ///
-    /// Method variant of `add_stackmap` that is easier to manipulate for non-fixed-sizes
-    /// instructions.
-    pub fn add_stackmap_ending_at(&mut self, start_offset: CodeOffset, stackmap: Stackmap) {
-        let cur_offset = self.cur_offset();
-        self.stackmaps.push(MachStackMap {
-            offset: start_offset,
-            offset_end: cur_offset,
+            offset: start,
+            offset_end: end,
             stackmap,
         });
     }

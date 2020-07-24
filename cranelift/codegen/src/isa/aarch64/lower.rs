@@ -798,6 +798,26 @@ pub(crate) fn lower_vector_compare<C: LowerCtx<I = Inst>>(
     Ok(())
 }
 
+/// Determines whether this condcode interprets inputs as signed or unsigned.  See the
+/// documentation for the `icmp` instruction in cranelift-codegen/meta/src/shared/instructions.rs
+/// for further insights into this.
+pub(crate) fn condcode_is_signed(cc: IntCC) -> bool {
+    match cc {
+        IntCC::Equal
+        | IntCC::UnsignedGreaterThanOrEqual
+        | IntCC::UnsignedGreaterThan
+        | IntCC::UnsignedLessThanOrEqual
+        | IntCC::UnsignedLessThan
+        | IntCC::NotEqual => false,
+        IntCC::SignedGreaterThanOrEqual
+        | IntCC::SignedGreaterThan
+        | IntCC::SignedLessThanOrEqual
+        | IntCC::SignedLessThan
+        | IntCC::Overflow
+        | IntCC::NotOverflow => true,
+    }
+}
+
 //=============================================================================
 // Helpers for instruction lowering.
 
