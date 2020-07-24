@@ -12,6 +12,7 @@ use super::{
     regs::{self, show_ireg_sized},
     EmitState,
 };
+use core::fmt::Debug;
 
 /// A possible addressing mode (amode) that can be used in instructions.
 /// These denote a 64-bit value only.
@@ -343,6 +344,8 @@ pub enum SseOpcode {
     Andnpd,
     Comiss,
     Comisd,
+    Cmpps,
+    Cmppd,
     Cmpss,
     Cmpsd,
     Cvtsd2ss,
@@ -407,6 +410,9 @@ impl SseOpcode {
             | SseOpcode::Addss
             | SseOpcode::Andps
             | SseOpcode::Andnps
+            | SseOpcode::Comiss
+            | SseOpcode::Cmpps
+            | SseOpcode::Cmpss
             | SseOpcode::Cvtsi2ss
             | SseOpcode::Cvtss2si
             | SseOpcode::Cvttss2si
@@ -429,14 +435,15 @@ impl SseOpcode {
             | SseOpcode::Subps
             | SseOpcode::Subss
             | SseOpcode::Ucomiss
-            | SseOpcode::Comiss
-            | SseOpcode::Cmpss
             | SseOpcode::Xorps => SSE,
 
             SseOpcode::Addpd
             | SseOpcode::Addsd
             | SseOpcode::Andpd
             | SseOpcode::Andnpd
+            | SseOpcode::Cmppd
+            | SseOpcode::Cmpsd
+            | SseOpcode::Comisd
             | SseOpcode::Cvtsd2ss
             | SseOpcode::Cvtsd2si
             | SseOpcode::Cvtsi2sd
@@ -461,8 +468,6 @@ impl SseOpcode {
             | SseOpcode::Subpd
             | SseOpcode::Subsd
             | SseOpcode::Ucomisd
-            | SseOpcode::Comisd
-            | SseOpcode::Cmpsd
             | SseOpcode::Xorpd => SSE2,
 
             SseOpcode::Insertps | SseOpcode::Roundss | SseOpcode::Roundsd => SSE41,
@@ -489,6 +494,10 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Andps => "andps",
             SseOpcode::Andnps => "andnps",
             SseOpcode::Andnpd => "andnpd",
+            SseOpcode::Cmpps => "cmpps",
+            SseOpcode::Cmppd => "cmppd",
+            SseOpcode::Cmpss => "cmpss",
+            SseOpcode::Cmpsd => "cmpsd",
             SseOpcode::Comiss => "comiss",
             SseOpcode::Comisd => "comisd",
             SseOpcode::Cvtsd2ss => "cvtsd2ss",
@@ -503,6 +512,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Divpd => "divpd",
             SseOpcode::Divss => "divss",
             SseOpcode::Divsd => "divsd",
+            SseOpcode::Insertps => "insertps",
             SseOpcode::Maxps => "maxps",
             SseOpcode::Maxpd => "maxpd",
             SseOpcode::Maxss => "maxss",
@@ -539,9 +549,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Subsd => "subsd",
             SseOpcode::Ucomiss => "ucomiss",
             SseOpcode::Ucomisd => "ucomisd",
-            SseOpcode::Cmpss => "cmpss",
-            SseOpcode::Cmpsd => "cmpsd",
-            SseOpcode::Insertps => "insertps",
             SseOpcode::Xorps => "xorps",
             SseOpcode::Xorpd => "xorpd",
         };
@@ -811,6 +818,42 @@ impl fmt::Debug for CC {
 impl fmt::Display for CC {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
+    }
+}
+
+/// Encode the ways that floats can be compared. This is used in float comparisons such as `cmpps`,
+/// e.g.; it is distinguished from other float comparisons (e.g. `ucomiss`) in that those use EFLAGS
+/// whereas [FcmpImm] is used as an immediate.
+pub(crate) enum FcmpImm {
+    Equal = 0x00,
+    LessThan = 0x01,
+    LessThanOrEqual = 0x02,
+    Unordered = 0x03,
+    NotEqual = 0x04,
+    UnorderedOrGreaterThanOrEqual = 0x05,
+    UnorderedOrGreaterThan = 0x06,
+    Ordered = 0x07,
+}
+
+impl FcmpImm {
+    pub(crate) fn encode(self) -> u8 {
+        self as u8
+    }
+}
+
+impl From<FloatCC> for FcmpImm {
+    fn from(cond: FloatCC) -> Self {
+        match cond {
+            FloatCC::Equal => FcmpImm::Equal,
+            FloatCC::LessThan => FcmpImm::LessThan,
+            FloatCC::LessThanOrEqual => FcmpImm::LessThanOrEqual,
+            FloatCC::Unordered => FcmpImm::Unordered,
+            FloatCC::NotEqual => FcmpImm::NotEqual,
+            FloatCC::UnorderedOrGreaterThanOrEqual => FcmpImm::UnorderedOrGreaterThanOrEqual,
+            FloatCC::UnorderedOrGreaterThan => FcmpImm::UnorderedOrGreaterThan,
+            FloatCC::Ordered => FcmpImm::Ordered,
+            _ => panic!("unable to create comparison predicate for {}", cond),
+        }
     }
 }
 

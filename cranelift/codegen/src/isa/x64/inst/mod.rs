@@ -309,6 +309,14 @@ pub enum Inst {
         dst: Reg,
     },
 
+    /// A binary XMM instruction with an 8-bit immediate: cmp (ps pd) imm (reg addr) reg
+    XmmRmRImm {
+        op: SseOpcode,
+        src: RegMem,
+        dst: Writable<Reg>,
+        imm: u8,
+    },
+
     // =====================================
     // Control flow instructions.
     /// Direct call: call simm32.
@@ -679,6 +687,13 @@ impl Inst {
             lhs,
             rhs_dst,
         }
+    }
+
+    pub(crate) fn xmm_rm_r_imm(op: SseOpcode, src: RegMem, dst: Writable<Reg>, imm: u8) -> Inst {
+        src.assert_regclass_is(RegClass::V128);
+        debug_assert!(dst.to_reg().get_class() == RegClass::V128);
+        debug_assert!(imm < 8);
+        Inst::XmmRmRImm { op, src, dst, imm }
     }
 
     pub(crate) fn movzx_rm_r(
@@ -1055,6 +1070,14 @@ impl ShowWithRRU for Inst {
                 show_ireg_sized(rhs_dst.to_reg(), mb_rru, 8),
             ),
 
+            Inst::XmmRmRImm { op, src, dst, imm } => format!(
+                "{} ${}, {}, {}",
+                ljustify(op.to_string()),
+                imm,
+                src.show_rru(mb_rru),
+                dst.show_rru(mb_rru),
+            ),
+
             Inst::XmmToGpr {
                 op,
                 src,
@@ -1408,6 +1431,29 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             src.get_regs_as_uses(collector);
             collector.add_mod(*dst);
         }
+        Inst::XmmRmRImm { src, dst, op, imm } => {
+            // In certain cases, instructions of this format can act as a definition of an XMM
+            // register, producing a value that is independent of its initial value. For example,
+            // a vector equality comparison (`cmppd` or `cmpps`) that compares a register to itself
+            // will generate all ones as a result, regardless of its value. From the register
+            // allocator's point of view, we should (i) record the first register, which is normally
+            // a mod, as a def instread; and (ii) not record the second register as a use, because
+            // it is the same as the first register (already handled). TODO Re-factored in #2071.
+            let is_def = if let RegMem::Reg { reg } = src {
+                (*op == SseOpcode::Cmppd || *op == SseOpcode::Cmpps)
+                    && *imm == FcmpImm::Equal.encode()
+                    && *reg == dst.to_reg()
+            } else {
+                false
+            };
+
+            if is_def {
+                collector.add_def(*dst);
+            } else {
+                src.get_regs_as_uses(collector);
+                collector.add_mod(*dst);
+            }
+        }
         Inst::XmmMinMaxSeq { lhs, rhs_dst, .. } => {
             collector.add_use(*lhs);
             collector.add_mod(*rhs_dst);
@@ -1649,6 +1695,35 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         } => {
             src.map_uses(mapper);
             map_def(mapper, dst);
+        }
+        Inst::XmmRmRImm {
+            ref mut src,
+            ref mut dst,
+            ref op,
+            ref imm,
+        } => {
+            // In certain cases, instructions of this format can convert an XMM register into a
+            // define (e.g. an equality comparison); this extra logic is necessary to inform the
+            // registry allocator of a different register usage. TODO Re-factored in #2071.
+            if let RegMem::Reg { reg } = src {
+                if (*op == SseOpcode::Cmppd || *op == SseOpcode::Cmpps)
+                    && *imm == FcmpImm::Equal.encode()
+                    && *reg == dst.to_reg()
+                {
+                    let mut writable_src = Writable::from_reg(*reg);
+                    map_def(mapper, &mut writable_src);
+                    *reg = writable_src.to_reg();
+                    map_def(mapper, dst);
+                } else {
+                    // Otherwise, we map the instruction as usual.
+                    src.map_uses(mapper);
+                    map_mod(mapper, dst);
+                }
+            } else {
+                // TODO this is duplicated because there seems to be no way to join the `if let` and `if`?
+                src.map_uses(mapper);
+                map_mod(mapper, dst);
+            }
         }
         Inst::XMM_RM_R {
             ref mut src,
