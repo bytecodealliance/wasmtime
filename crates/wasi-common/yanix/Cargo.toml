@@ -7,6 +7,9 @@ documentation = "https://docs.rs/yanix"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 edition = "2018"
+keywords = ["api", "network", "file"]
+categories = ["filesystem", "network-programming"]
+readme = "README.md"
 
 [dependencies]
 log = "0.4"
