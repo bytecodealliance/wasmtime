@@ -19,6 +19,10 @@ pub unsafe fn posix_fadvise(
     len: libc::off64_t,
     advice: PosixFadviseAdvice,
 ) -> Result<()> {
+    use std::convert::TryInto;
     // TODO: Use `posix_fadvise64` once it's in `libc`.
-    from_success_code(libc::posix_fadvise(fd, offset, len, advice as libc::c_int))
+    if let Ok(offset) = offset.try_into() {
+        from_success_code(libc::posix_fadvise(fd, offset, len, advice as libc::c_int))?;
+    }
+    Ok(())
 }
