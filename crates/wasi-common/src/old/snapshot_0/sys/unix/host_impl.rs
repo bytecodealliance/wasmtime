@@ -172,7 +172,7 @@ pub(crate) fn filestat_from_yanix(filestat: yanix::file::stat) -> WasiResult<was
 
     let filetype = yanix::file::FileType::from_stat_st_mode(filestat.st_mode);
     let dev = stdev_from_yanix(filestat.st_dev)?;
-    let ino = stino_from_yanix(filestat.st_ino)?;
+    let ino = stino_from_yanix(filestat.st_ino.try_into()?)?;
     let atim = filestat_to_timestamp(
         filestat.st_atime.try_into()?,
         filestat.st_atime_nsec.try_into()?,
