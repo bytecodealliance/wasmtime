@@ -333,6 +333,8 @@ pub(crate) enum InstructionSet {
 /// Some SSE operations requiring 2 operands r/m and r.
 #[derive(Clone, Copy, PartialEq)]
 pub enum SseOpcode {
+    Addps,
+    Addpd,
     Addss,
     Addsd,
     Andps,
@@ -351,11 +353,17 @@ pub enum SseOpcode {
     Cvtss2sd,
     Cvttss2si,
     Cvttsd2si,
+    Divps,
+    Divpd,
     Divss,
     Divsd,
     Insertps,
+    Maxps,
+    Maxpd,
     Maxss,
     Maxsd,
+    Minps,
+    Minpd,
     Minss,
     Minsd,
     Movaps,
@@ -376,8 +384,12 @@ pub enum SseOpcode {
     Roundss,
     Roundsd,
     Rsqrtss,
+    Sqrtps,
+    Sqrtpd,
     Sqrtss,
     Sqrtsd,
+    Subps,
+    Subpd,
     Subss,
     Subsd,
     Ucomiss,
@@ -391,14 +403,18 @@ impl SseOpcode {
     pub(crate) fn available_from(&self) -> InstructionSet {
         use InstructionSet::*;
         match self {
-            SseOpcode::Addss
+            SseOpcode::Addps
+            | SseOpcode::Addss
             | SseOpcode::Andps
             | SseOpcode::Andnps
             | SseOpcode::Cvtsi2ss
             | SseOpcode::Cvtss2si
             | SseOpcode::Cvttss2si
+            | SseOpcode::Divps
             | SseOpcode::Divss
+            | SseOpcode::Maxps
             | SseOpcode::Maxss
+            | SseOpcode::Minps
             | SseOpcode::Minss
             | SseOpcode::Movaps
             | SseOpcode::Movss
@@ -408,14 +424,17 @@ impl SseOpcode {
             | SseOpcode::Orps
             | SseOpcode::Rcpss
             | SseOpcode::Rsqrtss
+            | SseOpcode::Sqrtps
+            | SseOpcode::Sqrtss
+            | SseOpcode::Subps
             | SseOpcode::Subss
             | SseOpcode::Ucomiss
-            | SseOpcode::Sqrtss
             | SseOpcode::Comiss
             | SseOpcode::Cmpss
             | SseOpcode::Xorps => SSE,
 
-            SseOpcode::Addsd
+            SseOpcode::Addpd
+            | SseOpcode::Addsd
             | SseOpcode::Andpd
             | SseOpcode::Andnpd
             | SseOpcode::Cvtsd2ss
@@ -423,8 +442,11 @@ impl SseOpcode {
             | SseOpcode::Cvtsi2sd
             | SseOpcode::Cvtss2sd
             | SseOpcode::Cvttsd2si
+            | SseOpcode::Divpd
             | SseOpcode::Divsd
+            | SseOpcode::Maxpd
             | SseOpcode::Maxsd
+            | SseOpcode::Minpd
             | SseOpcode::Minsd
             | SseOpcode::Movapd
             | SseOpcode::Movd
@@ -434,7 +456,9 @@ impl SseOpcode {
             | SseOpcode::Mulpd
             | SseOpcode::Mulsd
             | SseOpcode::Orpd
+            | SseOpcode::Sqrtpd
             | SseOpcode::Sqrtsd
+            | SseOpcode::Subpd
             | SseOpcode::Subsd
             | SseOpcode::Ucomisd
             | SseOpcode::Comisd
@@ -457,6 +481,8 @@ impl SseOpcode {
 impl fmt::Debug for SseOpcode {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let name = match self {
+            SseOpcode::Addps => "addps",
+            SseOpcode::Addpd => "addpd",
             SseOpcode::Addss => "addss",
             SseOpcode::Addsd => "addsd",
             SseOpcode::Andpd => "andpd",
@@ -473,10 +499,16 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Cvtss2sd => "cvtss2sd",
             SseOpcode::Cvttss2si => "cvttss2si",
             SseOpcode::Cvttsd2si => "cvttsd2si",
+            SseOpcode::Divps => "divps",
+            SseOpcode::Divpd => "divpd",
             SseOpcode::Divss => "divss",
             SseOpcode::Divsd => "divsd",
+            SseOpcode::Maxps => "maxps",
+            SseOpcode::Maxpd => "maxpd",
             SseOpcode::Maxss => "maxss",
             SseOpcode::Maxsd => "maxsd",
+            SseOpcode::Minps => "minps",
+            SseOpcode::Minpd => "minpd",
             SseOpcode::Minss => "minss",
             SseOpcode::Minsd => "minsd",
             SseOpcode::Movaps => "movaps",
@@ -497,8 +529,12 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Roundss => "roundss",
             SseOpcode::Roundsd => "roundsd",
             SseOpcode::Rsqrtss => "rsqrtss",
+            SseOpcode::Sqrtps => "sqrtps",
+            SseOpcode::Sqrtpd => "sqrtpd",
             SseOpcode::Sqrtss => "sqrtss",
             SseOpcode::Sqrtsd => "sqrtsd",
+            SseOpcode::Subps => "subps",
+            SseOpcode::Subpd => "subpd",
             SseOpcode::Subss => "subss",
             SseOpcode::Subsd => "subsd",
             SseOpcode::Ucomiss => "ucomiss",
