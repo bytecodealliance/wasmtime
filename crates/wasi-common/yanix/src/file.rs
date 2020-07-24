@@ -32,6 +32,15 @@ bitflags! {
 }
 
 bitflags! {
+    pub struct Access: libc::c_int {
+        const R_OK = libc::R_OK;
+        const W_OK = libc::W_OK;
+        const X_OK = libc::X_OK;
+        const F_OK = libc::F_OK;
+    }
+}
+
+bitflags! {
     pub struct AtFlags: libc::c_int {
         const REMOVEDIR = libc::AT_REMOVEDIR;
         const SYMLINK_FOLLOW = libc::AT_SYMLINK_FOLLOW;
@@ -313,6 +322,22 @@ pub unsafe fn fstat(fd: RawFd) -> Result<stat> {
     let mut filestat = MaybeUninit::<stat>::uninit();
     from_result(libc_fstat(fd as libc::c_int, filestat.as_mut_ptr()))?;
     Ok(filestat.assume_init())
+}
+
+pub unsafe fn faccessat<P: AsRef<Path>>(
+    dirfd: RawFd,
+    path: P,
+    access: Access,
+    flags: AtFlags,
+) -> Result<()> {
+    let path = cstr(path)?;
+    from_result(libc::faccessat(
+        dirfd as libc::c_int,
+        path.as_ptr(),
+        access.bits(),
+        flags.bits(),
+    ))?;
+    Ok(())
 }
 
 /// `fionread()` function, equivalent to `ioctl(fd, FIONREAD, *bytes)`.
