@@ -3174,6 +3174,24 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
+    // XmmRmi
+    insns.push((
+        Inst::xmm_rmi_reg(SseOpcode::Psraw, RegMemImm::reg(xmm10), w_xmm1),
+        "66410FE1CA",
+        "psraw   %xmm10, %xmm1",
+    ));
+    insns.push((
+        Inst::xmm_rmi_reg(SseOpcode::Pslld, RegMemImm::imm(31), w_xmm1),
+        "660F72F11F",
+        "pslld   $31, %xmm1",
+    ));
+    insns.push((
+        Inst::xmm_rmi_reg(SseOpcode::Psrlq, RegMemImm::imm(1), w_xmm3),
+        "660F73D301",
+        "psrlq   $1, %xmm3",
+    ));
+
+    // ========================================================
     // Misc instructions.
 
     insns.push((Inst::Hlt, "CC", "hlt"));

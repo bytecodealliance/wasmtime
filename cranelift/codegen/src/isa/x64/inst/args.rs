@@ -185,7 +185,7 @@ pub enum RegMemImm {
 
 impl RegMemImm {
     pub(crate) fn reg(reg: Reg) -> Self {
-        debug_assert!(reg.get_class() == RegClass::I64);
+        debug_assert!(reg.get_class() == RegClass::I64 || reg.get_class() == RegClass::V128);
         Self::Reg { reg }
     }
     pub(crate) fn mem(addr: impl Into<SyntheticAmode>) -> Self {
@@ -383,6 +383,14 @@ pub enum SseOpcode {
     Mulsd,
     Orps,
     Orpd,
+    Psllw,
+    Pslld,
+    Psllq,
+    Psraw,
+    Psrad,
+    Psrlw,
+    Psrld,
+    Psrlq,
     Rcpss,
     Roundss,
     Roundsd,
@@ -463,6 +471,14 @@ impl SseOpcode {
             | SseOpcode::Mulpd
             | SseOpcode::Mulsd
             | SseOpcode::Orpd
+            | SseOpcode::Psllw
+            | SseOpcode::Pslld
+            | SseOpcode::Psllq
+            | SseOpcode::Psraw
+            | SseOpcode::Psrad
+            | SseOpcode::Psrlw
+            | SseOpcode::Psrld
+            | SseOpcode::Psrlq
             | SseOpcode::Sqrtpd
             | SseOpcode::Sqrtsd
             | SseOpcode::Subpd
@@ -535,6 +551,14 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Mulsd => "mulsd",
             SseOpcode::Orpd => "orpd",
             SseOpcode::Orps => "orps",
+            SseOpcode::Psllw => "psllw",
+            SseOpcode::Pslld => "pslld",
+            SseOpcode::Psllq => "psllq",
+            SseOpcode::Psraw => "psraw",
+            SseOpcode::Psrad => "psrad",
+            SseOpcode::Psrlw => "psrlw",
+            SseOpcode::Psrld => "psrld",
+            SseOpcode::Psrlq => "psrlq",
             SseOpcode::Rcpss => "rcpss",
             SseOpcode::Roundss => "roundss",
             SseOpcode::Roundsd => "roundsd",
