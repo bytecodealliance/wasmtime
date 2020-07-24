@@ -424,6 +424,35 @@ pub(crate) fn put_input_in_rse_imm12<C: LowerCtx<I = Inst>>(
     ResultRSEImm12::from_rse(put_input_in_rse(ctx, input, narrow_mode))
 }
 
+/// Like `put_input_in_rse_imm12` above, except is allowed to negate the
+/// argument (assuming a two's-complement representation with the given bit
+/// width) if this allows use of 12-bit immediate. Used to flip `add`s with
+/// negative immediates to `sub`s (and vice-versa).
+pub(crate) fn put_input_in_rse_imm12_maybe_negated<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    input: InsnInput,
+    twos_complement_bits: usize,
+    narrow_mode: NarrowValueMode,
+) -> (ResultRSEImm12, bool) {
+    assert!(twos_complement_bits <= 64);
+    if let Some(imm_value) = input_to_const(ctx, input) {
+        if let Some(i) = Imm12::maybe_from_u64(imm_value) {
+            return (ResultRSEImm12::Imm12(i), false);
+        }
+        let sign_extended =
+            ((imm_value as i64) << (64 - twos_complement_bits)) >> (64 - twos_complement_bits);
+        let inverted = sign_extended.wrapping_neg();
+        if let Some(i) = Imm12::maybe_from_u64(inverted as u64) {
+            return (ResultRSEImm12::Imm12(i), true);
+        }
+    }
+
+    (
+        ResultRSEImm12::from_rse(put_input_in_rse(ctx, input, narrow_mode)),
+        false,
+    )
+}
+
 pub(crate) fn put_input_in_rs_immlogic<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     input: InsnInput,
