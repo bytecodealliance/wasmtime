@@ -1,13 +1,12 @@
-use log::debug;
-use regalloc::Reg;
-
-use std::convert::TryFrom;
-
 use crate::binemit::Reloc;
-use crate::{
-    ir::immediates::{Ieee32, Ieee64},
-    isa::x64::inst::*,
-};
+use crate::ir::immediates::{Ieee32, Ieee64};
+use crate::ir::TrapCode;
+use crate::isa::x64::inst::args::*;
+use crate::isa::x64::inst::*;
+use crate::machinst::{MachBuffer, MachInstEmit, MachLabel};
+use log::debug;
+use regalloc::{Reg, RegClass, Writable};
+use std::convert::TryFrom;
 
 fn low8_will_sign_extend_to_64(x: u32) -> bool {
     let xs = (x as i32) as i64;
