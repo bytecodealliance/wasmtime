@@ -46,6 +46,10 @@ bitflags! {
         #[cfg(any(target_os = "linux",
                   target_os = "fuchsia"))]
         const EMPTY_PATH = libc::AT_EMPTY_PATH;
+
+        // Temporarily disable on Emscripten until https://github.com/rust-lang/libc/pull/1836
+        // is available.
+        #[cfg(not(target_os = "emscripten"))]
         const EACCESS = libc::AT_EACCESS;
     }
 }
@@ -323,6 +327,8 @@ pub unsafe fn fstat(fd: RawFd) -> Result<stat> {
     Ok(filestat.assume_init())
 }
 
+// Temporarily disable on Emscripten until https://github.com/rust-lang/libc/pull/1836
+// is available.
 #[cfg(not(target_os = "emscripten"))]
 pub unsafe fn faccessat<P: AsRef<Path>>(
     dirfd: RawFd,
@@ -340,8 +346,6 @@ pub unsafe fn faccessat<P: AsRef<Path>>(
     Ok(())
 }
 
-// In Web environments, we don't have Unix-style access control, so just
-// silently succeed.
 #[cfg(target_os = "emscripten")]
 pub unsafe fn faccessat<P: AsRef<Path>>(
     _dirfd: RawFd,
