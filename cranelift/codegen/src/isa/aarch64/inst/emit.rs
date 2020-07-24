@@ -1123,6 +1123,18 @@ impl MachInstEmit for Inst {
                     VecMisc2::Not => (0b1, 0b00101, 0b00),
                     VecMisc2::Neg => (0b1, 0b01011, enc_size),
                     VecMisc2::Abs => (0b0, 0b01011, enc_size),
+                    VecMisc2::Fabs => {
+                        debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
+                        (0b0, 0b01111, enc_size)
+                    }
+                    VecMisc2::Fneg => {
+                        debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
+                        (0b1, 0b01111, enc_size)
+                    }
+                    VecMisc2::Fsqrt => {
+                        debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
+                        (0b1, 0b11111, enc_size)
+                    }
                 };
                 sink.put4(enc_vec_rr_misc(u, size, bits_12_16, rd, rn));
             }
@@ -1363,9 +1375,22 @@ impl MachInstEmit for Inst {
                     VectorSize::Size64x2 => 0b11,
                     _ => 0,
                 };
-                let enc_size_for_fcmp = match size {
-                    VectorSize::Size32x4 => 0b0,
-                    VectorSize::Size64x2 => 0b1,
+                let is_float = match alu_op {
+                    VecALUOp::Fcmeq
+                    | VecALUOp::Fcmgt
+                    | VecALUOp::Fcmge
+                    | VecALUOp::Fadd
+                    | VecALUOp::Fsub
+                    | VecALUOp::Fdiv
+                    | VecALUOp::Fmax
+                    | VecALUOp::Fmin
+                    | VecALUOp::Fmul => true,
+                    _ => false,
+                };
+                let enc_float_size = match (is_float, size) {
+                    (true, VectorSize::Size32x4) => 0b0,
+                    (true, VectorSize::Size64x2) => 0b1,
+                    (true, _) => unimplemented!(),
                     _ => 0,
                 };
 
@@ -1379,9 +1404,9 @@ impl MachInstEmit for Inst {
                     VecALUOp::Cmgt => (0b010_01110_00_1 | enc_size << 1, 0b001101),
                     VecALUOp::Cmhi => (0b011_01110_00_1 | enc_size << 1, 0b001101),
                     VecALUOp::Cmhs => (0b011_01110_00_1 | enc_size << 1, 0b001111),
-                    VecALUOp::Fcmeq => (0b010_01110_00_1 | enc_size_for_fcmp << 1, 0b111001),
-                    VecALUOp::Fcmgt => (0b011_01110_10_1 | enc_size_for_fcmp << 1, 0b111001),
-                    VecALUOp::Fcmge => (0b011_01110_00_1 | enc_size_for_fcmp << 1, 0b111001),
+                    VecALUOp::Fcmeq => (0b010_01110_00_1, 0b111001),
+                    VecALUOp::Fcmgt => (0b011_01110_10_1, 0b111001),
+                    VecALUOp::Fcmge => (0b011_01110_00_1, 0b111001),
                     // The following logical instructions operate on bytes, so are not encoded differently
                     // for the different vector types.
                     VecALUOp::And => (0b010_01110_00_1, 0b000111),
@@ -1403,6 +1428,17 @@ impl MachInstEmit for Inst {
                     VecALUOp::Umax => (0b011_01110_00_1 | enc_size << 1, 0b011001),
                     VecALUOp::Smax => (0b010_01110_00_1 | enc_size << 1, 0b011001),
                     VecALUOp::Urhadd => (0b011_01110_00_1 | enc_size << 1, 0b000101),
+                    VecALUOp::Fadd => (0b010_01110_00_1, 0b110101),
+                    VecALUOp::Fsub => (0b010_01110_10_1, 0b110101),
+                    VecALUOp::Fdiv => (0b011_01110_00_1, 0b111111),
+                    VecALUOp::Fmax => (0b010_01110_00_1, 0b111101),
+                    VecALUOp::Fmin => (0b010_01110_10_1, 0b111101),
+                    VecALUOp::Fmul => (0b011_01110_00_1, 0b110111),
+                };
+                let top11 = if is_float {
+                    top11 | enc_float_size << 1
+                } else {
+                    top11
                 };
                 sink.put4(enc_vec_rrr(top11, rm, bit15_10, rn, rd));
             }

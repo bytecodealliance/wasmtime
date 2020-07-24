@@ -1802,46 +1802,84 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv | Opcode::Fmin | Opcode::Fmax => {
-            let bits = ty_bits(ctx.output_ty(insn, 0));
-            let fpu_op = match (op, bits) {
-                (Opcode::Fadd, 32) => FPUOp2::Add32,
-                (Opcode::Fadd, 64) => FPUOp2::Add64,
-                (Opcode::Fsub, 32) => FPUOp2::Sub32,
-                (Opcode::Fsub, 64) => FPUOp2::Sub64,
-                (Opcode::Fmul, 32) => FPUOp2::Mul32,
-                (Opcode::Fmul, 64) => FPUOp2::Mul64,
-                (Opcode::Fdiv, 32) => FPUOp2::Div32,
-                (Opcode::Fdiv, 64) => FPUOp2::Div64,
-                (Opcode::Fmin, 32) => FPUOp2::Min32,
-                (Opcode::Fmin, 64) => FPUOp2::Min64,
-                (Opcode::Fmax, 32) => FPUOp2::Max32,
-                (Opcode::Fmax, 64) => FPUOp2::Max64,
-                _ => panic!("Unknown op/bits combination"),
-            };
+            let ty = ty.unwrap();
+            let bits = ty_bits(ty);
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
             let rd = get_output_reg(ctx, outputs[0]);
-            ctx.emit(Inst::FpuRRR { fpu_op, rd, rn, rm });
+            if bits < 128 {
+                let fpu_op = match (op, bits) {
+                    (Opcode::Fadd, 32) => FPUOp2::Add32,
+                    (Opcode::Fadd, 64) => FPUOp2::Add64,
+                    (Opcode::Fsub, 32) => FPUOp2::Sub32,
+                    (Opcode::Fsub, 64) => FPUOp2::Sub64,
+                    (Opcode::Fmul, 32) => FPUOp2::Mul32,
+                    (Opcode::Fmul, 64) => FPUOp2::Mul64,
+                    (Opcode::Fdiv, 32) => FPUOp2::Div32,
+                    (Opcode::Fdiv, 64) => FPUOp2::Div64,
+                    (Opcode::Fmin, 32) => FPUOp2::Min32,
+                    (Opcode::Fmin, 64) => FPUOp2::Min64,
+                    (Opcode::Fmax, 32) => FPUOp2::Max32,
+                    (Opcode::Fmax, 64) => FPUOp2::Max64,
+                    _ => panic!("Unknown op/bits combination"),
+                };
+                ctx.emit(Inst::FpuRRR { fpu_op, rd, rn, rm });
+            } else {
+                let alu_op = match op {
+                    Opcode::Fadd => VecALUOp::Fadd,
+                    Opcode::Fsub => VecALUOp::Fsub,
+                    Opcode::Fdiv => VecALUOp::Fdiv,
+                    Opcode::Fmax => VecALUOp::Fmax,
+                    Opcode::Fmin => VecALUOp::Fmin,
+                    Opcode::Fmul => VecALUOp::Fmul,
+                    _ => unreachable!(),
+                };
+
+                ctx.emit(Inst::VecRRR {
+                    rd,
+                    rn,
+                    rm,
+                    alu_op,
+                    size: VectorSize::from_ty(ty),
+                });
+            }
         }
 
         Opcode::Sqrt | Opcode::Fneg | Opcode::Fabs | Opcode::Fpromote | Opcode::Fdemote => {
-            let bits = ty_bits(ctx.output_ty(insn, 0));
-            let fpu_op = match (op, bits) {
-                (Opcode::Sqrt, 32) => FPUOp1::Sqrt32,
-                (Opcode::Sqrt, 64) => FPUOp1::Sqrt64,
-                (Opcode::Fneg, 32) => FPUOp1::Neg32,
-                (Opcode::Fneg, 64) => FPUOp1::Neg64,
-                (Opcode::Fabs, 32) => FPUOp1::Abs32,
-                (Opcode::Fabs, 64) => FPUOp1::Abs64,
-                (Opcode::Fpromote, 32) => panic!("Cannot promote to 32 bits"),
-                (Opcode::Fpromote, 64) => FPUOp1::Cvt32To64,
-                (Opcode::Fdemote, 32) => FPUOp1::Cvt64To32,
-                (Opcode::Fdemote, 64) => panic!("Cannot demote to 64 bits"),
-                _ => panic!("Unknown op/bits combination"),
-            };
+            let ty = ty.unwrap();
+            let bits = ty_bits(ty);
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let rd = get_output_reg(ctx, outputs[0]);
-            ctx.emit(Inst::FpuRR { fpu_op, rd, rn });
+            if bits < 128 {
+                let fpu_op = match (op, bits) {
+                    (Opcode::Sqrt, 32) => FPUOp1::Sqrt32,
+                    (Opcode::Sqrt, 64) => FPUOp1::Sqrt64,
+                    (Opcode::Fneg, 32) => FPUOp1::Neg32,
+                    (Opcode::Fneg, 64) => FPUOp1::Neg64,
+                    (Opcode::Fabs, 32) => FPUOp1::Abs32,
+                    (Opcode::Fabs, 64) => FPUOp1::Abs64,
+                    (Opcode::Fpromote, 32) => panic!("Cannot promote to 32 bits"),
+                    (Opcode::Fpromote, 64) => FPUOp1::Cvt32To64,
+                    (Opcode::Fdemote, 32) => FPUOp1::Cvt64To32,
+                    (Opcode::Fdemote, 64) => panic!("Cannot demote to 64 bits"),
+                    _ => panic!("Unknown op/bits combination"),
+                };
+                ctx.emit(Inst::FpuRR { fpu_op, rd, rn });
+            } else {
+                let op = match op {
+                    Opcode::Fabs => VecMisc2::Fabs,
+                    Opcode::Fneg => VecMisc2::Fneg,
+                    Opcode::Sqrt => VecMisc2::Fsqrt,
+                    _ => unimplemented!(),
+                };
+
+                ctx.emit(Inst::VecMisc {
+                    op,
+                    rd,
+                    rn,
+                    size: VectorSize::from_ty(ty),
+                });
+            }
         }
 
         Opcode::Ceil | Opcode::Floor | Opcode::Trunc | Opcode::Nearest => {
