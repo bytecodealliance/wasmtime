@@ -23,7 +23,7 @@ Next, add a reference to the Wasmtime NuGet package to your project:
 
 
 ```text
-$ dotnet add package --version 0.15.0-preview1 wasmtime
+$ dotnet add package --version 0.19.0-preview1 wasmtime
 ```
 
 Copy this example WebAssembly text module into your project directory as `gcd.wat`.
@@ -46,10 +46,12 @@ namespace Tutorial
     {
         static void Main(string[] args)
         {
-            using var host = new Host();
-            using var module = host.LoadModuleText("gcd.wat");
+            using var engine = new Engine();
+            using var module = Module.FromTextFile(engine, "gcd.wat");
 
+            using var host = new Host(engine);
             using dynamic instance = host.Instantiate(module);
+
             Console.WriteLine($"gcd(27, 6) = {instance.gcd(27, 6)}");
         }
     }
