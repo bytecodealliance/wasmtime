@@ -255,7 +255,11 @@ impl Handle for InMemoryFile {
     fn read_vectored(&self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
         trace!("read_vectored(iovs={:?})", iovs);
         trace!("     | *read_start={:?}", self.cursor.get());
-        self.data.borrow_mut().preadv(iovs, self.cursor.get())
+        let read = self.data.borrow_mut().preadv(iovs, self.cursor.get())?;
+        let offset: u64 = read.try_into().map_err(|_| Errno::Inval)?;
+        let update = self.cursor.get().checked_add(offset).ok_or(Errno::Inval)?;
+        self.cursor.set(update);
+        Ok(read)
     }
     fn seek(&self, offset: SeekFrom) -> Result<types::Filesize> {
         let content_len = self.data.borrow().size();

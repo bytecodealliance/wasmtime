@@ -25,10 +25,10 @@ unsafe fn test_file_seek_tell(dir_fd: wasi::Fd) {
     assert_eq!(offset, 0, "current offset should be 0");
 
     // Write to file
-    let buf = &[0u8; 100];
+    let data = &[0u8; 100];
     let iov = wasi::Ciovec {
-        buf: buf.as_ptr() as *const _,
-        buf_len: buf.len(),
+        buf: data.as_ptr() as *const _,
+        buf_len: data.len(),
     };
     let nwritten = wasi::fd_write(file_fd, &[iov]).expect("writing to a file");
     assert_eq!(nwritten, 100, "should write 100 bytes to file");
@@ -64,6 +64,20 @@ unsafe fn test_file_seek_tell(dir_fd: wasi::Fd) {
         wasi::ERRNO_INVAL,
         "errno should be ERRNO_INVAL",
     );
+
+    // Check that fd_read properly updates the file offset
+    wasi::fd_seek(file_fd, 0, wasi::WHENCE_SET).expect("seeking to the beginning of the file again");
+
+    let buffer = &mut [0u8; 100];
+    let iovec = wasi::Iovec {
+        buf: buffer.as_mut_ptr(),
+        buf_len: buffer.len(),
+    };
+    let nread = wasi::fd_read(file_fd, &[iovec]).expect("reading file");
+    assert_eq!(nread, buffer.len(), "should read {} bytes", buffer.len());
+
+    offset = wasi::fd_tell(file_fd).expect("getting file offset after reading");
+    assert_eq!(offset, 100, "offset after reading should be 100");
 
     wasi::fd_close(file_fd).expect("closing a file");
     wasi::path_unlink_file(dir_fd, "file").expect("deleting a file");
