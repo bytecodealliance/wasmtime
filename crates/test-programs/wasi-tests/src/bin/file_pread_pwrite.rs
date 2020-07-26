@@ -1,5 +1,6 @@
 use more_asserts::assert_gt;
 use std::{env, process};
+use std::convert::TryInto;
 use wasi_tests::open_scratch_directory;
 
 unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
@@ -37,6 +38,71 @@ unsafe fn test_file_pread_pwrite(dir_fd: wasi::Fd) {
     let mut nread = wasi::fd_pread(file_fd, &[iovec], 0).expect("reading bytes at offset 0");
     assert_eq!(nread, 4, "nread bytes check");
     assert_eq!(contents, &[0u8, 1, 2, 3], "written bytes equal read bytes");
+
+    // Write all the data through multiple iovecs.
+    //
+    // Note that this needs to be done with a loop, because some
+    // platforms do not support writing multiple iovecs at once.
+    // See https://github.com/rust-lang/rust/issues/74825.
+    let contents = &[0u8, 1, 2, 3];
+    let mut offset = 0usize;
+    loop {
+        let mut ciovecs: Vec<wasi::Ciovec> = Vec::new();
+        let mut remaining = contents.len() - offset;
+        if remaining > 2 {
+            ciovecs.push(
+                wasi::Ciovec {
+                    buf: contents[offset..].as_ptr() as *const _,
+                    buf_len: 2,
+                },
+            );
+            remaining -= 2;
+        }
+        ciovecs.push(
+            wasi::Ciovec {
+                buf: contents[contents.len() - remaining..].as_ptr() as *const _,
+                buf_len: remaining
+            },
+        );
+
+        nwritten =
+            wasi::fd_pwrite(file_fd, ciovecs.as_slice(), offset.try_into().unwrap()).expect("writing bytes at offset 0");
+
+        offset += nwritten;
+        if offset == contents.len() {
+            break;
+        }
+    }
+    assert_eq!(offset, 4, "nread bytes check");
+
+    // Read all the data through multiple iovecs.
+    //
+    // Note that this needs to be done with a loop, because some
+    // platforms do not support reading multiple iovecs at once.
+    // See https://github.com/rust-lang/rust/issues/74825.
+    let contents = &mut [0u8; 4];
+    let mut offset = 0usize;
+    loop {
+        let buffer = &mut [0u8; 4];
+        let iovecs = &[
+            wasi::Iovec {
+                buf: buffer.as_mut_ptr() as *mut _,
+                buf_len: 2,
+            },
+            wasi::Iovec {
+                buf: buffer[2..].as_mut_ptr() as *mut _,
+                buf_len: 2
+            },
+        ];
+        nread = wasi::fd_pread(file_fd, iovecs, offset as _).expect("reading bytes at offset 0");
+        if nread == 0 {
+            break;
+        }
+        contents[offset..offset+nread].copy_from_slice(&buffer[0..nread]);
+        offset += nread;
+    }
+    assert_eq!(offset, 4, "nread bytes check");
+    assert_eq!(contents, &[0u8, 1, 2, 3], "file cursor was overwritten");
 
     let contents = &mut [0u8; 4];
     let iovec = wasi::Iovec {
