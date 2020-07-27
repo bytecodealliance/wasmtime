@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use std::cmp;
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
@@ -38,14 +39,16 @@ pub struct GlobalFrameInfoRegistration {
     key: usize,
 }
 
+#[derive(Debug)]
 struct ModuleFrameInfo {
     start: usize,
     functions: BTreeMap<usize, FunctionInfo>,
     module: Arc<Module>,
-    #[allow(dead_code)]
-    module_code: Arc<dyn std::any::Any + Send + Sync>,
+    // #[allow(dead_code)]
+    // module_code: Arc<dyn std::any::Any + Send + Sync>,
 }
 
+#[derive(Debug)]
 struct FunctionInfo {
     start: usize,
     index: FuncIndex,
@@ -96,7 +99,7 @@ impl GlobalFrameInfo {
         // the function, because otherwise something is buggy along the way and
         // not accounting for all the instructions. This isn't super critical
         // though so we can omit this check in release mode.
-        debug_assert!(pos.is_some(), "failed to find instruction for {:x}", pc);
+        // debug_assert!(pos.is_some(), "failed to find instruction for {:x}", pc);
 
         let instr = match pos {
             Some(pos) => func.instr_map.instructions[pos].srcloc,
@@ -152,12 +155,22 @@ pub fn register(module: &CompiledModule) -> Option<GlobalFrameInfoRegistration> 
     let mut min = usize::max_value();
     let mut max = 0;
     let mut functions = BTreeMap::new();
-    for (((i, allocated), traps), instrs) in module
+    for vals in module
         .finished_functions()
         .iter()
         .zip(module.traps().values())
-        .zip(module.address_transform().values())
+        .zip_longest(module.address_transform().values())
     {
+        use itertools::EitherOrBoth::*;
+
+        // We have to do a `match` here because of the weird use of this `EitherOrBoth` enum instead
+        // of `(Option<A>, Option<B>)`
+        let (((i, allocated), traps), instrs) = match vals {
+            Left(left) => (left, None),
+            Right(_) => break,
+            Both(left, right) => (left, Some(right)),
+        };
+
         let (start, end) = unsafe {
             let ptr = (**allocated).as_ptr();
             let len = (**allocated).len();
@@ -169,7 +182,7 @@ pub fn register(module: &CompiledModule) -> Option<GlobalFrameInfoRegistration> 
             start,
             index: module.module().local.func_index(i),
             traps: traps.to_vec(),
-            instr_map: (*instrs).clone(),
+            instr_map: instrs.cloned().unwrap_or_default(),
         };
         assert!(functions.insert(end, func).is_none());
     }
@@ -194,7 +207,7 @@ pub fn register(module: &CompiledModule) -> Option<GlobalFrameInfoRegistration> 
             start: min,
             functions,
             module: module.module().clone(),
-            module_code: module.code().clone(),
+            // module_code: module.code().clone(),
         },
     );
     assert!(prev.is_none());

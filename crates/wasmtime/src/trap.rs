@@ -79,9 +79,7 @@ impl Trap {
                 backtrace,
                 maybe_interrupted,
             } => {
-                let mut code = info
-                    .lookup_trap_info(pc)
-                    .map(|info| info.trap_code)
+                let mut code = (info.lookup_trap_info(pc).map(|info| info.trap_code))
                     .unwrap_or(TrapCode::StackOverflow);
                 if maybe_interrupted && code == TrapCode::StackOverflow {
                     code = TrapCode::Interrupt;

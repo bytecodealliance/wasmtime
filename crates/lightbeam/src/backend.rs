@@ -6581,6 +6581,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         let temp0 = self
             .take_reg(I64)
             .ok_or_else(|| error("Ran out of free registers"))?;
+
         dynasm!(self.asm
             ; cmp Rd(callee_reg.rq().unwrap()), [
                 Rq(reg.unwrap_or(vmctx).rq().unwrap()) +
@@ -6588,14 +6589,16 @@ impl<'this, M: ModuleContext> Context<'this, M> {
                     self.module_context.vmtable_definition_current_elements() as i32
             ]
             ;; self.trap_if(cc::GE_U, TrapCode::TableOutOfBounds)
-            ; imul
+            ; imul Rd(callee_reg.rq().unwrap()),
                 Rd(callee_reg.rq().unwrap()),
-                Rd(callee_reg.rq().unwrap()),
-                self.module_context.size_of_vmcaller_checked_anyfunc() as i32
+                std::mem::size_of::<usize>() as i32
             ; mov Rq(temp0.rq().unwrap()), [
                 Rq(reg.unwrap_or(vmctx).rq().unwrap()) +
                     offset +
                     self.module_context.vmtable_definition_base() as i32
+            ]
+            ; mov Rq(temp0.rq().unwrap()), [
+                Rq(temp0.rq().unwrap()) + Rq(callee_reg.rq().unwrap())
             ]
         );
 
@@ -6615,19 +6618,16 @@ impl<'this, M: ModuleContext> Context<'this, M> {
             ]
             ; cmp DWORD [
                 Rq(temp0.rq().unwrap()) +
-                    Rq(callee_reg.rq().unwrap()) +
                     self.module_context.vmcaller_checked_anyfunc_type_index() as i32
             ], Rd(temp1.rq().unwrap())
             ;; self.trap_if(cc::NOT_EQUAL, TrapCode::BadSignature)
             ; mov Rq(VMCTX), [
                 Rq(temp0.rq().unwrap()) +
-                    Rq(callee_reg.rq().unwrap()) +
                     self.module_context.vmcaller_checked_anyfunc_vmctx() as i32
             ]
             ;; assert_eq!(self.physical_stack_depth, needed_depth)
             ; call QWORD [
                 Rq(temp0.rq().unwrap()) +
-                    Rq(callee_reg.rq().unwrap()) +
                     self.module_context.vmcaller_checked_anyfunc_func_ptr() as i32
             ]
         );
@@ -6861,8 +6861,16 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     }
 
     pub fn trap(&mut self, trap_id: TrapCode) {
+        let function_start_offset = self
+            .func_starts
+            .get(self.current_function as usize)
+            .and_then(|(start, _)| start.as_ref())
+            .copied()
+            .map(|o| o.0)
+            .unwrap_or_default();
         self.sinks.traps.trap(
-            u32::try_from(self.asm.offset().0).expect("Assembly offset overflowed u32"),
+            u32::try_from(self.asm.offset().0 - function_start_offset)
+                .expect("Assembly offset overflowed u32"),
             self.source_loc,
             trap_id,
         );
