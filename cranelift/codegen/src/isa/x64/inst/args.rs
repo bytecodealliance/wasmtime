@@ -210,6 +210,13 @@ impl RegMemImm {
             Self::Imm { .. } => {}
         }
     }
+
+    pub(crate) fn to_reg(&self) -> Option<Reg> {
+        match self {
+            Self::Reg { reg } => Some(*reg),
+            _ => None,
+        }
+    }
 }
 
 impl ShowWithRRU for RegMemImm {
@@ -255,6 +262,12 @@ impl RegMem {
             RegMem::Mem { addr, .. } => addr.get_regs_as_uses(collector),
         }
     }
+    pub(crate) fn to_reg(&self) -> Option<Reg> {
+        match self {
+            RegMem::Reg { reg } => Some(*reg),
+            _ => None,
+        }
+    }
 }
 
 impl ShowWithRRU for RegMem {
@@ -271,7 +284,7 @@ impl ShowWithRRU for RegMem {
 }
 
 /// Some basic ALU operations.  TODO: maybe add Adc, Sbb.
-#[derive(Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum AluRmiROpcode {
     Add,
     Sub,
