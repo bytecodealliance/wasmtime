@@ -2044,8 +2044,7 @@ pub(crate) fn emit(
             //
             // ;; positive inputs get saturated to INT_MAX; negative ones to INT_MIN, which is
             // ;; already in %dst.
-            // mov 0, %tmp_gpr
-            // movd/movq %tmp_gpr, %tmp_xmm
+            // xorpd %tmp_xmm, %tmp_xmm
             // cmpss/cmpsd %src, %tmp_xmm
             // jnb done
             // mov/movaps $INT_MAX, %dst
@@ -2069,8 +2068,7 @@ pub(crate) fn emit(
             //
             // ;; if positive, it was a real overflow
             // check_positive:
-            // mov 0, %tmp_gpr
-            // movd/movq %tmp_gpr, %tmp_xmm
+            // xorpd %tmp_xmm, %tmp_xmm
             // cmpss/cmpsd %src, %tmp_xmm
             // jnb done
             // ud2 trap IntegerOverflow
@@ -2120,11 +2118,10 @@ pub(crate) fn emit(
                 sink.bind_label(not_nan);
 
                 // If the input was positive, saturate to INT_MAX.
-                // TODO use xorps/xorpd here
-                let inst = Inst::imm_r(false, 0, *tmp_gpr); // rely on sign-extension to get 0 on 64-bits
-                inst.emit(sink, flags, state);
+
+                // Zero out tmp_xmm.
                 let inst =
-                    Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, *tmp_xmm);
+                    Inst::xmm_rm_r(SseOpcode::Xorpd, RegMem::reg(tmp_xmm.to_reg()), *tmp_xmm);
                 inst.emit(sink, flags, state);
 
                 let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), tmp_xmm.to_reg());
@@ -2194,12 +2191,9 @@ pub(crate) fn emit(
 
                 sink.bind_label(check_positive);
 
-                // TODO use xorpd
-                let inst = Inst::imm_r(false, 0, *tmp_gpr);
-                inst.emit(sink, flags, state);
-
+                // Zero out the tmp_xmm register.
                 let inst =
-                    Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, *tmp_xmm);
+                    Inst::xmm_rm_r(SseOpcode::Xorpd, RegMem::reg(tmp_xmm.to_reg()), *tmp_xmm);
                 inst.emit(sink, flags, state);
 
                 let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(src), tmp_xmm.to_reg());
