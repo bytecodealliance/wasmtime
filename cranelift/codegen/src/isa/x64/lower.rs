@@ -1989,8 +1989,13 @@ impl LowerBackend for X64Backend {
                     // is to introduce a relocation pass for inlined jumptables, which is much
                     // worse.)
 
-                    let tmp1 = ctx.alloc_tmp(RegClass::I64, I32);
-                    let tmp2 = ctx.alloc_tmp(RegClass::I64, I32);
+                    // This temporary is used as a signed integer of 64-bits (to hold addresses).
+                    let tmp1 = ctx.alloc_tmp(RegClass::I64, I64);
+                    // This temporary is used as a signed integer of 32-bits (for the wasm-table
+                    // index) and then 64-bits (address addend). The small lie about the I64 type
+                    // is benign, since the temporary is dead after this instruction (and its
+                    // Cranelift type is thus unused).
+                    let tmp2 = ctx.alloc_tmp(RegClass::I64, I64);
 
                     let targets_for_term: Vec<MachLabel> = targets.to_vec();
                     let default_target = BranchTarget::Label(targets[0]);

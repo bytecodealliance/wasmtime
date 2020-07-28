@@ -350,6 +350,7 @@ pub enum Inst {
     /// Jump-table sequence, as one compound instruction (see note in lower.rs for rationale).
     /// The generated code sequence is described in the emit's function match arm for this
     /// instruction.
+    /// See comment in lowering about the temporaries signedness.
     JmpTableSeq {
         idx: Reg,
         tmp1: Writable<Reg>,
