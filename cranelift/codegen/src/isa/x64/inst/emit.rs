@@ -1462,7 +1462,7 @@ pub(crate) fn emit(
             // jnb $default_target
             // movl %idx, %tmp2
             // lea start_of_jump_table_offset(%rip), %tmp1
-            // movzlq [%tmp1, %tmp2], %tmp2
+            // movslq [%tmp1, %tmp2, 4], %tmp2 ;; shift of 2, viz. multiply index by 4
             // addq %tmp2, %tmp1
             // j *%tmp1
             // $start_of_jump_table:
@@ -1485,8 +1485,9 @@ pub(crate) fn emit(
             );
             inst.emit(sink, flags, state);
 
-            // Load value out of jump table.
-            let inst = Inst::movzx_rm_r(
+            // Load value out of the jump table. It's a relative offset to the target block, so it
+            // might be negative; use a sign-extension.
+            let inst = Inst::movsx_rm_r(
                 ExtMode::LQ,
                 RegMem::mem(Amode::imm_reg_reg_shift(0, tmp1.to_reg(), tmp2.to_reg(), 2)),
                 *tmp2,
