@@ -271,6 +271,18 @@ pub enum VecALUOp {
     Smax,
     /// Unsigned rounding halving add
     Urhadd,
+    /// Floating-point add
+    Fadd,
+    /// Floating-point subtract
+    Fsub,
+    /// Floating-point divide
+    Fdiv,
+    /// Floating-point maximum
+    Fmax,
+    /// Floating-point minimum
+    Fmin,
+    /// Floating-point multiply
+    Fmul,
 }
 
 /// A Vector miscellaneous operation with two registers.
@@ -282,6 +294,12 @@ pub enum VecMisc2 {
     Neg,
     /// Absolute value
     Abs,
+    /// Floating-point absolute value
+    Fabs,
+    /// Floating-point negate
+    Fneg,
+    /// Floating-point square root
+    Fsqrt,
 }
 
 /// An operation across the lanes of vectors.
@@ -2810,6 +2828,12 @@ impl Inst {
                     VecALUOp::Umax => ("umax", size),
                     VecALUOp::Smax => ("smax", size),
                     VecALUOp::Urhadd => ("urhadd", size),
+                    VecALUOp::Fadd => ("fadd", size),
+                    VecALUOp::Fsub => ("fsub", size),
+                    VecALUOp::Fdiv => ("fdiv", size),
+                    VecALUOp::Fmax => ("fmax", size),
+                    VecALUOp::Fmin => ("fmin", size),
+                    VecALUOp::Fmul => ("fmul", size),
                 };
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
                 let rn = show_vreg_vector(rn, mb_rru, size);
@@ -2821,6 +2845,9 @@ impl Inst {
                     VecMisc2::Not => ("mvn", VectorSize::Size8x16),
                     VecMisc2::Neg => ("neg", size),
                     VecMisc2::Abs => ("abs", size),
+                    VecMisc2::Fabs => ("fabs", size),
+                    VecMisc2::Fneg => ("fneg", size),
+                    VecMisc2::Fsqrt => ("fsqrt", size),
                 };
 
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
