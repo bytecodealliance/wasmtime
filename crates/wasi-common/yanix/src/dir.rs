@@ -65,6 +65,7 @@ impl Dir {
 }
 
 unsafe impl Send for Dir {}
+unsafe impl Sync for Dir {}
 
 impl AsRawFd for Dir {
     fn as_raw_fd(&self) -> RawFd {
