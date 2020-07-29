@@ -252,6 +252,27 @@ pub enum SerInstData {
         cond: String,
         code: String,
     },
+    AtomicCas {
+        opcode: String,
+        args: [String; 3],
+        flags: String,
+    },
+    AtomicRmw {
+        opcode: String,
+        args: [String; 2],
+        flags: String,
+        op: String,
+    },
+    LoadNoOffset {
+        opcode: String,
+        arg: String,
+        flags: String,
+    },
+    StoreNoOffset {
+        opcode: String,
+        args: [String; 2],
+        flags: String,
+    },
 }
 
 /// Convert Cranelift IR instructions to JSON format.
@@ -739,6 +760,53 @@ pub fn get_inst_data(inst_index: Inst, func: &Function) -> SerInstData {
             cond: cond.to_string(),
             code: code.to_string(),
         },
+        InstructionData::AtomicCas {
+            opcode,
+            args,
+            flags,
+        } => {
+            let hold_args = [
+                args[0].to_string(),
+                args[1].to_string(),
+                args[2].to_string(),
+            ];
+            SerInstData::AtomicCas {
+                opcode: opcode.to_string(),
+                args: hold_args,
+                flags: flags.to_string(),
+            }
+        }
+        InstructionData::AtomicRmw {
+            opcode,
+            args,
+            flags,
+            op,
+        } => {
+            let hold_args = [args[0].to_string(), args[1].to_string()];
+            SerInstData::AtomicRmw {
+                opcode: opcode.to_string(),
+                args: hold_args,
+                flags: flags.to_string(),
+                op: op.to_string(),
+            }
+        }
+        InstructionData::LoadNoOffset { opcode, arg, flags } => SerInstData::LoadNoOffset {
+            opcode: opcode.to_string(),
+            arg: arg.to_string(),
+            flags: flags.to_string(),
+        },
+        InstructionData::StoreNoOffset {
+            opcode,
+            args,
+            flags,
+        } => {
+            let hold_args = [args[0].to_string(), args[1].to_string()];
+            SerInstData::StoreNoOffset {
+                opcode: opcode.to_string(),
+                args: hold_args,
+                flags: flags.to_string(),
+            }
+        }
     }
 }
 

@@ -71,6 +71,9 @@ pub(crate) struct Immediates {
     ///
     /// The Rust enum type also has a `User(u16)` variant for user-provided trap codes.
     pub trapcode: OperandKind,
+
+    /// A code indicating the arithmetic operation to perform in an atomic_rmw memory access.
+    pub atomic_rmw_op: OperandKind,
 }
 
 fn new_imm(format_field_name: &'static str, rust_type: &'static str) -> OperandKind {
@@ -155,6 +158,17 @@ impl Immediates {
                 trapcode_values.insert("int_ovf", "IntegerOverflow");
                 trapcode_values.insert("int_divz", "IntegerDivisionByZero");
                 new_enum("code", "ir::TrapCode", trapcode_values).with_doc("A trap reason code.")
+            },
+            atomic_rmw_op: {
+                let mut atomic_rmw_op_values = HashMap::new();
+                atomic_rmw_op_values.insert("add", "Add");
+                atomic_rmw_op_values.insert("sub", "Sub");
+                atomic_rmw_op_values.insert("and", "And");
+                atomic_rmw_op_values.insert("or", "Or");
+                atomic_rmw_op_values.insert("xor", "Xor");
+                atomic_rmw_op_values.insert("xchg", "Xchg");
+                new_enum("op", "ir::AtomicRmwOp", atomic_rmw_op_values)
+                    .with_doc("Atomic Read-Modify-Write Ops")
             },
         }
     }

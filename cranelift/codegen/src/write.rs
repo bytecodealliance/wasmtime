@@ -498,6 +498,10 @@ pub fn write_operands(
     let pool = &dfg.value_lists;
     use crate::ir::instructions::InstructionData::*;
     match dfg[inst] {
+        AtomicRmw { op, args, .. } => write!(w, " {}, {}, {}", op, args[0], args[1]),
+        AtomicCas { args, .. } => write!(w, " {}, {}, {}", args[0], args[1], args[2]),
+        LoadNoOffset { flags, arg, .. } => write!(w, "{} {}", flags, arg),
+        StoreNoOffset { flags, args, .. } => write!(w, "{} {}, {}", flags, args[0], args[1]),
         Unary { arg, .. } => write!(w, " {}", arg),
         UnaryImm { imm, .. } => write!(w, " {}", imm),
         UnaryIeee32 { imm, .. } => write!(w, " {}", imm),

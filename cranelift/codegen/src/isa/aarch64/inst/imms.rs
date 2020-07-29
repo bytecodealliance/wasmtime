@@ -328,8 +328,7 @@ impl Imm12 {
 }
 
 /// An immediate for logical instructions.
-#[derive(Clone, Debug)]
-#[cfg_attr(test, derive(PartialEq))]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ImmLogic {
     /// The actual value.
     value: u64,
@@ -550,6 +549,37 @@ impl ImmLogic {
     pub fn invert(&self) -> ImmLogic {
         // For every ImmLogical immediate, the inverse can also be encoded.
         Self::maybe_from_u64(!self.value, self.size.to_ty()).unwrap()
+    }
+
+    /// This provides a safe(ish) way to avoid the costs of `maybe_from_u64` when we want to
+    /// encode a constant that we know at compiler-build time.  It constructs an `ImmLogic` from
+    /// the fields `n`, `r`, `s` and `size`, but in a debug build, checks that `value_to_check`
+    /// corresponds to those four fields.  The intention is that, in a non-debug build, this
+    /// reduces to something small enough that it will be a candidate for inlining.
+    pub fn from_n_r_s(value_to_check: u64, n: bool, r: u8, s: u8, size: OperandSize) -> Self {
+        // Construct it from the components we got given.
+        let imml = Self {
+            value: value_to_check,
+            n,
+            r,
+            s,
+            size,
+        };
+
+        // In debug mode, check that `n`/`r`/`s` are correct, given `value` and `size`.
+        debug_assert!(match ImmLogic::maybe_from_u64(
+            value_to_check,
+            if size == OperandSize::Size64 {
+                I64
+            } else {
+                I32
+            }
+        ) {
+            None => false, // fail: `value` is unrepresentable
+            Some(imml_check) => imml_check == imml,
+        });
+
+        imml
     }
 }
 

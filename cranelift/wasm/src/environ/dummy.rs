@@ -538,6 +538,29 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     ) -> WasmResult<()> {
         Ok(())
     }
+
+    fn translate_atomic_wait(
+        &mut self,
+        mut pos: FuncCursor,
+        _index: MemoryIndex,
+        _heap: ir::Heap,
+        _addr: ir::Value,
+        _expected: ir::Value,
+        _timeout: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        Ok(pos.ins().iconst(I32, -1))
+    }
+
+    fn translate_atomic_notify(
+        &mut self,
+        mut pos: FuncCursor,
+        _index: MemoryIndex,
+        _heap: ir::Heap,
+        _addr: ir::Value,
+        _count: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        Ok(pos.ins().iconst(I32, 0))
+    }
 }
 
 impl TargetEnvironment for DummyEnvironment {

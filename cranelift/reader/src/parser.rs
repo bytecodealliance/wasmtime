@@ -3202,6 +3202,52 @@ impl<'a> Parser<'a> {
                     code,
                 }
             }
+            InstructionFormat::AtomicCas => {
+                let flags = self.optional_memflags();
+                let addr = self.match_value("expected SSA value address")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let expected = self.match_value("expected SSA value address")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let replacement = self.match_value("expected SSA value address")?;
+                InstructionData::AtomicCas {
+                    opcode,
+                    flags,
+                    args: [addr, expected, replacement],
+                }
+            }
+            InstructionFormat::AtomicRmw => {
+                let flags = self.optional_memflags();
+                let op = self.match_enum("expected AtomicRmwOp")?;
+                let addr = self.match_value("expected SSA value address")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let arg2 = self.match_value("expected SSA value address")?;
+                InstructionData::AtomicRmw {
+                    opcode,
+                    flags,
+                    op,
+                    args: [addr, arg2],
+                }
+            }
+            InstructionFormat::LoadNoOffset => {
+                let flags = self.optional_memflags();
+                let addr = self.match_value("expected SSA value address")?;
+                InstructionData::LoadNoOffset {
+                    opcode,
+                    flags,
+                    arg: addr,
+                }
+            }
+            InstructionFormat::StoreNoOffset => {
+                let flags = self.optional_memflags();
+                let arg = self.match_value("expected SSA value operand")?;
+                self.match_token(Token::Comma, "expected ',' between operands")?;
+                let addr = self.match_value("expected SSA value address")?;
+                InstructionData::StoreNoOffset {
+                    opcode,
+                    flags,
+                    args: [arg, addr],
+                }
+            }
         };
         Ok(idata)
     }

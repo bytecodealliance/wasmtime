@@ -10,7 +10,7 @@
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
-use crate::ir::{InstructionData, Opcode, TrapCode, Type};
+use crate::ir::{AtomicRmwOp, InstructionData, Opcode, TrapCode, Type};
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::CodegenResult;
@@ -1078,6 +1078,13 @@ pub(crate) fn inst_trapcode(data: &InstructionData) -> Option<TrapCode> {
         | &InstructionData::CondTrap { code, .. }
         | &InstructionData::IntCondTrap { code, .. }
         | &InstructionData::FloatCondTrap { code, .. } => Some(code),
+        _ => None,
+    }
+}
+
+pub(crate) fn inst_atomic_rmw_op(data: &InstructionData) -> Option<AtomicRmwOp> {
+    match data {
+        &InstructionData::AtomicRmw { op, .. } => Some(op),
         _ => None,
     }
 }

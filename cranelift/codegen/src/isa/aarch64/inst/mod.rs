@@ -606,6 +606,68 @@ pub enum Inst {
         cond: Cond,
     },
 
+    /// A synthetic insn, which is a load-linked store-conditional loop, that has the overall
+    /// effect of atomically modifying a memory location in a particular way.  Because we have
+    /// no way to explain to the regalloc about earlyclobber registers, this instruction has
+    /// completely fixed operand registers, and we rely on the RA's coalescing to remove copies
+    /// in the surrounding code to the extent it can.  The sequence is both preceded and
+    /// followed by a fence which is at least as comprehensive as that of the `Fence`
+    /// instruction below.  This instruction is sequentially consistent.  The operand
+    /// conventions are:
+    ///
+    /// x25   (rd) address
+    /// x26   (rd) second operand for `op`
+    /// x27   (wr) old value
+    /// x24   (wr) scratch reg; value afterwards has no meaning
+    /// x28   (wr) scratch reg; value afterwards has no meaning
+    AtomicRMW {
+        ty: Type, // I8, I16, I32 or I64
+        op: AtomicRMWOp,
+        srcloc: Option<SourceLoc>,
+    },
+
+    /// Similar to AtomicRMW, a compare-and-swap operation implemented using a load-linked
+    /// store-conditional loop.  (Although we could possibly implement it more directly using
+    /// CAS insns that are available in some revisions of AArch64 above 8.0).  The sequence is
+    /// both preceded and followed by a fence which is at least as comprehensive as that of the
+    /// `Fence` instruction below.  This instruction is sequentially consistent.  Note that the
+    /// operand conventions, although very similar to AtomicRMW, are different:
+    ///
+    /// x25   (rd) address
+    /// x26   (rd) expected value
+    /// x28   (rd) replacement value
+    /// x27   (wr) old value
+    /// x24   (wr) scratch reg; value afterwards has no meaning
+    AtomicCAS {
+        ty: Type, // I8, I16, I32 or I64
+        srcloc: Option<SourceLoc>,
+    },
+
+    /// Read `ty` bits from address `r_addr`, zero extend the loaded value to 64 bits and put it
+    /// in `r_data`.  The load instruction is preceded by a fence at least as comprehensive as
+    /// that of the `Fence` instruction below.  This instruction is sequentially consistent.
+    AtomicLoad {
+        ty: Type, // I8, I16, I32 or I64
+        r_data: Writable<Reg>,
+        r_addr: Reg,
+        srcloc: Option<SourceLoc>,
+    },
+
+    /// Write the lowest `ty` bits of `r_data` to address `r_addr`, with a memory fence
+    /// instruction following the store.  The fence is at least as comprehensive as that of the
+    /// `Fence` instruction below.  This instruction is sequentially consistent.
+    AtomicStore {
+        ty: Type, // I8, I16, I32 or I64
+        r_data: Reg,
+        r_addr: Reg,
+        srcloc: Option<SourceLoc>,
+    },
+
+    /// A memory fence.  This must provide ordering to ensure that, at a minimum, neither loads
+    /// nor stores may move forwards or backwards across the fence.  Currently emitted as "dmb
+    /// ish".  This instruction is sequentially consistent.
+    Fence,
+
     /// FPU move. Note that this is distinct from a vector-register
     /// move; moving just 64 bits seems to be significantly faster.
     FpuMove64 {
@@ -1249,6 +1311,29 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::CCmpImm { rn, .. } => {
             collector.add_use(rn);
         }
+        &Inst::AtomicRMW { .. } => {
+            collector.add_use(xreg(25));
+            collector.add_use(xreg(26));
+            collector.add_def(writable_xreg(24));
+            collector.add_def(writable_xreg(27));
+            collector.add_def(writable_xreg(28));
+        }
+        &Inst::AtomicCAS { .. } => {
+            collector.add_use(xreg(25));
+            collector.add_use(xreg(26));
+            collector.add_use(xreg(28));
+            collector.add_def(writable_xreg(24));
+            collector.add_def(writable_xreg(27));
+        }
+        &Inst::AtomicLoad { r_data, r_addr, .. } => {
+            collector.add_use(r_addr);
+            collector.add_def(r_data);
+        }
+        &Inst::AtomicStore { r_data, r_addr, .. } => {
+            collector.add_use(r_addr);
+            collector.add_use(r_data);
+        }
+        &Inst::Fence {} => {}
         &Inst::FpuMove64 { rd, rn } => {
             collector.add_def(rd);
             collector.add_use(rn);
@@ -1721,6 +1806,29 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         &mut Inst::CCmpImm { ref mut rn, .. } => {
             map_use(mapper, rn);
         }
+        &mut Inst::AtomicRMW { .. } => {
+            // There are no vregs to map in this insn.
+        }
+        &mut Inst::AtomicCAS { .. } => {
+            // There are no vregs to map in this insn.
+        }
+        &mut Inst::AtomicLoad {
+            ref mut r_data,
+            ref mut r_addr,
+            ..
+        } => {
+            map_def(mapper, r_data);
+            map_use(mapper, r_addr);
+        }
+        &mut Inst::AtomicStore {
+            ref mut r_data,
+            ref mut r_addr,
+            ..
+        } => {
+            map_use(mapper, r_data);
+            map_use(mapper, r_addr);
+        }
+        &mut Inst::Fence {} => {}
         &mut Inst::FpuMove64 {
             ref mut rd,
             ref mut rn,
@@ -2533,6 +2641,28 @@ impl Inst {
                 let nzcv = nzcv.show_rru(mb_rru);
                 let cond = cond.show_rru(mb_rru);
                 format!("ccmp {}, {}, {}, {}", rn, imm, nzcv, cond)
+            }
+            &Inst::AtomicRMW { ty, op, .. } => {
+                format!(
+                    "atomically {{ {}_bits_at_[x25]) {:?}= x26 ; x27 = old_value_at_[x25]; x24,x28 = trash }}",
+                    ty.bits(), op)
+            }
+            &Inst::AtomicCAS { ty, .. } => {
+                format!(
+                    "atomically {{ compare-and-swap({}_bits_at_[x25], x26 -> x28), x27 = old_value_at_[x25]; x24 = trash }}",
+                    ty.bits())
+            }
+            &Inst::AtomicLoad { ty, r_data, r_addr, .. } => {
+                format!(
+                    "atomically {{ {} = zero_extend_{}_bits_at[{}] }}",
+                    r_data.show_rru(mb_rru), ty.bits(), r_addr.show_rru(mb_rru))
+            }
+            &Inst::AtomicStore { ty, r_data, r_addr, .. } => {
+                format!(
+                    "atomically {{ {}_bits_at[{}] = {} }}", ty.bits(), r_addr.show_rru(mb_rru), r_data.show_rru(mb_rru))
+            }
+            &Inst::Fence {} => {
+                format!("dmb ish")
             }
             &Inst::FpuMove64 { rd, rn } => {
                 let rd = rd.to_reg().show_rru(mb_rru);
