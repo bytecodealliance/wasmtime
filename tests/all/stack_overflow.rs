@@ -2,6 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
 #[test]
+#[cfg_attr(feature = "experimental_x64", ignore)] // TODO #2079 require probe stacks
 fn host_always_has_some_stack() -> anyhow::Result<()> {
     static HITS: AtomicUsize = AtomicUsize::new(0);
     // assume hosts always have at least 512k of stack

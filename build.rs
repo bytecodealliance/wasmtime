@@ -151,7 +151,12 @@ fn write_testsuite_tests(
     let testname = extract_name(path);
 
     writeln!(out, "#[test]")?;
-    if ignore(testsuite, &testname, strategy) {
+    if experimental_x64_should_panic(testsuite, &testname, strategy) {
+        writeln!(
+            out,
+            r#"#[cfg_attr(feature = "experimental_x64", should_panic)]"#
+        )?;
+    } else if ignore(testsuite, &testname, strategy) {
         writeln!(out, "#[ignore]")?;
     }
     writeln!(out, "fn r#{}() {{", &testname)?;
@@ -165,6 +170,21 @@ fn write_testsuite_tests(
     writeln!(out, "}}")?;
     writeln!(out)?;
     Ok(())
+}
+
+/// For experimental_x64 backend features that are not supported yet, mark tests as panicking, so
+/// they stop "passing" once the features are properly implemented.
+fn experimental_x64_should_panic(testsuite: &str, testname: &str, strategy: &str) -> bool {
+    if !cfg!(feature = "experimental_x64") || strategy != "Cranelift" {
+        return false;
+    }
+
+    match (testsuite, testname) {
+        ("simd", _) => return true,
+        _ => {}
+    }
+
+    false
 }
 
 /// Ignore tests that aren't supported yet.
