@@ -229,6 +229,13 @@ pub enum Inst {
         srcloc: Option<SourceLoc>,
     },
 
+    /// XMM (vector) unary op (to move a constant value into an xmm register): movups
+    XmmLoadConstSeq {
+        val: Vec<u8>,
+        dst: Writable<Reg>,
+        ty: Type,
+    },
+
     /// XMM (scalar) unary op (from xmm to integer reg): movd, movq, cvtts{s,d}2si
     XmmToGpr {
         op: SseOpcode,
@@ -535,6 +542,13 @@ impl Inst {
             dst,
             srcloc,
         }
+    }
+
+    pub(crate) fn xmm_load_const_seq(val: Vec<u8>, dst: Writable<Reg>, ty: Type) -> Inst {
+        debug_assert!(val.len() == 16);
+        debug_assert!(dst.to_reg().get_class() == RegClass::V128);
+        debug_assert!(ty.is_vector() && ty.bits() == 128);
+        Inst::XmmLoadConstSeq { val, dst, ty }
     }
 
     /// Convenient helper for unary float operations.
@@ -1091,6 +1105,10 @@ impl ShowWithRRU for Inst {
                 dst.show_rru(mb_rru),
             ),
 
+            Inst::XmmLoadConstSeq { val, dst, .. } => {
+                format!("load_const ${:?}, {}", val, dst.show_rru(mb_rru),)
+            }
+
             Inst::XmmToGpr {
                 op,
                 src,
@@ -1474,6 +1492,7 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
                 collector.add_mod(*dst);
             }
         }
+        Inst::XmmLoadConstSeq { dst, .. } => collector.add_def(*dst),
         Inst::XmmMinMaxSeq { lhs, rhs_dst, .. } => {
             collector.add_use(*lhs);
             collector.add_mod(*rhs_dst);
@@ -1764,6 +1783,9 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         } => {
             src.map_uses(mapper);
             map_mod(mapper, dst);
+        }
+        Inst::XmmLoadConstSeq { ref mut dst, .. } => {
+            map_def(mapper, dst);
         }
         Inst::XmmMinMaxSeq {
             ref mut lhs,

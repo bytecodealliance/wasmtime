@@ -1,6 +1,6 @@
 use crate::binemit::Reloc;
 use crate::ir::immediates::{Ieee32, Ieee64};
-use crate::ir::TrapCode;
+use crate::ir::{types, TrapCode};
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::machinst::{MachBuffer, MachInstEmit, MachLabel};
@@ -1785,6 +1785,40 @@ pub(crate) fn emit(
                 }
             }
             sink.put1(*imm)
+        }
+
+        Inst::XmmLoadConstSeq { val, dst, ty } => {
+            // This sequence is *one* instruction in the vcode, and is expanded only here at
+            // emission time, because we cannot allow the regalloc to insert spills/reloads in
+            // the middle; we depend on hardcoded PC-rel addressing below. TODO Eventually this
+            // "constant inline" code should be replaced by constant pool integration.
+
+            // Load the inline constant.
+            let opcode = match *ty {
+                types::F32X4 => SseOpcode::Movups,
+                types::F64X2 => SseOpcode::Movupd,
+                types::I8X16 => SseOpcode::Movupd, // TODO replace with MOVDQU
+                _ => unimplemented!("cannot yet load constants for type: {}", ty),
+            };
+            let constant_start_label = sink.get_label();
+            let load_offset = RegMem::mem(Amode::rip_relative(BranchTarget::Label(
+                constant_start_label,
+            )));
+            let load = Inst::xmm_unary_rm_r(opcode, load_offset, *dst);
+            load.emit(sink, flags, state);
+
+            // Jump over the constant.
+            let constant_end_label = sink.get_label();
+            let continue_at_offset = BranchTarget::Label(constant_end_label);
+            let jump = Inst::jmp_known(continue_at_offset);
+            jump.emit(sink, flags, state);
+
+            // Emit the constant.
+            sink.bind_label(constant_start_label);
+            for i in val.iter() {
+                sink.put1(*i);
+            }
+            sink.bind_label(constant_end_label);
         }
 
         Inst::Xmm_Mov_R_M {
