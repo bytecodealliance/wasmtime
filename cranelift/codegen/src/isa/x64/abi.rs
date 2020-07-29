@@ -23,8 +23,8 @@ static STACK_ARG_RET_SIZE_LIMIT: u64 = 128 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
 enum ABIArg {
-    Reg(RealReg, ir::Type),
-    Stack(i64, ir::Type),
+    Reg(RealReg, ir::Type, ir::ArgumentExtension),
+    Stack(i64, ir::Type, ir::ArgumentExtension),
 }
 
 /// X64 ABI information shared between body (callee) and caller.
@@ -302,7 +302,7 @@ impl ABIBody for X64ABIBody {
     fn liveins(&self) -> Set<RealReg> {
         let mut set: Set<RealReg> = Set::empty();
         for arg in &self.sig.args {
-            if let &ABIArg::Reg(r, _) = arg {
+            if let &ABIArg::Reg(r, ..) = arg {
                 set.insert(r);
             }
         }
@@ -312,7 +312,7 @@ impl ABIBody for X64ABIBody {
     fn liveouts(&self) -> Set<RealReg> {
         let mut set: Set<RealReg> = Set::empty();
         for ret in &self.sig.rets {
-            if let &ABIArg::Reg(r, _) = ret {
+            if let &ABIArg::Reg(r, ..) = ret {
                 set.insert(r);
             }
         }
@@ -321,8 +321,8 @@ impl ABIBody for X64ABIBody {
 
     fn gen_copy_arg_to_reg(&self, idx: usize, to_reg: Writable<Reg>) -> Inst {
         match &self.sig.args[idx] {
-            ABIArg::Reg(from_reg, ty) => Inst::gen_move(to_reg, from_reg.to_reg(), *ty),
-            &ABIArg::Stack(off, ty) => {
+            ABIArg::Reg(from_reg, ty, _) => Inst::gen_move(to_reg, from_reg.to_reg(), *ty),
+            &ABIArg::Stack(off, ty, _) => {
                 assert!(
                     self.fp_to_arg_offset() + off <= u32::max_value() as i64,
                     "large offset nyi"
@@ -351,15 +351,10 @@ impl ABIBody for X64ABIBody {
         }
     }
 
-    fn gen_copy_reg_to_retval(
-        &self,
-        idx: usize,
-        from_reg: Writable<Reg>,
-        ext: ArgumentExtension,
-    ) -> Vec<Inst> {
+    fn gen_copy_reg_to_retval(&self, idx: usize, from_reg: Writable<Reg>) -> Vec<Inst> {
         let mut ret = Vec::new();
         match &self.sig.rets[idx] {
-            &ABIArg::Reg(r, ty) => {
+            &ABIArg::Reg(r, ty, ext) => {
                 let from_bits = ty.bits() as u8;
                 let ext_mode = match from_bits {
                     1 | 8 => Some(ExtMode::BQ),
@@ -391,7 +386,7 @@ impl ABIBody for X64ABIBody {
                 };
             }
 
-            &ABIArg::Stack(off, ty) => {
+            &ABIArg::Stack(off, ty, ext) => {
                 let from_bits = ty.bits() as u8;
                 let ext_mode = match from_bits {
                     1 | 8 => Some(ExtMode::BQ),
@@ -758,7 +753,7 @@ fn abisig_to_uses_and_defs(sig: &ABISig) -> (Vec<Reg>, Vec<Writable<Reg>>) {
     let mut uses = Vec::new();
     for arg in &sig.args {
         match arg {
-            &ABIArg::Reg(reg, _) => uses.push(reg.to_reg()),
+            &ABIArg::Reg(reg, ..) => uses.push(reg.to_reg()),
             _ => {}
         }
     }
@@ -767,7 +762,7 @@ fn abisig_to_uses_and_defs(sig: &ABISig) -> (Vec<Reg>, Vec<Writable<Reg>>) {
     let mut defs = get_caller_saves(sig.call_conv);
     for ret in &sig.rets {
         match ret {
-            &ABIArg::Reg(reg, _) => defs.push(Writable::from_reg(reg.to_reg())),
+            &ABIArg::Reg(reg, ..) => defs.push(Writable::from_reg(reg.to_reg())),
             _ => {}
         }
     }
@@ -781,11 +776,19 @@ fn try_fill_baldrdash_reg(call_conv: CallConv, param: &ir::AbiParam) -> Option<A
         match &param.purpose {
             &ir::ArgumentPurpose::VMContext => {
                 // This is SpiderMonkey's `WasmTlsReg`.
-                Some(ABIArg::Reg(regs::r14().to_real_reg(), ir::types::I64))
+                Some(ABIArg::Reg(
+                    regs::r14().to_real_reg(),
+                    ir::types::I64,
+                    param.extension,
+                ))
             }
             &ir::ArgumentPurpose::SignatureId => {
                 // This is SpiderMonkey's `WasmTableCallSigReg`.
-                Some(ABIArg::Reg(regs::r10().to_real_reg(), ir::types::I64))
+                Some(ABIArg::Reg(
+                    regs::r10().to_real_reg(),
+                    ir::types::I64,
+                    param.extension,
+                ))
             }
             _ => None,
         }
@@ -872,7 +875,11 @@ fn compute_arg_locs(
             assert!(intreg);
             ret.push(param);
         } else if let Some(reg) = candidate {
-            ret.push(ABIArg::Reg(reg.to_real_reg(), param.value_type));
+            ret.push(ABIArg::Reg(
+                reg.to_real_reg(),
+                param.value_type,
+                param.extension,
+            ));
             *next_reg += 1;
         } else {
             // Compute size. Every arg takes a minimum slot of 8 bytes. (16-byte
@@ -882,7 +889,11 @@ fn compute_arg_locs(
             // Align.
             debug_assert!(size.is_power_of_two());
             next_stack = (next_stack + size - 1) & !(size - 1);
-            ret.push(ABIArg::Stack(next_stack as i64, param.value_type));
+            ret.push(ABIArg::Stack(
+                next_stack as i64,
+                param.value_type,
+                param.extension,
+            ));
             next_stack += size;
         }
     }
@@ -894,9 +905,17 @@ fn compute_arg_locs(
     let extra_arg = if add_ret_area_ptr {
         debug_assert!(args_or_rets == ArgsOrRets::Args);
         if let Some(reg) = get_intreg_for_arg_systemv(&call_conv, next_gpr) {
-            ret.push(ABIArg::Reg(reg.to_real_reg(), ir::types::I64));
+            ret.push(ABIArg::Reg(
+                reg.to_real_reg(),
+                ir::types::I64,
+                ir::ArgumentExtension::None,
+            ));
         } else {
-            ret.push(ABIArg::Stack(next_stack as i64, ir::types::I64));
+            ret.push(ABIArg::Stack(
+                next_stack as i64,
+                ir::types::I64,
+                ir::ArgumentExtension::None,
+            ));
             next_stack += 8;
         }
         Some(ret.len() - 1)
@@ -1125,12 +1144,74 @@ impl ABICall for X64ABICall {
         from_reg: Reg,
     ) {
         match &self.sig.args[idx] {
-            &ABIArg::Reg(reg, ty) => ctx.emit(Inst::gen_move(
+            &ABIArg::Reg(reg, ty, ext) if ext != ir::ArgumentExtension::None && ty.bits() < 64 => {
+                assert_eq!(RegClass::I64, reg.get_class());
+                let dest_reg = Writable::from_reg(reg.to_reg());
+                let ext_mode = match ty.bits() {
+                    1 | 8 => ExtMode::BQ,
+                    16 => ExtMode::WQ,
+                    32 => ExtMode::LQ,
+                    _ => unreachable!(),
+                };
+                match ext {
+                    ir::ArgumentExtension::Uext => {
+                        ctx.emit(Inst::movzx_rm_r(
+                            ext_mode,
+                            RegMem::reg(from_reg),
+                            dest_reg,
+                            /* infallible load */ None,
+                        ));
+                    }
+                    ir::ArgumentExtension::Sext => {
+                        ctx.emit(Inst::movsx_rm_r(
+                            ext_mode,
+                            RegMem::reg(from_reg),
+                            dest_reg,
+                            /* infallible load */ None,
+                        ));
+                    }
+                    _ => unreachable!(),
+                };
+            }
+            &ABIArg::Reg(reg, ty, _) => ctx.emit(Inst::gen_move(
                 Writable::from_reg(reg.to_reg()),
                 from_reg,
                 ty,
             )),
-            &ABIArg::Stack(off, ty) => {
+            &ABIArg::Stack(off, ty, ext) => {
+                if ext != ir::ArgumentExtension::None && ty.bits() < 64 {
+                    assert_eq!(RegClass::I64, from_reg.get_class());
+                    let dest_reg = Writable::from_reg(from_reg);
+                    let ext_mode = match ty.bits() {
+                        1 | 8 => ExtMode::BQ,
+                        16 => ExtMode::WQ,
+                        32 => ExtMode::LQ,
+                        _ => unreachable!(),
+                    };
+                    // Extend in place in the source register. Our convention is to
+                    // treat high bits as undefined for values in registers, so this
+                    // is safe, even for an argument that is nominally read-only.
+                    match ext {
+                        ir::ArgumentExtension::Uext => {
+                            ctx.emit(Inst::movzx_rm_r(
+                                ext_mode,
+                                RegMem::reg(from_reg),
+                                dest_reg,
+                                /* infallible load */ None,
+                            ));
+                        }
+                        ir::ArgumentExtension::Sext => {
+                            ctx.emit(Inst::movsx_rm_r(
+                                ext_mode,
+                                RegMem::reg(from_reg),
+                                dest_reg,
+                                /* infallible load */ None,
+                            ));
+                        }
+                        _ => unreachable!(),
+                    };
+                }
+
                 debug_assert!(off <= u32::max_value() as i64);
                 debug_assert!(off >= 0);
                 ctx.emit(store_stack(
@@ -1149,8 +1230,8 @@ impl ABICall for X64ABICall {
         into_reg: Writable<Reg>,
     ) {
         match &self.sig.rets[idx] {
-            &ABIArg::Reg(reg, ty) => ctx.emit(Inst::gen_move(into_reg, reg.to_reg(), ty)),
-            &ABIArg::Stack(off, ty) => {
+            &ABIArg::Reg(reg, ty, _) => ctx.emit(Inst::gen_move(into_reg, reg.to_reg(), ty)),
+            &ABIArg::Stack(off, ty, _) => {
                 let ret_area_base = self.sig.stack_arg_space;
                 let sp_offset = off + ret_area_base;
                 // TODO handle offsets bigger than u32::max
