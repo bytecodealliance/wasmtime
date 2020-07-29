@@ -378,6 +378,39 @@ fn enc_vec_lanes(q: u32, u: u32, size: u32, opcode: u32, rd: Writable<Reg>, rn: 
         | machreg_to_vec(rd.to_reg())
 }
 
+fn enc_dmb_ish() -> u32 {
+    0xD5033BBF
+}
+
+fn enc_ldxr(ty: Type, rt: Writable<Reg>, rn: Reg) -> u32 {
+    let sz = match ty {
+        I64 => 0b11,
+        I32 => 0b10,
+        I16 => 0b01,
+        I8 => 0b00,
+        _ => unreachable!(),
+    };
+    0b00001000_01011111_01111100_00000000
+        | (sz << 30)
+        | (machreg_to_gpr(rn) << 5)
+        | machreg_to_gpr(rt.to_reg())
+}
+
+fn enc_stxr(ty: Type, rs: Writable<Reg>, rt: Reg, rn: Reg) -> u32 {
+    let sz = match ty {
+        I64 => 0b11,
+        I32 => 0b10,
+        I16 => 0b01,
+        I8 => 0b00,
+        _ => unreachable!(),
+    };
+    0b00001000_00000000_01111100_00000000
+        | (sz << 30)
+        | (machreg_to_gpr(rs.to_reg()) << 16)
+        | (machreg_to_gpr(rn) << 5)
+        | machreg_to_gpr(rt)
+}
+
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
@@ -1004,6 +1037,219 @@ impl MachInstEmit for Inst {
                 cond,
             } => {
                 sink.put4(enc_ccmp_imm(size, rn, imm, nzcv, cond));
+            }
+            &Inst::AtomicRMW { ty, op, srcloc } => {
+                /* Emit this:
+                      dmb         ish
+                     again:
+                      ldxr{,b,h}  x/w27, [x25]
+                      op          x28, x27, x26 // op is add,sub,and,orr,eor
+                      stxr{,b,h}  w24, x/w28, [x25]
+                      cbnz        x24, again
+                      dmb         ish
+
+                   Operand conventions:
+                      IN:  x25 (addr), x26 (2nd arg for op)
+                      OUT: x27 (old value), x24 (trashed), x28 (trashed)
+
+                   It is unfortunate that, per the ARM documentation, x28 cannot be used for
+                   both the store-data and success-flag operands of stxr.  This causes the
+                   instruction's behaviour to be "CONSTRAINED UNPREDICTABLE", so we use x24
+                   instead for the success-flag.
+
+                   In the case where the operation is 'xchg', the second insn is instead
+                     mov          x28, x26
+                   so that we simply write in the destination, the "2nd arg for op".
+                */
+                let xzr = zero_reg();
+                let x24 = xreg(24);
+                let x25 = xreg(25);
+                let x26 = xreg(26);
+                let x27 = xreg(27);
+                let x28 = xreg(28);
+                let x24wr = writable_xreg(24);
+                let x27wr = writable_xreg(27);
+                let x28wr = writable_xreg(28);
+                let again_label = sink.get_label();
+
+                sink.put4(enc_dmb_ish()); // dmb ish
+
+                // again:
+                sink.bind_label(again_label);
+                if let Some(srcloc) = srcloc {
+                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                }
+                sink.put4(enc_ldxr(ty, x27wr, x25)); // ldxr x27, [x25]
+
+                if op == AtomicRMWOp::Xchg {
+                    // mov x28, x26
+                    sink.put4(enc_arith_rrr(0b101_01010_00_0, 0b000000, x28wr, xzr, x26))
+                } else {
+                    // add/sub/and/orr/eor x28, x27, x26
+                    let bits_31_21 = match op {
+                        AtomicRMWOp::Add => 0b100_01011_00_0,
+                        AtomicRMWOp::Sub => 0b110_01011_00_0,
+                        AtomicRMWOp::And => 0b100_01010_00_0,
+                        AtomicRMWOp::Or => 0b101_01010_00_0,
+                        AtomicRMWOp::Xor => 0b110_01010_00_0,
+                        AtomicRMWOp::Xchg => unreachable!(),
+                    };
+                    sink.put4(enc_arith_rrr(bits_31_21, 0b000000, x28wr, x27, x26));
+                }
+
+                if let Some(srcloc) = srcloc {
+                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                }
+                sink.put4(enc_stxr(ty, x24wr, x28, x25)); // stxr w24, x28, [x25]
+
+                // cbnz w24, again
+                // Note, we're actually testing x24, and relying on the default zero-high-half
+                // rule in the assignment that `stxr` does.
+                let br_offset = sink.cur_offset();
+                sink.put4(enc_conditional_br(
+                    BranchTarget::Label(again_label),
+                    CondBrKind::NotZero(x24),
+                ));
+                sink.use_label_at_offset(br_offset, again_label, LabelUse::Branch19);
+
+                sink.put4(enc_dmb_ish()); // dmb ish
+            }
+            &Inst::AtomicCAS { ty, srcloc } => {
+                /* Emit this:
+                     dmb         ish
+                    again:
+                     ldxr{,b,h}  x/w27, [x25]
+                     and         x24, x26, MASK (= 2^size_bits - 1)
+                     cmp         x27, x24
+                     b.ne        out
+                     stxr{,b,h}  w24, x/w28, [x25]
+                     cbnz        x24, again
+                    out:
+                     dmb         ish
+
+                  Operand conventions:
+                     IN:  x25 (addr), x26 (expected value), x28 (replacement value)
+                     OUT: x27 (old value), x24 (trashed)
+                */
+                let xzr = zero_reg();
+                let x24 = xreg(24);
+                let x25 = xreg(25);
+                let x26 = xreg(26);
+                let x27 = xreg(27);
+                let x28 = xreg(28);
+                let xzrwr = writable_zero_reg();
+                let x24wr = writable_xreg(24);
+                let x27wr = writable_xreg(27);
+                let again_label = sink.get_label();
+                let out_label = sink.get_label();
+
+                sink.put4(enc_dmb_ish()); // dmb ish
+
+                // again:
+                sink.bind_label(again_label);
+                if let Some(srcloc) = srcloc {
+                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                }
+                sink.put4(enc_ldxr(ty, x27wr, x25)); // ldxr x27, [x25]
+
+                if ty == I64 {
+                    // mov x24, x26
+                    sink.put4(enc_arith_rrr(0b101_01010_00_0, 0b000000, x24wr, xzr, x26))
+                } else {
+                    // and x24, x26, 0xFF/0xFFFF/0xFFFFFFFF
+                    let (mask, s) = match ty {
+                        I8 => (0xFF, 7),
+                        I16 => (0xFFFF, 15),
+                        I32 => (0xFFFFFFFF, 31),
+                        _ => unreachable!(),
+                    };
+                    sink.put4(enc_arith_rr_imml(
+                        0b100_100100,
+                        ImmLogic::from_n_r_s(mask, true, 0, s, OperandSize::Size64).enc_bits(),
+                        x26,
+                        x24wr,
+                    ))
+                }
+
+                // cmp x27, x24 (== subs xzr, x27, x24)
+                sink.put4(enc_arith_rrr(0b111_01011_00_0, 0b000000, xzrwr, x27, x24));
+
+                // b.ne out
+                let br_out_offset = sink.cur_offset();
+                sink.put4(enc_conditional_br(
+                    BranchTarget::Label(out_label),
+                    CondBrKind::Cond(Cond::Ne),
+                ));
+                sink.use_label_at_offset(br_out_offset, out_label, LabelUse::Branch19);
+
+                if let Some(srcloc) = srcloc {
+                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                }
+                sink.put4(enc_stxr(ty, x24wr, x28, x25)); // stxr w24, x28, [x25]
+
+                // cbnz w24, again.
+                // Note, we're actually testing x24, and relying on the default zero-high-half
+                // rule in the assignment that `stxr` does.
+                let br_again_offset = sink.cur_offset();
+                sink.put4(enc_conditional_br(
+                    BranchTarget::Label(again_label),
+                    CondBrKind::NotZero(x24),
+                ));
+                sink.use_label_at_offset(br_again_offset, again_label, LabelUse::Branch19);
+
+                // out:
+                sink.bind_label(out_label);
+                sink.put4(enc_dmb_ish()); // dmb ish
+            }
+            &Inst::AtomicLoad {
+                ty,
+                r_data,
+                r_addr,
+                srcloc,
+            } => {
+                let op = match ty {
+                    I8 => 0b0011100001,
+                    I16 => 0b0111100001,
+                    I32 => 0b1011100001,
+                    I64 => 0b1111100001,
+                    _ => unreachable!(),
+                };
+                sink.put4(enc_dmb_ish()); // dmb ish
+
+                if let Some(srcloc) = srcloc {
+                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                }
+                let uimm12scaled_zero = UImm12Scaled::zero(I8 /*irrelevant*/);
+                sink.put4(enc_ldst_uimm12(
+                    op,
+                    uimm12scaled_zero,
+                    r_addr,
+                    r_data.to_reg(),
+                ));
+            }
+            &Inst::AtomicStore {
+                ty,
+                r_data,
+                r_addr,
+                srcloc,
+            } => {
+                let op = match ty {
+                    I8 => 0b0011100000,
+                    I16 => 0b0111100000,
+                    I32 => 0b1011100000,
+                    I64 => 0b1111100000,
+                    _ => unreachable!(),
+                };
+
+                if let Some(srcloc) = srcloc {
+                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                }
+                let uimm12scaled_zero = UImm12Scaled::zero(I8 /*irrelevant*/);
+                sink.put4(enc_ldst_uimm12(op, uimm12scaled_zero, r_addr, r_data));
+                sink.put4(enc_dmb_ish()); // dmb ish
+            }
+            &Inst::Fence {} => {
+                sink.put4(enc_dmb_ish()); // dmb ish
             }
             &Inst::FpuMove64 { rd, rn } => {
                 sink.put4(enc_vecmov(/* 16b = */ false, rd, rn));

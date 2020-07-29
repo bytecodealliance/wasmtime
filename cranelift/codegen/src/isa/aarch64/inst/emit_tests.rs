@@ -4262,6 +4262,90 @@ fn test_aarch64_binemit() {
         "frintn d23, d24",
     ));
 
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I16,
+            op: AtomicRMWOp::Xor,
+            srcloc: None,
+        },
+        "BF3B03D53B7F5F487C031ACA3C7F1848B8FFFFB5BF3B03D5",
+        "atomically { 16_bits_at_[x25]) Xor= x26 ; x27 = old_value_at_[x25]; x24,x28 = trash }",
+    ));
+
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I32,
+            op: AtomicRMWOp::Xchg,
+            srcloc: None,
+        },
+        "BF3B03D53B7F5F88FC031AAA3C7F1888B8FFFFB5BF3B03D5",
+        "atomically { 32_bits_at_[x25]) Xchg= x26 ; x27 = old_value_at_[x25]; x24,x28 = trash }",
+    ));
+
+    insns.push((
+        Inst::AtomicCAS {
+            ty: I8,
+            srcloc: None,
+        },
+        "BF3B03D53B7F5F08581F40927F0318EB610000543C7F180878FFFFB5BF3B03D5",
+        "atomically { compare-and-swap(8_bits_at_[x25], x26 -> x28), x27 = old_value_at_[x25]; x24 = trash }"
+    ));
+
+    insns.push((
+        Inst::AtomicCAS {
+            ty: I64,
+            srcloc: None,
+        },
+        "BF3B03D53B7F5FC8F8031AAA7F0318EB610000543C7F18C878FFFFB5BF3B03D5",
+        "atomically { compare-and-swap(64_bits_at_[x25], x26 -> x28), x27 = old_value_at_[x25]; x24 = trash }"
+    ));
+
+    insns.push((
+        Inst::AtomicLoad {
+            ty: I8,
+            r_data: writable_xreg(7),
+            r_addr: xreg(28),
+            srcloc: None,
+        },
+        "BF3B03D587034039",
+        "atomically { x7 = zero_extend_8_bits_at[x28] }",
+    ));
+
+    insns.push((
+        Inst::AtomicLoad {
+            ty: I64,
+            r_data: writable_xreg(28),
+            r_addr: xreg(7),
+            srcloc: None,
+        },
+        "BF3B03D5FC0040F9",
+        "atomically { x28 = zero_extend_64_bits_at[x7] }",
+    ));
+
+    insns.push((
+        Inst::AtomicStore {
+            ty: I16,
+            r_data: xreg(17),
+            r_addr: xreg(8),
+            srcloc: None,
+        },
+        "11010079BF3B03D5",
+        "atomically { 16_bits_at[x8] = x17 }",
+    ));
+
+    insns.push((
+        Inst::AtomicStore {
+            ty: I32,
+            r_data: xreg(18),
+            r_addr: xreg(7),
+            srcloc: None,
+        },
+        "F20000B9BF3B03D5",
+        "atomically { 32_bits_at[x7] = x18 }",
+    ));
+
+    insns.push((Inst::Fence {}, "BF3B03D5", "dmb ish"));
+
     let rru = create_reg_universe(&settings::Flags::new(settings::builder()));
     for (insn, expected_encoding, expected_printing) in insns {
         println!(

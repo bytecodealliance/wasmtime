@@ -3,7 +3,10 @@ use crate::shared::{entities::EntityRefs, immediates::Immediates};
 use std::rc::Rc;
 
 pub(crate) struct Formats {
+    pub(crate) atomic_cas: Rc<InstructionFormat>,
+    pub(crate) atomic_rmw: Rc<InstructionFormat>,
     pub(crate) binary: Rc<InstructionFormat>,
+    pub(crate) binary_imm8: Rc<InstructionFormat>,
     pub(crate) binary_imm64: Rc<InstructionFormat>,
     pub(crate) branch: Rc<InstructionFormat>,
     pub(crate) branch_float: Rc<InstructionFormat>,
@@ -17,7 +20,6 @@ pub(crate) struct Formats {
     pub(crate) cond_trap: Rc<InstructionFormat>,
     pub(crate) copy_special: Rc<InstructionFormat>,
     pub(crate) copy_to_ssa: Rc<InstructionFormat>,
-    pub(crate) binary_imm8: Rc<InstructionFormat>,
     pub(crate) float_compare: Rc<InstructionFormat>,
     pub(crate) float_cond: Rc<InstructionFormat>,
     pub(crate) float_cond_trap: Rc<InstructionFormat>,
@@ -32,6 +34,7 @@ pub(crate) struct Formats {
     pub(crate) jump: Rc<InstructionFormat>,
     pub(crate) load: Rc<InstructionFormat>,
     pub(crate) load_complex: Rc<InstructionFormat>,
+    pub(crate) load_no_offset: Rc<InstructionFormat>,
     pub(crate) multiary: Rc<InstructionFormat>,
     pub(crate) nullary: Rc<InstructionFormat>,
     pub(crate) reg_fill: Rc<InstructionFormat>,
@@ -42,6 +45,7 @@ pub(crate) struct Formats {
     pub(crate) stack_store: Rc<InstructionFormat>,
     pub(crate) store: Rc<InstructionFormat>,
     pub(crate) store_complex: Rc<InstructionFormat>,
+    pub(crate) store_no_offset: Rc<InstructionFormat>,
     pub(crate) table_addr: Rc<InstructionFormat>,
     pub(crate) ternary: Rc<InstructionFormat>,
     pub(crate) ternary_imm8: Rc<InstructionFormat>,
@@ -202,6 +206,21 @@ impl Formats {
 
             func_addr: Builder::new("FuncAddr").imm(&entities.func_ref).build(),
 
+            atomic_rmw: Builder::new("AtomicRmw")
+                .imm(&imm.memflags)
+                .imm(&imm.atomic_rmw_op)
+                .value()
+                .value()
+                .build(),
+
+            atomic_cas: Builder::new("AtomicCas")
+                .imm(&imm.memflags)
+                .value()
+                .value()
+                .value()
+                .typevar_operand(2)
+                .build(),
+
             load: Builder::new("Load")
                 .imm(&imm.memflags)
                 .value()
@@ -212,6 +231,11 @@ impl Formats {
                 .imm(&imm.memflags)
                 .varargs()
                 .imm(&imm.offset32)
+                .build(),
+
+            load_no_offset: Builder::new("LoadNoOffset")
+                .imm(&imm.memflags)
+                .value()
                 .build(),
 
             store: Builder::new("Store")
@@ -226,6 +250,12 @@ impl Formats {
                 .value()
                 .varargs()
                 .imm(&imm.offset32)
+                .build(),
+
+            store_no_offset: Builder::new("StoreNoOffset")
+                .imm(&imm.memflags)
+                .value()
+                .value()
                 .build(),
 
             stack_load: Builder::new("StackLoad")

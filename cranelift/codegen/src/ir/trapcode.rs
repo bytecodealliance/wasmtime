@@ -24,6 +24,9 @@ pub enum TrapCode {
     /// offset-guard pages.
     HeapOutOfBounds,
 
+    /// A wasm atomic operation was presented with a not-naturally-aligned linear-memory address.
+    HeapMisaligned,
+
     /// A `table_addr` instruction detected an out-of-bounds error.
     TableOutOfBounds,
 
@@ -59,6 +62,7 @@ impl Display for TrapCode {
         let identifier = match *self {
             StackOverflow => "stk_ovf",
             HeapOutOfBounds => "heap_oob",
+            HeapMisaligned => "heap_misaligned",
             TableOutOfBounds => "table_oob",
             IndirectCallToNull => "icall_null",
             BadSignature => "bad_sig",
@@ -81,6 +85,7 @@ impl FromStr for TrapCode {
         match s {
             "stk_ovf" => Ok(StackOverflow),
             "heap_oob" => Ok(HeapOutOfBounds),
+            "heap_misaligned" => Ok(HeapMisaligned),
             "table_oob" => Ok(TableOutOfBounds),
             "icall_null" => Ok(IndirectCallToNull),
             "bad_sig" => Ok(BadSignature),
@@ -101,9 +106,10 @@ mod tests {
     use alloc::string::ToString;
 
     // Everything but user-defined codes.
-    const CODES: [TrapCode; 10] = [
+    const CODES: [TrapCode; 11] = [
         TrapCode::StackOverflow,
         TrapCode::HeapOutOfBounds,
+        TrapCode::HeapMisaligned,
         TrapCode::TableOutOfBounds,
         TrapCode::IndirectCallToNull,
         TrapCode::BadSignature,

@@ -1,5 +1,6 @@
 //! Representation of Cranelift IR functions.
 
+mod atomic_rmw_op;
 mod builder;
 pub mod constant;
 pub mod dfg;
@@ -26,6 +27,7 @@ mod valueloc;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
+pub use crate::ir::atomic_rmw_op::AtomicRmwOp;
 pub use crate::ir::builder::{
     InsertBuilder, InstBuilder, InstBuilderBase, InstInserterBase, ReplaceBuilder,
 };

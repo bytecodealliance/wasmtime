@@ -109,6 +109,7 @@ impl Trap {
         let desc = match code {
             StackOverflow => "call stack exhausted",
             HeapOutOfBounds => "out of bounds memory access",
+            HeapMisaligned => "misaligned memory access",
             TableOutOfBounds => "undefined element: out of bounds table access",
             IndirectCallToNull => "uninitialized element",
             BadSignature => "indirect call type mismatch",

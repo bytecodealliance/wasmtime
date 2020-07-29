@@ -36,7 +36,7 @@ use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
-    self, ConstantData, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
+    self, AtomicRmwOp, ConstantData, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
 };
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
@@ -1051,74 +1051,285 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let index = FuncIndex::from_u32(*function_index);
             state.push1(environ.translate_ref_func(builder.cursor(), index)?);
         }
-        Operator::AtomicNotify { .. }
-        | Operator::I32AtomicWait { .. }
-        | Operator::I64AtomicWait { .. }
-        | Operator::I32AtomicLoad { .. }
-        | Operator::I64AtomicLoad { .. }
-        | Operator::I32AtomicLoad8U { .. }
-        | Operator::I32AtomicLoad16U { .. }
-        | Operator::I64AtomicLoad8U { .. }
-        | Operator::I64AtomicLoad16U { .. }
-        | Operator::I64AtomicLoad32U { .. }
-        | Operator::I32AtomicStore { .. }
-        | Operator::I64AtomicStore { .. }
-        | Operator::I32AtomicStore8 { .. }
-        | Operator::I32AtomicStore16 { .. }
-        | Operator::I64AtomicStore8 { .. }
-        | Operator::I64AtomicStore16 { .. }
-        | Operator::I64AtomicStore32 { .. }
-        | Operator::I32AtomicRmwAdd { .. }
-        | Operator::I64AtomicRmwAdd { .. }
-        | Operator::I32AtomicRmw8AddU { .. }
-        | Operator::I32AtomicRmw16AddU { .. }
-        | Operator::I64AtomicRmw8AddU { .. }
-        | Operator::I64AtomicRmw16AddU { .. }
-        | Operator::I64AtomicRmw32AddU { .. }
-        | Operator::I32AtomicRmwSub { .. }
-        | Operator::I64AtomicRmwSub { .. }
-        | Operator::I32AtomicRmw8SubU { .. }
-        | Operator::I32AtomicRmw16SubU { .. }
-        | Operator::I64AtomicRmw8SubU { .. }
-        | Operator::I64AtomicRmw16SubU { .. }
-        | Operator::I64AtomicRmw32SubU { .. }
-        | Operator::I32AtomicRmwAnd { .. }
-        | Operator::I64AtomicRmwAnd { .. }
-        | Operator::I32AtomicRmw8AndU { .. }
-        | Operator::I32AtomicRmw16AndU { .. }
-        | Operator::I64AtomicRmw8AndU { .. }
-        | Operator::I64AtomicRmw16AndU { .. }
-        | Operator::I64AtomicRmw32AndU { .. }
-        | Operator::I32AtomicRmwOr { .. }
-        | Operator::I64AtomicRmwOr { .. }
-        | Operator::I32AtomicRmw8OrU { .. }
-        | Operator::I32AtomicRmw16OrU { .. }
-        | Operator::I64AtomicRmw8OrU { .. }
-        | Operator::I64AtomicRmw16OrU { .. }
-        | Operator::I64AtomicRmw32OrU { .. }
-        | Operator::I32AtomicRmwXor { .. }
-        | Operator::I64AtomicRmwXor { .. }
-        | Operator::I32AtomicRmw8XorU { .. }
-        | Operator::I32AtomicRmw16XorU { .. }
-        | Operator::I64AtomicRmw8XorU { .. }
-        | Operator::I64AtomicRmw16XorU { .. }
-        | Operator::I64AtomicRmw32XorU { .. }
-        | Operator::I32AtomicRmwXchg { .. }
-        | Operator::I64AtomicRmwXchg { .. }
-        | Operator::I32AtomicRmw8XchgU { .. }
-        | Operator::I32AtomicRmw16XchgU { .. }
-        | Operator::I64AtomicRmw8XchgU { .. }
-        | Operator::I64AtomicRmw16XchgU { .. }
-        | Operator::I64AtomicRmw32XchgU { .. }
-        | Operator::I32AtomicRmwCmpxchg { .. }
-        | Operator::I64AtomicRmwCmpxchg { .. }
-        | Operator::I32AtomicRmw8CmpxchgU { .. }
-        | Operator::I32AtomicRmw16CmpxchgU { .. }
-        | Operator::I64AtomicRmw8CmpxchgU { .. }
-        | Operator::I64AtomicRmw16CmpxchgU { .. }
-        | Operator::I64AtomicRmw32CmpxchgU { .. }
-        | Operator::AtomicFence { .. } => {
-            return Err(wasm_unsupported!("proposed thread operator {:?}", op));
+        Operator::I32AtomicWait { .. } | Operator::I64AtomicWait { .. } => {
+            // The WebAssembly MVP only supports one linear memory and
+            // wasmparser will ensure that the memory indices specified are
+            // zero.
+            let implied_ty = match op {
+                Operator::I64AtomicWait { .. } => I64,
+                Operator::I32AtomicWait { .. } => I32,
+                _ => unreachable!(),
+            };
+            let heap_index = MemoryIndex::from_u32(0);
+            let heap = state.get_heap(builder.func, 0, environ)?;
+            let timeout = state.pop1(); // 64 (fixed)
+            let expected = state.pop1(); // 32 or 64 (per the `Ixx` in `IxxAtomicWait`)
+            let addr = state.pop1(); // 32 (fixed)
+            assert!(builder.func.dfg.value_type(expected) == implied_ty);
+            // `fn translate_atomic_wait` can inspect the type of `expected` to figure out what
+            // code it needs to generate, if it wants.
+            let res = environ.translate_atomic_wait(
+                builder.cursor(),
+                heap_index,
+                heap,
+                addr,
+                expected,
+                timeout,
+            )?;
+            state.push1(res);
+        }
+        Operator::AtomicNotify { .. } => {
+            // The WebAssembly MVP only supports one linear memory and
+            // wasmparser will ensure that the memory indices specified are
+            // zero.
+            let heap_index = MemoryIndex::from_u32(0);
+            let heap = state.get_heap(builder.func, 0, environ)?;
+            let count = state.pop1(); // 32 (fixed)
+            let addr = state.pop1(); // 32 (fixed)
+            let res =
+                environ.translate_atomic_notify(builder.cursor(), heap_index, heap, addr, count)?;
+            state.push1(res);
+        }
+        Operator::I32AtomicLoad {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_load(I32, I32, *offset, builder, state, environ)?,
+        Operator::I64AtomicLoad {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_load(I64, I64, *offset, builder, state, environ)?,
+        Operator::I32AtomicLoad8U {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_load(I32, I8, *offset, builder, state, environ)?,
+        Operator::I32AtomicLoad16U {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_load(I32, I16, *offset, builder, state, environ)?,
+        Operator::I64AtomicLoad8U {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_load(I64, I8, *offset, builder, state, environ)?,
+        Operator::I64AtomicLoad16U {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_load(I64, I16, *offset, builder, state, environ)?,
+        Operator::I64AtomicLoad32U {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_load(I64, I32, *offset, builder, state, environ)?,
+
+        Operator::I32AtomicStore {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_store(I32, *offset, builder, state, environ)?,
+        Operator::I64AtomicStore {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_store(I64, *offset, builder, state, environ)?,
+        Operator::I32AtomicStore8 {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_store(I8, *offset, builder, state, environ)?,
+        Operator::I32AtomicStore16 {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_store(I16, *offset, builder, state, environ)?,
+        Operator::I64AtomicStore8 {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_store(I8, *offset, builder, state, environ)?,
+        Operator::I64AtomicStore16 {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_store(I16, *offset, builder, state, environ)?,
+        Operator::I64AtomicStore32 {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_store(I32, *offset, builder, state, environ)?,
+
+        Operator::I32AtomicRmwAdd {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I32, I32, AtomicRmwOp::Add, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmwAdd {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I64, AtomicRmwOp::Add, *offset, builder, state, environ)?,
+        Operator::I32AtomicRmw8AddU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I32, I8, AtomicRmwOp::Add, *offset, builder, state, environ)?,
+        Operator::I32AtomicRmw16AddU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I32, I16, AtomicRmwOp::Add, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw8AddU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I8, AtomicRmwOp::Add, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw16AddU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I16, AtomicRmwOp::Add, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw32AddU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I32, AtomicRmwOp::Add, *offset, builder, state, environ)?,
+
+        Operator::I32AtomicRmwSub {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I32, I32, AtomicRmwOp::Sub, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmwSub {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I64, AtomicRmwOp::Sub, *offset, builder, state, environ)?,
+        Operator::I32AtomicRmw8SubU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I32, I8, AtomicRmwOp::Sub, *offset, builder, state, environ)?,
+        Operator::I32AtomicRmw16SubU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I32, I16, AtomicRmwOp::Sub, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw8SubU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I8, AtomicRmwOp::Sub, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw16SubU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I16, AtomicRmwOp::Sub, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw32SubU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I32, AtomicRmwOp::Sub, *offset, builder, state, environ)?,
+
+        Operator::I32AtomicRmwAnd {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I32, I32, AtomicRmwOp::And, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmwAnd {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I64, AtomicRmwOp::And, *offset, builder, state, environ)?,
+        Operator::I32AtomicRmw8AndU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I32, I8, AtomicRmwOp::And, *offset, builder, state, environ)?,
+        Operator::I32AtomicRmw16AndU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I32, I16, AtomicRmwOp::And, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw8AndU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I8, AtomicRmwOp::And, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw16AndU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I16, AtomicRmwOp::And, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw32AndU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I32, AtomicRmwOp::And, *offset, builder, state, environ)?,
+
+        Operator::I32AtomicRmwOr {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I32, I32, AtomicRmwOp::Or, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmwOr {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I64, AtomicRmwOp::Or, *offset, builder, state, environ)?,
+        Operator::I32AtomicRmw8OrU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I32, I8, AtomicRmwOp::Or, *offset, builder, state, environ)?,
+        Operator::I32AtomicRmw16OrU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I32, I16, AtomicRmwOp::Or, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw8OrU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I8, AtomicRmwOp::Or, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw16OrU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I16, AtomicRmwOp::Or, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw32OrU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I32, AtomicRmwOp::Or, *offset, builder, state, environ)?,
+
+        Operator::I32AtomicRmwXor {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I32, I32, AtomicRmwOp::Xor, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmwXor {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I64, AtomicRmwOp::Xor, *offset, builder, state, environ)?,
+        Operator::I32AtomicRmw8XorU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I32, I8, AtomicRmwOp::Xor, *offset, builder, state, environ)?,
+        Operator::I32AtomicRmw16XorU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I32, I16, AtomicRmwOp::Xor, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw8XorU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I8, AtomicRmwOp::Xor, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw16XorU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I16, AtomicRmwOp::Xor, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw32XorU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I32, AtomicRmwOp::Xor, *offset, builder, state, environ)?,
+
+        Operator::I32AtomicRmwXchg {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(
+            I32,
+            I32,
+            AtomicRmwOp::Xchg,
+            *offset,
+            builder,
+            state,
+            environ,
+        )?,
+        Operator::I64AtomicRmwXchg {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(
+            I64,
+            I64,
+            AtomicRmwOp::Xchg,
+            *offset,
+            builder,
+            state,
+            environ,
+        )?,
+        Operator::I32AtomicRmw8XchgU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I32, I8, AtomicRmwOp::Xchg, *offset, builder, state, environ)?,
+        Operator::I32AtomicRmw16XchgU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(
+            I32,
+            I16,
+            AtomicRmwOp::Xchg,
+            *offset,
+            builder,
+            state,
+            environ,
+        )?,
+        Operator::I64AtomicRmw8XchgU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(I64, I8, AtomicRmwOp::Xchg, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw16XchgU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(
+            I64,
+            I16,
+            AtomicRmwOp::Xchg,
+            *offset,
+            builder,
+            state,
+            environ,
+        )?,
+        Operator::I64AtomicRmw32XchgU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_rmw(
+            I64,
+            I32,
+            AtomicRmwOp::Xchg,
+            *offset,
+            builder,
+            state,
+            environ,
+        )?,
+
+        Operator::I32AtomicRmwCmpxchg {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_cas(I32, I32, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmwCmpxchg {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_cas(I64, I64, *offset, builder, state, environ)?,
+        Operator::I32AtomicRmw8CmpxchgU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_cas(I32, I8, *offset, builder, state, environ)?,
+        Operator::I32AtomicRmw16CmpxchgU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_cas(I32, I16, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw8CmpxchgU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_cas(I64, I8, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw16CmpxchgU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_cas(I64, I16, *offset, builder, state, environ)?,
+        Operator::I64AtomicRmw32CmpxchgU {
+            memarg: MemoryImmediate { flags: _, offset },
+        } => translate_atomic_cas(I64, I32, *offset, builder, state, environ)?,
+
+        Operator::AtomicFence { .. } => {
+            builder.ins().fence();
         }
         Operator::MemoryCopy => {
             // The WebAssembly MVP only supports one linear memory and
@@ -1906,7 +2117,7 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
         environ.pointer_type(),
         builder,
     );
-    // See the comments in `translate_load` about the flags.
+    // See the comments in `prepare_load` about the flags.
     let flags = MemFlags::new();
     builder
         .ins()
@@ -1928,6 +2139,233 @@ fn translate_icmp(cc: IntCC, builder: &mut FunctionBuilder, state: &mut FuncTran
     let (arg0, arg1) = state.pop2();
     let val = builder.ins().icmp(cc, arg0, arg1);
     state.push1(builder.ins().bint(I32, val));
+}
+
+// For an atomic memory operation, emit an alignment check for the linear memory address,
+// and then compute the final effective address.
+fn finalise_atomic_mem_addr<FE: FuncEnvironment + ?Sized>(
+    linear_mem_addr: Value,
+    offset: u32,
+    access_ty: Type,
+    builder: &mut FunctionBuilder,
+    state: &mut FuncTranslationState,
+    environ: &mut FE,
+) -> WasmResult<Value> {
+    // Check the alignment of `linear_mem_addr`.
+    let access_ty_bytes = access_ty.bytes();
+    let final_lma = builder.ins().iadd_imm(linear_mem_addr, i64::from(offset));
+    if access_ty_bytes != 1 {
+        assert!(access_ty_bytes == 2 || access_ty_bytes == 4 || access_ty_bytes == 8);
+        let final_lma_misalignment = builder
+            .ins()
+            .band_imm(final_lma, i64::from(access_ty_bytes - 1));
+        let f = builder
+            .ins()
+            .ifcmp_imm(final_lma_misalignment, i64::from(0));
+        builder
+            .ins()
+            .trapif(IntCC::NotEqual, f, ir::TrapCode::HeapMisaligned);
+    }
+
+    // Compute the final effective address.  Note, we don't yet support multiple linear memories.
+    let heap = state.get_heap(builder.func, 0, environ)?;
+    let (base, offset) = get_heap_addr(
+        heap,
+        final_lma,
+        /*offset=*/ 0,
+        access_ty.bytes(),
+        environ.pointer_type(),
+        builder,
+    );
+
+    let final_effective_address = builder.ins().iadd_imm(base, i64::from(offset));
+    Ok(final_effective_address)
+}
+
+fn translate_atomic_rmw<FE: FuncEnvironment + ?Sized>(
+    widened_ty: Type,
+    access_ty: Type,
+    op: AtomicRmwOp,
+    offset: u32,
+    builder: &mut FunctionBuilder,
+    state: &mut FuncTranslationState,
+    environ: &mut FE,
+) -> WasmResult<()> {
+    let (linear_mem_addr, mut arg2) = state.pop2();
+    let arg2_ty = builder.func.dfg.value_type(arg2);
+
+    // The operation is performed at type `access_ty`, and the old value is zero-extended
+    // to type `widened_ty`.
+    match access_ty {
+        I8 | I16 | I32 | I64 => {}
+        _ => {
+            return Err(wasm_unsupported!(
+                "atomic_rmw: unsupported access type {:?}",
+                access_ty
+            ))
+        }
+    };
+    let w_ty_ok = match widened_ty {
+        I32 | I64 => true,
+        _ => false,
+    };
+    assert!(w_ty_ok && widened_ty.bytes() >= access_ty.bytes());
+
+    assert!(arg2_ty.bytes() >= access_ty.bytes());
+    if arg2_ty.bytes() > access_ty.bytes() {
+        arg2 = builder.ins().ireduce(access_ty, arg2);
+    }
+
+    let final_effective_address =
+        finalise_atomic_mem_addr(linear_mem_addr, offset, access_ty, builder, state, environ)?;
+
+    // See the comments in `prepare_load` about the flags.
+    let flags = MemFlags::new();
+    let mut res = builder
+        .ins()
+        .atomic_rmw(access_ty, flags, op, final_effective_address, arg2);
+    if access_ty != widened_ty {
+        res = builder.ins().uextend(widened_ty, res);
+    }
+    state.push1(res);
+    Ok(())
+}
+
+fn translate_atomic_cas<FE: FuncEnvironment + ?Sized>(
+    widened_ty: Type,
+    access_ty: Type,
+    offset: u32,
+    builder: &mut FunctionBuilder,
+    state: &mut FuncTranslationState,
+    environ: &mut FE,
+) -> WasmResult<()> {
+    let (linear_mem_addr, mut expected, mut replacement) = state.pop3();
+    let expected_ty = builder.func.dfg.value_type(expected);
+    let replacement_ty = builder.func.dfg.value_type(replacement);
+
+    // The compare-and-swap is performed at type `access_ty`, and the old value is zero-extended
+    // to type `widened_ty`.
+    match access_ty {
+        I8 | I16 | I32 | I64 => {}
+        _ => {
+            return Err(wasm_unsupported!(
+                "atomic_cas: unsupported access type {:?}",
+                access_ty
+            ))
+        }
+    };
+    let w_ty_ok = match widened_ty {
+        I32 | I64 => true,
+        _ => false,
+    };
+    assert!(w_ty_ok && widened_ty.bytes() >= access_ty.bytes());
+
+    assert!(expected_ty.bytes() >= access_ty.bytes());
+    if expected_ty.bytes() > access_ty.bytes() {
+        expected = builder.ins().ireduce(access_ty, expected);
+    }
+    assert!(replacement_ty.bytes() >= access_ty.bytes());
+    if replacement_ty.bytes() > access_ty.bytes() {
+        replacement = builder.ins().ireduce(access_ty, replacement);
+    }
+
+    let final_effective_address =
+        finalise_atomic_mem_addr(linear_mem_addr, offset, access_ty, builder, state, environ)?;
+
+    // See the comments in `prepare_load` about the flags.
+    let flags = MemFlags::new();
+    let mut res = builder
+        .ins()
+        .atomic_cas(flags, final_effective_address, expected, replacement);
+    if access_ty != widened_ty {
+        res = builder.ins().uextend(widened_ty, res);
+    }
+    state.push1(res);
+    Ok(())
+}
+
+fn translate_atomic_load<FE: FuncEnvironment + ?Sized>(
+    widened_ty: Type,
+    access_ty: Type,
+    offset: u32,
+    builder: &mut FunctionBuilder,
+    state: &mut FuncTranslationState,
+    environ: &mut FE,
+) -> WasmResult<()> {
+    let linear_mem_addr = state.pop1();
+
+    // The load is performed at type `access_ty`, and the loaded value is zero extended
+    // to `widened_ty`.
+    match access_ty {
+        I8 | I16 | I32 | I64 => {}
+        _ => {
+            return Err(wasm_unsupported!(
+                "atomic_load: unsupported access type {:?}",
+                access_ty
+            ))
+        }
+    };
+    let w_ty_ok = match widened_ty {
+        I32 | I64 => true,
+        _ => false,
+    };
+    assert!(w_ty_ok && widened_ty.bytes() >= access_ty.bytes());
+
+    let final_effective_address =
+        finalise_atomic_mem_addr(linear_mem_addr, offset, access_ty, builder, state, environ)?;
+
+    // See the comments in `prepare_load` about the flags.
+    let flags = MemFlags::new();
+    let mut res = builder
+        .ins()
+        .atomic_load(access_ty, flags, final_effective_address);
+    if access_ty != widened_ty {
+        res = builder.ins().uextend(widened_ty, res);
+    }
+    state.push1(res);
+    Ok(())
+}
+
+fn translate_atomic_store<FE: FuncEnvironment + ?Sized>(
+    access_ty: Type,
+    offset: u32,
+    builder: &mut FunctionBuilder,
+    state: &mut FuncTranslationState,
+    environ: &mut FE,
+) -> WasmResult<()> {
+    let (linear_mem_addr, mut data) = state.pop2();
+    let data_ty = builder.func.dfg.value_type(data);
+
+    // The operation is performed at type `access_ty`, and the data to be stored may first
+    // need to be narrowed accordingly.
+    match access_ty {
+        I8 | I16 | I32 | I64 => {}
+        _ => {
+            return Err(wasm_unsupported!(
+                "atomic_store: unsupported access type {:?}",
+                access_ty
+            ))
+        }
+    };
+    let d_ty_ok = match data_ty {
+        I32 | I64 => true,
+        _ => false,
+    };
+    assert!(d_ty_ok && data_ty.bytes() >= access_ty.bytes());
+
+    if data_ty.bytes() > access_ty.bytes() {
+        data = builder.ins().ireduce(access_ty, data);
+    }
+
+    let final_effective_address =
+        finalise_atomic_mem_addr(linear_mem_addr, offset, access_ty, builder, state, environ)?;
+
+    // See the comments in `prepare_load` about the flags.
+    let flags = MemFlags::new();
+    builder
+        .ins()
+        .atomic_store(flags, data, final_effective_address);
+    Ok(())
 }
 
 fn translate_vector_icmp(

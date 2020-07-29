@@ -1612,6 +1612,33 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(())
     }
 
+    fn translate_atomic_wait(
+        &mut self,
+        _pos: FuncCursor,
+        _index: MemoryIndex,
+        _heap: ir::Heap,
+        _addr: ir::Value,
+        _expected: ir::Value,
+        _timeout: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        Err(WasmError::Unsupported(
+            "wasm atomics (fn translate_atomic_wait)".to_string(),
+        ))
+    }
+
+    fn translate_atomic_notify(
+        &mut self,
+        _pos: FuncCursor,
+        _index: MemoryIndex,
+        _heap: ir::Heap,
+        _addr: ir::Value,
+        _count: ir::Value,
+    ) -> WasmResult<ir::Value> {
+        Err(WasmError::Unsupported(
+            "wasm atomics (fn translate_atomic_notify)".to_string(),
+        ))
+    }
+
     fn translate_loop_header(&mut self, mut pos: FuncCursor) -> WasmResult<()> {
         if !self.tunables.interruptable {
             return Ok(());

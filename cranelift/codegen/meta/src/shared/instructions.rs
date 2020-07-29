@@ -4305,5 +4305,109 @@ pub(crate) fn define(
         .is_ghost(true),
     );
 
+    // Instructions relating to atomic memory accesses and fences
+    let AtomicMem = &TypeVar::new(
+        "AtomicMem",
+        "Any type that can be stored in memory, which can be used in an atomic operation",
+        TypeSetBuilder::new().ints(8..64).build(),
+    );
+    let x = &Operand::new("x", AtomicMem).with_doc("Value to be atomically stored");
+    let a = &Operand::new("a", AtomicMem).with_doc("Value atomically loaded");
+    let e = &Operand::new("e", AtomicMem).with_doc("Expected value in CAS");
+    let p = &Operand::new("p", iAddr);
+    let MemFlags = &Operand::new("MemFlags", &imm.memflags);
+    let AtomicRmwOp = &Operand::new("AtomicRmwOp", &imm.atomic_rmw_op);
+
+    ig.push(
+        Inst::new(
+            "atomic_rmw",
+            r#"
+        Atomically read-modify-write memory at `p`, with second operand `x`.  The old value is
+        returned.  `p` has the type of the target word size, and `x` may be an integer type of
+        8, 16, 32 or 64 bits, even on a 32-bit target.  The type of the returned value is the
+        same as the type of `x`.  This operation is sequentially consistent and creates
+        happens-before edges that order normal (non-atomic) loads and stores.
+        "#,
+            &formats.atomic_rmw,
+        )
+        .operands_in(vec![MemFlags, AtomicRmwOp, p, x])
+        .operands_out(vec![a])
+        .can_load(true)
+        .can_store(true)
+        .other_side_effects(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "atomic_cas",
+            r#"
+        Perform an atomic compare-and-swap operation on memory at `p`, with expected value `e`,
+        storing `x` if the value at `p` equals `e`.  The old value at `p` is returned,
+        regardless of whether the operation succeeds or fails.  `p` has the type of the target
+        word size, and `x` and `e` must have the same type and the same size, which may be an
+        integer type of 8, 16, 32 or 64 bits, even on a 32-bit target.  The type of the returned
+        value is the same as the type of `x` and `e`.  This operation is sequentially
+        consistent and creates happens-before edges that order normal (non-atomic) loads and
+        stores.
+        "#,
+            &formats.atomic_cas,
+        )
+        .operands_in(vec![MemFlags, p, e, x])
+        .operands_out(vec![a])
+        .can_load(true)
+        .can_store(true)
+        .other_side_effects(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "atomic_load",
+            r#"
+        Atomically load from memory at `p`.
+
+        This is a polymorphic instruction that can load any value type which has a memory
+        representation.  It should only be used for integer types with 8, 16, 32 or 64 bits.
+        This operation is sequentially consistent and creates happens-before edges that order
+        normal (non-atomic) loads and stores.
+        "#,
+            &formats.load_no_offset,
+        )
+        .operands_in(vec![MemFlags, p])
+        .operands_out(vec![a])
+        .can_load(true)
+        .other_side_effects(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "atomic_store",
+            r#"
+        Atomically store `x` to memory at `p`.
+
+        This is a polymorphic instruction that can store any value type with a memory
+        representation.  It should only be used for integer types with 8, 16, 32 or 64 bits.
+        This operation is sequentially consistent and creates happens-before edges that order
+        normal (non-atomic) loads and stores.
+        "#,
+            &formats.store_no_offset,
+        )
+        .operands_in(vec![MemFlags, x, p])
+        .can_store(true)
+        .other_side_effects(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "fence",
+            r#"
+        A memory fence.  This must provide ordering to ensure that, at a minimum, neither loads
+        nor stores of any kind may move forwards or backwards across the fence.  This operation
+        is sequentially consistent.
+        "#,
+            &formats.nullary,
+        )
+        .other_side_effects(true),
+    );
+
     ig.build()
 }

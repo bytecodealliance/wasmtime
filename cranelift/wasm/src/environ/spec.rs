@@ -560,6 +560,38 @@ pub trait FuncEnvironment: TargetEnvironment {
         val: ir::Value,
     ) -> WasmResult<()>;
 
+    /// Translate an `i32.atomic.wait` or `i64.atomic.wait` WebAssembly instruction.
+    /// The `index` provided identifies the linear memory containing the value
+    /// to wait on, and `heap` is the heap reference returned by `make_heap`
+    /// for the same index.  Whether the waited-on value is 32- or 64-bit can be
+    /// determined by examining the type of `expected`, which must be only I32 or I64.
+    ///
+    /// Returns an i32, which is negative if the helper call failed.
+    fn translate_atomic_wait(
+        &mut self,
+        pos: FuncCursor,
+        index: MemoryIndex,
+        heap: ir::Heap,
+        addr: ir::Value,
+        expected: ir::Value,
+        timeout: ir::Value,
+    ) -> WasmResult<ir::Value>;
+
+    /// Translate an `atomic.notify` WebAssembly instruction.
+    /// The `index` provided identifies the linear memory containing the value
+    /// to wait on, and `heap` is the heap reference returned by `make_heap`
+    /// for the same index.
+    ///
+    /// Returns an i64, which is negative if the helper call failed.
+    fn translate_atomic_notify(
+        &mut self,
+        pos: FuncCursor,
+        index: MemoryIndex,
+        heap: ir::Heap,
+        addr: ir::Value,
+        count: ir::Value,
+    ) -> WasmResult<ir::Value>;
+
     /// Emit code at the beginning of every wasm loop.
     ///
     /// This can be used to insert explicit interrupt or safepoint checking at

@@ -160,6 +160,9 @@ pub trait LowerCtx {
     fn is_reg_needed(&self, ir_inst: Inst, reg: Reg) -> bool;
     /// Retrieve constant data given a handle.
     fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData;
+    /// Cause the value in `reg` to be in a virtual reg, by copying it into a new virtual reg
+    /// if `reg` is a real reg.  `ty` describes the type of the value in `reg`.
+    fn ensure_in_vreg(&mut self, reg: Reg, ty: Type) -> Reg;
 }
 
 /// A representation of all of the ways in which an instruction input is
@@ -904,10 +907,14 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
 
     fn memflags(&self, ir_inst: Inst) -> Option<MemFlags> {
         match &self.f.dfg[ir_inst] {
+            &InstructionData::AtomicCas { flags, .. } => Some(flags),
+            &InstructionData::AtomicRmw { flags, .. } => Some(flags),
             &InstructionData::Load { flags, .. }
             | &InstructionData::LoadComplex { flags, .. }
+            | &InstructionData::LoadNoOffset { flags, .. }
             | &InstructionData::Store { flags, .. }
             | &InstructionData::StoreComplex { flags, .. } => Some(flags),
+            &InstructionData::StoreNoOffset { flags, .. } => Some(flags),
             _ => None,
         }
     }
@@ -988,6 +995,17 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
 
     fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData {
         self.f.dfg.constants.get(constant_handle)
+    }
+
+    fn ensure_in_vreg(&mut self, reg: Reg, ty: Type) -> Reg {
+        if reg.is_virtual() {
+            reg
+        } else {
+            let rc = reg.get_class();
+            let new_reg = self.alloc_tmp(rc, ty);
+            self.emit(I::gen_move(new_reg, reg, ty));
+            new_reg.to_reg()
+        }
     }
 }
 
