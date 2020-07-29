@@ -373,6 +373,7 @@ fn gc_during_gc_when_passing_refs_into_wasm() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(feature = "experimental_x64", ignore)] // TODO #2079 investigate.
 fn gc_during_gc_from_many_table_gets() -> anyhow::Result<()> {
     let (store, module) = ref_types_module(
         r#"

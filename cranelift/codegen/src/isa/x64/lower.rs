@@ -347,7 +347,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     };
 
     match op {
-        Opcode::Iconst | Opcode::Null => {
+        Opcode::Iconst | Opcode::Bconst | Opcode::Null => {
             if let Some(w64) = iri_to_u64_imm(ctx, insn) {
                 let dst_is_64 = w64 > 0x7fffffff;
                 let dst = output_to_reg(ctx, outputs[0]);
