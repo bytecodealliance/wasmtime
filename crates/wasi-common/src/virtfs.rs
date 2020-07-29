@@ -78,7 +78,8 @@ impl FileContents for VecFileContents {
     fn preadv(&self, iovs: &mut [io::IoSliceMut], offset: types::Filesize) -> Result<usize> {
         let mut read_total = 0usize;
         for iov in iovs.iter_mut() {
-            let read = self.pread(iov, offset)?;
+            let skip: u64 = read_total.try_into().map_err(|_| Errno::Inval)?;
+            let read = self.pread(iov, offset + skip)?;
             read_total = read_total.checked_add(read).expect("FileContents::preadv must not be called when reads could total to more bytes than the return value can hold");
         }
         Ok(read_total)
@@ -87,7 +88,8 @@ impl FileContents for VecFileContents {
     fn pwritev(&mut self, iovs: &[io::IoSlice], offset: types::Filesize) -> Result<usize> {
         let mut write_total = 0usize;
         for iov in iovs.iter() {
-            let written = self.pwrite(iov, offset)?;
+            let skip: u64 = write_total.try_into().map_err(|_| Errno::Inval)?;
+            let written = self.pwrite(iov, offset + skip)?;
             write_total = write_total.checked_add(written).expect("FileContents::pwritev must not be called when writes could total to more bytes than the return value can hold");
         }
         Ok(write_total)
@@ -255,7 +257,11 @@ impl Handle for InMemoryFile {
     fn read_vectored(&self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
         trace!("read_vectored(iovs={:?})", iovs);
         trace!("     | *read_start={:?}", self.cursor.get());
-        self.data.borrow_mut().preadv(iovs, self.cursor.get())
+        let read = self.data.borrow_mut().preadv(iovs, self.cursor.get())?;
+        let offset: u64 = read.try_into().map_err(|_| Errno::Inval)?;
+        let update = self.cursor.get().checked_add(offset).ok_or(Errno::Inval)?;
+        self.cursor.set(update);
+        Ok(read)
     }
     fn seek(&self, offset: SeekFrom) -> Result<types::Filesize> {
         let content_len = self.data.borrow().size();
