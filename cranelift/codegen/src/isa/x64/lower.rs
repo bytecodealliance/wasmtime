@@ -1869,6 +1869,20 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ));
         }
 
+        Opcode::Vconst => {
+            let val = if let &InstructionData::UnaryConst {
+                constant_handle, ..
+            } = ctx.data(insn)
+            {
+                ctx.get_constant_data(constant_handle).clone().into_vec()
+            } else {
+                unreachable!("vconst should always have unary_const format")
+            };
+            let dst = output_to_reg(ctx, outputs[0]);
+            let ty = ty.unwrap();
+            ctx.emit(Inst::xmm_load_const_seq(val, dst, ty));
+        }
+
         Opcode::RawBitcast => {
             // A raw_bitcast is just a mechanism for correcting the type of V128 values (see
             // https://github.com/bytecodealliance/wasmtime/issues/1147). As such, this IR
