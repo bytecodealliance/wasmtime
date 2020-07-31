@@ -178,9 +178,12 @@ pub struct MachBuffer<I: VCodeInst> {
     label_offsets: SmallVec<[CodeOffset; 16]>,
     /// Label aliases: when one label points to an unconditional jump, and that
     /// jump points to another label, we can redirect references to the first
-    /// label immediately to the second. (We don't chase arbitrarily deep to
-    /// avoid problems with cycles, but rather only one level, i.e.  through one
-    /// jump.)
+    /// label immediately to the second.
+    ///
+    /// Invariant: we don't have label-alias cycles. We ensure this by,
+    /// before setting label A to alias label B, resolving B's alias
+    /// target (iteratively until a non-aliased label); if B is already
+    /// aliased to A, then we cannot alias A back to B.
     label_aliases: SmallVec<[MachLabel; 16]>,
     /// Constants that must be emitted at some point.
     pending_constants: SmallVec<[MachLabelConstant; 16]>,
@@ -502,13 +505,19 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Resolve a label to an offset, if known. May return `UNKNOWN_LABEL_OFFSET`.
-    fn resolve_label_offset(&self, label: MachLabel) -> CodeOffset {
-        let alias = self.label_aliases[label.0 as usize];
-        if alias != UNKNOWN_LABEL {
-            self.label_offsets[alias.0 as usize]
-        } else {
-            self.label_offsets[label.0 as usize]
+    fn resolve_label_offset(&self, mut label: MachLabel) -> CodeOffset {
+        let mut iters = 0;
+        while self.label_aliases[label.0 as usize] != UNKNOWN_LABEL {
+            label = self.label_aliases[label.0 as usize];
+            // To protect against an infinite loop (despite our assurances to
+            // ourselves that the invariants make this impossible), assert out
+            // after 1M iterations. The number of basic blocks is limited
+            // in most contexts anyway so this should be impossible to hit with
+            // a legitimate input.
+            iters += 1;
+            assert!(iters < 1_000_000, "Unexpected cycle in label aliases");
         }
+        self.label_offsets[label.0 as usize]
 
         // Post-invariant: no mutations.
     }
@@ -822,6 +831,35 @@ impl<I: VCodeInst> MachBuffer<I> {
                 // Set any label equal to current branch's start as an alias of
                 // the branch's target, if the target is not the branch itself
                 // (i.e., an infinite loop).
+                //
+                // We cannot perform this aliasing if the target of this branch
+                // ultimately aliases back here; if so, we need to keep this
+                // branch, so break out of this loop entirely (and clear the
+                // latest-branches list below).
+                //
+                // Note that this check is what prevents cycles from forming in
+                // `self.label_aliases`. To see why, consider an arbitrary start
+                // state:
+                //
+                // label_aliases[L1] = L2, label_aliases[L2] = L3, ..., up to
+                // Ln, which is not aliased.
+                //
+                // We would create a cycle if we assigned label_aliases[Ln]
+                // = L1.  Note that the below assignment is the only write
+                // to label_aliases.
+                //
+                // By our other invariants, we have that Ln (`l` below)
+                // resolves to the offset `b.start`, because it is in the
+                // set `b.labels_at_this_branch`.
+                //
+                // If L1 were already aliased, through some arbitrarily deep
+                // chain, to Ln, then it must also resolve to this offset
+                // `b.start`.
+                //
+                // By checking the resolution of `L1` against this offset,
+                // and aborting this branch-simplification if they are
+                // equal, we prevent the below assignment from ever creating
+                // a cycle.
                 if self.resolve_label_offset(b.target) != b.start {
                     let redirected = b.labels_at_this_branch.len();
                     for &l in &b.labels_at_this_branch {
@@ -847,7 +885,10 @@ impl<I: VCodeInst> MachBuffer<I> {
                         trace!(" -> after label redirects, restarting loop");
                         continue;
                     }
+                } else {
+                    break;
                 }
+
                 let b = self.latest_branches.last().unwrap();
 
                 // Examine any immediately preceding branch.
@@ -1583,5 +1624,151 @@ mod test {
         let buf2 = buf2.finish();
 
         assert_eq!(&buf.data[2000000..], &buf2.data[..]);
+    }
+
+    #[test]
+    fn test_multiple_redirect() {
+        // label0:
+        //   cbz x0, label1
+        //   b label2
+        // label1:
+        //   b label3
+        // label2:
+        //   nop
+        //   nop
+        //   b label0
+        // label3:
+        //   b label4
+        // label4:
+        //   b label5
+        // label5:
+        //   b label7
+        // label6:
+        //   nop
+        // label7:
+        //   ret
+        //
+        // -- should become:
+        //
+        // label0:
+        //   cbz x0, label7
+        // label2:
+        //   nop
+        //   nop
+        //   b label0
+        // label6:
+        //   nop
+        // label7:
+        //   ret
+
+        let flags = settings::Flags::new(settings::builder());
+        let mut buf = MachBuffer::new();
+        let mut state = Default::default();
+
+        buf.reserve_labels_for_blocks(8);
+
+        buf.bind_label(label(0));
+        let inst = Inst::CondBr {
+            kind: CondBrKind::Zero(xreg(0)),
+            taken: target(1),
+            not_taken: target(2),
+        };
+        inst.emit(&mut buf, &flags, &mut state);
+
+        buf.bind_label(label(1));
+        let inst = Inst::Jump { dest: target(3) };
+        inst.emit(&mut buf, &flags, &mut state);
+
+        buf.bind_label(label(2));
+        let inst = Inst::Nop4;
+        inst.emit(&mut buf, &flags, &mut state);
+        inst.emit(&mut buf, &flags, &mut state);
+        let inst = Inst::Jump { dest: target(0) };
+        inst.emit(&mut buf, &flags, &mut state);
+
+        buf.bind_label(label(3));
+        let inst = Inst::Jump { dest: target(4) };
+        inst.emit(&mut buf, &flags, &mut state);
+
+        buf.bind_label(label(4));
+        let inst = Inst::Jump { dest: target(5) };
+        inst.emit(&mut buf, &flags, &mut state);
+
+        buf.bind_label(label(5));
+        let inst = Inst::Jump { dest: target(7) };
+        inst.emit(&mut buf, &flags, &mut state);
+
+        buf.bind_label(label(6));
+        let inst = Inst::Nop4;
+        inst.emit(&mut buf, &flags, &mut state);
+
+        buf.bind_label(label(7));
+        let inst = Inst::Ret;
+        inst.emit(&mut buf, &flags, &mut state);
+
+        let buf = buf.finish();
+
+        let golden_data = vec![
+            0xa0, 0x00, 0x00, 0xb4, // cbz x0, 0x14
+            0x1f, 0x20, 0x03, 0xd5, // nop
+            0x1f, 0x20, 0x03, 0xd5, // nop
+            0xfd, 0xff, 0xff, 0x17, // b 0
+            0x1f, 0x20, 0x03, 0xd5, // nop
+            0xc0, 0x03, 0x5f, 0xd6, // ret
+        ];
+
+        assert_eq!(&golden_data[..], &buf.data[..]);
+    }
+
+    #[test]
+    fn test_handle_branch_cycle() {
+        // label0:
+        //   b label1
+        // label1:
+        //   b label2
+        // label2:
+        //   b label3
+        // label3:
+        //   b label4
+        // label4:
+        //   b label1  // note: not label0 (to make it interesting).
+        //
+        // -- should become:
+        //
+        // label0, label1, ..., label4:
+        //   b label0
+        let flags = settings::Flags::new(settings::builder());
+        let mut buf = MachBuffer::new();
+        let mut state = Default::default();
+
+        buf.reserve_labels_for_blocks(5);
+
+        buf.bind_label(label(0));
+        let inst = Inst::Jump { dest: target(1) };
+        inst.emit(&mut buf, &flags, &mut state);
+
+        buf.bind_label(label(1));
+        let inst = Inst::Jump { dest: target(2) };
+        inst.emit(&mut buf, &flags, &mut state);
+
+        buf.bind_label(label(2));
+        let inst = Inst::Jump { dest: target(3) };
+        inst.emit(&mut buf, &flags, &mut state);
+
+        buf.bind_label(label(3));
+        let inst = Inst::Jump { dest: target(4) };
+        inst.emit(&mut buf, &flags, &mut state);
+
+        buf.bind_label(label(4));
+        let inst = Inst::Jump { dest: target(1) };
+        inst.emit(&mut buf, &flags, &mut state);
+
+        let buf = buf.finish();
+
+        let golden_data = vec![
+            0x00, 0x00, 0x00, 0x14, // b 0
+        ];
+
+        assert_eq!(&golden_data[..], &buf.data[..]);
     }
 }
