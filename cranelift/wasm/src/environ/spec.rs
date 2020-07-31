@@ -758,7 +758,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
     fn declare_passive_data(&mut self, data_index: DataIndex, data: &'data [u8]) -> WasmResult<()>;
 
     /// Indicates how many functions the code section reports and the byte
-    /// offset of where the code sections tarts.
+    /// offset of where the code sections starts.
     fn reserve_function_bodies(&mut self, bodies: u32, code_section_offset: u64) {
         drop((bodies, code_section_offset));
     }
