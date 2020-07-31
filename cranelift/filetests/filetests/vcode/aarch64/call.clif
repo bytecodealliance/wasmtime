@@ -1,7 +1,7 @@
 test compile
 target aarch64
 
-function %f(i64) -> i64 {
+function %f1(i64) -> i64 {
     fn0 = %g(i64) -> i64
 
 block0(v0: i64):
@@ -13,6 +13,64 @@ block0(v0: i64):
 ; nextln:  mov fp, sp
 ; nextln:  ldr x16, 8 ; b 12 ; data
 ; nextln:  blr x16
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f2(i32) -> i64 {
+    fn0 = %g(i32 uext) -> i64
+
+block0(v0: i32):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  mov w0, w0
+; nextln:  ldr x16, 8 ; b 12 ; data
+; nextln:  blr x16
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f3(i32) -> i32 uext {
+block0(v0: i32):
+    return v0
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  mov w0, w0
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f4(i32) -> i64 {
+    fn0 = %g(i32 sext) -> i64
+
+block0(v0: i32):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  sxtw x0, w0
+; nextln:  ldr x16, 8 ; b 12 ; data
+; nextln:  blr x16
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f3(i32) -> i32 sext {
+block0(v0: i32):
+    return v0
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  sxtw x0, w0
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret

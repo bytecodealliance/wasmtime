@@ -1,7 +1,7 @@
 //! ABI definitions.
 
 use crate::binemit::Stackmap;
-use crate::ir::{ArgumentExtension, StackSlot};
+use crate::ir::StackSlot;
 use crate::machinst::*;
 use crate::settings;
 
@@ -52,12 +52,7 @@ pub trait ABIBody {
     fn gen_retval_area_setup(&self) -> Option<Self::I>;
 
     /// Generate an instruction which copies a source register to a return value slot.
-    fn gen_copy_reg_to_retval(
-        &self,
-        idx: usize,
-        from_reg: Writable<Reg>,
-        ext: ArgumentExtension,
-    ) -> Vec<Self::I>;
+    fn gen_copy_reg_to_retval(&self, idx: usize, from_reg: Writable<Reg>) -> Vec<Self::I>;
 
     /// Generate a return instruction.
     fn gen_ret(&self) -> Self::I;
