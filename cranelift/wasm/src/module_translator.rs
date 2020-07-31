@@ -59,7 +59,10 @@ pub fn translate_module<'data>(
                 parse_element_section(elements, environ)?;
             }
 
-            Payload::CodeSectionStart { .. } => {}
+            Payload::CodeSectionStart { count, range, .. } => {
+                environ.reserve_function_bodies(count, range.start as u64);
+            }
+
             Payload::CodeSectionEntry(code) => {
                 let mut code = code.get_binary_reader();
                 let size = code.bytes_remaining();
@@ -91,7 +94,14 @@ pub fn translate_module<'data>(
                 name: "name",
                 data,
                 data_offset,
-            } => parse_name_section(NameSectionReader::new(data, data_offset)?, environ)?,
+            } => {
+                let result = NameSectionReader::new(data, data_offset)
+                    .map_err(|e| e.into())
+                    .and_then(|s| parse_name_section(s, environ));
+                if let Err(e) = result {
+                    log::warn!("failed to parse name section {:?}", e);
+                }
+            }
 
             Payload::CustomSection { name, data, .. } => environ.custom_section(name, data)?,
 

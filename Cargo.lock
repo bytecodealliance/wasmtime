@@ -2466,6 +2466,7 @@ dependencies = [
  "errno",
  "file-per-thread-logger",
  "filetime",
+ "gimli 0.21.0",
  "indexmap",
  "lazy_static",
  "libc",

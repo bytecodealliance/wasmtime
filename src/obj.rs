@@ -2,7 +2,7 @@ use anyhow::{anyhow, bail, Context as _, Result};
 use object::write::Object;
 use target_lexicon::Triple;
 use wasmtime::Strategy;
-use wasmtime_debug::{emit_dwarf, read_debuginfo};
+use wasmtime_debug::emit_dwarf;
 #[cfg(feature = "lightbeam")]
 use wasmtime_environ::Lightbeam;
 use wasmtime_environ::{
@@ -103,8 +103,7 @@ pub fn compile_to_obj(
         }
     };
 
-    let dwarf_sections = if debug_info {
-        let debug_data = read_debuginfo(wasm).context("failed to emit DWARF")?;
+    let dwarf_sections = if let Some(debug_data) = &translation.debuginfo {
         emit_dwarf(
             &*isa,
             &debug_data,

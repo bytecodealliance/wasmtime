@@ -1,4 +1,3 @@
-use crate::WasmFileInfo;
 use gimli::write;
 use more_asserts::assert_le;
 use std::collections::BTreeMap;
@@ -6,6 +5,7 @@ use std::iter::FromIterator;
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::ir::SourceLoc;
 use wasmtime_environ::wasm::DefinedFuncIndex;
+use wasmtime_environ::WasmFileInfo;
 use wasmtime_environ::{FunctionAddressMap, ModuleAddressMap};
 
 pub type GeneratedAddress = usize;

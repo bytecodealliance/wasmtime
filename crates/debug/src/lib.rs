@@ -6,11 +6,9 @@ use anyhow::{bail, ensure, Error};
 use object::{RelocationEncoding, RelocationKind};
 use std::collections::HashMap;
 
-pub use crate::read_debuginfo::{read_debuginfo, DebugInfoData, WasmFileInfo};
 pub use crate::write_debuginfo::{emit_dwarf, DwarfSection, DwarfSectionRelocTarget};
 
 mod gc;
-mod read_debuginfo;
 mod transform;
 mod write_debuginfo;
 

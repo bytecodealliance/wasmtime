@@ -5,12 +5,12 @@ use crate::object::{build_object, ObjectUnwindInfo};
 use cranelift_codegen::ir;
 use object::write::Object;
 use std::hash::{Hash, Hasher};
-use wasmtime_debug::{emit_dwarf, DebugInfoData, DwarfSection};
+use wasmtime_debug::{emit_dwarf, DwarfSection};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::isa::{unwind::UnwindInfo, TargetFrontendConfig, TargetIsa};
 use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex};
 use wasmtime_environ::{
-    Compiler as _C, Module, ModuleAddressMap, ModuleMemoryOffset, ModuleTranslation,
+    Compiler as _C, DebugInfoData, Module, ModuleAddressMap, ModuleMemoryOffset, ModuleTranslation,
     ModuleVmctxInfo, StackMaps, Traps, Tunables, VMOffsets, ValueLabelsRanges,
 };
 
@@ -61,7 +61,7 @@ fn _assert_compiler_send_sync() {
 fn transform_dwarf_data(
     isa: &dyn TargetIsa,
     module: &Module,
-    debug_data: DebugInfoData,
+    debug_data: &DebugInfoData,
     address_transform: &ModuleAddressMap,
     value_ranges: &ValueLabelsRanges,
     stack_slots: PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
@@ -86,7 +86,7 @@ fn transform_dwarf_data(
     };
     emit_dwarf(
         isa,
-        &debug_data,
+        debug_data,
         &address_transform,
         &module_vmctx_info,
         &value_ranges,
@@ -129,7 +129,6 @@ impl Compiler {
     pub(crate) fn compile<'data>(
         &self,
         translation: &ModuleTranslation,
-        debug_data: Option<DebugInfoData>,
     ) -> Result<Compilation, SetupError> {
         let (
             compilation,
@@ -152,12 +151,12 @@ impl Compiler {
         }
         .map_err(SetupError::Compile)?;
 
-        let dwarf_sections = if debug_data.is_some() && !compilation.is_empty() {
+        let dwarf_sections = if translation.debuginfo.is_some() && !compilation.is_empty() {
             let unwind_info = compilation.unwind_info();
             transform_dwarf_data(
                 &*self.isa,
                 &translation.module,
-                debug_data.unwrap(),
+                translation.debuginfo.as_ref().unwrap(),
                 &address_transform,
                 &value_ranges,
                 stack_slots,

@@ -57,10 +57,7 @@ pub use crate::lightbeam::Lightbeam;
 pub use crate::module::{
     EntityIndex, MemoryPlan, MemoryStyle, Module, ModuleLocal, TableElements, TablePlan, TableStyle,
 };
-pub use crate::module_environ::{
-    translate_signature, DataInitializer, DataInitializerLocation, FunctionBodyData,
-    ModuleEnvironment, ModuleTranslation,
-};
+pub use crate::module_environ::*;
 pub use crate::tunables::Tunables;
 pub use crate::vmoffsets::{TargetSharedSignatureIndex, VMOffsets, INTERRUPTED};
 
