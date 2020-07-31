@@ -150,6 +150,15 @@ where
     }
 }
 
+impl<K, V> Default for PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    fn default() -> PrimaryMap<K, V> {
+        PrimaryMap::new()
+    }
+}
+
 /// Immutable indexing into an `PrimaryMap`.
 /// The indexed value must be in the map.
 impl<K, V> Index<K> for PrimaryMap<K, V>

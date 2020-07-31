@@ -1,11 +1,9 @@
 pub use crate::transform::transform_dwarf;
 use gimli::write::{Address, Dwarf, EndianVec, FrameTable, Result, Sections, Writer};
 use gimli::{RunTimeEndian, SectionId};
-use wasmtime_environ::entity::{EntityRef, PrimaryMap};
+use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
-use wasmtime_environ::wasm::DefinedFuncIndex;
-use wasmtime_environ::DebugInfoData;
-use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
+use wasmtime_environ::{CompiledFunctions, DebugInfoData, ModuleMemoryOffset};
 
 #[derive(Clone)]
 pub enum DwarfSectionRelocTarget {
@@ -130,16 +128,13 @@ impl Writer for WriterRelocate {
     }
 }
 
-fn create_frame_table<'a>(
-    isa: &dyn TargetIsa,
-    infos: &PrimaryMap<DefinedFuncIndex, &Option<UnwindInfo>>,
-) -> Option<FrameTable> {
+fn create_frame_table<'a>(isa: &dyn TargetIsa, funcs: &CompiledFunctions) -> Option<FrameTable> {
     let mut table = FrameTable::default();
 
     let cie_id = table.add_cie(isa.create_systemv_cie()?);
 
-    for (i, info) in infos {
-        if let Some(UnwindInfo::SystemV(info)) = info {
+    for (i, f) in funcs {
+        if let Some(UnwindInfo::SystemV(info)) = &f.unwind_info {
             table.add_fde(
                 cie_id,
                 info.to_fde(Address::Symbol {
@@ -156,13 +151,11 @@ fn create_frame_table<'a>(
 pub fn emit_dwarf<'a>(
     isa: &dyn TargetIsa,
     debuginfo_data: &DebugInfoData,
-    at: &ModuleAddressMap,
-    vmctx_info: &ModuleVmctxInfo,
-    ranges: &ValueLabelsRanges,
-    unwind_info: &PrimaryMap<DefinedFuncIndex, &Option<UnwindInfo>>,
+    funcs: &CompiledFunctions,
+    memory_offset: &ModuleMemoryOffset,
 ) -> anyhow::Result<Vec<DwarfSection>> {
-    let dwarf = transform_dwarf(isa, debuginfo_data, at, vmctx_info, ranges)?;
-    let frame_table = create_frame_table(isa, unwind_info);
+    let dwarf = transform_dwarf(isa, debuginfo_data, funcs, memory_offset)?;
+    let frame_table = create_frame_table(isa, funcs);
     let sections = emit_dwarf_sections(dwarf, frame_table)?;
     Ok(sections)
 }

@@ -986,14 +986,14 @@ impl Store {
             module
                 .finished_functions()
                 .values()
-                .zip(module.stack_maps().values())
-                .map(|(func, stack_maps)| unsafe {
+                .zip(module.compiled_functions().values())
+                .map(|(func, compiled)| unsafe {
                     let ptr = (**func).as_ptr();
                     let len = (**func).len();
                     let start = ptr as usize;
                     let end = ptr as usize + len;
                     let range = start..end;
-                    (range, &stack_maps[..])
+                    (range, &compiled.stack_maps[..])
                 }),
         );
     }

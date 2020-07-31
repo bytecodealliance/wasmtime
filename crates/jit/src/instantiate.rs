@@ -20,8 +20,8 @@ use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
 use wasmtime_environ::{
-    CompileError, DataInitializer, DataInitializerLocation, Module, ModuleAddressMap,
-    ModuleEnvironment, ModuleTranslation, StackMaps, Traps,
+    CompileError, CompiledFunctions, DataInitializer, DataInitializerLocation, Module,
+    ModuleEnvironment, ModuleTranslation,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::VMInterrupts;
@@ -68,13 +68,7 @@ pub struct CompilationArtifacts {
     data_initializers: Box<[OwnedDataInitializer]>,
 
     /// Traps descriptors.
-    traps: Traps,
-
-    /// Stack map descriptors.
-    stack_maps: StackMaps,
-
-    /// Wasm to function code address map.
-    address_transform: ModuleAddressMap,
+    funcs: CompiledFunctions,
 
     /// Debug info presence flags.
     debug_info: bool,
@@ -92,9 +86,7 @@ impl CompilationArtifacts {
         let Compilation {
             obj,
             unwind_info,
-            traps,
-            stack_maps,
-            address_transform,
+            funcs,
         } = compiler.compile(&translation)?;
 
         let ModuleTranslation {
@@ -120,9 +112,7 @@ impl CompilationArtifacts {
             obj: obj.into_boxed_slice(),
             unwind_info: unwind_info.into_boxed_slice(),
             data_initializers,
-            traps,
-            stack_maps,
-            address_transform,
+            funcs,
             debug_info: compiler.tunables().debug_info,
         })
     }
@@ -147,9 +137,7 @@ pub struct CompiledModule {
     finished_functions: FinishedFunctions,
     trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
     data_initializers: Box<[OwnedDataInitializer]>,
-    traps: Traps,
-    stack_maps: StackMaps,
-    address_transform: ModuleAddressMap,
+    funcs: CompiledFunctions,
     obj: Box<[u8]>,
     unwind_info: Box<[ObjectUnwindInfo]>,
 }
@@ -176,9 +164,7 @@ impl CompiledModule {
             obj,
             unwind_info,
             data_initializers,
-            traps,
-            stack_maps,
-            address_transform,
+            funcs,
             debug_info,
         } = artifacts;
 
@@ -216,9 +202,7 @@ impl CompiledModule {
             finished_functions,
             trampolines,
             data_initializers,
-            traps,
-            stack_maps,
-            address_transform,
+            funcs,
             obj,
             unwind_info,
         })
@@ -231,9 +215,7 @@ impl CompiledModule {
             obj: self.obj.clone(),
             unwind_info: self.unwind_info.clone(),
             data_initializers: self.data_initializers.clone(),
-            traps: self.traps.clone(),
-            stack_maps: self.stack_maps.clone(),
-            address_transform: self.address_transform.clone(),
+            funcs: self.funcs.clone(),
             debug_info: self.code.dbg_jit_registration.is_some(),
         }
     }
@@ -319,18 +301,8 @@ impl CompiledModule {
     }
 
     /// Returns the map for all traps in this module.
-    pub fn traps(&self) -> &Traps {
-        &self.traps
-    }
-
-    /// Returns the map for each of this module's stack maps.
-    pub fn stack_maps(&self) -> &StackMaps {
-        &self.stack_maps
-    }
-
-    /// Returns a map of compiled addresses back to original bytecode offsets.
-    pub fn address_transform(&self) -> &ModuleAddressMap {
-        &self.address_transform
+    pub fn compiled_functions(&self) -> &CompiledFunctions {
+        &self.funcs
     }
 
     /// Returns all ranges convered by JIT code.

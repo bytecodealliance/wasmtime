@@ -5,8 +5,7 @@ use std::iter::FromIterator;
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::ir::SourceLoc;
 use wasmtime_environ::wasm::DefinedFuncIndex;
-use wasmtime_environ::WasmFileInfo;
-use wasmtime_environ::{FunctionAddressMap, ModuleAddressMap};
+use wasmtime_environ::{CompiledFunctions, FunctionAddressMap, WasmFileInfo};
 
 pub type GeneratedAddress = usize;
 pub type WasmAddress = u64;
@@ -187,11 +186,12 @@ fn build_function_lookup(
 }
 
 fn build_function_addr_map(
-    at: &ModuleAddressMap,
+    funcs: &CompiledFunctions,
     code_section_offset: u64,
 ) -> PrimaryMap<DefinedFuncIndex, FunctionMap> {
     let mut map = PrimaryMap::new();
-    for (_, ft) in at {
+    for (_, f) in funcs {
+        let ft = &f.address_map;
         let mut fn_map = Vec::new();
         for t in &ft.instructions {
             if t.srcloc.is_default() {
@@ -447,11 +447,12 @@ impl<'a> Iterator for TransformRangeIter<'a> {
 }
 
 impl AddressTransform {
-    pub fn new(at: &ModuleAddressMap, wasm_file: &WasmFileInfo) -> Self {
+    pub fn new(funcs: &CompiledFunctions, wasm_file: &WasmFileInfo) -> Self {
         let code_section_offset = wasm_file.code_section_offset;
 
         let mut func = BTreeMap::new();
-        for (i, ft) in at {
+        for (i, f) in funcs {
+            let ft = &f.address_map;
             let (fn_start, fn_end, lookup) = build_function_lookup(ft, code_section_offset);
 
             func.insert(
@@ -465,7 +466,7 @@ impl AddressTransform {
             );
         }
 
-        let map = build_function_addr_map(at, code_section_offset);
+        let map = build_function_addr_map(funcs, code_section_offset);
         let func = Vec::from_iter(func.into_iter());
         AddressTransform { map, func }
     }
@@ -606,8 +607,8 @@ mod tests {
     use std::iter::FromIterator;
     use wasmtime_environ::entity::PrimaryMap;
     use wasmtime_environ::ir::SourceLoc;
-    use wasmtime_environ::WasmFileInfo;
-    use wasmtime_environ::{FunctionAddressMap, InstructionAddressMap, ModuleAddressMap};
+    use wasmtime_environ::{CompiledFunction, WasmFileInfo};
+    use wasmtime_environ::{CompiledFunctions, FunctionAddressMap, InstructionAddressMap};
 
     #[test]
     fn test_get_wasm_code_offset() {
@@ -640,8 +641,11 @@ mod tests {
         }
     }
 
-    fn create_simple_module(func: FunctionAddressMap) -> ModuleAddressMap {
-        PrimaryMap::from_iter(vec![func])
+    fn create_simple_module(address_map: FunctionAddressMap) -> CompiledFunctions {
+        PrimaryMap::from_iter(vec![CompiledFunction {
+            address_map,
+            ..Default::default()
+        }])
     }
 
     #[test]

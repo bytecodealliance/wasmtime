@@ -54,4 +54,4 @@ jitdump = ["wasmtime-jit/jitdump"]
 vtune = ["wasmtime-jit/vtune"]
 
 # Enables parallel compilation of WebAssembly code
-parallel-compilation = ["wasmtime-environ/parallel-compilation"]
+parallel-compilation = ["wasmtime-jit/parallel-compilation"]

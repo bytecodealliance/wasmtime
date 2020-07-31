@@ -131,6 +131,16 @@ where
     }
 }
 
+impl<K, V> Default for SecondaryMap<K, V>
+where
+    K: EntityRef,
+    V: Clone + Default,
+{
+    fn default() -> SecondaryMap<K, V> {
+        SecondaryMap::new()
+    }
+}
+
 /// Immutable indexing into an `SecondaryMap`.
 ///
 /// All keys are permitted. Untouched entries have the default value.

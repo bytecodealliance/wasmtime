@@ -11,9 +11,9 @@ use wasmparser::Type as WasmType;
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{get_vmctx_value_label, DefinedFuncIndex};
-use wasmtime_environ::WasmFileInfo;
-use wasmtime_environ::{DebugInfoData, FunctionMetadata};
-use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
+use wasmtime_environ::{
+    CompiledFunctions, DebugInfoData, FunctionMetadata, ModuleMemoryOffset, WasmFileInfo,
+};
 
 const PRODUCER_NAME: &str = "wasmtime";
 
@@ -120,9 +120,9 @@ fn add_wasm_types(
     unit: &mut write::Unit,
     root_id: write::UnitEntryId,
     out_strings: &mut write::StringTable,
-    vmctx_info: &ModuleVmctxInfo,
+    memory_offset: &ModuleMemoryOffset,
 ) -> WasmTypesDieRefs {
-    let (_wp_die_id, vmctx_die_id) = add_internal_types(unit, root_id, out_strings, vmctx_info);
+    let (_wp_die_id, vmctx_die_id) = add_internal_types(unit, root_id, out_strings, memory_offset);
 
     macro_rules! def_type {
         ($id:literal, $size:literal, $enc:path) => {{
@@ -280,8 +280,8 @@ fn check_invalid_chars_in_path(path: PathBuf) -> Option<PathBuf> {
 pub fn generate_simulated_dwarf(
     addr_tr: &AddressTransform,
     di: &DebugInfoData,
-    vmctx_info: &ModuleVmctxInfo,
-    ranges: &ValueLabelsRanges,
+    memory_offset: &ModuleMemoryOffset,
+    funcs: &CompiledFunctions,
     translated: &HashSet<DefinedFuncIndex>,
     out_encoding: gimli::Encoding,
     out_units: &mut write::UnitTable,
@@ -342,7 +342,7 @@ pub fn generate_simulated_dwarf(
         (unit, root_id, name_id)
     };
 
-    let wasm_types = add_wasm_types(unit, root_id, out_strings, vmctx_info);
+    let wasm_types = add_wasm_types(unit, root_id, out_strings, memory_offset);
 
     for (i, map) in addr_tr.map().iter() {
         let index = i.index();
@@ -389,7 +389,7 @@ pub fn generate_simulated_dwarf(
             write::AttributeValue::Udata(wasm_offset),
         );
 
-        if let Some(frame_info) = get_function_frame_info(vmctx_info, i, ranges) {
+        if let Some(frame_info) = get_function_frame_info(memory_offset, funcs, i) {
             let source_range = addr_tr.func_source_range(i);
             generate_vars(
                 unit,

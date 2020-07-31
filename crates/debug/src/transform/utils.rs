@@ -4,7 +4,7 @@ use anyhow::Error;
 use gimli::write;
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::DefinedFuncIndex;
-use wasmtime_environ::{ModuleMemoryOffset, ModuleVmctxInfo, ValueLabelsRanges};
+use wasmtime_environ::{CompiledFunctions, ModuleMemoryOffset};
 
 /// Adds internal Wasm utility types DIEs such as WebAssemblyPtr and
 /// WasmtimeVMContext.
@@ -17,7 +17,7 @@ pub(crate) fn add_internal_types(
     comp_unit: &mut write::Unit,
     root_id: write::UnitEntryId,
     out_strings: &mut write::StringTable,
-    module_info: &ModuleVmctxInfo,
+    memory_offset: &ModuleMemoryOffset,
 ) -> (write::UnitEntryId, write::UnitEntryId) {
     const WASM_PTR_LEN: u8 = 4;
 
@@ -70,7 +70,7 @@ pub(crate) fn add_internal_types(
     );
 
     // TODO multiple memories
-    match module_info.memory_offset {
+    match *memory_offset {
         ModuleMemoryOffset::Defined(memory_offset) => {
             // The context has defined memory: extend the WasmtimeVMContext size
             // past the "memory" field.
@@ -165,19 +165,19 @@ pub(crate) fn append_vmctx_info(
 }
 
 pub(crate) fn get_function_frame_info<'a, 'b, 'c>(
-    module_info: &'b ModuleVmctxInfo,
+    memory_offset: &ModuleMemoryOffset,
+    funcs: &'b CompiledFunctions,
     func_index: DefinedFuncIndex,
-    value_ranges: &'c ValueLabelsRanges,
 ) -> Option<FunctionFrameInfo<'a>>
 where
     'b: 'a,
     'c: 'a,
 {
-    if let Some(value_ranges) = value_ranges.get(func_index) {
+    if let Some(func) = funcs.get(func_index) {
         let frame_info = FunctionFrameInfo {
-            value_ranges,
-            memory_offset: module_info.memory_offset.clone(),
-            stack_slots: &module_info.stack_slots[func_index],
+            value_ranges: &func.value_labels_ranges,
+            memory_offset: memory_offset.clone(),
+            stack_slots: &func.stack_slots,
         };
         Some(frame_info)
     } else {

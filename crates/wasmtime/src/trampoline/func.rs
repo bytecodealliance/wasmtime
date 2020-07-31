@@ -197,6 +197,12 @@ fn make_trampoline(
             body: code_buf,
             jt_offsets: context.func.jt_offsets,
             unwind_info,
+            relocations: Default::default(),
+            address_map: Default::default(),
+            stack_maps: Default::default(),
+            stack_slots: Default::default(),
+            traps: Default::default(),
+            value_labels_ranges: Default::default(),
         })
         .expect("allocate_for_function")
 }

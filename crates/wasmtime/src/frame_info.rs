@@ -152,11 +152,10 @@ pub fn register(module: &CompiledModule) -> Option<GlobalFrameInfoRegistration> 
     let mut min = usize::max_value();
     let mut max = 0;
     let mut functions = BTreeMap::new();
-    for (((i, allocated), traps), instrs) in module
+    for ((i, allocated), func) in module
         .finished_functions()
         .iter()
-        .zip(module.traps().values())
-        .zip(module.address_transform().values())
+        .zip(module.compiled_functions().values())
     {
         let (start, end) = unsafe {
             let ptr = (**allocated).as_ptr();
@@ -168,8 +167,8 @@ pub fn register(module: &CompiledModule) -> Option<GlobalFrameInfoRegistration> 
         let func = FunctionInfo {
             start,
             index: module.module().local.func_index(i),
-            traps: traps.to_vec(),
-            instr_map: (*instrs).clone(),
+            traps: func.traps.to_vec(),
+            instr_map: func.address_map.clone(),
         };
         assert!(functions.insert(end, func).is_none());
     }
