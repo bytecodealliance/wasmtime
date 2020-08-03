@@ -277,7 +277,7 @@ fn emit_vm_call<C: LowerCtx<I = Inst>>(
     abi.emit_stack_pre_adjust(ctx);
 
     let vm_context = if call_conv.extends_baldrdash() { 1 } else { 0 };
-    assert!(inputs.len() + vm_context == abi.num_args());
+    assert_eq!(inputs.len() + vm_context, abi.num_args());
 
     for (i, input) in inputs.iter().enumerate() {
         let arg_reg = input_to_reg(ctx, *input);
@@ -960,8 +960,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 Opcode::Call => {
                     let (extname, dist) = ctx.call_target(insn).unwrap();
                     let sig = ctx.call_sig(insn).unwrap();
-                    assert!(inputs.len() == sig.params.len());
-                    assert!(outputs.len() == sig.returns.len());
+                    assert_eq!(inputs.len(), sig.params.len());
+                    assert_eq!(outputs.len(), sig.returns.len());
                     (
                         X64ABICall::from_func(sig, &extname, dist, loc)?,
                         &inputs[..],
@@ -971,8 +971,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 Opcode::CallIndirect => {
                     let ptr = input_to_reg(ctx, inputs[0]);
                     let sig = ctx.call_sig(insn).unwrap();
-                    assert!(inputs.len() - 1 == sig.params.len());
-                    assert!(outputs.len() == sig.returns.len());
+                    assert_eq!(inputs.len() - 1, sig.params.len());
+                    assert_eq!(outputs.len(), sig.returns.len());
                     (X64ABICall::from_ptr(sig, ptr, loc, op)?, &inputs[1..])
                 }
 
@@ -980,7 +980,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             };
 
             abi.emit_stack_pre_adjust(ctx);
-            assert!(inputs.len() == abi.num_args());
+            assert_eq!(inputs.len(), abi.num_args());
             for (i, input) in inputs.iter().enumerate() {
                 let arg_reg = input_to_reg(ctx, *input);
                 abi.emit_copy_reg_to_arg(ctx, i, arg_reg);
@@ -1531,7 +1531,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 | Opcode::Sload16
                 | Opcode::Uload32
                 | Opcode::Sload32 => {
-                    assert!(inputs.len() == 1, "only one input for load operands");
+                    assert_eq!(inputs.len(), 1, "only one input for load operands");
                     let base = input_to_reg(ctx, inputs[0]);
                     Amode::imm_reg(offset as u32, base)
                 }
@@ -1543,8 +1543,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 | Opcode::Sload16Complex
                 | Opcode::Uload32Complex
                 | Opcode::Sload32Complex => {
-                    assert!(
-                        inputs.len() == 2,
+                    assert_eq!(
+                        inputs.len(),
+                        2,
                         "can't handle more than two inputs in complex load"
                     );
                     let base = input_to_reg(ctx, inputs[0]);
@@ -1618,10 +1619,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             let addr = match op {
                 Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
-                    assert!(
-                        inputs.len() == 2,
-                        "only one input for store memory operands"
-                    );
+                    assert_eq!(inputs.len(), 2, "only one input for store memory operands");
                     let base = input_to_reg(ctx, inputs[1]);
                     // TODO sign?
                     Amode::imm_reg(offset as u32, base)
@@ -1631,8 +1629,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 | Opcode::Istore8Complex
                 | Opcode::Istore16Complex
                 | Opcode::Istore32Complex => {
-                    assert!(
-                        inputs.len() == 3,
+                    assert_eq!(
+                        inputs.len(),
+                        3,
                         "can't handle more than two inputs in complex store"
                     );
                     let base = input_to_reg(ctx, inputs[1]);
@@ -2023,7 +2022,7 @@ impl LowerBackend for X64Backend {
                 _ => unimplemented!("branch opcode"),
             }
         } else {
-            assert!(branches.len() == 1);
+            assert_eq!(branches.len(), 1);
 
             // Must be an unconditional branch or trap.
             let op = ctx.data(branches[0]).opcode();
