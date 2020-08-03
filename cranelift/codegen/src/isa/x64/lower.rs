@@ -2,31 +2,26 @@
 
 #![allow(non_snake_case)]
 
-use log::trace;
-use regalloc::{Reg, RegClass, Writable};
-use smallvec::SmallVec;
-
-use crate::ir::types;
 use crate::ir::types::*;
-use crate::ir::Inst as IRInst;
 use crate::ir::{
-    condcodes::FloatCC, condcodes::IntCC, AbiParam, ArgumentPurpose, ExternalName, InstructionData,
-    LibCall, Opcode, Signature, TrapCode, Type,
+    condcodes::FloatCC, condcodes::IntCC, types, AbiParam, ArgumentPurpose, ExternalName,
+    Inst as IRInst, InstructionData, LibCall, Opcode, Signature, TrapCode, Type,
 };
-use alloc::boxed::Box;
-use alloc::vec::Vec;
-use cranelift_codegen_shared::condcodes::CondCode;
-use std::convert::TryFrom;
-
-use crate::machinst::lower::*;
-use crate::machinst::*;
-use crate::result::CodegenResult;
-use crate::settings::Flags;
-
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::isa::{x64::X64Backend, CallConv};
+use crate::machinst::lower::*;
+use crate::machinst::*;
+use crate::result::CodegenResult;
+use crate::settings::Flags;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use cranelift_codegen_shared::condcodes::CondCode;
+use log::trace;
+use regalloc::{Reg, RegClass, Writable};
+use smallvec::SmallVec;
+use std::convert::TryFrom;
 use target_lexicon::Triple;
 
 /// Context passed to all lowering functions.

@@ -9,10 +9,9 @@
 //! (cd cranelift/codegen && \
 //! RUST_BACKTRACE=1 cargo test isa::x64::inst::test_x64_insn_encoding_and_printing -- --nocapture)
 
-use alloc::vec::Vec;
-
 use super::*;
 use crate::isa::test_utils;
+use alloc::vec::Vec;
 
 #[test]
 fn test_x64_emit() {

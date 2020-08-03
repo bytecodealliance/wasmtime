@@ -4,21 +4,20 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 
-use alloc::boxed::Box;
-use alloc::vec::Vec;
-use std::fmt;
-use std::string::{String, ToString};
-
-use regalloc::RegUsageCollector;
-use regalloc::{RealRegUniverse, Reg, RegClass, RegUsageMapper, SpillSlot, VirtualReg, Writable};
-use smallvec::SmallVec;
-
 use crate::binemit::{CodeOffset, Stackmap};
 use crate::ir::types::*;
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
-use crate::settings::Flags;
-use crate::{settings, CodegenError, CodegenResult};
+use crate::{settings, settings::Flags, CodegenError, CodegenResult};
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use regalloc::{
+    RealRegUniverse, Reg, RegClass, RegUsageCollector, RegUsageMapper, SpillSlot, VirtualReg,
+    Writable,
+};
+use smallvec::SmallVec;
+use std::fmt;
+use std::string::{String, ToString};
 
 pub mod args;
 mod emit;
