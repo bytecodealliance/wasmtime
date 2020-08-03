@@ -1,20 +1,17 @@
 //! Implementation of the standard x64 ABI.
 
-use log::trace;
-use regalloc::{RealReg, Reg, RegClass, Set, SpillSlot, Writable};
-
-use alloc::boxed::Box;
-use alloc::vec::Vec;
-use std::mem;
-
 use crate::binemit::Stackmap;
 use crate::ir::{self, types, types::*, ArgumentExtension, StackSlot, Type};
 use crate::isa::{x64::inst::*, CallConv};
 use crate::machinst::*;
 use crate::settings;
 use crate::{CodegenError, CodegenResult};
-
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use args::*;
+use log::trace;
+use regalloc::{RealReg, Reg, RegClass, Set, SpillSlot, Writable};
+use std::mem;
 
 /// This is the limit for the size of argument and return-value areas on the
 /// stack. We place a reasonable limit here to avoid integer overflow issues
