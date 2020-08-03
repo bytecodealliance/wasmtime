@@ -13,7 +13,7 @@
     )
 )]
 
-use clap::{App, Arg, SubCommand};
+use clap::{arg_enum, App, Arg, SubCommand};
 use cranelift_codegen::dbg::LOG_FILENAME_PREFIX;
 use cranelift_codegen::VERSION;
 use std::io::{self, Write};
@@ -60,6 +60,26 @@ fn add_pass_arg<'a>() -> clap::Arg<'a, 'a> {
 
 fn add_verbose_flag<'a>() -> clap::Arg<'a, 'a> {
     Arg::with_name("verbose").short("v").help("Be more verbose")
+}
+
+arg_enum! {
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub enum UseTerminalColor {
+        Auto,
+        Never,
+        Always
+    }
+}
+
+fn add_color<'a>() -> clap::Arg<'a, 'a> {
+    Arg::with_name("color")
+        .long("color")
+        .possible_values(&UseTerminalColor::variants())
+        .takes_value(true)
+        .multiple(false)
+        .default_value("auto")
+        .case_insensitive(true)
+        .help("Use colors in output")
 }
 
 fn add_time_flag<'a>() -> clap::Arg<'a, 'a> {
@@ -118,6 +138,12 @@ fn add_check_translation_flag<'a>() -> clap::Arg<'a, 'a> {
     Arg::with_name("check-translation")
         .short("c")
         .help("Just checks the correctness of Cranelift IR translated from WebAssembly")
+}
+
+fn add_value_ranges<'a>() -> clap::Arg<'a, 'a> {
+    Arg::with_name("value-ranges")
+        .long("value-ranges")
+        .help("Display values ranges and their locations")
 }
 
 /// Returns a vector of clap value options and changes these options into a vector of strings
@@ -201,11 +227,9 @@ fn main() {
         )
         .subcommand(add_wasm_or_compile("compile"))
         .subcommand(
-            add_wasm_or_compile("wasm").arg(
-                Arg::with_name("value-ranges")
-                    .long("value-ranges")
-                    .help("Display values ranges and their locations"),
-            ),
+            add_wasm_or_compile("wasm")
+                .arg(add_value_ranges())
+                .arg(add_color()),
         )
         .subcommand(
             SubCommand::with_name("pass")
@@ -306,6 +330,7 @@ fn main() {
 
                 wasm::run(
                     get_vec(rest_cmd.values_of("file")),
+                    rest_cmd.value_of("color").unwrap().parse().unwrap(),
                     rest_cmd.is_present("verbose"),
                     rest_cmd.is_present("just-decode"),
                     rest_cmd.is_present("check-translation"),
