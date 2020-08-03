@@ -1975,7 +1975,7 @@ pub(crate) fn emit(
 
             // Divide x by two to get it in range for the signed conversion, keep the LSB, and
             // scale it back up on the FP side.
-            let inst = Inst::gen_move(*tmp_gpr1, src.to_reg(), I64);
+            let inst = Inst::gen_move(*tmp_gpr1, src.to_reg(), types::I64);
             inst.emit(sink, flags, state);
 
             // tmp_gpr1 := src >> 1
@@ -1987,7 +1987,7 @@ pub(crate) fn emit(
             );
             inst.emit(sink, flags, state);
 
-            let inst = Inst::gen_move(*tmp_gpr2, src.to_reg(), I64);
+            let inst = Inst::gen_move(*tmp_gpr2, src.to_reg(), types::I64);
             inst.emit(sink, flags, state);
 
             let inst = Inst::alu_rmi_r(
