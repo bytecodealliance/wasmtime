@@ -5,8 +5,7 @@
 #![allow(non_camel_case_types)]
 
 use crate::binemit::{CodeOffset, Stackmap};
-use crate::ir::types::*;
-use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
+use crate::ir::{types, ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
 use crate::{settings, settings::Flags, CodegenError, CodegenResult};
 use alloc::boxed::Box;
@@ -2095,8 +2094,8 @@ impl MachInst for Inst {
         match rc_dst {
             RegClass::I64 => Inst::mov_r_r(true, src_reg, dst_reg),
             RegClass::V128 => match ty {
-                F32 => Inst::xmm_mov(SseOpcode::Movss, RegMem::reg(src_reg), dst_reg, None),
-                F64 => Inst::xmm_mov(SseOpcode::Movsd, RegMem::reg(src_reg), dst_reg, None),
+                types::F32 => Inst::xmm_mov(SseOpcode::Movss, RegMem::reg(src_reg), dst_reg, None),
+                types::F64 => Inst::xmm_mov(SseOpcode::Movsd, RegMem::reg(src_reg), dst_reg, None),
                 _ if ty.is_vector() && ty.bits() == 128 => {
                     // TODO Specialize this move for different types: MOVUPD, MOVDQU, etc.
                     Inst::xmm_mov(SseOpcode::Movups, RegMem::reg(src_reg), dst_reg, None)
@@ -2121,10 +2120,20 @@ impl MachInst for Inst {
 
     fn rc_for_type(ty: Type) -> CodegenResult<RegClass> {
         match ty {
-            I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 | R32 | R64 => Ok(RegClass::I64),
-            F32 | F64 => Ok(RegClass::V128),
+            types::I8
+            | types::I16
+            | types::I32
+            | types::I64
+            | types::B1
+            | types::B8
+            | types::B16
+            | types::B32
+            | types::B64
+            | types::R32
+            | types::R64 => Ok(RegClass::I64),
+            types::F32 | types::F64 => Ok(RegClass::V128),
             _ if ty.bits() == 128 => Ok(RegClass::V128),
-            IFLAGS | FFLAGS => Ok(RegClass::I64),
+            types::IFLAGS | types::FFLAGS => Ok(RegClass::I64),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty
@@ -2146,13 +2155,13 @@ impl MachInst for Inst {
         if ty.is_int() {
             if value == 0 {
                 ret.push(Inst::alu_rmi_r(
-                    ty == I64,
+                    ty == types::I64,
                     AluRmiROpcode::Xor,
                     RegMemImm::reg(to_reg.to_reg()),
                     to_reg,
                 ));
             } else {
-                let is_64 = ty == I64 && value > 0x7fffffff;
+                let is_64 = ty == types::I64 && value > 0x7fffffff;
                 ret.push(Inst::imm_r(is_64, value, to_reg));
             }
         } else if value == 0 {
@@ -2163,8 +2172,8 @@ impl MachInst for Inst {
             ));
         } else {
             match ty {
-                F32 => {
-                    let tmp = alloc_tmp(RegClass::I64, I32);
+                types::F32 => {
+                    let tmp = alloc_tmp(RegClass::I64, types::I32);
                     ret.push(Inst::imm32_r_unchecked(value, tmp));
 
                     ret.push(Inst::gpr_to_xmm(
@@ -2175,8 +2184,8 @@ impl MachInst for Inst {
                     ));
                 }
 
-                F64 => {
-                    let tmp = alloc_tmp(RegClass::I64, I64);
+                types::F64 => {
+                    let tmp = alloc_tmp(RegClass::I64, types::I64);
                     ret.push(Inst::imm_r(true, value, tmp));
 
                     ret.push(Inst::gpr_to_xmm(

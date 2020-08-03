@@ -1,7 +1,7 @@
 //! Implementation of the standard x64 ABI.
 
 use crate::binemit::Stackmap;
-use crate::ir::{self, types, types::*, ArgumentExtension, StackSlot, Type};
+use crate::ir::{self, types, ArgumentExtension, StackSlot, Type};
 use crate::isa::{x64::inst::*, CallConv};
 use crate::machinst::*;
 use crate::settings;
@@ -660,7 +660,7 @@ impl ABIBody for X64ABIBody {
         // We allocate in terms of 8-byte slots.
         match (rc, ty) {
             (RegClass::I64, _) => 1,
-            (RegClass::V128, F32) | (RegClass::V128, F64) => 1,
+            (RegClass::V128, types::F32) | (RegClass::V128, types::F64) => 1,
             (RegClass::V128, _) => 2,
             _ => panic!("Unexpected register class!"),
         }
@@ -697,7 +697,7 @@ fn ty_from_ty_hint_or_reg_class(r: Reg, ty: Option<Type>) -> Type {
         (Some(t), _) => t,
         // If no type is provided, this should be a register spill for a
         // safepoint, so we only expect I64 (integer) registers.
-        (None, RegClass::I64) => I64,
+        (None, RegClass::I64) => types::I64,
         _ => panic!("Unexpected register class!"),
     }
 }
@@ -776,7 +776,7 @@ fn try_fill_baldrdash_reg(call_conv: CallConv, param: &ir::AbiParam) -> Option<A
                 // This is SpiderMonkey's `WasmTlsReg`.
                 Some(ABIArg::Reg(
                     regs::r14().to_real_reg(),
-                    ir::types::I64,
+                    types::I64,
                     param.extension,
                 ))
             }
@@ -784,7 +784,7 @@ fn try_fill_baldrdash_reg(call_conv: CallConv, param: &ir::AbiParam) -> Option<A
                 // This is SpiderMonkey's `WasmTableCallSigReg`.
                 Some(ABIArg::Reg(
                     regs::r10().to_real_reg(),
-                    ir::types::I64,
+                    types::I64,
                     param.extension,
                 ))
             }
@@ -905,13 +905,13 @@ fn compute_arg_locs(
         if let Some(reg) = get_intreg_for_arg_systemv(&call_conv, next_gpr) {
             ret.push(ABIArg::Reg(
                 reg.to_real_reg(),
-                ir::types::I64,
+                types::I64,
                 ir::ArgumentExtension::None,
             ));
         } else {
             ret.push(ABIArg::Stack(
                 next_stack as i64,
-                ir::types::I64,
+                types::I64,
                 ir::ArgumentExtension::None,
             ));
             next_stack += 8;
@@ -1251,7 +1251,7 @@ impl ABICall for X64ABICall {
         );
 
         if let Some(i) = self.sig.stack_ret_arg {
-            let dst = ctx.alloc_tmp(RegClass::I64, I64);
+            let dst = ctx.alloc_tmp(RegClass::I64, types::I64);
             let ret_area_base = self.sig.stack_arg_space;
             debug_assert!(
                 ret_area_base <= u32::max_value() as i64,
@@ -1269,7 +1269,7 @@ impl ABICall for X64ABICall {
                 Inst::call_known(name.clone(), uses, defs, self.loc, self.opcode),
             ),
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
-                let tmp = ctx.alloc_tmp(RegClass::I64, I64);
+                let tmp = ctx.alloc_tmp(RegClass::I64, types::I64);
                 ctx.emit(Inst::LoadExtName {
                     dst: tmp,
                     name: Box::new(name.clone()),
