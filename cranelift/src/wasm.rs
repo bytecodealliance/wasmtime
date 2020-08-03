@@ -21,20 +21,33 @@ use std::path::Path;
 use std::path::PathBuf;
 use term;
 
+/// For verbose printing: only print if the `$x` expression is true.
 macro_rules! vprintln {
     ($x: expr, $($tts:tt)*) => {
         if $x {
             println!($($tts)*);
         }
-    }
+    };
 }
-
-macro_rules! vprint {
-    ($x: expr, $($tts:tt)*) => {
+/// For verbose printing: prints in color if the `$x` expression is true.
+macro_rules! vcprintln {
+    ($x: expr, $term: ident, $color: expr, $($tts:tt)*) => {
         if $x {
-            print!($($tts)*);
+            let _ = $term.fg($color);
+            println!($($tts)*);
+            let _ = $term.reset();
         }
-    }
+    };
+}
+/// For verbose printing: prints in color (without an appended newline) if the `$x` expression is true.
+macro_rules! vcprint {
+    ($x: expr, $term: ident, $color: expr, $($tts:tt)*) => {
+        if $x {
+            let _ = $term.fg($color);
+            print!($($tts)*);
+            let _ = $term.reset();
+        }
+    };
 }
 
 pub fn run(
@@ -85,13 +98,14 @@ fn handle_module(
     fisa: FlagsOrIsa,
 ) -> Result<(), String> {
     let mut terminal = term::stdout().unwrap();
-    let _ = terminal.fg(term::color::YELLOW);
-    vprint!(flag_verbose, "Handling: ");
-    let _ = terminal.reset();
+    vcprint!(flag_verbose, terminal, term::color::YELLOW, "Handling: ");
     vprintln!(flag_verbose, "\"{}\"", name);
-    let _ = terminal.fg(term::color::MAGENTA);
-    vprint!(flag_verbose, "Translating... ");
-    let _ = terminal.reset();
+    vcprint!(
+        flag_verbose,
+        terminal,
+        term::color::MAGENTA,
+        "Translating... "
+    );
 
     let module_binary = if path.to_str() == Some("-") {
         let stdin = std::io::stdin();
@@ -121,9 +135,7 @@ fn handle_module(
         DummyEnvironment::new(isa.frontend_config(), ReturnMode::NormalReturns, debug_info);
     translate_module(&module_binary, &mut dummy_environ).map_err(|e| e.to_string())?;
 
-    let _ = terminal.fg(term::color::GREEN);
-    vprintln!(flag_verbose, "ok");
-    let _ = terminal.reset();
+    vcprintln!(flag_verbose, terminal, term::color::GREEN, "ok");
 
     if flag_just_decode {
         if !flag_print {
@@ -153,13 +165,16 @@ fn handle_module(
         return Ok(());
     }
 
-    let _ = terminal.fg(term::color::MAGENTA);
     if flag_check_translation {
-        vprint!(flag_verbose, "Checking... ");
+        vcprint!(flag_verbose, terminal, term::color::MAGENTA, "Checking... ");
     } else {
-        vprint!(flag_verbose, "Compiling... ");
+        vcprint!(
+            flag_verbose,
+            terminal,
+            term::color::MAGENTA,
+            "Compiling... "
+        );
     }
-    let _ = terminal.reset();
 
     if flag_print_size {
         vprintln!(flag_verbose, "");
@@ -263,8 +278,6 @@ fn handle_module(
         println!("{}", timing::take_current());
     }
 
-    let _ = terminal.fg(term::color::GREEN);
-    vprintln!(flag_verbose, "ok");
-    let _ = terminal.reset();
+    vcprintln!(flag_verbose, terminal, term::color::GREEN, "ok");
     Ok(())
 }
