@@ -9,6 +9,7 @@
 
 use crate::disasm::{print_all, PrintRelocs, PrintStackmaps, PrintTraps};
 use crate::utils::parse_sets_and_triple;
+use crate::UseTerminalColor;
 use cranelift_codegen::ir::DisplayFunctionAnnotations;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
@@ -31,27 +32,36 @@ macro_rules! vprintln {
 }
 /// For verbose printing: prints in color if the `$x` expression is true.
 macro_rules! vcprintln {
-    ($x: expr, $term: ident, $color: expr, $($tts:tt)*) => {
+    ($x: expr, $use_color: expr, $term: ident, $color: expr, $($tts:tt)*) => {
         if $x {
-            let _ = $term.fg($color);
+            if $use_color {
+                let _ = $term.fg($color);
+            }
             println!($($tts)*);
-            let _ = $term.reset();
+            if $use_color {
+                let _ = $term.reset();
+            }
         }
     };
 }
 /// For verbose printing: prints in color (without an appended newline) if the `$x` expression is true.
 macro_rules! vcprint {
-    ($x: expr, $term: ident, $color: expr, $($tts:tt)*) => {
+    ($x: expr, $use_color: expr, $term: ident, $color: expr, $($tts:tt)*) => {
         if $x {
-            let _ = $term.fg($color);
+            if $use_color {
+                let _ = $term.fg($color);
+            }
             print!($($tts)*);
-            let _ = $term.reset();
+            if $use_color {
+                let _ = $term.reset();
+            }
         }
     };
 }
 
 pub fn run(
     files: Vec<String>,
+    use_terminal_color: UseTerminalColor,
     flag_verbose: bool,
     flag_just_decode: bool,
     flag_check_translation: bool,
@@ -68,6 +78,7 @@ pub fn run(
         let path = Path::new(&filename);
         let name = String::from(path.as_os_str().to_string_lossy());
         handle_module(
+            use_terminal_color,
             flag_verbose,
             flag_just_decode,
             flag_check_translation,
@@ -85,6 +96,7 @@ pub fn run(
 }
 
 fn handle_module(
+    use_terminal_color: UseTerminalColor,
     flag_verbose: bool,
     flag_just_decode: bool,
     flag_check_translation: bool,
@@ -98,10 +110,19 @@ fn handle_module(
     fisa: FlagsOrIsa,
 ) -> Result<(), String> {
     let mut terminal = term::stdout().unwrap();
-    vcprint!(flag_verbose, terminal, term::color::YELLOW, "Handling: ");
+    let use_color = terminal.supports_color() && use_terminal_color == UseTerminalColor::Auto
+        || use_terminal_color == UseTerminalColor::Always;
+    vcprint!(
+        flag_verbose,
+        use_color,
+        terminal,
+        term::color::YELLOW,
+        "Handling: "
+    );
     vprintln!(flag_verbose, "\"{}\"", name);
     vcprint!(
         flag_verbose,
+        use_color,
         terminal,
         term::color::MAGENTA,
         "Translating... "
@@ -135,7 +156,7 @@ fn handle_module(
         DummyEnvironment::new(isa.frontend_config(), ReturnMode::NormalReturns, debug_info);
     translate_module(&module_binary, &mut dummy_environ).map_err(|e| e.to_string())?;
 
-    vcprintln!(flag_verbose, terminal, term::color::GREEN, "ok");
+    vcprintln!(flag_verbose, use_color, terminal, term::color::GREEN, "ok");
 
     if flag_just_decode {
         if !flag_print {
@@ -166,10 +187,17 @@ fn handle_module(
     }
 
     if flag_check_translation {
-        vcprint!(flag_verbose, terminal, term::color::MAGENTA, "Checking... ");
+        vcprint!(
+            flag_verbose,
+            use_color,
+            terminal,
+            term::color::MAGENTA,
+            "Checking... "
+        );
     } else {
         vcprint!(
             flag_verbose,
+            use_color,
             terminal,
             term::color::MAGENTA,
             "Compiling... "
@@ -278,6 +306,6 @@ fn handle_module(
         println!("{}", timing::take_current());
     }
 
-    vcprintln!(flag_verbose, terminal, term::color::GREEN, "ok");
+    vcprintln!(flag_verbose, use_color, terminal, term::color::GREEN, "ok");
     Ok(())
 }
