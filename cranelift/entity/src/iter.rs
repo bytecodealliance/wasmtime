@@ -1,6 +1,7 @@
 //! A double-ended iterator over entity references and entities.
 
 use crate::EntityRef;
+use alloc::vec;
 use core::iter::Enumerate;
 use core::marker::PhantomData;
 use core::slice;
@@ -84,3 +85,40 @@ impl<'a, K: EntityRef, V> DoubleEndedIterator for IterMut<'a, K, V> {
 }
 
 impl<'a, K: EntityRef, V> ExactSizeIterator for IterMut<'a, K, V> {}
+
+/// Iterate over all keys in order.
+pub struct IntoIter<K: EntityRef, V> {
+    enumerate: Enumerate<vec::IntoIter<V>>,
+    unused: PhantomData<K>,
+}
+
+impl<K: EntityRef, V> IntoIter<K, V> {
+    /// Create an `IntoIter` iterator that visits the `PrimaryMap` keys and values
+    /// of `iter`.
+    pub fn new(iter: vec::IntoIter<V>) -> Self {
+        Self {
+            enumerate: iter.enumerate(),
+            unused: PhantomData,
+        }
+    }
+}
+
+impl<K: EntityRef, V> Iterator for IntoIter<K, V> {
+    type Item = (K, V);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.enumerate.next().map(|(i, v)| (K::new(i), v))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.enumerate.size_hint()
+    }
+}
+
+impl<K: EntityRef, V> DoubleEndedIterator for IntoIter<K, V> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.enumerate.next_back().map(|(i, v)| (K::new(i), v))
+    }
+}
+
+impl<K: EntityRef, V> ExactSizeIterator for IntoIter<K, V> {}

@@ -123,7 +123,7 @@ impl Compiler {
                 let iter = translation.function_body_inputs.iter();
             }
         }
-        let mut funcs = iter
+        let funcs = iter
             .map(|(index, func)| {
                 self.compiler
                     .compile_function(translation, index, func, &*self.isa)
@@ -145,20 +145,6 @@ impl Compiler {
 
         let (obj, unwind_info) =
             build_object(&*self.isa, &translation.module, &funcs, dwarf_sections)?;
-
-        // Clear out fields which are no longer needed for each function,
-        // releasing their memory back to the system. We may want to prefer to
-        // do this with `Option` to prevent access in the future as well. These
-        // fields were all used to construct the object file and/or debug info,
-        // but from this point on they're no longer needed.
-        for func in funcs.values_mut() {
-            func.body = Default::default();
-            func.jt_offsets = Default::default();
-            func.relocations = Default::default();
-            func.value_labels_ranges = Default::default();
-            func.stack_slots = Default::default();
-            func.unwind_info = Default::default();
-        }
 
         Ok(Compilation {
             obj,
