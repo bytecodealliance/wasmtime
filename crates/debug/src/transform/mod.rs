@@ -2,7 +2,6 @@ use self::refs::DebugInfoRefsMap;
 use self::simulate::generate_simulated_dwarf;
 use self::unit::clone_unit;
 use crate::gc::build_dependencies;
-use crate::DebugInfoData;
 use anyhow::Error;
 use gimli::{
     write, DebugAddr, DebugLine, DebugLineStr, DebugStr, DebugStrOffsets, LocationLists,
@@ -11,6 +10,7 @@ use gimli::{
 use std::collections::HashSet;
 use thiserror::Error;
 use wasmtime_environ::isa::TargetIsa;
+use wasmtime_environ::DebugInfoData;
 use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
 
 pub use address_transform::AddressTransform;

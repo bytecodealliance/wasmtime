@@ -1,4 +1,3 @@
-use crate::WasmFileInfo;
 use gimli::write;
 use more_asserts::assert_le;
 use std::collections::BTreeMap;
@@ -6,6 +5,7 @@ use std::iter::FromIterator;
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::ir::SourceLoc;
 use wasmtime_environ::wasm::DefinedFuncIndex;
+use wasmtime_environ::WasmFileInfo;
 use wasmtime_environ::{FunctionAddressMap, ModuleAddressMap};
 
 pub type GeneratedAddress = usize;
@@ -602,11 +602,11 @@ impl AddressTransform {
 #[cfg(test)]
 mod tests {
     use super::{build_function_lookup, get_wasm_code_offset, AddressTransform};
-    use crate::read_debuginfo::WasmFileInfo;
     use gimli::write::Address;
     use std::iter::FromIterator;
     use wasmtime_environ::entity::PrimaryMap;
     use wasmtime_environ::ir::SourceLoc;
+    use wasmtime_environ::WasmFileInfo;
     use wasmtime_environ::{FunctionAddressMap, InstructionAddressMap, ModuleAddressMap};
 
     #[test]
@@ -724,7 +724,7 @@ mod tests {
                 path: None,
                 code_section_offset: 1,
                 imported_func_count: 0,
-                funcs: Box::new([]),
+                funcs: Vec::new(),
             },
         );
 

@@ -15,7 +15,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
-use wasmtime_debug::{create_gdbjit_image, read_debuginfo};
+use wasmtime_debug::create_gdbjit_image;
 use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
@@ -89,21 +89,13 @@ impl CompilationArtifacts {
             .translate(data)
             .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
 
-        let debug_info = compiler.tunables().debug_info;
-
-        let mut debug_data = None;
-        if debug_info {
-            // TODO Do we want to ignore invalid DWARF data?
-            debug_data = Some(read_debuginfo(&data)?);
-        }
-
         let Compilation {
             obj,
             unwind_info,
             traps,
             stack_maps,
             address_transform,
-        } = compiler.compile(&translation, debug_data)?;
+        } = compiler.compile(&translation)?;
 
         let ModuleTranslation {
             module,
@@ -131,7 +123,7 @@ impl CompilationArtifacts {
             traps,
             stack_maps,
             address_transform,
-            debug_info,
+            debug_info: compiler.tunables().debug_info,
         })
     }
 }

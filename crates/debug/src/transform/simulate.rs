@@ -1,18 +1,19 @@
 use super::expression::{CompiledExpression, FunctionFrameInfo};
 use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_info};
 use super::AddressTransform;
-use crate::read_debuginfo::WasmFileInfo;
 use anyhow::{Context, Error};
 use gimli::write;
 use gimli::{self, LineEncoding};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+use wasmparser::Type as WasmType;
 use wasmtime_environ::entity::EntityRef;
-use wasmtime_environ::wasm::{get_vmctx_value_label, DefinedFuncIndex};
-use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
-
-pub use crate::read_debuginfo::{DebugInfoData, FunctionMetadata, WasmType};
 use wasmtime_environ::isa::TargetIsa;
+use wasmtime_environ::wasm::{get_vmctx_value_label, DefinedFuncIndex};
+use wasmtime_environ::WasmFileInfo;
+use wasmtime_environ::{DebugInfoData, FunctionMetadata};
+use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
 
 const PRODUCER_NAME: &str = "wasmtime";
 
@@ -87,7 +88,7 @@ fn generate_line_info(
     Ok(out_program)
 }
 
-fn check_invalid_chars_in_name(s: String) -> Option<String> {
+fn check_invalid_chars_in_name(s: &str) -> Option<&str> {
     if s.contains('\x00') {
         None
     } else {
@@ -96,16 +97,13 @@ fn check_invalid_chars_in_name(s: String) -> Option<String> {
 }
 
 fn autogenerate_dwarf_wasm_path(di: &DebugInfoData) -> PathBuf {
+    static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
     let module_name = di
         .name_section
-        .as_ref()
-        .and_then(|ns| ns.module_name.to_owned())
+        .module_name
         .and_then(check_invalid_chars_in_name)
-        .unwrap_or_else(|| unsafe {
-            static mut GEN_ID: u32 = 0;
-            GEN_ID += 1;
-            format!("<gen-{}>", GEN_ID)
-        });
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("<gen-{}>", NEXT_ID.fetch_add(1, SeqCst)));
     let path = format!("/<wasm-module>/{}.wasm", module_name);
     PathBuf::from(path)
 }
@@ -195,7 +193,7 @@ fn generate_vars(
     scope_ranges: &[(u64, u64)],
     wasm_types: &WasmTypesDieRefs,
     func_meta: &FunctionMetadata,
-    locals_names: Option<&HashMap<u32, String>>,
+    locals_names: Option<&HashMap<u32, &str>>,
     out_strings: &mut write::StringTable,
     isa: &dyn TargetIsa,
 ) -> Result<(), Error> {
@@ -253,7 +251,7 @@ fn generate_vars(
 
             let name_id = match locals_names
                 .and_then(|m| m.get(&(var_index as u32)))
-                .and_then(|s| check_invalid_chars_in_name(s.to_owned()))
+                .and_then(|s| check_invalid_chars_in_name(s))
             {
                 Some(n) => out_strings.add(assert_dwarf_str!(n)),
                 None => out_strings.add(format!("var{}", var_index)),
@@ -297,14 +295,8 @@ pub fn generate_simulated_dwarf(
         .and_then(check_invalid_chars_in_path)
         .unwrap_or_else(|| autogenerate_dwarf_wasm_path(di));
 
-    let (func_names, locals_names) = if let Some(ref name_section) = di.name_section {
-        (
-            Some(&name_section.func_names),
-            Some(&name_section.locals_names),
-        )
-    } else {
-        (None, None)
-    };
+    let func_names = &di.name_section.func_names;
+    let locals_names = &di.name_section.locals_names;
     let imported_func_count = di.wasm_file.imported_func_count;
 
     let (unit, root_id, name_id) = {
@@ -376,8 +368,8 @@ pub fn generate_simulated_dwarf(
 
         let func_index = imported_func_count + (index as u32);
         let id = match func_names
-            .and_then(|m| m.get(&func_index))
-            .and_then(|s| check_invalid_chars_in_name(s.to_owned()))
+            .get(&func_index)
+            .and_then(|s| check_invalid_chars_in_name(s))
         {
             Some(n) => out_strings.add(assert_dwarf_str!(n)),
             None => out_strings.add(format!("wasm-function[{}]", func_index)),
@@ -407,7 +399,7 @@ pub fn generate_simulated_dwarf(
                 &[(source_range.0, source_range.1)],
                 &wasm_types,
                 &di.wasm_file.funcs[index],
-                locals_names.and_then(|m| m.get(&(index as u32))),
+                locals_names.get(&(index as u32)),
                 out_strings,
                 isa,
             )?;

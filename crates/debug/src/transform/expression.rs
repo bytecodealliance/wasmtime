@@ -683,9 +683,9 @@ mod tests {
     }
 
     fn create_mock_address_transform() -> AddressTransform {
-        use crate::read_debuginfo::WasmFileInfo;
         use wasmtime_environ::entity::PrimaryMap;
         use wasmtime_environ::ir::SourceLoc;
+        use wasmtime_environ::WasmFileInfo;
         use wasmtime_environ::{FunctionAddressMap, InstructionAddressMap};
         let mut module_map = PrimaryMap::new();
         let code_section_offset: u32 = 100;
@@ -709,7 +709,7 @@ mod tests {
         });
         let fi = WasmFileInfo {
             code_section_offset: code_section_offset.into(),
-            funcs: Box::new([]),
+            funcs: Vec::new(),
             imported_func_count: 0,
             path: None,
         };

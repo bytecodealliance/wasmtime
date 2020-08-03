@@ -10,17 +10,17 @@ use cranelift_wasm::{
     TargetEnvironment, WasmError, WasmFuncType, WasmResult,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::path::PathBuf;
 use std::sync::Arc;
+use wasmparser::Type as WasmType;
 
-/// Contains function data: byte code and its offset in the module.
-#[derive(Hash)]
-pub struct FunctionBodyData<'a> {
-    /// Body byte code.
-    pub data: &'a [u8],
-
-    /// Body offset in the module file.
-    pub module_offset: usize,
+/// Object containing the standalone environment information.
+pub struct ModuleEnvironment<'data> {
+    /// The result to be filled in.
+    result: ModuleTranslation<'data>,
+    code_index: u32,
 }
 
 /// The result of translating via `ModuleEnvironment`. Function bodies are not
@@ -44,12 +44,60 @@ pub struct ModuleTranslation<'data> {
 
     /// The decoded Wasm types for the module.
     pub module_translation: Option<ModuleTranslationState>,
+
+    /// DWARF debug information, if enabled, parsed from the module.
+    pub debuginfo: Option<DebugInfoData<'data>>,
 }
 
-/// Object containing the standalone environment information.
-pub struct ModuleEnvironment<'data> {
-    /// The result to be filled in.
-    result: ModuleTranslation<'data>,
+/// Contains function data: byte code and its offset in the module.
+#[derive(Hash)]
+pub struct FunctionBodyData<'a> {
+    /// Body byte code.
+    pub data: &'a [u8],
+
+    /// Body offset in the module file.
+    pub module_offset: usize,
+}
+
+#[derive(Debug, Default)]
+#[allow(missing_docs)]
+pub struct DebugInfoData<'a> {
+    pub dwarf: Dwarf<'a>,
+    pub name_section: NameSection<'a>,
+    pub wasm_file: WasmFileInfo,
+    debug_loc: gimli::DebugLoc<Reader<'a>>,
+    debug_loclists: gimli::DebugLocLists<Reader<'a>>,
+    debug_ranges: gimli::DebugRanges<Reader<'a>>,
+    debug_rnglists: gimli::DebugRngLists<Reader<'a>>,
+}
+
+#[allow(missing_docs)]
+pub type Dwarf<'input> = gimli::Dwarf<Reader<'input>>;
+
+type Reader<'input> = gimli::EndianSlice<'input, gimli::LittleEndian>;
+
+#[derive(Debug, Default)]
+#[allow(missing_docs)]
+pub struct NameSection<'a> {
+    pub module_name: Option<&'a str>,
+    pub func_names: HashMap<u32, &'a str>,
+    pub locals_names: HashMap<u32, HashMap<u32, &'a str>>,
+}
+
+#[derive(Debug, Default)]
+#[allow(missing_docs)]
+pub struct WasmFileInfo {
+    pub path: Option<PathBuf>,
+    pub code_section_offset: u64,
+    pub imported_func_count: u32,
+    pub funcs: Vec<FunctionMetadata>,
+}
+
+#[derive(Debug)]
+#[allow(missing_docs)]
+pub struct FunctionMetadata {
+    pub params: Box<[WasmType]>,
+    pub locals: Box<[(u32, WasmType)]>,
 }
 
 impl<'data> ModuleEnvironment<'data> {
@@ -63,7 +111,13 @@ impl<'data> ModuleEnvironment<'data> {
                 data_initializers: Vec::new(),
                 tunables: tunables.clone(),
                 module_translation: None,
+                debuginfo: if tunables.debug_info {
+                    Some(DebugInfoData::default())
+                } else {
+                    None
+                },
             },
+            code_index: 0,
         }
     }
 
@@ -86,6 +140,42 @@ impl<'data> ModuleEnvironment<'data> {
             .exports
             .insert(String::from(name), export);
         Ok(())
+    }
+
+    fn register_dwarf_section(&mut self, name: &str, data: &'data [u8]) {
+        let info = match &mut self.result.debuginfo {
+            Some(info) => info,
+            None => return,
+        };
+        if !name.starts_with(".debug_") {
+            return;
+        }
+        let dwarf = &mut info.dwarf;
+        let endian = gimli::LittleEndian;
+        let slice = gimli::EndianSlice::new(data, endian);
+
+        match name {
+            ".debug_str" => dwarf.debug_str = gimli::DebugStr::new(data, endian),
+            ".debug_abbrev" => dwarf.debug_abbrev = gimli::DebugAbbrev::new(data, endian),
+            ".debug_info" => dwarf.debug_info = gimli::DebugInfo::new(data, endian),
+            ".debug_line" => dwarf.debug_line = gimli::DebugLine::new(data, endian),
+            ".debug_addr" => dwarf.debug_addr = gimli::DebugAddr::from(slice),
+            ".debug_line_str" => dwarf.debug_line_str = gimli::DebugLineStr::from(slice),
+            ".debug_str_sup" => dwarf.debug_str_sup = gimli::DebugStr::from(slice),
+            ".debug_ranges" => info.debug_ranges = gimli::DebugRanges::new(data, endian),
+            ".debug_rnglists" => info.debug_rnglists = gimli::DebugRngLists::new(data, endian),
+            ".debug_loc" => info.debug_loc = gimli::DebugLoc::from(slice),
+            ".debug_loclists" => info.debug_loclists = gimli::DebugLocLists::from(slice),
+            ".debug_str_offsets" => dwarf.debug_str_offsets = gimli::DebugStrOffsets::from(slice),
+            ".debug_types" => dwarf.debug_types = gimli::DebugTypes::from(slice),
+            other => {
+                log::warn!("unknown debug section `{}`", other);
+                return;
+            }
+        }
+
+        dwarf.ranges = gimli::RangeLists::new(info.debug_ranges, info.debug_rnglists);
+        dwarf.locations = gimli::LocationLists::new(info.debug_loc, info.debug_loclists);
     }
 }
 
@@ -144,6 +234,9 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             EntityIndex::Function(func_index),
         ));
         self.result.module.local.num_imported_funcs += 1;
+        if let Some(info) = &mut self.result.debuginfo {
+            info.wasm_file.imported_func_count += 1;
+        }
         Ok(())
     }
 
@@ -346,6 +439,12 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         Ok(())
     }
 
+    fn reserve_function_bodies(&mut self, _count: u32, offset: u64) {
+        if let Some(info) = &mut self.result.debuginfo {
+            info.wasm_file.code_section_offset = offset;
+        }
+    }
+
     fn define_function_body(
         &mut self,
         _module_translation: &ModuleTranslationState,
@@ -356,6 +455,22 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             data: body_bytes,
             module_offset: body_offset,
         });
+        if let Some(info) = &mut self.result.debuginfo {
+            let func_index = self.code_index + self.result.module.local.num_imported_funcs as u32;
+            let func_index = FuncIndex::from_u32(func_index);
+            let sig_index = self.result.module.local.functions[func_index];
+            let sig = &self.result.module.local.signatures[sig_index];
+            let mut locals = Vec::new();
+            let body = wasmparser::FunctionBody::new(body_offset, body_bytes);
+            for pair in body.get_locals_reader()? {
+                locals.push(pair?);
+            }
+            info.wasm_file.funcs.push(FunctionMetadata {
+                locals: locals.into_boxed_slice(),
+                params: sig.0.params.iter().cloned().map(|i| i.into()).collect(),
+            });
+        }
+        self.code_index += 1;
         Ok(())
     }
 
@@ -402,20 +517,38 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         Ok(())
     }
 
-    fn declare_module_name(&mut self, name: &'data str) -> WasmResult<()> {
+    fn declare_module_name(&mut self, name: &'data str) {
         self.result.module.name = Some(name.to_string());
-        Ok(())
+        if let Some(info) = &mut self.result.debuginfo {
+            info.name_section.module_name = Some(name);
+        }
     }
 
-    fn declare_func_name(&mut self, func_index: FuncIndex, name: &'data str) -> WasmResult<()> {
+    fn declare_func_name(&mut self, func_index: FuncIndex, name: &'data str) {
         self.result
             .module
             .func_names
             .insert(func_index, name.to_string());
-        Ok(())
+        if let Some(info) = &mut self.result.debuginfo {
+            info.name_section
+                .func_names
+                .insert(func_index.as_u32(), name);
+        }
     }
 
-    fn custom_section(&mut self, name: &'data str, _data: &'data [u8]) -> WasmResult<()> {
+    fn declare_local_name(&mut self, func_index: FuncIndex, local: u32, name: &'data str) {
+        if let Some(info) = &mut self.result.debuginfo {
+            info.name_section
+                .locals_names
+                .entry(func_index.as_u32())
+                .or_insert(HashMap::new())
+                .insert(local, name);
+        }
+    }
+
+    fn custom_section(&mut self, name: &'data str, data: &'data [u8]) -> WasmResult<()> {
+        self.register_dwarf_section(name, data);
+
         match name {
             "webidl-bindings" | "wasm-interface-types" => Err(WasmError::Unsupported(
                 "\
@@ -431,6 +564,7 @@ and for re-adding support for interface types you can see this issue:
 "
                 .to_owned(),
             )),
+
             // skip other sections
             _ => Ok(()),
         }
