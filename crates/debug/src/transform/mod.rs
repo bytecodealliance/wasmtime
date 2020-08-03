@@ -10,8 +10,7 @@ use gimli::{
 use std::collections::HashSet;
 use thiserror::Error;
 use wasmtime_environ::isa::TargetIsa;
-use wasmtime_environ::DebugInfoData;
-use wasmtime_environ::{ModuleAddressMap, ModuleVmctxInfo, ValueLabelsRanges};
+use wasmtime_environ::{CompiledFunctions, DebugInfoData, ModuleMemoryOffset};
 
 pub use address_transform::AddressTransform;
 
@@ -50,11 +49,10 @@ where
 pub fn transform_dwarf(
     isa: &dyn TargetIsa,
     di: &DebugInfoData,
-    at: &ModuleAddressMap,
-    vmctx_info: &ModuleVmctxInfo,
-    ranges: &ValueLabelsRanges,
+    funcs: &CompiledFunctions,
+    memory_offset: &ModuleMemoryOffset,
 ) -> Result<write::Dwarf, Error> {
-    let addr_tr = AddressTransform::new(at, &di.wasm_file);
+    let addr_tr = AddressTransform::new(funcs, &di.wasm_file);
     let reachable = build_dependencies(&di.dwarf, &addr_tr)?.get_reachable();
 
     let context = DebugInputContext {
@@ -90,9 +88,9 @@ pub fn transform_dwarf(
             unit,
             &context,
             &addr_tr,
-            &ranges,
+            funcs,
+            memory_offset,
             out_encoding,
-            &vmctx_info,
             &mut out_units,
             &mut out_strings,
             &mut translated,
@@ -107,8 +105,8 @@ pub fn transform_dwarf(
     generate_simulated_dwarf(
         &addr_tr,
         di,
-        &vmctx_info,
-        &ranges,
+        memory_offset,
+        funcs,
         &translated,
         out_encoding,
         &mut out_units,

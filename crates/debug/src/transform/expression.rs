@@ -601,6 +601,7 @@ mod tests {
     use super::compile_expression;
     use super::{AddressTransform, FunctionFrameInfo, ValueLabel, ValueLabelsRanges};
     use gimli::{self, Encoding, EndianSlice, Expression, RunTimeEndian};
+    use wasmtime_environ::CompiledFunction;
 
     macro_rules! expression {
         ($($i:literal),*) => {
@@ -689,23 +690,26 @@ mod tests {
         use wasmtime_environ::{FunctionAddressMap, InstructionAddressMap};
         let mut module_map = PrimaryMap::new();
         let code_section_offset: u32 = 100;
-        module_map.push(FunctionAddressMap {
-            instructions: vec![
-                InstructionAddressMap {
-                    srcloc: SourceLoc::new(code_section_offset + 12),
-                    code_offset: 5,
-                    code_len: 3,
-                },
-                InstructionAddressMap {
-                    srcloc: SourceLoc::new(code_section_offset + 17),
-                    code_offset: 15,
-                    code_len: 8,
-                },
-            ],
-            start_srcloc: SourceLoc::new(code_section_offset + 10),
-            end_srcloc: SourceLoc::new(code_section_offset + 20),
-            body_offset: 0,
-            body_len: 30,
+        module_map.push(CompiledFunction {
+            address_map: FunctionAddressMap {
+                instructions: vec![
+                    InstructionAddressMap {
+                        srcloc: SourceLoc::new(code_section_offset + 12),
+                        code_offset: 5,
+                        code_len: 3,
+                    },
+                    InstructionAddressMap {
+                        srcloc: SourceLoc::new(code_section_offset + 17),
+                        code_offset: 15,
+                        code_len: 8,
+                    },
+                ],
+                start_srcloc: SourceLoc::new(code_section_offset + 10),
+                end_srcloc: SourceLoc::new(code_section_offset + 20),
+                body_offset: 0,
+                body_len: 30,
+            },
+            ..Default::default()
         });
         let fi = WasmFileInfo {
             code_section_offset: code_section_offset.into(),

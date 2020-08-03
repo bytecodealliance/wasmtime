@@ -2,16 +2,15 @@
 
 use crate::instantiate::SetupError;
 use crate::object::{build_object, ObjectUnwindInfo};
-use cranelift_codegen::ir;
 use object::write::Object;
 use std::hash::{Hash, Hasher};
 use wasmtime_debug::{emit_dwarf, DwarfSection};
-use wasmtime_environ::entity::{EntityRef, PrimaryMap};
-use wasmtime_environ::isa::{unwind::UnwindInfo, TargetFrontendConfig, TargetIsa};
-use wasmtime_environ::wasm::{DefinedFuncIndex, DefinedMemoryIndex, MemoryIndex};
+use wasmtime_environ::entity::EntityRef;
+use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
+use wasmtime_environ::wasm::{DefinedMemoryIndex, MemoryIndex};
 use wasmtime_environ::{
-    Compiler as _C, DebugInfoData, Module, ModuleAddressMap, ModuleMemoryOffset, ModuleTranslation,
-    ModuleVmctxInfo, StackMaps, Traps, Tunables, VMOffsets, ValueLabelsRanges,
+    CompiledFunctions, Compiler as EnvCompiler, DebugInfoData, Module, ModuleMemoryOffset,
+    ModuleTranslation, Tunables, VMOffsets,
 };
 
 /// Select which kind of compilation to use.
@@ -38,6 +37,7 @@ pub enum CompilationStrategy {
 /// TODO: Consider using cranelift-module.
 pub struct Compiler {
     isa: Box<dyn TargetIsa>,
+    compiler: Box<dyn EnvCompiler>,
     strategy: CompilationStrategy,
     tunables: Tunables,
 }
@@ -48,6 +48,13 @@ impl Compiler {
         Self {
             isa,
             strategy,
+            compiler: match strategy {
+                CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
+                    Box::new(wasmtime_environ::cranelift::Cranelift::default())
+                }
+                #[cfg(feature = "lightbeam")]
+                CompilationStrategy::Lightbeam => Box::new(wasmtime_environ::lightbeam::Lightbeam),
+            },
             tunables,
         }
     }
@@ -62,46 +69,26 @@ fn transform_dwarf_data(
     isa: &dyn TargetIsa,
     module: &Module,
     debug_data: &DebugInfoData,
-    address_transform: &ModuleAddressMap,
-    value_ranges: &ValueLabelsRanges,
-    stack_slots: PrimaryMap<DefinedFuncIndex, ir::StackSlots>,
-    unwind_info: PrimaryMap<DefinedFuncIndex, &Option<UnwindInfo>>,
+    funcs: &CompiledFunctions,
 ) -> Result<Vec<DwarfSection>, SetupError> {
     let target_config = isa.frontend_config();
     let ofs = VMOffsets::new(target_config.pointer_bytes(), &module.local);
 
-    let module_vmctx_info = {
-        ModuleVmctxInfo {
-            memory_offset: if ofs.num_imported_memories > 0 {
-                ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
-            } else if ofs.num_defined_memories > 0 {
-                ModuleMemoryOffset::Defined(
-                    ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)),
-                )
-            } else {
-                ModuleMemoryOffset::None
-            },
-            stack_slots,
-        }
+    let memory_offset = if ofs.num_imported_memories > 0 {
+        ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
+    } else if ofs.num_defined_memories > 0 {
+        ModuleMemoryOffset::Defined(ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)))
+    } else {
+        ModuleMemoryOffset::None
     };
-    emit_dwarf(
-        isa,
-        debug_data,
-        &address_transform,
-        &module_vmctx_info,
-        &value_ranges,
-        &unwind_info,
-    )
-    .map_err(SetupError::DebugInfo)
+    emit_dwarf(isa, debug_data, funcs, &memory_offset).map_err(SetupError::DebugInfo)
 }
 
 #[allow(missing_docs)]
 pub struct Compilation {
     pub obj: Object,
     pub unwind_info: Vec<ObjectUnwindInfo>,
-    pub traps: Traps,
-    pub stack_maps: StackMaps,
-    pub address_transform: ModuleAddressMap,
+    pub funcs: CompiledFunctions,
 }
 
 impl Compiler {
@@ -120,66 +107,49 @@ impl Compiler {
         &self.tunables
     }
 
-    /// Return the compilation strategy.
-    pub fn strategy(&self) -> CompilationStrategy {
-        self.strategy
-    }
-
     /// Compile the given function bodies.
-    pub(crate) fn compile<'data>(
+    pub fn compile<'data>(
         &self,
         translation: &ModuleTranslation,
     ) -> Result<Compilation, SetupError> {
-        let (
-            compilation,
-            relocations,
-            address_transform,
-            value_ranges,
-            stack_slots,
-            traps,
-            stack_maps,
-        ) = match self.strategy {
-            // For now, interpret `Auto` as `Cranelift` since that's the most stable
-            // implementation.
-            CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
-                wasmtime_environ::cranelift::Cranelift::compile_module(translation, &*self.isa)
-            }
-            #[cfg(feature = "lightbeam")]
-            CompilationStrategy::Lightbeam => {
-                wasmtime_environ::lightbeam::Lightbeam::compile_module(translation, &*self.isa)
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "parallel-compilation")] {
+                use rayon::prelude::*;
+                let iter = translation.function_body_inputs
+                    .iter()
+                    .collect::<Vec<_>>()
+                    .into_par_iter();
+            } else {
+                let iter = translation.function_body_inputs.iter();
             }
         }
-        .map_err(SetupError::Compile)?;
+        let funcs = iter
+            .map(|(index, func)| {
+                self.compiler
+                    .compile_function(translation, index, func, &*self.isa)
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .collect::<CompiledFunctions>();
 
-        let dwarf_sections = if translation.debuginfo.is_some() && !compilation.is_empty() {
-            let unwind_info = compilation.unwind_info();
+        let dwarf_sections = if translation.debuginfo.is_some() && !funcs.is_empty() {
             transform_dwarf_data(
                 &*self.isa,
                 &translation.module,
                 translation.debuginfo.as_ref().unwrap(),
-                &address_transform,
-                &value_ranges,
-                stack_slots,
-                unwind_info,
+                &funcs,
             )?
         } else {
             vec![]
         };
 
-        let (obj, unwind_info) = build_object(
-            &*self.isa,
-            &translation.module,
-            compilation,
-            relocations,
-            dwarf_sections,
-        )?;
+        let (obj, unwind_info) =
+            build_object(&*self.isa, &translation.module, &funcs, dwarf_sections)?;
 
         Ok(Compilation {
             obj,
             unwind_info,
-            traps,
-            stack_maps,
-            address_transform,
+            funcs,
         })
     }
 }
@@ -188,6 +158,7 @@ impl Hash for Compiler {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
         let Compiler {
             strategy,
+            compiler: _,
             isa,
             tunables,
         } = self;

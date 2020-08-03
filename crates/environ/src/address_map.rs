@@ -2,8 +2,6 @@
 // addresses of a WebAssembly module into the native code.
 
 use cranelift_codegen::ir;
-use cranelift_entity::PrimaryMap;
-use cranelift_wasm::DefinedFuncIndex;
 use serde::{Deserialize, Serialize};
 
 /// Single source location to generated address mapping.
@@ -20,7 +18,7 @@ pub struct InstructionAddressMap {
 }
 
 /// Function and its instructions addresses mappings.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct FunctionAddressMap {
     /// Instructions maps.
     /// The array is sorted by the InstructionAddressMap::code_offset field.
@@ -39,15 +37,6 @@ pub struct FunctionAddressMap {
     pub body_len: usize,
 }
 
-/// Module functions addresses mappings.
-pub type ModuleAddressMap = PrimaryMap<DefinedFuncIndex, FunctionAddressMap>;
-
-/// Value ranges for functions.
-pub type ValueLabelsRanges = PrimaryMap<DefinedFuncIndex, cranelift_codegen::ValueLabelsRanges>;
-
-/// Stack slots for functions.
-pub type StackSlots = PrimaryMap<DefinedFuncIndex, ir::StackSlots>;
-
 /// Memory definition offset in the VMContext structure.
 #[derive(Debug, Clone)]
 pub enum ModuleMemoryOffset {
@@ -57,14 +46,4 @@ pub enum ModuleMemoryOffset {
     Defined(u32),
     /// Offset to the imported memory.
     Imported(u32),
-}
-
-/// Module `vmctx` related info.
-#[derive(Debug, Clone)]
-pub struct ModuleVmctxInfo {
-    /// The memory definition offset in the VMContext structure.
-    pub memory_offset: ModuleMemoryOffset,
-
-    /// The functions stack slots.
-    pub stack_slots: StackSlots,
 }

@@ -33,9 +33,9 @@ pub fn make_trampoline(
     signature: &ir::Signature,
     value_size: usize,
 ) -> Result<VMTrampoline, SetupError> {
-    let (compiled_function, relocs) = build_trampoline(isa, fn_builder_ctx, signature, value_size)?;
+    let compiled_function = build_trampoline(isa, fn_builder_ctx, signature, value_size)?;
 
-    assert!(relocs.is_empty());
+    assert!(compiled_function.relocations.is_empty());
     let ptr = code_memory
         .allocate_for_function(&compiled_function)
         .map_err(|message| SetupError::Instantiate(InstantiationError::Resource(message)))?
@@ -48,7 +48,7 @@ pub(crate) fn build_trampoline(
     fn_builder_ctx: &mut FunctionBuilderContext,
     signature: &ir::Signature,
     value_size: usize,
-) -> Result<(CompiledFunction, Vec<Relocation>), SetupError> {
+) -> Result<CompiledFunction, SetupError> {
     let pointer_type = isa.pointer_type();
     let mut wrapper_sig = ir::Signature::new(isa.frontend_config().default_call_conv);
 
@@ -155,14 +155,17 @@ pub(crate) fn build_trampoline(
         )))
     })?;
 
-    Ok((
-        CompiledFunction {
-            body: code_buf,
-            jt_offsets: context.func.jt_offsets,
-            unwind_info,
-        },
-        reloc_sink.relocs,
-    ))
+    Ok(CompiledFunction {
+        body: code_buf,
+        jt_offsets: context.func.jt_offsets,
+        unwind_info,
+        relocations: reloc_sink.relocs,
+        stack_maps: Default::default(),
+        stack_slots: Default::default(),
+        traps: Default::default(),
+        value_labels_ranges: Default::default(),
+        address_map: Default::default(),
+    })
 }
 
 /// We don't expect trampoline compilation to produce many relocations, so

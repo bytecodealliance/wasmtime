@@ -85,23 +85,21 @@
 // also need to actually catch stack overflow, so for now 32k is chosen and it's
 // assume no valid stack pointer will ever be `usize::max_value() - 32k`.
 
-use crate::address_map::{FunctionAddressMap, InstructionAddressMap};
-use crate::compilation::{
-    Compilation, CompileError, CompiledFunction, Relocation, RelocationTarget, StackMapInformation,
+use crate::func_environ::{get_func_name, FuncEnvironment};
+use crate::Compiler;
+use crate::{
+    CompileError, CompiledFunction, Relocation, RelocationTarget, StackMapInformation,
     TrapInformation,
 };
-use crate::compilation::{CompileResult, Compiler};
-use crate::func_environ::{get_func_name, FuncEnvironment};
-use crate::{FunctionBodyData, ModuleLocal, ModuleTranslation, Tunables};
+use crate::{FunctionAddressMap, InstructionAddressMap};
+use crate::{FunctionBodyData, ModuleTranslation};
 use cranelift_codegen::ir::{self, ExternalName};
 use cranelift_codegen::machinst::buffer::MachSrcLoc;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{binemit, isa, Context};
-use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, ModuleTranslationState};
-#[cfg(feature = "parallel-compilation")]
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator};
 use std::convert::TryFrom;
+use std::sync::Mutex;
 
 /// Implementation of a relocation sink that just saves all the information for later
 pub struct RelocSink {
@@ -280,45 +278,33 @@ fn get_function_address_map<'data>(
 
 /// A compiler that compiles a WebAssembly module with Cranelift, translating the Wasm to Cranelift IR,
 /// optimizing it and then translating to assembly.
-pub struct Cranelift;
+#[derive(Default)]
+pub struct Cranelift {
+    translators: Mutex<Vec<FuncTranslator>>,
+}
 
-impl Compiler for Cranelift {
-    /// Compile the module using Cranelift, producing a compilation result with
-    /// associated relocations.
-    fn compile_module(
-        translation: &ModuleTranslation,
-        isa: &dyn isa::TargetIsa,
-    ) -> Result<CompileResult, CompileError> {
-        compile(
-            isa,
-            &translation.module.local,
-            translation.module_translation.as_ref().unwrap(),
-            &translation.function_body_inputs,
-            &translation.tunables,
-        )
+impl Cranelift {
+    fn take_translator(&self) -> FuncTranslator {
+        let candidate = self.translators.lock().unwrap().pop();
+        candidate.unwrap_or_else(FuncTranslator::new)
+    }
+
+    fn save_translator(&self, translator: FuncTranslator) {
+        self.translators.lock().unwrap().push(translator);
     }
 }
 
-fn compile(
-    isa: &dyn isa::TargetIsa,
-    local: &ModuleLocal,
-    module_translation: &ModuleTranslationState,
-    function_body_inputs: &PrimaryMap<DefinedFuncIndex, FunctionBodyData<'_>>,
-    tunables: &Tunables,
-) -> Result<CompileResult, CompileError> {
-    let mut functions = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut relocations = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut address_transforms = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut value_ranges = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut stack_slots = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut traps = PrimaryMap::with_capacity(function_body_inputs.len());
-    let mut stack_maps = PrimaryMap::with_capacity(function_body_inputs.len());
-
-    type FunctionBodyInput<'a> = (DefinedFuncIndex, &'a FunctionBodyData<'a>);
-
-    let compile_function = |func_translator: &mut FuncTranslator,
-                            (i, input): &FunctionBodyInput| {
-        let func_index = local.func_index(*i);
+impl Compiler for Cranelift {
+    fn compile_function(
+        &self,
+        translation: &ModuleTranslation<'_>,
+        func_index: DefinedFuncIndex,
+        input: &FunctionBodyData<'_>,
+        isa: &dyn isa::TargetIsa,
+    ) -> Result<CompiledFunction, CompileError> {
+        let local = &translation.module.local;
+        let tunables = &translation.tunables;
+        let func_index = local.func_index(func_index);
         let mut context = Context::new();
         context.func.name = get_func_name(func_index);
         context.func.signature = local.native_func_signature(func_index).clone();
@@ -361,13 +347,16 @@ fn compile(
             readonly: false,
         });
         context.func.stack_limit = Some(stack_limit);
-        func_translator.translate(
-            module_translation,
+        let mut func_translator = self.take_translator();
+        let result = func_translator.translate(
+            translation.module_translation.as_ref().unwrap(),
             input.data,
             input.module_offset,
             &mut context.func,
             &mut func_env,
-        )?;
+        );
+        self.save_translator(func_translator);
+        result?;
 
         let mut code_buf: Vec<u8> = Vec::new();
         let mut reloc_sink = RelocSink::new(func_index);
@@ -400,73 +389,16 @@ fn compile(
             None
         };
 
-        Ok((
-            code_buf,
-            context.func.jt_offsets,
-            reloc_sink.func_relocs,
-            address_transform,
-            ranges,
-            context.func.stack_slots,
-            trap_sink.traps,
+        Ok(CompiledFunction {
+            body: code_buf,
+            jt_offsets: context.func.jt_offsets,
+            relocations: reloc_sink.func_relocs,
+            address_map: address_transform,
+            value_labels_ranges: ranges.unwrap_or(Default::default()),
+            stack_slots: context.func.stack_slots,
+            traps: trap_sink.traps,
             unwind_info,
-            stack_map_sink.finish(),
-        ))
-    };
-
-    let inputs: Vec<FunctionBodyInput> = function_body_inputs.into_iter().collect();
-
-    let results: Result<Vec<_>, CompileError> = {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "parallel-compilation")] {
-                inputs
-                    .par_iter()
-                    .map_init(FuncTranslator::new, compile_function)
-                    .collect()
-            } else {
-                let mut func_translator = FuncTranslator::new();
-                inputs
-                    .iter()
-                    .map(|input| compile_function(&mut func_translator, input))
-                    .collect()
-            }
-        }
-    };
-
-    results?.into_iter().for_each(
-        |(
-            function,
-            func_jt_offsets,
-            relocs,
-            address_transform,
-            ranges,
-            sss,
-            function_traps,
-            unwind_info,
-            stack_map,
-        )| {
-            functions.push(CompiledFunction {
-                body: function,
-                jt_offsets: func_jt_offsets,
-                unwind_info,
-            });
-            relocations.push(relocs);
-            address_transforms.push(address_transform);
-            value_ranges.push(ranges.unwrap_or_default());
-            stack_slots.push(sss);
-            traps.push(function_traps);
-            stack_maps.push(stack_map);
-        },
-    );
-
-    // TODO: Reorganize where we create the Vec for the resolved imports.
-
-    Ok((
-        Compilation::new(functions),
-        relocations,
-        address_transforms,
-        value_ranges,
-        stack_slots,
-        traps,
-        stack_maps,
-    ))
+            stack_maps: stack_map_sink.finish(),
+        })
+    }
 }

@@ -1,6 +1,6 @@
 //! Densely numbered entity references as mapping keys.
 use crate::boxed_slice::BoxedSlice;
-use crate::iter::{Iter, IterMut};
+use crate::iter::{IntoIter, Iter, IterMut};
 use crate::keys::Keys;
 use crate::EntityRef;
 use alloc::boxed::Box;
@@ -150,6 +150,15 @@ where
     }
 }
 
+impl<K, V> Default for PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    fn default() -> PrimaryMap<K, V> {
+        PrimaryMap::new()
+    }
+}
+
 /// Immutable indexing into an `PrimaryMap`.
 /// The indexed value must be in the map.
 impl<K, V> Index<K> for PrimaryMap<K, V>
@@ -170,6 +179,18 @@ where
 {
     fn index_mut(&mut self, k: K) -> &mut V {
         &mut self.elems[k.index()]
+    }
+}
+
+impl<K, V> IntoIterator for PrimaryMap<K, V>
+where
+    K: EntityRef,
+{
+    type Item = (K, V);
+    type IntoIter = IntoIter<K, V>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIter::new(self.elems.into_iter())
     }
 }
 

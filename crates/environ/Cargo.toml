@@ -20,7 +20,6 @@ cranelift-wasm = { path = "../../cranelift/wasm", version = "0.66.0", features =
 wasmparser = "0.59.0"
 lightbeam = { path = "../lightbeam", optional = true, version = "0.19.0" }
 indexmap = { version = "1.0.2", features = ["serde-1"] }
-rayon = { version = "1.2.1", optional = true }
 thiserror = "1.0.4"
 directories = "2.0.1"
 sha2 = "0.8.0"
@@ -47,9 +46,6 @@ tempfile = "3"
 pretty_env_logger = "0.4.0"
 filetime = "0.2.7"
 lazy_static = "1.3.0"
-
-[features]
-parallel-compilation = ["rayon"]
 
 [badges]
 maintenance = { status = "actively-developed" }

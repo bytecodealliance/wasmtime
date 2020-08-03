@@ -28,12 +28,10 @@ use std::collections::HashMap;
 use target_lexicon::Triple;
 use wasmtime_debug::{DwarfSection, DwarfSectionRelocTarget};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
-use wasmtime_environ::ir::{JumpTableOffsets, LibCall, Reloc};
+use wasmtime_environ::ir::{LibCall, Reloc};
 use wasmtime_environ::isa::unwind::UnwindInfo;
 use wasmtime_environ::wasm::{DefinedFuncIndex, FuncIndex, SignatureIndex};
-use wasmtime_environ::{
-    Compilation, CompiledFunction, Module, Relocation, RelocationTarget, Relocations,
-};
+use wasmtime_environ::{CompiledFunction, CompiledFunctions, Module, Relocation, RelocationTarget};
 
 fn to_object_relocations<'a>(
     it: impl Iterator<Item = &'a Relocation> + 'a,
@@ -41,7 +39,7 @@ fn to_object_relocations<'a>(
     module: &'a Module,
     funcs: &'a PrimaryMap<FuncIndex, SymbolId>,
     libcalls: &'a HashMap<LibCall, SymbolId>,
-    jt_offsets: &'a PrimaryMap<DefinedFuncIndex, JumpTableOffsets>,
+    compiled_funcs: &'a CompiledFunctions,
 ) -> impl Iterator<Item = ObjectRelocation> + 'a {
     it.filter_map(move |r| {
         let (symbol, symbol_offset) = match r.reloc_target {
@@ -49,9 +47,9 @@ fn to_object_relocations<'a>(
             RelocationTarget::LibCall(call) => (libcalls[&call], 0),
             RelocationTarget::JumpTable(f, jt) => {
                 let df = module.local.defined_func_index(f).unwrap();
-                let offset = *jt_offsets
+                let offset = *compiled_funcs
                     .get(df)
-                    .and_then(|ofs| ofs.get(jt))
+                    .and_then(|f| f.jt_offsets.get(jt))
                     .expect("func jump table");
                 (funcs[f], offset)
             }
@@ -258,20 +256,24 @@ pub struct ObjectBuilder<'a> {
     target: ObjectBuilderTarget,
     module: &'a Module,
     code_alignment: u64,
-    compilation: Option<(Compilation, Relocations)>,
-    trampolines: PrimaryMap<SignatureIndex, (CompiledFunction, Vec<Relocation>)>,
+    compilation: &'a CompiledFunctions,
+    trampolines: PrimaryMap<SignatureIndex, CompiledFunction>,
     dwarf_sections: Vec<DwarfSection>,
 }
 
 impl<'a> ObjectBuilder<'a> {
-    pub fn new(target: ObjectBuilderTarget, module: &'a Module) -> Self {
+    pub fn new(
+        target: ObjectBuilderTarget,
+        module: &'a Module,
+        compilation: &'a CompiledFunctions,
+    ) -> Self {
         Self {
             target,
             module,
             code_alignment: 1,
-            compilation: None,
             trampolines: PrimaryMap::new(),
             dwarf_sections: vec![],
+            compilation,
         }
     }
 
@@ -280,18 +282,9 @@ impl<'a> ObjectBuilder<'a> {
         self
     }
 
-    pub fn set_compilation(
-        &mut self,
-        compilation: Compilation,
-        relocations: Relocations,
-    ) -> &mut Self {
-        self.compilation = Some((compilation, relocations));
-        self
-    }
-
     pub fn set_trampolines(
         &mut self,
-        trampolines: PrimaryMap<SignatureIndex, (CompiledFunction, Vec<Relocation>)>,
+        trampolines: PrimaryMap<SignatureIndex, CompiledFunction>,
     ) -> &mut Self {
         self.trampolines = trampolines;
         self
@@ -319,17 +312,8 @@ impl<'a> ObjectBuilder<'a> {
             SectionKind::Text,
         );
 
-        let (compilation, jt_offsets, relocations) = self.compilation.map_or_else(
-            || (None, PrimaryMap::new(), PrimaryMap::new()),
-            |(c, relocations)| {
-                let jt_offsets = c.get_jt_offsets();
-                (Some(c), jt_offsets, relocations)
-            },
-        );
-
         // Create symbols for imports -- needed during linking.
-        let mut func_symbols =
-            PrimaryMap::with_capacity(compilation.as_ref().map_or_else(|| 0, |c| c.len()));
+        let mut func_symbols = PrimaryMap::with_capacity(self.compilation.len());
         for index in 0..module.local.num_imported_funcs {
             let symbol_id = obj.add_symbol(Symbol {
                 name: utils::func_symbol_name(FuncIndex::new(index))
@@ -346,38 +330,10 @@ impl<'a> ObjectBuilder<'a> {
             func_symbols.push(symbol_id);
         }
 
-        if let Some(compilation) = compilation {
-            // Create symbols and section data for the compiled functions.
-            for (index, func) in compilation.into_iter().enumerate() {
-                let off = obj.append_section_data(section_id, &func.body, 1);
-                let symbol_id = obj.add_symbol(Symbol {
-                    name: utils::func_symbol_name(
-                        module.local.func_index(DefinedFuncIndex::new(index)),
-                    )
-                    .as_bytes()
-                    .to_vec(),
-                    value: off,
-                    size: func.body.len() as u64,
-                    kind: SymbolKind::Text,
-                    scope: SymbolScope::Compilation,
-                    weak: false,
-                    section: SymbolSection::Section(section_id),
-                    flags: SymbolFlags::None,
-                });
-                func_symbols.push(symbol_id);
-                // Preserve function unwind info.
-                if let Some(info) = &func.unwind_info {
-                    process_unwind_info(info, &mut obj, section_id);
-                }
-            }
-        }
-
-        // Create trampoline symbols for every signature.
-        let mut trampoline_relocs = HashMap::new();
-        for (i, (func, relocs)) in self.trampolines.into_iter() {
+        let mut append_func = |name: Vec<u8>, func: &CompiledFunction| {
             let off = obj.append_section_data(section_id, &func.body, 1);
             let symbol_id = obj.add_symbol(Symbol {
-                name: utils::trampoline_symbol_name(i).as_bytes().to_vec(),
+                name,
                 value: off,
                 size: func.body.len() as u64,
                 kind: SymbolKind::Text,
@@ -386,11 +342,25 @@ impl<'a> ObjectBuilder<'a> {
                 section: SymbolSection::Section(section_id),
                 flags: SymbolFlags::None,
             });
-            trampoline_relocs.insert(symbol_id, relocs);
-            // Preserve trampoline function unwind info.
+            // Preserve function unwind info.
             if let Some(info) = &func.unwind_info {
                 process_unwind_info(info, &mut obj, section_id);
             }
+            symbol_id
+        };
+
+        // Create symbols and section data for the compiled functions.
+        for (index, func) in self.compilation.iter() {
+            let name = utils::func_symbol_name(module.local.func_index(index))
+                .as_bytes()
+                .to_vec();
+            let symbol_id = append_func(name, func);
+            func_symbols.push(symbol_id);
+        }
+        let mut trampolines = Vec::new();
+        for (i, func) in self.trampolines.iter() {
+            let name = utils::trampoline_symbol_name(i).as_bytes().to_vec();
+            trampolines.push(append_func(name, func));
         }
 
         obj.append_section_data(section_id, &[], self.code_alignment);
@@ -412,32 +382,32 @@ impl<'a> ObjectBuilder<'a> {
         let libcalls = write_libcall_symbols(&mut obj);
 
         // Write all functions relocations.
-        for (index, relocs) in relocations.into_iter() {
+        for (index, func) in self.compilation.into_iter() {
             let func_index = module.local.func_index(index);
             let (_, off) = obj
                 .symbol_section_and_offset(func_symbols[func_index])
                 .unwrap();
             for r in to_object_relocations(
-                relocs.iter(),
+                func.relocations.iter(),
                 off,
                 module,
                 &func_symbols,
                 &libcalls,
-                &jt_offsets,
+                &self.compilation,
             ) {
                 obj.add_relocation(section_id, r)?;
             }
         }
 
-        for (symbol, relocs) in trampoline_relocs {
+        for (func, symbol) in self.trampolines.values().zip(trampolines) {
             let (_, off) = obj.symbol_section_and_offset(symbol).unwrap();
             for r in to_object_relocations(
-                relocs.iter(),
+                func.relocations.iter(),
                 off,
                 module,
                 &func_symbols,
                 &libcalls,
-                &jt_offsets,
+                &self.compilation,
             ) {
                 obj.add_relocation(section_id, r)?;
             }

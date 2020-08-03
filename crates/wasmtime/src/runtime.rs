@@ -982,20 +982,15 @@ impl Store {
 
     pub(crate) fn register_stack_maps(&self, module: &Module) {
         let module = &module.compiled_module();
-        self.stack_map_registry().register_stack_maps(
-            module
-                .finished_functions()
-                .values()
-                .zip(module.stack_maps().values())
-                .map(|(func, stack_maps)| unsafe {
-                    let ptr = (**func).as_ptr();
-                    let len = (**func).len();
-                    let start = ptr as usize;
-                    let end = ptr as usize + len;
-                    let range = start..end;
-                    (range, &stack_maps[..])
-                }),
-        );
+        self.stack_map_registry()
+            .register_stack_maps(module.stack_maps().map(|(func, stack_maps)| unsafe {
+                let ptr = (*func).as_ptr();
+                let len = (*func).len();
+                let start = ptr as usize;
+                let end = ptr as usize + len;
+                let range = start..end;
+                (range, stack_maps)
+            }));
     }
 
     pub(crate) unsafe fn add_instance(&self, handle: InstanceHandle) -> StoreInstanceHandle {

@@ -12,7 +12,7 @@ use gimli::{AttributeValue, DebuggingInformationEntry, Unit};
 use std::collections::HashSet;
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::DefinedFuncIndex;
-use wasmtime_environ::{ModuleVmctxInfo, ValueLabelsRanges};
+use wasmtime_environ::{CompiledFunctions, ModuleMemoryOffset};
 
 struct InheritedAttr<T> {
     stack: Vec<(usize, T)>,
@@ -246,9 +246,9 @@ pub(crate) fn clone_unit<'a, R>(
     unit: Unit<R, R::Offset>,
     context: &DebugInputContext<R>,
     addr_tr: &'a AddressTransform,
-    value_ranges: &'a ValueLabelsRanges,
+    funcs: &'a CompiledFunctions,
+    memory_offset: &ModuleMemoryOffset,
     out_encoding: gimli::Encoding,
-    module_info: &ModuleVmctxInfo,
     out_units: &mut write::UnitTable,
     out_strings: &mut write::StringTable,
     translated: &mut HashSet<DefinedFuncIndex>,
@@ -319,7 +319,7 @@ where
                 )?;
 
                 let (wp_die_id, vmctx_die_id) =
-                    add_internal_types(comp_unit, root_id, out_strings, module_info);
+                    add_internal_types(comp_unit, root_id, out_strings, memory_offset);
 
                 stack.push(root_id);
                 (
@@ -371,8 +371,7 @@ where
             let range_builder =
                 RangeInfoBuilder::from_subprogram_die(&unit, entry, context, addr_tr, cu_low_pc)?;
             if let RangeInfoBuilder::Function(func_index) = range_builder {
-                if let Some(frame_info) =
-                    get_function_frame_info(module_info, func_index, value_ranges)
+                if let Some(frame_info) = get_function_frame_info(memory_offset, funcs, func_index)
                 {
                     current_value_range.push(new_stack_len, frame_info);
                 }

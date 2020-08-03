@@ -20,8 +20,8 @@ use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
 use wasmtime_environ::{
-    CompileError, DataInitializer, DataInitializerLocation, Module, ModuleAddressMap,
-    ModuleEnvironment, ModuleTranslation, StackMaps, Traps,
+    CompileError, DataInitializer, DataInitializerLocation, FunctionAddressMap, Module,
+    ModuleEnvironment, ModuleTranslation, StackMapInformation, TrapInformation,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::VMInterrupts;
@@ -67,17 +67,18 @@ pub struct CompilationArtifacts {
     /// Data initiailizers.
     data_initializers: Box<[OwnedDataInitializer]>,
 
-    /// Traps descriptors.
-    traps: Traps,
-
-    /// Stack map descriptors.
-    stack_maps: StackMaps,
-
-    /// Wasm to function code address map.
-    address_transform: ModuleAddressMap,
+    /// Descriptions of compiled functions
+    funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
 
     /// Debug info presence flags.
     debug_info: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+struct FunctionInfo {
+    traps: Vec<TrapInformation>,
+    address_map: FunctionAddressMap,
+    stack_maps: Vec<StackMapInformation>,
 }
 
 impl CompilationArtifacts {
@@ -92,9 +93,7 @@ impl CompilationArtifacts {
         let Compilation {
             obj,
             unwind_info,
-            traps,
-            stack_maps,
-            address_transform,
+            funcs,
         } = compiler.compile(&translation)?;
 
         let ModuleTranslation {
@@ -120,9 +119,14 @@ impl CompilationArtifacts {
             obj: obj.into_boxed_slice(),
             unwind_info: unwind_info.into_boxed_slice(),
             data_initializers,
-            traps,
-            stack_maps,
-            address_transform,
+            funcs: funcs
+                .into_iter()
+                .map(|(_, func)| FunctionInfo {
+                    stack_maps: func.stack_maps,
+                    traps: func.traps,
+                    address_map: func.address_map,
+                })
+                .collect(),
             debug_info: compiler.tunables().debug_info,
         })
     }
@@ -147,9 +151,7 @@ pub struct CompiledModule {
     finished_functions: FinishedFunctions,
     trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
     data_initializers: Box<[OwnedDataInitializer]>,
-    traps: Traps,
-    stack_maps: StackMaps,
-    address_transform: ModuleAddressMap,
+    funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
     obj: Box<[u8]>,
     unwind_info: Box<[ObjectUnwindInfo]>,
 }
@@ -176,9 +178,7 @@ impl CompiledModule {
             obj,
             unwind_info,
             data_initializers,
-            traps,
-            stack_maps,
-            address_transform,
+            funcs,
             debug_info,
         } = artifacts;
 
@@ -216,9 +216,7 @@ impl CompiledModule {
             finished_functions,
             trampolines,
             data_initializers,
-            traps,
-            stack_maps,
-            address_transform,
+            funcs,
             obj,
             unwind_info,
         })
@@ -231,9 +229,7 @@ impl CompiledModule {
             obj: self.obj.clone(),
             unwind_info: self.unwind_info.clone(),
             data_initializers: self.data_initializers.clone(),
-            traps: self.traps.clone(),
-            stack_maps: self.stack_maps.clone(),
-            address_transform: self.address_transform.clone(),
+            funcs: self.funcs.clone(),
             debug_info: self.code.dbg_jit_registration.is_some(),
         }
     }
@@ -318,19 +314,36 @@ impl CompiledModule {
         &self.finished_functions.0
     }
 
-    /// Returns the map for all traps in this module.
-    pub fn traps(&self) -> &Traps {
-        &self.traps
+    /// Returns the stack map information for all functions defined in this
+    /// module.
+    ///
+    /// The iterator returned iterates over the span of the compiled function in
+    /// memory with the stack maps associated with those bytes.
+    pub fn stack_maps(
+        &self,
+    ) -> impl Iterator<Item = (*mut [VMFunctionBody], &[StackMapInformation])> {
+        self.finished_functions()
+            .values()
+            .copied()
+            .zip(self.funcs.values().map(|f| f.stack_maps.as_slice()))
     }
 
-    /// Returns the map for each of this module's stack maps.
-    pub fn stack_maps(&self) -> &StackMaps {
-        &self.stack_maps
-    }
-
-    /// Returns a map of compiled addresses back to original bytecode offsets.
-    pub fn address_transform(&self) -> &ModuleAddressMap {
-        &self.address_transform
+    /// Iterates over all functions in this module, returning information about
+    /// how to decode traps which happen in the function.
+    pub fn trap_information(
+        &self,
+    ) -> impl Iterator<
+        Item = (
+            DefinedFuncIndex,
+            *mut [VMFunctionBody],
+            &[TrapInformation],
+            &FunctionAddressMap,
+        ),
+    > {
+        self.finished_functions()
+            .iter()
+            .zip(self.funcs.values())
+            .map(|((i, alloc), func)| (i, *alloc, func.traps.as_slice(), &func.address_map))
     }
 
     /// Returns all ranges convered by JIT code.

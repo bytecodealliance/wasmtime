@@ -13,7 +13,7 @@ use std::{cmp, mem};
 use wasmtime_environ::{
     isa::{unwind::UnwindInfo, TargetIsa},
     wasm::{FuncIndex, SignatureIndex},
-    Compilation, CompiledFunction,
+    CompiledFunction,
 };
 use wasmtime_runtime::{Mmap, VMFunctionBody};
 
@@ -117,31 +117,6 @@ impl CodeMemory {
         let (_, _, vmfunc) = Self::copy_function(func, start as u32, buf, registry);
 
         Ok(vmfunc)
-    }
-
-    /// Allocate a continuous memory block for a compilation.
-    pub fn allocate_for_compilation(
-        &mut self,
-        compilation: &Compilation,
-    ) -> Result<Box<[&mut [VMFunctionBody]]>, String> {
-        let total_len = compilation
-            .into_iter()
-            .fold(0, |acc, func| acc + Self::function_allocation_size(func));
-
-        let (mut buf, registry, start) = self.allocate(total_len)?;
-        let mut result = Vec::with_capacity(compilation.len());
-        let mut start = start as u32;
-
-        for func in compilation.into_iter() {
-            let (next_start, next_buf, vmfunc) = Self::copy_function(func, start, buf, registry);
-
-            result.push(vmfunc);
-
-            start = next_start;
-            buf = next_buf;
-        }
-
-        Ok(result.into_boxed_slice())
     }
 
     /// Make all allocated memory executable.
