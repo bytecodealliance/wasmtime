@@ -3191,6 +3191,19 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
+    // XmmRmRImm
+    insns.push((
+        Inst::xmm_rm_r_imm(SseOpcode::Cmppd, RegMem::reg(xmm5), w_xmm1, 2),
+        "660FC2CD02",
+        "cmppd   $2, %xmm5, %xmm1",
+    ));
+    insns.push((
+        Inst::xmm_rm_r_imm(SseOpcode::Cmpps, RegMem::reg(xmm15), w_xmm7, 0),
+        "410FC2FF00",
+        "cmpps   $0, %xmm15, %xmm7",
+    ));
+
+    // ========================================================
     // Misc instructions.
 
     insns.push((Inst::Hlt, "CC", "hlt"));

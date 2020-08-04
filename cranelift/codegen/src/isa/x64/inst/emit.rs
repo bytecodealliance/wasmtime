@@ -1767,8 +1767,8 @@ pub(crate) fn emit(
 
         Inst::XmmRmRImm { op, src, dst, imm } => {
             let prefix = match op {
-                SseOpcode::Cmpps => LegacyPrefix::_66,
-                SseOpcode::Cmppd => LegacyPrefix::None,
+                SseOpcode::Cmpps => LegacyPrefix::None,
+                SseOpcode::Cmppd => LegacyPrefix::_66,
                 SseOpcode::Cmpss => LegacyPrefix::_F3,
                 SseOpcode::Cmpsd => LegacyPrefix::_F2,
                 _ => unimplemented!("Opcode {:?} not implemented", op),
