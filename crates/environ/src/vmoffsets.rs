@@ -19,7 +19,7 @@
 //      builtins: VMBuiltinFunctionsArray,
 // }
 
-use crate::module::ModuleLocal;
+use crate::module::Module;
 use crate::BuiltinFunctionIndex;
 use cranelift_codegen::ir;
 use cranelift_wasm::{
@@ -75,7 +75,7 @@ pub struct VMOffsets {
 
 impl VMOffsets {
     /// Return a new `VMOffsets` instance, for a given pointer size.
-    pub fn new(pointer_size: u8, module: &ModuleLocal) -> Self {
+    pub fn new(pointer_size: u8, module: &Module) -> Self {
         Self {
             pointer_size,
             num_signature_ids: cast_to_u32(module.signatures.len()),

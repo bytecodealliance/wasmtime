@@ -20,10 +20,10 @@ pub fn resolve_imports(
     signatures: &SignatureRegistry,
     resolver: &mut dyn Resolver,
 ) -> Result<Imports, LinkError> {
-    let mut function_imports = PrimaryMap::with_capacity(module.local.num_imported_funcs);
-    let mut table_imports = PrimaryMap::with_capacity(module.local.num_imported_tables);
-    let mut memory_imports = PrimaryMap::with_capacity(module.local.num_imported_memories);
-    let mut global_imports = PrimaryMap::with_capacity(module.local.num_imported_globals);
+    let mut function_imports = PrimaryMap::with_capacity(module.num_imported_funcs);
+    let mut table_imports = PrimaryMap::with_capacity(module.num_imported_tables);
+    let mut memory_imports = PrimaryMap::with_capacity(module.num_imported_memories);
+    let mut global_imports = PrimaryMap::with_capacity(module.num_imported_globals);
 
     for (import_idx, (module_name, field_name, import)) in module.imports.iter().enumerate() {
         let import_idx = import_idx.try_into().unwrap();
@@ -31,7 +31,7 @@ pub fn resolve_imports(
 
         match (import, &export) {
             (EntityIndex::Function(func_index), Some(Export::Function(f))) => {
-                let import_signature = module.local.native_func_signature(*func_index);
+                let import_signature = module.native_func_signature(*func_index);
                 let signature = signatures
                     .lookup_native(unsafe { f.anyfunc.as_ref().type_index })
                     .unwrap();
@@ -63,7 +63,7 @@ pub fn resolve_imports(
             }
 
             (EntityIndex::Table(table_index), Some(Export::Table(t))) => {
-                let import_table = &module.local.table_plans[*table_index];
+                let import_table = &module.table_plans[*table_index];
                 if !is_table_compatible(&t.table, import_table) {
                     return Err(LinkError(format!(
                         "{}/{}: incompatible import type: exported table incompatible with \
@@ -90,7 +90,7 @@ pub fn resolve_imports(
             }
 
             (EntityIndex::Memory(memory_index), Some(Export::Memory(m))) => {
-                let import_memory = &module.local.memory_plans[*memory_index];
+                let import_memory = &module.memory_plans[*memory_index];
                 if !is_memory_compatible(&m.memory, import_memory) {
                     return Err(LinkError(format!(
                         "{}/{}: incompatible import type: exported memory incompatible with \
@@ -131,7 +131,7 @@ pub fn resolve_imports(
             }
 
             (EntityIndex::Global(global_index), Some(Export::Global(g))) => {
-                let imported_global = module.local.globals[*global_index];
+                let imported_global = module.globals[*global_index];
                 if !is_global_compatible(&g.global, &imported_global) {
                     return Err(LinkError(format!(
                         "{}/{}: incompatible import type: exported global incompatible with \

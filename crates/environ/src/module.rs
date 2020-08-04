@@ -146,12 +146,6 @@ pub struct Module {
     /// The name of this wasm module, often found in the wasm file.
     pub name: Option<String>,
 
-    /// Local information about a module which is the bare minimum necessary to
-    /// translate a function body. This is derived as `Hash` whereas this module
-    /// isn't, since it contains too much information needed to translate a
-    /// function.
-    pub local: ModuleLocal,
-
     /// All import records, in the order they are declared in the module.
     pub imports: Vec<(String, String, EntityIndex)>,
 
@@ -173,16 +167,7 @@ pub struct Module {
 
     /// WebAssembly table initializers.
     pub func_names: HashMap<FuncIndex, String>,
-}
 
-/// Local information known about a wasm module, the bare minimum necessary to
-/// translate function bodies.
-///
-/// This is stored within a `Module` and it implements `Hash`, unlike `Module`,
-/// and is used as part of the cache key when we load compiled modules from the
-/// global cache.
-#[derive(Debug, Clone, Hash, Serialize, Deserialize)]
-pub struct ModuleLocal {
     /// Unprocessed signatures exactly as provided by `declare_signature()`.
     pub signatures: PrimaryMap<SignatureIndex, (WasmFuncType, ir::Signature)>,
 
@@ -224,17 +209,15 @@ impl Module {
             passive_elements: HashMap::new(),
             passive_data: HashMap::new(),
             func_names: HashMap::new(),
-            local: ModuleLocal {
-                num_imported_funcs: 0,
-                num_imported_tables: 0,
-                num_imported_memories: 0,
-                num_imported_globals: 0,
-                signatures: PrimaryMap::new(),
-                functions: PrimaryMap::new(),
-                table_plans: PrimaryMap::new(),
-                memory_plans: PrimaryMap::new(),
-                globals: PrimaryMap::new(),
-            },
+            num_imported_funcs: 0,
+            num_imported_tables: 0,
+            num_imported_memories: 0,
+            num_imported_globals: 0,
+            signatures: PrimaryMap::new(),
+            functions: PrimaryMap::new(),
+            table_plans: PrimaryMap::new(),
+            memory_plans: PrimaryMap::new(),
+            globals: PrimaryMap::new(),
         }
     }
 
@@ -247,9 +230,7 @@ impl Module {
         static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
         NEXT_ID.fetch_add(1, SeqCst)
     }
-}
 
-impl ModuleLocal {
     /// Convert a `DefinedFuncIndex` into a `FuncIndex`.
     pub fn func_index(&self, defined_func: DefinedFuncIndex) -> FuncIndex {
         FuncIndex::new(self.num_imported_funcs + defined_func.index())

@@ -195,7 +195,6 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     fn reserve_signatures(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
-            .local
             .signatures
             .reserve_exact(usize::try_from(num).unwrap());
         Ok(())
@@ -204,7 +203,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     fn declare_signature(&mut self, wasm: WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
         let sig = translate_signature(sig, self.pointer_type());
         // TODO: Deduplicate signatures.
-        self.result.module.local.signatures.push((wasm, sig));
+        self.result.module.signatures.push((wasm, sig));
         Ok(())
     }
 
@@ -223,17 +222,17 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         field: &str,
     ) -> WasmResult<()> {
         debug_assert_eq!(
-            self.result.module.local.functions.len(),
-            self.result.module.local.num_imported_funcs,
+            self.result.module.functions.len(),
+            self.result.module.num_imported_funcs,
             "Imported functions must be declared first"
         );
-        let func_index = self.result.module.local.functions.push(sig_index);
+        let func_index = self.result.module.functions.push(sig_index);
         self.result.module.imports.push((
             module.to_owned(),
             field.to_owned(),
             EntityIndex::Function(func_index),
         ));
-        self.result.module.local.num_imported_funcs += 1;
+        self.result.module.num_imported_funcs += 1;
         if let Some(info) = &mut self.result.debuginfo {
             info.wasm_file.imported_func_count += 1;
         }
@@ -242,18 +241,18 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
 
     fn declare_table_import(&mut self, table: Table, module: &str, field: &str) -> WasmResult<()> {
         debug_assert_eq!(
-            self.result.module.local.table_plans.len(),
-            self.result.module.local.num_imported_tables,
+            self.result.module.table_plans.len(),
+            self.result.module.num_imported_tables,
             "Imported tables must be declared first"
         );
         let plan = TablePlan::for_table(table, &self.result.tunables);
-        let table_index = self.result.module.local.table_plans.push(plan);
+        let table_index = self.result.module.table_plans.push(plan);
         self.result.module.imports.push((
             module.to_owned(),
             field.to_owned(),
             EntityIndex::Table(table_index),
         ));
-        self.result.module.local.num_imported_tables += 1;
+        self.result.module.num_imported_tables += 1;
         Ok(())
     }
 
@@ -264,21 +263,21 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         field: &str,
     ) -> WasmResult<()> {
         debug_assert_eq!(
-            self.result.module.local.memory_plans.len(),
-            self.result.module.local.num_imported_memories,
+            self.result.module.memory_plans.len(),
+            self.result.module.num_imported_memories,
             "Imported memories must be declared first"
         );
         if memory.shared {
             return Err(WasmError::Unsupported("shared memories".to_owned()));
         }
         let plan = MemoryPlan::for_memory(memory, &self.result.tunables);
-        let memory_index = self.result.module.local.memory_plans.push(plan);
+        let memory_index = self.result.module.memory_plans.push(plan);
         self.result.module.imports.push((
             module.to_owned(),
             field.to_owned(),
             EntityIndex::Memory(memory_index),
         ));
-        self.result.module.local.num_imported_memories += 1;
+        self.result.module.num_imported_memories += 1;
         Ok(())
     }
 
@@ -289,24 +288,23 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         field: &str,
     ) -> WasmResult<()> {
         debug_assert_eq!(
-            self.result.module.local.globals.len(),
-            self.result.module.local.num_imported_globals,
+            self.result.module.globals.len(),
+            self.result.module.num_imported_globals,
             "Imported globals must be declared first"
         );
-        let global_index = self.result.module.local.globals.push(global);
+        let global_index = self.result.module.globals.push(global);
         self.result.module.imports.push((
             module.to_owned(),
             field.to_owned(),
             EntityIndex::Global(global_index),
         ));
-        self.result.module.local.num_imported_globals += 1;
+        self.result.module.num_imported_globals += 1;
         Ok(())
     }
 
     fn reserve_func_types(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
-            .local
             .functions
             .reserve_exact(usize::try_from(num).unwrap());
         self.result
@@ -316,14 +314,13 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn declare_func_type(&mut self, sig_index: SignatureIndex) -> WasmResult<()> {
-        self.result.module.local.functions.push(sig_index);
+        self.result.module.functions.push(sig_index);
         Ok(())
     }
 
     fn reserve_tables(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
-            .local
             .table_plans
             .reserve_exact(usize::try_from(num).unwrap());
         Ok(())
@@ -331,14 +328,13 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
 
     fn declare_table(&mut self, table: Table) -> WasmResult<()> {
         let plan = TablePlan::for_table(table, &self.result.tunables);
-        self.result.module.local.table_plans.push(plan);
+        self.result.module.table_plans.push(plan);
         Ok(())
     }
 
     fn reserve_memories(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
-            .local
             .memory_plans
             .reserve_exact(usize::try_from(num).unwrap());
         Ok(())
@@ -349,21 +345,20 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             return Err(WasmError::Unsupported("shared memories".to_owned()));
         }
         let plan = MemoryPlan::for_memory(memory, &self.result.tunables);
-        self.result.module.local.memory_plans.push(plan);
+        self.result.module.memory_plans.push(plan);
         Ok(())
     }
 
     fn reserve_globals(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
-            .local
             .globals
             .reserve_exact(usize::try_from(num).unwrap());
         Ok(())
     }
 
     fn declare_global(&mut self, global: Global) -> WasmResult<()> {
-        self.result.module.local.globals.push(global);
+        self.result.module.globals.push(global);
         Ok(())
     }
 
@@ -456,10 +451,10 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             module_offset: body_offset,
         });
         if let Some(info) = &mut self.result.debuginfo {
-            let func_index = self.code_index + self.result.module.local.num_imported_funcs as u32;
+            let func_index = self.code_index + self.result.module.num_imported_funcs as u32;
             let func_index = FuncIndex::from_u32(func_index);
-            let sig_index = self.result.module.local.functions[func_index];
-            let sig = &self.result.module.local.signatures[sig_index];
+            let sig_index = self.result.module.functions[func_index];
+            let sig = &self.result.module.signatures[sig_index];
             let mut locals = Vec::new();
             let body = wasmparser::FunctionBody::new(body_offset, body_bytes);
             for pair in body.get_locals_reader()? {

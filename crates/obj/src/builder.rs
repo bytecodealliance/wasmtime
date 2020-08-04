@@ -46,7 +46,7 @@ fn to_object_relocations<'a>(
             RelocationTarget::UserFunc(index) => (funcs[index], 0),
             RelocationTarget::LibCall(call) => (libcalls[&call], 0),
             RelocationTarget::JumpTable(f, jt) => {
-                let df = module.local.defined_func_index(f).unwrap();
+                let df = module.defined_func_index(f).unwrap();
                 let offset = *compiled_funcs
                     .get(df)
                     .and_then(|f| f.jt_offsets.get(jt))
@@ -314,7 +314,7 @@ impl<'a> ObjectBuilder<'a> {
 
         // Create symbols for imports -- needed during linking.
         let mut func_symbols = PrimaryMap::with_capacity(self.compilation.len());
-        for index in 0..module.local.num_imported_funcs {
+        for index in 0..module.num_imported_funcs {
             let symbol_id = obj.add_symbol(Symbol {
                 name: utils::func_symbol_name(FuncIndex::new(index))
                     .as_bytes()
@@ -351,7 +351,7 @@ impl<'a> ObjectBuilder<'a> {
 
         // Create symbols and section data for the compiled functions.
         for (index, func) in self.compilation.iter() {
-            let name = utils::func_symbol_name(module.local.func_index(index))
+            let name = utils::func_symbol_name(module.func_index(index))
                 .as_bytes()
                 .to_vec();
             let symbol_id = append_func(name, func);
@@ -383,7 +383,7 @@ impl<'a> ObjectBuilder<'a> {
 
         // Write all functions relocations.
         for (index, func) in self.compilation.into_iter() {
-            let func_index = module.local.func_index(index);
+            let func_index = module.func_index(index);
             let (_, off) = obj
                 .symbol_section_and_offset(func_symbols[func_index])
                 .unwrap();
@@ -419,7 +419,7 @@ impl<'a> ObjectBuilder<'a> {
             for reloc in relocs {
                 let target_symbol = match reloc.target {
                     DwarfSectionRelocTarget::Func(index) => {
-                        func_symbols[module.local.func_index(DefinedFuncIndex::new(index))]
+                        func_symbols[module.func_index(DefinedFuncIndex::new(index))]
                     }
                     DwarfSectionRelocTarget::Section(name) => {
                         obj.section_symbol(*dwarf_sections_ids.get(name).unwrap())

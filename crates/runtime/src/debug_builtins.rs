@@ -16,7 +16,7 @@ pub unsafe extern "C" fn resolve_vmctx_memory_ptr(p: *const u32) -> *const u8 {
     );
     let handle = InstanceHandle::from_vmctx(VMCTX_AND_MEMORY.0);
     assert!(
-        VMCTX_AND_MEMORY.1 < handle.module().local.memory_plans.len(),
+        VMCTX_AND_MEMORY.1 < handle.module().memory_plans.len(),
         "memory index for debugger is out of bounds"
     );
     let index = MemoryIndex::new(VMCTX_AND_MEMORY.1);

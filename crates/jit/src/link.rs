@@ -49,7 +49,7 @@ fn apply_reloc(
             match sym.name() {
                 Some(name) => {
                     if let Some(index) = try_parse_func_name(name) {
-                        match module.local.defined_func_index(index) {
+                        match module.defined_func_index(index) {
                             Some(f) => {
                                 let fatptr: *const [VMFunctionBody] = finished_functions[f];
                                 fatptr as *const VMFunctionBody as usize

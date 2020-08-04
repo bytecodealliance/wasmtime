@@ -1,6 +1,6 @@
-use crate::module::{MemoryPlan, MemoryStyle, ModuleLocal, TableStyle};
+use crate::module::{MemoryPlan, MemoryStyle, TableStyle};
 use crate::vmoffsets::VMOffsets;
-use crate::{Tunables, INTERRUPTED, WASM_PAGE_SIZE};
+use crate::{Module, Tunables, INTERRUPTED, WASM_PAGE_SIZE};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
@@ -203,7 +203,7 @@ pub struct FuncEnvironment<'module_environment> {
     target_config: TargetFrontendConfig,
 
     /// The module-level environment which this function-level environment belongs to.
-    module: &'module_environment ModuleLocal,
+    module: &'module_environment Module,
 
     /// The Cranelift global holding the vmctx address.
     vmctx: Option<ir::GlobalValue>,
@@ -220,7 +220,7 @@ pub struct FuncEnvironment<'module_environment> {
 impl<'module_environment> FuncEnvironment<'module_environment> {
     pub fn new(
         target_config: TargetFrontendConfig,
-        module: &'module_environment ModuleLocal,
+        module: &'module_environment Module,
         tunables: &'module_environment Tunables,
     ) -> Self {
         let builtin_function_signatures = BuiltinFunctionSignatures::new(

@@ -432,18 +432,16 @@ impl<'module> EntityType<'module> {
     ) -> EntityType<'module> {
         match entity_index {
             EntityIndex::Function(func_index) => {
-                let sig = module.local.wasm_func_type(*func_index);
+                let sig = module.wasm_func_type(*func_index);
                 EntityType::Function(&sig)
             }
             EntityIndex::Table(table_index) => {
-                EntityType::Table(&module.local.table_plans[*table_index].table)
+                EntityType::Table(&module.table_plans[*table_index].table)
             }
             EntityIndex::Memory(memory_index) => {
-                EntityType::Memory(&module.local.memory_plans[*memory_index].memory)
+                EntityType::Memory(&module.memory_plans[*memory_index].memory)
             }
-            EntityIndex::Global(global_index) => {
-                EntityType::Global(&module.local.globals[*global_index])
-            }
+            EntityIndex::Global(global_index) => EntityType::Global(&module.globals[*global_index]),
         }
     }
 

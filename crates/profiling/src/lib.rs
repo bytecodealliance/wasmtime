@@ -72,7 +72,7 @@ impl ProfilingAgent for NullProfilerAgent {
 
 #[allow(dead_code)]
 fn debug_name(module: &Module, index: DefinedFuncIndex) -> String {
-    let index = module.local.func_index(index);
+    let index = module.func_index(index);
     match module.func_names.get(&index) {
         Some(s) => s.clone(),
         None => format!("wasm::wasm-function[{}]", index.index()),

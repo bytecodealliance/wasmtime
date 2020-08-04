@@ -22,11 +22,11 @@ impl Compiler for Lightbeam {
         if translation.tunables.debug_info {
             return Err(CompileError::DebugInfoNotSupported);
         }
-        let func_index = translation.module.local.func_index(i);
+        let func_index = translation.module.func_index(i);
 
         let env = FuncEnvironment::new(
             isa.frontend_config(),
-            &translation.module.local,
+            &translation.module,
             &translation.tunables,
         );
         let mut codegen_session: CodeGenSession<_> = CodeGenSession::new(

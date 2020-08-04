@@ -39,13 +39,13 @@ pub(crate) fn build_object(
     unwind_info.extend(funcs.iter().filter_map(|(index, func)| {
         func.unwind_info
             .as_ref()
-            .map(|info| ObjectUnwindInfo::Func(module.local.func_index(index), info.clone()))
+            .map(|info| ObjectUnwindInfo::Func(module.func_index(index), info.clone()))
     }));
 
-    let mut trampolines = PrimaryMap::with_capacity(module.local.signatures.len());
+    let mut trampolines = PrimaryMap::with_capacity(module.signatures.len());
     let mut cx = FunctionBuilderContext::new();
     // Build trampolines for every signature.
-    for (i, (_, native_sig)) in module.local.signatures.iter() {
+    for (i, (_, native_sig)) in module.signatures.iter() {
         let func = build_trampoline(isa, &mut cx, native_sig, std::mem::size_of::<u128>())?;
         // Preserve trampoline function unwind info.
         if let Some(info) = &func.unwind_info {
