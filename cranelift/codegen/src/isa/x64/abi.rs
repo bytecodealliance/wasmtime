@@ -325,10 +325,13 @@ impl ABIBody for X64ABIBody {
                     self.fp_to_arg_offset() + off <= u32::max_value() as i64,
                     "large offset nyi"
                 );
-                load_stack(
-                    Amode::imm_reg((self.fp_to_arg_offset() + off) as u32, regs::rbp()),
-                    to_reg,
+                let from_addr = Amode::imm_reg((self.fp_to_arg_offset() + off) as u32, regs::rbp());
+                Inst::load(
                     ty,
+                    from_addr,
+                    to_reg,
+                    ExtKind::ZeroExtend,
+                    /* infallible load */ None,
                 )
             }
         }
@@ -420,8 +423,10 @@ impl ABIBody for X64ABIBody {
                     "large stack return offset nyi"
                 );
 
-                let mem = Amode::imm_reg(off as u32, self.ret_area_ptr.unwrap().to_reg());
-                ret.push(store_stack(mem, from_reg.to_reg(), ty))
+                let from_reg = from_reg.to_reg();
+                let to_mem = Amode::imm_reg(off as u32, self.ret_area_ptr.unwrap().to_reg());
+                let store = Inst::store(ty, from_reg, to_mem, /* infallible store */ None);
+                ret.push(store)
             }
         }
 
@@ -464,17 +469,20 @@ impl ABIBody for X64ABIBody {
         unimplemented!("store_stackslot")
     }
 
-    fn load_spillslot(&self, slot: SpillSlot, ty: Type, into_reg: Writable<Reg>) -> Inst {
+    fn load_spillslot(&self, slot: SpillSlot, ty: Type, to_reg: Writable<Reg>) -> Inst {
         // Offset from beginning of spillslot area, which is at nominal-SP + stackslots_size.
         let islot = slot.get() as i64;
         let spill_off = islot * 8;
         let sp_off = self.stack_slots_size as i64 + spill_off;
         debug_assert!(sp_off <= u32::max_value() as i64, "large spill offsets NYI");
         trace!("load_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
-        load_stack(
-            SyntheticAmode::nominal_sp_offset(sp_off as u32),
-            into_reg,
+        let from_addr = SyntheticAmode::nominal_sp_offset(sp_off as u32);
+        Inst::load(
             ty,
+            from_addr,
+            to_reg,
+            ExtKind::ZeroExtend,
+            /* infallible load */ None,
         )
     }
 
@@ -485,11 +493,8 @@ impl ABIBody for X64ABIBody {
         let sp_off = self.stack_slots_size as i64 + spill_off;
         debug_assert!(sp_off <= u32::max_value() as i64, "large spill offsets NYI");
         trace!("store_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
-        store_stack(
-            SyntheticAmode::nominal_sp_offset(sp_off as u32),
-            from_reg,
-            ty,
-        )
+        let to_mem = SyntheticAmode::nominal_sp_offset(sp_off as u32);
+        Inst::store(ty, from_reg, to_mem, /* infallible store */ None)
     }
 
     fn spillslots_to_stack_map(&self, slots: &[SpillSlot], state: &EmitState) -> StackMap {
@@ -1003,66 +1008,6 @@ fn adjust_stack<C: LowerCtx<I = Inst>>(ctx: &mut C, amount: u64, is_sub: bool) {
     }
 }
 
-fn load_stack(mem: impl Into<SyntheticAmode>, into_reg: Writable<Reg>, ty: Type) -> Inst {
-    let (is_int, ext_mode) = match ty {
-        types::B1 | types::B8 | types::I8 => (true, Some(ExtMode::BQ)),
-        types::B16 | types::I16 => (true, Some(ExtMode::WQ)),
-        types::B32 | types::I32 => (true, Some(ExtMode::LQ)),
-        types::B64 | types::I64 | types::R64 => (true, None),
-        types::F32 | types::F64 => (false, None),
-        _ => panic!("load_stack({})", ty),
-    };
-
-    let mem = mem.into();
-
-    if is_int {
-        match ext_mode {
-            Some(ext_mode) => Inst::movsx_rm_r(
-                ext_mode,
-                RegMem::mem(mem),
-                into_reg,
-                /* infallible load */ None,
-            ),
-            None => Inst::mov64_m_r(mem, into_reg, None /* infallible */),
-        }
-    } else {
-        let sse_op = match ty {
-            types::F32 => SseOpcode::Movss,
-            types::F64 => SseOpcode::Movsd,
-            _ => unreachable!(),
-        };
-        Inst::xmm_mov(
-            sse_op,
-            RegMem::mem(mem),
-            into_reg,
-            None, /* infallible */
-        )
-    }
-}
-
-fn store_stack(mem: impl Into<SyntheticAmode>, from_reg: Reg, ty: Type) -> Inst {
-    let (is_int, size) = match ty {
-        types::B1 | types::B8 | types::I8 => (true, 1),
-        types::B16 | types::I16 => (true, 2),
-        types::B32 | types::I32 => (true, 4),
-        types::B64 | types::I64 | types::R64 => (true, 8),
-        types::F32 => (false, 4),
-        types::F64 => (false, 8),
-        _ => unimplemented!("store_stack({})", ty),
-    };
-    let mem = mem.into();
-    if is_int {
-        Inst::mov_r_m(size, from_reg, mem, /* infallible store */ None)
-    } else {
-        let sse_op = match size {
-            4 => SseOpcode::Movss,
-            8 => SseOpcode::Movsd,
-            _ => unreachable!(),
-        };
-        Inst::xmm_mov_r_m(sse_op, from_reg, mem, /* infallible store */ None)
-    }
-}
-
 /// X64 ABI object for a function call.
 pub struct X64ABICall {
     sig: ABISig,
@@ -1212,11 +1157,9 @@ impl ABICall for X64ABICall {
 
                 debug_assert!(off <= u32::max_value() as i64);
                 debug_assert!(off >= 0);
-                ctx.emit(store_stack(
-                    Amode::imm_reg(off as u32, regs::rsp()),
-                    from_reg,
-                    ty,
-                ))
+                let to_mem = Amode::imm_reg(off as u32, regs::rsp());
+                let store = Inst::store(ty, from_reg, to_mem, /* infallible store */ None);
+                ctx.emit(store)
             }
         }
     }
@@ -1225,21 +1168,25 @@ impl ABICall for X64ABICall {
         &self,
         ctx: &mut C,
         idx: usize,
-        into_reg: Writable<Reg>,
+        to_reg: Writable<Reg>,
     ) {
         match &self.sig.rets[idx] {
-            &ABIArg::Reg(reg, ty, _) => ctx.emit(Inst::gen_move(into_reg, reg.to_reg(), ty)),
+            &ABIArg::Reg(reg, ty, _) => ctx.emit(Inst::gen_move(to_reg, reg.to_reg(), ty)),
             &ABIArg::Stack(off, ty, _) => {
                 let ret_area_base = self.sig.stack_arg_space;
                 let sp_offset = off + ret_area_base;
                 // TODO handle offsets bigger than u32::max
                 debug_assert!(sp_offset >= 0);
                 debug_assert!(sp_offset <= u32::max_value() as i64);
-                ctx.emit(load_stack(
-                    Amode::imm_reg(sp_offset as u32, regs::rsp()),
-                    into_reg,
+                let from_addr = Amode::imm_reg(sp_offset as u32, regs::rsp());
+                let load = Inst::load(
                     ty,
-                ));
+                    from_addr,
+                    to_reg,
+                    ExtKind::ZeroExtend,
+                    /* infallible load */ None,
+                );
+                ctx.emit(load);
             }
         }
     }

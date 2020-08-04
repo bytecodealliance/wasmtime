@@ -634,6 +634,16 @@ impl fmt::Display for SseOpcode {
     }
 }
 
+/// This defines the ways a value can be extended: either signed- or zero-extension, or none for
+/// types that are not extended. Contrast with [ExtMode], which defines the widths from and to which
+/// values can be extended.
+#[derive(Clone, PartialEq)]
+pub enum ExtKind {
+    None,
+    SignExtend,
+    ZeroExtend,
+}
+
 /// These indicate ways of extending (widening) a value, using the Intel
 /// naming: B(yte) = u8, W(ord) = u16, L(ong)word = u32, Q(uad)word = u64
 #[derive(Clone, PartialEq)]

@@ -1,6 +1,6 @@
 use crate::binemit::Reloc;
 use crate::ir::immediates::{Ieee32, Ieee64};
-use crate::ir::{types, TrapCode};
+use crate::ir::TrapCode;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::machinst::{MachBuffer, MachInstEmit, MachLabel};
@@ -1807,17 +1807,9 @@ pub(crate) fn emit(
             // "constant inline" code should be replaced by constant pool integration.
 
             // Load the inline constant.
-            let opcode = match *ty {
-                types::F32X4 => SseOpcode::Movups,
-                types::F64X2 => SseOpcode::Movupd,
-                types::I8X16 => SseOpcode::Movupd, // TODO replace with MOVDQU
-                _ => unimplemented!("cannot yet load constants for type: {}", ty),
-            };
             let constant_start_label = sink.get_label();
-            let load_offset = RegMem::mem(Amode::rip_relative(BranchTarget::Label(
-                constant_start_label,
-            )));
-            let load = Inst::xmm_unary_rm_r(opcode, load_offset, *dst);
+            let load_offset = Amode::rip_relative(BranchTarget::Label(constant_start_label));
+            let load = Inst::load(*ty, load_offset, *dst, ExtKind::None, None);
             load.emit(sink, flags, state);
 
             // Jump over the constant.
