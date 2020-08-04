@@ -395,7 +395,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 let i = state.control_stack.len() - 1 - (min_depth as usize);
                 let min_depth_frame = &state.control_stack[i];
                 if min_depth_frame.is_loop() {
-                    0
+                    min_depth_frame.num_param_values()
                 } else {
                     min_depth_frame.num_return_values()
                 }
