@@ -12,7 +12,6 @@ use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
-use target_lexicon::Triple;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
@@ -254,6 +253,20 @@ impl Config {
     /// [proposal]: https://github.com/webassembly/multi-memory
     pub fn wasm_multi_memory(&mut self, enable: bool) -> &mut Self {
         self.features.multi_memory = enable;
+        self
+    }
+
+    /// Configures whether the WebAssembly module linking [proposal] will
+    /// be enabled for compilation.
+    ///
+    /// Note that development of this feature is still underway, so enabling
+    /// this is likely to be full of bugs.
+    ///
+    /// This is `false` by default.
+    ///
+    /// [proposal]: https://github.com/webassembly/module-linking
+    pub fn wasm_module_linking(&mut self, enable: bool) -> &mut Self {
+        self.features.module_linking = enable;
         self
     }
 
@@ -615,22 +628,6 @@ impl Config {
     fn build_compiler(&self) -> Compiler {
         let isa = self.target_isa();
         Compiler::new(isa, self.strategy, self.tunables.clone(), self.features)
-    }
-
-    /// Hashes/fingerprints compiler setting to ensure that compatible
-    /// compilation artifacts are used.
-    pub(crate) fn compiler_fingerprint<H>(&self, state: &mut H)
-    where
-        H: Hasher,
-    {
-        self.flags.hash(state);
-        self.tunables.hash(state);
-
-        let triple = Triple::host();
-        triple.hash(state);
-
-        // Catch accidental bugs of reusing across wasmtime versions.
-        env!("CARGO_PKG_VERSION").hash(state);
     }
 }
 

@@ -1,8 +1,9 @@
 use crate::frame_info::GlobalFrameInfoRegistration;
-use crate::runtime::{Config, Engine};
 use crate::types::{EntityType, ExportType, ExternType, ImportType};
+use crate::Engine;
 use anyhow::{bail, Context, Result};
 use bincode::Options;
+use std::hash::Hash;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use wasmparser::Validator;
@@ -81,7 +82,8 @@ use wasmtime_jit::{CompilationArtifacts, CompiledModule};
 #[derive(Clone)]
 pub struct Module {
     engine: Engine,
-    compiled: Arc<CompiledModule>,
+    compiled: Arc<[CompiledModule]>,
+    index: usize,
     frame_info_registration: Arc<Mutex<Option<Option<Arc<GlobalFrameInfoRegistration>>>>>,
 }
 
@@ -164,8 +166,7 @@ impl Module {
     /// See [`Module::new`] for other details.
     pub fn new_with_name(engine: &Engine, bytes: impl AsRef<[u8]>, name: &str) -> Result<Module> {
         let mut module = Module::new(engine, bytes.as_ref())?;
-        Arc::get_mut(&mut module.compiled)
-            .unwrap()
+        Arc::get_mut(&mut module.compiled).unwrap()[module.index]
             .module_mut()
             .expect("mutable module")
             .name = Some(name.to_string());
@@ -248,7 +249,7 @@ impl Module {
         #[cfg(not(feature = "cache"))]
         let artifacts = CompilationArtifacts::build(engine.compiler(), binary)?;
 
-        let compiled = CompiledModule::from_artifacts(
+        let compiled = CompiledModule::from_artifacts_list(
             artifacts,
             engine.compiler().isa(),
             &*engine.config().profiler,
@@ -256,7 +257,8 @@ impl Module {
 
         Ok(Module {
             engine: engine.clone(),
-            compiled: Arc::new(compiled),
+            index: compiled.len() - 1,
+            compiled: compiled.into(),
             frame_info_registration: Arc::new(Mutex::new(None)),
         })
     }
@@ -290,8 +292,12 @@ impl Module {
     /// Serialize compilation artifacts to the buffer. See also `deseriaize`.
     pub fn serialize(&self) -> Result<Vec<u8>> {
         let artifacts = (
-            compiler_fingerprint(self.engine.config()),
-            self.compiled.to_compilation_artifacts(),
+            compiler_fingerprint(&self.engine),
+            self.compiled
+                .iter()
+                .map(|i| i.compilation_artifacts())
+                .collect::<Vec<_>>(),
+            self.index,
         );
 
         let buffer = bincode_options().serialize(&artifacts)?;
@@ -308,16 +314,16 @@ impl Module {
     /// for modifications or curruptions. All responsibily of signing and its
     /// verification falls on the embedder.
     pub fn deserialize(engine: &Engine, serialized: &[u8]) -> Result<Module> {
-        let expected_fingerprint = compiler_fingerprint(engine.config());
+        let expected_fingerprint = compiler_fingerprint(engine);
 
-        let (fingerprint, artifacts) = bincode_options()
-            .deserialize::<(u64, CompilationArtifacts)>(serialized)
+        let (fingerprint, artifacts, index) = bincode_options()
+            .deserialize::<(u64, _, _)>(serialized)
             .context("Deserialize compilation artifacts")?;
         if fingerprint != expected_fingerprint {
             bail!("Incompatible compilation artifact");
         }
 
-        let compiled = CompiledModule::from_artifacts(
+        let compiled = CompiledModule::from_artifacts_list(
             artifacts,
             engine.compiler().isa(),
             &*engine.config().profiler,
@@ -325,13 +331,14 @@ impl Module {
 
         Ok(Module {
             engine: engine.clone(),
-            compiled: Arc::new(compiled),
+            index,
+            compiled: compiled.into(),
             frame_info_registration: Arc::new(Mutex::new(None)),
         })
     }
 
     pub(crate) fn compiled_module(&self) -> &CompiledModule {
-        &self.compiled
+        &self.compiled[self.index]
     }
 
     /// Returns identifier/name that this [`Module`] has. This name
@@ -359,7 +366,7 @@ impl Module {
     /// # }
     /// ```
     pub fn name(&self) -> Option<&str> {
-        self.compiled.module().name.as_deref()
+        self.compiled_module().module().name.as_deref()
     }
 
     /// Returns the list of imports that this [`Module`] has and must be
@@ -414,7 +421,7 @@ impl Module {
     pub fn imports<'module>(
         &'module self,
     ) -> impl ExactSizeIterator<Item = ImportType<'module>> + 'module {
-        let module = self.compiled.module();
+        let module = self.compiled_module().module();
         module
             .imports
             .iter()
@@ -481,7 +488,7 @@ impl Module {
     pub fn exports<'module>(
         &'module self,
     ) -> impl ExactSizeIterator<Item = ExportType<'module>> + 'module {
-        let module = self.compiled.module();
+        let module = self.compiled_module().module();
         module.exports.iter().map(move |(name, entity_index)| {
             let r#type = EntityType::new(entity_index, module);
             ExportType::new(name, r#type)
@@ -532,7 +539,7 @@ impl Module {
     /// # }
     /// ```
     pub fn get_export<'module>(&'module self, name: &'module str) -> Option<ExternType> {
-        let module = self.compiled.module();
+        let module = self.compiled_module().module();
         let entity_index = module.exports.get(name)?;
         Some(EntityType::new(entity_index, module).extern_type())
     }
@@ -550,7 +557,7 @@ impl Module {
         if let Some(info) = &*info {
             return info.clone();
         }
-        let ret = super::frame_info::register(&self.compiled).map(Arc::new);
+        let ret = super::frame_info::register(self.compiled_module()).map(Arc::new);
         *info = Some(ret.clone());
         return ret;
     }
@@ -567,10 +574,10 @@ fn bincode_options() -> impl Options {
     bincode::DefaultOptions::new().with_varint_encoding()
 }
 
-fn compiler_fingerprint(config: &Config) -> u64 {
+fn compiler_fingerprint(engine: &Engine) -> u64 {
     use std::hash::Hasher;
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    config.compiler_fingerprint(&mut hasher);
+    engine.compiler().hash(&mut hasher);
     hasher.finish()
 }
 

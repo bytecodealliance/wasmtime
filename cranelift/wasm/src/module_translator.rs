@@ -8,6 +8,7 @@ use crate::sections_translator::{
 };
 use crate::state::ModuleTranslationState;
 use cranelift_codegen::timing;
+use std::prelude::v1::*;
 use wasmparser::{NameSectionReader, Parser, Payload, Validator};
 
 /// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cranelift IR
@@ -20,14 +21,23 @@ pub fn translate_module<'data>(
     let mut module_translation_state = ModuleTranslationState::new();
     let mut validator = Validator::new();
     validator.wasm_features(environ.wasm_features());
+    let mut stack = Vec::new();
+    let mut modules = 1;
+    let mut cur_module = 0;
 
     for payload in Parser::new(0).parse_all(data) {
         match payload? {
             Payload::Version { num, range } => {
                 validator.version(num, &range)?;
+                environ.module_start(cur_module);
             }
             Payload::End => {
                 validator.end()?;
+                environ.module_end(cur_module);
+                if let Some((other, other_index)) = stack.pop() {
+                    validator = other;
+                    cur_module = other_index;
+                }
             }
 
             Payload::TypeSection(types) => {
@@ -97,7 +107,7 @@ pub fn translate_module<'data>(
 
             Payload::ModuleSection(s) => {
                 validator.module_section(&s)?;
-                unimplemented!("module linking not implemented yet")
+                environ.reserve_modules(s.get_count());
             }
             Payload::InstanceSection(s) => {
                 validator.instance_section(&s)?;
@@ -113,11 +123,14 @@ pub fn translate_module<'data>(
                 size: _,
             } => {
                 validator.module_code_section_start(count, &range)?;
-                unimplemented!("module linking not implemented yet")
             }
 
             Payload::ModuleCodeSectionEntry { .. } => {
-                unimplemented!("module linking not implemented yet")
+                let subvalidator = validator.module_code_section_entry();
+                stack.push((validator, cur_module));
+                validator = subvalidator;
+                cur_module = modules;
+                modules += 1;
             }
 
             Payload::CustomSection {

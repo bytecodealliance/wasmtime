@@ -8,6 +8,8 @@ use crate::compiler::{Compilation, Compiler};
 use crate::link::link_module;
 use crate::object::ObjectUnwindInfo;
 use object::File as ObjectFile;
+#[cfg(feature = "parallel-compilation")]
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::sync::Arc;
@@ -71,69 +73,74 @@ pub struct CompilationArtifacts {
     debug_info: bool,
 }
 
+impl CompilationArtifacts {
+    /// Creates a `CompilationArtifacts` for a singular translated wasm module.
+    pub fn build(
+        compiler: &Compiler,
+        data: &[u8],
+    ) -> Result<Vec<CompilationArtifacts>, SetupError> {
+        let translations = ModuleEnvironment::new(
+            compiler.frontend_config(),
+            compiler.tunables(),
+            compiler.features(),
+        )
+        .translate(data)
+        .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
+
+        maybe_parallel!(translations.(into_iter | into_par_iter))
+            .map(|mut translation| {
+                let Compilation {
+                    obj,
+                    unwind_info,
+                    funcs,
+                } = compiler.compile(&mut translation)?;
+
+                let ModuleTranslation {
+                    module,
+                    data_initializers,
+                    ..
+                } = translation;
+
+                let data_initializers = data_initializers
+                    .into_iter()
+                    .map(OwnedDataInitializer::new)
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice();
+
+                let obj = obj.write().map_err(|_| {
+                    SetupError::Instantiate(InstantiationError::Resource(
+                        "failed to create image memory".to_string(),
+                    ))
+                })?;
+
+                Ok(CompilationArtifacts {
+                    module,
+                    obj: obj.into_boxed_slice(),
+                    unwind_info: unwind_info.into_boxed_slice(),
+                    data_initializers,
+                    funcs: funcs
+                        .into_iter()
+                        .map(|(_, func)| FunctionInfo {
+                            stack_maps: func.stack_maps,
+                            traps: func.traps,
+                            address_map: func.address_map,
+                        })
+                        .collect(),
+                    debug_info: compiler.tunables().debug_info,
+                })
+            })
+            .collect::<Result<Vec<_>, SetupError>>()
+    }
+}
+
+struct FinishedFunctions(PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>);
+
 #[derive(Serialize, Deserialize, Clone)]
 struct FunctionInfo {
     traps: Vec<TrapInformation>,
     address_map: FunctionAddressMap,
     stack_maps: Vec<StackMapInformation>,
 }
-
-impl CompilationArtifacts {
-    /// Builds compilation artifacts.
-    pub fn build(compiler: &Compiler, data: &[u8]) -> Result<Self, SetupError> {
-        let environ = ModuleEnvironment::new(
-            compiler.frontend_config(),
-            compiler.tunables(),
-            compiler.features(),
-        );
-
-        let mut translation = environ
-            .translate(data)
-            .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
-
-        let Compilation {
-            obj,
-            unwind_info,
-            funcs,
-        } = compiler.compile(&mut translation)?;
-
-        let ModuleTranslation {
-            module,
-            data_initializers,
-            ..
-        } = translation;
-
-        let data_initializers = data_initializers
-            .into_iter()
-            .map(OwnedDataInitializer::new)
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-
-        let obj = obj.write().map_err(|_| {
-            SetupError::Instantiate(InstantiationError::Resource(
-                "failed to create image memory".to_string(),
-            ))
-        })?;
-
-        Ok(Self {
-            module,
-            obj: obj.into_boxed_slice(),
-            unwind_info: unwind_info.into_boxed_slice(),
-            data_initializers,
-            funcs: funcs
-                .into_iter()
-                .map(|(_, func)| FunctionInfo {
-                    stack_maps: func.stack_maps,
-                    traps: func.traps,
-                    address_map: func.address_map,
-                })
-                .collect(),
-            debug_info: compiler.tunables().debug_info,
-        })
-    }
-}
-
-struct FinishedFunctions(PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>);
 
 unsafe impl Send for FinishedFunctions {}
 unsafe impl Sync for FinishedFunctions {}
@@ -147,25 +154,24 @@ pub struct ModuleCode {
 
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
+    artifacts: CompilationArtifacts,
     module: Arc<Module>,
     code: Arc<ModuleCode>,
     finished_functions: FinishedFunctions,
     trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
-    data_initializers: Box<[OwnedDataInitializer]>,
-    funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
-    obj: Box<[u8]>,
-    unwind_info: Box<[ObjectUnwindInfo]>,
 }
 
 impl CompiledModule {
-    /// Compile a data buffer into a `CompiledModule`, which may then be instantiated.
-    pub fn new<'data>(
-        compiler: &Compiler,
-        data: &'data [u8],
+    /// Creates a list of compiled modules from the given list of compilation
+    /// artifacts.
+    pub fn from_artifacts_list(
+        artifacts: Vec<CompilationArtifacts>,
+        isa: &dyn TargetIsa,
         profiler: &dyn ProfilingAgent,
-    ) -> Result<Self, SetupError> {
-        let artifacts = CompilationArtifacts::build(compiler, data)?;
-        Self::from_artifacts(artifacts, compiler.isa(), profiler)
+    ) -> Result<Vec<Self>, SetupError> {
+        maybe_parallel!(artifacts.(into_iter | into_par_iter))
+            .map(|a| CompiledModule::from_artifacts(a, isa, profiler))
+            .collect()
     }
 
     /// Creates `CompiledModule` directly from `CompilationArtifacts`.
@@ -174,65 +180,49 @@ impl CompiledModule {
         isa: &dyn TargetIsa,
         profiler: &dyn ProfilingAgent,
     ) -> Result<Self, SetupError> {
-        let CompilationArtifacts {
-            module,
-            obj,
-            unwind_info,
-            data_initializers,
-            funcs,
-            debug_info,
-        } = artifacts;
-
         // Allocate all of the compiled functions into executable memory,
         // copying over their contents.
-        let (code_memory, code_range, finished_functions, trampolines) =
-            build_code_memory(isa, &obj, &module, &unwind_info).map_err(|message| {
-                SetupError::Instantiate(InstantiationError::Resource(format!(
-                    "failed to build code memory for functions: {}",
-                    message
-                )))
-            })?;
+        let (code_memory, code_range, finished_functions, trampolines) = build_code_memory(
+            isa,
+            &artifacts.obj,
+            &artifacts.module,
+            &artifacts.unwind_info,
+        )
+        .map_err(|message| {
+            SetupError::Instantiate(InstantiationError::Resource(format!(
+                "failed to build code memory for functions: {}",
+                message
+            )))
+        })?;
 
         // Register GDB JIT images; initialize profiler and load the wasm module.
-        let dbg_jit_registration = if debug_info {
-            let bytes = create_dbg_image(obj.to_vec(), code_range, &module, &finished_functions)?;
-
-            profiler.module_load(&module, &finished_functions, Some(&bytes));
-
+        let dbg_jit_registration = if artifacts.debug_info {
+            let bytes = create_dbg_image(
+                artifacts.obj.to_vec(),
+                code_range,
+                &artifacts.module,
+                &finished_functions,
+            )?;
+            profiler.module_load(&artifacts.module, &finished_functions, Some(&bytes));
             let reg = GdbJitImageRegistration::register(bytes);
             Some(reg)
         } else {
-            profiler.module_load(&module, &finished_functions, None);
+            profiler.module_load(&artifacts.module, &finished_functions, None);
             None
         };
 
         let finished_functions = FinishedFunctions(finished_functions);
 
         Ok(Self {
-            module: Arc::new(module),
+            module: Arc::new(artifacts.module.clone()),
+            artifacts,
             code: Arc::new(ModuleCode {
                 code_memory,
                 dbg_jit_registration,
             }),
             finished_functions,
             trampolines,
-            data_initializers,
-            funcs,
-            obj,
-            unwind_info,
         })
-    }
-
-    /// Extracts `CompilationArtifacts` from the compiled module.
-    pub fn to_compilation_artifacts(&self) -> CompilationArtifacts {
-        CompilationArtifacts {
-            module: (*self.module).clone(),
-            obj: self.obj.clone(),
-            unwind_info: self.unwind_info.clone(),
-            data_initializers: self.data_initializers.clone(),
-            funcs: self.funcs.clone(),
-            debug_info: self.code.dbg_jit_registration.is_some(),
-        }
     }
 
     /// Crate an `Instance` from this `CompiledModule`.
@@ -267,10 +257,15 @@ impl CompiledModule {
             stack_map_registry,
         )
     }
+    /// Extracts `CompilationArtifacts` from the compiled module.
+    pub fn compilation_artifacts(&self) -> &CompilationArtifacts {
+        &self.artifacts
+    }
 
     /// Returns data initializers to pass to `InstanceHandle::initialize`
     pub fn data_initializers(&self) -> Vec<DataInitializer<'_>> {
-        self.data_initializers
+        self.artifacts
+            .data_initializers
             .iter()
             .map(|init| DataInitializer {
                 location: init.location.clone(),
@@ -307,10 +302,12 @@ impl CompiledModule {
     pub fn stack_maps(
         &self,
     ) -> impl Iterator<Item = (*mut [VMFunctionBody], &[StackMapInformation])> {
-        self.finished_functions()
-            .values()
-            .copied()
-            .zip(self.funcs.values().map(|f| f.stack_maps.as_slice()))
+        self.finished_functions().values().copied().zip(
+            self.artifacts
+                .funcs
+                .values()
+                .map(|f| f.stack_maps.as_slice()),
+        )
     }
 
     /// Iterates over all functions in this module, returning information about
@@ -327,7 +324,7 @@ impl CompiledModule {
     > {
         self.finished_functions()
             .iter()
-            .zip(self.funcs.values())
+            .zip(self.artifacts.funcs.values())
             .map(|((i, alloc), func)| (i, *alloc, func.traps.as_slice(), &func.address_map))
     }
 

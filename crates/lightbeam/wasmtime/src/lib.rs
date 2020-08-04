@@ -14,7 +14,7 @@ use wasmtime_environ::wasm::{
 use wasmtime_environ::{
     entity::PrimaryMap, BuiltinFunctionIndex, CompileError, CompiledFunction, Compiler,
     FunctionBodyData, Module, ModuleTranslation, Relocation, RelocationTarget, TrapInformation,
-    VMOffsets,
+    Tunables, VMOffsets,
 };
 
 /// A compiler that compiles a WebAssembly module with Lightbeam, directly translating the Wasm file.
@@ -27,8 +27,9 @@ impl Compiler for Lightbeam {
         i: DefinedFuncIndex,
         function_body: FunctionBodyData<'_>,
         isa: &dyn isa::TargetIsa,
+        tunables: &Tunables,
     ) -> Result<CompiledFunction, CompileError> {
-        if translation.tunables.debug_info {
+        if tunables.debug_info {
             return Err(CompileError::DebugInfoNotSupported);
         }
         let func_index = translation.module.func_index(i);

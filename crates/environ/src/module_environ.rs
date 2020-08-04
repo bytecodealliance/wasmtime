@@ -6,12 +6,13 @@ use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
     self, translate_module, DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex,
-    Memory, MemoryIndex, ModuleTranslationState, SignatureIndex, Table, TableIndex,
-    TargetEnvironment, WasmError, WasmFuncType, WasmResult,
+    Memory, MemoryIndex, SignatureIndex, Table, TableIndex, TargetEnvironment, WasmError,
+    WasmFuncType, WasmResult,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::mem;
 use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::Type as WasmType;
@@ -19,19 +20,29 @@ use wasmparser::{FuncValidator, FunctionBody, ValidatorResources, WasmFeatures};
 
 /// Object containing the standalone environment information.
 pub struct ModuleEnvironment<'data> {
-    /// The result to be filled in.
+    /// The current module being translated
     result: ModuleTranslation<'data>,
-    code_index: u32,
+
+    /// Modules which have finished translation. This only really applies for
+    /// the module linking proposal.
+    results: Vec<ModuleTranslation<'data>>,
+
+    /// Modules which are in-progress for being translated (our parents) and
+    /// we'll resume once we finish the current module. This is only applicable
+    /// with the module linking proposal.
+    in_progress: Vec<ModuleTranslation<'data>>,
+
+    // Various bits and pieces of configuration
     features: WasmFeatures,
+    target_config: TargetFrontendConfig,
+    tunables: Tunables,
 }
 
 /// The result of translating via `ModuleEnvironment`. Function bodies are not
 /// yet translated, and data initializers have not yet been copied out of the
 /// original buffer.
+#[derive(Default)]
 pub struct ModuleTranslation<'data> {
-    /// Compilation setting flags.
-    pub target_config: TargetFrontendConfig,
-
     /// Module information.
     pub module: Module,
 
@@ -44,14 +55,14 @@ pub struct ModuleTranslation<'data> {
     /// References to the data initializers.
     pub data_initializers: Vec<DataInitializer<'data>>,
 
-    /// Tunable parameters.
-    pub tunables: Tunables,
-
-    /// The decoded Wasm types for the module.
-    pub module_translation: Option<ModuleTranslationState>,
-
     /// DWARF debug information, if enabled, parsed from the module.
-    pub debuginfo: Option<DebugInfoData<'data>>,
+    pub debuginfo: DebugInfoData<'data>,
+
+    /// Indexes into the returned list of translations that are submodules of
+    /// this module.
+    pub submodules: Vec<usize>,
+
+    code_index: u32,
 }
 
 /// Contains function data: byte code and its offset in the module.
@@ -111,36 +122,25 @@ impl<'data> ModuleEnvironment<'data> {
         features: &WasmFeatures,
     ) -> Self {
         Self {
-            result: ModuleTranslation {
-                target_config,
-                module: Module::new(),
-                native_signatures: PrimaryMap::new(),
-                function_body_inputs: PrimaryMap::new(),
-                data_initializers: Vec::new(),
-                tunables: tunables.clone(),
-                module_translation: None,
-                debuginfo: if tunables.debug_info {
-                    Some(DebugInfoData::default())
-                } else {
-                    None
-                },
-            },
-            code_index: 0,
+            result: ModuleTranslation::default(),
+            results: Vec::with_capacity(1),
+            in_progress: Vec::new(),
+            target_config,
+            tunables: tunables.clone(),
             features: *features,
         }
     }
 
     fn pointer_type(&self) -> ir::Type {
-        self.result.target_config.pointer_type()
+        self.target_config.pointer_type()
     }
 
     /// Translate a wasm module using this environment. This consumes the
     /// `ModuleEnvironment` and produces a `ModuleTranslation`.
-    pub fn translate(mut self, data: &'data [u8]) -> WasmResult<ModuleTranslation<'data>> {
-        assert!(self.result.module_translation.is_none());
-        let module_translation = translate_module(data, &mut self)?;
-        self.result.module_translation = Some(module_translation);
-        Ok(self.result)
+    pub fn translate(mut self, data: &'data [u8]) -> WasmResult<Vec<ModuleTranslation<'data>>> {
+        translate_module(data, &mut self)?;
+        assert!(self.results.len() > 0);
+        Ok(self.results)
     }
 
     fn declare_export(&mut self, export: EntityIndex, name: &str) -> WasmResult<()> {
@@ -152,13 +152,13 @@ impl<'data> ModuleEnvironment<'data> {
     }
 
     fn register_dwarf_section(&mut self, name: &str, data: &'data [u8]) {
-        let info = match &mut self.result.debuginfo {
-            Some(info) => info,
-            None => return,
-        };
+        if !self.tunables.debug_info {
+            return;
+        }
         if !name.starts_with(".debug_") {
             return;
         }
+        let info = &mut self.result.debuginfo;
         let dwarf = &mut info.dwarf;
         let endian = gimli::LittleEndian;
         let slice = gimli::EndianSlice::new(data, endian);
@@ -190,7 +190,7 @@ impl<'data> ModuleEnvironment<'data> {
 
 impl<'data> TargetEnvironment for ModuleEnvironment<'data> {
     fn target_config(&self) -> TargetFrontendConfig {
-        self.result.target_config
+        self.target_config
     }
 
     fn reference_type(&self, ty: cranelift_wasm::WasmType) -> ir::Type {
@@ -242,9 +242,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             EntityIndex::Function(func_index),
         ));
         self.result.module.num_imported_funcs += 1;
-        if let Some(info) = &mut self.result.debuginfo {
-            info.wasm_file.imported_func_count += 1;
-        }
+        self.result.debuginfo.wasm_file.imported_func_count += 1;
         Ok(())
     }
 
@@ -254,7 +252,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             self.result.module.num_imported_tables,
             "Imported tables must be declared first"
         );
-        let plan = TablePlan::for_table(table, &self.result.tunables);
+        let plan = TablePlan::for_table(table, &self.tunables);
         let table_index = self.result.module.table_plans.push(plan);
         self.result.module.imports.push((
             module.to_owned(),
@@ -279,7 +277,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         if memory.shared {
             return Err(WasmError::Unsupported("shared memories".to_owned()));
         }
-        let plan = MemoryPlan::for_memory(memory, &self.result.tunables);
+        let plan = MemoryPlan::for_memory(memory, &self.tunables);
         let memory_index = self.result.module.memory_plans.push(plan);
         self.result.module.imports.push((
             module.to_owned(),
@@ -336,7 +334,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn declare_table(&mut self, table: Table) -> WasmResult<()> {
-        let plan = TablePlan::for_table(table, &self.result.tunables);
+        let plan = TablePlan::for_table(table, &self.tunables);
         self.result.module.table_plans.push(plan);
         Ok(())
     }
@@ -353,7 +351,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         if memory.shared {
             return Err(WasmError::Unsupported("shared memories".to_owned()));
         }
-        let plan = MemoryPlan::for_memory(memory, &self.result.tunables);
+        let plan = MemoryPlan::for_memory(memory, &self.tunables);
         self.result.module.memory_plans.push(plan);
         Ok(())
     }
@@ -444,9 +442,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn reserve_function_bodies(&mut self, _count: u32, offset: u64) {
-        if let Some(info) = &mut self.result.debuginfo {
-            info.wasm_file.code_section_offset = offset;
-        }
+        self.result.debuginfo.wasm_file.code_section_offset = offset;
     }
 
     fn define_function_body(
@@ -454,8 +450,8 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         validator: FuncValidator<ValidatorResources>,
         body: FunctionBody<'data>,
     ) -> WasmResult<()> {
-        if let Some(info) = &mut self.result.debuginfo {
-            let func_index = self.code_index + self.result.module.num_imported_funcs as u32;
+        if self.tunables.debug_info {
+            let func_index = self.result.code_index + self.result.module.num_imported_funcs as u32;
             let func_index = FuncIndex::from_u32(func_index);
             let sig_index = self.result.module.functions[func_index];
             let sig = &self.result.module.signatures[sig_index];
@@ -463,15 +459,19 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             for pair in body.get_locals_reader()? {
                 locals.push(pair?);
             }
-            info.wasm_file.funcs.push(FunctionMetadata {
-                locals: locals.into_boxed_slice(),
-                params: sig.params.iter().cloned().map(|i| i.into()).collect(),
-            });
+            self.result
+                .debuginfo
+                .wasm_file
+                .funcs
+                .push(FunctionMetadata {
+                    locals: locals.into_boxed_slice(),
+                    params: sig.params.iter().cloned().map(|i| i.into()).collect(),
+                });
         }
         self.result
             .function_body_inputs
             .push(FunctionBodyData { validator, body });
-        self.code_index += 1;
+        self.result.code_index += 1;
         Ok(())
     }
 
@@ -520,8 +520,8 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
 
     fn declare_module_name(&mut self, name: &'data str) {
         self.result.module.name = Some(name.to_string());
-        if let Some(info) = &mut self.result.debuginfo {
-            info.name_section.module_name = Some(name);
+        if self.tunables.debug_info {
+            self.result.debuginfo.name_section.module_name = Some(name);
         }
     }
 
@@ -530,16 +530,20 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             .module
             .func_names
             .insert(func_index, name.to_string());
-        if let Some(info) = &mut self.result.debuginfo {
-            info.name_section
+        if self.tunables.debug_info {
+            self.result
+                .debuginfo
+                .name_section
                 .func_names
                 .insert(func_index.as_u32(), name);
         }
     }
 
     fn declare_local_name(&mut self, func_index: FuncIndex, local: u32, name: &'data str) {
-        if let Some(info) = &mut self.result.debuginfo {
-            info.name_section
+        if self.tunables.debug_info {
+            self.result
+                .debuginfo
+                .name_section
                 .locals_names
                 .entry(func_index.as_u32())
                 .or_insert(HashMap::new())
@@ -573,6 +577,34 @@ and for re-adding support for interface types you can see this issue:
 
     fn wasm_features(&self) -> WasmFeatures {
         self.features
+    }
+
+    fn reserve_modules(&mut self, amount: u32) {
+        let extra = self.results.capacity() + (amount as usize) - self.results.len();
+        self.results.reserve(extra);
+        self.result.submodules.reserve(amount as usize);
+    }
+
+    fn module_start(&mut self, index: usize) {
+        // skip the first module since `self.result` is already empty and we'll
+        // be translating into that.
+        if index > 0 {
+            let in_progress = mem::replace(&mut self.result, ModuleTranslation::default());
+            self.in_progress.push(in_progress);
+        }
+    }
+
+    fn module_end(&mut self, index: usize) {
+        let to_continue = match self.in_progress.pop() {
+            Some(m) => m,
+            None => {
+                assert_eq!(index, 0);
+                ModuleTranslation::default()
+            }
+        };
+        let finished = mem::replace(&mut self.result, to_continue);
+        self.result.submodules.push(self.results.len());
+        self.results.push(finished);
     }
 }
 
