@@ -380,6 +380,8 @@ pub enum SseOpcode {
     Movaps,
     Movapd,
     Movd,
+    Movdqa,
+    Movdqu,
     Movq,
     Movss,
     Movsd,
@@ -487,6 +489,8 @@ impl SseOpcode {
             | SseOpcode::Movq
             | SseOpcode::Movsd
             | SseOpcode::Movupd
+            | SseOpcode::Movdqa
+            | SseOpcode::Movdqu
             | SseOpcode::Mulpd
             | SseOpcode::Mulsd
             | SseOpcode::Orpd
@@ -571,6 +575,8 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Movaps => "movaps",
             SseOpcode::Movapd => "movapd",
             SseOpcode::Movd => "movd",
+            SseOpcode::Movdqa => "movdqa",
+            SseOpcode::Movdqu => "movdqu",
             SseOpcode::Movq => "movq",
             SseOpcode::Movss => "movss",
             SseOpcode::Movsd => "movsd",
