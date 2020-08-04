@@ -526,6 +526,7 @@ impl Inst {
         Inst::Mov_R_R { is_64, src, dst }
     }
 
+    // TODO Can be replaced by `Inst::move` (high-level) and `Inst::unary_rm_r` (low-level)
     pub(crate) fn xmm_mov(
         op: SseOpcode,
         src: RegMem,
@@ -933,6 +934,85 @@ impl Inst {
             cc,
             trap_code,
             srcloc,
+        }
+    }
+
+    /// Choose which instruction to use for loading a register value from memory. For loads smaller
+    /// than 64 bits, this method expects a way to extend the value (i.e. [ExtKind::SignExtend],
+    /// [ExtKind::ZeroExtend]); loads with no extension necessary will ignore this.
+    pub(crate) fn load(
+        ty: Type,
+        from_addr: impl Into<SyntheticAmode>,
+        to_reg: Writable<Reg>,
+        ext_kind: ExtKind,
+        srcloc: Option<SourceLoc>,
+    ) -> Inst {
+        let rc = to_reg.to_reg().get_class();
+        match rc {
+            RegClass::I64 => {
+                let ext_mode = match ty.bytes() {
+                    1 => Some(ExtMode::BQ),
+                    2 => Some(ExtMode::WQ),
+                    4 => Some(ExtMode::LQ),
+                    8 => None,
+                    _ => unreachable!("the type should never use a scalar load: {}", ty),
+                };
+                if let Some(ext_mode) = ext_mode {
+                    // Values smaller than 64 bits must be extended in some way.
+                    match ext_kind {
+                        ExtKind::SignExtend => {
+                            Inst::movsx_rm_r(ext_mode, RegMem::mem(from_addr), to_reg, srcloc)
+                        }
+                        ExtKind::ZeroExtend => {
+                            Inst::movzx_rm_r(ext_mode, RegMem::mem(from_addr), to_reg, srcloc)
+                        }
+                        ExtKind::None => panic!(
+                            "expected an extension kind for extension mode: {:?}",
+                            ext_mode
+                        ),
+                    }
+                } else {
+                    // 64-bit values can be moved directly.
+                    Inst::mov64_m_r(from_addr, to_reg, srcloc)
+                }
+            }
+            RegClass::V128 => {
+                let opcode = match ty {
+                    types::F32 => SseOpcode::Movss,
+                    types::F64 => SseOpcode::Movsd,
+                    types::F32X4 => SseOpcode::Movups,
+                    types::F64X2 => SseOpcode::Movupd,
+                    _ if ty.is_vector() && ty.bits() == 128 => SseOpcode::Movdqu,
+                    _ => unimplemented!("unable to load type: {}", ty),
+                };
+                Inst::xmm_unary_rm_r(opcode, RegMem::mem(from_addr), to_reg)
+            }
+            _ => panic!("unable to generate load for register class: {:?}", rc),
+        }
+    }
+
+    /// Choose which instruction to use for storing a register value to memory.
+    pub(crate) fn store(
+        ty: Type,
+        from_reg: Reg,
+        to_addr: impl Into<SyntheticAmode>,
+        srcloc: Option<SourceLoc>,
+    ) -> Inst {
+        let rc = from_reg.get_class();
+        match rc {
+            RegClass::I64 => Inst::mov_r_m(ty.bytes() as u8, from_reg, to_addr, srcloc),
+            RegClass::V128 => {
+                let opcode = match ty {
+                    types::F32 => SseOpcode::Movss,
+                    types::F64 => SseOpcode::Movsd,
+                    types::F32X4 => SseOpcode::Movups,
+                    types::F64X2 => SseOpcode::Movupd,
+                    _ if ty.is_vector() && ty.bits() == 128 => SseOpcode::Movdqu,
+                    _ => unimplemented!("unable to store type: {}", ty),
+                };
+                Inst::xmm_mov_r_m(opcode, from_reg, to_addr, srcloc)
+            }
+            _ => panic!("unable to generate store for register class: {:?}", rc),
         }
     }
 }
@@ -2093,16 +2173,18 @@ impl MachInst for Inst {
         debug_assert!(rc_dst == rc_src);
         match rc_dst {
             RegClass::I64 => Inst::mov_r_r(true, src_reg, dst_reg),
-            RegClass::V128 => match ty {
-                types::F32 => Inst::xmm_mov(SseOpcode::Movss, RegMem::reg(src_reg), dst_reg, None),
-                types::F64 => Inst::xmm_mov(SseOpcode::Movsd, RegMem::reg(src_reg), dst_reg, None),
-                _ if ty.is_vector() && ty.bits() == 128 => {
-                    // TODO Specialize this move for different types: MOVUPD, MOVDQU, etc.
-                    Inst::xmm_mov(SseOpcode::Movups, RegMem::reg(src_reg), dst_reg, None)
-                }
-                _ => panic!("unexpected type {:?} in gen_move of regclass V128", ty),
-            },
-            _ => panic!("gen_move(x64): unhandled regclass"),
+            RegClass::V128 => {
+                let opcode = match ty {
+                    types::F32 => SseOpcode::Movss,
+                    types::F64 => SseOpcode::Movsd,
+                    types::F32X4 => SseOpcode::Movaps,
+                    types::F64X2 => SseOpcode::Movapd,
+                    _ if ty.is_vector() && ty.bits() == 128 => SseOpcode::Movdqa,
+                    _ => unimplemented!("unable to move type: {}", ty),
+                };
+                Inst::xmm_unary_rm_r(opcode, RegMem::reg(src_reg), dst_reg)
+            }
+            _ => panic!("gen_move(x64): unhandled regclass {:?}", rc_dst),
         }
     }
 
