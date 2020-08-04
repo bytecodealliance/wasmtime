@@ -1,5 +1,6 @@
 //! The module that implements the `wasmtime run` command.
 
+use crate::gdb_server::{wait_for_debugger_connection, GdbServer};
 use crate::{init_file_per_thread_logger, CommonOptions};
 use anyhow::{bail, Context as _, Result};
 use std::thread;
@@ -108,6 +109,14 @@ pub struct RunCommand {
     )]
     wasm_timeout: Option<Duration>,
 
+    /// Enable GDB server
+    #[structopt(long = "gdb-server")]
+    enable_gdb_server: bool,
+
+    /// GDB server port
+    #[structopt(long = "gdb-server-port", short = "p")]
+    gdb_server_port: Option<u16>,
+
     // NOTE: this must come last for trailing varargs
     /// The arguments to pass to the module
     #[structopt(value_name = "ARGS")]
@@ -129,34 +138,11 @@ impl RunCommand {
             config.interruptable(true);
         }
 
-        // EXAMPLE
-        config.debugger({
-            use wasmtime::debugger::*;
-            struct Dbg {
-                count: u32,
-            }
-            impl DebuggerAgent for Dbg {
-                fn pause(&mut self, kind: DebuggerPauseKind) -> DebuggerResumeAction {
-                    match kind {
-                        DebuggerPauseKind::Breakpoint(_) => {
-                            println!("!brk");
-                            DebuggerResumeAction::Step
-                        }
-                        DebuggerPauseKind::Step => {
-                            if self.count > 0 {
-                                self.count -= 1;
-                                let t = Trap::new("test");
-                                println!("!step {:?}", t.trace());
-                                DebuggerResumeAction::Step
-                            } else {
-                                DebuggerResumeAction::Continue
-                            }
-                        }
-                    }
-                }
-            }
-            Dbg { count: 5 }
-        });
+        if self.enable_gdb_server {
+            let port = self.gdb_server_port.unwrap_or(22334);
+            let gdb_server = GdbServer::new(port);
+            config.debugger(gdb_server);
+        }
 
         let engine = Engine::new(&config);
         let store = Store::new(&engine);
@@ -282,6 +268,9 @@ impl RunCommand {
             .module("", &module)
             .context(format!("failed to instantiate {:?}", self.module))?;
 
+        if self.enable_gdb_server {
+            wait_for_debugger_connection(&module.engine().config())?;
+        }
         // EXAMPLE
         module.set_breakpoint(0x45);
 
