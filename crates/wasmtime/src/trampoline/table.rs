@@ -22,7 +22,7 @@ pub fn create_handle_with_table(store: &Store, table: &TableType) -> Result<Stor
     let tunable = Default::default();
 
     let table_plan = wasmtime_environ::TablePlan::for_table(table, &tunable);
-    let table_id = module.local.table_plans.push(table_plan);
+    let table_id = module.table_plans.push(table_plan);
     module
         .exports
         .insert("table".to_string(), EntityIndex::Table(table_id));

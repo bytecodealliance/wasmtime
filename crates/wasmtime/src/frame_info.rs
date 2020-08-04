@@ -162,7 +162,7 @@ pub fn register(module: &CompiledModule) -> Option<GlobalFrameInfoRegistration> 
         max = cmp::max(max, end);
         let func = FunctionInfo {
             start,
-            index: module.module().local.func_index(i),
+            index: module.module().func_index(i),
             traps: traps.to_vec(),
             instr_map: address_map.clone(),
         };

@@ -176,7 +176,7 @@ impl Instance {
 
     /// Get a locally defined or imported memory.
     pub(crate) fn get_memory(&self, index: MemoryIndex) -> VMMemoryDefinition {
-        if let Some(defined_index) = self.module.local.defined_memory_index(index) {
+        if let Some(defined_index) = self.module.defined_memory_index(index) {
             self.memory(defined_index)
         } else {
             let import = self.imported_memory(index);
@@ -234,7 +234,7 @@ impl Instance {
         &self,
         index: GlobalIndex,
     ) -> *mut VMGlobalDefinition {
-        if let Some(index) = self.module.local.defined_global_index(index) {
+        if let Some(index) = self.module.defined_global_index(index) {
             self.global_ptr(index)
         } else {
             self.imported_global(index).from
@@ -297,7 +297,7 @@ impl Instance {
             }
             EntityIndex::Table(index) => {
                 let (definition, vmctx) =
-                    if let Some(def_index) = self.module.local.defined_table_index(*index) {
+                    if let Some(def_index) = self.module.defined_table_index(*index) {
                         (self.table_ptr(def_index), self.vmctx_ptr())
                     } else {
                         let import = self.imported_table(*index);
@@ -306,13 +306,13 @@ impl Instance {
                 ExportTable {
                     definition,
                     vmctx,
-                    table: self.module.local.table_plans[*index].clone(),
+                    table: self.module.table_plans[*index].clone(),
                 }
                 .into()
             }
             EntityIndex::Memory(index) => {
                 let (definition, vmctx) =
-                    if let Some(def_index) = self.module.local.defined_memory_index(*index) {
+                    if let Some(def_index) = self.module.defined_memory_index(*index) {
                         (self.memory_ptr(def_index), self.vmctx_ptr())
                     } else {
                         let import = self.imported_memory(*index);
@@ -321,19 +321,18 @@ impl Instance {
                 ExportMemory {
                     definition,
                     vmctx,
-                    memory: self.module.local.memory_plans[*index].clone(),
+                    memory: self.module.memory_plans[*index].clone(),
                 }
                 .into()
             }
             EntityIndex::Global(index) => ExportGlobal {
-                definition: if let Some(def_index) = self.module.local.defined_global_index(*index)
-                {
+                definition: if let Some(def_index) = self.module.defined_global_index(*index) {
                     self.global_ptr(def_index)
                 } else {
                     self.imported_global(*index).from
                 },
                 vmctx: self.vmctx_ptr(),
-                global: self.module.local.globals[*index],
+                global: self.module.globals[*index],
             }
             .into(),
         }
@@ -771,7 +770,7 @@ impl Instance {
     /// Get a table by index regardless of whether it is locally-defined or an
     /// imported, foreign table.
     pub(crate) fn get_table(&self, table_index: TableIndex) -> &Table {
-        if let Some(defined_table_index) = self.module.local.defined_table_index(table_index) {
+        if let Some(defined_table_index) = self.module.defined_table_index(table_index) {
             self.get_defined_table(defined_table_index)
         } else {
             self.get_foreign_table(table_index)
@@ -796,7 +795,7 @@ impl Instance {
         &self,
         index: TableIndex,
     ) -> (DefinedTableIndex, &Instance) {
-        if let Some(defined_table_index) = self.module.local.defined_table_index(index) {
+        if let Some(defined_table_index) = self.module.defined_table_index(index) {
             (defined_table_index, self)
         } else {
             let import = self.imported_table(index);
@@ -867,7 +866,7 @@ impl InstanceHandle {
 
         let vmctx_globals = create_globals(&module);
 
-        let offsets = VMOffsets::new(mem::size_of::<*const u8>() as u8, &module.local);
+        let offsets = VMOffsets::new(mem::size_of::<*const u8>() as u8, &module);
 
         let passive_data = RefCell::new(module.passive_data.clone());
 
@@ -946,11 +945,11 @@ impl InstanceHandle {
         *instance.externref_activations_table() = externref_activations_table;
         *instance.stack_map_registry() = stack_map_registry;
 
-        for (index, sig) in instance.module.local.functions.iter() {
+        for (index, sig) in instance.module.functions.iter() {
             let type_index = instance.signature_id(*sig);
 
             let (func_ptr, vmctx) =
-                if let Some(def_index) = instance.module.local.defined_func_index(index) {
+                if let Some(def_index) = instance.module.defined_func_index(index) {
                     (
                         NonNull::new(instance.finished_functions[def_index] as *mut _).unwrap(),
                         instance.vmctx_ptr(),
@@ -1202,7 +1201,7 @@ fn get_memory_init_start(init: &DataInitializer<'_>, instance: &Instance) -> usi
 
     if let Some(base) = init.location.base {
         let val = unsafe {
-            if let Some(def_index) = instance.module.local.defined_global_index(base) {
+            if let Some(def_index) = instance.module.defined_global_index(base) {
                 *instance.global(def_index).as_u32()
             } else {
                 *(*instance.imported_global(base).from).as_u32()
@@ -1221,7 +1220,6 @@ unsafe fn get_memory_slice<'instance>(
 ) -> &'instance mut [u8] {
     let memory = if let Some(defined_memory_index) = instance
         .module
-        .local
         .defined_memory_index(init.location.memory_index)
     {
         instance.memory(defined_memory_index)
@@ -1256,10 +1254,10 @@ fn check_memory_init_bounds(
 
 /// Allocate memory for just the tables of the current module.
 fn create_tables(module: &Module) -> BoxedSlice<DefinedTableIndex, Table> {
-    let num_imports = module.local.num_imported_tables;
+    let num_imports = module.num_imported_tables;
     let mut tables: PrimaryMap<DefinedTableIndex, _> =
-        PrimaryMap::with_capacity(module.local.table_plans.len() - num_imports);
-    for table in &module.local.table_plans.values().as_slice()[num_imports..] {
+        PrimaryMap::with_capacity(module.table_plans.len() - num_imports);
+    for table in &module.table_plans.values().as_slice()[num_imports..] {
         tables.push(Table::new(table));
     }
     tables.into_boxed_slice()
@@ -1271,7 +1269,7 @@ fn get_table_init_start(init: &TableElements, instance: &Instance) -> usize {
 
     if let Some(base) = init.base {
         let val = unsafe {
-            if let Some(def_index) = instance.module.local.defined_global_index(base) {
+            if let Some(def_index) = instance.module.defined_global_index(base) {
                 *instance.global(def_index).as_u32()
             } else {
                 *(*instance.imported_global(base).from).as_u32()
@@ -1354,10 +1352,10 @@ fn create_memories(
     module: &Module,
     mem_creator: &dyn RuntimeMemoryCreator,
 ) -> Result<BoxedSlice<DefinedMemoryIndex, Box<dyn RuntimeLinearMemory>>, InstantiationError> {
-    let num_imports = module.local.num_imported_memories;
+    let num_imports = module.num_imported_memories;
     let mut memories: PrimaryMap<DefinedMemoryIndex, _> =
-        PrimaryMap::with_capacity(module.local.memory_plans.len() - num_imports);
-    for plan in &module.local.memory_plans.values().as_slice()[num_imports..] {
+        PrimaryMap::with_capacity(module.memory_plans.len() - num_imports);
+    for plan in &module.memory_plans.values().as_slice()[num_imports..] {
         memories.push(
             mem_creator
                 .new_memory(plan)
@@ -1399,10 +1397,10 @@ fn initialize_memories(
 /// Allocate memory for just the globals of the current module,
 /// with initializers applied.
 fn create_globals(module: &Module) -> BoxedSlice<DefinedGlobalIndex, VMGlobalDefinition> {
-    let num_imports = module.local.num_imported_globals;
-    let mut vmctx_globals = PrimaryMap::with_capacity(module.local.globals.len() - num_imports);
+    let num_imports = module.num_imported_globals;
+    let mut vmctx_globals = PrimaryMap::with_capacity(module.globals.len() - num_imports);
 
-    for _ in &module.local.globals.values().as_slice()[num_imports..] {
+    for _ in &module.globals.values().as_slice()[num_imports..] {
         vmctx_globals.push(VMGlobalDefinition::new());
     }
 
@@ -1411,9 +1409,9 @@ fn create_globals(module: &Module) -> BoxedSlice<DefinedGlobalIndex, VMGlobalDef
 
 fn initialize_globals(instance: &Instance) {
     let module = instance.module();
-    let num_imports = module.local.num_imported_globals;
-    for (index, global) in module.local.globals.iter().skip(num_imports) {
-        let def_index = module.local.defined_global_index(index).unwrap();
+    let num_imports = module.num_imported_globals;
+    for (index, global) in module.globals.iter().skip(num_imports) {
+        let def_index = module.defined_global_index(index).unwrap();
         unsafe {
             let to = instance.global_ptr(def_index);
             match global.initializer {
@@ -1423,7 +1421,7 @@ fn initialize_globals(instance: &Instance) {
                 GlobalInit::F64Const(x) => *(*to).as_f64_bits_mut() = x,
                 GlobalInit::V128Const(x) => *(*to).as_u128_bits_mut() = x.0,
                 GlobalInit::GetGlobal(x) => {
-                    let from = if let Some(def_x) = module.local.defined_global_index(x) {
+                    let from = if let Some(def_x) = module.defined_global_index(x) {
                         instance.global(def_x)
                     } else {
                         *instance.imported_global(x).from

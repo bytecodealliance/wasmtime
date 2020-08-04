@@ -229,10 +229,9 @@ pub fn create_handle_with_function(
     // First up we manufacture a trampoline which has the ABI specified by `ft`
     // and calls into `stub_fn`...
     let sig_id = module
-        .local
         .signatures
         .push((ft.to_wasm_func_type(), sig.clone()));
-    let func_id = module.local.functions.push(sig_id);
+    let func_id = module.functions.push(sig_id);
     module
         .exports
         .insert("trampoline".to_string(), EntityIndex::Function(func_id));
@@ -289,10 +288,9 @@ pub unsafe fn create_handle_with_raw_function(
     let mut trampolines = HashMap::new();
 
     let sig_id = module
-        .local
         .signatures
         .push((ft.to_wasm_func_type(), sig.clone()));
-    let func_id = module.local.functions.push(sig_id);
+    let func_id = module.functions.push(sig_id);
     module
         .exports
         .insert("trampoline".to_string(), EntityIndex::Function(func_id));

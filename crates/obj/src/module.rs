@@ -66,7 +66,7 @@ pub fn emit_module(
         declare_data_segment(&mut obj, initializer, i)?;
     }
 
-    for i in 0..module.local.table_plans.len() {
+    for i in 0..module.table_plans.len() {
         declare_table(&mut obj, i)?;
     }
 
@@ -74,7 +74,7 @@ pub fn emit_module(
         emit_data_segment(&mut obj, initializer, i)?;
     }
 
-    for i in 0..module.local.table_plans.len() {
+    for i in 0..module.table_plans.len() {
         emit_table(&mut obj, i)?;
     }
 

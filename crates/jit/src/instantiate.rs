@@ -256,7 +256,6 @@ impl CompiledModule {
         // Compute indices into the shared signature table.
         let signatures = {
             self.module
-                .local
                 .signatures
                 .values()
                 .map(|(wasm_sig, native)| {
@@ -387,7 +386,7 @@ fn create_dbg_image(
         .values()
         .map(|allocated: &*mut [VMFunctionBody]| (*allocated) as *const u8)
         .collect::<Vec<_>>();
-    create_gdbjit_image(obj, code_range, module.local.num_imported_funcs, &funcs)
+    create_gdbjit_image(obj, code_range, module.num_imported_funcs, &funcs)
         .map_err(SetupError::DebugInfo)
 }
 
@@ -417,7 +416,7 @@ fn build_code_memory(
         let fat_ptr: *mut [VMFunctionBody] = fat_ptr;
         assert_eq!(
             Some(finished_functions.push(fat_ptr)),
-            module.local.defined_func_index(i)
+            module.defined_func_index(i)
         );
     }
 

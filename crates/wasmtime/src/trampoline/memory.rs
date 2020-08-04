@@ -24,7 +24,7 @@ pub fn create_handle_with_memory(
 
     let memory_plan =
         wasmtime_environ::MemoryPlan::for_memory(memory, &store.engine().config().tunables);
-    let memory_id = module.local.memory_plans.push(memory_plan);
+    let memory_id = module.memory_plans.push(memory_plan);
     module
         .exports
         .insert("memory".to_string(), EntityIndex::Memory(memory_id));

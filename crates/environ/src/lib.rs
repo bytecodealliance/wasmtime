@@ -49,7 +49,7 @@ pub use crate::func_environ::BuiltinFunctionIndex;
 #[cfg(feature = "lightbeam")]
 pub use crate::lightbeam::Lightbeam;
 pub use crate::module::{
-    EntityIndex, MemoryPlan, MemoryStyle, Module, ModuleLocal, TableElements, TablePlan, TableStyle,
+    EntityIndex, MemoryPlan, MemoryStyle, Module, TableElements, TablePlan, TableStyle,
 };
 pub use crate::module_environ::*;
 pub use crate::tunables::Tunables;

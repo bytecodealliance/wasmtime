@@ -302,17 +302,17 @@ impl Compiler for Cranelift {
         input: &FunctionBodyData<'_>,
         isa: &dyn isa::TargetIsa,
     ) -> Result<CompiledFunction, CompileError> {
-        let local = &translation.module.local;
+        let module = &translation.module;
         let tunables = &translation.tunables;
-        let func_index = local.func_index(func_index);
+        let func_index = module.func_index(func_index);
         let mut context = Context::new();
         context.func.name = get_func_name(func_index);
-        context.func.signature = local.native_func_signature(func_index).clone();
+        context.func.signature = module.native_func_signature(func_index).clone();
         if tunables.debug_info {
             context.func.collect_debug_info();
         }
 
-        let mut func_env = FuncEnvironment::new(isa.frontend_config(), local, tunables);
+        let mut func_env = FuncEnvironment::new(isa.frontend_config(), module, tunables);
 
         // We use these as constant offsets below in
         // `stack_limit_from_arguments`, so assert their values here. This
