@@ -72,8 +72,8 @@ fn test_x64_emit() {
     let w_xmm2 = Writable::<Reg>::from_reg(xmm2);
     let w_xmm3 = Writable::<Reg>::from_reg(xmm3);
     let w_xmm4 = Writable::<Reg>::from_reg(xmm4);
-    let _w_xmm5 = Writable::<Reg>::from_reg(xmm5);
-    let _w_xmm6 = Writable::<Reg>::from_reg(xmm6);
+    let w_xmm5 = Writable::<Reg>::from_reg(xmm5);
+    let w_xmm6 = Writable::<Reg>::from_reg(xmm6);
     let w_xmm7 = Writable::<Reg>::from_reg(xmm7);
     let w_xmm8 = Writable::<Reg>::from_reg(xmm8);
     let w_xmm9 = Writable::<Reg>::from_reg(xmm9);
@@ -3009,6 +3009,33 @@ fn test_x64_emit() {
         Inst::xmm_rm_r(SseOpcode::Orps, RegMem::reg(xmm5), w_xmm4),
         "0F56E5",
         "orps    %xmm5, %xmm4",
+    ));
+
+    // ========================================================
+    // XMM_RM_R: Integer Packed
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Paddb, RegMem::reg(xmm9), w_xmm5),
+        "66410FFCE9",
+        "paddb   %xmm9, %xmm5",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Paddw, RegMem::reg(xmm7), w_xmm6),
+        "660FFDF7",
+        "paddw   %xmm7, %xmm6",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Paddd, RegMem::reg(xmm12), w_xmm13),
+        "66450FFEEC",
+        "paddd   %xmm12, %xmm13",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Paddq, RegMem::reg(xmm1), w_xmm8),
+        "66440FD4C1",
+        "paddq   %xmm1, %xmm8",
     ));
 
     // XMM_Mov_R_M: float stores
