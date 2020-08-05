@@ -26,7 +26,7 @@ pub(super) fn define_struct(
                 } else {
                     quote!(#tt)
                 }
-            },
+            }
             witx::TypeRef::Value(ty) => match &**ty {
                 witx::Type::Builtin(builtin) => names.builtin_type(*builtin, quote!('a)),
                 witx::Type::Pointer(pointee) | witx::Type::ConstPointer(pointee) => {
