@@ -45,14 +45,6 @@ fn is_bool_ty(ty: Type) -> bool {
     }
 }
 
-fn int_ty_is_64(ty: Type) -> bool {
-    match ty {
-        types::I8 | types::I16 | types::I32 => false,
-        types::I64 => true,
-        _ => panic!("type {} is none of I8, I16, I32 or I64", ty),
-    }
-}
-
 fn iri_to_u64_imm(ctx: Ctx, inst: IRInst) -> Option<u64> {
     ctx.get_constant(inst)
 }
@@ -346,28 +338,45 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Band
         | Opcode::Bor
         | Opcode::Bxor => {
-            let lhs = input_to_reg(ctx, inputs[0]);
-            let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
-            let dst = output_to_reg(ctx, outputs[0]);
-            let ty = ty.unwrap();
-
             // TODO For commutative operations (add, mul, and, or, xor), try to commute the
             // operands if one is an immediate.
+            let ty = ty.unwrap();
+            println!("Type: {}, Ops: {}", ty, op);
+            if ty.lane_count() > 1 {
+                let sse_op = match op {
+                    Opcode::Iadd => match ty {
+                        I8x16 => SseOpcode::Paddb,
+                        I16x8 => SseOpcode::Paddw,
+                        I32x4 => SseOpcode::Paddd,
+                        I64x2 => SseOpcode::Paddq,
+                        _ => panic!("Unsupported type for packed Iadd instruction"),
+                    },
+                    _ => panic!("Unsupported packed instruction"),
+                };
+                let lhs = input_to_reg(ctx, inputs[0]);
+                let rhs = input_to_reg_mem(ctx, inputs[1]);
+                let dst = output_to_reg(ctx, outputs[0]);
 
-            println!("Type: {}", ty);
-            let is_64 = int_ty_is_64(ty.unwrap());
-            let alu_op = match op {
-                Opcode::Iadd | Opcode::IaddIfcout => AluRmiROpcode::Add,
-                Opcode::Isub => AluRmiROpcode::Sub,
-                Opcode::Imul => AluRmiROpcode::Mul,
-                Opcode::Band => AluRmiROpcode::And,
-                Opcode::Bor => AluRmiROpcode::Or,
-                Opcode::Bxor => AluRmiROpcode::Xor,
-                _ => unreachable!(),
-            };
-
-            ctx.emit(Inst::mov_r_r(true, lhs, dst));
-            ctx.emit(Inst::alu_rmi_r(is_64, alu_op, rhs, dst));
+                // Move the `lhs` to the same register as `dst`.
+                ctx.emit(Inst::gen_move(dst, lhs, ty));
+                ctx.emit(Inst::xmm_rm_r(sse_op, rhs, dst));
+            } else {
+                let is_64 = ty == types::I64;
+                let alu_op = match op {
+                    Opcode::Iadd | Opcode::IaddIfcout => AluRmiROpcode::Add,
+                    Opcode::Isub => AluRmiROpcode::Sub,
+                    Opcode::Imul => AluRmiROpcode::Mul,
+                    Opcode::Band => AluRmiROpcode::And,
+                    Opcode::Bor => AluRmiROpcode::Or,
+                    Opcode::Bxor => AluRmiROpcode::Xor,
+                    _ => unreachable!(),
+                };
+                let lhs = input_to_reg(ctx, inputs[0]);
+                let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
+                let dst = output_to_reg(ctx, outputs[0]);
+                ctx.emit(Inst::mov_r_r(true, lhs, dst));
+                ctx.emit(Inst::alu_rmi_r(is_64, alu_op, rhs, dst));
+            }
         }
 
         Opcode::Ishl | Opcode::Ushr | Opcode::Sshr | Opcode::Rotl | Opcode::Rotr => {
