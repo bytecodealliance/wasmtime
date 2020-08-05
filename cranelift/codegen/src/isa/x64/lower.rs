@@ -341,14 +341,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // TODO For commutative operations (add, mul, and, or, xor), try to commute the
             // operands if one is an immediate.
             let ty = ty.unwrap();
-            println!("Type: {}, Ops: {}", ty, op);
             if ty.lane_count() > 1 {
                 let sse_op = match op {
                     Opcode::Iadd => match ty {
-                        I8x16 => SseOpcode::Paddb,
-                        I16x8 => SseOpcode::Paddw,
-                        I32x4 => SseOpcode::Paddd,
-                        I64x2 => SseOpcode::Paddq,
+                        types::I8X16 => SseOpcode::Paddb,
+                        types::I16X8 => SseOpcode::Paddw,
+                        types::I32X4 => SseOpcode::Paddd,
+                        types::I64X2 => SseOpcode::Paddq,
                         _ => panic!("Unsupported type for packed Iadd instruction"),
                     },
                     _ => panic!("Unsupported packed instruction"),
