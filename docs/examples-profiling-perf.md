@@ -132,7 +132,7 @@ Alternatively we could also use `perf annotate` to take a look at the
 disassembly of the `fib` function, seeing what the JIT generated:
 
 ```sh
-$ perf annotate --input perf.jit-data
+$ perf annotate --input perf.jit.data
 ```
 
 ![perf annotate output](assets/perf-annotate-fib.png)
