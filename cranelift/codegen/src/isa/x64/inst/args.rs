@@ -391,6 +391,10 @@ pub enum SseOpcode {
     Mulsd,
     Orps,
     Orpd,
+    Paddb,
+    Paddd,
+    Paddq,
+    Paddw,
     Psllw,
     Pslld,
     Psllq,
@@ -479,6 +483,10 @@ impl SseOpcode {
             | SseOpcode::Mulpd
             | SseOpcode::Mulsd
             | SseOpcode::Orpd
+            | SseOpcode::Paddb
+            | SseOpcode::Paddd
+            | SseOpcode::Paddq
+            | SseOpcode::Paddw
             | SseOpcode::Psllw
             | SseOpcode::Pslld
             | SseOpcode::Psllq
@@ -559,6 +567,10 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Mulsd => "mulsd",
             SseOpcode::Orpd => "orpd",
             SseOpcode::Orps => "orps",
+            SseOpcode::Paddb => "paddb",
+            SseOpcode::Paddd => "paddd",
+            SseOpcode::Paddq => "paddq",
+            SseOpcode::Paddw => "paddw",
             SseOpcode::Psllw => "psllw",
             SseOpcode::Pslld => "pslld",
             SseOpcode::Psllq => "psllq",
