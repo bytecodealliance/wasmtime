@@ -2,14 +2,41 @@
 
 use crate::runtime::{Engine, EngineInner};
 use std::sync::{Arc, Mutex, Weak};
+use wasmtime_jit::CompiledModule;
 
 pub use wasmtime_runtime::debugger::{
     BreakpointData, DebuggerContext, DebuggerContextData, DebuggerPauseKind, DebuggerResumeAction,
     PatchableCode,
 };
 
+pub trait DebuggerJitCodeRegistration: std::marker::Send + std::marker::Sync {}
+
 pub trait DebuggerAgent: std::marker::Send + std::marker::Sync {
     fn pause(&mut self, kind: DebuggerPauseKind) -> DebuggerResumeAction;
+    fn register_module(&mut self, module: DebuggerModule) -> Box<dyn DebuggerJitCodeRegistration>;
+}
+
+pub struct DebuggerModule<'a> {
+    module: Weak<CompiledModule>,
+    bytes: &'a [u8],
+}
+
+impl<'a> DebuggerModule<'a> {
+    fn new(module: &Arc<CompiledModule>, bytes: &'a [u8]) -> Self {
+        Self {
+            module: Arc::downgrade(module),
+            bytes,
+        }
+    }
+    pub fn bytes(&self) -> &[u8] {
+        self.bytes
+    }
+    fn module(&self) -> Arc<CompiledModule> {
+        self.module.upgrade().unwrap()
+    }
+    pub fn ranges(&self) -> Vec<(usize, usize)> {
+        self.module().jit_code_ranges().collect()
+    }
 }
 
 pub(crate) struct NullDebuggerAgent;
@@ -17,6 +44,11 @@ pub(crate) struct NullDebuggerAgent;
 impl DebuggerAgent for NullDebuggerAgent {
     fn pause(&mut self, _kind: DebuggerPauseKind) -> DebuggerResumeAction {
         DebuggerResumeAction::Continue
+    }
+    fn register_module(&mut self, _module: DebuggerModule) -> Box<dyn DebuggerJitCodeRegistration> {
+        struct NullReg;
+        impl DebuggerJitCodeRegistration for NullReg {}
+        Box::new(NullReg)
     }
 }
 
@@ -41,6 +73,16 @@ impl EngineDebuggerContext {
     }
     pub fn add_breakpoints(&mut self, it: impl Iterator<Item = BreakpointData>) {
         self.breakpoints.extend(it);
+    }
+    pub fn register_module(
+        &mut self,
+        module: &Arc<CompiledModule>,
+        bytes: &[u8],
+    ) -> Box<dyn DebuggerJitCodeRegistration> {
+        self.debugger()
+            .lock()
+            .unwrap()
+            .register_module(DebuggerModule::new(module, bytes))
     }
     fn debugger(&self) -> Arc<Mutex<dyn DebuggerAgent + 'static>> {
         let engine_inner = self.engine.upgrade().unwrap();

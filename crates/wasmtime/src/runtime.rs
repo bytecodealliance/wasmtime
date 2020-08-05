@@ -1,4 +1,6 @@
-use crate::debugger::{DebuggerAgent, EngineDebuggerContext, NullDebuggerAgent};
+use crate::debugger::{
+    DebuggerAgent, DebuggerJitCodeRegistration, EngineDebuggerContext, NullDebuggerAgent,
+};
 use crate::externals::MemoryCreator;
 use crate::trampoline::{MemoryCreatorProxy, StoreInstanceHandle};
 use crate::Module;
@@ -888,6 +890,18 @@ impl Engine {
         &self.inner.jit_code
     }
 
+    pub(crate) fn register_module(
+        &self,
+        compiled_module: &Arc<CompiledModule>,
+        bytes: &[u8],
+    ) -> ModuleRegistration {
+        let reg = self
+            .ensure_engine_debugger_context()
+            .get_mut()
+            .register_module(compiled_module, bytes);
+        ModuleRegistration(reg)
+    }
+
     /// Returns whether the engine `a` and `b` refer to the same configuration.
     pub fn same(a: &Engine, b: &Engine) -> bool {
         Arc::ptr_eq(&a.inner, &b.inner)
@@ -899,6 +913,8 @@ impl Default for Engine {
         Engine::new(&Config::default())
     }
 }
+
+pub(crate) struct ModuleRegistration(Box<dyn DebuggerJitCodeRegistration>);
 
 pub(crate) struct EngineDebuggerContextGuard<'a>(
     MutexGuard<'a, Option<Box<dyn DebuggerContext + Send + Sync + 'static>>>,

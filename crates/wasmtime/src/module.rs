@@ -1,5 +1,5 @@
 use crate::frame_info::GlobalFrameInfoRegistration;
-use crate::runtime::{Config, Engine, EngineJitCodeRegistration};
+use crate::runtime::{Config, Engine, EngineJitCodeRegistration, ModuleRegistration};
 use crate::types::{EntityType, ExportType, ExternType, ImportType};
 use anyhow::{bail, Context, Result};
 use std::path::Path;
@@ -82,6 +82,7 @@ pub struct Module {
     compiled: Arc<CompiledModule>,
     frame_info_registration: Arc<Mutex<Option<Option<Arc<GlobalFrameInfoRegistration>>>>>,
     jit_code_registration: Arc<EngineJitCodeRegistration>,
+    module_registration: Arc<Option<ModuleRegistration>>,
 }
 
 impl Module {
@@ -319,12 +320,14 @@ impl Module {
 
         let compiled = Arc::new(compiled);
         let jit_code_registration = engine.jit_code().register_jit_code(&compiled);
+        let module_registration = engine.register_module(&compiled, binary);
 
         Ok(Module {
             engine: engine.clone(),
             compiled,
             frame_info_registration: Arc::new(Mutex::new(None)),
             jit_code_registration: Arc::new(jit_code_registration),
+            module_registration: Arc::new(Some(module_registration)),
         })
     }
 
@@ -374,6 +377,7 @@ impl Module {
             compiled,
             frame_info_registration: Arc::new(Mutex::new(None)),
             jit_code_registration: Arc::new(jit_code_registration),
+            module_registration: Arc::new(None),
         })
     }
 
