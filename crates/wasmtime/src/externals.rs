@@ -86,15 +86,6 @@ impl Extern {
         }
     }
 
-    pub(crate) fn get_wasmtime_export(&self) -> wasmtime_runtime::Export {
-        match self {
-            Extern::Func(f) => f.wasmtime_function().clone().into(),
-            Extern::Global(g) => g.wasmtime_export.clone().into(),
-            Extern::Memory(m) => m.wasmtime_export.clone().into(),
-            Extern::Table(t) => t.wasmtime_export.clone().into(),
-        }
-    }
-
     pub(crate) fn from_wasmtime_export(
         wasmtime_export: wasmtime_runtime::Export,
         instance: StoreInstanceHandle,
@@ -123,6 +114,15 @@ impl Extern {
             Extern::Table(t) => &t.instance.store,
         };
         Store::same(my_store, store)
+    }
+
+    pub(crate) fn desc(&self) -> &'static str {
+        match self {
+            Extern::Func(_) => "function",
+            Extern::Table(_) => "table",
+            Extern::Memory(_) => "memory",
+            Extern::Global(_) => "global",
+        }
     }
 }
 
@@ -291,6 +291,19 @@ impl Global {
         Global {
             instance,
             wasmtime_export,
+        }
+    }
+
+    pub(crate) fn matches_expected(&self, expected: &wasmtime_environ::wasm::Global) -> bool {
+        let actual = &self.wasmtime_export.global;
+        expected.ty == actual.ty
+            && expected.wasm_ty == actual.wasm_ty
+            && expected.mutability == actual.mutability
+    }
+
+    pub(crate) fn vmimport(&self) -> wasmtime_runtime::VMGlobalImport {
+        wasmtime_runtime::VMGlobalImport {
+            from: self.wasmtime_export.definition,
         }
     }
 }
@@ -522,6 +535,28 @@ impl Table {
         Table {
             instance,
             wasmtime_export,
+        }
+    }
+
+    pub(crate) fn matches_expected(&self, ty: &wasmtime_environ::TablePlan) -> bool {
+        let expected = &ty.table;
+        let actual = &self.wasmtime_export.table.table;
+        expected.wasm_ty == actual.wasm_ty
+            && expected.ty == actual.ty
+            && expected.minimum <= actual.minimum
+            && match expected.maximum {
+                Some(expected) => match actual.maximum {
+                    Some(actual) => expected >= actual,
+                    None => false,
+                },
+                None => true,
+            }
+    }
+
+    pub(crate) fn vmimport(&self) -> wasmtime_runtime::VMTableImport {
+        wasmtime_runtime::VMTableImport {
+            from: self.wasmtime_export.definition,
+            vmctx: self.wasmtime_export.vmctx,
         }
     }
 }
@@ -922,6 +957,27 @@ impl Memory {
         Memory {
             instance,
             wasmtime_export,
+        }
+    }
+
+    pub(crate) fn matches_expected(&self, ty: &wasmtime_environ::MemoryPlan) -> bool {
+        let expected = &ty.memory;
+        let actual = &self.wasmtime_export.memory.memory;
+        expected.shared == actual.shared
+            && expected.minimum <= actual.minimum
+            && match expected.maximum {
+                Some(expected) => match actual.maximum {
+                    Some(actual) => expected >= actual,
+                    None => false,
+                },
+                None => true,
+            }
+    }
+
+    pub(crate) fn vmimport(&self) -> wasmtime_runtime::VMMemoryImport {
+        wasmtime_runtime::VMMemoryImport {
+            from: self.wasmtime_export.definition,
+            vmctx: self.wasmtime_export.vmctx,
         }
     }
 }

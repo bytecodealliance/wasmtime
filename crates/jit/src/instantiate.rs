@@ -5,10 +5,8 @@
 
 use crate::code_memory::CodeMemory;
 use crate::compiler::{Compilation, Compiler};
-use crate::imports::resolve_imports;
 use crate::link::link_module;
 use crate::object::ObjectUnwindInfo;
-use crate::resolver::Resolver;
 use object::File as ObjectFile;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
@@ -24,10 +22,10 @@ use wasmtime_environ::{
     ModuleEnvironment, ModuleTranslation, StackMapInformation, TrapInformation,
 };
 use wasmtime_profiling::ProfilingAgent;
-use wasmtime_runtime::VMInterrupts;
 use wasmtime_runtime::{
-    GdbJitImageRegistration, InstanceHandle, InstantiationError, RuntimeMemoryCreator,
-    SignatureRegistry, StackMapRegistry, VMExternRefActivationsTable, VMFunctionBody, VMTrampoline,
+    GdbJitImageRegistration, Imports, InstanceHandle, InstantiationError, RuntimeMemoryCreator,
+    SignatureRegistry, StackMapRegistry, VMExternRefActivationsTable, VMFunctionBody, VMInterrupts,
+    VMTrampoline,
 };
 
 /// An error condition while setting up a wasm instance, be it validation,
@@ -245,7 +243,7 @@ impl CompiledModule {
     /// See `InstanceHandle::new`
     pub unsafe fn instantiate(
         &self,
-        resolver: &mut dyn Resolver,
+        imports: Imports<'_>,
         signature_registry: &mut SignatureRegistry,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
         interrupts: Arc<VMInterrupts>,
@@ -271,7 +269,6 @@ impl CompiledModule {
 
         let finished_functions = self.finished_functions.0.clone();
 
-        let imports = resolve_imports(&self.module, signature_registry, resolver)?;
         InstanceHandle::new(
             self.module.clone(),
             self.code.clone(),

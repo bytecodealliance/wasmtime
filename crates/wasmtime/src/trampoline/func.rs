@@ -262,7 +262,7 @@ pub fn create_handle_with_function(
         finished_functions,
         trampolines,
         Box::new(trampoline_state),
-        PrimaryMap::new(),
+        &[],
     )
     .map(|instance| (instance, trampoline))
 }
@@ -298,12 +298,5 @@ pub unsafe fn create_handle_with_raw_function(
     let sig_id = store.register_signature(ft.to_wasm_func_type(), sig);
     trampolines.insert(sig_id, trampoline);
 
-    create_handle(
-        module,
-        store,
-        finished_functions,
-        trampolines,
-        state,
-        PrimaryMap::new(),
-    )
+    create_handle(module, store, finished_functions, trampolines, state, &[])
 }

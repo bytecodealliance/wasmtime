@@ -50,6 +50,11 @@ impl SignatureRegistry {
         }
     }
 
+    /// Looks up a shared index from the wasm signature itself.
+    pub fn lookup(&self, wasm: &WasmFuncType) -> Option<VMSharedSignatureIndex> {
+        self.wasm2index.get(wasm).cloned()
+    }
+
     /// Looks up a shared native signature within this registry.
     ///
     /// Note that for this operation to be semantically correct the `idx` must

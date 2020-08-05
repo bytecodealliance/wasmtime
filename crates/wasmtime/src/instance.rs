@@ -1,53 +1,25 @@
 use crate::trampoline::StoreInstanceHandle;
 use crate::{Engine, Export, Extern, Func, Global, Memory, Module, Store, Table, Trap};
-use anyhow::{bail, Error, Result};
+use anyhow::{anyhow, bail, Context, Error, Result};
 use std::any::Any;
 use std::mem;
 use wasmtime_environ::EntityIndex;
-use wasmtime_jit::{CompiledModule, Resolver};
+use wasmtime_jit::CompiledModule;
 use wasmtime_runtime::{
-    InstantiationError, StackMapRegistry, VMContext, VMExternRefActivationsTable, VMFunctionBody,
+    Imports, InstantiationError, StackMapRegistry, VMContext, VMExternRefActivationsTable,
+    VMFunctionBody,
 };
-
-struct SimpleResolver<'a> {
-    imports: &'a [Extern],
-}
-
-impl Resolver for SimpleResolver<'_> {
-    fn resolve(&mut self, idx: u32, _name: &str, _field: &str) -> Option<wasmtime_runtime::Export> {
-        self.imports
-            .get(idx as usize)
-            .map(|i| i.get_wasmtime_export())
-    }
-}
 
 fn instantiate(
     store: &Store,
     compiled_module: &CompiledModule,
-    imports: &[Extern],
+    imports: Imports<'_>,
     host: Box<dyn Any>,
 ) -> Result<StoreInstanceHandle, Error> {
-    // For now we have a restriction that the `Store` that we're working
-    // with is the same for everything involved here.
-    for import in imports {
-        if !import.comes_from_same_store(store) {
-            bail!("cross-`Store` instantiation is not currently supported");
-        }
-    }
-
-    if imports.len() != compiled_module.module().imports.len() {
-        bail!(
-            "wrong number of imports provided, {} != {}",
-            imports.len(),
-            compiled_module.module().imports.len()
-        );
-    }
-
-    let mut resolver = SimpleResolver { imports };
     let config = store.engine().config();
     let instance = unsafe {
         let instance = compiled_module.instantiate(
-            &mut resolver,
+            imports,
             &mut store.signatures_mut(),
             config.memory_creator.as_ref().map(|a| a as _),
             store.interrupts().clone(),
@@ -196,7 +168,9 @@ impl Instance {
             frame_info_registration
         });
 
-        let handle = instantiate(store, module.compiled_module(), imports, host_info)?;
+        let handle = with_imports(store, module.compiled_module(), imports, |imports| {
+            instantiate(store, module.compiled_module(), imports, host_info)
+        })?;
 
         Ok(Instance {
             handle,
@@ -266,4 +240,83 @@ impl Instance {
     pub fn get_global(&self, name: &str) -> Option<Global> {
         self.get_export(name)?.into_global()
     }
+}
+
+fn with_imports<R>(
+    store: &Store,
+    module: &CompiledModule,
+    externs: &[Extern],
+    f: impl FnOnce(Imports<'_>) -> Result<R>,
+) -> Result<R> {
+    let m = module.module();
+    if externs.len() != m.imports.len() {
+        bail!(
+            "wrong number of imports provided, {} != {}",
+            externs.len(),
+            m.imports.len()
+        );
+    }
+
+    let mut tables = Vec::new();
+    let mut functions = Vec::new();
+    let mut globals = Vec::new();
+    let mut memories = Vec::new();
+
+    let mut process = |expected: &EntityIndex, actual: &Extern| {
+        // For now we have a restriction that the `Store` that we're working
+        // with is the same for everything involved here.
+        if !actual.comes_from_same_store(store) {
+            bail!("cross-`Store` instantiation is not currently supported");
+        }
+
+        match *expected {
+            EntityIndex::Table(i) => tables.push(match actual {
+                Extern::Table(e) if e.matches_expected(&m.table_plans[i]) => e.vmimport(),
+                Extern::Table(_) => bail!("table types incompatible"),
+                _ => bail!("expected table, but found {}", actual.desc()),
+            }),
+            EntityIndex::Memory(i) => memories.push(match actual {
+                Extern::Memory(e) if e.matches_expected(&m.memory_plans[i]) => e.vmimport(),
+                Extern::Memory(_) => bail!("memory types incompatible"),
+                _ => bail!("expected memory, but found {}", actual.desc()),
+            }),
+            EntityIndex::Global(i) => globals.push(match actual {
+                Extern::Global(e) if e.matches_expected(&m.globals[i]) => e.vmimport(),
+                Extern::Global(_) => bail!("global types incompatible"),
+                _ => bail!("expected global, but found {}", actual.desc()),
+            }),
+            EntityIndex::Function(i) => {
+                let func = match actual {
+                    Extern::Func(e) => e,
+                    _ => bail!("expected function, but found {}", actual.desc()),
+                };
+                // Look up the `i`th function's type from the module in our
+                // signature registry. If it's not present then we have no
+                // functions registered with that type, so `func` is guaranteed
+                // to not match.
+                let ty = store
+                    .signatures_mut()
+                    .lookup(&m.signatures[m.functions[i]].0)
+                    .ok_or_else(|| anyhow!("function types incompatible"))?;
+                if !func.matches_expected(ty) {
+                    bail!("function types incompatible");
+                }
+                functions.push(func.vmimport());
+            }
+        }
+        Ok(())
+    };
+
+    for (expected, actual) in m.imports.iter().zip(externs) {
+        process(&expected.2, actual).with_context(|| {
+            format!("incompatible import type for {}/{}", expected.0, expected.1)
+        })?;
+    }
+
+    return f(Imports {
+        tables: &tables,
+        functions: &functions,
+        globals: &globals,
+        memories: &memories,
+    });
 }
