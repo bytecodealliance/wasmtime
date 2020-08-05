@@ -1,6 +1,6 @@
 use proptest::prelude::*;
 use wiggle::{GuestMemory, GuestPtr};
-use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
+use wiggle_test::{impl_errno, HostMemory, MemArea, MemAreas, WasiCtx};
 
 wiggle::from_witx!({
     witx: ["tests/structs.witx"],
@@ -51,6 +51,25 @@ impl<'a> structs::Structs for WasiCtx<'a> {
             first: *first,
             second: *second,
         })
+    }
+
+    fn sum_array<'b>(&self, struct_of_arr: &types::StructOfArray<'b>) -> Result<u16, types::Errno> {
+        // my kingdom for try blocks
+        fn aux(struct_of_arr: &types::StructOfArray) -> Result<u16, wiggle::GuestError> {
+            let mut s = 0;
+            for elem in struct_of_arr.arr.iter() {
+                let v = elem?.read()?;
+                s += v as u16;
+            }
+            Ok(s)
+        }
+        match aux(struct_of_arr) {
+            Ok(s) => Ok(s),
+            Err(guest_err) => {
+                eprintln!("guest error summing array: {:?}", guest_err);
+                Err(types::Errno::PicketLine)
+            }
+        }
     }
 }
 
@@ -420,6 +439,106 @@ impl ReturnPairPtrsExercise {
 proptest! {
     #[test]
     fn return_pair_of_ptrs(e in ReturnPairPtrsExercise::strat()) {
+        e.test()
+    }
+}
+
+#[derive(Debug)]
+struct SumArrayExercise {
+    inputs: Vec<u8>,
+    input_array_loc: MemArea,
+    input_struct_loc: MemArea,
+    output_loc: MemArea,
+}
+
+impl SumArrayExercise {
+    pub fn strat() -> BoxedStrategy<Self> {
+        (0..256u32)
+            .prop_flat_map(|len| {
+                let len_usize = len as usize;
+                (
+                    prop::collection::vec(prop::num::u8::ANY, len_usize..=len_usize),
+                    HostMemory::mem_area_strat(8), // Input struct is 8 bytes - ptr and len
+                    HostMemory::mem_area_strat(4), // Output is 4 bytes - stores a u16, but abi requires 4 byte alignment
+                )
+            })
+            .prop_filter(
+                "non-overlapping input struct and output pointers",
+                |(_inputs, input_struct_loc, output_loc)| {
+                    MemArea::non_overlapping_set(&[input_struct_loc.clone(), output_loc.clone()])
+                },
+            )
+            .prop_flat_map(|(inputs, input_struct_loc, output_loc)| {
+                (
+                    Just(inputs.clone()),
+                    HostMemory::byte_slice_strat(
+                        inputs.len() as u32,
+                        &MemAreas::from([input_struct_loc, output_loc]),
+                    ),
+                    Just(input_struct_loc.clone()),
+                    Just(output_loc.clone()),
+                )
+            })
+            .prop_map(
+                |(inputs, input_array_loc, input_struct_loc, output_loc)| SumArrayExercise {
+                    inputs,
+                    input_array_loc,
+                    input_struct_loc,
+                    output_loc,
+                },
+            )
+            .boxed()
+    }
+    pub fn test(&self) {
+        let ctx = WasiCtx::new();
+        let host_memory = HostMemory::new();
+
+        // Write inputs to memory as an array
+        for (ix, val) in self.inputs.iter().enumerate() {
+            let ix = ix as u32;
+            host_memory
+                .ptr(self.input_array_loc.ptr + ix)
+                .write(*val)
+                .expect("write val to array memory");
+        }
+
+        // Write struct that contains the array
+        host_memory
+            .ptr(self.input_struct_loc.ptr)
+            .write(self.input_array_loc.ptr)
+            .expect("write ptr to struct memory");
+        host_memory
+            .ptr(self.input_struct_loc.ptr + 4)
+            .write(self.inputs.len() as u32)
+            .expect("write len to struct memory");
+
+        // Call wiggle-generated func
+        let res = structs::sum_array(
+            &ctx,
+            &host_memory,
+            self.input_struct_loc.ptr as i32,
+            self.output_loc.ptr as i32,
+        );
+
+        // should be no error - if hostcall did a GuestError it should eprintln it.
+        assert_eq!(res, types::Errno::Ok.into(), "reduce excuses errno");
+
+        // Sum is inputs upcasted to u16
+        let expected: u16 = self.inputs.iter().map(|v| *v as u16).sum();
+
+        // Wiggle stored output value in memory as u16
+        let given: u16 = host_memory
+            .ptr(self.output_loc.ptr)
+            .read()
+            .expect("deref ptr to returned value");
+
+        // Assert the two calculations match
+        assert_eq!(expected, given, "sum_array return val");
+    }
+}
+proptest! {
+    #[test]
+    fn sum_of_array(e in SumArrayExercise::strat()) {
         e.test()
     }
 }

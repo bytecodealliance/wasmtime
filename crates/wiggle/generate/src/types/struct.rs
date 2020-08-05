@@ -19,7 +19,14 @@ pub(super) fn define_struct(
     let member_decls = s.members.iter().map(|m| {
         let name = names.struct_member(&m.name);
         let type_ = match &m.tref {
-            witx::TypeRef::Name(nt) => names.type_(&nt.name),
+            witx::TypeRef::Name(nt) => {
+                let tt = names.type_(&nt.name);
+                if m.tref.needs_lifetime() {
+                    quote!(#tt<'a>)
+                } else {
+                    quote!(#tt)
+                }
+            }
             witx::TypeRef::Value(ty) => match &**ty {
                 witx::Type::Builtin(builtin) => names.builtin_type(*builtin, quote!('a)),
                 witx::Type::Pointer(pointee) | witx::Type::ConstPointer(pointee) => {
