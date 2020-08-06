@@ -8,8 +8,9 @@ use crate::inst_predicates::{has_side_effect_or_load, is_constant_64bit};
 use crate::ir::instructions::BranchInfo;
 use crate::ir::types::I64;
 use crate::ir::{
-    ArgumentPurpose, Block, Constant, ConstantData, ExternalName, Function, GlobalValueData, Inst,
-    InstructionData, MemFlags, Opcode, Signature, SourceLoc, Type, Value, ValueDef,
+    ArgumentPurpose, Block, Constant, ConstantData, ExternalName, Function, GlobalValueData,
+    Immediate, Inst, InstructionData, MemFlags, Opcode, Signature, SourceLoc, Type, Value,
+    ValueDef,
 };
 use crate::machinst::{
     ABIBody, BlockIndex, BlockLoweringOrder, LoweredBlock, MachLabel, VCode, VCodeBuilder,
@@ -160,6 +161,8 @@ pub trait LowerCtx {
     fn is_reg_needed(&self, ir_inst: Inst, reg: Reg) -> bool;
     /// Retrieve constant data given a handle.
     fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData;
+    /// Retrieve an immediate given a reference.
+    fn get_immediate(&self, imm: Immediate) -> &ConstantData;
     /// Cause the value in `reg` to be in a virtual reg, by copying it into a new virtual reg
     /// if `reg` is a real reg.  `ty` describes the type of the value in `reg`.
     fn ensure_in_vreg(&mut self, reg: Reg, ty: Type) -> Reg;
@@ -995,6 +998,10 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
 
     fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData {
         self.f.dfg.constants.get(constant_handle)
+    }
+
+    fn get_immediate(&self, imm: Immediate) -> &ConstantData {
+        self.f.dfg.immediates.get(imm).unwrap()
     }
 
     fn ensure_in_vreg(&mut self, reg: Reg, ty: Type) -> Reg {

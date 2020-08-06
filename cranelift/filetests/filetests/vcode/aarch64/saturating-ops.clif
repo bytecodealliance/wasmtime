@@ -9,8 +9,8 @@ block0(v0: i64, v1: i64):
 
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: mov v0.d[0], x0
-; nextln: mov v1.d[0], x1
+; nextln: fmov d0, x0
+; nextln: fmov d1, x1
 ; nextln: uqadd d0, d0, d1
 ; nextln: mov x0, v0.d[0]
 ; nextln: mov sp, fp
@@ -27,8 +27,8 @@ block0(v0: i8, v1: i8):
 ; nextln: mov fp, sp
 ; nextln: uxtb x0, w0
 ; nextln: uxtb x1, w1
-; nextln: mov v0.d[0], x0
-; nextln: mov v1.d[0], x1
+; nextln: fmov d0, x0
+; nextln: fmov d1, x1
 ; nextln: uqadd d0, d0, d1
 ; nextln: mov x0, v0.d[0]
 ; nextln: mov sp, fp
