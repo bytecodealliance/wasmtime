@@ -1456,15 +1456,11 @@ pub struct Caller<'a> {
 impl Caller<'_> {
     /// Looks up an export from the caller's module by the `name` given.
     ///
-    /// Note that this function is only implemented for the `Extern::Memory`
-    /// type currently. No other exported structure can be acquired through this
-    /// just yet, but this may be implemented in the future!
-    ///
     /// # Return
     ///
-    /// If a memory export with the `name` provided was found, then it is
+    /// If a memory or function export with the `name` provided was found, then it is
     /// returned as a `Memory`. There are a number of situations, however, where
-    /// the memory may not be available:
+    /// the memory or function may not be available:
     ///
     /// * The caller instance may not have an export named `name`
     /// * The export named `name` may not be an exported memory
@@ -1479,19 +1475,25 @@ impl Caller<'_> {
                 return None;
             }
             let instance = InstanceHandle::from_vmctx(self.caller_vmctx);
-            let export = match instance.lookup(name) {
-                Some(Export::Memory(m)) => m,
+            match instance.lookup(name) {
+                Some(Export::Memory(m)) => {
+                    // Our `Weak` pointer is used only to break a cycle where `Store`
+                    // stores instance handles which have this weak pointer as their
+                    // custom host data. This function should only be invoke-able while
+                    // the `Store` is active, so this upgrade should always succeed.
+                    debug_assert!(self.store.upgrade().is_some());
+                    let handle = Store::from_inner(self.store.upgrade()?).existing_instance_handle(instance);
+                    let mem = Memory::from_wasmtime_memory(m, handle);
+                    return Some(Extern::Memory(mem));
+                },
+                Some(Export::Function(f)) => {
+                    debug_assert!(self.store.upgrade().is_some());
+                    let handle = Store::from_inner(self.store.upgrade()?).existing_instance_handle(instance);
+                    let func = Func::from_wasmtime_function(f, handle);
+                    return Some(Extern::Func(func));
+                },
                 _ => return None,
-            };
-            // Our `Weak` pointer is used only to break a cycle where `Store`
-            // stores instance handles which have this weak pointer as their
-            // custom host data. This function should only be invoke-able while
-            // the `Store` is active, so this upgrade should always succeed.
-            debug_assert!(self.store.upgrade().is_some());
-            let handle =
-                Store::from_inner(self.store.upgrade()?).existing_instance_handle(instance);
-            let mem = Memory::from_wasmtime_memory(export, handle);
-            Some(Extern::Memory(mem))
+            }
         }
     }
 
