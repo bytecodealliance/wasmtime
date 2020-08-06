@@ -21,4 +21,4 @@ peepmatic-test-operator = { path = "../test-operator" }
 peepmatic-traits = { path = "../traits" }
 rand = { version = "0.7.3", features = ["small_rng"] }
 serde = "1.0.106"
-wast = "15.0.0"
+wast = "22.0.0"

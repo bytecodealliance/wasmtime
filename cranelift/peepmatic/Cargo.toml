@@ -15,7 +15,7 @@ peepmatic-macro = { version = "0.66.0", path = "crates/macro" }
 peepmatic-runtime = { version = "0.66.0", path = "crates/runtime", features = ["construct"] }
 peepmatic-traits = { version = "0.66.0", path = "crates/traits" }
 serde = { version = "1.0.105", features = ["derive"] }
-wast = "15.0.0"
+wast = "22.0.0"
 z3 = { version = "0.6.0", features = ["static-link-z3"] }
 
 [dev-dependencies]

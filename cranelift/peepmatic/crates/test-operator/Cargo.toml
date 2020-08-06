@@ -9,4 +9,4 @@ edition = "2018"
 [dependencies]
 peepmatic-traits = { version = "0.66.0", path = "../traits" }
 serde = { version = "1.0.105", features = ["derive"] }
-wast = "15.0.0"
+wast = "22.0.0"
