@@ -631,8 +631,7 @@ mod tests {
 
         let (val1, val3, val20) = (ValueLabel::new(1), ValueLabel::new(3), ValueLabel::new(20));
 
-        // DW_OP_WASM_location 0x0 +20, DW_OP_stack_value
-        let e = expression!(0xed, 0x00, 0x14, 0x9f);
+        let e = expression!(DW_OP_WASM_location, 0x0, 20, DW_OP_stack_value);
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
             .expect("expression");
@@ -647,8 +646,7 @@ mod tests {
             }
         );
 
-        //  DW_OP_WASM_location 0x0 +1, DW_OP_plus_uconst 0x10, DW_OP_stack_value
-        let e = expression!(0xed, 0x00, 0x01, 0x23, 0x10, 0x9f);
+        let e = expression!(DW_OP_WASM_location, 0x0, 1, DW_OP_plus_uconst, 0x10, DW_OP_stack_value);
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
             .expect("expression");
@@ -666,8 +664,7 @@ mod tests {
             }
         );
 
-        // Frame base: DW_OP_WASM_location 0x0 +3, DW_OP_stack_value
-        let e = expression!(0xed, 0x00, 0x03, 0x9f);
+        let e = expression!(DW_OP_WASM_location, 0x0, 3, DW_OP_stack_value);
         let fe = compile_expression(&e, DWARF_ENCODING, None).expect("non-error");
         // DW_OP_fpreg 0x12
         let e = expression!(0x91, 0x12);
