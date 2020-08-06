@@ -604,9 +604,15 @@ mod tests {
     use wasmtime_environ::CompiledFunction;
 
     macro_rules! dw_op {
-        (DW_OP_WASM_location) => { 0xed };
-        ($i:literal) => { $i };
-        ($d:ident) => { constants::$d.0 as u8 }
+        (DW_OP_WASM_location) => {
+            0xed
+        };
+        ($i:literal) => {
+            $i
+        };
+        ($d:ident) => {
+            constants::$d.0 as u8
+        };
     }
 
     macro_rules! expression {
@@ -646,7 +652,14 @@ mod tests {
             }
         );
 
-        let e = expression!(DW_OP_WASM_location, 0x0, 1, DW_OP_plus_uconst, 0x10, DW_OP_stack_value);
+        let e = expression!(
+            DW_OP_WASM_location,
+            0x0,
+            1,
+            DW_OP_plus_uconst,
+            0x10,
+            DW_OP_stack_value
+        );
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
             .expect("expression");
