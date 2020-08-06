@@ -10,7 +10,7 @@ use wasmtime_environ::{CompiledFunctions, ModuleMemoryOffset};
 /// WasmtimeVMContext.
 ///
 /// For unwrapping Wasm pointer, the WasmtimeVMContext has the `set()` method
-/// that allows to contol current Wasm memory to inspect.
+/// that allows to control current Wasm memory to inspect.
 /// Notice that "set_vmctx_memory" is an external/builtin subprogram that
 /// is not part of Wasm code.
 pub(crate) fn add_internal_types(
