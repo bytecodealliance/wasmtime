@@ -1482,17 +1482,19 @@ impl Caller<'_> {
                     // custom host data. This function should only be invoke-able while
                     // the `Store` is active, so this upgrade should always succeed.
                     debug_assert!(self.store.upgrade().is_some());
-                    let handle = Store::from_inner(self.store.upgrade()?).existing_instance_handle(instance);
+                    let handle =
+                        Store::from_inner(self.store.upgrade()?).existing_instance_handle(instance);
                     let mem = Memory::from_wasmtime_memory(m, handle);
-                    return Some(Extern::Memory(mem));
-                },
+                    Some(Extern::Memory(mem))
+                }
                 Some(Export::Function(f)) => {
                     debug_assert!(self.store.upgrade().is_some());
-                    let handle = Store::from_inner(self.store.upgrade()?).existing_instance_handle(instance);
+                    let handle =
+                        Store::from_inner(self.store.upgrade()?).existing_instance_handle(instance);
                     let func = Func::from_wasmtime_function(f, handle);
-                    return Some(Extern::Func(func));
-                },
-                _ => return None,
+                    Some(Extern::Func(func))
+                }
+                _ => None,
             }
         }
     }

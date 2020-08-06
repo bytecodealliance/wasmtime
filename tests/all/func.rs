@@ -409,7 +409,7 @@ fn caller_memory() -> anyhow::Result<()> {
 
     let f = Func::wrap(&store, |c: Caller<'_>| {
         assert!(c.get_export("m").is_some());
-        assert!(c.get_export("f").is_none());
+        assert!(c.get_export("f").is_some());
         assert!(c.get_export("g").is_none());
         assert!(c.get_export("t").is_none());
     });
