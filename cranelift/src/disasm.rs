@@ -97,12 +97,12 @@ impl binemit::TrapSink for PrintTraps {
     }
 }
 
-pub struct PrintStackmaps {
+pub struct PrintStackMaps {
     pub flag_print: bool,
     pub text: String,
 }
 
-impl PrintStackmaps {
+impl PrintStackMaps {
     pub fn new(flag_print: bool) -> Self {
         Self {
             flag_print,
@@ -111,10 +111,10 @@ impl PrintStackmaps {
     }
 }
 
-impl binemit::StackmapSink for PrintStackmaps {
-    fn add_stackmap(&mut self, offset: binemit::CodeOffset, _: binemit::Stackmap) {
+impl binemit::StackMapSink for PrintStackMaps {
+    fn add_stack_map(&mut self, offset: binemit::CodeOffset, _: binemit::StackMap) {
         if self.flag_print {
-            writeln!(&mut self.text, "add_stackmap at {}", offset).unwrap();
+            writeln!(&mut self.text, "add_stack_map at {}", offset).unwrap();
         }
     }
 }
@@ -223,12 +223,12 @@ pub fn print_all(
     rodata_size: u32,
     relocs: &PrintRelocs,
     traps: &PrintTraps,
-    stackmaps: &PrintStackmaps,
+    stack_maps: &PrintStackMaps,
 ) -> Result<(), String> {
     print_bytes(&mem);
     print_disassembly(isa, &mem[0..code_size as usize])?;
     print_readonly_data(&mem[code_size as usize..(code_size + rodata_size) as usize]);
-    println!("\n{}\n{}\n{}", &relocs.text, &traps.text, &stackmaps.text);
+    println!("\n{}\n{}\n{}", &relocs.text, &traps.text, &stack_maps.text);
     Ok(())
 }
 

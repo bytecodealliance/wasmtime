@@ -174,14 +174,14 @@ fn make_trampoline(
     let mut code_buf: Vec<u8> = Vec::new();
     let mut reloc_sink = trampoline::TrampolineRelocSink::default();
     let mut trap_sink = binemit::NullTrapSink {};
-    let mut stackmap_sink = binemit::NullStackmapSink {};
+    let mut stack_map_sink = binemit::NullStackMapSink {};
     context
         .compile_and_emit(
             isa,
             &mut code_buf,
             &mut reloc_sink,
             &mut trap_sink,
-            &mut stackmap_sink,
+            &mut stack_map_sink,
         )
         .map_err(|error| pretty_error(&context.func, Some(isa), error))
         .expect("compile_and_emit");

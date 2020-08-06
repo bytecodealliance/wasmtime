@@ -59,7 +59,7 @@ const NUM_BITS: usize = core::mem::size_of::<Num>() * 8;
 ///         | ...               |
 /// ```
 ///
-/// An individual `Stackmap` is associated with just one instruction pointer
+/// An individual `StackMap` is associated with just one instruction pointer
 /// within the function, contains the size of the stack frame, and represents
 /// the stack frame as a bitmap. There is one bit per word in the stack frame,
 /// and if the bit is set, then the word contains a live GC reference.
@@ -70,13 +70,14 @@ const NUM_BITS: usize = core::mem::size_of::<Num>() * 8;
 /// callee's stack map.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(serde::Deserialize, serde::Serialize))]
-pub struct Stackmap {
+pub struct StackMap {
     bitmap: Vec<BitSet<Num>>,
     mapped_words: u32,
 }
 
-impl Stackmap {
-    /// Create a stackmap based on where references are located on a function's stack.
+impl StackMap {
+    /// Create a `StackMap` based on where references are located on a
+    /// function's stack.
     pub fn from_values(
         args: &[ir::entities::Value],
         func: &ir::Function,
@@ -101,7 +102,7 @@ impl Stackmap {
         let stack = &func.stack_slots;
         let info = func.stack_slots.layout_info.unwrap();
 
-        // Refer to the doc comment for `Stackmap` above to understand the
+        // Refer to the doc comment for `StackMap` above to understand the
         // bitmap representation used here.
         let map_size = (info.frame_size + info.inbound_args_size) as usize;
         let word_size = isa.pointer_bytes() as usize;
@@ -171,9 +172,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stackmaps() {
+    fn stack_maps() {
         let vec: Vec<bool> = Vec::new();
-        assert!(Stackmap::from_slice(&vec).bitmap.is_empty());
+        assert!(StackMap::from_slice(&vec).bitmap.is_empty());
 
         let mut vec: [bool; NUM_BITS] = Default::default();
         let set_true_idx = [5, 7, 24, 31];
@@ -185,12 +186,12 @@ mod tests {
         let mut vec = vec.to_vec();
         assert_eq!(
             vec![BitSet::<Num>(2164261024)],
-            Stackmap::from_slice(&vec).bitmap
+            StackMap::from_slice(&vec).bitmap
         );
 
         vec.push(false);
         vec.push(true);
-        let res = Stackmap::from_slice(&vec);
+        let res = StackMap::from_slice(&vec);
         assert_eq!(
             vec![BitSet::<Num>(2164261024), BitSet::<Num>(2)],
             res.bitmap

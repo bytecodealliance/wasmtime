@@ -2071,7 +2071,7 @@ pub(crate) fn define(
     );
 
     let N =
-        &Operand::new("args", &entities.varargs).with_doc("Variable number of args for Stackmap");
+        &Operand::new("args", &entities.varargs).with_doc("Variable number of args for StackMap");
 
     ig.push(
         Inst::new(
@@ -3926,9 +3926,9 @@ pub(crate) fn define(
         Inst::new(
             "snarrow",
             r#"
-        Combine `x` and `y` into a vector with twice the lanes but half the integer width while 
+        Combine `x` and `y` into a vector with twice the lanes but half the integer width while
         saturating overflowing values to the signed maximum and minimum.
-        
+
         The lanes will be concatenated after narrowing. For example, when `x` and `y` are `i32x4`
         and `x = [x3, x2, x1, x0]` and `y = [y3, y2, y1, y0]`, then after narrowing the value
         returned is an `i16x8`: `a = [y3', y2', y1', y0', x3', x2', x1', x0']`.
@@ -3943,12 +3943,12 @@ pub(crate) fn define(
         Inst::new(
             "unarrow",
             r#"
-        Combine `x` and `y` into a vector with twice the lanes but half the integer width while 
+        Combine `x` and `y` into a vector with twice the lanes but half the integer width while
         saturating overflowing values to the unsigned maximum and minimum.
-        
+
         Note that all input lanes are considered signed: any negative lanes will overflow and be
         replaced with the unsigned minimum, `0x00`.
-        
+
         The lanes will be concatenated after narrowing. For example, when `x` and `y` are `i32x4`
         and `x = [x3, x2, x1, x0]` and `y = [y3, y2, y1, y0]`, then after narrowing the value
         returned is an `i16x8`: `a = [y3', y2', y1', y0', x3', x2', x1', x0']`.
@@ -3977,7 +3977,7 @@ pub(crate) fn define(
             "swiden_low",
             r#"
         Widen the low lanes of `x` using signed extension.
-        
+
         This will double the lane width and halve the number of lanes.
             "#,
             &formats.unary,
@@ -3991,7 +3991,7 @@ pub(crate) fn define(
             "swiden_high",
             r#"
         Widen the high lanes of `x` using signed extension.
-        
+
         This will double the lane width and halve the number of lanes.
             "#,
             &formats.unary,
@@ -4005,7 +4005,7 @@ pub(crate) fn define(
             "uwiden_low",
             r#"
         Widen the low lanes of `x` using unsigned extension.
-        
+
         This will double the lane width and halve the number of lanes.
             "#,
             &formats.unary,
@@ -4019,7 +4019,7 @@ pub(crate) fn define(
             "uwiden_high",
             r#"
         Widen the high lanes of `x` using unsigned extension.
-        
+
         This will double the lane width and halve the number of lanes.
             "#,
             &formats.unary,

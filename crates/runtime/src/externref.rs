@@ -110,7 +110,7 @@ use std::mem;
 use std::ops::Deref;
 use std::ptr::{self, NonNull};
 use std::rc::Rc;
-use wasmtime_environ::{ir::Stackmap, StackMapInformation};
+use wasmtime_environ::{ir::StackMap, StackMapInformation};
 
 /// An external reference to some opaque data.
 ///
@@ -780,7 +780,7 @@ struct ModuleStackMaps {
 
     /// A map from a PC in this module (that is a GC safepoint) to its
     /// associated stack map.
-    pc_to_stack_map: Vec<(usize, Rc<Stackmap>)>,
+    pc_to_stack_map: Vec<(usize, Rc<StackMap>)>,
 }
 
 impl StackMapRegistry {
@@ -849,7 +849,7 @@ impl StackMapRegistry {
     }
 
     /// Lookup the stack map for the given PC, if any.
-    pub fn lookup_stack_map(&self, pc: usize) -> Option<Rc<Stackmap>> {
+    pub fn lookup_stack_map(&self, pc: usize) -> Option<Rc<StackMap>> {
         let inner = self.inner.borrow();
         let stack_maps = inner.module_stack_maps(pc)?;
 

@@ -208,8 +208,8 @@ struct StackMapSink {
     infos: Vec<StackMapInformation>,
 }
 
-impl binemit::StackmapSink for StackMapSink {
-    fn add_stackmap(&mut self, code_offset: binemit::CodeOffset, stack_map: binemit::Stackmap) {
+impl binemit::StackMapSink for StackMapSink {
+    fn add_stack_map(&mut self, code_offset: binemit::CodeOffset, stack_map: binemit::StackMap) {
         self.infos.push(StackMapInformation {
             code_offset,
             stack_map,

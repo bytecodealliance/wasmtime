@@ -7,7 +7,7 @@
     allow(clippy::too_many_arguments, clippy::cognitive_complexity)
 )]
 
-use crate::disasm::{print_all, PrintRelocs, PrintStackmaps, PrintTraps};
+use crate::disasm::{print_all, PrintRelocs, PrintStackMaps, PrintTraps};
 use crate::utils::parse_sets_and_triple;
 use crate::UseTerminalColor;
 use cranelift_codegen::ir::DisplayFunctionAnnotations;
@@ -219,14 +219,14 @@ fn handle_module(
         let mut mem = vec![];
         let mut relocs = PrintRelocs::new(flag_print);
         let mut traps = PrintTraps::new(flag_print);
-        let mut stackmaps = PrintStackmaps::new(flag_print);
+        let mut stack_maps = PrintStackMaps::new(flag_print);
         if flag_check_translation {
             if let Err(errors) = context.verify(fisa) {
                 return Err(pretty_verifier_error(&context.func, fisa.isa, None, errors));
             }
         } else {
             let code_info = context
-                .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stackmaps)
+                .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stack_maps)
                 .map_err(|err| pretty_error(&context.func, fisa.isa, err))?;
 
             if flag_print_size {
@@ -289,7 +289,7 @@ fn handle_module(
                 rodata_size,
                 &relocs,
                 &traps,
-                &stackmaps,
+                &stack_maps,
             )?;
         }
 

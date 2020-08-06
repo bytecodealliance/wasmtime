@@ -778,10 +778,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         self.copy_bbs_to_vcode();
 
         // Now that we've emitted all instructions into the VCodeBuilder, let's build the VCode.
-        let (vcode, stackmap_info) = self.vcode.build();
+        let (vcode, stack_map_info) = self.vcode.build();
         debug!("built vcode: {:?}", vcode);
 
-        Ok((vcode, stackmap_info))
+        Ok((vcode, stack_map_info))
     }
 
     /// Get the actual inputs for a value. This is the implementation for

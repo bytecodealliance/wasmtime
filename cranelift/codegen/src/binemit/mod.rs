@@ -6,15 +6,15 @@
 mod memorysink;
 mod relaxation;
 mod shrink;
-mod stackmap;
+mod stack_map;
 
 pub use self::memorysink::{
-    MemoryCodeSink, NullRelocSink, NullStackmapSink, NullTrapSink, RelocSink, StackmapSink,
+    MemoryCodeSink, NullRelocSink, NullStackMapSink, NullTrapSink, RelocSink, StackMapSink,
     TrapSink,
 };
 pub use self::relaxation::relax_branches;
 pub use self::shrink::shrink_instructions;
-pub use self::stackmap::Stackmap;
+pub use self::stack_map::StackMap;
 use crate::ir::entities::Value;
 use crate::ir::{
     ConstantOffset, ExternalName, Function, Inst, JumpTable, Opcode, SourceLoc, TrapCode,
@@ -164,8 +164,8 @@ pub trait CodeSink {
     /// Read-only data output is complete, we're done.
     fn end_codegen(&mut self);
 
-    /// Add a stackmap at the current code offset.
-    fn add_stackmap(&mut self, _: &[Value], _: &Function, _: &dyn TargetIsa);
+    /// Add a stack map at the current code offset.
+    fn add_stack_map(&mut self, _: &[Value], _: &Function, _: &dyn TargetIsa);
 
     /// Add a call site for a call with the given opcode, returning at the current offset.
     fn add_call_site(&mut self, _: Opcode, _: SourceLoc) {

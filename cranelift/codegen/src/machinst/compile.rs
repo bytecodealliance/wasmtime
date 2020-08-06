@@ -23,7 +23,7 @@ where
     // Build the lowering context.
     let lower = Lower::new(f, abi, block_order)?;
     // Lower the IR.
-    let (mut vcode, stackmap_request_info) = {
+    let (mut vcode, stack_map_request_info) = {
         let _tt = timing::vcode_lower();
         lower.lower(b)?
     };
@@ -62,11 +62,11 @@ where
 
     // If either there are no reference-typed values, or else there are
     // but there are no safepoints at which we need to know about them,
-    // then we don't need stackmaps.
-    let sri = if stackmap_request_info.reftyped_vregs.len() > 0
-        && stackmap_request_info.safepoint_insns.len() > 0
+    // then we don't need stack maps.
+    let sri = if stack_map_request_info.reftyped_vregs.len() > 0
+        && stack_map_request_info.safepoint_insns.len() > 0
     {
-        Some(&stackmap_request_info)
+        Some(&stack_map_request_info)
     } else {
         None
     };

@@ -1,5 +1,5 @@
 use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
-use cranelift_codegen::binemit::{self, Addend, CodeOffset, CodeSink, Reloc, Stackmap};
+use cranelift_codegen::binemit::{self, Addend, CodeOffset, CodeSink, Reloc, StackMap};
 use cranelift_codegen::ir::*;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::print_errors::pretty_error;
@@ -7,27 +7,27 @@ use cranelift_reader::TestCommand;
 use std::borrow::Cow;
 use std::fmt::Write;
 
-struct TestStackmaps;
+struct TestStackMaps;
 
 pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
-    assert_eq!(parsed.command, "stackmaps");
+    assert_eq!(parsed.command, "stack_maps");
     if !parsed.options.is_empty() {
         Err(format!("No options allowed on {}", parsed))
     } else {
-        Ok(Box::new(TestStackmaps))
+        Ok(Box::new(TestStackMaps))
     }
 }
 
-impl SubTest for TestStackmaps {
+impl SubTest for TestStackMaps {
     fn name(&self) -> &'static str {
-        "stackmaps"
+        "stack_maps"
     }
 
     fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
         comp_ctx
-            .compile(context.isa.expect("`test stackmaps` requires an isa"))
+            .compile(context.isa.expect("`test stack_maps` requires an isa"))
             .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
 
         let mut sink = TestStackMapsSink::default();
@@ -40,7 +40,7 @@ impl SubTest for TestStackmaps {
                 isa.emit_inst(func, inst, div, sink)
             },
             &mut sink,
-            context.isa.expect("`test stackmaps` requires an isa"),
+            context.isa.expect("`test stack_maps` requires an isa"),
         );
 
         let mut text = comp_ctx.func.display(context.isa).to_string();
@@ -48,6 +48,7 @@ impl SubTest for TestStackmaps {
         text.push_str("Stack maps:\n");
         text.push('\n');
         text.push_str(&sink.text);
+        log::debug!("FITZGEN:\n{}", text);
 
         run_filecheck(&text, context)
     }
@@ -89,8 +90,8 @@ impl CodeSink for TestStackMapsSink {
     fn begin_rodata(&mut self) {}
     fn end_codegen(&mut self) {}
 
-    fn add_stackmap(&mut self, val_list: &[Value], func: &Function, isa: &dyn TargetIsa) {
-        let map = Stackmap::from_values(&val_list, func, isa);
+    fn add_stack_map(&mut self, val_list: &[Value], func: &Function, isa: &dyn TargetIsa) {
+        let map = StackMap::from_values(&val_list, func, isa);
 
         writeln!(&mut self.text, "  - mapped words: {}", map.mapped_words()).unwrap();
         write!(&mut self.text, "  - live: [").unwrap();

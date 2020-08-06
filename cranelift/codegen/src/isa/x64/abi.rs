@@ -1,6 +1,6 @@
 //! Implementation of the standard x64 ABI.
 
-use crate::binemit::Stackmap;
+use crate::binemit::StackMap;
 use crate::ir::{self, types, ArgumentExtension, StackSlot, Type};
 use crate::isa::{x64::inst::*, CallConv};
 use crate::machinst::*;
@@ -492,10 +492,10 @@ impl ABIBody for X64ABIBody {
         )
     }
 
-    fn spillslots_to_stackmap(&self, slots: &[SpillSlot], state: &EmitState) -> Stackmap {
+    fn spillslots_to_stack_map(&self, slots: &[SpillSlot], state: &EmitState) -> StackMap {
         assert!(state.virtual_sp_offset >= 0);
         trace!(
-            "spillslots_to_stackmap: slots = {:?}, state = {:?}",
+            "spillslots_to_stack_map: slots = {:?}, state = {:?}",
             slots,
             state
         );
@@ -511,7 +511,7 @@ impl ABIBody for X64ABIBody {
             bits[first_spillslot_word + slot] = true;
         }
 
-        Stackmap::from_slice(&bits[..])
+        StackMap::from_slice(&bits[..])
     }
 
     fn gen_prologue(&mut self) -> Vec<Inst> {

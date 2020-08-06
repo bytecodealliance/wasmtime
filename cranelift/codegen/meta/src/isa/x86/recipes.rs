@@ -3334,7 +3334,7 @@ pub(crate) fn define<'shared>(
     recipes.add_recipe(
         EncodingRecipeBuilder::new("safepoint", &formats.multiary, 0).emit(
             r#"
-                sink.add_stackmap(args, func, isa);
+                sink.add_stack_map(args, func, isa);
             "#,
         ),
     );

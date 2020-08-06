@@ -2,7 +2,7 @@
 
 use crate::memory::Memory;
 use cranelift_codegen::binemit::{
-    Addend, CodeOffset, Reloc, RelocSink, Stackmap, StackmapSink, TrapSink,
+    Addend, CodeOffset, Reloc, RelocSink, StackMap, StackMapSink, TrapSink,
 };
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
@@ -134,11 +134,11 @@ struct RelocRecord {
     addend: Addend,
 }
 
-struct StackmapRecord {
+struct StackMapRecord {
     #[allow(dead_code)]
     offset: CodeOffset,
     #[allow(dead_code)]
-    stackmap: Stackmap,
+    stack_map: StackMap,
 }
 
 pub struct SimpleJITCompiledFunction {
@@ -298,14 +298,14 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         self.record_function_for_perf(ptr, size, name);
 
         let mut reloc_sink = SimpleJITRelocSink::new();
-        let mut stackmap_sink = SimpleJITStackmapSink::new();
+        let mut stack_map_sink = SimpleJITStackMapSink::new();
         unsafe {
             ctx.emit_to_memory(
                 &*self.isa,
                 ptr,
                 &mut reloc_sink,
                 trap_sink,
-                &mut stackmap_sink,
+                &mut stack_map_sink,
             )
         };
 
@@ -675,20 +675,20 @@ impl RelocSink for SimpleJITRelocSink {
     }
 }
 
-struct SimpleJITStackmapSink {
-    pub stackmaps: Vec<StackmapRecord>,
+struct SimpleJITStackMapSink {
+    pub stack_maps: Vec<StackMapRecord>,
 }
 
-impl SimpleJITStackmapSink {
+impl SimpleJITStackMapSink {
     pub fn new() -> Self {
         Self {
-            stackmaps: Vec::new(),
+            stack_maps: Vec::new(),
         }
     }
 }
 
-impl StackmapSink for SimpleJITStackmapSink {
-    fn add_stackmap(&mut self, offset: CodeOffset, stackmap: Stackmap) {
-        self.stackmaps.push(StackmapRecord { offset, stackmap });
+impl StackMapSink for SimpleJITStackMapSink {
+    fn add_stack_map(&mut self, offset: CodeOffset, stack_map: StackMap) {
+        self.stack_maps.push(StackMapRecord { offset, stack_map });
     }
 }

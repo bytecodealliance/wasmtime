@@ -1,6 +1,6 @@
 //! Provides functionality for compiling and running CLIF IR for `run` tests.
 use core::{mem, ptr};
-use cranelift_codegen::binemit::{NullRelocSink, NullStackmapSink, NullTrapSink};
+use cranelift_codegen::binemit::{NullRelocSink, NullStackMapSink, NullTrapSink};
 use cranelift_codegen::ir::{condcodes::IntCC, Function, InstBuilder, Signature, Type};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{ir, settings, CodegenError, Context};
@@ -268,12 +268,12 @@ fn compile(function: Function, isa: &dyn TargetIsa) -> Result<Mmap, CompilationE
     // Compile and encode the result to machine code.
     let relocs = &mut NullRelocSink {};
     let traps = &mut NullTrapSink {};
-    let stackmaps = &mut NullStackmapSink {};
+    let stack_maps = &mut NullStackMapSink {};
     let code_info = context.compile(isa)?;
     let mut code_page = MmapMut::map_anon(code_info.total_size as usize)?;
 
     unsafe {
-        context.emit_to_memory(isa, code_page.as_mut_ptr(), relocs, traps, stackmaps);
+        context.emit_to_memory(isa, code_page.as_mut_ptr(), relocs, traps, stack_maps);
     };
 
     let code_page = code_page.make_exec()?;
