@@ -600,13 +600,19 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
 mod tests {
     use super::compile_expression;
     use super::{AddressTransform, FunctionFrameInfo, ValueLabel, ValueLabelsRanges};
-    use gimli::{self, Encoding, EndianSlice, Expression, RunTimeEndian};
+    use gimli::{self, constants, Encoding, EndianSlice, Expression, RunTimeEndian};
     use wasmtime_environ::CompiledFunction;
 
+    macro_rules! dw_op {
+        (DW_OP_WASM_location) => { 0xed };
+        ($i:literal) => { $i };
+        ($d:ident) => { constants::$d.0 as u8 }
+    }
+
     macro_rules! expression {
-        ($($i:literal),*) => {
+        ($($t:tt),*) => {
             Expression(EndianSlice::new(
-                &[$($i),*],
+                &[$(dw_op!($t)),*],
                 RunTimeEndian::Little,
             ))
         }
