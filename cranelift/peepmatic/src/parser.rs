@@ -429,6 +429,13 @@ where
     DynAstRef<'a, TOperator>: From<&'a TOperand>,
 {
     fn parse(p: Parser<'a>) -> ParseResult<Self> {
+        // Don't blow the stack with this recursive parser. We don't expect
+        // nesting to ever get very deep, so it isn't worth refactoring this
+        // code to be non-recursive.
+        if p.parens_depth() > 25 {
+            return Err(p.error("module nesting too deep"));
+        }
+
         let span = p.cur_span();
         p.parens(|p| {
             let operator = p.parse()?;
@@ -816,6 +823,9 @@ mod test {
                 "$var",
                 "$CONST",
                 "(ishl $x $(log2 $C))",
+
+                // Nesting too deep.
+                "(iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd (iadd))))))))))))))))))))))))))))))))))))))))))))))))))",
             }
         }
         parse_operation_rhs<Operation<TestOperator, Rhs<TestOperator>>> {
