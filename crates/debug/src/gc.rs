@@ -101,6 +101,7 @@ fn has_die_back_edge<R: Reader<Offset = usize>>(die: &read::DebuggingInformation
         | constants::DW_TAG_try_block
         | constants::DW_TAG_catch_block
         | constants::DW_TAG_template_type_parameter
+        | constants::DW_TAG_enumerator
         | constants::DW_TAG_member
         | constants::DW_TAG_formal_parameter => true,
         _ => false,
