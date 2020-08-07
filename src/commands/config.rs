@@ -1,8 +1,7 @@
 //! The module that implements the `wasmtime config` command.
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use structopt::StructOpt;
-use wasmtime_environ::cache_create_new_config;
 
 const CONFIG_NEW_AFTER_HELP: &str =
     "If no file path is specified, the system configuration file path will be used.";
@@ -37,7 +36,7 @@ pub struct ConfigNewCommand {
 impl ConfigNewCommand {
     /// Executes the command.
     pub fn execute(&self) -> Result<()> {
-        let path = cache_create_new_config(self.path.as_ref()).map_err(|e| anyhow!(e))?;
+        let path = wasmtime_cache::create_new_config(self.path.as_ref())?;
 
         println!(
             "Successfully created a new configuation file at '{}'.",
