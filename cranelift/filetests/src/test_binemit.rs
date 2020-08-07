@@ -108,7 +108,7 @@ impl binemit::CodeSink for TextSink {
     }
     fn begin_rodata(&mut self) {}
     fn end_codegen(&mut self) {}
-    fn add_stackmap(
+    fn add_stack_map(
         &mut self,
         _: &[ir::entities::Value],
         _: &ir::Function,

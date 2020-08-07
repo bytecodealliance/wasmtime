@@ -76,7 +76,7 @@ pub struct StackMapInformation {
     pub code_offset: binemit::CodeOffset,
 
     /// The stack map for identifying live GC refs at the GC safepoint.
-    pub stack_map: binemit::Stackmap,
+    pub stack_map: binemit::StackMap,
 }
 
 /// An error while compiling WebAssembly to machine code.

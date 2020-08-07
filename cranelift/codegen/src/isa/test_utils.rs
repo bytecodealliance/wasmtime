@@ -82,7 +82,7 @@ impl CodeSink for TestCodeSink {
 
     fn end_codegen(&mut self) {}
 
-    fn add_stackmap(&mut self, _val_list: &[Value], _func: &Function, _isa: &dyn TargetIsa) {}
+    fn add_stack_map(&mut self, _val_list: &[Value], _func: &Function, _isa: &dyn TargetIsa) {}
 
     fn add_call_site(&mut self, _opcode: Opcode, _srcloc: SourceLoc) {}
 }

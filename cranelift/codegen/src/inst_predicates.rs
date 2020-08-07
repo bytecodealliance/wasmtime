@@ -63,7 +63,7 @@ pub fn is_constant_64bit(func: &Function, inst: Inst) -> Option<u64> {
 }
 
 /// Is the given instruction a safepoint (i.e., potentially causes a GC, depending on the
-/// embedding, and so requires reftyped values to be enumerated with a stackmap)?
+/// embedding, and so requires reftyped values to be enumerated with a stack map)?
 pub fn is_safepoint(func: &Function, inst: Inst) -> bool {
     let op = func.dfg[inst].opcode();
     op.is_resumable_trap() || op.is_call()

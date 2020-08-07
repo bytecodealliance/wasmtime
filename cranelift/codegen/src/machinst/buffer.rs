@@ -140,7 +140,7 @@
 //! Given these invariants, we argue why each optimization preserves execution
 //! semantics below (grep for "Preserves execution semantics").
 
-use crate::binemit::{Addend, CodeOffset, CodeSink, Reloc, Stackmap};
+use crate::binemit::{Addend, CodeOffset, CodeSink, Reloc, StackMap};
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode};
 use crate::machinst::{BlockIndex, MachInstLabelUse, VCodeInst};
 use crate::timing;
@@ -169,8 +169,8 @@ pub struct MachBuffer<I: VCodeInst> {
     call_sites: SmallVec<[MachCallSite; 16]>,
     /// Any source location mappings referring to this code.
     srclocs: SmallVec<[MachSrcLoc; 64]>,
-    /// Any stackmaps referring to this code.
-    stackmaps: SmallVec<[MachStackMap; 8]>,
+    /// Any stack maps referring to this code.
+    stack_maps: SmallVec<[MachStackMap; 8]>,
     /// The current source location in progress (after `start_srcloc()` and
     /// before `end_srcloc()`).  This is a (start_offset, src_loc) tuple.
     cur_srcloc: Option<(CodeOffset, SourceLoc)>,
@@ -234,8 +234,8 @@ pub struct MachBufferFinalized {
     call_sites: SmallVec<[MachCallSite; 16]>,
     /// Any source location mappings referring to this code.
     srclocs: SmallVec<[MachSrcLoc; 64]>,
-    /// Any stackmaps referring to this code.
-    stackmaps: SmallVec<[MachStackMap; 8]>,
+    /// Any stack maps referring to this code.
+    stack_maps: SmallVec<[MachStackMap; 8]>,
 }
 
 static UNKNOWN_LABEL_OFFSET: CodeOffset = 0xffff_ffff;
@@ -261,8 +261,8 @@ impl MachLabel {
     }
 }
 
-/// A stackmap extent, when creating a stackmap.
-pub enum StackmapExtent {
+/// A stack map extent, when creating a stack map.
+pub enum StackMapExtent {
     /// The stack map starts at this instruction, and ends after the number of upcoming bytes
     /// (note: this is a code offset diff).
     UpcomingBytes(CodeOffset),
@@ -282,7 +282,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             traps: SmallVec::new(),
             call_sites: SmallVec::new(),
             srclocs: SmallVec::new(),
-            stackmaps: SmallVec::new(),
+            stack_maps: SmallVec::new(),
             cur_srcloc: None,
             label_offsets: SmallVec::new(),
             label_aliases: SmallVec::new(),
@@ -1151,7 +1151,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             traps: self.traps,
             call_sites: self.call_sites,
             srclocs: self.srclocs,
-            stackmaps: self.stackmaps,
+            stack_maps: self.stack_maps,
         }
     }
 
@@ -1212,28 +1212,28 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
     }
 
-    /// Add stackmap metadata for this program point: a set of stack offsets (from SP upward) that
-    /// contain live references.
+    /// Add stack map metadata for this program point: a set of stack offsets
+    /// (from SP upward) that contain live references.
     ///
     /// The `offset_to_fp` value is the offset from the nominal SP (at which the `stack_offsets`
     /// are based) and the FP value. By subtracting `offset_to_fp` from each `stack_offsets`
     /// element, one can obtain live-reference offsets from FP instead.
-    pub fn add_stackmap(&mut self, extent: StackmapExtent, stackmap: Stackmap) {
+    pub fn add_stack_map(&mut self, extent: StackMapExtent, stack_map: StackMap) {
         let (start, end) = match extent {
-            StackmapExtent::UpcomingBytes(insn_len) => {
+            StackMapExtent::UpcomingBytes(insn_len) => {
                 let start_offset = self.cur_offset();
                 (start_offset, start_offset + insn_len)
             }
-            StackmapExtent::StartedAtOffset(start_offset) => {
+            StackMapExtent::StartedAtOffset(start_offset) => {
                 let end_offset = self.cur_offset();
                 debug_assert!(end_offset >= start_offset);
                 (start_offset, end_offset)
             }
         };
-        self.stackmaps.push(MachStackMap {
+        self.stack_maps.push(MachStackMap {
             offset: start,
             offset_end: end,
-            stackmap,
+            stack_map,
         });
     }
 }
@@ -1295,9 +1295,9 @@ impl MachBufferFinalized {
         sink.end_codegen();
     }
 
-    /// Get the stackmap metadata for this code.
-    pub fn stackmaps(&self) -> &[MachStackMap] {
-        &self.stackmaps[..]
+    /// Get the stack map metadata for this code.
+    pub fn stack_maps(&self) -> &[MachStackMap] {
+        &self.stack_maps[..]
     }
 }
 
@@ -1378,17 +1378,17 @@ pub struct MachSrcLoc {
     pub loc: SourceLoc,
 }
 
-/// Record of stackmap metadata: stack offsets containing references.
+/// Record of stack map metadata: stack offsets containing references.
 #[derive(Clone, Debug)]
 pub struct MachStackMap {
-    /// The code offset at which this stackmap applies.
+    /// The code offset at which this stack map applies.
     pub offset: CodeOffset,
     /// The code offset just past the "end" of the instruction: that is, the
     /// offset of the first byte of the following instruction, or equivalently,
     /// the start offset plus the instruction length.
     pub offset_end: CodeOffset,
-    /// The Stackmap itself.
-    pub stackmap: Stackmap,
+    /// The stack map itself.
+    pub stack_map: StackMap,
 }
 
 /// Record of branch instruction in the buffer, to facilitate editing.

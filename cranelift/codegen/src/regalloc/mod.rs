@@ -23,4 +23,4 @@ mod spilling;
 pub use self::context::Context;
 pub use self::diversion::{EntryRegDiversions, RegDiversions};
 pub use self::register_set::RegisterSet;
-pub use self::safepoint::emit_stackmaps;
+pub use self::safepoint::emit_stack_maps;

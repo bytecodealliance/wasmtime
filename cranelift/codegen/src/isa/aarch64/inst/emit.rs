@@ -1,6 +1,6 @@
 //! AArch64 ISA: binary code emission.
 
-use crate::binemit::{CodeOffset, Reloc, Stackmap};
+use crate::binemit::{CodeOffset, Reloc, StackMap};
 use crate::ir::constant::ConstantData;
 use crate::ir::types::*;
 use crate::ir::TrapCode;
@@ -429,8 +429,8 @@ pub struct EmitState {
     pub(crate) virtual_sp_offset: i64,
     /// Offset of FP from nominal-SP.
     pub(crate) nominal_sp_to_fp: i64,
-    /// Safepoint stackmap for upcoming instruction, as provided to `pre_safepoint()`.
-    stackmap: Option<Stackmap>,
+    /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
+    stack_map: Option<StackMap>,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -438,22 +438,22 @@ impl MachInstEmitState<Inst> for EmitState {
         EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
-            stackmap: None,
+            stack_map: None,
         }
     }
 
-    fn pre_safepoint(&mut self, stackmap: Stackmap) {
-        self.stackmap = Some(stackmap);
+    fn pre_safepoint(&mut self, stack_map: StackMap) {
+        self.stack_map = Some(stack_map);
     }
 }
 
 impl EmitState {
-    fn take_stackmap(&mut self) -> Option<Stackmap> {
-        self.stackmap.take()
+    fn take_stack_map(&mut self) -> Option<StackMap> {
+        self.stack_map.take()
     }
 
     fn clear_post_insn(&mut self) {
-        self.stackmap = None;
+        self.stack_map = None;
     }
 }
 
@@ -1854,8 +1854,8 @@ impl MachInstEmit for Inst {
                 // Noop; this is just a placeholder for epilogues.
             }
             &Inst::Call { ref info } => {
-                if let Some(s) = state.take_stackmap() {
-                    sink.add_stackmap(StackmapExtent::UpcomingBytes(4), s);
+                if let Some(s) = state.take_stack_map() {
+                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
                 sink.add_reloc(info.loc, Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b100101, 0));
@@ -1864,8 +1864,8 @@ impl MachInstEmit for Inst {
                 }
             }
             &Inst::CallInd { ref info } => {
-                if let Some(s) = state.take_stackmap() {
-                    sink.add_stackmap(StackmapExtent::UpcomingBytes(4), s);
+                if let Some(s) = state.take_stack_map() {
+                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
                 sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(info.rn) << 5));
                 if info.opcode.is_call() {
@@ -1922,8 +1922,8 @@ impl MachInstEmit for Inst {
             &Inst::Udf { trap_info } => {
                 let (srcloc, code) = trap_info;
                 sink.add_trap(srcloc, code);
-                if let Some(s) = state.take_stackmap() {
-                    sink.add_stackmap(StackmapExtent::UpcomingBytes(4), s);
+                if let Some(s) = state.take_stack_map() {
+                    sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
                 sink.put4(0xd4a00000);
             }

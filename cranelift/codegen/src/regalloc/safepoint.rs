@@ -32,9 +32,9 @@ fn insert_and_encode_safepoint<'f>(
     }
 }
 
-// The emit_stackmaps() function analyzes each instruction to retrieve the liveness of
+// The emit_stack_maps() function analyzes each instruction to retrieve the liveness of
 // the defs and operands by traversing a function's blocks in layout order.
-pub fn emit_stackmaps(
+pub fn emit_stack_maps(
     func: &mut Function,
     domtree: &DominatorTree,
     liveness: &Liveness,

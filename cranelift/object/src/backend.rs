@@ -2,7 +2,7 @@
 
 use anyhow::anyhow;
 use cranelift_codegen::binemit::{
-    Addend, CodeOffset, NullStackmapSink, Reloc, RelocSink, TrapSink,
+    Addend, CodeOffset, NullStackMapSink, Reloc, RelocSink, TrapSink,
 };
 use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::TargetIsa;
@@ -213,7 +213,7 @@ impl Backend for ObjectBackend {
     {
         let mut code: Vec<u8> = vec![0; code_size as usize];
         let mut reloc_sink = ObjectRelocSink::new(self.object.format());
-        let mut stackmap_sink = NullStackmapSink {};
+        let mut stack_map_sink = NullStackMapSink {};
 
         unsafe {
             ctx.emit_to_memory(
@@ -221,7 +221,7 @@ impl Backend for ObjectBackend {
                 code.as_mut_ptr(),
                 &mut reloc_sink,
                 trap_sink,
-                &mut stackmap_sink,
+                &mut stack_map_sink,
             )
         };
 

@@ -132,5 +132,5 @@ impl binemit::CodeSink for RodataSink {
             "Expected rodata to be emitted before the end of codegen"
         );
     }
-    fn add_stackmap(&mut self, _: &[Value], _: &Function, _: &dyn TargetIsa) {}
+    fn add_stack_map(&mut self, _: &[Value], _: &Function, _: &dyn TargetIsa) {}
 }

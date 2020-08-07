@@ -1,4 +1,4 @@
-test stackmaps
+test stack_maps
 set enable_safepoints=true
 target x86_64
 

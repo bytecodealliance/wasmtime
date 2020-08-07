@@ -1,4 +1,4 @@
-test stackmaps
+test stack_maps
 set enable_safepoints=true
 target x86_64
 
@@ -28,4 +28,3 @@ block0(v0: r64, v1: r64, v2: r64, v3: r64, v4: r64):
 ; nextln: safepoint v4
 ; nextln:   - mapped words: 13
 ; nextln:   - live: [12]
-

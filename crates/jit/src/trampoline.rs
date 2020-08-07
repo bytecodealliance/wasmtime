@@ -22,7 +22,7 @@ pub use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 pub mod binemit {
     pub use cranelift_codegen::binemit::NullTrapSink;
     pub(super) use cranelift_codegen::binemit::{Addend, Reloc, RelocSink};
-    pub use cranelift_codegen::binemit::{CodeOffset, NullStackmapSink, TrapSink};
+    pub use cranelift_codegen::binemit::{CodeOffset, NullStackMapSink, TrapSink};
 }
 
 /// Create a trampoline for invoking a function.
@@ -130,14 +130,14 @@ pub(crate) fn build_trampoline(
     let mut code_buf = Vec::new();
     let mut reloc_sink = TrampolineRelocSink::default();
     let mut trap_sink = binemit::NullTrapSink {};
-    let mut stackmap_sink = binemit::NullStackmapSink {};
+    let mut stack_map_sink = binemit::NullStackMapSink {};
     context
         .compile_and_emit(
             isa,
             &mut code_buf,
             &mut reloc_sink,
             &mut trap_sink,
-            &mut stackmap_sink,
+            &mut stack_map_sink,
         )
         .map_err(|error| {
             SetupError::Compile(CompileError::Codegen(pretty_error(

@@ -4,7 +4,7 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 
-use crate::binemit::{CodeOffset, Stackmap};
+use crate::binemit::{CodeOffset, StackMap};
 use crate::ir::{types, ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
 use crate::{settings, settings::Flags, CodegenError, CodegenResult};
@@ -2225,8 +2225,8 @@ pub struct EmitState {
     pub(crate) virtual_sp_offset: i64,
     /// Offset of FP from nominal-SP.
     pub(crate) nominal_sp_to_fp: i64,
-    /// Safepoint stackmap for upcoming instruction, as provided to `pre_safepoint()`.
-    stackmap: Option<Stackmap>,
+    /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
+    stack_map: Option<StackMap>,
 }
 
 impl MachInstEmit for Inst {
@@ -2246,22 +2246,22 @@ impl MachInstEmitState<Inst> for EmitState {
         EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
-            stackmap: None,
+            stack_map: None,
         }
     }
 
-    fn pre_safepoint(&mut self, stackmap: Stackmap) {
-        self.stackmap = Some(stackmap);
+    fn pre_safepoint(&mut self, stack_map: StackMap) {
+        self.stack_map = Some(stack_map);
     }
 }
 
 impl EmitState {
-    fn take_stackmap(&mut self) -> Option<Stackmap> {
-        self.stackmap.take()
+    fn take_stack_map(&mut self) -> Option<StackMap> {
+        self.stack_map.take()
     }
 
     fn clear_post_insn(&mut self) {
-        self.stackmap = None;
+        self.stack_map = None;
     }
 }
 

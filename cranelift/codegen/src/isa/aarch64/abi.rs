@@ -90,7 +90,7 @@
 //!   - Return v1 in memory at `[P+8]`.
 //!   - Return v0 in memory at `[P+16]`.
 
-use crate::binemit::Stackmap;
+use crate::binemit::StackMap;
 use crate::ir;
 use crate::ir::types;
 use crate::ir::types::*;
@@ -1074,10 +1074,10 @@ impl ABIBody for AArch64ABIBody {
         store_stack(MemArg::NominalSPOffset(sp_off, ty), from_reg, ty)
     }
 
-    fn spillslots_to_stackmap(&self, slots: &[SpillSlot], state: &EmitState) -> Stackmap {
+    fn spillslots_to_stack_map(&self, slots: &[SpillSlot], state: &EmitState) -> StackMap {
         assert!(state.virtual_sp_offset >= 0);
         trace!(
-            "spillslots_to_stackmap: slots = {:?}, state = {:?}",
+            "spillslots_to_stack_map: slots = {:?}, state = {:?}",
             slots,
             state
         );
@@ -1094,7 +1094,7 @@ impl ABIBody for AArch64ABIBody {
             bits[first_spillslot_word + slot] = true;
         }
 
-        Stackmap::from_slice(&bits[..])
+        StackMap::from_slice(&bits[..])
     }
 
     fn gen_prologue(&mut self) -> Vec<Inst> {
