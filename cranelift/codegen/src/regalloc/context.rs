@@ -203,17 +203,22 @@ impl Context {
             &mut self.tracker,
         );
 
-        // This function runs after register allocation has taken
-        // place, meaning values have locations assigned already.
-        if isa.flags().enable_safepoints() {
-            emit_stack_maps(func, domtree, &self.liveness, &mut self.tracker, isa);
-        } else {
-            // Make sure no references are used.
-            for val in func.dfg.values() {
-                let ty = func.dfg.value_type(val);
-                if ty.lane_type().is_ref() {
-                    panic!("reference types were found but safepoints were not enabled.");
-                }
+        // If there are any reference types used, encode safepoints and emit
+        // stack maps.
+        //
+        // This function runs after register allocation has taken place, meaning
+        // values have locations assigned already, which is necessary for
+        // creating the stack maps.
+        let safepoints_enabled = isa.flags().enable_safepoints();
+        for val in func.dfg.values() {
+            let ty = func.dfg.value_type(val);
+            if ty.lane_type().is_ref() {
+                assert!(
+                    safepoints_enabled,
+                    "reference types were found but safepoints were not enabled"
+                );
+                emit_stack_maps(func, domtree, &self.liveness, &mut self.tracker, isa);
+                break;
             }
         }
 
