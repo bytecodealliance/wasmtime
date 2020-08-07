@@ -45,6 +45,7 @@
 - [Stability](stability.md)
   - [Release Process](./stability-release.md)
   - [Platform Support](./stability-platform-support.md)
+  - [Wasm Proposals Support](./stability-wasm-proposals-support.md)
 - [Security](security.md)
   - [Disclosure Policy](./security-disclosure.md)
   - [Sandboxing](./security-sandboxing.md)
