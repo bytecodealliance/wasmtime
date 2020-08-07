@@ -1,0 +1,18 @@
+[package]
+name = "wasmtime-lightbeam"
+version = "0.19.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Integration between Lightbeam and Wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+documentation = "https://docs.rs/wasmtime-lightbeam/"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+lightbeam = { path = "..", version = "0.19.0" }
+wasmparser = "0.59"
+cranelift-codegen = { path = "../../../cranelift/codegen", version = "0.66.0" }
+wasmtime-environ = { path = "../../environ", version = "0.19.0" }

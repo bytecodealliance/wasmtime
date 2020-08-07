@@ -242,6 +242,7 @@ jobs:
             --features test-programs/test_programs \
             --all \
             --exclude lightbeam \
+            --exclude wasmtime-lightbeam \
             --exclude peepmatic \
             --exclude peepmatic-automata \
             --exclude peepmatic-fuzzing \
@@ -375,6 +376,7 @@ jobs:
             --release \
             --all \
             --exclude lightbeam \
+            --exclude wasmtime-lightbeam \
             --exclude peepmatic \
             --exclude peepmatic-automata \
             --exclude peepmatic-fuzzing \

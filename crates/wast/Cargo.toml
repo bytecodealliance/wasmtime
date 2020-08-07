@@ -17,6 +17,3 @@ wast = "21.0.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
-
-[features]
-lightbeam = ["wasmtime/lightbeam"]

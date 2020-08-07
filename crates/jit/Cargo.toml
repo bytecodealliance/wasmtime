@@ -19,6 +19,8 @@ cranelift-native = { path = "../../cranelift/native", version = "0.66.0" }
 cranelift-frontend = { path = "../../cranelift/frontend", version = "0.66.0" }
 wasmtime-environ = { path = "../environ", version = "0.19.0" }
 wasmtime-runtime = { path = "../runtime", version = "0.19.0" }
+wasmtime-cranelift = { path = "../cranelift", version = "0.19.0" }
+wasmtime-lightbeam = { path = "../lightbeam/wasmtime", version = "0.19.0", optional = true }
 wasmtime-debug = { path = "../debug", version = "0.19.0" }
 wasmtime-profiling = { path = "../profiling", version = "0.19.0" }
 wasmtime-obj = { path = "../obj", version = "0.19.0" }
@@ -39,7 +41,7 @@ serde = { version = "1.0.94", features = ["derive"] }
 winapi = { version = "0.3.8", features = ["winnt", "impl-default"] }
 
 [features]
-lightbeam = ["wasmtime-environ/lightbeam"]
+lightbeam = ["wasmtime-lightbeam"]
 jitdump = ["wasmtime-profiling/jitdump"]
 vtune = ["wasmtime-profiling/vtune"]
 parallel-compilation = ["rayon"]
