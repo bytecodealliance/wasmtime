@@ -897,28 +897,36 @@ impl InstanceHandle {
         };
         let instance = handle.instance();
 
+        debug_assert_eq!(vmshared_signatures.len(), handle.module().signatures.len());
         ptr::copy(
             vmshared_signatures.values().as_slice().as_ptr(),
             instance.signature_ids_ptr() as *mut VMSharedSignatureIndex,
             vmshared_signatures.len(),
         );
+        debug_assert_eq!(imports.functions.len(), handle.module().num_imported_funcs);
         ptr::copy(
-            imports.functions.values().as_slice().as_ptr(),
+            imports.functions.as_ptr(),
             instance.imported_functions_ptr() as *mut VMFunctionImport,
             imports.functions.len(),
         );
+        debug_assert_eq!(imports.tables.len(), handle.module().num_imported_tables);
         ptr::copy(
-            imports.tables.values().as_slice().as_ptr(),
+            imports.tables.as_ptr(),
             instance.imported_tables_ptr() as *mut VMTableImport,
             imports.tables.len(),
         );
+        debug_assert_eq!(
+            imports.memories.len(),
+            handle.module().num_imported_memories
+        );
         ptr::copy(
-            imports.memories.values().as_slice().as_ptr(),
+            imports.memories.as_ptr(),
             instance.imported_memories_ptr() as *mut VMMemoryImport,
             imports.memories.len(),
         );
+        debug_assert_eq!(imports.globals.len(), handle.module().num_imported_globals);
         ptr::copy(
-            imports.globals.values().as_slice().as_ptr(),
+            imports.globals.as_ptr(),
             instance.imported_globals_ptr() as *mut VMGlobalImport,
             imports.globals.len(),
         );

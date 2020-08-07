@@ -635,10 +635,6 @@ impl Func {
         Ok(results.into())
     }
 
-    pub(crate) fn wasmtime_function(&self) -> &wasmtime_runtime::ExportFunction {
-        &self.export
-    }
-
     pub(crate) fn caller_checked_anyfunc(
         &self,
     ) -> NonNull<wasmtime_runtime::VMCallerCheckedAnyfunc> {
@@ -788,6 +784,20 @@ impl Func {
     /// Get a reference to this function's store.
     pub fn store(&self) -> &Store {
         &self.instance.store
+    }
+
+    pub(crate) fn matches_expected(&self, expected: VMSharedSignatureIndex) -> bool {
+        self.sig_index() == expected
+    }
+
+    pub(crate) fn vmimport(&self) -> wasmtime_runtime::VMFunctionImport {
+        unsafe {
+            let f = self.caller_checked_anyfunc();
+            wasmtime_runtime::VMFunctionImport {
+                body: f.as_ref().func_ptr,
+                vmctx: f.as_ref().vmctx,
+            }
+        }
     }
 }
 

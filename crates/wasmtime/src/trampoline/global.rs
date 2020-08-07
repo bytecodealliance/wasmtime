@@ -8,7 +8,7 @@ use wasmtime_runtime::VMFunctionImport;
 
 pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<StoreInstanceHandle> {
     let mut module = Module::new();
-    let mut func_imports = PrimaryMap::new();
+    let mut func_imports = Vec::new();
     let mut externref_init = None;
 
     let global = wasm::Global {
@@ -68,7 +68,7 @@ pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<StoreIn
         PrimaryMap::new(),
         Default::default(),
         Box::new(()),
-        func_imports,
+        &func_imports,
     )?;
 
     if let Some(x) = externref_init {
