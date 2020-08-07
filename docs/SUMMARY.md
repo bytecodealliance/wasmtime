@@ -57,5 +57,6 @@
   - [Coding Guidelines](./contributing-coding-guidelines.md)
   - [Development Process](./contributing-development-process.md)
   - [Release Process](./contributing-release-process.md)
+  - [Implementing Wasm Proposals](./contributing-implementing-wasm-proposals.md)
   - [Governance](./contributing-governance.md)
   - [Code of Conduct](./contributing-coc.md)
