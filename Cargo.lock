@@ -2373,6 +2373,7 @@ dependencies = [
  "target-lexicon",
  "tempfile",
  "wasmparser 0.59.0",
+ "wasmtime-cache",
  "wasmtime-environ",
  "wasmtime-jit",
  "wasmtime-profiling",
@@ -2405,6 +2406,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmtime-cache"
+version = "0.19.0"
+dependencies = [
+ "anyhow",
+ "base64 0.12.3",
+ "bincode",
+ "directories",
+ "errno",
+ "file-per-thread-logger",
+ "filetime",
+ "lazy_static",
+ "libc",
+ "log",
+ "more-asserts",
+ "pretty_env_logger",
+ "serde",
+ "sha2",
+ "tempfile",
+ "toml",
+ "winapi",
+ "zstd",
+]
+
+[[package]]
 name = "wasmtime-cli"
 version = "0.19.0"
 dependencies = [
@@ -2425,6 +2450,7 @@ dependencies = [
  "test-programs",
  "wasi-common",
  "wasmtime",
+ "wasmtime-cache",
  "wasmtime-debug",
  "wasmtime-environ",
  "wasmtime-fuzzing",
@@ -2455,33 +2481,19 @@ name = "wasmtime-environ"
 version = "0.19.0"
 dependencies = [
  "anyhow",
- "base64 0.12.3",
- "bincode",
  "cfg-if",
  "cranelift-codegen",
  "cranelift-entity",
  "cranelift-frontend",
  "cranelift-wasm",
- "directories",
- "errno",
- "file-per-thread-logger",
- "filetime",
  "gimli 0.21.0",
  "indexmap",
- "lazy_static",
- "libc",
  "lightbeam",
  "log",
  "more-asserts",
- "pretty_env_logger",
  "serde",
- "sha2",
- "tempfile",
  "thiserror",
- "toml",
  "wasmparser 0.59.0",
- "winapi",
- "zstd",
 ]
 
 [[package]]

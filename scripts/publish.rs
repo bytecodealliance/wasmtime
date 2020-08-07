@@ -58,6 +58,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-profiling",
     "wasmtime-obj",
     "wasmtime-jit",
+    "wasmtime-cache",
     "wasmtime",
     "wasmtime-wiggle",
     "wasmtime-wasi",

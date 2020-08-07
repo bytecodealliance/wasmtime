@@ -1,5 +1,5 @@
 use super::*;
-use crate::cache::config::tests::test_prolog;
+use crate::config::tests::test_prolog;
 use more_asserts::{assert_ge, assert_gt, assert_lt};
 use std::iter::repeat;
 use std::process;

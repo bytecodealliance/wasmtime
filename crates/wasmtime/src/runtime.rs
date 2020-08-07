@@ -7,13 +7,16 @@ use std::cmp;
 use std::convert::TryFrom;
 use std::fmt;
 use std::hash::{Hash, Hasher};
+#[cfg(feature = "cache")]
 use std::path::Path;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use target_lexicon::Triple;
 use wasmparser::Validator;
+#[cfg(feature = "cache")]
+use wasmtime_cache::CacheConfig;
 use wasmtime_environ::settings::{self, Configurable, SetError};
-use wasmtime_environ::{ir, isa, isa::TargetIsa, wasm, CacheConfig, Tunables};
+use wasmtime_environ::{ir, isa, isa::TargetIsa, wasm, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{
@@ -37,6 +40,7 @@ pub struct Config {
     pub(crate) isa_flags: isa::Builder,
     pub(crate) tunables: Tunables,
     pub(crate) strategy: CompilationStrategy,
+    #[cfg(feature = "cache")]
     pub(crate) cache_config: CacheConfig,
     pub(crate) profiler: Arc<dyn ProfilingAgent>,
     pub(crate) memory_creator: Option<MemoryCreatorProxy>,
@@ -89,6 +93,7 @@ impl Config {
             flags,
             isa_flags: native::builder(),
             strategy: CompilationStrategy::Auto,
+            #[cfg(feature = "cache")]
             cache_config: CacheConfig::new_cache_disabled(),
             profiler: Arc::new(NullProfilerAgent),
             memory_creator: None,
@@ -395,14 +400,18 @@ impl Config {
     ///
     /// By default cache configuration is not enabled or loaded.
     ///
+    /// This method is only available when the `cache` feature of this crate is
+    /// enabled.
+    ///
     /// # Errors
     ///
     /// This method can fail due to any error that happens when loading the file
     /// pointed to by `path` and attempting to load the cache configuration.
     ///
     /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
+    #[cfg(feature = "cache")]
     pub fn cache_config_load(&mut self, path: impl AsRef<Path>) -> Result<&mut Self> {
-        self.cache_config = wasmtime_environ::CacheConfig::from_file(Some(path.as_ref()))?;
+        self.cache_config = CacheConfig::from_file(Some(path.as_ref()))?;
         Ok(self)
     }
 
@@ -416,6 +425,9 @@ impl Config {
     ///
     /// By default cache configuration is not enabled or loaded.
     ///
+    /// This method is only available when the `cache` feature of this crate is
+    /// enabled.
+    ///
     /// # Errors
     ///
     /// This method can fail due to any error that happens when loading the
@@ -424,8 +436,9 @@ impl Config {
     /// for an enabled cache are applied.
     ///
     /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
+    #[cfg(feature = "cache")]
     pub fn cache_config_load_default(&mut self) -> Result<&mut Self> {
-        self.cache_config = wasmtime_environ::CacheConfig::from_file(None)?;
+        self.cache_config = CacheConfig::from_file(None)?;
         Ok(self)
     }
 
@@ -793,6 +806,7 @@ impl Engine {
         &self.inner.compiler
     }
 
+    #[cfg(feature = "cache")]
     pub(crate) fn cache_config(&self) -> &CacheConfig {
         &self.config().cache_config
     }

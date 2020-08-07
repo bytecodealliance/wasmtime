@@ -1,3 +1,7 @@
+// Don't worry about unused imports if we're frobbing features, only worry about
+// them with the default set of features enabled.
+#![cfg_attr(not(feature = "cache"), allow(unused_imports))]
+
 use crate::{handle_result, wasmtime_error_t};
 use std::ffi::CStr;
 use std::os::raw::c_char;
@@ -130,6 +134,7 @@ pub extern "C" fn wasmtime_config_profiler_set(
 }
 
 #[no_mangle]
+#[cfg(feature = "cache")]
 pub unsafe extern "C" fn wasmtime_config_cache_config_load(
     c: &mut wasm_config_t,
     filename: *const c_char,
