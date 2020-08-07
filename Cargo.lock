@@ -392,7 +392,7 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "thiserror",
- "wast 15.0.0",
+ "wast 22.0.0",
 ]
 
 [[package]]
@@ -1303,7 +1303,7 @@ dependencies = [
  "peepmatic-test-operator",
  "peepmatic-traits",
  "serde",
- "wast 15.0.0",
+ "wast 22.0.0",
  "z3",
 ]
 
@@ -1331,7 +1331,7 @@ dependencies = [
  "peepmatic-traits",
  "rand 0.7.3",
  "serde",
- "wast 15.0.0",
+ "wast 22.0.0",
 ]
 
 [[package]]
@@ -1356,7 +1356,7 @@ dependencies = [
  "serde",
  "serde_test",
  "thiserror",
- "wast 15.0.0",
+ "wast 22.0.0",
 ]
 
 [[package]]
@@ -1377,7 +1377,7 @@ version = "0.66.0"
 dependencies = [
  "peepmatic-traits",
  "serde",
- "wast 15.0.0",
+ "wast 22.0.0",
 ]
 
 [[package]]
@@ -2667,18 +2667,18 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "15.0.0"
+version = "21.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a10df5277f68adee65bba117b40235f07a4cb3d59e5ec9aa86dbee180fb1bc04"
+checksum = "0b1844f66a2bc8526d71690104c0e78a8e59ffa1597b7245769d174ebb91deb5"
 dependencies = [
  "leb128",
 ]
 
 [[package]]
 name = "wast"
-version = "21.0.0"
+version = "22.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b1844f66a2bc8526d71690104c0e78a8e59ffa1597b7245769d174ebb91deb5"
+checksum = "fe1220ed7f824992b426a76125a3403d048eaf0f627918e97ade0d9b9d510d20"
 dependencies = [
  "leb128",
 ]
