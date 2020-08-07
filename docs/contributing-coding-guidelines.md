@@ -6,7 +6,7 @@ be aware of.
 
 [pull request]: https://help.github.com/articles/about-pull-requests/
 
-### rustfmt
+### `rustfmt`
 
 All PRs must be formatted according to rustfmt, and this is checked in the
 continuous integration tests. You can format code locally with:
@@ -19,7 +19,7 @@ at the root of the repository. You can find [more information about rustfmt
 online](https://github.com/rust-lang/rustfmt) too, such as how to configure
 your editor.
 
-### Rustc version support
+### Minimum Supported `rustc` Version
 
 Wasmtime supports the current stable version of Rust.
 
