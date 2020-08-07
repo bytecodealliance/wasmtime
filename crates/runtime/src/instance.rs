@@ -28,10 +28,10 @@ use thiserror::Error;
 use wasmtime_environ::entity::{packed_option::ReservedValue, BoxedSlice, EntityRef, PrimaryMap};
 use wasmtime_environ::wasm::{
     DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
-    ElemIndex, FuncIndex, GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex, TableElementType,
-    TableIndex, WasmType,
+    ElemIndex, EntityIndex, FuncIndex, GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex,
+    TableElementType, TableIndex, WasmType,
 };
-use wasmtime_environ::{ir, DataInitializer, EntityIndex, Module, TableElements, VMOffsets};
+use wasmtime_environ::{ir, DataInitializer, Module, TableElements, VMOffsets};
 
 /// A WebAssembly instance.
 ///
@@ -325,6 +325,10 @@ impl Instance {
                 global: self.module.globals[*index],
             }
             .into(),
+
+            // FIXME(#2094)
+            EntityIndex::Instance(_index) => unimplemented!(),
+            EntityIndex::Module(_index) => unimplemented!(),
         }
     }
 

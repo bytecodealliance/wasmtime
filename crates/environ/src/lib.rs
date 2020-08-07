@@ -37,10 +37,7 @@ pub use crate::address_map::*;
 pub use crate::builtin::*;
 pub use crate::compilation::*;
 pub use crate::data_structures::*;
-// pub use crate::func_environ::BuiltinFunctionIndex;
-pub use crate::module::{
-    EntityIndex, MemoryPlan, MemoryStyle, Module, TableElements, TablePlan, TableStyle,
-};
+pub use crate::module::*;
 pub use crate::module_environ::*;
 pub use crate::tunables::Tunables;
 pub use crate::vmoffsets::{TargetSharedSignatureIndex, VMOffsets, INTERRUPTED};

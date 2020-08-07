@@ -84,7 +84,12 @@ impl Config {
             profiler: Arc::new(NullProfilerAgent),
             memory_creator: None,
             max_wasm_stack: 1 << 20,
-            features: WasmFeatures::default(),
+            features: WasmFeatures {
+                reference_types: true,
+                bulk_memory: true,
+                multi_value: true,
+                ..WasmFeatures::default()
+            },
         }
     }
 
@@ -655,6 +660,7 @@ impl fmt::Debug for Config {
             .field("wasm_bulk_memory", &self.features.bulk_memory)
             .field("wasm_simd", &self.features.simd)
             .field("wasm_multi_value", &self.features.multi_value)
+            .field("wasm_module_linking", &self.features.module_linking)
             .field(
                 "flags",
                 &settings::Flags::new(self.flags.clone()).to_string(),

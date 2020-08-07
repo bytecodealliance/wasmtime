@@ -9,7 +9,7 @@ use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
     self, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableIndex,
-    TargetEnvironment, WasmError, WasmResult, WasmType,
+    TargetEnvironment, TypeIndex, WasmError, WasmResult, WasmType,
 };
 use std::convert::TryFrom;
 use wasmtime_environ::{
@@ -996,8 +996,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn make_indirect_sig(
         &mut self,
         func: &mut ir::Function,
-        index: SignatureIndex,
+        index: TypeIndex,
     ) -> WasmResult<ir::SigRef> {
+        let index = self.module.types[index].unwrap_function();
         Ok(func.import_signature(self.native_signatures[index].clone()))
     }
 
@@ -1024,11 +1025,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         mut pos: FuncCursor<'_>,
         table_index: TableIndex,
         table: ir::Table,
-        sig_index: SignatureIndex,
+        ty_index: TypeIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
+        let sig_index = self.module.types[ty_index].unwrap_function();
         let pointer_type = self.pointer_type();
 
         let table_entry_addr = pos.ins().table_addr(pointer_type, table, callee, 0);

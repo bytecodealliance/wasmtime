@@ -10,7 +10,7 @@ use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::isa::TargetIsa;
-use wasmtime_environ::{ir, CompiledFunction, EntityIndex, Module};
+use wasmtime_environ::{ir, wasm, CompiledFunction, Module};
 use wasmtime_jit::trampoline::ir::{
     ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind,
 };
@@ -227,7 +227,7 @@ pub fn create_handle_with_function(
     let func_id = module.functions.push(sig_id);
     module
         .exports
-        .insert(String::new(), EntityIndex::Function(func_id));
+        .insert(String::new(), wasm::EntityIndex::Function(func_id));
     let trampoline = make_trampoline(isa.as_ref(), &mut code_memory, &mut fn_builder_ctx, &sig);
     finished_functions.push(trampoline);
 
@@ -274,7 +274,7 @@ pub unsafe fn create_handle_with_raw_function(
     let func_id = module.functions.push(sig_id);
     module
         .exports
-        .insert(String::new(), EntityIndex::Function(func_id));
+        .insert(String::new(), wasm::EntityIndex::Function(func_id));
     finished_functions.push(func);
     store.signatures().borrow_mut().register(wft, trampoline);
 

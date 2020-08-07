@@ -17,6 +17,10 @@ pub fn dummy_imports<'module>(
                 ExternType::Global(global_ty) => Extern::Global(dummy_global(&store, global_ty)?),
                 ExternType::Table(table_ty) => Extern::Table(dummy_table(&store, table_ty)?),
                 ExternType::Memory(mem_ty) => Extern::Memory(dummy_memory(&store, mem_ty)),
+
+                // FIXME(#2094)
+                ExternType::Instance(_) => unimplemented!(),
+                ExternType::Module(_) => unimplemented!(),
             })
         })
         .collect()

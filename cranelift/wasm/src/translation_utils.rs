@@ -73,6 +73,65 @@ entity_impl!(DataIndex);
 pub struct ElemIndex(u32);
 entity_impl!(ElemIndex);
 
+/// Index type of a type inside the WebAssembly module.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct TypeIndex(u32);
+entity_impl!(TypeIndex);
+
+/// Index type of a module inside the WebAssembly module.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct ModuleIndex(u32);
+entity_impl!(ModuleIndex);
+
+/// Index type of an instance inside the WebAssembly module.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct InstanceIndex(u32);
+entity_impl!(InstanceIndex);
+
+/// An index of an entity.
+#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub enum EntityIndex {
+    /// Function index.
+    Function(FuncIndex),
+    /// Table index.
+    Table(TableIndex),
+    /// Memory index.
+    Memory(MemoryIndex),
+    /// Global index.
+    Global(GlobalIndex),
+    /// Module index.
+    Module(ModuleIndex),
+    /// Instance index.
+    Instance(InstanceIndex),
+}
+
+/// A type of an item in a wasm module where an item is typically something that
+/// can be exported.
+#[allow(missing_docs)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub enum EntityType {
+    /// A global variable with the specified content type
+    Global(Global),
+    /// A linear memory with the specified limits
+    Memory(Memory),
+    /// A table with the specified element type and limits
+    Table(Table),
+    /// A function type where the index points to the type section and records a
+    /// function signature.
+    Function(TypeIndex),
+    /// An instance where the index points to the type section and records a
+    /// instance's exports.
+    Instance(TypeIndex),
+    /// A module where the index points to the type section and records a
+    /// module's imports and exports.
+    Module(TypeIndex),
+}
+
 /// A WebAssembly global.
 ///
 /// Note that we record both the original Wasm type and the Cranelift IR type

@@ -44,3 +44,11 @@ fn compile() -> Result<()> {
     assert_eq!(m.exports().len(), 0);
     Ok(())
 }
+
+#[test]
+fn types() -> Result<()> {
+    let engine = engine();
+    Module::new(&engine, "(module (type (module)))")?;
+    Module::new(&engine, "(module (type (instance)))")?;
+    Ok(())
+}

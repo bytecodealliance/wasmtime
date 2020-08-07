@@ -3,7 +3,7 @@ use crate::{Engine, Export, Extern, Func, Global, Memory, Module, Store, Table, 
 use anyhow::{anyhow, bail, Context, Error, Result};
 use std::any::Any;
 use std::mem;
-use wasmtime_environ::EntityIndex;
+use wasmtime_environ::wasm::EntityIndex;
 use wasmtime_jit::CompiledModule;
 use wasmtime_runtime::{
     Imports, InstantiationError, StackMapRegistry, VMContext, VMExternRefActivationsTable,
@@ -300,6 +300,10 @@ fn with_imports<R>(
                 }
                 functions.push(func.vmimport());
             }
+
+            // FIXME(#2094)
+            EntityIndex::Module(_i) => unimplemented!(),
+            EntityIndex::Instance(_i) => unimplemented!(),
         }
         Ok(())
     };

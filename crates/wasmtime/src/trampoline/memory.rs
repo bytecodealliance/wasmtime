@@ -5,7 +5,7 @@ use crate::Store;
 use crate::{Limits, MemoryType};
 use anyhow::Result;
 use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::{wasm, EntityIndex, MemoryPlan, MemoryStyle, Module, WASM_PAGE_SIZE};
+use wasmtime_environ::{wasm, MemoryPlan, MemoryStyle, Module, WASM_PAGE_SIZE};
 use wasmtime_runtime::{RuntimeLinearMemory, RuntimeMemoryCreator, VMMemoryDefinition};
 
 use std::sync::Arc;
@@ -27,7 +27,7 @@ pub fn create_handle_with_memory(
     let memory_id = module.memory_plans.push(memory_plan);
     module
         .exports
-        .insert(String::new(), EntityIndex::Memory(memory_id));
+        .insert(String::new(), wasm::EntityIndex::Memory(memory_id));
 
     create_handle(module, store, PrimaryMap::new(), Box::new(()), &[])
 }
