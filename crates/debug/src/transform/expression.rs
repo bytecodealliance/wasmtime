@@ -439,10 +439,23 @@ where
                     code_chunk.extend(writer.into_vec());
                     continue;
                 }
-                Operation::UnsignedConstant { .. }
+                Operation::Drop { .. }
+                | Operation::Pick { .. }
+                | Operation::Swap { .. }
+                | Operation::Rot { .. }
+                | Operation::UnsignedConstant { .. }
                 | Operation::SignedConstant { .. }
                 | Operation::PlusConstant { .. }
-                | Operation::Piece { .. } => (),
+                | Operation::And { .. }
+                | Operation::Or { .. }
+                | Operation::Shr { .. }
+                | Operation::Shra { .. }
+                | Operation::Shl { .. }
+                | Operation::Plus { .. }
+                | Operation::Minus { .. }
+                | Operation::Piece { .. }
+                | Operation::Skip { .. }
+                | Operation::Bra { .. } => (),
                 Operation::StackValue => {
                     need_deref = false;
 
@@ -724,6 +737,44 @@ mod tests {
                         trailing: false
                     },
                     CompiledExpressionPart::Code(vec![35, 5]),
+                    CompiledExpressionPart::Deref,
+                    CompiledExpressionPart::Code(vec![6, 159])
+                ],
+                need_deref: false
+            }
+        );
+
+        let e = expression!(
+            DW_OP_lit1,
+            DW_OP_dup,
+            DW_OP_WASM_location,
+            0x0,
+            1,
+            DW_OP_and,
+            DW_OP_bra,
+            3,
+            0, // --> pointer
+            DW_OP_swap,
+            DW_OP_shr,
+            DW_OP_stack_value,
+            // pointer:
+            DW_OP_plus,
+            DW_OP_deref,
+            DW_OP_stack_value
+        );
+        let ce = compile_expression(&e, DWARF_ENCODING, None)
+            .expect("non-error")
+            .expect("expression");
+        assert_eq!(
+            ce,
+            CompiledExpression {
+                parts: vec![
+                    CompiledExpressionPart::Code(vec![49, 18]),
+                    CompiledExpressionPart::Local {
+                        label: val1,
+                        trailing: false
+                    },
+                    CompiledExpressionPart::Code(vec![26, 40, 3, 0, 22, 37, 159, 34]),
                     CompiledExpressionPart::Deref,
                     CompiledExpressionPart::Code(vec![6, 159])
                 ],
