@@ -94,8 +94,8 @@ impl Config {
             memory_creator: None,
             max_wasm_stack: 1 << 20,
             wasm_threads: false,
-            wasm_reference_types: false,
-            wasm_bulk_memory: false,
+            wasm_reference_types: cfg!(target_arch = "x86_64"),
+            wasm_bulk_memory: true,
             wasm_simd: false,
             wasm_multi_value: true,
         }
@@ -170,25 +170,17 @@ impl Config {
         self
     }
 
-    /// Configures whether the WebAssembly reference types proposal will be
-    /// enabled for compilation.
+    /// Configures whether the [WebAssembly reference types proposal][proposal]
+    /// will be enabled for compilation.
     ///
-    /// The [WebAssembly reference types proposal][proposal] is not currently
-    /// fully standardized and is undergoing development. Additionally the
-    /// support in wasmtime itself is still being worked on. Support for this
-    /// feature can be enabled through this method for appropriate wasm
-    /// modules.
+    /// This feature gates items such as the `externref` and `funcref` types as
+    /// well as allowing a module to define multiple tables.
     ///
-    /// This feature gates items such as the `externref` type and multiple tables
-    /// being in a module. Note that enabling the reference types feature will
-    /// also enable the bulk memory feature.
+    /// Note that enabling the reference types feature will also enable the bulk
+    /// memory feature.
     ///
-    /// This is `false` by default.
-    ///
-    /// > **Note**: Wasmtime does not implement everything for the reference
-    /// > types proposal spec at this time, so bugs, panics, and possibly
-    /// > segfaults should be expected. This should not be enabled in a
-    /// > production setting right now.
+    /// This is `true` by default on x86-64, and `false` by default on other
+    /// architectures.
     ///
     /// [proposal]: https://github.com/webassembly/reference-types
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
@@ -235,19 +227,13 @@ impl Config {
         self
     }
 
-    /// Configures whether the WebAssembly bulk memory operations proposal will
-    /// be enabled for compilation.
-    ///
-    /// The [WebAssembly bulk memory operations proposal][proposal] is not
-    /// currently fully standardized and is undergoing development.
-    /// Additionally the support in wasmtime itself is still being worked on.
-    /// Support for this feature can be enabled through this method for
-    /// appropriate wasm modules.
+    /// Configures whether the [WebAssembly bulk memory operations
+    /// proposal][proposal] will be enabled for compilation.
     ///
     /// This feature gates items such as the `memory.copy` instruction, passive
     /// data/table segments, etc, being in a module.
     ///
-    /// This is `false` by default.
+    /// This is `true` by default.
     ///
     /// [proposal]: https://github.com/webassembly/bulk-memory-operations
     pub fn wasm_bulk_memory(&mut self, enable: bool) -> &mut Self {
