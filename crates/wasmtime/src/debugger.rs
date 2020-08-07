@@ -31,11 +31,17 @@ impl<'a> DebuggerModule<'a> {
     pub fn bytes(&self) -> &[u8] {
         self.bytes
     }
+    pub fn compiled_module(&self) -> Weak<CompiledModule> {
+        self.module.clone()
+    }
     fn module(&self) -> Arc<CompiledModule> {
         self.module.upgrade().unwrap()
     }
     pub fn ranges(&self) -> Vec<(usize, usize)> {
         self.module().jit_code_ranges().collect()
+    }
+    pub fn name(&self) -> Option<String> {
+        self.module().module().name.clone()
     }
 }
 

@@ -3,16 +3,19 @@
 use anyhow::Result;
 use gdb_remote_protocol::*;
 use log::{error, trace};
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::ops::Range;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak as SyncWeak};
 use std::thread;
 use wasmtime::debugger::{
     DebuggerAgent, DebuggerJitCodeRegistration, DebuggerModule, DebuggerPauseKind,
     DebuggerResumeAction,
 };
 use wasmtime::{Config, Trap};
+use wasmtime_jit::CompiledModule;
 
 fn hex_byte_sequence(s: &str) -> String {
     s.as_bytes().iter().fold(String::new(), |mut acc, ch| {
@@ -21,9 +24,15 @@ fn hex_byte_sequence(s: &str) -> String {
     })
 }
 
+struct PauseState {
+    pub pc: u64,
+    pub stack: Vec<u64>,
+}
+
 struct DebuggerHandler {
-    modules: Vec<(u64, String, Vec<u8>)>,
+    modules: Arc<Mutex<HashMap<u32, RegisteredModule>>>,
     tx: Sender<()>,
+    state: Mutex<Option<PauseState>>,
 }
 
 impl Handler for DebuggerHandler {
@@ -73,7 +82,9 @@ impl Handler for DebuggerHandler {
     }
 
     fn read_general_registers(&self) -> Result<Vec<u8>, Error> {
-        Ok(vec![0x6B, 0, 0, 0, 1, 0, 0, 0]) // TODO pc
+        let state = self.state.lock().unwrap();
+        // Report only PC register.
+        Ok(state.as_ref().unwrap().pc.to_le_bytes().to_vec())
     }
 
     fn current_thread(&self) -> Result<Option<ThreadId>, Error> {
@@ -93,11 +104,15 @@ impl Handler for DebuggerHandler {
         if object == "libraries" && annex.is_empty() {
             let libs =
                 self.modules
-                    .iter()
-                    .fold("<library-list>".to_string(), |s, (addr, name, _)| {
+                    .lock()
+                    .unwrap()
+                    .values()
+                    .fold("<library-list>".to_string(), |s, r| {
                         format!(
-                            r#"{}\n<library name="{}"><section address="0x{:08x}"/></library>"#,
-                            s, name, addr
+                            r#"{}\n<library name="{}"><section address="0x{:016x}"/></library>"#,
+                            s,
+                            r.name,
+                            r.addr()
                         )
                     });
             return Ok((format!("{}</library-list>", libs).as_bytes().to_vec(), true));
@@ -107,7 +122,8 @@ impl Handler for DebuggerHandler {
 
     fn read_register(&self, register: u64) -> Result<Vec<u8>, Error> {
         if register == 0 {
-            Ok(vec![0x6B, 0, 0, 0, 1, 0, 0, 0]) // TODO pcs
+            let state = self.state.lock().unwrap();
+            Ok(state.as_ref().unwrap().pc.to_le_bytes().to_vec())
         } else {
             Err(Error::Unimplemented)
         }
@@ -125,13 +141,11 @@ impl Handler for DebuggerHandler {
     }
 
     fn read_memory(&self, region: MemoryRegion) -> Result<Vec<u8>, Error> {
-        let lib = self
-            .modules
-            .iter()
-            .find(|m| m.0 <= region.address && region.address < m.0 + m.2.len() as u64);
+        let modules = self.modules.lock().unwrap();
+        let lib = modules.values().find(|m| m.has_addr(region.address));
         match lib {
             Some(lib) => {
-                let chunk = &lib.2[(region.address - lib.0) as usize..];
+                let chunk = &lib.bytes[(region.address - lib.addr()) as usize..];
                 Ok((if (chunk.len() as u64) < region.length {
                     chunk
                 } else {
@@ -149,7 +163,16 @@ impl Handler for DebuggerHandler {
     }
 
     fn wasm_call_stack(&self) -> Result<Vec<u8>, Error> {
-        Ok(vec![0x6B, 0, 0, 0, 1, 0, 0, 0]) // TODO pcs
+        let state = self.state.lock().unwrap();
+        let stack = state
+            .as_ref()
+            .unwrap()
+            .stack
+            .iter()
+            .map(|s| s.to_le_bytes().to_vec())
+            .flatten()
+            .collect();
+        Ok(stack)
     }
 
     fn wasm_local(&self, frame: u64, index: u64) -> Result<Vec<u8>, Error> {
@@ -163,16 +186,17 @@ impl Handler for DebuggerHandler {
     }
 }
 
-fn handle_client(stream: TcpStream, tx: Sender<()>) {
-    let h = DebuggerHandler {
-        // modules: vec![(
-        //     0x1_0000_0000,
-        //     "fib.wasm".to_string(),
-        //     read("fib.wasm").expect("fib module"),
-        // )],
-        modules: vec![(0, "".to_string(), WAIT_WASM.to_vec())],
-        tx,
-    };
+fn handle_client(
+    stream: TcpStream,
+    tx: Sender<()>,
+    modules: Arc<Mutex<HashMap<u32, RegisteredModule>>>,
+) {
+    const PC: u64 = FUNC_CALL_OFFSET as u64 + 0x2_0000_0000;
+    let state = Mutex::new(Some(PauseState {
+        pc: PC,
+        stack: vec![PC],
+    }));
+    let h = DebuggerHandler { modules, tx, state };
     process_packets_from(
         stream.try_clone().expect("TCPStream::try_clone failed!"),
         stream,
@@ -181,11 +205,41 @@ fn handle_client(stream: TcpStream, tx: Sender<()>) {
     // TODO? stream.shutdown(Shutdown::Both).unwrap();
 }
 
+struct RegisteredModule {
+    id: u32,
+    name: String,
+    ranges: Vec<(usize, usize)>,
+    module: SyncWeak<CompiledModule>,
+    bytes: Vec<u8>,
+}
+
+impl RegisteredModule {
+    fn from(id: u32, module: DebuggerModule) -> Self {
+        let name = module
+            .name()
+            .unwrap_or_else(|| format!("module-{}.wasm", id));
+        Self {
+            id,
+            name,
+            ranges: module.ranges(),
+            module: module.compiled_module(),
+            bytes: module.bytes().to_vec(),
+        }
+    }
+    fn addr(&self) -> u64 {
+        (self.id as u64) << 32
+    }
+    fn has_addr(&self, addr: u64) -> bool {
+        self.id as u64 == addr >> 32 && (addr as usize) & 0xFFFFFFFF < self.bytes.len()
+    }
+}
+
 pub(crate) struct GdbServer {
     handler: thread::JoinHandle<()>,
     count: u32,
     connection_expected: bool,
     rx: Mutex<Receiver<()>>,
+    modules: Arc<Mutex<HashMap<u32, RegisteredModule>>>,
 }
 
 impl DebuggerAgent for GdbServer {
@@ -215,10 +269,26 @@ impl DebuggerAgent for GdbServer {
         }
     }
 
-    fn register_module(&mut self, _module: DebuggerModule) -> Box<dyn DebuggerJitCodeRegistration> {
-        struct NullReg;
-        impl DebuggerJitCodeRegistration for NullReg {}
-        Box::new(NullReg)
+    fn register_module(&mut self, module: DebuggerModule) -> Box<dyn DebuggerJitCodeRegistration> {
+        use std::sync::atomic::{AtomicU32, Ordering::SeqCst};
+        static NEXT_ID: AtomicU32 = AtomicU32::new(1);
+
+        let id = NEXT_ID.fetch_add(1, SeqCst);
+        self.modules
+            .lock()
+            .unwrap()
+            .insert(id, RegisteredModule::from(id, module));
+
+        trace!("module registered: {}", id);
+
+        struct Registration(u32, Arc<Mutex<HashMap<u32, RegisteredModule>>>);
+        impl DebuggerJitCodeRegistration for Registration {}
+        impl Drop for Registration {
+            fn drop(&mut self) {
+                self.1.lock().unwrap().remove(&self.0);
+            }
+        }
+        Box::new(Registration(id, self.modules.clone()))
     }
 }
 
@@ -226,14 +296,18 @@ impl GdbServer {
     pub(crate) fn new(port: u16) -> Self {
         let (tx, rx) = channel();
         let listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).unwrap();
+        let modules = Arc::new(Mutex::new(HashMap::new()));
+        //?? modules: vec![(0, "".to_string(), WAIT_WASM.to_vec())],
         trace!("Server listening on port {}", port);
+        let modules0 = modules.clone();
         let handler = thread::spawn(move || {
             for stream in listener.incoming() {
                 let tx = tx.clone();
+                let modules = modules0.clone();
                 match stream {
                     Ok(stream) => {
                         trace!("New connection: {}", stream.peer_addr().unwrap());
-                        thread::spawn(move || handle_client(stream, tx));
+                        thread::spawn(move || handle_client(stream, tx, modules));
                     }
                     Err(e) => {
                         error!("Error: {}", e);
@@ -246,6 +320,7 @@ impl GdbServer {
             count: 5,
             connection_expected: true,
             rx: Mutex::new(rx),
+            modules,
         }
     }
 }
