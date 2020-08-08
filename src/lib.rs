@@ -110,7 +110,7 @@ struct CommonOptions {
 
     /// Enable support for reference types
     #[structopt(long)]
-    enable_reference_types: bool,
+    enable_reference_types: Option<bool>,
 
     /// Enable support for multi-value functions
     #[structopt(long)]
@@ -122,7 +122,7 @@ struct CommonOptions {
 
     /// Enable support for bulk memory instructions
     #[structopt(long)]
-    enable_bulk_memory: bool,
+    enable_bulk_memory: Option<bool>,
 
     /// Enable all experimental Wasm features
     #[structopt(long)]
@@ -185,9 +185,13 @@ impl CommonOptions {
         config
             .cranelift_debug_verifier(self.enable_cranelift_debug_verifier)
             .debug_info(self.debug_info)
-            .wasm_bulk_memory(self.enable_bulk_memory || self.enable_all)
             .wasm_simd(self.enable_simd || self.enable_all)
-            .wasm_reference_types(self.enable_reference_types || self.enable_all)
+            .wasm_bulk_memory(self.enable_bulk_memory.unwrap_or(true) || self.enable_all)
+            .wasm_reference_types(
+                self.enable_reference_types
+                    .unwrap_or(cfg!(target_arch = "x86_64"))
+                    || self.enable_all,
+            )
             .wasm_multi_value(self.enable_multi_value.unwrap_or(true) || self.enable_all)
             .wasm_threads(self.enable_threads || self.enable_all)
             .cranelift_opt_level(self.opt_level())
