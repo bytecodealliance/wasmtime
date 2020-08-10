@@ -148,6 +148,7 @@ bitflags! {
                   target_os = "vxworks",
                   target_os = "macos",
                   target_os = "ios",
+                  target_os = "emscripten",
                   target_os = "redox"))]
         const CLOEXEC = libc::O_CLOEXEC;
         #[cfg(any(target_os = "linux",
