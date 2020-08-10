@@ -406,7 +406,10 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
 pub fn spectest(config: crate::generators::Config, test: crate::generators::SpecTest) {
     crate::init_fuzzing();
     log::debug!("running {:?} with {:?}", test.file, config);
-    let store = Store::new(&Engine::new(&config.to_wasmtime()));
+    let mut config = config.to_wasmtime();
+    config.wasm_reference_types(false);
+    config.wasm_bulk_memory(false);
+    let store = Store::new(&Engine::new(&config));
     let mut wast_context = WastContext::new(store);
     wast_context.register_spectest().unwrap();
     wast_context
