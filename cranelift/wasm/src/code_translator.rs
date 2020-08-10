@@ -1888,13 +1888,21 @@ fn translate_unreachable_operator<FE: FuncEnvironment + ?Sized>(
                                 let (params, _results) =
                                     blocktype_params_results(module_translation_state, blocktype)?;
                                 let else_block = block_with_params(builder, params, environ)?;
+                                state.stack.truncate(
+                                    state.control_stack.last().unwrap().original_stack_size(),
+                                );
 
                                 // We change the target of the branch instruction.
                                 builder.change_jump_destination(branch_inst, else_block);
                                 builder.seal_block(else_block);
                                 else_block
                             }
-                            ElseData::WithElse { else_block } => else_block,
+                            ElseData::WithElse { else_block } => {
+                                state.stack.truncate(
+                                    state.control_stack.last().unwrap().original_stack_size(),
+                                );
+                                else_block
+                            }
                         };
 
                         builder.switch_to_block(else_block);
