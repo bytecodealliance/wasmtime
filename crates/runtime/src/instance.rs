@@ -1300,7 +1300,7 @@ fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
             .map_or(true, |end| end > table.size() as usize)
         {
             return Err(InstantiationError::Trap(Trap::wasm(
-                ir::TrapCode::HeapOutOfBounds,
+                ir::TrapCode::TableOutOfBounds,
             )));
         }
 
