@@ -14,6 +14,8 @@ use libc::{
 use std::os::unix::prelude::*;
 #[cfg(target_os = "wasi")]
 use std::os::wasi::prelude::*;
+#[cfg(not(target_os = "wasi"))]
+use std::ffi::OsStr;
 use std::{convert::TryInto, ffi::OsString, io::Result, path::Path};
 
 pub use crate::sys::file::*;
@@ -217,6 +219,27 @@ pub unsafe fn openat<P: AsRef<Path>>(
     Ok(fd as RawFd)
 }
 
+// Platforms which have `PATH_MAX` that we can rely on.
+#[cfg(not(target_os = "wasi"))]
+pub unsafe fn readlinkat<P: AsRef<Path>>(dirfd: RawFd, path: P) -> Result<OsString> {
+    let path = cstr(path)?;
+    let buffer = &mut [0u8; libc::PATH_MAX as usize + 1];
+    let nread = from_result(libc::readlinkat(
+        dirfd,
+        path.as_ptr(),
+        buffer.as_mut_ptr() as *mut _,
+        buffer.len(),
+    ))?;
+    // We can just unwrap() this, because readlinkat returns an ssize_t which is either -1
+    // (handled above) or non-negative and will fit in a size_t/usize, which is what we're
+    // converting it to here.
+    let nread = nread.try_into().unwrap();
+    let link = OsStr::from_bytes(&buffer[0..nread]);
+    Ok(link.into())
+}
+
+// Platforms where we dyamically allocate the buffer instead.
+#[cfg(target_os = "wasi")]
 pub unsafe fn readlinkat<P: AsRef<Path>>(dirfd: RawFd, path: P) -> Result<OsString> {
     let path = cstr(path)?;
     // Start with a buffer big enough for the vast majority of paths.
@@ -238,7 +261,7 @@ pub unsafe fn readlinkat<P: AsRef<Path>>(dirfd: RawFd, path: P) -> Result<OsStri
         }
         // This would be a good candidate for `try_reserve`.
         // https://github.com/rust-lang/rust/issues/48043
-        buffer.reserve(buffer.capacity());
+        buffer.reserve(1);
     }
 }
 
