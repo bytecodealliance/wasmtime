@@ -24,7 +24,7 @@ fn hex_byte_sequence(s: &str) -> String {
     })
 }
 
-struct PauseState {
+struct DebuggerPauseState {
     pub pc: u64,
     pub stack: Vec<u64>,
 }
@@ -32,7 +32,7 @@ struct PauseState {
 struct DebuggerHandler {
     modules: Arc<Mutex<HashMap<u32, RegisteredModule>>>,
     tx: Sender<()>,
-    state: Mutex<Option<PauseState>>,
+    state: Arc<Mutex<Option<DebuggerPauseState>>>,
 }
 
 impl Handler for DebuggerHandler {
@@ -190,12 +190,8 @@ fn handle_client(
     stream: TcpStream,
     tx: Sender<()>,
     modules: Arc<Mutex<HashMap<u32, RegisteredModule>>>,
+    state: Arc<Mutex<Option<DebuggerPauseState>>>,
 ) {
-    const PC: u64 = FUNC_CALL_OFFSET as u64 + 0x2_0000_0000;
-    let state = Mutex::new(Some(PauseState {
-        pc: PC,
-        stack: vec![PC],
-    }));
     let h = DebuggerHandler { modules, tx, state };
     process_packets_from(
         stream.try_clone().expect("TCPStream::try_clone failed!"),
@@ -240,17 +236,30 @@ pub(crate) struct GdbServer {
     connection_expected: bool,
     rx: Mutex<Receiver<()>>,
     modules: Arc<Mutex<HashMap<u32, RegisteredModule>>>,
+    state: Arc<Mutex<Option<DebuggerPauseState>>>,
 }
 
 impl DebuggerAgent for GdbServer {
     fn pause(&mut self, kind: DebuggerPauseKind) -> DebuggerResumeAction {
-        match kind {
+        let stack = Trap::new("")
+            .trace()
+            .iter()
+            .map(|f| f.module_offset() as u64)
+            .collect::<Vec<_>>();
+        let pc = stack[0];
+
+        let state = DebuggerPauseState { pc, stack };
+        assert!(self.state.lock().unwrap().replace(state).is_none());
+
+        let action = match kind {
             DebuggerPauseKind::Breakpoint(_) => {
                 if self.connection_expected {
+                    assert_eq!(pc, FUNC_CALL_OFFSET as u64);
                     trace!("Waiting for debugger connection");
                     let _ = self.rx.lock().unwrap().recv().unwrap();
                     self.connection_expected = false;
                     trace!("Debugger connected");
+                    *self.state.lock().unwrap() = None;
                     return DebuggerResumeAction::Continue;
                 }
                 println!("!brk");
@@ -259,14 +268,17 @@ impl DebuggerAgent for GdbServer {
             DebuggerPauseKind::Step => {
                 if self.count > 0 {
                     self.count -= 1;
-                    let t = Trap::new("test");
-                    println!("!step {:?}", t.trace());
+                    println!("!step");
                     DebuggerResumeAction::Step
                 } else {
                     DebuggerResumeAction::Continue
                 }
             }
-        }
+        };
+
+        *self.state.lock().unwrap() = None;
+
+        action
     }
 
     fn register_module(&mut self, module: DebuggerModule) -> Box<dyn DebuggerJitCodeRegistration> {
@@ -297,17 +309,19 @@ impl GdbServer {
         let (tx, rx) = channel();
         let listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).unwrap();
         let modules = Arc::new(Mutex::new(HashMap::new()));
-        //?? modules: vec![(0, "".to_string(), WAIT_WASM.to_vec())],
+        let state = Arc::new(Mutex::new(None));
         trace!("Server listening on port {}", port);
-        let modules0 = modules.clone();
+        let modules_copy = modules.clone();
+        let state_copy = state.clone();
         let handler = thread::spawn(move || {
             for stream in listener.incoming() {
                 let tx = tx.clone();
-                let modules = modules0.clone();
+                let modules = modules_copy.clone();
+                let state = state_copy.clone();
                 match stream {
                     Ok(stream) => {
                         trace!("New connection: {}", stream.peer_addr().unwrap());
-                        thread::spawn(move || handle_client(stream, tx, modules));
+                        thread::spawn(move || handle_client(stream, tx, modules, state));
                     }
                     Err(e) => {
                         error!("Error: {}", e);
@@ -321,6 +335,7 @@ impl GdbServer {
             connection_expected: true,
             rx: Mutex::new(rx),
             modules,
+            state,
         }
     }
 }
