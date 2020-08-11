@@ -3038,6 +3038,30 @@ fn test_x64_emit() {
         "paddq   %xmm1, %xmm8",
     ));
 
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Psubb, RegMem::reg(xmm5), w_xmm9),
+        "66440FF8CD",
+        "psubb   %xmm5, %xmm9",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Psubw, RegMem::reg(xmm6), w_xmm7),
+        "660FF9FE",
+        "psubw   %xmm6, %xmm7",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Psubd, RegMem::reg(xmm13), w_xmm12),
+        "66450FFAE5",
+        "psubd   %xmm13, %xmm12",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Psubq, RegMem::reg(xmm8), w_xmm1),
+        "66410FFBC8",
+        "psubq   %xmm8, %xmm1",
+    ));
+
     // XMM_Mov_R_M: float stores
     insns.push((
         Inst::xmm_mov_r_m(SseOpcode::Movss, xmm15, Amode::imm_reg(128, r12), None),
