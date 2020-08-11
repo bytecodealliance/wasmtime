@@ -350,6 +350,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         types::I64X2 => SseOpcode::Paddq,
                         _ => panic!("Unsupported type for packed Iadd instruction"),
                     },
+                    Opcode::Isub => match ty {
+                        types::I8X16 => SseOpcode::Psubb,
+                        types::I16X8 => SseOpcode::Psubw,
+                        types::I32X4 => SseOpcode::Psubd,
+                        types::I64X2 => SseOpcode::Psubq,
+                        _ => panic!("Unsupported type for packed Isub instruction"),
+                    },
                     _ => panic!("Unsupported packed instruction"),
                 };
                 let lhs = input_to_reg(ctx, inputs[0]);
