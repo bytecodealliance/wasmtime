@@ -58,11 +58,13 @@ impl SavedBreakpointData {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum DebuggerPauseKind {
-    Breakpoint(*const u8),
+    Breakpoint(usize),
     Step,
 }
 
+#[derive(Debug, Clone)]
 pub enum DebuggerResumeAction {
     Step,
     Continue,
@@ -182,7 +184,7 @@ cfg_if::cfg_if! {
             if let Some(b) = dbg.find_breakpoint(pc) {
                 let ptr: *const _ = &*b;
 
-                let action = dbg.pause(DebuggerPauseKind::Breakpoint(pc));
+                let action = dbg.pause(DebuggerPauseKind::Breakpoint(pc as usize));
                 (*ptr).restore_code(dbg.patchable());
                 adjust_pc_in_ucontext(context, pc_adj as i64);
                 set_stepping_flag_in_ucontext(context, true);

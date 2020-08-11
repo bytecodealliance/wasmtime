@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::ops::Range;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex, Weak as SyncWeak};
+use std::sync::{Arc, Condvar, Mutex, Weak as SyncWeak};
 use std::thread;
 use wasmtime::debugger::{
     DebuggerAgent, DebuggerJitCodeRegistration, DebuggerModule, DebuggerPauseKind,
@@ -25,14 +25,26 @@ fn hex_byte_sequence(s: &str) -> String {
 }
 
 struct DebuggerPauseState {
-    pub pc: u64,
-    pub stack: Vec<u64>,
+    pc: u64,
+    stack: Vec<u64>,
+    pause_kind: DebuggerPauseKind,
 }
 
 struct DebuggerHandler {
     modules: Arc<Mutex<HashMap<u32, RegisteredModule>>>,
-    tx: Sender<()>,
-    state: Arc<Mutex<Option<DebuggerPauseState>>>,
+    tx: RefCell<Option<Sender<()>>>,
+    state: Arc<(Mutex<Option<DebuggerPauseState>>, Condvar)>,
+    resume_cvar: Arc<(Mutex<Option<DebuggerResumeAction>>, Condvar)>,
+}
+
+impl DebuggerHandler {
+    fn continue_and_wait(&self, action: DebuggerResumeAction) -> Result<StopReason, Error> {
+        *self.resume_cvar.0.lock().unwrap() = Some(action);
+        self.resume_cvar.1.notify_one();
+        let mut lock = self.state.0.lock().unwrap();
+        lock = self.state.1.wait(lock).unwrap();
+        Ok(StopReason::Signal(0)) // TODO
+    }
 }
 
 impl Handler for DebuggerHandler {
@@ -82,7 +94,7 @@ impl Handler for DebuggerHandler {
     }
 
     fn read_general_registers(&self) -> Result<Vec<u8>, Error> {
-        let state = self.state.lock().unwrap();
+        let state = self.state.0.lock().unwrap();
         // Report only PC register.
         Ok(state.as_ref().unwrap().pc.to_le_bytes().to_vec())
     }
@@ -122,7 +134,7 @@ impl Handler for DebuggerHandler {
 
     fn read_register(&self, register: u64) -> Result<Vec<u8>, Error> {
         if register == 0 {
-            let state = self.state.lock().unwrap();
+            let state = self.state.0.lock().unwrap();
             Ok(state.as_ref().unwrap().pc.to_le_bytes().to_vec())
         } else {
             Err(Error::Unimplemented)
@@ -135,9 +147,13 @@ impl Handler for DebuggerHandler {
         Ok(StopReason::Signal(0)) // TODO real signal
     }
 
-    fn process_continue(&self) -> Result<(), Error> {
-        self.tx.send(()).unwrap();
-        Ok(())
+    fn process_continue(&self) -> Result<StopReason, Error> {
+        self.tx.borrow_mut().take().map(|tx| tx.send(()).unwrap());
+        self.continue_and_wait(DebuggerResumeAction::Continue)
+    }
+
+    fn process_step(&self) -> Result<StopReason, Error> {
+        self.continue_and_wait(DebuggerResumeAction::Step)
     }
 
     fn read_memory(&self, region: MemoryRegion) -> Result<Vec<u8>, Error> {
@@ -163,7 +179,7 @@ impl Handler for DebuggerHandler {
     }
 
     fn wasm_call_stack(&self) -> Result<Vec<u8>, Error> {
-        let state = self.state.lock().unwrap();
+        let state = self.state.0.lock().unwrap();
         let stack = state
             .as_ref()
             .unwrap()
@@ -190,9 +206,16 @@ fn handle_client(
     stream: TcpStream,
     tx: Sender<()>,
     modules: Arc<Mutex<HashMap<u32, RegisteredModule>>>,
-    state: Arc<Mutex<Option<DebuggerPauseState>>>,
+    state: Arc<(Mutex<Option<DebuggerPauseState>>, Condvar)>,
+    resume_cvar: Arc<(Mutex<Option<DebuggerResumeAction>>, Condvar)>,
 ) {
-    let h = DebuggerHandler { modules, tx, state };
+    let tx = RefCell::new(Some(tx));
+    let h = DebuggerHandler {
+        modules,
+        tx,
+        state,
+        resume_cvar,
+    };
     process_packets_from(
         stream.try_clone().expect("TCPStream::try_clone failed!"),
         stream,
@@ -236,49 +259,57 @@ pub(crate) struct GdbServer {
     connection_expected: bool,
     rx: Mutex<Receiver<()>>,
     modules: Arc<Mutex<HashMap<u32, RegisteredModule>>>,
-    state: Arc<Mutex<Option<DebuggerPauseState>>>,
+    state: Arc<(Mutex<Option<DebuggerPauseState>>, Condvar)>,
+    cvar: Arc<(Mutex<Option<DebuggerResumeAction>>, Condvar)>,
 }
 
 impl DebuggerAgent for GdbServer {
     fn pause(&mut self, kind: DebuggerPauseKind) -> DebuggerResumeAction {
+        self.count += 1;
         let stack = Trap::new("")
             .trace()
             .iter()
-            .map(|f| f.module_offset() as u64)
+            .map(|f| {
+                f.module_offset() as u64
+                    + if self.count > 1 {
+                        0x100000000
+                    } else {
+                        0x200000000
+                    }
+            })
             .collect::<Vec<_>>();
-        let pc = stack[0];
+        let pc = if stack.len() > 0 { stack[0] } else { 0 };
 
-        let state = DebuggerPauseState { pc, stack };
-        assert!(self.state.lock().unwrap().replace(state).is_none());
+        let pause_state = DebuggerPauseState {
+            pc,
+            stack,
+            pause_kind: kind.clone(),
+        };
+        assert!(self.state.0.lock().unwrap().replace(pause_state).is_none());
+        self.state.1.notify_all();
+
+        trace!("execution paused");
+        let mut lock = self.cvar.0.lock().unwrap();
+        assert!(lock.is_none());
+        lock = self.cvar.1.wait(lock).unwrap();
 
         let action = match kind {
-            DebuggerPauseKind::Breakpoint(_) => {
-                if self.connection_expected {
-                    assert_eq!(pc, FUNC_CALL_OFFSET as u64);
-                    trace!("Waiting for debugger connection");
-                    let _ = self.rx.lock().unwrap().recv().unwrap();
-                    self.connection_expected = false;
-                    trace!("Debugger connected");
-                    *self.state.lock().unwrap() = None;
-                    return DebuggerResumeAction::Continue;
-                }
-                println!("!brk");
-                DebuggerResumeAction::Step
+            DebuggerPauseKind::Breakpoint(_) if self.connection_expected => {
+                assert_eq!(pc & 0xFFFFFFFF, FUNC_CALL_OFFSET as u64);
+                // trace!("Waiting for debugger connection");
+                // let _ = self.rx.lock().unwrap().recv().unwrap();
+                self.connection_expected = false;
+                trace!("Debugger connected");
             }
-            DebuggerPauseKind::Step => {
-                if self.count > 0 {
-                    self.count -= 1;
-                    println!("!step");
-                    DebuggerResumeAction::Step
-                } else {
-                    DebuggerResumeAction::Continue
-                }
-            }
+
+            _ => (),
         };
 
-        *self.state.lock().unwrap() = None;
+        trace!("continue execution");
 
-        action
+        *self.state.0.lock().unwrap() = None;
+
+        lock.take().unwrap_or(DebuggerResumeAction::Continue)
     }
 
     fn register_module(&mut self, module: DebuggerModule) -> Box<dyn DebuggerJitCodeRegistration> {
@@ -309,19 +340,24 @@ impl GdbServer {
         let (tx, rx) = channel();
         let listener = TcpListener::bind(&format!("0.0.0.0:{}", port)).unwrap();
         let modules = Arc::new(Mutex::new(HashMap::new()));
-        let state = Arc::new(Mutex::new(None));
+        let state: Arc<(Mutex<Option<DebuggerPauseState>>, Condvar)> =
+            Arc::new((Mutex::new(None), Condvar::new()));
+        let cvar: Arc<(Mutex<Option<DebuggerResumeAction>>, Condvar)> =
+            Arc::new((Mutex::new(None), Condvar::new()));
         trace!("Server listening on port {}", port);
         let modules_copy = modules.clone();
         let state_copy = state.clone();
+        let cvar_copy = cvar.clone();
         let handler = thread::spawn(move || {
             for stream in listener.incoming() {
                 let tx = tx.clone();
                 let modules = modules_copy.clone();
                 let state = state_copy.clone();
+                let cvar = cvar_copy.clone();
                 match stream {
                     Ok(stream) => {
                         trace!("New connection: {}", stream.peer_addr().unwrap());
-                        thread::spawn(move || handle_client(stream, tx, modules, state));
+                        thread::spawn(move || handle_client(stream, tx, modules, state, cvar));
                     }
                     Err(e) => {
                         error!("Error: {}", e);
@@ -331,11 +367,12 @@ impl GdbServer {
         });
         Self {
             handler,
-            count: 5,
+            count: 0,
             connection_expected: true,
             rx: Mutex::new(rx),
             modules,
             state,
+            cvar,
         }
     }
 }
