@@ -174,7 +174,21 @@ impl Handler for DebuggerHandler {
     }
 
     fn insert_software_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
+        let modules = self.modules.lock().unwrap();
+        let lib = modules.values().find(|m| m.has_addr(breakpoint.addr));
+        let breakpoints = lib
+            .unwrap()
+            .module
+            .upgrade()
+            .unwrap()
+            .set_breakpoint(breakpoint.addr as usize & 0xFFFF_FFFF);
+        // TODO add `breakpoints` to context, see Module::set_breakpoint
         trace!("Breakpoint {:x}", breakpoint.addr);
+        Ok(())
+    }
+
+    fn remove_software_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
+        trace!("-Breakpoint {:x}", breakpoint.addr);
         Ok(())
     }
 

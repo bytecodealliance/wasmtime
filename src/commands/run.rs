@@ -271,8 +271,6 @@ impl RunCommand {
         if self.enable_gdb_server {
             wait_for_debugger_connection(&module.engine().config())?;
         }
-        // EXAMPLE
-        module.set_breakpoint(0x45);
 
         // If a function to invoke was given, invoke it.
         if let Some(name) = self.invoke.as_ref() {
