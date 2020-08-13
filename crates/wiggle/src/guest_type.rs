@@ -45,11 +45,11 @@ pub trait GuestType<'a>: Sized {
 }
 
 /// A trait for `GuestType`s that have the same representation in guest memory
-/// as in Rust. These types can be used with the `GuestPtr::as_raw` method to
+/// as in Rust. These types can be used with the `GuestPtr::as_slice` method to
 /// view as a slice.
 ///
 /// Unsafe trait because a correct GuestTypeTransparent implemengation ensures that the
-/// GuestPtr::as_raw methods are safe. This trait should only ever be implemented
+/// GuestPtr::as_slice methods are safe. This trait should only ever be implemented
 /// by wiggle_generate-produced code.
 pub unsafe trait GuestTypeTransparent<'a>: GuestType<'a> {
     /// Checks that the memory at `ptr` is a valid representation of `Self`.
