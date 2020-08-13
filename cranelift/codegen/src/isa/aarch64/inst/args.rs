@@ -7,8 +7,7 @@ use crate::ir;
 use crate::ir::types::{F32X2, F32X4, F64X2, I16X4, I16X8, I32X2, I32X4, I64X2, I8X16, I8X8};
 use crate::ir::Type;
 use crate::isa::aarch64::inst::*;
-use crate::isa::aarch64::lower::ty_bits;
-use crate::machinst::MachLabel;
+use crate::machinst::{ty_bits, MachLabel};
 
 use regalloc::{RealRegUniverse, Reg, Writable};
 
@@ -119,9 +118,9 @@ pub enum MemLabel {
     PCRel(i32),
 }
 
-/// A memory argument to load/store, encapsulating the possible addressing modes.
+/// An addressing mode specified for a load/store operation.
 #[derive(Clone, Debug)]
-pub enum MemArg {
+pub enum AMode {
     //
     // Real ARM64 addressing modes:
     //
@@ -183,39 +182,39 @@ pub enum MemArg {
     NominalSPOffset(i64, Type),
 }
 
-impl MemArg {
+impl AMode {
     /// Memory reference using an address in a register.
-    pub fn reg(reg: Reg) -> MemArg {
+    pub fn reg(reg: Reg) -> AMode {
         // Use UnsignedOffset rather than Unscaled to use ldr rather than ldur.
         // This also does not use PostIndexed / PreIndexed as they update the register.
-        MemArg::UnsignedOffset(reg, UImm12Scaled::zero(I64))
+        AMode::UnsignedOffset(reg, UImm12Scaled::zero(I64))
     }
 
     /// Memory reference using the sum of two registers as an address.
-    pub fn reg_plus_reg(reg1: Reg, reg2: Reg) -> MemArg {
-        MemArg::RegReg(reg1, reg2)
+    pub fn reg_plus_reg(reg1: Reg, reg2: Reg) -> AMode {
+        AMode::RegReg(reg1, reg2)
     }
 
     /// Memory reference using `reg1 + sizeof(ty) * reg2` as an address.
-    pub fn reg_plus_reg_scaled(reg1: Reg, reg2: Reg, ty: Type) -> MemArg {
-        MemArg::RegScaled(reg1, reg2, ty)
+    pub fn reg_plus_reg_scaled(reg1: Reg, reg2: Reg, ty: Type) -> AMode {
+        AMode::RegScaled(reg1, reg2, ty)
     }
 
     /// Memory reference using `reg1 + sizeof(ty) * reg2` as an address, with `reg2` sign- or
     /// zero-extended as per `op`.
-    pub fn reg_plus_reg_scaled_extended(reg1: Reg, reg2: Reg, ty: Type, op: ExtendOp) -> MemArg {
-        MemArg::RegScaledExtended(reg1, reg2, ty, op)
+    pub fn reg_plus_reg_scaled_extended(reg1: Reg, reg2: Reg, ty: Type, op: ExtendOp) -> AMode {
+        AMode::RegScaledExtended(reg1, reg2, ty, op)
     }
 
     /// Memory reference to a label: a global function or value, or data in the constant pool.
-    pub fn label(label: MemLabel) -> MemArg {
-        MemArg::Label(label)
+    pub fn label(label: MemLabel) -> AMode {
+        AMode::Label(label)
     }
 }
 
 /// A memory argument to a load/store-pair.
 #[derive(Clone, Debug)]
-pub enum PairMemArg {
+pub enum PairAMode {
     SignedOffset(Reg, SImm7Scaled),
     PreIndexed(Writable<Reg>, SImm7Scaled),
     PostIndexed(Writable<Reg>, SImm7Scaled),
@@ -381,27 +380,27 @@ fn shift_for_type(ty: Type) -> usize {
     }
 }
 
-impl ShowWithRRU for MemArg {
+impl ShowWithRRU for AMode {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         match self {
-            &MemArg::Unscaled(reg, simm9) => {
+            &AMode::Unscaled(reg, simm9) => {
                 if simm9.value != 0 {
                     format!("[{}, {}]", reg.show_rru(mb_rru), simm9.show_rru(mb_rru))
                 } else {
                     format!("[{}]", reg.show_rru(mb_rru))
                 }
             }
-            &MemArg::UnsignedOffset(reg, uimm12) => {
+            &AMode::UnsignedOffset(reg, uimm12) => {
                 if uimm12.value != 0 {
                     format!("[{}, {}]", reg.show_rru(mb_rru), uimm12.show_rru(mb_rru))
                 } else {
                     format!("[{}]", reg.show_rru(mb_rru))
                 }
             }
-            &MemArg::RegReg(r1, r2) => {
+            &AMode::RegReg(r1, r2) => {
                 format!("[{}, {}]", r1.show_rru(mb_rru), r2.show_rru(mb_rru),)
             }
-            &MemArg::RegScaled(r1, r2, ty) => {
+            &AMode::RegScaled(r1, r2, ty) => {
                 let shift = shift_for_type(ty);
                 format!(
                     "[{}, {}, LSL #{}]",
@@ -410,7 +409,7 @@ impl ShowWithRRU for MemArg {
                     shift,
                 )
             }
-            &MemArg::RegScaledExtended(r1, r2, ty, op) => {
+            &AMode::RegScaledExtended(r1, r2, ty, op) => {
                 let shift = shift_for_type(ty);
                 let size = match op {
                     ExtendOp::SXTW | ExtendOp::UXTW => OperandSize::Size32,
@@ -425,7 +424,7 @@ impl ShowWithRRU for MemArg {
                     shift
                 )
             }
-            &MemArg::RegExtended(r1, r2, op) => {
+            &AMode::RegExtended(r1, r2, op) => {
                 let size = match op {
                     ExtendOp::SXTW | ExtendOp::UXTW => OperandSize::Size32,
                     _ => OperandSize::Size64,
@@ -438,44 +437,44 @@ impl ShowWithRRU for MemArg {
                     op,
                 )
             }
-            &MemArg::Label(ref label) => label.show_rru(mb_rru),
-            &MemArg::PreIndexed(r, simm9) => format!(
+            &AMode::Label(ref label) => label.show_rru(mb_rru),
+            &AMode::PreIndexed(r, simm9) => format!(
                 "[{}, {}]!",
                 r.to_reg().show_rru(mb_rru),
                 simm9.show_rru(mb_rru)
             ),
-            &MemArg::PostIndexed(r, simm9) => format!(
+            &AMode::PostIndexed(r, simm9) => format!(
                 "[{}], {}",
                 r.to_reg().show_rru(mb_rru),
                 simm9.show_rru(mb_rru)
             ),
             // Eliminated by `mem_finalize()`.
-            &MemArg::SPOffset(..)
-            | &MemArg::FPOffset(..)
-            | &MemArg::NominalSPOffset(..)
-            | &MemArg::RegOffset(..) => {
+            &AMode::SPOffset(..)
+            | &AMode::FPOffset(..)
+            | &AMode::NominalSPOffset(..)
+            | &AMode::RegOffset(..) => {
                 panic!("Unexpected pseudo mem-arg mode (stack-offset or generic reg-offset)!")
             }
         }
     }
 }
 
-impl ShowWithRRU for PairMemArg {
+impl ShowWithRRU for PairAMode {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         match self {
-            &PairMemArg::SignedOffset(reg, simm7) => {
+            &PairAMode::SignedOffset(reg, simm7) => {
                 if simm7.value != 0 {
                     format!("[{}, {}]", reg.show_rru(mb_rru), simm7.show_rru(mb_rru))
                 } else {
                     format!("[{}]", reg.show_rru(mb_rru))
                 }
             }
-            &PairMemArg::PreIndexed(reg, simm7) => format!(
+            &PairAMode::PreIndexed(reg, simm7) => format!(
                 "[{}, {}]!",
                 reg.to_reg().show_rru(mb_rru),
                 simm7.show_rru(mb_rru)
             ),
-            &PairMemArg::PostIndexed(reg, simm7) => format!(
+            &PairAMode::PostIndexed(reg, simm7) => format!(
                 "[{}], {}",
                 reg.to_reg().show_rru(mb_rru),
                 simm7.show_rru(mb_rru)

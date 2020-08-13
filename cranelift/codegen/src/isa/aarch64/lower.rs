@@ -663,7 +663,7 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
     elem_ty: Type,
     roots: &[InsnInput],
     offset: i32,
-) -> MemArg {
+) -> AMode {
     // TODO: support base_reg + scale * index_reg. For this, we would need to pattern-match shl or
     // mul instructions (Load/StoreComplex don't include scale factors).
 
@@ -680,26 +680,26 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
         offset
     );
 
-    // First, decide what the `MemArg` will be. Take one extendee and one 64-bit
+    // First, decide what the `AMode` will be. Take one extendee and one 64-bit
     // reg, or two 64-bit regs, or a 64-bit reg and a 32-bit reg with extension,
     // or some other combination as appropriate.
     let memarg = if addends64.len() > 0 {
         if addends32.len() > 0 {
             let (reg32, extendop) = addends32.pop().unwrap();
             let reg64 = addends64.pop().unwrap();
-            MemArg::RegExtended(reg64, reg32, extendop)
+            AMode::RegExtended(reg64, reg32, extendop)
         } else if offset > 0 && offset < 0x1000 {
             let reg64 = addends64.pop().unwrap();
             let off = offset;
             offset = 0;
-            MemArg::RegOffset(reg64, off, elem_ty)
+            AMode::RegOffset(reg64, off, elem_ty)
         } else if addends64.len() >= 2 {
             let reg1 = addends64.pop().unwrap();
             let reg2 = addends64.pop().unwrap();
-            MemArg::RegReg(reg1, reg2)
+            AMode::RegReg(reg1, reg2)
         } else {
             let reg1 = addends64.pop().unwrap();
-            MemArg::reg(reg1)
+            AMode::reg(reg1)
         }
     } else
     /* addends64.len() == 0 */
@@ -720,9 +720,9 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
                 to_bits: 64,
             });
             if let Some((reg2, extendop)) = addends32.pop() {
-                MemArg::RegExtended(tmp.to_reg(), reg2, extendop)
+                AMode::RegExtended(tmp.to_reg(), reg2, extendop)
             } else {
-                MemArg::reg(tmp.to_reg())
+                AMode::reg(tmp.to_reg())
             }
         } else
         /* addends32.len() == 0 */
@@ -730,32 +730,32 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
             let off_reg = ctx.alloc_tmp(RegClass::I64, I64);
             lower_constant_u64(ctx, off_reg, offset as u64);
             offset = 0;
-            MemArg::reg(off_reg.to_reg())
+            AMode::reg(off_reg.to_reg())
         }
     };
 
     // At this point, if we have any remaining components, we need to allocate a
-    // temp, replace one of the registers in the MemArg with the temp, and emit
+    // temp, replace one of the registers in the AMode with the temp, and emit
     // instructions to add together the remaining components. Return immediately
     // if this is *not* the case.
     if offset == 0 && addends32.len() == 0 && addends64.len() == 0 {
         return memarg;
     }
 
-    // Allocate the temp and shoehorn it into the MemArg.
+    // Allocate the temp and shoehorn it into the AMode.
     let addr = ctx.alloc_tmp(RegClass::I64, I64);
     let (reg, memarg) = match memarg {
-        MemArg::RegExtended(r1, r2, extendop) => {
-            (r1, MemArg::RegExtended(addr.to_reg(), r2, extendop))
+        AMode::RegExtended(r1, r2, extendop) => {
+            (r1, AMode::RegExtended(addr.to_reg(), r2, extendop))
         }
-        MemArg::RegOffset(r, off, ty) => (r, MemArg::RegOffset(addr.to_reg(), off, ty)),
-        MemArg::RegReg(r1, r2) => (r2, MemArg::RegReg(addr.to_reg(), r1)),
-        MemArg::UnsignedOffset(r, imm) => (r, MemArg::UnsignedOffset(addr.to_reg(), imm)),
+        AMode::RegOffset(r, off, ty) => (r, AMode::RegOffset(addr.to_reg(), off, ty)),
+        AMode::RegReg(r1, r2) => (r2, AMode::RegReg(addr.to_reg(), r1)),
+        AMode::UnsignedOffset(r, imm) => (r, AMode::UnsignedOffset(addr.to_reg(), imm)),
         _ => unreachable!(),
     };
 
     // If there is any offset, load that first into `addr`, and add the `reg`
-    // that we kicked out of the `MemArg`; otherwise, start with that reg.
+    // that we kicked out of the `AMode`; otherwise, start with that reg.
     if offset != 0 {
         // If we can fit offset or -offset in an imm12, use an add-imm
         // to combine the reg and offset. Otherwise, load value first then add.
@@ -993,37 +993,6 @@ pub(crate) fn condcode_is_signed(cc: IntCC) -> bool {
 
 //=============================================================================
 // Helpers for instruction lowering.
-
-/// Returns the size (in bits) of a given type.
-pub fn ty_bits(ty: Type) -> usize {
-    match ty {
-        B1 => 1,
-        B8 | I8 => 8,
-        B16 | I16 => 16,
-        B32 | I32 | F32 | R32 => 32,
-        B64 | I64 | F64 | R64 => 64,
-        B128 | I128 => 128,
-        IFLAGS | FFLAGS => 32,
-        B8X8 | I8X8 | B16X4 | I16X4 | B32X2 | I32X2 => 64,
-        B8X16 | I8X16 | B16X8 | I16X8 | B32X4 | I32X4 | B64X2 | I64X2 => 128,
-        F32X4 | F64X2 => 128,
-        _ => panic!("ty_bits() on unknown type: {:?}", ty),
-    }
-}
-
-pub(crate) fn ty_is_int(ty: Type) -> bool {
-    match ty {
-        B1 | B8 | I8 | B16 | I16 | B32 | I32 | B64 | I64 | R32 | R64 => true,
-        F32 | F64 | B128 | F32X2 | F32X4 | F64X2 | I128 | I8X8 | I8X16 | I16X4 | I16X8 | I32X2
-        | I32X4 | I64X2 => false,
-        IFLAGS | FFLAGS => panic!("Unexpected flags type"),
-        _ => panic!("ty_is_int() on unknown type: {:?}", ty),
-    }
-}
-
-pub(crate) fn ty_is_float(ty: Type) -> bool {
-    !ty_is_int(ty)
-}
 
 pub(crate) fn choose_32_64<T: Copy>(ty: Type, op32: T, op64: T) -> T {
     let bits = ty_bits(ty);
