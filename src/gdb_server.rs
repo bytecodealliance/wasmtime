@@ -4,7 +4,7 @@ use anyhow::Result;
 use gdb_remote_protocol::*;
 use log::{error, trace};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::ops::Range;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -14,7 +14,7 @@ use wasmtime::debugger::{
     DebuggerAgent, DebuggerJitCodeRegistration, DebuggerModule, DebuggerPauseKind,
     DebuggerResumeAction,
 };
-use wasmtime::{Config, Trap};
+use wasmtime::{Config, Engine, Trap};
 use wasmtime_jit::CompiledModule;
 
 fn hex_byte_sequence(s: &str) -> String {
@@ -176,13 +176,26 @@ impl Handler for DebuggerHandler {
     fn insert_software_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
         let modules = self.modules.lock().unwrap();
         let lib = modules.values().find(|m| m.has_addr(breakpoint.addr));
+        if lib
+            .unwrap()
+            .set_breakpoints
+            .borrow()
+            .contains(&breakpoint.addr)
+        {
+            // TODO flip breakpoint? see `remove_software_breakpoint`
+            return Ok(());
+        }
         let breakpoints = lib
             .unwrap()
             .module
             .upgrade()
             .unwrap()
             .set_breakpoint(breakpoint.addr as usize & 0xFFFF_FFFF);
-        // TODO add `breakpoints` to context, see Module::set_breakpoint
+        lib.unwrap().engine.add_breakpoints(breakpoints.into_iter());
+        lib.unwrap()
+            .set_breakpoints
+            .borrow_mut()
+            .insert(breakpoint.addr);
         trace!("Breakpoint {:x}", breakpoint.addr);
         Ok(())
     }
@@ -243,7 +256,9 @@ struct RegisteredModule {
     name: String,
     ranges: Vec<(usize, usize)>,
     module: SyncWeak<CompiledModule>,
+    engine: Engine,
     bytes: Vec<u8>,
+    set_breakpoints: RefCell<HashSet<u64>>,
 }
 
 impl RegisteredModule {
@@ -256,7 +271,9 @@ impl RegisteredModule {
             name,
             ranges: module.ranges(),
             module: module.compiled_module(),
+            engine: module.engine(),
             bytes: module.bytes().to_vec(),
+            set_breakpoints: RefCell::new(HashSet::new()),
         }
     }
     fn addr(&self) -> u64 {

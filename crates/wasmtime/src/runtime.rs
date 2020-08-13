@@ -23,7 +23,7 @@ use wasmtime_environ::settings::{self, Configurable, SetError};
 use wasmtime_environ::{ir, isa, isa::TargetIsa, wasm, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, CompiledModule, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
-use wasmtime_runtime::debugger::DebuggerContext;
+use wasmtime_runtime::debugger::{BreakpointData, DebuggerContext};
 use wasmtime_runtime::{
     debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, SignatureRegistry,
     StackMapRegistry, VMExternRef, VMExternRefActivationsTable, VMInterrupts,
@@ -794,6 +794,12 @@ impl EngineInner {
     }
 }
 
+impl From<Arc<EngineInner>> for Engine {
+    fn from(inner: Arc<EngineInner>) -> Self {
+        Self { inner }
+    }
+}
+
 pub(crate) struct EngineJitCode {
     jit_code_ranges: Arc<Mutex<Vec<(usize, usize, SyncWeak<CompiledModule>)>>>,
 }
@@ -900,6 +906,13 @@ impl Engine {
             .get_mut()
             .register_module(compiled_module, bytes);
         ModuleRegistration(reg)
+    }
+
+    /// FIXME
+    pub fn add_breakpoints(&self, it: impl Iterator<Item = BreakpointData>) {
+        self.ensure_engine_debugger_context()
+            .get_mut()
+            .add_breakpoints(it);
     }
 
     /// Returns whether the engine `a` and `b` refer to the same configuration.

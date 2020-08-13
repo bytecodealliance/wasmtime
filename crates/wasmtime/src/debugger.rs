@@ -18,13 +18,15 @@ pub trait DebuggerAgent: std::marker::Send + std::marker::Sync {
 
 pub struct DebuggerModule<'a> {
     module: Weak<CompiledModule>,
+    engine: Weak<EngineInner>,
     bytes: &'a [u8],
 }
 
 impl<'a> DebuggerModule<'a> {
-    fn new(module: &Arc<CompiledModule>, bytes: &'a [u8]) -> Self {
+    fn new(module: &Arc<CompiledModule>, engine: Weak<EngineInner>, bytes: &'a [u8]) -> Self {
         Self {
             module: Arc::downgrade(module),
+            engine,
             bytes,
         }
     }
@@ -33,6 +35,9 @@ impl<'a> DebuggerModule<'a> {
     }
     pub fn compiled_module(&self) -> Weak<CompiledModule> {
         self.module.clone()
+    }
+    pub fn engine(&self) -> Engine {
+        self.engine.upgrade().unwrap().into()
     }
     fn module(&self) -> Arc<CompiledModule> {
         self.module.upgrade().unwrap()
@@ -71,8 +76,11 @@ fn _assert_engine_debugger_context_send_sync() {
 
 impl EngineDebuggerContext {
     pub fn new(engine: &Engine) -> EngineDebuggerContext {
+        EngineDebuggerContext::new_inner(engine.clone().weak())
+    }
+    pub(crate) fn new_inner(engine: Weak<EngineInner>) -> EngineDebuggerContext {
         EngineDebuggerContext {
-            engine: engine.clone().weak(),
+            engine,
             breakpoints: Vec::new(),
             data: Mutex::new(None),
         }
@@ -88,7 +96,7 @@ impl EngineDebuggerContext {
         self.debugger()
             .lock()
             .unwrap()
-            .register_module(DebuggerModule::new(module, bytes))
+            .register_module(DebuggerModule::new(module, self.engine.clone(), bytes))
     }
     fn debugger(&self) -> Arc<Mutex<dyn DebuggerAgent + 'static>> {
         let engine_inner = self.engine.upgrade().unwrap();
