@@ -9,11 +9,11 @@ Wasmtime strives to be a highly configurable and embeddable runtime to run on
 any scale of application. Many features are still under development so if you
 have a question don't hesitate to [file an issue][issue].
 
-This guide is intended to server a number of purposes and within you'll find:
+This guide is intended to serve a number of purposes and within you'll find:
 
 * [How to create simple wasm modules](tutorial-create-hello-world.md)
 * [How to use Wasmtime from a number of languages](lang.md)
-* [How to use install and use the `wasmtime` CLI](cli.md)
+* [How to install and use the `wasmtime` CLI](cli.md)
 * Information about [stability](stability.md) and [security](security.md) in
   Wasmtime.
 
