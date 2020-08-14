@@ -37,13 +37,15 @@ struct DebuggerHandler {
     resume_cvar: Arc<(Mutex<Option<DebuggerResumeAction>>, Condvar)>,
 }
 
+const SIG_TRACE: u8 = 5;
+
 impl DebuggerHandler {
     fn continue_and_wait(&self, action: DebuggerResumeAction) -> Result<StopReason, Error> {
         *self.resume_cvar.0.lock().unwrap() = Some(action);
         self.resume_cvar.1.notify_one();
         let mut lock = self.state.0.lock().unwrap();
         lock = self.state.1.wait(lock).unwrap();
-        Ok(StopReason::Signal(0)) // TODO
+        Ok(StopReason::Signal(SIG_TRACE))
     }
 }
 
@@ -141,10 +143,15 @@ impl Handler for DebuggerHandler {
         }
     }
 
+    fn set_current_thread(&self, _for: SetThreadFor, _id: ThreadId) -> Result<(), Error> {
+        // We have only one thread.
+        Ok(())
+    }
+
     fn halt_reason(
         &self,
     ) -> std::result::Result<gdb_remote_protocol::StopReason, gdb_remote_protocol::Error> {
-        Ok(StopReason::Signal(0)) // TODO real signal
+        Ok(StopReason::Signal(SIG_TRACE))
     }
 
     fn process_continue(&self) -> Result<StopReason, Error> {
