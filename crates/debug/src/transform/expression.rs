@@ -395,6 +395,21 @@ where
     let mut pc = expr.0.clone();
     let buf = expr.0.to_slice()?;
     let mut parts = Vec::new();
+    macro_rules! push {
+        ($part:expr) => {{
+            let part = $part;
+            if let (CompiledExpressionPart::Code(cc2), Some(CompiledExpressionPart::Code(cc1))) =
+                (&part, parts.last())
+            {
+                let mut combined = cc1.clone();
+                parts.pop();
+                combined.extend_from_slice(cc2);
+                parts.push(CompiledExpressionPart::Code(combined));
+            } else {
+                parts.push(part)
+            }
+        }};
+    }
     let mut need_deref = false;
     if is_old_expression_format(&buf) && frame_base.is_some() {
         // Still supporting old DWARF variable expressions without fbreg.
@@ -404,12 +419,11 @@ where
         }
         need_deref = frame_base.unwrap().need_deref;
     }
-    let base_len = parts.len();
     let mut code_chunk = Vec::new();
     macro_rules! flush_code_chunk {
         () => {
             if !code_chunk.is_empty() {
-                parts.push(CompiledExpressionPart::Code(code_chunk));
+                push!(CompiledExpressionPart::Code(code_chunk));
                 code_chunk = Vec::new();
             }
         };
@@ -429,7 +443,7 @@ where
             let index = pc.read_sleb128()?;
             flush_code_chunk!();
             let label = ValueLabel::from_u32(index as u32);
-            parts.push(CompiledExpressionPart::Local {
+            push!(CompiledExpressionPart::Local {
                 label,
                 trailing: false,
             });
@@ -472,7 +486,7 @@ where
                 | Operation::Piece { .. } => (),
                 Operation::Bra { target } | Operation::Skip { target } => {
                     flush_code_chunk!();
-                    parts.push(CompiledExpressionPart::Jump {
+                    push!(CompiledExpressionPart::Jump {
                         target,
                         conditionally: match op {
                             Operation::Bra { .. } => true,
@@ -494,7 +508,7 @@ where
                 }
                 Operation::Deref { .. } => {
                     flush_code_chunk!();
-                    parts.push(CompiledExpressionPart::Deref);
+                    push!(CompiledExpressionPart::Deref);
                     // Don't re-enter the loop here (i.e. continue), because the
                     // DW_OP_deref still needs to be kept.
                 }
@@ -508,19 +522,7 @@ where
     }
 
     if !code_chunk.is_empty() {
-        parts.push(CompiledExpressionPart::Code(code_chunk));
-    }
-
-    if base_len > 0 && base_len + 1 < parts.len() {
-        // see if we can glue two code chunks
-        if let [CompiledExpressionPart::Code(cc1), CompiledExpressionPart::Code(cc2)] =
-            &parts[base_len..=base_len]
-        {
-            let mut combined = cc1.clone();
-            combined.extend_from_slice(cc2);
-            parts[base_len] = CompiledExpressionPart::Code(combined);
-            parts.remove(base_len + 1);
-        }
+        push!(CompiledExpressionPart::Code(code_chunk));
     }
 
     Ok(Some(CompiledExpression { parts, need_deref }))
