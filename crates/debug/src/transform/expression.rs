@@ -91,6 +91,8 @@ enum CompiledExpressionPart {
     Local { label: ValueLabel, trailing: bool },
     // Dereference is needed.
     Deref,
+    // Jumping in the expression.
+    Jump { target: i16, conditionally: bool },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -288,7 +290,7 @@ impl CompiledExpression {
         let mut ranges_builder = ValueLabelRangesBuilder::new(scope, addr_tr, frame_info);
         for p in self.parts.iter() {
             match p {
-                CompiledExpressionPart::Code(_) => (),
+                CompiledExpressionPart::Code(_) | CompiledExpressionPart::Jump { .. } => (),
                 CompiledExpressionPart::Local { label, .. } => ranges_builder.process_label(*label),
                 CompiledExpressionPart::Deref => ranges_builder.process_label(vmctx_label),
             }
@@ -332,6 +334,20 @@ impl CompiledExpression {
                             match part {
                                 CompiledExpressionPart::Code(c) => {
                                     code_buf.extend_from_slice(c.as_slice())
+                                }
+                                CompiledExpressionPart::Jump {
+                                    target,
+                                    conditionally,
+                                } => {
+                                    code_buf.push(
+                                        match conditionally {
+                                            true => gimli::constants::DW_OP_bra,
+                                            false => gimli::constants::DW_OP_skip,
+                                        }
+                                        .0 as u8,
+                                    );
+                                    code_buf.push((target & 0xFF) as u8);
+                                    code_buf.push((target >> (8 as u16)) as u8)
                                 }
                                 CompiledExpressionPart::Local { label, trailing } => {
                                     let loc =
@@ -453,9 +469,17 @@ where
                 | Operation::Shl { .. }
                 | Operation::Plus { .. }
                 | Operation::Minus { .. }
-                | Operation::Piece { .. }
-                | Operation::Skip { .. }
-                | Operation::Bra { .. } => (),
+                | Operation::Piece { .. } => (),
+                Operation::Bra { target } | Operation::Skip { target } => {
+                    flush_code_chunk!();
+                    parts.push(CompiledExpressionPart::Jump {
+                        target,
+                        conditionally: match op {
+                            Operation::Bra { .. } => true,
+                            _ => false,
+                        },
+                    })
+                }
                 Operation::StackValue => {
                     need_deref = false;
 
@@ -774,7 +798,12 @@ mod tests {
                         label: val1,
                         trailing: false
                     },
-                    CompiledExpressionPart::Code(vec![26, 40, 3, 0, 22, 37, 159, 34]),
+                    CompiledExpressionPart::Code(vec![26]),
+                    CompiledExpressionPart::Jump {
+                        target: 3,
+                        conditionally: true
+                    },
+                    CompiledExpressionPart::Code(vec![40, 3, 0, 22, 37, 159, 34]),
                     CompiledExpressionPart::Deref,
                     CompiledExpressionPart::Code(vec![6, 159])
                 ],
