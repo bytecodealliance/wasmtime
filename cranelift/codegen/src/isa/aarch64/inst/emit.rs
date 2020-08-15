@@ -5,7 +5,7 @@ use crate::ir::constant::ConstantData;
 use crate::ir::types::*;
 use crate::ir::TrapCode;
 use crate::isa::aarch64::inst::*;
-use crate::isa::aarch64::lower::ty_bits;
+use crate::machinst::ty_bits;
 
 use regalloc::{Reg, RegClass, Writable};
 
@@ -26,22 +26,22 @@ pub fn memlabel_finalize(_insn_off: CodeOffset, label: &MemLabel) -> i32 {
 /// of this amode.
 pub fn mem_finalize(
     insn_off: CodeOffset,
-    mem: &MemArg,
+    mem: &AMode,
     state: &EmitState,
-) -> (SmallVec<[Inst; 4]>, MemArg) {
+) -> (SmallVec<[Inst; 4]>, AMode) {
     match mem {
-        &MemArg::RegOffset(_, off, ty)
-        | &MemArg::SPOffset(off, ty)
-        | &MemArg::FPOffset(off, ty)
-        | &MemArg::NominalSPOffset(off, ty) => {
+        &AMode::RegOffset(_, off, ty)
+        | &AMode::SPOffset(off, ty)
+        | &AMode::FPOffset(off, ty)
+        | &AMode::NominalSPOffset(off, ty) => {
             let basereg = match mem {
-                &MemArg::RegOffset(reg, _, _) => reg,
-                &MemArg::SPOffset(..) | &MemArg::NominalSPOffset(..) => stack_reg(),
-                &MemArg::FPOffset(..) => fp_reg(),
+                &AMode::RegOffset(reg, _, _) => reg,
+                &AMode::SPOffset(..) | &AMode::NominalSPOffset(..) => stack_reg(),
+                &AMode::FPOffset(..) => fp_reg(),
                 _ => unreachable!(),
             };
             let adj = match mem {
-                &MemArg::NominalSPOffset(..) => {
+                &AMode::NominalSPOffset(..) => {
                     debug!(
                         "mem_finalize: nominal SP offset {} + adj {} -> {}",
                         off,
@@ -55,10 +55,10 @@ pub fn mem_finalize(
             let off = off + adj;
 
             if let Some(simm9) = SImm9::maybe_from_i64(off) {
-                let mem = MemArg::Unscaled(basereg, simm9);
+                let mem = AMode::Unscaled(basereg, simm9);
                 (smallvec![], mem)
             } else if let Some(uimm12s) = UImm12Scaled::maybe_from_i64(off, ty) {
-                let mem = MemArg::UnsignedOffset(basereg, uimm12s);
+                let mem = AMode::UnsignedOffset(basereg, uimm12s);
                 (smallvec![], mem)
             } else {
                 let tmp = writable_spilltmp_reg();
@@ -75,13 +75,13 @@ pub fn mem_finalize(
                     extendop: ExtendOp::UXTX,
                 };
                 const_insts.push(add_inst);
-                (const_insts, MemArg::reg(tmp.to_reg()))
+                (const_insts, AMode::reg(tmp.to_reg()))
             }
         }
 
-        &MemArg::Label(ref label) => {
+        &AMode::Label(ref label) => {
             let off = memlabel_finalize(insn_off, label);
-            (smallvec![], MemArg::Label(MemLabel::PCRel(off)))
+            (smallvec![], AMode::Label(MemLabel::PCRel(off)))
         }
 
         _ => (smallvec![], mem.clone()),
@@ -226,7 +226,7 @@ fn enc_ldst_reg(
         Some(ExtendOp::SXTW) => 0b110,
         Some(ExtendOp::SXTX) => 0b111,
         None => 0b011, // LSL
-        _ => panic!("bad extend mode for ld/st MemArg"),
+        _ => panic!("bad extend mode for ld/st AMode"),
     };
     (op_31_22 << 22)
         | (1 << 21)
@@ -780,32 +780,32 @@ impl MachInstEmit for Inst {
                 }
 
                 match &mem {
-                    &MemArg::Unscaled(reg, simm9) => {
+                    &AMode::Unscaled(reg, simm9) => {
                         sink.put4(enc_ldst_simm9(op, simm9, 0b00, reg, rd));
                     }
-                    &MemArg::UnsignedOffset(reg, uimm12scaled) => {
+                    &AMode::UnsignedOffset(reg, uimm12scaled) => {
                         if uimm12scaled.value() != 0 {
                             assert_eq!(bits, ty_bits(uimm12scaled.scale_ty()));
                         }
                         sink.put4(enc_ldst_uimm12(op, uimm12scaled, reg, rd));
                     }
-                    &MemArg::RegReg(r1, r2) => {
+                    &AMode::RegReg(r1, r2) => {
                         sink.put4(enc_ldst_reg(
                             op, r1, r2, /* scaled = */ false, /* extendop = */ None, rd,
                         ));
                     }
-                    &MemArg::RegScaled(r1, r2, ty) | &MemArg::RegScaledExtended(r1, r2, ty, _) => {
+                    &AMode::RegScaled(r1, r2, ty) | &AMode::RegScaledExtended(r1, r2, ty, _) => {
                         assert_eq!(bits, ty_bits(ty));
                         let extendop = match &mem {
-                            &MemArg::RegScaled(..) => None,
-                            &MemArg::RegScaledExtended(_, _, _, op) => Some(op),
+                            &AMode::RegScaled(..) => None,
+                            &AMode::RegScaledExtended(_, _, _, op) => Some(op),
                             _ => unreachable!(),
                         };
                         sink.put4(enc_ldst_reg(
                             op, r1, r2, /* scaled = */ true, extendop, rd,
                         ));
                     }
-                    &MemArg::RegExtended(r1, r2, extendop) => {
+                    &AMode::RegExtended(r1, r2, extendop) => {
                         sink.put4(enc_ldst_reg(
                             op,
                             r1,
@@ -815,7 +815,7 @@ impl MachInstEmit for Inst {
                             rd,
                         ));
                     }
-                    &MemArg::Label(ref label) => {
+                    &AMode::Label(ref label) => {
                         let offset = match label {
                             // cast i32 to u32 (two's-complement)
                             &MemLabel::PCRel(off) => off as u32,
@@ -843,17 +843,17 @@ impl MachInstEmit for Inst {
                             _ => panic!("Unspported size for LDR from constant pool!"),
                         }
                     }
-                    &MemArg::PreIndexed(reg, simm9) => {
+                    &AMode::PreIndexed(reg, simm9) => {
                         sink.put4(enc_ldst_simm9(op, simm9, 0b11, reg.to_reg(), rd));
                     }
-                    &MemArg::PostIndexed(reg, simm9) => {
+                    &AMode::PostIndexed(reg, simm9) => {
                         sink.put4(enc_ldst_simm9(op, simm9, 0b01, reg.to_reg(), rd));
                     }
                     // Eliminated by `mem_finalize()` above.
-                    &MemArg::SPOffset(..)
-                    | &MemArg::FPOffset(..)
-                    | &MemArg::NominalSPOffset(..) => panic!("Should not see stack-offset here!"),
-                    &MemArg::RegOffset(..) => panic!("SHould not see generic reg-offset here!"),
+                    &AMode::SPOffset(..) | &AMode::FPOffset(..) | &AMode::NominalSPOffset(..) => {
+                        panic!("Should not see stack-offset here!")
+                    }
+                    &AMode::RegOffset(..) => panic!("SHould not see generic reg-offset here!"),
                 }
             }
 
@@ -916,32 +916,31 @@ impl MachInstEmit for Inst {
                 }
 
                 match &mem {
-                    &MemArg::Unscaled(reg, simm9) => {
+                    &AMode::Unscaled(reg, simm9) => {
                         sink.put4(enc_ldst_simm9(op, simm9, 0b00, reg, rd));
                     }
-                    &MemArg::UnsignedOffset(reg, uimm12scaled) => {
+                    &AMode::UnsignedOffset(reg, uimm12scaled) => {
                         if uimm12scaled.value() != 0 {
                             assert_eq!(bits, ty_bits(uimm12scaled.scale_ty()));
                         }
                         sink.put4(enc_ldst_uimm12(op, uimm12scaled, reg, rd));
                     }
-                    &MemArg::RegReg(r1, r2) => {
+                    &AMode::RegReg(r1, r2) => {
                         sink.put4(enc_ldst_reg(
                             op, r1, r2, /* scaled = */ false, /* extendop = */ None, rd,
                         ));
                     }
-                    &MemArg::RegScaled(r1, r2, _ty)
-                    | &MemArg::RegScaledExtended(r1, r2, _ty, _) => {
+                    &AMode::RegScaled(r1, r2, _ty) | &AMode::RegScaledExtended(r1, r2, _ty, _) => {
                         let extendop = match &mem {
-                            &MemArg::RegScaled(..) => None,
-                            &MemArg::RegScaledExtended(_, _, _, op) => Some(op),
+                            &AMode::RegScaled(..) => None,
+                            &AMode::RegScaledExtended(_, _, _, op) => Some(op),
                             _ => unreachable!(),
                         };
                         sink.put4(enc_ldst_reg(
                             op, r1, r2, /* scaled = */ true, extendop, rd,
                         ));
                     }
-                    &MemArg::RegExtended(r1, r2, extendop) => {
+                    &AMode::RegExtended(r1, r2, extendop) => {
                         sink.put4(enc_ldst_reg(
                             op,
                             r1,
@@ -951,33 +950,33 @@ impl MachInstEmit for Inst {
                             rd,
                         ));
                     }
-                    &MemArg::Label(..) => {
+                    &AMode::Label(..) => {
                         panic!("Store to a MemLabel not implemented!");
                     }
-                    &MemArg::PreIndexed(reg, simm9) => {
+                    &AMode::PreIndexed(reg, simm9) => {
                         sink.put4(enc_ldst_simm9(op, simm9, 0b11, reg.to_reg(), rd));
                     }
-                    &MemArg::PostIndexed(reg, simm9) => {
+                    &AMode::PostIndexed(reg, simm9) => {
                         sink.put4(enc_ldst_simm9(op, simm9, 0b01, reg.to_reg(), rd));
                     }
                     // Eliminated by `mem_finalize()` above.
-                    &MemArg::SPOffset(..)
-                    | &MemArg::FPOffset(..)
-                    | &MemArg::NominalSPOffset(..) => panic!("Should not see stack-offset here!"),
-                    &MemArg::RegOffset(..) => panic!("SHould not see generic reg-offset here!"),
+                    &AMode::SPOffset(..) | &AMode::FPOffset(..) | &AMode::NominalSPOffset(..) => {
+                        panic!("Should not see stack-offset here!")
+                    }
+                    &AMode::RegOffset(..) => panic!("SHould not see generic reg-offset here!"),
                 }
             }
 
             &Inst::StoreP64 { rt, rt2, ref mem } => match mem {
-                &PairMemArg::SignedOffset(reg, simm7) => {
+                &PairAMode::SignedOffset(reg, simm7) => {
                     assert_eq!(simm7.scale_ty, I64);
                     sink.put4(enc_ldst_pair(0b1010100100, simm7, reg, rt, rt2));
                 }
-                &PairMemArg::PreIndexed(reg, simm7) => {
+                &PairAMode::PreIndexed(reg, simm7) => {
                     assert_eq!(simm7.scale_ty, I64);
                     sink.put4(enc_ldst_pair(0b1010100110, simm7, reg.to_reg(), rt, rt2));
                 }
-                &PairMemArg::PostIndexed(reg, simm7) => {
+                &PairAMode::PostIndexed(reg, simm7) => {
                     assert_eq!(simm7.scale_ty, I64);
                     sink.put4(enc_ldst_pair(0b1010100010, simm7, reg.to_reg(), rt, rt2));
                 }
@@ -986,15 +985,15 @@ impl MachInstEmit for Inst {
                 let rt = rt.to_reg();
                 let rt2 = rt2.to_reg();
                 match mem {
-                    &PairMemArg::SignedOffset(reg, simm7) => {
+                    &PairAMode::SignedOffset(reg, simm7) => {
                         assert_eq!(simm7.scale_ty, I64);
                         sink.put4(enc_ldst_pair(0b1010100101, simm7, reg, rt, rt2));
                     }
-                    &PairMemArg::PreIndexed(reg, simm7) => {
+                    &PairAMode::PreIndexed(reg, simm7) => {
                         assert_eq!(simm7.scale_ty, I64);
                         sink.put4(enc_ldst_pair(0b1010100111, simm7, reg.to_reg(), rt, rt2));
                     }
-                    &PairMemArg::PostIndexed(reg, simm7) => {
+                    &PairAMode::PostIndexed(reg, simm7) => {
                         assert_eq!(simm7.scale_ty, I64);
                         sink.put4(enc_ldst_pair(0b1010100011, simm7, reg.to_reg(), rt, rt2));
                     }
@@ -1475,7 +1474,7 @@ impl MachInstEmit for Inst {
             &Inst::LoadFpuConst32 { rd, const_data } => {
                 let inst = Inst::FpuLoad32 {
                     rd,
-                    mem: MemArg::Label(MemLabel::PCRel(8)),
+                    mem: AMode::Label(MemLabel::PCRel(8)),
                     srcloc: None,
                 };
                 inst.emit(sink, flags, state);
@@ -1488,7 +1487,7 @@ impl MachInstEmit for Inst {
             &Inst::LoadFpuConst64 { rd, const_data } => {
                 let inst = Inst::FpuLoad64 {
                     rd,
-                    mem: MemArg::Label(MemLabel::PCRel(8)),
+                    mem: AMode::Label(MemLabel::PCRel(8)),
                     srcloc: None,
                 };
                 inst.emit(sink, flags, state);
@@ -1501,7 +1500,7 @@ impl MachInstEmit for Inst {
             &Inst::LoadFpuConst128 { rd, const_data } => {
                 let inst = Inst::FpuLoad128 {
                     rd,
-                    mem: MemArg::Label(MemLabel::PCRel(8)),
+                    mem: AMode::Label(MemLabel::PCRel(8)),
                     srcloc: None,
                 };
                 inst.emit(sink, flags, state);
@@ -1970,7 +1969,7 @@ impl MachInstEmit for Inst {
                 // Load value out of jump table
                 let inst = Inst::SLoad32 {
                     rd: rtmp2,
-                    mem: MemArg::reg_plus_reg_scaled_extended(
+                    mem: AMode::reg_plus_reg_scaled_extended(
                         rtmp1.to_reg(),
                         rtmp2.to_reg(),
                         I32,
@@ -2018,7 +2017,7 @@ impl MachInstEmit for Inst {
             &Inst::LoadConst64 { rd, const_data } => {
                 let inst = Inst::ULoad64 {
                     rd,
-                    mem: MemArg::Label(MemLabel::PCRel(8)),
+                    mem: AMode::Label(MemLabel::PCRel(8)),
                     srcloc: None, // can't cause a user trap.
                 };
                 inst.emit(sink, flags, state);
@@ -2036,7 +2035,7 @@ impl MachInstEmit for Inst {
             } => {
                 let inst = Inst::ULoad64 {
                     rd,
-                    mem: MemArg::Label(MemLabel::PCRel(8)),
+                    mem: AMode::Label(MemLabel::PCRel(8)),
                     srcloc: None, // can't cause a user trap.
                 };
                 inst.emit(sink, flags, state);
@@ -2058,8 +2057,8 @@ impl MachInstEmit for Inst {
                 }
 
                 let (reg, offset) = match mem {
-                    MemArg::Unscaled(r, simm9) => (r, simm9.value()),
-                    MemArg::UnsignedOffset(r, uimm12scaled) => (r, uimm12scaled.value() as i32),
+                    AMode::Unscaled(r, simm9) => (r, simm9.value()),
+                    AMode::UnsignedOffset(r, uimm12scaled) => (r, uimm12scaled.value() as i32),
                     _ => panic!("Unsupported case for LoadAddr: {:?}", mem),
                 };
                 let abs_offset = if offset < 0 {
@@ -2085,7 +2084,7 @@ impl MachInstEmit for Inst {
                     };
                     add.emit(sink, flags, state);
                 } else {
-                    // Use `tmp2` here: `reg` may be `spilltmp` if the `MemArg` on this instruction
+                    // Use `tmp2` here: `reg` may be `spilltmp` if the `AMode` on this instruction
                     // was initially an `SPOffset`. Assert that `tmp2` is truly free to use. Note
                     // that no other instructions will be inserted here (we're emitting directly),
                     // and a live range of `tmp2` should not span this instruction, so this use

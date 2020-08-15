@@ -1010,7 +1010,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 | Opcode::Sload32Complex => true,
                 _ => false,
             };
-            let is_float = ty_is_float(elem_ty);
+            let is_float = ty_has_float_or_vec_representation(elem_ty);
 
             let mem = lower_address(ctx, elem_ty, &inputs[..], off);
             let rd = get_output_reg(ctx, outputs[0]);
@@ -1074,7 +1074,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 Opcode::Store | Opcode::StoreComplex => ctx.input_ty(insn, 0),
                 _ => unreachable!(),
             };
-            let is_float = ty_is_float(elem_ty);
+            let is_float = ty_has_float_or_vec_representation(elem_ty);
 
             let mem = lower_address(ctx, elem_ty, &inputs[1..], off);
             let rd = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
@@ -1291,9 +1291,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rm = put_input_in_reg(ctx, inputs[2], NarrowValueMode::None);
             let ty = ctx.output_ty(insn, 0);
             let bits = ty_bits(ty);
-            if ty_is_float(ty) && bits == 32 {
+            let is_float = ty_has_float_or_vec_representation(ty);
+            if is_float && bits == 32 {
                 ctx.emit(Inst::FpuCSel32 { cond, rd, rn, rm });
-            } else if ty_is_float(ty) && bits == 64 {
+            } else if is_float && bits == 64 {
                 ctx.emit(Inst::FpuCSel64 { cond, rd, rn, rm });
             } else {
                 ctx.emit(Inst::CSel { cond, rd, rn, rm });
@@ -1315,9 +1316,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rm = put_input_in_reg(ctx, inputs[2], NarrowValueMode::None);
             let ty = ctx.output_ty(insn, 0);
             let bits = ty_bits(ty);
-            if ty_is_float(ty) && bits == 32 {
+            let is_float = ty_has_float_or_vec_representation(ty);
+            if is_float && bits == 32 {
                 ctx.emit(Inst::FpuCSel32 { cond, rd, rn, rm });
-            } else if ty_is_float(ty) && bits == 64 {
+            } else if is_float && bits == 64 {
                 ctx.emit(Inst::FpuCSel64 { cond, rd, rn, rm });
             } else {
                 ctx.emit(Inst::CSel { cond, rd, rn, rm });
@@ -1521,7 +1523,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rd = get_output_reg(ctx, outputs[0]);
             let ity = ctx.input_ty(insn, 0);
             let oty = ctx.output_ty(insn, 0);
-            match (ty_is_float(ity), ty_is_float(oty)) {
+            let ity_vec_reg = ty_has_float_or_vec_representation(ity);
+            let oty_vec_reg = ty_has_float_or_vec_representation(oty);
+            match (ity_vec_reg, oty_vec_reg) {
                 (true, true) => {
                     let narrow_mode = if ty_bits(ity) <= 32 && ty_bits(oty) <= 32 {
                         NarrowValueMode::ZeroExtend32
@@ -1809,7 +1813,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let size = VectorSize::from_ty(ctx.input_ty(insn, 0));
                 let ty = ty.unwrap();
 
-                if ty_is_int(ty) {
+                if ty_has_int_representation(ty) {
                     ctx.emit(Inst::MovFromVec { rd, rn, idx, size });
                 // Plain moves are faster on some processors.
                 } else if idx == 0 {
@@ -1837,7 +1841,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             ctx.emit(Inst::gen_move(rd, rm, ty));
 
-            if ty_is_int(input_ty) {
+            if ty_has_int_representation(input_ty) {
                 ctx.emit(Inst::MovToVec { rd, rn, idx, size });
             } else {
                 ctx.emit(Inst::VecMovElement {
@@ -1855,7 +1859,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rd = get_output_reg(ctx, outputs[0]);
             let input_ty = ctx.input_ty(insn, 0);
             let size = VectorSize::from_ty(ty.unwrap());
-            let inst = if ty_is_int(input_ty) {
+            let inst = if ty_has_int_representation(input_ty) {
                 Inst::VecDup { rd, rn, size }
             } else {
                 Inst::VecDupFromFpu { rd, rn, size }

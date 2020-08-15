@@ -463,68 +463,68 @@ pub enum Inst {
     /// An unsigned (zero-extending) 8-bit load.
     ULoad8 {
         rd: Writable<Reg>,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
     /// A signed (sign-extending) 8-bit load.
     SLoad8 {
         rd: Writable<Reg>,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
     /// An unsigned (zero-extending) 16-bit load.
     ULoad16 {
         rd: Writable<Reg>,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
     /// A signed (sign-extending) 16-bit load.
     SLoad16 {
         rd: Writable<Reg>,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
     /// An unsigned (zero-extending) 32-bit load.
     ULoad32 {
         rd: Writable<Reg>,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
     /// A signed (sign-extending) 32-bit load.
     SLoad32 {
         rd: Writable<Reg>,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
     /// A 64-bit load.
     ULoad64 {
         rd: Writable<Reg>,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
 
     /// An 8-bit store.
     Store8 {
         rd: Reg,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
     /// A 16-bit store.
     Store16 {
         rd: Reg,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
     /// A 32-bit store.
     Store32 {
         rd: Reg,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
     /// A 64-bit store.
     Store64 {
         rd: Reg,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
 
@@ -532,13 +532,13 @@ pub enum Inst {
     StoreP64 {
         rt: Reg,
         rt2: Reg,
-        mem: PairMemArg,
+        mem: PairAMode,
     },
     /// A load of a pair of registers.
     LoadP64 {
         rt: Writable<Reg>,
         rt2: Writable<Reg>,
-        mem: PairMemArg,
+        mem: PairAMode,
     },
 
     /// A MOV instruction. These are encoded as ORR's (AluRRR form) but we
@@ -734,37 +734,37 @@ pub enum Inst {
     /// Floating-point load, single-precision (32 bit).
     FpuLoad32 {
         rd: Writable<Reg>,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
     /// Floating-point store, single-precision (32 bit).
     FpuStore32 {
         rd: Reg,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
     /// Floating-point load, double-precision (64 bit).
     FpuLoad64 {
         rd: Writable<Reg>,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
     /// Floating-point store, double-precision (64 bit).
     FpuStore64 {
         rd: Reg,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
     /// Floating-point/vector load, 128 bit.
     FpuLoad128 {
         rd: Writable<Reg>,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
     /// Floating-point/vector store, 128 bit.
     FpuStore128 {
         rd: Reg,
-        mem: MemArg,
+        mem: AMode,
         srcloc: Option<SourceLoc>,
     },
 
@@ -1050,11 +1050,11 @@ pub enum Inst {
     /// Load address referenced by `mem` into `rd`.
     LoadAddr {
         rd: Writable<Reg>,
-        mem: MemArg,
+        mem: AMode,
     },
 
     /// Marker, no-op in generated code: SP "virtual offset" is adjusted. This
-    /// controls how MemArg::NominalSPOffset args are lowered.
+    /// controls how AMode::NominalSPOffset args are lowered.
     VirtualSPOffsetAdj {
         offset: i64,
     },
@@ -1215,45 +1215,119 @@ impl Inst {
             const_data: value,
         }
     }
+
+    /// Generic constructor for a load (zero-extending where appropriate).
+    pub fn gen_load(into_reg: Writable<Reg>, mem: AMode, ty: Type) -> Inst {
+        match ty {
+            B1 | B8 | I8 => Inst::ULoad8 {
+                rd: into_reg,
+                mem,
+                srcloc: None,
+            },
+            B16 | I16 => Inst::ULoad16 {
+                rd: into_reg,
+                mem,
+                srcloc: None,
+            },
+            B32 | I32 | R32 => Inst::ULoad32 {
+                rd: into_reg,
+                mem,
+                srcloc: None,
+            },
+            B64 | I64 | R64 => Inst::ULoad64 {
+                rd: into_reg,
+                mem,
+                srcloc: None,
+            },
+            F32 => Inst::FpuLoad32 {
+                rd: into_reg,
+                mem,
+                srcloc: None,
+            },
+            F64 => Inst::FpuLoad64 {
+                rd: into_reg,
+                mem,
+                srcloc: None,
+            },
+            _ => unimplemented!("gen_load({})", ty),
+        }
+    }
+
+    /// Generic constructor for a store.
+    pub fn gen_store(mem: AMode, from_reg: Reg, ty: Type) -> Inst {
+        match ty {
+            B1 | B8 | I8 => Inst::Store8 {
+                rd: from_reg,
+                mem,
+                srcloc: None,
+            },
+            B16 | I16 => Inst::Store16 {
+                rd: from_reg,
+                mem,
+                srcloc: None,
+            },
+            B32 | I32 | R32 => Inst::Store32 {
+                rd: from_reg,
+                mem,
+                srcloc: None,
+            },
+            B64 | I64 | R64 => Inst::Store64 {
+                rd: from_reg,
+                mem,
+                srcloc: None,
+            },
+            F32 => Inst::FpuStore32 {
+                rd: from_reg,
+                mem,
+                srcloc: None,
+            },
+            F64 => Inst::FpuStore64 {
+                rd: from_reg,
+                mem,
+                srcloc: None,
+            },
+            _ => unimplemented!("gen_store({})", ty),
+        }
+    }
 }
 
 //=============================================================================
 // Instructions: get_regs
 
-fn memarg_regs(memarg: &MemArg, collector: &mut RegUsageCollector) {
+fn memarg_regs(memarg: &AMode, collector: &mut RegUsageCollector) {
     match memarg {
-        &MemArg::Unscaled(reg, ..) | &MemArg::UnsignedOffset(reg, ..) => {
+        &AMode::Unscaled(reg, ..) | &AMode::UnsignedOffset(reg, ..) => {
             collector.add_use(reg);
         }
-        &MemArg::RegReg(r1, r2, ..)
-        | &MemArg::RegScaled(r1, r2, ..)
-        | &MemArg::RegScaledExtended(r1, r2, ..)
-        | &MemArg::RegExtended(r1, r2, ..) => {
+        &AMode::RegReg(r1, r2, ..)
+        | &AMode::RegScaled(r1, r2, ..)
+        | &AMode::RegScaledExtended(r1, r2, ..)
+        | &AMode::RegExtended(r1, r2, ..) => {
             collector.add_use(r1);
             collector.add_use(r2);
         }
-        &MemArg::Label(..) => {}
-        &MemArg::PreIndexed(reg, ..) | &MemArg::PostIndexed(reg, ..) => {
+        &AMode::Label(..) => {}
+        &AMode::PreIndexed(reg, ..) | &AMode::PostIndexed(reg, ..) => {
             collector.add_mod(reg);
         }
-        &MemArg::FPOffset(..) => {
+        &AMode::FPOffset(..) => {
             collector.add_use(fp_reg());
         }
-        &MemArg::SPOffset(..) | &MemArg::NominalSPOffset(..) => {
+        &AMode::SPOffset(..) | &AMode::NominalSPOffset(..) => {
             collector.add_use(stack_reg());
         }
-        &MemArg::RegOffset(r, ..) => {
+        &AMode::RegOffset(r, ..) => {
             collector.add_use(r);
         }
     }
 }
 
-fn pairmemarg_regs(pairmemarg: &PairMemArg, collector: &mut RegUsageCollector) {
+fn pairmemarg_regs(pairmemarg: &PairAMode, collector: &mut RegUsageCollector) {
     match pairmemarg {
-        &PairMemArg::SignedOffset(reg, ..) => {
+        &PairAMode::SignedOffset(reg, ..) => {
             collector.add_use(reg);
         }
-        &PairMemArg::PreIndexed(reg, ..) | &PairMemArg::PostIndexed(reg, ..) => {
+        &PairAMode::PreIndexed(reg, ..) | &PairAMode::PostIndexed(reg, ..) => {
             collector.add_mod(reg);
         }
     }
@@ -1627,36 +1701,36 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         }
     }
 
-    fn map_mem<RUM: RegUsageMapper>(m: &RUM, mem: &mut MemArg) {
+    fn map_mem<RUM: RegUsageMapper>(m: &RUM, mem: &mut AMode) {
         // N.B.: we take only the pre-map here, but this is OK because the
         // only addressing modes that update registers (pre/post-increment on
         // AArch64) both read and write registers, so they are "mods" rather
         // than "defs", so must be the same in both the pre- and post-map.
         match mem {
-            &mut MemArg::Unscaled(ref mut reg, ..) => map_use(m, reg),
-            &mut MemArg::UnsignedOffset(ref mut reg, ..) => map_use(m, reg),
-            &mut MemArg::RegReg(ref mut r1, ref mut r2)
-            | &mut MemArg::RegScaled(ref mut r1, ref mut r2, ..)
-            | &mut MemArg::RegScaledExtended(ref mut r1, ref mut r2, ..)
-            | &mut MemArg::RegExtended(ref mut r1, ref mut r2, ..) => {
+            &mut AMode::Unscaled(ref mut reg, ..) => map_use(m, reg),
+            &mut AMode::UnsignedOffset(ref mut reg, ..) => map_use(m, reg),
+            &mut AMode::RegReg(ref mut r1, ref mut r2)
+            | &mut AMode::RegScaled(ref mut r1, ref mut r2, ..)
+            | &mut AMode::RegScaledExtended(ref mut r1, ref mut r2, ..)
+            | &mut AMode::RegExtended(ref mut r1, ref mut r2, ..) => {
                 map_use(m, r1);
                 map_use(m, r2);
             }
-            &mut MemArg::Label(..) => {}
-            &mut MemArg::PreIndexed(ref mut r, ..) => map_mod(m, r),
-            &mut MemArg::PostIndexed(ref mut r, ..) => map_mod(m, r),
-            &mut MemArg::FPOffset(..)
-            | &mut MemArg::SPOffset(..)
-            | &mut MemArg::NominalSPOffset(..) => {}
-            &mut MemArg::RegOffset(ref mut r, ..) => map_use(m, r),
+            &mut AMode::Label(..) => {}
+            &mut AMode::PreIndexed(ref mut r, ..) => map_mod(m, r),
+            &mut AMode::PostIndexed(ref mut r, ..) => map_mod(m, r),
+            &mut AMode::FPOffset(..)
+            | &mut AMode::SPOffset(..)
+            | &mut AMode::NominalSPOffset(..) => {}
+            &mut AMode::RegOffset(ref mut r, ..) => map_use(m, r),
         };
     }
 
-    fn map_pairmem<RUM: RegUsageMapper>(m: &RUM, mem: &mut PairMemArg) {
+    fn map_pairmem<RUM: RegUsageMapper>(m: &RUM, mem: &mut PairAMode) {
         match mem {
-            &mut PairMemArg::SignedOffset(ref mut reg, ..) => map_use(m, reg),
-            &mut PairMemArg::PreIndexed(ref mut reg, ..) => map_def(m, reg),
-            &mut PairMemArg::PostIndexed(ref mut reg, ..) => map_def(m, reg),
+            &mut PairAMode::SignedOffset(ref mut reg, ..) => map_use(m, reg),
+            &mut PairAMode::PreIndexed(ref mut reg, ..) => map_def(m, reg),
+            &mut PairAMode::PostIndexed(ref mut reg, ..) => map_def(m, reg),
         }
     }
 
@@ -2432,10 +2506,10 @@ impl MachInst for Inst {
 // Pretty-printing of instructions.
 
 fn mem_finalize_for_show(
-    mem: &MemArg,
+    mem: &AMode,
     mb_rru: Option<&RealRegUniverse>,
     state: &EmitState,
-) -> (String, MemArg) {
+) -> (String, AMode) {
     let (mem_insts, mem) = mem_finalize(0, mem, state);
     let mut mem_str = mem_insts
         .into_iter()
@@ -2646,7 +2720,7 @@ impl Inst {
                 let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
 
                 let is_unscaled = match &mem {
-                    &MemArg::Unscaled(..) => true,
+                    &AMode::Unscaled(..) => true,
                     _ => false,
                 };
                 let (op, size) = match (self, is_unscaled) {
@@ -2694,7 +2768,7 @@ impl Inst {
                 let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
 
                 let is_unscaled = match &mem {
-                    &MemArg::Unscaled(..) => true,
+                    &AMode::Unscaled(..) => true,
                     _ => false,
                 };
                 let (op, size) = match (self, is_unscaled) {
@@ -3350,8 +3424,8 @@ impl Inst {
                     ret.push_str(&inst.show_rru(mb_rru));
                 }
                 let (reg, offset) = match mem {
-                    MemArg::Unscaled(r, simm9) => (r, simm9.value()),
-                    MemArg::UnsignedOffset(r, uimm12scaled) => (r, uimm12scaled.value() as i32),
+                    AMode::Unscaled(r, simm9) => (r, simm9.value()),
+                    AMode::UnsignedOffset(r, uimm12scaled) => (r, uimm12scaled.value() as i32),
                     _ => panic!("Unsupported case for LoadAddr: {:?}", mem),
                 };
                 let abs_offset = if offset < 0 {
