@@ -13,7 +13,7 @@ include = ["src/**/*", "LICENSE"]
 [dependencies]
 wasmtime = { path = "../../wasmtime", version = "0.19.0", default-features = false }
 wasmtime-wiggle-macro = { path = "./macro", version = "0.19.0" }
-witx = { path = "../../wasi-common/WASI/tools/witx", version = "0.8.5", optional = true }
+witx = { path = "../../wasi-common/WASI/tools/witx", version = "0.8.7", optional = true }
 wiggle = { path = "..", version = "0.19.0" }
 
 [badges]

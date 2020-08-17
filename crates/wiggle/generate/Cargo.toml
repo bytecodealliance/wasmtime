@@ -14,7 +14,7 @@ include = ["src/**/*", "LICENSE"]
 [lib]
 
 [dependencies]
-witx = { version = "0.8.5", path = "../../wasi-common/WASI/tools/witx" }
+witx = { version = "0.8.7", path = "../../wasi-common/WASI/tools/witx" }
 quote = "1.0"
 proc-macro2 = "1.0"
 heck = "0.3"

@@ -2644,7 +2644,7 @@ version = "0.19.0"
 dependencies = [
  "anyhow",
  "wasmtime",
- "wast 21.0.0",
+ "wast 22.0.0",
 ]
 
 [[package]]
@@ -2666,15 +2666,6 @@ dependencies = [
  "syn",
  "wiggle-generate",
  "witx",
-]
-
-[[package]]
-name = "wast"
-version = "11.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df4d67ba9266f4fcaf2e8a1afadc5e2a959e51aecc07b1ecbdf85a6ddaf08bde"
-dependencies = [
- "leb128",
 ]
 
 [[package]]
@@ -2803,7 +2794,7 @@ dependencies = [
 
 [[package]]
 name = "witx"
-version = "0.8.5"
+version = "0.8.7"
 dependencies = [
  "anyhow",
  "diff",
@@ -2811,7 +2802,7 @@ dependencies = [
  "pretty_env_logger",
  "structopt",
  "thiserror",
- "wast 11.0.0",
+ "wast 22.0.0",
 ]
 
 [[package]]

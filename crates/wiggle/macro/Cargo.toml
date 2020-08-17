@@ -22,7 +22,7 @@ doctest = false
 
 [dependencies]
 wiggle-generate = { path = "../generate", version = "0.19.0" }
-witx = { path = "../../wasi-common/WASI/tools/witx", version = "0.8.5" }
+witx = { path = "../../wasi-common/WASI/tools/witx", version = "0.8.7" }
 quote = "1.0"
 syn = { version = "1.0", features = ["full"] }
 
