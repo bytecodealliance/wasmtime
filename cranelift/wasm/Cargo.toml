@@ -22,7 +22,7 @@ serde = { version = "1.0.94", features = ["derive"], optional = true }
 thiserror = "1.0.4"
 
 [dev-dependencies]
-wat = "1.0.18"
+wat = "1.0.23"
 target-lexicon = "0.10"
 # Enable the riscv feature for cranelift-codegen, as some tests require it
 cranelift-codegen = { path = "../codegen", version = "0.66.0", default-features = false, features = ["riscv"] }

@@ -37,7 +37,7 @@ anyhow = "1.0.19"
 target-lexicon = { version = "0.10.0", default-features = false }
 pretty_env_logger = "0.4.0"
 file-per-thread-logger = "0.1.1"
-wat = "1.0.18"
+wat = "1.0.23"
 libc = "0.2.60"
 log = "0.4.8"
 rayon = "1.2.1"

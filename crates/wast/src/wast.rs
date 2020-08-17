@@ -409,7 +409,7 @@ fn val_matches(actual: &Val, expected: &wast::AssertExpression) -> Result<bool> 
         (Val::F32(a), wast::AssertExpression::F32(b)) => f32_matches(*a, b),
         (Val::F64(a), wast::AssertExpression::F64(b)) => f64_matches(*a, b),
         (Val::V128(a), wast::AssertExpression::V128(b)) => v128_matches(*a, b),
-        (Val::ExternRef(x), wast::AssertExpression::RefNull(HeapType::Extern)) => x.is_none(),
+        (Val::ExternRef(x), wast::AssertExpression::RefNull(Some(HeapType::Extern))) => x.is_none(),
         (Val::ExternRef(x), wast::AssertExpression::RefExtern(y)) => {
             if let Some(x) = x {
                 let x = x
@@ -421,7 +421,7 @@ fn val_matches(actual: &Val, expected: &wast::AssertExpression) -> Result<bool> 
                 false
             }
         }
-        (Val::FuncRef(x), wast::AssertExpression::RefNull(HeapType::Func)) => x.is_none(),
+        (Val::FuncRef(x), wast::AssertExpression::RefNull(_)) => x.is_none(),
         _ => bail!(
             "don't know how to compare {:?} and {:?} yet",
             actual,

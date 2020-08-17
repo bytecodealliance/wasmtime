@@ -24,7 +24,7 @@ wasmtime = { path = "../wasmtime", default-features = false }
 wasmtime-c-api-macros = { path = "macros" }
 
 # Optional dependency for the `wat2wasm` API
-wat = { version = "1.0.18", optional = true }
+wat = { version = "1.0.23", optional = true }
 
 # Optional dependencies for the `wasi` feature
 wasi-common = { path = "../wasi-common", optional = true }

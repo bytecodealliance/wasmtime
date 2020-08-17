@@ -392,7 +392,7 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "thiserror",
- "wast 22.0.0",
+ "wast",
 ]
 
 [[package]]
@@ -1303,7 +1303,7 @@ dependencies = [
  "peepmatic-test-operator",
  "peepmatic-traits",
  "serde",
- "wast 22.0.0",
+ "wast",
  "z3",
 ]
 
@@ -1331,7 +1331,7 @@ dependencies = [
  "peepmatic-traits",
  "rand 0.7.3",
  "serde",
- "wast 22.0.0",
+ "wast",
 ]
 
 [[package]]
@@ -1356,7 +1356,7 @@ dependencies = [
  "serde",
  "serde_test",
  "thiserror",
- "wast 22.0.0",
+ "wast",
 ]
 
 [[package]]
@@ -1377,7 +1377,7 @@ version = "0.66.0"
 dependencies = [
  "peepmatic-traits",
  "serde",
- "wast 22.0.0",
+ "wast",
 ]
 
 [[package]]
@@ -2644,7 +2644,7 @@ version = "0.19.0"
 dependencies = [
  "anyhow",
  "wasmtime",
- "wast 21.0.0",
+ "wast",
 ]
 
 [[package]]
@@ -2670,24 +2670,6 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "11.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df4d67ba9266f4fcaf2e8a1afadc5e2a959e51aecc07b1ecbdf85a6ddaf08bde"
-dependencies = [
- "leb128",
-]
-
-[[package]]
-name = "wast"
-version = "21.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b1844f66a2bc8526d71690104c0e78a8e59ffa1597b7245769d174ebb91deb5"
-dependencies = [
- "leb128",
-]
-
-[[package]]
-name = "wast"
 version = "22.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe1220ed7f824992b426a76125a3403d048eaf0f627918e97ade0d9b9d510d20"
@@ -2697,11 +2679,11 @@ dependencies = [
 
 [[package]]
 name = "wat"
-version = "1.0.22"
+version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce85d72b74242c340e9e3492cfb602652d7bb324c3172dd441b5577e39a2e18c"
+checksum = "f888158d9a4b7c39b859f72a435019835b64097c749f4f28d319004ca5a520b8"
 dependencies = [
- "wast 21.0.0",
+ "wast",
 ]
 
 [[package]]
@@ -2803,7 +2785,7 @@ dependencies = [
 
 [[package]]
 name = "witx"
-version = "0.8.5"
+version = "0.8.7"
 dependencies = [
  "anyhow",
  "diff",
@@ -2811,7 +2793,7 @@ dependencies = [
  "pretty_env_logger",
  "structopt",
  "thiserror",
- "wast 11.0.0",
+ "wast",
 ]
 
 [[package]]
