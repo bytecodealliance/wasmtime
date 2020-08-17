@@ -63,7 +63,7 @@ block0(v0: i32):
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
-function %f3(i32) -> i32 sext {
+function %f5(i32) -> i32 sext {
 block0(v0: i32):
     return v0
 }
@@ -71,6 +71,62 @@ block0(v0: i32):
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
 ; nextln:  sxtw x0, w0
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f6(i8) -> i64 {
+    fn0 = %g(i32, i32, i32, i32, i32, i32, i32, i32, i8 sext) -> i64
+
+block0(v0: i8):
+    v1 = iconst.i32 42
+    v2 = call fn0(v1, v1, v1, v1, v1, v1, v1, v1, v0)
+    return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  mov x8, x0
+; nextln:  sub sp, sp, #16
+; nextln:  virtual_sp_offset_adjust 16
+; nextln:  movz x0, #42
+; nextln:  movz x1, #42
+; nextln:  movz x2, #42
+; nextln:  movz x3, #42
+; nextln:  movz x4, #42
+; nextln:  movz x5, #42
+; nextln:  movz x6, #42
+; nextln:  movz x7, #42
+; nextln:  sxtb x8, w8
+; nextln:  stur x8, [sp]
+; nextln:  ldr x16, 8 ; b 12 ; data
+; nextln:  blr x16
+; nextln:  add sp, sp, #16
+; nextln:  virtual_sp_offset_adjust -16
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f7(i8) -> i32, i32, i32, i32, i32, i32, i32, i32, i8 sext {
+block0(v0: i8):
+    v1 = iconst.i32 42
+    return v1, v1, v1, v1, v1, v1, v1, v1, v0
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  mov x9, x0
+; nextln:  mov x8, x1
+; nextln:  movz x0, #42
+; nextln:  movz x1, #42
+; nextln:  movz x2, #42
+; nextln:  movz x3, #42
+; nextln:  movz x4, #42
+; nextln:  movz x5, #42
+; nextln:  movz x6, #42
+; nextln:  movz x7, #42
+; nextln:  sxtb x9, w9
+; nextln:  stur x9, [x8]
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret

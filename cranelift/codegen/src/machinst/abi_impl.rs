@@ -674,11 +674,12 @@ impl<M: ABIMachineImpl> ABIBody for ABIBodyImpl<M> {
                     _ => ret.push(M::gen_move(dest_reg, from_reg.to_reg(), ty)),
                 };
             }
-            &ABIArg::Stack(off, ty, ext) => {
+            &ABIArg::Stack(off, mut ty, ext) => {
                 let from_bits = ty_bits(ty) as u8;
                 // Trash the from_reg; it should be its last use.
                 match (ext, from_bits) {
                     (ArgumentExtension::Uext, n) | (ArgumentExtension::Sext, n) if n < 64 => {
+                        assert_eq!(RegClass::I64, from_reg.to_reg().get_class());
                         let signed = ext == ArgumentExtension::Sext;
                         ret.push(M::gen_extend(
                             from_reg,
@@ -687,6 +688,8 @@ impl<M: ABIMachineImpl> ABIBody for ABIBodyImpl<M> {
                             from_bits,
                             /* to_bits = */ 64,
                         ));
+                        // Store the extended version.
+                        ty = I64;
                     }
                     _ => {}
                 };
@@ -1083,7 +1086,7 @@ impl<M: ABIMachineImpl> ABICall for ABICallImpl<M> {
             &ABIArg::Reg(reg, ty, _) => {
                 ctx.emit(M::gen_move(Writable::from_reg(reg.to_reg()), from_reg, ty));
             }
-            &ABIArg::Stack(off, ty, ext) => {
+            &ABIArg::Stack(off, mut ty, ext) => {
                 if ext != ir::ArgumentExtension::None && ty_bits(ty) < 64 {
                     assert_eq!(RegClass::I64, from_reg.get_class());
                     let signed = match ext {
@@ -1101,6 +1104,8 @@ impl<M: ABIMachineImpl> ABICall for ABICallImpl<M> {
                         ty_bits(ty) as u8,
                         64,
                     ));
+                    // Store the extended version.
+                    ty = I64;
                 }
                 ctx.emit(M::gen_store_stack(
                     StackAMode::SPOffset(off, ty),
