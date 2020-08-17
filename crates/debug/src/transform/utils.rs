@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use super::address_transform::AddressTransform;
 use super::expression::{CompiledExpression, FunctionFrameInfo};
 use anyhow::Error;
@@ -136,7 +137,7 @@ pub(crate) fn append_vmctx_info(
     let loc = {
         let expr = CompiledExpression::vmctx();
         let locs = expr
-            .build_with_locals(scope_ranges, addr_tr, frame_info, isa)
+            .build_with_locals(&HashMap::new(), scope_ranges, addr_tr, frame_info, isa)
             .map(|i| {
                 i.map(|(begin, length, data)| write::Location::StartLength {
                     begin,
