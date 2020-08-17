@@ -395,6 +395,9 @@ pub enum SseOpcode {
     Paddd,
     Paddq,
     Paddw,
+    Pmulld,
+    Pmullw,
+    Pmuludq,
     Psllw,
     Pslld,
     Psllq,
@@ -491,6 +494,8 @@ impl SseOpcode {
             | SseOpcode::Paddd
             | SseOpcode::Paddq
             | SseOpcode::Paddw
+            | SseOpcode::Pmullw
+            | SseOpcode::Pmuludq
             | SseOpcode::Psllw
             | SseOpcode::Pslld
             | SseOpcode::Psllq
@@ -510,7 +515,9 @@ impl SseOpcode {
             | SseOpcode::Ucomisd
             | SseOpcode::Xorpd => SSE2,
 
-            SseOpcode::Insertps | SseOpcode::Roundss | SseOpcode::Roundsd => SSE41,
+            SseOpcode::Insertps | SseOpcode::Pmulld | SseOpcode::Roundss | SseOpcode::Roundsd => {
+                SSE41
+            }
         }
     }
 
@@ -579,6 +586,9 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Paddd => "paddd",
             SseOpcode::Paddq => "paddq",
             SseOpcode::Paddw => "paddw",
+            SseOpcode::Pmulld => "pmulld",
+            SseOpcode::Pmullw => "pmullw",
+            SseOpcode::Pmuludq => "pmuludq",
             SseOpcode::Psllw => "psllw",
             SseOpcode::Pslld => "pslld",
             SseOpcode::Psllq => "psllq",
