@@ -609,11 +609,8 @@ impl Module {
     /// Sets a breakpoint in the module. The `offset` is wasm module bytecode
     /// offset for the target instruction.
     pub fn set_breakpoint(&self, offset: usize) {
-        let breakpoints = self.compiled.set_breakpoint(offset).into_iter();
-        self.engine
-            .ensure_engine_debugger_context()
-            .get_mut()
-            .add_breakpoints(breakpoints);
+        let reg = (*self.module_registration).as_ref().unwrap();
+        self.engine.add_breakpoints(reg.id(), offset as u64);
     }
 }
 

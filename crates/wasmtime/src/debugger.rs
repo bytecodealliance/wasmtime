@@ -9,11 +9,15 @@ pub use wasmtime_runtime::debugger::{
     PatchableCode,
 };
 
-pub trait DebuggerJitCodeRegistration: std::marker::Send + std::marker::Sync {}
+pub trait DebuggerJitCodeRegistration: std::marker::Send + std::marker::Sync {
+    fn id(&self) -> u32;
+}
 
 pub trait DebuggerAgent: std::marker::Send + std::marker::Sync {
     fn pause(&mut self, kind: DebuggerPauseKind) -> DebuggerResumeAction;
     fn register_module(&mut self, module: DebuggerModule) -> Box<dyn DebuggerJitCodeRegistration>;
+    fn add_breakpoints(&self, module_id: u32, addr: u64);
+    fn find_breakpoint(&self, addr: usize) -> Option<*const BreakpointData>;
 }
 
 pub struct DebuggerModule<'a> {
@@ -23,7 +27,11 @@ pub struct DebuggerModule<'a> {
 }
 
 impl<'a> DebuggerModule<'a> {
-    fn new(module: &Arc<CompiledModule>, engine: Weak<EngineInner>, bytes: &'a [u8]) -> Self {
+    pub(crate) fn new(
+        module: &Arc<CompiledModule>,
+        engine: Weak<EngineInner>,
+        bytes: &'a [u8],
+    ) -> Self {
         Self {
             module: Arc::downgrade(module),
             engine,
@@ -58,14 +66,23 @@ impl DebuggerAgent for NullDebuggerAgent {
     }
     fn register_module(&mut self, _module: DebuggerModule) -> Box<dyn DebuggerJitCodeRegistration> {
         struct NullReg;
-        impl DebuggerJitCodeRegistration for NullReg {}
+        impl DebuggerJitCodeRegistration for NullReg {
+            fn id(&self) -> u32 {
+                0
+            }
+        }
         Box::new(NullReg)
+    }
+    fn find_breakpoint(&self, _addr: usize) -> Option<*const BreakpointData> {
+        None
+    }
+    fn add_breakpoints(&self, _module_id: u32, _addr: u64) {
+        panic!()
     }
 }
 
 pub(crate) struct EngineDebuggerContext {
     engine: Weak<EngineInner>,
-    breakpoints: Vec<BreakpointData>,
     data: Mutex<Option<Box<dyn std::any::Any + Send + Sync>>>,
 }
 
@@ -81,22 +98,8 @@ impl EngineDebuggerContext {
     pub(crate) fn new_inner(engine: Weak<EngineInner>) -> EngineDebuggerContext {
         EngineDebuggerContext {
             engine,
-            breakpoints: Vec::new(),
             data: Mutex::new(None),
         }
-    }
-    pub fn add_breakpoints(&mut self, it: impl Iterator<Item = BreakpointData>) {
-        self.breakpoints.extend(it);
-    }
-    pub fn register_module(
-        &mut self,
-        module: &Arc<CompiledModule>,
-        bytes: &[u8],
-    ) -> Box<dyn DebuggerJitCodeRegistration> {
-        self.debugger()
-            .lock()
-            .unwrap()
-            .register_module(DebuggerModule::new(module, self.engine.clone(), bytes))
     }
     fn debugger(&self) -> Arc<Mutex<dyn DebuggerAgent + 'static>> {
         let engine_inner = self.engine.upgrade().unwrap();
@@ -108,9 +111,10 @@ impl DebuggerContext for EngineDebuggerContext {
     fn patchable(&self) -> &dyn PatchableCode {
         self
     }
-    fn find_breakpoint(&self, addr: *const u8) -> Option<&BreakpointData> {
+    fn find_breakpoint(&self, addr: *const u8) -> Option<*const BreakpointData> {
         let addr = addr as usize;
-        self.breakpoints.iter().find(|b| b.pc == addr)
+        let engine_inner = self.engine.upgrade().unwrap();
+        engine_inner.find_breakpoint(addr)
     }
     fn pause(&self, kind: DebuggerPauseKind) -> DebuggerResumeAction {
         self.debugger().lock().unwrap().pause(kind)

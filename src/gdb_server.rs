@@ -11,7 +11,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex, Weak as SyncWeak};
 use std::thread;
 use wasmtime::debugger::{
-    DebuggerAgent, DebuggerJitCodeRegistration, DebuggerModule, DebuggerPauseKind,
+    BreakpointData, DebuggerAgent, DebuggerJitCodeRegistration, DebuggerModule, DebuggerPauseKind,
     DebuggerResumeAction,
 };
 use wasmtime::{Config, Engine, Trap};
@@ -183,28 +183,8 @@ impl Handler for DebuggerHandler {
     fn insert_software_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
         let modules = self.modules.lock().unwrap();
         let lib = modules.values().find(|m| m.has_addr(breakpoint.addr));
-        if lib
-            .unwrap()
-            .set_breakpoints
-            .borrow()
-            .contains(&breakpoint.addr)
-        {
-            // TODO flip breakpoint? see `remove_software_breakpoint`
-            return Ok(());
-        }
-        let breakpoints = lib
-            .unwrap()
-            .module
-            .upgrade()
-            .unwrap()
-            .set_breakpoint(breakpoint.addr as usize & 0xFFFF_FFFF);
-        lib.unwrap().engine.add_breakpoints(breakpoints.into_iter());
-        lib.unwrap()
-            .set_breakpoints
-            .borrow_mut()
-            .insert(breakpoint.addr);
         trace!("Breakpoint {:x}", breakpoint.addr);
-        Ok(())
+        lib.unwrap().set_breakpoint(breakpoint.addr)
     }
 
     fn remove_software_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
@@ -265,7 +245,7 @@ struct RegisteredModule {
     module: SyncWeak<CompiledModule>,
     engine: Engine,
     bytes: Vec<u8>,
-    set_breakpoints: RefCell<HashSet<u64>>,
+    set_breakpoints: RefCell<HashMap<u64, Vec<BreakpointData>>>,
 }
 
 impl RegisteredModule {
@@ -280,7 +260,7 @@ impl RegisteredModule {
             module: module.compiled_module(),
             engine: module.engine(),
             bytes: module.bytes().to_vec(),
-            set_breakpoints: RefCell::new(HashSet::new()),
+            set_breakpoints: RefCell::new(HashMap::new()),
         }
     }
     fn addr(&self) -> u64 {
@@ -288,6 +268,20 @@ impl RegisteredModule {
     }
     fn has_addr(&self, addr: u64) -> bool {
         self.id as u64 == addr >> 32 && (addr as usize) & 0xFFFFFFFF < self.bytes.len()
+    }
+
+    fn set_breakpoint(&self, addr: u64) -> Result<(), Error> {
+        if self.set_breakpoints.borrow().contains_key(&addr) {
+            // TODO flip breakpoint? see `remove_software_breakpoint`
+            return Ok(());
+        }
+        let breakpoints = self
+            .module
+            .upgrade()
+            .unwrap()
+            .set_breakpoint(addr as usize & 0xFFFF_FFFF);
+        self.set_breakpoints.borrow_mut().insert(addr, breakpoints);
+        Ok(())
     }
 }
 
@@ -363,13 +357,42 @@ impl DebuggerAgent for GdbServer {
         trace!("module registered: {}", id);
 
         struct Registration(u32, Arc<Mutex<HashMap<u32, RegisteredModule>>>);
-        impl DebuggerJitCodeRegistration for Registration {}
+        impl DebuggerJitCodeRegistration for Registration {
+            fn id(&self) -> u32 {
+                self.0
+            }
+        }
         impl Drop for Registration {
             fn drop(&mut self) {
                 self.1.lock().unwrap().remove(&self.0);
             }
         }
         Box::new(Registration(id, self.modules.clone()))
+    }
+
+    fn add_breakpoints(&self, module_id: u32, addr: u64) {
+        trace!("add_breakpoints {:x}@{}", addr, module_id);
+        let lock = self.modules.lock().unwrap();
+        let found = lock.iter().find(|m| *m.0 == module_id);
+        found.as_ref().unwrap().1.set_breakpoint(addr);
+    }
+
+    fn find_breakpoint(&self, addr: usize) -> Option<*const BreakpointData> {
+        use std::cell::Ref;
+        use std::sync::MutexGuard;
+        let lock = self.modules.lock().unwrap();
+        let found = lock.iter().find_map(|(module_id, m)| {
+            m.set_breakpoints
+                .borrow()
+                .iter()
+                .find_map(|(_, b)| b.iter().find(|b| b.pc == addr).map(|b| b as *const _))
+        });
+        trace!(
+            "DebuggerAgent::find_breakpoint {:x} {}",
+            addr,
+            found.is_some()
+        );
+        found
     }
 }
 

@@ -1,5 +1,6 @@
 use crate::debugger::{
-    DebuggerAgent, DebuggerJitCodeRegistration, EngineDebuggerContext, NullDebuggerAgent,
+    DebuggerAgent, DebuggerJitCodeRegistration, DebuggerModule, EngineDebuggerContext,
+    NullDebuggerAgent,
 };
 use crate::externals::MemoryCreator;
 use crate::trampoline::{MemoryCreatorProxy, StoreInstanceHandle};
@@ -792,6 +793,10 @@ impl EngineInner {
     pub(crate) fn jit_code(&self) -> &EngineJitCode {
         &self.jit_code
     }
+    pub(crate) fn find_breakpoint(&self, addr: usize) -> Option<*const BreakpointData> {
+        let lock = self.config.debugger.lock().unwrap();
+        lock.find_breakpoint(addr)
+    }
 }
 
 impl From<Arc<EngineInner>> for Engine {
@@ -852,14 +857,19 @@ impl Engine {
     /// configuration settings.
     pub fn new(config: &Config) -> Engine {
         debug_builtins::ensure_exported();
-        Engine {
+        let engine = Engine {
             inner: Arc::new(EngineInner {
                 config: config.clone(),
                 compiler: config.build_compiler(),
                 debugger_context: Mutex::new(None),
                 jit_code: EngineJitCode::new(),
             }),
+        };
+        {
+            let mut lock = engine.inner.debugger_context.lock().unwrap();
+            *lock = Some(Box::new(EngineDebuggerContext::new(&engine)));
         }
+        engine
     }
 
     /// Returns the configuration settings that this engine is using.
@@ -882,12 +892,6 @@ impl Engine {
         &self.inner.debugger_context
     }
 
-    pub(crate) fn ensure_engine_debugger_context(&self) -> EngineDebuggerContextGuard {
-        let mut lock = self.inner.debugger_context.lock().unwrap();
-        let _ = lock.get_or_insert_with(|| Box::new(EngineDebuggerContext::new(&self)));
-        EngineDebuggerContextGuard(lock)
-    }
-
     pub(crate) fn weak(&self) -> SyncWeak<EngineInner> {
         Arc::downgrade(&self.inner)
     }
@@ -901,18 +905,14 @@ impl Engine {
         compiled_module: &Arc<CompiledModule>,
         bytes: &[u8],
     ) -> ModuleRegistration {
-        let reg = self
-            .ensure_engine_debugger_context()
-            .get_mut()
-            .register_module(compiled_module, bytes);
+        let mut lock = self.inner.config().debugger.lock().unwrap();
+        let reg = lock.register_module(DebuggerModule::new(compiled_module, self.weak(), bytes));
         ModuleRegistration(reg)
     }
 
-    /// FIXME
-    pub fn add_breakpoints(&self, it: impl Iterator<Item = BreakpointData>) {
-        self.ensure_engine_debugger_context()
-            .get_mut()
-            .add_breakpoints(it);
+    pub(crate) fn add_breakpoints(&self, module_id: u32, addr: u64) {
+        let lock = self.inner.config().debugger.lock().unwrap();
+        lock.add_breakpoints(module_id, addr);
     }
 
     /// Returns whether the engine `a` and `b` refer to the same configuration.
@@ -929,18 +929,9 @@ impl Default for Engine {
 
 pub(crate) struct ModuleRegistration(Box<dyn DebuggerJitCodeRegistration>);
 
-pub(crate) struct EngineDebuggerContextGuard<'a>(
-    MutexGuard<'a, Option<Box<dyn DebuggerContext + Send + Sync + 'static>>>,
-);
-
-impl<'a> EngineDebuggerContextGuard<'a> {
-    pub fn get_mut(&mut self) -> &mut EngineDebuggerContext {
-        self.0
-            .as_mut()
-            .unwrap()
-            .as_any_mut()
-            .downcast_mut()
-            .unwrap()
+impl ModuleRegistration {
+    pub(crate) fn id(&self) -> u32 {
+        self.0.id()
     }
 }
 

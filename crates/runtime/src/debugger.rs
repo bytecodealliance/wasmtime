@@ -8,6 +8,7 @@ pub trait PatchableCode {
     fn patch_jit_code(&self, addr: usize, len: usize, f: &mut dyn FnMut());
 }
 
+#[derive(Debug)]
 pub struct BreakpointData {
     /// Breakpoint address.
     pub pc: usize,
@@ -41,6 +42,8 @@ impl BreakpointData {
 
 const BREAKPOINT_INSTR: u8 = 0xCC;
 const BREAKPOINT_INSTR_LEN: usize = 1;
+
+#[derive(Debug)]
 struct SavedBreakpointData(u8);
 
 unsafe fn write_breakpoint_instr(addr: usize) -> SavedBreakpointData {
@@ -74,7 +77,7 @@ pub type DebuggerContextData<'a, 'b> = MutexGuard<'a, Option<Box<dyn Any + Send 
 
 pub trait DebuggerContext {
     fn patchable(&self) -> &dyn PatchableCode;
-    fn find_breakpoint(&self, addr: *const u8) -> Option<&BreakpointData>;
+    fn find_breakpoint(&self, addr: *const u8) -> Option<*const BreakpointData>;
     fn pause(&self, kind: DebuggerPauseKind) -> DebuggerResumeAction;
     fn data<'c, 'a>(&'c self) -> DebuggerContextData<'c, 'a>;
 
@@ -170,8 +173,7 @@ cfg_if::cfg_if! {
                     }
                     DebuggerResumeAction::Step => {
                         let pc = get_pc_from_ucontext(context);
-                        if let Some(b) = dbg.find_breakpoint(pc) {
-                            let ptr: *const _ = &*b;
+                        if let Some(ptr) = dbg.find_breakpoint(pc) {
                             (*ptr).restore_code(dbg.patchable());
                             data.last = Some(pc);
                         }
@@ -181,9 +183,7 @@ cfg_if::cfg_if! {
             }
             let pc_adj: isize = -(BREAKPOINT_INSTR_LEN as isize);
             let pc = get_pc_from_ucontext(context).offset(pc_adj);
-            if let Some(b) = dbg.find_breakpoint(pc) {
-                let ptr: *const _ = &*b;
-
+            if let Some(ptr) = dbg.find_breakpoint(pc) {
                 let action = dbg.pause(DebuggerPauseKind::Breakpoint(pc as usize));
                 (*ptr).restore_code(dbg.patchable());
                 adjust_pc_in_ucontext(context, pc_adj as i64);
