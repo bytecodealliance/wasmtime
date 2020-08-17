@@ -454,6 +454,7 @@ where
         () => {
             if !code_chunk.is_empty() {
 		let corr = code_chunk.len().into_u64();
+		print!("Correcting: unread_bytes={}   corr={}\n", unread_bytes, corr);
 		unread_bytes += corr;
                 push!(CompiledExpressionPart::Code(code_chunk));
 		unread_bytes -= corr;
@@ -562,9 +563,8 @@ where
         }
     }
 
-    if !code_chunk.is_empty() {
-        push!(CompiledExpressionPart::Code(code_chunk));
-    }
+    unread_bytes = 0;
+    flush_code_chunk!();
 
     parts.push(CompiledExpressionPart::LandingPad { original_pos: expr.0.len().into_u64() as usize });
 
