@@ -126,6 +126,7 @@ bitflags! {
         const RDONLY = libc::O_RDONLY;
         const WRONLY = libc::O_WRONLY;
         const RDWR = libc::O_RDWR;
+        const NOCTTY = libc::O_NOCTTY;
         #[cfg(any(target_os = "linux",
                   target_os = "netbsd",
                   target_os = "openbsd",
