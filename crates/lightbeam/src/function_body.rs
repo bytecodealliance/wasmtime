@@ -150,7 +150,7 @@ where
         let params = func_type.params().iter().map(|t| t.to_microwasm_type());
         let returns = func_type.returns().iter().map(|t| t.to_microwasm_type());
 
-        const DISASSEMBLE: bool = false;
+        const DISASSEMBLE: bool = true;
 
         if DISASSEMBLE {
             print!("     \tdef .Fn{} :: [", func_idx);
@@ -216,6 +216,7 @@ where
             let op_offset = op_offset?;
 
             if DISASSEMBLE {
+                println!("{:#?}", ctx.stack);
                 println!("{}", DisassemblyOpFormatter(op_offset.clone()));
             }
 
@@ -615,17 +616,24 @@ where
                                     .clone()
                                     .map(|t| t.count())
                                     .unwrap_or_default() as u32,
+                            "We somehow mistracked the `to_drop` count and ended up with \
+                            an incorrect param count"
                         );
                     }
 
                     debug_assert_le!(
                         // `params + 1` because we need 1 element for the selector.
                         params + 1,
-                        ctx.stack.len() as u32
+                        ctx.stack.len() as u32,
+                        "Stack has too few elements for branch"
                     );
 
                     if !adaptors.is_empty() {
-                        debug_assert_eq!(additional_instructions.len(), 0);
+                        debug_assert_eq!(
+                            additional_instructions.len(),
+                            0,
+                            "We didn't emit all adaptor instructions before adding more"
+                        );
 
                         additional_instructions = adaptors.into_iter();
                         additional_instructions_offset = offset;
@@ -643,8 +651,7 @@ where
                             //       serialized for blocks where `!block.should_serialize_args()`.
                             let locs = cc_to_param_locs(params, &cc, to_drop.clone())
                                 .map(|loc| {
-                                    loc
-                                        .and_then(|loc| CCLoc::try_from(loc).ok())
+                                    loc.and_then(|loc| CCLoc::try_from(loc).ok())
                                         .map(MaybeCCLoc::Concrete)
                                         .unwrap_or(should_serialize)
                                 })
@@ -709,7 +716,9 @@ where
                                 (_, None) => {}
                                 _ => {
                                     return Err(error(
-                                            "Programmer error: Tried to conditionally jump to targets that require different values for `rsp`"));
+                                        "Programmer error: Tried to conditionally jump to targets \
+                                        that require different values for `rsp`",
+                                    ));
                                 }
                             }
                         } else {

@@ -1242,8 +1242,8 @@ where
         ty: wasmparser::TypeOrFuncType,
     ) -> Result<
         (
-            impl ExactSizeIterator<Item = SignlessType> + '_,
-            impl ExactSizeIterator<Item = SignlessType> + '_,
+            impl ExactSizeIterator<Item = SignlessType> + Clone + '_,
+            impl ExactSizeIterator<Item = SignlessType> + Clone + '_,
         ),
         Error,
     > {
@@ -1311,27 +1311,33 @@ where
             WasmOperator::Unreachable => OpSig::none(),
             WasmOperator::Nop => OpSig::none(),
 
-            // TODO: Multi-value
             WasmOperator::Block { ty } | WasmOperator::Loop { ty } => {
                 let (input, _) = self.type_or_func_type_to_sig(*ty)?;
+                let input = input.map(SigT::Concrete);
+                let output = input.clone();
 
-                OpSig::new(input.map(SigT::Concrete), none())
+                OpSig::new(input, output)
             }
             WasmOperator::If { ty } => {
                 let (input, _) = self.type_or_func_type_to_sig(*ty)?;
-                OpSig::new(input.map(SigT::Concrete).chain(one(I32)), none())
+                let input = input.map(SigT::Concrete);
+                let output = input.clone();
+
+                OpSig::new(input.chain(one(I32)), output)
             }
 
-            WasmOperator::Else | WasmOperator::End => OpSig::new(
-                self.control_frames
+            WasmOperator::Else | WasmOperator::End => {
+                let input = self
+                    .control_frames
                     .top()
                     .ok_or_else(|| error("Missing control frame"))?
                     .returns
                     .iter()
                     .copied()
-                    .map(SigT::Concrete),
-                none(),
-            ),
+                    .map(SigT::Concrete);
+                let output = input.clone();
+                OpSig::new(input, output)
+            }
 
             WasmOperator::Br { .. } => OpSig::none(),
             WasmOperator::BrIf { .. } => sig!((I32) -> ()),

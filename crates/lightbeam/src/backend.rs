@@ -234,7 +234,16 @@ where
 }
 
 pub fn ret_locs<T: From<CCLoc>, I: IntoIterator<Item = SignlessType>>(types: I) -> Locs<Vec<T>> {
-    locs::<T, I>(types, INTEGER_RETURN_GPRS, FLOAT_RETURN_GPRS)
+    let out = locs::<T, I>(types, INTEGER_RETURN_GPRS, FLOAT_RETURN_GPRS);
+
+    if out.max_depth != StackDepth(0) {
+        unimplemented!(
+            "We need to implement proper MEMORY-type argument passing \
+            in Lightbeam, by taking a hidden first argument and returning a pointer"
+        );
+    }
+
+    out
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -627,7 +636,7 @@ impl ValueLocation {
 // All rest arguments are passed on the stack.
 // Usually system-v uses rdi and rsi, but rdi is used for the vmctx and rsi is used for the _caller_ vmctx
 const INTEGER_ARGS_IN_GPRS: &[GPR] = &[GPR::Rq(CALLER_VMCTX), RDX, RCX, R8, R9];
-const INTEGER_RETURN_GPRS: &[GPR] = &[RAX, RDX];
+const INTEGER_RETURN_GPRS: &[GPR] = &[RAX, RDX, RCX];
 const FLOAT_ARGS_IN_GPRS: &[GPR] = &[XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7];
 const FLOAT_RETURN_GPRS: &[GPR] = &[XMM0, XMM1];
 // List of scratch registers taken from https://wiki.osdev.org/System_V_ABI
@@ -2577,13 +2586,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         );
         debug_assert_lt!(
             out,
-            ((self.physical_stack_depth.0
-                + self
-                    .module_context
-                    .defined_func_type(self.current_function)
-                    .params()
-                    .len() as u32)
-                * WORD_SIZE) as i32,
+            ((self.physical_stack_depth.0 + self.allocated_stack.offset) * WORD_SIZE) as i32,
             "Trying to access stack value at offset greater than allocated space"
         );
         out
