@@ -19,4 +19,4 @@ wasmtime = { path = "../wasmtime" }
 wasmtime-wast = { path = "../wast" }
 
 [dev-dependencies]
-wat = "1.0.18"
+wat = "1.0.23"
