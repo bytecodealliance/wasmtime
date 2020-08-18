@@ -34,7 +34,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-preopt",
     "cranelift-frontend",
     "cranelift-wasm",
-    "cranelift-faerie",
     "cranelift-native",
     "cranelift-object",
     "cranelift-interpreter",

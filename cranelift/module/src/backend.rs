@@ -22,12 +22,9 @@ use std::string::String;
 ///    the contents of a `Module` to memory which can be directly executed.
 ///  - `ObjectBackend`, defined in [cranelift-object], which writes the
 ///    contents of a `Module` out as a native object file.
-///  - `FaerieBackend`, defined in [cranelift-faerie], which writes the
-///    contents of a `Module` out as a native object file.
 ///
 /// [cranelift-simplejit]: https://docs.rs/cranelift-simplejit/
 /// [cranelift-object]: https://docs.rs/cranelift-object/
-/// [cranelift-faerie]: https://docs.rs/cranelift-faerie/
 pub trait Backend
 where
     Self: marker::Sized,
