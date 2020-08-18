@@ -345,10 +345,10 @@ impl Handle for InMemoryFile {
     fn openat(
         &self,
         path: &str,
-        read: bool,
-        write: bool,
+        _read: bool,
+        _write: bool,
         oflags: types::Oflags,
-        fd_flags: types::Fdflags,
+        _fd_flags: types::Fdflags,
     ) -> Result<Box<dyn Handle>> {
         if oflags.contains(&types::Oflags::DIRECTORY) {
             tracing::trace!(
@@ -633,8 +633,8 @@ impl Handle for VirtualDir {
     fn openat(
         &self,
         path: &str,
-        read: bool,
-        write: bool,
+        _read: bool,
+        _write: bool,
         oflags: types::Oflags,
         fd_flags: types::Fdflags,
     ) -> Result<Box<dyn Handle>> {
