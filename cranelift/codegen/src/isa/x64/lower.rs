@@ -124,10 +124,14 @@ struct InsnOutput {
     output: usize,
 }
 
-fn matches_input<C: LowerCtx<I = Inst>>(c: &mut C, input: InsnInput, op: Opcode) -> Option<IRInst> {
-    let inputs = c.get_input(input.insn, input.input);
+fn matches_input<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    input: InsnInput,
+    op: Opcode,
+) -> Option<IRInst> {
+    let inputs = ctx.get_input(input.insn, input.input);
     if let Some((src_inst, _)) = inputs.inst {
-        let data = c.data(src_inst);
+        let data = ctx.data(src_inst);
         if data.opcode() == op {
             return Some(src_inst);
         }
@@ -212,6 +216,10 @@ fn input_to_sext_imm(ctx: Ctx, spec: InsnInput) -> Option<u32> {
             None
         }
     })
+}
+
+fn input_to_imm(ctx: Ctx, spec: InsnInput) -> Option<u64> {
+    ctx.get_input(spec.insn, spec.input).constant
 }
 
 /// Put the given input into an immediate, a register or a memory operand.
@@ -338,6 +346,80 @@ fn emit_vm_call<C: LowerCtx<I = Inst>>(
     abi.emit_stack_post_adjust(ctx);
 
     Ok(())
+}
+
+/// Returns whether the given input is a shift by a constant value less or equal than 3.
+/// The goal is to embed it within an address mode.
+fn matches_small_cst_shift<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    spec: InsnInput,
+) -> Option<(InsnInput, u8)> {
+    if let Some(shift) = matches_input(ctx, spec, Opcode::Ishl) {
+        if let Some(shift_amt) = input_to_imm(
+            ctx,
+            InsnInput {
+                insn: shift,
+                input: 1,
+            },
+        ) {
+            if shift_amt <= 3 {
+                return Some((
+                    InsnInput {
+                        insn: shift,
+                        input: 0,
+                    },
+                    shift_amt as u8,
+                ));
+            }
+        }
+    }
+    None
+}
+
+fn lower_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: u32) -> Amode {
+    // We now either have an add that we must materialize, or some other input; as well as the
+    // final offset.
+    if let Some(add) = matches_input(ctx, spec, Opcode::Iadd) {
+        let add_inputs = &[
+            InsnInput {
+                insn: add,
+                input: 0,
+            },
+            InsnInput {
+                insn: add,
+                input: 1,
+            },
+        ];
+
+        // TODO heap_addr legalization generates a uext64 *after* the shift, so these optimizations
+        // aren't happening in the wasm case. We could do better, given some range analysis.
+        let (base, index, shift) = if let Some((shift_input, shift_amt)) =
+            matches_small_cst_shift(ctx, add_inputs[0])
+        {
+            (
+                input_to_reg(ctx, add_inputs[1]),
+                input_to_reg(ctx, shift_input),
+                shift_amt,
+            )
+        } else if let Some((shift_input, shift_amt)) = matches_small_cst_shift(ctx, add_inputs[1]) {
+            (
+                input_to_reg(ctx, add_inputs[0]),
+                input_to_reg(ctx, shift_input),
+                shift_amt,
+            )
+        } else {
+            (
+                input_to_reg(ctx, add_inputs[0]),
+                input_to_reg(ctx, add_inputs[1]),
+                0,
+            )
+        };
+
+        return Amode::imm_reg_reg_shift(offset, base, index, shift);
+    }
+
+    let input = input_to_reg(ctx, spec);
+    Amode::imm_reg(offset, input)
 }
 
 //=============================================================================
@@ -1660,7 +1742,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 _ => false,
             };
 
-            let addr = match op {
+            let amode = match op {
                 Opcode::Load
                 | Opcode::Uload8
                 | Opcode::Sload8
@@ -1669,8 +1751,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 | Opcode::Uload32
                 | Opcode::Sload32 => {
                     assert_eq!(inputs.len(), 1, "only one input for load operands");
-                    let base = input_to_reg(ctx, inputs[0]);
-                    Amode::imm_reg(offset as u32, base)
+                    lower_amode(ctx, inputs[0], offset as u32)
                 }
 
                 Opcode::LoadComplex
@@ -1704,7 +1785,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     // so ext-mode is defined in this case.
                     ctx.emit(Inst::movsx_rm_r(
                         ext_mode.unwrap(),
-                        RegMem::mem(addr),
+                        RegMem::mem(amode),
                         dst,
                         srcloc,
                     ));
@@ -1712,12 +1793,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 (false, false) => {
                     if elem_ty.bytes() == 8 {
                         // Use a plain load.
-                        ctx.emit(Inst::mov64_m_r(addr, dst, srcloc))
+                        ctx.emit(Inst::mov64_m_r(amode, dst, srcloc))
                     } else {
                         // Use a zero-extended load.
                         ctx.emit(Inst::movzx_rm_r(
                             ext_mode.unwrap(),
-                            RegMem::mem(addr),
+                            RegMem::mem(amode),
                             dst,
                             srcloc,
                         ))
@@ -1726,13 +1807,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 (_, true) => {
                     ctx.emit(match elem_ty {
                         types::F32 => {
-                            Inst::xmm_mov(SseOpcode::Movss, RegMem::mem(addr), dst, srcloc)
+                            Inst::xmm_mov(SseOpcode::Movss, RegMem::mem(amode), dst, srcloc)
                         }
                         types::F64 => {
-                            Inst::xmm_mov(SseOpcode::Movsd, RegMem::mem(addr), dst, srcloc)
+                            Inst::xmm_mov(SseOpcode::Movsd, RegMem::mem(amode), dst, srcloc)
                         }
                         _ if elem_ty.is_vector() && elem_ty.bits() == 128 => {
-                            Inst::xmm_mov(SseOpcode::Movups, RegMem::mem(addr), dst, srcloc)
+                            Inst::xmm_mov(SseOpcode::Movups, RegMem::mem(amode), dst, srcloc)
                         } // TODO Specialize for different types: MOVUPD, MOVDQU
                         _ => unreachable!("unexpected type for load: {:?}", elem_ty),
                     });
@@ -1761,9 +1842,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let addr = match op {
                 Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
                     assert_eq!(inputs.len(), 2, "only one input for store memory operands");
-                    let base = input_to_reg(ctx, inputs[1]);
-                    // TODO sign?
-                    Amode::imm_reg(offset as u32, base)
+                    lower_amode(ctx, inputs[1], offset as u32)
                 }
 
                 Opcode::StoreComplex
