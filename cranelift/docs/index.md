@@ -52,11 +52,6 @@
     emits native object files using the
     `object <https://github.com/gimli-rs/object>`_ library.
 
- - [cranelift-faerie](https://docs.rs/cranelift-faerie)
-    This crate provides a faerie-based backend for `cranelift-module`, which
-    emits native object files using the
-    `faerie <https://github.com/m4b/faerie>`_ library.
-
  - [cranelift-simplejit](https://docs.rs/cranelift-simplejit)
     This crate provides a simple JIT backend for `cranelift-module`, which
     emits code and data into memory.
