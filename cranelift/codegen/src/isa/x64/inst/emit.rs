@@ -1298,6 +1298,8 @@ pub(crate) fn emit(
             src,
             dst,
         } => {
+            // Lowering of the Select IR opcode when the input is an fcmp relies on the fact that
+            // this doesn't clobber flags. Make sure to not do so here.
             let next = sink.get_label();
 
             // Jump if cc is *not* set.
@@ -1430,6 +1432,21 @@ pub(crate) fn emit(
             let disp = disp as u32;
             sink.put1(0xE9);
             sink.put4(disp);
+        }
+
+        Inst::JmpIf { cc, taken } => {
+            let cond_start = sink.cur_offset();
+            let cond_disp_off = cond_start + 2;
+            if let Some(l) = taken.as_label() {
+                sink.use_label_at_offset(cond_disp_off, l, LabelUse::JmpRel32);
+                // Since this is not a terminator, don't enroll in the branch inversion mechanism.
+            }
+
+            let taken_disp = taken.as_offset32_or_zero();
+            let taken_disp = taken_disp as u32;
+            sink.put1(0x0F);
+            sink.put1(0x80 + cc.get_enc());
+            sink.put4(taken_disp);
         }
 
         Inst::JmpCond {
