@@ -51,7 +51,9 @@ pub unsafe fn posix_fadvise(
             // is providing a dubiously large hint. This is not confirmed (no helpful info in the man
             // pages), but offhand, a 2+ GiB advisory read async seems unlikely to help with any kind
             // of performance, so we log and exit early with a no-op.
-            log::warn!("`len` too big to fit in the host's command. Returning early with no-op!");
+            tracing::warn!(
+                "`len` too big to fit in the host's command. Returning early with no-op!"
+            );
             return Ok(());
         }
     };
