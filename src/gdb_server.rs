@@ -189,6 +189,7 @@ impl Handler for DebuggerHandler {
     }
 
     fn remove_software_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
+        // TODO
         trace!("-Breakpoint {:x}", breakpoint.addr);
         Ok(())
     }
@@ -208,12 +209,14 @@ impl Handler for DebuggerHandler {
 
     fn wasm_local(&self, frame: u64, index: u64) -> Result<Vec<u8>, Error> {
         trace!("Local {} at {}", index, frame);
-        Ok(vec![0, 0, 0, 0, 0, 0, 0, 0]) // TODO local
+        // TODO local: need access to value locations and native stack.
+        Ok(vec![0, 0, 0, 0, 0, 0, 0, 0])
     }
 
     fn wasm_memory(&self, frame: u64, addr: u64, len: u64) -> Result<Vec<u8>, Error> {
         trace!("Memory {:x}/{:x} at {}", addr, len, frame);
-        Ok(vec![0; len as usize]) // TODO memory
+        // TODO memory: need access to instance's vmctx
+        Ok(vec![0; len as usize])
     }
 }
 
@@ -306,11 +309,22 @@ impl DebuggerAgent for GdbServer {
                 .iter()
                 .map(|f| {
                     let lib = lock.iter().find(|m| m.1.module_id == f.module_id());
-                    f.module_offset() as u64 + lib.as_ref().unwrap().1.addr()
+                    let offset = match f.module_offset() {
+                        z @ 0xFFFF_FFFF => {
+                            // special value for unknown, correcting to start of func ??.
+                            (z - f.func_offset()) as u64
+                        }
+                        x => x as u64,
+                    };
+                    offset + lib.as_ref().unwrap().1.addr()
                 })
                 .collect::<Vec<_>>()
         };
-        let pc = if stack.len() > 0 { stack[0] } else { 0 };
+        if stack.is_empty() {
+            // Failed to recover stack -- nothing can be done.
+            return DebuggerResumeAction::Continue;
+        }
+        let pc = stack[0];
 
         let pause_state = DebuggerPauseState {
             pc,
