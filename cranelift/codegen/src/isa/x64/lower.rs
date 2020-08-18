@@ -135,12 +135,14 @@ fn matches_input<C: LowerCtx<I = Inst>>(c: &mut C, input: InsnInput, op: Opcode)
     None
 }
 
+/// Put the given input into a register, and mark it as used (side-effect).
 fn input_to_reg(ctx: Ctx, spec: InsnInput) -> Reg {
     let inputs = ctx.get_input(spec.insn, spec.input);
     ctx.use_input_reg(inputs);
     inputs.reg
 }
 
+/// An extension specification for `extend_input_to_reg`.
 enum ExtSpec {
     ZeroExtendTo32,
     ZeroExtendTo64,
@@ -148,6 +150,8 @@ enum ExtSpec {
     SignExtendTo64,
 }
 
+/// Put the given input into a register, marking it as used, and do a zero- or signed- extension if
+/// required. (This obviously causes side-effects.)
 fn extend_input_to_reg(ctx: Ctx, spec: InsnInput, ext_spec: ExtSpec) -> Reg {
     let requested_size = match ext_spec {
         ExtSpec::ZeroExtendTo32 | ExtSpec::SignExtendTo32 => 32,
@@ -188,15 +192,17 @@ fn extend_input_to_reg(ctx: Ctx, spec: InsnInput, ext_spec: ExtSpec) -> Reg {
     dst.to_reg()
 }
 
+/// Put the given input into a register or a memory operand.
+/// Effectful: may mark the given input as used, when returning the register form.
 fn input_to_reg_mem(ctx: Ctx, spec: InsnInput) -> RegMem {
     // TODO handle memory.
     RegMem::reg(input_to_reg(ctx, spec))
 }
 
-/// Try to use an immediate for constant inputs, and a register otherwise.
-/// TODO: handle memory as well!
-fn input_to_reg_mem_imm(ctx: Ctx, spec: InsnInput) -> RegMemImm {
-    let imm = ctx.get_input(spec.insn, spec.input).constant.and_then(|x| {
+/// Returns whether the given input is an immediate that can be properly sign-extended, without any
+/// possible side-effect.
+fn input_to_sext_imm(ctx: Ctx, spec: InsnInput) -> Option<u32> {
+    ctx.get_input(spec.insn, spec.input).constant.and_then(|x| {
         // For i64 instructions (prefixed with REX.W), require that the immediate will sign-extend
         // to 64 bits. For other sizes, it doesn't matter and we can just use the plain
         // constant.
@@ -205,10 +211,18 @@ fn input_to_reg_mem_imm(ctx: Ctx, spec: InsnInput) -> RegMemImm {
         } else {
             None
         }
-    });
-    match imm {
+    })
+}
+
+/// Put the given input into an immediate, a register or a memory operand.
+/// Effectful: may mark the given input as used, when returning the register form.
+fn input_to_reg_mem_imm(ctx: Ctx, spec: InsnInput) -> RegMemImm {
+    match input_to_sext_imm(ctx, spec) {
         Some(x) => RegMemImm::imm(x),
-        None => RegMemImm::reg(input_to_reg(ctx, spec)),
+        None => match input_to_reg_mem(ctx, spec) {
+            RegMem::Reg { reg } => RegMemImm::reg(reg),
+            RegMem::Mem { addr } => RegMemImm::mem(addr),
+        },
     }
 }
 
@@ -369,8 +383,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Band
         | Opcode::Bor
         | Opcode::Bxor => {
-            // TODO For commutative operations (add, mul, and, or, xor), try to commute the
-            // operands if one is an immediate.
             let ty = ty.unwrap();
             if ty.lane_count() > 1 {
                 let sse_op = match op {
@@ -413,8 +425,32 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     Opcode::Bxor => AluRmiROpcode::Xor,
                     _ => unreachable!(),
                 };
-                let lhs = input_to_reg(ctx, inputs[0]);
-                let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
+
+                let (lhs, rhs) = match op {
+                    Opcode::Iadd
+                    | Opcode::IaddIfcout
+                    | Opcode::Imul
+                    | Opcode::Band
+                    | Opcode::Bor
+                    | Opcode::Bxor => {
+                        // For commutative operations, try to commute operands if one is an
+                        // immediate.
+                        if let Some(imm) = input_to_sext_imm(ctx, inputs[0]) {
+                            (input_to_reg(ctx, inputs[1]), RegMemImm::imm(imm))
+                        } else {
+                            (
+                                input_to_reg(ctx, inputs[0]),
+                                input_to_reg_mem_imm(ctx, inputs[1]),
+                            )
+                        }
+                    }
+                    Opcode::Isub => (
+                        input_to_reg(ctx, inputs[0]),
+                        input_to_reg_mem_imm(ctx, inputs[1]),
+                    ),
+                    _ => unreachable!(),
+                };
+
                 let dst = output_to_reg(ctx, outputs[0]);
                 ctx.emit(Inst::mov_r_r(true, lhs, dst));
                 ctx.emit(Inst::alu_rmi_r(is_64, alu_op, rhs, dst));
