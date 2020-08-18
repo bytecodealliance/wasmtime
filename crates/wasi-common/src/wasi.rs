@@ -271,12 +271,12 @@ impl From<io::Error> for Errno {
                 winerror::ERROR_DIRECTORY => Self::Notdir,
                 winerror::ERROR_ALREADY_EXISTS => Self::Exist,
                 x => {
-                    log::debug!("winerror: unknown error value: {}", x);
+                    tracing::debug!("winerror: unknown error value: {}", x);
                     Self::Io
                 }
             },
             None => {
-                log::debug!("Other I/O error: {}", err);
+                tracing::debug!("Other I/O error: {}", err);
                 Self::Io
             }
         }
@@ -365,12 +365,12 @@ impl From<io::Error> for Errno {
                 libc::ENOTRECOVERABLE => Self::Notrecoverable,
                 libc::ENOTSUP => Self::Notsup,
                 x => {
-                    log::debug!("Unknown errno value: {}", x);
+                    tracing::debug!("Unknown errno value: {}", x);
                     Self::Io
                 }
             },
             None => {
-                log::debug!("Other I/O error: {}", err);
+                tracing::debug!("Other I/O error: {}", err);
                 Self::Io
             }
         }
