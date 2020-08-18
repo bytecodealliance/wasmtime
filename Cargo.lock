@@ -883,6 +883,7 @@ checksum = "8f5f3913fa0bfe7ee1fd8248b6b9f42a5af4b9d65ec2dd2c3c26132b950ecfc2"
 [[package]]
 name = "gdb-remote-protocol"
 version = "0.1.0"
+source = "git+https://github.com/yurydelendik/rust-gdb-remote-protocol?rev=wasm#32b9373abe5319c8b320c19c99e4f2810cb3b890"
 dependencies = [
  "bitflags",
  "byteorder",
