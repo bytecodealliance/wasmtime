@@ -2,6 +2,7 @@
 //! pointer or `usize`-sized data are excluded here, so this file only contains
 //! fixed-size types, so it's host/target independent.
 use crate::WasiCtx;
+use tracing::debug;
 
 wiggle::from_witx!({
     witx: ["WASI/phases/snapshot/witx/wasi_snapshot_preview1.witx"],
@@ -19,9 +20,8 @@ impl wiggle::GuestErrorType for Errno {
 
 impl types::GuestErrorConversion for WasiCtx {
     fn into_errno(&self, e: wiggle::GuestError) -> Errno {
-        eprintln!("Guest error: {:?}", e);
-        // TODO proper error mapping
-        Errno::Inval
+        debug!("Guest error: {:?}", e);
+        e.into()
     }
 }
 
