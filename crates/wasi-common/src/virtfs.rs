@@ -1,6 +1,5 @@
 use crate::handle::{Handle, HandleRights};
 use crate::wasi::{self, types, Errno, Result, RightsExt};
-use log::trace;
 use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::collections::hash_map::Entry;
@@ -10,6 +9,7 @@ use std::io;
 use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use tracing::trace;
 
 pub mod pipe;
 
@@ -96,7 +96,7 @@ impl FileContents for VecFileContents {
     }
 
     fn pread(&self, buf: &mut [u8], offset: types::Filesize) -> Result<usize> {
-        trace!("     | pread(buf.len={}, offset={})", buf.len(), offset);
+        trace!(buffer_length = buf.len(), offset = offset, "pread");
         let offset: usize = offset.try_into().map_err(|_| Errno::Inval)?;
 
         let data_remaining = self.content.len().saturating_sub(offset);
@@ -105,9 +105,7 @@ impl FileContents for VecFileContents {
 
         (&mut buf[..read_count]).copy_from_slice(&self.content[offset..][..read_count]);
 
-        let res = Ok(read_count);
-        trace!("     | pread={:?}", res);
-        res
+        Ok(read_count)
     }
 
     fn pwrite(&mut self, buf: &[u8], offset: types::Filesize) -> Result<usize> {
@@ -352,21 +350,11 @@ impl Handle for InMemoryFile {
         oflags: types::Oflags,
         fd_flags: types::Fdflags,
     ) -> Result<Box<dyn Handle>> {
-        log::trace!(
-            "InMemoryFile::openat(path={:?}, read={:?}, write={:?}, oflags={:?}, fd_flags={:?}",
-            path,
-            read,
-            write,
-            oflags,
-            fd_flags
-        );
-
         if oflags.contains(&types::Oflags::DIRECTORY) {
-            log::trace!(
+            tracing::trace!(
                 "InMemoryFile::openat was passed oflags DIRECTORY, but {:?} is a file.",
                 path
             );
-            log::trace!("  return Notdir");
             return Err(Errno::Notdir);
         }
 
@@ -526,7 +514,7 @@ impl Handle for VirtualDir {
             type Item = Result<(types::Dirent, String)>;
 
             fn next(&mut self) -> Option<Self::Item> {
-                log::trace!("VirtualDirIter::next continuing from {}", self.start);
+                tracing::trace!("VirtualDirIter::next continuing from {}", self.start);
                 if self.start == SELF_DIR_COOKIE {
                     self.start += 1;
                     let name = ".".to_owned();
@@ -650,15 +638,6 @@ impl Handle for VirtualDir {
         oflags: types::Oflags,
         fd_flags: types::Fdflags,
     ) -> Result<Box<dyn Handle>> {
-        log::trace!(
-            "VirtualDir::openat(path={:?}, read={:?}, write={:?}, oflags={:?}, fd_flags={:?}",
-            path,
-            read,
-            write,
-            oflags,
-            fd_flags
-        );
-
         if path == "." {
             return self.try_clone().map_err(Into::into);
         } else if path == ".." {
@@ -681,19 +660,17 @@ impl Handle for VirtualDir {
             Entry::Occupied(e) => {
                 let creat_excl_mask = types::Oflags::CREAT | types::Oflags::EXCL;
                 if (oflags & creat_excl_mask) == creat_excl_mask {
-                    log::trace!("VirtualDir::openat was passed oflags CREAT|EXCL, but the file {:?} exists.", file_name);
-                    log::trace!("  return Exist");
+                    tracing::trace!("VirtualDir::openat was passed oflags CREAT|EXCL, but the file {:?} exists.", file_name);
                     return Err(Errno::Exist);
                 }
 
                 if oflags.contains(&types::Oflags::DIRECTORY)
                     && e.get().get_file_type() != types::Filetype::Directory
                 {
-                    log::trace!(
+                    tracing::trace!(
                         "VirtualDir::openat was passed oflags DIRECTORY, but {:?} is a file.",
                         file_name
                     );
-                    log::trace!("  return Notdir");
                     return Err(Errno::Notdir);
                 }
 
@@ -709,7 +686,7 @@ impl Handle for VirtualDir {
                         return Err(Errno::Nospc);
                     }
 
-                    log::trace!("VirtualDir::openat creating an InMemoryFile named {}", path);
+                    tracing::trace!("VirtualDir::openat creating an InMemoryFile named {}", path);
 
                     let file = Box::new(InMemoryFile::memory_backed());
                     file.fd_flags.set(fd_flags);
@@ -757,7 +734,7 @@ impl Handle for VirtualDir {
                 Ok(())
             }
             Entry::Vacant(_) => {
-                log::trace!(
+                tracing::trace!(
                     "VirtualDir::remove_directory failed to remove {}, no such entry",
                     trimmed_path
                 );
@@ -798,7 +775,7 @@ impl Handle for VirtualDir {
                 Ok(())
             }
             Entry::Vacant(_) => {
-                log::trace!(
+                tracing::trace!(
                     "VirtualDir::unlink_file failed to remove {}, no such entry",
                     trimmed_path
                 );

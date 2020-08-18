@@ -115,8 +115,8 @@ pub(crate) fn path_open(
     // umask is, but don't set the executable flag, because it isn't yet
     // meaningful for WASI programs to create executable files.
 
-    log::debug!("path_open resolved = {:?}", resolved);
-    log::debug!("path_open oflags = {:?}", nix_all_oflags);
+    tracing::debug!("path_open resolved = {:?}", resolved);
+    tracing::debug!("path_open oflags = {:?}", nix_all_oflags);
 
     let new_fd = match unsafe {
         openat(
@@ -144,7 +144,7 @@ pub(crate) fn path_open(
                             }
                         }
                         Err(err) => {
-                            log::debug!("path_open fstatat error: {:?}", err);
+                            tracing::debug!("path_open fstatat error: {:?}", err);
                         }
                     }
                 }
@@ -166,7 +166,7 @@ pub(crate) fn path_open(
                             }
                         }
                         Err(err) => {
-                            log::debug!("path_open fstatat error: {:?}", err);
+                            tracing::debug!("path_open fstatat error: {:?}", err);
                         }
                     }
                 }
@@ -182,7 +182,7 @@ pub(crate) fn path_open(
         }
     };
 
-    log::debug!("path_open (host) new_fd = {:?}", new_fd);
+    tracing::debug!("path_open (host) new_fd = {:?}", new_fd);
 
     // Determine the type of the new file descriptor and which rights contradict with this type
     Ok(unsafe { File::from_raw_fd(new_fd) })
@@ -294,10 +294,10 @@ pub(crate) fn fd_readdir<'a>(
     // Seek if needed. Unless cookie is wasi::__WASI_DIRCOOKIE_START,
     // new items may not be returned to the caller.
     if cookie == wasi::__WASI_DIRCOOKIE_START {
-        log::trace!("     | fd_readdir: doing rewinddir");
+        tracing::trace!("     | fd_readdir: doing rewinddir");
         dir.rewind();
     } else {
-        log::trace!("     | fd_readdir: doing seekdir to {}", cookie);
+        tracing::trace!("     | fd_readdir: doing seekdir to {}", cookie);
         let loc = unsafe { SeekLoc::from_raw(cookie as i64)? };
         dir.seek(loc);
     }

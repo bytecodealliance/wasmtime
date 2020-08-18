@@ -92,12 +92,12 @@ impl From<io::Error> for WasiError {
                 libc::ENOTRECOVERABLE => Self::ENOTRECOVERABLE,
                 libc::ENOTSUP => Self::ENOTSUP,
                 x => {
-                    log::debug!("Unknown errno value: {}", x);
+                    tracing::debug!("Unknown errno value: {}", x);
                     Self::EIO
                 }
             },
             None => {
-                log::debug!("Other I/O error: {}", err);
+                tracing::debug!("Other I/O error: {}", err);
                 Self::EIO
             }
         }

@@ -359,7 +359,10 @@ impl WasiCtxBuilder {
             self.stdout.take().unwrap(),
             self.stderr.take().unwrap(),
         ] {
-            log::debug!("WasiCtx inserting entry {:?}", pending);
+            tracing::debug!(
+                pending = tracing::field::debug(&pending),
+                "WasiCtx inserting entry"
+            );
             let fd = match pending {
                 PendingEntry::Thunk(f) => {
                     let handle = EntryHandle::from(f()?);
@@ -376,7 +379,7 @@ impl WasiCtxBuilder {
                         .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?
                 }
             };
-            log::debug!("WasiCtx inserted at {:?}", fd);
+            tracing::debug!(fd = tracing::field::debug(fd), "WasiCtx inserted");
         }
         // Then add the preopen entries.
         for (guest_path, preopen) in self.preopens.take().unwrap() {
@@ -386,7 +389,7 @@ impl WasiCtxBuilder {
             let fd = entries
                 .insert(entry)
                 .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
-            log::debug!("WasiCtx inserted at {:?}", fd);
+            tracing::debug!(fd = tracing::field::debug(fd), "WasiCtx inserted",);
         }
 
         Ok(WasiCtx {

@@ -17,8 +17,8 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> WasiResult<()> {
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> WasiResult<()> {
     use yanix::file::symlinkat;
 
-    log::debug!("path_symlink old_path = {:?}", old_path);
-    log::debug!("path_symlink resolved = {:?}", resolved);
+    tracing::debug!("path_symlink old_path = {:?}", old_path);
+    tracing::debug!("path_symlink resolved = {:?}", resolved);
 
     unsafe { symlinkat(old_path, resolved.dirfd().as_raw_fd(), resolved.path()) }
         .map_err(Into::into)

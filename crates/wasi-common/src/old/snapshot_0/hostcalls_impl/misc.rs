@@ -5,8 +5,8 @@ use crate::old::snapshot_0::memory::*;
 use crate::old::snapshot_0::sys::hostcalls_impl;
 use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
 use crate::old::snapshot_0::wasi32;
-use log::{error, trace};
 use std::convert::TryFrom;
+use tracing::{error, trace};
 
 pub(crate) fn args_get(
     wasi_ctx: &WasiCtx,
@@ -227,8 +227,8 @@ pub(crate) fn poll_oneoff(
                 let clock = unsafe { subscription.u.u.clock };
                 let delay = wasi_clock_to_relative_ns_delay(clock)?;
 
-                log::debug!("poll_oneoff event.u.clock = {:?}", clock);
-                log::debug!("poll_oneoff delay = {:?}ns", delay);
+                tracing::debug!("poll_oneoff event.u.clock = {:?}", clock);
+                tracing::debug!("poll_oneoff delay = {:?}ns", delay);
 
                 let current = ClockEventData {
                     delay,
@@ -299,8 +299,8 @@ pub(crate) fn poll_oneoff(
         }
     }
 
-    log::debug!("poll_oneoff timeout = {:?}", timeout);
-    log::debug!("poll_oneoff fd_events = {:?}", fd_events);
+    tracing::debug!("poll_oneoff timeout = {:?}", timeout);
+    tracing::debug!("poll_oneoff fd_events = {:?}", fd_events);
 
     hostcalls_impl::poll_oneoff(timeout, fd_events, &mut events)?;
 

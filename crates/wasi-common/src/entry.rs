@@ -87,10 +87,10 @@ impl Entry {
         if this_rights.contains(rights) {
             Ok(())
         } else {
-            log::trace!(
-                "     | validate_rights failed: required rights = {}; actual rights = {}",
-                rights,
-                this_rights,
+            tracing::trace!(
+                required = tracing::field::display(rights),
+                actual = tracing::field::display(this_rights),
+                "validate_rights failed",
             );
             Err(Errno::Notcapable)
         }
