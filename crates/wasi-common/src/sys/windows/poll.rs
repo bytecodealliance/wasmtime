@@ -102,10 +102,13 @@ lazy_static! {
     };
 }
 
-fn make_rw_event(event: &FdEventData, nbytes: Result<u64>) -> types::Event {
+fn make_rw_event(
+    event: &FdEventData,
+    nbytes: std::result::Result<u64, types::Errno>,
+) -> types::Event {
     let (nbytes, error) = match nbytes {
         Ok(nbytes) => (nbytes, types::Errno::Success),
-        Err(e) => (u64::default(), e.into()),
+        Err(e) => (u64::default(), e),
     };
     types::Event {
         userdata: event.userdata,
@@ -174,8 +177,8 @@ fn handle_rw_event(event: FdEventData, out_events: &mut Vec<types::Event>) {
     out_events.push(new_event);
 }
 
-fn handle_error_event(event: FdEventData, error: Error, out_events: &mut Vec<types::Event>) {
-    let new_event = make_rw_event(&event, Err(error));
+fn handle_error_event(event: FdEventData, error: &Error, out_events: &mut Vec<types::Event>) {
+    let new_event = make_rw_event(&event, Err(error.into()));
     out_events.push(new_event);
 }
 
@@ -239,7 +242,7 @@ pub(crate) fn oneoff(
                     "poll_oneoff: unsupported file type: {}",
                     other.get_file_type()
                 );
-                handle_error_event(event, Error::Notsup, events);
+                handle_error_event(event, &Error::Notsup, events);
             }
         } else {
             log::error!("can poll FdEvent for OS resources only");
@@ -291,7 +294,7 @@ pub(crate) fn oneoff(
                 PollState::Ready => handle_rw_event(event, events),
                 PollState::NotReady => {} // not immediately available, so just ignore
                 PollState::TimedOut => handle_timeout_event(timeout.unwrap().0, events),
-                PollState::Error(e) => handle_error_event(event, e, events),
+                PollState::Error(ref e) => handle_error_event(event, e, events),
             }
         }
     }
