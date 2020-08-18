@@ -24,7 +24,7 @@ enum PollState {
     Ready,
     NotReady, // it's not ready, but we didn't wait
     TimedOut, // it's not ready and a timeout has occurred
-    Error(Error),
+    Error(types::Errno),
 }
 
 enum WaitMode {
@@ -80,7 +80,7 @@ impl StdinPoll {
             // Linux returns `POLLIN` in both cases, and we imitate this behavior.
             let resp = match std::io::stdin().lock().fill_buf() {
                 Ok(_) => PollState::Ready,
-                Err(e) => PollState::Error(Error::from(e)),
+                Err(e) => PollState::Error(types::Errno::from(Error::from(e))),
             };
 
             // Notify the requestor about data in stdin. They may have already timed out,
@@ -177,8 +177,8 @@ fn handle_rw_event(event: FdEventData, out_events: &mut Vec<types::Event>) {
     out_events.push(new_event);
 }
 
-fn handle_error_event(event: FdEventData, error: &Error, out_events: &mut Vec<types::Event>) {
-    let new_event = make_rw_event(&event, Err(error.into()));
+fn handle_error_event(event: FdEventData, error: types::Errno, out_events: &mut Vec<types::Event>) {
+    let new_event = make_rw_event(&event, Err(error));
     out_events.push(new_event);
 }
 
@@ -242,7 +242,7 @@ pub(crate) fn oneoff(
                     "poll_oneoff: unsupported file type: {}",
                     other.get_file_type()
                 );
-                handle_error_event(event, &Error::Notsup, events);
+                handle_error_event(event, types::Errno::Notsup, events);
             }
         } else {
             log::error!("can poll FdEvent for OS resources only");
@@ -294,7 +294,7 @@ pub(crate) fn oneoff(
                 PollState::Ready => handle_rw_event(event, events),
                 PollState::NotReady => {} // not immediately available, so just ignore
                 PollState::TimedOut => handle_timeout_event(timeout.unwrap().0, events),
-                PollState::Error(ref e) => handle_error_event(event, e, events),
+                PollState::Error(e) => handle_error_event(event, e, events),
             }
         }
     }
