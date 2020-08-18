@@ -1,6 +1,5 @@
 use crate::debugger::{
-    DebuggerAgent, DebuggerJitCodeRegistration, DebuggerModule, EngineDebuggerContext,
-    NullDebuggerAgent,
+    DebuggerAgent, DebuggerJitCodeRegistration, DebuggerModule, NullDebuggerAgent,
 };
 use crate::externals::MemoryCreator;
 use crate::trampoline::{MemoryCreatorProxy, StoreInstanceHandle};
@@ -24,7 +23,10 @@ use wasmtime_environ::settings::{self, Configurable, SetError};
 use wasmtime_environ::{ir, isa, isa::TargetIsa, wasm, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, CompiledModule, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
-use wasmtime_runtime::debugger::{BreakpointData, DebuggerContext};
+use wasmtime_runtime::debugger::{
+    BreakpointData, DebuggerContext, DebuggerContextData, DebuggerPauseKind, DebuggerResumeAction,
+    PatchableCode,
+};
 use wasmtime_runtime::{
     debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, SignatureRegistry,
     StackMapRegistry, VMExternRef, VMExternRefActivationsTable, VMInterrupts,
@@ -782,7 +784,7 @@ pub struct Engine {
 pub(crate) struct EngineInner {
     config: Config,
     compiler: Compiler,
-    debugger_context: Mutex<Option<Box<dyn DebuggerContext + Send + Sync + 'static>>>,
+    debugger_data: Mutex<Option<Box<dyn std::any::Any + Send + Sync>>>,
     jit_code: EngineJitCode,
 }
 
@@ -857,19 +859,14 @@ impl Engine {
     /// configuration settings.
     pub fn new(config: &Config) -> Engine {
         debug_builtins::ensure_exported();
-        let engine = Engine {
+        Engine {
             inner: Arc::new(EngineInner {
                 config: config.clone(),
                 compiler: config.build_compiler(),
-                debugger_context: Mutex::new(None),
+                debugger_data: Mutex::new(None),
                 jit_code: EngineJitCode::new(),
             }),
-        };
-        {
-            let mut lock = engine.inner.debugger_context.lock().unwrap();
-            *lock = Some(Box::new(EngineDebuggerContext::new(&engine)));
         }
-        engine
     }
 
     /// Returns the configuration settings that this engine is using.
@@ -884,12 +881,6 @@ impl Engine {
     #[cfg(feature = "cache")]
     pub(crate) fn cache_config(&self) -> &CacheConfig {
         &self.config().cache_config
-    }
-
-    pub(crate) fn debugger_context(
-        &self,
-    ) -> &Mutex<Option<Box<dyn DebuggerContext + Send + Sync + 'static>>> {
-        &self.inner.debugger_context
     }
 
     pub(crate) fn weak(&self) -> SyncWeak<EngineInner> {
@@ -924,6 +915,40 @@ impl Engine {
 impl Default for Engine {
     fn default() -> Engine {
         Engine::new(&Config::default())
+    }
+}
+
+impl DebuggerContext for Engine {
+    fn patchable(&self) -> &dyn PatchableCode {
+        self
+    }
+    fn find_breakpoint(&self, addr: *const u8) -> Option<*const BreakpointData> {
+        let addr = addr as usize;
+        self.inner.find_breakpoint(addr)
+    }
+    fn pause(&self, kind: DebuggerPauseKind) -> DebuggerResumeAction {
+        self.config().debugger.lock().unwrap().pause(kind)
+    }
+    fn data<'c, 'a>(&'c self) -> DebuggerContextData<'c, 'a> {
+        self.inner.debugger_data.lock().unwrap()
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl PatchableCode for Engine {
+    fn patch_jit_code(&self, addr: usize, len: usize, f: &mut dyn FnMut()) {
+        let compiled = self
+            .inner
+            .jit_code()
+            .lookup_jit_code_range(addr)
+            .and_then(|(_, _, module)| module.upgrade())
+            .expect("jit_code_range module ref exist");
+        compiled.patch_jit_code(addr, len, f);
     }
 }
 

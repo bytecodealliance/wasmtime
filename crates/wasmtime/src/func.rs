@@ -812,7 +812,6 @@ pub(crate) fn invoke_wasm_and_catch_traps(
     store: &Store,
     closure: impl FnMut(),
 ) -> Result<(), Trap> {
-    use std::ops::Deref;
     let signalhandler = store.signal_handler();
     unsafe {
         let canary = 0;
@@ -820,14 +819,12 @@ pub(crate) fn invoke_wasm_and_catch_traps(
             .externref_activations_table()
             .set_stack_canary(&canary);
 
-        let debuggercontext = store.engine().debugger_context().lock().unwrap();
-
         wasmtime_runtime::catch_traps(
             vmctx,
             store.engine().config().max_wasm_stack,
             |addr| store.is_in_jit_code(addr),
             signalhandler.as_deref(),
-            debuggercontext.deref().as_ref().map(|b| b.as_ref()),
+            Some(store.engine()),
             closure,
         )
         .map_err(Trap::from_runtime)
