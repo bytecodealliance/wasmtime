@@ -6,7 +6,7 @@ use crate::sys::stdio::NullDevice;
 use crate::sys::stdio::{Stderr, StderrExt, Stdin, StdinExt, Stdout, StdoutExt};
 use crate::virtfs::{VirtualDir, VirtualDirEntry};
 use crate::wasi::types;
-use crate::wasi::{Errno, Result};
+use crate::{Error, Result};
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -466,7 +466,7 @@ impl WasiCtx {
     pub(crate) fn get_entry(&self, fd: types::Fd) -> Result<Rc<Entry>> {
         match self.entries.borrow().get(&fd) {
             Some(entry) => Ok(entry),
-            None => Err(Errno::Badf),
+            None => Err(Error::Badf),
         }
     }
 
@@ -475,7 +475,7 @@ impl WasiCtx {
     /// The `Entry` will automatically get another free raw WASI `fd` assigned. Note that
     /// the two subsequent free raw WASI `fd`s do not have to be stored contiguously.
     pub(crate) fn insert_entry(&self, entry: Entry) -> Result<types::Fd> {
-        self.entries.borrow_mut().insert(entry).ok_or(Errno::Mfile)
+        self.entries.borrow_mut().insert(entry).ok_or(Error::Mfile)
     }
 
     /// Insert the specified `Entry` with the specified raw WASI `fd` key into the `WasiCtx`
@@ -486,6 +486,6 @@ impl WasiCtx {
 
     /// Remove `Entry` corresponding to the specified raw WASI `fd` from the `WasiCtx` object.
     pub(crate) fn remove_entry(&self, fd: types::Fd) -> Result<Rc<Entry>> {
-        self.entries.borrow_mut().remove(fd).ok_or(Errno::Badf)
+        self.entries.borrow_mut().remove(fd).ok_or(Error::Badf)
     }
 }

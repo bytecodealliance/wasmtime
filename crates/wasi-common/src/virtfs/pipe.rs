@@ -10,7 +10,8 @@
 //! Note that `poll_oneoff` is not supported for these types, so they do not match the behavior of
 //! real pipes exactly.
 use crate::handle::{Handle, HandleRights};
-use crate::wasi::{types, Errno, Result};
+use crate::wasi::types;
+use crate::{Error, Result};
 use std::any::Any;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, RwLock};
@@ -132,11 +133,11 @@ impl<R: Read + Any> Handle for ReadPipe<R> {
         _offset: types::Filesize,
         _len: types::Filesize,
     ) -> Result<()> {
-        Err(Errno::Spipe)
+        Err(Error::Spipe)
     }
 
     fn allocate(&self, _offset: types::Filesize, _len: types::Filesize) -> Result<()> {
-        Err(Errno::Spipe)
+        Err(Error::Spipe)
     }
 
     fn fdstat_set_flags(&self, _fdflags: types::Fdflags) -> Result<()> {
@@ -159,18 +160,18 @@ impl<R: Read + Any> Handle for ReadPipe<R> {
     }
 
     fn filestat_set_size(&self, _st_size: types::Filesize) -> Result<()> {
-        Err(Errno::Spipe)
+        Err(Error::Spipe)
     }
 
     fn preadv(&self, buf: &mut [io::IoSliceMut], offset: types::Filesize) -> Result<usize> {
         if offset != 0 {
-            return Err(Errno::Spipe);
+            return Err(Error::Spipe);
         }
         Ok(self.reader.write().unwrap().read_vectored(buf)?)
     }
 
     fn seek(&self, _offset: io::SeekFrom) -> Result<types::Filesize> {
-        Err(Errno::Spipe)
+        Err(Error::Spipe)
     }
 
     fn read_vectored(&self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
@@ -178,7 +179,7 @@ impl<R: Read + Any> Handle for ReadPipe<R> {
     }
 
     fn create_directory(&self, _path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 
     fn openat(
@@ -189,7 +190,7 @@ impl<R: Read + Any> Handle for ReadPipe<R> {
         _oflags: types::Oflags,
         _fd_flags: types::Fdflags,
     ) -> Result<Box<dyn Handle>> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 
     fn link(
@@ -199,31 +200,31 @@ impl<R: Read + Any> Handle for ReadPipe<R> {
         _new_path: &str,
         _follow: bool,
     ) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 
     fn readlink(&self, _path: &str, _buf: &mut [u8]) -> Result<usize> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 
     fn readlinkat(&self, _path: &str) -> Result<String> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 
     fn rename(&self, _old_path: &str, _new_handle: Box<dyn Handle>, _new_path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 
     fn remove_directory(&self, _path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 
     fn symlink(&self, _old_path: &str, _new_path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 
     fn unlink_file(&self, _path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 }
 
@@ -317,11 +318,11 @@ impl<W: Write + Any> Handle for WritePipe<W> {
         _offset: types::Filesize,
         _len: types::Filesize,
     ) -> Result<()> {
-        Err(Errno::Spipe)
+        Err(Error::Spipe)
     }
 
     fn allocate(&self, _offset: types::Filesize, _len: types::Filesize) -> Result<()> {
-        Err(Errno::Spipe)
+        Err(Error::Spipe)
     }
 
     fn fdstat_set_flags(&self, _fdflags: types::Fdflags) -> Result<()> {
@@ -344,18 +345,18 @@ impl<W: Write + Any> Handle for WritePipe<W> {
     }
 
     fn filestat_set_size(&self, _st_size: types::Filesize) -> Result<()> {
-        Err(Errno::Spipe)
+        Err(Error::Spipe)
     }
 
     fn pwritev(&self, buf: &[io::IoSlice], offset: types::Filesize) -> Result<usize> {
         if offset != 0 {
-            return Err(Errno::Spipe);
+            return Err(Error::Spipe);
         }
         Ok(self.writer.write().unwrap().write_vectored(buf)?)
     }
 
     fn seek(&self, _offset: io::SeekFrom) -> Result<types::Filesize> {
-        Err(Errno::Spipe)
+        Err(Error::Spipe)
     }
 
     fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
@@ -363,7 +364,7 @@ impl<W: Write + Any> Handle for WritePipe<W> {
     }
 
     fn create_directory(&self, _path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 
     fn openat(
@@ -374,7 +375,7 @@ impl<W: Write + Any> Handle for WritePipe<W> {
         _oflags: types::Oflags,
         _fd_flags: types::Fdflags,
     ) -> Result<Box<dyn Handle>> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 
     fn link(
@@ -384,30 +385,30 @@ impl<W: Write + Any> Handle for WritePipe<W> {
         _new_path: &str,
         _follow: bool,
     ) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 
     fn readlink(&self, _path: &str, _buf: &mut [u8]) -> Result<usize> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 
     fn readlinkat(&self, _path: &str) -> Result<String> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 
     fn rename(&self, _old_path: &str, _new_handle: Box<dyn Handle>, _new_path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 
     fn remove_directory(&self, _path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 
     fn symlink(&self, _old_path: &str, _new_path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 
     fn unlink_file(&self, _path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 }

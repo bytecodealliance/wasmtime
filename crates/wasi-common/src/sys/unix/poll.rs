@@ -1,7 +1,8 @@
 use crate::entry::EntryHandle;
 use crate::poll::{ClockEventData, FdEventData};
 use crate::sys::AsFile;
-use crate::wasi::{types, Errno, Result};
+use crate::wasi::types;
+use crate::{Error, Result};
 use std::io;
 use std::{convert::TryInto, os::unix::prelude::AsRawFd};
 use yanix::file::fionread;
@@ -64,7 +65,7 @@ pub(crate) fn oneoff(
 fn handle_timeout_event(timeout: ClockEventData, events: &mut Vec<types::Event>) {
     events.push(types::Event {
         userdata: timeout.userdata,
-        error: Errno::Success,
+        error: types::Errno::Success,
         type_: types::Eventtype::Clock,
         fd_readwrite: types::EventFdReadwrite {
             flags: types::Eventrwflags::empty(),
@@ -110,7 +111,7 @@ fn handle_fd_event(
         let output_event = if revents.contains(PollFlags::POLLNVAL) {
             types::Event {
                 userdata: fd_event.userdata,
-                error: Errno::Badf,
+                error: Error::Badf.into(),
                 type_: fd_event.r#type,
                 fd_readwrite: types::EventFdReadwrite {
                     nbytes: 0,
@@ -120,7 +121,7 @@ fn handle_fd_event(
         } else if revents.contains(PollFlags::POLLERR) {
             types::Event {
                 userdata: fd_event.userdata,
-                error: Errno::Io,
+                error: Error::Io.into(),
                 type_: fd_event.r#type,
                 fd_readwrite: types::EventFdReadwrite {
                     nbytes: 0,
@@ -130,7 +131,7 @@ fn handle_fd_event(
         } else if revents.contains(PollFlags::POLLHUP) {
             types::Event {
                 userdata: fd_event.userdata,
-                error: Errno::Success,
+                error: types::Errno::Success,
                 type_: fd_event.r#type,
                 fd_readwrite: types::EventFdReadwrite {
                     nbytes: 0,
@@ -140,7 +141,7 @@ fn handle_fd_event(
         } else if revents.contains(PollFlags::POLLIN) | revents.contains(PollFlags::POLLOUT) {
             types::Event {
                 userdata: fd_event.userdata,
-                error: Errno::Success,
+                error: types::Errno::Success,
                 type_: fd_event.r#type,
                 fd_readwrite: types::EventFdReadwrite {
                     nbytes: nbytes.try_into()?,

@@ -1,5 +1,5 @@
 use crate::sys::osdir::OsDir;
-use crate::wasi::{Errno, Result};
+use crate::{Error, Result};
 use std::os::unix::prelude::AsRawFd;
 
 pub(crate) fn unlink_file(dirfd: &OsDir, path: &str) -> Result<()> {
@@ -20,7 +20,7 @@ pub(crate) fn unlink_file(dirfd: &OsDir, path: &str) -> Result<()> {
                 match unsafe { fstatat(dirfd.as_raw_fd(), path, AtFlags::SYMLINK_NOFOLLOW) } {
                     Ok(stat) => {
                         if FileType::from_stat_st_mode(stat.st_mode) == FileType::Directory {
-                            return Err(Errno::Isdir);
+                            return Err(Error::Isdir);
                         }
                     }
                     Err(err) => {
@@ -56,7 +56,7 @@ pub(crate) fn symlink(old_path: &str, new_dirfd: &OsDir, new_path: &str) -> Resu
                 let new_path = new_path.trim_end_matches('/');
                 match unsafe { fstatat(new_dirfd.as_raw_fd(), new_path, AtFlags::SYMLINK_NOFOLLOW) }
                 {
-                    Ok(_) => return Err(Errno::Exist),
+                    Ok(_) => return Err(Error::Exist),
                     Err(err) => {
                         log::debug!("path_symlink fstatat error: {:?}", err);
                     }
@@ -100,9 +100,9 @@ pub(crate) fn rename(
                     Ok(_) => {
                         // check if destination contains a trailing slash
                         if new_path.contains('/') {
-                            return Err(Errno::Notdir);
+                            return Err(Error::Notdir);
                         } else {
-                            return Err(Errno::Noent);
+                            return Err(Error::Noent);
                         }
                     }
                     Err(err) => {

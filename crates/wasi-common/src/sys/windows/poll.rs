@@ -5,7 +5,8 @@ use crate::sys::osfile::OsFile;
 use crate::sys::osother::OsOther;
 use crate::sys::stdio::{Stderr, Stdin, Stdout};
 use crate::sys::AsFile;
-use crate::wasi::{types, Errno, Result};
+use crate::wasi::types;
+use crate::{Error, Result};
 use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
 use std::convert::TryInto;
@@ -23,7 +24,7 @@ enum PollState {
     Ready,
     NotReady, // it's not ready, but we didn't wait
     TimedOut, // it's not ready and a timeout has occurred
-    Error(Errno),
+    Error(Error),
 }
 
 enum WaitMode {
@@ -79,7 +80,7 @@ impl StdinPoll {
             // Linux returns `POLLIN` in both cases, and we imitate this behavior.
             let resp = match std::io::stdin().lock().fill_buf() {
                 Ok(_) => PollState::Ready,
-                Err(e) => PollState::Error(Errno::from(e)),
+                Err(e) => PollState::Error(Error::from(e)),
             };
 
             // Notify the requestor about data in stdin. They may have already timed out,
@@ -103,7 +104,7 @@ lazy_static! {
 
 fn make_rw_event(event: &FdEventData, nbytes: Result<u64>) -> types::Event {
     let (nbytes, error) = match nbytes {
-        Ok(nbytes) => (nbytes, Errno::Success),
+        Ok(nbytes) => (nbytes, Error::Success),
         Err(e) => (u64::default(), e),
     };
     types::Event {
@@ -121,7 +122,7 @@ fn make_timeout_event(timeout: &ClockEventData) -> types::Event {
     types::Event {
         userdata: timeout.userdata,
         type_: types::Eventtype::Clock,
-        error: Errno::Success,
+        error: Error::Success,
         fd_readwrite: types::EventFdReadwrite {
             nbytes: 0,
             flags: types::Eventrwflags::empty(),
@@ -173,7 +174,7 @@ fn handle_rw_event(event: FdEventData, out_events: &mut Vec<types::Event>) {
     out_events.push(new_event);
 }
 
-fn handle_error_event(event: FdEventData, error: Errno, out_events: &mut Vec<types::Event>) {
+fn handle_error_event(event: FdEventData, error: Error, out_events: &mut Vec<types::Event>) {
     let new_event = make_rw_event(&event, Err(error));
     out_events.push(new_event);
 }
@@ -238,11 +239,11 @@ pub(crate) fn oneoff(
                     "poll_oneoff: unsupported file type: {}",
                     other.get_file_type()
                 );
-                handle_error_event(event, Errno::Notsup, events);
+                handle_error_event(event, Error::Notsup, events);
             }
         } else {
             log::error!("can poll FdEvent for OS resources only");
-            return Err(Errno::Badf);
+            return Err(Error::Badf);
         }
     }
 
@@ -306,7 +307,7 @@ pub(crate) fn oneoff(
             }
             None => {
                 error!("Polling only pipes with no timeout not supported on Windows.");
-                return Err(Errno::Notsup);
+                return Err(Error::Notsup);
             }
         }
     }
