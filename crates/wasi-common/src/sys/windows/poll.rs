@@ -105,7 +105,7 @@ lazy_static! {
 fn make_rw_event(event: &FdEventData, nbytes: Result<u64>) -> types::Event {
     let (nbytes, error) = match nbytes {
         Ok(nbytes) => (nbytes, types::Errno::Success),
-        Err(e) => (u64::default(), e),
+        Err(e) => (u64::default(), e.into()),
     };
     types::Event {
         userdata: event.userdata,
