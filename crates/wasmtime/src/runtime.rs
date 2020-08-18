@@ -15,7 +15,7 @@ use std::hash::{Hash, Hasher};
 #[cfg(feature = "cache")]
 use std::path::Path;
 use std::rc::{Rc, Weak};
-use std::sync::{Arc, Mutex, MutexGuard, Weak as SyncWeak};
+use std::sync::{Arc, Mutex, Weak as SyncWeak};
 use target_lexicon::Triple;
 use wasmparser::Validator;
 #[cfg(feature = "cache")]

@@ -22,6 +22,7 @@ pub trait DebuggerAgent: std::marker::Send + std::marker::Sync {
 
 pub struct DebuggerModule<'a> {
     module: Weak<CompiledModule>,
+    module_id: usize,
     engine: Weak<EngineInner>,
     bytes: &'a [u8],
 }
@@ -34,6 +35,7 @@ impl<'a> DebuggerModule<'a> {
     ) -> Self {
         Self {
             module: Arc::downgrade(module),
+            module_id: module.module().id,
             engine,
             bytes,
         }
@@ -49,6 +51,9 @@ impl<'a> DebuggerModule<'a> {
     }
     fn module(&self) -> Arc<CompiledModule> {
         self.module.upgrade().unwrap()
+    }
+    pub fn module_id(&self) -> usize {
+        self.module_id
     }
     pub fn ranges(&self) -> Vec<(usize, usize)> {
         self.module().jit_code_ranges().collect()

@@ -43,8 +43,8 @@ impl DebuggerHandler {
     fn continue_and_wait(&self, action: DebuggerResumeAction) -> Result<StopReason, Error> {
         *self.resume_cvar.0.lock().unwrap() = Some(action);
         self.resume_cvar.1.notify_one();
-        let mut lock = self.state.0.lock().unwrap();
-        lock = self.state.1.wait(lock).unwrap();
+        let lock = self.state.0.lock().unwrap();
+        drop(self.state.1.wait(lock).unwrap());
         Ok(StopReason::Signal(SIG_TRACE))
     }
 }
@@ -184,7 +184,8 @@ impl Handler for DebuggerHandler {
         let modules = self.modules.lock().unwrap();
         let lib = modules.values().find(|m| m.has_addr(breakpoint.addr));
         trace!("Breakpoint {:x}", breakpoint.addr);
-        lib.unwrap().set_breakpoint(breakpoint.addr)
+        lib.unwrap().set_breakpoint(breakpoint.addr);
+        Ok(())
     }
 
     fn remove_software_breakpoint(&self, breakpoint: Breakpoint) -> Result<(), Error> {
@@ -243,6 +244,7 @@ struct RegisteredModule {
     name: String,
     ranges: Vec<(usize, usize)>,
     module: SyncWeak<CompiledModule>,
+    module_id: usize,
     engine: Engine,
     bytes: Vec<u8>,
     set_breakpoints: RefCell<HashMap<u64, Vec<BreakpointData>>>,
@@ -258,6 +260,7 @@ impl RegisteredModule {
             name,
             ranges: module.ranges(),
             module: module.compiled_module(),
+            module_id: module.module_id(),
             engine: module.engine(),
             bytes: module.bytes().to_vec(),
             set_breakpoints: RefCell::new(HashMap::new()),
@@ -270,10 +273,10 @@ impl RegisteredModule {
         self.id as u64 == addr >> 32 && (addr as usize) & 0xFFFFFFFF < self.bytes.len()
     }
 
-    fn set_breakpoint(&self, addr: u64) -> Result<(), Error> {
+    fn set_breakpoint(&self, addr: u64) {
         if self.set_breakpoints.borrow().contains_key(&addr) {
             // TODO flip breakpoint? see `remove_software_breakpoint`
-            return Ok(());
+            return;
         }
         let breakpoints = self
             .module
@@ -281,13 +284,11 @@ impl RegisteredModule {
             .unwrap()
             .set_breakpoint(addr as usize & 0xFFFF_FFFF);
         self.set_breakpoints.borrow_mut().insert(addr, breakpoints);
-        Ok(())
     }
 }
 
 pub(crate) struct GdbServer {
     handler: thread::JoinHandle<()>,
-    count: u32,
     connection_expected: bool,
     rx: Mutex<Receiver<()>>,
     modules: Arc<Mutex<HashMap<u32, RegisteredModule>>>,
@@ -297,19 +298,18 @@ pub(crate) struct GdbServer {
 
 impl DebuggerAgent for GdbServer {
     fn pause(&mut self, kind: DebuggerPauseKind) -> DebuggerResumeAction {
-        self.count += 1;
-        let stack = Trap::new("")
-            .trace()
-            .iter()
-            .map(|f| {
-                f.module_offset() as u64
-                    + if self.count > 1 {
-                        0x100000000
-                    } else {
-                        0x200000000
-                    }
-            })
-            .collect::<Vec<_>>();
+        let stack = {
+            let lock = self.modules.lock().unwrap();
+
+            Trap::new("")
+                .trace()
+                .iter()
+                .map(|f| {
+                    let lib = lock.iter().find(|m| m.1.module_id == f.module_id());
+                    f.module_offset() as u64 + lib.as_ref().unwrap().1.addr()
+                })
+                .collect::<Vec<_>>()
+        };
         let pc = if stack.len() > 0 { stack[0] } else { 0 };
 
         let pause_state = DebuggerPauseState {
@@ -428,7 +428,6 @@ impl GdbServer {
         });
         Self {
             handler,
-            count: 0,
             connection_expected: true,
             rx: Mutex::new(rx),
             modules,
