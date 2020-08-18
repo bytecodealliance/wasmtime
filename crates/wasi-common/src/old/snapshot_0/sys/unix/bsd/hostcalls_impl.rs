@@ -36,7 +36,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> WasiResult<()> {
                         }
                     }
                     Err(err) => {
-                        log::debug!("path_unlink_file fstatat error: {:?}", err);
+                        tracing::debug!("path_unlink_file fstatat error: {:?}", err);
                     }
                 }
             }
@@ -50,8 +50,8 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> WasiResult<()> {
 pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> WasiResult<()> {
     use yanix::file::{fstatat, symlinkat, AtFlags};
 
-    log::debug!("path_symlink old_path = {:?}", old_path);
-    log::debug!("path_symlink resolved = {:?}", resolved);
+    tracing::debug!("path_symlink old_path = {:?}", old_path);
+    tracing::debug!("path_symlink resolved = {:?}", resolved);
 
     match unsafe { symlinkat(old_path, resolved.dirfd().as_raw_fd(), resolved.path()) } {
         Err(err) => {
@@ -71,7 +71,7 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> WasiResult<()> 
                 } {
                     Ok(_) => return Err(WasiError::EEXIST),
                     Err(err) => {
-                        log::debug!("path_symlink fstatat error: {:?}", err);
+                        tracing::debug!("path_symlink fstatat error: {:?}", err);
                     }
                 }
             }
@@ -119,7 +119,7 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> WasiR
                         }
                     }
                     Err(err) => {
-                        log::debug!("path_rename fstatat error: {:?}", err);
+                        tracing::debug!("path_rename fstatat error: {:?}", err);
                     }
                 }
             }

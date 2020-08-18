@@ -2804,7 +2804,7 @@ dependencies = [
  "cfg-if",
  "filetime",
  "libc",
- "log",
+ "tracing",
 ]
 
 [[package]]
