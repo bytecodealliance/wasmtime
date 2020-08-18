@@ -104,7 +104,7 @@ lazy_static! {
 
 fn make_rw_event(event: &FdEventData, nbytes: Result<u64>) -> types::Event {
     let (nbytes, error) = match nbytes {
-        Ok(nbytes) => (nbytes, Error::Success),
+        Ok(nbytes) => (nbytes, types::Errno::Success),
         Err(e) => (u64::default(), e),
     };
     types::Event {
@@ -122,7 +122,7 @@ fn make_timeout_event(timeout: &ClockEventData) -> types::Event {
     types::Event {
         userdata: timeout.userdata,
         type_: types::Eventtype::Clock,
-        error: Error::Success,
+        error: types::Errno::Success,
         fd_readwrite: types::EventFdReadwrite {
             nbytes: 0,
             flags: types::Eventrwflags::empty(),
