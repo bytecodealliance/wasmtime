@@ -47,7 +47,7 @@ impl AArch64Backend {
         func: &Function,
         flags: settings::Flags,
     ) -> CodegenResult<VCode<inst::Inst>> {
-        let abi = Box::new(abi::AArch64ABIBody::new(func, flags)?);
+        let abi = Box::new(abi::AArch64ABICallee::new(func, flags)?);
         compile::compile::<AArch64Backend>(func, self, abi)
     }
 }

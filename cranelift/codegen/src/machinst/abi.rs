@@ -9,7 +9,7 @@ use regalloc::{Reg, Set, SpillSlot, Writable};
 
 /// Trait implemented by an object that tracks ABI-related state (e.g., stack
 /// layout) and can generate code while emitting the *body* of a function.
-pub trait ABIBody {
+pub trait ABICallee {
     /// The instruction type for the ISA associated with this ABI.
     type I: VCodeInst;
 
@@ -17,7 +17,7 @@ pub trait ABIBody {
     /// as the `maybe_tmp` arg if so.
     fn temp_needed(&self) -> bool;
 
-    /// Initialize. This is called after the ABIBody is constructed because it
+    /// Initialize. This is called after the ABICallee is constructed because it
     /// may be provided with a temp vreg, which can only be allocated once the
     /// lowering context exists.
     fn init(&mut self, maybe_tmp: Option<Writable<Reg>>);
@@ -155,14 +155,14 @@ pub trait ABIBody {
 /// callsite. It will usually be computed from the called function's
 /// signature.
 ///
-/// Unlike `ABIBody` above, methods on this trait are not invoked directly
+/// Unlike `ABICallee` above, methods on this trait are not invoked directly
 /// by the machine-independent code. Rather, the machine-specific lowering
-/// code will typically create an `ABICall` when creating machine instructions
+/// code will typically create an `ABICaller` when creating machine instructions
 /// for an IR call instruction inside `lower()`, directly emit the arg and
 /// and retval copies, and attach the register use/def info to the call.
 ///
 /// This trait is thus provided for convenience to the backends.
-pub trait ABICall {
+pub trait ABICaller {
     /// The instruction type for the ISA associated with this ABI.
     type I: VCodeInst;
 
@@ -203,6 +203,6 @@ pub trait ABICall {
     /// sense.)
     ///
     /// This function should only be called once, as it is allowed to re-use
-    /// parts of the ABICall object in emitting instructions.
+    /// parts of the ABICaller object in emitting instructions.
     fn emit_call<C: LowerCtx<I = Self::I>>(&mut self, ctx: &mut C);
 }
