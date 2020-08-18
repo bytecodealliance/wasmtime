@@ -384,9 +384,8 @@ impl CompiledExpression {
                                         }
                                         .0 as u8,
                                     );
-                                    code_buf.push((target & 0xFF) as u8);
-                                    code_buf.push((target >> (8 as u16)) as u8)
-                                    // FIXME: use encoding?
+                                    code_buf.push(0xFF);
+                                    code_buf.push(0xFF) // these will be relocated below
                                 }
                                 CompiledExpressionPart::Local { label, trailing } => {
                                     let loc =
@@ -405,7 +404,19 @@ impl CompiledExpression {
                         if self.need_deref {
                             deref!();
                         }
-			print!("\n\n\nFinishing: translations {:?}?\n Buf: {:?}\n\n\n\n\n", old_to_new, code_buf);
+			print!("\n\n\nFinishing: translations {:?}?\n Buf: {:?}\n\n", old_to_new, code_buf);
+			for (from, to) in arcs {
+			    // relocate jump targets
+			    let new_from = old_to_new[from];
+			    let new_to = old_to_new[to];
+			    let new_diff = new_to as i32 - new_from as i32;
+                            code_buf[new_from - 2] = (new_diff & 0xFF) as u8;
+                            code_buf[new_from - 1] = (new_diff >> (8 as u16)) as u8;
+                            // FIXME: use encoding?
+			    print!("\n\nReloc: new_from {}   new_to {}   new_diff {} \nBuf: {:?}\n\n\n\n\n\n", new_from, new_to, new_diff, code_buf);
+			}
+
+			
                         Ok(Some((func_index, start, end, code_buf)))
                     },
                 )
@@ -438,7 +449,7 @@ where
 
     print!("Starting:  buf: {:?}\n", pc);
 
-    let mut unread_bytes = 0;
+    let mut unread_bytes;
     let buf = expr.0.to_slice()?;
     let mut parts = Vec::new();
     macro_rules! push {
@@ -599,7 +610,7 @@ where
     let relevant_parts = parts
         .into_iter()
         .filter(|p| match p {
-            CompiledExpressionPart::LandingPad { .. } => true,
+            CompiledExpressionPart::LandingPad { original_pos } => jump_arc.iter().any(|(from,to)| from == original_pos || to == original_pos),
             _ => true,
         })
         .collect();
