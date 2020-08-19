@@ -594,6 +594,33 @@ where
         original_pos: expr.0.len().into_u64() as usize,
     });
 
+
+
+
+    parts.push(CompiledExpressionPart::Code(vec![])); // so that we have enough windows below
+    let relevant_parts = parts
+        .windows(2)
+        .filter_map(|p| match p {
+	    [CompiledExpressionPart::LandingPad { original_pos }, CompiledExpressionPart::Code(code_chunk)]
+		if jump_arc.values().any(|t| (original_pos + 1..original_pos + code_chunk.len()).contains(t))
+		=>Some(p[0].clone()),
+	    [CompiledExpressionPart::LandingPad { original_pos }, _] =>
+		if jump_arc
+                .iter()
+                .any(|(from, to)| from == original_pos || to == original_pos)
+	    {Some(p[0].clone())} else { None},
+	    _ => Some(p[0].clone())
+	})
+	.collect();
+
+
+
+/*
+
+
+
+
+
     let spare_parts = parts.clone();
     let mut spare_pos: usize = !0; // sentinel
 
@@ -624,6 +651,7 @@ where
             _ => true,
         })
         .collect();
+*/
     Ok(Some((
         CompiledExpression {
             parts: relevant_parts,
