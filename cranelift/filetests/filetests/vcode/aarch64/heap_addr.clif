@@ -20,7 +20,8 @@ block0(v0: i64, v1: i32):
 ; nextln: subs wzr, w1, w2
 ; nextln: b.ls label1 ; b label2
 ; check: Block 1:
-; check: add x0, x0, x1, UXTW
+; check: mov w3, w1
+; check: add x0, x0, x3, UXTW
 ; nextln: subs wzr, w1, w2
 ; nextln: movz x1, #0
 ; nextln: csel x0, x1, x0, hi
@@ -45,7 +46,8 @@ block0(v0: i64, v1: i32):
 ; nextln: subs wzr, w1, #65536
 ; nextln: b.ls label1 ; b label2
 ; check: Block 1:
-; check: add x0, x0, x1, UXTW
+; check: mov w2, w1
+; check: add x0, x0, x2, UXTW
 ; nextln: subs wzr, w1, #65536
 ; nextln: movz x1, #0
 ; nextln: csel x0, x1, x0, hi

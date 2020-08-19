@@ -355,7 +355,7 @@ fn put_input_in_rse<C: LowerCtx<I = Inst>>(
             && ((narrow_mode.is_32bit() && out_bits < 32)
                 || (!narrow_mode.is_32bit() && out_bits < 64))
         {
-            let reg = put_input_in_reg(ctx, InsnInput { insn, input: 0 }, NarrowValueMode::None);
+            let reg = put_input_in_reg(ctx, input, NarrowValueMode::None);
             let extendop = match (narrow_mode, out_bits) {
                 (NarrowValueMode::SignExtend32, 1) | (NarrowValueMode::SignExtend64, 1) => {
                     ExtendOp::SXTB
@@ -400,7 +400,7 @@ fn put_input_in_rse<C: LowerCtx<I = Inst>>(
                 (false, 32) => ExtendOp::UXTW,
                 _ => unreachable!(),
             };
-            let reg = put_input_in_reg(ctx, InsnInput { insn, input: 0 }, NarrowValueMode::None);
+            let reg = put_input_in_reg(ctx, input, NarrowValueMode::None);
             return ResultRSE::RegExtend(reg, extendop);
         }
     }
