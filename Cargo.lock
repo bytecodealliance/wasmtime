@@ -499,7 +499,7 @@ dependencies = [
  "anyhow",
  "cranelift-codegen",
  "cranelift-module",
- "object 0.20.0",
+ "object 0.21.1",
  "target-lexicon",
 ]
 
@@ -1255,6 +1255,12 @@ name = "object"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ab52be62400ca80aa00285d25253d7f7c437b7375c4de678f5405d3afe82ca5"
+
+[[package]]
+name = "object"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37fd5004feb2ce328a52b0b3d01dbf4ffff72583493900ed15f22d4111c51693"
 dependencies = [
  "crc32fast",
  "indexmap",
@@ -2441,7 +2447,7 @@ dependencies = [
  "libc",
  "log",
  "more-asserts",
- "object 0.20.0",
+ "object 0.21.1",
  "pretty_env_logger",
  "rayon",
  "structopt",
@@ -2469,7 +2475,7 @@ dependencies = [
  "anyhow",
  "gimli 0.21.0",
  "more-asserts",
- "object 0.20.0",
+ "object 0.21.1",
  "target-lexicon",
  "thiserror",
  "wasmparser 0.59.0",
@@ -2541,7 +2547,7 @@ dependencies = [
  "gimli 0.21.0",
  "log",
  "more-asserts",
- "object 0.20.0",
+ "object 0.21.1",
  "rayon",
  "region",
  "serde",
@@ -2562,7 +2568,7 @@ version = "0.19.0"
 dependencies = [
  "anyhow",
  "more-asserts",
- "object 0.20.0",
+ "object 0.21.1",
  "target-lexicon",
  "wasmtime-debug",
  "wasmtime-environ",
