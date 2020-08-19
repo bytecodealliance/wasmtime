@@ -31,6 +31,9 @@ pub enum Error {
     /// Errno::Badf: Bad file descriptor
     #[error("Badf: Bad file descriptor")]
     Badf,
+    /// Errno::Busy: Device or resource busy
+    #[error("Busy: Device or resource busy")]
+    Busy,
     /// Errno::Exist: File exists
     #[error("Exist: File exists")]
     Exist,
@@ -64,9 +67,15 @@ pub enum Error {
     /// Errno::Nametoolong: Filename too long
     #[error("Nametoolong: Filename too long")]
     Nametoolong,
+    /// Errno::Nfile: Too many files open in system
+    #[error("Nfile: Too many files open in system")]
+    Nfile,
     /// Errno::Noent: No such file or directory
     #[error("Noent: No such file or directory")]
     Noent,
+    /// Errno::Nomem: Not enough space
+    #[error("Nomem: Not enough space")]
+    Nomem,
     /// Errno::Nospc: No space left on device
     #[error("Nospc: No space left on device")]
     Nospc,
@@ -82,6 +91,9 @@ pub enum Error {
     /// Errno::Overflow: Value too large to be stored in data type.
     #[error("Overflow: Value too large to be stored in data type")]
     Overflow,
+    /// Errno::Pipe: Broken pipe
+    #[error("Pipe: Broken pipe")]
+    Pipe,
     /// Errno::Perm: Operation not permitted
     #[error("Perm: Operation not permitted")]
     Perm,
@@ -108,7 +120,6 @@ impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {
         match err.raw_os_error() {
             Some(code) => match code as u32 {
-                winerror::ERROR_SUCCESS => Self::Success,
                 winerror::ERROR_BAD_ENVIRONMENT => Self::TooBig,
                 winerror::ERROR_FILE_NOT_FOUND => Self::Noent,
                 winerror::ERROR_PATH_NOT_FOUND => Self::Noent,
@@ -144,11 +155,14 @@ impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self {
         match err.raw_os_error() {
             Some(code) => match code {
+                libc::EPIPE => Self::Pipe,
                 libc::EPERM => Self::Perm,
                 libc::ENOENT => Self::Noent,
+                libc::ENOMEM => Self::Nomem,
                 libc::E2BIG => Self::TooBig,
                 libc::EIO => Self::Io,
                 libc::EBADF => Self::Badf,
+                libc::EBUSY => Self::Busy,
                 libc::EACCES => Self::Acces,
                 libc::EFAULT => Self::Fault,
                 libc::ENOTDIR => Self::Notdir,
@@ -161,6 +175,7 @@ impl From<io::Error> for Error {
                 libc::EMFILE => Self::Mfile,
                 libc::EMLINK => Self::Mlink,
                 libc::ENAMETOOLONG => Self::Nametoolong,
+                libc::ENFILE => Self::Nfile,
                 libc::ENOTEMPTY => Self::Notempty,
                 libc::ELOOP => Self::Loop,
                 libc::EOVERFLOW => Self::Overflow,

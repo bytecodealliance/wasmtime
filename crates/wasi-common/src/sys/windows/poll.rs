@@ -164,7 +164,7 @@ fn handle_rw_event(event: FdEventData, out_events: &mut Vec<types::Event>) {
                 .as_file()
                 .and_then(|f| f.metadata())
                 .map(|m| m.len())
-                .map_err(Into::into)
+                .map_err(|ioerror| types::Errno::from(Error::from(ioerror)))
         } else {
             // The spec is unclear what nbytes should actually be for __WASI_EVENTTYPE_FD_WRITE and
             // the implementation on Unix just returns 0 here, so it's probably fine
