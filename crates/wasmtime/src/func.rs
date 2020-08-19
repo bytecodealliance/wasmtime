@@ -237,7 +237,7 @@ impl Func {
         ty: FuncType,
         func: impl Fn(Caller<'_>, &[Val], &mut [Val]) -> Result<(), Trap> + 'static,
     ) -> Self {
-        let store_weak = store.weak();
+        let store_clone: Store = store.clone();
         let ty_clone = ty.clone();
 
         // Create our actual trampoline function which translates from a bunch
@@ -250,6 +250,8 @@ impl Func {
             const STACK_ARGS: usize = 3;
             const STACK_RETURNS: usize = 1;
 
+            let store = store_clone.clone();
+
             let use_heap_args = ty_clone.params().len() > STACK_ARGS;
             let mut stack_args: [Val; STACK_ARGS] = [Val::null(), Val::null(), Val::null()];
             let mut heap_args = Vec::with_capacity(if use_heap_args {
@@ -260,7 +262,7 @@ impl Func {
 
             for (i, ty) in ty_clone.params().iter().enumerate() {
                 unsafe {
-                    let val = Val::read_value_from(values_vec.add(i), ty);
+                    let val = Val::read_value_from(&store, values_vec.add(i), ty);
                     if use_heap_args {
                         heap_args.push(val);
                     } else {
@@ -288,7 +290,7 @@ impl Func {
 
             func(
                 Caller {
-                    store: &store_weak,
+                    store: &store.weak(),
                     caller_vmctx,
                 },
                 args,
@@ -306,13 +308,13 @@ impl Func {
                     ));
                 }
                 unsafe {
-                    ret.write_value_to(&store, values_vec.add(i));
+                    ret.clone().write_value_to(&store, values_vec.add(i));
                 }
             }
             Ok(())
         });
         let (instance, export, trampoline) =
-            crate::trampoline::generate_func_export(&ty, func, store).expect("generated func");
+            crate::trampoline::generate_func_export(&ty, func, &store).expect("generated func");
         Func {
             instance,
             trampoline,

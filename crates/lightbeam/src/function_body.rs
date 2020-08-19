@@ -150,7 +150,7 @@ where
         let params = func_type.params().iter().map(|t| t.to_microwasm_type());
         let returns = func_type.returns().iter().map(|t| t.to_microwasm_type());
 
-        const DISASSEMBLE: bool = true;
+        const DISASSEMBLE: bool = false;
 
         if DISASSEMBLE {
             print!("     \tdef .Fn{} :: [", func_idx);
