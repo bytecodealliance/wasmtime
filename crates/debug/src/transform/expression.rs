@@ -524,6 +524,7 @@ where
                 | Operation::Pick { .. }
                 | Operation::Swap { .. }
                 | Operation::Rot { .. }
+                | Operation::Nop { .. }
                 | Operation::UnsignedConstant { .. }
                 | Operation::SignedConstant { .. }
                 | Operation::PlusConstant { .. }
