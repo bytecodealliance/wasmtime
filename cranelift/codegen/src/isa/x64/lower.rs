@@ -531,6 +531,107 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     Opcode::Imul => match ty {
                         types::I16X8 => SseOpcode::Pmullw,
                         types::I32X4 => SseOpcode::Pmulld,
+                        types::I64X2 => {
+                            // Note for I64X2 we describe a lane A as being composed of a
+                            // 32-bit upper half "Ah" and a 32-bit lower half "Al".
+                            // The 32-bit long hand multiplication can then be written as:
+                            //    Ah Al
+                            // *  Bh Bl
+                            //    -----
+                            //    Al * Bl
+                            // + (Ah * Bl) << 32
+                            // + (Al * Bh) << 32
+                            //
+                            // So for each lane we will compute:
+                            // A * B  = (Al * Bl) + ((Ah * Bl) + (Al * Bh)) << 32
+                            //
+                            // Note, the algorithm will use pmuldq which operates directly on
+                            // the lower 32-bit (Al or Bl) of a lane and writes the result
+                            // to the full 64-bits of the lane of the destination. For this
+                            // reason we don't need shifts to isolate the lower 32-bits, however
+                            // we will need to use shifts to isolate the high 32-bits when doing
+                            // calculations, i.e. Ah == A >> 32
+                            //
+                            // The full sequence then is as follows:
+                            // A' = A
+                            // A' = A' >> 32
+                            // A' = Ah' * Bl
+                            // B' = B
+                            // B' = B' >> 32
+                            // B' = Bh' * Al
+                            // B' = B' + A'
+                            // B' = B' << 32
+                            // A' = A
+                            // A' = Al' * Bl
+                            // A' = A' + B'
+                            // dst = A'
+
+                            // Get inputs rhs=A and lhs=B and the dst register
+                            let lhs = put_input_in_reg(ctx, inputs[0]);
+                            let rhs = put_input_in_reg(ctx, inputs[1]);
+                            let dst = get_output_reg(ctx, outputs[0]);
+
+                            // A' = A
+                            let rhs_1 = ctx.alloc_tmp(RegClass::V128, types::I64X2);
+                            ctx.emit(Inst::gen_move(rhs_1, rhs, ty));
+
+                            // A' = A' >> 32
+                            // A' = Ah' * Bl
+                            ctx.emit(Inst::xmm_rmi_reg(
+                                SseOpcode::Psrlq,
+                                RegMemImm::imm(32),
+                                rhs_1,
+                            ));
+                            ctx.emit(Inst::xmm_rm_r(
+                                SseOpcode::Pmuludq,
+                                RegMem::reg(lhs.clone()),
+                                rhs_1,
+                            ));
+
+                            // B' = B
+                            let lhs_1 = ctx.alloc_tmp(RegClass::V128, types::I64X2);
+                            ctx.emit(Inst::gen_move(lhs_1, lhs, ty));
+
+                            // B' = B' >> 32
+                            // B' = Bh' * Al
+                            ctx.emit(Inst::xmm_rmi_reg(
+                                SseOpcode::Psrlq,
+                                RegMemImm::imm(32),
+                                lhs_1,
+                            ));
+                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmuludq, RegMem::reg(rhs), lhs_1));
+
+                            // B' = B' + A'
+                            // B' = B' << 32
+                            ctx.emit(Inst::xmm_rm_r(
+                                SseOpcode::Paddq,
+                                RegMem::reg(rhs_1.to_reg()),
+                                lhs_1,
+                            ));
+                            ctx.emit(Inst::xmm_rmi_reg(
+                                SseOpcode::Psllq,
+                                RegMemImm::imm(32),
+                                lhs_1,
+                            ));
+
+                            // A' = A
+                            // A' = Al' * Bl
+                            // A' = A' + B'
+                            // dst = A'
+                            ctx.emit(Inst::gen_move(rhs_1, rhs, ty));
+                            ctx.emit(Inst::xmm_rm_r(
+                                SseOpcode::Pmuludq,
+                                RegMem::reg(lhs.clone()),
+                                rhs_1,
+                            ));
+                            ctx.emit(Inst::xmm_rm_r(
+                                SseOpcode::Paddq,
+                                RegMem::reg(lhs_1.to_reg()),
+                                rhs_1,
+                            ));
+                            ctx.emit(Inst::gen_move(dst, rhs_1.to_reg(), ty));
+                            return Ok(());
+                        }
                         _ => panic!("Unsupported type for packed Imul instruction"),
                     },
                     _ => panic!("Unsupported packed instruction"),
