@@ -36,6 +36,7 @@ impl From<Error> for Errno {
             Error::TryFromInt(_) => Errno::Overflow,
             Error::Utf8(_) => Errno::Ilseq,
             Error::UnexpectedIo(_) => Errno::Io,
+            Error::GetRandom(_) => Errno::Io,
             Error::TooBig => Errno::TooBig,
             Error::Acces => Errno::Acces,
             Error::Badf => Errno::Badf,

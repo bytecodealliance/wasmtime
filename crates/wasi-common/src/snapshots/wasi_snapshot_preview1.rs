@@ -5,7 +5,7 @@ use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
 use crate::wasi::{types, AsBytes};
 use crate::{path, poll};
 use crate::{Error, Result, WasiCtx};
-use log::{debug, error, trace};
+use log::{debug, trace};
 use std::convert::TryInto;
 use std::io::{self, SeekFrom};
 use wiggle::{GuestPtr, GuestSlice};
@@ -802,10 +802,8 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn random_get(&self, buf: &GuestPtr<u8>, buf_len: types::Size) -> Result<()> {
         let mut slice = buf.as_array(buf_len).as_slice()?;
-        getrandom::getrandom(&mut *slice).map_err(|err| {
-            error!("getrandom failure: {:?}", err);
-            Error::Io
-        })
+        getrandom::getrandom(&mut *slice)?;
+        Ok(())
     }
 
     fn sock_recv(

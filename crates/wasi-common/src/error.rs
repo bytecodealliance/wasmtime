@@ -14,6 +14,8 @@ pub enum Error {
     TryFromInt(#[from] std::num::TryFromIntError),
     #[error("Utf8Error: {0}")]
     Utf8(#[from] std::str::Utf8Error),
+    #[error("GetRandom: {0}")]
+    GetRandom(#[from] getrandom::Error),
 
     /// The host OS may return an io error that doesn't match one of the
     /// wasi errno variants we expect. We do not expose the details of this
