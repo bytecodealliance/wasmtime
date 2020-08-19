@@ -293,15 +293,9 @@ impl CompiledExpression {
         let mut ranges_builder = ValueLabelRangesBuilder::new(scope, addr_tr, frame_info);
         for p in self.parts.iter() {
             match p {
-                CompiledExpressionPart::Code(_) => (),
-                CompiledExpressionPart::Jump {
-                    target, ..
-                } => {
-                    print!("Jumping: {:?}?\n", arcs);
-                }
-                CompiledExpressionPart::LandingPad { original_pos } => {
-                    print!("Landing: original {}  in  {:?}?\n", original_pos, arcs);
-                }
+                CompiledExpressionPart::Code(_)
+                | CompiledExpressionPart::Jump { .. }
+                | CompiledExpressionPart::LandingPad { .. } => (),
                 CompiledExpressionPart::Local { label, .. } => ranges_builder.process_label(*label),
                 CompiledExpressionPart::Deref => ranges_builder.process_label(vmctx_label),
             }
@@ -349,7 +343,7 @@ impl CompiledExpression {
 					if new == code_buf.len() {
 					    for i in 1..c.len() {
 						old_to_new.insert(old + i, new + i);
-						println!("CompiledExpressionPart::Code {}: \"{}\"  with {:?}   updated {:?}", old, new, c, old_to_new);
+						// println!("CompiledExpressionPart::Code {}: \"{}\"  with {:?}   updated {:?}", old, new, c, old_to_new);
 					    }
 					    break;
 					}
@@ -359,11 +353,10 @@ impl CompiledExpression {
                                 CompiledExpressionPart::LandingPad { original_pos } => {
 				    let new_pos = code_buf.len();
 				    old_to_new.insert(*original_pos, new_pos);
-				    print!("Landing: on {}  translations {:?}?\n buf: {:?}\n", original_pos, old_to_new, code_buf);
+				    // print!("Landing: on {}  translations {:?}?\n buf: {:?}\n", original_pos, old_to_new, code_buf);
 				}
                                 CompiledExpressionPart::Jump {
-                                    target,
-                                    conditionally,
+                                    conditionally, ..
                                 } => {
                                     code_buf.push(
                                         match conditionally {
@@ -372,8 +365,8 @@ impl CompiledExpression {
                                         }
                                         .0 as u8,
                                     );
-                                    code_buf.push(0xFF);
-                                    code_buf.push(0xFF) // these will be relocated below
+                                    code_buf.push(!0);
+                                    code_buf.push(!0) // these will be relocated below
                                 }
                                 CompiledExpressionPart::Local { label, trailing } => {
                                     let loc =
@@ -430,7 +423,7 @@ pub fn compile_expression<R>(
 where
     R: Reader,
 {
-    let mut jump_arc: HashMap<usize, usize> = HashMap::new();
+    let mut jump_arcs: HashMap<usize, usize> = HashMap::new();
     let mut pc = expr.0.clone();
 
     print!("Starting:  buf: {:?}\n", pc);
@@ -449,10 +442,10 @@ where
                 combined.extend_from_slice(cc2);
                 parts.push(CompiledExpressionPart::Code(combined));
             } else {
-                print!(
+                /*print!(
                     "Pushing: Part={:?}   unread={} buf(pc): {:?}\n",
                     part, unread_bytes, pc
-                );
+                );*/
                 parts.push(CompiledExpressionPart::LandingPad {
                     original_pos: (expr.0.len().into_u64() - unread_bytes) as usize,
                 });
@@ -474,10 +467,10 @@ where
         () => {
             if !code_chunk.is_empty() {
                 let corr = code_chunk.len().into_u64();
-                print!(
+                /*print!(
                     "Correcting: unread_bytes={}   corr={}\n",
                     unread_bytes, corr
-                );
+                );*/
                 unread_bytes += corr;
                 push!(CompiledExpressionPart::Code(code_chunk));
                 unread_bytes -= corr;
@@ -546,7 +539,7 @@ where
                     flush_code_chunk!();
                     let arc_from = (expr.0.len().into_u64() - pc.len().into_u64()) as usize;
                     let arc_to = (arc_from as i32 + target as i32) as usize;
-                    jump_arc.insert(arc_from, arc_to);
+                    jump_arcs.insert(arc_from, arc_to);
                     push!(CompiledExpressionPart::Jump {
                         target,
                         conditionally: match op {
@@ -591,22 +584,23 @@ where
     });
 
     parts.push(CompiledExpressionPart::Code(vec![])); // so that we have enough windows below
-    // collect all CompiledExpressionPart but only relevant LandingPads:
+
+    // collect all CompiledExpressionParts but only relevant LandingPads:
     //  - those followed by a Code chunk that is being jumped into
     //  - those which are either at the start or end of a jump arc
     let parts = parts
         .windows(2)
         .filter_map(|p| match p {
 	    [CompiledExpressionPart::LandingPad { original_pos }, CompiledExpressionPart::Code(code_chunk)]
-		if jump_arc.values().any(|t| (original_pos + 1..original_pos + code_chunk.len()).contains(t))
+		if jump_arcs.values().any(|t| (original_pos + 1..original_pos + code_chunk.len()).contains(t))
 		=> Some(p[0].clone()),
 	    [CompiledExpressionPart::LandingPad { original_pos }, _]
-		if jump_arc.iter().all(|(from, to)| from != original_pos && to != original_pos)
+		if jump_arcs.iter().all(|(from, to)| from != original_pos && to != original_pos)
 		=> None,
 	    _ => Some(p[0].clone())
 	})
 	.collect();
-    Ok(Some((CompiledExpression { parts, need_deref }, jump_arc)))
+    Ok(Some((CompiledExpression { parts, need_deref }, jump_arcs)))
 }
 
 #[derive(Debug, Clone)]
