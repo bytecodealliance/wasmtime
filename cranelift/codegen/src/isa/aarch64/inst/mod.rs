@@ -308,6 +308,14 @@ pub enum VecMisc2 {
     Rev64,
     /// Shift left long (by element size)
     Shll,
+    /// Floating-point convert to signed integer, rounding toward zero
+    Fcvtzs,
+    /// Floating-point convert to unsigned integer, rounding toward zero
+    Fcvtzu,
+    /// Signed integer convert to floating-point
+    Scvtf,
+    /// Unsigned integer convert to floating-point
+    Ucvtf,
 }
 
 /// A Vector narrowing operation with two registers.
@@ -315,6 +323,10 @@ pub enum VecMisc2 {
 pub enum VecMiscNarrowOp {
     /// Extract Narrow
     Xtn,
+    /// Signed saturating extract narrow
+    Sqxtn,
+    /// Signed saturating extract unsigned narrow
+    Sqxtun,
 }
 
 /// An operation across the lanes of vectors.
@@ -884,6 +896,7 @@ pub enum Inst {
         t: VecExtendOp,
         rd: Writable<Reg>,
         rn: Reg,
+        high_half: bool,
     },
 
     /// Move vector element to another vector element.
@@ -901,6 +914,7 @@ pub enum Inst {
         rd: Writable<Reg>,
         rn: Reg,
         size: VectorSize,
+        high_half: bool,
     },
 
     /// A vector ALU op.
@@ -1628,9 +1642,16 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_mod(rd);
             collector.add_use(rn);
         }
-        &Inst::VecMiscNarrow { rd, rn, .. } => {
-            collector.add_def(rd);
+        &Inst::VecMiscNarrow {
+            rd, rn, high_half, ..
+        } => {
             collector.add_use(rn);
+
+            if high_half {
+                collector.add_mod(rd);
+            } else {
+                collector.add_def(rd);
+            }
         }
         &Inst::VecRRR {
             alu_op, rd, rn, rm, ..
@@ -2300,10 +2321,16 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         &mut Inst::VecMiscNarrow {
             ref mut rd,
             ref mut rn,
+            high_half,
             ..
         } => {
-            map_def(mapper, rd);
             map_use(mapper, rn);
+
+            if high_half {
+                map_mod(mapper, rd);
+            } else {
+                map_def(mapper, rd);
+            }
         }
         &mut Inst::VecRRR {
             alu_op,
@@ -3155,14 +3182,20 @@ impl Inst {
                 let rn = show_vreg_element(rn, mb_rru, 0, size);
                 format!("dup {}, {}", rd, rn)
             }
-            &Inst::VecExtend { t, rd, rn } => {
-                let (op, dest, src) = match t {
-                    VecExtendOp::Sxtl8 => ("sxtl", VectorSize::Size16x8, VectorSize::Size8x8),
-                    VecExtendOp::Sxtl16 => ("sxtl", VectorSize::Size32x4, VectorSize::Size16x4),
-                    VecExtendOp::Sxtl32 => ("sxtl", VectorSize::Size64x2, VectorSize::Size32x2),
-                    VecExtendOp::Uxtl8 => ("uxtl", VectorSize::Size16x8, VectorSize::Size8x8),
-                    VecExtendOp::Uxtl16 => ("uxtl", VectorSize::Size32x4, VectorSize::Size16x4),
-                    VecExtendOp::Uxtl32 => ("uxtl", VectorSize::Size64x2, VectorSize::Size32x2),
+            &Inst::VecExtend { t, rd, rn, high_half } => {
+                let (op, dest, src) = match (t, high_half) {
+                    (VecExtendOp::Sxtl8, false) => ("sxtl", VectorSize::Size16x8, VectorSize::Size8x8),
+                    (VecExtendOp::Sxtl8, true) => ("sxtl2", VectorSize::Size16x8, VectorSize::Size8x16),
+                    (VecExtendOp::Sxtl16, false) => ("sxtl", VectorSize::Size32x4, VectorSize::Size16x4),
+                    (VecExtendOp::Sxtl16, true) => ("sxtl2", VectorSize::Size32x4, VectorSize::Size16x8),
+                    (VecExtendOp::Sxtl32, false) => ("sxtl", VectorSize::Size64x2, VectorSize::Size32x2),
+                    (VecExtendOp::Sxtl32, true) => ("sxtl2", VectorSize::Size64x2, VectorSize::Size32x4),
+                    (VecExtendOp::Uxtl8, false) => ("uxtl", VectorSize::Size16x8, VectorSize::Size8x8),
+                    (VecExtendOp::Uxtl8, true) => ("uxtl2", VectorSize::Size16x8, VectorSize::Size8x16),
+                    (VecExtendOp::Uxtl16, false) => ("uxtl", VectorSize::Size32x4, VectorSize::Size16x4),
+                    (VecExtendOp::Uxtl16, true) => ("uxtl2", VectorSize::Size32x4, VectorSize::Size16x8),
+                    (VecExtendOp::Uxtl32, false) => ("uxtl", VectorSize::Size64x2, VectorSize::Size32x2),
+                    (VecExtendOp::Uxtl32, true) => ("uxtl2", VectorSize::Size64x2, VectorSize::Size32x4),
                 };
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, dest);
                 let rn = show_vreg_vector(rn, mb_rru, src);
@@ -3179,11 +3212,22 @@ impl Inst {
                 let rn = show_vreg_element(rn, mb_rru, idx2, size);
                 format!("mov {}, {}", rd, rn)
             }
-            &Inst::VecMiscNarrow { op, rd, rn, size } => {
-                let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
+            &Inst::VecMiscNarrow { op, rd, rn, size, high_half } => {
+                let dest_size = if high_half {
+                    assert!(size.is_128bits());
+                    size
+                } else {
+                    size.halve()
+                };
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, dest_size);
                 let rn = show_vreg_vector(rn, mb_rru, size.widen());
-                let op = match op {
-                    VecMiscNarrowOp::Xtn => "xtn",
+                let op = match (op, high_half) {
+                    (VecMiscNarrowOp::Xtn, false) => "xtn",
+                    (VecMiscNarrowOp::Xtn, true) => "xtn2",
+                    (VecMiscNarrowOp::Sqxtn, false) => "sqxtn",
+                    (VecMiscNarrowOp::Sqxtn, true) => "sqxtn2",
+                    (VecMiscNarrowOp::Sqxtun, false) => "sqxtun",
+                    (VecMiscNarrowOp::Sqxtun, true) => "sqxtun2",
                 };
                 format!("{} {}, {}", op, rd, rn)
             }
@@ -3267,6 +3311,10 @@ impl Inst {
                     VecMisc2::Fsqrt => ("fsqrt", size),
                     VecMisc2::Rev64 => ("rev64", size),
                     VecMisc2::Shll => ("shll", size),
+                    VecMisc2::Fcvtzs => ("fcvtzs", size),
+                    VecMisc2::Fcvtzu => ("fcvtzu", size),
+                    VecMisc2::Scvtf => ("scvtf", size),
+                    VecMisc2::Ucvtf => ("ucvtf", size),
                 };
 
                 let rd_size = if is_shll { size.widen() } else { size };
