@@ -610,13 +610,10 @@ where
                             false
                         }
                         CompiledExpressionPart::Code(code_chunk) => {
-                            if spare_pos == *original_pos {
-                                jump_target.iter().any(|t| {
+                            spare_pos == *original_pos
+                                && jump_target.iter().any(|t| {
                                     (spare_pos + 1..spare_pos + code_chunk.len()).contains(t)
                                 })
-                            } else {
-                                false
-                            }
                         }
                         _ => {
                             spare_pos = !0;
