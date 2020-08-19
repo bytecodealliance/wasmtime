@@ -88,21 +88,13 @@ enum CompiledExpressionPart {
     // The wasm-local DWARF operator. The label points to `ValueLabel`.
     // The trailing field denotes that the operator was last in sequence,
     // and it is the DWARF location (not a pointer).
-    Local {
-        label: ValueLabel,
-        trailing: bool,
-    },
+    Local { label: ValueLabel, trailing: bool },
     // Dereference is needed.
     Deref,
     // Jumping in the expression.
-    Jump {
-        target: i16,
-        conditionally: bool,
-    },
+    Jump { target: i16, conditionally: bool },
     // Floating landing pad.
-    LandingPad {
-        original_pos: usize,
-    },
+    LandingPad { original_pos: usize },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -413,7 +405,6 @@ impl CompiledExpression {
 			    print!("\n\nReloc: new_from {}   new_to {}   new_diff {} \nBuf: {:?}\n\n\n\n\n\n", new_from, new_to, new_diff, code_buf);
 			}
 
-			
                         Ok(Some((func_index, start, end, code_buf)))
                     },
                 )
@@ -606,7 +597,9 @@ where
     let relevant_parts = parts
         .into_iter()
         .filter(|p| match p {
-            CompiledExpressionPart::LandingPad { original_pos } => jump_arc.iter().any(|(from,to)| from == original_pos || to == original_pos),
+            CompiledExpressionPart::LandingPad { original_pos } => jump_arc
+                .iter()
+                .any(|(from, to)| from == original_pos || to == original_pos),
             _ => true,
         })
         .collect();
@@ -776,7 +769,8 @@ mod tests {
         let e = expression!(DW_OP_WASM_location, 0x0, 20, DW_OP_stack_value);
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
-            .expect("expression").0;
+            .expect("expression")
+            .0;
         assert_eq!(
             ce,
             CompiledExpression {
@@ -798,7 +792,8 @@ mod tests {
         );
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
-            .expect("expression").0;
+            .expect("expression")
+            .0;
         assert_eq!(
             ce,
             CompiledExpression {
@@ -816,9 +811,10 @@ mod tests {
         let e = expression!(DW_OP_WASM_location, 0x0, 3, DW_OP_stack_value);
         let fe = compile_expression(&e, DWARF_ENCODING, None).expect("non-error");
         let e = expression!(DW_OP_fbreg, 0x12);
-        let ce = compile_expression(&e, DWARF_ENCODING, fe.map(|(e,_)| e).as_ref())
+        let ce = compile_expression(&e, DWARF_ENCODING, fe.map(|(e, _)| e).as_ref())
             .expect("non-error")
-            .expect("expression").0;
+            .expect("expression")
+            .0;
         assert_eq!(
             ce,
             CompiledExpression {
@@ -844,7 +840,8 @@ mod tests {
         );
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
-            .expect("expression").0;
+            .expect("expression")
+            .0;
         assert_eq!(
             ce,
             CompiledExpression {
@@ -869,19 +866,23 @@ mod tests {
             1,
             DW_OP_and,
             DW_OP_bra,
-            3,
+            7,
             0, // --> pointer
             DW_OP_swap,
             DW_OP_shr,
-            DW_OP_stack_value,
+            DW_OP_skip,
+            2,
+            0, // --> done
             // pointer:
             DW_OP_plus,
             DW_OP_deref,
+            // done:
             DW_OP_stack_value
         );
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
-            .expect("expression").0;
+            .expect("expression")
+            .0;
         assert_eq!(
             ce,
             CompiledExpression {
@@ -893,11 +894,19 @@ mod tests {
                     },
                     CompiledExpressionPart::Code(vec![26]),
                     CompiledExpressionPart::Jump {
-                        target: 3,
+                        target: 7,
                         conditionally: true
                     },
-                    CompiledExpressionPart::Code(vec![40, 3, 0, 22, 37, 159, 34]),
+                    CompiledExpressionPart::LandingPad { original_pos: 9 }, // capture from
+                    CompiledExpressionPart::Code(vec![22, 37]),
+                    CompiledExpressionPart::Jump {
+                        target: 2,
+                        conditionally: false
+                    },
+                    CompiledExpressionPart::LandingPad { original_pos: 14 }, // capture from
+                    CompiledExpressionPart::Code(vec![34]),
                     CompiledExpressionPart::Deref,
+                    CompiledExpressionPart::LandingPad { original_pos: 16 }, // capture to
                     CompiledExpressionPart::Code(vec![159])
                 ],
                 need_deref: false
@@ -907,7 +916,8 @@ mod tests {
         let e = expression!(DW_OP_WASM_location, 0x0, 1, DW_OP_plus_uconst, 5);
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
-            .expect("expression").0;
+            .expect("expression")
+            .0;
         assert_eq!(
             ce,
             CompiledExpression {
