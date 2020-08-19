@@ -20,7 +20,7 @@ links = "wasi-common-19"
 anyhow = "1.0"
 thiserror = "1.0"
 libc = "0.2"
-getrandom = "0.1"
+getrandom = { version = "0.1.14", features = ["std"] }
 cfg-if = "0.1.9"
 log = "0.4"
 filetime = "0.2.7"
