@@ -41,9 +41,11 @@ pub fn has_side_effect(func: &Function, inst: Inst) -> bool {
     trivially_has_side_effects(opcode) || is_load_with_defined_trapping(opcode, data)
 }
 
-/// Does the given instruction have any side-effect as per [has_side_effect], or else is a load?
-pub fn has_side_effect_or_load(func: &Function, inst: Inst) -> bool {
-    has_side_effect(func, inst) || func.dfg[inst].opcode().can_load()
+/// Does the given instruction have any side-effect as per [has_side_effect], or else is a load,
+/// but not the get_pinned_reg opcode?
+pub fn has_side_effect_or_load_not_get_pinned_reg(func: &Function, inst: Inst) -> bool {
+    let op = func.dfg[inst].opcode();
+    op != Opcode::GetPinnedReg && (has_side_effect(func, inst) || op.can_load())
 }
 
 /// Is the given instruction a constant value (`iconst`, `fconst`, `bconst`) that can be
