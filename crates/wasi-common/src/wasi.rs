@@ -1,5 +1,4 @@
 use crate::{Error, Result, WasiCtx};
-use cfg_if::cfg_if;
 use tracing::debug;
 
 wiggle::from_witx!({
@@ -36,7 +35,7 @@ impl From<Error> for Errno {
             Error::Guest(e) => e.into(),
             Error::TryFromInt(_) => Errno::Overflow,
             Error::Utf8(_) => Errno::Ilseq,
-            Error::IoError(e) => e.into(),
+            Error::UnexpectedIo(_) => Errno::Io,
             Error::TooBig => Errno::TooBig,
             Error::Acces => Errno::Acces,
             Error::Badf => Errno::Badf,
@@ -235,146 +234,5 @@ impl crate::fdpool::Fd for types::Fd {
     }
     fn from_raw(raw_fd: u32) -> Self {
         Self::from(raw_fd)
-    }
-}
-
-// Turning an io::Error into an Errno is different on windows.
-cfg_if! {
-    if #[cfg(windows)] {
-use winapi::shared::winerror;
-use std::io;
-impl From<io::Error> for Errno {
-    fn from(err: io::Error) -> Self {
-        match err.raw_os_error() {
-            Some(code) => match code as u32 {
-                winerror::ERROR_SUCCESS => Self::Success,
-                winerror::ERROR_BAD_ENVIRONMENT => Self::TooBig,
-                winerror::ERROR_FILE_NOT_FOUND => Self::Noent,
-                winerror::ERROR_PATH_NOT_FOUND => Self::Noent,
-                winerror::ERROR_TOO_MANY_OPEN_FILES => Self::Nfile,
-                winerror::ERROR_ACCESS_DENIED => Self::Acces,
-                winerror::ERROR_SHARING_VIOLATION => Self::Acces,
-                winerror::ERROR_PRIVILEGE_NOT_HELD => Self::Notcapable,
-                winerror::ERROR_INVALID_HANDLE => Self::Badf,
-                winerror::ERROR_INVALID_NAME => Self::Noent,
-                winerror::ERROR_NOT_ENOUGH_MEMORY => Self::Nomem,
-                winerror::ERROR_OUTOFMEMORY => Self::Nomem,
-                winerror::ERROR_DIR_NOT_EMPTY => Self::Notempty,
-                winerror::ERROR_NOT_READY => Self::Busy,
-                winerror::ERROR_BUSY => Self::Busy,
-                winerror::ERROR_NOT_SUPPORTED => Self::Notsup,
-                winerror::ERROR_FILE_EXISTS => Self::Exist,
-                winerror::ERROR_BROKEN_PIPE => Self::Pipe,
-                winerror::ERROR_BUFFER_OVERFLOW => Self::Nametoolong,
-                winerror::ERROR_NOT_A_REPARSE_POINT => Self::Inval,
-                winerror::ERROR_NEGATIVE_SEEK => Self::Inval,
-                winerror::ERROR_DIRECTORY => Self::Notdir,
-                winerror::ERROR_ALREADY_EXISTS => Self::Exist,
-                x => {
-                    tracing::debug!("winerror: unknown error value: {}", x);
-                    Self::Io
-                }
-            },
-            None => {
-                tracing::debug!("Other I/O error: {}", err);
-                Self::Io
-            }
-        }
-    }
-}
-
-    } else {
-use std::io;
-impl From<io::Error> for Errno {
-    fn from(err: io::Error) -> Self {
-        match err.raw_os_error() {
-            Some(code) => match code {
-                libc::EPERM => Self::Perm,
-                libc::ENOENT => Self::Noent,
-                libc::ESRCH => Self::Srch,
-                libc::EINTR => Self::Intr,
-                libc::EIO => Self::Io,
-                libc::ENXIO => Self::Nxio,
-                libc::E2BIG => Self::TooBig,
-                libc::ENOEXEC => Self::Noexec,
-                libc::EBADF => Self::Badf,
-                libc::ECHILD => Self::Child,
-                libc::EAGAIN => Self::Again,
-                libc::ENOMEM => Self::Nomem,
-                libc::EACCES => Self::Acces,
-                libc::EFAULT => Self::Fault,
-                libc::EBUSY => Self::Busy,
-                libc::EEXIST => Self::Exist,
-                libc::EXDEV => Self::Xdev,
-                libc::ENODEV => Self::Nodev,
-                libc::ENOTDIR => Self::Notdir,
-                libc::EISDIR => Self::Isdir,
-                libc::EINVAL => Self::Inval,
-                libc::ENFILE => Self::Nfile,
-                libc::EMFILE => Self::Mfile,
-                libc::ENOTTY => Self::Notty,
-                libc::ETXTBSY => Self::Txtbsy,
-                libc::EFBIG => Self::Fbig,
-                libc::ENOSPC => Self::Nospc,
-                libc::ESPIPE => Self::Spipe,
-                libc::EROFS => Self::Rofs,
-                libc::EMLINK => Self::Mlink,
-                libc::EPIPE => Self::Pipe,
-                libc::EDOM => Self::Dom,
-                libc::ERANGE => Self::Range,
-                libc::EDEADLK => Self::Deadlk,
-                libc::ENAMETOOLONG => Self::Nametoolong,
-                libc::ENOLCK => Self::Nolck,
-                libc::ENOSYS => Self::Nosys,
-                libc::ENOTEMPTY => Self::Notempty,
-                libc::ELOOP => Self::Loop,
-                libc::ENOMSG => Self::Nomsg,
-                libc::EIDRM => Self::Idrm,
-                libc::ENOLINK => Self::Nolink,
-                libc::EPROTO => Self::Proto,
-                libc::EMULTIHOP => Self::Multihop,
-                libc::EBADMSG => Self::Badmsg,
-                libc::EOVERFLOW => Self::Overflow,
-                libc::EILSEQ => Self::Ilseq,
-                libc::ENOTSOCK => Self::Notsock,
-                libc::EDESTADDRREQ => Self::Destaddrreq,
-                libc::EMSGSIZE => Self::Msgsize,
-                libc::EPROTOTYPE => Self::Prototype,
-                libc::ENOPROTOOPT => Self::Noprotoopt,
-                libc::EPROTONOSUPPORT => Self::Protonosupport,
-                libc::EAFNOSUPPORT => Self::Afnosupport,
-                libc::EADDRINUSE => Self::Addrinuse,
-                libc::EADDRNOTAVAIL => Self::Addrnotavail,
-                libc::ENETDOWN => Self::Netdown,
-                libc::ENETUNREACH => Self::Netunreach,
-                libc::ENETRESET => Self::Netreset,
-                libc::ECONNABORTED => Self::Connaborted,
-                libc::ECONNRESET => Self::Connreset,
-                libc::ENOBUFS => Self::Nobufs,
-                libc::EISCONN => Self::Isconn,
-                libc::ENOTCONN => Self::Notconn,
-                libc::ETIMEDOUT => Self::Timedout,
-                libc::ECONNREFUSED => Self::Connrefused,
-                libc::EHOSTUNREACH => Self::Hostunreach,
-                libc::EALREADY => Self::Already,
-                libc::EINPROGRESS => Self::Inprogress,
-                libc::ESTALE => Self::Stale,
-                libc::EDQUOT => Self::Dquot,
-                libc::ECANCELED => Self::Canceled,
-                libc::EOWNERDEAD => Self::Ownerdead,
-                libc::ENOTRECOVERABLE => Self::Notrecoverable,
-                libc::ENOTSUP => Self::Notsup,
-                x => {
-                    tracing::debug!("Unknown errno value: {}", x);
-                    Self::Io
-                }
-            },
-            None => {
-                tracing::debug!("Other I/O error: {}", err);
-                Self::Io
-            }
-        }
-    }
-}
     }
 }

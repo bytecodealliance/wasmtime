@@ -1,3 +1,4 @@
+use cfg_if::cfg_if;
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -14,8 +15,11 @@ pub enum Error {
     #[error("Utf8Error: {0}")]
     Utf8(#[from] std::str::Utf8Error),
 
-    #[error("IO: {0}")]
-    IoError(#[from] std::io::Error),
+    /// The host OS may return an io error that doesn't match one of the
+    /// wasi errno variants we expect. We do not expose the details of this
+    /// error to the user.
+    #[error("Unexpected IoError: {0}")]
+    UnexpectedIo(#[source] std::io::Error),
 
     // Below this, all variants are from the `$errno` type:
     /// Errno::TooBig: Argument list too long
@@ -92,5 +96,83 @@ pub enum Error {
 impl From<std::convert::Infallible> for Error {
     fn from(_err: std::convert::Infallible) -> Self {
         unreachable!("should be impossible: From<Infallible>")
+    }
+}
+
+// Turning an io::Error into an Error has platform-specific behavior
+cfg_if! {
+    if #[cfg(windows)] {
+use winapi::shared::winerror;
+use std::io;
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Self {
+        match err.raw_os_error() {
+            Some(code) => match code as u32 {
+                winerror::ERROR_SUCCESS => Self::Success,
+                winerror::ERROR_BAD_ENVIRONMENT => Self::TooBig,
+                winerror::ERROR_FILE_NOT_FOUND => Self::Noent,
+                winerror::ERROR_PATH_NOT_FOUND => Self::Noent,
+                winerror::ERROR_TOO_MANY_OPEN_FILES => Self::Nfile,
+                winerror::ERROR_ACCESS_DENIED => Self::Acces,
+                winerror::ERROR_SHARING_VIOLATION => Self::Acces,
+                winerror::ERROR_PRIVILEGE_NOT_HELD => Self::Notcapable,
+                winerror::ERROR_INVALID_HANDLE => Self::Badf,
+                winerror::ERROR_INVALID_NAME => Self::Noent,
+                winerror::ERROR_NOT_ENOUGH_MEMORY => Self::Nomem,
+                winerror::ERROR_OUTOFMEMORY => Self::Nomem,
+                winerror::ERROR_DIR_NOT_EMPTY => Self::Notempty,
+                winerror::ERROR_NOT_READY => Self::Busy,
+                winerror::ERROR_BUSY => Self::Busy,
+                winerror::ERROR_NOT_SUPPORTED => Self::Notsup,
+                winerror::ERROR_FILE_EXISTS => Self::Exist,
+                winerror::ERROR_BROKEN_PIPE => Self::Pipe,
+                winerror::ERROR_BUFFER_OVERFLOW => Self::Nametoolong,
+                winerror::ERROR_NOT_A_REPARSE_POINT => Self::Inval,
+                winerror::ERROR_NEGATIVE_SEEK => Self::Inval,
+                winerror::ERROR_DIRECTORY => Self::Notdir,
+                winerror::ERROR_ALREADY_EXISTS => Self::Exist,
+                _ => Self::UnexpectedIo(err),
+            },
+            None => Self::UnexpectedIo(err),
+        }
+    }
+}
+
+    } else {
+use std::io;
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Self {
+        match err.raw_os_error() {
+            Some(code) => match code {
+                libc::EPERM => Self::Perm,
+                libc::ENOENT => Self::Noent,
+                libc::E2BIG => Self::TooBig,
+                libc::EIO => Self::Io,
+                libc::EBADF => Self::Badf,
+                libc::EACCES => Self::Acces,
+                libc::EFAULT => Self::Fault,
+                libc::ENOTDIR => Self::Notdir,
+                libc::EISDIR => Self::Isdir,
+                libc::EINVAL => Self::Inval,
+                libc::EEXIST => Self::Exist,
+                libc::EFBIG => Self::Fbig,
+                libc::ENOSPC => Self::Nospc,
+                libc::ESPIPE => Self::Spipe,
+                libc::EMFILE => Self::Mfile,
+                libc::EMLINK => Self::Mlink,
+                libc::ENAMETOOLONG => Self::Nametoolong,
+                libc::ENOTEMPTY => Self::Notempty,
+                libc::ELOOP => Self::Loop,
+                libc::EOVERFLOW => Self::Overflow,
+                libc::EILSEQ => Self::Ilseq,
+                libc::ENOTSUP => Self::Notsup,
+                _ => Self::UnexpectedIo(err),
+            },
+            None => {
+                Self::UnexpectedIo(err)
+            }
+        }
+    }
+}
     }
 }
