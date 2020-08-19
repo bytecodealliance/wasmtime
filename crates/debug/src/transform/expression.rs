@@ -96,7 +96,6 @@ enum CompiledExpressionPart {
     Deref,
     // Jumping in the expression.
     Jump {
-        arc_from: usize,
         target: i16,
         conditionally: bool,
     },
@@ -304,11 +303,10 @@ impl CompiledExpression {
             match p {
                 CompiledExpressionPart::Code(_) => (),
                 CompiledExpressionPart::Jump {
-                    arc_from,
                     target,
                     conditionally,
                 } => {
-                    print!("Jumping: from {}  in  {:?}?\n", arc_from, arcs);
+                    print!("Jumping: {:?}?\n", arcs);
                 }
                 CompiledExpressionPart::LandingPad { original_pos } => {
                     print!("Landing: original {}  in  {:?}?\n", original_pos, arcs);
@@ -373,7 +371,6 @@ impl CompiledExpression {
 				    print!("Landing: on {}  translations {:?}?\n buf: {:?}\n", original_pos, old_to_new, code_buf);
 				}
                                 CompiledExpressionPart::Jump {
-				    arc_from,
                                     target,
                                     conditionally,
                                 } => {
@@ -564,7 +561,6 @@ where
                     jump_target.insert(arc_to);
                     print!("jump_targets = {:?}\n", jump_target);
                     push!(CompiledExpressionPart::Jump {
-                        arc_from,
                         target,
                         conditionally: match op {
                             Operation::Bra { .. } => true,
@@ -780,7 +776,7 @@ mod tests {
         let e = expression!(DW_OP_WASM_location, 0x0, 20, DW_OP_stack_value);
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
-            .expect("expression");
+            .expect("expression").0;
         assert_eq!(
             ce,
             CompiledExpression {
@@ -802,7 +798,7 @@ mod tests {
         );
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
-            .expect("expression");
+            .expect("expression").0;
         assert_eq!(
             ce,
             CompiledExpression {
@@ -820,9 +816,9 @@ mod tests {
         let e = expression!(DW_OP_WASM_location, 0x0, 3, DW_OP_stack_value);
         let fe = compile_expression(&e, DWARF_ENCODING, None).expect("non-error");
         let e = expression!(DW_OP_fbreg, 0x12);
-        let ce = compile_expression(&e, DWARF_ENCODING, fe.as_ref())
+        let ce = compile_expression(&e, DWARF_ENCODING, fe.map(|(e,_)| e).as_ref())
             .expect("non-error")
-            .expect("expression");
+            .expect("expression").0;
         assert_eq!(
             ce,
             CompiledExpression {
@@ -848,7 +844,7 @@ mod tests {
         );
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
-            .expect("expression");
+            .expect("expression").0;
         assert_eq!(
             ce,
             CompiledExpression {
@@ -885,7 +881,7 @@ mod tests {
         );
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
-            .expect("expression");
+            .expect("expression").0;
         assert_eq!(
             ce,
             CompiledExpression {
@@ -911,7 +907,7 @@ mod tests {
         let e = expression!(DW_OP_WASM_location, 0x0, 1, DW_OP_plus_uconst, 5);
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
-            .expect("expression");
+            .expect("expression").0;
         assert_eq!(
             ce,
             CompiledExpression {
