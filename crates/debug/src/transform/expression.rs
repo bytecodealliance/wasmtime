@@ -594,12 +594,36 @@ where
         original_pos: expr.0.len().into_u64() as usize,
     });
 
+    let spare_parts = parts.clone();
+    let mut spare_pos: usize = !0; // sentinel
+
     let relevant_parts = parts
         .into_iter()
         .filter(|p| match p {
-            CompiledExpressionPart::LandingPad { original_pos } => jump_arc
-                .iter()
-                .any(|(from, to)| from == original_pos || to == original_pos),
+            CompiledExpressionPart::LandingPad { original_pos } => {
+                jump_arc
+                    .iter()
+                    .any(|(from, to)| from == original_pos || to == original_pos)
+                    || spare_parts.iter().any(|p| match p {
+                        CompiledExpressionPart::LandingPad { original_pos: pos } => {
+                            spare_pos = *pos;
+                            false
+                        }
+                        CompiledExpressionPart::Code(code_chunk) => {
+                            if spare_pos == *original_pos {
+                                jump_target.iter().any(|t| {
+                                    (spare_pos + 1..spare_pos + code_chunk.len()).contains(t)
+                                })
+                            } else {
+                                false
+                            }
+                        }
+                        _ => {
+                            spare_pos = !0;
+                            false
+                        }
+                    })
+            }
             _ => true,
         })
         .collect();
@@ -939,7 +963,8 @@ mod tests {
                     },
                     CompiledExpressionPart::LandingPad { original_pos: 5 }, // capture from
                     CompiledExpressionPart::Deref,
-                    CompiledExpressionPart::Code(vec![48, 159]) // capture to MISSING! (FIXME)
+                    CompiledExpressionPart::LandingPad { original_pos: 6 }, // capture to
+                    CompiledExpressionPart::Code(vec![48, 159])
                 ],
                 need_deref: false
             }
