@@ -418,7 +418,7 @@ where
             let op = Operation::parse(&mut pc, encoding)?;
             match op {
                 Operation::FrameOffset { offset } => {
-                    // Expand DW_OP_fpreg into frame location and DW_OP_plus_uconst.
+                    // Expand DW_OP_fbreg into frame location and DW_OP_plus_uconst.
                     if frame_base.is_some() {
                         // Add frame base expressions.
                         flush_code_chunk!();
@@ -680,8 +680,7 @@ mod tests {
 
         let e = expression!(DW_OP_WASM_location, 0x0, 3, DW_OP_stack_value);
         let fe = compile_expression(&e, DWARF_ENCODING, None).expect("non-error");
-        // DW_OP_fpreg 0x12
-        let e = expression!(0x91, 0x12);
+        let e = expression!(DW_OP_fbreg, 0x12);
         let ce = compile_expression(&e, DWARF_ENCODING, fe.as_ref())
             .expect("non-error")
             .expect("expression");
