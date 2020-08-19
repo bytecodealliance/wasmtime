@@ -913,6 +913,38 @@ mod tests {
             }
         );
 
+        let e = expression!(
+            DW_OP_lit1,
+            DW_OP_dup,
+            DW_OP_bra,
+            2,
+            0, // --> target
+            DW_OP_deref,
+            DW_OP_lit0,
+            // target:
+            DW_OP_stack_value
+        );
+        let ce = compile_expression(&e, DWARF_ENCODING, None)
+            .expect("non-error")
+            .expect("expression")
+            .0;
+        assert_eq!(
+            ce,
+            CompiledExpression {
+                parts: vec![
+                    CompiledExpressionPart::Code(vec![49, 18]),
+                    CompiledExpressionPart::Jump {
+                        target: 2,
+                        conditionally: true
+                    },
+                    CompiledExpressionPart::LandingPad { original_pos: 5 }, // capture from
+                    CompiledExpressionPart::Deref,
+                    CompiledExpressionPart::Code(vec![48, 159]) // capture to MISSING! (FIXME)
+                ],
+                need_deref: false
+            }
+        );
+
         let e = expression!(DW_OP_WASM_location, 0x0, 1, DW_OP_plus_uconst, 5);
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
