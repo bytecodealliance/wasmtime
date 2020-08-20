@@ -11,7 +11,6 @@ block0(v0: i8):
 
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
-; nextln:  sxtb x0, w0
 ; nextln:  movz x1, #42
 ; nextln:  add x0, x1, x0, SXTB
 ; nextln:  mov sp, fp

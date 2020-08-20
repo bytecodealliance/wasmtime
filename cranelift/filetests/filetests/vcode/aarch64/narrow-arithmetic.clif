@@ -49,7 +49,6 @@ block0(v0: i32, v1: i8):
 
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: sxtb w1, w1
 ; nextln: add w0, w0, w1, SXTB
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
@@ -64,7 +63,6 @@ block0(v0: i64, v1: i32):
 
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: sxtw x1, w1
 ; nextln: add x0, x0, x1, SXTW
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
