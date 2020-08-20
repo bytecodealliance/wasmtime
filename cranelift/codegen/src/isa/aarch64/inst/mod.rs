@@ -649,7 +649,7 @@ pub enum Inst {
     /// x28   (wr) scratch reg; value afterwards has no meaning
     AtomicRMW {
         ty: Type, // I8, I16, I32 or I64
-        op: AtomicRMWOp,
+        op: inst_common::AtomicRmwOp,
         srcloc: Option<SourceLoc>,
     },
 

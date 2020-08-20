@@ -4551,7 +4551,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::AtomicRMW {
             ty: I16,
-            op: AtomicRMWOp::Xor,
+            op: inst_common::AtomicRmwOp::Xor,
             srcloc: None,
         },
         "BF3B03D53B7F5F487C031ACA3C7F1848B8FFFFB5BF3B03D5",
@@ -4561,7 +4561,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::AtomicRMW {
             ty: I32,
-            op: AtomicRMWOp::Xchg,
+            op: inst_common::AtomicRmwOp::Xchg,
             srcloc: None,
         },
         "BF3B03D53B7F5F88FC031AAA3C7F1888B8FFFFB5BF3B03D5",

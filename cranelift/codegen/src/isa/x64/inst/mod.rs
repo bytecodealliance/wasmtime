@@ -405,6 +405,56 @@ pub enum Inst {
     },
 
     // =====================================
+    // Instructions pertaining to atomic memory accesses.
+    /// A standard (native) `lock cmpxchg src, (amode)`, with register conventions:
+    ///
+    /// `dst`  (read) address
+    /// `src`  (read) replacement value
+    /// %rax   (modified) in: expected value, out: value that was actually at `dst`
+    /// %rflags is written.  Do not assume anything about it after the instruction.
+    ///
+    /// The instruction "succeeded" iff the lowest `ty` bits of %rax afterwards are the same as
+    /// they were before.
+    LockCmpxchg {
+        ty: Type, // I8, I16, I32 or I64
+        src: Reg,
+        dst: SyntheticAmode,
+        srcloc: Option<SourceLoc>,
+    },
+
+    /// A synthetic instruction, based on a loop around a native `lock cmpxchg` instruction.
+    /// This atomically modifies a value in memory and returns the old value.  The sequence
+    /// consists of an initial "normal" load from `dst`, followed by a loop which computes the
+    /// new value and tries to compare-and-swap ("CAS") it into `dst`, using the native
+    /// instruction `lock cmpxchg{b,w,l,q}` .  The loop iterates until the CAS is successful.
+    /// If there is no contention, there will be only one pass through the loop body.  The
+    /// sequence does *not* perform any explicit memory fence instructions
+    /// (mfence/sfence/lfence).
+    ///
+    /// Note that the transaction is atomic in the sense that, as observed by some other thread,
+    /// `dst` either has the initial or final value, but no other.  It isn't atomic in the sense
+    /// of guaranteeing that no other thread writes to `dst` in between the initial load and the
+    /// CAS -- but that would cause the CAS to fail unless the other thread's last write before
+    /// the CAS wrote the same value that was already there.  In other words, this
+    /// implementation suffers (unavoidably) from the A-B-A problem.
+    ///
+    /// This instruction sequence has fixed register uses as follows:
+    ///
+    /// %r9   (read) address
+    /// %r10  (read) second operand for `op`
+    /// %r11  (written) scratch reg; value afterwards has no meaning
+    /// %rax  (written) the old value at %r9
+    /// %rflags is written.  Do not assume anything about it after the instruction.
+    AtomicRmwSeq {
+        ty: Type, // I8, I16, I32 or I64
+        op: inst_common::AtomicRmwOp,
+        srcloc: Option<SourceLoc>,
+    },
+
+    /// A memory fence (mfence, lfence or sfence).
+    Fence { kind: FenceKind },
+
+    // =====================================
     // Meta-instructions generating no code.
     /// Marker, no-op in generated code: SP "virtual offset" is adjusted. This
     /// controls how MemArg::NominalSPOffset args are lowered.
@@ -1521,6 +1571,26 @@ impl ShowWithRRU for Inst {
                 show_ireg_sized(dst.to_reg(), mb_rru, 8),
             ),
 
+            Inst::LockCmpxchg { ty, src, dst, .. } => {
+                let size = ty.bytes() as u8;
+                format!("lock cmpxchg{} {}, {}",
+                        suffixBWLQ(size), show_ireg_sized(*src, mb_rru, size), dst.show_rru(mb_rru))
+            }
+
+            Inst::AtomicRmwSeq { ty, op, .. } => {
+                format!(
+                    "atomically {{ {}_bits_at_[%r9]) {:?}= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }}",
+                    ty.bits(), op)
+            },
+
+            Inst::Fence { kind } => {
+                match kind {
+                    FenceKind::MFence => "mfence".to_string(),
+                    FenceKind::LFence => "lfence".to_string(),
+                    FenceKind::SFence => "sfence".to_string(),
+                }
+            }
+
             Inst::VirtualSPOffsetAdj { offset } => format!("virtual_sp_offset_adjust {}", offset),
 
             Inst::Hlt => "hlt".into(),
@@ -1737,6 +1807,19 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(*dst);
         }
 
+        Inst::LockCmpxchg { src, dst, .. } => {
+            dst.get_regs_as_uses(collector);
+            collector.add_use(*src);
+            collector.add_mod(Writable::from_reg(regs::rax()));
+        }
+
+        Inst::AtomicRmwSeq { .. } => {
+            collector.add_use(regs::r9());
+            collector.add_use(regs::r10());
+            collector.add_def(Writable::from_reg(regs::r11()));
+            collector.add_def(Writable::from_reg(regs::rax()));
+        }
+
         Inst::Ret
         | Inst::EpiloguePlaceholder
         | Inst::JmpKnown { .. }
@@ -1745,7 +1828,8 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         | Inst::TrapIf { .. }
         | Inst::VirtualSPOffsetAdj { .. }
         | Inst::Hlt
-        | Inst::Ud2 { .. } => {
+        | Inst::Ud2 { .. }
+        | Inst::Fence { .. } => {
             // No registers are used.
         }
     }
@@ -2091,6 +2175,15 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
 
         Inst::LoadExtName { ref mut dst, .. } => map_def(mapper, dst),
 
+        Inst::LockCmpxchg {
+            ref mut src,
+            ref mut dst,
+            ..
+        } => {
+            map_use(mapper, src);
+            dst.map_uses(mapper);
+        }
+
         Inst::Ret
         | Inst::EpiloguePlaceholder
         | Inst::JmpKnown { .. }
@@ -2099,8 +2192,11 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         | Inst::TrapIf { .. }
         | Inst::VirtualSPOffsetAdj { .. }
         | Inst::Ud2 { .. }
-        | Inst::Hlt => {
-            // No registers are used.
+        | Inst::Hlt
+        | Inst::AtomicRmwSeq { .. }
+        | Inst::Fence { .. } => {
+            // Instruction doesn't explicitly mention any regs, so it can't have any virtual
+            // regs that we'd need to remap.  Hence no action required.
         }
     }
 }

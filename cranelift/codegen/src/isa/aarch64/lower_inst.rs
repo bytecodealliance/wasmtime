@@ -21,7 +21,8 @@ use smallvec::SmallVec;
 
 use super::lower::*;
 
-fn is_single_word_int_ty(ty: Type) -> bool {
+/// This is target-word-size dependent.  And it excludes booleans and reftypes.
+fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
     match ty {
         I8 | I16 | I32 | I64 => true,
         _ => false,
@@ -1228,7 +1229,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let mut r_addr = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let mut r_arg2 = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
             let ty_access = ty.unwrap();
-            assert!(is_single_word_int_ty(ty_access));
+            assert!(is_valid_atomic_transaction_ty(ty_access));
             let memflags = ctx.memflags(insn).expect("memory flags");
             let srcloc = if !memflags.notrap() {
                 Some(ctx.srcloc(insn))
@@ -1244,7 +1245,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::gen_move(Writable::from_reg(xreg(25)), r_addr, I64));
             ctx.emit(Inst::gen_move(Writable::from_reg(xreg(26)), r_arg2, I64));
             // Now the AtomicRMW insn itself
-            let op = AtomicRMWOp::from(inst_atomic_rmw_op(ctx.data(insn)).unwrap());
+            let op = inst_common::AtomicRmwOp::from(inst_atomic_rmw_op(ctx.data(insn)).unwrap());
             ctx.emit(Inst::AtomicRMW {
                 ty: ty_access,
                 op,
@@ -1264,7 +1265,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let mut r_expected = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
             let mut r_replacement = put_input_in_reg(ctx, inputs[2], NarrowValueMode::None);
             let ty_access = ty.unwrap();
-            assert!(is_single_word_int_ty(ty_access));
+            assert!(is_valid_atomic_transaction_ty(ty_access));
             let memflags = ctx.memflags(insn).expect("memory flags");
             let srcloc = if !memflags.notrap() {
                 Some(ctx.srcloc(insn))
@@ -1302,7 +1303,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let r_data = get_output_reg(ctx, outputs[0]);
             let r_addr = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let ty_access = ty.unwrap();
-            assert!(is_single_word_int_ty(ty_access));
+            assert!(is_valid_atomic_transaction_ty(ty_access));
             let memflags = ctx.memflags(insn).expect("memory flags");
             let srcloc = if !memflags.notrap() {
                 Some(ctx.srcloc(insn))
@@ -1321,7 +1322,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let r_data = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let r_addr = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
             let ty_access = ctx.input_ty(insn, 0);
-            assert!(is_single_word_int_ty(ty_access));
+            assert!(is_valid_atomic_transaction_ty(ty_access));
             let memflags = ctx.memflags(insn).expect("memory flags");
             let srcloc = if !memflags.notrap() {
                 Some(ctx.srcloc(insn))
