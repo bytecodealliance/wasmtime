@@ -283,6 +283,10 @@ pub enum VecALUOp {
     Fmin,
     /// Floating-point multiply
     Fmul,
+    /// Add pairwise
+    Addp,
+    /// Unsigned multiply add long
+    Umlal,
 }
 
 /// A Vector miscellaneous operation with two registers.
@@ -300,6 +304,17 @@ pub enum VecMisc2 {
     Fneg,
     /// Floating-point square root
     Fsqrt,
+    /// Reverse elements in 64-bit doublewords
+    Rev64,
+    /// Shift left long (by element size)
+    Shll,
+}
+
+/// A Vector narrowing operation with two registers.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum VecMiscNarrowOp {
+    /// Extract Narrow
+    Xtn,
 }
 
 /// An operation across the lanes of vectors.
@@ -877,6 +892,14 @@ pub enum Inst {
         rn: Reg,
         idx1: u8,
         idx2: u8,
+        size: VectorSize,
+    },
+
+    /// Vector narrowing operation.
+    VecMiscNarrow {
+        op: VecMiscNarrowOp,
+        rd: Writable<Reg>,
+        rn: Reg,
         size: VectorSize,
     },
 
@@ -1605,10 +1628,14 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_mod(rd);
             collector.add_use(rn);
         }
+        &Inst::VecMiscNarrow { rd, rn, .. } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
+        }
         &Inst::VecRRR {
             alu_op, rd, rn, rm, ..
         } => {
-            if alu_op == VecALUOp::Bsl {
+            if alu_op == VecALUOp::Bsl || alu_op == VecALUOp::Umlal {
                 collector.add_mod(rd);
             } else {
                 collector.add_def(rd);
@@ -2270,6 +2297,14 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_mod(mapper, rd);
             map_use(mapper, rn);
         }
+        &mut Inst::VecMiscNarrow {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+        }
         &mut Inst::VecRRR {
             alu_op,
             ref mut rd,
@@ -2277,7 +2312,7 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut rm,
             ..
         } => {
-            if alu_op == VecALUOp::Bsl {
+            if alu_op == VecALUOp::Bsl || alu_op == VecALUOp::Umlal {
                 map_mod(mapper, rd);
             } else {
                 map_def(mapper, rd);
@@ -3144,6 +3179,14 @@ impl Inst {
                 let rn = show_vreg_element(rn, mb_rru, idx2, size);
                 format!("mov {}, {}", rd, rn)
             }
+            &Inst::VecMiscNarrow { op, rd, rn, size } => {
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
+                let rn = show_vreg_vector(rn, mb_rru, size.widen());
+                let op = match op {
+                    VecMiscNarrowOp::Xtn => "xtn",
+                };
+                format!("{} {}, {}", op, rd, rn)
+            }
             &Inst::VecRRR {
                 rd,
                 rn,
@@ -3186,25 +3229,51 @@ impl Inst {
                     VecALUOp::Fmax => ("fmax", size),
                     VecALUOp::Fmin => ("fmin", size),
                     VecALUOp::Fmul => ("fmul", size),
+                    VecALUOp::Addp => ("addp", size),
+                    VecALUOp::Umlal => ("umlal", size),
                 };
-                let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
+                let rd_size = if alu_op == VecALUOp::Umlal {
+                    size.widen()
+                } else {
+                    size
+                };
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, rd_size);
                 let rn = show_vreg_vector(rn, mb_rru, size);
                 let rm = show_vreg_vector(rm, mb_rru, size);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
             &Inst::VecMisc { op, rd, rn, size } => {
+                let is_shll = op == VecMisc2::Shll;
+                let suffix = match (is_shll, size) {
+                    (true, VectorSize::Size8x8) => ", #8",
+                    (true, VectorSize::Size16x4) => ", #16",
+                    (true, VectorSize::Size32x2) => ", #32",
+                    _ => "",
+                };
+
                 let (op, size) = match op {
-                    VecMisc2::Not => ("mvn", VectorSize::Size8x16),
+                    VecMisc2::Not => (
+                        "mvn",
+                        if size.is_128bits() {
+                            VectorSize::Size8x16
+                        } else {
+                            VectorSize::Size8x8
+                        },
+                    ),
                     VecMisc2::Neg => ("neg", size),
                     VecMisc2::Abs => ("abs", size),
                     VecMisc2::Fabs => ("fabs", size),
                     VecMisc2::Fneg => ("fneg", size),
                     VecMisc2::Fsqrt => ("fsqrt", size),
+                    VecMisc2::Rev64 => ("rev64", size),
+                    VecMisc2::Shll => ("shll", size),
                 };
 
-                let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
+                let rd_size = if is_shll { size.widen() } else { size };
+
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, rd_size);
                 let rn = show_vreg_vector(rn, mb_rru, size);
-                format!("{} {}, {}", op, rd, rn)
+                format!("{} {}, {}{}", op, rd, rn, suffix)
             }
             &Inst::VecLanes { op, rd, rn, size } => {
                 let op = match op {

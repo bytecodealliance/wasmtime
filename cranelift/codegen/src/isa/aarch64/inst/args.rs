@@ -647,6 +647,30 @@ impl VectorSize {
             VectorSize::Size64x2 => ScalarSize::Size64,
         }
     }
+
+    pub fn is_128bits(&self) -> bool {
+        match self {
+            VectorSize::Size8x8 => false,
+            VectorSize::Size8x16 => true,
+            VectorSize::Size16x4 => false,
+            VectorSize::Size16x8 => true,
+            VectorSize::Size32x2 => false,
+            VectorSize::Size32x4 => true,
+            VectorSize::Size64x2 => true,
+        }
+    }
+
+    pub fn widen(&self) -> VectorSize {
+        match self {
+            VectorSize::Size8x8 => VectorSize::Size16x8,
+            VectorSize::Size8x16 => VectorSize::Size16x8,
+            VectorSize::Size16x4 => VectorSize::Size32x4,
+            VectorSize::Size16x8 => VectorSize::Size32x4,
+            VectorSize::Size32x2 => VectorSize::Size64x2,
+            VectorSize::Size32x4 => VectorSize::Size64x2,
+            VectorSize::Size64x2 => unreachable!(),
+        }
+    }
 }
 
 //=============================================================================
