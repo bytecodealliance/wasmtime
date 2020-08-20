@@ -50,10 +50,10 @@ impl Compiler {
             strategy,
             compiler: match strategy {
                 CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
-                    Box::new(wasmtime_environ::cranelift::Cranelift::default())
+                    Box::new(wasmtime_cranelift::Cranelift::default())
                 }
                 #[cfg(feature = "lightbeam")]
-                CompilationStrategy::Lightbeam => Box::new(wasmtime_environ::lightbeam::Lightbeam),
+                CompilationStrategy::Lightbeam => Box::new(wasmtime_lightbeam::Lightbeam),
             },
             tunables,
         }

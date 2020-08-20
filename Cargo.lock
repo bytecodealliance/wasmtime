@@ -2415,6 +2415,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmtime-cranelift"
+version = "0.19.0"
+dependencies = [
+ "cranelift-codegen",
+ "cranelift-entity",
+ "cranelift-frontend",
+ "cranelift-wasm",
+ "wasmtime-environ",
+]
+
+[[package]]
 name = "wasmtime-debug"
 version = "0.19.0"
 dependencies = [
@@ -2436,11 +2447,9 @@ dependencies = [
  "cfg-if",
  "cranelift-codegen",
  "cranelift-entity",
- "cranelift-frontend",
  "cranelift-wasm",
  "gimli 0.21.0",
  "indexmap",
- "lightbeam",
  "log",
  "more-asserts",
  "serde",
@@ -2500,12 +2509,24 @@ dependencies = [
  "target-lexicon",
  "thiserror",
  "wasmparser 0.59.0",
+ "wasmtime-cranelift",
  "wasmtime-debug",
  "wasmtime-environ",
+ "wasmtime-lightbeam",
  "wasmtime-obj",
  "wasmtime-profiling",
  "wasmtime-runtime",
  "winapi",
+]
+
+[[package]]
+name = "wasmtime-lightbeam"
+version = "0.19.0"
+dependencies = [
+ "cranelift-codegen",
+ "lightbeam",
+ "wasmparser 0.59.0",
+ "wasmtime-environ",
 ]
 
 [[package]]

@@ -1,6 +1,3 @@
-use crate::module::{MemoryPlan, MemoryStyle, TableStyle};
-use crate::vmoffsets::VMOffsets;
-use crate::{Module, Tunables, INTERRUPTED, WASM_PAGE_SIZE};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
@@ -14,20 +11,18 @@ use cranelift_wasm::{
     self, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableIndex,
     TargetEnvironment, WasmError, WasmResult, WasmType,
 };
-#[cfg(feature = "lightbeam")]
-use cranelift_wasm::{DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex};
 use std::convert::TryFrom;
+use wasmtime_environ::{
+    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, TableStyle, Tunables, VMOffsets,
+    INTERRUPTED, WASM_PAGE_SIZE,
+};
 
 /// Compute an `ir::ExternalName` for a given wasm function index.
 pub fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
     ir::ExternalName::user(0, func_index.as_u32())
 }
 
-/// An index type for builtin functions.
-#[derive(Copy, Clone, Debug)]
-pub struct BuiltinFunctionIndex(u32);
-
-macro_rules! declare_builtin_functions {
+macro_rules! declare_function_signatures {
     (
         $(
             $( #[$attr:meta] )*
@@ -91,111 +86,10 @@ macro_rules! declare_builtin_functions {
                 }
             )*
         }
-
-        impl BuiltinFunctionIndex {
-            declare_builtin_functions!(
-                @indices;
-                0;
-                $( $( #[$attr] )* $name; )*
-            );
-        }
     };
-
-    // Base case: no more indices to declare, so define the total number of
-    // function indices.
-    (
-        @indices;
-        $len:expr;
-    ) => {
-        /// Returns the total number of builtin functions.
-        pub const fn builtin_functions_total_number() -> u32 {
-            $len
-        }
-    };
-
-    // Recursive case: declare the next index, and then keep declaring the rest of
-    // the indices.
-    (
-         @indices;
-         $index:expr;
-         $( #[$this_attr:meta] )*
-         $this_name:ident;
-         $(
-             $( #[$rest_attr:meta] )*
-             $rest_name:ident;
-         )*
-    ) => {
-        $( #[$this_attr] )*
-        pub const fn $this_name() -> Self {
-            Self($index)
-        }
-
-        declare_builtin_functions!(
-            @indices;
-            ($index + 1);
-            $( $( #[$rest_attr] )* $rest_name; )*
-        );
-    }
 }
 
-declare_builtin_functions! {
-    /// Returns an index for wasm's `memory.grow` builtin function.
-    memory32_grow(vmctx, i32, i32) -> (i32);
-    /// Returns an index for wasm's imported `memory.grow` builtin function.
-    imported_memory32_grow(vmctx, i32, i32) -> (i32);
-    /// Returns an index for wasm's `memory.size` builtin function.
-    memory32_size(vmctx, i32) -> (i32);
-    /// Returns an index for wasm's imported `memory.size` builtin function.
-    imported_memory32_size(vmctx, i32) -> (i32);
-    /// Returns an index for wasm's `table.copy` when both tables are locally
-    /// defined.
-    table_copy(vmctx, i32, i32, i32, i32, i32) -> ();
-    /// Returns an index for wasm's `table.init`.
-    table_init(vmctx, i32, i32, i32, i32, i32) -> ();
-    /// Returns an index for wasm's `elem.drop`.
-    elem_drop(vmctx, i32) -> ();
-    /// Returns an index for wasm's `memory.copy` for locally defined memories.
-    defined_memory_copy(vmctx, i32, i32, i32, i32) -> ();
-    /// Returns an index for wasm's `memory.copy` for imported memories.
-    imported_memory_copy(vmctx, i32, i32, i32, i32) -> ();
-    /// Returns an index for wasm's `memory.fill` for locally defined memories.
-    memory_fill(vmctx, i32, i32, i32, i32) -> ();
-    /// Returns an index for wasm's `memory.fill` for imported memories.
-    imported_memory_fill(vmctx, i32, i32, i32, i32) -> ();
-    /// Returns an index for wasm's `memory.init` instruction.
-    memory_init(vmctx, i32, i32, i32, i32, i32) -> ();
-    /// Returns an index for wasm's `data.drop` instruction.
-    data_drop(vmctx, i32) -> ();
-    /// Returns an index for Wasm's `table.grow` instruction for `funcref`s.
-    table_grow_funcref(vmctx, i32, i32, pointer) -> (i32);
-    /// Returns an index for Wasm's `table.grow` instruction for `externref`s.
-    table_grow_externref(vmctx, i32, i32, reference) -> (i32);
-    /// Returns an index for Wasm's `table.fill` instruction for `externref`s.
-    table_fill_externref(vmctx, i32, i32, reference, i32) -> ();
-    /// Returns an index for Wasm's `table.fill` instruction for `funcref`s.
-    table_fill_funcref(vmctx, i32, i32, pointer, i32) -> ();
-    /// Returns an index to drop a `VMExternRef`.
-    drop_externref(pointer) -> ();
-    /// Returns an index to do a GC and then insert a `VMExternRef` into the
-    /// `VMExternRefActivationsTable`.
-    activations_table_insert_with_gc(vmctx, reference) -> ();
-    /// Returns an index for Wasm's `global.get` instruction for `externref`s.
-    externref_global_get(vmctx, i32) -> (reference);
-    /// Returns an index for Wasm's `global.get` instruction for `externref`s.
-    externref_global_set(vmctx, i32, reference) -> ();
-}
-
-impl BuiltinFunctionIndex {
-    /// Create a new `BuiltinFunctionIndex` from its index
-    pub const fn from_u32(i: u32) -> Self {
-        Self(i)
-    }
-
-    /// Return the index as an u32 number.
-    pub const fn index(&self) -> u32 {
-        self.0
-    }
-}
+wasmtime_environ::foreach_builtin_function!(declare_function_signatures);
 
 /// The `FuncEnvironment` implementation for use by the `ModuleEnvironment`.
 pub struct FuncEnvironment<'module_environment> {
@@ -464,153 +358,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 }
 
-// TODO: This is necessary as if Lightbeam used `FuncEnvironment` directly it would cause
-//       a circular dependency graph. We should extract common types out into a separate
-//       crate that Lightbeam can use but until then we need this trait.
-#[cfg(feature = "lightbeam")]
-impl lightbeam::ModuleContext for FuncEnvironment<'_> {
-    type Signature = ir::Signature;
-    type GlobalType = ir::Type;
-
-    fn func_index(&self, defined_func_index: u32) -> u32 {
-        self.module
-            .func_index(DefinedFuncIndex::from_u32(defined_func_index))
-            .as_u32()
-    }
-
-    fn defined_func_index(&self, func_index: u32) -> Option<u32> {
-        self.module
-            .defined_func_index(FuncIndex::from_u32(func_index))
-            .map(DefinedFuncIndex::as_u32)
-    }
-
-    fn defined_global_index(&self, global_index: u32) -> Option<u32> {
-        self.module
-            .defined_global_index(GlobalIndex::from_u32(global_index))
-            .map(DefinedGlobalIndex::as_u32)
-    }
-
-    fn global_type(&self, global_index: u32) -> &Self::GlobalType {
-        &self.module.globals[GlobalIndex::from_u32(global_index)].ty
-    }
-
-    fn func_type_index(&self, func_idx: u32) -> u32 {
-        self.module.functions[FuncIndex::from_u32(func_idx)].as_u32()
-    }
-
-    fn signature(&self, index: u32) -> &Self::Signature {
-        &self.module.signatures[SignatureIndex::from_u32(index)].1
-    }
-
-    fn defined_table_index(&self, table_index: u32) -> Option<u32> {
-        self.module
-            .defined_table_index(TableIndex::from_u32(table_index))
-            .map(DefinedTableIndex::as_u32)
-    }
-
-    fn defined_memory_index(&self, memory_index: u32) -> Option<u32> {
-        self.module
-            .defined_memory_index(MemoryIndex::from_u32(memory_index))
-            .map(DefinedMemoryIndex::as_u32)
-    }
-
-    fn vmctx_builtin_function(&self, func_index: u32) -> u32 {
-        self.offsets
-            .vmctx_builtin_function(BuiltinFunctionIndex::from_u32(func_index))
-    }
-
-    fn vmctx_vmfunction_import_body(&self, func_index: u32) -> u32 {
-        self.offsets
-            .vmctx_vmfunction_import_body(FuncIndex::from_u32(func_index))
-    }
-    fn vmctx_vmfunction_import_vmctx(&self, func_index: u32) -> u32 {
-        self.offsets
-            .vmctx_vmfunction_import_vmctx(FuncIndex::from_u32(func_index))
-    }
-
-    fn vmctx_vmglobal_import_from(&self, global_index: u32) -> u32 {
-        self.offsets
-            .vmctx_vmglobal_import_from(GlobalIndex::from_u32(global_index))
-    }
-    fn vmctx_vmglobal_definition(&self, defined_global_index: u32) -> u32 {
-        self.offsets
-            .vmctx_vmglobal_definition(DefinedGlobalIndex::from_u32(defined_global_index))
-    }
-    fn vmctx_vmmemory_import_from(&self, memory_index: u32) -> u32 {
-        self.offsets
-            .vmctx_vmmemory_import_from(MemoryIndex::from_u32(memory_index))
-    }
-    fn vmctx_vmmemory_definition(&self, defined_memory_index: u32) -> u32 {
-        self.offsets
-            .vmctx_vmmemory_definition(DefinedMemoryIndex::from_u32(defined_memory_index))
-    }
-    fn vmctx_vmmemory_definition_base(&self, defined_memory_index: u32) -> u32 {
-        self.offsets
-            .vmctx_vmmemory_definition_base(DefinedMemoryIndex::from_u32(defined_memory_index))
-    }
-    fn vmctx_vmmemory_definition_current_length(&self, defined_memory_index: u32) -> u32 {
-        self.offsets
-            .vmctx_vmmemory_definition_current_length(DefinedMemoryIndex::from_u32(
-                defined_memory_index,
-            ))
-    }
-    fn vmmemory_definition_base(&self) -> u8 {
-        self.offsets.vmmemory_definition_base()
-    }
-    fn vmmemory_definition_current_length(&self) -> u8 {
-        self.offsets.vmmemory_definition_current_length()
-    }
-    fn vmctx_vmtable_import_from(&self, table_index: u32) -> u32 {
-        self.offsets
-            .vmctx_vmtable_import_from(TableIndex::from_u32(table_index))
-    }
-    fn vmctx_vmtable_definition(&self, defined_table_index: u32) -> u32 {
-        self.offsets
-            .vmctx_vmtable_definition(DefinedTableIndex::from_u32(defined_table_index))
-    }
-    fn vmctx_vmtable_definition_base(&self, defined_table_index: u32) -> u32 {
-        self.offsets
-            .vmctx_vmtable_definition_base(DefinedTableIndex::from_u32(defined_table_index))
-    }
-    fn vmctx_vmtable_definition_current_elements(&self, defined_table_index: u32) -> u32 {
-        self.offsets
-            .vmctx_vmtable_definition_current_elements(DefinedTableIndex::from_u32(
-                defined_table_index,
-            ))
-    }
-    fn vmtable_definition_base(&self) -> u8 {
-        self.offsets.vmtable_definition_base()
-    }
-    fn vmtable_definition_current_elements(&self) -> u8 {
-        self.offsets.vmtable_definition_current_elements()
-    }
-    fn vmcaller_checked_anyfunc_type_index(&self) -> u8 {
-        self.offsets.vmcaller_checked_anyfunc_type_index()
-    }
-    fn vmcaller_checked_anyfunc_func_ptr(&self) -> u8 {
-        self.offsets.vmcaller_checked_anyfunc_func_ptr()
-    }
-    fn vmcaller_checked_anyfunc_vmctx(&self) -> u8 {
-        self.offsets.vmcaller_checked_anyfunc_vmctx()
-    }
-    fn size_of_vmcaller_checked_anyfunc(&self) -> u8 {
-        self.offsets.size_of_vmcaller_checked_anyfunc()
-    }
-    fn vmctx_vmshared_signature_id(&self, signature_idx: u32) -> u32 {
-        self.offsets
-            .vmctx_vmshared_signature_id(SignatureIndex::from_u32(signature_idx))
-    }
-
-    // TODO: type of a global
-}
-
 impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environment> {
     fn target_config(&self) -> TargetFrontendConfig {
         self.target_config
     }
 
     fn reference_type(&self, ty: WasmType) -> ir::Type {
-        crate::reference_type(ty, self.pointer_type())
+        wasmtime_environ::reference_type(ty, self.pointer_type())
     }
 }
 

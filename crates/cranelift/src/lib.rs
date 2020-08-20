@@ -1,4 +1,7 @@
 //! Support for compiling with Cranelift.
+//!
+//! This crate provides an implementation of [`Compiler`] in the form of
+//! [`Cranelift`].
 
 // # How does Wasmtime prevent stack overflow?
 //
@@ -86,13 +89,6 @@
 // assume no valid stack pointer will ever be `usize::max_value() - 32k`.
 
 use crate::func_environ::{get_func_name, FuncEnvironment};
-use crate::Compiler;
-use crate::{
-    CompileError, CompiledFunction, Relocation, RelocationTarget, StackMapInformation,
-    TrapInformation,
-};
-use crate::{FunctionAddressMap, InstructionAddressMap};
-use crate::{FunctionBodyData, ModuleTranslation};
 use cranelift_codegen::ir::{self, ExternalName};
 use cranelift_codegen::machinst::buffer::MachSrcLoc;
 use cranelift_codegen::print_errors::pretty_error;
@@ -100,14 +96,21 @@ use cranelift_codegen::{binemit, isa, Context};
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator};
 use std::convert::TryFrom;
 use std::sync::Mutex;
+use wasmtime_environ::{
+    CompileError, CompiledFunction, Compiler, FunctionAddressMap, FunctionBodyData,
+    InstructionAddressMap, ModuleTranslation, Relocation, RelocationTarget, StackMapInformation,
+    TrapInformation,
+};
+
+mod func_environ;
 
 /// Implementation of a relocation sink that just saves all the information for later
-pub struct RelocSink {
+struct RelocSink {
     /// Current function index.
     func_index: FuncIndex,
 
     /// Relocations recorded for the function.
-    pub func_relocs: Vec<Relocation>,
+    func_relocs: Vec<Relocation>,
 }
 
 impl binemit::RelocSink for RelocSink {
@@ -166,7 +169,7 @@ impl binemit::RelocSink for RelocSink {
 
 impl RelocSink {
     /// Return a new `RelocSink` instance.
-    pub fn new(func_index: FuncIndex) -> Self {
+    fn new(func_index: FuncIndex) -> Self {
         Self {
             func_index,
             func_relocs: Vec::new(),
@@ -176,14 +179,14 @@ impl RelocSink {
 
 /// Implementation of a trap sink that simply stores all trap info in-memory
 #[derive(Default)]
-pub struct TrapSink {
+struct TrapSink {
     /// The in-memory vector of trap info
-    pub traps: Vec<TrapInformation>,
+    traps: Vec<TrapInformation>,
 }
 
 impl TrapSink {
     /// Create a new `TrapSink`
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self::default()
     }
 }
