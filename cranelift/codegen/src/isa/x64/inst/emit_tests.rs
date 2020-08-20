@@ -4,10 +4,13 @@
 //!
 //! to see stdout: cargo test -- --nocapture
 //!
-//! for this specific case:
+//! for this specific case, as of 24 Aug 2020:
 //!
-//! (cd cranelift/codegen && \
-//! RUST_BACKTRACE=1 cargo test isa::x64::inst::test_x64_insn_encoding_and_printing -- --nocapture)
+//! cd to the top of your wasmtime tree, then:
+//! RUST_BACKTRACE=1 cargo test --features test-programs/test_programs \
+//!   --features experimental_x64 --all --exclude peepmatic --exclude lightbeam \
+//!   --exclude wasmtime-lightbeam --exclude peepmatic-automata --exclude peepmatic-fuzzing \
+//!  --exclude peepmatic-macro -- isa::x64::inst::emit_tests::test_x64_emit
 
 use super::*;
 use crate::isa::test_utils;
@@ -3270,6 +3273,174 @@ fn test_x64_emit() {
         Inst::xmm_rm_r_imm(SseOpcode::Cmpps, RegMem::reg(xmm15), w_xmm7, 0),
         "410FC2FF00",
         "cmpps   $0, %xmm15, %xmm7",
+    ));
+
+    // ========================================================
+    // Pertaining to atomics.
+    let am1: SyntheticAmode = Amode::imm_reg_reg_shift(321, r10, rdx, 2).into();
+    // `am2` doesn't contribute any 1 bits to the rex prefix, so we must use it when testing
+    // for retention of the apparently-redundant rex prefix in the 8-bit case.
+    let am2: SyntheticAmode = Amode::imm_reg_reg_shift(-12345i32 as u32, rcx, rsi, 3).into();
+
+    // A general 8-bit case.
+    insns.push((
+        Inst::LockCmpxchg {
+            ty: types::I8,
+            src: rbx,
+            dst: am1,
+            srcloc: None,
+        },
+        "F0410FB09C9241010000",
+        "lock cmpxchgb %bl, 321(%r10,%rdx,4)",
+    ));
+    // Check redundant rex retention in 8-bit cases.
+    insns.push((
+        Inst::LockCmpxchg {
+            ty: types::I8,
+            src: rdx,
+            dst: am2.clone(),
+            srcloc: None,
+        },
+        "F00FB094F1C7CFFFFF",
+        "lock cmpxchgb %dl, -12345(%rcx,%rsi,8)",
+    ));
+    insns.push((
+        Inst::LockCmpxchg {
+            ty: types::I8,
+            src: rsi,
+            dst: am2.clone(),
+            srcloc: None,
+        },
+        "F0400FB0B4F1C7CFFFFF",
+        "lock cmpxchgb %sil, -12345(%rcx,%rsi,8)",
+    ));
+    insns.push((
+        Inst::LockCmpxchg {
+            ty: types::I8,
+            src: r10,
+            dst: am2.clone(),
+            srcloc: None,
+        },
+        "F0440FB094F1C7CFFFFF",
+        "lock cmpxchgb %r10b, -12345(%rcx,%rsi,8)",
+    ));
+    insns.push((
+        Inst::LockCmpxchg {
+            ty: types::I8,
+            src: r15,
+            dst: am2.clone(),
+            srcloc: None,
+        },
+        "F0440FB0BCF1C7CFFFFF",
+        "lock cmpxchgb %r15b, -12345(%rcx,%rsi,8)",
+    ));
+    // 16 bit cases
+    insns.push((
+        Inst::LockCmpxchg {
+            ty: types::I16,
+            src: rsi,
+            dst: am2.clone(),
+            srcloc: None,
+        },
+        "66F00FB1B4F1C7CFFFFF",
+        "lock cmpxchgw %si, -12345(%rcx,%rsi,8)",
+    ));
+    insns.push((
+        Inst::LockCmpxchg {
+            ty: types::I16,
+            src: r10,
+            dst: am2.clone(),
+            srcloc: None,
+        },
+        "66F0440FB194F1C7CFFFFF",
+        "lock cmpxchgw %r10w, -12345(%rcx,%rsi,8)",
+    ));
+    // 32 bit cases
+    insns.push((
+        Inst::LockCmpxchg {
+            ty: types::I32,
+            src: rsi,
+            dst: am2.clone(),
+            srcloc: None,
+        },
+        "F00FB1B4F1C7CFFFFF",
+        "lock cmpxchgl %esi, -12345(%rcx,%rsi,8)",
+    ));
+    insns.push((
+        Inst::LockCmpxchg {
+            ty: types::I32,
+            src: r10,
+            dst: am2.clone(),
+            srcloc: None,
+        },
+        "F0440FB194F1C7CFFFFF",
+        "lock cmpxchgl %r10d, -12345(%rcx,%rsi,8)",
+    ));
+    // 64 bit cases
+    insns.push((
+        Inst::LockCmpxchg {
+            ty: types::I64,
+            src: rsi,
+            dst: am2.clone(),
+            srcloc: None,
+        },
+        "F0480FB1B4F1C7CFFFFF",
+        "lock cmpxchgq %rsi, -12345(%rcx,%rsi,8)",
+    ));
+    insns.push((
+        Inst::LockCmpxchg {
+            ty: types::I64,
+            src: r10,
+            dst: am2.clone(),
+            srcloc: None,
+        },
+        "F04C0FB194F1C7CFFFFF",
+        "lock cmpxchgq %r10, -12345(%rcx,%rsi,8)",
+    ));
+
+    // AtomicRmwSeq
+    insns.push((
+        Inst::AtomicRmwSeq { ty: types::I8, op: inst_common::AtomicRmwOp::Or, srcloc: None },
+        "490FB6014989C34D09D3F0450FB0190F85EFFFFFFF",
+        "atomically { 8_bits_at_[%r9]) Or= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
+    ));
+    insns.push((
+        Inst::AtomicRmwSeq { ty: types::I16, op: inst_common::AtomicRmwOp::And, srcloc: None },
+        "490FB7014989C34D21D366F0450FB1190F85EEFFFFFF",
+        "atomically { 16_bits_at_[%r9]) And= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
+    ));
+    insns.push((
+        Inst::AtomicRmwSeq { ty: types::I32, op: inst_common::AtomicRmwOp::Xchg, srcloc: None },
+        "418B014989C34D89D3F0450FB1190F85EFFFFFFF",
+        "atomically { 32_bits_at_[%r9]) Xchg= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
+    ));
+    insns.push((
+        Inst::AtomicRmwSeq { ty: types::I64, op: inst_common::AtomicRmwOp::Add, srcloc: None },
+        "498B014989C34D01D3F04D0FB1190F85EFFFFFFF",
+        "atomically { 64_bits_at_[%r9]) Add= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
+    ));
+
+    // Fence
+    insns.push((
+        Inst::Fence {
+            kind: FenceKind::MFence,
+        },
+        "0FAEF0",
+        "mfence",
+    ));
+    insns.push((
+        Inst::Fence {
+            kind: FenceKind::LFence,
+        },
+        "0FAEE8",
+        "lfence",
+    ));
+    insns.push((
+        Inst::Fence {
+            kind: FenceKind::SFence,
+        },
+        "0FAEF8",
+        "sfence",
     ));
 
     // ========================================================

@@ -1090,18 +1090,18 @@ impl MachInstEmit for Inst {
                 }
                 sink.put4(enc_ldxr(ty, x27wr, x25)); // ldxr x27, [x25]
 
-                if op == AtomicRMWOp::Xchg {
+                if op == inst_common::AtomicRmwOp::Xchg {
                     // mov x28, x26
                     sink.put4(enc_arith_rrr(0b101_01010_00_0, 0b000000, x28wr, xzr, x26))
                 } else {
                     // add/sub/and/orr/eor x28, x27, x26
                     let bits_31_21 = match op {
-                        AtomicRMWOp::Add => 0b100_01011_00_0,
-                        AtomicRMWOp::Sub => 0b110_01011_00_0,
-                        AtomicRMWOp::And => 0b100_01010_00_0,
-                        AtomicRMWOp::Or => 0b101_01010_00_0,
-                        AtomicRMWOp::Xor => 0b110_01010_00_0,
-                        AtomicRMWOp::Xchg => unreachable!(),
+                        inst_common::AtomicRmwOp::Add => 0b100_01011_00_0,
+                        inst_common::AtomicRmwOp::Sub => 0b110_01011_00_0,
+                        inst_common::AtomicRmwOp::And => 0b100_01010_00_0,
+                        inst_common::AtomicRmwOp::Or => 0b101_01010_00_0,
+                        inst_common::AtomicRmwOp::Xor => 0b110_01010_00_0,
+                        inst_common::AtomicRmwOp::Xchg => unreachable!(),
                     };
                     sink.put4(enc_arith_rrr(bits_31_21, 0b000000, x28wr, x27, x26));
                 }

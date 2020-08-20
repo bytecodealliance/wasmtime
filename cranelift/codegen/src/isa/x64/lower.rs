@@ -2,6 +2,7 @@
 
 #![allow(non_snake_case)]
 
+use crate::ir;
 use crate::ir::{
     condcodes::FloatCC, condcodes::IntCC, types, AbiParam, ArgumentPurpose, ExternalName,
     Inst as IRInst, InstructionData, LibCall, Opcode, Signature, TrapCode, Type,
@@ -45,6 +46,14 @@ fn is_bool_ty(ty: Type) -> bool {
     }
 }
 
+/// This is target-word-size dependent.  And it excludes booleans and reftypes.
+fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
+    match ty {
+        types::I8 | types::I16 | types::I32 | types::I64 => true,
+        _ => false,
+    }
+}
+
 fn iri_to_u64_imm(ctx: Ctx, inst: IRInst) -> Option<u64> {
     ctx.get_constant(inst)
 }
@@ -78,6 +87,13 @@ fn inst_fp_condcode(data: &InstructionData) -> Option<FloatCC> {
         | &InstructionData::FloatCompare { cond, .. }
         | &InstructionData::FloatCond { cond, .. }
         | &InstructionData::FloatCondTrap { cond, .. } => Some(cond),
+        _ => None,
+    }
+}
+
+fn inst_atomic_rmw_op(data: &InstructionData) -> Option<ir::AtomicRmwOp> {
+    match data {
+        &InstructionData::AtomicRmw { op, .. } => Some(op),
         _ => None,
     }
 }
@@ -1729,6 +1745,148 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     Inst::xmm_mov_r_m(SseOpcode::Movups, src, addr, srcloc)
                 }
                 _ => Inst::mov_r_m(elem_ty.bytes() as u8, src, addr, srcloc),
+            });
+        }
+
+        Opcode::AtomicRmw => {
+            // This is a simple, general-case atomic update, based on a loop involving
+            // `cmpxchg`.  Note that we could do much better than this in the case where the old
+            // value at the location (that is to say, the SSA `Value` computed by this CLIF
+            // instruction) is not required.  In that case, we could instead implement this
+            // using a single `lock`-prefixed x64 read-modify-write instruction.  Also, even in
+            // the case where the old value is required, for the `add` and `sub` cases, we can
+            // use the single instruction `lock xadd`.  However, those improvements have been
+            // left for another day.
+            // TODO: filed as https://github.com/bytecodealliance/wasmtime/issues/2153
+            let dst = output_to_reg(ctx, outputs[0]);
+            let mut addr = input_to_reg(ctx, inputs[0]);
+            let mut arg2 = input_to_reg(ctx, inputs[1]);
+            let ty_access = ty.unwrap();
+            assert!(is_valid_atomic_transaction_ty(ty_access));
+            let memflags = ctx.memflags(insn).expect("memory flags");
+            let srcloc = if !memflags.notrap() {
+                Some(ctx.srcloc(insn))
+            } else {
+                None
+            };
+            // Make sure that both args are in virtual regs, since in effect we have to do a
+            // parallel copy to get them safely to the AtomicRmwSeq input regs, and that's not
+            // guaranteed safe if either is in a real reg.
+            addr = ctx.ensure_in_vreg(addr, types::I64);
+            arg2 = ctx.ensure_in_vreg(arg2, types::I64);
+            // Move the args to the preordained AtomicRMW input regs.  Note that `AtomicRmwSeq`
+            // operates at whatever width is specified by `ty`, so there's no need to
+            // zero-extend `arg2` in the case of `ty` being I8/I16/I32.
+            ctx.emit(Inst::gen_move(
+                Writable::from_reg(regs::r9()),
+                addr,
+                types::I64,
+            ));
+            ctx.emit(Inst::gen_move(
+                Writable::from_reg(regs::r10()),
+                arg2,
+                types::I64,
+            ));
+            // Now the AtomicRmwSeq (pseudo-) instruction itself
+            let op = inst_common::AtomicRmwOp::from(inst_atomic_rmw_op(ctx.data(insn)).unwrap());
+            ctx.emit(Inst::AtomicRmwSeq {
+                ty: ty_access,
+                op,
+                srcloc,
+            });
+            // And finally, copy the preordained AtomicRmwSeq output reg to its destination.
+            ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
+        }
+
+        Opcode::AtomicCas => {
+            // This is very similar to, but not identical to, the `AtomicRmw` case.  As with
+            // `AtomicRmw`, there's no need to zero-extend narrow values here.
+            let dst = output_to_reg(ctx, outputs[0]);
+            let addr = input_to_reg(ctx, inputs[0]);
+            let expected = input_to_reg(ctx, inputs[1]);
+            let replacement = input_to_reg(ctx, inputs[2]);
+            let ty_access = ty.unwrap();
+            assert!(is_valid_atomic_transaction_ty(ty_access));
+            let memflags = ctx.memflags(insn).expect("memory flags");
+            let srcloc = if !memflags.notrap() {
+                Some(ctx.srcloc(insn))
+            } else {
+                None
+            };
+            // Move the expected value into %rax.  Because there's only one fixed register on
+            // the input side, we don't have to use `ensure_in_vreg`, as is necessary in the
+            // `AtomicRmw` case.
+            ctx.emit(Inst::gen_move(
+                Writable::from_reg(regs::rax()),
+                expected,
+                types::I64,
+            ));
+            ctx.emit(Inst::LockCmpxchg {
+                ty: ty_access,
+                src: replacement,
+                dst: Amode::imm_reg(0, addr).into(),
+                srcloc,
+            });
+            // And finally, copy the old value at the location to its destination reg.
+            ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
+        }
+
+        Opcode::AtomicLoad => {
+            // This is a normal load.  The x86-TSO memory model provides sufficient sequencing
+            // to satisfy the CLIF synchronisation requirements for `AtomicLoad` without the
+            // need for any fence instructions.
+            let data = output_to_reg(ctx, outputs[0]);
+            let addr = input_to_reg(ctx, inputs[0]);
+            let ty_access = ty.unwrap();
+            assert!(is_valid_atomic_transaction_ty(ty_access));
+            let memflags = ctx.memflags(insn).expect("memory flags");
+            let srcloc = if !memflags.notrap() {
+                Some(ctx.srcloc(insn))
+            } else {
+                None
+            };
+            // For the amode, we could do better, but for now just use `0(addr)`.
+            let rm = RegMem::mem(Amode::imm_reg(0, addr));
+            if ty_access == types::I64 {
+                ctx.emit(Inst::mov64_rm_r(rm, data, srcloc));
+            } else {
+                let ext_mode = match ty_access {
+                    types::I8 => ExtMode::BQ,
+                    types::I16 => ExtMode::WQ,
+                    types::I32 => ExtMode::LQ,
+                    _ => panic!("lowering AtomicLoad: invalid type"),
+                };
+                ctx.emit(Inst::movzx_rm_r(ext_mode, rm, data, srcloc));
+            }
+        }
+
+        Opcode::AtomicStore => {
+            // This is a normal store, followed by an `mfence` instruction.
+            let data = input_to_reg(ctx, inputs[0]);
+            let addr = input_to_reg(ctx, inputs[1]);
+            let ty_access = ctx.input_ty(insn, 0);
+            assert!(is_valid_atomic_transaction_ty(ty_access));
+            let memflags = ctx.memflags(insn).expect("memory flags");
+            let srcloc = if !memflags.notrap() {
+                Some(ctx.srcloc(insn))
+            } else {
+                None
+            };
+            // For the amode, we could do better, but for now just use `0(addr)`.
+            ctx.emit(Inst::mov_r_m(
+                ty_access.bytes() as u8,
+                data,
+                Amode::imm_reg(0, addr),
+                srcloc,
+            ));
+            ctx.emit(Inst::Fence {
+                kind: FenceKind::MFence,
+            });
+        }
+
+        Opcode::Fence => {
+            ctx.emit(Inst::Fence {
+                kind: FenceKind::MFence,
             });
         }
 
