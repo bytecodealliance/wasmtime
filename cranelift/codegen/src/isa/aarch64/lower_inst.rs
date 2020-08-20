@@ -211,13 +211,118 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     ra: zero_reg(),
                 });
             } else {
-                ctx.emit(Inst::VecRRR {
-                    alu_op: VecALUOp::Mul,
-                    rd,
-                    rn,
-                    rm,
-                    size: VectorSize::from_ty(ty),
-                });
+                if ty == I64X2 {
+                    let tmp1 = ctx.alloc_tmp(RegClass::V128, I64X2);
+                    let tmp2 = ctx.alloc_tmp(RegClass::V128, I64X2);
+
+                    // This I64X2 multiplication is performed with several 32-bit
+                    // operations.
+
+                    // 64-bit numbers x and y, can be represented as:
+                    //   x = a + 2^32(b)
+                    //   y = c + 2^32(d)
+
+                    // A 64-bit multiplication is:
+                    //   x * y = ac + 2^32(ad + bc) + 2^64(bd)
+                    // note: `2^64(bd)` can be ignored, the value is too large to fit in
+                    // 64 bits.
+
+                    // This sequence implements a I64X2 multiply, where the registers
+                    // `rn` and `rm` are split up into 32-bit components:
+                    //   rn = |d|c|b|a|
+                    //   rm = |h|g|f|e|
+                    //
+                    //   rn * rm = |cg + 2^32(ch + dg)|ae + 2^32(af + be)|
+                    //
+                    //  The sequence is:
+                    //  rev64 rd.4s, rm.4s
+                    //  mul rd.4s, rd.4s, rn.4s
+                    //  xtn tmp1.2s, rn.2d
+                    //  addp rd.4s, rd.4s, rd.4s
+                    //  xtn tmp2.2s, rm.2d
+                    //  shll rd.2d, rd.2s, #32
+                    //  umlal rd.2d, tmp2.2s, tmp1.2s
+
+                    // Reverse the 32-bit elements in the 64-bit words.
+                    //   rd = |g|h|e|f|
+                    ctx.emit(Inst::VecMisc {
+                        op: VecMisc2::Rev64,
+                        rd,
+                        rn: rm,
+                        size: VectorSize::Size32x4,
+                    });
+
+                    // Calculate the high half components.
+                    //   rd = |dg|ch|be|af|
+                    //
+                    // Note that this 32-bit multiply of the high half
+                    // discards the bits that would overflow, same as
+                    // if 64-bit operations were used. Also the Shll
+                    // below would shift out the overflow bits anyway.
+                    ctx.emit(Inst::VecRRR {
+                        alu_op: VecALUOp::Mul,
+                        rd,
+                        rn: rd.to_reg(),
+                        rm: rn,
+                        size: VectorSize::Size32x4,
+                    });
+
+                    // Extract the low half components of rn.
+                    //   tmp1 = |c|a|
+                    ctx.emit(Inst::VecMiscNarrow {
+                        op: VecMiscNarrowOp::Xtn,
+                        rd: tmp1,
+                        rn,
+                        size: VectorSize::Size32x2,
+                    });
+
+                    // Sum the respective high half components.
+                    //   rd = |dg+ch|be+af||dg+ch|be+af|
+                    ctx.emit(Inst::VecRRR {
+                        alu_op: VecALUOp::Addp,
+                        rd: rd,
+                        rn: rd.to_reg(),
+                        rm: rd.to_reg(),
+                        size: VectorSize::Size32x4,
+                    });
+
+                    // Extract the low half components of rm.
+                    //   tmp2 = |g|e|
+                    ctx.emit(Inst::VecMiscNarrow {
+                        op: VecMiscNarrowOp::Xtn,
+                        rd: tmp2,
+                        rn: rm,
+                        size: VectorSize::Size32x2,
+                    });
+
+                    // Shift the high half components, into the high half.
+                    //   rd = |dg+ch << 32|be+af << 32|
+                    ctx.emit(Inst::VecMisc {
+                        op: VecMisc2::Shll,
+                        rd,
+                        rn: rd.to_reg(),
+                        size: VectorSize::Size32x2,
+                    });
+
+                    // Multiply the low components together, and accumulate with the high
+                    // half.
+                    //   rd = |rd[1] + cg|rd[0] + ae|
+                    ctx.emit(Inst::VecRRR {
+                        alu_op: VecALUOp::Umlal,
+                        rd,
+                        rn: tmp2.to_reg(),
+                        rm: tmp1.to_reg(),
+                        size: VectorSize::Size32x2,
+                    });
+                } else {
+                    ctx.emit(Inst::VecRRR {
+                        alu_op: VecALUOp::Mul,
+                        rd,
+                        rn,
+                        rm,
+                        size: VectorSize::from_ty(ty),
+                    });
+                }
             }
         }
 
