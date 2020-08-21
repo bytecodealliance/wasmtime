@@ -508,18 +508,33 @@ where
                 Operation::Drop { .. }
                 | Operation::Pick { .. }
                 | Operation::Swap { .. }
+                //| Operation::Over { .. }
                 | Operation::Rot { .. }
+                //| Operation::Dup { .. }
                 | Operation::Nop { .. }
                 | Operation::UnsignedConstant { .. }
                 | Operation::SignedConstant { .. }
                 | Operation::PlusConstant { .. }
+                | Operation::Abs { .. }
                 | Operation::And { .. }
                 | Operation::Or { .. }
+                | Operation::Xor { .. }
                 | Operation::Shr { .. }
                 | Operation::Shra { .. }
                 | Operation::Shl { .. }
                 | Operation::Plus { .. }
                 | Operation::Minus { .. }
+                | Operation::Div { .. }
+                | Operation::Mod { .. }
+                | Operation::Mul { .. }
+                | Operation::Neg { .. }
+                | Operation::Not { .. }
+                | Operation::Lt { .. }
+                | Operation::Gt { .. }
+                | Operation::Le { .. }
+                | Operation::Ge { .. }
+                | Operation::Eq { .. }
+                | Operation::Ne { .. }
                 | Operation::Piece { .. } => (),
                 Operation::Bra { target } | Operation::Skip { target } => {
                     flush_code_chunk!();
