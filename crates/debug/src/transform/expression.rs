@@ -458,6 +458,8 @@ where
                 Operation::Deref { .. } => {
                     flush_code_chunk!();
                     parts.push(CompiledExpressionPart::Deref);
+                    // Don't re-enter the loop here (i.e. continue), because the
+                    // DW_OP_deref still needs to be kept.
                 }
                 _ => {
                     return Ok(None);
