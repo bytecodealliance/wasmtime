@@ -514,6 +514,7 @@ where
                 | Operation::Nop { .. }
                 | Operation::UnsignedConstant { .. }
                 | Operation::SignedConstant { .. }
+		| Operation::ConstantIndex { .. }
                 | Operation::PlusConstant { .. }
                 | Operation::Abs { .. }
                 | Operation::And { .. }
@@ -573,7 +574,6 @@ where
                 }
 		Operation::Address { .. }
 		| Operation::AddressIndex { .. }
-		| Operation::ConstantIndex { .. }
 		| Operation::Call { .. }
 		| Operation::Register { .. }
 		| Operation::RegisterOffset { .. }
