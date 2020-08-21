@@ -360,6 +360,13 @@ pub enum Inst {
     JmpKnown { dst: BranchTarget },
 
     /// One-way conditional branch: jcond cond target.
+    ///
+    /// This instruction is useful when we have conditional jumps depending on more than two
+    /// conditions, see for instance the lowering of Brz/brnz with Fcmp inputs.
+    ///
+    /// A note of caution: in contexts where the branch target is another block, this has to be the
+    /// same successor as the one specified in the terminator branch of the current block.
+    /// Otherwise, this might confuse register allocation by creating new invisible edges.
     JmpIf { cc: CC, taken: BranchTarget },
 
     /// Two-way conditional branch: jcond cond target target.

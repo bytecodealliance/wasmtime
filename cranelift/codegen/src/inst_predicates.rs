@@ -43,7 +43,7 @@ pub fn has_side_effect(func: &Function, inst: Inst) -> bool {
 
 /// Does the given instruction have any side-effect as per [has_side_effect], or else is a load,
 /// but not the get_pinned_reg opcode?
-pub fn has_side_effect_or_load_not_get_pinned_reg(func: &Function, inst: Inst) -> bool {
+pub fn has_lowering_side_effect(func: &Function, inst: Inst) -> bool {
     let op = func.dfg[inst].opcode();
     op != Opcode::GetPinnedReg && (has_side_effect(func, inst) || op.can_load())
 }
