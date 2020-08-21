@@ -340,25 +340,21 @@ impl CompiledExpression {
                         for part in &self.parts {
                             match part {
                                 CompiledExpressionPart::Code(c) => {
-				    for (old, new) in old_to_new.clone() {
-					if new == code_buf.len() {
-					    for i in 1..c.len() {
-						old_to_new.insert(old + i, new + i);
-						// println!("CompiledExpressionPart::Code {}: \"{}\"  with {:?}   updated {:?}", old, new, c, old_to_new);
-					    }
-					    break;
-					}
-				    }
+                                    for (old, new) in old_to_new.clone() {
+                                        if new == code_buf.len() {
+                                            for i in 1..c.len() {
+                                                old_to_new.insert(old + i, new + i);
+                                            }
+                                            break;
+                                        }
+                                    }
                                     code_buf.extend_from_slice(c.as_slice())
                                 }
                                 CompiledExpressionPart::LandingPad { original_pos } => {
-				    let new_pos = code_buf.len();
-				    old_to_new.insert(*original_pos, new_pos);
-				    // print!("Landing: on {}  translations {:?}?\n buf: {:?}\n", original_pos, old_to_new, code_buf);
-				}
-                                CompiledExpressionPart::Jump {
-                                    conditionally, ..
-                                } => {
+                                    let new_pos = code_buf.len();
+                                    old_to_new.insert(*original_pos, new_pos);
+                                }
+                                CompiledExpressionPart::Jump { conditionally, .. } => {
                                     code_buf.push(
                                         match conditionally {
                                             true => gimli::constants::DW_OP_bra,
@@ -386,17 +382,15 @@ impl CompiledExpression {
                         if self.need_deref {
                             deref!();
                         }
-			print!("\n\n\nFinishing: translations {:?}?\n Buf: {:?}\n\n", old_to_new, code_buf);
-			for (from, to) in self.jump_arcs.clone() {
-			    // relocate jump targets
-			    let new_from = old_to_new[&from];
-			    let new_to = old_to_new[&to];
-			    let new_diff = new_to as i32 - new_from as i32;
+                        for (from, to) in self.jump_arcs.clone() {
+                            // relocate jump targets
+                            let new_from = old_to_new[&from];
+                            let new_to = old_to_new[&to];
+                            let new_diff = new_to as i32 - new_from as i32;
                             code_buf[new_from - 2] = (new_diff & 0xFF) as u8;
                             code_buf[new_from - 1] = (new_diff >> (8 as u16)) as u8;
                             // FIXME: use encoding?
-			    print!("\n\nReloc: new_from {}   new_to {}   new_diff {} \nBuf: {:?}\n\n\n\n\n\n", new_from, new_to, new_diff, code_buf);
-			}
+                        }
 
                         Ok(Some((func_index, start, end, code_buf)))
                     },
@@ -427,8 +421,6 @@ where
     let mut jump_arcs: HashMap<usize, usize> = HashMap::new();
     let mut pc = expr.0.clone();
 
-    print!("Starting:  buf: {:?}\n", pc);
-
     let mut unread_bytes;
     let buf = expr.0.to_slice()?;
     let mut parts = Vec::new();
@@ -443,10 +435,6 @@ where
                 combined.extend_from_slice(cc2);
                 parts.push(CompiledExpressionPart::Code(combined));
             } else {
-                /*print!(
-                    "Pushing: Part={:?}   unread={} buf(pc): {:?}\n",
-                    part, unread_bytes, pc
-                );*/
                 parts.push(CompiledExpressionPart::LandingPad {
                     original_pos: (expr.0.len().into_u64() - unread_bytes) as usize,
                 });
@@ -468,10 +456,6 @@ where
         () => {
             if !code_chunk.is_empty() {
                 let corr = code_chunk.len().into_u64();
-                /*print!(
-                    "Correcting: unread_bytes={}   corr={}\n",
-                    unread_bytes, corr
-                );*/
                 unread_bytes += corr;
                 push!(CompiledExpressionPart::Code(code_chunk));
                 unread_bytes -= corr;
