@@ -758,6 +758,7 @@ mod tests {
 
     #[test]
     fn test_debug_parse_expressions() {
+	use std::collections::{HashMap};
         use super::{CompiledExpression, CompiledExpressionPart};
         use wasmtime_environ::entity::EntityRef;
 
@@ -766,8 +767,7 @@ mod tests {
         let e = expression!(DW_OP_WASM_location, 0x0, 20, DW_OP_stack_value);
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
-            .expect("expression")
-            .0;
+            .expect("expression");
         assert_eq!(
             ce,
             CompiledExpression {
@@ -775,7 +775,8 @@ mod tests {
                     label: val20,
                     trailing: true
                 }],
-                need_deref: false
+                need_deref: false,
+		jump_arcs: HashMap::new()
             }
         );
 
@@ -789,8 +790,7 @@ mod tests {
         );
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
-            .expect("expression")
-            .0;
+            .expect("expression");
         assert_eq!(
             ce,
             CompiledExpression {
@@ -801,17 +801,17 @@ mod tests {
                     },
                     CompiledExpressionPart::Code(vec![35, 16, 159])
                 ],
-                need_deref: false
+                need_deref: false,
+		jump_arcs: HashMap::new()
             }
         );
 
         let e = expression!(DW_OP_WASM_location, 0x0, 3, DW_OP_stack_value);
         let fe = compile_expression(&e, DWARF_ENCODING, None).expect("non-error");
         let e = expression!(DW_OP_fbreg, 0x12);
-        let ce = compile_expression(&e, DWARF_ENCODING, fe.map(|(e, _)| e).as_ref())
+        let ce = compile_expression(&e, DWARF_ENCODING, fe.as_ref())
             .expect("non-error")
-            .expect("expression")
-            .0;
+            .expect("expression");
         assert_eq!(
             ce,
             CompiledExpression {
@@ -822,7 +822,8 @@ mod tests {
                     },
                     CompiledExpressionPart::Code(vec![35, 18])
                 ],
-                need_deref: true
+                need_deref: true,
+		jump_arcs: HashMap::new()
             }
         );
 
@@ -837,8 +838,7 @@ mod tests {
         );
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
-            .expect("expression")
-            .0;
+            .expect("expression");
         assert_eq!(
             ce,
             CompiledExpression {
@@ -851,7 +851,8 @@ mod tests {
                     CompiledExpressionPart::Deref,
                     CompiledExpressionPart::Code(vec![6, 159])
                 ],
-                need_deref: false
+                need_deref: false,
+		jump_arcs: HashMap::new()
             }
         );
 
@@ -878,8 +879,7 @@ mod tests {
         );
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
-            .expect("expression")
-            .0;
+            .expect("expression");
         assert_eq!(
             ce,
             CompiledExpression {
@@ -906,7 +906,8 @@ mod tests {
                     CompiledExpressionPart::LandingPad { original_pos: 16 }, // capture to
                     CompiledExpressionPart::Code(vec![159])
                 ],
-                need_deref: false
+                need_deref: false,
+		jump_arcs: { let mut m = HashMap::new(); m.insert(9, 16); m.insert(14, 16); m }
             }
         );
 
@@ -923,8 +924,7 @@ mod tests {
         );
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
-            .expect("expression")
-            .0;
+            .expect("expression");
         assert_eq!(
             ce,
             CompiledExpression {
@@ -939,15 +939,15 @@ mod tests {
                     CompiledExpressionPart::LandingPad { original_pos: 6 }, // capture to
                     CompiledExpressionPart::Code(vec![48, 159])
                 ],
-                need_deref: false
+                need_deref: false,
+		jump_arcs: { let mut m = HashMap::new(); m.insert(5, 7); m }
             }
         );
 
         let e = expression!(DW_OP_WASM_location, 0x0, 1, DW_OP_plus_uconst, 5);
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
-            .expect("expression")
-            .0;
+            .expect("expression");
         assert_eq!(
             ce,
             CompiledExpression {
@@ -958,7 +958,8 @@ mod tests {
                     },
                     CompiledExpressionPart::Code(vec![35, 5])
                 ],
-                need_deref: true
+                need_deref: true,
+		jump_arcs: HashMap::new()
             }
         );
     }
