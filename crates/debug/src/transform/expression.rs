@@ -758,8 +758,8 @@ mod tests {
 
     #[test]
     fn test_debug_parse_expressions() {
-	use std::collections::{HashMap};
         use super::{CompiledExpression, CompiledExpressionPart};
+        use std::collections::HashMap;
         use wasmtime_environ::entity::EntityRef;
 
         let (val1, val3, val20) = (ValueLabel::new(1), ValueLabel::new(3), ValueLabel::new(20));
@@ -776,7 +776,7 @@ mod tests {
                     trailing: true
                 }],
                 need_deref: false,
-		jump_arcs: HashMap::new()
+                jump_arcs: HashMap::new()
             }
         );
 
@@ -802,7 +802,7 @@ mod tests {
                     CompiledExpressionPart::Code(vec![35, 16, 159])
                 ],
                 need_deref: false,
-		jump_arcs: HashMap::new()
+                jump_arcs: HashMap::new()
             }
         );
 
@@ -823,7 +823,7 @@ mod tests {
                     CompiledExpressionPart::Code(vec![35, 18])
                 ],
                 need_deref: true,
-		jump_arcs: HashMap::new()
+                jump_arcs: HashMap::new()
             }
         );
 
@@ -852,7 +852,7 @@ mod tests {
                     CompiledExpressionPart::Code(vec![6, 159])
                 ],
                 need_deref: false,
-		jump_arcs: HashMap::new()
+                jump_arcs: HashMap::new()
             }
         );
 
@@ -907,7 +907,12 @@ mod tests {
                     CompiledExpressionPart::Code(vec![159])
                 ],
                 need_deref: false,
-		jump_arcs: { let mut m = HashMap::new(); m.insert(9, 16); m.insert(14, 16); m }
+                jump_arcs: {
+                    let mut m = HashMap::new();
+                    m.insert(9, 16);
+                    m.insert(14, 16);
+                    m
+                }
             }
         );
 
@@ -940,7 +945,11 @@ mod tests {
                     CompiledExpressionPart::Code(vec![48, 159])
                 ],
                 need_deref: false,
-		jump_arcs: { let mut m = HashMap::new(); m.insert(5, 7); m }
+                jump_arcs: {
+                    let mut m = HashMap::new();
+                    m.insert(5, 7);
+                    m
+                }
             }
         );
 
@@ -959,7 +968,7 @@ mod tests {
                     CompiledExpressionPart::Code(vec![35, 5])
                 ],
                 need_deref: true,
-		jump_arcs: HashMap::new()
+                jump_arcs: HashMap::new()
             }
         );
     }
