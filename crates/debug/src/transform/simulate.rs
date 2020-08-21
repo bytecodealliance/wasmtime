@@ -228,7 +228,6 @@ fn generate_vars(
             let loc_list_id = {
                 let locs = CompiledExpression::from_label(*label)
                     .build_with_locals(
-                        &HashMap::new(),
                         scope_ranges,
                         addr_tr,
                         Some(frame_info),

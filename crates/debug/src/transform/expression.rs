@@ -101,6 +101,7 @@ enum CompiledExpressionPart {
 pub struct CompiledExpression {
     parts: Vec<CompiledExpressionPart>,
     need_deref: bool,
+    jump_arcs: HashMap<usize, usize>,
 }
 
 impl CompiledExpression {
@@ -115,6 +116,7 @@ impl CompiledExpression {
                 trailing: true,
             }],
             need_deref: false,
+	    jump_arcs: HashMap::new(),
         }
     }
 }
@@ -231,7 +233,6 @@ impl CompiledExpression {
 
     pub fn build_with_locals<'a>(
         &'a self,
-        arcs: &'a HashMap<usize, usize>,
         scope: &'a [(u64, u64)], // wasm ranges
         addr_tr: &'a AddressTransform,
         frame_info: Option<&'a FunctionFrameInfo>,
@@ -386,10 +387,10 @@ impl CompiledExpression {
                             deref!();
                         }
 			print!("\n\n\nFinishing: translations {:?}?\n Buf: {:?}\n\n", old_to_new, code_buf);
-			for (from, to) in arcs {
+			for (from, to) in self.jump_arcs.clone() {
 			    // relocate jump targets
-			    let new_from = old_to_new[from];
-			    let new_to = old_to_new[to];
+			    let new_from = old_to_new[&from];
+			    let new_to = old_to_new[&to];
 			    let new_diff = new_to as i32 - new_from as i32;
                             code_buf[new_from - 2] = (new_diff & 0xFF) as u8;
                             code_buf[new_from - 1] = (new_diff >> (8 as u16)) as u8;
@@ -419,7 +420,7 @@ pub fn compile_expression<R>(
     expr: &Expression<R>,
     encoding: gimli::Encoding,
     frame_base: Option<&CompiledExpression>,
-) -> Result<Option<(CompiledExpression, HashMap<usize, usize>)>, Error>
+) -> Result<Option<CompiledExpression>, Error>
 where
     R: Reader,
 {
@@ -601,7 +602,7 @@ where
 	    _ => Some(p[0].clone())
 	})
 	.collect();
-    Ok(Some((CompiledExpression { parts, need_deref }, jump_arcs)))
+    Ok(Some(CompiledExpression { parts, need_deref, jump_arcs }))
 }
 
 #[derive(Debug, Clone)]

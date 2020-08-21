@@ -161,12 +161,11 @@ where
 
                 let mut result: Option<Vec<_>> = None;
                 while let Some(loc) = locs.next()? {
-                    if let Some((expr, arcs)) =
+                    if let Some(expr) =
                         compile_expression(&loc.data, unit_encoding, frame_base)?
                     {
                         let chunk = expr
                             .build_with_locals(
-                                &arcs,
                                 &[(loc.range.begin, loc.range.end)],
                                 addr_tr,
                                 frame_info,
@@ -210,7 +209,7 @@ where
                     } else {
                         None
                     };
-                if let Some((expr, arcs)) = compile_expression(expr, unit_encoding, frame_base)? {
+                if let Some(expr) = compile_expression(expr, unit_encoding, frame_base)? {
                     if expr.is_simple() {
                         if let Some(expr) = expr.build() {
                             write::AttributeValue::Exprloc(expr)
@@ -221,7 +220,7 @@ where
                         // Conversion to loclist is required.
                         if let Some(scope_ranges) = scope_ranges {
                             let exprs = expr
-                                .build_with_locals(&arcs, scope_ranges, addr_tr, frame_info, isa)
+                                .build_with_locals(scope_ranges, addr_tr, frame_info, isa)
                                 .collect::<Result<Vec<_>, _>>()?;
                             if exprs.is_empty() {
                                 continue;
