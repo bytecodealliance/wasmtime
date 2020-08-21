@@ -161,9 +161,7 @@ where
 
                 let mut result: Option<Vec<_>> = None;
                 while let Some(loc) = locs.next()? {
-                    if let Some(expr) =
-                        compile_expression(&loc.data, unit_encoding, frame_base)?
-                    {
+                    if let Some(expr) = compile_expression(&loc.data, unit_encoding, frame_base)? {
                         let chunk = expr
                             .build_with_locals(
                                 &[(loc.range.begin, loc.range.end)],

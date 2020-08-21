@@ -116,7 +116,7 @@ impl CompiledExpression {
                 trailing: true,
             }],
             need_deref: false,
-	    jump_arcs: HashMap::new(),
+            jump_arcs: HashMap::new(),
         }
     }
 }
@@ -602,7 +602,11 @@ where
 	    _ => Some(p[0].clone())
 	})
 	.collect();
-    Ok(Some(CompiledExpression { parts, need_deref, jump_arcs }))
+    Ok(Some(CompiledExpression {
+        parts,
+        need_deref,
+        jump_arcs,
+    }))
 }
 
 #[derive(Debug, Clone)]
