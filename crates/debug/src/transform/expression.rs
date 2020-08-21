@@ -341,6 +341,7 @@ impl CompiledExpression {
                             match part {
                                 CompiledExpressionPart::Code(c) => {
                                     for (old, new) in old_to_new.clone() {
+                                        // when `new` comes from the preceeding LandingPad
                                         if new == code_buf.len() {
                                             for i in 1..c.len() {
                                                 old_to_new.insert(old + i, new + i);
@@ -382,14 +383,14 @@ impl CompiledExpression {
                         if self.need_deref {
                             deref!();
                         }
-                        for (from, to) in self.jump_arcs.clone() {
+                        for (from, to) in &self.jump_arcs {
                             // relocate jump targets
                             let new_from = old_to_new[&from];
                             let new_to = old_to_new[&to];
                             let new_diff = new_to as i32 - new_from as i32;
+                            // FIXME: use encoding? LittleEndian for now...
                             code_buf[new_from - 2] = (new_diff & 0xFF) as u8;
                             code_buf[new_from - 1] = (new_diff >> (8 as u16)) as u8;
-                            // FIXME: use encoding?
                         }
 
                         Ok(Some((func_index, start, end, code_buf)))
