@@ -4,7 +4,7 @@
 
 use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
-use crate::inst_predicates::{has_side_effect_or_load_not_get_pinned_reg, is_constant_64bit};
+use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::instructions::BranchInfo;
 use crate::ir::types::I64;
 use crate::ir::{
@@ -372,7 +372,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         for bb in f.layout.blocks() {
             cur_color += 1;
             for inst in f.layout.block_insts(bb) {
-                let side_effect = has_side_effect_or_load_not_get_pinned_reg(f, inst);
+                let side_effect = has_lowering_side_effect(f, inst);
 
                 // Assign colors. A new color is chosen *after* any side-effecting instruction.
                 inst_colors[inst] = InstColor::new(cur_color);
@@ -799,15 +799,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             ValueDef::Result(src_inst, result_idx) => {
                 debug!(" -> src inst {}", src_inst);
                 debug!(
-                    " -> has side effect: {}",
-                    has_side_effect_or_load_not_get_pinned_reg(self.f, src_inst)
+                    " -> has lowering side effect: {}",
+                    has_lowering_side_effect(self.f, src_inst)
                 );
                 debug!(
                     " -> our color is {:?}, src inst is {:?}",
                     self.inst_color(at_inst),
                     self.inst_color(src_inst)
                 );
-                if !has_side_effect_or_load_not_get_pinned_reg(self.f, src_inst)
+                if !has_lowering_side_effect(self.f, src_inst)
                     || self.inst_color(at_inst) == self.inst_color(src_inst)
                 {
                     Some((src_inst, result_idx))
@@ -989,6 +989,8 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
 
     fn use_input_reg(&mut self, input: LowerInput) {
         debug!("use_input_reg: vreg {:?} is needed", input.reg);
+        // We may directly return a real (machine) register when we know that register holds the
+        // result of an opcode (e.g. GetPinnedReg).
         if input.reg.is_virtual() {
             self.vreg_needed[input.reg.get_index()] = true;
         }
