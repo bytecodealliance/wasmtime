@@ -535,6 +535,9 @@ where
                 | Operation::Ge { .. }
                 | Operation::Eq { .. }
                 | Operation::Ne { .. }
+		| Operation::TypedLiteral { .. }
+		| Operation::Convert { .. }
+		| Operation::Reinterpret { .. }
                 | Operation::Piece { .. } => (),
                 Operation::Bra { target } | Operation::Skip { target } => {
                     flush_code_chunk!();
@@ -568,7 +571,20 @@ where
                     // Don't re-enter the loop here (i.e. continue), because the
                     // DW_OP_deref still needs to be kept.
                 }
-                _ => {
+		Operation::Address { .. }
+		| Operation::AddressIndex { .. }
+		| Operation::ConstantIndex { .. }
+		| Operation::Call { .. }
+		| Operation::Register { .. }
+		| Operation::RegisterOffset { .. }
+		| Operation::CallFrameCFA
+		| Operation::PushObjectAddress
+		| Operation::TLS
+		| Operation::ImplicitValue { .. }
+		| Operation::ImplicitPointer { .. }
+		| Operation::EntryValue { .. }
+		| Operation::ParameterRef { .. }
+                 => {
                     return Ok(None);
                 }
             }
