@@ -671,6 +671,15 @@ impl VectorSize {
             VectorSize::Size64x2 => unreachable!(),
         }
     }
+
+    pub fn halve(&self) -> VectorSize {
+        match self {
+            VectorSize::Size8x16 => VectorSize::Size8x8,
+            VectorSize::Size16x8 => VectorSize::Size16x4,
+            VectorSize::Size32x4 => VectorSize::Size32x2,
+            _ => *self,
+        }
+    }
 }
 
 //=============================================================================
