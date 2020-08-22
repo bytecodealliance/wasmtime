@@ -340,13 +340,14 @@ impl CompiledExpression {
                         for part in &self.parts {
                             match part {
                                 CompiledExpressionPart::Code(c) => {
-                                    for (old, new) in old_to_new.clone() {
-                                        // when `new` comes from the preceeding LandingPad
-                                        if new == code_buf.len() {
-                                            for i in 1..c.len() {
-                                                old_to_new.insert(old + i, new + i);
-                                            }
-                                            break;
+                                    if let Some((old, new)) = old_to_new
+                                        .iter()
+                                        .find(|(_, new)| *new == &code_buf.len())
+                                        .map(|(old, new)| (*old, *new))
+                                    {
+                                        // when `new` comes from the preceding LandingPad
+                                        for i in 1..c.len() {
+                                            old_to_new.insert(old + i, new + i);
                                         }
                                     }
                                     code_buf.extend_from_slice(c.as_slice())
@@ -455,9 +456,12 @@ where
     macro_rules! flush_code_chunk {
         ($unread:expr) => {
             if !code_chunk.is_empty() {
-		let corr = code_chunk.len().into_u64();
-                push!($unread + corr, CompiledExpressionPart::Code(code_chunk.clone()));
-		code_chunk.clear()
+                let corr = code_chunk.len().into_u64();
+                push!(
+                    $unread + corr,
+                    CompiledExpressionPart::Code(code_chunk.clone())
+                );
+                code_chunk.clear()
             }
         };
     };
@@ -477,11 +481,13 @@ where
             let index = pc.read_sleb128()?;
             flush_code_chunk!(unread_bytes);
             let label = ValueLabel::from_u32(index as u32);
-            push!(unread_bytes,
-		CompiledExpressionPart::Local {
-                label,
-                trailing: false,
-            });
+            push!(
+                unread_bytes,
+                CompiledExpressionPart::Local {
+                    label,
+                    trailing: false,
+                }
+            );
         } else {
             let pos = pc.offset_from(&expr.0).into_u64() as usize;
             let op = Operation::parse(&mut pc, encoding)?;
@@ -542,14 +548,16 @@ where
                     let arc_from = (expr.0.len().into_u64() - pc.len().into_u64()) as usize;
                     let arc_to = (arc_from as i32 + target as i32) as usize;
                     jump_arcs.insert(arc_from, arc_to);
-                    push!(unread_bytes,
-			CompiledExpressionPart::Jump {
-                        target,
-                        conditionally: match op {
-                            Operation::Bra { .. } => true,
-                            _ => false,
-                        },
-                    });
+                    push!(
+                        unread_bytes,
+                        CompiledExpressionPart::Jump {
+                            target,
+                            conditionally: match op {
+                                Operation::Bra { .. } => true,
+                                _ => false,
+                            },
+                        }
+                    );
                     continue;
                 }
                 Operation::StackValue => {
@@ -566,8 +574,7 @@ where
                 }
                 Operation::Deref { .. } => {
                     flush_code_chunk!(unread_bytes);
-                    push!(unread_bytes,
-			CompiledExpressionPart::Deref);
+                    push!(unread_bytes, CompiledExpressionPart::Deref);
                     // Don't re-enter the loop here (i.e. continue), because the
                     // DW_OP_deref still needs to be kept.
                 }
@@ -582,8 +589,7 @@ where
                 | Operation::ImplicitValue { .. }
                 | Operation::ImplicitPointer { .. }
                 | Operation::EntryValue { .. }
-                | Operation::ParameterRef { .. }
-                 => {
+                | Operation::ParameterRef { .. } => {
                     return Ok(None);
                 }
             }
