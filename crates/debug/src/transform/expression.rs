@@ -422,11 +422,10 @@ where
     let mut jump_arcs: HashMap<usize, usize> = HashMap::new();
     let mut pc = expr.0.clone();
 
-    let mut unread_bytes;
     let buf = expr.0.to_slice()?;
     let mut parts = Vec::new();
     macro_rules! push {
-        ($part:expr) => {{
+        ($unread:expr, $part:expr) => {{
             let part = $part;
             if let (CompiledExpressionPart::Code(cc2), Some(CompiledExpressionPart::Code(cc1))) =
                 (&part, parts.last())
@@ -437,7 +436,7 @@ where
                 parts.push(CompiledExpressionPart::Code(combined));
             } else {
                 parts.push(CompiledExpressionPart::LandingPad {
-                    original_pos: (expr.0.len().into_u64() - unread_bytes) as usize,
+                    original_pos: (expr.0.len().into_u64() - $unread) as usize,
                 });
                 parts.push(part)
             }
@@ -454,18 +453,16 @@ where
     }
     let mut code_chunk = Vec::new();
     macro_rules! flush_code_chunk {
-        () => {
+        ($unread:expr) => {
             if !code_chunk.is_empty() {
-                let corr = code_chunk.len().into_u64();
-                unread_bytes += corr;
-                push!(CompiledExpressionPart::Code(code_chunk));
-                unread_bytes -= corr;
-                code_chunk = Vec::new();
+		let corr = code_chunk.len().into_u64();
+                push!($unread + corr, CompiledExpressionPart::Code(code_chunk));
+                code_chunk = Vec::new()
             }
         };
     };
     while !pc.is_empty() {
-        unread_bytes = pc.len().into_u64();
+        let unread_bytes = pc.len().into_u64();
         let next = buf[pc.offset_from(&expr.0).into_u64() as usize];
         need_deref = true;
         if next == 0xED {
@@ -478,9 +475,10 @@ where
                 return Ok(None);
             }
             let index = pc.read_sleb128()?;
-            flush_code_chunk!();
+            flush_code_chunk!(unread_bytes);
             let label = ValueLabel::from_u32(index as u32);
-            push!(CompiledExpressionPart::Local {
+            push!(unread_bytes,
+		CompiledExpressionPart::Local {
                 label,
                 trailing: false,
             });
@@ -492,7 +490,7 @@ where
                     // Expand DW_OP_fbreg into frame location and DW_OP_plus_uconst.
                     if frame_base.is_some() {
                         // Add frame base expressions.
-                        flush_code_chunk!();
+                        flush_code_chunk!(unread_bytes);
                         parts.extend_from_slice(&frame_base.unwrap().parts);
                     }
                     if let Some(CompiledExpressionPart::Local { trailing, .. }) = parts.last_mut() {
@@ -540,11 +538,12 @@ where
                 | Operation::Reinterpret { .. }
                 | Operation::Piece { .. } => (),
                 Operation::Bra { target } | Operation::Skip { target } => {
-                    flush_code_chunk!();
+                    flush_code_chunk!(unread_bytes);
                     let arc_from = (expr.0.len().into_u64() - pc.len().into_u64()) as usize;
                     let arc_to = (arc_from as i32 + target as i32) as usize;
                     jump_arcs.insert(arc_from, arc_to);
-                    push!(CompiledExpressionPart::Jump {
+                    push!(unread_bytes,
+			CompiledExpressionPart::Jump {
                         target,
                         conditionally: match op {
                             Operation::Bra { .. } => true,
@@ -566,8 +565,9 @@ where
                     }
                 }
                 Operation::Deref { .. } => {
-                    flush_code_chunk!();
-                    push!(CompiledExpressionPart::Deref);
+                    flush_code_chunk!(unread_bytes);
+                    push!(unread_bytes,
+			CompiledExpressionPart::Deref);
                     // Don't re-enter the loop here (i.e. continue), because the
                     // DW_OP_deref still needs to be kept.
                 }
@@ -592,8 +592,7 @@ where
         }
     }
 
-    unread_bytes = 0;
-    flush_code_chunk!();
+    flush_code_chunk!(0);
 
     parts.push(CompiledExpressionPart::LandingPad {
         original_pos: expr.0.len().into_u64() as usize,
