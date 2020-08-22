@@ -633,9 +633,18 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Ishl | Opcode::Ushr | Opcode::Sshr | Opcode::Rotl | Opcode::Rotr => {
             let dst_ty = ctx.output_ty(insn, 0);
             debug_assert_eq!(ctx.input_ty(insn, 0), dst_ty);
-            debug_assert!(dst_ty == types::I32 || dst_ty == types::I64);
 
-            let lhs = input_to_reg(ctx, inputs[0]);
+            let lhs = match dst_ty {
+                types::I8 | types::I16 => match op {
+                    Opcode::Ishl => input_to_reg(ctx, inputs[0]),
+                    Opcode::Ushr => extend_input_to_reg(ctx, inputs[0], ExtSpec::ZeroExtendTo32),
+                    Opcode::Sshr => extend_input_to_reg(ctx, inputs[0], ExtSpec::SignExtendTo32),
+                    Opcode::Rotl | Opcode::Rotr => unimplemented!("rotl/rotr.i8/i16"),
+                    _ => unreachable!(),
+                },
+                types::I32 | types::I64 => input_to_reg(ctx, inputs[0]),
+                _ => unreachable!("{}", dst_ty),
+            };
 
             let (count, rhs) = if let Some(cst) = ctx.get_input(insn, 1).constant {
                 let cst = if op == Opcode::Rotl || op == Opcode::Rotr {
