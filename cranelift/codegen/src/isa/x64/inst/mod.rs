@@ -56,6 +56,18 @@ pub enum Inst {
         dst: Writable<Reg>,
     },
 
+    /// Bitwise negation
+    Not {
+        size: u8, // 1, 2, 4 or 8
+        src: Writable<Reg>,
+    },
+
+    /// Integer negation
+    Neg {
+        size: u8, // 1, 2, 4 or 8
+        src: Writable<Reg>,
+    },
+
     /// Integer quotient and remainder: (div idiv) $rax $rdx (reg addr)
     Div {
         size: u8, // 1, 2, 4 or 8
@@ -510,6 +522,18 @@ impl Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
         debug_assert!(size == 8 || size == 4 || size == 2);
         Self::UnaryRmR { size, op, src, dst }
+    }
+
+    pub(crate) fn not(size: u8, src: Writable<Reg>) -> Inst {
+        debug_assert_eq!(src.to_reg().get_class(), RegClass::I64);
+        debug_assert!(size == 8 || size == 4 || size == 2 || size == 1);
+        Inst::Not { size, src }
+    }
+
+    pub(crate) fn neg(size: u8, src: Writable<Reg>) -> Inst {
+        debug_assert_eq!(src.to_reg().get_class(), RegClass::I64);
+        debug_assert!(size == 8 || size == 4 || size == 2 || size == 1);
+        Inst::Neg { size, src }
     }
 
     pub(crate) fn div(size: u8, signed: bool, divisor: RegMem, loc: SourceLoc) -> Inst {
@@ -1180,6 +1204,18 @@ impl ShowWithRRU for Inst {
                 show_ireg_sized(dst.to_reg(), mb_rru, *size),
             ),
 
+            Inst::Not { size, src } => format!(
+                "{} {}",
+                ljustify2("not".to_string(), suffixBWLQ(*size)),
+                show_ireg_sized(src.to_reg(), mb_rru, *size)
+            ),
+
+            Inst::Neg { size, src } => format!(
+                "{} {}",
+                ljustify2("neg".to_string(), suffixBWLQ(*size)),
+                show_ireg_sized(src.to_reg(), mb_rru, *size)
+            ),
+
             Inst::Div {
                 size,
                 signed,
@@ -1645,6 +1681,12 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
                 collector.add_mod(*dst);
             }
         }
+        Inst::Not { src, .. } => {
+            collector.add_mod(*src);
+        }
+        Inst::Neg { src, .. } => {
+            collector.add_mod(*src);
+        }
         Inst::Div { divisor, .. } => {
             collector.add_mod(Writable::from_reg(regs::rax()));
             collector.add_mod(Writable::from_reg(regs::rdx()));
@@ -1961,6 +2003,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
                 map_mod(mapper, dst);
             }
         }
+        Inst::Not { src, .. } | Inst::Neg { src, .. } => map_mod(mapper, src),
         Inst::Div { divisor, .. } => divisor.map_uses(mapper),
         Inst::MulHi { rhs, .. } => rhs.map_uses(mapper),
         Inst::CheckedDivOrRemSeq { divisor, tmp, .. } => {

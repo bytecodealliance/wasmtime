@@ -628,6 +628,34 @@ pub(crate) fn emit(
             }
         }
 
+        Inst::Not { size, src } => {
+            let (opcode, prefix, rex_flags) = match size {
+                1 => (0xF6, LegacyPrefixes::None, RexFlags::clear_w()),
+                2 => (0xF7, LegacyPrefixes::_66, RexFlags::clear_w()),
+                4 => (0xF7, LegacyPrefixes::None, RexFlags::clear_w()),
+                8 => (0xF7, LegacyPrefixes::None, RexFlags::set_w()),
+                _ => unreachable!("{}", size),
+            };
+
+            let subopcode = 2;
+            let src = int_reg_enc(src.to_reg());
+            emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, src, rex_flags)
+        }
+
+        Inst::Neg { size, src } => {
+            let (opcode, prefix, rex_flags) = match size {
+                1 => (0xF6, LegacyPrefixes::None, RexFlags::clear_w()),
+                2 => (0xF7, LegacyPrefixes::_66, RexFlags::clear_w()),
+                4 => (0xF7, LegacyPrefixes::None, RexFlags::clear_w()),
+                8 => (0xF7, LegacyPrefixes::None, RexFlags::set_w()),
+                _ => unreachable!("{}", size),
+            };
+
+            let subopcode = 3;
+            let src = int_reg_enc(src.to_reg());
+            emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, src, rex_flags)
+        }
+
         Inst::Div {
             size,
             signed,
