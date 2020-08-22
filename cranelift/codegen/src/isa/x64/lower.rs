@@ -2381,16 +2381,30 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let divisor = input_to_reg_mem(ctx, inputs[1]);
 
                 // Fill in the high parts:
-                if kind.is_signed() {
-                    // sign-extend the sign-bit of rax into rdx, for signed opcodes.
-                    ctx.emit(Inst::sign_extend_rax_to_rdx(size));
+                if input_ty == types::I8 {
+                    if kind.is_signed() {
+                        // sign-extend the sign-bit of al into ah, for signed opcodes.
+                        ctx.emit(Inst::sign_extend_al_to_ah());
+                    } else {
+                        ctx.emit(Inst::movzx_rm_r(
+                            ExtMode::BL,
+                            RegMem::reg(regs::rax()),
+                            Writable::from_reg(regs::rax()),
+                            /* infallible */ None,
+                        ));
+                    }
                 } else {
-                    // zero for unsigned opcodes.
-                    ctx.emit(Inst::imm_r(
-                        true, /* is_64 */
-                        0,
-                        Writable::from_reg(regs::rdx()),
-                    ));
+                    if kind.is_signed() {
+                        // sign-extend the sign-bit of rax into rdx, for signed opcodes.
+                        ctx.emit(Inst::sign_extend_rax_to_rdx(size));
+                    } else {
+                        // zero for unsigned opcodes.
+                        ctx.emit(Inst::imm_r(
+                            true, /* is_64 */
+                            0,
+                            Writable::from_reg(regs::rdx()),
+                        ));
+                    }
                 }
 
                 // Emit the actual idiv.

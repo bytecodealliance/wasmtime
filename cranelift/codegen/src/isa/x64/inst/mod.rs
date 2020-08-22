@@ -100,6 +100,9 @@ pub enum Inst {
         loc: SourceLoc,
     },
 
+    /// Do a sign-extend based on the sign of the value in al into ah: (cbw)
+    SignExtendAlAh,
+
     /// Do a sign-extend based on the sign of the value in rax into rdx: (cwd cdq cqo)
     SignExtendRaxRdx {
         size: u8, // 1, 2, 4 or 8
@@ -572,6 +575,10 @@ impl Inst {
             tmp,
             loc,
         }
+    }
+
+    pub(crate) fn sign_extend_al_to_ah() -> Inst {
+        Inst::SignExtendAlAh
     }
 
     pub(crate) fn sign_extend_rax_to_rdx(size: u8) -> Inst {
@@ -1259,6 +1266,8 @@ impl ShowWithRRU for Inst {
                 show_ireg_sized(divisor.to_reg(), mb_rru, *size),
             ),
 
+            Inst::SignExtendAlAh => "cbw".into(),
+
             Inst::SignExtendRaxRdx { size } => match size {
                 2 => "cwd",
                 4 => "cdq",
@@ -1687,9 +1696,13 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         Inst::Neg { src, .. } => {
             collector.add_mod(*src);
         }
-        Inst::Div { divisor, .. } => {
+        Inst::Div { size, divisor, .. } => {
             collector.add_mod(Writable::from_reg(regs::rax()));
-            collector.add_mod(Writable::from_reg(regs::rdx()));
+            if *size == 1 {
+                collector.add_def(Writable::from_reg(regs::rdx()));
+            } else {
+                collector.add_mod(Writable::from_reg(regs::rdx()));
+            }
             divisor.get_regs_as_uses(collector);
         }
         Inst::MulHi { rhs, .. } => {
@@ -1707,6 +1720,9 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             if let Some(tmp) = tmp {
                 collector.add_def(*tmp);
             }
+        }
+        Inst::SignExtendAlAh => {
+            collector.add_mod(Writable::from_reg(regs::rax()));
         }
         Inst::SignExtendRaxRdx { .. } => {
             collector.add_use(regs::rax());
@@ -2012,7 +2028,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
                 map_def(mapper, tmp)
             }
         }
-        Inst::SignExtendRaxRdx { .. } => {}
+        Inst::SignExtendAlAh | Inst::SignExtendRaxRdx { .. } => {}
         Inst::XmmUnaryRmR {
             ref mut src,
             ref mut dst,
