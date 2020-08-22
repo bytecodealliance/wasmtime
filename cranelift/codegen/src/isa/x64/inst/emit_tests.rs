@@ -1243,6 +1243,52 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
+    // Not
+    insns.push((
+        Inst::not(4, Writable::from_reg(regs::rsi())),
+        "F7D6",
+        "notl    %esi",
+    ));
+    insns.push((
+        Inst::not(8, Writable::from_reg(regs::r15())),
+        "49F7D7",
+        "notq    %r15",
+    ));
+    insns.push((
+        Inst::not(4, Writable::from_reg(regs::r14())),
+        "41F7D6",
+        "notl    %r14d",
+    ));
+    insns.push((
+        Inst::not(2, Writable::from_reg(regs::rdi())),
+        "66F7D7",
+        "notw    %di",
+    ));
+
+    // ========================================================
+    // Neg
+    insns.push((
+        Inst::neg(4, Writable::from_reg(regs::rsi())),
+        "F7DE",
+        "negl    %esi",
+    ));
+    insns.push((
+        Inst::neg(8, Writable::from_reg(regs::r15())),
+        "49F7DF",
+        "negq    %r15",
+    ));
+    insns.push((
+        Inst::neg(4, Writable::from_reg(regs::r14())),
+        "41F7DE",
+        "negl    %r14d",
+    ));
+    insns.push((
+        Inst::neg(2, Writable::from_reg(regs::rdi())),
+        "66F7DF",
+        "negw    %di",
+    ));
+
+    // ========================================================
     // Div
     insns.push((
         Inst::div(

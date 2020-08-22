@@ -614,6 +614,21 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::Bnot => {
+            let ty = ty.unwrap();
+            if ty.is_vector() {
+                unimplemented!("vector bnot");
+            } else if ty.is_bool() {
+                unimplemented!("bool bnot")
+            } else {
+                let size = ty.bytes() as u8;
+                let src = input_to_reg(ctx, inputs[0]);
+                let dst = output_to_reg(ctx, outputs[0]);
+                ctx.emit(Inst::gen_move(dst, src, ty));
+                ctx.emit(Inst::not(size, dst));
+            }
+        }
+
         Opcode::Ishl | Opcode::Ushr | Opcode::Sshr | Opcode::Rotl | Opcode::Rotr => {
             let dst_ty = ctx.output_ty(insn, 0);
             debug_assert_eq!(ctx.input_ty(insn, 0), dst_ty);
@@ -654,34 +669,43 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Ineg => {
-            // Zero's out a register and then does a packed subtraction
-            // of the input from the register.
-            let src = input_to_reg_mem(ctx, inputs[0]);
             let dst = output_to_reg(ctx, outputs[0]);
-            let tmp = ctx.alloc_tmp(RegClass::V128, types::I32X4);
             let ty = ty.unwrap();
 
-            let subtract_opcode = match ty {
-                types::I8X16 => SseOpcode::Psubb,
-                types::I16X8 => SseOpcode::Psubw,
-                types::I32X4 => SseOpcode::Psubd,
-                types::I64X2 => SseOpcode::Psubq,
-                _ => panic!("Unsupported type for Ineg instruction, found {}", ty),
-            };
+            if ty.is_vector() {
+                // Zero's out a register and then does a packed subtraction
+                // of the input from the register.
 
-            // Note we must zero out a tmp instead of using the destination register since
-            // the desitnation could be an alias for the source input register
-            ctx.emit(Inst::xmm_rm_r(
-                SseOpcode::Pxor,
-                RegMem::reg(tmp.to_reg()),
-                tmp,
-            ));
-            ctx.emit(Inst::xmm_rm_r(subtract_opcode, src, tmp));
-            ctx.emit(Inst::xmm_unary_rm_r(
-                SseOpcode::Movapd,
-                RegMem::reg(tmp.to_reg()),
-                dst,
-            ));
+                let src = input_to_reg_mem(ctx, inputs[0]);
+                let tmp = ctx.alloc_tmp(RegClass::V128, types::I32X4);
+
+                let subtract_opcode = match ty {
+                    types::I8X16 => SseOpcode::Psubb,
+                    types::I16X8 => SseOpcode::Psubw,
+                    types::I32X4 => SseOpcode::Psubd,
+                    types::I64X2 => SseOpcode::Psubq,
+                    _ => panic!("Unsupported type for Ineg instruction, found {}", ty),
+                };
+
+                // Note we must zero out a tmp instead of using the destination register since
+                // the desitnation could be an alias for the source input register
+                ctx.emit(Inst::xmm_rm_r(
+                    SseOpcode::Pxor,
+                    RegMem::reg(tmp.to_reg()),
+                    tmp,
+                ));
+                ctx.emit(Inst::xmm_rm_r(subtract_opcode, src, tmp));
+                ctx.emit(Inst::xmm_unary_rm_r(
+                    SseOpcode::Movapd,
+                    RegMem::reg(tmp.to_reg()),
+                    dst,
+                ));
+            } else {
+                let size = ty.bytes() as u8;
+                let src = input_to_reg(ctx, inputs[0]);
+                ctx.emit(Inst::gen_move(dst, src, ty));
+                ctx.emit(Inst::neg(size, dst));
+            }
         }
 
         Opcode::Clz => {
