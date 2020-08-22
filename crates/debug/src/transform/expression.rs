@@ -456,8 +456,8 @@ where
         ($unread:expr) => {
             if !code_chunk.is_empty() {
 		let corr = code_chunk.len().into_u64();
-                push!($unread + corr, CompiledExpressionPart::Code(code_chunk));
-                code_chunk = Vec::new()
+                push!($unread + corr, CompiledExpressionPart::Code(code_chunk.clone()));
+		code_chunk.clear()
             }
         };
     };
