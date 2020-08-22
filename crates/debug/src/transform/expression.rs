@@ -509,13 +509,11 @@ where
                 Operation::Drop { .. }
                 | Operation::Pick { .. }
                 | Operation::Swap { .. }
-                //| Operation::Over { .. }
                 | Operation::Rot { .. }
-                //| Operation::Dup { .. }
                 | Operation::Nop { .. }
                 | Operation::UnsignedConstant { .. }
                 | Operation::SignedConstant { .. }
-		| Operation::ConstantIndex { .. }
+                | Operation::ConstantIndex { .. }
                 | Operation::PlusConstant { .. }
                 | Operation::Abs { .. }
                 | Operation::And { .. }
@@ -537,9 +535,9 @@ where
                 | Operation::Ge { .. }
                 | Operation::Eq { .. }
                 | Operation::Ne { .. }
-		| Operation::TypedLiteral { .. }
-		| Operation::Convert { .. }
-		| Operation::Reinterpret { .. }
+                | Operation::TypedLiteral { .. }
+                | Operation::Convert { .. }
+                | Operation::Reinterpret { .. }
                 | Operation::Piece { .. } => (),
                 Operation::Bra { target } | Operation::Skip { target } => {
                     flush_code_chunk!();
@@ -573,18 +571,18 @@ where
                     // Don't re-enter the loop here (i.e. continue), because the
                     // DW_OP_deref still needs to be kept.
                 }
-		Operation::Address { .. }
-		| Operation::AddressIndex { .. }
-		| Operation::Call { .. }
-		| Operation::Register { .. }
-		| Operation::RegisterOffset { .. }
-		| Operation::CallFrameCFA
-		| Operation::PushObjectAddress
-		| Operation::TLS
-		| Operation::ImplicitValue { .. }
-		| Operation::ImplicitPointer { .. }
-		| Operation::EntryValue { .. }
-		| Operation::ParameterRef { .. }
+                Operation::Address { .. }
+                | Operation::AddressIndex { .. }
+                | Operation::Call { .. }
+                | Operation::Register { .. }
+                | Operation::RegisterOffset { .. }
+                | Operation::CallFrameCFA
+                | Operation::PushObjectAddress
+                | Operation::TLS
+                | Operation::ImplicitValue { .. }
+                | Operation::ImplicitPointer { .. }
+                | Operation::EntryValue { .. }
+                | Operation::ParameterRef { .. }
                  => {
                     return Ok(None);
                 }
@@ -609,15 +607,15 @@ where
     let parts = parts
         .windows(2)
         .filter_map(|p| match p {
-	    [CompiledExpressionPart::LandingPad { original_pos }, CompiledExpressionPart::Code(code_chunk)]
-		if jump_arcs.values().any(|t| (original_pos + 1..original_pos + code_chunk.len()).contains(t))
-		=> Some(p[0].clone()),
-	    [CompiledExpressionPart::LandingPad { original_pos }, _]
-		if jump_arcs.iter().all(|(from, to)| from != original_pos && to != original_pos)
-		=> None,
-	    _ => Some(p[0].clone())
-	})
-	.collect();
+            [CompiledExpressionPart::LandingPad { original_pos }, CompiledExpressionPart::Code(code_chunk)]
+                if jump_arcs.values().any(|t| (original_pos + 1..original_pos + code_chunk.len()).contains(t))
+                => Some(p[0].clone()),
+            [CompiledExpressionPart::LandingPad { original_pos }, _]
+                if jump_arcs.iter().all(|(from, to)| from != original_pos && to != original_pos)
+                => None,
+            _ => Some(p[0].clone())
+        })
+        .collect();
     Ok(Some(CompiledExpression {
         parts,
         need_deref,
