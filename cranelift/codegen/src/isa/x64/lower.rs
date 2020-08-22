@@ -179,12 +179,13 @@ fn extend_input_to_reg(ctx: Ctx, spec: InsnInput, ext_spec: ExtSpec) -> Reg {
 
     let ext_mode = match (input_size, requested_size) {
         (a, b) if a == b => return input_to_reg(ctx, spec),
-        (a, 32) if a == 1 || a == 8 => ExtMode::BL,
+        (1, 8) => return input_to_reg(ctx, spec),
+        (a, 16) | (a, 32) if a == 1 || a == 8 => ExtMode::BL,
         (a, 64) if a == 1 || a == 8 => ExtMode::BQ,
         (16, 32) => ExtMode::WL,
         (16, 64) => ExtMode::WQ,
         (32, 64) => ExtMode::LQ,
-        _ => unreachable!(),
+        _ => unreachable!("extend {} -> {}", input_size, requested_size),
     };
 
     let src = input_to_reg_mem(ctx, spec);
@@ -1108,7 +1109,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let dst = output_to_reg(ctx, outputs[0]);
 
             let ext_mode = match (src_ty.bits(), dst_ty.bits()) {
-                (1, 32) | (8, 32) => Some(ExtMode::BL),
+                (1, 8) | (1, 16) | (1, 32) | (8, 16) | (8, 32) => Some(ExtMode::BL),
                 (1, 64) | (8, 64) => Some(ExtMode::BQ),
                 (16, 32) => Some(ExtMode::WL),
                 (16, 64) => Some(ExtMode::WQ),
