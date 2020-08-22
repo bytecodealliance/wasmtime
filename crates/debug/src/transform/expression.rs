@@ -391,8 +391,8 @@ impl CompiledExpression {
                             let new_to = old_to_new[&to];
                             let new_diff = new_to as i32 - new_from as i32;
                             // FIXME: use encoding? LittleEndian for now...
-                            code_buf[new_from - 2] = (new_diff & 0xFF) as u8;
-                            code_buf[new_from - 1] = (new_diff >> (8 as u16)) as u8;
+                            &code_buf[new_from - 2..new_from]
+                                .copy_from_slice(&(new_diff as i16).to_le_bytes());
                         }
 
                         Ok(Some((func_index, start, end, code_buf)))
