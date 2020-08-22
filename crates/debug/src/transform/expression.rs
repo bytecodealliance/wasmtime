@@ -92,7 +92,8 @@ enum CompiledExpressionPart {
     // Dereference is needed.
     Deref,
     // Jumping in the expression.
-    Jump { target: i16, conditionally: bool },
+    // The target is encoded in the `jump_arcs` map, externally.
+    Jump { conditionally: bool },
     // Floating landing pad.
     LandingPad { original_pos: usize },
 }
@@ -551,7 +552,6 @@ where
                     push!(
                         unread_bytes,
                         CompiledExpressionPart::Jump {
-                            target,
                             conditionally: match op {
                                 Operation::Bra { .. } => true,
                                 _ => false,
@@ -910,13 +910,11 @@ mod tests {
                     },
                     CompiledExpressionPart::Code(vec![26]),
                     CompiledExpressionPart::Jump {
-                        target: 7,
                         conditionally: true
                     },
                     CompiledExpressionPart::LandingPad { original_pos: 9 }, // capture from
                     CompiledExpressionPart::Code(vec![22, 37]),
                     CompiledExpressionPart::Jump {
-                        target: 2,
                         conditionally: false
                     },
                     CompiledExpressionPart::LandingPad { original_pos: 14 }, // capture from
@@ -955,7 +953,6 @@ mod tests {
                 parts: vec![
                     CompiledExpressionPart::Code(vec![49, 18]),
                     CompiledExpressionPart::Jump {
-                        target: 2,
                         conditionally: true
                     },
                     CompiledExpressionPart::LandingPad { original_pos: 5 }, // capture from
