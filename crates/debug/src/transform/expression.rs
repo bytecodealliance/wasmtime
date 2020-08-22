@@ -922,8 +922,8 @@ mod tests {
                     CompiledExpressionPart::LandingPad { original_pos: 14 }, // capture from
                     CompiledExpressionPart::Code(vec![34]),
                     CompiledExpressionPart::Deref,
-                    CompiledExpressionPart::LandingPad { original_pos: 16 }, // capture to
-                    CompiledExpressionPart::Code(vec![159])
+                    CompiledExpressionPart::LandingPad { original_pos: 15 }, // capture to
+                    CompiledExpressionPart::Code(vec![6, 159])
                 ],
                 need_deref: false,
                 jump_arcs: {
@@ -960,8 +960,8 @@ mod tests {
                     },
                     CompiledExpressionPart::LandingPad { original_pos: 5 }, // capture from
                     CompiledExpressionPart::Deref,
-                    CompiledExpressionPart::LandingPad { original_pos: 6 }, // capture to
-                    CompiledExpressionPart::Code(vec![48, 159])
+                    CompiledExpressionPart::LandingPad { original_pos: 5 }, // capture to
+                    CompiledExpressionPart::Code(vec![6, 48, 159])
                 ],
                 need_deref: false,
                 jump_arcs: {
