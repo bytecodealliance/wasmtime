@@ -50,6 +50,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     match op {
         Opcode::Iconst | Opcode::Bconst | Opcode::Null => {
             let value = ctx.get_constant(insn).unwrap();
+            // Sign extend constant if necessary
+            let value = match ty.unwrap() {
+                I8 => (((value as i64) << 8) >> 8) as u64,
+                I16 => (((value as i64) << 16) >> 16) as u64,
+                I32 => (((value as i64) << 32) >> 32) as u64,
+                I64 | R64 => value,
+                ty if ty.is_bool() => value,
+                ty => unreachable!("Unknown type for const: {}", ty),
+            };
             let rd = get_output_reg(ctx, outputs[0]);
             lower_constant_u64(ctx, rd, value);
         }
