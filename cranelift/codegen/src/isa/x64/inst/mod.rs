@@ -166,9 +166,9 @@ pub enum Inst {
         srcloc: Option<SourceLoc>,
     },
 
-    /// Arithmetic shifts: (shl shr sar) (l q) imm reg.
+    /// Arithmetic shifts: (shl shr sar) (b w l q) imm reg.
     Shift_R {
-        is_64: bool,
+        size: u8, // 1, 2, 4 or 8
         kind: ShiftKind,
         /// shift count: Some(0 .. #bits-in-type - 1), or None to mean "%cl".
         num_bits: Option<u8>,
@@ -892,19 +892,20 @@ impl Inst {
     }
 
     pub(crate) fn shift_r(
-        is_64: bool,
+        size: u8,
         kind: ShiftKind,
         num_bits: Option<u8>,
         dst: Writable<Reg>,
     ) -> Inst {
+        debug_assert!(size == 8 || size == 4 || size == 2 || size == 1);
         debug_assert!(if let Some(num_bits) = num_bits {
-            num_bits < if is_64 { 64 } else { 32 }
+            num_bits < size * 8
         } else {
             true
         });
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
         Inst::Shift_R {
-            is_64,
+            size,
             kind,
             num_bits,
             dst,
@@ -1511,22 +1512,22 @@ impl ShowWithRRU for Inst {
             ),
 
             Inst::Shift_R {
-                is_64,
+                size,
                 kind,
                 num_bits,
                 dst,
             } => match num_bits {
                 None => format!(
                     "{} %cl, {}",
-                    ljustify2(kind.to_string(), suffixLQ(*is_64)),
-                    show_ireg_sized(dst.to_reg(), mb_rru, sizeLQ(*is_64))
+                    ljustify2(kind.to_string(), suffixBWLQ(*size)),
+                    show_ireg_sized(dst.to_reg(), mb_rru, *size)
                 ),
 
                 Some(num_bits) => format!(
                     "{} ${}, {}",
-                    ljustify2(kind.to_string(), suffixLQ(*is_64)),
+                    ljustify2(kind.to_string(), suffixBWLQ(*size)),
                     num_bits,
-                    show_ireg_sized(dst.to_reg(), mb_rru, sizeLQ(*is_64))
+                    show_ireg_sized(dst.to_reg(), mb_rru, *size)
                 ),
             },
 
