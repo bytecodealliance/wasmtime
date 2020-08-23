@@ -634,15 +634,23 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let dst_ty = ctx.output_ty(insn, 0);
             debug_assert_eq!(ctx.input_ty(insn, 0), dst_ty);
 
-            let lhs = match dst_ty {
+            let (size, lhs) = match dst_ty {
                 types::I8 | types::I16 => match op {
-                    Opcode::Ishl => input_to_reg(ctx, inputs[0]),
-                    Opcode::Ushr => extend_input_to_reg(ctx, inputs[0], ExtSpec::ZeroExtendTo32),
-                    Opcode::Sshr => extend_input_to_reg(ctx, inputs[0], ExtSpec::SignExtendTo32),
-                    Opcode::Rotl | Opcode::Rotr => unimplemented!("rotl/rotr.i8/i16"),
+                    Opcode::Ishl => (4, input_to_reg(ctx, inputs[0])),
+                    Opcode::Ushr => (
+                        4,
+                        extend_input_to_reg(ctx, inputs[0], ExtSpec::ZeroExtendTo32),
+                    ),
+                    Opcode::Sshr => (
+                        4,
+                        extend_input_to_reg(ctx, inputs[0], ExtSpec::SignExtendTo32),
+                    ),
+                    Opcode::Rotl | Opcode::Rotr => {
+                        (dst_ty.bytes() as u8, input_to_reg(ctx, inputs[0]))
+                    }
                     _ => unreachable!(),
                 },
-                types::I32 | types::I64 => input_to_reg(ctx, inputs[0]),
+                types::I32 | types::I64 => (dst_ty.bytes() as u8, input_to_reg(ctx, inputs[0])),
                 _ => unreachable!("{}", dst_ty),
             };
 
@@ -669,13 +677,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 _ => unreachable!(),
             };
 
-            let is_64 = dst_ty == types::I64;
             let w_rcx = Writable::from_reg(regs::rcx());
             ctx.emit(Inst::mov_r_r(true, lhs, dst));
             if count.is_none() {
                 ctx.emit(Inst::mov_r_r(true, rhs.unwrap(), w_rcx));
             }
-            ctx.emit(Inst::shift_r(is_64, shift_kind, count, dst));
+            ctx.emit(Inst::shift_r(size, shift_kind, count, dst));
         }
 
         Opcode::Ineg => {
@@ -828,7 +835,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 // shr $1, tmp1
                 ctx.emit(Inst::shift_r(
-                    is_64,
+                    8,
                     ShiftKind::ShiftRightLogical,
                     Some(1),
                     tmp1,
@@ -858,7 +865,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 // shr $1, tmp1
                 ctx.emit(Inst::shift_r(
-                    is_64,
+                    8,
                     ShiftKind::ShiftRightLogical,
                     Some(1),
                     tmp1,
@@ -882,7 +889,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 // shr $1, tmp1
                 ctx.emit(Inst::shift_r(
-                    is_64,
+                    8,
                     ShiftKind::ShiftRightLogical,
                     Some(1),
                     tmp1,
@@ -908,12 +915,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::mov64_rm_r(RegMem::reg(tmp2.to_reg()), dst, None));
 
                 // shr $4, dst
-                ctx.emit(Inst::shift_r(
-                    is_64,
-                    ShiftKind::ShiftRightLogical,
-                    Some(4),
-                    dst,
-                ));
+                ctx.emit(Inst::shift_r(8, ShiftKind::ShiftRightLogical, Some(4), dst));
 
                 // add tmp2, dst
                 ctx.emit(Inst::alu_rmi_r(
@@ -947,7 +949,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 // shr $56, dst
                 ctx.emit(Inst::shift_r(
-                    is_64,
+                    8,
                     ShiftKind::ShiftRightLogical,
                     Some(56),
                     dst,
@@ -964,7 +966,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 // shr $1, tmp1
                 ctx.emit(Inst::shift_r(
-                    is_64,
+                    4,
                     ShiftKind::ShiftRightLogical,
                     Some(1),
                     tmp1,
@@ -991,7 +993,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 // shr $1, tmp1
                 ctx.emit(Inst::shift_r(
-                    is_64,
+                    4,
                     ShiftKind::ShiftRightLogical,
                     Some(1),
                     tmp1,
@@ -1015,7 +1017,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 // shr $1, tmp1
                 ctx.emit(Inst::shift_r(
-                    is_64,
+                    4,
                     ShiftKind::ShiftRightLogical,
                     Some(1),
                     tmp1,
@@ -1041,12 +1043,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::mov64_rm_r(RegMem::reg(tmp2.to_reg()), dst, None));
 
                 // shr $4, dst
-                ctx.emit(Inst::shift_r(
-                    is_64,
-                    ShiftKind::ShiftRightLogical,
-                    Some(4),
-                    dst,
-                ));
+                ctx.emit(Inst::shift_r(4, ShiftKind::ShiftRightLogical, Some(4), dst));
 
                 // add tmp2, dst
                 ctx.emit(Inst::alu_rmi_r(
@@ -1074,7 +1071,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 // shr $24, dst
                 ctx.emit(Inst::shift_r(
-                    is_64,
+                    4,
                     ShiftKind::ShiftRightLogical,
                     Some(24),
                     dst,

@@ -1133,7 +1133,7 @@ pub(crate) fn emit(
         }
 
         Inst::Shift_R {
-            is_64,
+            size,
             kind,
             num_bits,
             dst,
@@ -1147,25 +1147,39 @@ pub(crate) fn emit(
                 ShiftKind::ShiftRightArithmetic => 7,
             };
 
-            let rex = if *is_64 {
-                RexFlags::set_w()
-            } else {
-                RexFlags::clear_w()
-            };
-
             match num_bits {
                 None => {
+                    let (opcode, prefix, rex_flags) = match size {
+                        1 => (0xD2, LegacyPrefixes::None, RexFlags::clear_w()),
+                        2 => (0xD3, LegacyPrefixes::_66, RexFlags::clear_w()),
+                        4 => (0xD3, LegacyPrefixes::None, RexFlags::clear_w()),
+                        8 => (0xD3, LegacyPrefixes::None, RexFlags::set_w()),
+                        _ => unreachable!("{}", size),
+                    };
+
+                    // SHL/SHR/SAR %cl, reg8 is (REX.W==0) D2 /subopcode
+                    // SHL/SHR/SAR %cl, reg16 is 66 (REX.W==0) D3 /subopcode
                     // SHL/SHR/SAR %cl, reg32 is (REX.W==0) D3 /subopcode
                     // SHL/SHR/SAR %cl, reg64 is (REX.W==1) D3 /subopcode
-                    emit_std_enc_enc(sink, LegacyPrefixes::None, 0xD3, 1, subopcode, enc_dst, rex);
+                    emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, enc_dst, rex_flags);
                 }
 
                 Some(num_bits) => {
+                    let (opcode, prefix, rex_flags) = match size {
+                        1 => (0xC0, LegacyPrefixes::None, RexFlags::clear_w()),
+                        2 => (0xC1, LegacyPrefixes::_66, RexFlags::clear_w()),
+                        4 => (0xC1, LegacyPrefixes::None, RexFlags::clear_w()),
+                        8 => (0xC1, LegacyPrefixes::None, RexFlags::set_w()),
+                        _ => unreachable!("{}", size),
+                    };
+
+                    // SHL/SHR/SAR $ib, reg8 is (REX.W==0) C0 /subopcode
+                    // SHL/SHR/SAR $ib, reg16 is 66 (REX.W==0) C1 /subopcode
                     // SHL/SHR/SAR $ib, reg32 is (REX.W==0) C1 /subopcode ib
                     // SHL/SHR/SAR $ib, reg64 is (REX.W==1) C1 /subopcode ib
                     // When the shift amount is 1, there's an even shorter encoding, but we don't
                     // bother with that nicety here.
-                    emit_std_enc_enc(sink, LegacyPrefixes::None, 0xC1, 1, subopcode, enc_dst, rex);
+                    emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, enc_dst, rex_flags);
                     sink.put1(*num_bits);
                 }
             }
@@ -2054,12 +2068,7 @@ pub(crate) fn emit(
             inst.emit(sink, flags, state);
 
             // tmp_gpr1 := src >> 1
-            let inst = Inst::shift_r(
-                /*is_64*/ true,
-                ShiftKind::ShiftRightLogical,
-                Some(1),
-                *tmp_gpr1,
-            );
+            let inst = Inst::shift_r(8, ShiftKind::ShiftRightLogical, Some(1), *tmp_gpr1);
             inst.emit(sink, flags, state);
 
             let inst = Inst::gen_move(*tmp_gpr2, src.to_reg(), types::I64);

@@ -2365,129 +2365,149 @@ fn test_x64_emit() {
     // ========================================================
     // Shift_R
     insns.push((
-        Inst::shift_r(false, ShiftKind::ShiftLeft, None, w_rdi),
+        Inst::shift_r(4, ShiftKind::ShiftLeft, None, w_rdi),
         "D3E7",
         "shll    %cl, %edi",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::ShiftLeft, None, w_r12),
+        Inst::shift_r(4, ShiftKind::ShiftLeft, None, w_r12),
         "41D3E4",
         "shll    %cl, %r12d",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::ShiftLeft, Some(2), w_r8),
+        Inst::shift_r(4, ShiftKind::ShiftLeft, Some(2), w_r8),
         "41C1E002",
         "shll    $2, %r8d",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::ShiftLeft, Some(31), w_r13),
+        Inst::shift_r(4, ShiftKind::ShiftLeft, Some(31), w_r13),
         "41C1E51F",
         "shll    $31, %r13d",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::ShiftLeft, None, w_r13),
+        Inst::shift_r(8, ShiftKind::ShiftLeft, None, w_r13),
         "49D3E5",
         "shlq    %cl, %r13",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::ShiftLeft, None, w_rdi),
+        Inst::shift_r(8, ShiftKind::ShiftLeft, None, w_rdi),
         "48D3E7",
         "shlq    %cl, %rdi",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::ShiftLeft, Some(2), w_r8),
+        Inst::shift_r(8, ShiftKind::ShiftLeft, Some(2), w_r8),
         "49C1E002",
         "shlq    $2, %r8",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::ShiftLeft, Some(3), w_rbx),
+        Inst::shift_r(8, ShiftKind::ShiftLeft, Some(3), w_rbx),
         "48C1E303",
         "shlq    $3, %rbx",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::ShiftLeft, Some(63), w_r13),
+        Inst::shift_r(8, ShiftKind::ShiftLeft, Some(63), w_r13),
         "49C1E53F",
         "shlq    $63, %r13",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::ShiftRightLogical, None, w_rdi),
+        Inst::shift_r(4, ShiftKind::ShiftRightLogical, None, w_rdi),
         "D3EF",
         "shrl    %cl, %edi",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::ShiftRightLogical, Some(2), w_r8),
+        Inst::shift_r(4, ShiftKind::ShiftRightLogical, Some(2), w_r8),
         "41C1E802",
         "shrl    $2, %r8d",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::ShiftRightLogical, Some(31), w_r13),
+        Inst::shift_r(4, ShiftKind::ShiftRightLogical, Some(31), w_r13),
         "41C1ED1F",
         "shrl    $31, %r13d",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::ShiftRightLogical, None, w_rdi),
+        Inst::shift_r(8, ShiftKind::ShiftRightLogical, None, w_rdi),
         "48D3EF",
         "shrq    %cl, %rdi",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::ShiftRightLogical, Some(2), w_r8),
+        Inst::shift_r(8, ShiftKind::ShiftRightLogical, Some(2), w_r8),
         "49C1E802",
         "shrq    $2, %r8",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::ShiftRightLogical, Some(63), w_r13),
+        Inst::shift_r(8, ShiftKind::ShiftRightLogical, Some(63), w_r13),
         "49C1ED3F",
         "shrq    $63, %r13",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::ShiftRightArithmetic, None, w_rdi),
+        Inst::shift_r(4, ShiftKind::ShiftRightArithmetic, None, w_rdi),
         "D3FF",
         "sarl    %cl, %edi",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::ShiftRightArithmetic, Some(2), w_r8),
+        Inst::shift_r(4, ShiftKind::ShiftRightArithmetic, Some(2), w_r8),
         "41C1F802",
         "sarl    $2, %r8d",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::ShiftRightArithmetic, Some(31), w_r13),
+        Inst::shift_r(4, ShiftKind::ShiftRightArithmetic, Some(31), w_r13),
         "41C1FD1F",
         "sarl    $31, %r13d",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::ShiftRightArithmetic, None, w_rdi),
+        Inst::shift_r(8, ShiftKind::ShiftRightArithmetic, None, w_rdi),
         "48D3FF",
         "sarq    %cl, %rdi",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::ShiftRightArithmetic, Some(2), w_r8),
+        Inst::shift_r(8, ShiftKind::ShiftRightArithmetic, Some(2), w_r8),
         "49C1F802",
         "sarq    $2, %r8",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::ShiftRightArithmetic, Some(63), w_r13),
+        Inst::shift_r(8, ShiftKind::ShiftRightArithmetic, Some(63), w_r13),
         "49C1FD3F",
         "sarq    $63, %r13",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::RotateLeft, None, w_r8),
+        Inst::shift_r(8, ShiftKind::RotateLeft, None, w_r8),
         "49D3C0",
         "rolq    %cl, %r8",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::RotateLeft, Some(3), w_r9),
+        Inst::shift_r(4, ShiftKind::RotateLeft, Some(3), w_r9),
         "41C1C103",
         "roll    $3, %r9d",
     ));
     insns.push((
-        Inst::shift_r(false, ShiftKind::RotateRight, None, w_rsi),
+        Inst::shift_r(4, ShiftKind::RotateRight, None, w_rsi),
         "D3CE",
         "rorl    %cl, %esi",
     ));
     insns.push((
-        Inst::shift_r(true, ShiftKind::RotateRight, Some(5), w_r15),
+        Inst::shift_r(8, ShiftKind::RotateRight, Some(5), w_r15),
         "49C1CF05",
         "rorq    $5, %r15",
+    ));
+    insns.push((
+        Inst::shift_r(1, ShiftKind::RotateRight, None, w_rsi),
+        "D2CE",
+        "rorb    %cl, %sil",
+    ));
+    insns.push((
+        Inst::shift_r(1, ShiftKind::RotateRight, Some(5), w_r15),
+        "41C0CF05",
+        "rorb    $5, %r15b",
+    ));
+    insns.push((
+        Inst::shift_r(2, ShiftKind::RotateRight, None, w_rsi),
+        "66D3CE",
+        "rorw    %cl, %si",
+    ));
+    insns.push((
+        Inst::shift_r(2, ShiftKind::RotateRight, Some(5), w_r15),
+        "6641C1CF05",
+        "rorw    $5, %r15w",
     ));
 
     // ========================================================
