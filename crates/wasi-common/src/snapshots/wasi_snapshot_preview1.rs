@@ -6,6 +6,7 @@ use crate::wasi::{types, AsBytes};
 use crate::{path, poll, Error, Result, WasiCtx};
 use std::convert::TryInto;
 use std::io::{self, SeekFrom};
+use std::ops::Deref;
 use tracing::{debug, trace};
 use wiggle::{GuestPtr, GuestSlice};
 
@@ -438,11 +439,12 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             types::Rights::PATH_OPEN | types::Rights::PATH_CREATE_DIRECTORY,
         );
         let entry = self.get_entry(dirfd)?;
+        let path = path.as_str()?;
         let (dirfd, path) = path::get(
             &entry,
             &required_rights,
             types::Lookupflags::empty(),
-            path,
+            path.deref(),
             false,
         )?;
         dirfd.create_directory(&path)
@@ -456,7 +458,8 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<types::Filestat> {
         let required_rights = HandleRights::from_base(types::Rights::PATH_FILESTAT_GET);
         let entry = self.get_entry(dirfd)?;
-        let (dirfd, path) = path::get(&entry, &required_rights, flags, path, false)?;
+        let path = path.as_str()?;
+        let (dirfd, path) = path::get(&entry, &required_rights, flags, path.deref(), false)?;
         let host_filestat =
             dirfd.filestat_get_at(&path, flags.contains(&types::Lookupflags::SYMLINK_FOLLOW))?;
         Ok(host_filestat)
@@ -473,7 +476,8 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<()> {
         let required_rights = HandleRights::from_base(types::Rights::PATH_FILESTAT_SET_TIMES);
         let entry = self.get_entry(dirfd)?;
-        let (dirfd, path) = path::get(&entry, &required_rights, flags, path, false)?;
+        let path = path.as_str()?;
+        let (dirfd, path) = path::get(&entry, &required_rights, flags, path.deref(), false)?;
         dirfd.filestat_set_times_at(
             &path,
             atim,
@@ -494,22 +498,30 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<()> {
         let required_rights = HandleRights::from_base(types::Rights::PATH_LINK_SOURCE);
         let old_entry = self.get_entry(old_fd)?;
-        let (old_dirfd, old_path) = path::get(
-            &old_entry,
-            &required_rights,
-            types::Lookupflags::empty(),
-            old_path,
-            false,
-        )?;
+        let (old_dirfd, old_path) = {
+            // Borrow old_path for just this scope
+            let old_path = old_path.as_str()?;
+            path::get(
+                &old_entry,
+                &required_rights,
+                types::Lookupflags::empty(),
+                old_path.deref(),
+                false,
+            )?
+        };
         let required_rights = HandleRights::from_base(types::Rights::PATH_LINK_TARGET);
         let new_entry = self.get_entry(new_fd)?;
-        let (new_dirfd, new_path) = path::get(
-            &new_entry,
-            &required_rights,
-            types::Lookupflags::empty(),
-            new_path,
-            false,
-        )?;
+        let (new_dirfd, new_path) = {
+            // Borrow new_path for just this scope
+            let new_path = new_path.as_str()?;
+            path::get(
+                &new_entry,
+                &required_rights,
+                types::Lookupflags::empty(),
+                new_path.deref(),
+                false,
+            )?
+        };
         old_dirfd.link(
             &old_path,
             new_dirfd,
@@ -535,13 +547,16 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         );
         trace!("     | needed_rights={}", needed_rights);
         let entry = self.get_entry(dirfd)?;
-        let (dirfd, path) = path::get(
-            &entry,
-            &needed_rights,
-            dirflags,
-            path,
-            oflags & types::Oflags::CREAT != types::Oflags::empty(),
-        )?;
+        let (dirfd, path) = {
+            let path = path.as_str()?;
+            path::get(
+                &entry,
+                &needed_rights,
+                dirflags,
+                path.deref(),
+                oflags & types::Oflags::CREAT != types::Oflags::empty(),
+            )?
+        };
         // which open mode do we need?
         let read = fs_rights_base & (types::Rights::FD_READ | types::Rights::FD_READDIR)
             != types::Rights::empty();
@@ -577,13 +592,17 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<types::Size> {
         let required_rights = HandleRights::from_base(types::Rights::PATH_READLINK);
         let entry = self.get_entry(dirfd)?;
-        let (dirfd, path) = path::get(
-            &entry,
-            &required_rights,
-            types::Lookupflags::empty(),
-            path,
-            false,
-        )?;
+        let (dirfd, path) = {
+            // borrow path for just this scope
+            let path = path.as_str()?;
+            path::get(
+                &entry,
+                &required_rights,
+                types::Lookupflags::empty(),
+                path.deref(),
+                false,
+            )?
+        };
         let mut slice = buf.as_array(buf_len).as_slice()?;
         let host_bufused = dirfd.readlink(&path, &mut *slice)?.try_into()?;
         Ok(host_bufused)
@@ -592,13 +611,16 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn path_remove_directory(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
         let required_rights = HandleRights::from_base(types::Rights::PATH_REMOVE_DIRECTORY);
         let entry = self.get_entry(dirfd)?;
-        let (dirfd, path) = path::get(
-            &entry,
-            &required_rights,
-            types::Lookupflags::empty(),
-            path,
-            true,
-        )?;
+        let (dirfd, path) = {
+            let path = path.as_str()?;
+            path::get(
+                &entry,
+                &required_rights,
+                types::Lookupflags::empty(),
+                path.deref(),
+                true,
+            )?
+        };
         dirfd.remove_directory(&path)
     }
 
@@ -611,22 +633,28 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<()> {
         let required_rights = HandleRights::from_base(types::Rights::PATH_RENAME_SOURCE);
         let entry = self.get_entry(old_fd)?;
-        let (old_dirfd, old_path) = path::get(
-            &entry,
-            &required_rights,
-            types::Lookupflags::empty(),
-            old_path,
-            true,
-        )?;
+        let (old_dirfd, old_path) = {
+            let old_path = old_path.as_str()?;
+            path::get(
+                &entry,
+                &required_rights,
+                types::Lookupflags::empty(),
+                old_path.deref(),
+                true,
+            )?
+        };
         let required_rights = HandleRights::from_base(types::Rights::PATH_RENAME_TARGET);
         let entry = self.get_entry(new_fd)?;
-        let (new_dirfd, new_path) = path::get(
-            &entry,
-            &required_rights,
-            types::Lookupflags::empty(),
-            new_path,
-            true,
-        )?;
+        let (new_dirfd, new_path) = {
+            let new_path = new_path.as_str()?;
+            path::get(
+                &entry,
+                &required_rights,
+                types::Lookupflags::empty(),
+                new_path.deref(),
+                true,
+            )?
+        };
         old_dirfd.rename(&old_path, new_dirfd, &new_path)
     }
 
@@ -638,28 +666,34 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<()> {
         let required_rights = HandleRights::from_base(types::Rights::PATH_SYMLINK);
         let entry = self.get_entry(dirfd)?;
-        let (new_fd, new_path) = path::get(
-            &entry,
-            &required_rights,
-            types::Lookupflags::empty(),
-            new_path,
-            true,
-        )?;
+        let (new_fd, new_path) = {
+            let new_path = new_path.as_str()?;
+            path::get(
+                &entry,
+                &required_rights,
+                types::Lookupflags::empty(),
+                new_path.deref(),
+                true,
+            )?
+        };
         let old_path = old_path.as_str()?;
-        trace!(old_path = &*old_path);
+        trace!(old_path = old_path.deref());
         new_fd.symlink(&old_path, &new_path)
     }
 
     fn path_unlink_file(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
         let required_rights = HandleRights::from_base(types::Rights::PATH_UNLINK_FILE);
         let entry = self.get_entry(dirfd)?;
-        let (dirfd, path) = path::get(
-            &entry,
-            &required_rights,
-            types::Lookupflags::empty(),
-            path,
-            false,
-        )?;
+        let (dirfd, path) = {
+            let path = path.as_str()?;
+            path::get(
+                &entry,
+                &required_rights,
+                types::Lookupflags::empty(),
+                path.deref(),
+                false,
+            )?
+        };
         dirfd.unlink_file(&path)?;
         Ok(())
     }
