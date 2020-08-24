@@ -32,6 +32,7 @@ mod path;
 mod poll;
 mod sandboxed_tty_writer;
 pub mod snapshots;
+mod string_array_writer;
 mod sys;
 pub mod virtfs;
 pub mod wasi;

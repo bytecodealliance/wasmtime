@@ -1,6 +1,7 @@
 use crate::entry::{Entry, EntryHandle};
 use crate::fdpool::FdPool;
 use crate::handle::Handle;
+use crate::string_array_writer::StringArrayWriter;
 use crate::sys::osdir::OsDir;
 use crate::sys::stdio::NullDevice;
 use crate::sys::stdio::{Stderr, StderrExt, Stdin, StdinExt, Stdout, StdoutExt};
@@ -490,5 +491,13 @@ impl WasiCtx {
     /// Remove `Entry` corresponding to the specified raw WASI `fd` from the `WasiCtx` object.
     pub(crate) fn remove_entry(&self, fd: types::Fd) -> Result<Rc<Entry>> {
         self.entries.borrow_mut().remove(fd).ok_or(Error::Badf)
+    }
+
+    pub(crate) fn args(&self) -> &impl StringArrayWriter {
+        &self.args
+    }
+
+    pub(crate) fn env(&self) -> &impl StringArrayWriter {
+        &self.env
     }
 }

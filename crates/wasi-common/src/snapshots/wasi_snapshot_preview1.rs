@@ -1,5 +1,6 @@
 use crate::entry::{Entry, EntryHandle};
 use crate::handle::HandleRights;
+use crate::string_array_writer::StringArrayWriter;
 use crate::sys::clock;
 use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
 use crate::wasi::{types, AsBytes};
@@ -16,29 +17,12 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         argv: &GuestPtr<'b, GuestPtr<'b, u8>>,
         argv_buf: &GuestPtr<'b, u8>,
     ) -> Result<()> {
-        let mut argv = argv.clone();
-        let mut argv_buf = argv_buf.clone();
-
-        for arg in &self.args {
-            let arg_bytes = arg.as_bytes_with_nul();
-            let elems = arg_bytes.len().try_into()?;
-            argv_buf.as_array(elems).copy_from_slice(arg_bytes)?;
-            argv.write(argv_buf)?;
-            argv = argv.add(1)?;
-            argv_buf = argv_buf.add(elems)?;
-        }
-
-        Ok(())
+        self.args().write_to_guest(argv_buf, argv)
     }
 
     fn args_sizes_get(&self) -> Result<(types::Size, types::Size)> {
-        let argc = self.args.len().try_into()?;
-        let mut argv_size: types::Size = 0;
-        for arg in &self.args {
-            let arg_len = arg.as_bytes_with_nul().len().try_into()?;
-            argv_size = argv_size.checked_add(arg_len).ok_or(Error::Overflow)?;
-        }
-        Ok((argc, argv_size))
+        let args = self.args();
+        Ok((args.number_elements()?, args.cumulative_size()?))
     }
 
     fn environ_get<'b>(
@@ -46,29 +30,12 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         environ: &GuestPtr<'b, GuestPtr<'b, u8>>,
         environ_buf: &GuestPtr<'b, u8>,
     ) -> Result<()> {
-        let mut environ = environ.clone();
-        let mut environ_buf = environ_buf.clone();
-
-        for e in &self.env {
-            let environ_bytes = e.as_bytes_with_nul();
-            let elems = environ_bytes.len().try_into()?;
-            environ_buf.as_array(elems).copy_from_slice(environ_bytes)?;
-            environ.write(environ_buf)?;
-            environ = environ.add(1)?;
-            environ_buf = environ_buf.add(elems)?;
-        }
-
-        Ok(())
+        self.env().write_to_guest(environ_buf, environ)
     }
 
     fn environ_sizes_get(&self) -> Result<(types::Size, types::Size)> {
-        let environ_count = self.env.len().try_into()?;
-        let mut environ_size: types::Size = 0;
-        for environ in &self.env {
-            let env_len = environ.as_bytes_with_nul().len().try_into()?;
-            environ_size = environ_size.checked_add(env_len).ok_or(Error::Overflow)?;
-        }
-        Ok((environ_count, environ_size))
+        let args = self.args();
+        Ok((args.number_elements()?, args.cumulative_size()?))
     }
 
     fn clock_res_get(&self, id: types::Clockid) -> Result<types::Timestamp> {
