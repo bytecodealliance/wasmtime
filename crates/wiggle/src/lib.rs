@@ -542,6 +542,29 @@ impl<'a, T> GuestPtr<'a, [T]> {
     pub fn as_ptr(&self) -> GuestPtr<'a, T> {
         GuestPtr::new(self.mem, self.offset_base())
     }
+
+    pub fn get(&self, index: u32) -> Option<GuestPtr<'a, T>> {
+        if index < self.len() {
+            Some(GuestPtr::new(self.mem, self.offset_base() + index))
+        } else {
+            None
+        }
+    }
+
+    pub fn get_range(&self, r: std::ops::Range<u32>) -> Option<GuestPtr<'a, [T]>> {
+        let range_length = r.end - r.start;
+        if r.start < self.len() && r.end < self.len() {
+            Some(GuestPtr::new(
+                self.mem,
+                (
+                    self.offset_base() + r.start,
+                    self.offset_base() + range_length,
+                ),
+            ))
+        } else {
+            None
+        }
+    }
 }
 
 impl<'a> GuestPtr<'a, str> {
