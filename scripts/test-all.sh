@@ -64,13 +64,7 @@ RUST_BACKTRACE=1 cargo test \
   --package wiggle-generate \
   --package wiggle-test \
   --package wiggle-macro \
-  --package wasi-common \
-
-# Test wasmtime-wasi-c, which doesn't support Windows.
-if [ "${OS:-Not}" != "Windows_NT" ]; then
-    RUST_BACKTRACE=1 cargo test \
-      --package wasmtime-wasi-c
-fi
+  --package wasi-common
 
 # Make sure the documentation builds.
 banner "Rust documentation: $topdir/target/doc/wasmtime/index.html"
