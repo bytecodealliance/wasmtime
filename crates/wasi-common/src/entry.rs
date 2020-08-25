@@ -18,6 +18,12 @@ impl EntryHandle {
     }
 }
 
+impl std::fmt::Debug for EntryHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("EntryHandle").field("opaque", &()).finish()
+    }
+}
+
 impl From<Box<dyn Handle>> for EntryHandle {
     fn from(handle: Box<dyn Handle>) -> Self {
         Self(handle.into())

@@ -9,6 +9,7 @@ pub(crate) struct ClockEventData {
     pub(crate) userdata: types::Userdata,
 }
 
+#[derive(Debug)]
 pub(crate) struct FdEventData {
     pub(crate) handle: EntryHandle,
     pub(crate) r#type: types::Eventtype,
