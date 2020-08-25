@@ -50,7 +50,10 @@ impl<T: AsRawFd> AsFile for T {
 pub(super) fn get_file_type(file: &File) -> io::Result<types::Filetype> {
     let ft = file.metadata()?.file_type();
     let file_type = if ft.is_block_device() {
-        tracing::debug!("Host fd {:?} is a block device", file.as_raw_fd());
+        tracing::debug!(
+            host_fd = tracing::field::display(file.as_raw_fd()),
+            "Host fd is a block device"
+        );
         types::Filetype::BlockDevice
     } else if ft.is_char_device() {
         tracing::debug!("Host fd {:?} is a char device", file.as_raw_fd());
