@@ -46,7 +46,7 @@ fn concatenate<P: AsRef<Path>>(file: &OsDir, path: P) -> Result<PathBuf> {
     // components with `out_path`
     let out_path = PathBuf::from(strip_extended_prefix(out_path));
 
-    tracing::debug!("out_path={:?}", out_path);
+    tracing::debug!(out_path = tracing::field::debug(&out_path));
 
     Ok(out_path)
 }
@@ -171,7 +171,7 @@ pub(crate) fn link(
     if follow_symlinks {
         // in particular, this will return an error if the target path doesn't exist
         tracing::debug!(
-            old_path = tracing::field::display(&old_path),
+            old_path = tracing::field::display(old_path.display()),
             "Following symlinks"
         );
         old_path = fs::canonicalize(&old_path).map_err(|e| match e.raw_os_error() {
