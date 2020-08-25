@@ -421,6 +421,16 @@ pub fn compile_expression<R>(
 where
     R: Reader,
 {
+    // Bail when `frame_base` is complicated.
+    if let Some(expr) = frame_base {
+        if expr.parts.iter().any(|p| match p {
+            CompiledExpressionPart::Jump { .. } => true,
+            _ => false,
+        }) {
+            return Ok(None);
+        }
+    }
+
     let mut jump_arcs: HashMap<usize, usize> = HashMap::new();
     let mut pc = expr.0.clone();
 
