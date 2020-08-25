@@ -357,7 +357,7 @@ impl CompiledExpression {
                                     let new_pos = code_buf.len();
                                     old_to_new.insert(*original_pos, new_pos);
                                 }
-                                CompiledExpressionPart::Jump { conditionally, .. } => {
+                                CompiledExpressionPart::Jump { conditionally } => {
                                     code_buf.push(
                                         match conditionally {
                                             true => gimli::constants::DW_OP_bra,
