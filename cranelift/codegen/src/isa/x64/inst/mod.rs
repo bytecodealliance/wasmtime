@@ -359,6 +359,16 @@ pub enum Inst {
     /// Jump to a known target: jmp simm32.
     JmpKnown { dst: BranchTarget },
 
+    /// One-way conditional branch: jcond cond target.
+    ///
+    /// This instruction is useful when we have conditional jumps depending on more than two
+    /// conditions, see for instance the lowering of Brz/brnz with Fcmp inputs.
+    ///
+    /// A note of caution: in contexts where the branch target is another block, this has to be the
+    /// same successor as the one specified in the terminator branch of the current block.
+    /// Otherwise, this might confuse register allocation by creating new invisible edges.
+    JmpIf { cc: CC, taken: BranchTarget },
+
     /// Two-way conditional branch: jcond cond target target.
     /// Emitted as a compound sequence; the MachBuffer will shrink it as appropriate.
     JmpCond {
@@ -403,6 +413,56 @@ pub enum Inst {
         srcloc: SourceLoc,
         offset: i64,
     },
+
+    // =====================================
+    // Instructions pertaining to atomic memory accesses.
+    /// A standard (native) `lock cmpxchg src, (amode)`, with register conventions:
+    ///
+    /// `dst`  (read) address
+    /// `src`  (read) replacement value
+    /// %rax   (modified) in: expected value, out: value that was actually at `dst`
+    /// %rflags is written.  Do not assume anything about it after the instruction.
+    ///
+    /// The instruction "succeeded" iff the lowest `ty` bits of %rax afterwards are the same as
+    /// they were before.
+    LockCmpxchg {
+        ty: Type, // I8, I16, I32 or I64
+        src: Reg,
+        dst: SyntheticAmode,
+        srcloc: Option<SourceLoc>,
+    },
+
+    /// A synthetic instruction, based on a loop around a native `lock cmpxchg` instruction.
+    /// This atomically modifies a value in memory and returns the old value.  The sequence
+    /// consists of an initial "normal" load from `dst`, followed by a loop which computes the
+    /// new value and tries to compare-and-swap ("CAS") it into `dst`, using the native
+    /// instruction `lock cmpxchg{b,w,l,q}` .  The loop iterates until the CAS is successful.
+    /// If there is no contention, there will be only one pass through the loop body.  The
+    /// sequence does *not* perform any explicit memory fence instructions
+    /// (mfence/sfence/lfence).
+    ///
+    /// Note that the transaction is atomic in the sense that, as observed by some other thread,
+    /// `dst` either has the initial or final value, but no other.  It isn't atomic in the sense
+    /// of guaranteeing that no other thread writes to `dst` in between the initial load and the
+    /// CAS -- but that would cause the CAS to fail unless the other thread's last write before
+    /// the CAS wrote the same value that was already there.  In other words, this
+    /// implementation suffers (unavoidably) from the A-B-A problem.
+    ///
+    /// This instruction sequence has fixed register uses as follows:
+    ///
+    /// %r9   (read) address
+    /// %r10  (read) second operand for `op`
+    /// %r11  (written) scratch reg; value afterwards has no meaning
+    /// %rax  (written) the old value at %r9
+    /// %rflags is written.  Do not assume anything about it after the instruction.
+    AtomicRmwSeq {
+        ty: Type, // I8, I16, I32 or I64
+        op: inst_common::AtomicRmwOp,
+        srcloc: Option<SourceLoc>,
+    },
+
+    /// A memory fence (mfence, lfence or sfence).
+    Fence { kind: FenceKind },
 
     // =====================================
     // Meta-instructions generating no code.
@@ -526,6 +586,7 @@ impl Inst {
         Inst::Mov_R_R { is_64, src, dst }
     }
 
+    // TODO Can be replaced by `Inst::move` (high-level) and `Inst::unary_rm_r` (low-level)
     pub(crate) fn xmm_mov(
         op: SseOpcode,
         src: RegMem,
@@ -915,6 +976,10 @@ impl Inst {
         Inst::JmpKnown { dst }
     }
 
+    pub(crate) fn jmp_if(cc: CC, taken: BranchTarget) -> Inst {
+        Inst::JmpIf { cc, taken }
+    }
+
     pub(crate) fn jmp_cond(cc: CC, taken: BranchTarget, not_taken: BranchTarget) -> Inst {
         Inst::JmpCond {
             cc,
@@ -933,6 +998,85 @@ impl Inst {
             cc,
             trap_code,
             srcloc,
+        }
+    }
+
+    /// Choose which instruction to use for loading a register value from memory. For loads smaller
+    /// than 64 bits, this method expects a way to extend the value (i.e. [ExtKind::SignExtend],
+    /// [ExtKind::ZeroExtend]); loads with no extension necessary will ignore this.
+    pub(crate) fn load(
+        ty: Type,
+        from_addr: impl Into<SyntheticAmode>,
+        to_reg: Writable<Reg>,
+        ext_kind: ExtKind,
+        srcloc: Option<SourceLoc>,
+    ) -> Inst {
+        let rc = to_reg.to_reg().get_class();
+        match rc {
+            RegClass::I64 => {
+                let ext_mode = match ty.bytes() {
+                    1 => Some(ExtMode::BQ),
+                    2 => Some(ExtMode::WQ),
+                    4 => Some(ExtMode::LQ),
+                    8 => None,
+                    _ => unreachable!("the type should never use a scalar load: {}", ty),
+                };
+                if let Some(ext_mode) = ext_mode {
+                    // Values smaller than 64 bits must be extended in some way.
+                    match ext_kind {
+                        ExtKind::SignExtend => {
+                            Inst::movsx_rm_r(ext_mode, RegMem::mem(from_addr), to_reg, srcloc)
+                        }
+                        ExtKind::ZeroExtend => {
+                            Inst::movzx_rm_r(ext_mode, RegMem::mem(from_addr), to_reg, srcloc)
+                        }
+                        ExtKind::None => panic!(
+                            "expected an extension kind for extension mode: {:?}",
+                            ext_mode
+                        ),
+                    }
+                } else {
+                    // 64-bit values can be moved directly.
+                    Inst::mov64_m_r(from_addr, to_reg, srcloc)
+                }
+            }
+            RegClass::V128 => {
+                let opcode = match ty {
+                    types::F32 => SseOpcode::Movss,
+                    types::F64 => SseOpcode::Movsd,
+                    types::F32X4 => SseOpcode::Movups,
+                    types::F64X2 => SseOpcode::Movupd,
+                    _ if ty.is_vector() && ty.bits() == 128 => SseOpcode::Movdqu,
+                    _ => unimplemented!("unable to load type: {}", ty),
+                };
+                Inst::xmm_unary_rm_r(opcode, RegMem::mem(from_addr), to_reg)
+            }
+            _ => panic!("unable to generate load for register class: {:?}", rc),
+        }
+    }
+
+    /// Choose which instruction to use for storing a register value to memory.
+    pub(crate) fn store(
+        ty: Type,
+        from_reg: Reg,
+        to_addr: impl Into<SyntheticAmode>,
+        srcloc: Option<SourceLoc>,
+    ) -> Inst {
+        let rc = from_reg.get_class();
+        match rc {
+            RegClass::I64 => Inst::mov_r_m(ty.bytes() as u8, from_reg, to_addr, srcloc),
+            RegClass::V128 => {
+                let opcode = match ty {
+                    types::F32 => SseOpcode::Movss,
+                    types::F64 => SseOpcode::Movsd,
+                    types::F32X4 => SseOpcode::Movups,
+                    types::F64X2 => SseOpcode::Movupd,
+                    _ if ty.is_vector() && ty.bits() == 128 => SseOpcode::Movdqu,
+                    _ => unimplemented!("unable to store type: {}", ty),
+                };
+                Inst::xmm_mov_r_m(opcode, from_reg, to_addr, srcloc)
+            }
+            _ => panic!("unable to generate store for register class: {:?}", rc),
         }
     }
 }
@@ -1406,12 +1550,18 @@ impl ShowWithRRU for Inst {
                 format!("{} {}", ljustify("jmp".to_string()), dst.show_rru(mb_rru))
             }
 
+            Inst::JmpIf { cc, taken } => format!(
+                "{} {}",
+                ljustify2("j".to_string(), cc.to_string()),
+                taken.show_rru(mb_rru),
+            ),
+
             Inst::JmpCond {
                 cc,
                 taken,
                 not_taken,
             } => format!(
-                "{} taken={} not_taken={}",
+                "{} {}; j {}",
                 ljustify2("j".to_string(), cc.to_string()),
                 taken.show_rru(mb_rru),
                 not_taken.show_rru(mb_rru)
@@ -1440,6 +1590,26 @@ impl ShowWithRRU for Inst {
                 offset,
                 show_ireg_sized(dst.to_reg(), mb_rru, 8),
             ),
+
+            Inst::LockCmpxchg { ty, src, dst, .. } => {
+                let size = ty.bytes() as u8;
+                format!("lock cmpxchg{} {}, {}",
+                        suffixBWLQ(size), show_ireg_sized(*src, mb_rru, size), dst.show_rru(mb_rru))
+            }
+
+            Inst::AtomicRmwSeq { ty, op, .. } => {
+                format!(
+                    "atomically {{ {}_bits_at_[%r9]) {:?}= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }}",
+                    ty.bits(), op)
+            },
+
+            Inst::Fence { kind } => {
+                match kind {
+                    FenceKind::MFence => "mfence".to_string(),
+                    FenceKind::LFence => "lfence".to_string(),
+                    FenceKind::SFence => "sfence".to_string(),
+                }
+            }
 
             Inst::VirtualSPOffsetAdj { offset } => format!("virtual_sp_offset_adjust {}", offset),
 
@@ -1657,15 +1827,30 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(*dst);
         }
 
+        Inst::LockCmpxchg { src, dst, .. } => {
+            dst.get_regs_as_uses(collector);
+            collector.add_use(*src);
+            collector.add_mod(Writable::from_reg(regs::rax()));
+        }
+
+        Inst::AtomicRmwSeq { .. } => {
+            collector.add_use(regs::r9());
+            collector.add_use(regs::r10());
+            collector.add_def(Writable::from_reg(regs::r11()));
+            collector.add_def(Writable::from_reg(regs::rax()));
+        }
+
         Inst::Ret
         | Inst::EpiloguePlaceholder
         | Inst::JmpKnown { .. }
+        | Inst::JmpIf { .. }
         | Inst::JmpCond { .. }
         | Inst::Nop { .. }
         | Inst::TrapIf { .. }
         | Inst::VirtualSPOffsetAdj { .. }
         | Inst::Hlt
-        | Inst::Ud2 { .. } => {
+        | Inst::Ud2 { .. }
+        | Inst::Fence { .. } => {
             // No registers are used.
         }
     }
@@ -2011,16 +2196,29 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
 
         Inst::LoadExtName { ref mut dst, .. } => map_def(mapper, dst),
 
+        Inst::LockCmpxchg {
+            ref mut src,
+            ref mut dst,
+            ..
+        } => {
+            map_use(mapper, src);
+            dst.map_uses(mapper);
+        }
+
         Inst::Ret
         | Inst::EpiloguePlaceholder
         | Inst::JmpKnown { .. }
         | Inst::JmpCond { .. }
+        | Inst::JmpIf { .. }
         | Inst::Nop { .. }
         | Inst::TrapIf { .. }
         | Inst::VirtualSPOffsetAdj { .. }
         | Inst::Ud2 { .. }
-        | Inst::Hlt => {
-            // No registers are used.
+        | Inst::Hlt
+        | Inst::AtomicRmwSeq { .. }
+        | Inst::Fence { .. } => {
+            // Instruction doesn't explicitly mention any regs, so it can't have any virtual
+            // regs that we'd need to remap.  Hence no action required.
         }
     }
 }
@@ -2093,16 +2291,18 @@ impl MachInst for Inst {
         debug_assert!(rc_dst == rc_src);
         match rc_dst {
             RegClass::I64 => Inst::mov_r_r(true, src_reg, dst_reg),
-            RegClass::V128 => match ty {
-                types::F32 => Inst::xmm_mov(SseOpcode::Movss, RegMem::reg(src_reg), dst_reg, None),
-                types::F64 => Inst::xmm_mov(SseOpcode::Movsd, RegMem::reg(src_reg), dst_reg, None),
-                _ if ty.is_vector() && ty.bits() == 128 => {
-                    // TODO Specialize this move for different types: MOVUPD, MOVDQU, etc.
-                    Inst::xmm_mov(SseOpcode::Movups, RegMem::reg(src_reg), dst_reg, None)
-                }
-                _ => panic!("unexpected type {:?} in gen_move of regclass V128", ty),
-            },
-            _ => panic!("gen_move(x64): unhandled regclass"),
+            RegClass::V128 => {
+                let opcode = match ty {
+                    types::F32 => SseOpcode::Movss,
+                    types::F64 => SseOpcode::Movsd,
+                    types::F32X4 => SseOpcode::Movaps,
+                    types::F64X2 => SseOpcode::Movapd,
+                    _ if ty.is_vector() && ty.bits() == 128 => SseOpcode::Movdqa,
+                    _ => unimplemented!("unable to move type: {}", ty),
+                };
+                Inst::xmm_unary_rm_r(opcode, RegMem::reg(src_reg), dst_reg)
+            }
+            _ => panic!("gen_move(x64): unhandled regclass {:?}", rc_dst),
         }
     }
 

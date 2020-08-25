@@ -3,10 +3,10 @@ use super::{fd, path, AsFile};
 use crate::handle::{Handle, HandleRights};
 use crate::wasi::types;
 use crate::{Error, Result};
-use log::{debug, error};
 use std::any::Any;
 use std::io;
 use std::ops::Deref;
+use tracing::{debug, error};
 
 // TODO could this be cleaned up?
 // The actual `OsDir` struct is OS-dependent, therefore we delegate

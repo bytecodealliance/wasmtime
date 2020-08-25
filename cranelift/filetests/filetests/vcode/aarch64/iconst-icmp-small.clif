@@ -1,0 +1,32 @@
+; Test that `put_input_in_rse` doesn't try to put the input of the `iconst` into a register, which
+; would result in an out-of-bounds panic. (#2147)
+
+test compile
+target aarch64
+
+function u0:0() -> i8 system_v {
+
+block0:
+    v0 = iconst.i16 0xddcc
+    v1 = icmp.i16 ne v0, v0
+    v2 = bint.i8 v1
+    return v2
+}
+
+; check: VCode_ShowWithRRU {{
+; nextln: Entry block: 0
+; nextln: Block 0:
+; nextln:   (original IR block: block0)
+; nextln:   (instruction range: 0 .. 11)
+; nextln:   Inst 0:   stp fp, lr, [sp, #-16]!
+; nextln:   Inst 1:   mov fp, sp
+; nextln:   Inst 2:   movz x0, #56780
+; nextln:   Inst 3:   uxth w0, w0
+; nextln:   Inst 4:   movz x1, #56780
+; nextln:   Inst 5:   subs wzr, w0, w1, UXTH
+; nextln:   Inst 6:   cset x0, ne
+; nextln:   Inst 7:   and w0, w0, #1
+; nextln:   Inst 8:   mov sp, fp
+; nextln:   Inst 9:   ldp fp, lr, [sp], #16
+; nextln:   Inst 10:   ret
+; nextln: }}

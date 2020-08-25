@@ -2,8 +2,6 @@ use anyhow::{bail, Context as _, Result};
 use object::write::Object;
 use target_lexicon::Triple;
 use wasmtime::Strategy;
-#[cfg(feature = "lightbeam")]
-use wasmtime_environ::Lightbeam;
 use wasmtime_environ::{settings, settings::Configurable, ModuleEnvironment, Tunables};
 use wasmtime_jit::{native, Compiler};
 

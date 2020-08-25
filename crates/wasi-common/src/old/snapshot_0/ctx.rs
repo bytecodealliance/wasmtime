@@ -287,7 +287,7 @@ impl WasiCtxBuilder {
             let fd = fd_pool
                 .allocate()
                 .ok_or(WasiCtxBuilderError::TooManyFilesOpen)?;
-            log::debug!("WasiCtx inserting ({:?}, {:?})", fd, pending);
+            tracing::debug!("WasiCtx inserting ({:?}, {:?})", fd, pending);
             match pending.take().unwrap() {
                 PendingEntry::Thunk(f) => {
                     entries.insert(fd, f()?);
@@ -311,9 +311,9 @@ impl WasiCtxBuilder {
 
             let mut fe = Entry::from(dir)?;
             fe.preopen_path = Some(guest_path);
-            log::debug!("WasiCtx inserting ({:?}, {:?})", preopen_fd, fe);
+            tracing::debug!("WasiCtx inserting ({:?}, {:?})", preopen_fd, fe);
             entries.insert(preopen_fd, fe);
-            log::debug!("WasiCtx entries = {:?}", entries);
+            tracing::debug!("WasiCtx entries = {:?}", entries);
         }
 
         Ok(WasiCtx {

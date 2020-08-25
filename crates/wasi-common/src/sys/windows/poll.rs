@@ -8,12 +8,12 @@ use crate::sys::AsFile;
 use crate::wasi::types;
 use crate::{Error, Result};
 use lazy_static::lazy_static;
-use log::{debug, error, trace, warn};
 use std::convert::TryInto;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
+use tracing::{debug, error, trace, warn};
 
 struct StdinPoll {
     request_tx: Sender<()>,
@@ -245,7 +245,7 @@ pub(crate) fn oneoff(
                 handle_error_event(event, types::Errno::Notsup, events);
             }
         } else {
-            log::error!("can poll FdEvent for OS resources only");
+            tracing::error!("can poll FdEvent for OS resources only");
             return Err(Error::Badf);
         }
     }

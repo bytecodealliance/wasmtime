@@ -11,11 +11,11 @@ pub(crate) fn unlink_file(dirfd: &OsDir, path: &str) -> Result<()> {
 pub(crate) fn symlink(old_path: &str, new_dirfd: &OsDir, new_path: &str) -> Result<()> {
     use yanix::file::symlinkat;
 
-    log::debug!("path_symlink old_path = {:?}", old_path);
-    log::debug!(
-        "path_symlink (new_dirfd, new_path) = ({:?}, {:?})",
-        new_dirfd,
-        new_path
+    tracing::debug!(
+        old_path = old_path,
+        new_dirfd = tracing::field::debug(new_dirfd),
+        new_path = new_path,
+        "path symlink"
     );
 
     unsafe { symlinkat(old_path, new_dirfd.as_raw_fd(), new_path)? };

@@ -3,11 +3,10 @@ use crate::handle::HandleRights;
 use crate::sys::clock;
 use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
 use crate::wasi::{types, AsBytes};
-use crate::{path, poll};
-use crate::{Error, Result, WasiCtx};
-use log::{debug, trace};
+use crate::{path, poll, Error, Result, WasiCtx};
 use std::convert::TryInto;
 use std::io::{self, SeekFrom};
+use tracing::{debug, trace};
 use wiggle::{GuestPtr, GuestSlice};
 
 impl<'a> WasiSnapshotPreview1 for WasiCtx {
@@ -651,7 +650,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             true,
         )?;
         let old_path = old_path.as_str()?;
-        trace!("     | old_path='{}'", &*old_path);
+        trace!(old_path = &*old_path);
         new_fd.symlink(&old_path, &new_path)
     }
 
@@ -701,8 +700,11 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             match subscription.u {
                 types::SubscriptionU::Clock(clock) => {
                     let delay = clock::to_relative_ns_delay(&clock)?;
-                    debug!("poll_oneoff event.u.clock = {:?}", clock);
-                    debug!("poll_oneoff delay = {:?}ns", delay);
+                    debug!(
+                        clock = tracing::field::debug(&clock),
+                        delay_ns = tracing::field::debug(delay),
+                        "poll_oneoff"
+                    );
                     let current = poll::ClockEventData {
                         delay,
                         userdata: subscription.userdata,
@@ -766,8 +768,11 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                 }
             }
         }
-        debug!("poll_oneoff events = {:?}", events);
-        debug!("poll_oneoff timeout = {:?}", timeout);
+        debug!(
+            events = tracing::field::debug(&events),
+            timeout = tracing::field::debug(timeout),
+            "poll_oneoff"
+        );
         // The underlying implementation should successfully and immediately return
         // if no events have been passed. Such situation may occur if all provided
         // events have been filtered out as errors in the code above.
@@ -780,7 +785,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             event_ptr.write(event)?;
         }
 
-        trace!("     | *nevents={:?}", nevents);
+        trace!(nevents = nevents);
 
         Ok(nevents)
     }

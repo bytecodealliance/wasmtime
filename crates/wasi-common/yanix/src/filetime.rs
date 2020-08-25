@@ -25,7 +25,7 @@ impl FileTimeExt for filetime::FileTime {
         let sec = match self.seconds().try_into() {
             Ok(sec) => sec,
             Err(_) => {
-                log::debug!("filetime_to_timespec failed converting seconds to required width");
+                tracing::debug!("filetime_to_timespec failed converting seconds to required width");
                 return Err(Error::from_raw_os_error(libc::EOVERFLOW));
             }
         };

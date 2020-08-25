@@ -1,0 +1,134 @@
+test compile
+target aarch64
+
+function u0:0(i8) -> f32 {
+block0(v0: i8):
+    ; check: stp fp, lr, [sp, #-16]!
+    ; check: mov fp, sp
+    v1 = fcvt_from_uint.f32 v0
+    ; check: uxtb w0, w0
+    ; check: ucvtf s0, w0
+    return v1
+    ; check: mov sp, fp
+    ; check: ldp fp, lr, [sp], #16
+    ; check: ret
+}
+
+function u0:0(i8) -> f64 {
+block0(v0: i8):
+    ; check: stp fp, lr, [sp, #-16]!
+    ; check: mov fp, sp
+    v1 = fcvt_from_uint.f64 v0
+    ; check: uxtb w0, w0
+    ; check: ucvtf d0, w0
+    return v1
+    ; check: mov sp, fp
+    ; check: ldp fp, lr, [sp], #16
+    ; check: ret
+}
+
+function u0:0(i16) -> f32 {
+block0(v0: i16):
+    ; check: stp fp, lr, [sp, #-16]!
+    ; check: mov fp, sp
+    v1 = fcvt_from_uint.f32 v0
+    ; check: uxth w0, w0
+    ; check: ucvtf s0, w0
+    return v1
+    ; check: mov sp, fp
+    ; check: ldp fp, lr, [sp], #16
+    ; check: ret
+}
+
+function u0:0(i16) -> f64 {
+block0(v0: i16):
+    ; check: stp fp, lr, [sp, #-16]!
+    ; check: mov fp, sp
+    v1 = fcvt_from_uint.f64 v0
+    ; check: uxth w0, w0
+    ; check: ucvtf d0, w0
+    return v1
+    ; check: mov sp, fp
+    ; check: ldp fp, lr, [sp], #16
+    ; check: ret
+}
+
+function u0:0(f32) -> i8 {
+block0(v0: f32):
+    ; check: stp fp, lr, [sp, #-16]!
+    ; check: mov fp, sp
+    v1 = fcvt_to_uint.i8 v0
+    ; check: fcmp s0, s0
+    ; check: b.vc 8 ; udf
+    ; check: ldr s1, pc+8 ; b 8 ; data.f32 -1
+    ; check: fcmp s0, s1
+    ; check: b.gt 8 ; udf
+    ; check: ldr s1, pc+8 ; b 8 ; data.f32 256
+    ; check: fcmp s0, s1
+    ; check: b.mi 8 ; udf
+    ; check: fcvtzu w0, s0
+    return v1
+    ; check: mov sp, fp
+    ; check: ldp fp, lr, [sp], #16
+    ; check: ret
+}
+
+function u0:0(f64) -> i8 {
+block0(v0: f64):
+    ; check: stp fp, lr, [sp, #-16]!
+    ; check: mov fp, sp
+    v1 = fcvt_to_uint.i8 v0
+    ; check: fcmp d0, d0
+    ; check: b.vc 8 ; udf
+    ; check: ldr d1, pc+8 ; b 12 ; data.f64 -1
+    ; check: fcmp d0, d1
+    ; check: b.gt 8 ; udf
+    ; check: ldr d1, pc+8 ; b 12 ; data.f64 256
+    ; check: fcmp d0, d1
+    ; check: b.mi 8 ; udf
+    ; check: fcvtzu w0, d0
+    return v1
+    ; check: mov sp, fp
+    ; check: ldp fp, lr, [sp], #16
+    ; check: ret
+}
+
+function u0:0(f32) -> i16 {
+block0(v0: f32):
+    ; check: stp fp, lr, [sp, #-16]!
+    ; check: mov fp, sp
+    v1 = fcvt_to_uint.i16 v0
+    ; check: fcmp s0, s0
+    ; check: b.vc 8 ; udf
+    ; check: ldr s1, pc+8 ; b 8 ; data.f32 -1
+    ; check: fcmp s0, s1
+    ; check: b.gt 8 ; udf
+    ; check: ldr s1, pc+8 ; b 8 ; data.f32 65536
+    ; check: fcmp s0, s1
+    ; check: b.mi 8 ; udf
+    ; check: fcvtzu w0, s0
+    return v1
+    ; check: mov sp, fp
+    ; check: ldp fp, lr, [sp], #16
+    ; check: ret
+}
+
+function u0:0(f64) -> i16 {
+block0(v0: f64):
+    ; check: stp fp, lr, [sp, #-16]!
+    ; check: mov fp, sp
+    v1 = fcvt_to_uint.i16 v0
+    ; check: fcmp d0, d0
+    ; check: b.vc 8 ; udf
+    ; check: ldr d1, pc+8 ; b 12 ; data.f64 -1
+    ; check: fcmp d0, d1
+    ; check: b.gt 8 ; udf
+    ; check: ldr d1, pc+8 ; b 12 ; data.f64 65536
+    ; check: fcmp d0, d1
+    ; check: b.mi 8 ; udf
+    ; check: fcvtzu w0, d0
+    return v1
+    ; check: mov sp, fp
+    ; check: ldp fp, lr, [sp], #16
+    ; check: ret
+}

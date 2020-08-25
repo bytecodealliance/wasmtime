@@ -181,6 +181,7 @@ fn experimental_x64_should_panic(testsuite: &str, testname: &str, strategy: &str
 
     match (testsuite, testname) {
         ("simd", "simd_address") => return false,
+        ("simd", "simd_const") => return false,
         ("simd", "simd_f32x4_arith") => return false,
         ("simd", "simd_f32x4_cmp") => return false,
         ("simd", "simd_f64x2_arith") => return false,
@@ -195,7 +196,6 @@ fn experimental_x64_should_panic(testsuite: &str, testname: &str, strategy: &str
 
 /// Ignore tests that aren't supported yet.
 fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
-    let target = env::var("TARGET").unwrap();
     match strategy {
         #[cfg(feature = "lightbeam")]
         "Lightbeam" => match (testsuite, testname) {
@@ -206,36 +206,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             _ => (),
         },
         "Cranelift" => match (testsuite, testname) {
-            ("simd", "simd_address") => return false,
-            ("simd", "simd_align") => return false,
-            ("simd", "simd_bitwise") => return false,
-            ("simd", "simd_bit_shift") => return false,
-            ("simd", "simd_boolean") => return false,
-            ("simd", "simd_f32x4") => return false,
-            ("simd", "simd_f32x4_arith") => return false,
-            ("simd", "simd_f32x4_cmp") => return false,
-            ("simd", "simd_f64x2") => return false,
-            ("simd", "simd_f64x2_arith") => return false,
-            ("simd", "simd_f64x2_cmp") => return false,
-            ("simd", "simd_i8x16_arith") => return false,
-            ("simd", "simd_i8x16_arith2") => return false,
-            ("simd", "simd_i8x16_cmp") => return false,
-            ("simd", "simd_i8x16_sat_arith") => return false,
-            ("simd", "simd_i16x8_arith") => return false,
-            ("simd", "simd_i16x8_arith2") => return false,
-            ("simd", "simd_i16x8_cmp") => return false,
-            ("simd", "simd_i16x8_sat_arith") => return false,
-            ("simd", "simd_i32x4_arith") => return false,
-            ("simd", "simd_i32x4_arith2") => return false,
-            ("simd", "simd_i32x4_cmp") => return false,
-            ("simd", "simd_lane") => return false,
-            ("simd", "simd_load_extend") => return false,
-            ("simd", "simd_load_splat") => return false,
-            ("simd", "simd_store") => return false,
-            // Most simd tests are known to fail on aarch64 for now, it's going
-            // to be a big chunk of work to implement them all there!
-            ("simd", _) if target.contains("aarch64") => return true,
-
             // TODO(#1886): Ignore reference types tests if this isn't x64,
             // because Cranelift only supports reference types on x64.
             ("reference_types", _) => {

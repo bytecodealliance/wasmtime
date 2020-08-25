@@ -133,6 +133,8 @@ pub mod adapter;
 pub use adapter::*;
 pub mod helpers;
 pub use helpers::*;
+pub mod inst_common;
+pub use inst_common::*;
 
 /// A machine instruction.
 pub trait MachInst: Clone + Debug {

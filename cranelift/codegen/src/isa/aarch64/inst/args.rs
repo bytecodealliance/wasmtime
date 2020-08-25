@@ -3,7 +3,6 @@
 // Some variants are never constructed, but we still want them as options in the future.
 #![allow(dead_code)]
 
-use crate::ir;
 use crate::ir::types::{F32X2, F32X4, F64X2, I16X4, I16X8, I32X2, I32X4, I64X2, I8X16, I8X8};
 use crate::ir::Type;
 use crate::isa::aarch64::inst::*;
@@ -647,31 +646,37 @@ impl VectorSize {
             VectorSize::Size64x2 => ScalarSize::Size64,
         }
     }
-}
 
-//=============================================================================
-// Instruction sub-components: atomic memory update operations
+    pub fn is_128bits(&self) -> bool {
+        match self {
+            VectorSize::Size8x8 => false,
+            VectorSize::Size8x16 => true,
+            VectorSize::Size16x4 => false,
+            VectorSize::Size16x8 => true,
+            VectorSize::Size32x2 => false,
+            VectorSize::Size32x4 => true,
+            VectorSize::Size64x2 => true,
+        }
+    }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum AtomicRMWOp {
-    Add,
-    Sub,
-    And,
-    Or,
-    Xor,
-    Xchg,
-}
+    pub fn widen(&self) -> VectorSize {
+        match self {
+            VectorSize::Size8x8 => VectorSize::Size16x8,
+            VectorSize::Size8x16 => VectorSize::Size16x8,
+            VectorSize::Size16x4 => VectorSize::Size32x4,
+            VectorSize::Size16x8 => VectorSize::Size32x4,
+            VectorSize::Size32x2 => VectorSize::Size64x2,
+            VectorSize::Size32x4 => VectorSize::Size64x2,
+            VectorSize::Size64x2 => unreachable!(),
+        }
+    }
 
-impl AtomicRMWOp {
-    pub fn from(ir_op: ir::AtomicRmwOp) -> Self {
-        match ir_op {
-            ir::AtomicRmwOp::Add => AtomicRMWOp::Add,
-            ir::AtomicRmwOp::Sub => AtomicRMWOp::Sub,
-            ir::AtomicRmwOp::And => AtomicRMWOp::And,
-            ir::AtomicRmwOp::Or => AtomicRMWOp::Or,
-            ir::AtomicRmwOp::Xor => AtomicRMWOp::Xor,
-            ir::AtomicRmwOp::Xchg => AtomicRMWOp::Xchg,
+    pub fn halve(&self) -> VectorSize {
+        match self {
+            VectorSize::Size8x16 => VectorSize::Size8x8,
+            VectorSize::Size16x8 => VectorSize::Size16x4,
+            VectorSize::Size32x4 => VectorSize::Size32x2,
+            _ => *self,
         }
     }
 }

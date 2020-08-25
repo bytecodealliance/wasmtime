@@ -60,10 +60,10 @@ pub(crate) fn readdir<'a>(
     // Seek if needed. Unless cookie is wasi::__WASI_DIRCOOKIE_START,
     // new items may not be returned to the caller.
     if cookie == wasi::DIRCOOKIE_START {
-        log::trace!("     | fd_readdir: doing rewinddir");
+        tracing::trace!("fd_readdir: doing rewinddir");
         dir.rewind();
     } else {
-        log::trace!("     | fd_readdir: doing seekdir to {}", cookie);
+        tracing::trace!("fd_readdir: doing seekdir to {}", cookie);
         let loc = unsafe { SeekLoc::from_raw(cookie as i64)? };
         dir.seek(loc);
     }

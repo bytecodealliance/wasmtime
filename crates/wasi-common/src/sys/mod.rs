@@ -55,7 +55,7 @@ impl AsFile for dyn Handle + 'static {
         } else if let Some(other) = self.as_any().downcast_ref::<OsOther>() {
             other.as_file()
         } else {
-            log::error!("tried to make std::fs::File from non-OS handle");
+            tracing::error!("tried to make std::fs::File from non-OS handle");
             Err(io::Error::from_raw_os_error(libc::EBADF))
         }
     }
@@ -69,17 +69,26 @@ impl TryFrom<File> for Box<dyn Handle> {
         match file_type {
             types::Filetype::RegularFile => {
                 let handle = OsFile::try_from(file)?;
-                log::debug!("Created new instance of OsFile: {:?}", handle);
+                tracing::debug!(
+                    handle = tracing::field::debug(&handle),
+                    "Created new instance of OsFile"
+                );
                 Ok(Box::new(handle))
             }
             types::Filetype::Directory => {
                 let handle = OsDir::try_from(file)?;
-                log::debug!("Created new instance of OsDir: {:?}", handle);
+                tracing::debug!(
+                    handle = tracing::field::debug(&handle),
+                    "Created new instance of OsDir"
+                );
                 Ok(Box::new(handle))
             }
             _ => {
                 let handle = OsOther::try_from(file)?;
-                log::debug!("Created new instance of OsOther: {:?}", handle);
+                tracing::debug!(
+                    handle = tracing::field::debug(&handle),
+                    "Created new instance of OsOther"
+                );
                 Ok(Box::new(handle))
             }
         }

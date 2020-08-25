@@ -9,7 +9,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 edition = "2018"
 
 [dependencies]
-log = "0.4"
+tracing = "0.1.15"
 libc = { version = "0.2", features = ["extra_traits"] }
 bitflags = "1.2"
 cfg-if = "0.1.9"

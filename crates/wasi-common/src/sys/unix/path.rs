@@ -55,7 +55,7 @@ pub(crate) fn readlinkat(dirfd: &OsDir, path: &str) -> Result<String> {
     use std::os::unix::prelude::AsRawFd;
     use yanix::file::readlinkat;
 
-    log::debug!("path_get readlinkat path = {:?}", path);
+    tracing::debug!(path = path, "path_get readlinkat");
 
     let path = unsafe { readlinkat(dirfd.as_raw_fd(), path)? };
     let path = from_host(path)?;
@@ -124,9 +124,12 @@ pub(crate) fn open(
     // umask is, but don't set the executable flag, because it isn't yet
     // meaningful for WASI programs to create executable files.
 
-    log::debug!("path_open dirfd = {:?}", dirfd);
-    log::debug!("path_open path = {:?}", path);
-    log::debug!("path_open oflags = {:?}", nix_all_oflags);
+    tracing::debug!(
+        dirfd = tracing::field::debug(dirfd),
+        path = tracing::field::debug(path),
+        oflags = tracing::field::debug(nix_all_oflags),
+        "path_open"
+    );
 
     let fd_no = unsafe {
         openat(
@@ -149,7 +152,10 @@ pub(crate) fn open(
                             }
                         }
                         Err(err) => {
-                            log::debug!("path_open fstatat error: {:?}", err);
+                            tracing::debug!(
+                                error = tracing::field::debug(&err),
+                                "path_open fstatat error",
+                            );
                         }
                     }
                 }
@@ -165,7 +171,10 @@ pub(crate) fn open(
                             }
                         }
                         Err(err) => {
-                            log::debug!("path_open fstatat error: {:?}", err);
+                            tracing::debug!(
+                                error = tracing::field::debug(&err),
+                                "path_open fstatat error",
+                            );
                         }
                     }
                 }
@@ -181,7 +190,7 @@ pub(crate) fn open(
         }
     };
 
-    log::debug!("path_open (host) new_fd = {:?}", new_fd);
+    tracing::debug!(new_fd = tracing::field::debug(new_fd));
 
     // Determine the type of the new file descriptor and which rights contradict with this type
     let file = unsafe { File::from_raw_fd(new_fd) };

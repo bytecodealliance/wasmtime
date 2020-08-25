@@ -40,7 +40,7 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> WasiResult<File> {
     use std::os::unix::prelude::{AsRawFd, FromRawFd};
     use yanix::file::{openat, Mode};
 
-    log::debug!("path_get openat path = {:?}", path);
+    tracing::debug!("path_get openat path = {:?}", path);
 
     unsafe {
         openat(
@@ -58,7 +58,7 @@ pub(crate) fn readlinkat(dirfd: &File, path: &str) -> WasiResult<String> {
     use std::os::unix::prelude::AsRawFd;
     use yanix::file::readlinkat;
 
-    log::debug!("path_get readlinkat path = {:?}", path);
+    tracing::debug!("path_get readlinkat path = {:?}", path);
 
     unsafe { readlinkat(dirfd.as_raw_fd(), path) }
         .map_err(Into::into)

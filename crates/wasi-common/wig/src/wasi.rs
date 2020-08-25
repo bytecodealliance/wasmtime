@@ -201,7 +201,7 @@ pub fn define_struct(args: TokenStream) -> TokenStream {
                 let #name_ident = wasmtime::Func::wrap(
                     store,
                     move |caller: wasmtime::Caller<'_> #(,#shim_arg_decls)*| -> #ret_ty {
-                        log::trace!(
+                        tracing::trace!(
                             #format_str,
                             #(#format_args),*
                         );
@@ -209,7 +209,7 @@ pub fn define_struct(args: TokenStream) -> TokenStream {
                             let memory = match caller.get_export("memory") {
                                 Some(wasmtime::Extern::Memory(m)) => m,
                                 _ => {
-                                    log::warn!("callee does not export a memory as \"memory\"");
+                                    tracing::warn!("callee does not export a memory as \"memory\"");
                                     let e = wasi_common::old::snapshot_0::wasi::__WASI_ERRNO_INVAL;
                                     #handle_early_error
                                 }

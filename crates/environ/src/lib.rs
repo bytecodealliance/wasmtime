@@ -25,25 +25,19 @@
 )]
 
 mod address_map;
+mod builtin;
 mod compilation;
 mod data_structures;
-mod func_environ;
 mod module;
 mod module_environ;
 mod tunables;
 mod vmoffsets;
 
-pub mod cranelift;
-#[cfg(feature = "lightbeam")]
-pub mod lightbeam;
-
 pub use crate::address_map::*;
+pub use crate::builtin::*;
 pub use crate::compilation::*;
-pub use crate::cranelift::Cranelift;
 pub use crate::data_structures::*;
-pub use crate::func_environ::BuiltinFunctionIndex;
-#[cfg(feature = "lightbeam")]
-pub use crate::lightbeam::Lightbeam;
+// pub use crate::func_environ::BuiltinFunctionIndex;
 pub use crate::module::{
     EntityIndex, MemoryPlan, MemoryStyle, Module, TableElements, TablePlan, TableStyle,
 };
@@ -60,10 +54,8 @@ pub const WASM_MAX_PAGES: u32 = 0x10000;
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub(crate) fn reference_type(
-    wasm_ty: cranelift_wasm::WasmType,
-    pointer_type: ir::Type,
-) -> ir::Type {
+/// Returns the reference type to use for the provided wasm type.
+pub fn reference_type(wasm_ty: cranelift_wasm::WasmType, pointer_type: ir::Type) -> ir::Type {
     match wasm_ty {
         cranelift_wasm::WasmType::FuncRef => pointer_type,
         cranelift_wasm::WasmType::ExternRef => match pointer_type {

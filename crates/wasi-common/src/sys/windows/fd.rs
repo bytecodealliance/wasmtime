@@ -6,12 +6,12 @@ use crate::sys::osfile::OsFile;
 use crate::sys::AsFile;
 use crate::wasi::types;
 use crate::Result;
-use log::trace;
 use std::convert::TryInto;
 use std::fs::{File, OpenOptions};
 use std::os::windows::fs::OpenOptionsExt;
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle};
 use std::path::Path;
+use tracing::trace;
 use winx::file::{AccessMode, FileModeInformation, Flags};
 
 pub(crate) fn fdstat_get(file: &File) -> Result<types::Fdflags> {

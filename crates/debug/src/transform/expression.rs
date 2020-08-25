@@ -64,6 +64,10 @@ impl ExpressionWriter {
         write::Writer::write_u8(&mut self.0, b)
     }
 
+    pub fn write_u32(&mut self, b: u32) -> write::Result<()> {
+        write::Writer::write_u32(&mut self.0, b)
+    }
+
     pub fn write_uleb128(&mut self, i: u64) -> write::Result<()> {
         write::Writer::write_uleb128(&mut self.0, i)
     }
@@ -196,8 +200,8 @@ fn append_memory_deref(
     }
     writer.write_op(gimli::constants::DW_OP_deref)?;
     writer.write_op(gimli::constants::DW_OP_swap)?;
-    writer.write_op(gimli::constants::DW_OP_constu)?;
-    writer.write_uleb128(0xffff_ffff)?;
+    writer.write_op(gimli::constants::DW_OP_const4u)?;
+    writer.write_u32(0xffff_ffff)?;
     writer.write_op(gimli::constants::DW_OP_and)?;
     writer.write_op(gimli::constants::DW_OP_plus)?;
     buf.extend(writer.into_vec());
@@ -418,7 +422,7 @@ where
             let op = Operation::parse(&mut pc, encoding)?;
             match op {
                 Operation::FrameOffset { offset } => {
-                    // Expand DW_OP_fpreg into frame location and DW_OP_plus_uconst.
+                    // Expand DW_OP_fbreg into frame location and DW_OP_plus_uconst.
                     if frame_base.is_some() {
                         // Add frame base expressions.
                         flush_code_chunk!();
@@ -454,7 +458,8 @@ where
                 Operation::Deref { .. } => {
                     flush_code_chunk!();
                     parts.push(CompiledExpressionPart::Deref);
-                    continue;
+                    // Don't re-enter the loop here (i.e. continue), because the
+                    // DW_OP_deref still needs to be kept.
                 }
                 _ => {
                     return Ok(None);
@@ -680,8 +685,7 @@ mod tests {
 
         let e = expression!(DW_OP_WASM_location, 0x0, 3, DW_OP_stack_value);
         let fe = compile_expression(&e, DWARF_ENCODING, None).expect("non-error");
-        // DW_OP_fpreg 0x12
-        let e = expression!(0x91, 0x12);
+        let e = expression!(DW_OP_fbreg, 0x12);
         let ce = compile_expression(&e, DWARF_ENCODING, fe.as_ref())
             .expect("non-error")
             .expect("expression");
@@ -721,7 +725,7 @@ mod tests {
                     },
                     CompiledExpressionPart::Code(vec![35, 5]),
                     CompiledExpressionPart::Deref,
-                    CompiledExpressionPart::Code(vec![159])
+                    CompiledExpressionPart::Code(vec![6, 159])
                 ],
                 need_deref: false
             }
