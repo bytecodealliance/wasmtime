@@ -31,6 +31,7 @@ pub mod old;
 mod path;
 mod poll;
 mod sandboxed_tty_writer;
+pub(crate) mod sched;
 pub mod snapshots;
 mod string_array;
 mod sys;

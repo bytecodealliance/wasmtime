@@ -1,4 +1,7 @@
-use crate::wasi::types::{self, Rights};
+use crate::wasi::types;
+pub use crate::wasi::types::{
+    Advice, Fdflags, Filesize, Filestat, Filetype, Fstflags, Rights, Timestamp,
+};
 use crate::{Error, Result};
 use std::any::Any;
 use std::fmt;
@@ -82,13 +85,13 @@ impl fmt::Display for HandleRights {
 pub trait Handle {
     fn as_any(&self) -> &dyn Any;
     fn try_clone(&self) -> io::Result<Box<dyn Handle>>;
-    fn get_file_type(&self) -> types::Filetype;
+    fn get_file_type(&self) -> Filetype;
     fn get_rights(&self) -> HandleRights {
         HandleRights::empty()
     }
     fn set_rights(&self, rights: HandleRights);
     fn is_directory(&self) -> bool {
-        self.get_file_type() == types::Filetype::Directory
+        self.get_file_type() == Filetype::Directory
     }
     /// Test whether this descriptor is considered a tty within WASI.
     /// Note that since WASI itself lacks an `isatty` syscall and relies
@@ -97,41 +100,36 @@ pub trait Handle {
         let file_type = self.get_file_type();
         let rights = self.get_rights();
         let required_rights = HandleRights::from_base(Rights::FD_SEEK | Rights::FD_TELL);
-        file_type == types::Filetype::CharacterDevice && rights.contains(&required_rights)
+        file_type == Filetype::CharacterDevice && rights.contains(&required_rights)
     }
     // TODO perhaps should be a separate trait?
     // FdOps
-    fn advise(
-        &self,
-        _advice: types::Advice,
-        _offset: types::Filesize,
-        _len: types::Filesize,
-    ) -> Result<()> {
+    fn advise(&self, _advice: Advice, _offset: Filesize, _len: Filesize) -> Result<()> {
         Err(Error::Badf)
     }
-    fn allocate(&self, _offset: types::Filesize, _len: types::Filesize) -> Result<()> {
+    fn allocate(&self, _offset: Filesize, _len: Filesize) -> Result<()> {
         Err(Error::Badf)
     }
     fn datasync(&self) -> Result<()> {
         Err(Error::Inval)
     }
-    fn fdstat_get(&self) -> Result<types::Fdflags> {
-        Ok(types::Fdflags::empty())
+    fn fdstat_get(&self) -> Result<Fdflags> {
+        Ok(Fdflags::empty())
     }
-    fn fdstat_set_flags(&self, _fdflags: types::Fdflags) -> Result<()> {
+    fn fdstat_set_flags(&self, _fdflags: Fdflags) -> Result<()> {
         Err(Error::Badf)
     }
-    fn filestat_get(&self) -> Result<types::Filestat> {
+    fn filestat_get(&self) -> Result<Filestat> {
         Err(Error::Badf)
     }
-    fn filestat_set_size(&self, _st_size: types::Filesize) -> Result<()> {
+    fn filestat_set_size(&self, _st_size: Filesize) -> Result<()> {
         Err(Error::Badf)
     }
     fn filestat_set_times(
         &self,
-        _atim: types::Timestamp,
-        _mtim: types::Timestamp,
-        _fst_flags: types::Fstflags,
+        _atim: Timestamp,
+        _mtim: Timestamp,
+        _fst_flags: Fstflags,
     ) -> Result<()> {
         Err(Error::Badf)
     }
@@ -164,15 +162,15 @@ pub trait Handle {
     fn create_directory(&self, _path: &str) -> Result<()> {
         Err(Error::Acces)
     }
-    fn filestat_get_at(&self, _path: &str, _follow: bool) -> Result<types::Filestat> {
+    fn filestat_get_at(&self, _path: &str, _follow: bool) -> Result<Filestat> {
         Err(Error::Acces)
     }
     fn filestat_set_times_at(
         &self,
         _path: &str,
-        _atim: types::Timestamp,
-        _mtim: types::Timestamp,
-        _fst_flags: types::Fstflags,
+        _atim: Timestamp,
+        _mtim: Timestamp,
+        _fst_flags: Fstflags,
         _follow: bool,
     ) -> Result<()> {
         Err(Error::Acces)
@@ -183,7 +181,7 @@ pub trait Handle {
         _read: bool,
         _write: bool,
         _oflags: types::Oflags,
-        _fd_flags: types::Fdflags,
+        _fd_flags: Fdflags,
     ) -> Result<Box<dyn Handle>> {
         Err(Error::Acces)
     }

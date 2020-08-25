@@ -56,11 +56,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         len: types::Filesize,
         advice: types::Advice,
     ) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::FD_ADVISE);
-        let entry = self.get_entry(fd)?;
-        entry
-            .as_handle(&required_rights)?
-            .advise(advice, offset, len)
+        self.get_entry(fd)?.fd_advise(offset, len, advice)
     }
 
     fn fd_allocate(
