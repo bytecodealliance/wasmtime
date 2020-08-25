@@ -24,8 +24,7 @@ cfg_if! {
 pub(crate) use sys_impl::path;
 pub(crate) use sys_impl::poll;
 
-use super::handle::Handle;
-use crate::wasi::types;
+use super::handle::{Filetype, Handle};
 use osdir::OsDir;
 use osfile::OsFile;
 use osother::OsOther;
@@ -67,7 +66,7 @@ impl TryFrom<File> for Box<dyn Handle> {
     fn try_from(file: File) -> io::Result<Self> {
         let file_type = get_file_type(&file)?;
         match file_type {
-            types::Filetype::RegularFile => {
+            Filetype::RegularFile => {
                 let handle = OsFile::try_from(file)?;
                 tracing::debug!(
                     handle = tracing::field::debug(&handle),
@@ -75,7 +74,7 @@ impl TryFrom<File> for Box<dyn Handle> {
                 );
                 Ok(Box::new(handle))
             }
-            types::Filetype::Directory => {
+            Filetype::Directory => {
                 let handle = OsDir::try_from(file)?;
                 tracing::debug!(
                     handle = tracing::field::debug(&handle),

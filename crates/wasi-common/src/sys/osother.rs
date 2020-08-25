@@ -1,8 +1,7 @@
 use super::sys_impl::oshandle::RawOsHandle;
 use super::{fd, AsFile};
-use crate::handle::{Handle, HandleRights};
+use crate::handle::{Fdflags, Filetype, Handle, HandleRights};
 use crate::sandboxed_tty_writer::SandboxedTTYWriter;
-use crate::wasi::types::{self, Filetype};
 use crate::Result;
 use std::any::Any;
 use std::cell::Cell;
@@ -79,10 +78,10 @@ impl Handle for OsOther {
         self.rights.set(new_rights)
     }
     // FdOps
-    fn fdstat_get(&self) -> Result<types::Fdflags> {
+    fn fdstat_get(&self) -> Result<Fdflags> {
         fd::fdstat_get(&*self.as_file()?)
     }
-    fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<()> {
+    fn fdstat_set_flags(&self, fdflags: Fdflags) -> Result<()> {
         if let Some(handle) = fd::fdstat_set_flags(&*self.as_file()?, fdflags)? {
             self.handle.update_from(handle);
         }
