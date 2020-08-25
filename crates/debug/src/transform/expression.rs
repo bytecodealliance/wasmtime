@@ -430,12 +430,9 @@ where
         ($unread:expr, $part:expr) => {{
             let part = $part;
             if let (CompiledExpressionPart::Code(cc2), Some(CompiledExpressionPart::Code(cc1))) =
-                (&part, parts.last())
+                (&part, parts.last_mut())
             {
-                let mut combined = cc1.clone();
-                parts.pop();
-                combined.extend_from_slice(cc2);
-                parts.push(CompiledExpressionPart::Code(combined));
+                cc1.extend_from_slice(cc2);
             } else {
                 parts.push(CompiledExpressionPart::LandingPad {
                     original_pos: (expr.0.len().into_u64() - $unread) as usize,
