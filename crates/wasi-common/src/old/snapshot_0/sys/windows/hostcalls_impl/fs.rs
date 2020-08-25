@@ -9,13 +9,13 @@ use crate::old::snapshot_0::sys::entry_impl::determine_type_rights;
 use crate::old::snapshot_0::sys::host_impl::{self, path_from_host};
 use crate::old::snapshot_0::sys::hostcalls_impl::fs_helpers::PathGetExt;
 use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
-use log::{debug, trace};
 use std::convert::TryInto;
 use std::fs::{File, Metadata, OpenOptions};
 use std::io::{self, Seek, SeekFrom};
 use std::os::windows::fs::{FileExt, OpenOptionsExt};
 use std::os::windows::prelude::{AsRawHandle, FromRawHandle};
 use std::path::{Path, PathBuf};
+use tracing::{debug, trace};
 use winapi::shared::winerror;
 use winx::file::{AccessMode, CreationDisposition, FileModeInformation, Flags};
 
@@ -156,7 +156,7 @@ pub(crate) fn path_open(
         }
         Err(err) => match err.raw_os_error() {
             Some(code) => {
-                log::debug!("path_open at symlink_metadata error code={:?}", code);
+                tracing::debug!("path_open at symlink_metadata error code={:?}", code);
 
                 if code as u32 != winerror::ERROR_FILE_NOT_FOUND {
                     return Err(err.into());
@@ -165,7 +165,7 @@ pub(crate) fn path_open(
                 // trying to open it
             }
             None => {
-                log::debug!("Inconvertible OS error: {}", err);
+                tracing::debug!("Inconvertible OS error: {}", err);
                 return Err(WasiError::EIO);
             }
         },
@@ -397,7 +397,7 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> WasiR
     };
     match err.raw_os_error() {
         Some(code) => {
-            log::debug!("path_rename at rename error code={:?}", code);
+            tracing::debug!("path_rename at rename error code={:?}", code);
             match code as u32 {
                 winerror::ERROR_ACCESS_DENIED => {
                     // So most likely dealing with new_path == dir.
@@ -427,7 +427,7 @@ pub(crate) fn path_rename(resolved_old: PathGet, resolved_new: PathGet) -> WasiR
             Err(err.into())
         }
         None => {
-            log::debug!("Inconvertible OS error: {}", err);
+            tracing::debug!("Inconvertible OS error: {}", err);
             Err(WasiError::EIO)
         }
     }
@@ -474,7 +474,7 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> WasiResult<()> 
     };
     match err.raw_os_error() {
         Some(code) => {
-            log::debug!("path_symlink at symlink_file error code={:?}", code);
+            tracing::debug!("path_symlink at symlink_file error code={:?}", code);
             match code as u32 {
                 winerror::ERROR_NOT_A_REPARSE_POINT => {
                     // try creating a dir symlink instead
@@ -500,7 +500,7 @@ pub(crate) fn path_symlink(old_path: &str, resolved: PathGet) -> WasiResult<()> 
             Err(err.into())
         }
         None => {
-            log::debug!("Inconvertible OS error: {}", err);
+            tracing::debug!("Inconvertible OS error: {}", err);
             Err(WasiError::EIO)
         }
     }
@@ -526,7 +526,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> WasiResult<()> {
         };
         match err.raw_os_error() {
             Some(code) => {
-                log::debug!("path_unlink_file at symlink_file error code={:?}", code);
+                tracing::debug!("path_unlink_file at symlink_file error code={:?}", code);
                 if code as u32 == winerror::ERROR_ACCESS_DENIED {
                     // try unlinking a dir symlink instead
                     return fs::remove_dir(path).map_err(Into::into);
@@ -535,7 +535,7 @@ pub(crate) fn path_unlink_file(resolved: PathGet) -> WasiResult<()> {
                 Err(err.into())
             }
             None => {
-                log::debug!("Inconvertible OS error: {}", err);
+                tracing::debug!("Inconvertible OS error: {}", err);
                 Err(WasiError::EIO)
             }
         }

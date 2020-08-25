@@ -43,12 +43,12 @@ impl From<io::Error> for WasiError {
                 winerror::ERROR_DIRECTORY => Self::ENOTDIR,
                 winerror::ERROR_ALREADY_EXISTS => Self::EEXIST,
                 x => {
-                    log::debug!("unknown error value: {}", x);
+                    tracing::debug!("unknown error value: {}", x);
                     Self::EIO
                 }
             },
             None => {
-                log::debug!("Other I/O error: {}", err);
+                tracing::debug!("Other I/O error: {}", err);
                 Self::EIO
             }
         }

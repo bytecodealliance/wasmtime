@@ -22,7 +22,7 @@ pub(crate) fn get(
     // Extract path as &str from guest's memory.
     let path = path_ptr.as_str()?;
 
-    log::trace!("     | (path_ptr,path_len)='{}'", &*path);
+    tracing::trace!(path = &*path);
 
     if path.contains('\0') {
         // if contains NUL, return Ilseq
@@ -55,7 +55,7 @@ pub(crate) fn get(
     loop {
         match path_stack.pop() {
             Some(cur_path) => {
-                log::debug!("path_get cur_path = {:?}", cur_path);
+                tracing::debug!(cur_path = tracing::field::display(&cur_path), "path get");
 
                 let ends_with_slash = cur_path.ends_with('/');
                 let mut components = Path::new(&cur_path).components();
@@ -73,7 +73,7 @@ pub(crate) fn get(
                     path_stack.push(tail);
                 }
 
-                log::debug!("path_get path_stack = {:?}", path_stack);
+                tracing::debug!(path_stack = tracing::field::debug(&path_stack), "path_get");
 
                 match head {
                     Component::Prefix(_) | Component::RootDir => {
@@ -129,7 +129,7 @@ pub(crate) fn get(
                                                 link_path.push('/');
                                             }
 
-                                            log::debug!(
+                                            tracing::debug!(
                                                 "attempted symlink expansion link_path={:?}",
                                                 link_path
                                             );
@@ -161,7 +161,7 @@ pub(crate) fn get(
                                         link_path.push('/');
                                     }
 
-                                    log::debug!(
+                                    tracing::debug!(
                                         "attempted symlink expansion link_path={:?}",
                                         link_path
                                     );

@@ -38,7 +38,10 @@ pub(crate) fn oneoff(
         let delay = timeout.delay / 1_000_000; // poll syscall requires delay to expressed in milliseconds
         delay.try_into().unwrap_or(libc::c_int::max_value())
     });
-    log::debug!("poll_oneoff poll_timeout = {:?}", poll_timeout);
+    tracing::debug!(
+        poll_timeout = tracing::field::debug(poll_timeout),
+        "poll_oneoff"
+    );
 
     let ready = loop {
         match poll(&mut poll_fds, poll_timeout) {
@@ -91,15 +94,16 @@ fn handle_fd_event(
     }
 
     for (fd_event, poll_fd) in ready_events {
-        // log::debug!("poll_oneoff_handle_fd_event fd_event = {:?}", fd_event);
-        log::debug!("poll_oneoff_handle_fd_event poll_fd = {:?}", poll_fd);
+        tracing::debug!(
+            poll_fd = tracing::field::debug(poll_fd),
+            poll_event = tracing::field::debug(&fd_event),
+            "poll_oneoff handle_fd_event"
+        );
 
         let revents = match poll_fd.revents() {
             Some(revents) => revents,
             None => continue,
         };
-
-        log::debug!("poll_oneoff_handle_fd_event revents = {:?}", revents);
 
         let nbytes = if fd_event.r#type == types::Eventtype::FdRead {
             query_nbytes(fd_event.handle)?

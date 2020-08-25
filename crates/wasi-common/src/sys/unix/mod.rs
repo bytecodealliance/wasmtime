@@ -50,19 +50,22 @@ impl<T: AsRawFd> AsFile for T {
 pub(super) fn get_file_type(file: &File) -> io::Result<types::Filetype> {
     let ft = file.metadata()?.file_type();
     let file_type = if ft.is_block_device() {
-        log::debug!("Host fd {:?} is a block device", file.as_raw_fd());
+        tracing::debug!(
+            host_fd = tracing::field::display(file.as_raw_fd()),
+            "Host fd is a block device"
+        );
         types::Filetype::BlockDevice
     } else if ft.is_char_device() {
-        log::debug!("Host fd {:?} is a char device", file.as_raw_fd());
+        tracing::debug!("Host fd {:?} is a char device", file.as_raw_fd());
         types::Filetype::CharacterDevice
     } else if ft.is_dir() {
-        log::debug!("Host fd {:?} is a directory", file.as_raw_fd());
+        tracing::debug!("Host fd {:?} is a directory", file.as_raw_fd());
         types::Filetype::Directory
     } else if ft.is_file() {
-        log::debug!("Host fd {:?} is a file", file.as_raw_fd());
+        tracing::debug!("Host fd {:?} is a file", file.as_raw_fd());
         types::Filetype::RegularFile
     } else if ft.is_socket() {
-        log::debug!("Host fd {:?} is a socket", file.as_raw_fd());
+        tracing::debug!("Host fd {:?} is a socket", file.as_raw_fd());
         use yanix::socket::{get_socket_type, SockType};
         match unsafe { get_socket_type(file.as_raw_fd())? } {
             SockType::Datagram => types::Filetype::SocketDgram,
@@ -70,10 +73,10 @@ pub(super) fn get_file_type(file: &File) -> io::Result<types::Filetype> {
             _ => return Err(io::Error::from_raw_os_error(libc::EINVAL)),
         }
     } else if ft.is_fifo() {
-        log::debug!("Host fd {:?} is a fifo", file.as_raw_fd());
+        tracing::debug!("Host fd {:?} is a fifo", file.as_raw_fd());
         types::Filetype::Unknown
     } else {
-        log::debug!("Host fd {:?} is unknown", file.as_raw_fd());
+        tracing::debug!("Host fd {:?} is unknown", file.as_raw_fd());
         return Err(io::Error::from_raw_os_error(libc::EINVAL));
     };
     Ok(file_type)
@@ -221,12 +224,12 @@ impl From<io::Error> for Errno {
                 libc::ENOTRECOVERABLE => Self::Notrecoverable,
                 libc::ENOTSUP => Self::Notsup,
                 x => {
-                    log::debug!("Unknown errno value: {}", x);
+                    tracing::debug!("Unknown errno value: {}", x);
                     Self::Io
                 }
             },
             None => {
-                log::debug!("Other I/O error: {}", err);
+                tracing::debug!("Other I/O error: {}", err);
                 Self::Io
             }
         }

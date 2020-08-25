@@ -24,7 +24,7 @@ pub(crate) fn unlink_file(dirfd: &OsDir, path: &str) -> Result<()> {
                         }
                     }
                     Err(err) => {
-                        log::debug!("path_unlink_file fstatat error: {:?}", err);
+                        tracing::debug!("path_unlink_file fstatat error: {:?}", err);
                     }
                 }
             }
@@ -38,8 +38,8 @@ pub(crate) fn unlink_file(dirfd: &OsDir, path: &str) -> Result<()> {
 pub(crate) fn symlink(old_path: &str, new_dirfd: &OsDir, new_path: &str) -> Result<()> {
     use yanix::file::{fstatat, symlinkat, AtFlags};
 
-    log::debug!("path_symlink old_path = {:?}", old_path);
-    log::debug!(
+    tracing::debug!("path_symlink old_path = {:?}", old_path);
+    tracing::debug!(
         "path_symlink (new_dirfd, new_path) = ({:?}, {:?})",
         new_dirfd,
         new_path
@@ -58,7 +58,7 @@ pub(crate) fn symlink(old_path: &str, new_dirfd: &OsDir, new_path: &str) -> Resu
                 {
                     Ok(_) => return Err(Errno::Exist),
                     Err(err) => {
-                        log::debug!("path_symlink fstatat error: {:?}", err);
+                        tracing::debug!("path_symlink fstatat error: {:?}", err);
                     }
                 }
             }
@@ -106,7 +106,7 @@ pub(crate) fn rename(
                         }
                     }
                     Err(err) => {
-                        log::debug!("path_rename fstatat error: {:?}", err);
+                        tracing::debug!("path_rename fstatat error: {:?}", err);
                     }
                 }
             }

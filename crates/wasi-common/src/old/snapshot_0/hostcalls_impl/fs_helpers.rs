@@ -68,7 +68,7 @@ pub(crate) fn path_get(
     loop {
         match path_stack.pop() {
             Some(cur_path) => {
-                log::debug!("path_get cur_path = {:?}", cur_path);
+                tracing::debug!("path_get cur_path = {:?}", cur_path);
 
                 let ends_with_slash = cur_path.ends_with('/');
                 let mut components = Path::new(&cur_path).components();
@@ -86,7 +86,7 @@ pub(crate) fn path_get(
                     path_stack.push(tail);
                 }
 
-                log::debug!("path_get path_stack = {:?}", path_stack);
+                tracing::debug!("path_get path_stack = {:?}", path_stack);
 
                 match head {
                     Component::Prefix(_) | Component::RootDir => {
@@ -140,7 +140,7 @@ pub(crate) fn path_get(
                                                 link_path.push('/');
                                             }
 
-                                            log::debug!(
+                                            tracing::debug!(
                                                 "attempted symlink expansion link_path={:?}",
                                                 link_path
                                             );
@@ -172,7 +172,7 @@ pub(crate) fn path_get(
                                         link_path.push('/');
                                     }
 
-                                    log::debug!(
+                                    tracing::debug!(
                                         "attempted symlink expansion link_path={:?}",
                                         link_path
                                     );

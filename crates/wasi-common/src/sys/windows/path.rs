@@ -46,7 +46,7 @@ fn concatenate<P: AsRef<Path>>(file: &OsDir, path: P) -> Result<PathBuf> {
     // components with `out_path`
     let out_path = PathBuf::from(strip_extended_prefix(out_path));
 
-    log::debug!("out_path={:?}", out_path);
+    tracing::debug!(out_path = tracing::field::debug(&out_path));
 
     Ok(out_path)
 }
@@ -138,7 +138,7 @@ pub(crate) fn readlinkat(dirfd: &OsDir, s_path: &str) -> Result<String> {
         Err(e) => e,
     };
     if let Some(code) = err.raw_os_error() {
-        log::debug!("readlinkat error={:?}", code);
+        tracing::debug!("readlinkat error={:?}", code);
         if code as u32 == winerror::ERROR_INVALID_NAME {
             if s_path.ends_with('/') {
                 // strip "/" and check if exists
@@ -170,7 +170,10 @@ pub(crate) fn link(
     let new_path = concatenate(new_dirfd, new_path)?;
     if follow_symlinks {
         // in particular, this will return an error if the target path doesn't exist
-        log::debug!("Following symlinks for path: {:?}", old_path);
+        tracing::debug!(
+            old_path = tracing::field::display(old_path.display()),
+            "Following symlinks"
+        );
         old_path = fs::canonicalize(&old_path).map_err(|e| match e.raw_os_error() {
             // fs::canonicalize under Windows will return:
             // * ERROR_FILE_NOT_FOUND, if it encounters a dangling symlink
@@ -184,7 +187,7 @@ pub(crate) fn link(
         Err(e) => e,
     };
     if let Some(code) = err.raw_os_error() {
-        log::debug!("path_link at fs::hard_link error code={:?}", code);
+        tracing::debug!("path_link at fs::hard_link error code={:?}", code);
         if code as u32 == winerror::ERROR_ACCESS_DENIED {
             // If an attempt is made to create a hard link to a directory, POSIX-compliant
             // implementations of link return `EPERM`, but `ERROR_ACCESS_DENIED` is converted
@@ -248,7 +251,7 @@ pub(crate) fn open(
         }
         Err(err) => match err.raw_os_error() {
             Some(code) => {
-                log::debug!("path_open at symlink_metadata error code={:?}", code);
+                tracing::debug!("path_open at symlink_metadata error code={:?}", code);
                 match code as u32 {
                     winerror::ERROR_FILE_NOT_FOUND => {
                         // file not found, let it proceed to actually
@@ -263,7 +266,7 @@ pub(crate) fn open(
                 };
             }
             None => {
-                log::debug!("Inconvertible OS error: {}", err);
+                tracing::debug!("Inconvertible OS error: {}", err);
                 return Err(Errno::Io);
             }
         },
@@ -353,7 +356,7 @@ pub(crate) fn rename(
     };
     match err.raw_os_error() {
         Some(code) => {
-            log::debug!("path_rename at rename error code={:?}", code);
+            tracing::debug!("path_rename at rename error code={:?}", code);
             match code as u32 {
                 winerror::ERROR_ACCESS_DENIED => {
                     // So most likely dealing with new_path == dir.
@@ -385,7 +388,7 @@ pub(crate) fn rename(
             Err(err.into())
         }
         None => {
-            log::debug!("Inconvertible OS error: {}", err);
+            tracing::debug!("Inconvertible OS error: {}", err);
             Err(Errno::Io)
         }
     }
@@ -417,7 +420,7 @@ pub(crate) fn symlink(old_path: &str, new_dirfd: &OsDir, new_path_: &str) -> Res
     };
     match err.raw_os_error() {
         Some(code) => {
-            log::debug!("path_symlink at symlink_file error code={:?}", code);
+            tracing::debug!("path_symlink at symlink_file error code={:?}", code);
             match code as u32 {
                 // If the target contains a trailing slash, the Windows API returns
                 // ERROR_INVALID_NAME (which corresponds to ENOENT) instead of
@@ -442,7 +445,7 @@ pub(crate) fn symlink(old_path: &str, new_dirfd: &OsDir, new_path_: &str) -> Res
             Err(err.into())
         }
         None => {
-            log::debug!("Inconvertible OS error: {}", err);
+            tracing::debug!("Inconvertible OS error: {}", err);
             Err(Errno::Io)
         }
     }
@@ -468,7 +471,7 @@ pub(crate) fn unlink_file(dirfd: &OsDir, path: &str) -> Result<()> {
         };
         match err.raw_os_error() {
             Some(code) => {
-                log::debug!("path_unlink_file at symlink_file error code={:?}", code);
+                tracing::debug!("path_unlink_file at symlink_file error code={:?}", code);
                 if code as u32 == winerror::ERROR_ACCESS_DENIED {
                     // try unlinking a dir symlink instead
                     return fs::remove_dir(path).map_err(Into::into);
@@ -477,7 +480,7 @@ pub(crate) fn unlink_file(dirfd: &OsDir, path: &str) -> Result<()> {
                 Err(err.into())
             }
             None => {
-                log::debug!("Inconvertible OS error: {}", err);
+                tracing::debug!("Inconvertible OS error: {}", err);
                 Err(Errno::Io)
             }
         }

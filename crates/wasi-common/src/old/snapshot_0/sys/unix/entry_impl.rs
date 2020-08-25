@@ -61,14 +61,14 @@ pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
         let file = std::mem::ManuallyDrop::new(std::fs::File::from_raw_fd(fd.as_raw_fd()));
         let ft = file.metadata()?.file_type();
         if ft.is_block_device() {
-            log::debug!("Host fd {:?} is a block device", fd.as_raw_fd());
+            tracing::debug!("Host fd {:?} is a block device", fd.as_raw_fd());
             (
                 wasi::__WASI_FILETYPE_BLOCK_DEVICE,
                 wasi::RIGHTS_BLOCK_DEVICE_BASE,
                 wasi::RIGHTS_BLOCK_DEVICE_INHERITING,
             )
         } else if ft.is_char_device() {
-            log::debug!("Host fd {:?} is a char device", fd.as_raw_fd());
+            tracing::debug!("Host fd {:?} is a char device", fd.as_raw_fd());
             use yanix::file::isatty;
             if isatty(fd.as_raw_fd())? {
                 (
@@ -84,21 +84,21 @@ pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
                 )
             }
         } else if ft.is_dir() {
-            log::debug!("Host fd {:?} is a directory", fd.as_raw_fd());
+            tracing::debug!("Host fd {:?} is a directory", fd.as_raw_fd());
             (
                 wasi::__WASI_FILETYPE_DIRECTORY,
                 wasi::RIGHTS_DIRECTORY_BASE,
                 wasi::RIGHTS_DIRECTORY_INHERITING,
             )
         } else if ft.is_file() {
-            log::debug!("Host fd {:?} is a file", fd.as_raw_fd());
+            tracing::debug!("Host fd {:?} is a file", fd.as_raw_fd());
             (
                 wasi::__WASI_FILETYPE_REGULAR_FILE,
                 wasi::RIGHTS_REGULAR_FILE_BASE,
                 wasi::RIGHTS_REGULAR_FILE_INHERITING,
             )
         } else if ft.is_socket() {
-            log::debug!("Host fd {:?} is a socket", fd.as_raw_fd());
+            tracing::debug!("Host fd {:?} is a socket", fd.as_raw_fd());
             use yanix::socket::{get_socket_type, SockType};
             match get_socket_type(fd.as_raw_fd())? {
                 SockType::Datagram => (
@@ -114,14 +114,14 @@ pub(crate) unsafe fn determine_type_rights<Fd: AsRawFd>(
                 _ => return Err(io::Error::from_raw_os_error(libc::EINVAL)),
             }
         } else if ft.is_fifo() {
-            log::debug!("Host fd {:?} is a fifo", fd.as_raw_fd());
+            tracing::debug!("Host fd {:?} is a fifo", fd.as_raw_fd());
             (
                 wasi::__WASI_FILETYPE_UNKNOWN,
                 wasi::RIGHTS_REGULAR_FILE_BASE,
                 wasi::RIGHTS_REGULAR_FILE_INHERITING,
             )
         } else {
-            log::debug!("Host fd {:?} is unknown", fd.as_raw_fd());
+            tracing::debug!("Host fd {:?} is unknown", fd.as_raw_fd());
             return Err(io::Error::from_raw_os_error(libc::EINVAL));
         }
     };

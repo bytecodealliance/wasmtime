@@ -61,7 +61,7 @@ pub(crate) fn openat(dirfd: &File, path: &str) -> WasiResult<File> {
         Err(e) => e,
     };
     if let Some(code) = err.raw_os_error() {
-        log::debug!("openat error={:?}", code);
+        tracing::debug!("openat error={:?}", code);
         if code as u32 == winerror::ERROR_INVALID_NAME {
             return Err(WasiError::ENOTDIR);
         }
@@ -90,7 +90,7 @@ pub(crate) fn readlinkat(dirfd: &File, s_path: &str) -> WasiResult<String> {
         Err(e) => e,
     };
     if let Some(code) = err.raw_os_error() {
-        log::debug!("readlinkat error={:?}", code);
+        tracing::debug!("readlinkat error={:?}", code);
         if code as u32 == winerror::ERROR_INVALID_NAME {
             if s_path.ends_with('/') {
                 // strip "/" and check if exists
@@ -130,7 +130,7 @@ pub(crate) fn concatenate<P: AsRef<Path>>(dirfd: &File, path: P) -> WasiResult<P
     // components with `out_path`
     let out_path = PathBuf::from(strip_extended_prefix(out_path));
 
-    log::debug!("out_path={:?}", out_path);
+    tracing::debug!("out_path={:?}", out_path);
 
     Ok(out_path)
 }

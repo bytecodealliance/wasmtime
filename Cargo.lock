@@ -2276,8 +2276,8 @@ dependencies = [
  "getrandom",
  "lazy_static",
  "libc",
- "log",
  "thiserror",
+ "tracing",
  "wig",
  "wiggle",
  "winapi",
@@ -2613,7 +2613,7 @@ name = "wasmtime-wasi"
 version = "0.19.1"
 dependencies = [
  "anyhow",
- "log",
+ "tracing",
  "wasi-common",
  "wasmtime",
  "wasmtime-runtime",
@@ -2788,7 +2788,7 @@ dependencies = [
  "cfg-if",
  "filetime",
  "libc",
- "log",
+ "tracing",
 ]
 
 [[package]]

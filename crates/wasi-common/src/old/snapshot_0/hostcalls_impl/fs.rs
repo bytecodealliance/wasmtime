@@ -11,11 +11,11 @@ use crate::old::snapshot_0::wasi::{self, WasiError, WasiResult};
 use crate::old::snapshot_0::{helpers, host, wasi32};
 use crate::sandboxed_tty_writer::SandboxedTTYWriter;
 use filetime::{set_file_handle_times, FileTime};
-use log::trace;
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::ops::DerefMut;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tracing::trace;
 
 pub(crate) unsafe fn fd_close(
     wasi_ctx: &mut WasiCtx,
@@ -686,8 +686,8 @@ pub(crate) unsafe fn path_rename(
         true,
     )?;
 
-    log::debug!("path_rename resolved_old={:?}", resolved_old);
-    log::debug!("path_rename resolved_new={:?}", resolved_new);
+    tracing::debug!("path_rename resolved_old={:?}", resolved_old);
+    tracing::debug!("path_rename resolved_new={:?}", resolved_new);
 
     hostcalls_impl::path_rename(resolved_old, resolved_new)
 }
@@ -950,7 +950,7 @@ pub(crate) unsafe fn path_remove_directory(
         true,
     )?;
 
-    log::debug!("path_remove_directory resolved={:?}", resolved);
+    tracing::debug!("path_remove_directory resolved={:?}", resolved);
 
     hostcalls_impl::path_remove_directory(resolved)
 }

@@ -18,6 +18,12 @@ impl EntryHandle {
     }
 }
 
+impl std::fmt::Debug for EntryHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("EntryHandle").field("opaque", &()).finish()
+    }
+}
+
 impl From<Box<dyn Handle>> for EntryHandle {
     fn from(handle: Box<dyn Handle>) -> Self {
         Self(handle.into())
@@ -87,10 +93,10 @@ impl Entry {
         if this_rights.contains(rights) {
             Ok(())
         } else {
-            log::trace!(
-                "     | validate_rights failed: required rights = {}; actual rights = {}",
-                rights,
-                this_rights,
+            tracing::trace!(
+                required = tracing::field::display(rights),
+                actual = tracing::field::display(this_rights),
+                "validate_rights failed",
             );
             Err(Errno::Notcapable)
         }
