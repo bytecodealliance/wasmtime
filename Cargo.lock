@@ -56,9 +56,9 @@ checksum = "85bb70cc08ec97ca5450e6eba421deeea5f172c0fc61f78b5357b2a8e8be195f"
 
 [[package]]
 name = "arbitrary"
-version = "0.4.5"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cb544f1057eaaff4b34f8c4dcf56fc3cd04debd291998405d135017a7c3c0f4"
+checksum = "0922a3e746b5a44e111e5603feb6704e5cc959116f66737f50bb5cbd264e9d87"
 dependencies = [
  "derive_arbitrary",
 ]
@@ -656,9 +656,9 @@ dependencies = [
 
 [[package]]
 name = "derive_arbitrary"
-version = "0.4.5"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02b43185d3e7ce7dcd44a23ca761ec026359753ebf480283a571e6463853d2ef"
+checksum = "d0f7c6c81276b6b8702074defbdb1938933ddf98c7f7e0dca8d9e9214dd6c730"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2286,6 +2286,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm-smith"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ec52a2524c15abcc827e59c1eef9cdb742b4ba57a6db6a1ccd914e357326edd"
+dependencies = [
+ "arbitrary",
+ "leb128",
+]
+
+[[package]]
 name = "wasmparser"
 version = "0.57.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2467,6 +2477,7 @@ dependencies = [
  "libfuzzer-sys",
  "peepmatic-fuzzing",
  "target-lexicon",
+ "wasm-smith",
  "wasmtime",
  "wasmtime-fuzzing",
 ]
