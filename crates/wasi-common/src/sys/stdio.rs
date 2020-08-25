@@ -17,10 +17,8 @@
 // TODO it might worth re-investigating the suitability of this type on Windows.
 
 use super::{fd, AsFile};
-use crate::handle::{Handle, HandleRights};
+use crate::handle::{Fdflags, Filetype, Handle, HandleRights, Rights, RightsExt, Size};
 use crate::sandboxed_tty_writer::SandboxedTTYWriter;
-use crate::wasi::types::{self, Filetype};
-use crate::wasi::RightsExt;
 use crate::{Error, Result};
 use std::any::Any;
 use std::cell::Cell;
@@ -55,10 +53,10 @@ impl Handle for Stdin {
         self.rights.set(new_rights)
     }
     // FdOps
-    fn fdstat_get(&self) -> Result<types::Fdflags> {
+    fn fdstat_get(&self) -> Result<Fdflags> {
         fd::fdstat_get(&*self.as_file()?)
     }
-    fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<()> {
+    fn fdstat_set_flags(&self, fdflags: Fdflags) -> Result<()> {
         if let Some(_) = fd::fdstat_set_flags(&*self.as_file()?, fdflags)? {
             // OK, this means we should somehow update the underlying os handle,
             // and we can't do that with `std::io::std{in, out, err}`, so we'll
@@ -101,10 +99,10 @@ impl Handle for Stdout {
         self.rights.set(new_rights)
     }
     // FdOps
-    fn fdstat_get(&self) -> Result<types::Fdflags> {
+    fn fdstat_get(&self) -> Result<Fdflags> {
         fd::fdstat_get(&*self.as_file()?)
     }
-    fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<()> {
+    fn fdstat_set_flags(&self, fdflags: Fdflags) -> Result<()> {
         if let Some(_) = fd::fdstat_set_flags(&*self.as_file()?, fdflags)? {
             // OK, this means we should somehow update the underlying os handle,
             // and we can't do that with `std::io::std{in, out, err}`, so we'll
@@ -155,10 +153,10 @@ impl Handle for Stderr {
         self.rights.set(new_rights)
     }
     // FdOps
-    fn fdstat_get(&self) -> Result<types::Fdflags> {
+    fn fdstat_get(&self) -> Result<Fdflags> {
         fd::fdstat_get(&*self.as_file()?)
     }
-    fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<()> {
+    fn fdstat_set_flags(&self, fdflags: Fdflags) -> Result<()> {
         if let Some(_) = fd::fdstat_set_flags(&*self.as_file()?, fdflags)? {
             // OK, this means we should somehow update the underlying os handle,
             // and we can't do that with `std::io::std{in, out, err}`, so we'll
@@ -180,17 +178,17 @@ impl Handle for Stderr {
 #[derive(Debug, Clone)]
 pub(crate) struct NullDevice {
     pub(crate) rights: Cell<HandleRights>,
-    pub(crate) fd_flags: Cell<types::Fdflags>,
+    pub(crate) fd_flags: Cell<Fdflags>,
 }
 
 impl NullDevice {
     pub(crate) fn new() -> Self {
         let rights = HandleRights::new(
-            types::Rights::character_device_base(),
-            types::Rights::character_device_inheriting(),
+            Rights::character_device_base(),
+            Rights::character_device_inheriting(),
         );
         let rights = Cell::new(rights);
-        let fd_flags = types::Fdflags::empty();
+        let fd_flags = Fdflags::empty();
         let fd_flags = Cell::new(fd_flags);
         Self { rights, fd_flags }
     }
@@ -203,8 +201,8 @@ impl Handle for NullDevice {
     fn try_clone(&self) -> io::Result<Box<dyn Handle>> {
         Ok(Box::new(self.clone()))
     }
-    fn get_file_type(&self) -> types::Filetype {
-        types::Filetype::CharacterDevice
+    fn get_file_type(&self) -> Filetype {
+        Filetype::CharacterDevice
     }
     fn get_rights(&self) -> HandleRights {
         self.rights.get()
@@ -213,10 +211,10 @@ impl Handle for NullDevice {
         self.rights.set(rights)
     }
     // FdOps
-    fn fdstat_get(&self) -> Result<types::Fdflags> {
+    fn fdstat_get(&self) -> Result<Fdflags> {
         Ok(self.fd_flags.get())
     }
-    fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<()> {
+    fn fdstat_set_flags(&self, fdflags: Fdflags) -> Result<()> {
         self.fd_flags.set(fdflags);
         Ok(())
     }
@@ -226,7 +224,7 @@ impl Handle for NullDevice {
     fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
         let mut total_len = 0u32;
         for iov in iovs {
-            let len: types::Size = iov.len().try_into()?;
+            let len: Size = iov.len().try_into()?;
             total_len = total_len.checked_add(len).ok_or(Error::Overflow)?;
         }
         Ok(total_len as usize)

@@ -6,7 +6,7 @@ use crate::sys::osdir::OsDir;
 use crate::sys::stdio::NullDevice;
 use crate::sys::stdio::{Stderr, StderrExt, Stdin, StdinExt, Stdout, StdoutExt};
 use crate::virtfs::{VirtualDir, VirtualDirEntry};
-use crate::wasi::types;
+use crate::wasi::types::Fd;
 use crate::Error;
 use std::borrow::Borrow;
 use std::cell::RefCell;
@@ -331,7 +331,7 @@ impl WasiCtxBuilder {
 
 struct EntryTable {
     fd_pool: FdPool,
-    entries: HashMap<types::Fd, Rc<Entry>>,
+    entries: HashMap<Fd, Rc<Entry>>,
 }
 
 impl EntryTable {
@@ -342,25 +342,25 @@ impl EntryTable {
         }
     }
 
-    fn contains(&self, fd: &types::Fd) -> bool {
+    fn contains(&self, fd: &Fd) -> bool {
         self.entries.contains_key(fd)
     }
 
-    fn insert(&mut self, entry: Entry) -> Option<types::Fd> {
+    fn insert(&mut self, entry: Entry) -> Option<Fd> {
         let fd = self.fd_pool.allocate()?;
         self.entries.insert(fd, Rc::new(entry));
         Some(fd)
     }
 
-    fn insert_at(&mut self, fd: &types::Fd, entry: Rc<Entry>) {
+    fn insert_at(&mut self, fd: &Fd, entry: Rc<Entry>) {
         self.entries.insert(*fd, entry);
     }
 
-    fn get(&self, fd: &types::Fd) -> Option<Rc<Entry>> {
+    fn get(&self, fd: &Fd) -> Option<Rc<Entry>> {
         self.entries.get(fd).map(Rc::clone)
     }
 
-    fn remove(&mut self, fd: types::Fd) -> Option<Rc<Entry>> {
+    fn remove(&mut self, fd: Fd) -> Option<Rc<Entry>> {
         let entry = self.entries.remove(&fd)?;
         self.fd_pool.deallocate(fd);
         Some(entry)
@@ -390,12 +390,12 @@ impl WasiCtx {
     }
 
     /// Check if `WasiCtx` contains the specified raw WASI `fd`.
-    pub(crate) fn contains_entry(&self, fd: types::Fd) -> bool {
+    pub(crate) fn contains_entry(&self, fd: Fd) -> bool {
         self.entries.borrow().contains(&fd)
     }
 
     /// Get an immutable `Entry` corresponding to the specified raw WASI `fd`.
-    pub(crate) fn get_entry(&self, fd: types::Fd) -> Result<Rc<Entry>, Error> {
+    pub(crate) fn get_entry(&self, fd: Fd) -> Result<Rc<Entry>, Error> {
         match self.entries.borrow().get(&fd) {
             Some(entry) => Ok(entry),
             None => Err(Error::Badf),
@@ -406,18 +406,18 @@ impl WasiCtx {
     ///
     /// The `Entry` will automatically get another free raw WASI `fd` assigned. Note that
     /// the two subsequent free raw WASI `fd`s do not have to be stored contiguously.
-    pub(crate) fn insert_entry(&self, entry: Entry) -> Result<types::Fd, Error> {
+    pub(crate) fn insert_entry(&self, entry: Entry) -> Result<Fd, Error> {
         self.entries.borrow_mut().insert(entry).ok_or(Error::Mfile)
     }
 
     /// Insert the specified `Entry` with the specified raw WASI `fd` key into the `WasiCtx`
     /// object.
-    pub(crate) fn insert_entry_at(&self, fd: types::Fd, entry: Rc<Entry>) {
+    pub(crate) fn insert_entry_at(&self, fd: Fd, entry: Rc<Entry>) {
         self.entries.borrow_mut().insert_at(&fd, entry)
     }
 
     /// Remove `Entry` corresponding to the specified raw WASI `fd` from the `WasiCtx` object.
-    pub(crate) fn remove_entry(&self, fd: types::Fd) -> Result<Rc<Entry>, Error> {
+    pub(crate) fn remove_entry(&self, fd: Fd) -> Result<Rc<Entry>, Error> {
         self.entries.borrow_mut().remove(fd).ok_or(Error::Badf)
     }
 

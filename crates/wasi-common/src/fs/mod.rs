@@ -39,6 +39,8 @@ mod open_options;
 mod permissions;
 mod readdir;
 
+pub use crate::wasi::types::Fd;
+
 pub use dir::*;
 pub use dir_builder::*;
 pub use dir_entry::*;

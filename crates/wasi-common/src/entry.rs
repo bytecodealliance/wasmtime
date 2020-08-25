@@ -1,5 +1,4 @@
-use crate::handle::{Handle, HandleRights};
-use crate::wasi::types::Filetype;
+use crate::handle::{Filetype, Handle, HandleRights};
 use crate::{Error, Result};
 use std::ops::Deref;
 use std::path::PathBuf;
@@ -8,7 +7,7 @@ use std::rc::Rc;
 mod fd;
 mod path;
 
-pub(crate) struct EntryHandle(Rc<dyn Handle>);
+pub struct EntryHandle(Rc<dyn Handle>);
 
 impl EntryHandle {
     #[allow(dead_code)]

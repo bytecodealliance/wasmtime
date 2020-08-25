@@ -29,7 +29,6 @@ pub mod fs;
 mod handle;
 pub mod old;
 mod path;
-mod poll;
 mod sandboxed_tty_writer;
 pub(crate) mod sched;
 pub mod snapshots;

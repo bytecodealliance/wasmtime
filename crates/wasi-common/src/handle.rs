@@ -1,6 +1,6 @@
-use crate::wasi::types;
 pub use crate::wasi::types::{
-    Advice, Fdflags, Filesize, Filestat, Filetype, Fstflags, Rights, Timestamp,
+    Advice, Dircookie, Dirent, Fdflags, Filesize, Filestat, Filetype, Fstflags, Lookupflags,
+    Oflags, Rights, Size, Timestamp,
 };
 use crate::{Error, Result};
 use std::any::Any;
@@ -144,8 +144,8 @@ pub trait Handle {
     }
     fn readdir<'a>(
         &'a self,
-        _cookie: types::Dircookie,
-    ) -> Result<Box<dyn Iterator<Item = Result<(types::Dirent, String)>> + 'a>> {
+        _cookie: Dircookie,
+    ) -> Result<Box<dyn Iterator<Item = Result<(Dirent, String)>> + 'a>> {
         Err(Error::Badf)
     }
     fn seek(&self, _offset: SeekFrom) -> Result<u64> {
@@ -180,7 +180,7 @@ pub trait Handle {
         _path: &str,
         _read: bool,
         _write: bool,
-        _oflags: types::Oflags,
+        _oflags: Oflags,
         _fd_flags: Fdflags,
     ) -> Result<Box<dyn Handle>> {
         Err(Error::Acces)
@@ -213,3 +213,148 @@ pub trait Handle {
         Err(Error::Acces)
     }
 }
+
+impl From<std::fs::FileType> for Filetype {
+    fn from(ftype: std::fs::FileType) -> Self {
+        if ftype.is_file() {
+            Self::RegularFile
+        } else if ftype.is_dir() {
+            Self::Directory
+        } else if ftype.is_symlink() {
+            Self::SymbolicLink
+        } else {
+            Self::Unknown
+        }
+    }
+}
+
+pub(crate) trait AsBytes {
+    fn as_bytes(&self) -> Result<Vec<u8>>;
+}
+
+impl AsBytes for Dirent {
+    fn as_bytes(&self) -> Result<Vec<u8>> {
+        use std::convert::TryInto;
+        use wiggle::GuestType;
+
+        assert_eq!(
+            Self::guest_size(),
+            std::mem::size_of::<Self>() as _,
+            "guest repr of Dirent and host repr should match"
+        );
+
+        let offset = Self::guest_size().try_into()?;
+        let mut bytes: Vec<u8> = Vec::with_capacity(offset);
+        bytes.resize(offset, 0);
+        let ptr = bytes.as_mut_ptr() as *mut Self;
+        unsafe { ptr.write_unaligned(self.clone()) };
+        Ok(bytes)
+    }
+}
+
+pub(crate) trait RightsExt: Sized {
+    fn block_device_base() -> Self;
+    fn block_device_inheriting() -> Self;
+    fn character_device_base() -> Self;
+    fn character_device_inheriting() -> Self;
+    fn directory_base() -> Self;
+    fn directory_inheriting() -> Self;
+    fn regular_file_base() -> Self;
+    fn regular_file_inheriting() -> Self;
+    fn socket_base() -> Self;
+    fn socket_inheriting() -> Self;
+    fn tty_base() -> Self;
+    fn tty_inheriting() -> Self;
+}
+
+impl RightsExt for Rights {
+    // Block and character device interaction is outside the scope of
+    // WASI. Simply allow everything.
+    fn block_device_base() -> Self {
+        Self::all()
+    }
+    fn block_device_inheriting() -> Self {
+        Self::all()
+    }
+    fn character_device_base() -> Self {
+        Self::all()
+    }
+    fn character_device_inheriting() -> Self {
+        Self::all()
+    }
+
+    // Only allow directory operations on directories. Directories can only
+    // yield file descriptors to other directories and files.
+    fn directory_base() -> Self {
+        Self::FD_FDSTAT_SET_FLAGS
+            | Self::FD_SYNC
+            | Self::FD_ADVISE
+            | Self::PATH_CREATE_DIRECTORY
+            | Self::PATH_CREATE_FILE
+            | Self::PATH_LINK_SOURCE
+            | Self::PATH_LINK_TARGET
+            | Self::PATH_OPEN
+            | Self::FD_READDIR
+            | Self::PATH_READLINK
+            | Self::PATH_RENAME_SOURCE
+            | Self::PATH_RENAME_TARGET
+            | Self::PATH_FILESTAT_GET
+            | Self::PATH_FILESTAT_SET_SIZE
+            | Self::PATH_FILESTAT_SET_TIMES
+            | Self::FD_FILESTAT_GET
+            | Self::FD_FILESTAT_SET_TIMES
+            | Self::PATH_SYMLINK
+            | Self::PATH_UNLINK_FILE
+            | Self::PATH_REMOVE_DIRECTORY
+            | Self::POLL_FD_READWRITE
+    }
+    fn directory_inheriting() -> Self {
+        Self::all() ^ Self::SOCK_SHUTDOWN
+    }
+
+    // Operations that apply to regular files.
+    fn regular_file_base() -> Self {
+        Self::FD_DATASYNC
+            | Self::FD_READ
+            | Self::FD_SEEK
+            | Self::FD_FDSTAT_SET_FLAGS
+            | Self::FD_SYNC
+            | Self::FD_TELL
+            | Self::FD_WRITE
+            | Self::FD_ADVISE
+            | Self::FD_ALLOCATE
+            | Self::FD_FILESTAT_GET
+            | Self::FD_FILESTAT_SET_SIZE
+            | Self::FD_FILESTAT_SET_TIMES
+            | Self::POLL_FD_READWRITE
+    }
+    fn regular_file_inheriting() -> Self {
+        Self::empty()
+    }
+
+    // Operations that apply to sockets and socket pairs.
+    fn socket_base() -> Self {
+        Self::FD_READ
+            | Self::FD_FDSTAT_SET_FLAGS
+            | Self::FD_WRITE
+            | Self::FD_FILESTAT_GET
+            | Self::POLL_FD_READWRITE
+            | Self::SOCK_SHUTDOWN
+    }
+    fn socket_inheriting() -> Self {
+        Self::all()
+    }
+
+    // Operations that apply to TTYs.
+    fn tty_base() -> Self {
+        Self::FD_READ
+            | Self::FD_FDSTAT_SET_FLAGS
+            | Self::FD_WRITE
+            | Self::FD_FILESTAT_GET
+            | Self::POLL_FD_READWRITE
+    }
+    fn tty_inheriting() -> Self {
+        Self::empty()
+    }
+}
+pub(crate) const DIRCOOKIE_START: Dircookie = 0;

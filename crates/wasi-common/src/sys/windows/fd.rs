@@ -1,10 +1,10 @@
 use super::file_serial_no;
 use super::oshandle::RawOsHandle;
+use crate::handle::{Advice, Dircookie, Dirent, Fdflags, Filesize, Filestat};
 use crate::path;
 use crate::sys::osdir::OsDir;
 use crate::sys::osfile::OsFile;
 use crate::sys::AsFile;
-use crate::wasi::types;
 use crate::Result;
 use std::convert::TryInto;
 use std::fs::{File, OpenOptions};
@@ -14,8 +14,8 @@ use std::path::Path;
 use tracing::trace;
 use winx::file::{AccessMode, FileModeInformation, Flags};
 
-pub(crate) fn fdstat_get(file: &File) -> Result<types::Fdflags> {
-    let mut fdflags = types::Fdflags::empty();
+pub(crate) fn fdstat_get(file: &File) -> Result<Fdflags> {
+    let mut fdflags = Fdflags::empty();
     let handle = file.as_raw_handle();
     let access_mode = winx::file::query_access_information(handle)?;
     let mode = winx::file::query_mode_information(handle)?;
@@ -24,13 +24,13 @@ pub(crate) fn fdstat_get(file: &File) -> Result<types::Fdflags> {
     if access_mode.contains(AccessMode::FILE_APPEND_DATA)
         && !access_mode.contains(AccessMode::FILE_WRITE_DATA)
     {
-        fdflags |= types::Fdflags::APPEND;
+        fdflags |= Fdflags::APPEND;
     }
 
     if mode.contains(FileModeInformation::FILE_WRITE_THROUGH) {
         // Only report __WASI_FDFLAGS_SYNC
         // This is technically the only one of the O_?SYNC flags Windows supports.
-        fdflags |= types::Fdflags::SYNC;
+        fdflags |= Fdflags::SYNC;
     }
 
     // Files do not support the `__WASI_FDFLAGS_NONBLOCK` flag
@@ -42,10 +42,7 @@ pub(crate) fn fdstat_get(file: &File) -> Result<types::Fdflags> {
 // handle came from `CreateFile`, but the Rust's libstd will use `GetStdHandle`
 // rather than `CreateFile`. Relevant discussion can be found in:
 // https://github.com/rust-lang/rust/issues/40490
-pub(crate) fn fdstat_set_flags(
-    file: &File,
-    fdflags: types::Fdflags,
-) -> Result<Option<RawOsHandle>> {
+pub(crate) fn fdstat_set_flags(file: &File, fdflags: Fdflags) -> Result<Option<RawOsHandle>> {
     let handle = file.as_raw_handle();
     let access_mode = winx::file::query_access_information(handle)?;
     let new_access_mode = file_access_mode_from_fdflags(
@@ -65,14 +62,14 @@ pub(crate) fn fdstat_set_flags(
 
 pub(crate) fn advise(
     _file: &OsFile,
-    _advice: types::Advice,
-    _offset: types::Filesize,
-    _len: types::Filesize,
+    _advice: Advice,
+    _offset: Filesize,
+    _len: Filesize,
 ) -> Result<()> {
     Ok(())
 }
 
-fn file_access_mode_from_fdflags(fdflags: types::Fdflags, read: bool, write: bool) -> AccessMode {
+fn file_access_mode_from_fdflags(fdflags: Fdflags, read: bool, write: bool) -> AccessMode {
     let mut access_mode = AccessMode::READ_CONTROL;
 
     // Note that `GENERIC_READ` and `GENERIC_WRITE` cannot be used to properly support append-only mode
@@ -89,7 +86,7 @@ fn file_access_mode_from_fdflags(fdflags: types::Fdflags, read: bool, write: boo
     // For append, grant the handle FILE_APPEND_DATA access but *not* FILE_WRITE_DATA.
     // This makes the handle "append only".
     // Changes to the file pointer will be ignored (like POSIX's O_APPEND behavior).
-    if fdflags.contains(&types::Fdflags::APPEND) {
+    if fdflags.contains(&Fdflags::APPEND) {
         access_mode.insert(AccessMode::FILE_APPEND_DATA);
         access_mode.remove(AccessMode::FILE_WRITE_DATA);
     }
@@ -127,8 +124,8 @@ fn file_access_mode_from_fdflags(fdflags: types::Fdflags, read: bool, write: boo
 // other entries, in order they were returned by FindNextFileW get subsequent integers as their cookies
 pub(crate) fn readdir(
     dirfd: &OsDir,
-    cookie: types::Dircookie,
-) -> Result<Box<dyn Iterator<Item = Result<(types::Dirent, String)>>>> {
+    cookie: Dircookie,
+) -> Result<Box<dyn Iterator<Item = Result<(Dirent, String)>>>> {
     use winx::file::get_file_path;
 
     let cookie = cookie.try_into()?;
@@ -146,7 +143,7 @@ pub(crate) fn readdir(
         let ftype = dir.file_type()?;
         let name = path::from_host(dir.file_name())?;
         let d_ino = File::open(dir.path()).and_then(|f| file_serial_no(&f))?;
-        let dirent = types::Dirent {
+        let dirent = Dirent {
             d_namlen: name.len().try_into()?,
             d_type: ftype.into(),
             d_ino,
@@ -171,8 +168,8 @@ pub(crate) fn readdir(
 fn dirent_from_path<P: AsRef<Path>>(
     path: P,
     name: &str,
-    cookie: types::Dircookie,
-) -> Result<(types::Dirent, String)> {
+    cookie: Dircookie,
+) -> Result<(Dirent, String)> {
     let path = path.as_ref();
     trace!("dirent_from_path: opening {}", path.to_string_lossy());
 
@@ -183,7 +180,7 @@ fn dirent_from_path<P: AsRef<Path>>(
         .open(path)?;
     let ty = file.metadata()?.file_type();
     let name = name.to_owned();
-    let dirent = types::Dirent {
+    let dirent = Dirent {
         d_namlen: name.len().try_into()?,
         d_next: cookie,
         d_type: ty.into(),
@@ -192,7 +189,7 @@ fn dirent_from_path<P: AsRef<Path>>(
     Ok((dirent, name))
 }
 
-pub(crate) fn filestat_get(file: &File) -> Result<types::Filestat> {
+pub(crate) fn filestat_get(file: &File) -> Result<Filestat> {
     let filestat = file.try_into()?;
     Ok(filestat)
 }

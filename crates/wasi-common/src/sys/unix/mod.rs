@@ -26,9 +26,11 @@ cfg_if::cfg_if! {
     }
 }
 
-use crate::handle::HandleRights;
+use crate::handle::{
+    Fdflags, Filesize, Filestat, Filetype, HandleRights, Lookupflags, Oflags, Rights, RightsExt,
+};
+use crate::sched::{Clockid, Timestamp};
 use crate::sys::AsFile;
-use crate::wasi::{types, RightsExt};
 use crate::{Error, Result};
 use std::convert::{TryFrom, TryInto};
 use std::fs::File;
@@ -48,34 +50,34 @@ impl<T: AsRawFd> AsFile for T {
     }
 }
 
-pub(super) fn get_file_type(file: &File) -> io::Result<types::Filetype> {
+pub(super) fn get_file_type(file: &File) -> io::Result<Filetype> {
     let ft = file.metadata()?.file_type();
     let file_type = if ft.is_block_device() {
         tracing::debug!(
             host_fd = tracing::field::display(file.as_raw_fd()),
             "Host fd is a block device"
         );
-        types::Filetype::BlockDevice
+        Filetype::BlockDevice
     } else if ft.is_char_device() {
         tracing::debug!("Host fd {:?} is a char device", file.as_raw_fd());
-        types::Filetype::CharacterDevice
+        Filetype::CharacterDevice
     } else if ft.is_dir() {
         tracing::debug!("Host fd {:?} is a directory", file.as_raw_fd());
-        types::Filetype::Directory
+        Filetype::Directory
     } else if ft.is_file() {
         tracing::debug!("Host fd {:?} is a file", file.as_raw_fd());
-        types::Filetype::RegularFile
+        Filetype::RegularFile
     } else if ft.is_socket() {
         tracing::debug!("Host fd {:?} is a socket", file.as_raw_fd());
         use yanix::socket::{get_socket_type, SockType};
         match unsafe { get_socket_type(file.as_raw_fd())? } {
-            SockType::Datagram => types::Filetype::SocketDgram,
-            SockType::Stream => types::Filetype::SocketStream,
+            SockType::Datagram => Filetype::SocketDgram,
+            SockType::Stream => Filetype::SocketStream,
             _ => return Err(io::Error::from_raw_os_error(libc::EINVAL)),
         }
     } else if ft.is_fifo() {
         tracing::debug!("Host fd {:?} is a fifo", file.as_raw_fd());
-        types::Filetype::Unknown
+        Filetype::Unknown
     } else {
         tracing::debug!("Host fd {:?} is unknown", file.as_raw_fd());
         return Err(io::Error::from_raw_os_error(libc::EINVAL));
@@ -83,48 +85,44 @@ pub(super) fn get_file_type(file: &File) -> io::Result<types::Filetype> {
     Ok(file_type)
 }
 
-pub(super) fn get_rights(file: &File, file_type: &types::Filetype) -> io::Result<HandleRights> {
+pub(super) fn get_rights(file: &File, file_type: &Filetype) -> io::Result<HandleRights> {
     use yanix::{fcntl, file::OFlags};
     let (base, inheriting) = match file_type {
-        types::Filetype::BlockDevice => (
-            types::Rights::block_device_base(),
-            types::Rights::block_device_inheriting(),
+        Filetype::BlockDevice => (
+            Rights::block_device_base(),
+            Rights::block_device_inheriting(),
         ),
-        types::Filetype::CharacterDevice => {
+        Filetype::CharacterDevice => {
             use yanix::file::isatty;
             if unsafe { isatty(file.as_raw_fd())? } {
-                (types::Rights::tty_base(), types::Rights::tty_base())
+                (Rights::tty_base(), Rights::tty_base())
             } else {
                 (
-                    types::Rights::character_device_base(),
-                    types::Rights::character_device_inheriting(),
+                    Rights::character_device_base(),
+                    Rights::character_device_inheriting(),
                 )
             }
         }
-        types::Filetype::SocketDgram | types::Filetype::SocketStream => (
-            types::Rights::socket_base(),
-            types::Rights::socket_inheriting(),
+        Filetype::SocketDgram | Filetype::SocketStream => {
+            (Rights::socket_base(), Rights::socket_inheriting())
+        }
+        Filetype::SymbolicLink | Filetype::Unknown => (
+            Rights::regular_file_base(),
+            Rights::regular_file_inheriting(),
         ),
-        types::Filetype::SymbolicLink | types::Filetype::Unknown => (
-            types::Rights::regular_file_base(),
-            types::Rights::regular_file_inheriting(),
-        ),
-        types::Filetype::Directory => (
-            types::Rights::directory_base(),
-            types::Rights::directory_inheriting(),
-        ),
-        types::Filetype::RegularFile => (
-            types::Rights::regular_file_base(),
-            types::Rights::regular_file_inheriting(),
+        Filetype::Directory => (Rights::directory_base(), Rights::directory_inheriting()),
+        Filetype::RegularFile => (
+            Rights::regular_file_base(),
+            Rights::regular_file_inheriting(),
         ),
     };
     let mut rights = HandleRights::new(base, inheriting);
     let flags = unsafe { fcntl::get_status_flags(file.as_raw_fd())? };
     let accmode = flags & OFlags::ACCMODE;
     if accmode == OFlags::RDONLY {
-        rights.base &= !types::Rights::FD_WRITE;
+        rights.base &= !Rights::FD_WRITE;
     } else if accmode == OFlags::WRONLY {
-        rights.base &= !types::Rights::FD_READ;
+        rights.base &= !Rights::FD_READ;
     }
     Ok(rights)
 }
@@ -133,9 +131,9 @@ pub fn preopen_dir<P: AsRef<Path>>(path: P) -> io::Result<File> {
     File::open(path)
 }
 
-impl From<types::Clockid> for ClockId {
-    fn from(clock_id: types::Clockid) -> Self {
-        use types::Clockid::*;
+impl From<Clockid> for ClockId {
+    fn from(clock_id: Clockid) -> Self {
+        use Clockid::*;
         match clock_id {
             Realtime => Self::Realtime,
             Monotonic => Self::Monotonic,
@@ -145,29 +143,29 @@ impl From<types::Clockid> for ClockId {
     }
 }
 
-impl From<types::Fdflags> for OFlags {
-    fn from(fdflags: types::Fdflags) -> Self {
+impl From<Fdflags> for OFlags {
+    fn from(fdflags: Fdflags) -> Self {
         let mut nix_flags = Self::empty();
-        if fdflags.contains(&types::Fdflags::APPEND) {
+        if fdflags.contains(&Fdflags::APPEND) {
             nix_flags.insert(Self::APPEND);
         }
-        if fdflags.contains(&types::Fdflags::DSYNC) {
+        if fdflags.contains(&Fdflags::DSYNC) {
             nix_flags.insert(Self::DSYNC);
         }
-        if fdflags.contains(&types::Fdflags::NONBLOCK) {
+        if fdflags.contains(&Fdflags::NONBLOCK) {
             nix_flags.insert(Self::NONBLOCK);
         }
-        if fdflags.contains(&types::Fdflags::RSYNC) {
+        if fdflags.contains(&Fdflags::RSYNC) {
             nix_flags.insert(O_RSYNC);
         }
-        if fdflags.contains(&types::Fdflags::SYNC) {
+        if fdflags.contains(&Fdflags::SYNC) {
             nix_flags.insert(Self::SYNC);
         }
         nix_flags
     }
 }
 
-impl From<OFlags> for types::Fdflags {
+impl From<OFlags> for Fdflags {
     fn from(oflags: OFlags) -> Self {
         let mut fdflags = Self::empty();
         if oflags.contains(OFlags::APPEND) {
@@ -189,30 +187,30 @@ impl From<OFlags> for types::Fdflags {
     }
 }
 
-impl From<types::Oflags> for OFlags {
-    fn from(oflags: types::Oflags) -> Self {
+impl From<Oflags> for OFlags {
+    fn from(oflags: Oflags) -> Self {
         let mut nix_flags = Self::empty();
-        if oflags.contains(&types::Oflags::CREAT) {
+        if oflags.contains(&Oflags::CREAT) {
             nix_flags.insert(Self::CREAT);
         }
-        if oflags.contains(&types::Oflags::DIRECTORY) {
+        if oflags.contains(&Oflags::DIRECTORY) {
             nix_flags.insert(Self::DIRECTORY);
         }
-        if oflags.contains(&types::Oflags::EXCL) {
+        if oflags.contains(&Oflags::EXCL) {
             nix_flags.insert(Self::EXCL);
         }
-        if oflags.contains(&types::Oflags::TRUNC) {
+        if oflags.contains(&Oflags::TRUNC) {
             nix_flags.insert(Self::TRUNC);
         }
         nix_flags
     }
 }
 
-impl TryFrom<libc::stat> for types::Filestat {
+impl TryFrom<libc::stat> for Filestat {
     type Error = Error;
 
     fn try_from(filestat: libc::stat) -> Result<Self> {
-        fn filestat_to_timestamp(secs: u64, nsecs: u64) -> Result<types::Timestamp> {
+        fn filestat_to_timestamp(secs: u64, nsecs: u64) -> Result<Timestamp> {
             secs.checked_mul(1_000_000_000)
                 .and_then(|sec_nsec| sec_nsec.checked_add(nsecs))
                 .ok_or(Error::Overflow)
@@ -238,7 +236,7 @@ impl TryFrom<libc::stat> for types::Filestat {
             dev,
             ino,
             nlink: filestat.st_nlink.into(),
-            size: filestat.st_size as types::Filesize,
+            size: filestat.st_size as Filesize,
             atim,
             ctim,
             mtim,
@@ -247,7 +245,7 @@ impl TryFrom<libc::stat> for types::Filestat {
     }
 }
 
-impl From<yanix::file::FileType> for types::Filetype {
+impl From<yanix::file::FileType> for Filetype {
     fn from(ft: yanix::file::FileType) -> Self {
         use yanix::file::FileType::*;
         match ft {
@@ -267,10 +265,10 @@ impl From<yanix::file::FileType> for types::Filetype {
     }
 }
 
-impl From<types::Lookupflags> for AtFlags {
-    fn from(flags: types::Lookupflags) -> Self {
+impl From<Lookupflags> for AtFlags {
+    fn from(flags: Lookupflags) -> Self {
         match flags {
-            types::Lookupflags::SYMLINK_FOLLOW => Self::empty(),
+            Lookupflags::SYMLINK_FOLLOW => Self::empty(),
             _ => Self::SYMLINK_NOFOLLOW,
         }
     }

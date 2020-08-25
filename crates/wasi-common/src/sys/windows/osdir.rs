@@ -1,6 +1,5 @@
 use super::oshandle::RawOsHandle;
-use crate::handle::HandleRights;
-use crate::wasi::{types, RightsExt};
+use crate::handle::{HandleRights, Rights, RightsExt};
 use std::cell::Cell;
 use std::convert::TryFrom;
 use std::fs::File;
@@ -55,16 +54,13 @@ impl TryFrom<File> for OsDir {
 
 fn get_rights(file: &File) -> io::Result<HandleRights> {
     use winx::file::{query_access_information, AccessMode};
-    let mut rights = HandleRights::new(
-        types::Rights::directory_base(),
-        types::Rights::directory_inheriting(),
-    );
+    let mut rights = HandleRights::new(Rights::directory_base(), Rights::directory_inheriting());
     let mode = query_access_information(file.as_raw_handle())?;
     if mode.contains(AccessMode::FILE_GENERIC_READ) {
-        rights.base |= types::Rights::FD_READ;
+        rights.base |= Rights::FD_READ;
     }
     if mode.contains(AccessMode::FILE_GENERIC_WRITE) {
-        rights.base |= types::Rights::FD_WRITE;
+        rights.base |= Rights::FD_WRITE;
     }
     Ok(rights)
 }

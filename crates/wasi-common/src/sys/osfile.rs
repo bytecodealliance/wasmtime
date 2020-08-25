@@ -1,7 +1,9 @@
 use super::sys_impl::oshandle::RawOsHandle;
 use super::{fd, AsFile};
-use crate::handle::{Handle, HandleRights};
-use crate::wasi::types;
+use crate::handle::{
+    Advice, Fdflags, Filesize, Filestat, Filetype, Fstflags, Handle, HandleRights,
+};
+use crate::sched::Timestamp;
 use crate::{Error, Result};
 use std::any::Any;
 use std::cell::Cell;
@@ -56,8 +58,8 @@ impl Handle for OsFile {
         let rights = self.rights.clone();
         Ok(Box::new(Self { rights, handle }))
     }
-    fn get_file_type(&self) -> types::Filetype {
-        types::Filetype::RegularFile
+    fn get_file_type(&self) -> Filetype {
+        Filetype::RegularFile
     }
     fn get_rights(&self) -> HandleRights {
         self.rights.get()
@@ -66,15 +68,10 @@ impl Handle for OsFile {
         self.rights.set(rights)
     }
     // FdOps
-    fn advise(
-        &self,
-        advice: types::Advice,
-        offset: types::Filesize,
-        len: types::Filesize,
-    ) -> Result<()> {
+    fn advise(&self, advice: Advice, offset: Filesize, len: Filesize) -> Result<()> {
         fd::advise(self, advice, offset, len)
     }
-    fn allocate(&self, offset: types::Filesize, len: types::Filesize) -> Result<()> {
+    fn allocate(&self, offset: Filesize, len: Filesize) -> Result<()> {
         let fd = self.as_file()?;
         let metadata = fd.metadata()?;
         let current_size = metadata.len();
@@ -92,27 +89,27 @@ impl Handle for OsFile {
         self.as_file()?.sync_data()?;
         Ok(())
     }
-    fn fdstat_get(&self) -> Result<types::Fdflags> {
+    fn fdstat_get(&self) -> Result<Fdflags> {
         fd::fdstat_get(&*self.as_file()?)
     }
-    fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<()> {
+    fn fdstat_set_flags(&self, fdflags: Fdflags) -> Result<()> {
         if let Some(new_handle) = fd::fdstat_set_flags(&*self.as_file()?, fdflags)? {
             self.handle.update_from(new_handle);
         }
         Ok(())
     }
-    fn filestat_get(&self) -> Result<types::Filestat> {
+    fn filestat_get(&self) -> Result<Filestat> {
         fd::filestat_get(&*self.as_file()?)
     }
-    fn filestat_set_size(&self, size: types::Filesize) -> Result<()> {
+    fn filestat_set_size(&self, size: Filesize) -> Result<()> {
         self.as_file()?.set_len(size)?;
         Ok(())
     }
     fn filestat_set_times(
         &self,
-        atim: types::Timestamp,
-        mtim: types::Timestamp,
-        fst_flags: types::Fstflags,
+        atim: Timestamp,
+        mtim: Timestamp,
+        fst_flags: Fstflags,
     ) -> Result<()> {
         fd::filestat_set_times(&*self.as_file()?, atim, mtim, fst_flags)
     }

@@ -1,7 +1,9 @@
 use super::sys_impl::oshandle::RawOsHandle;
 use super::{fd, path, AsFile};
-use crate::handle::{Handle, HandleRights};
-use crate::wasi::types;
+use crate::handle::{
+    Dircookie, Dirent, Fdflags, Filestat, Filetype, Fstflags, Handle, HandleRights, Oflags,
+};
+use crate::sched::Timestamp;
 use crate::{Error, Result};
 use std::any::Any;
 use std::io;
@@ -30,8 +32,8 @@ impl Handle for OsDir {
         let new = Self::new(self.rights.get(), handle)?;
         Ok(Box::new(new))
     }
-    fn get_file_type(&self) -> types::Filetype {
-        types::Filetype::Directory
+    fn get_file_type(&self) -> Filetype {
+        Filetype::Directory
     }
     fn get_rights(&self) -> HandleRights {
         self.rights.get()
@@ -40,45 +42,45 @@ impl Handle for OsDir {
         self.rights.set(rights)
     }
     // FdOps
-    fn fdstat_get(&self) -> Result<types::Fdflags> {
+    fn fdstat_get(&self) -> Result<Fdflags> {
         fd::fdstat_get(&*self.as_file()?)
     }
-    fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<()> {
+    fn fdstat_set_flags(&self, fdflags: Fdflags) -> Result<()> {
         if let Some(new_file) = fd::fdstat_set_flags(&*self.as_file()?, fdflags)? {
             self.handle.update_from(new_file);
         }
         Ok(())
     }
-    fn filestat_get(&self) -> Result<types::Filestat> {
+    fn filestat_get(&self) -> Result<Filestat> {
         fd::filestat_get(&*self.as_file()?)
     }
     fn filestat_set_times(
         &self,
-        atim: types::Timestamp,
-        mtim: types::Timestamp,
-        fst_flags: types::Fstflags,
+        atim: Timestamp,
+        mtim: Timestamp,
+        fst_flags: Fstflags,
     ) -> Result<()> {
         fd::filestat_set_times(&*self.as_file()?, atim, mtim, fst_flags)
     }
     fn readdir<'a>(
         &'a self,
-        cookie: types::Dircookie,
-    ) -> Result<Box<dyn Iterator<Item = Result<(types::Dirent, String)>> + 'a>> {
+        cookie: Dircookie,
+    ) -> Result<Box<dyn Iterator<Item = Result<(Dirent, String)>> + 'a>> {
         fd::readdir(self, cookie)
     }
     // PathOps
     fn create_directory(&self, path: &str) -> Result<()> {
         path::create_directory(self, path)
     }
-    fn filestat_get_at(&self, path: &str, follow: bool) -> Result<types::Filestat> {
+    fn filestat_get_at(&self, path: &str, follow: bool) -> Result<Filestat> {
         path::filestat_get_at(self, path, follow)
     }
     fn filestat_set_times_at(
         &self,
         path: &str,
-        atim: types::Timestamp,
-        mtim: types::Timestamp,
-        fst_flags: types::Fstflags,
+        atim: Timestamp,
+        mtim: Timestamp,
+        fst_flags: Fstflags,
         follow: bool,
     ) -> Result<()> {
         path::filestat_set_times_at(self, path, atim, mtim, fst_flags, follow)
@@ -88,8 +90,8 @@ impl Handle for OsDir {
         path: &str,
         read: bool,
         write: bool,
-        oflags: types::Oflags,
-        fd_flags: types::Fdflags,
+        oflags: Oflags,
+        fd_flags: Fdflags,
     ) -> Result<Box<dyn Handle>> {
         path::open(self, path, read, write, oflags, fd_flags)
     }
