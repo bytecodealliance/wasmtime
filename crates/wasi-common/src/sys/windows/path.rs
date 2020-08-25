@@ -170,7 +170,10 @@ pub(crate) fn link(
     let new_path = concatenate(new_dirfd, new_path)?;
     if follow_symlinks {
         // in particular, this will return an error if the target path doesn't exist
-        tracing::debug!("Following symlinks for path: {:?}", old_path);
+        tracing::debug!(
+            old_path = tracing::field::display(&old_path),
+            "Following symlinks"
+        );
         old_path = fs::canonicalize(&old_path).map_err(|e| match e.raw_os_error() {
             // fs::canonicalize under Windows will return:
             // * ERROR_FILE_NOT_FOUND, if it encounters a dangling symlink
