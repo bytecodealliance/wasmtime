@@ -2,7 +2,10 @@ use super::address_transform::AddressTransform;
 use anyhow::{Context, Error, Result};
 use gimli::{self, write, Expression, Operation, Reader, ReaderOffset, X86_64};
 use more_asserts::{assert_le, assert_lt};
+use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::ir::{StackSlots, ValueLabel, ValueLabelsRanges, ValueLoc};
 use wasmtime_environ::isa::TargetIsa;
@@ -88,21 +91,25 @@ enum CompiledExpressionPart {
     // The wasm-local DWARF operator. The label points to `ValueLabel`.
     // The trailing field denotes that the operator was last in sequence,
     // and it is the DWARF location (not a pointer).
-    Local { label: ValueLabel, trailing: bool },
+    Local {
+        label: ValueLabel,
+        trailing: bool,
+    },
     // Dereference is needed.
     Deref,
     // Jumping in the expression.
-    // The target is encoded in the `jump_arcs` map, externally.
-    Jump { conditionally: bool },
+    Jump {
+        conditionally: bool,
+        target: JumpTargetMarker,
+    },
     // Floating landing pad.
-    LandingPad { original_pos: usize },
+    LandingPad(JumpTargetMarker),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompiledExpression {
     parts: Vec<CompiledExpressionPart>,
     need_deref: bool,
-    jump_arcs: HashMap<usize, usize>,
 }
 
 impl CompiledExpression {
@@ -117,7 +124,6 @@ impl CompiledExpression {
                 trailing: true,
             }],
             need_deref: false,
-            jump_arcs: HashMap::new(),
         }
     }
 }
@@ -306,7 +312,6 @@ impl CompiledExpression {
             ranges_builder.process_label(vmctx_label);
         }
         let ranges = ranges_builder.into_ranges();
-        let mut old_to_new: HashMap<usize, usize> = HashMap::new();
 
         return BuildWithLocalsResult::Ranges(Box::new(
             ranges
@@ -320,6 +325,9 @@ impl CompiledExpression {
                           }| {
                         // build expression
                         let mut code_buf = Vec::new();
+                        let mut jump_positions = Vec::new();
+                        let mut landing_positions = HashMap::new();
+
                         macro_rules! deref {
                             () => {
                                 if let (Some(vmctx_loc), Some(frame_info)) =
@@ -341,23 +349,15 @@ impl CompiledExpression {
                         for part in &self.parts {
                             match part {
                                 CompiledExpressionPart::Code(c) => {
-                                    if let Some((old, new)) = old_to_new
-                                        .iter()
-                                        .find(|(_, new)| *new == &code_buf.len())
-                                        .map(|(old, new)| (*old, *new))
-                                    {
-                                        // when `new` comes from the preceding LandingPad
-                                        for i in 1..c.len() {
-                                            old_to_new.insert(old + i, new + i);
-                                        }
-                                    }
                                     code_buf.extend_from_slice(c.as_slice())
                                 }
-                                CompiledExpressionPart::LandingPad { original_pos } => {
-                                    let new_pos = code_buf.len();
-                                    old_to_new.insert(*original_pos, new_pos);
+                                CompiledExpressionPart::LandingPad(marker) => {
+                                    landing_positions.insert(marker.clone(), code_buf.len());
                                 }
-                                CompiledExpressionPart::Jump { conditionally } => {
+                                CompiledExpressionPart::Jump {
+                                    conditionally,
+                                    target,
+                                } => {
                                     code_buf.push(
                                         match conditionally {
                                             true => gimli::constants::DW_OP_bra,
@@ -366,7 +366,8 @@ impl CompiledExpression {
                                         .0 as u8,
                                     );
                                     code_buf.push(!0);
-                                    code_buf.push(!0) // these will be relocated below
+                                    code_buf.push(!0); // these will be relocated below
+                                    jump_positions.push((target.clone(), code_buf.len()));
                                 }
                                 CompiledExpressionPart::Local { label, trailing } => {
                                     let loc =
@@ -385,16 +386,15 @@ impl CompiledExpression {
                         if self.need_deref {
                             deref!();
                         }
-                        for (from, to) in &self.jump_arcs {
+
+                        for (marker, new_from) in jump_positions {
                             // relocate jump targets
-                            let new_from = old_to_new[&from];
-                            let new_to = old_to_new[&to];
-                            let new_diff = new_to as i32 - new_from as i32;
+                            let new_to = landing_positions[&marker];
+                            let new_diff = new_to as isize - new_from as isize;
                             // FIXME: use encoding? LittleEndian for now...
                             &code_buf[new_from - 2..new_from]
                                 .copy_from_slice(&(new_diff as i16).to_le_bytes());
                         }
-
                         Ok(Some((func_index, start, end, code_buf)))
                     },
                 )
@@ -431,22 +431,21 @@ where
         }
     }
 
-    let mut jump_arcs: HashMap<usize, usize> = HashMap::new();
+    // jump_targets key is offset in buf starting from the end
+    // (see also `unread_bytes` below)
+    let mut jump_targets: HashMap<u64, JumpTargetMarker> = HashMap::new();
     let mut pc = expr.0.clone();
 
     let buf = expr.0.to_slice()?;
     let mut parts = Vec::new();
     macro_rules! push {
-        ($unread:expr, $part:expr) => {{
+        ($part:expr) => {{
             let part = $part;
             if let (CompiledExpressionPart::Code(cc2), Some(CompiledExpressionPart::Code(cc1))) =
                 (&part, parts.last_mut())
             {
                 cc1.extend_from_slice(cc2);
             } else {
-                parts.push(CompiledExpressionPart::LandingPad {
-                    original_pos: (expr.0.len().into_u64() - $unread) as usize,
-                });
                 parts.push(part)
             }
         }};
@@ -462,19 +461,38 @@ where
     }
     let mut code_chunk = Vec::new();
     macro_rules! flush_code_chunk {
-        ($unread:expr) => {
+        () => {
             if !code_chunk.is_empty() {
-                let corr = code_chunk.len().into_u64();
-                push!(
-                    $unread + corr,
-                    CompiledExpressionPart::Code(code_chunk.clone())
-                );
+                push!(CompiledExpressionPart::Code(code_chunk.clone()));
                 code_chunk.clear()
             }
         };
     };
+    // Find all landing pads by scanning bytes, do not care about
+    // false location at this moment.
+    // Looks hacky but it is fast and we may not need to be really exact.
+    for i in 0..buf.len() - 2 {
+        let op = buf[i];
+        if op == gimli::constants::DW_OP_bra.0 || op == gimli::constants::DW_OP_skip.0 {
+            // TODO fix for big-endian
+            let offset = i16::from_le_bytes([buf[i + 1], buf[i + 2]]);
+            let origin = i + 3;
+            // Discarding out-of-bounds jumps (also some of falsly detected ops)
+            if (offset >= 0 && offset as usize + origin <= buf.len())
+                || (offset < 0 && -offset as usize <= origin)
+            {
+                let target = buf.len() as isize - origin as isize - offset as isize;
+                jump_targets.insert(target as u64, JumpTargetMarker::new());
+            }
+        }
+    }
     while !pc.is_empty() {
         let unread_bytes = pc.len().into_u64();
+        if let Some(marker) = jump_targets.get(&unread_bytes) {
+            flush_code_chunk!();
+            parts.push(CompiledExpressionPart::LandingPad(marker.clone()));
+        }
+
         let next = buf[pc.offset_from(&expr.0).into_u64() as usize];
         need_deref = true;
         if next == 0xED {
@@ -487,15 +505,12 @@ where
                 return Ok(None);
             }
             let index = pc.read_sleb128()?;
-            flush_code_chunk!(unread_bytes);
+            flush_code_chunk!();
             let label = ValueLabel::from_u32(index as u32);
-            push!(
-                unread_bytes,
-                CompiledExpressionPart::Local {
-                    label,
-                    trailing: false,
-                }
-            );
+            push!(CompiledExpressionPart::Local {
+                label,
+                trailing: false,
+            });
         } else {
             let pos = pc.offset_from(&expr.0).into_u64() as usize;
             let op = Operation::parse(&mut pc, encoding)?;
@@ -504,7 +519,7 @@ where
                     // Expand DW_OP_fbreg into frame location and DW_OP_plus_uconst.
                     if frame_base.is_some() {
                         // Add frame base expressions.
-                        flush_code_chunk!(unread_bytes);
+                        flush_code_chunk!();
                         parts.extend_from_slice(&frame_base.unwrap().parts);
                     }
                     if let Some(CompiledExpressionPart::Local { trailing, .. }) = parts.last_mut() {
@@ -552,19 +567,22 @@ where
                 | Operation::Reinterpret { .. }
                 | Operation::Piece { .. } => (),
                 Operation::Bra { target } | Operation::Skip { target } => {
-                    flush_code_chunk!(unread_bytes);
-                    let arc_from = (expr.0.len().into_u64() - pc.len().into_u64()) as usize;
-                    let arc_to = (arc_from as i32 + target as i32) as usize;
-                    jump_arcs.insert(arc_from, arc_to);
-                    push!(
-                        unread_bytes,
-                        CompiledExpressionPart::Jump {
-                            conditionally: match op {
-                                Operation::Bra { .. } => true,
-                                _ => false,
-                            },
+                    flush_code_chunk!();
+                    let arc_to = (pc.len().into_u64() as isize - target as isize) as u64;
+                    let marker = match jump_targets.get(&arc_to) {
+                        Some(m) => m.clone(),
+                        None => {
+                            // Marker not found: probably out of bounds.
+                            return Ok(None);
                         }
-                    );
+                    };
+                    push!(CompiledExpressionPart::Jump {
+                        conditionally: match op {
+                            Operation::Bra { .. } => true,
+                            _ => false,
+                        },
+                        target: marker,
+                    });
                     continue;
                 }
                 Operation::StackValue => {
@@ -580,8 +598,8 @@ where
                     }
                 }
                 Operation::Deref { .. } => {
-                    flush_code_chunk!(unread_bytes);
-                    push!(unread_bytes, CompiledExpressionPart::Deref);
+                    flush_code_chunk!();
+                    push!(CompiledExpressionPart::Deref);
                     // Don't re-enter the loop here (i.e. continue), because the
                     // DW_OP_deref still needs to be kept.
                 }
@@ -605,34 +623,12 @@ where
         }
     }
 
-    flush_code_chunk!(0);
+    flush_code_chunk!();
+    if let Some(marker) = jump_targets.get(&0) {
+        parts.push(CompiledExpressionPart::LandingPad(marker.clone()));
+    }
 
-    parts.push(CompiledExpressionPart::LandingPad {
-        original_pos: expr.0.len().into_u64() as usize,
-    });
-
-    parts.push(CompiledExpressionPart::Code(vec![])); // so that we have enough windows below
-
-    // collect all CompiledExpressionParts but only relevant LandingPads:
-    //  - those followed by a Code chunk that is being jumped into
-    //  - those which are either at the start or end of a jump arc
-    let parts = parts
-        .windows(2)
-        .filter_map(|p| match p {
-            [CompiledExpressionPart::LandingPad { original_pos }, CompiledExpressionPart::Code(code_chunk)]
-                if jump_arcs.values().any(|t| (original_pos + 1..original_pos + code_chunk.len()).contains(t))
-                => Some(p[0].clone()),
-            [CompiledExpressionPart::LandingPad { original_pos }, _]
-                if jump_arcs.iter().all(|(from, to)| from != original_pos && to != original_pos)
-                => None,
-            _ => Some(p[0].clone())
-        })
-        .collect();
-    Ok(Some(CompiledExpression {
-        parts,
-        need_deref,
-        jump_arcs,
-    }))
+    Ok(Some(CompiledExpression { parts, need_deref }))
 }
 
 #[derive(Debug, Clone)]
@@ -748,10 +744,49 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
     }
 }
 
+/// Marker for tracking incoming jumps.
+/// Different when created new, and the same when cloned.
+#[derive(Clone, Eq)]
+struct JumpTargetMarker(Rc<u32>);
+
+impl JumpTargetMarker {
+    fn new() -> JumpTargetMarker {
+        // We need somewhat unique hash data -- using part of
+        // the pointer of the RcBox.
+        let mut rc = Rc::new(0);
+        let hash_data = rc.as_ref() as *const u32 as usize as u32;
+        *Rc::get_mut(&mut rc).unwrap() = hash_data;
+        JumpTargetMarker(rc)
+    }
+}
+
+impl PartialEq for JumpTargetMarker {
+    fn eq(&self, other: &JumpTargetMarker) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Hash for JumpTargetMarker {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        hasher.write_u32(*self.0);
+    }
+}
+impl std::fmt::Debug for JumpTargetMarker {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "JumpMarker<{:08x}>",
+            self.0.as_ref() as *const u32 as usize
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::compile_expression;
-    use super::{AddressTransform, FunctionFrameInfo, ValueLabel, ValueLabelsRanges};
+    use super::{
+        compile_expression, AddressTransform, CompiledExpression, CompiledExpressionPart,
+        FunctionFrameInfo, JumpTargetMarker, ValueLabel, ValueLabelsRanges,
+    };
     use gimli::{self, constants, Encoding, EndianSlice, Expression, RunTimeEndian};
     use wasmtime_environ::CompiledFunction;
 
@@ -776,6 +811,19 @@ mod tests {
         }
     }
 
+    fn find_jump_targets<'a>(ce: &'a CompiledExpression) -> Vec<&'a JumpTargetMarker> {
+        ce.parts
+            .iter()
+            .filter_map(|p| {
+                if let CompiledExpressionPart::LandingPad(t) = p {
+                    Some(t)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    }
+
     static DWARF_ENCODING: Encoding = Encoding {
         address_size: 4,
         format: gimli::Format::Dwarf32,
@@ -783,9 +831,18 @@ mod tests {
     };
 
     #[test]
+    fn test_debug_expression_jump_target() {
+        let m1 = JumpTargetMarker::new();
+        let m2 = JumpTargetMarker::new();
+        assert!(m1 != m2);
+        assert!(m1 == m1.clone());
+
+        // internal hash_data test
+        assert!(m1.0 != m2.0);
+    }
+
+    #[test]
     fn test_debug_parse_expressions() {
-        use super::{CompiledExpression, CompiledExpressionPart};
-        use std::collections::HashMap;
         use wasmtime_environ::entity::EntityRef;
 
         let (val1, val3, val20) = (ValueLabel::new(1), ValueLabel::new(3), ValueLabel::new(20));
@@ -802,7 +859,6 @@ mod tests {
                     trailing: true
                 }],
                 need_deref: false,
-                jump_arcs: HashMap::new()
             }
         );
 
@@ -828,7 +884,6 @@ mod tests {
                     CompiledExpressionPart::Code(vec![35, 16, 159])
                 ],
                 need_deref: false,
-                jump_arcs: HashMap::new()
             }
         );
 
@@ -849,7 +904,6 @@ mod tests {
                     CompiledExpressionPart::Code(vec![35, 18])
                 ],
                 need_deref: true,
-                jump_arcs: HashMap::new()
             }
         );
 
@@ -878,7 +932,6 @@ mod tests {
                     CompiledExpressionPart::Code(vec![6, 159])
                 ],
                 need_deref: false,
-                jump_arcs: HashMap::new()
             }
         );
 
@@ -890,7 +943,7 @@ mod tests {
             1,
             DW_OP_and,
             DW_OP_bra,
-            7,
+            5,
             0, // --> pointer
             DW_OP_swap,
             DW_OP_shr,
@@ -906,6 +959,8 @@ mod tests {
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
             .expect("expression");
+        let targets = find_jump_targets(&ce);
+        assert_eq!(targets.len(), 2);
         assert_eq!(
             ce,
             CompiledExpression {
@@ -917,26 +972,22 @@ mod tests {
                     },
                     CompiledExpressionPart::Code(vec![26]),
                     CompiledExpressionPart::Jump {
-                        conditionally: true
+                        conditionally: true,
+                        target: targets[0].clone(),
                     },
-                    CompiledExpressionPart::LandingPad { original_pos: 9 }, // capture from
                     CompiledExpressionPart::Code(vec![22, 37]),
                     CompiledExpressionPart::Jump {
-                        conditionally: false
+                        conditionally: false,
+                        target: targets[1].clone(),
                     },
-                    CompiledExpressionPart::LandingPad { original_pos: 14 }, // capture from
+                    CompiledExpressionPart::LandingPad(targets[0].clone()), // capture from
                     CompiledExpressionPart::Code(vec![34]),
                     CompiledExpressionPart::Deref,
-                    CompiledExpressionPart::LandingPad { original_pos: 15 }, // capture to
-                    CompiledExpressionPart::Code(vec![6, 159])
+                    CompiledExpressionPart::Code(vec![6]),
+                    CompiledExpressionPart::LandingPad(targets[1].clone()), // capture to
+                    CompiledExpressionPart::Code(vec![159])
                 ],
                 need_deref: false,
-                jump_arcs: {
-                    let mut m = HashMap::new();
-                    m.insert(9, 16);
-                    m.insert(14, 16);
-                    m
-                }
             }
         );
 
@@ -954,25 +1005,23 @@ mod tests {
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
             .expect("expression");
+        let targets = find_jump_targets(&ce);
+        assert_eq!(targets.len(), 1);
         assert_eq!(
             ce,
             CompiledExpression {
                 parts: vec![
                     CompiledExpressionPart::Code(vec![49, 18]),
                     CompiledExpressionPart::Jump {
-                        conditionally: true
+                        conditionally: true,
+                        target: targets[0].clone(),
                     },
-                    CompiledExpressionPart::LandingPad { original_pos: 5 }, // capture from
                     CompiledExpressionPart::Deref,
-                    CompiledExpressionPart::LandingPad { original_pos: 5 }, // capture to
-                    CompiledExpressionPart::Code(vec![6, 48, 159])
+                    CompiledExpressionPart::Code(vec![6, 48]),
+                    CompiledExpressionPart::LandingPad(targets[0].clone()), // capture to
+                    CompiledExpressionPart::Code(vec![159])
                 ],
                 need_deref: false,
-                jump_arcs: {
-                    let mut m = HashMap::new();
-                    m.insert(5, 7);
-                    m
-                }
             }
         );
 
@@ -991,7 +1040,6 @@ mod tests {
                     CompiledExpressionPart::Code(vec![35, 5])
                 ],
                 need_deref: true,
-                jump_arcs: HashMap::new()
             }
         );
     }
