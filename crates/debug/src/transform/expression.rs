@@ -465,7 +465,7 @@ where
             if !code_chunk.is_empty() {
                 push!(CompiledExpressionPart::Code(code_chunk));
                 code_chunk = Vec::new();
-                if code_chunk.is_empty() {} // suppresses warning
+                let _ = code_chunk; // suppresses warning for final flush
             }
         };
     };
