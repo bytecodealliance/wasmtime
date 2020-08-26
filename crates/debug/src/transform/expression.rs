@@ -478,7 +478,7 @@ where
             // TODO fix for big-endian
             let offset = i16::from_le_bytes([buf[i + 1], buf[i + 2]]);
             let origin = i + 3;
-            // Discarding out-of-bounds jumps (also some of falsly detected ops)
+            // Discarding out-of-bounds jumps (also some of falsely detected ops)
             if (offset >= 0 && offset as usize + origin <= buf.len())
                 || (offset < 0 && -offset as usize <= origin)
             {
