@@ -800,6 +800,9 @@ mod tests {
         ($d:ident) => {
             constants::$d.0 as u8
         };
+        ($e:expr) => {
+            $e as u8
+        };
     }
 
     macro_rules! expression {
@@ -1019,6 +1022,49 @@ mod tests {
                     CompiledExpressionPart::Deref,
                     CompiledExpressionPart::Code(vec![6, 48]),
                     CompiledExpressionPart::LandingPad(targets[0].clone()), // capture to
+                    CompiledExpressionPart::Code(vec![159])
+                ],
+                need_deref: false,
+            }
+        );
+
+        let e = expression!(
+            DW_OP_lit1,
+            /* loop */ DW_OP_dup,
+            DW_OP_lit25,
+            DW_OP_ge,
+            DW_OP_bra,
+            5,
+            0, // --> done
+            DW_OP_plus_uconst,
+            1,
+            DW_OP_skip,
+            (-11 as i8),
+            (!0), // --> loop
+            /* done */ DW_OP_stack_value
+        );
+        let ce = compile_expression(&e, DWARF_ENCODING, None)
+            .expect("non-error")
+            .expect("expression");
+        let targets = find_jump_targets(&ce);
+        assert_eq!(targets.len(), 2);
+        assert_eq!(
+            ce,
+            CompiledExpression {
+                parts: vec![
+                    CompiledExpressionPart::Code(vec![49]),
+                    CompiledExpressionPart::LandingPad(targets[0].clone()),
+                    CompiledExpressionPart::Code(vec![18, 73, 42]),
+                    CompiledExpressionPart::Jump {
+                        conditionally: true,
+                        target: targets[1].clone(),
+                    },
+                    CompiledExpressionPart::Code(vec![35, 1]),
+                    CompiledExpressionPart::Jump {
+                        conditionally: false,
+                        target: targets[0].clone(),
+                    },
+                    CompiledExpressionPart::LandingPad(targets[1].clone()),
                     CompiledExpressionPart::Code(vec![159])
                 ],
                 need_deref: false,
