@@ -463,8 +463,9 @@ where
     macro_rules! flush_code_chunk {
         () => {
             if !code_chunk.is_empty() {
-                push!(CompiledExpressionPart::Code(code_chunk.clone()));
-                code_chunk.clear()
+                push!(CompiledExpressionPart::Code(code_chunk));
+                code_chunk = Vec::new();
+                if code_chunk.is_empty() {} // suppresses warning
             }
         };
     };
