@@ -172,10 +172,6 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_filestat_set_size(&self, fd: types::Fd, size: types::Filesize) -> Result<()> {
         let required_rights = HandleRights::from_base(types::Rights::FD_FILESTAT_SET_SIZE);
         let entry = self.get_entry(fd)?;
-        // This check will be unnecessary when rust-lang/rust#63326 is fixed
-        if size > i64::max_value() as u64 {
-            return Err(Errno::TooBig);
-        }
         entry.as_handle(&required_rights)?.filestat_set_size(size)
     }
 
