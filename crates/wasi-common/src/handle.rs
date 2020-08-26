@@ -1,6 +1,6 @@
 pub use crate::wasi::types::{
-    Advice, Dircookie, Dirent, Fdflags, Filesize, Filestat, Filetype, Fstflags, Lookupflags,
-    Oflags, Rights, Size, Timestamp,
+    Advice, Dircookie, Dirent, Fdflags, Fdstat, Filesize, Filestat, Filetype, Fstflags,
+    Lookupflags, Oflags, Rights, Size, Timestamp,
 };
 use crate::{Error, Result};
 use std::any::Any;
