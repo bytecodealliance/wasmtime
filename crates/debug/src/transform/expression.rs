@@ -470,7 +470,7 @@ where
     };
     // Find all landing pads by scanning bytes, do not care about
     // false location at this moment.
-    // Looks hacky but it is fast and we may not need to be really exact.
+    // Looks hacky but it is fast; does not need to be really exact.
     for i in 0..buf.len() - 2 {
         let op = buf[i];
         if op == gimli::constants::DW_OP_bra.0 || op == gimli::constants::DW_OP_skip.0 {
@@ -751,7 +751,7 @@ struct JumpTargetMarker(Rc<u32>);
 
 impl JumpTargetMarker {
     fn new() -> JumpTargetMarker {
-        // We need somewhat unique hash data -- using part of
+        // Create somewhat unique hash data -- using part of
         // the pointer of the RcBox.
         let mut rc = Rc::new(0);
         let hash_data = rc.as_ref() as *const u32 as usize as u32;
@@ -840,7 +840,7 @@ mod tests {
         assert!(m1 != m2);
         assert!(m1 == m1.clone());
 
-        // internal hash_data test
+        // Internal hash_data test (theoretically can fail intermittently).
         assert!(m1.0 != m2.0);
     }
 
