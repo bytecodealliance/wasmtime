@@ -621,7 +621,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             let lhs = input_to_reg(ctx, inputs[0]);
 
-            let (count, rhs) = if let Some(cst) = ctx.get_constant(inputs[1].insn) {
+            let (count, rhs) = if let Some(cst) = ctx.get_input(insn, 1).constant {
                 let cst = if op == Opcode::Rotl || op == Opcode::Rotr {
                     // Mask rotation count, according to Cranelift's semantics.
                     (cst as u8) & (dst_ty.bits() as u8 - 1)
