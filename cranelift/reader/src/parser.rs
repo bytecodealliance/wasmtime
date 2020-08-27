@@ -445,7 +445,7 @@ impl<'a> Parser<'a> {
         // running. I don't think this is true - self.lookahead is mutated in the loop body - so
         // maybe this is a clippy bug? Either way, disable clippy for this.
         #[cfg_attr(feature = "cargo-clippy", allow(clippy::while_immutable_condition))]
-        while self.lookahead == None {
+        while self.lookahead.is_none() {
             match self.lex.next() {
                 Some(Ok(LocatedToken { token, location })) => {
                     match token {

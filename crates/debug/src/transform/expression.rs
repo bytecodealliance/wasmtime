@@ -2,7 +2,10 @@ use super::address_transform::AddressTransform;
 use anyhow::{Context, Error, Result};
 use gimli::{self, write, Expression, Operation, Reader, ReaderOffset, X86_64};
 use more_asserts::{assert_le, assert_lt};
+use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::ir::{StackSlots, ValueLabel, ValueLabelsRanges, ValueLoc};
 use wasmtime_environ::isa::TargetIsa;
@@ -88,9 +91,19 @@ enum CompiledExpressionPart {
     // The wasm-local DWARF operator. The label points to `ValueLabel`.
     // The trailing field denotes that the operator was last in sequence,
     // and it is the DWARF location (not a pointer).
-    Local { label: ValueLabel, trailing: bool },
+    Local {
+        label: ValueLabel,
+        trailing: bool,
+    },
     // Dereference is needed.
     Deref,
+    // Jumping in the expression.
+    Jump {
+        conditionally: bool,
+        target: JumpTargetMarker,
+    },
+    // Floating landing pad.
+    LandingPad(JumpTargetMarker),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -288,7 +301,9 @@ impl CompiledExpression {
         let mut ranges_builder = ValueLabelRangesBuilder::new(scope, addr_tr, frame_info);
         for p in self.parts.iter() {
             match p {
-                CompiledExpressionPart::Code(_) => (),
+                CompiledExpressionPart::Code(_)
+                | CompiledExpressionPart::Jump { .. }
+                | CompiledExpressionPart::LandingPad { .. } => (),
                 CompiledExpressionPart::Local { label, .. } => ranges_builder.process_label(*label),
                 CompiledExpressionPart::Deref => ranges_builder.process_label(vmctx_label),
             }
@@ -310,6 +325,9 @@ impl CompiledExpression {
                           }| {
                         // build expression
                         let mut code_buf = Vec::new();
+                        let mut jump_positions = Vec::new();
+                        let mut landing_positions = HashMap::new();
+
                         macro_rules! deref {
                             () => {
                                 if let (Some(vmctx_loc), Some(frame_info)) =
@@ -333,6 +351,24 @@ impl CompiledExpression {
                                 CompiledExpressionPart::Code(c) => {
                                     code_buf.extend_from_slice(c.as_slice())
                                 }
+                                CompiledExpressionPart::LandingPad(marker) => {
+                                    landing_positions.insert(marker.clone(), code_buf.len());
+                                }
+                                CompiledExpressionPart::Jump {
+                                    conditionally,
+                                    target,
+                                } => {
+                                    code_buf.push(
+                                        match conditionally {
+                                            true => gimli::constants::DW_OP_bra,
+                                            false => gimli::constants::DW_OP_skip,
+                                        }
+                                        .0 as u8,
+                                    );
+                                    code_buf.push(!0);
+                                    code_buf.push(!0); // these will be relocated below
+                                    jump_positions.push((target.clone(), code_buf.len()));
+                                }
                                 CompiledExpressionPart::Local { label, trailing } => {
                                     let loc =
                                         *label_location.get(&label).context("label_location")?;
@@ -349,6 +385,15 @@ impl CompiledExpression {
                         }
                         if self.need_deref {
                             deref!();
+                        }
+
+                        for (marker, new_from) in jump_positions {
+                            // relocate jump targets
+                            let new_to = landing_positions[&marker];
+                            let new_diff = new_to as isize - new_from as isize;
+                            // FIXME: use encoding? LittleEndian for now...
+                            &code_buf[new_from - 2..new_from]
+                                .copy_from_slice(&(new_diff as i16).to_le_bytes());
                         }
                         Ok(Some((func_index, start, end, code_buf)))
                     },
@@ -376,9 +421,35 @@ pub fn compile_expression<R>(
 where
     R: Reader,
 {
+    // Bail when `frame_base` is complicated.
+    if let Some(expr) = frame_base {
+        if expr.parts.iter().any(|p| match p {
+            CompiledExpressionPart::Jump { .. } => true,
+            _ => false,
+        }) {
+            return Ok(None);
+        }
+    }
+
+    // jump_targets key is offset in buf starting from the end
+    // (see also `unread_bytes` below)
+    let mut jump_targets: HashMap<u64, JumpTargetMarker> = HashMap::new();
     let mut pc = expr.0.clone();
+
     let buf = expr.0.to_slice()?;
     let mut parts = Vec::new();
+    macro_rules! push {
+        ($part:expr) => {{
+            let part = $part;
+            if let (CompiledExpressionPart::Code(cc2), Some(CompiledExpressionPart::Code(cc1))) =
+                (&part, parts.last_mut())
+            {
+                cc1.extend_from_slice(cc2);
+            } else {
+                parts.push(part)
+            }
+        }};
+    }
     let mut need_deref = false;
     if is_old_expression_format(&buf) && frame_base.is_some() {
         // Still supporting old DWARF variable expressions without fbreg.
@@ -388,17 +459,41 @@ where
         }
         need_deref = frame_base.unwrap().need_deref;
     }
-    let base_len = parts.len();
     let mut code_chunk = Vec::new();
     macro_rules! flush_code_chunk {
         () => {
             if !code_chunk.is_empty() {
-                parts.push(CompiledExpressionPart::Code(code_chunk));
+                push!(CompiledExpressionPart::Code(code_chunk));
                 code_chunk = Vec::new();
+                let _ = code_chunk; // suppresses warning for final flush
             }
         };
     };
+    // Find all landing pads by scanning bytes, do not care about
+    // false location at this moment.
+    // Looks hacky but it is fast; does not need to be really exact.
+    for i in 0..buf.len() - 2 {
+        let op = buf[i];
+        if op == gimli::constants::DW_OP_bra.0 || op == gimli::constants::DW_OP_skip.0 {
+            // TODO fix for big-endian
+            let offset = i16::from_le_bytes([buf[i + 1], buf[i + 2]]);
+            let origin = i + 3;
+            // Discarding out-of-bounds jumps (also some of falsely detected ops)
+            if (offset >= 0 && offset as usize + origin <= buf.len())
+                || (offset < 0 && -offset as usize <= origin)
+            {
+                let target = buf.len() as isize - origin as isize - offset as isize;
+                jump_targets.insert(target as u64, JumpTargetMarker::new());
+            }
+        }
+    }
     while !pc.is_empty() {
+        let unread_bytes = pc.len().into_u64();
+        if let Some(marker) = jump_targets.get(&unread_bytes) {
+            flush_code_chunk!();
+            parts.push(CompiledExpressionPart::LandingPad(marker.clone()));
+        }
+
         let next = buf[pc.offset_from(&expr.0).into_u64() as usize];
         need_deref = true;
         if next == 0xED {
@@ -413,7 +508,7 @@ where
             let index = pc.read_sleb128()?;
             flush_code_chunk!();
             let label = ValueLabel::from_u32(index as u32);
-            parts.push(CompiledExpressionPart::Local {
+            push!(CompiledExpressionPart::Local {
                 label,
                 trailing: false,
             });
@@ -439,10 +534,58 @@ where
                     code_chunk.extend(writer.into_vec());
                     continue;
                 }
-                Operation::UnsignedConstant { .. }
+                Operation::Drop { .. }
+                | Operation::Pick { .. }
+                | Operation::Swap { .. }
+                | Operation::Rot { .. }
+                | Operation::Nop { .. }
+                | Operation::UnsignedConstant { .. }
                 | Operation::SignedConstant { .. }
+                | Operation::ConstantIndex { .. }
                 | Operation::PlusConstant { .. }
+                | Operation::Abs { .. }
+                | Operation::And { .. }
+                | Operation::Or { .. }
+                | Operation::Xor { .. }
+                | Operation::Shr { .. }
+                | Operation::Shra { .. }
+                | Operation::Shl { .. }
+                | Operation::Plus { .. }
+                | Operation::Minus { .. }
+                | Operation::Div { .. }
+                | Operation::Mod { .. }
+                | Operation::Mul { .. }
+                | Operation::Neg { .. }
+                | Operation::Not { .. }
+                | Operation::Lt { .. }
+                | Operation::Gt { .. }
+                | Operation::Le { .. }
+                | Operation::Ge { .. }
+                | Operation::Eq { .. }
+                | Operation::Ne { .. }
+                | Operation::TypedLiteral { .. }
+                | Operation::Convert { .. }
+                | Operation::Reinterpret { .. }
                 | Operation::Piece { .. } => (),
+                Operation::Bra { target } | Operation::Skip { target } => {
+                    flush_code_chunk!();
+                    let arc_to = (pc.len().into_u64() as isize - target as isize) as u64;
+                    let marker = match jump_targets.get(&arc_to) {
+                        Some(m) => m.clone(),
+                        None => {
+                            // Marker not found: probably out of bounds.
+                            return Ok(None);
+                        }
+                    };
+                    push!(CompiledExpressionPart::Jump {
+                        conditionally: match op {
+                            Operation::Bra { .. } => true,
+                            _ => false,
+                        },
+                        target: marker,
+                    });
+                    continue;
+                }
                 Operation::StackValue => {
                     need_deref = false;
 
@@ -457,11 +600,22 @@ where
                 }
                 Operation::Deref { .. } => {
                     flush_code_chunk!();
-                    parts.push(CompiledExpressionPart::Deref);
+                    push!(CompiledExpressionPart::Deref);
                     // Don't re-enter the loop here (i.e. continue), because the
                     // DW_OP_deref still needs to be kept.
                 }
-                _ => {
+                Operation::Address { .. }
+                | Operation::AddressIndex { .. }
+                | Operation::Call { .. }
+                | Operation::Register { .. }
+                | Operation::RegisterOffset { .. }
+                | Operation::CallFrameCFA
+                | Operation::PushObjectAddress
+                | Operation::TLS
+                | Operation::ImplicitValue { .. }
+                | Operation::ImplicitPointer { .. }
+                | Operation::EntryValue { .. }
+                | Operation::ParameterRef { .. } => {
                     return Ok(None);
                 }
             }
@@ -470,20 +624,9 @@ where
         }
     }
 
-    if !code_chunk.is_empty() {
-        parts.push(CompiledExpressionPart::Code(code_chunk));
-    }
-
-    if base_len > 0 && base_len + 1 < parts.len() {
-        // see if we can glue two code chunks
-        if let [CompiledExpressionPart::Code(cc1), CompiledExpressionPart::Code(cc2)] =
-            &parts[base_len..=base_len]
-        {
-            let mut combined = cc1.clone();
-            combined.extend_from_slice(cc2);
-            parts[base_len] = CompiledExpressionPart::Code(combined);
-            parts.remove(base_len + 1);
-        }
+    flush_code_chunk!();
+    if let Some(marker) = jump_targets.get(&0) {
+        parts.push(CompiledExpressionPart::LandingPad(marker.clone()));
     }
 
     Ok(Some(CompiledExpression { parts, need_deref }))
@@ -602,10 +745,49 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
     }
 }
 
+/// Marker for tracking incoming jumps.
+/// Different when created new, and the same when cloned.
+#[derive(Clone, Eq)]
+struct JumpTargetMarker(Rc<u32>);
+
+impl JumpTargetMarker {
+    fn new() -> JumpTargetMarker {
+        // Create somewhat unique hash data -- using part of
+        // the pointer of the RcBox.
+        let mut rc = Rc::new(0);
+        let hash_data = rc.as_ref() as *const u32 as usize as u32;
+        *Rc::get_mut(&mut rc).unwrap() = hash_data;
+        JumpTargetMarker(rc)
+    }
+}
+
+impl PartialEq for JumpTargetMarker {
+    fn eq(&self, other: &JumpTargetMarker) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Hash for JumpTargetMarker {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        hasher.write_u32(*self.0);
+    }
+}
+impl std::fmt::Debug for JumpTargetMarker {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "JumpMarker<{:08x}>",
+            self.0.as_ref() as *const u32 as usize
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::compile_expression;
-    use super::{AddressTransform, FunctionFrameInfo, ValueLabel, ValueLabelsRanges};
+    use super::{
+        compile_expression, AddressTransform, CompiledExpression, CompiledExpressionPart,
+        FunctionFrameInfo, JumpTargetMarker, ValueLabel, ValueLabelsRanges,
+    };
     use gimli::{self, constants, Encoding, EndianSlice, Expression, RunTimeEndian};
     use wasmtime_environ::CompiledFunction;
 
@@ -619,6 +801,9 @@ mod tests {
         ($d:ident) => {
             constants::$d.0 as u8
         };
+        ($e:expr) => {
+            $e as u8
+        };
     }
 
     macro_rules! expression {
@@ -630,6 +815,19 @@ mod tests {
         }
     }
 
+    fn find_jump_targets<'a>(ce: &'a CompiledExpression) -> Vec<&'a JumpTargetMarker> {
+        ce.parts
+            .iter()
+            .filter_map(|p| {
+                if let CompiledExpressionPart::LandingPad(t) = p {
+                    Some(t)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    }
+
     static DWARF_ENCODING: Encoding = Encoding {
         address_size: 4,
         format: gimli::Format::Dwarf32,
@@ -637,8 +835,18 @@ mod tests {
     };
 
     #[test]
+    fn test_debug_expression_jump_target() {
+        let m1 = JumpTargetMarker::new();
+        let m2 = JumpTargetMarker::new();
+        assert!(m1 != m2);
+        assert!(m1 == m1.clone());
+
+        // Internal hash_data test (theoretically can fail intermittently).
+        assert!(m1.0 != m2.0);
+    }
+
+    #[test]
     fn test_debug_parse_expressions() {
-        use super::{CompiledExpression, CompiledExpressionPart};
         use wasmtime_environ::entity::EntityRef;
 
         let (val1, val3, val20) = (ValueLabel::new(1), ValueLabel::new(3), ValueLabel::new(20));
@@ -654,7 +862,7 @@ mod tests {
                     label: val20,
                     trailing: true
                 }],
-                need_deref: false
+                need_deref: false,
             }
         );
 
@@ -679,7 +887,7 @@ mod tests {
                     },
                     CompiledExpressionPart::Code(vec![35, 16, 159])
                 ],
-                need_deref: false
+                need_deref: false,
             }
         );
 
@@ -699,7 +907,7 @@ mod tests {
                     },
                     CompiledExpressionPart::Code(vec![35, 18])
                 ],
-                need_deref: true
+                need_deref: true,
             }
         );
 
@@ -727,7 +935,158 @@ mod tests {
                     CompiledExpressionPart::Deref,
                     CompiledExpressionPart::Code(vec![6, 159])
                 ],
-                need_deref: false
+                need_deref: false,
+            }
+        );
+
+        let e = expression!(
+            DW_OP_lit1,
+            DW_OP_dup,
+            DW_OP_WASM_location,
+            0x0,
+            1,
+            DW_OP_and,
+            DW_OP_bra,
+            5,
+            0, // --> pointer
+            DW_OP_swap,
+            DW_OP_shr,
+            DW_OP_skip,
+            2,
+            0, // --> done
+            // pointer:
+            DW_OP_plus,
+            DW_OP_deref,
+            // done:
+            DW_OP_stack_value
+        );
+        let ce = compile_expression(&e, DWARF_ENCODING, None)
+            .expect("non-error")
+            .expect("expression");
+        let targets = find_jump_targets(&ce);
+        assert_eq!(targets.len(), 2);
+        assert_eq!(
+            ce,
+            CompiledExpression {
+                parts: vec![
+                    CompiledExpressionPart::Code(vec![49, 18]),
+                    CompiledExpressionPart::Local {
+                        label: val1,
+                        trailing: false
+                    },
+                    CompiledExpressionPart::Code(vec![26]),
+                    CompiledExpressionPart::Jump {
+                        conditionally: true,
+                        target: targets[0].clone(),
+                    },
+                    CompiledExpressionPart::Code(vec![22, 37]),
+                    CompiledExpressionPart::Jump {
+                        conditionally: false,
+                        target: targets[1].clone(),
+                    },
+                    CompiledExpressionPart::LandingPad(targets[0].clone()), // capture from
+                    CompiledExpressionPart::Code(vec![34]),
+                    CompiledExpressionPart::Deref,
+                    CompiledExpressionPart::Code(vec![6]),
+                    CompiledExpressionPart::LandingPad(targets[1].clone()), // capture to
+                    CompiledExpressionPart::Code(vec![159])
+                ],
+                need_deref: false,
+            }
+        );
+
+        let e = expression!(
+            DW_OP_lit1,
+            DW_OP_dup,
+            DW_OP_bra,
+            2,
+            0, // --> target
+            DW_OP_deref,
+            DW_OP_lit0,
+            // target:
+            DW_OP_stack_value
+        );
+        let ce = compile_expression(&e, DWARF_ENCODING, None)
+            .expect("non-error")
+            .expect("expression");
+        let targets = find_jump_targets(&ce);
+        assert_eq!(targets.len(), 1);
+        assert_eq!(
+            ce,
+            CompiledExpression {
+                parts: vec![
+                    CompiledExpressionPart::Code(vec![49, 18]),
+                    CompiledExpressionPart::Jump {
+                        conditionally: true,
+                        target: targets[0].clone(),
+                    },
+                    CompiledExpressionPart::Deref,
+                    CompiledExpressionPart::Code(vec![6, 48]),
+                    CompiledExpressionPart::LandingPad(targets[0].clone()), // capture to
+                    CompiledExpressionPart::Code(vec![159])
+                ],
+                need_deref: false,
+            }
+        );
+
+        let e = expression!(
+            DW_OP_lit1,
+            /* loop */ DW_OP_dup,
+            DW_OP_lit25,
+            DW_OP_ge,
+            DW_OP_bra,
+            5,
+            0, // --> done
+            DW_OP_plus_uconst,
+            1,
+            DW_OP_skip,
+            (-11 as i8),
+            (!0), // --> loop
+            /* done */ DW_OP_stack_value
+        );
+        let ce = compile_expression(&e, DWARF_ENCODING, None)
+            .expect("non-error")
+            .expect("expression");
+        let targets = find_jump_targets(&ce);
+        assert_eq!(targets.len(), 2);
+        assert_eq!(
+            ce,
+            CompiledExpression {
+                parts: vec![
+                    CompiledExpressionPart::Code(vec![49]),
+                    CompiledExpressionPart::LandingPad(targets[0].clone()),
+                    CompiledExpressionPart::Code(vec![18, 73, 42]),
+                    CompiledExpressionPart::Jump {
+                        conditionally: true,
+                        target: targets[1].clone(),
+                    },
+                    CompiledExpressionPart::Code(vec![35, 1]),
+                    CompiledExpressionPart::Jump {
+                        conditionally: false,
+                        target: targets[0].clone(),
+                    },
+                    CompiledExpressionPart::LandingPad(targets[1].clone()),
+                    CompiledExpressionPart::Code(vec![159])
+                ],
+                need_deref: false,
+            }
+        );
+
+        let e = expression!(DW_OP_WASM_location, 0x0, 1, DW_OP_plus_uconst, 5);
+        let ce = compile_expression(&e, DWARF_ENCODING, None)
+            .expect("non-error")
+            .expect("expression");
+        assert_eq!(
+            ce,
+            CompiledExpression {
+                parts: vec![
+                    CompiledExpressionPart::Local {
+                        label: val1,
+                        trailing: false
+                    },
+                    CompiledExpressionPart::Code(vec![35, 5])
+                ],
+                need_deref: true,
             }
         );
     }

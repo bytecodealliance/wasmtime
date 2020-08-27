@@ -17,7 +17,7 @@ target-lexicon = "0.10"
 peepmatic-fuzzing = { path = "../cranelift/peepmatic/crates/fuzzing", optional = true }
 wasmtime = { path = "../crates/wasmtime" }
 wasmtime-fuzzing = { path = "../crates/fuzzing" }
-wasm-smith = "0.1.1"
+wasm-smith = "0.1.2"
 
 [[bin]]
 name = "compile"
