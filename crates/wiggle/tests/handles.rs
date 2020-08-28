@@ -5,7 +5,7 @@ use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 const FD_VAL: u32 = 123;
 
 wiggle::from_witx!({
-    witx: ["tests/handles.witx"],
+    witx: ["$CARGO_MANIFEST_DIR/tests/handles.witx"],
     ctx: WasiCtx,
 });
 
