@@ -1,10 +1,6 @@
 use {
     proc_macro2::Span,
-    std::{
-        collections::HashMap,
-        iter::FromIterator,
-        path::{Path, PathBuf},
-    },
+    std::{collections::HashMap, iter::FromIterator, path::PathBuf},
     syn::{
         braced, bracketed,
         parse::{Parse, ParseStream},
@@ -143,20 +139,6 @@ impl WitxConf {
             Self::Literal(doc) => witx::parse(doc.as_ref()).expect("parsing witx"),
         }
     }
-
-    /// If using the [`Paths`][paths] syntax, make all paths relative to a root directory.
-    ///
-    /// [paths]: enum.WitxConf.html#variant.Paths
-    // FIXME this can be deleted once we have env var interpolation
-    pub fn make_paths_relative_to<P: AsRef<Path>>(&mut self, root: P) {
-        if let Self::Paths(paths) = self {
-            paths.as_mut().iter_mut().for_each(|p| {
-                if !p.is_absolute() {
-                    *p = PathBuf::from(root.as_ref()).join(p.clone());
-                }
-            });
-        }
-    }
 }
 
 /// A collection of paths, pointing to witx documents.
@@ -203,32 +185,18 @@ impl Parse for Paths {
         let _ = bracketed!(content in input);
         let path_lits: Punctuated<LitStr, Token![,]> = content.parse_terminated(Parse::parse)?;
 
-        /* TODO interpolate env variables here!!!
-                        fn main() {
-            let p = "foo/$BAR/baz";
-            let buf = PathBuf::from(p);
-            let components = buf
-                .iter()
-                .map(|osstr| interpolate(osstr.to_str().expect("always a str")))
-                .collect::<Vec<String>>();
-
-            println!("{:?}", components);
-        }
-
-        fn interpolate(v: &str) -> String {
-            if let Some('$') = v.chars().nth(0) {
-                let var = &v[1..];
-                std::env::var(var).unwrap_or(String::new())
-            } else {
-                v.to_owned()
-            }
-        }
-        */
-
-        Ok(path_lits
+        let expanded_paths = path_lits
             .iter()
-            .map(|lit| PathBuf::from(lit.value()))
-            .collect())
+            .map(|lit| {
+                PathBuf::from(
+                    shellexpand::env(&lit.value())
+                        .expect("shell expansion")
+                        .as_ref(),
+                )
+            })
+            .collect::<Vec<PathBuf>>();
+
+        Ok(Paths(expanded_paths))
     }
 }
 
