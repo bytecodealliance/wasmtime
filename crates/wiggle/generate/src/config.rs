@@ -147,6 +147,7 @@ impl WitxConf {
     /// If using the [`Paths`][paths] syntax, make all paths relative to a root directory.
     ///
     /// [paths]: enum.WitxConf.html#variant.Paths
+    // FIXME this can be deleted once we have env var interpolation
     pub fn make_paths_relative_to<P: AsRef<Path>>(&mut self, root: P) {
         if let Self::Paths(paths) = self {
             paths.as_mut().iter_mut().for_each(|p| {
@@ -201,6 +202,29 @@ impl Parse for Paths {
         let content;
         let _ = bracketed!(content in input);
         let path_lits: Punctuated<LitStr, Token![,]> = content.parse_terminated(Parse::parse)?;
+
+        /* TODO interpolate env variables here!!!
+                        fn main() {
+            let p = "foo/$BAR/baz";
+            let buf = PathBuf::from(p);
+            let components = buf
+                .iter()
+                .map(|osstr| interpolate(osstr.to_str().expect("always a str")))
+                .collect::<Vec<String>>();
+
+            println!("{:?}", components);
+        }
+
+        fn interpolate(v: &str) -> String {
+            if let Some('$') = v.chars().nth(0) {
+                let var = &v[1..];
+                std::env::var(var).unwrap_or(String::new())
+            } else {
+                v.to_owned()
+            }
+        }
+        */
+
         Ok(path_lits
             .iter()
             .map(|lit| PathBuf::from(lit.value()))
