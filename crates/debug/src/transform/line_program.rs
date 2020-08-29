@@ -271,7 +271,7 @@ where
                     }
                 }
             }
-            let end_addr = (map.offset + map.len - 1) as u64;
+            let end_addr = (map.offset + map.len) as u64;
             out_program.end_sequence(end_addr);
         }
         Ok((out_program, offset, files, file_index_base))
