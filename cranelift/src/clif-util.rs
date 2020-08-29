@@ -170,14 +170,11 @@ fn add_wasm_or_compile<'a>(cmd: &str) -> clap::App<'a, 'a> {
         .arg(add_verbose_flag())
         .arg(add_print_flag())
         .arg(add_time_flag())
-        .arg(add_size_flag())
         .arg(add_disasm_flag())
         .arg(add_set_flag())
         .arg(add_target_flag())
         .arg(add_input_file_arg())
         .arg(add_debug_flag())
-        .arg(add_just_decode_flag())
-        .arg(add_check_translation_flag())
 }
 
 fn handle_debug_flag(debug: bool) {
@@ -228,6 +225,9 @@ fn main() {
         .subcommand(add_wasm_or_compile("compile"))
         .subcommand(
             add_wasm_or_compile("wasm")
+                .arg(add_size_flag())
+                .arg(add_just_decode_flag())
+                .arg(add_check_translation_flag())
                 .arg(add_value_ranges())
                 .arg(add_color()),
         )
