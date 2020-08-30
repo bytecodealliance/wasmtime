@@ -92,7 +92,7 @@ macro_rules! entity_impl {
         }
 
         impl $entity {
-            /// Create a new instance of entity from a `u32`
+            /// Create a new instance from a `u32`
             #[allow(dead_code)]
             pub fn from_u32(x: u32) -> Self {
                 debug_assert!(x < $crate::__core::u32::MAX);
