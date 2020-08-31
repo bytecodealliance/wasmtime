@@ -124,10 +124,18 @@ impl ABIMachineImpl for AArch64MachineImpl {
         let mut next_stack: u64 = 0;
         let mut ret = vec![];
 
-        let max_reg_vals = match (args_or_rets, is_baldrdash) {
-            (ArgsOrRets::Args, _) => 8,     // x0-x7, v0-v7
-            (ArgsOrRets::Rets, false) => 8, // x0-x7, v0-v7
-            (ArgsOrRets::Rets, true) => 1,  // x0 or v0
+        // Note on return values: on the regular non-baldrdash ABI, we may return values in 8
+        // registers for V128 and I64 registers independently of the number of register values
+        // returned in the other class. That is, we can return values in up to 8 integer and 8
+        // vector registers at once.
+        // In Baldrdash, we can only use one register for return value for all the register
+        // classes. That is, we can't return values in both one integer and one vector register;
+        // only one return value may be in a register.
+
+        let (max_per_class_reg_vals, mut remaining_reg_vals) = match (args_or_rets, is_baldrdash) {
+            (ArgsOrRets::Args, _) => (8, 16),     // x0-x7 and v0-v7
+            (ArgsOrRets::Rets, false) => (8, 16), // x0-x7 and v0-v7
+            (ArgsOrRets::Rets, true) => (1, 1),   // x0 or v0, but not both
         };
 
         for i in 0..params.len() {
@@ -167,7 +175,7 @@ impl ABIMachineImpl for AArch64MachineImpl {
             if let Some(param) = try_fill_baldrdash_reg(call_conv, param) {
                 assert!(rc == RegClass::I64);
                 ret.push(param);
-            } else if *next_reg < max_reg_vals {
+            } else if *next_reg < max_per_class_reg_vals && remaining_reg_vals > 0 {
                 let reg = match rc {
                     RegClass::I64 => xreg(*next_reg),
                     RegClass::V128 => vreg(*next_reg),
@@ -179,6 +187,7 @@ impl ABIMachineImpl for AArch64MachineImpl {
                     param.extension,
                 ));
                 *next_reg += 1;
+                remaining_reg_vals -= 1;
             } else {
                 // Compute size. Every arg takes a minimum slot of 8 bytes. (16-byte
                 // stack alignment happens separately after all args.)
@@ -202,7 +211,7 @@ impl ABIMachineImpl for AArch64MachineImpl {
 
         let extra_arg = if add_ret_area_ptr {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
-            if next_xreg < max_reg_vals {
+            if next_xreg < max_per_class_reg_vals && remaining_reg_vals > 0 {
                 ret.push(ABIArg::Reg(
                     xreg(next_xreg).to_real_reg(),
                     I64,
