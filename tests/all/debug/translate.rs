@@ -124,7 +124,7 @@ check:   Address            Line   Column File   ISA Discriminator Flags
 check: 0x000000000000013c     15      3      1   0             0
 # The important point is that the following offset must be _after_ the `ret` instruction.
 # FIXME: this +1 increment might vary on other archs.
-check: 0x000000000000013d     15      3      1   0             0  end_sequence
+nextln: 0x000000000000013d     15      3      1   0             0  end_sequence
     "##,
     )
 }
