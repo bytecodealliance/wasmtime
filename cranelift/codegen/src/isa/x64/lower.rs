@@ -733,7 +733,18 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
             ctx.emit(Inst::shift_r(is_64, shift_kind, count, dst));
         }
-
+        Opcode::Ineg => {
+            let ty = ty.unwrap();
+            let sse_op = match ty {
+                types::I8X16 => SseOpcode::Psignb,
+                types::I16X8 => SseOpcode::Psignw,
+                types::I32X4 => SseOpcode::Psignd,
+                _ => panic!("Unsupported type for packed Ineg instruction"),
+            };
+            let src = input_to_reg_mem(ctx, inputs[0]);
+            let dst = output_to_reg(ctx, outputs[0]);
+            ctx.emit(Inst::xmm_unary_rm_r(sse_op, src, dst));
+        }
         Opcode::Clz => {
             // TODO when the x86 flags have use_lzcnt, we can use LZCNT.
 
