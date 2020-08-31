@@ -20,6 +20,7 @@ proc-macro2 = "1.0"
 heck = "0.3"
 anyhow = "1"
 syn = { version = "1.0", features = ["full"] }
+shellexpand = "2.0"
 
 [badges]
 maintenance = { status = "actively-developed" }

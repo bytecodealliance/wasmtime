@@ -1906,6 +1906,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "shellexpand"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a2b22262a9aaf9464d356f656fea420634f78c881c5eebd5ef5e66d8b9bc603"
+dependencies = [
+ "dirs",
+]
+
+[[package]]
 name = "smallvec"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2700,6 +2709,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
+ "shellexpand",
  "syn",
  "witx",
 ]

@@ -1,10 +1,6 @@
 use {
     proc_macro2::Span,
-    std::{
-        collections::HashMap,
-        iter::FromIterator,
-        path::{Path, PathBuf},
-    },
+    std::{collections::HashMap, iter::FromIterator, path::PathBuf},
     syn::{
         braced, bracketed,
         parse::{Parse, ParseStream},
@@ -143,19 +139,6 @@ impl WitxConf {
             Self::Literal(doc) => witx::parse(doc.as_ref()).expect("parsing witx"),
         }
     }
-
-    /// If using the [`Paths`][paths] syntax, make all paths relative to a root directory.
-    ///
-    /// [paths]: enum.WitxConf.html#variant.Paths
-    pub fn make_paths_relative_to<P: AsRef<Path>>(&mut self, root: P) {
-        if let Self::Paths(paths) = self {
-            paths.as_mut().iter_mut().for_each(|p| {
-                if !p.is_absolute() {
-                    *p = PathBuf::from(root.as_ref()).join(p.clone());
-                }
-            });
-        }
-    }
 }
 
 /// A collection of paths, pointing to witx documents.
@@ -201,10 +184,19 @@ impl Parse for Paths {
         let content;
         let _ = bracketed!(content in input);
         let path_lits: Punctuated<LitStr, Token![,]> = content.parse_terminated(Parse::parse)?;
-        Ok(path_lits
+
+        let expanded_paths = path_lits
             .iter()
-            .map(|lit| PathBuf::from(lit.value()))
-            .collect())
+            .map(|lit| {
+                PathBuf::from(
+                    shellexpand::env(&lit.value())
+                        .expect("shell expansion")
+                        .as_ref(),
+                )
+            })
+            .collect::<Vec<PathBuf>>();
+
+        Ok(Paths(expanded_paths))
     }
 }
 

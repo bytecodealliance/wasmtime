@@ -7,7 +7,7 @@ use wiggle_test::WasiCtx;
 // witx is exposed with the type signatures that we expect.
 
 wiggle::from_witx!({
-    witx: ["tests/wasi.witx"],
+    witx: ["$CARGO_MANIFEST_DIR/tests/wasi.witx"],
     ctx: WasiCtx,
 });
 
@@ -16,7 +16,10 @@ wiggle::from_witx!({
 #[test]
 fn document_equivalent() {
     let macro_doc = metadata::document();
-    let disk_doc = witx::load(&["tests/wasi.witx"]).expect("load wasi.witx from disk");
+    let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("tests");
+    path.push("wasi.witx");
+    let disk_doc = witx::load(&[path]).expect("load wasi.witx from disk");
 
     assert_eq!(macro_doc, disk_doc);
 }

@@ -4,7 +4,7 @@ use wiggle::{GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
-    witx: ["tests/flags.witx"],
+    witx: ["$CARGO_MANIFEST_DIR/tests/flags.witx"],
     ctx: WasiCtx,
 });
 

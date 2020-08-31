@@ -47,10 +47,7 @@ use config::{MissingMemoryConf, ModuleConf, TargetConf};
 ///
 #[proc_macro]
 pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
-    let mut config = parse_macro_input!(args as config::Config);
-    config
-        .witx
-        .make_paths_relative_to(std::env::var("WASI_ROOT").expect("WASI_ROOT env var"));
+    let config = parse_macro_input!(args as config::Config);
     let doc = config.load_document();
     let names = Names::new(&config.ctx.name, quote!(wasmtime_wiggle));
 
