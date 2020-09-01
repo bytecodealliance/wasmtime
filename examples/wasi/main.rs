@@ -8,6 +8,11 @@ use wasmtime::*;
 use wasmtime_wasi::{Wasi, WasiCtx};
 
 fn main() -> Result<()> {
+    tracing_subscriber::FmtSubscriber::builder()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_ansi(true)
+        .init();
+
     let store = Store::default();
     let mut linker = Linker::new(&store);
 
