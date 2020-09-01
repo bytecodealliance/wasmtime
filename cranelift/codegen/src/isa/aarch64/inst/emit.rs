@@ -170,7 +170,7 @@ fn enc_conditional_br(taken: BranchTarget, kind: CondBrKind) -> u32 {
     }
 }
 
-const MOVE_WIDE_FIXED: u32 = 0x92800000;
+const MOVE_WIDE_FIXED: u32 = 0x12800000;
 
 #[repr(u32)]
 enum MoveWideOpcode {
@@ -179,9 +179,15 @@ enum MoveWideOpcode {
     MOVK = 0b11,
 }
 
-fn enc_move_wide(op: MoveWideOpcode, rd: Writable<Reg>, imm: MoveWideConst) -> u32 {
+fn enc_move_wide(
+    op: MoveWideOpcode,
+    rd: Writable<Reg>,
+    imm: MoveWideConst,
+    size: OperandSize,
+) -> u32 {
     assert!(imm.shift <= 0b11);
     MOVE_WIDE_FIXED
+        | size.sf_bit() << 31
         | (op as u32) << 29
         | u32::from(imm.shift) << 21
         | u32::from(imm.bits) << 5
@@ -1029,9 +1035,15 @@ impl MachInstEmit for Inst {
                 // Encoded as ORR rd, rm, zero.
                 sink.put4(enc_arith_rrr(0b00101010_000, 0b000_000, rd, zero_reg(), rm));
             }
-            &Inst::MovZ { rd, imm } => sink.put4(enc_move_wide(MoveWideOpcode::MOVZ, rd, imm)),
-            &Inst::MovN { rd, imm } => sink.put4(enc_move_wide(MoveWideOpcode::MOVN, rd, imm)),
-            &Inst::MovK { rd, imm } => sink.put4(enc_move_wide(MoveWideOpcode::MOVK, rd, imm)),
+            &Inst::MovZ { rd, imm, size } => {
+                sink.put4(enc_move_wide(MoveWideOpcode::MOVZ, rd, imm, size))
+            }
+            &Inst::MovN { rd, imm, size } => {
+                sink.put4(enc_move_wide(MoveWideOpcode::MOVN, rd, imm, size))
+            }
+            &Inst::MovK { rd, imm, size } => {
+                sink.put4(enc_move_wide(MoveWideOpcode::MOVK, rd, imm, size))
+            }
             &Inst::CSel { rd, rn, rm, cond } => {
                 sink.put4(enc_csel(rd, rn, rm, cond));
             }

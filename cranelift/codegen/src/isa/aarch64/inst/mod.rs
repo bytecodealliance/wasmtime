@@ -587,18 +587,21 @@ pub enum Inst {
     MovZ {
         rd: Writable<Reg>,
         imm: MoveWideConst,
+        size: OperandSize,
     },
 
     /// A MOVN with a 16-bit immediate.
     MovN {
         rd: Writable<Reg>,
         imm: MoveWideConst,
+        size: OperandSize,
     },
 
     /// A MOVK with a 16-bit immediate.
     MovK {
         rd: Writable<Reg>,
         imm: MoveWideConst,
+        size: OperandSize,
     },
 
     /// A sign- or zero-extend operation.
@@ -1122,9 +1125,9 @@ pub enum Inst {
     },
 }
 
-fn count_zero_half_words(mut value: u64) -> usize {
+fn count_zero_half_words(mut value: u64, num_half_words: u8) -> usize {
     let mut count = 0;
-    for _ in 0..4 {
+    for _ in 0..num_half_words {
         if value & 0xffff == 0 {
             count += 1;
         }
@@ -1176,10 +1179,18 @@ impl Inst {
     pub fn load_constant(rd: Writable<Reg>, value: u64) -> SmallVec<[Inst; 4]> {
         if let Some(imm) = MoveWideConst::maybe_from_u64(value) {
             // 16-bit immediate (shifted by 0, 16, 32 or 48 bits) in MOVZ
-            smallvec![Inst::MovZ { rd, imm }]
+            smallvec![Inst::MovZ {
+                rd,
+                imm,
+                size: OperandSize::Size64
+            }]
         } else if let Some(imm) = MoveWideConst::maybe_from_u64(!value) {
             // 16-bit immediate (shifted by 0, 16, 32 or 48 bits) in MOVN
-            smallvec![Inst::MovN { rd, imm }]
+            smallvec![Inst::MovN {
+                rd,
+                imm,
+                size: OperandSize::Size64
+            }]
         } else if let Some(imml) = ImmLogic::maybe_from_u64(value, I64) {
             // Weird logical-instruction immediate in ORI using zero register
             smallvec![Inst::AluRRImmLogic {
@@ -1191,15 +1202,22 @@ impl Inst {
         } else {
             let mut insts = smallvec![];
 
+            // If the top 32 bits are zero, use 32-bit `mov` operations.
+            let (num_half_words, size, negated) = if value >> 32 == 0 {
+                (2, OperandSize::Size32, (!value << 32) >> 32)
+            } else {
+                (4, OperandSize::Size64, !value)
+            };
             // If the number of 0xffff half words is greater than the number of 0x0000 half words
             // it is more efficient to use `movn` for the first instruction.
-            let first_is_inverted = count_zero_half_words(!value) > count_zero_half_words(value);
+            let first_is_inverted = count_zero_half_words(negated, num_half_words)
+                > count_zero_half_words(value, num_half_words);
             // Either 0xffff or 0x0000 half words can be skipped, depending on the first
             // instruction used.
             let ignored_halfword = if first_is_inverted { 0xffff } else { 0 };
             let mut first_mov_emitted = false;
 
-            for i in 0..4 {
+            for i in 0..num_half_words {
                 let imm16 = (value >> (16 * i)) & 0xffff;
                 if imm16 != ignored_halfword {
                     if !first_mov_emitted {
@@ -1208,15 +1226,15 @@ impl Inst {
                             let imm =
                                 MoveWideConst::maybe_with_shift(((!imm16) & 0xffff) as u16, i * 16)
                                     .unwrap();
-                            insts.push(Inst::MovN { rd, imm });
+                            insts.push(Inst::MovN { rd, imm, size });
                         } else {
                             let imm =
                                 MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                            insts.push(Inst::MovZ { rd, imm });
+                            insts.push(Inst::MovZ { rd, imm, size });
                         }
                     } else {
                         let imm = MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                        insts.push(Inst::MovK { rd, imm });
+                        insts.push(Inst::MovK { rd, imm, size });
                     }
                 }
             }
@@ -2870,18 +2888,18 @@ impl Inst {
                 let rm = show_ireg_sized(rm, mb_rru, OperandSize::Size32);
                 format!("mov {}, {}", rd, rm)
             }
-            &Inst::MovZ { rd, ref imm } => {
-                let rd = rd.to_reg().show_rru(mb_rru);
+            &Inst::MovZ { rd, ref imm, size } => {
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
                 let imm = imm.show_rru(mb_rru);
                 format!("movz {}, {}", rd, imm)
             }
-            &Inst::MovN { rd, ref imm } => {
-                let rd = rd.to_reg().show_rru(mb_rru);
+            &Inst::MovN { rd, ref imm, size } => {
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
                 let imm = imm.show_rru(mb_rru);
                 format!("movn {}, {}", rd, imm)
             }
-            &Inst::MovK { rd, ref imm } => {
-                let rd = rd.to_reg().show_rru(mb_rru);
+            &Inst::MovK { rd, ref imm, size } => {
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
                 let imm = imm.show_rru(mb_rru);
                 format!("movk {}, {}", rd, imm)
             }
