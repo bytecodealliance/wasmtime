@@ -1,4 +1,5 @@
-use crate::wasi::{types, Errno, Result};
+use crate::wasi::types;
+use crate::{Error, Result};
 use filetime::{set_file_handle_times, FileTime};
 use std::fs::File;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -17,7 +18,7 @@ pub(crate) fn filestat_set_times(
     let set_mtim_now = fst_flags.contains(&types::Fstflags::MTIM_NOW);
 
     if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
-        return Err(Errno::Inval);
+        return Err(Error::Inval);
     }
     let atim = if set_atim {
         let time = UNIX_EPOCH + Duration::from_nanos(st_atim);

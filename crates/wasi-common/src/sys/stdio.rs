@@ -20,7 +20,8 @@ use super::{fd, AsFile};
 use crate::handle::{Handle, HandleRights};
 use crate::sandboxed_tty_writer::SandboxedTTYWriter;
 use crate::wasi::types::{self, Filetype};
-use crate::wasi::{Errno, Result, RightsExt};
+use crate::wasi::RightsExt;
+use crate::{Error, Result};
 use std::any::Any;
 use std::cell::Cell;
 use std::convert::TryInto;
@@ -226,7 +227,7 @@ impl Handle for NullDevice {
         let mut total_len = 0u32;
         for iov in iovs {
             let len: types::Size = iov.len().try_into()?;
-            total_len = total_len.checked_add(len).ok_or(Errno::Overflow)?;
+            total_len = total_len.checked_add(len).ok_or(Error::Overflow)?;
         }
         Ok(total_len as usize)
     }

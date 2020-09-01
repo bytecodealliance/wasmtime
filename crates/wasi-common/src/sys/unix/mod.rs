@@ -28,7 +28,8 @@ cfg_if::cfg_if! {
 
 use crate::handle::HandleRights;
 use crate::sys::AsFile;
-use crate::wasi::{types, Errno, Result, RightsExt};
+use crate::wasi::{types, RightsExt};
+use crate::{Error, Result};
 use std::convert::{TryFrom, TryInto};
 use std::fs::File;
 use std::io;
@@ -144,98 +145,6 @@ impl From<types::Clockid> for ClockId {
     }
 }
 
-impl From<io::Error> for Errno {
-    fn from(err: io::Error) -> Self {
-        match err.raw_os_error() {
-            Some(code) => match code {
-                libc::EPERM => Self::Perm,
-                libc::ENOENT => Self::Noent,
-                libc::ESRCH => Self::Srch,
-                libc::EINTR => Self::Intr,
-                libc::EIO => Self::Io,
-                libc::ENXIO => Self::Nxio,
-                libc::E2BIG => Self::TooBig,
-                libc::ENOEXEC => Self::Noexec,
-                libc::EBADF => Self::Badf,
-                libc::ECHILD => Self::Child,
-                libc::EAGAIN => Self::Again,
-                libc::ENOMEM => Self::Nomem,
-                libc::EACCES => Self::Acces,
-                libc::EFAULT => Self::Fault,
-                libc::EBUSY => Self::Busy,
-                libc::EEXIST => Self::Exist,
-                libc::EXDEV => Self::Xdev,
-                libc::ENODEV => Self::Nodev,
-                libc::ENOTDIR => Self::Notdir,
-                libc::EISDIR => Self::Isdir,
-                libc::EINVAL => Self::Inval,
-                libc::ENFILE => Self::Nfile,
-                libc::EMFILE => Self::Mfile,
-                libc::ENOTTY => Self::Notty,
-                libc::ETXTBSY => Self::Txtbsy,
-                libc::EFBIG => Self::Fbig,
-                libc::ENOSPC => Self::Nospc,
-                libc::ESPIPE => Self::Spipe,
-                libc::EROFS => Self::Rofs,
-                libc::EMLINK => Self::Mlink,
-                libc::EPIPE => Self::Pipe,
-                libc::EDOM => Self::Dom,
-                libc::ERANGE => Self::Range,
-                libc::EDEADLK => Self::Deadlk,
-                libc::ENAMETOOLONG => Self::Nametoolong,
-                libc::ENOLCK => Self::Nolck,
-                libc::ENOSYS => Self::Nosys,
-                libc::ENOTEMPTY => Self::Notempty,
-                libc::ELOOP => Self::Loop,
-                libc::ENOMSG => Self::Nomsg,
-                libc::EIDRM => Self::Idrm,
-                libc::ENOLINK => Self::Nolink,
-                libc::EPROTO => Self::Proto,
-                libc::EMULTIHOP => Self::Multihop,
-                libc::EBADMSG => Self::Badmsg,
-                libc::EOVERFLOW => Self::Overflow,
-                libc::EILSEQ => Self::Ilseq,
-                libc::ENOTSOCK => Self::Notsock,
-                libc::EDESTADDRREQ => Self::Destaddrreq,
-                libc::EMSGSIZE => Self::Msgsize,
-                libc::EPROTOTYPE => Self::Prototype,
-                libc::ENOPROTOOPT => Self::Noprotoopt,
-                libc::EPROTONOSUPPORT => Self::Protonosupport,
-                libc::EAFNOSUPPORT => Self::Afnosupport,
-                libc::EADDRINUSE => Self::Addrinuse,
-                libc::EADDRNOTAVAIL => Self::Addrnotavail,
-                libc::ENETDOWN => Self::Netdown,
-                libc::ENETUNREACH => Self::Netunreach,
-                libc::ENETRESET => Self::Netreset,
-                libc::ECONNABORTED => Self::Connaborted,
-                libc::ECONNRESET => Self::Connreset,
-                libc::ENOBUFS => Self::Nobufs,
-                libc::EISCONN => Self::Isconn,
-                libc::ENOTCONN => Self::Notconn,
-                libc::ETIMEDOUT => Self::Timedout,
-                libc::ECONNREFUSED => Self::Connrefused,
-                libc::EHOSTUNREACH => Self::Hostunreach,
-                libc::EALREADY => Self::Already,
-                libc::EINPROGRESS => Self::Inprogress,
-                libc::ESTALE => Self::Stale,
-                libc::EDQUOT => Self::Dquot,
-                libc::ECANCELED => Self::Canceled,
-                libc::EOWNERDEAD => Self::Ownerdead,
-                libc::ENOTRECOVERABLE => Self::Notrecoverable,
-                libc::ENOTSUP => Self::Notsup,
-                x => {
-                    tracing::debug!("Unknown errno value: {}", x);
-                    Self::Io
-                }
-            },
-            None => {
-                tracing::debug!("Other I/O error: {}", err);
-                Self::Io
-            }
-        }
-    }
-}
-
 impl From<types::Fdflags> for OFlags {
     fn from(fdflags: types::Fdflags) -> Self {
         let mut nix_flags = Self::empty();
@@ -300,13 +209,13 @@ impl From<types::Oflags> for OFlags {
 }
 
 impl TryFrom<libc::stat> for types::Filestat {
-    type Error = Errno;
+    type Error = Error;
 
     fn try_from(filestat: libc::stat) -> Result<Self> {
         fn filestat_to_timestamp(secs: u64, nsecs: u64) -> Result<types::Timestamp> {
             secs.checked_mul(1_000_000_000)
                 .and_then(|sec_nsec| sec_nsec.checked_add(nsecs))
-                .ok_or(Errno::Overflow)
+                .ok_or(Error::Overflow)
         }
 
         let filetype = yanix::file::FileType::from_stat_st_mode(filestat.st_mode);

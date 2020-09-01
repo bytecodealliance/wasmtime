@@ -10,7 +10,8 @@ pub(crate) mod stdio;
 
 use crate::handle::HandleRights;
 use crate::sys::AsFile;
-use crate::wasi::{types, Errno, Result, RightsExt};
+use crate::wasi::{types, RightsExt};
+use crate::{Error, Result};
 use std::convert::{TryFrom, TryInto};
 use std::fs::File;
 use std::mem::ManuallyDrop;
@@ -18,7 +19,6 @@ use std::os::windows::prelude::{AsRawHandle, FromRawHandle};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{io, string};
-use winapi::shared::winerror;
 use winx::file::{CreationDisposition, Flags};
 
 impl<T: AsRawHandle> AsFile for T {
@@ -106,47 +106,7 @@ pub(crate) fn file_serial_no(file: &File) -> io::Result<u64> {
     Ok(no)
 }
 
-impl From<io::Error> for Errno {
-    fn from(err: io::Error) -> Self {
-        match err.raw_os_error() {
-            Some(code) => match code as u32 {
-                winerror::ERROR_SUCCESS => Self::Success,
-                winerror::ERROR_BAD_ENVIRONMENT => Self::TooBig,
-                winerror::ERROR_FILE_NOT_FOUND => Self::Noent,
-                winerror::ERROR_PATH_NOT_FOUND => Self::Noent,
-                winerror::ERROR_TOO_MANY_OPEN_FILES => Self::Nfile,
-                winerror::ERROR_ACCESS_DENIED => Self::Acces,
-                winerror::ERROR_SHARING_VIOLATION => Self::Acces,
-                winerror::ERROR_PRIVILEGE_NOT_HELD => Self::Notcapable,
-                winerror::ERROR_INVALID_HANDLE => Self::Badf,
-                winerror::ERROR_INVALID_NAME => Self::Noent,
-                winerror::ERROR_NOT_ENOUGH_MEMORY => Self::Nomem,
-                winerror::ERROR_OUTOFMEMORY => Self::Nomem,
-                winerror::ERROR_DIR_NOT_EMPTY => Self::Notempty,
-                winerror::ERROR_NOT_READY => Self::Busy,
-                winerror::ERROR_BUSY => Self::Busy,
-                winerror::ERROR_NOT_SUPPORTED => Self::Notsup,
-                winerror::ERROR_FILE_EXISTS => Self::Exist,
-                winerror::ERROR_BROKEN_PIPE => Self::Pipe,
-                winerror::ERROR_BUFFER_OVERFLOW => Self::Nametoolong,
-                winerror::ERROR_NOT_A_REPARSE_POINT => Self::Inval,
-                winerror::ERROR_NEGATIVE_SEEK => Self::Inval,
-                winerror::ERROR_DIRECTORY => Self::Notdir,
-                winerror::ERROR_ALREADY_EXISTS => Self::Exist,
-                x => {
-                    tracing::debug!("winerror: unknown error value: {}", x);
-                    Self::Io
-                }
-            },
-            None => {
-                tracing::debug!("Other I/O error: {}", err);
-                Self::Io
-            }
-        }
-    }
-}
-
-impl From<string::FromUtf16Error> for Errno {
+impl From<string::FromUtf16Error> for Error {
     fn from(_err: string::FromUtf16Error) -> Self {
         Self::Ilseq
     }
@@ -166,14 +126,14 @@ fn change_time(file: &File) -> io::Result<i64> {
 
 fn systemtime_to_timestamp(st: SystemTime) -> Result<u64> {
     st.duration_since(UNIX_EPOCH)
-        .map_err(|_| Errno::Inval)? // date earlier than UNIX_EPOCH
+        .map_err(|_| Error::Inval)? // date earlier than UNIX_EPOCH
         .as_nanos()
         .try_into()
         .map_err(Into::into) // u128 doesn't fit into u64
 }
 
 impl TryFrom<&File> for types::Filestat {
-    type Error = Errno;
+    type Error = Error;
 
     fn try_from(file: &File) -> Result<Self> {
         let metadata = file.metadata()?;

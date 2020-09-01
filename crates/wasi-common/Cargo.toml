@@ -20,13 +20,13 @@ links = "wasi-common-19"
 anyhow = "1.0"
 thiserror = "1.0"
 libc = "0.2"
-getrandom = "0.1"
+getrandom = { version = "0.1.14", features = ["std"] }
 cfg-if = "0.1.9"
 filetime = "0.2.7"
 lazy_static = "1.4.0"
 wig = { path = "wig", version = "0.19.0" }
 wiggle = { path = "../wiggle", default-features = false, version = "0.19.0" }
-tracing = "0.1.15"
+tracing = "0.1.19"
 
 [target.'cfg(unix)'.dependencies]
 yanix = { path = "yanix", version = "0.19.0" }

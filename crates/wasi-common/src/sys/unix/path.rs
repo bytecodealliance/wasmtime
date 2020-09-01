@@ -1,7 +1,8 @@
 use crate::handle::{Handle, HandleRights};
 use crate::sys::osdir::OsDir;
 use crate::sys::AsFile;
-use crate::wasi::{types, Errno, Result};
+use crate::wasi::types;
+use crate::{Error, Result};
 use std::convert::{TryFrom, TryInto};
 use std::ffi::OsStr;
 use std::fs::File;
@@ -147,7 +148,7 @@ pub(crate) fn open(
                     match unsafe { fstatat(dirfd.as_raw_fd(), path, AtFlags::SYMLINK_NOFOLLOW) } {
                         Ok(stat) => {
                             if FileType::from_stat_st_mode(stat.st_mode) == FileType::Socket {
-                                return Err(Errno::Notsup);
+                                return Err(Error::Notsup);
                             }
                         }
                         Err(err) => {
@@ -166,7 +167,7 @@ pub(crate) fn open(
                     match unsafe { fstatat(dirfd.as_raw_fd(), path, AtFlags::SYMLINK_NOFOLLOW) } {
                         Ok(stat) => {
                             if FileType::from_stat_st_mode(stat.st_mode) == FileType::Symlink {
-                                return Err(Errno::Loop);
+                                return Err(Error::Loop);
                             }
                         }
                         Err(err) => {
@@ -180,7 +181,7 @@ pub(crate) fn open(
                 // FreeBSD returns EMLINK instead of ELOOP when using O_NOFOLLOW on
                 // a symlink.
                 libc::EMLINK if !(nix_all_oflags & OFlags::NOFOLLOW).is_empty() => {
-                    return Err(Errno::Loop);
+                    return Err(Error::Loop);
                 }
                 _ => {}
             }
@@ -244,7 +245,7 @@ pub(crate) fn filestat_set_times_at(
     let set_mtim_now = fst_flags.contains(&types::Fstflags::MTIM_NOW);
 
     if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
-        return Err(Errno::Inval);
+        return Err(Error::Inval);
     }
 
     let atim = if set_atim {

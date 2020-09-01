@@ -1,5 +1,6 @@
 use crate::handle::{Handle, HandleRights};
-use crate::wasi::{self, types, Errno, Result, RightsExt};
+use crate::wasi::{self, types, RightsExt};
+use crate::{Error, Result};
 use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::collections::hash_map::Entry;
@@ -70,7 +71,7 @@ impl FileContents for VecFileContents {
     }
 
     fn resize(&mut self, new_size: types::Filesize) -> Result<()> {
-        let new_size: usize = new_size.try_into().map_err(|_| Errno::Inval)?;
+        let new_size: usize = new_size.try_into().map_err(|_| Error::Inval)?;
         self.content.resize(new_size, 0);
         Ok(())
     }
@@ -78,7 +79,7 @@ impl FileContents for VecFileContents {
     fn preadv(&self, iovs: &mut [io::IoSliceMut], offset: types::Filesize) -> Result<usize> {
         let mut read_total = 0usize;
         for iov in iovs.iter_mut() {
-            let skip: u64 = read_total.try_into().map_err(|_| Errno::Inval)?;
+            let skip: u64 = read_total.try_into().map_err(|_| Error::Inval)?;
             let read = self.pread(iov, offset + skip)?;
             read_total = read_total.checked_add(read).expect("FileContents::preadv must not be called when reads could total to more bytes than the return value can hold");
         }
@@ -88,7 +89,7 @@ impl FileContents for VecFileContents {
     fn pwritev(&mut self, iovs: &[io::IoSlice], offset: types::Filesize) -> Result<usize> {
         let mut write_total = 0usize;
         for iov in iovs.iter() {
-            let skip: u64 = write_total.try_into().map_err(|_| Errno::Inval)?;
+            let skip: u64 = write_total.try_into().map_err(|_| Error::Inval)?;
             let written = self.pwrite(iov, offset + skip)?;
             write_total = write_total.checked_add(written).expect("FileContents::pwritev must not be called when writes could total to more bytes than the return value can hold");
         }
@@ -97,7 +98,7 @@ impl FileContents for VecFileContents {
 
     fn pread(&self, buf: &mut [u8], offset: types::Filesize) -> Result<usize> {
         trace!(buffer_length = buf.len(), offset = offset, "pread");
-        let offset: usize = offset.try_into().map_err(|_| Errno::Inval)?;
+        let offset: usize = offset.try_into().map_err(|_| Error::Inval)?;
 
         let data_remaining = self.content.len().saturating_sub(offset);
 
@@ -109,9 +110,9 @@ impl FileContents for VecFileContents {
     }
 
     fn pwrite(&mut self, buf: &[u8], offset: types::Filesize) -> Result<usize> {
-        let offset: usize = offset.try_into().map_err(|_| Errno::Inval)?;
+        let offset: usize = offset.try_into().map_err(|_| Error::Inval)?;
 
-        let write_end = offset.checked_add(buf.len()).ok_or(Errno::Fbig)?;
+        let write_end = offset.checked_add(buf.len()).ok_or(Error::Fbig)?;
 
         if write_end > self.content.len() {
             self.content.resize(write_end, 0);
@@ -206,11 +207,11 @@ impl Handle for InMemoryFile {
         Ok(())
     }
     fn allocate(&self, offset: types::Filesize, len: types::Filesize) -> Result<()> {
-        let new_limit = offset.checked_add(len).ok_or(Errno::Fbig)?;
+        let new_limit = offset.checked_add(len).ok_or(Error::Fbig)?;
         let mut data = self.data.borrow_mut();
 
         if new_limit > data.max_size() {
-            return Err(Errno::Fbig);
+            return Err(Error::Fbig);
         }
 
         if new_limit > data.size() {
@@ -242,7 +243,7 @@ impl Handle for InMemoryFile {
     fn filestat_set_size(&self, st_size: types::Filesize) -> Result<()> {
         let mut data = self.data.borrow_mut();
         if st_size > data.max_size() {
-            return Err(Errno::Fbig);
+            return Err(Error::Fbig);
         }
         data.resize(st_size)
     }
@@ -256,8 +257,8 @@ impl Handle for InMemoryFile {
         trace!("read_vectored(iovs={:?})", iovs);
         trace!("     | *read_start={:?}", self.cursor.get());
         let read = self.data.borrow_mut().preadv(iovs, self.cursor.get())?;
-        let offset: u64 = read.try_into().map_err(|_| Errno::Inval)?;
-        let update = self.cursor.get().checked_add(offset).ok_or(Errno::Inval)?;
+        let offset: u64 = read.try_into().map_err(|_| Error::Inval)?;
+        let update = self.cursor.get().checked_add(offset).ok_or(Error::Inval)?;
         self.cursor.set(update);
         Ok(read)
     }
@@ -269,23 +270,23 @@ impl Handle for InMemoryFile {
                     self.cursor
                         .get()
                         .checked_sub(offset.wrapping_neg() as u64)
-                        .ok_or(Errno::Inval)?
+                        .ok_or(Error::Inval)?
                 } else {
                     self.cursor
                         .get()
                         .checked_add(offset as u64)
-                        .ok_or(Errno::Inval)?
+                        .ok_or(Error::Inval)?
                 };
                 self.cursor.set(std::cmp::min(content_len, new_cursor));
             }
             SeekFrom::End(offset) => {
                 // A negative offset from the end would be past the end of the file,
-                let offset: u64 = offset.try_into().map_err(|_| Errno::Inval)?;
+                let offset: u64 = offset.try_into().map_err(|_| Error::Inval)?;
                 self.cursor.set(content_len.saturating_sub(offset));
             }
             SeekFrom::Start(offset) => {
                 // A negative offset from the end would be before the start of the file.
-                let offset: u64 = offset.try_into().map_err(|_| Errno::Inval)?;
+                let offset: u64 = offset.try_into().map_err(|_| Error::Inval)?;
                 self.cursor.set(std::cmp::min(content_len, offset));
             }
         }
@@ -320,10 +321,10 @@ impl Handle for InMemoryFile {
 
         if let Some(end) = write_start.checked_add(max_size as types::Filesize) {
             if end > data.max_size() {
-                return Err(Errno::Fbig);
+                return Err(Error::Fbig);
             }
         } else {
-            return Err(Errno::Fbig);
+            return Err(Error::Fbig);
         }
 
         trace!("     | *write_start={:?}", write_start);
@@ -340,7 +341,7 @@ impl Handle for InMemoryFile {
     }
     // PathOps
     fn create_directory(&self, _path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
     fn openat(
         &self,
@@ -355,7 +356,7 @@ impl Handle for InMemoryFile {
                 "InMemoryFile::openat was passed oflags DIRECTORY, but {:?} is a file.",
                 path
             );
-            return Err(Errno::Notdir);
+            return Err(Error::Notdir);
         }
 
         if path == "." {
@@ -366,7 +367,7 @@ impl Handle for InMemoryFile {
                 None => self.try_clone().map_err(Into::into),
             }
         } else {
-            Err(Errno::Acces)
+            Err(Error::Acces)
         }
     }
     fn link(
@@ -376,25 +377,25 @@ impl Handle for InMemoryFile {
         _new_path: &str,
         _follow: bool,
     ) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
     fn readlink(&self, _path: &str, _buf: &mut [u8]) -> Result<usize> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
     fn readlinkat(&self, _path: &str) -> Result<String> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
     fn rename(&self, _old_path: &str, _new_handle: Box<dyn Handle>, _new_path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
     fn remove_directory(&self, _path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
     fn symlink(&self, _old_path: &str, _new_path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
     fn unlink_file(&self, _path: &str) -> Result<()> {
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
 }
 
@@ -587,7 +588,7 @@ impl Handle for VirtualDir {
     fn create_directory(&self, path: &str) -> Result<()> {
         let mut entries = self.entries.borrow_mut();
         match entries.entry(PathBuf::from(path)) {
-            Entry::Occupied(_) => Err(Errno::Exist),
+            Entry::Occupied(_) => Err(Error::Exist),
             Entry::Vacant(v) => {
                 if self.writable {
                     let new_dir = Box::new(Self::new(true));
@@ -595,7 +596,7 @@ impl Handle for VirtualDir {
                     v.insert(new_dir);
                     Ok(())
                 } else {
-                    Err(Errno::Acces)
+                    Err(Error::Acces)
                 }
             }
         }
@@ -653,7 +654,7 @@ impl Handle for VirtualDir {
 
         // openat may have been passed a path with a trailing slash, but files are mapped to paths
         // with trailing slashes normalized out.
-        let file_name = Path::new(path).file_name().ok_or(Errno::Inval)?;
+        let file_name = Path::new(path).file_name().ok_or(Error::Inval)?;
         let mut entries = self.entries.borrow_mut();
         let entry_count = entries.len();
         match entries.entry(Path::new(file_name).to_path_buf()) {
@@ -661,7 +662,7 @@ impl Handle for VirtualDir {
                 let creat_excl_mask = types::Oflags::CREAT | types::Oflags::EXCL;
                 if (oflags & creat_excl_mask) == creat_excl_mask {
                     tracing::trace!("VirtualDir::openat was passed oflags CREAT|EXCL, but the file {:?} exists.", file_name);
-                    return Err(Errno::Exist);
+                    return Err(Error::Exist);
                 }
 
                 if oflags.contains(&types::Oflags::DIRECTORY)
@@ -671,7 +672,7 @@ impl Handle for VirtualDir {
                         "VirtualDir::openat was passed oflags DIRECTORY, but {:?} is a file.",
                         file_name
                     );
-                    return Err(Errno::Notdir);
+                    return Err(Error::Notdir);
                 }
 
                 e.get().try_clone().map_err(Into::into)
@@ -683,7 +684,7 @@ impl Handle for VirtualDir {
                     // would have with `usize`. The limit is the full `u32` range minus two so we
                     // can reserve "self" and "parent" cookie values.
                     if entry_count >= (std::u32::MAX - RESERVED_ENTRY_COUNT) as usize {
-                        return Err(Errno::Nospc);
+                        return Err(Error::Nospc);
                     }
 
                     tracing::trace!("VirtualDir::openat creating an InMemoryFile named {}", path);
@@ -693,14 +694,14 @@ impl Handle for VirtualDir {
                     file.set_parent(Some(self.try_clone().expect("can clone self")));
                     v.insert(file).try_clone().map_err(Into::into)
                 } else {
-                    Err(Errno::Acces)
+                    Err(Error::Acces)
                 }
             }
         }
     }
     fn readlinkat(&self, _path: &str) -> Result<String> {
         // Files are not symbolic links or directories, faithfully report Notdir.
-        Err(Errno::Notdir)
+        Err(Error::Notdir)
     }
     fn remove_directory(&self, path: &str) -> Result<()> {
         let trimmed_path = path.trim_end_matches('/');
@@ -709,13 +710,13 @@ impl Handle for VirtualDir {
             Entry::Occupied(e) => {
                 // first, does this name a directory?
                 if e.get().get_file_type() != types::Filetype::Directory {
-                    return Err(Errno::Notdir);
+                    return Err(Error::Notdir);
                 }
 
                 // Okay, but is the directory empty?
                 let iter = e.get().readdir(wasi::DIRCOOKIE_START)?;
                 if iter.skip(RESERVED_ENTRY_COUNT as usize).next().is_some() {
-                    return Err(Errno::Notempty);
+                    return Err(Error::Notempty);
                 }
 
                 // Alright, it's an empty directory. We can remove it.
@@ -738,7 +739,7 @@ impl Handle for VirtualDir {
                     "VirtualDir::remove_directory failed to remove {}, no such entry",
                     trimmed_path
                 );
-                Err(Errno::Noent)
+                Err(Error::Noent)
             }
         }
     }
@@ -749,7 +750,7 @@ impl Handle for VirtualDir {
         // fail with Isdir, since this is a directory. Alternatively, we may be unlinking `".."`,
         // which is bound the same way, as this is by definition contained in a directory.
         if trimmed_path == "." || trimmed_path == ".." {
-            return Err(Errno::Isdir);
+            return Err(Error::Isdir);
         }
 
         let mut entries = self.entries.borrow_mut();
@@ -757,7 +758,7 @@ impl Handle for VirtualDir {
             Entry::Occupied(e) => {
                 // Directories must be removed through `remove_directory`, not `unlink_file`.
                 if e.get().get_file_type() == types::Filetype::Directory {
-                    return Err(Errno::Isdir);
+                    return Err(Error::Isdir);
                 }
 
                 let removed = e.remove_entry();
@@ -779,7 +780,7 @@ impl Handle for VirtualDir {
                     "VirtualDir::unlink_file failed to remove {}, no such entry",
                     trimmed_path
                 );
-                Err(Errno::Noent)
+                Err(Error::Noent)
             }
         }
     }

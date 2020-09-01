@@ -1,7 +1,8 @@
 use super::sys_impl::oshandle::RawOsHandle;
 use super::{fd, path, AsFile};
 use crate::handle::{Handle, HandleRights};
-use crate::wasi::{types, Errno, Result};
+use crate::wasi::types;
+use crate::{Error, Result};
 use std::any::Any;
 use std::io;
 use std::ops::Deref;
@@ -102,7 +103,7 @@ impl Handle for OsDir {
         let new_handle = match new_handle.as_any().downcast_ref::<Self>() {
             None => {
                 error!("Tried to link with handle that's not an OsDir");
-                return Err(Errno::Badf);
+                return Err(Error::Badf);
             }
             Some(handle) => handle,
         };
@@ -121,7 +122,7 @@ impl Handle for OsDir {
         let new_handle = match new_handle.as_any().downcast_ref::<Self>() {
             None => {
                 error!("Tried to rename with handle that's not an OsDir");
-                return Err(Errno::Badf);
+                return Err(Error::Badf);
             }
             Some(handle) => handle,
         };

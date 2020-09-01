@@ -1,6 +1,6 @@
 use crate::handle::{Handle, HandleRights};
 use crate::wasi::types::Filetype;
-use crate::wasi::{Errno, Result};
+use crate::{Error, Result};
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -77,7 +77,7 @@ impl Entry {
     /// The `Entry` can only be converted into a valid `Handle` object if
     /// the specified set of base rights, and inheriting rights encapsulated within `rights`
     /// `HandleRights` structure is a subset of rights attached to this `Entry`. The check is
-    /// performed using `Entry::validate_rights` method. If the check fails, `Errno::Notcapable`
+    /// performed using `Entry::validate_rights` method. If the check fails, `Error::Notcapable`
     /// is returned.
     pub(crate) fn as_handle(&self, rights: &HandleRights) -> Result<EntryHandle> {
         self.validate_rights(rights)?;
@@ -87,7 +87,7 @@ impl Entry {
     /// Check if this `Entry` object satisfies the specified `HandleRights`; i.e., if
     /// rights attached to this `Entry` object are a superset.
     ///
-    /// Upon unsuccessful check, `Errno::Notcapable` is returned.
+    /// Upon unsuccessful check, `Error::Notcapable` is returned.
     pub(crate) fn validate_rights(&self, rights: &HandleRights) -> Result<()> {
         let this_rights = self.handle.get_rights();
         if this_rights.contains(rights) {
@@ -98,7 +98,7 @@ impl Entry {
                 actual = tracing::field::display(this_rights),
                 "validate_rights failed",
             );
-            Err(Errno::Notcapable)
+            Err(Error::Notcapable)
         }
     }
 }

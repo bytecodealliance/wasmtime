@@ -1,7 +1,8 @@
 use super::oshandle::RawOsHandle;
 use crate::sys::osdir::OsDir;
 use crate::sys::osfile::OsFile;
-use crate::wasi::{self, types, Result};
+use crate::wasi::{self, types};
+use crate::Result;
 use std::convert::TryInto;
 use std::fs::File;
 use std::os::unix::prelude::AsRawFd;

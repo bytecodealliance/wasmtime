@@ -1,7 +1,8 @@
 use crate::handle::{Handle, HandleRights};
 use crate::sys::osdir::OsDir;
 use crate::sys::{fd, AsFile};
-use crate::wasi::{types, Errno, Result};
+use crate::wasi::types;
+use crate::{Error, Result};
 use std::convert::TryFrom;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, Metadata, OpenOptions};
@@ -35,7 +36,7 @@ fn concatenate<P: AsRef<Path>>(file: &OsDir, path: P) -> Result<PathBuf> {
     // WASI is not able to deal with absolute paths
     // so error out if absolute
     if path.as_ref().is_absolute() {
-        return Err(Errno::Notcapable);
+        return Err(Error::Notcapable);
     }
 
     let dir_path = get_file_path(&*file.as_file()?)?;
@@ -131,8 +132,8 @@ pub(crate) fn readlinkat(dirfd: &OsDir, s_path: &str) -> Result<String> {
             let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
             let target_path = target_path
                 .strip_prefix(dir_path)
-                .map_err(|_| Errno::Notcapable)?;
-            let target_path = target_path.to_str().ok_or(Errno::Ilseq)?;
+                .map_err(|_| Error::Notcapable)?;
+            let target_path = target_path.to_str().ok_or(Error::Ilseq)?;
             return Ok(target_path.to_owned());
         }
         Err(e) => e,
@@ -144,7 +145,7 @@ pub(crate) fn readlinkat(dirfd: &OsDir, s_path: &str) -> Result<String> {
                 // strip "/" and check if exists
                 let path = concatenate(dirfd, Path::new(s_path.trim_end_matches('/')))?;
                 if path.exists() && !path.is_dir() {
-                    return Err(Errno::Notdir);
+                    return Err(Error::Notdir);
                 }
             }
         }
@@ -178,7 +179,7 @@ pub(crate) fn link(
             // fs::canonicalize under Windows will return:
             // * ERROR_FILE_NOT_FOUND, if it encounters a dangling symlink
             // * ERROR_CANT_RESOLVE_FILENAME, if it encounters a symlink loop
-            Some(code) if code as u32 == winerror::ERROR_CANT_RESOLVE_FILENAME => Errno::Loop,
+            Some(code) if code as u32 == winerror::ERROR_CANT_RESOLVE_FILENAME => Error::Loop,
             _ => e.into(),
         })?;
     }
@@ -193,7 +194,7 @@ pub(crate) fn link(
             // implementations of link return `EPERM`, but `ERROR_ACCESS_DENIED` is converted
             // to `EACCES`. We detect and correct this case here.
             if fs::metadata(&old_path).map(|m| m.is_dir()).unwrap_or(false) {
-                return Err(Errno::Perm);
+                return Err(Error::Perm);
             }
         }
     }
@@ -217,7 +218,7 @@ pub(crate) fn open(
         // This is because truncation requires `GENERIC_WRITE` access, which will override the removal
         // of the `FILE_WRITE_DATA` permission.
         if fdflags.contains(&types::Fdflags::APPEND) {
-            return Err(Errno::Notsup);
+            return Err(Error::Notsup);
         }
     }
 
@@ -242,11 +243,11 @@ pub(crate) fn open(
         Ok(file_type) => {
             // check if we are trying to open a symlink
             if file_type.is_symlink() {
-                return Err(Errno::Loop);
+                return Err(Error::Loop);
             }
             // check if we are trying to open a file as a dir
             if file_type.is_file() && oflags.contains(&types::Oflags::DIRECTORY) {
-                return Err(Errno::Notdir);
+                return Err(Error::Notdir);
             }
         }
         Err(err) => match err.raw_os_error() {
@@ -260,14 +261,14 @@ pub(crate) fn open(
                     winerror::ERROR_INVALID_NAME => {
                         // TODO rethink this. For now, migrate how we handled
                         // it in `path::openat` on Windows.
-                        return Err(Errno::Notdir);
+                        return Err(Error::Notdir);
                     }
                     _ => return Err(err.into()),
                 };
             }
             None => {
                 tracing::debug!("Inconvertible OS error: {}", err);
-                return Err(Errno::Io);
+                return Err(Error::Io);
             }
         },
     }
@@ -302,8 +303,8 @@ pub(crate) fn readlink(dirfd: &OsDir, path: &str, buf: &mut [u8]) -> Result<usiz
     let dir_path = PathBuf::from(strip_extended_prefix(dir_path));
     let target_path = target_path
         .strip_prefix(dir_path)
-        .map_err(|_| Errno::Notcapable)
-        .and_then(|path| path.to_str().map(String::from).ok_or(Errno::Ilseq))?;
+        .map_err(|_| Error::Notcapable)
+        .and_then(|path| path.to_str().map(String::from).ok_or(Error::Ilseq))?;
 
     if buf.len() > 0 {
         let mut chars = target_path.chars();
@@ -341,12 +342,12 @@ pub(crate) fn rename(
     //
     // [std::fs::rename]: https://doc.rust-lang.org/std/fs/fn.rename.html
     if old_path.is_dir() && new_path.is_file() {
-        return Err(Errno::Notdir);
+        return Err(Error::Notdir);
     }
     // Second sanity check: check we're not trying to rename a file into a path
     // ending in a trailing slash.
     if old_path.is_file() && new_path_.ends_with('/') {
-        return Err(Errno::Notdir);
+        return Err(Error::Notdir);
     }
 
     // TODO handle symlinks
@@ -362,7 +363,7 @@ pub(crate) fn rename(
                     // So most likely dealing with new_path == dir.
                     // Eliminate case old_path == file first.
                     if old_path.is_file() {
-                        return Err(Errno::Isdir);
+                        return Err(Error::Isdir);
                     } else {
                         // Ok, let's try removing an empty dir at new_path if it exists
                         // and is a nonempty dir.
@@ -378,7 +379,7 @@ pub(crate) fn rename(
                         strip_trailing_slashes_and_concatenate(old_dirfd, old_path_)?
                     {
                         if path.is_file() {
-                            return Err(Errno::Notdir);
+                            return Err(Error::Notdir);
                         }
                     }
                 }
@@ -389,7 +390,7 @@ pub(crate) fn rename(
         }
         None => {
             tracing::debug!("Inconvertible OS error: {}", err);
-            Err(Errno::Io)
+            Err(Error::Io)
         }
     }
 }
@@ -435,7 +436,7 @@ pub(crate) fn symlink(old_path: &str, new_dirfd: &OsDir, new_path_: &str) -> Res
                         strip_trailing_slashes_and_concatenate(new_dirfd, new_path_)?
                     {
                         if path.exists() {
-                            return Err(Errno::Exist);
+                            return Err(Error::Exist);
                         }
                     }
                 }
@@ -446,7 +447,7 @@ pub(crate) fn symlink(old_path: &str, new_dirfd: &OsDir, new_path_: &str) -> Res
         }
         None => {
             tracing::debug!("Inconvertible OS error: {}", err);
-            Err(Errno::Io)
+            Err(Error::Io)
         }
     }
 }
@@ -481,15 +482,15 @@ pub(crate) fn unlink_file(dirfd: &OsDir, path: &str) -> Result<()> {
             }
             None => {
                 tracing::debug!("Inconvertible OS error: {}", err);
-                Err(Errno::Io)
+                Err(Error::Io)
             }
         }
     } else if file_type.is_dir() {
-        Err(Errno::Isdir)
+        Err(Error::Isdir)
     } else if file_type.is_file() {
         fs::remove_file(path).map_err(Into::into)
     } else {
-        Err(Errno::Inval)
+        Err(Error::Inval)
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::sys::osdir::OsDir;
-use crate::wasi::Result;
+use crate::Result;
 use std::os::unix::prelude::AsRawFd;
 
 pub(crate) fn unlink_file(dirfd: &OsDir, path: &str) -> Result<()> {

@@ -23,6 +23,7 @@
 
 mod ctx;
 mod entry;
+mod error;
 mod fdpool;
 pub mod fs;
 mod handle;
@@ -36,6 +37,7 @@ pub mod virtfs;
 pub mod wasi;
 
 pub use ctx::{WasiCtx, WasiCtxBuilder, WasiCtxBuilderError};
+pub use error::{Error, Result};
 pub use handle::{Handle, HandleRights};
 pub use sys::osdir::OsDir;
 pub use sys::osfile::OsFile;

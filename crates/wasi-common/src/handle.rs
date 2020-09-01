@@ -1,5 +1,5 @@
 use crate::wasi::types::{self, Rights};
-use crate::wasi::{Errno, Result};
+use crate::{Error, Result};
 use std::any::Any;
 use std::fmt;
 use std::io::{self, SeekFrom};
@@ -107,25 +107,25 @@ pub trait Handle {
         _offset: types::Filesize,
         _len: types::Filesize,
     ) -> Result<()> {
-        Err(Errno::Badf)
+        Err(Error::Badf)
     }
     fn allocate(&self, _offset: types::Filesize, _len: types::Filesize) -> Result<()> {
-        Err(Errno::Badf)
+        Err(Error::Badf)
     }
     fn datasync(&self) -> Result<()> {
-        Err(Errno::Inval)
+        Err(Error::Inval)
     }
     fn fdstat_get(&self) -> Result<types::Fdflags> {
         Ok(types::Fdflags::empty())
     }
     fn fdstat_set_flags(&self, _fdflags: types::Fdflags) -> Result<()> {
-        Err(Errno::Badf)
+        Err(Error::Badf)
     }
     fn filestat_get(&self) -> Result<types::Filestat> {
-        Err(Errno::Badf)
+        Err(Error::Badf)
     }
     fn filestat_set_size(&self, _st_size: types::Filesize) -> Result<()> {
-        Err(Errno::Badf)
+        Err(Error::Badf)
     }
     fn filestat_set_times(
         &self,
@@ -133,39 +133,39 @@ pub trait Handle {
         _mtim: types::Timestamp,
         _fst_flags: types::Fstflags,
     ) -> Result<()> {
-        Err(Errno::Badf)
+        Err(Error::Badf)
     }
     fn preadv(&self, _buf: &mut [io::IoSliceMut], _offset: u64) -> Result<usize> {
-        Err(Errno::Badf)
+        Err(Error::Badf)
     }
     fn pwritev(&self, _buf: &[io::IoSlice], _offset: u64) -> Result<usize> {
-        Err(Errno::Badf)
+        Err(Error::Badf)
     }
     fn read_vectored(&self, _iovs: &mut [io::IoSliceMut]) -> Result<usize> {
-        Err(Errno::Badf)
+        Err(Error::Badf)
     }
     fn readdir<'a>(
         &'a self,
         _cookie: types::Dircookie,
     ) -> Result<Box<dyn Iterator<Item = Result<(types::Dirent, String)>> + 'a>> {
-        Err(Errno::Badf)
+        Err(Error::Badf)
     }
     fn seek(&self, _offset: SeekFrom) -> Result<u64> {
-        Err(Errno::Badf)
+        Err(Error::Badf)
     }
     fn sync(&self) -> Result<()> {
         Ok(())
     }
     fn write_vectored(&self, _iovs: &[io::IoSlice]) -> Result<usize> {
-        Err(Errno::Badf)
+        Err(Error::Badf)
     }
     // TODO perhaps should be a separate trait?
     // PathOps
     fn create_directory(&self, _path: &str) -> Result<()> {
-        Err(Errno::Acces)
+        Err(Error::Acces)
     }
     fn filestat_get_at(&self, _path: &str, _follow: bool) -> Result<types::Filestat> {
-        Err(Errno::Acces)
+        Err(Error::Acces)
     }
     fn filestat_set_times_at(
         &self,
@@ -175,7 +175,7 @@ pub trait Handle {
         _fst_flags: types::Fstflags,
         _follow: bool,
     ) -> Result<()> {
-        Err(Errno::Acces)
+        Err(Error::Acces)
     }
     fn openat(
         &self,
@@ -185,7 +185,7 @@ pub trait Handle {
         _oflags: types::Oflags,
         _fd_flags: types::Fdflags,
     ) -> Result<Box<dyn Handle>> {
-        Err(Errno::Acces)
+        Err(Error::Acces)
     }
     fn link(
         &self,
@@ -194,24 +194,24 @@ pub trait Handle {
         _new_path: &str,
         _follow: bool,
     ) -> Result<()> {
-        Err(Errno::Acces)
+        Err(Error::Acces)
     }
     fn readlink(&self, _path: &str, _buf: &mut [u8]) -> Result<usize> {
-        Err(Errno::Acces)
+        Err(Error::Acces)
     }
     fn readlinkat(&self, _path: &str) -> Result<String> {
-        Err(Errno::Acces)
+        Err(Error::Acces)
     }
     fn remove_directory(&self, _path: &str) -> Result<()> {
-        Err(Errno::Acces)
+        Err(Error::Acces)
     }
     fn rename(&self, _old_path: &str, _new_handle: Box<dyn Handle>, _new_path: &str) -> Result<()> {
-        Err(Errno::Acces)
+        Err(Error::Acces)
     }
     fn symlink(&self, _old_path: &str, _new_path: &str) -> Result<()> {
-        Err(Errno::Acces)
+        Err(Error::Acces)
     }
     fn unlink_file(&self, _path: &str) -> Result<()> {
-        Err(Errno::Acces)
+        Err(Error::Acces)
     }
 }

@@ -1,6 +1,6 @@
 use crate::handle::HandleRights;
 use crate::sys::sys_impl::oshandle::RawOsHandle;
-use crate::wasi::Result;
+use crate::Result;
 use std::cell::Cell;
 use std::io;
 use yanix::dir::Dir;

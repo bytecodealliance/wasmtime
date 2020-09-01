@@ -2,12 +2,11 @@ use crate::entry::{Entry, EntryHandle};
 use crate::handle::HandleRights;
 use crate::sys::clock;
 use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
-use crate::wasi::{types, AsBytes, Errno, Result};
-use crate::WasiCtx;
-use crate::{path, poll};
+use crate::wasi::{types, AsBytes};
+use crate::{path, poll, Error, Result, WasiCtx};
 use std::convert::TryInto;
 use std::io::{self, SeekFrom};
-use tracing::{debug, error, trace};
+use tracing::{debug, trace};
 use wiggle::{GuestPtr, GuestSlice};
 
 impl<'a> WasiSnapshotPreview1 for WasiCtx {
@@ -36,7 +35,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let mut argv_size: types::Size = 0;
         for arg in &self.args {
             let arg_len = arg.as_bytes_with_nul().len().try_into()?;
-            argv_size = argv_size.checked_add(arg_len).ok_or(Errno::Overflow)?;
+            argv_size = argv_size.checked_add(arg_len).ok_or(Error::Overflow)?;
         }
         Ok((argc, argv_size))
     }
@@ -66,7 +65,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let mut environ_size: types::Size = 0;
         for environ in &self.env {
             let env_len = environ.as_bytes_with_nul().len().try_into()?;
-            environ_size = environ_size.checked_add(env_len).ok_or(Errno::Overflow)?;
+            environ_size = environ_size.checked_add(env_len).ok_or(Error::Overflow)?;
         }
         Ok((environ_count, environ_size))
     }
@@ -114,7 +113,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         if let Ok(fe) = self.get_entry(fd) {
             // can't close preopened files
             if fe.preopen_path.is_some() {
-                return Err(Errno::Notsup);
+                return Err(Error::Notsup);
             }
         }
         self.remove_entry(fd)?;
@@ -156,7 +155,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let rights = HandleRights::new(fs_rights_base, fs_rights_inheriting);
         let entry = self.get_entry(fd)?;
         if !entry.get_rights().contains(&rights) {
-            return Err(Errno::Notcapable);
+            return Err(Error::Notcapable);
         }
         entry.set_rights(rights);
         Ok(())
@@ -206,7 +205,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             HandleRights::from_base(types::Rights::FD_READ | types::Rights::FD_SEEK);
         let entry = self.get_entry(fd)?;
         if offset > i64::max_value() as u64 {
-            return Err(Errno::Io);
+            return Err(Error::Io);
         }
 
         let host_nread = {
@@ -225,9 +224,9 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_prestat_get(&self, fd: types::Fd) -> Result<types::Prestat> {
         // TODO: should we validate any rights here?
         let entry = self.get_entry(fd)?;
-        let po_path = entry.preopen_path.as_ref().ok_or(Errno::Notsup)?;
+        let po_path = entry.preopen_path.as_ref().ok_or(Error::Notsup)?;
         if entry.get_file_type() != types::Filetype::Directory {
-            return Err(Errno::Notdir);
+            return Err(Error::Notdir);
         }
 
         let path = path::from_host(po_path.as_os_str())?;
@@ -245,16 +244,16 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<()> {
         // TODO: should we validate any rights here?
         let entry = self.get_entry(fd)?;
-        let po_path = entry.preopen_path.as_ref().ok_or(Errno::Notsup)?;
+        let po_path = entry.preopen_path.as_ref().ok_or(Error::Notsup)?;
         if entry.get_file_type() != types::Filetype::Directory {
-            return Err(Errno::Notdir);
+            return Err(Error::Notdir);
         }
 
         let host_path = path::from_host(po_path.as_os_str())?;
         let host_path_len = host_path.len().try_into()?;
 
         if host_path_len > path_len {
-            return Err(Errno::Nametoolong);
+            return Err(Error::Nametoolong);
         }
 
         trace!("     | path='{}'", host_path);
@@ -283,7 +282,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let entry = self.get_entry(fd)?;
 
         if offset > i64::max_value() as u64 {
-            return Err(Errno::Io);
+            return Err(Error::Io);
         }
 
         let host_nwritten = {
@@ -339,7 +338,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             let dirent_len: types::Size = dirent_raw.len().try_into()?;
             let name_raw = name.as_bytes();
             let name_len = name_raw.len().try_into()?;
-            let offset = dirent_len.checked_add(name_len).ok_or(Errno::Overflow)?;
+            let offset = dirent_len.checked_add(name_len).ok_or(Error::Overflow)?;
             if (buf_len - bufused) < offset {
                 break;
             } else {
@@ -356,7 +355,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_renumber(&self, from: types::Fd, to: types::Fd) -> Result<()> {
         if !self.contains_entry(from) {
-            return Err(Errno::Badf);
+            return Err(Error::Badf);
         }
 
         // Don't allow renumbering over a pre-opened resource.
@@ -364,12 +363,12 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         // userspace is capable of removing entries from its tables as well.
         if let Ok(from_fe) = self.get_entry(from) {
             if from_fe.preopen_path.is_some() {
-                return Err(Errno::Notsup);
+                return Err(Error::Notsup);
             }
         }
         if let Ok(to_fe) = self.get_entry(to) {
             if to_fe.preopen_path.is_some() {
-                return Err(Errno::Notsup);
+                return Err(Error::Notsup);
             }
         }
         let fe = self.remove_entry(from)?;
@@ -672,7 +671,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         nsubscriptions: types::Size,
     ) -> Result<types::Size> {
         if u64::from(nsubscriptions) > types::Filesize::max_value() {
-            return Err(Errno::Inval);
+            return Err(Error::Inval);
         }
 
         let mut subscriptions = Vec::new();
@@ -690,7 +689,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         // As mandated by the WASI spec:
         // > If `nsubscriptions` is 0, returns `errno::inval`.
         if subscriptions.is_empty() {
-            return Err(Errno::Inval);
+            return Err(Error::Inval);
         }
 
         for subscription in subscriptions {
@@ -721,7 +720,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                         Err(error) => {
                             events.push(types::Event {
                                 userdata: subscription.userdata,
-                                error,
+                                error: error.into(),
                                 type_: types::Eventtype::FdRead,
                                 fd_readwrite: types::EventFdReadwrite {
                                     nbytes: 0,
@@ -747,7 +746,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                         Err(error) => {
                             events.push(types::Event {
                                 userdata: subscription.userdata,
-                                error,
+                                error: error.into(),
                                 type_: types::Eventtype::FdWrite,
                                 fd_readwrite: types::EventFdReadwrite {
                                     nbytes: 0,
@@ -804,10 +803,8 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
     fn random_get(&self, buf: &GuestPtr<u8>, buf_len: types::Size) -> Result<()> {
         let mut slice = buf.as_array(buf_len).as_slice()?;
-        getrandom::getrandom(&mut *slice).map_err(|err| {
-            error!(error = tracing::field::display(err), "getrandom failure");
-            Errno::Io
-        })
+        getrandom::getrandom(&mut *slice)?;
+        Ok(())
     }
 
     fn sock_recv(

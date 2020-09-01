@@ -1,7 +1,8 @@
 use super::sys_impl::oshandle::RawOsHandle;
 use super::{fd, AsFile};
 use crate::handle::{Handle, HandleRights};
-use crate::wasi::{types, Errno, Result};
+use crate::wasi::types;
+use crate::{Error, Result};
 use std::any::Any;
 use std::cell::Cell;
 use std::fs::File;
@@ -77,10 +78,10 @@ impl Handle for OsFile {
         let fd = self.as_file()?;
         let metadata = fd.metadata()?;
         let current_size = metadata.len();
-        let wanted_size = offset.checked_add(len).ok_or(Errno::TooBig)?;
+        let wanted_size = offset.checked_add(len).ok_or(Error::TooBig)?;
         // This check will be unnecessary when rust-lang/rust#63326 is fixed
         if wanted_size > i64::max_value() as u64 {
-            return Err(Errno::TooBig);
+            return Err(Error::TooBig);
         }
         if wanted_size > current_size {
             fd.set_len(wanted_size)?;

@@ -3,7 +3,7 @@ use super::{fd, AsFile};
 use crate::handle::{Handle, HandleRights};
 use crate::sandboxed_tty_writer::SandboxedTTYWriter;
 use crate::wasi::types::{self, Filetype};
-use crate::wasi::Result;
+use crate::Result;
 use std::any::Any;
 use std::cell::Cell;
 use std::fs::File;

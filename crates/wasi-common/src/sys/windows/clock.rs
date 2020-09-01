@@ -1,4 +1,5 @@
-use crate::wasi::{types, Errno, Result};
+use crate::wasi::types;
+use crate::{Error, Result};
 use cpu_time::{ProcessTime, ThreadTime};
 use lazy_static::lazy_static;
 use std::convert::TryInto;
@@ -83,7 +84,7 @@ fn get_monotonic_time() -> Duration {
 fn get_realtime_time() -> Result<Duration> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|_| Errno::Fault)
+        .map_err(|_| Error::Fault)
 }
 
 fn get_proc_cputime() -> Result<Duration> {

@@ -1,6 +1,7 @@
 use crate::fs::Metadata;
+use crate::wasi::types;
 use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
-use crate::wasi::{types, Result};
+use crate::Result;
 use crate::WasiCtx;
 use std::io;
 
