@@ -1703,6 +1703,7 @@ pub(crate) fn emit(
                 SseOpcode::Psubd => (LegacyPrefixes::_66, 0x0FFA, 2),
                 SseOpcode::Psubq => (LegacyPrefixes::_66, 0x0FFB, 2),
                 SseOpcode::Psubw => (LegacyPrefixes::_66, 0x0FF9, 2),
+                SseOpcode::Pxor => (LegacyPrefixes::_66, 0x0FEF, 2),
                 SseOpcode::Subps => (LegacyPrefixes::None, 0x0F5C, 2),
                 SseOpcode::Subpd => (LegacyPrefixes::_66, 0x0F5C, 2),
                 SseOpcode::Subss => (LegacyPrefixes::_F3, 0x0F5C, 2),
