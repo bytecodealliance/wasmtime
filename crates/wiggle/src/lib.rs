@@ -449,7 +449,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
         self.pointer.0
     }
 
-    /// For slices, returns the length of the slice, in units.
+    /// For slices, returns the length of the slice, in elements.
     pub fn len(&self) -> u32 {
         self.pointer.1
     }
@@ -552,6 +552,9 @@ impl<'a, T> GuestPtr<'a, [T]> {
     }
 
     pub fn get_range(&self, r: std::ops::Range<u32>) -> Option<GuestPtr<'a, [T]>> {
+        if r.end < r.start {
+            return None;
+        }
         let range_length = r.end - r.start;
         if r.start <= self.len() && r.end <= self.len() {
             Some(GuestPtr::new(
