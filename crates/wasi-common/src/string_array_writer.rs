@@ -39,7 +39,7 @@ impl StringArrayWriter for Vec<CString> {
             let len: u32 = bytes.len().try_into()?;
             let elem_buffer = buffer
                 .get_range(cursor..(cursor + len))
-                .ok_or(Error::Overflow)?;
+                .ok_or(Error::Inval)?; // Elements don't fit in buffer provided
             elem_buffer.copy_from_slice(bytes)?;
             head?.write(
                 elem_buffer
