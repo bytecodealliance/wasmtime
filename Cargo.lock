@@ -2419,7 +2419,6 @@ dependencies = [
  "target-lexicon",
  "tempfile",
  "test-programs",
- "tracing",
  "tracing-subscriber",
  "wasi-common",
  "wasmtime",

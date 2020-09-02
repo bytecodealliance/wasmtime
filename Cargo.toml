@@ -51,7 +51,6 @@ tempfile = "3.1.0"
 test-programs = { path = "crates/test-programs" }
 wasmtime-fuzzing = { path = "crates/fuzzing" }
 wasmtime-runtime = { path = "crates/runtime" }
-tracing = "0.1.12"
 tracing-subscriber = "0.2.0"
 
 [build-dependencies]
