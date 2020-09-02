@@ -420,7 +420,10 @@ fn harvest_candidate_lhs(
             _ => ast::AssignmentRhs::Var,
         };
 
-        non_var_count += !matches!(souper_assignment_rhs, ast::AssignmentRhs::Var) as u32;
+        non_var_count += match souper_assignment_rhs {
+            ast::AssignmentRhs::Var => 0,
+            _ => 1,
+        };
         let souper_ty = souper_type_of(&func.dfg, val);
         let souper_val = lhs.assignment(None, souper_ty, souper_assignment_rhs, vec![]);
         let old_value = allocs.ir_to_souper_val.insert(val, souper_val);
