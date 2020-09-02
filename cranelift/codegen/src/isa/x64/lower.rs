@@ -653,6 +653,37 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::shift_r(is_64, shift_kind, count, dst));
         }
 
+        Opcode::Ineg => {
+            // Zero's out a register and then does a packed subtraction
+            // of the input from the register.
+            let src = input_to_reg_mem(ctx, inputs[0]);
+            let dst = output_to_reg(ctx, outputs[0]);
+            let tmp = ctx.alloc_tmp(RegClass::V128, types::I32X4);
+            let ty = ty.unwrap();
+
+            let subtract_opcode = match ty {
+                types::I8X16 => SseOpcode::Psubb,
+                types::I16X8 => SseOpcode::Psubw,
+                types::I32X4 => SseOpcode::Psubd,
+                types::I64X2 => SseOpcode::Psubq,
+                _ => panic!("Unsupported type for Ineg instruction, found {}", ty),
+            };
+
+            // Note we must zero out a tmp instead of using the destination register since
+            // the desitnation could be an alias for the source input register
+            ctx.emit(Inst::xmm_rm_r(
+                SseOpcode::Pxor,
+                RegMem::reg(tmp.to_reg()),
+                tmp,
+            ));
+            ctx.emit(Inst::xmm_rm_r(subtract_opcode, src, tmp));
+            ctx.emit(Inst::xmm_unary_rm_r(
+                SseOpcode::Movapd,
+                RegMem::reg(tmp.to_reg()),
+                dst,
+            ));
+        }
+
         Opcode::Clz => {
             // TODO when the x86 flags have use_lzcnt, we can use LZCNT.
 

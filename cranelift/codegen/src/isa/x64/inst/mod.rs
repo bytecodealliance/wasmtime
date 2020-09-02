@@ -1101,7 +1101,9 @@ impl Inst {
 
             Self::XMM_RM_R { op, src, dst, .. } => {
                 src.to_reg() == Some(dst.to_reg())
-                    && (*op == SseOpcode::Xorps || *op == SseOpcode::Xorpd)
+                    && (*op == SseOpcode::Xorps
+                        || *op == SseOpcode::Xorpd
+                        || *op == SseOpcode::Pxor)
             }
 
             Self::XmmRmRImm { op, src, dst, imm } => {

@@ -412,6 +412,7 @@ pub enum SseOpcode {
     Psubd,
     Psubq,
     Psubw,
+    Pxor,
     Rcpss,
     Roundss,
     Roundsd,
@@ -512,6 +513,7 @@ impl SseOpcode {
             | SseOpcode::Psubd
             | SseOpcode::Psubq
             | SseOpcode::Psubw
+            | SseOpcode::Pxor
             | SseOpcode::Sqrtpd
             | SseOpcode::Sqrtsd
             | SseOpcode::Subpd
@@ -607,6 +609,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Psubd => "psubd",
             SseOpcode::Psubq => "psubq",
             SseOpcode::Psubw => "psubw",
+            SseOpcode::Pxor => "pxor",
             SseOpcode::Rcpss => "rcpss",
             SseOpcode::Roundss => "roundss",
             SseOpcode::Roundsd => "roundsd",
