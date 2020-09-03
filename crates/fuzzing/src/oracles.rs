@@ -16,6 +16,7 @@ use dummy::dummy_imports;
 use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+use std::time::Duration;
 use wasmtime::*;
 use wasmtime_wast::WastContext;
 
@@ -53,7 +54,7 @@ fn log_wat(wat: &str) {
 ///
 /// You can control which compiler is used via passing a `Strategy`.
 pub fn instantiate(wasm: &[u8], strategy: Strategy) {
-    instantiate_with_config(wasm, crate::fuzz_default_config(strategy).unwrap());
+    instantiate_with_config(wasm, crate::fuzz_default_config(strategy).unwrap(), None);
 }
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
@@ -62,11 +63,20 @@ pub fn instantiate(wasm: &[u8], strategy: Strategy) {
 /// The engine will be configured using provided config.
 ///
 /// See also `instantiate` functions.
-pub fn instantiate_with_config(wasm: &[u8], config: Config) {
+pub fn instantiate_with_config(wasm: &[u8], mut config: Config, timeout: Option<Duration>) {
     crate::init_fuzzing();
 
     let engine = Engine::new(&config);
     let store = Store::new(&engine);
+
+    if let Some(timeout) = timeout {
+        config.interruptable(true);
+        let handle = store.interrupt_handle().unwrap();
+        std::thread::spawn(move || {
+            std::thread::sleep(timeout);
+            handle.interrupt();
+        });
+    }
 
     log_wasm(wasm);
     let module = match Module::new(&engine, wasm) {
