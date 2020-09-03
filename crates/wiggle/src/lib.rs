@@ -543,24 +543,36 @@ impl<'a, T> GuestPtr<'a, [T]> {
         GuestPtr::new(self.mem, self.offset_base())
     }
 
-    pub fn get(&self, index: u32) -> Option<GuestPtr<'a, T>> {
+    pub fn get(&self, index: u32) -> Option<GuestPtr<'a, T>>
+    where
+        T: GuestType<'a>,
+    {
         if index < self.len() {
-            Some(GuestPtr::new(self.mem, self.offset_base() + index))
+            Some(
+                self.as_ptr()
+                    .add(index)
+                    .expect("just performed bounds check"),
+            )
         } else {
             None
         }
     }
 
-    pub fn get_range(&self, r: std::ops::Range<u32>) -> Option<GuestPtr<'a, [T]>> {
+    pub fn get_range(&self, r: std::ops::Range<u32>) -> Option<GuestPtr<'a, [T]>>
+    where
+        T: GuestType<'a>,
+    {
         if r.end < r.start {
             return None;
         }
         let range_length = r.end - r.start;
         if r.start <= self.len() && r.end <= self.len() {
-            Some(GuestPtr::new(
-                self.mem,
-                (self.offset_base() + r.start, range_length),
-            ))
+            Some(
+                self.as_ptr()
+                    .add(r.start)
+                    .expect("just performed bounds check")
+                    .as_array(range_length),
+            )
         } else {
             None
         }
