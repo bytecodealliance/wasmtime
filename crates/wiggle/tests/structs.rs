@@ -473,6 +473,7 @@ impl SumArrayExercise {
                     Just(inputs.clone()),
                     HostMemory::byte_slice_strat(
                         inputs.len() as u32,
+                        1,
                         &MemAreas::from([input_struct_loc, output_loc]),
                     ),
                     Just(input_struct_loc.clone()),
