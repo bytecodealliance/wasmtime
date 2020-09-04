@@ -449,7 +449,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
         self.pointer.0
     }
 
-    /// For slices, returns the length of the slice, in units.
+    /// For slices, returns the length of the slice, in elements.
     pub fn len(&self) -> u32 {
         self.pointer.1
     }
@@ -541,6 +541,41 @@ impl<'a, T> GuestPtr<'a, [T]> {
     /// type `T`.
     pub fn as_ptr(&self) -> GuestPtr<'a, T> {
         GuestPtr::new(self.mem, self.offset_base())
+    }
+
+    pub fn get(&self, index: u32) -> Option<GuestPtr<'a, T>>
+    where
+        T: GuestType<'a>,
+    {
+        if index < self.len() {
+            Some(
+                self.as_ptr()
+                    .add(index)
+                    .expect("just performed bounds check"),
+            )
+        } else {
+            None
+        }
+    }
+
+    pub fn get_range(&self, r: std::ops::Range<u32>) -> Option<GuestPtr<'a, [T]>>
+    where
+        T: GuestType<'a>,
+    {
+        if r.end < r.start {
+            return None;
+        }
+        let range_length = r.end - r.start;
+        if r.start <= self.len() && r.end <= self.len() {
+            Some(
+                self.as_ptr()
+                    .add(r.start)
+                    .expect("just performed bounds check")
+                    .as_array(range_length),
+            )
+        } else {
+            None
+        }
     }
 }
 

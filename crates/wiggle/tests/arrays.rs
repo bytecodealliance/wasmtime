@@ -1,6 +1,6 @@
 use proptest::prelude::*;
-use wiggle::{GuestMemory, GuestPtr};
-use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
+use wiggle::{GuestMemory, GuestPtr, GuestType};
+use wiggle_test::{impl_errno, HostMemory, MemArea, MemAreas, WasiCtx};
 
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/arrays.witx"],
@@ -205,6 +205,193 @@ impl PopulateExcusesExcercise {
 proptest! {
     #[test]
     fn populate_excuses(e in PopulateExcusesExcercise::strat()) {
+        e.test()
+    }
+}
+
+impl<'a> array_traversal::ArrayTraversal for WasiCtx<'a> {
+    fn sum_of_element(
+        &self,
+        elements: &GuestPtr<[types::PairInts]>,
+        index: u32,
+    ) -> Result<i32, types::Errno> {
+        let elem_ptr = elements.get(index).ok_or(types::Errno::InvalidArg)?;
+        let pair = elem_ptr.read().map_err(|_| types::Errno::DontWantTo)?;
+        Ok(pair.first.wrapping_add(pair.second))
+    }
+    fn sum_of_elements(
+        &self,
+        elements: &GuestPtr<[types::PairInts]>,
+        start: u32,
+        end: u32,
+    ) -> Result<i32, types::Errno> {
+        let elem_range = elements
+            .get_range(start..end)
+            .ok_or(types::Errno::InvalidArg)?;
+        let mut sum: i32 = 0;
+        for e in elem_range.iter() {
+            let pair = e
+                .map_err(|_| types::Errno::DontWantTo)?
+                .read()
+                .map_err(|_| types::Errno::PhysicallyUnable)?;
+            sum = sum.wrapping_add(pair.first).wrapping_add(pair.second);
+        }
+        Ok(sum)
+    }
+}
+
+impl types::PairInts {
+    pub fn strat() -> BoxedStrategy<Self> {
+        (prop::num::i32::ANY, prop::num::i32::ANY)
+            .prop_map(|(first, second)| types::PairInts { first, second })
+            .boxed()
+    }
+}
+
+#[derive(Debug)]
+struct SumElementsExercise {
+    elements: Vec<types::PairInts>,
+    element_loc: MemArea,
+    return_loc: MemArea,
+    start_ix: u32,
+    end_ix: u32,
+}
+
+impl SumElementsExercise {
+    pub fn strat() -> BoxedStrategy<Self> {
+        (
+            prop::collection::vec(types::PairInts::strat(), 1..256),
+            HostMemory::mem_area_strat(4),
+        )
+            .prop_flat_map(|(elements, return_loc)| {
+                let len = elements.len() as u32;
+                (
+                    Just(elements),
+                    HostMemory::byte_slice_strat(
+                        len * types::PairInts::guest_size(),
+                        types::PairInts::guest_size(),
+                        &MemAreas::from([return_loc]),
+                    ),
+                    Just(return_loc),
+                    0..len,
+                    0..len,
+                )
+            })
+            .prop_map(
+                |(elements, element_loc, return_loc, start_ix, end_ix)| SumElementsExercise {
+                    elements,
+                    element_loc,
+                    return_loc,
+                    start_ix,
+                    end_ix,
+                },
+            )
+            .boxed()
+    }
+    pub fn test(&self) {
+        let ctx = WasiCtx::new();
+        let host_memory = HostMemory::new();
+
+        // Populate array
+        let ptr = host_memory
+            .ptr::<[types::PairInts]>((self.element_loc.ptr, self.elements.len() as u32));
+        for (ptr, val) in ptr.iter().zip(&self.elements) {
+            ptr.expect("should be valid pointer")
+                .write(val.clone())
+                .expect("failed to write value");
+        }
+
+        let res = array_traversal::sum_of_element(
+            &ctx,
+            &host_memory,
+            self.element_loc.ptr as i32,
+            self.elements.len() as i32,
+            self.start_ix as i32,
+            self.return_loc.ptr as i32,
+        );
+        assert_eq!(res, types::Errno::Ok.into(), "sum_of_element errno");
+        let result_ptr = host_memory.ptr::<i32>(self.return_loc.ptr);
+        let result = result_ptr.read().expect("read result");
+
+        let e = self
+            .elements
+            .get(self.start_ix as usize)
+            .expect("start_ix must be in bounds");
+        assert_eq!(result, e.first.wrapping_add(e.second), "sum of element");
+
+        // Off the end of the array:
+        let res = array_traversal::sum_of_element(
+            &ctx,
+            &host_memory,
+            self.element_loc.ptr as i32,
+            self.elements.len() as i32,
+            self.elements.len() as i32,
+            self.return_loc.ptr as i32,
+        );
+        assert_eq!(
+            res,
+            types::Errno::InvalidArg.into(),
+            "out of bounds sum_of_element errno"
+        );
+
+        let res = array_traversal::sum_of_elements(
+            &ctx,
+            &host_memory,
+            self.element_loc.ptr as i32,
+            self.elements.len() as i32,
+            self.start_ix as i32,
+            self.end_ix as i32,
+            self.return_loc.ptr as i32,
+        );
+        if self.start_ix <= self.end_ix {
+            assert_eq!(
+                res,
+                types::Errno::Ok.into(),
+                "expected ok sum_of_elements errno"
+            );
+            let result_ptr = host_memory.ptr::<i32>(self.return_loc.ptr);
+            let result = result_ptr.read().expect("read result");
+
+            let mut expected_sum: i32 = 0;
+            for elem in self
+                .elements
+                .get(self.start_ix as usize..self.end_ix as usize)
+                .unwrap()
+                .iter()
+            {
+                expected_sum = expected_sum
+                    .wrapping_add(elem.first)
+                    .wrapping_add(elem.second);
+            }
+            assert_eq!(result, expected_sum, "sum of elements");
+        } else {
+            assert_eq!(
+                res,
+                types::Errno::InvalidArg.into(),
+                "expected error out-of-bounds sum_of_elements"
+            );
+        }
+
+        // Index an array off the end of the array:
+        let res = array_traversal::sum_of_elements(
+            &ctx,
+            &host_memory,
+            self.element_loc.ptr as i32,
+            self.elements.len() as i32,
+            self.start_ix as i32,
+            self.elements.len() as i32 + 1,
+            self.return_loc.ptr as i32,
+        );
+        assert_eq!(
+            res,
+            types::Errno::InvalidArg.into(),
+            "out of bounds sum_of_elements errno"
+        );
+    }
+}
+proptest! {
+    #[test]
+    fn sum_elements(e in SumElementsExercise::strat()) {
         e.test()
     }
 }

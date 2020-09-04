@@ -102,10 +102,11 @@ impl HostMemory {
         out
     }
 
-    pub fn byte_slice_strat(size: u32, exclude: &MemAreas) -> BoxedStrategy<MemArea> {
+    pub fn byte_slice_strat(size: u32, align: u32, exclude: &MemAreas) -> BoxedStrategy<MemArea> {
         let available: Vec<MemArea> = Self::invert(exclude)
             .iter()
             .flat_map(|a| a.inside(size))
+            .filter(|a| a.ptr % align == 0)
             .collect();
 
         Just(available)
@@ -256,18 +257,18 @@ mod test {
         s2: u32,
         s3: u32,
     ) -> BoxedStrategy<(MemArea, MemArea, MemArea)> {
-        HostMemory::byte_slice_strat(s1, &MemAreas::new())
+        HostMemory::byte_slice_strat(s1, 1, &MemAreas::new())
             .prop_flat_map(move |a1| {
                 (
                     Just(a1),
-                    HostMemory::byte_slice_strat(s2, &MemAreas::from(&[a1])),
+                    HostMemory::byte_slice_strat(s2, 1, &MemAreas::from(&[a1])),
                 )
             })
             .prop_flat_map(move |(a1, a2)| {
                 (
                     Just(a1),
                     Just(a2),
-                    HostMemory::byte_slice_strat(s3, &MemAreas::from(&[a1, a2])),
+                    HostMemory::byte_slice_strat(s3, 1, &MemAreas::from(&[a1, a2])),
                 )
             })
             .boxed()

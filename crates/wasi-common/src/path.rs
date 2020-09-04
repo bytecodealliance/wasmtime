@@ -4,7 +4,6 @@ use crate::wasi::types;
 use crate::{Error, Result};
 use std::path::{Component, Path};
 use std::str;
-use wiggle::GuestPtr;
 
 pub(crate) use crate::sys::path::{from_host, open_rights};
 
@@ -15,15 +14,12 @@ pub(crate) fn get(
     entry: &Entry,
     required_rights: &HandleRights,
     dirflags: types::Lookupflags,
-    path_ptr: &GuestPtr<'_, str>,
+    path: &str,
     needs_final_component: bool,
 ) -> Result<(Box<dyn Handle>, String)> {
     const MAX_SYMLINK_EXPANSIONS: usize = 128;
 
-    // Extract path as &str from guest's memory.
-    let path = path_ptr.as_str()?;
-
-    tracing::trace!(path = &*path);
+    tracing::trace!(path = path);
 
     if path.contains('\0') {
         // if contains NUL, return Ilseq

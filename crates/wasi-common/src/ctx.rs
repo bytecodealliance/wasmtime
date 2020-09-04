@@ -1,21 +1,21 @@
 use crate::entry::{Entry, EntryHandle};
 use crate::fdpool::FdPool;
 use crate::handle::Handle;
+use crate::string_array::{PendingString, StringArray, StringArrayError};
 use crate::sys::osdir::OsDir;
 use crate::sys::stdio::NullDevice;
 use crate::sys::stdio::{Stderr, StderrExt, Stdin, StdinExt, Stdout, StdoutExt};
 use crate::virtfs::{VirtualDir, VirtualDirEntry};
 use crate::wasi::types;
-use crate::{Error, Result};
+use crate::Error;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::ffi::{self, CString, OsString};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::{env, io, string};
+use std::{env, io};
 
 /// Possible errors when `WasiCtxBuilder` fails building
 /// `WasiCtx`.
@@ -24,17 +24,12 @@ pub enum WasiCtxBuilderError {
     /// General I/O error was encountered.
     #[error("general I/O error encountered: {0}")]
     Io(#[from] io::Error),
-    /// Provided sequence of bytes was not a valid UTF-8.
-    #[error("provided sequence is not valid UTF-8: {0}")]
-    InvalidUtf8(#[from] string::FromUtf8Error),
-    /// Provided sequence of bytes was not a valid UTF-16.
-    ///
-    /// This error is expected to only occur on Windows hosts.
-    #[error("provided sequence is not valid UTF-16: {0}")]
-    InvalidUtf16(#[from] string::FromUtf16Error),
-    /// Provided sequence of bytes contained an unexpected NUL byte.
-    #[error("provided sequence contained an unexpected NUL byte")]
-    UnexpectedNul(#[from] ffi::NulError),
+    /// Error constructing arguments
+    #[error("while constructing arguments: {0}")]
+    Args(#[source] StringArrayError),
+    /// Error constructing environment
+    #[error("while constructing environment: {0}")]
+    Env(#[source] StringArrayError),
     /// The root of a VirtualDirEntry tree must be a VirtualDirEntry::Directory.
     #[error("the root of a VirtualDirEntry tree at {} must be a VirtualDirEntry::Directory", .0.display())]
     VirtualDirEntryRootNotADirectory(PathBuf),
@@ -63,51 +58,6 @@ impl std::fmt::Debug for PendingEntry {
     }
 }
 
-#[derive(Debug, Eq, Hash, PartialEq)]
-enum PendingCString {
-    Bytes(Vec<u8>),
-    OsString(OsString),
-}
-
-impl From<Vec<u8>> for PendingCString {
-    fn from(bytes: Vec<u8>) -> Self {
-        Self::Bytes(bytes)
-    }
-}
-
-impl From<OsString> for PendingCString {
-    fn from(s: OsString) -> Self {
-        Self::OsString(s)
-    }
-}
-
-impl PendingCString {
-    fn into_string(self) -> WasiCtxBuilderResult<String> {
-        let res = match self {
-            Self::Bytes(v) => String::from_utf8(v)?,
-            #[cfg(unix)]
-            Self::OsString(s) => {
-                use std::os::unix::ffi::OsStringExt;
-                String::from_utf8(s.into_vec())?
-            }
-            #[cfg(windows)]
-            Self::OsString(s) => {
-                use std::os::windows::ffi::OsStrExt;
-                let bytes: Vec<u16> = s.encode_wide().collect();
-                String::from_utf16(&bytes)?
-            }
-        };
-        Ok(res)
-    }
-
-    /// Create a `CString` containing valid UTF-8.
-    fn into_utf8_cstring(self) -> WasiCtxBuilderResult<CString> {
-        let s = self.into_string()?;
-        let s = CString::new(s)?;
-        Ok(s)
-    }
-}
-
 struct PendingPreopen(Box<dyn FnOnce() -> WasiCtxBuilderResult<Box<dyn Handle>>>);
 
 impl PendingPreopen {
@@ -129,8 +79,8 @@ pub struct WasiCtxBuilder {
     stdout: Option<PendingEntry>,
     stderr: Option<PendingEntry>,
     preopens: Option<Vec<(PathBuf, PendingPreopen)>>,
-    args: Option<Vec<PendingCString>>,
-    env: Option<HashMap<PendingCString, PendingCString>>,
+    args: Option<Vec<PendingString>>,
+    env: Option<HashMap<PendingString, PendingString>>,
 }
 
 impl WasiCtxBuilder {
@@ -179,7 +129,7 @@ impl WasiCtxBuilder {
     pub fn inherit_args(&mut self) -> &mut Self {
         let args = self.args.as_mut().unwrap();
         args.clear();
-        args.extend(env::args_os().map(PendingCString::OsString));
+        args.extend(env::args_os().map(PendingString::OsString));
         self
     }
 
@@ -323,34 +273,13 @@ impl WasiCtxBuilder {
     /// If any of the arguments or environment variables in this builder cannot be converted into
     /// `CString`s, either due to NUL bytes or Unicode conversions, this will fail.
     pub fn build(&mut self) -> WasiCtxBuilderResult<WasiCtx> {
-        // Process arguments and environment variables into `CString`s, failing quickly if they
+        // Process arguments and environment variables into `String`s, failing quickly if they
         // contain any NUL bytes, or if conversion from `OsString` fails.
-        let args = self
-            .args
-            .take()
-            .unwrap()
-            .into_iter()
-            .map(|arg| arg.into_utf8_cstring())
-            .collect::<WasiCtxBuilderResult<Vec<CString>>>()?;
-
-        let env = self
-            .env
-            .take()
-            .unwrap()
-            .into_iter()
-            .map(|(k, v)| {
-                k.into_string().and_then(|mut pair| {
-                    v.into_string().and_then(|v| {
-                        pair.push('=');
-                        pair.push_str(v.as_str());
-                        // We have valid UTF-8, but the keys and values have not yet been checked
-                        // for NULs, so we do a final check here.
-                        let s = CString::new(pair)?;
-                        Ok(s)
-                    })
-                })
-            })
-            .collect::<WasiCtxBuilderResult<Vec<CString>>>()?;
+        let args =
+            StringArray::from_pending_vec(self.args.take().expect("WasiCtxBuilder has args"))
+                .map_err(WasiCtxBuilderError::Args)?;
+        let env = StringArray::from_pending_map(self.env.take().expect("WasiCtxBuilder has env"))
+            .map_err(WasiCtxBuilderError::Env)?;
 
         let mut entries = EntryTable::new();
         // Populate the non-preopen entries.
@@ -440,8 +369,8 @@ impl EntryTable {
 
 pub struct WasiCtx {
     entries: RefCell<EntryTable>,
-    pub(crate) args: Vec<CString>,
-    pub(crate) env: Vec<CString>,
+    pub(crate) args: StringArray,
+    pub(crate) env: StringArray,
 }
 
 impl WasiCtx {
@@ -466,7 +395,7 @@ impl WasiCtx {
     }
 
     /// Get an immutable `Entry` corresponding to the specified raw WASI `fd`.
-    pub(crate) fn get_entry(&self, fd: types::Fd) -> Result<Rc<Entry>> {
+    pub(crate) fn get_entry(&self, fd: types::Fd) -> Result<Rc<Entry>, Error> {
         match self.entries.borrow().get(&fd) {
             Some(entry) => Ok(entry),
             None => Err(Error::Badf),
@@ -477,7 +406,7 @@ impl WasiCtx {
     ///
     /// The `Entry` will automatically get another free raw WASI `fd` assigned. Note that
     /// the two subsequent free raw WASI `fd`s do not have to be stored contiguously.
-    pub(crate) fn insert_entry(&self, entry: Entry) -> Result<types::Fd> {
+    pub(crate) fn insert_entry(&self, entry: Entry) -> Result<types::Fd, Error> {
         self.entries.borrow_mut().insert(entry).ok_or(Error::Mfile)
     }
 
@@ -488,7 +417,17 @@ impl WasiCtx {
     }
 
     /// Remove `Entry` corresponding to the specified raw WASI `fd` from the `WasiCtx` object.
-    pub(crate) fn remove_entry(&self, fd: types::Fd) -> Result<Rc<Entry>> {
+    pub(crate) fn remove_entry(&self, fd: types::Fd) -> Result<Rc<Entry>, Error> {
         self.entries.borrow_mut().remove(fd).ok_or(Error::Badf)
     }
+
+    /*
+    pub(crate) fn args(&self) -> &impl StringArrayWriter {
+        &self.args
+    }
+
+    pub(crate) fn env(&self) -> &impl StringArrayWriter {
+        &self.env
+    }
+    */
 }
