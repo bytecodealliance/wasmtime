@@ -29,7 +29,8 @@ block0:
 
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: ldr x16, 8 ; b 12 ; data 100016
+; nextln: movz w16, #34480
+; nextln: movk w16, #1, LSL #16
 ; nextln: sub sp, sp, x16, UXTX
 ; nextln: mov x0, sp
 ; nextln: mov sp, fp
@@ -68,7 +69,8 @@ block0:
 
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: ldr x16, 8 ; b 12 ; data 100016
+; nextln: movz w16, #34480
+; nextln: movk w16, #1, LSL #16
 ; nextln: sub sp, sp, x16, UXTX
 ; nextln: mov x0, sp
 ; nextln: ldr x0, [x0]
@@ -106,7 +108,8 @@ block0(v0: i64):
 
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: ldr x16, 8 ; b 12 ; data 100016
+; nextln: movz w16, #34480
+; nextln: movk w16, #1, LSL #16
 ; nextln: sub sp, sp, x16, UXTX
 ; nextln: mov x1, sp
 ; nextln: str x0, [x1]

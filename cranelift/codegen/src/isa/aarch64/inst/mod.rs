@@ -45,15 +45,11 @@ pub enum ALUOp {
     Sub64,
     Orr32,
     Orr64,
-    /// NOR
     OrrNot32,
-    /// NOR
     OrrNot64,
     And32,
     And64,
-    /// NAND
     AndNot32,
-    /// NAND
     AndNot64,
     /// XOR (AArch64 calls this "EOR")
     Eor32,
@@ -71,8 +67,6 @@ pub enum ALUOp {
     SubS32,
     /// Sub, setting flags
     SubS64,
-    /// Sub, setting flags, using extended registers
-    SubS64XR,
     /// Signed multiply, high-word result
     SMulH,
     /// Unsigned multiply, high-word result
@@ -1078,12 +1072,6 @@ pub enum Inst {
         rtmp2: Writable<Reg>,
     },
 
-    /// Load an inline constant.
-    LoadConst64 {
-        rd: Writable<Reg>,
-        const_data: u64,
-    },
-
     /// Load an inline symbol reference.
     LoadExtName {
         rd: Writable<Reg>,
@@ -1309,7 +1297,22 @@ impl Inst {
                 mem,
                 srcloc: None,
             },
-            _ => unimplemented!("gen_load({})", ty),
+            _ => {
+                if ty.is_vector() {
+                    let bits = ty_bits(ty);
+                    let rd = into_reg;
+                    let srcloc = None;
+
+                    if bits == 128 {
+                        Inst::FpuLoad128 { rd, mem, srcloc }
+                    } else {
+                        assert_eq!(bits, 64);
+                        Inst::FpuLoad64 { rd, mem, srcloc }
+                    }
+                } else {
+                    unimplemented!("gen_load({})", ty);
+                }
+            }
         }
     }
 
@@ -1346,7 +1349,22 @@ impl Inst {
                 mem,
                 srcloc: None,
             },
-            _ => unimplemented!("gen_store({})", ty),
+            _ => {
+                if ty.is_vector() {
+                    let bits = ty_bits(ty);
+                    let rd = from_reg;
+                    let srcloc = None;
+
+                    if bits == 128 {
+                        Inst::FpuStore128 { rd, mem, srcloc }
+                    } else {
+                        assert_eq!(bits, 64);
+                        Inst::FpuStore64 { rd, mem, srcloc }
+                    }
+                } else {
+                    unimplemented!("gen_store({})", ty);
+                }
+            }
         }
     }
 }
@@ -1736,7 +1754,7 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rtmp1);
             collector.add_def(rtmp2);
         }
-        &Inst::LoadConst64 { rd, .. } | &Inst::LoadExtName { rd, .. } => {
+        &Inst::LoadExtName { rd, .. } => {
             collector.add_def(rd);
         }
         &Inst::LoadAddr { rd, mem: _ } => {
@@ -2427,9 +2445,6 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_def(mapper, rtmp1);
             map_def(mapper, rtmp2);
         }
-        &mut Inst::LoadConst64 { ref mut rd, .. } => {
-            map_def(mapper, rd);
-        }
         &mut Inst::LoadExtName { ref mut rd, .. } => {
             map_def(mapper, rd);
         }
@@ -2632,7 +2647,6 @@ impl Inst {
                 ALUOp::AddS64 => ("adds", OperandSize::Size64),
                 ALUOp::SubS32 => ("subs", OperandSize::Size32),
                 ALUOp::SubS64 => ("subs", OperandSize::Size64),
-                ALUOp::SubS64XR => ("subs", OperandSize::Size64),
                 ALUOp::SMulH => ("smulh", OperandSize::Size64),
                 ALUOp::UMulH => ("umulh", OperandSize::Size64),
                 ALUOp::SDiv64 => ("sdiv", OperandSize::Size64),
@@ -3534,10 +3548,6 @@ impl Inst {
                     rtmp1,
                     info.targets
                 )
-            }
-            &Inst::LoadConst64 { rd, const_data } => {
-                let rd = rd.show_rru(mb_rru);
-                format!("ldr {}, 8 ; b 12 ; data {:?}", rd, const_data)
             }
             &Inst::LoadExtName {
                 rd,

@@ -575,7 +575,7 @@ impl ScalarSize {
             32 => ScalarSize::Size32,
             64 => ScalarSize::Size64,
             128 => ScalarSize::Size128,
-            _ => panic!("Unexpected type width"),
+            w => panic!("Unexpected type width: {}", w),
         }
     }
 
@@ -591,7 +591,7 @@ impl ScalarSize {
             ScalarSize::Size16 => 0b11,
             ScalarSize::Size32 => 0b00,
             ScalarSize::Size64 => 0b01,
-            _ => panic!("Unexpected scalar FP operand size"),
+            _ => panic!("Unexpected scalar FP operand size: {:?}", self),
         }
     }
 }
@@ -612,6 +612,7 @@ impl VectorSize {
     /// Convert from a type into a vector operand size.
     pub fn from_ty(ty: Type) -> VectorSize {
         match ty {
+            B32X4 => VectorSize::Size32x4,
             F32X2 => VectorSize::Size32x2,
             F32X4 => VectorSize::Size32x4,
             F64X2 => VectorSize::Size64x2,
@@ -622,7 +623,7 @@ impl VectorSize {
             I32X2 => VectorSize::Size32x2,
             I32X4 => VectorSize::Size32x4,
             I64X2 => VectorSize::Size64x2,
-            _ => unimplemented!(),
+            _ => unimplemented!("Unsupported type: {}", ty),
         }
     }
 

@@ -105,7 +105,8 @@ block0(v0: i64):
 ; nextln:     add x16, x0, x17, UXTX
 ; nextln:     subs xzr, sp, x16
 ; nextln:     b.hs 8 ; udf
-; nextln:     ldr x16, 8 ; b 12 ; data 400000
+; nextln:     movz w16, #6784
+; nextln:     movk w16, #6, LSL #16
 ; nextln:     sub sp, sp, x16, UXTX
 ; nextln:     mov sp, fp
 ; nextln:     ldp fp, lr, [sp], #16
@@ -154,7 +155,8 @@ block0(v0: i64):
 ; nextln:     add x16, x16, x17, UXTX
 ; nextln:     subs xzr, sp, x16
 ; nextln:     b.hs 8 ; udf
-; nextln:     ldr x16, 8 ; b 12 ; data 400000
+; nextln:     movz w16, #6784
+; nextln:     movk w16, #6, LSL #16
 ; nextln:     sub sp, sp, x16, UXTX
 ; nextln:     mov sp, fp
 ; nextln:     ldp fp, lr, [sp], #16

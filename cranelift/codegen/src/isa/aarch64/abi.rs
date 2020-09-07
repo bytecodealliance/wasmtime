@@ -311,11 +311,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
     fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallVec<[Inst; 2]> {
         let mut insts = SmallVec::new();
-        insts.push(Inst::AluRRR {
-            alu_op: ALUOp::SubS64XR,
+        insts.push(Inst::AluRRRExtend {
+            alu_op: ALUOp::SubS64,
             rd: writable_zero_reg(),
             rn: stack_reg(),
             rm: limit_reg,
+            extendop: ExtendOp::UXTX,
         });
         insts.push(Inst::TrapIf {
             trap_info: (ir::SourceLoc::default(), ir::TrapCode::StackOverflow),
@@ -373,10 +374,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             ret.push(adj_inst);
         } else {
             let tmp = writable_spilltmp_reg();
-            let const_inst = Inst::LoadConst64 {
-                rd: tmp,
-                const_data: amount,
-            };
+            let const_inst = Inst::load_constant(tmp, amount);
             let adj_inst = Inst::AluRRRExtend {
                 alu_op,
                 rd: writable_stack_reg(),
@@ -384,7 +382,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 rm: tmp.to_reg(),
                 extendop: ExtendOp::UXTX,
             };
-            ret.push(const_inst);
+            ret.extend(const_inst);
             ret.push(adj_inst);
         }
         ret
