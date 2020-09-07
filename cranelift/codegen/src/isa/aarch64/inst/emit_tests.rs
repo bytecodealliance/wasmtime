@@ -789,7 +789,7 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AluRRRR {
-            alu_op: ALUOp::MAdd32,
+            alu_op: ALUOp3::MAdd32,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -800,7 +800,7 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRR {
-            alu_op: ALUOp::MAdd64,
+            alu_op: ALUOp3::MAdd64,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -811,7 +811,7 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRR {
-            alu_op: ALUOp::MSub32,
+            alu_op: ALUOp3::MSub32,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -822,7 +822,7 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRR {
-            alu_op: ALUOp::MSub64,
+            alu_op: ALUOp3::MSub64,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
@@ -832,23 +832,21 @@ fn test_aarch64_binemit() {
         "msub x1, x2, x3, x4",
     ));
     insns.push((
-        Inst::AluRRRR {
+        Inst::AluRRR {
             alu_op: ALUOp::SMulH,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
-            ra: zero_reg(),
         },
         "417C439B",
         "smulh x1, x2, x3",
     ));
     insns.push((
-        Inst::AluRRRR {
+        Inst::AluRRR {
             alu_op: ALUOp::UMulH,
             rd: writable_xreg(1),
             rn: xreg(2),
             rm: xreg(3),
-            ra: zero_reg(),
         },
         "417CC39B",
         "umulh x1, x2, x3",
@@ -1654,7 +1652,7 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::Mov {
+        Inst::Mov64 {
             rd: writable_xreg(8),
             rm: xreg(9),
         },

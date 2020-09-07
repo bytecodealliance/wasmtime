@@ -203,7 +203,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
             let ty = ty.unwrap();
             if !ty.is_vector() {
-                let alu_op = choose_32_64(ty, ALUOp::MAdd32, ALUOp::MAdd64);
+                let alu_op = choose_32_64(ty, ALUOp3::MAdd32, ALUOp3::MAdd64);
                 ctx.emit(Inst::AluRRRR {
                     alu_op,
                     rd,
@@ -340,19 +340,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 I64 => {
                     let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
                     let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-                    let ra = zero_reg();
                     let alu_op = if is_signed {
                         ALUOp::SMulH
                     } else {
                         ALUOp::UMulH
                     };
-                    ctx.emit(Inst::AluRRRR {
-                        alu_op,
-                        rd,
-                        rn,
-                        rm,
-                        ra,
-                    });
+                    ctx.emit(Inst::AluRRR { alu_op, rd, rn, rm });
                 }
                 I32 | I16 | I8 => {
                     let narrow_mode = if is_signed {
@@ -364,7 +357,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     let rm = put_input_in_reg(ctx, inputs[1], narrow_mode);
                     let ra = zero_reg();
                     ctx.emit(Inst::AluRRRR {
-                        alu_op: ALUOp::MAdd64,
+                        alu_op: ALUOp3::MAdd64,
                         rd,
                         rn,
                         rm,
@@ -453,7 +446,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 });
 
                 ctx.emit(Inst::AluRRRR {
-                    alu_op: ALUOp::MSub64,
+                    alu_op: ALUOp3::MSub64,
                     rd: rd,
                     rn: rd.to_reg(),
                     rm: rm,

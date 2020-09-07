@@ -496,16 +496,8 @@ impl MachInstEmit for Inst {
                     ALUOp::UDiv64 => 0b10011010_110,
                     ALUOp::RotR32 | ALUOp::Lsr32 | ALUOp::Asr32 | ALUOp::Lsl32 => 0b00011010_110,
                     ALUOp::RotR64 | ALUOp::Lsr64 | ALUOp::Asr64 | ALUOp::Lsl64 => 0b10011010_110,
-
-                    ALUOp::MAdd32
-                    | ALUOp::MAdd64
-                    | ALUOp::MSub32
-                    | ALUOp::MSub64
-                    | ALUOp::SMulH
-                    | ALUOp::UMulH => {
-                        //// RRRR ops.
-                        panic!("Bad ALUOp {:?} in RRR form!", alu_op);
-                    }
+                    ALUOp::SMulH => 0b10011011_010,
+                    ALUOp::UMulH => 0b10011011_110,
                 };
                 let bit15_10 = match alu_op {
                     ALUOp::SDiv64 => 0b000011,
@@ -515,6 +507,7 @@ impl MachInstEmit for Inst {
                     ALUOp::Asr32 | ALUOp::Asr64 => 0b001010,
                     ALUOp::Lsl32 | ALUOp::Lsl64 => 0b001000,
                     ALUOp::SubS64XR => 0b011000,
+                    ALUOp::SMulH | ALUOp::UMulH => 0b011111,
                     _ => 0b000000,
                 };
                 debug_assert_ne!(writable_stack_reg(), rd);
@@ -535,13 +528,10 @@ impl MachInstEmit for Inst {
                 ra,
             } => {
                 let (top11, bit15) = match alu_op {
-                    ALUOp::MAdd32 => (0b0_00_11011_000, 0),
-                    ALUOp::MSub32 => (0b0_00_11011_000, 1),
-                    ALUOp::MAdd64 => (0b1_00_11011_000, 0),
-                    ALUOp::MSub64 => (0b1_00_11011_000, 1),
-                    ALUOp::SMulH => (0b1_00_11011_010, 0),
-                    ALUOp::UMulH => (0b1_00_11011_110, 0),
-                    _ => unimplemented!("{:?}", alu_op),
+                    ALUOp3::MAdd32 => (0b0_00_11011_000, 0),
+                    ALUOp3::MSub32 => (0b0_00_11011_000, 1),
+                    ALUOp3::MAdd64 => (0b1_00_11011_000, 0),
+                    ALUOp3::MSub64 => (0b1_00_11011_000, 1),
                 };
                 sink.put4(enc_arith_rrrr(top11, rm, bit15, ra, rn, rd));
             }
@@ -999,7 +989,7 @@ impl MachInstEmit for Inst {
                     }
                 }
             }
-            &Inst::Mov { rd, rm } => {
+            &Inst::Mov64 { rd, rm } => {
                 assert!(rd.to_reg().get_class() == rm.get_class());
                 assert!(rm.get_class() == RegClass::I64);
 
