@@ -24,6 +24,25 @@ fn check_wasm(wasm_path: &str, directives: &str) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
+fn check_line_program(wasm_path: &str, directives: &str) -> Result<()> {
+    let wasm = read(wasm_path)?;
+    let obj_file = NamedTempFile::new()?;
+    let obj_path = obj_file.path().to_str().unwrap();
+    compile_cranelift(&wasm, None, obj_path)?;
+    let dump = get_dwarfdump(obj_path, DwarfDumpSection::DebugLine)?;
+    let mut builder = CheckerBuilder::new();
+    builder
+        .text(directives)
+        .map_err(|e| format_err!("unable to build checker: {:?}", e))?;
+    let checker = builder.finish();
+    let check = checker
+        .explain(&dump, NO_VARIABLES)
+        .map_err(|e| format_err!("{:?}", e))?;
+    assert!(check.0, "didn't pass check {}", check.1);
+    Ok(())
+}
+
 #[test]
 #[ignore]
 #[cfg(all(
@@ -86,6 +105,26 @@ check:        DW_AT_name	("b")
 check:      DW_TAG_variable
 check:        DW_AT_name	("i")
 check:        DW_AT_decl_line	(10)
+    "##,
+    )
+}
+
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_arch = "x86_64",
+    target_pointer_width = "64"
+))]
+fn test_debug_dwarf5_translate_lines() -> Result<()> {
+    check_line_program(
+        "tests/all/debug/testsuite/fib-wasm-dwarf5.wasm",
+        r##"
+check:   Address            Line   Column File   ISA Discriminator Flags
+check: 0x000000000000013c     15      3      1   0             0
+# The important point is that the following offset must be _after_ the `ret` instruction.
+# FIXME: this +1 increment might vary on other archs.
+nextln: 0x000000000000013d     15      3      1   0             0  end_sequence
     "##,
     )
 }
