@@ -716,20 +716,22 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::SignExtendAlAh => {
-            sink.put1(0x66);
-            sink.put1(0x98);
-        }
-
-        Inst::SignExtendRaxRdx { size } => {
-            match size {
-                2 => sink.put1(0x66),
-                4 => {}
-                8 => sink.put1(0x48),
-                _ => unreachable!(),
+        Inst::SignExtendData { size } => match size {
+            1 => {
+                sink.put1(0x66);
+                sink.put1(0x98);
             }
-            sink.put1(0x99);
-        }
+            2 => {
+                sink.put1(0x66);
+                sink.put1(0x99);
+            }
+            4 => sink.put1(0x99),
+            8 => {
+                sink.put1(0x48);
+                sink.put1(0x99);
+            }
+            _ => unreachable!(),
+        },
 
         Inst::CheckedDivOrRemSeq {
             kind,
@@ -825,10 +827,15 @@ pub(crate) fn emit(
                 sink.bind_label(do_op);
             }
 
+            assert!(
+                *size > 1,
+                "CheckedDivOrRemSeq for i8 is not yet implemented"
+            );
+
             // Fill in the high parts:
             if kind.is_signed() {
                 // sign-extend the sign-bit of rax into rdx, for signed opcodes.
-                let inst = Inst::sign_extend_rax_to_rdx(*size);
+                let inst = Inst::sign_extend_data(*size);
                 inst.emit(sink, flags, state);
             } else {
                 // zero for unsigned opcodes.

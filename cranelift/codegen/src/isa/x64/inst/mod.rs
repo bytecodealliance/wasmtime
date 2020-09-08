@@ -100,11 +100,9 @@ pub enum Inst {
         loc: SourceLoc,
     },
 
-    /// Do a sign-extend based on the sign of the value in al into ah: (cbw)
-    SignExtendAlAh,
-
     /// Do a sign-extend based on the sign of the value in rax into rdx: (cwd cdq cqo)
-    SignExtendRaxRdx {
+    /// or al into ah: (cbw)
+    SignExtendData {
         size: u8, // 1, 2, 4 or 8
     },
 
@@ -577,13 +575,9 @@ impl Inst {
         }
     }
 
-    pub(crate) fn sign_extend_al_to_ah() -> Inst {
-        Inst::SignExtendAlAh
-    }
-
-    pub(crate) fn sign_extend_rax_to_rdx(size: u8) -> Inst {
-        debug_assert!(size == 8 || size == 4 || size == 2);
-        Inst::SignExtendRaxRdx { size }
+    pub(crate) fn sign_extend_data(size: u8) -> Inst {
+        debug_assert!(size == 8 || size == 4 || size == 2 || size == 1);
+        Inst::SignExtendData { size }
     }
 
     pub(crate) fn imm_r(dst_is_64: bool, simm64: u64, dst: Writable<Reg>) -> Inst {
@@ -1267,9 +1261,8 @@ impl ShowWithRRU for Inst {
                 show_ireg_sized(divisor.to_reg(), mb_rru, *size),
             ),
 
-            Inst::SignExtendAlAh => "cbw".into(),
-
-            Inst::SignExtendRaxRdx { size } => match size {
+            Inst::SignExtendData { size } => match size {
+                1 => "cbw",
                 2 => "cwd",
                 4 => "cdq",
                 8 => "cqo",
@@ -1722,13 +1715,14 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
                 collector.add_def(*tmp);
             }
         }
-        Inst::SignExtendAlAh => {
-            collector.add_mod(Writable::from_reg(regs::rax()));
-        }
-        Inst::SignExtendRaxRdx { .. } => {
-            collector.add_use(regs::rax());
-            collector.add_def(Writable::from_reg(regs::rdx()));
-        }
+        Inst::SignExtendData { size } => match size {
+            1 => collector.add_mod(Writable::from_reg(regs::rax())),
+            2 | 4 | 8 => {
+                collector.add_use(regs::rax());
+                collector.add_def(Writable::from_reg(regs::rdx()));
+            }
+            _ => unreachable!(),
+        },
         Inst::UnaryRmR { src, dst, .. } | Inst::XmmUnaryRmR { src, dst, .. } => {
             src.get_regs_as_uses(collector);
             collector.add_def(*dst);
@@ -2029,7 +2023,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
                 map_def(mapper, tmp)
             }
         }
-        Inst::SignExtendAlAh | Inst::SignExtendRaxRdx { .. } => {}
+        Inst::SignExtendData { .. } => {}
         Inst::XmmUnaryRmR {
             ref mut src,
             ref mut dst,
