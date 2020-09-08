@@ -651,7 +651,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     _ => unreachable!(),
                 },
                 types::I32 | types::I64 => (dst_ty.bytes() as u8, input_to_reg(ctx, inputs[0])),
-                _ => unreachable!("{}", dst_ty),
+                _ => unreachable!("unhandled output type for shift/rotates: {}", dst_ty),
             };
 
             let (count, rhs) = if let Some(cst) = ctx.get_input(insn, 1).constant {
