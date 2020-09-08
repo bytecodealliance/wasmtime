@@ -1356,13 +1356,13 @@ fn test_x64_emit() {
 
     // ========================================================
     // cbw
-    insns.push((Inst::sign_extend_al_to_ah(), "6698", "cbw"));
+    insns.push((Inst::sign_extend_data(1), "6698", "cbw"));
 
     // ========================================================
     // cdq family: SignExtendRaxRdx
-    insns.push((Inst::sign_extend_rax_to_rdx(2), "6699", "cwd"));
-    insns.push((Inst::sign_extend_rax_to_rdx(4), "99", "cdq"));
-    insns.push((Inst::sign_extend_rax_to_rdx(8), "4899", "cqo"));
+    insns.push((Inst::sign_extend_data(2), "6699", "cwd"));
+    insns.push((Inst::sign_extend_data(4), "99", "cdq"));
+    insns.push((Inst::sign_extend_data(8), "4899", "cqo"));
 
     // ========================================================
     // Imm_R

@@ -2391,7 +2391,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 if input_ty == types::I8 {
                     if kind.is_signed() {
                         // sign-extend the sign-bit of al into ah, for signed opcodes.
-                        ctx.emit(Inst::sign_extend_al_to_ah());
+                        ctx.emit(Inst::sign_extend_data(1));
                     } else {
                         ctx.emit(Inst::movzx_rm_r(
                             ExtMode::BL,
@@ -2403,7 +2403,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 } else {
                     if kind.is_signed() {
                         // sign-extend the sign-bit of rax into rdx, for signed opcodes.
-                        ctx.emit(Inst::sign_extend_rax_to_rdx(size));
+                        ctx.emit(Inst::sign_extend_data(size));
                     } else {
                         // zero for unsigned opcodes.
                         ctx.emit(Inst::imm_r(
