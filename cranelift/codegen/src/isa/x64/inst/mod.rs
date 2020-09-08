@@ -1,5 +1,4 @@
-//! This module defines x86_64-specific machine instruction types.an explanation of what it's
-//! doing.
+//! This module defines x86_64-specific machine instruction types.
 #![allow(dead_code)]
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
