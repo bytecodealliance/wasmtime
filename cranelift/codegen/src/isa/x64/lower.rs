@@ -79,7 +79,29 @@ fn lowerinput_to_reg(ctx: Ctx, input: LowerInput) -> Reg {
 /// Put the given input into a register, and mark it as used (side-effect).
 fn put_input_in_reg(ctx: Ctx, spec: InsnInput) -> Reg {
     let input = ctx.get_input(spec.insn, spec.input);
-    lowerinput_to_reg(ctx, input)
+
+    if let Some(c) = input.constant {
+        // Generate constants fresh at each use to minimize long-range register pressure.
+        let ty = ctx.input_ty(spec.insn, spec.input);
+        let from_bits = ty_bits(ty);
+        let masked = if from_bits < 64 {
+            c & ((1u64 << from_bits) - 1)
+        } else {
+            c
+        };
+
+        let cst_copy = ctx.alloc_tmp(Inst::rc_for_type(ty).unwrap(), ty);
+        for inst in Inst::gen_constant(cst_copy, masked, ty, |reg_class, ty| {
+            ctx.alloc_tmp(reg_class, ty)
+        })
+        .into_iter()
+        {
+            ctx.emit(inst);
+        }
+        cst_copy.to_reg()
+    } else {
+        lowerinput_to_reg(ctx, input)
+    }
 }
 
 /// An extension specification for `extend_input_to_reg`.
