@@ -1092,7 +1092,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Uload16x4
         | Opcode::Sload32x2
         | Opcode::Uload32x2 => {
-            let off = ldst_offset(ctx.data(insn)).unwrap();
+            let off = ctx.data(insn).load_store_offset().unwrap();
             let elem_ty = match op {
                 Opcode::Sload8 | Opcode::Uload8 | Opcode::Sload8Complex | Opcode::Uload8Complex => {
                     I8
@@ -1177,7 +1177,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Istore8Complex
         | Opcode::Istore16Complex
         | Opcode::Istore32Complex => {
-            let off = ldst_offset(ctx.data(insn)).unwrap();
+            let off = ctx.data(insn).load_store_offset().unwrap();
             let elem_ty = match op {
                 Opcode::Istore8 | Opcode::Istore8Complex => I8,
                 Opcode::Istore16 | Opcode::Istore16Complex => I16,
@@ -1247,7 +1247,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::gen_move(Writable::from_reg(xreg(25)), r_addr, I64));
             ctx.emit(Inst::gen_move(Writable::from_reg(xreg(26)), r_arg2, I64));
             // Now the AtomicRMW insn itself
-            let op = inst_common::AtomicRmwOp::from(inst_atomic_rmw_op(ctx.data(insn)).unwrap());
+            let op = inst_common::AtomicRmwOp::from(ctx.data(insn).atomic_rmw_op().unwrap());
             ctx.emit(Inst::AtomicRMW {
                 ty: ty_access,
                 op,
@@ -1366,7 +1366,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let cond = if let Some(icmp_insn) =
                 maybe_input_insn_via_conv(ctx, flag_input, Opcode::Icmp, Opcode::Bint)
             {
-                let condcode = inst_condcode(ctx.data(icmp_insn)).unwrap();
+                let condcode = ctx.data(icmp_insn).cond_code().unwrap();
                 let cond = lower_condcode(condcode);
                 let is_signed = condcode_is_signed(condcode);
                 lower_icmp_or_ifcmp_to_flags(ctx, icmp_insn, is_signed);
@@ -1374,7 +1374,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else if let Some(fcmp_insn) =
                 maybe_input_insn_via_conv(ctx, flag_input, Opcode::Fcmp, Opcode::Bint)
             {
-                let condcode = inst_fp_condcode(ctx.data(fcmp_insn)).unwrap();
+                let condcode = ctx.data(fcmp_insn).fp_cond_code().unwrap();
                 let cond = lower_fp_condcode(condcode);
                 lower_fcmp_or_ffcmp_to_flags(ctx, fcmp_insn);
                 cond
@@ -1413,7 +1413,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Selectif | Opcode::SelectifSpectreGuard => {
-            let condcode = inst_condcode(ctx.data(insn)).unwrap();
+            let condcode = ctx.data(insn).cond_code().unwrap();
             let cond = lower_condcode(condcode);
             let is_signed = condcode_is_signed(condcode);
             // Verification ensures that the input is always a
@@ -1485,7 +1485,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Trueif => {
-            let condcode = inst_condcode(ctx.data(insn)).unwrap();
+            let condcode = ctx.data(insn).cond_code().unwrap();
             let cond = lower_condcode(condcode);
             let is_signed = condcode_is_signed(condcode);
             // Verification ensures that the input is always a
@@ -1498,7 +1498,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Trueff => {
-            let condcode = inst_fp_condcode(ctx.data(insn)).unwrap();
+            let condcode = ctx.data(insn).fp_cond_code().unwrap();
             let cond = lower_fp_condcode(condcode);
             let ffcmp_insn = maybe_input_insn(ctx, inputs[0], Opcode::Ffcmp).unwrap();
             lower_fcmp_or_ffcmp_to_flags(ctx, ffcmp_insn);
@@ -1688,7 +1688,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Icmp => {
-            let condcode = inst_condcode(ctx.data(insn)).unwrap();
+            let condcode = ctx.data(insn).cond_code().unwrap();
             let cond = lower_condcode(condcode);
             let is_signed = condcode_is_signed(condcode);
             let rd = get_output_reg(ctx, outputs[0]);
@@ -1715,7 +1715,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fcmp => {
-            let condcode = inst_fp_condcode(ctx.data(insn)).unwrap();
+            let condcode = ctx.data(insn).fp_cond_code().unwrap();
             let cond = lower_fp_condcode(condcode);
             let ty = ctx.input_ty(insn, 0);
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
@@ -1748,15 +1748,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Trap | Opcode::ResumableTrap => {
-            let trap_info = (ctx.srcloc(insn), inst_trapcode(ctx.data(insn)).unwrap());
+            let trap_info = (ctx.srcloc(insn), ctx.data(insn).trap_code().unwrap());
             ctx.emit_safepoint(Inst::Udf { trap_info });
         }
 
         Opcode::Trapif | Opcode::Trapff => {
-            let trap_info = (ctx.srcloc(insn), inst_trapcode(ctx.data(insn)).unwrap());
+            let trap_info = (ctx.srcloc(insn), ctx.data(insn).trap_code().unwrap());
 
             let cond = if maybe_input_insn(ctx, inputs[0], Opcode::IaddIfcout).is_some() {
-                let condcode = inst_condcode(ctx.data(insn)).unwrap();
+                let condcode = ctx.data(insn).cond_code().unwrap();
                 let cond = lower_condcode(condcode);
                 // The flags must not have been clobbered by any other
                 // instruction between the iadd_ifcout and this instruction, as
@@ -1764,7 +1764,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // flags here.
                 cond
             } else if op == Opcode::Trapif {
-                let condcode = inst_condcode(ctx.data(insn)).unwrap();
+                let condcode = ctx.data(insn).cond_code().unwrap();
                 let cond = lower_condcode(condcode);
                 let is_signed = condcode_is_signed(condcode);
 
@@ -1773,7 +1773,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 lower_icmp_or_ifcmp_to_flags(ctx, ifcmp_insn, is_signed);
                 cond
             } else {
-                let condcode = inst_fp_condcode(ctx.data(insn)).unwrap();
+                let condcode = ctx.data(insn).fp_cond_code().unwrap();
                 let cond = lower_fp_condcode(condcode);
 
                 // Verification ensures that the input is always a
@@ -2826,7 +2826,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                 if let Some(icmp_insn) =
                     maybe_input_insn_via_conv(ctx, flag_input, Opcode::Icmp, Opcode::Bint)
                 {
-                    let condcode = inst_condcode(ctx.data(icmp_insn)).unwrap();
+                    let condcode = ctx.data(icmp_insn).cond_code().unwrap();
                     let cond = lower_condcode(condcode);
                     let is_signed = condcode_is_signed(condcode);
                     let negated = op0 == Opcode::Brz;
@@ -2841,7 +2841,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                 } else if let Some(fcmp_insn) =
                     maybe_input_insn_via_conv(ctx, flag_input, Opcode::Fcmp, Opcode::Bint)
                 {
-                    let condcode = inst_fp_condcode(ctx.data(fcmp_insn)).unwrap();
+                    let condcode = ctx.data(fcmp_insn).fp_cond_code().unwrap();
                     let cond = lower_fp_condcode(condcode);
                     let negated = op0 == Opcode::Brz;
                     let cond = if negated { cond.invert() } else { cond };
@@ -2874,7 +2874,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                 }
             }
             Opcode::BrIcmp => {
-                let condcode = inst_condcode(ctx.data(branches[0])).unwrap();
+                let condcode = ctx.data(branches[0]).cond_code().unwrap();
                 let cond = lower_condcode(condcode);
                 let kind = CondBrKind::Cond(cond);
 
@@ -2915,7 +2915,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
             }
 
             Opcode::Brif => {
-                let condcode = inst_condcode(ctx.data(branches[0])).unwrap();
+                let condcode = ctx.data(branches[0]).cond_code().unwrap();
                 let cond = lower_condcode(condcode);
                 let kind = CondBrKind::Cond(cond);
 
@@ -2945,7 +2945,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
             }
 
             Opcode::Brff => {
-                let condcode = inst_fp_condcode(ctx.data(branches[0])).unwrap();
+                let condcode = ctx.data(branches[0]).fp_cond_code().unwrap();
                 let cond = lower_fp_condcode(condcode);
                 let kind = CondBrKind::Cond(cond);
                 let flag_input = InsnInput {

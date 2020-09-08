@@ -2,10 +2,9 @@
 
 #![allow(non_snake_case)]
 
-use crate::ir;
 use crate::ir::{
-    condcodes::FloatCC, condcodes::IntCC, types, AbiParam, ArgumentPurpose, ExternalName,
-    Inst as IRInst, InstructionData, LibCall, Opcode, Signature, TrapCode, Type,
+    condcodes::FloatCC, types, AbiParam, ArgumentPurpose, ExternalName, Inst as IRInst,
+    InstructionData, LibCall, Opcode, Signature, Type,
 };
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
@@ -56,58 +55,6 @@ fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
 
 fn iri_to_u64_imm(ctx: Ctx, inst: IRInst) -> Option<u64> {
     ctx.get_constant(inst)
-}
-
-fn inst_trapcode(data: &InstructionData) -> Option<TrapCode> {
-    match data {
-        &InstructionData::Trap { code, .. }
-        | &InstructionData::CondTrap { code, .. }
-        | &InstructionData::IntCondTrap { code, .. }
-        | &InstructionData::FloatCondTrap { code, .. } => Some(code),
-        _ => None,
-    }
-}
-
-fn inst_condcode(data: &InstructionData) -> IntCC {
-    match data {
-        &InstructionData::IntCond { cond, .. }
-        | &InstructionData::BranchIcmp { cond, .. }
-        | &InstructionData::IntCompare { cond, .. }
-        | &InstructionData::IntCondTrap { cond, .. }
-        | &InstructionData::BranchInt { cond, .. }
-        | &InstructionData::IntSelect { cond, .. }
-        | &InstructionData::IntCompareImm { cond, .. } => cond,
-        _ => panic!("inst_condcode(x64): unhandled: {:?}", data),
-    }
-}
-
-fn inst_fp_condcode(data: &InstructionData) -> FloatCC {
-    match data {
-        &InstructionData::BranchFloat { cond, .. }
-        | &InstructionData::FloatCompare { cond, .. }
-        | &InstructionData::FloatCond { cond, .. }
-        | &InstructionData::FloatCondTrap { cond, .. } => cond,
-        _ => panic!("inst_fp_condcode(x64): unhandled: {:?}", data),
-    }
-}
-
-fn inst_atomic_rmw_op(data: &InstructionData) -> Option<ir::AtomicRmwOp> {
-    match data {
-        &InstructionData::AtomicRmw { op, .. } => Some(op),
-        _ => None,
-    }
-}
-
-fn ldst_offset(data: &InstructionData) -> Option<i32> {
-    match data {
-        &InstructionData::Load { offset, .. }
-        | &InstructionData::StackLoad { offset, .. }
-        | &InstructionData::LoadComplex { offset, .. }
-        | &InstructionData::Store { offset, .. }
-        | &InstructionData::StackStore { offset, .. }
-        | &InstructionData::StoreComplex { offset, .. } => Some(offset.into()),
-        _ => None,
-    }
 }
 
 /// Returns whether the given specified `input` is a result produced by an instruction with Opcode
@@ -1135,14 +1082,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Icmp => {
             emit_cmp(ctx, insn);
 
-            let condcode = inst_condcode(ctx.data(insn));
+            let condcode = ctx.data(insn).cond_code().unwrap();
             let cc = CC::from_intcc(condcode);
             let dst = get_output_reg(ctx, outputs[0]);
             ctx.emit(Inst::setcc(cc, dst));
         }
 
         Opcode::Fcmp => {
-            let cond_code = inst_fp_condcode(ctx.data(insn));
+            let cond_code = ctx.data(insn).fp_cond_code().unwrap();
             let input_ty = ctx.input_ty(insn, 0);
             if !input_ty.is_vector() {
                 // Unordered is returned by setting ZF, PF, CF <- 111
@@ -1290,16 +1237,16 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Trap | Opcode::ResumableTrap => {
-            let trap_info = (ctx.srcloc(insn), inst_trapcode(ctx.data(insn)).unwrap());
+            let trap_info = (ctx.srcloc(insn), ctx.data(insn).trap_code().unwrap());
             ctx.emit_safepoint(Inst::Ud2 { trap_info });
         }
 
         Opcode::Trapif | Opcode::Trapff => {
             let srcloc = ctx.srcloc(insn);
-            let trap_code = inst_trapcode(ctx.data(insn)).unwrap();
+            let trap_code = ctx.data(insn).trap_code().unwrap();
 
             if matches_input(ctx, inputs[0], Opcode::IaddIfcout).is_some() {
-                let cond_code = inst_condcode(ctx.data(insn));
+                let cond_code = ctx.data(insn).cond_code().unwrap();
                 // The flags must not have been clobbered by any other instruction between the
                 // iadd_ifcout and this instruction, as verified by the CLIF validator; so we can
                 // simply use the flags here.
@@ -1311,7 +1258,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     cc,
                 });
             } else if op == Opcode::Trapif {
-                let cond_code = inst_condcode(ctx.data(insn));
+                let cond_code = ctx.data(insn).cond_code().unwrap();
                 let cc = CC::from_intcc(cond_code);
 
                 // Verification ensures that the input is always a single-def ifcmp.
@@ -1324,7 +1271,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     cc,
                 });
             } else {
-                let cond_code = inst_fp_condcode(ctx.data(insn));
+                let cond_code = ctx.data(insn).fp_cond_code().unwrap();
 
                 // Verification ensures that the input is always a single-def ffcmp.
                 let ffcmp = matches_input(ctx, inputs[0], Opcode::Ffcmp).unwrap();
@@ -1822,7 +1769,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Sload16Complex
         | Opcode::Uload32Complex
         | Opcode::Sload32Complex => {
-            let offset = ldst_offset(ctx.data(insn)).unwrap();
+            let offset = ctx.data(insn).load_store_offset().unwrap();
 
             let elem_ty = match op {
                 Opcode::Sload8 | Opcode::Uload8 | Opcode::Sload8Complex | Opcode::Uload8Complex => {
@@ -1944,7 +1891,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Istore8Complex
         | Opcode::Istore16Complex
         | Opcode::Istore32Complex => {
-            let offset = ldst_offset(ctx.data(insn)).unwrap();
+            let offset = ctx.data(insn).load_store_offset().unwrap();
 
             let elem_ty = match op {
                 Opcode::Istore8 | Opcode::Istore8Complex => types::I8,
@@ -2036,7 +1983,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ));
 
             // Now the AtomicRmwSeq (pseudo-) instruction itself
-            let op = inst_common::AtomicRmwOp::from(inst_atomic_rmw_op(ctx.data(insn)).unwrap());
+            let op = inst_common::AtomicRmwOp::from(ctx.data(insn).atomic_rmw_op().unwrap());
             ctx.emit(Inst::AtomicRmwSeq {
                 ty: ty_access,
                 op,
@@ -2181,7 +2128,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Select => {
             let flag_input = inputs[0];
             if let Some(fcmp) = matches_input(ctx, flag_input, Opcode::Fcmp) {
-                let cond_code = inst_fp_condcode(ctx.data(fcmp));
+                let cond_code = ctx.data(fcmp).fp_cond_code().unwrap();
 
                 // we request inversion of Equal to NotEqual here: taking LHS if equal would mean
                 // take it if both CC::NP and CC::Z are set, the conjunction of which can't be
@@ -2240,7 +2187,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 let cc = if let Some(icmp) = matches_input(ctx, flag_input, Opcode::Icmp) {
                     emit_cmp(ctx, icmp);
-                    let cond_code = inst_condcode(ctx.data(icmp));
+                    let cond_code = ctx.data(icmp).cond_code().unwrap();
                     CC::from_intcc(cond_code)
                 } else {
                     // The input is a boolean value, compare it against zero.
@@ -2286,7 +2233,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             debug_assert_eq!(ctx.data(cmp_insn).opcode(), Opcode::Ifcmp);
             emit_cmp(ctx, cmp_insn);
 
-            let cc = CC::from_intcc(inst_condcode(ctx.data(insn)));
+            let cc = CC::from_intcc(ctx.data(insn).cond_code().unwrap());
 
             let lhs = input_to_reg_mem(ctx, inputs[1]);
             let rhs = input_to_reg(ctx, inputs[2]);
@@ -2558,7 +2505,7 @@ impl LowerBackend for X64Backend {
                     if let Some(icmp) = matches_input(ctx, flag_input, Opcode::Icmp) {
                         emit_cmp(ctx, icmp);
 
-                        let cond_code = inst_condcode(ctx.data(icmp));
+                        let cond_code = ctx.data(icmp).cond_code().unwrap();
                         let cond_code = if op0 == Opcode::Brz {
                             cond_code.inverse()
                         } else {
@@ -2568,7 +2515,7 @@ impl LowerBackend for X64Backend {
                         let cc = CC::from_intcc(cond_code);
                         ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
                     } else if let Some(fcmp) = matches_input(ctx, flag_input, Opcode::Fcmp) {
-                        let cond_code = inst_fp_condcode(ctx.data(fcmp));
+                        let cond_code = ctx.data(fcmp).fp_cond_code().unwrap();
                         let cond_code = if op0 == Opcode::Brz {
                             cond_code.inverse()
                         } else {
@@ -2626,7 +2573,7 @@ impl LowerBackend for X64Backend {
                                 input: 1,
                             },
                         );
-                        let cc = CC::from_intcc(inst_condcode(ctx.data(branches[0])));
+                        let cc = CC::from_intcc(ctx.data(branches[0]).cond_code().unwrap());
                         let byte_size = src_ty.bytes() as u8;
                         // Cranelift's icmp semantics want to compare lhs - rhs, while Intel gives
                         // us dst - src at the machine instruction level, so invert operands.
