@@ -73,14 +73,6 @@ pub enum ALUOp {
     SubS64,
     /// Sub, setting flags, using extended registers
     SubS64XR,
-    /// Multiply-add
-    MAdd32,
-    /// Multiply-add
-    MAdd64,
-    /// Multiply-sub
-    MSub32,
-    /// Multiply-sub
-    MSub64,
     /// Signed multiply, high-word result
     SMulH,
     /// Unsigned multiply, high-word result
@@ -95,6 +87,19 @@ pub enum ALUOp {
     Asr64,
     Lsl32,
     Lsl64,
+}
+
+/// An ALU operation with three arguments.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ALUOp3 {
+    /// Multiply-add
+    MAdd32,
+    /// Multiply-add
+    MAdd64,
+    /// Multiply-sub
+    MSub32,
+    /// Multiply-sub
+    MSub64,
 }
 
 /// A floating-point unit (FPU) operation with one arg.
@@ -433,7 +438,7 @@ pub enum Inst {
     },
     /// An ALU operation with three register sources and a register destination.
     AluRRRR {
-        alu_op: ALUOp,
+        alu_op: ALUOp3,
         rd: Writable<Reg>,
         rn: Reg,
         rm: Reg,
@@ -571,7 +576,7 @@ pub enum Inst {
     /// A MOV instruction. These are encoded as ORR's (AluRRR form) but we
     /// keep them separate at the `Inst` level for better pretty-printing
     /// and faster `is_move()` logic.
-    Mov {
+    Mov64 {
         rd: Writable<Reg>,
         rm: Reg,
     },
@@ -1149,7 +1154,7 @@ impl Inst {
     pub fn mov(to_reg: Writable<Reg>, from_reg: Reg) -> Inst {
         assert!(to_reg.to_reg().get_class() == from_reg.get_class());
         if from_reg.get_class() == RegClass::I64 {
-            Inst::Mov {
+            Inst::Mov64 {
                 rd: to_reg,
                 rm: from_reg,
             }
@@ -1458,7 +1463,7 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rt2);
             pairmemarg_regs(mem, collector);
         }
-        &Inst::Mov { rd, rm } => {
+        &Inst::Mov64 { rd, rm } => {
             collector.add_def(rd);
             collector.add_use(rm);
         }
@@ -1991,7 +1996,7 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_def(mapper, rt2);
             map_pairmem(mapper, mem);
         }
-        &mut Inst::Mov {
+        &mut Inst::Mov64 {
             ref mut rd,
             ref mut rm,
         } => {
@@ -2456,7 +2461,7 @@ impl MachInst for Inst {
 
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
         match self {
-            &Inst::Mov { rd, rm } => Some((rd, rm)),
+            &Inst::Mov64 { rd, rm } => Some((rd, rm)),
             &Inst::FpuMove64 { rd, rn } => Some((rd, rn)),
             &Inst::FpuMove128 { rd, rn } => Some((rd, rn)),
             _ => None,
@@ -2628,10 +2633,6 @@ impl Inst {
                 ALUOp::SubS32 => ("subs", OperandSize::Size32),
                 ALUOp::SubS64 => ("subs", OperandSize::Size64),
                 ALUOp::SubS64XR => ("subs", OperandSize::Size64),
-                ALUOp::MAdd32 => ("madd", OperandSize::Size32),
-                ALUOp::MAdd64 => ("madd", OperandSize::Size64),
-                ALUOp::MSub32 => ("msub", OperandSize::Size32),
-                ALUOp::MSub64 => ("msub", OperandSize::Size64),
                 ALUOp::SMulH => ("smulh", OperandSize::Size64),
                 ALUOp::UMulH => ("umulh", OperandSize::Size64),
                 ALUOp::SDiv64 => ("sdiv", OperandSize::Size64),
@@ -2670,19 +2671,18 @@ impl Inst {
                 rm,
                 ra,
             } => {
-                let (op, size) = op_name_size(alu_op);
-                let four_args = alu_op != ALUOp::SMulH && alu_op != ALUOp::UMulH;
+                let (op, size) = match alu_op {
+                    ALUOp3::MAdd32 => ("madd", OperandSize::Size32),
+                    ALUOp3::MAdd64 => ("madd", OperandSize::Size64),
+                    ALUOp3::MSub32 => ("msub", OperandSize::Size32),
+                    ALUOp3::MSub64 => ("msub", OperandSize::Size64),
+                };
                 let rd = show_ireg_sized(rd.to_reg(), mb_rru, size);
                 let rn = show_ireg_sized(rn, mb_rru, size);
                 let rm = show_ireg_sized(rm, mb_rru, size);
                 let ra = show_ireg_sized(ra, mb_rru, size);
-                if four_args {
-                    format!("{} {}, {}, {}, {}", op, rd, rn, rm, ra)
-                } else {
-                    // smulh and umulh have Ra "hard-wired" to the zero register
-                    // and the canonical assembly form has only three regs.
-                    format!("{} {}, {}, {}", op, rd, rn, rm)
-                }
+
+                format!("{} {}, {}, {}, {}", op, rd, rn, rm, ra)
             }
             &Inst::AluRRImm12 {
                 alu_op,
@@ -2878,7 +2878,7 @@ impl Inst {
                 let mem = mem.show_rru_sized(mb_rru, /* size = */ 8);
                 format!("ldp {}, {}, {}", rt, rt2, mem)
             }
-            &Inst::Mov { rd, rm } => {
+            &Inst::Mov64 { rd, rm } => {
                 let rd = rd.to_reg().show_rru(mb_rru);
                 let rm = rm.show_rru(mb_rru);
                 format!("mov {}, {}", rd, rm)
