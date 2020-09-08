@@ -213,3 +213,42 @@ block0:
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
+
+function %f() -> i32 {
+block0:
+  v0 = iconst.i32 0xfffffff7
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movn w0, #8
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xfffffff7
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movn w0, #8
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xfffffffffffffff7
+  return v0
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movn x0, #8
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret

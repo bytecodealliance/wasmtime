@@ -1370,8 +1370,8 @@ fn test_aarch64_binemit() {
             mem: AMode::FPOffset(1048576 + 1, I8), // 2^20 + 1
             srcloc: None,
         },
-        "300080D21002A0F2B063308B010240F9",
-        "movz x16, #1 ; movk x16, #16, LSL #16 ; add x16, fp, x16, UXTX ; ldr x1, [x16]",
+        "300080521002A072B063308B010240F9",
+        "movz w16, #1 ; movk w16, #16, LSL #16 ; add x16, fp, x16, UXTX ; ldr x1, [x16]",
     ));
 
     insns.push((
@@ -1674,6 +1674,7 @@ fn test_aarch64_binemit() {
         Inst::MovZ {
             rd: writable_xreg(8),
             imm: MoveWideConst::maybe_from_u64(0x0000_0000_0000_ffff).unwrap(),
+            size: OperandSize::Size64,
         },
         "E8FF9FD2",
         "movz x8, #65535",
@@ -1682,6 +1683,7 @@ fn test_aarch64_binemit() {
         Inst::MovZ {
             rd: writable_xreg(8),
             imm: MoveWideConst::maybe_from_u64(0x0000_0000_ffff_0000).unwrap(),
+            size: OperandSize::Size64,
         },
         "E8FFBFD2",
         "movz x8, #65535, LSL #16",
@@ -1690,6 +1692,7 @@ fn test_aarch64_binemit() {
         Inst::MovZ {
             rd: writable_xreg(8),
             imm: MoveWideConst::maybe_from_u64(0x0000_ffff_0000_0000).unwrap(),
+            size: OperandSize::Size64,
         },
         "E8FFDFD2",
         "movz x8, #65535, LSL #32",
@@ -1698,15 +1701,26 @@ fn test_aarch64_binemit() {
         Inst::MovZ {
             rd: writable_xreg(8),
             imm: MoveWideConst::maybe_from_u64(0xffff_0000_0000_0000).unwrap(),
+            size: OperandSize::Size64,
         },
         "E8FFFFD2",
         "movz x8, #65535, LSL #48",
+    ));
+    insns.push((
+        Inst::MovZ {
+            rd: writable_xreg(8),
+            imm: MoveWideConst::maybe_from_u64(0x0000_0000_ffff_0000).unwrap(),
+            size: OperandSize::Size32,
+        },
+        "E8FFBF52",
+        "movz w8, #65535, LSL #16",
     ));
 
     insns.push((
         Inst::MovN {
             rd: writable_xreg(8),
             imm: MoveWideConst::maybe_from_u64(0x0000_0000_0000_ffff).unwrap(),
+            size: OperandSize::Size64,
         },
         "E8FF9F92",
         "movn x8, #65535",
@@ -1715,6 +1729,7 @@ fn test_aarch64_binemit() {
         Inst::MovN {
             rd: writable_xreg(8),
             imm: MoveWideConst::maybe_from_u64(0x0000_0000_ffff_0000).unwrap(),
+            size: OperandSize::Size64,
         },
         "E8FFBF92",
         "movn x8, #65535, LSL #16",
@@ -1723,6 +1738,7 @@ fn test_aarch64_binemit() {
         Inst::MovN {
             rd: writable_xreg(8),
             imm: MoveWideConst::maybe_from_u64(0x0000_ffff_0000_0000).unwrap(),
+            size: OperandSize::Size64,
         },
         "E8FFDF92",
         "movn x8, #65535, LSL #32",
@@ -1731,15 +1747,26 @@ fn test_aarch64_binemit() {
         Inst::MovN {
             rd: writable_xreg(8),
             imm: MoveWideConst::maybe_from_u64(0xffff_0000_0000_0000).unwrap(),
+            size: OperandSize::Size64,
         },
         "E8FFFF92",
         "movn x8, #65535, LSL #48",
+    ));
+    insns.push((
+        Inst::MovN {
+            rd: writable_xreg(8),
+            imm: MoveWideConst::maybe_from_u64(0x0000_0000_0000_ffff).unwrap(),
+            size: OperandSize::Size32,
+        },
+        "E8FF9F12",
+        "movn w8, #65535",
     ));
 
     insns.push((
         Inst::MovK {
             rd: writable_xreg(12),
             imm: MoveWideConst::maybe_from_u64(0x0000_0000_0000_0000).unwrap(),
+            size: OperandSize::Size64,
         },
         "0C0080F2",
         "movk x12, #0",
@@ -1748,6 +1775,7 @@ fn test_aarch64_binemit() {
         Inst::MovK {
             rd: writable_xreg(19),
             imm: MoveWideConst::maybe_with_shift(0x0000, 16).unwrap(),
+            size: OperandSize::Size64,
         },
         "1300A0F2",
         "movk x19, #0, LSL #16",
@@ -1756,6 +1784,7 @@ fn test_aarch64_binemit() {
         Inst::MovK {
             rd: writable_xreg(3),
             imm: MoveWideConst::maybe_from_u64(0x0000_0000_0000_ffff).unwrap(),
+            size: OperandSize::Size64,
         },
         "E3FF9FF2",
         "movk x3, #65535",
@@ -1764,6 +1793,7 @@ fn test_aarch64_binemit() {
         Inst::MovK {
             rd: writable_xreg(8),
             imm: MoveWideConst::maybe_from_u64(0x0000_0000_ffff_0000).unwrap(),
+            size: OperandSize::Size64,
         },
         "E8FFBFF2",
         "movk x8, #65535, LSL #16",
@@ -1772,6 +1802,7 @@ fn test_aarch64_binemit() {
         Inst::MovK {
             rd: writable_xreg(8),
             imm: MoveWideConst::maybe_from_u64(0x0000_ffff_0000_0000).unwrap(),
+            size: OperandSize::Size64,
         },
         "E8FFDFF2",
         "movk x8, #65535, LSL #32",
@@ -1780,6 +1811,7 @@ fn test_aarch64_binemit() {
         Inst::MovK {
             rd: writable_xreg(8),
             imm: MoveWideConst::maybe_from_u64(0xffff_0000_0000_0000).unwrap(),
+            size: OperandSize::Size64,
         },
         "E8FFFFF2",
         "movk x8, #65535, LSL #48",

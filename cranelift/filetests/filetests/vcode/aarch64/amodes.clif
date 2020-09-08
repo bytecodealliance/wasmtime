@@ -230,8 +230,8 @@ block0(v0: i64):
 
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: movz x1, #51712
-; nextln: movk x1, #15258, LSL #16
+; nextln: movz w1, #51712
+; nextln: movk w1, #15258, LSL #16
 ; nextln: add x0, x1, x0
 ; nextln: ldr w0, [x0]
 ; nextln: mov sp, fp
