@@ -56,7 +56,7 @@ pub enum Inst {
         dst: Writable<Reg>,
     },
 
-    /// Bitwise negation
+    /// Bitwise not
     Not {
         size: u8, // 1, 2, 4 or 8
         src: Writable<Reg>,
