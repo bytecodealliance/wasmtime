@@ -1001,6 +1001,14 @@ pub enum OperandSize {
 }
 
 impl OperandSize {
+    pub(crate) fn from_bytes(num_bytes: u32) -> Self {
+        match num_bytes {
+            1 | 2 | 4 => OperandSize::Size32,
+            8 => OperandSize::Size64,
+            _ => unreachable!(),
+        }
+    }
+
     pub(crate) fn to_bytes(&self) -> u8 {
         match self {
             Self::Size32 => 4,

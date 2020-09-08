@@ -791,7 +791,11 @@ pub(crate) fn emit(
                     // x % -1 = 0; put the result into the destination, $rdx.
                     let done_label = sink.get_label();
 
-                    let inst = Inst::imm_r(*size == 8, 0, Writable::from_reg(regs::rdx()));
+                    let inst = Inst::imm(
+                        OperandSize::from_bytes(*size as u32),
+                        0,
+                        Writable::from_reg(regs::rdx()),
+                    );
                     inst.emit(sink, flags, state);
 
                     let inst = Inst::jmp_known(BranchTarget::Label(done_label));
@@ -803,7 +807,7 @@ pub(crate) fn emit(
                     if *size == 8 {
                         let tmp = tmp.expect("temporary for i64 sdiv");
 
-                        let inst = Inst::imm_r(true, 0x8000000000000000, tmp);
+                        let inst = Inst::imm(OperandSize::Size64, 0x8000000000000000, tmp);
                         inst.emit(sink, flags, state);
 
                         let inst = Inst::cmp_rmi_r(8, RegMemImm::reg(tmp.to_reg()), regs::rax());
@@ -839,7 +843,7 @@ pub(crate) fn emit(
                 inst.emit(sink, flags, state);
             } else {
                 // zero for unsigned opcodes.
-                let inst = Inst::imm_r(true /* is_64 */, 0, Writable::from_reg(regs::rdx()));
+                let inst = Inst::imm(OperandSize::Size64, 0, Writable::from_reg(regs::rdx()));
                 inst.emit(sink, flags, state);
             }
 
@@ -854,18 +858,30 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::Imm_R {
+        Inst::Imm {
             dst_is_64,
             simm64,
             dst,
         } => {
             let enc_dst = int_reg_enc(dst.to_reg());
             if *dst_is_64 {
-                // FIXME JRS 2020Feb10: also use the 32-bit case here when
-                // possible
-                sink.put1(0x48 | ((enc_dst >> 3) & 1));
-                sink.put1(0xB8 | (enc_dst & 7));
-                sink.put8(*simm64);
+                if low32_will_sign_extend_to_64(*simm64) {
+                    // Sign-extended move imm32.
+                    emit_std_enc_enc(
+                        sink,
+                        LegacyPrefixes::None,
+                        0xC7,
+                        1,
+                        /* subopcode */ 0,
+                        enc_dst,
+                        RexFlags::set_w(),
+                    );
+                    sink.put4(*simm64 as u32);
+                } else {
+                    sink.put1(0x48 | ((enc_dst >> 3) & 1));
+                    sink.put1(0xB8 | (enc_dst & 7));
+                    sink.put8(*simm64);
+                }
             } else {
                 if ((enc_dst >> 3) & 1) == 1 {
                     sink.put1(0x41);
@@ -2223,10 +2239,10 @@ pub(crate) fn emit(
 
                 // Otherwise, put INT_MAX.
                 if *dst_size == OperandSize::Size64 {
-                    let inst = Inst::imm_r(true, 0x7fffffffffffffff, *dst);
+                    let inst = Inst::imm(OperandSize::Size64, 0x7fffffffffffffff, *dst);
                     inst.emit(sink, flags, state);
                 } else {
-                    let inst = Inst::imm_r(false, 0x7fffffff, *dst);
+                    let inst = Inst::imm(OperandSize::Size32, 0x7fffffff, *dst);
                     inst.emit(sink, flags, state);
                 }
             } else {
@@ -2248,7 +2264,7 @@ pub(crate) fn emit(
                 match *src_size {
                     OperandSize::Size32 => {
                         let cst = Ieee32::pow2(output_bits - 1).neg().bits();
-                        let inst = Inst::imm32_r_unchecked(cst as u64, *tmp_gpr);
+                        let inst = Inst::imm(OperandSize::Size32, cst as u64, *tmp_gpr);
                         inst.emit(sink, flags, state);
                     }
                     OperandSize::Size64 => {
@@ -2260,7 +2276,7 @@ pub(crate) fn emit(
                         } else {
                             Ieee64::pow2(output_bits - 1).neg()
                         };
-                        let inst = Inst::imm_r(true, cst.bits(), *tmp_gpr);
+                        let inst = Inst::imm(OperandSize::Size64, cst.bits(), *tmp_gpr);
                         inst.emit(sink, flags, state);
                     }
                 }
@@ -2362,15 +2378,14 @@ pub(crate) fn emit(
 
             let done = sink.get_label();
 
-            if *src_size == OperandSize::Size64 {
-                let cst = Ieee64::pow2(dst_size.to_bits() - 1).bits();
-                let inst = Inst::imm_r(true, cst, *tmp_gpr);
-                inst.emit(sink, flags, state);
+            let cst = if *src_size == OperandSize::Size64 {
+                Ieee64::pow2(dst_size.to_bits() - 1).bits()
             } else {
-                let cst = Ieee32::pow2(dst_size.to_bits() - 1).bits() as u64;
-                let inst = Inst::imm32_r_unchecked(cst, *tmp_gpr);
-                inst.emit(sink, flags, state);
-            }
+                Ieee32::pow2(dst_size.to_bits() - 1).bits() as u64
+            };
+
+            let inst = Inst::imm(*src_size, cst, *tmp_gpr);
+            inst.emit(sink, flags, state);
 
             let inst =
                 Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, *tmp_xmm);
@@ -2454,8 +2469,8 @@ pub(crate) fn emit(
             if *is_saturating {
                 // The input was "large" (>= 2**(width -1)), so the only way to get an integer
                 // overflow is because the input was too large: saturate to the max value.
-                let inst = Inst::imm_r(
-                    true,
+                let inst = Inst::imm(
+                    OperandSize::Size64,
                     if *dst_size == OperandSize::Size64 {
                         u64::max_value()
                     } else {
@@ -2475,7 +2490,7 @@ pub(crate) fn emit(
             sink.bind_label(next_is_large);
 
             if *dst_size == OperandSize::Size64 {
-                let inst = Inst::imm_r(true, 1 << 63, *tmp_gpr);
+                let inst = Inst::imm(OperandSize::Size64, 1 << 63, *tmp_gpr);
                 inst.emit(sink, flags, state);
 
                 let inst = Inst::alu_rmi_r(

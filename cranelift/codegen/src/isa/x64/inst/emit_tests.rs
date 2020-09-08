@@ -1368,43 +1368,43 @@ fn test_x64_emit() {
     // Imm_R
     //
     insns.push((
-        Inst::imm_r(false, 1234567, w_r14),
+        Inst::imm(OperandSize::Size32, 1234567, w_r14),
         "41BE87D61200",
         "movl    $1234567, %r14d",
     ));
     insns.push((
-        Inst::imm_r(false, -126i64 as u64, w_r14),
+        Inst::imm(OperandSize::Size32, -126i64 as u64, w_r14),
         "41BE82FFFFFF",
         "movl    $-126, %r14d",
     ));
     insns.push((
-        Inst::imm_r(true, 1234567898765, w_r14),
+        Inst::imm(OperandSize::Size64, 1234567898765, w_r14),
         "49BE8D26FB711F010000",
         "movabsq $1234567898765, %r14",
     ));
     insns.push((
-        Inst::imm_r(true, -126i64 as u64, w_r14),
-        "49BE82FFFFFFFFFFFFFF",
+        Inst::imm(OperandSize::Size64, -126i64 as u64, w_r14),
+        "49C7C682FFFFFF",
         "movabsq $-126, %r14",
     ));
     insns.push((
-        Inst::imm_r(false, 1234567, w_rcx),
+        Inst::imm(OperandSize::Size32, 1234567, w_rcx),
         "B987D61200",
         "movl    $1234567, %ecx",
     ));
     insns.push((
-        Inst::imm_r(false, -126i64 as u64, w_rcx),
+        Inst::imm(OperandSize::Size32, -126i64 as u64, w_rcx),
         "B982FFFFFF",
         "movl    $-126, %ecx",
     ));
     insns.push((
-        Inst::imm_r(true, 1234567898765, w_rsi),
+        Inst::imm(OperandSize::Size64, 1234567898765, w_rsi),
         "48BE8D26FB711F010000",
         "movabsq $1234567898765, %rsi",
     ));
     insns.push((
-        Inst::imm_r(true, -126i64 as u64, w_rbx),
-        "48BB82FFFFFFFFFFFFFF",
+        Inst::imm(OperandSize::Size64, -126i64 as u64, w_rbx),
+        "48C7C382FFFFFF",
         "movabsq $-126, %rbx",
     ));
 
