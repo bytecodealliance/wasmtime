@@ -107,26 +107,6 @@ pub(crate) enum ResultRegImmShift {
 }
 
 //============================================================================
-// Instruction input "slots".
-//
-// We use these types to refer to operand numbers, and result numbers, together
-// with the associated instruction, in a type-safe way.
-
-/// Identifier for a particular input of an instruction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct InsnInput {
-    pub(crate) insn: IRInst,
-    pub(crate) input: usize,
-}
-
-/// Identifier for a particular output of an instruction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct InsnOutput {
-    pub(crate) insn: IRInst,
-    pub(crate) output: usize,
-}
-
-//============================================================================
 // Lowering: convert instruction inputs to forms that we can use.
 
 /// Lower an instruction input to a 64-bit constant, if possible.
@@ -189,11 +169,6 @@ impl NarrowValueMode {
             NarrowValueMode::ZeroExtend64 | NarrowValueMode::SignExtend64 => false,
         }
     }
-}
-
-/// Allocate a register for an instruction output and return it.
-pub(crate) fn get_output_reg<C: LowerCtx<I = Inst>>(ctx: &mut C, out: InsnOutput) -> Writable<Reg> {
-    ctx.get_output(out.insn, out.output)
 }
 
 /// Lower an instruction input to a reg.

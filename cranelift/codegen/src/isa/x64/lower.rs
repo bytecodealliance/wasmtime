@@ -110,20 +110,6 @@ fn ldst_offset(data: &InstructionData) -> Option<i32> {
     }
 }
 
-/// Identifier for a particular input of an instruction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct InsnInput {
-    insn: IRInst,
-    input: usize,
-}
-
-/// Identifier for a particular output of an instruction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct InsnOutput {
-    insn: IRInst,
-    output: usize,
-}
-
 /// Returns whether the given specified `input` is a result produced by an instruction with Opcode
 /// `op`.
 // TODO investigate failures with checking against the result index.
@@ -254,10 +240,6 @@ fn input_to_reg_mem_imm(ctx: Ctx, spec: InsnInput) -> RegMemImm {
             RegMem::Mem { addr } => RegMemImm::mem(addr),
         },
     }
-}
-
-fn get_output_reg(ctx: Ctx, spec: InsnOutput) -> Writable<Reg> {
-    ctx.get_output(spec.insn, spec.output)
 }
 
 fn emit_cmp(ctx: Ctx, insn: IRInst) {
