@@ -53,10 +53,6 @@ fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
     }
 }
 
-fn iri_to_u64_imm(ctx: Ctx, inst: IRInst) -> Option<u64> {
-    ctx.get_constant(inst)
-}
-
 /// Returns whether the given specified `input` is a result produced by an instruction with Opcode
 /// `op`.
 // TODO investigate failures with checking against the result index.
@@ -454,13 +450,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
     match op {
         Opcode::Iconst | Opcode::Bconst | Opcode::Null => {
-            if let Some(w64) = iri_to_u64_imm(ctx, insn) {
-                let dst_is_64 = w64 > 0x7fffffff;
-                let dst = get_output_reg(ctx, outputs[0]);
-                ctx.emit(Inst::imm_r(dst_is_64, w64, dst));
-            } else {
-                unimplemented!();
-            }
+            let w64 = ctx
+                .get_constant(insn)
+                .expect("constant value for iconst et al");
+            let dst_is_64 = w64 > 0x7fffffff;
+            let dst = get_output_reg(ctx, outputs[0]);
+            ctx.emit(Inst::imm_r(dst_is_64, w64, dst));
         }
 
         Opcode::Iadd
