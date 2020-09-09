@@ -1,0 +1,15 @@
+#![no_main]
+
+use libfuzzer_sys::fuzz_target;
+use std::time::Duration;
+use wasm_smith::Module;
+use wasmtime::Strategy;
+use wasmtime_fuzzing::oracles;
+
+fuzz_target!(|module: MaybeInvalidModule| {
+    oracles::instantiate_with_config(
+        &module.to_bytes(),
+        wasmtime_fuzzing::fuzz_default_config(Strategy::Auto),
+        Some(Duration::from_secs(20)),
+    );
+});

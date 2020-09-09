@@ -26,5 +26,5 @@ fn instantiate_module_that_compiled_to_x64_has_register_32() {
     let mut config = Config::new();
     config.debug_info(true);
     let data = wat::parse_str(include_str!("./fuzzing/issue694.wat")).unwrap();
-    oracles::instantiate_with_config(&data, config);
+    oracles::instantiate_with_config(&data, config, None);
 }
