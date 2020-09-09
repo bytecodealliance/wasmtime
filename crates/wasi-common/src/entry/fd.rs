@@ -1,6 +1,7 @@
 use super::Entry;
 use crate::handle::{
-    Advice, Fdflags, Fdstat, Filesize, Filestat, Fstflags, HandleRights, Rights, Size,
+    Advice, Fdflags, Fdstat, Filesize, Filestat, Filetype, Fstflags, HandleRights, Prestat,
+    PrestatDir, Rights, Size,
 };
 use crate::sched::Timestamp;
 use crate::{Error, Result};
@@ -85,12 +86,55 @@ impl Entry {
             .filestat_set_times(atim, mtim, fst_flags)
     }
 
-    pub fn fd_pread(&self, iovs: &mut [std::io::IoSliceMut], offset: Filesize) -> Result<Size> {
+    pub fn fd_pread(
+        &self,
+        mut iovs: Vec<wiggle::GuestSlice<u8>>,
+        offset: Filesize,
+    ) -> Result<Size> {
+        use std::ops::DerefMut;
         let required_rights = HandleRights::from_base(Rights::FD_READ);
+        let mut io_slices = iovs
+            .iter_mut()
+            .map(|s| std::io::IoSliceMut::new(s.deref_mut()))
+            .collect::<Vec<std::io::IoSliceMut>>();
         let host_nread = self
             .as_handle(&required_rights)?
-            .read_vectored(iovs)?
+            .preadv(&mut io_slices, offset)?
             .try_into()?;
         Ok(host_nread)
+    }
+
+    pub fn fd_prestat_get(&self) -> Result<Prestat> {
+        // TODO: should we validate any rights here?
+        let po_path = self.preopen_path.as_ref().ok_or(Error::Notsup)?;
+        if self.get_file_type() != Filetype::Directory {
+            return Err(Error::Notdir);
+        }
+
+        let path = crate::path::from_host(po_path.as_os_str())?;
+        let prestat = PrestatDir {
+            pr_name_len: path.len().try_into()?,
+        };
+        Ok(Prestat::Dir(prestat))
+    }
+
+    pub fn fd_prestat_dir_name(&self, path: &mut [u8]) -> Result<()> {
+        // TODO: should we validate any rights here?
+        let po_path = self.preopen_path.as_ref().ok_or(Error::Notsup)?;
+        if self.get_file_type() != Filetype::Directory {
+            return Err(Error::Notdir);
+        }
+
+        let host_path = crate::path::from_host(po_path.as_os_str())?;
+        let host_path = host_path.as_bytes();
+        let host_path_len = host_path.len();
+
+        if host_path_len > path.len() {
+            return Err(Error::Nametoolong);
+        }
+
+        path[..host_path_len].copy_from_slice(host_path);
+
+        Ok(())
     }
 }

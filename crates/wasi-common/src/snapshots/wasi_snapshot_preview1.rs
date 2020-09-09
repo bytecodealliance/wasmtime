@@ -8,7 +8,7 @@ use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
 use crate::{path, Error, Result, WasiCtx};
 use std::convert::TryInto;
 use std::io::{self, SeekFrom};
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use tracing::{debug, trace};
 use wiggle::{GuestPtr, GuestSlice};
 
@@ -123,10 +123,8 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         iovs: &types::IovecArray<'_>,
         offset: types::Filesize,
     ) -> Result<types::Size> {
-        // TODO: translating IovecArray into something that can deref to &mut [IoSliceMut] needs to
-        // be a library function. Used here and in fd_read. Similar deal in fd_pwrite/fd_write.
-        // Will need to duplicate the library impl for each snapshot's IovecArray type.
-
+        // Rather than expose the details of our IovecArray to the Entry, it accepts a
+        // Vec<GuestSlice<u8>>
         let mut guest_slices: Vec<GuestSlice<'_, u8>> = Vec::new();
         for iov_ptr in iovs.iter() {
             let iov_ptr = iov_ptr?;
@@ -134,39 +132,11 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             guest_slices.push(iov.buf.as_array(iov.buf_len).as_slice()?);
         }
 
-        let required_rights =
-            HandleRights::from_base(types::Rights::FD_READ | types::Rights::FD_SEEK);
-        let entry = self.get_entry(fd)?;
-        if offset > i64::max_value() as u64 {
-            return Err(Error::Io);
-        }
-
-        let host_nread = {
-            let mut buf = guest_slices
-                .iter_mut()
-                .map(|s| io::IoSliceMut::new(&mut *s))
-                .collect::<Vec<io::IoSliceMut<'_>>>();
-            entry
-                .as_handle(&required_rights)?
-                .preadv(&mut buf, offset)?
-                .try_into()?
-        };
-        Ok(host_nread)
+        self.get_entry(fd)?.fd_pread(guest_slices, offset)
     }
 
     fn fd_prestat_get(&self, fd: types::Fd) -> Result<types::Prestat> {
-        // TODO: should we validate any rights here?
-        let entry = self.get_entry(fd)?;
-        let po_path = entry.preopen_path.as_ref().ok_or(Error::Notsup)?;
-        if entry.get_file_type() != types::Filetype::Directory {
-            return Err(Error::Notdir);
-        }
-
-        let path = path::from_host(po_path.as_os_str())?;
-        let prestat = types::PrestatDir {
-            pr_name_len: path.len().try_into()?,
-        };
-        Ok(types::Prestat::Dir(prestat))
+        self.get_entry(fd)?.fd_prestat_get()
     }
 
     fn fd_prestat_dir_name(
@@ -175,26 +145,9 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         path: &GuestPtr<u8>,
         path_len: types::Size,
     ) -> Result<()> {
-        // TODO: should we validate any rights here?
         let entry = self.get_entry(fd)?;
-        let po_path = entry.preopen_path.as_ref().ok_or(Error::Notsup)?;
-        if entry.get_file_type() != types::Filetype::Directory {
-            return Err(Error::Notdir);
-        }
-
-        let host_path = path::from_host(po_path.as_os_str())?;
-        let host_path_len = host_path.len().try_into()?;
-
-        if host_path_len > path_len {
-            return Err(Error::Nametoolong);
-        }
-
-        trace!("     | path='{}'", host_path);
-
-        path.as_array(host_path_len)
-            .copy_from_slice(host_path.as_bytes())?;
-
-        Ok(())
+        let mut path = path.as_array(path_len).as_slice()?;
+        entry.fd_prestat_dir_name(path.deref_mut())
     }
 
     fn fd_pwrite(
