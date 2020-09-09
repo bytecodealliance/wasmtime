@@ -6,6 +6,7 @@ use crate::handle::{
 use crate::sched::Timestamp;
 use crate::{Error, Result};
 use std::convert::TryInto;
+use std::ops::{Deref, DerefMut};
 
 impl Entry {
     pub fn fd_advise(&self, offset: Filesize, len: Filesize, advice: Advice) -> Result<()> {
@@ -91,7 +92,6 @@ impl Entry {
         mut iovs: Vec<wiggle::GuestSlice<u8>>,
         offset: Filesize,
     ) -> Result<Size> {
-        use std::ops::DerefMut;
         let required_rights = HandleRights::from_base(Rights::FD_READ);
         let mut io_slices = iovs
             .iter_mut()
@@ -136,5 +136,34 @@ impl Entry {
         path[..host_path_len].copy_from_slice(host_path);
 
         Ok(())
+    }
+
+    pub fn fd_pwrite(&self, iovs: Vec<wiggle::GuestSlice<u8>>, offset: Filesize) -> Result<Size> {
+        if offset > i64::max_value() as u64 {
+            return Err(Error::Io);
+        }
+        let required_rights = HandleRights::from_base(Rights::FD_WRITE | Rights::FD_SEEK);
+        let io_slices = iovs
+            .iter()
+            .map(|s| std::io::IoSlice::new(s.deref()))
+            .collect::<Vec<std::io::IoSlice>>();
+        let host_nread = self
+            .as_handle(&required_rights)?
+            .pwritev(&io_slices, offset)?
+            .try_into()?;
+        Ok(host_nread)
+    }
+
+    pub fn fd_read(&self, mut iovs: Vec<wiggle::GuestSlice<u8>>) -> Result<Size> {
+        let required_rights = HandleRights::from_base(Rights::FD_READ);
+        let mut io_slices = iovs
+            .iter_mut()
+            .map(|s| std::io::IoSliceMut::new(s.deref_mut()))
+            .collect::<Vec<std::io::IoSliceMut>>();
+        let host_nread = self
+            .as_handle(&required_rights)?
+            .read_vectored(&mut io_slices)?
+            .try_into()?;
+        Ok(host_nread)
     }
 }

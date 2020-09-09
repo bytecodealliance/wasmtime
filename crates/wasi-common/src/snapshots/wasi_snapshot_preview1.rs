@@ -123,6 +123,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         iovs: &types::IovecArray<'_>,
         offset: types::Filesize,
     ) -> Result<types::Size> {
+        let entry = self.get_entry(fd)?;
         // Rather than expose the details of our IovecArray to the Entry, it accepts a
         // Vec<GuestSlice<u8>>
         let mut guest_slices: Vec<GuestSlice<'_, u8>> = Vec::new();
@@ -132,7 +133,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             guest_slices.push(iov.buf.as_array(iov.buf_len).as_slice()?);
         }
 
-        self.get_entry(fd)?.fd_pread(guest_slices, offset)
+        entry.fd_pread(guest_slices, offset)
     }
 
     fn fd_prestat_get(&self, fd: types::Fd) -> Result<types::Prestat> {
@@ -163,23 +164,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             guest_slices.push(ciov.buf.as_array(ciov.buf_len).as_slice()?);
         }
 
-        let required_rights =
-            HandleRights::from_base(types::Rights::FD_WRITE | types::Rights::FD_SEEK);
-        let entry = self.get_entry(fd)?;
-
-        if offset > i64::max_value() as u64 {
-            return Err(Error::Io);
-        }
-
-        let host_nwritten = {
-            let buf: Vec<io::IoSlice> =
-                guest_slices.iter().map(|s| io::IoSlice::new(&*s)).collect();
-            entry
-                .as_handle(&required_rights)?
-                .pwritev(&buf, offset)?
-                .try_into()?
-        };
-        Ok(host_nwritten)
+        self.get_entry(fd)?.fd_pwrite(guest_slices, offset)
     }
 
     fn fd_read(&self, fd: types::Fd, iovs: &types::IovecArray<'_>) -> Result<types::Size> {
@@ -190,20 +175,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             guest_slices.push(iov.buf.as_array(iov.buf_len).as_slice()?);
         }
 
-        let required_rights = HandleRights::from_base(types::Rights::FD_READ);
-        let entry = self.get_entry(fd)?;
-        let host_nread = {
-            let mut slices: Vec<io::IoSliceMut> = guest_slices
-                .iter_mut()
-                .map(|s| io::IoSliceMut::new(&mut *s))
-                .collect();
-            entry
-                .as_handle(&required_rights)?
-                .read_vectored(&mut slices)?
-                .try_into()?
-        };
-
-        Ok(host_nread)
+        self.get_entry(fd)?.fd_read(guest_slices)
     }
 
     fn fd_readdir(
