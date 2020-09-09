@@ -2,10 +2,9 @@
 
 #![allow(non_snake_case)]
 
-use crate::ir;
 use crate::ir::{
-    condcodes::FloatCC, condcodes::IntCC, types, AbiParam, ArgumentPurpose, ExternalName,
-    Inst as IRInst, InstructionData, LibCall, Opcode, Signature, TrapCode, Type,
+    condcodes::FloatCC, types, AbiParam, ArgumentPurpose, ExternalName, Inst as IRInst,
+    InstructionData, LibCall, Opcode, Signature, Type,
 };
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
@@ -54,76 +53,6 @@ fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
     }
 }
 
-fn iri_to_u64_imm(ctx: Ctx, inst: IRInst) -> Option<u64> {
-    ctx.get_constant(inst)
-}
-
-fn inst_trapcode(data: &InstructionData) -> Option<TrapCode> {
-    match data {
-        &InstructionData::Trap { code, .. }
-        | &InstructionData::CondTrap { code, .. }
-        | &InstructionData::IntCondTrap { code, .. }
-        | &InstructionData::FloatCondTrap { code, .. } => Some(code),
-        _ => None,
-    }
-}
-
-fn inst_condcode(data: &InstructionData) -> IntCC {
-    match data {
-        &InstructionData::IntCond { cond, .. }
-        | &InstructionData::BranchIcmp { cond, .. }
-        | &InstructionData::IntCompare { cond, .. }
-        | &InstructionData::IntCondTrap { cond, .. }
-        | &InstructionData::BranchInt { cond, .. }
-        | &InstructionData::IntSelect { cond, .. }
-        | &InstructionData::IntCompareImm { cond, .. } => cond,
-        _ => panic!("inst_condcode(x64): unhandled: {:?}", data),
-    }
-}
-
-fn inst_fp_condcode(data: &InstructionData) -> FloatCC {
-    match data {
-        &InstructionData::BranchFloat { cond, .. }
-        | &InstructionData::FloatCompare { cond, .. }
-        | &InstructionData::FloatCond { cond, .. }
-        | &InstructionData::FloatCondTrap { cond, .. } => cond,
-        _ => panic!("inst_fp_condcode(x64): unhandled: {:?}", data),
-    }
-}
-
-fn inst_atomic_rmw_op(data: &InstructionData) -> Option<ir::AtomicRmwOp> {
-    match data {
-        &InstructionData::AtomicRmw { op, .. } => Some(op),
-        _ => None,
-    }
-}
-
-fn ldst_offset(data: &InstructionData) -> Option<i32> {
-    match data {
-        &InstructionData::Load { offset, .. }
-        | &InstructionData::StackLoad { offset, .. }
-        | &InstructionData::LoadComplex { offset, .. }
-        | &InstructionData::Store { offset, .. }
-        | &InstructionData::StackStore { offset, .. }
-        | &InstructionData::StoreComplex { offset, .. } => Some(offset.into()),
-        _ => None,
-    }
-}
-
-/// Identifier for a particular input of an instruction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct InsnInput {
-    insn: IRInst,
-    input: usize,
-}
-
-/// Identifier for a particular output of an instruction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct InsnOutput {
-    insn: IRInst,
-    output: usize,
-}
-
 /// Returns whether the given specified `input` is a result produced by an instruction with Opcode
 /// `op`.
 // TODO investigate failures with checking against the result index.
@@ -148,7 +77,7 @@ fn lowerinput_to_reg(ctx: Ctx, input: LowerInput) -> Reg {
 }
 
 /// Put the given input into a register, and mark it as used (side-effect).
-fn input_to_reg(ctx: Ctx, spec: InsnInput) -> Reg {
+fn put_input_in_reg(ctx: Ctx, spec: InsnInput) -> Reg {
     let input = ctx.get_input(spec.insn, spec.input);
     lowerinput_to_reg(ctx, input)
 }
@@ -178,8 +107,8 @@ fn extend_input_to_reg(ctx: Ctx, spec: InsnInput, ext_spec: ExtSpec) -> Reg {
     };
 
     let ext_mode = match (input_size, requested_size) {
-        (a, b) if a == b => return input_to_reg(ctx, spec),
-        (1, 8) => return input_to_reg(ctx, spec),
+        (a, b) if a == b => return put_input_in_reg(ctx, spec),
+        (1, 8) => return put_input_in_reg(ctx, spec),
         (a, 16) | (a, 32) if a == 1 || a == 8 => ExtMode::BL,
         (a, 64) if a == 1 || a == 8 => ExtMode::BQ,
         (16, 32) => ExtMode::WL,
@@ -256,17 +185,13 @@ fn input_to_reg_mem_imm(ctx: Ctx, spec: InsnInput) -> RegMemImm {
     }
 }
 
-fn output_to_reg(ctx: Ctx, spec: InsnOutput) -> Writable<Reg> {
-    ctx.get_output(spec.insn, spec.output)
-}
-
 fn emit_cmp(ctx: Ctx, insn: IRInst) {
     let ty = ctx.input_ty(insn, 0);
 
     let inputs = [InsnInput { insn, input: 0 }, InsnInput { insn, input: 1 }];
 
     // TODO Try to commute the operands (and invert the condition) if one is an immediate.
-    let lhs = input_to_reg(ctx, inputs[0]);
+    let lhs = put_input_in_reg(ctx, inputs[0]);
     let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
 
     // Cranelift's icmp semantics want to compare lhs - rhs, while Intel gives
@@ -342,7 +267,7 @@ fn emit_fcmp(ctx: Ctx, insn: IRInst, mut cond_code: FloatCC, spec: FcmpSpec) -> 
     } else {
         (inputs[0], inputs[1])
     };
-    let lhs = input_to_reg(ctx, lhs_input);
+    let lhs = put_input_in_reg(ctx, lhs_input);
     let rhs = input_to_reg_mem(ctx, rhs_input);
     ctx.emit(Inst::xmm_cmp_rm_r(op, rhs, lhs));
 
@@ -404,7 +329,7 @@ fn emit_vm_call<C: LowerCtx<I = Inst>>(
     assert_eq!(inputs.len() + vm_context, abi.num_args());
 
     for (i, input) in inputs.iter().enumerate() {
-        let arg_reg = input_to_reg(ctx, *input);
+        let arg_reg = put_input_in_reg(ctx, *input);
         abi.emit_copy_reg_to_arg(ctx, i, arg_reg);
     }
     if call_conv.extends_baldrdash() {
@@ -416,7 +341,7 @@ fn emit_vm_call<C: LowerCtx<I = Inst>>(
 
     abi.emit_call(ctx);
     for (i, output) in outputs.iter().enumerate() {
-        let retval_reg = output_to_reg(ctx, *output);
+        let retval_reg = get_output_reg(ctx, *output);
         abi.emit_copy_retval_to_reg(ctx, i, retval_reg);
     }
     abi.emit_stack_post_adjust(ctx);
@@ -471,22 +396,22 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: u
             matches_small_constant_shift(ctx, add_inputs[0])
         {
             (
-                input_to_reg(ctx, add_inputs[1]),
-                input_to_reg(ctx, shift_input),
+                put_input_in_reg(ctx, add_inputs[1]),
+                put_input_in_reg(ctx, shift_input),
                 shift_amt,
             )
         } else if let Some((shift_input, shift_amt)) =
             matches_small_constant_shift(ctx, add_inputs[1])
         {
             (
-                input_to_reg(ctx, add_inputs[0]),
-                input_to_reg(ctx, shift_input),
+                put_input_in_reg(ctx, add_inputs[0]),
+                put_input_in_reg(ctx, shift_input),
                 shift_amt,
             )
         } else {
             (
-                input_to_reg(ctx, add_inputs[0]),
-                input_to_reg(ctx, add_inputs[1]),
+                put_input_in_reg(ctx, add_inputs[0]),
+                put_input_in_reg(ctx, add_inputs[1]),
                 0,
             )
         };
@@ -494,7 +419,7 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: u
         return Amode::imm_reg_reg_shift(offset, base, index, shift);
     }
 
-    let input = input_to_reg(ctx, spec);
+    let input = put_input_in_reg(ctx, spec);
     Amode::imm_reg(offset, input)
 }
 
@@ -525,13 +450,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
     match op {
         Opcode::Iconst | Opcode::Bconst | Opcode::Null => {
-            if let Some(w64) = iri_to_u64_imm(ctx, insn) {
-                let dst_is_64 = w64 > 0x7fffffff;
-                let dst = output_to_reg(ctx, outputs[0]);
-                ctx.emit(Inst::imm_r(dst_is_64, w64, dst));
-            } else {
-                unimplemented!();
-            }
+            let w64 = ctx
+                .get_constant(insn)
+                .expect("constant value for iconst et al");
+            let dst_is_64 = w64 > 0x7fffffff;
+            let dst = get_output_reg(ctx, outputs[0]);
+            ctx.emit(Inst::imm_r(dst_is_64, w64, dst));
         }
 
         Opcode::Iadd
@@ -565,9 +489,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     },
                     _ => panic!("Unsupported packed instruction"),
                 };
-                let lhs = input_to_reg(ctx, inputs[0]);
+                let lhs = put_input_in_reg(ctx, inputs[0]);
                 let rhs = input_to_reg_mem(ctx, inputs[1]);
-                let dst = output_to_reg(ctx, outputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]);
 
                 // Move the `lhs` to the same register as `dst`.
                 ctx.emit(Inst::gen_move(dst, lhs, ty));
@@ -594,22 +518,22 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         // For commutative operations, try to commute operands if one is an
                         // immediate.
                         if let Some(imm) = input_to_sext_imm(ctx, inputs[0]) {
-                            (input_to_reg(ctx, inputs[1]), RegMemImm::imm(imm))
+                            (put_input_in_reg(ctx, inputs[1]), RegMemImm::imm(imm))
                         } else {
                             (
-                                input_to_reg(ctx, inputs[0]),
+                                put_input_in_reg(ctx, inputs[0]),
                                 input_to_reg_mem_imm(ctx, inputs[1]),
                             )
                         }
                     }
                     Opcode::Isub => (
-                        input_to_reg(ctx, inputs[0]),
+                        put_input_in_reg(ctx, inputs[0]),
                         input_to_reg_mem_imm(ctx, inputs[1]),
                     ),
                     _ => unreachable!(),
                 };
 
-                let dst = output_to_reg(ctx, outputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]);
                 ctx.emit(Inst::mov_r_r(true, lhs, dst));
                 ctx.emit(Inst::alu_rmi_r(is_64, alu_op, rhs, dst));
             }
@@ -623,8 +547,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 unimplemented!("bool bnot")
             } else {
                 let size = ty.bytes() as u8;
-                let src = input_to_reg(ctx, inputs[0]);
-                let dst = output_to_reg(ctx, outputs[0]);
+                let src = put_input_in_reg(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]);
                 ctx.emit(Inst::gen_move(dst, src, ty));
                 ctx.emit(Inst::not(size, dst));
             }
@@ -636,7 +560,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             let (size, lhs) = match dst_ty {
                 types::I8 | types::I16 => match op {
-                    Opcode::Ishl => (4, input_to_reg(ctx, inputs[0])),
+                    Opcode::Ishl => (4, put_input_in_reg(ctx, inputs[0])),
                     Opcode::Ushr => (
                         4,
                         extend_input_to_reg(ctx, inputs[0], ExtSpec::ZeroExtendTo32),
@@ -646,27 +570,23 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         extend_input_to_reg(ctx, inputs[0], ExtSpec::SignExtendTo32),
                     ),
                     Opcode::Rotl | Opcode::Rotr => {
-                        (dst_ty.bytes() as u8, input_to_reg(ctx, inputs[0]))
+                        (dst_ty.bytes() as u8, put_input_in_reg(ctx, inputs[0]))
                     }
                     _ => unreachable!(),
                 },
-                types::I32 | types::I64 => (dst_ty.bytes() as u8, input_to_reg(ctx, inputs[0])),
+                types::I32 | types::I64 => (dst_ty.bytes() as u8, put_input_in_reg(ctx, inputs[0])),
                 _ => unreachable!("unhandled output type for shift/rotates: {}", dst_ty),
             };
 
             let (count, rhs) = if let Some(cst) = ctx.get_input(insn, 1).constant {
-                let cst = if op == Opcode::Rotl || op == Opcode::Rotr {
-                    // Mask rotation count, according to Cranelift's semantics.
-                    (cst as u8) & (dst_ty.bits() as u8 - 1)
-                } else {
-                    cst as u8
-                };
+                // Mask count, according to Cranelift's semantics.
+                let cst = (cst as u8) & (dst_ty.bits() as u8 - 1);
                 (Some(cst), None)
             } else {
-                (None, Some(input_to_reg(ctx, inputs[1])))
+                (None, Some(put_input_in_reg(ctx, inputs[1])))
             };
 
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
 
             let shift_kind = match op {
                 Opcode::Ishl => ShiftKind::ShiftLeft,
@@ -686,7 +606,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Ineg => {
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             let ty = ty.unwrap();
 
             if ty.is_vector() {
@@ -719,7 +639,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ));
             } else {
                 let size = ty.bytes() as u8;
-                let src = input_to_reg(ctx, inputs[0]);
+                let src = put_input_in_reg(ctx, inputs[0]);
                 ctx.emit(Inst::gen_move(dst, src, ty));
                 ctx.emit(Inst::neg(size, dst));
             }
@@ -746,7 +666,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 input_to_reg_mem(ctx, inputs[0])
             };
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
 
             let tmp = ctx.alloc_tmp(RegClass::I64, ty);
             ctx.emit(Inst::imm_r(ty == types::I64, u64::max_value(), dst));
@@ -787,7 +707,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             debug_assert!(ty == types::I32 || ty == types::I64);
 
             let src = input_to_reg_mem(ctx, inputs[0]);
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
 
             let tmp = ctx.alloc_tmp(RegClass::I64, ty);
             ctx.emit(Inst::imm_r(false /* 64 bits */, ty.bits() as u64, tmp));
@@ -821,7 +741,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 input_to_reg_mem(ctx, inputs[0])
             };
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
 
             if ty == types::I64 {
                 let is_64 = true;
@@ -1083,8 +1003,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // Null references are represented by the constant value 0; invalid references are
             // represented by the constant value -1. See `define_reftypes()` in
             // `meta/src/isa/x86/encodings.rs` to confirm.
-            let src = input_to_reg(ctx, inputs[0]);
-            let dst = output_to_reg(ctx, outputs[0]);
+            let src = put_input_in_reg(ctx, inputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             let ty = ctx.input_ty(insn, 0);
             let imm = match op {
                 Opcode::IsNull => {
@@ -1112,7 +1032,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let dst_ty = ctx.output_ty(insn, 0);
 
             let src = input_to_reg_mem(ctx, inputs[0]);
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
 
             let ext_mode = match (src_ty.bits(), dst_ty.bits()) {
                 (1, 8) | (1, 16) | (1, 32) | (8, 16) | (8, 32) => Some(ExtMode::BL),
@@ -1157,14 +1077,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Icmp => {
             emit_cmp(ctx, insn);
 
-            let condcode = inst_condcode(ctx.data(insn));
+            let condcode = ctx.data(insn).cond_code().unwrap();
             let cc = CC::from_intcc(condcode);
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             ctx.emit(Inst::setcc(cc, dst));
         }
 
         Opcode::Fcmp => {
-            let cond_code = inst_fp_condcode(ctx.data(insn));
+            let cond_code = ctx.data(insn).fp_cond_code().unwrap();
             let input_ty = ctx.input_ty(insn, 0);
             if !input_ty.is_vector() {
                 // Unordered is returned by setting ZF, PF, CF <- 111
@@ -1182,7 +1102,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // set, then both the ZF and CF flag bits must also be set we can get away with using
                 // one setcc for most condition codes.
 
-                let dst = output_to_reg(ctx, outputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]);
 
                 match emit_fcmp(ctx, insn, cond_code, FcmpSpec::Normal) {
                     FcmpCondResult::Condition(cc) => {
@@ -1237,12 +1157,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // Determine the operands of the comparison, possibly by flipping them.
                 let (lhs, rhs) = if flip {
                     (
-                        input_to_reg(ctx, inputs[1]),
+                        put_input_in_reg(ctx, inputs[1]),
                         input_to_reg_mem(ctx, inputs[0]),
                     )
                 } else {
                     (
-                        input_to_reg(ctx, inputs[0]),
+                        put_input_in_reg(ctx, inputs[0]),
                         input_to_reg_mem(ctx, inputs[1]),
                     )
                 };
@@ -1250,7 +1170,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // Move the `lhs` to the same register as `dst`; this may not emit an actual move
                 // but ensures that the registers are the same to match x86's read-write operand
                 // encoding.
-                let dst = output_to_reg(ctx, outputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]);
                 ctx.emit(Inst::gen_move(dst, lhs, input_ty));
 
                 // Emit the comparison.
@@ -1260,7 +1180,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::FallthroughReturn | Opcode::Return => {
             for i in 0..ctx.num_inputs(insn) {
-                let src_reg = input_to_reg(ctx, inputs[i]);
+                let src_reg = put_input_in_reg(ctx, inputs[i]);
                 let retval_reg = ctx.retval(i);
                 let ty = ctx.input_ty(insn, i);
                 ctx.emit(Inst::gen_move(retval_reg, src_reg, ty));
@@ -1283,7 +1203,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
 
                 Opcode::CallIndirect => {
-                    let ptr = input_to_reg(ctx, inputs[0]);
+                    let ptr = put_input_in_reg(ctx, inputs[0]);
                     let sig = ctx.call_sig(insn).unwrap();
                     assert_eq!(inputs.len() - 1, sig.params.len());
                     assert_eq!(outputs.len(), sig.returns.len());
@@ -1296,12 +1216,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             abi.emit_stack_pre_adjust(ctx);
             assert_eq!(inputs.len(), abi.num_args());
             for (i, input) in inputs.iter().enumerate() {
-                let arg_reg = input_to_reg(ctx, *input);
+                let arg_reg = put_input_in_reg(ctx, *input);
                 abi.emit_copy_reg_to_arg(ctx, i, arg_reg);
             }
             abi.emit_call(ctx);
             for (i, output) in outputs.iter().enumerate() {
-                let retval_reg = output_to_reg(ctx, *output);
+                let retval_reg = get_output_reg(ctx, *output);
                 abi.emit_copy_retval_to_reg(ctx, i, retval_reg);
             }
             abi.emit_stack_post_adjust(ctx);
@@ -1312,16 +1232,16 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Trap | Opcode::ResumableTrap => {
-            let trap_info = (ctx.srcloc(insn), inst_trapcode(ctx.data(insn)).unwrap());
+            let trap_info = (ctx.srcloc(insn), ctx.data(insn).trap_code().unwrap());
             ctx.emit_safepoint(Inst::Ud2 { trap_info });
         }
 
         Opcode::Trapif | Opcode::Trapff => {
             let srcloc = ctx.srcloc(insn);
-            let trap_code = inst_trapcode(ctx.data(insn)).unwrap();
+            let trap_code = ctx.data(insn).trap_code().unwrap();
 
             if matches_input(ctx, inputs[0], Opcode::IaddIfcout).is_some() {
-                let cond_code = inst_condcode(ctx.data(insn));
+                let cond_code = ctx.data(insn).cond_code().unwrap();
                 // The flags must not have been clobbered by any other instruction between the
                 // iadd_ifcout and this instruction, as verified by the CLIF validator; so we can
                 // simply use the flags here.
@@ -1333,7 +1253,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     cc,
                 });
             } else if op == Opcode::Trapif {
-                let cond_code = inst_condcode(ctx.data(insn));
+                let cond_code = ctx.data(insn).cond_code().unwrap();
                 let cc = CC::from_intcc(cond_code);
 
                 // Verification ensures that the input is always a single-def ifcmp.
@@ -1346,7 +1266,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     cc,
                 });
             } else {
-                let cond_code = inst_fp_condcode(ctx.data(insn));
+                let cond_code = ctx.data(insn).fp_cond_code().unwrap();
 
                 // Verification ensures that the input is always a single-def ffcmp.
                 let ffcmp = matches_input(ctx, inputs[0], Opcode::Ffcmp).unwrap();
@@ -1396,7 +1316,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::F64const => {
             // TODO use cmpeqpd for all 1s.
             let value = ctx.get_constant(insn).unwrap();
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             for inst in Inst::gen_constant(dst, value, types::F64, |reg_class, ty| {
                 ctx.alloc_tmp(reg_class, ty)
             }) {
@@ -1407,7 +1327,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::F32const => {
             // TODO use cmpeqps for all 1s.
             let value = ctx.get_constant(insn).unwrap();
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             for inst in Inst::gen_constant(dst, value, types::F32, |reg_class, ty| {
                 ctx.alloc_tmp(reg_class, ty)
             }) {
@@ -1416,9 +1336,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv => {
-            let lhs = input_to_reg(ctx, inputs[0]);
+            let lhs = put_input_in_reg(ctx, inputs[0]);
             let rhs = input_to_reg_mem(ctx, inputs[1]);
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             let ty = ty.unwrap();
 
             // Move the `lhs` to the same register as `dst`; this may not emit an actual move
@@ -1467,9 +1387,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fmin | Opcode::Fmax => {
-            let lhs = input_to_reg(ctx, inputs[0]);
-            let rhs = input_to_reg(ctx, inputs[1]);
-            let dst = output_to_reg(ctx, outputs[0]);
+            let lhs = put_input_in_reg(ctx, inputs[0]);
+            let rhs = put_input_in_reg(ctx, inputs[1]);
+            let dst = get_output_reg(ctx, outputs[0]);
             let is_min = op == Opcode::Fmin;
             let output_ty = ty.unwrap();
             ctx.emit(Inst::gen_move(dst, rhs, output_ty));
@@ -1483,7 +1403,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Sqrt => {
             let src = input_to_reg_mem(ctx, inputs[0]);
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             let ty = ty.unwrap();
 
             let sse_op = match ty {
@@ -1502,13 +1422,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Fpromote => {
             let src = input_to_reg_mem(ctx, inputs[0]);
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             ctx.emit(Inst::xmm_unary_rm_r(SseOpcode::Cvtss2sd, src, dst));
         }
 
         Opcode::Fdemote => {
             let src = input_to_reg_mem(ctx, inputs[0]);
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             ctx.emit(Inst::xmm_unary_rm_r(SseOpcode::Cvtsd2ss, src, dst));
         }
 
@@ -1533,12 +1453,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 SseOpcode::Cvtsi2sd
             };
 
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             ctx.emit(Inst::gpr_to_xmm(opcode, src, src_size, dst));
         }
 
         Opcode::FcvtFromUint => {
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             let ty = ty.unwrap();
 
             let input_ty = ctx.input_ty(insn, 0);
@@ -1559,7 +1479,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
 
                 types::I64 => {
-                    let src = input_to_reg(ctx, inputs[0]);
+                    let src = put_input_in_reg(ctx, inputs[0]);
 
                     let src_copy = ctx.alloc_tmp(RegClass::I64, types::I64);
                     ctx.emit(Inst::gen_move(src_copy, src, types::I64));
@@ -1580,8 +1500,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FcvtToUint | Opcode::FcvtToUintSat | Opcode::FcvtToSint | Opcode::FcvtToSintSat => {
-            let src = input_to_reg(ctx, inputs[0]);
-            let dst = output_to_reg(ctx, outputs[0]);
+            let src = put_input_in_reg(ctx, inputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
 
             let input_ty = ctx.input_ty(insn, 0);
             let src_size = if input_ty == types::F32 {
@@ -1625,8 +1545,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let output_ty = ctx.output_ty(insn, 0);
             match (input_ty, output_ty) {
                 (types::F32, types::I32) => {
-                    let src = input_to_reg(ctx, inputs[0]);
-                    let dst = output_to_reg(ctx, outputs[0]);
+                    let src = put_input_in_reg(ctx, inputs[0]);
+                    let dst = get_output_reg(ctx, outputs[0]);
                     ctx.emit(Inst::xmm_to_gpr(
                         SseOpcode::Movd,
                         src,
@@ -1636,7 +1556,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
                 (types::I32, types::F32) => {
                     let src = input_to_reg_mem(ctx, inputs[0]);
-                    let dst = output_to_reg(ctx, outputs[0]);
+                    let dst = get_output_reg(ctx, outputs[0]);
                     ctx.emit(Inst::gpr_to_xmm(
                         SseOpcode::Movd,
                         src,
@@ -1645,8 +1565,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     ));
                 }
                 (types::F64, types::I64) => {
-                    let src = input_to_reg(ctx, inputs[0]);
-                    let dst = output_to_reg(ctx, outputs[0]);
+                    let src = put_input_in_reg(ctx, inputs[0]);
+                    let dst = get_output_reg(ctx, outputs[0]);
                     ctx.emit(Inst::xmm_to_gpr(
                         SseOpcode::Movq,
                         src,
@@ -1656,7 +1576,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
                 (types::I64, types::F64) => {
                     let src = input_to_reg_mem(ctx, inputs[0]);
-                    let dst = output_to_reg(ctx, outputs[0]);
+                    let dst = get_output_reg(ctx, outputs[0]);
                     ctx.emit(Inst::gpr_to_xmm(
                         SseOpcode::Movq,
                         src,
@@ -1670,7 +1590,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Fabs | Opcode::Fneg => {
             let src = input_to_reg_mem(ctx, inputs[0]);
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
 
             // In both cases, generate a constant and apply a single binary instruction:
             // - to compute the absolute value, set all bits to 1 but the MSB to 0, and bit-AND the
@@ -1707,7 +1627,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     // Move the `lhs` to the same register as `dst`; this may not emit an actual move
                     // but ensures that the registers are the same to match x86's read-write operand
                     // encoding.
-                    let src = input_to_reg(ctx, inputs[0]);
+                    let src = put_input_in_reg(ctx, inputs[0]);
                     ctx.emit(Inst::gen_move(dst, src, output_ty));
 
                     // Generate an all 1s constant in an XMM register. This uses CMPPS but could
@@ -1747,9 +1667,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fcopysign => {
-            let dst = output_to_reg(ctx, outputs[0]);
-            let lhs = input_to_reg(ctx, inputs[0]);
-            let rhs = input_to_reg(ctx, inputs[1]);
+            let dst = get_output_reg(ctx, outputs[0]);
+            let lhs = put_input_in_reg(ctx, inputs[0]);
+            let rhs = put_input_in_reg(ctx, inputs[1]);
 
             let ty = ty.unwrap();
 
@@ -1844,7 +1764,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Sload16Complex
         | Opcode::Uload32Complex
         | Opcode::Sload32Complex => {
-            let offset = ldst_offset(ctx.data(insn)).unwrap();
+            let offset = ctx.data(insn).load_store_offset().unwrap();
 
             let elem_ty = match op {
                 Opcode::Sload8 | Opcode::Uload8 | Opcode::Sload8Complex | Opcode::Uload8Complex => {
@@ -1903,8 +1823,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         2,
                         "can't handle more than two inputs in complex load"
                     );
-                    let base = input_to_reg(ctx, inputs[0]);
-                    let index = input_to_reg(ctx, inputs[1]);
+                    let base = put_input_in_reg(ctx, inputs[0]);
+                    let index = put_input_in_reg(ctx, inputs[1]);
                     let shift = 0;
                     Amode::imm_reg_reg_shift(offset as u32, base, index, shift)
                 }
@@ -1914,7 +1834,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             let srcloc = Some(ctx.srcloc(insn));
 
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             let is_xmm = elem_ty.is_float() || elem_ty.is_vector();
             match (sign_extend, is_xmm) {
                 (true, false) => {
@@ -1966,7 +1886,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Istore8Complex
         | Opcode::Istore16Complex
         | Opcode::Istore32Complex => {
-            let offset = ldst_offset(ctx.data(insn)).unwrap();
+            let offset = ctx.data(insn).load_store_offset().unwrap();
 
             let elem_ty = match op {
                 Opcode::Istore8 | Opcode::Istore8Complex => types::I8,
@@ -1991,8 +1911,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         3,
                         "can't handle more than two inputs in complex store"
                     );
-                    let base = input_to_reg(ctx, inputs[1]);
-                    let index = input_to_reg(ctx, inputs[2]);
+                    let base = put_input_in_reg(ctx, inputs[1]);
+                    let index = put_input_in_reg(ctx, inputs[2]);
                     let shift = 0;
                     Amode::imm_reg_reg_shift(offset as u32, base, index, shift)
                 }
@@ -2000,7 +1920,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 _ => unreachable!(),
             };
 
-            let src = input_to_reg(ctx, inputs[0]);
+            let src = put_input_in_reg(ctx, inputs[0]);
 
             let srcloc = Some(ctx.srcloc(insn));
 
@@ -2025,9 +1945,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // use the single instruction `lock xadd`.  However, those improvements have been
             // left for another day.
             // TODO: filed as https://github.com/bytecodealliance/wasmtime/issues/2153
-            let dst = output_to_reg(ctx, outputs[0]);
-            let mut addr = input_to_reg(ctx, inputs[0]);
-            let mut arg2 = input_to_reg(ctx, inputs[1]);
+            let dst = get_output_reg(ctx, outputs[0]);
+            let mut addr = put_input_in_reg(ctx, inputs[0]);
+            let mut arg2 = put_input_in_reg(ctx, inputs[1]);
             let ty_access = ty.unwrap();
             assert!(is_valid_atomic_transaction_ty(ty_access));
             let memflags = ctx.memflags(insn).expect("memory flags");
@@ -2058,7 +1978,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ));
 
             // Now the AtomicRmwSeq (pseudo-) instruction itself
-            let op = inst_common::AtomicRmwOp::from(inst_atomic_rmw_op(ctx.data(insn)).unwrap());
+            let op = inst_common::AtomicRmwOp::from(ctx.data(insn).atomic_rmw_op().unwrap());
             ctx.emit(Inst::AtomicRmwSeq {
                 ty: ty_access,
                 op,
@@ -2072,10 +1992,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::AtomicCas => {
             // This is very similar to, but not identical to, the `AtomicRmw` case.  As with
             // `AtomicRmw`, there's no need to zero-extend narrow values here.
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             let addr = lower_to_amode(ctx, inputs[0], 0);
-            let expected = input_to_reg(ctx, inputs[1]);
-            let replacement = input_to_reg(ctx, inputs[2]);
+            let expected = put_input_in_reg(ctx, inputs[1]);
+            let replacement = put_input_in_reg(ctx, inputs[2]);
             let ty_access = ty.unwrap();
             assert!(is_valid_atomic_transaction_ty(ty_access));
             let memflags = ctx.memflags(insn).expect("memory flags");
@@ -2107,7 +2027,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // This is a normal load.  The x86-TSO memory model provides sufficient sequencing
             // to satisfy the CLIF synchronisation requirements for `AtomicLoad` without the
             // need for any fence instructions.
-            let data = output_to_reg(ctx, outputs[0]);
+            let data = get_output_reg(ctx, outputs[0]);
             let addr = lower_to_amode(ctx, inputs[0], 0);
             let ty_access = ty.unwrap();
             assert!(is_valid_atomic_transaction_ty(ty_access));
@@ -2134,7 +2054,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::AtomicStore => {
             // This is a normal store, followed by an `mfence` instruction.
-            let data = input_to_reg(ctx, inputs[0]);
+            let data = put_input_in_reg(ctx, inputs[0]);
             let addr = lower_to_amode(ctx, inputs[1], 0);
             let ty_access = ctx.input_ty(insn, 0);
             assert!(is_valid_atomic_transaction_ty(ty_access));
@@ -2158,7 +2078,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FuncAddr => {
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             let (extname, _) = ctx.call_target(insn).unwrap();
             let extname = extname.clone();
             let loc = ctx.srcloc(insn);
@@ -2171,7 +2091,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::SymbolValue => {
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             let (extname, _, offset) = ctx.symbol_value(insn).unwrap();
             let extname = extname.clone();
             let loc = ctx.srcloc(insn);
@@ -2192,7 +2112,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 } => (stack_slot, offset),
                 _ => unreachable!(),
             };
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             let offset: i32 = offset.into();
             let inst = ctx
                 .abi()
@@ -2203,7 +2123,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Select => {
             let flag_input = inputs[0];
             if let Some(fcmp) = matches_input(ctx, flag_input, Opcode::Fcmp) {
-                let cond_code = inst_fp_condcode(ctx.data(fcmp));
+                let cond_code = ctx.data(fcmp).fp_cond_code().unwrap();
 
                 // we request inversion of Equal to NotEqual here: taking LHS if equal would mean
                 // take it if both CC::NP and CC::Z are set, the conjunction of which can't be
@@ -2219,14 +2139,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 };
 
                 let ty = ctx.output_ty(insn, 0);
-                let rhs = input_to_reg(ctx, rhs_input);
-                let dst = output_to_reg(ctx, outputs[0]);
+                let rhs = put_input_in_reg(ctx, rhs_input);
+                let dst = get_output_reg(ctx, outputs[0]);
                 let lhs = if is_int_ty(ty) && ty.bytes() < 4 {
                     // Special case: since the higher bits are undefined per CLIF semantics, we
                     // can just apply a 32-bit cmove here. Force inputs into registers, to
                     // avoid partial spilling out-of-bounds with memory accesses, though.
                     // Sign-extend operands to 32, then do a cmove of size 4.
-                    RegMem::reg(input_to_reg(ctx, lhs_input))
+                    RegMem::reg(put_input_in_reg(ctx, lhs_input))
                 } else {
                     input_to_reg_mem(ctx, lhs_input)
                 };
@@ -2262,18 +2182,18 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 let cc = if let Some(icmp) = matches_input(ctx, flag_input, Opcode::Icmp) {
                     emit_cmp(ctx, icmp);
-                    let cond_code = inst_condcode(ctx.data(icmp));
+                    let cond_code = ctx.data(icmp).cond_code().unwrap();
                     CC::from_intcc(cond_code)
                 } else {
                     // The input is a boolean value, compare it against zero.
                     let size = ctx.input_ty(insn, 0).bytes() as u8;
-                    let test = input_to_reg(ctx, inputs[0]);
+                    let test = put_input_in_reg(ctx, inputs[0]);
                     ctx.emit(Inst::cmp_rmi_r(size, RegMemImm::imm(0), test));
                     CC::NZ
                 };
 
-                let rhs = input_to_reg(ctx, inputs[2]);
-                let dst = output_to_reg(ctx, outputs[0]);
+                let rhs = put_input_in_reg(ctx, inputs[2]);
+                let dst = get_output_reg(ctx, outputs[0]);
                 let ty = ctx.output_ty(insn, 0);
 
                 ctx.emit(Inst::gen_move(dst, rhs, ty));
@@ -2285,7 +2205,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         // can just apply a 32-bit cmove here. Force inputs into registers, to
                         // avoid partial spilling out-of-bounds with memory accesses, though.
                         size = 4;
-                        RegMem::reg(input_to_reg(ctx, inputs[1]))
+                        RegMem::reg(put_input_in_reg(ctx, inputs[1]))
                     } else {
                         input_to_reg_mem(ctx, inputs[1])
                     };
@@ -2308,11 +2228,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             debug_assert_eq!(ctx.data(cmp_insn).opcode(), Opcode::Ifcmp);
             emit_cmp(ctx, cmp_insn);
 
-            let cc = CC::from_intcc(inst_condcode(ctx.data(insn)));
+            let cc = CC::from_intcc(ctx.data(insn).cond_code().unwrap());
 
             let lhs = input_to_reg_mem(ctx, inputs[1]);
-            let rhs = input_to_reg(ctx, inputs[2]);
-            let dst = output_to_reg(ctx, outputs[0]);
+            let rhs = put_input_in_reg(ctx, inputs[2]);
+            let dst = get_output_reg(ctx, outputs[0]);
 
             let ty = ctx.output_ty(insn, 0);
 
@@ -2348,8 +2268,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let input_ty = ctx.input_ty(insn, 0);
             let size = input_ty.bytes() as u8;
 
-            let dividend = input_to_reg(ctx, inputs[0]);
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dividend = put_input_in_reg(ctx, inputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
 
             let srcloc = ctx.srcloc(insn);
             ctx.emit(Inst::gen_move(
@@ -2366,7 +2286,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // Note it keeps the result in $rax (for divide) or $rdx (for rem), so that
                 // regalloc is aware of the coalescing opportunity between rax/rdx and the
                 // destination register.
-                let divisor = input_to_reg(ctx, inputs[1]);
+                let divisor = put_input_in_reg(ctx, inputs[1]);
 
                 let divisor_copy = ctx.alloc_tmp(RegClass::I64, types::I64);
                 ctx.emit(Inst::gen_move(divisor_copy, divisor, types::I64));
@@ -2432,9 +2352,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let input_ty = ctx.input_ty(insn, 0);
             let size = input_ty.bytes() as u8;
 
-            let lhs = input_to_reg(ctx, inputs[0]);
+            let lhs = put_input_in_reg(ctx, inputs[0]);
             let rhs = input_to_reg_mem(ctx, inputs[1]);
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
 
             // Move lhs in %rax.
             ctx.emit(Inst::gen_move(
@@ -2452,12 +2372,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::GetPinnedReg => {
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             ctx.emit(Inst::gen_move(dst, regs::pinned_reg(), types::I64));
         }
 
         Opcode::SetPinnedReg => {
-            let src = input_to_reg(ctx, inputs[0]);
+            let src = put_input_in_reg(ctx, inputs[0]);
             ctx.emit(Inst::gen_move(
                 Writable::from_reg(regs::pinned_reg()),
                 src,
@@ -2474,7 +2394,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 unreachable!("vconst should always have unary_const format")
             };
-            let dst = output_to_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             let ty = ty.unwrap();
             ctx.emit(Inst::xmm_load_const_seq(val, dst, ty));
         }
@@ -2484,8 +2404,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // https://github.com/bytecodealliance/wasmtime/issues/1147). As such, this IR
             // instruction should emit no machine code but a move is necessary to give the register
             // allocator a definition for the output virtual register.
-            let src = input_to_reg(ctx, inputs[0]);
-            let dst = output_to_reg(ctx, outputs[0]);
+            let src = put_input_in_reg(ctx, inputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
             let ty = ty.unwrap();
             ctx.emit(Inst::gen_move(dst, src, ty));
         }
@@ -2580,7 +2500,7 @@ impl LowerBackend for X64Backend {
                     if let Some(icmp) = matches_input(ctx, flag_input, Opcode::Icmp) {
                         emit_cmp(ctx, icmp);
 
-                        let cond_code = inst_condcode(ctx.data(icmp));
+                        let cond_code = ctx.data(icmp).cond_code().unwrap();
                         let cond_code = if op0 == Opcode::Brz {
                             cond_code.inverse()
                         } else {
@@ -2590,7 +2510,7 @@ impl LowerBackend for X64Backend {
                         let cc = CC::from_intcc(cond_code);
                         ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
                     } else if let Some(fcmp) = matches_input(ctx, flag_input, Opcode::Fcmp) {
-                        let cond_code = inst_fp_condcode(ctx.data(fcmp));
+                        let cond_code = ctx.data(fcmp).fp_cond_code().unwrap();
                         let cond_code = if op0 == Opcode::Brz {
                             cond_code.inverse()
                         } else {
@@ -2611,7 +2531,7 @@ impl LowerBackend for X64Backend {
                             FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
                         }
                     } else if is_int_ty(src_ty) || is_bool_ty(src_ty) {
-                        let src = input_to_reg(
+                        let src = put_input_in_reg(
                             ctx,
                             InsnInput {
                                 insn: branches[0],
@@ -2634,7 +2554,7 @@ impl LowerBackend for X64Backend {
                 Opcode::BrIcmp => {
                     let src_ty = ctx.input_ty(branches[0], 0);
                     if is_int_ty(src_ty) || is_bool_ty(src_ty) {
-                        let lhs = input_to_reg(
+                        let lhs = put_input_in_reg(
                             ctx,
                             InsnInput {
                                 insn: branches[0],
@@ -2648,7 +2568,7 @@ impl LowerBackend for X64Backend {
                                 input: 1,
                             },
                         );
-                        let cc = CC::from_intcc(inst_condcode(ctx.data(branches[0])));
+                        let cc = CC::from_intcc(ctx.data(branches[0]).cond_code().unwrap());
                         let byte_size = src_ty.bytes() as u8;
                         // Cranelift's icmp semantics want to compare lhs - rhs, while Intel gives
                         // us dst - src at the machine instruction level, so invert operands.

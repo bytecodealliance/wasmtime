@@ -7,11 +7,10 @@
 //!
 //! - Floating-point immediates (FIMM instruction).
 
-use crate::ir;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
-use crate::ir::{InstructionData, Opcode, TrapCode, Type};
+use crate::ir::{InstructionData, Opcode, Type};
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::CodegenResult;
@@ -107,26 +106,6 @@ pub(crate) enum ResultRegImmShift {
 }
 
 //============================================================================
-// Instruction input "slots".
-//
-// We use these types to refer to operand numbers, and result numbers, together
-// with the associated instruction, in a type-safe way.
-
-/// Identifier for a particular input of an instruction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct InsnInput {
-    pub(crate) insn: IRInst,
-    pub(crate) input: usize,
-}
-
-/// Identifier for a particular output of an instruction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct InsnOutput {
-    pub(crate) insn: IRInst,
-    pub(crate) output: usize,
-}
-
-//============================================================================
 // Lowering: convert instruction inputs to forms that we can use.
 
 /// Lower an instruction input to a 64-bit constant, if possible.
@@ -189,11 +168,6 @@ impl NarrowValueMode {
             NarrowValueMode::ZeroExtend64 | NarrowValueMode::SignExtend64 => false,
         }
     }
-}
-
-/// Allocate a register for an instruction output and return it.
-pub(crate) fn get_output_reg<C: LowerCtx<I = Inst>>(ctx: &mut C, out: InsnOutput) -> Writable<Reg> {
-    ctx.get_output(out.insn, out.output)
 }
 
 /// Lower an instruction input to a reg.
@@ -1020,58 +994,6 @@ pub(crate) fn choose_32_64<T: Copy>(ty: Type, op32: T, op64: T) -> T {
         op64
     } else {
         panic!("choose_32_64 on > 64 bits!")
-    }
-}
-
-pub(crate) fn ldst_offset(data: &InstructionData) -> Option<i32> {
-    match data {
-        &InstructionData::Load { offset, .. }
-        | &InstructionData::StackLoad { offset, .. }
-        | &InstructionData::LoadComplex { offset, .. }
-        | &InstructionData::Store { offset, .. }
-        | &InstructionData::StackStore { offset, .. }
-        | &InstructionData::StoreComplex { offset, .. } => Some(offset.into()),
-        _ => None,
-    }
-}
-
-pub(crate) fn inst_condcode(data: &InstructionData) -> Option<IntCC> {
-    match data {
-        &InstructionData::IntCond { cond, .. }
-        | &InstructionData::BranchIcmp { cond, .. }
-        | &InstructionData::IntCompare { cond, .. }
-        | &InstructionData::IntCondTrap { cond, .. }
-        | &InstructionData::BranchInt { cond, .. }
-        | &InstructionData::IntSelect { cond, .. }
-        | &InstructionData::IntCompareImm { cond, .. } => Some(cond),
-        _ => None,
-    }
-}
-
-pub(crate) fn inst_fp_condcode(data: &InstructionData) -> Option<FloatCC> {
-    match data {
-        &InstructionData::BranchFloat { cond, .. }
-        | &InstructionData::FloatCompare { cond, .. }
-        | &InstructionData::FloatCond { cond, .. }
-        | &InstructionData::FloatCondTrap { cond, .. } => Some(cond),
-        _ => None,
-    }
-}
-
-pub(crate) fn inst_trapcode(data: &InstructionData) -> Option<TrapCode> {
-    match data {
-        &InstructionData::Trap { code, .. }
-        | &InstructionData::CondTrap { code, .. }
-        | &InstructionData::IntCondTrap { code, .. }
-        | &InstructionData::FloatCondTrap { code, .. } => Some(code),
-        _ => None,
-    }
-}
-
-pub(crate) fn inst_atomic_rmw_op(data: &InstructionData) -> Option<ir::AtomicRmwOp> {
-    match data {
-        &InstructionData::AtomicRmw { op, .. } => Some(op),
-        _ => None,
     }
 }
 
