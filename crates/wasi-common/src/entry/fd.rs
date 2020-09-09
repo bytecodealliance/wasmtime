@@ -1,7 +1,7 @@
 use super::Entry;
 use crate::handle::{
-    Advice, Fdflags, Fdstat, Filesize, Filestat, Filetype, Fstflags, HandleRights, Prestat,
-    PrestatDir, Rights, Size,
+    Advice, Dircookie, Fdflags, Fdstat, Filesize, Filestat, Filetype, Fstflags, HandleRights,
+    Prestat, PrestatDir, Rights, Size,
 };
 use crate::sched::Timestamp;
 use crate::{Error, Result};
@@ -165,5 +165,42 @@ impl Entry {
             .read_vectored(&mut io_slices)?
             .try_into()?;
         Ok(host_nread)
+    }
+
+    pub fn fd_readdir(&self, buf: &mut [u8], cookie: Dircookie) -> Result<Size> {
+        use crate::handle::AsBytes;
+        let required_rights = HandleRights::from_base(Rights::FD_READDIR);
+        let handle = self.as_handle(&required_rights)?;
+
+        let buf_len: Size = buf.len().try_into().expect("buf len fits in u32");
+
+        let mut cursor = 0;
+        for pair in handle.readdir(cookie)? {
+            let (dirent, name) = pair?;
+            let dirent_raw = dirent.as_bytes()?;
+            let dirent_len: Size = dirent_raw.len().try_into()?;
+            let name_raw = name.as_bytes();
+            let name_len: Size = name_raw.len().try_into()?;
+            let offset = dirent_len.checked_add(name_len).ok_or(Error::Overflow)?;
+            if (buf_len - cursor) < offset {
+                break;
+            }
+
+            let dirent_start = cursor as usize;
+            let dirent_end = dirent_start + dirent_len as usize;
+            buf.get_mut(dirent_start..dirent_end)
+                .expect("checked bounds")
+                .copy_from_slice(&dirent_raw);
+            cursor += dirent_len;
+
+            let name_start = cursor as usize;
+            let name_end = name_start + name_len as usize;
+            buf.get_mut(name_start..name_end)
+                .expect("checked bounds")
+                .copy_from_slice(name_raw);
+            cursor += name_len;
+        }
+
+        Ok(cursor)
     }
 }

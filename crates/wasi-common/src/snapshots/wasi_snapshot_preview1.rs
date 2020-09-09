@@ -1,5 +1,5 @@
 use crate::entry::{Entry, EntryHandle};
-use crate::handle::{AsBytes, HandleRights};
+use crate::handle::HandleRights;
 use crate::sched::{ClockEventData, FdEventData};
 use crate::sys::clock;
 use crate::sys::poll;
@@ -185,30 +185,9 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         buf_len: types::Size,
         cookie: types::Dircookie,
     ) -> Result<types::Size> {
-        let required_rights = HandleRights::from_base(types::Rights::FD_READDIR);
         let entry = self.get_entry(fd)?;
-
-        let mut bufused = 0;
-        let mut buf = buf.clone();
-        for pair in entry.as_handle(&required_rights)?.readdir(cookie)? {
-            let (dirent, name) = pair?;
-            let dirent_raw = dirent.as_bytes()?;
-            let dirent_len: types::Size = dirent_raw.len().try_into()?;
-            let name_raw = name.as_bytes();
-            let name_len = name_raw.len().try_into()?;
-            let offset = dirent_len.checked_add(name_len).ok_or(Error::Overflow)?;
-            if (buf_len - bufused) < offset {
-                break;
-            } else {
-                buf.as_array(dirent_len).copy_from_slice(&dirent_raw)?;
-                buf = buf.add(dirent_len)?;
-                buf.as_array(name_len).copy_from_slice(name_raw)?;
-                buf = buf.add(name_len)?;
-                bufused += offset;
-            }
-        }
-
-        Ok(bufused)
+        let mut buf = buf.as_array(buf_len).as_slice()?;
+        entry.fd_readdir(buf.deref_mut(), cookie)
     }
 
     fn fd_renumber(&self, from: types::Fd, to: types::Fd) -> Result<()> {
