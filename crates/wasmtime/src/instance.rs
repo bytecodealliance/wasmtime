@@ -205,6 +205,7 @@ impl Instance {
         })
     }
 
+    /// Get the internal store handle for this `Instance` (*use with caution*)
     pub fn handle(&self) -> &StoreInstanceHandle {
         &self.handle
     }
