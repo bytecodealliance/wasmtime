@@ -564,6 +564,7 @@ dependencies = [
  "filecheck",
  "indicatif",
  "log",
+ "peepmatic-souper",
  "pretty_env_logger",
  "target-lexicon",
  "term",
@@ -1325,6 +1326,10 @@ dependencies = [
  "thiserror",
  "wast",
 ]
+
+[[package]]
+name = "peepmatic-souper"
+version = "0.66.0"
 
 [[package]]
 name = "peepmatic-test"

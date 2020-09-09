@@ -162,7 +162,8 @@ jobs:
           --package peepmatic-fuzzing \
           --package peepmatic-macro \
           --package peepmatic-runtime \
-          --package peepmatic-test
+          --package peepmatic-test \
+          --package peepmatic-souper
     - name: Rebuild Peepmatic-based peephole optimizers and test them
       run: |
         cargo test \
@@ -248,7 +249,8 @@ jobs:
             --exclude peepmatic-fuzzing \
             --exclude peepmatic-macro \
             --exclude peepmatic-runtime \
-            --exclude peepmatic-test
+            --exclude peepmatic-test \
+            --exclude peepmatic-souper
       env:
         RUST_BACKTRACE: 1
 
@@ -383,6 +385,7 @@ jobs:
             --exclude peepmatic-macro \
             --exclude peepmatic-runtime \
             --exclude peepmatic-test \
+            --exclude peepmatic-souper \
             --exclude wasmtime-fuzz
       env:
         RUST_BACKTRACE: 1

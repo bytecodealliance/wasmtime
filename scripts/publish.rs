@@ -22,6 +22,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "peepmatic-test-operator",
     "peepmatic-runtime",
     "peepmatic",
+    "peepmatic-souper",
     // cranelift
     "cranelift-entity",
     "cranelift-bforest",
