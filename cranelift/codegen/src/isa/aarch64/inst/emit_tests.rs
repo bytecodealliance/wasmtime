@@ -777,14 +777,15 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::AluRRR {
-            alu_op: ALUOp::SubS64XR,
+        Inst::AluRRRExtend {
+            alu_op: ALUOp::SubS64,
             rd: writable_zero_reg(),
             rn: stack_reg(),
             rm: xreg(12),
+            extendop: ExtendOp::UXTX,
         },
         "FF632CEB",
-        "subs xzr, sp, x12",
+        "subs xzr, sp, x12, UXTX",
     ));
 
     insns.push((

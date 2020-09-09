@@ -497,7 +497,6 @@ impl MachInstEmit for Inst {
                     ALUOp::AddS64 => 0b10101011_000,
                     ALUOp::SubS32 => 0b01101011_000,
                     ALUOp::SubS64 => 0b11101011_000,
-                    ALUOp::SubS64XR => 0b11101011_001,
                     ALUOp::SDiv64 => 0b10011010_110,
                     ALUOp::UDiv64 => 0b10011010_110,
                     ALUOp::RotR32 | ALUOp::Lsr32 | ALUOp::Asr32 | ALUOp::Lsl32 => 0b00011010_110,
@@ -512,17 +511,13 @@ impl MachInstEmit for Inst {
                     ALUOp::Lsr32 | ALUOp::Lsr64 => 0b001001,
                     ALUOp::Asr32 | ALUOp::Asr64 => 0b001010,
                     ALUOp::Lsl32 | ALUOp::Lsl64 => 0b001000,
-                    ALUOp::SubS64XR => 0b011000,
                     ALUOp::SMulH | ALUOp::UMulH => 0b011111,
                     _ => 0b000000,
                 };
                 debug_assert_ne!(writable_stack_reg(), rd);
-                // The stack pointer is the zero register if this instruction
-                // doesn't have access to extended registers, so this might be
-                // an indication that something is wrong.
-                if alu_op != ALUOp::SubS64XR {
-                    debug_assert_ne!(stack_reg(), rn);
-                }
+                // The stack pointer is the zero register in this context, so this might be an
+                // indication that something is wrong.
+                debug_assert_ne!(stack_reg(), rn);
                 debug_assert_ne!(stack_reg(), rm);
                 sink.put4(enc_arith_rrr(top11, bit15_10, rd, rn, rm));
             }
@@ -2078,19 +2073,6 @@ impl MachInstEmit for Inst {
                 // Lowering produces an EmitIsland before using a JTSequence, so we can safely
                 // disable the worst-case-size check in this case.
                 start_off = sink.cur_offset();
-            }
-            &Inst::LoadConst64 { rd, const_data } => {
-                let inst = Inst::ULoad64 {
-                    rd,
-                    mem: AMode::Label(MemLabel::PCRel(8)),
-                    srcloc: None, // can't cause a user trap.
-                };
-                inst.emit(sink, flags, state);
-                let inst = Inst::Jump {
-                    dest: BranchTarget::ResolvedOffset(12),
-                };
-                inst.emit(sink, flags, state);
-                sink.put8(const_data);
             }
             &Inst::LoadExtName {
                 rd,
