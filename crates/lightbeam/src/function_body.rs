@@ -5,7 +5,7 @@ use crate::{
         ret_locs, BrAction, CCLoc, CallingConvention, CodeGenSession, Label, MaybeCCLoc, Target,
         ValueLocation,
     },
-    error::{error, Error},
+    error::{error, error_nopanic, Error},
     microwasm::*,
     module::{ModuleContext, SigType, Signature},
 };
@@ -150,6 +150,10 @@ where
         let params = func_type.params().iter().map(|t| t.to_microwasm_type());
         let returns = func_type.returns().iter().map(|t| t.to_microwasm_type());
 
+        if returns.len() > 1 {
+            return Err(error_nopanic("invalid result arity"));
+        }
+
         const DISASSEMBLE: bool = false;
 
         if DISASSEMBLE {
@@ -216,7 +220,6 @@ where
             let op_offset = op_offset?;
 
             if DISASSEMBLE {
-                println!("{:#?}", ctx.stack);
                 println!("{}", DisassemblyOpFormatter(op_offset.clone()));
             }
 
