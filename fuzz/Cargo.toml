@@ -107,3 +107,9 @@ name = "instantiate-wasm-smith"
 path = "fuzz_targets/instantiate-wasm-smith.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "instantiate-maybe-invalid"
+path = "fuzz_targets/instantiate-maybe-invalid.rs"
+test = false
+doc = false

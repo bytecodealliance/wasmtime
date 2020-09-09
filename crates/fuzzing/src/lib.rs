@@ -31,9 +31,7 @@ pub(crate) fn init_fuzzing() {
 }
 
 /// Create default fuzzing config with given strategy
-pub(crate) fn fuzz_default_config(
-    strategy: wasmtime::Strategy,
-) -> anyhow::Result<wasmtime::Config> {
+pub fn fuzz_default_config(strategy: wasmtime::Strategy) -> anyhow::Result<wasmtime::Config> {
     init_fuzzing();
     let mut config = wasmtime::Config::new();
     config
