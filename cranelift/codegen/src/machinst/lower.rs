@@ -13,7 +13,7 @@ use crate::ir::{
     ValueDef,
 };
 use crate::machinst::{
-    ABIBody, BlockIndex, BlockLoweringOrder, LoweredBlock, MachLabel, VCode, VCodeBuilder,
+    ABICallee, BlockIndex, BlockLoweringOrder, LoweredBlock, MachLabel, VCode, VCodeBuilder,
     VCodeInst,
 };
 use crate::CodegenResult;
@@ -61,8 +61,8 @@ pub trait LowerCtx {
 
     // Function-level queries:
 
-    /// Get the `ABIBody`.
-    fn abi(&mut self) -> &dyn ABIBody<I = Self::I>;
+    /// Get the `ABICallee`.
+    fn abi(&mut self) -> &dyn ABICallee<I = Self::I>;
     /// Get the (virtual) register that receives the return value. A return
     /// instruction should lower into a sequence that fills this register. (Why
     /// not allow the backend to specify its own result register for the return?
@@ -312,7 +312,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Prepare a new lowering context for the given IR function.
     pub fn new(
         f: &'func Function,
-        abi: Box<dyn ABIBody<I = I>>,
+        abi: Box<dyn ABICallee<I = I>>,
         block_order: BlockLoweringOrder,
     ) -> CodegenResult<Lower<'func, I>> {
         let mut vcode = VCodeBuilder::new(abi, block_order);
@@ -844,7 +844,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
     type I = I;
 
-    fn abi(&mut self) -> &dyn ABIBody<I = I> {
+    fn abi(&mut self) -> &dyn ABICallee<I = I> {
         self.vcode.abi()
     }
 

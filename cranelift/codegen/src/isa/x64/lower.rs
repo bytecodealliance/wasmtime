@@ -396,7 +396,7 @@ fn emit_vm_call<C: LowerCtx<I = Inst>>(
     let sig = make_libcall_sig(ctx, insn, call_conv, types::I64);
 
     let loc = ctx.srcloc(insn);
-    let mut abi = X64ABICall::from_func(&sig, &extname, dist, loc)?;
+    let mut abi = X64ABICaller::from_func(&sig, &extname, dist, loc)?;
 
     abi.emit_stack_pre_adjust(ctx);
 
@@ -1277,7 +1277,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert_eq!(inputs.len(), sig.params.len());
                     assert_eq!(outputs.len(), sig.returns.len());
                     (
-                        X64ABICall::from_func(sig, &extname, dist, loc)?,
+                        X64ABICaller::from_func(sig, &extname, dist, loc)?,
                         &inputs[..],
                     )
                 }
@@ -1287,7 +1287,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     let sig = ctx.call_sig(insn).unwrap();
                     assert_eq!(inputs.len() - 1, sig.params.len());
                     assert_eq!(outputs.len(), sig.returns.len());
-                    (X64ABICall::from_ptr(sig, ptr, loc, op)?, &inputs[1..])
+                    (X64ABICaller::from_ptr(sig, ptr, loc, op)?, &inputs[1..])
                 }
 
                 _ => unreachable!(),

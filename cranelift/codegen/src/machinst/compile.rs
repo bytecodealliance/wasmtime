@@ -13,7 +13,7 @@ use regalloc::{allocate_registers_with_opts, Algorithm, Options};
 pub fn compile<B: LowerBackend + MachBackend>(
     f: &Function,
     b: &B,
-    abi: Box<dyn ABIBody<I = B::MInst>>,
+    abi: Box<dyn ABICallee<I = B::MInst>>,
 ) -> CodegenResult<VCode<B::MInst>>
 where
     B::MInst: ShowWithRRU,

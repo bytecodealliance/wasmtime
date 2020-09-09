@@ -440,7 +440,7 @@ pub struct EmitState {
 }
 
 impl MachInstEmitState<Inst> for EmitState {
-    fn new(abi: &dyn ABIBody<I = Inst>) -> Self {
+    fn new(abi: &dyn ABICallee<I = Inst>) -> Self {
         EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,

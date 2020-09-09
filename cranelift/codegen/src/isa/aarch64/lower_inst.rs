@@ -1837,7 +1837,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert!(inputs.len() == sig.params.len());
                     assert!(outputs.len() == sig.returns.len());
                     (
-                        AArch64ABICall::from_func(sig, &extname, dist, loc)?,
+                        AArch64ABICaller::from_func(sig, &extname, dist, loc)?,
                         &inputs[..],
                     )
                 }
@@ -1846,7 +1846,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     let sig = ctx.call_sig(insn).unwrap();
                     assert!(inputs.len() - 1 == sig.params.len());
                     assert!(outputs.len() == sig.returns.len());
-                    (AArch64ABICall::from_ptr(sig, ptr, loc, op)?, &inputs[1..])
+                    (AArch64ABICaller::from_ptr(sig, ptr, loc, op)?, &inputs[1..])
                 }
                 _ => unreachable!(),
             };

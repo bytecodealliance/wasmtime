@@ -41,7 +41,7 @@ impl X64Backend {
     fn compile_vcode(&self, func: &Function, flags: Flags) -> CodegenResult<VCode<inst::Inst>> {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
-        let abi = Box::new(abi::X64ABIBody::new(&func, flags)?);
+        let abi = Box::new(abi::X64ABICallee::new(&func, flags)?);
         compile::compile::<Self>(&func, self, abi)
     }
 }

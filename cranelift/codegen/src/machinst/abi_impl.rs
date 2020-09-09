@@ -119,6 +119,7 @@ use crate::{ir, isa};
 use alloc::vec::Vec;
 use log::{debug, trace};
 use regalloc::{RealReg, Reg, RegClass, Set, SpillSlot, Writable};
+use std::convert::TryFrom;
 use std::marker::PhantomData;
 use std::mem;
 
@@ -142,6 +143,16 @@ pub enum ArgsOrRets {
     Rets,
 }
 
+/// Is an instruction returned by an ABI machine-specific backend a safepoint,
+/// or not?
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InstIsSafepoint {
+    /// The instruction is a safepoint.
+    Yes,
+    /// The instruction is not a safepoint.
+    No,
+}
+
 /// Abstract location for a machine-specific ABI impl to translate into the
 /// appropriate addressing mode.
 #[derive(Clone, Copy, Debug)]
@@ -160,7 +171,7 @@ pub enum StackAMode {
 /// Trait implemented by machine-specific backend to provide information about
 /// register assignments and to allow generating the specific instructions for
 /// stack loads/saves, prologues/epilogues, etc.
-pub trait ABIMachineImpl {
+pub trait ABIMachineSpec {
     /// The instruction type.
     type I: VCodeInst;
 
@@ -207,13 +218,15 @@ pub trait ABIMachineImpl {
     fn gen_epilogue_placeholder() -> Self::I;
 
     /// Generate an add-with-immediate. Note that even if this uses a scratch
-    /// register, the sequence must still be correct if the given source or dest
-    /// is the register returned by `get_fixed_tmp_reg()`; hence, for machines
-    /// that may need a scratch register to synthesize an arbitrary constant,
-    /// the machine backend should reserve *another* fixed temp register for
-    /// this purpose. (E.g., on AArch64, x16 is the ordinary fixed tmp, and x17
-    /// is the secondary fixed tmp used to implement this.)
-    fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u64) -> SmallVec<[Self::I; 4]>;
+    /// register, it must satisfy two requirements:
+    ///
+    /// - The add-imm sequence must only clobber caller-save registers, because
+    ///   it will be placed in the prologue before the clobbered callee-save
+    ///   registers are saved.
+    ///
+    /// - The add-imm sequence must work correctly when `from_reg` and/or
+    ///   `into_reg` are the register returned by `get_stacklimit_reg()`.
+    fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallVec<[Self::I; 4]>;
 
     /// Generate a sequence that traps with a `TrapCode::StackOverflow` code if
     /// the stack pointer is less than the given limit register (assuming the
@@ -224,21 +237,30 @@ pub trait ABIMachineImpl {
     /// SP-based offset).
     fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I;
 
-    /// Get a fixed (not used by regalloc) temp. This is needed for certain
-    /// sequences generated after the register allocator has already run.
-    fn get_fixed_tmp_reg() -> Reg;
+    /// Get a fixed register to use to compute a stack limit. This is needed for
+    /// certain sequences generated after the register allocator has already
+    /// run. This must satisfy two requirements:
+    ///
+    /// - It must be a caller-save register, because it will be clobbered in the
+    ///   prologue before the clobbered callee-save registers are saved.
+    ///
+    /// - It must be safe to pass as an argument and/or destination to
+    ///   `gen_add_imm()`. This is relevant when an addition with a large
+    ///   immediate needs its own temporary; it cannot use the same fixed
+    ///   temporary as this one.
+    fn get_stacklimit_reg() -> Reg;
 
     /// Generate a store to the given [base+offset] address.
-    fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i64, ty: Type) -> Self::I;
+    fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Self::I;
 
     /// Generate a load from the given [base+offset] address.
-    fn gen_store_base_offset(base: Reg, offset: i64, from_reg: Reg, ty: Type) -> Self::I;
+    fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Self::I;
 
     /// Adjust the stack pointer up or down.
-    fn gen_sp_reg_adjust(amount: i64) -> SmallVec<[Self::I; 2]>;
+    fn gen_sp_reg_adjust(amount: i32) -> SmallVec<[Self::I; 2]>;
 
     /// Generate a meta-instruction that adjusts the nominal SP offset.
-    fn gen_nominal_sp_adj(amount: i64) -> Self::I;
+    fn gen_nominal_sp_adj(amount: i32) -> Self::I;
 
     /// Generate the usual frame-setup sequence for this architecture: e.g.,
     /// `push rbp / mov rbp, rsp` on x86-64, or `stp fp, lr, [sp, #-16]!` on
@@ -272,18 +294,20 @@ pub trait ABIMachineImpl {
         clobbers: &Set<Writable<RealReg>>,
     ) -> SmallVec<[Self::I; 16]>;
 
-    /// Generate a call instruction/sequence.
+    /// Generate a call instruction/sequence. This method is provided one
+    /// temporary register to use to synthesize the called address, if needed.
     fn gen_call(
         dest: &CallDest,
         uses: Vec<Reg>,
         defs: Vec<Writable<Reg>>,
         loc: SourceLoc,
         opcode: ir::Opcode,
-    ) -> SmallVec<[(/* is_safepoint = */ bool, Self::I); 2]>;
+        tmp: Writable<Reg>,
+    ) -> SmallVec<[(InstIsSafepoint, Self::I); 2]>;
 
     /// Get the number of spillslots required for the given register-class and
     /// type.
-    fn get_spillslot_size(rc: RegClass, ty: Type) -> u32;
+    fn get_number_of_spillslots_for_value(rc: RegClass, ty: Type) -> u32;
 
     /// Get the current virtual-SP offset from an instruction-emission state.
     fn get_virtual_sp_offset_from_state(s: &<Self::I as MachInstEmit>::State) -> i64;
@@ -314,7 +338,7 @@ struct ABISig {
 }
 
 impl ABISig {
-    fn from_func_sig<M: ABIMachineImpl>(sig: &ir::Signature) -> CodegenResult<ABISig> {
+    fn from_func_sig<M: ABIMachineSpec>(sig: &ir::Signature) -> CodegenResult<ABISig> {
         // Compute args and retvals from signature. Handle retvals first,
         // because we may need to add a return-area arg to the args.
         let (rets, stack_ret_space, _) = M::compute_arg_locs(
@@ -353,7 +377,7 @@ impl ABISig {
 }
 
 /// ABI object for a function body.
-pub struct ABIBodyImpl<M: ABIMachineImpl> {
+pub struct ABICalleeImpl<M: ABIMachineSpec> {
     /// Signature: arg and retval regs.
     sig: ABISig,
     /// Offsets to each stackslot.
@@ -405,7 +429,7 @@ fn get_special_purpose_param_register(
     }
 }
 
-impl<M: ABIMachineImpl> ABIBodyImpl<M> {
+impl<M: ABIMachineSpec> ABICalleeImpl<M> {
     /// Create a new body ABI instance.
     pub fn new(f: &ir::Function, flags: settings::Flags) -> CodegenResult<Self> {
         debug!("ABI: func signature {:?}", f.signature);
@@ -506,8 +530,7 @@ impl<M: ABIMachineImpl> ABIBodyImpl<M> {
         // `scratch`. If our stack size doesn't fit into an immediate this
         // means we need a second scratch register for loading the stack size
         // into a register.
-        let scratch = Writable::from_reg(M::get_fixed_tmp_reg());
-        let stack_size = u64::from(stack_size);
+        let scratch = Writable::from_reg(M::get_stacklimit_reg());
         insts.extend(M::gen_add_imm(scratch, stack_limit, stack_size).into_iter());
         insts.extend(M::gen_stack_lower_bound_trap(scratch.to_reg()));
     }
@@ -532,7 +555,7 @@ impl<M: ABIMachineImpl> ABIBodyImpl<M> {
 /// temporary register to store values in if necessary. Currently after we write
 /// to this register there's guaranteed to be no spilled values between where
 /// it's used, because we're not participating in register allocation anyway!
-fn gen_stack_limit<M: ABIMachineImpl>(
+fn gen_stack_limit<M: ABIMachineSpec>(
     f: &ir::Function,
     abi: &ABISig,
     gv: ir::GlobalValue,
@@ -542,7 +565,7 @@ fn gen_stack_limit<M: ABIMachineImpl>(
     return (reg, insts);
 }
 
-fn generate_gv<M: ABIMachineImpl>(
+fn generate_gv<M: ABIMachineSpec>(
     f: &ir::Function,
     abi: &ABISig,
     gv: ir::GlobalValue,
@@ -563,7 +586,7 @@ fn generate_gv<M: ABIMachineImpl>(
             readonly: _,
         } => {
             let base = generate_gv::<M>(f, abi, base, insts);
-            let into_reg = Writable::from_reg(M::get_fixed_tmp_reg());
+            let into_reg = Writable::from_reg(M::get_stacklimit_reg());
             insts.push(M::gen_load_base_offset(into_reg, base, offset.into(), I64));
             return into_reg.to_reg();
         }
@@ -591,7 +614,7 @@ fn ty_from_ty_hint_or_reg_class(r: Reg, ty: Option<Type>) -> Type {
     }
 }
 
-impl<M: ABIMachineImpl> ABIBody for ABIBodyImpl<M> {
+impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     type I = M::I;
 
     fn temp_needed(&self) -> bool {
@@ -676,6 +699,11 @@ impl<M: ABIMachineImpl> ABIBody for ABIBodyImpl<M> {
             }
             &ABIArg::Stack(off, mut ty, ext) => {
                 let from_bits = ty_bits(ty) as u8;
+                // A machine ABI implementation should ensure that stack frames
+                // have "reasonable" size. All current ABIs for machinst
+                // backends (aarch64 and x64) enforce a 128MB limit.
+                let off = i32::try_from(off)
+                    .expect("Argument stack offset greater than 2GB; should hit impl limit first");
                 // Trash the from_reg; it should be its last use.
                 match (ext, from_bits) {
                     (ArgumentExtension::Uext, n) | (ArgumentExtension::Sext, n) if n < 64 => {
@@ -864,7 +892,7 @@ impl<M: ABIMachineImpl> ABIBody for ABIBodyImpl<M> {
 
         if total_sp_adjust > 0 {
             // sub sp, sp, #total_stacksize
-            let adj = total_sp_adjust as i64;
+            let adj = total_sp_adjust as i32;
             insts.extend(M::gen_sp_reg_adjust(-adj));
         }
 
@@ -873,7 +901,7 @@ impl<M: ABIMachineImpl> ABIBody for ABIBodyImpl<M> {
         insts.extend(clobber_insts);
 
         if clobber_size > 0 {
-            insts.push(M::gen_nominal_sp_adj(clobber_size as i64));
+            insts.push(M::gen_nominal_sp_adj(clobber_size as i32));
         }
 
         self.total_frame_size = Some(total_stacksize);
@@ -911,7 +939,7 @@ impl<M: ABIMachineImpl> ABIBody for ABIBodyImpl<M> {
     }
 
     fn get_spillslot_size(&self, rc: RegClass, ty: Type) -> u32 {
-        M::get_spillslot_size(rc, ty)
+        M::get_number_of_spillslots_for_value(rc, ty)
     }
 
     fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg, ty: Option<Type>) -> Self::I {
@@ -930,7 +958,7 @@ impl<M: ABIMachineImpl> ABIBody for ABIBodyImpl<M> {
     }
 }
 
-fn abisig_to_uses_and_defs<M: ABIMachineImpl>(sig: &ABISig) -> (Vec<Reg>, Vec<Writable<Reg>>) {
+fn abisig_to_uses_and_defs<M: ABIMachineSpec>(sig: &ABISig) -> (Vec<Reg>, Vec<Writable<Reg>>) {
     // Compute uses: all arg regs.
     let mut uses = Vec::new();
     for arg in &sig.args {
@@ -953,7 +981,7 @@ fn abisig_to_uses_and_defs<M: ABIMachineImpl>(sig: &ABISig) -> (Vec<Reg>, Vec<Wr
 }
 
 /// ABI object for a callsite.
-pub struct ABICallImpl<M: ABIMachineImpl> {
+pub struct ABICallerImpl<M: ABIMachineSpec> {
     /// The called function's signature.
     sig: ABISig,
     /// All uses for the callsite, i.e., function args.
@@ -979,17 +1007,17 @@ pub enum CallDest {
     Reg(Reg),
 }
 
-impl<M: ABIMachineImpl> ABICallImpl<M> {
+impl<M: ABIMachineSpec> ABICallerImpl<M> {
     /// Create a callsite ABI object for a call directly to the specified function.
     pub fn from_func(
         sig: &ir::Signature,
         extname: &ir::ExternalName,
         dist: RelocDistance,
         loc: ir::SourceLoc,
-    ) -> CodegenResult<ABICallImpl<M>> {
+    ) -> CodegenResult<ABICallerImpl<M>> {
         let sig = ABISig::from_func_sig::<M>(sig)?;
         let (uses, defs) = abisig_to_uses_and_defs::<M>(&sig);
-        Ok(ABICallImpl {
+        Ok(ABICallerImpl {
             sig,
             uses,
             defs,
@@ -1007,10 +1035,10 @@ impl<M: ABIMachineImpl> ABICallImpl<M> {
         ptr: Reg,
         loc: ir::SourceLoc,
         opcode: ir::Opcode,
-    ) -> CodegenResult<ABICallImpl<M>> {
+    ) -> CodegenResult<ABICallerImpl<M>> {
         let sig = ABISig::from_func_sig::<M>(sig)?;
         let (uses, defs) = abisig_to_uses_and_defs::<M>(&sig);
-        Ok(ABICallImpl {
+        Ok(ABICallerImpl {
             sig,
             uses,
             defs,
@@ -1022,15 +1050,14 @@ impl<M: ABIMachineImpl> ABICallImpl<M> {
     }
 }
 
-fn adjust_stack_and_nominal_sp<M: ABIMachineImpl, C: LowerCtx<I = M::I>>(
+fn adjust_stack_and_nominal_sp<M: ABIMachineSpec, C: LowerCtx<I = M::I>>(
     ctx: &mut C,
-    off: u64,
+    off: i32,
     is_sub: bool,
 ) {
     if off == 0 {
         return;
     }
-    let off = off as i64;
     let amt = if is_sub { -off } else { off };
     for inst in M::gen_sp_reg_adjust(amt) {
         ctx.emit(inst);
@@ -1038,7 +1065,7 @@ fn adjust_stack_and_nominal_sp<M: ABIMachineImpl, C: LowerCtx<I = M::I>>(
     ctx.emit(M::gen_nominal_sp_adj(-amt));
 }
 
-impl<M: ABIMachineImpl> ABICall for ABICallImpl<M> {
+impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
     type I = M::I;
 
     fn num_args(&self) -> usize {
@@ -1051,12 +1078,12 @@ impl<M: ABIMachineImpl> ABICall for ABICallImpl<M> {
 
     fn emit_stack_pre_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
         let off = self.sig.stack_arg_space + self.sig.stack_ret_space;
-        adjust_stack_and_nominal_sp::<M, C>(ctx, off as u64, /* is_sub = */ true)
+        adjust_stack_and_nominal_sp::<M, C>(ctx, off as i32, /* is_sub = */ true)
     }
 
     fn emit_stack_post_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
         let off = self.sig.stack_arg_space + self.sig.stack_ret_space;
-        adjust_stack_and_nominal_sp::<M, C>(ctx, off as u64, /* is_sub = */ false)
+        adjust_stack_and_nominal_sp::<M, C>(ctx, off as i32, /* is_sub = */ false)
     }
 
     fn emit_copy_reg_to_arg<C: LowerCtx<I = Self::I>>(
@@ -1152,13 +1179,13 @@ impl<M: ABIMachineImpl> ABICall for ABICallImpl<M> {
             ));
             self.emit_copy_reg_to_arg(ctx, i, rd.to_reg());
         }
+        let tmp = ctx.alloc_tmp(RegClass::I64, I64);
         for (is_safepoint, inst) in
-            M::gen_call(&self.dest, uses, defs, self.loc, self.opcode).into_iter()
+            M::gen_call(&self.dest, uses, defs, self.loc, self.opcode, tmp).into_iter()
         {
-            if is_safepoint {
-                ctx.emit_safepoint(inst);
-            } else {
-                ctx.emit(inst);
+            match is_safepoint {
+                InstIsSafepoint::Yes => ctx.emit_safepoint(inst),
+                InstIsSafepoint::No => ctx.emit(inst),
             }
         }
     }
