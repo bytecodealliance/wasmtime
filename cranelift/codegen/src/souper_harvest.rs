@@ -365,6 +365,28 @@ fn harvest_candidate_lhs(
                         let a = arg(allocs, 0);
                         ast::Instruction::Trunc { a }.into()
                     }
+                    (ir::Opcode::Icmp, ir::InstructionData::IntCompare { cond, .. })
+                    | (ir::Opcode::IcmpImm, ir::InstructionData::IntCompare { cond, .. }) => {
+                        let a = arg(allocs, 0);
+                        let b = arg(allocs, 1);
+                        match cond {
+                            ir::condcodes::IntCC::Equal => ast::Instruction::Eq { a, b }.into(),
+                            ir::condcodes::IntCC::NotEqual => ast::Instruction::Ne { a, b }.into(),
+                            ir::condcodes::IntCC::UnsignedLessThan => {
+                                ast::Instruction::Ult { a, b }.into()
+                            }
+                            ir::condcodes::IntCC::SignedLessThan => {
+                                ast::Instruction::Slt { a, b }.into()
+                            }
+                            ir::condcodes::IntCC::UnsignedLessThanOrEqual => {
+                                ast::Instruction::Sle { a, b }.into()
+                            }
+                            ir::condcodes::IntCC::SignedLessThanOrEqual => {
+                                ast::Instruction::Sle { a, b }.into()
+                            }
+                            _ => ast::AssignmentRhs::Var,
+                        }
+                    }
                     (ir::Opcode::Popcnt, _) => {
                         let a = arg(allocs, 0);
                         ast::Instruction::Ctpop { a }.into()
