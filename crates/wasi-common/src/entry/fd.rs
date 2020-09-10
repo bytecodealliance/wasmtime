@@ -1,7 +1,7 @@
 use super::Entry;
 use crate::handle::{
-    Advice, Dircookie, Fdflags, Fdstat, Filesize, Filestat, Filetype, Fstflags, HandleRights,
-    Prestat, PrestatDir, Rights, Size,
+    Advice, Dircookie, Fdflags, Fdstat, Filedelta, Filesize, Filestat, Filetype, Fstflags,
+    HandleRights, Prestat, PrestatDir, Rights, Size, Whence,
 };
 use crate::sched::Timestamp;
 use crate::{Error, Result};
@@ -147,11 +147,11 @@ impl Entry {
             .iter()
             .map(|s| std::io::IoSlice::new(s.deref()))
             .collect::<Vec<std::io::IoSlice>>();
-        let host_nread = self
+        let host_nwrite = self
             .as_handle(&required_rights)?
             .pwritev(&io_slices, offset)?
             .try_into()?;
-        Ok(host_nread)
+        Ok(host_nwrite)
     }
 
     pub fn fd_read(&self, mut iovs: Vec<wiggle::GuestSlice<u8>>) -> Result<Size> {
@@ -169,6 +169,7 @@ impl Entry {
 
     pub fn fd_readdir(&self, buf: &mut [u8], cookie: Dircookie) -> Result<Size> {
         use crate::handle::AsBytes;
+
         let required_rights = HandleRights::from_base(Rights::FD_READDIR);
         let handle = self.as_handle(&required_rights)?;
 
@@ -202,5 +203,50 @@ impl Entry {
         }
 
         Ok(cursor)
+    }
+
+    pub fn fd_seek(&self, offset: Filedelta, whence: Whence) -> Result<Filesize> {
+        use std::io::SeekFrom;
+        let base = if offset == 0 && whence == Whence::Cur {
+            Rights::FD_TELL
+        } else {
+            Rights::FD_SEEK | Rights::FD_TELL
+        };
+        let required_rights = HandleRights::from_base(base);
+
+        let pos = match whence {
+            Whence::Cur => SeekFrom::Current(offset),
+            Whence::End => SeekFrom::End(offset),
+            Whence::Set => SeekFrom::Start(offset as u64),
+        };
+        let host_newoffset = self.as_handle(&required_rights)?.seek(pos)?;
+        Ok(host_newoffset)
+    }
+
+    pub fn fd_sync(&self) -> Result<()> {
+        let required_rights = HandleRights::from_base(Rights::FD_SYNC);
+        self.as_handle(&required_rights)?.sync()
+    }
+
+    pub fn fd_tell(&self) -> Result<Filesize> {
+        use std::io::SeekFrom;
+        let required_rights = HandleRights::from_base(Rights::FD_TELL);
+        let host_offset = self
+            .as_handle(&required_rights)?
+            .seek(SeekFrom::Current(0))?;
+        Ok(host_offset)
+    }
+
+    pub fn fd_write(&self, iovs: Vec<wiggle::GuestSlice<u8>>) -> Result<Size> {
+        let required_rights = HandleRights::from_base(Rights::FD_WRITE);
+        let io_slices = iovs
+            .iter()
+            .map(|s| std::io::IoSlice::new(s.deref()))
+            .collect::<Vec<std::io::IoSlice>>();
+        let host_nwrite = self
+            .as_handle(&required_rights)?
+            .write_vectored(&io_slices)?
+            .try_into()?;
+        Ok(host_nwrite)
     }
 }

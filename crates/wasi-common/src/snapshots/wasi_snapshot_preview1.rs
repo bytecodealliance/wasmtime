@@ -7,7 +7,6 @@ use crate::wasi::types;
 use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
 use crate::{path, Error, Result, WasiCtx};
 use std::convert::TryInto;
-use std::io::{self, SeekFrom};
 use std::ops::{Deref, DerefMut};
 use tracing::{debug, trace};
 use wiggle::{GuestPtr, GuestSlice};
@@ -117,6 +116,19 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             .fd_filestat_set_times(atim, mtim, fst_flags)
     }
 
+    fn fd_read(&self, fd: types::Fd, iovs: &types::IovecArray<'_>) -> Result<types::Size> {
+        let entry = self.get_entry(fd)?;
+
+        let mut guest_slices = Vec::new();
+        for iov_ptr in iovs.iter() {
+            let iov_ptr = iov_ptr?;
+            let iov: types::Iovec = iov_ptr.read()?;
+            guest_slices.push(iov.buf.as_array(iov.buf_len).as_slice()?);
+        }
+
+        entry.fd_read(guest_slices)
+    }
+
     fn fd_pread(
         &self,
         fd: types::Fd,
@@ -124,6 +136,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         offset: types::Filesize,
     ) -> Result<types::Size> {
         let entry = self.get_entry(fd)?;
+
         // Rather than expose the details of our IovecArray to the Entry, it accepts a
         // Vec<GuestSlice<u8>>
         let mut guest_slices: Vec<GuestSlice<'_, u8>> = Vec::new();
@@ -134,6 +147,35 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         }
 
         entry.fd_pread(guest_slices, offset)
+    }
+
+    fn fd_write(&self, fd: types::Fd, ciovs: &types::CiovecArray<'_>) -> Result<types::Size> {
+        let entry = self.get_entry(fd)?;
+
+        let mut guest_slices = Vec::new();
+        for ciov_ptr in ciovs.iter() {
+            let ciov_ptr = ciov_ptr?;
+            let ciov: types::Ciovec = ciov_ptr.read()?;
+            guest_slices.push(ciov.buf.as_array(ciov.buf_len).as_slice()?);
+        }
+        entry.fd_write(guest_slices)
+    }
+    fn fd_pwrite(
+        &self,
+        fd: types::Fd,
+        ciovs: &types::CiovecArray<'_>,
+        offset: types::Filesize,
+    ) -> Result<types::Size> {
+        let entry = self.get_entry(fd)?;
+
+        let mut guest_slices = Vec::new();
+        for ciov_ptr in ciovs.iter() {
+            let ciov_ptr = ciov_ptr?;
+            let ciov: types::Ciovec = ciov_ptr.read()?;
+            guest_slices.push(ciov.buf.as_array(ciov.buf_len).as_slice()?);
+        }
+
+        entry.fd_pwrite(guest_slices, offset)
     }
 
     fn fd_prestat_get(&self, fd: types::Fd) -> Result<types::Prestat> {
@@ -150,34 +192,6 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let mut path = path.as_array(path_len).as_slice()?;
         entry.fd_prestat_dir_name(path.deref_mut())
     }
-
-    fn fd_pwrite(
-        &self,
-        fd: types::Fd,
-        ciovs: &types::CiovecArray<'_>,
-        offset: types::Filesize,
-    ) -> Result<types::Size> {
-        let mut guest_slices = Vec::new();
-        for ciov_ptr in ciovs.iter() {
-            let ciov_ptr = ciov_ptr?;
-            let ciov: types::Ciovec = ciov_ptr.read()?;
-            guest_slices.push(ciov.buf.as_array(ciov.buf_len).as_slice()?);
-        }
-
-        self.get_entry(fd)?.fd_pwrite(guest_slices, offset)
-    }
-
-    fn fd_read(&self, fd: types::Fd, iovs: &types::IovecArray<'_>) -> Result<types::Size> {
-        let mut guest_slices = Vec::new();
-        for iov_ptr in iovs.iter() {
-            let iov_ptr = iov_ptr?;
-            let iov: types::Iovec = iov_ptr.read()?;
-            guest_slices.push(iov.buf.as_array(iov.buf_len).as_slice()?);
-        }
-
-        self.get_entry(fd)?.fd_read(guest_slices)
-    }
-
     fn fd_readdir(
         &self,
         fd: types::Fd,
@@ -219,55 +233,15 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         offset: types::Filedelta,
         whence: types::Whence,
     ) -> Result<types::Filesize> {
-        let base = if offset == 0 && whence == types::Whence::Cur {
-            types::Rights::FD_TELL
-        } else {
-            types::Rights::FD_SEEK | types::Rights::FD_TELL
-        };
-        let required_rights = HandleRights::from_base(base);
-        let entry = self.get_entry(fd)?;
-        let pos = match whence {
-            types::Whence::Cur => SeekFrom::Current(offset),
-            types::Whence::End => SeekFrom::End(offset),
-            types::Whence::Set => SeekFrom::Start(offset as u64),
-        };
-        let host_newoffset = entry.as_handle(&required_rights)?.seek(pos)?;
-        Ok(host_newoffset)
+        self.get_entry(fd)?.fd_seek(offset, whence)
     }
 
     fn fd_sync(&self, fd: types::Fd) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::FD_SYNC);
-        let entry = self.get_entry(fd)?;
-        entry.as_handle(&required_rights)?.sync()
+        self.get_entry(fd)?.fd_sync()
     }
 
     fn fd_tell(&self, fd: types::Fd) -> Result<types::Filesize> {
-        let required_rights = HandleRights::from_base(types::Rights::FD_TELL);
-        let entry = self.get_entry(fd)?;
-        let host_offset = entry
-            .as_handle(&required_rights)?
-            .seek(SeekFrom::Current(0))?;
-        Ok(host_offset)
-    }
-
-    fn fd_write(&self, fd: types::Fd, ciovs: &types::CiovecArray<'_>) -> Result<types::Size> {
-        let mut guest_slices = Vec::new();
-        for ciov_ptr in ciovs.iter() {
-            let ciov_ptr = ciov_ptr?;
-            let ciov: types::Ciovec = ciov_ptr.read()?;
-            guest_slices.push(ciov.buf.as_array(ciov.buf_len).as_slice()?);
-        }
-        let required_rights = HandleRights::from_base(types::Rights::FD_WRITE);
-        let entry = self.get_entry(fd)?;
-        let host_nwritten = {
-            let slices: Vec<io::IoSlice> =
-                guest_slices.iter().map(|s| io::IoSlice::new(&*s)).collect();
-            entry
-                .as_handle(&required_rights)?
-                .write_vectored(&slices)?
-                .try_into()?
-        };
-        Ok(host_nwritten)
+        self.get_entry(fd)?.fd_tell()
     }
 
     fn path_create_directory(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
