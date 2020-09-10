@@ -124,12 +124,12 @@ jobs:
     - run: cargo check --target wasm32-unknown-emscripten -p wasi-common
     - run: cargo check --target armv7-unknown-linux-gnueabihf -p wasi-common
 
-    # Check that codegen and wasm crates typecheck on 1.41.0; this is required
+    # Check that codegen and wasm crates typecheck on 1.43.0; this is required
     # for Firefox.
-    - run: rustup install 1.41.0
-    - run: cargo +1.41.0 check -p cranelift-codegen
-    - run: cargo +1.41.0 check -p cranelift-wasm
-    - run: cargo +1.41.0 check -p cranelift-tools
+    - run: rustup install 1.43.0
+    - run: cargo +1.43.0 check -p cranelift-codegen
+    - run: cargo +1.43.0 check -p cranelift-wasm
+    - run: cargo +1.43.0 check -p cranelift-tools
 
 
   fuzz_targets:
