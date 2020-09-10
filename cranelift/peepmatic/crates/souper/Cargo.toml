@@ -9,3 +9,11 @@ description = "Converting Souper optimizations into Peepmatic DSL"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1"
+souper-ir = { version = "1", features = ["parse"] }
+log = "0.4.8"
+
+[dev-dependencies]
+peepmatic = { path = "../..", version = "0.66.0" }
+peepmatic-test-operator = { version = "0.66.0", path = "../test-operator" }
+wast = "22.0.0"
