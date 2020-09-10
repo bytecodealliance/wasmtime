@@ -328,17 +328,17 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Self::I {
-        assert_eq!(ty, I64); // only ever used for I64s.
+        // Only ever used for I64s; if that changes, see if the ExtKind below needs to be changed.
+        assert_eq!(ty, I64);
         let simm32 = offset as u32;
         let mem = Amode::imm_reg(simm32, base);
-        Inst::mov64_m_r(mem, into_reg, None)
+        Inst::load(ty, mem, into_reg, ExtKind::None, None)
     }
 
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Self::I {
-        assert_eq!(ty, I64); // only ever used for I64s.
         let simm32 = offset as u32;
         let mem = Amode::imm_reg(simm32, base);
-        Inst::mov_r_m(/* bytes = */ 8, from_reg, mem, None)
+        Inst::store(ty, from_reg, mem, None)
     }
 
     fn gen_sp_reg_adjust(amount: i32) -> SmallVec<[Self::I; 2]> {
