@@ -375,7 +375,10 @@ fn matches_small_constant_shift<C: LowerCtx<I = Inst>>(
     })
 }
 
-fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: u32) -> Amode {
+/// Lowers an instruction to one of the x86 addressing modes.
+///
+/// Note: the 32-bit offset in Cranelift has to be sign-extended, which maps x86's behavior.
+fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i32) -> Amode {
     // We now either have an add that we must materialize, or some other input; as well as the
     // final offset.
     if let Some(add) = matches_input(ctx, spec, Opcode::Iadd) {
@@ -409,6 +412,16 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: u
                 shift_amt,
             )
         } else {
+            for i in 0..=1 {
+                if let Some(cst) = ctx.get_input(add, i).constant {
+                    let final_offset = (offset as i64).wrapping_add(cst as i64);
+                    if low32_will_sign_extend_to_64(final_offset as u64) {
+                        let base = put_input_in_reg(ctx, add_inputs[1 - i]);
+                        return Amode::imm_reg(final_offset as u32, base);
+                    }
+                }
+            }
+
             (
                 put_input_in_reg(ctx, add_inputs[0]),
                 put_input_in_reg(ctx, add_inputs[1]),
@@ -416,11 +429,11 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: u
             )
         };
 
-        return Amode::imm_reg_reg_shift(offset, base, index, shift);
+        return Amode::imm_reg_reg_shift(offset as u32, base, index, shift);
     }
 
     let input = put_input_in_reg(ctx, spec);
-    Amode::imm_reg(offset, input)
+    Amode::imm_reg(offset as u32, input)
 }
 
 //=============================================================================
@@ -1808,7 +1821,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 | Opcode::Uload32
                 | Opcode::Sload32 => {
                     assert_eq!(inputs.len(), 1, "only one input for load operands");
-                    lower_to_amode(ctx, inputs[0], offset as u32)
+                    lower_to_amode(ctx, inputs[0], offset)
                 }
 
                 Opcode::LoadComplex
@@ -1899,7 +1912,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let addr = match op {
                 Opcode::Store | Opcode::Istore8 | Opcode::Istore16 | Opcode::Istore32 => {
                     assert_eq!(inputs.len(), 2, "only one input for store memory operands");
-                    lower_to_amode(ctx, inputs[1], offset as u32)
+                    lower_to_amode(ctx, inputs[1], offset)
                 }
 
                 Opcode::StoreComplex
