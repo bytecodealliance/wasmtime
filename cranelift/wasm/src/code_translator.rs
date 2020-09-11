@@ -332,24 +332,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 builder.seal_block(header)
             }
 
-            // The "If" frame pushes its parameters twice, so they're available to the else block
-            // (see also `FuncTranslationState::push_if`).
-            // Yet, the original_stack_size member accounts for them only once, so that the else
-            // block can see the same number of parameters as the consequent block. As a matter of
-            // fact, we need to substract an extra number of parameter values for if blocks.
-            let num_duplicated_params = if let ControlStackFrame::If {
-                num_param_values, ..
-            } = frame
-            {
-                debug_assert!(num_param_values <= frame.original_stack_size());
-                num_param_values
-            } else {
-                0
-            };
-
-            state
-                .stack
-                .truncate(frame.original_stack_size() - num_duplicated_params);
+            frame.truncate_value_stack_to_original_size(&mut state.stack);
             state
                 .stack
                 .extend_from_slice(builder.block_params(next_block));
@@ -1908,9 +1891,8 @@ fn translate_unreachable_operator<FE: FuncEnvironment + ?Sized>(
                                 let (params, _results) =
                                     blocktype_params_results(module_translation_state, blocktype)?;
                                 let else_block = block_with_params(builder, params, environ)?;
-                                state.stack.truncate(
-                                    state.control_stack.last().unwrap().original_stack_size(),
-                                );
+                                let frame = state.control_stack.last().unwrap();
+                                frame.truncate_value_stack_to_else_params(&mut state.stack);
 
                                 // We change the target of the branch instruction.
                                 builder.change_jump_destination(branch_inst, else_block);
@@ -1918,9 +1900,8 @@ fn translate_unreachable_operator<FE: FuncEnvironment + ?Sized>(
                                 else_block
                             }
                             ElseData::WithElse { else_block } => {
-                                state.stack.truncate(
-                                    state.control_stack.last().unwrap().original_stack_size(),
-                                );
+                                let frame = state.control_stack.last().unwrap();
+                                frame.truncate_value_stack_to_else_params(&mut state.stack);
                                 else_block
                             }
                         };
@@ -1941,9 +1922,8 @@ fn translate_unreachable_operator<FE: FuncEnvironment + ?Sized>(
             let control_stack = &mut state.control_stack;
             let frame = control_stack.pop().unwrap();
 
-            // Now we have to split off the stack the values not used
-            // by unreachable code that hasn't been translated
-            stack.truncate(frame.original_stack_size());
+            // Pop unused parameters from stack.
+            frame.truncate_value_stack_to_original_size(stack);
 
             let reachable_anyway = match frame {
                 // If it is a loop we also have to seal the body loop block
