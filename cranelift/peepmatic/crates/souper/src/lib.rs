@@ -105,7 +105,7 @@ fn convert_lhs(statements: &ast::Arena<ast::Statement>, lhs: ast::ValueId) -> Op
         let mut lhs = format!("(when {}", pattern);
         for (name, width) in tys {
             lhs.push_str("\n        ");
-            lhs.push_str(&format!("(bit-width ${} {})", name, width));
+            lhs.push_str(&format!("(bit-width {} {})", name, width));
         }
         lhs.push(')');
         lhs
@@ -115,11 +115,11 @@ fn convert_lhs(statements: &ast::Arena<ast::Statement>, lhs: ast::ValueId) -> Op
 fn convert_name(name: &str) -> String {
     debug_assert!(name.starts_with('%'));
     debug_assert!(name.len() >= 2);
-    let c = name.chars().nth(1).unwrap();
-    if 'a' <= c && c <= 'z' {
-        name[1..].to_string()
+    let c = name.as_bytes()[1];
+    if b'a' <= c && c <= b'z' {
+        format!("${}", &name[1..])
     } else {
-        format!("v{}", &name[1..])
+        format!("$v{}", &name[1..])
     }
 }
 
@@ -172,7 +172,7 @@ fn convert_operand(
                             }
                         }
                     }
-                    Some(format!("${}", convert_name(&assn.name)))
+                    Some(format!("{}", convert_name(&assn.name)))
                 }
                 ast::AssignmentRhs::Constant(c) => Some(format!("{}", c.value)),
                 ast::AssignmentRhs::Instruction(inst) => match inst {
