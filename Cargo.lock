@@ -564,6 +564,7 @@ dependencies = [
  "filecheck",
  "indicatif",
  "log",
+ "peepmatic-souper",
  "pretty_env_logger",
  "target-lexicon",
  "term",
@@ -971,6 +972,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "id-arena"
+version = "2.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25a2bc672d1148e28034f176e01fffebb08b35768468cc954630da77a1449005"
+
+[[package]]
 name = "indexmap"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1323,6 +1330,18 @@ dependencies = [
  "serde",
  "serde_test",
  "thiserror",
+ "wast",
+]
+
+[[package]]
+name = "peepmatic-souper"
+version = "0.66.0"
+dependencies = [
+ "anyhow",
+ "log",
+ "peepmatic",
+ "peepmatic-test-operator",
+ "souper-ir",
  "wast",
 ]
 
@@ -1919,6 +1938,15 @@ name = "smallvec"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3757cb9d89161a2f24e1cf78efa0c1fcff485d18e3f55e0aa3480824ddaa0f3f"
+
+[[package]]
+name = "souper-ir"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "163cc2bdd8a66cbaccdf06a6b476689a97e928883e09bffbe06fd5945842a83f"
+dependencies = [
+ "id-arena",
+]
 
 [[package]]
 name = "stable_deref_trait"
