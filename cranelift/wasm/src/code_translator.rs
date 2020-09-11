@@ -323,13 +323,33 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 // since we truncate the stack back to the original height
                 // below.
             }
+
             builder.switch_to_block(next_block);
             builder.seal_block(next_block);
+
             // If it is a loop we also have to seal the body loop block
             if let ControlStackFrame::Loop { header, .. } = frame {
                 builder.seal_block(header)
             }
-            state.stack.truncate(frame.original_stack_size());
+
+            // The "If" frame pushes its parameters twice, so they're available to the else block
+            // (see also `FuncTranslationState::push_if`).
+            // Yet, the original_stack_size member accounts for them only once, so that the else
+            // block can see the same number of parameters as the consequent block. As a matter of
+            // fact, we need to substract an extra number of parameter values for if blocks.
+            let num_duplicated_params = if let ControlStackFrame::If {
+                num_param_values, ..
+            } = frame
+            {
+                debug_assert!(num_param_values <= frame.original_stack_size());
+                num_param_values
+            } else {
+                0
+            };
+
+            state
+                .stack
+                .truncate(frame.original_stack_size() - num_duplicated_params);
             state
                 .stack
                 .extend_from_slice(builder.block_params(next_block));
