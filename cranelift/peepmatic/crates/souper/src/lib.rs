@@ -235,17 +235,9 @@ fn convert_operand(
                     ast::Instruction::Add { a, b }
                     | ast::Instruction::AddNsw { a, b }
                     | ast::Instruction::AddNuw { a, b }
-                    | ast::Instruction::AddNw { a, b } => {
-                        if let ast::Operand::Constant(c) = b {
-                            Some(format!(
-                                "(iadd_imm {} {})",
-                                c.value,
-                                convert_operand(statements, a, tys, depth + 1)?,
-                            ))
-                        } else {
-                            convert_operation(statements, "iadd", &[a, b], None, tys, depth)
-                        }
-                    }
+                    | ast::Instruction::AddNw { a, b } => convert_commutative_operation(
+                        statements, "iadd", "iadd_imm", a, b, tys, depth,
+                    ),
                     ast::Instruction::Sub { a, b }
                     | ast::Instruction::SubNsw { a, b }
                     | ast::Instruction::SubNuw { a, b }
@@ -269,17 +261,9 @@ fn convert_operand(
                     ast::Instruction::Mul { a, b }
                     | ast::Instruction::MulNsw { a, b }
                     | ast::Instruction::MulNuw { a, b }
-                    | ast::Instruction::MulNw { a, b } => {
-                        if let ast::Operand::Constant(c) = b {
-                            Some(format!(
-                                "(imul_imm {} {})",
-                                c.value,
-                                convert_operand(statements, a, tys, depth + 1)?,
-                            ))
-                        } else {
-                            convert_operation(statements, "imul", &[a, b], None, tys, depth)
-                        }
-                    }
+                    | ast::Instruction::MulNw { a, b } => convert_commutative_operation(
+                        statements, "imul", "imul_imm", a, b, tys, depth,
+                    ),
                     ast::Instruction::Udiv { a, b } | ast::Instruction::UdivExact { a, b } => {
                         if let ast::Operand::Constant(c) = b {
                             Some(format!(
@@ -324,39 +308,15 @@ fn convert_operand(
                             convert_operation(statements, "srem", &[a, b], None, tys, depth)
                         }
                     }
-                    ast::Instruction::And { a, b } => {
-                        if let ast::Operand::Constant(c) = b {
-                            Some(format!(
-                                "(band_imm {} {})",
-                                c.value,
-                                convert_operand(statements, a, tys, depth + 1)?,
-                            ))
-                        } else {
-                            convert_operation(statements, "band", &[a, b], None, tys, depth)
-                        }
-                    }
-                    ast::Instruction::Or { a, b } => {
-                        if let ast::Operand::Constant(c) = b {
-                            Some(format!(
-                                "(bor_imm {} {})",
-                                c.value,
-                                convert_operand(statements, a, tys, depth + 1)?,
-                            ))
-                        } else {
-                            convert_operation(statements, "bor", &[a, b], None, tys, depth)
-                        }
-                    }
-                    ast::Instruction::Xor { a, b } => {
-                        if let ast::Operand::Constant(c) = b {
-                            Some(format!(
-                                "(bxor_imm {} {})",
-                                c.value,
-                                convert_operand(statements, a, tys, depth + 1)?,
-                            ))
-                        } else {
-                            convert_operation(statements, "bxor", &[a, b], None, tys, depth)
-                        }
-                    }
+                    ast::Instruction::And { a, b } => convert_commutative_operation(
+                        statements, "band", "band_imm", a, b, tys, depth,
+                    ),
+                    ast::Instruction::Or { a, b } => convert_commutative_operation(
+                        statements, "bor", "bor_imm", a, b, tys, depth,
+                    ),
+                    ast::Instruction::Xor { a, b } => convert_commutative_operation(
+                        statements, "bxor", "bxor_imm", a, b, tys, depth,
+                    ),
                     ast::Instruction::Shl { a, b }
                     | ast::Instruction::ShlNsw { a, b }
                     | ast::Instruction::ShlNuw { a, b }
@@ -542,6 +502,39 @@ fn convert_operation(
     Some(op)
 }
 
+/// Convert a commutative operation, using the `_imm` form if any of its
+/// operands is a constant.
+fn convert_commutative_operation(
+    statements: &ast::Arena<ast::Statement>,
+    operator: &str,
+    operator_imm: &str,
+    a: ast::Operand,
+    b: ast::Operand,
+    tys: &mut Vec<(String, u16)>,
+    depth: u8,
+) -> Option<String> {
+    Some(match (a, b) {
+        (ast::Operand::Constant(c), _) => format!(
+            "({} {} {})",
+            operator_imm,
+            c.value,
+            convert_operand(statements, b, tys, depth + 1)?,
+        ),
+        (_, ast::Operand::Constant(c)) => format!(
+            "({} {} {})",
+            operator_imm,
+            c.value,
+            convert_operand(statements, a, tys, depth + 1)?,
+        ),
+        _ => format!(
+            "({} {} {})",
+            operator,
+            convert_operand(statements, a, tys, depth + 1)?,
+            convert_operand(statements, b, tys, depth + 1)?,
+        ),
+    })
+}
+
 fn convert_rhs(statements: &ast::Arena<ast::Statement>, rhs: ast::Operand) -> Option<String> {
     let mut tys = vec![];
     convert_operand(statements, rhs, &mut tys, 0)
@@ -671,9 +664,9 @@ mod tests {
                 cand %3 %4
             ",
             "\
-(=> (when (iadd 1 (iadd 1 (iadd 1 $v0)))
+(=> (when (iadd_imm 1 (iadd_imm 1 (iadd_imm 1 $v0)))
         (bit-width $v0 32))
-    (iadd 3 $v0))",
+    (iadd_imm 3 $v0))",
         );
 
         // Comparisons need to add a `bint` instruction in Peepmatic, since clif
@@ -694,11 +687,24 @@ mod tests {
     0)",
         );
 
-        // We correctly introduce `_imm` variants of instructions.
-        iadd_imm => converts(
+        // We correctly introduce `_imm` variants of instructions, regardless of
+        // which side the constant is on for commutative instructions.
+        iadd_imm_right => converts(
             "
                 %0:i32 = var
                 %1:i32 = add %0, 1
+                %2:i32 = 0
+                cand %1 %2
+            ",
+            "\
+(=> (when (iadd_imm 1 $v0)
+        (bit-width $v0 32))
+    0)"
+        );
+        iadd_imm_left => converts(
+            "
+                %0:i32 = var
+                %1:i32 = add 1, %0
                 %2:i32 = 0
                 cand %1 %2
             ",
