@@ -1,5 +1,4 @@
-use crate::fs::Metadata;
-use crate::wasi::types;
+use crate::fs::{Fd, Metadata};
 use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
 use crate::Result;
 use crate::WasiCtx;
@@ -19,7 +18,7 @@ use std::io;
 /// [`Dir::create_file`]: struct.Dir.html#method.create_file
 pub struct File<'ctx> {
     ctx: &'ctx WasiCtx,
-    fd: types::Fd,
+    fd: Fd,
 }
 
 impl<'ctx> File<'ctx> {
@@ -28,7 +27,7 @@ impl<'ctx> File<'ctx> {
     /// This corresponds to [`std::fs::File::from_raw_fd`].
     ///
     /// [`std::fs::File::from_raw_fd`]: https://doc.rust-lang.org/std/fs/struct.File.html#method.from_raw_fd
-    pub unsafe fn from_raw_wasi_fd(ctx: &'ctx WasiCtx, fd: types::Fd) -> Self {
+    pub unsafe fn from_raw_wasi_fd(ctx: &'ctx WasiCtx, fd: Fd) -> Self {
         Self { ctx, fd }
     }
 
@@ -89,7 +88,7 @@ impl<'ctx> io::Read for File<'ctx> {
     /// TODO: Not yet implemented. See the comment in `Dir::open_file`.
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         // TODO
-        // let iov = [types::Iovec {
+        // let iov = [Iovec {
         //     buf: buf.as_mut_ptr() as *mut u8,
         //     buf_len: buf.len(),
         // }];
