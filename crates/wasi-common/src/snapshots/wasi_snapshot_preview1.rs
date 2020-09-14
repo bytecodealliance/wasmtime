@@ -4,7 +4,7 @@ use crate::sys::clock;
 use crate::sys::poll;
 use crate::wasi::types;
 use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
-use crate::{path, Error, Result, WasiCtx};
+use crate::{Error, Result, WasiCtx};
 use std::convert::TryInto;
 use std::ops::{Deref, DerefMut};
 use tracing::{debug, trace};
