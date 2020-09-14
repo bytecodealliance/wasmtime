@@ -1,5 +1,4 @@
-use crate::handle::{Handle, HandleRights};
-use crate::wasi::types::Filetype;
+use crate::handle::{Filetype, Handle, HandleRights};
 use crate::{Error, Result};
 use std::ops::Deref;
 use std::path::PathBuf;
