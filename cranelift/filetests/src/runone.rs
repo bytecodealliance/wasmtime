@@ -1,7 +1,8 @@
 //! Run the tests in a single test file.
 
-use crate::subtest::{Context, SubTest, SubtestResult};
-use crate::{new_subtest, TestResult};
+use crate::new_subtest;
+use crate::subtest::{Context, SubTest};
+use anyhow::Context as _;
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::print_errors::pretty_verifier_error;
@@ -18,11 +19,16 @@ use std::time;
 /// Load `path` and run the test in it.
 ///
 /// If running this test causes a panic, it will propagate as normal.
-pub fn run(path: &Path, passes: Option<&[String]>, target: Option<&str>) -> TestResult {
+pub fn run(
+    path: &Path,
+    passes: Option<&[String]>,
+    target: Option<&str>,
+) -> anyhow::Result<time::Duration> {
     let _tt = timing::process_file();
     info!("---\nFile: {}", path.to_string_lossy());
     let started = time::Instant::now();
-    let buffer = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let buffer =
+        fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))?;
     let options = ParseOptions {
         target,
         passes,
@@ -39,12 +45,14 @@ pub fn run(path: &Path, passes: Option<&[String]>, target: Option<&str>) -> Test
                 );
                 return Ok(started.elapsed());
             }
-            return Err(e.to_string());
+            return Err(e)
+                .context(format!("failed to parse {}", path.display()))
+                .into();
         }
     };
 
     if testfile.functions.is_empty() {
-        return Err("no functions found".to_string());
+        anyhow::bail!("no functions found");
     }
 
     // Parse the test commands.
@@ -52,7 +60,7 @@ pub fn run(path: &Path, passes: Option<&[String]>, target: Option<&str>) -> Test
         .commands
         .iter()
         .map(new_subtest)
-        .collect::<SubtestResult<Vec<_>>>()?;
+        .collect::<anyhow::Result<Vec<_>>>()?;
 
     // Flags to use for those tests that don't need an ISA.
     // This is the cumulative effect of all the `set` commands in the file.
@@ -71,7 +79,7 @@ pub fn run(path: &Path, passes: Option<&[String]>, target: Option<&str>) -> Test
     // Isolate the last test in the hope that this is the only mutating test.
     // If so, we can completely avoid cloning functions.
     let last_tuple = match tuples.pop() {
-        None => return Err("no test commands found".to_string()),
+        None => anyhow::bail!("no test commands found"),
         Some(t) => t,
     };
 
@@ -102,14 +110,14 @@ fn test_tuples<'a>(
     tests: &'a [Box<dyn SubTest>],
     isa_spec: &'a IsaSpec,
     no_isa_flags: &'a Flags,
-) -> SubtestResult<Vec<(&'a dyn SubTest, &'a Flags, Option<&'a dyn TargetIsa>)>> {
+) -> anyhow::Result<Vec<(&'a dyn SubTest, &'a Flags, Option<&'a dyn TargetIsa>)>> {
     let mut out = Vec::new();
     for test in tests {
         if test.needs_isa() {
             match *isa_spec {
                 IsaSpec::None(_) => {
                     // TODO: Generate a list of default ISAs.
-                    return Err(format!("test {} requires an ISA", test.name()));
+                    anyhow::bail!("test {} requires an ISA", test.name());
                 }
                 IsaSpec::Some(ref isas) => {
                     for isa in isas {
@@ -131,7 +139,7 @@ fn run_one_test<'a>(
     tuple: (&'a dyn SubTest, &'a Flags, Option<&'a dyn TargetIsa>),
     func: Cow<Function>,
     context: &mut Context<'a>,
-) -> SubtestResult<()> {
+) -> anyhow::Result<()> {
     let (test, flags, isa) = tuple;
     let name = format!("{}({})", test.name(), func.name);
     info!("Test: {} {}", name, isa.map_or("-", TargetIsa::name));
@@ -141,11 +149,12 @@ fn run_one_test<'a>(
 
     // Should we run the verifier before this test?
     if !context.verified && test.needs_verifier() {
-        verify_function(&func, context.flags_or_isa())
-            .map_err(|errors| pretty_verifier_error(&func, isa, None, errors))?;
+        verify_function(&func, context.flags_or_isa()).map_err(|errors| {
+            anyhow::anyhow!("{}", pretty_verifier_error(&func, isa, None, errors))
+        })?;
         context.verified = true;
     }
 
-    test.run(func, context)
-        .map_err(|e| format!("{}:\n{}", name, e))
+    test.run(func, context).context(test.name())?;
+    Ok(())
 }

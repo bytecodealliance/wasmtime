@@ -10,7 +10,7 @@
 //! containing the substring "jump to non-existent block".
 
 use crate::match_directive::match_directive;
-use crate::subtest::{Context, SubTest, SubtestResult};
+use crate::subtest::{Context, SubTest};
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::verify_function;
 use cranelift_reader::TestCommand;
@@ -19,13 +19,12 @@ use std::fmt::Write;
 
 struct TestVerifier;
 
-pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "verifier");
     if !parsed.options.is_empty() {
-        Err(format!("No options allowed on {}", parsed))
-    } else {
-        Ok(Box::new(TestVerifier))
+        anyhow::bail!("No options allowed on {}", parsed);
     }
+    Ok(Box::new(TestVerifier))
 }
 
 impl SubTest for TestVerifier {
@@ -38,7 +37,7 @@ impl SubTest for TestVerifier {
         false
     }
 
-    fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
+    fn run(&self, func: Cow<Function>, context: &Context) -> anyhow::Result<()> {
         let func = func.borrow();
 
         // Scan source annotations for "error:" directives.
@@ -52,10 +51,10 @@ impl SubTest for TestVerifier {
 
         match verify_function(func, context.flags_or_isa()) {
             Ok(()) if expected.is_empty() => Ok(()),
-            Ok(()) => Err(format!("passed, but expected errors: {:?}", expected)),
+            Ok(()) => anyhow::bail!("passed, but expected errors: {:?}", expected),
 
             Err(ref errors) if expected.is_empty() => {
-                Err(format!("expected no error, but got:\n{}", errors))
+                anyhow::bail!("expected no error, but got:\n{}", errors);
             }
 
             Err(errors) => {
@@ -86,7 +85,7 @@ impl SubTest for TestVerifier {
                 if msg.is_empty() {
                     Ok(())
                 } else {
-                    Err(msg)
+                    anyhow::bail!("{}", msg);
                 }
             }
         }

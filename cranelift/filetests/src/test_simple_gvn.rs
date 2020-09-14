@@ -5,22 +5,20 @@
 //!
 //! The resulting function is sent to `filecheck`.
 
-use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
+use crate::subtest::{run_filecheck, Context, SubTest};
 use cranelift_codegen;
 use cranelift_codegen::ir::Function;
-use cranelift_codegen::print_errors::pretty_error;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
 
 struct TestSimpleGVN;
 
-pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "simple-gvn");
     if !parsed.options.is_empty() {
-        Err(format!("No options allowed on {}", parsed))
-    } else {
-        Ok(Box::new(TestSimpleGVN))
+        anyhow::bail!("No options allowed on {}", parsed);
     }
+    Ok(Box::new(TestSimpleGVN))
 }
 
 impl SubTest for TestSimpleGVN {
@@ -32,13 +30,13 @@ impl SubTest for TestSimpleGVN {
         true
     }
 
-    fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
+    fn run(&self, func: Cow<Function>, context: &Context) -> anyhow::Result<()> {
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
         comp_ctx.flowgraph();
         comp_ctx
             .simple_gvn(context.flags_or_isa())
-            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, Into::into(e)))?;
+            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, context.isa, Into::into(e)))?;
 
         let text = comp_ctx.func.display(context.isa).to_string();
         run_filecheck(&text, context)

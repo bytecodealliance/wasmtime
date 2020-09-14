@@ -2,26 +2,24 @@
 //!
 //! The `rodata` test command runs each function through the full code generator pipeline
 
-use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
+use crate::subtest::{run_filecheck, Context, SubTest};
 use cranelift_codegen;
 use cranelift_codegen::binemit::{self, CodeInfo};
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::{Function, Value};
 use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::print_errors::pretty_error;
 use cranelift_reader::TestCommand;
 use log::info;
 use std::borrow::Cow;
 
 struct TestRodata;
 
-pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "rodata");
     if !parsed.options.is_empty() {
-        Err(format!("No options allowed on {}", parsed))
-    } else {
-        Ok(Box::new(TestRodata))
+        anyhow::bail!("No options allowed on {}", parsed);
     }
+    Ok(Box::new(TestRodata))
 }
 
 impl SubTest for TestRodata {
@@ -37,13 +35,13 @@ impl SubTest for TestRodata {
         true
     }
 
-    fn run(&self, func: Cow<ir::Function>, context: &Context) -> SubtestResult<()> {
+    fn run(&self, func: Cow<ir::Function>, context: &Context) -> anyhow::Result<()> {
         let isa = context.isa.expect("rodata needs an ISA");
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
         let CodeInfo { total_size, .. } = comp_ctx
             .compile(isa)
-            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
+            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, context.isa, e))?;
 
         info!(
             "Generated {} bytes of code:\n{}",

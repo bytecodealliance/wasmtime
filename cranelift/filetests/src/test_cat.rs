@@ -1,6 +1,6 @@
 //! The `cat` subtest.
 
-use crate::subtest::{self, Context, SubTest, SubtestResult};
+use crate::subtest::{self, Context, SubTest};
 use cranelift_codegen::ir::Function;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
@@ -13,13 +13,12 @@ use std::borrow::Cow;
 /// The result is verified by filecheck.
 struct TestCat;
 
-pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "cat");
     if !parsed.options.is_empty() {
-        Err(format!("No options allowed on {}", parsed))
-    } else {
-        Ok(Box::new(TestCat))
+        anyhow::bail!("No options allowed on {}", parsed);
     }
+    Ok(Box::new(TestCat))
 }
 
 impl SubTest for TestCat {
@@ -31,7 +30,7 @@ impl SubTest for TestCat {
         false
     }
 
-    fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
+    fn run(&self, func: Cow<Function>, context: &Context) -> anyhow::Result<()> {
         subtest::run_filecheck(&func.display(context.isa).to_string(), context)
     }
 }

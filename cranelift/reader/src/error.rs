@@ -33,6 +33,8 @@ impl fmt::Display for ParseError {
     }
 }
 
+impl std::error::Error for ParseError {}
+
 /// Result of a parser operation. The `ParseError` variant includes a location.
 pub type ParseResult<T> = Result<T, ParseError>;
 

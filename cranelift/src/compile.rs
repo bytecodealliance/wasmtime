@@ -2,6 +2,7 @@
 
 use crate::disasm::{print_all, PrintRelocs, PrintStackMaps, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_string};
+use anyhow::{Context as _, Result};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
@@ -17,7 +18,7 @@ pub fn run(
     flag_report_times: bool,
     flag_set: &[String],
     flag_isa: &str,
-) -> Result<(), String> {
+) -> Result<()> {
     let parsed = parse_sets_and_triple(flag_set, flag_isa)?;
 
     for filename in files {
@@ -42,17 +43,17 @@ fn handle_module(
     path: &PathBuf,
     name: &str,
     fisa: FlagsOrIsa,
-) -> Result<(), String> {
-    let buffer = read_to_string(&path).map_err(|e| format!("{}: {}", name, e))?;
-    let test_file =
-        parse_test(&buffer, ParseOptions::default()).map_err(|e| format!("{}: {}", name, e))?;
+) -> Result<()> {
+    let buffer = read_to_string(&path)?;
+    let test_file = parse_test(&buffer, ParseOptions::default())
+        .with_context(|| format!("failed to parse {}", name))?;
 
     // If we have an isa from the command-line, use that. Otherwise if the
     // file contains a unique isa, use that.
     let isa = fisa.isa.or(test_file.isa_spec.unique_isa());
 
     if isa.is_none() {
-        return Err(String::from("compilation requires a target isa"));
+        anyhow::bail!("compilation requires a target isa");
     };
 
     for (func, _) in test_file.functions {
@@ -68,7 +69,9 @@ fn handle_module(
             // Compile and encode the result to machine code.
             let code_info = context
                 .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stack_maps)
-                .map_err(|err| pretty_error(&context.func, Some(isa), err))?;
+                .map_err(|err| {
+                    anyhow::anyhow!("{}", pretty_error(&context.func, Some(isa), err))
+                })?;
 
             if flag_print {
                 println!("{}", context.func.display(isa));

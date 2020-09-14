@@ -4,10 +4,10 @@
 //! normalizing formatting and removing comments.
 
 use crate::utils::read_to_string;
-use crate::CommandResult;
+use anyhow::{Context, Result};
 use cranelift_reader::parse_functions;
 
-pub fn run(files: &[String]) -> CommandResult {
+pub fn run(files: &[String]) -> Result<()> {
     for (i, f) in files.iter().enumerate() {
         if i != 0 {
             println!();
@@ -17,9 +17,10 @@ pub fn run(files: &[String]) -> CommandResult {
     Ok(())
 }
 
-fn cat_one(filename: &str) -> CommandResult {
-    let buffer = read_to_string(&filename).map_err(|e| format!("{}: {}", filename, e))?;
-    let items = parse_functions(&buffer).map_err(|e| format!("{}: {}", filename, e))?;
+fn cat_one(filename: &str) -> Result<()> {
+    let buffer = read_to_string(&filename)?;
+    let items =
+        parse_functions(&buffer).with_context(|| format!("failed to parse {}", filename))?;
 
     for (idx, func) in items.into_iter().enumerate() {
         if idx != 0 {

@@ -13,7 +13,7 @@
 //!
 
 use crate::match_directive::match_directive;
-use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
+use crate::subtest::{run_filecheck, Context, SubTest};
 use cranelift_codegen::dominator_tree::{DominatorTree, DominatorTreePreorder};
 use cranelift_codegen::flowgraph::ControlFlowGraph;
 use cranelift_codegen::ir::entities::AnyEntity;
@@ -25,13 +25,12 @@ use std::fmt::{self, Write};
 
 struct TestDomtree;
 
-pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "domtree");
     if !parsed.options.is_empty() {
-        Err(format!("No options allowed on {}", parsed))
-    } else {
-        Ok(Box::new(TestDomtree))
+        anyhow::bail!("No options allowed on {}", parsed)
     }
+    Ok(Box::new(TestDomtree))
 }
 
 impl SubTest for TestDomtree {
@@ -40,7 +39,7 @@ impl SubTest for TestDomtree {
     }
 
     // Extract our own dominator tree from
-    fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
+    fn run(&self, func: Cow<Function>, context: &Context) -> anyhow::Result<()> {
         let func = func.borrow();
         let cfg = ControlFlowGraph::with_function(func);
         let domtree = DominatorTree::with_function(func, &cfg);
@@ -52,38 +51,42 @@ impl SubTest for TestDomtree {
                 let inst = match comment.entity {
                     AnyEntity::Inst(inst) => inst,
                     _ => {
-                        return Err(format!(
+                        anyhow::bail!(
                             "annotation on non-inst {}: {}",
-                            comment.entity, comment.text
-                        ));
+                            comment.entity,
+                            comment.text
+                        );
                     }
                 };
                 for src_block in tail.split_whitespace() {
                     let block = match context.details.map.lookup_str(src_block) {
                         Some(AnyEntity::Block(block)) => block,
-                        _ => return Err(format!("expected defined block, got {}", src_block)),
+                        _ => anyhow::bail!("expected defined block, got {}", src_block),
                     };
 
                     // Annotations say that `inst` is the idom of `block`.
                     if expected.insert(block, inst).is_some() {
-                        return Err(format!("multiple dominators for {}", src_block));
+                        anyhow::bail!("multiple dominators for {}", src_block);
                     }
 
                     // Compare to computed domtree.
                     match domtree.idom(block) {
                         Some(got_inst) if got_inst != inst => {
-                            return Err(format!(
+                            anyhow::bail!(
                                 "mismatching idoms for {}:\n\
                                  want: {}, got: {}",
-                                src_block, inst, got_inst
-                            ));
+                                src_block,
+                                inst,
+                                got_inst
+                            );
                         }
                         None => {
-                            return Err(format!(
+                            anyhow::bail!(
                                 "mismatching idoms for {}:\n\
                                  want: {}, got: unreachable",
-                                src_block, inst
-                            ));
+                                src_block,
+                                inst
+                            );
                         }
                         _ => {}
                     }
@@ -100,11 +103,12 @@ impl SubTest for TestDomtree {
             .filter(|block| !expected.contains_key(block))
         {
             if let Some(got_inst) = domtree.idom(block) {
-                return Err(format!(
+                anyhow::bail!(
                     "mismatching idoms for renumbered {}:\n\
                      want: unrechable, got: {}",
-                    block, got_inst
-                ));
+                    block,
+                    got_inst
+                );
             }
         }
 

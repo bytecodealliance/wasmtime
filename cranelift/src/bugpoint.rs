@@ -2,6 +2,7 @@
 
 use crate::disasm::{PrintRelocs, PrintStackMaps, PrintTraps};
 use crate::utils::{parse_sets_and_triple, read_to_string};
+use anyhow::{Context as _, Result};
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::flowgraph::ControlFlowGraph;
 use cranelift_codegen::ir::types::{F32, F64};
@@ -13,25 +14,19 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
 use cranelift_entity::PrimaryMap;
 use cranelift_reader::{parse_test, ParseOptions};
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use std::collections::HashMap;
 use std::path::Path;
 
-use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-
-pub fn run(
-    filename: &str,
-    flag_set: &[String],
-    flag_isa: &str,
-    verbose: bool,
-) -> Result<(), String> {
+pub fn run(filename: &str, flag_set: &[String], flag_isa: &str, verbose: bool) -> Result<()> {
     let parsed = parse_sets_and_triple(flag_set, flag_isa)?;
     let fisa = parsed.as_fisa();
 
     let path = Path::new(&filename).to_path_buf();
 
-    let buffer = read_to_string(&path).map_err(|e| format!("{}: {}", filename, e))?;
-    let test_file =
-        parse_test(&buffer, ParseOptions::default()).map_err(|e| format!("{}: {}", filename, e))?;
+    let buffer = read_to_string(&path)?;
+    let test_file = parse_test(&buffer, ParseOptions::default())
+        .with_context(|| format!("failed to parse {}", filename))?;
 
     // If we have an isa from the command-line, use that. Otherwise if the
     // file contains a unique isa, use that.
@@ -40,7 +35,7 @@ pub fn run(
     } else if let Some(isa) = test_file.isa_spec.unique_isa() {
         isa
     } else {
-        return Err(String::from("compilation requires a target isa"));
+        anyhow::bail!("compilation requires a target isa");
     };
 
     std::env::set_var("RUST_BACKTRACE", "0"); // Disable backtraces to reduce verbosity
@@ -833,20 +828,11 @@ fn try_resolve_aliases(context: &mut CrashCheckContext, func: &mut Function) {
     }
 }
 
-fn reduce(
-    isa: &dyn TargetIsa,
-    mut func: Function,
-    verbose: bool,
-) -> Result<(Function, String), String> {
+fn reduce(isa: &dyn TargetIsa, mut func: Function, verbose: bool) -> Result<(Function, String)> {
     let mut context = CrashCheckContext::new(isa);
 
-    match context.check_for_crash(&func) {
-        CheckResult::Succeed => {
-            return Err(
-                "Given function compiled successfully or gave a verifier error.".to_string(),
-            );
-        }
-        CheckResult::Crash(_) => {}
+    if let CheckResult::Succeed = context.check_for_crash(&func) {
+        anyhow::bail!("Given function compiled successfully or gave a verifier error.");
     }
 
     try_resolve_aliases(&mut context, &mut func);

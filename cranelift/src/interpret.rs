@@ -10,12 +10,12 @@ use std::{fs, io};
 use thiserror::Error;
 
 /// Run files through the Cranelift interpreter, interpreting any functions with annotations.
-pub fn run(files: Vec<String>, flag_print: bool) -> Result<(), String> {
+pub fn run(files: Vec<String>, flag_print: bool) -> anyhow::Result<()> {
     let mut total = 0;
     let mut errors = 0;
     for file in iterate_files(files) {
         total += 1;
-        let runner = FileInterpreter::from_path(file).map_err(|e| e.to_string())?;
+        let runner = FileInterpreter::from_path(file)?;
         match runner.run() {
             Ok(_) => {
                 if flag_print {
@@ -41,8 +41,8 @@ pub fn run(files: Vec<String>, flag_print: bool) -> Result<(), String> {
 
     match errors {
         0 => Ok(()),
-        1 => Err(String::from("1 failure")),
-        n => Err(format!("{} failures", n)),
+        1 => anyhow::bail!("1 failure"),
+        n => anyhow::bail!("{} failures", n),
     }
 }
 

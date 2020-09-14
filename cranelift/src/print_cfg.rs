@@ -4,11 +4,11 @@
 //! in graphviz format.
 
 use crate::utils::read_to_string;
-use crate::CommandResult;
+use anyhow::Result;
 use cranelift_codegen::cfg_printer::CFGPrinter;
 use cranelift_reader::parse_functions;
 
-pub fn run(files: &[String]) -> CommandResult {
+pub fn run(files: &[String]) -> Result<()> {
     for (i, f) in files.iter().enumerate() {
         if i != 0 {
             println!();
@@ -18,9 +18,9 @@ pub fn run(files: &[String]) -> CommandResult {
     Ok(())
 }
 
-fn print_cfg(filename: &str) -> CommandResult {
-    let buffer = read_to_string(filename).map_err(|e| format!("{}: {}", filename, e))?;
-    let items = parse_functions(&buffer).map_err(|e| format!("{}: {}", filename, e))?;
+fn print_cfg(filename: &str) -> Result<()> {
+    let buffer = read_to_string(filename)?;
+    let items = parse_functions(&buffer)?;
 
     for (idx, func) in items.into_iter().enumerate() {
         if idx != 0 {

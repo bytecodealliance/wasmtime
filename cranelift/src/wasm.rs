@@ -10,6 +10,7 @@
 use crate::disasm::{print_all, PrintRelocs, PrintStackMaps, PrintTraps};
 use crate::utils::parse_sets_and_triple;
 use crate::UseTerminalColor;
+use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::DisplayFunctionAnnotations;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
@@ -72,7 +73,7 @@ pub fn run(
     flag_print_size: bool,
     flag_report_times: bool,
     flag_calc_value_ranges: bool,
-) -> Result<(), String> {
+) -> Result<()> {
     let parsed = parse_sets_and_triple(flag_set, flag_triple)?;
     for filename in files {
         let path = Path::new(&filename);
@@ -108,7 +109,7 @@ fn handle_module(
     path: &PathBuf,
     name: &str,
     fisa: FlagsOrIsa,
-) -> Result<(), String> {
+) -> Result<()> {
     let mut terminal = term::stdout().unwrap();
     let use_color = terminal.supports_color() && use_terminal_color == UseTerminalColor::Auto
         || use_terminal_color == UseTerminalColor::Always;
@@ -134,27 +135,23 @@ fn handle_module(
         stdin
             .lock()
             .read_to_end(&mut buf)
-            .map_err(|e| e.to_string())?;
-        wat::parse_bytes(&buf)
-            .map_err(|err| format!("{:?}", err))?
-            .into()
+            .context("failed to read stdin")?;
+        wat::parse_bytes(&buf)?.into()
     } else {
-        wat::parse_file(path).map_err(|err| format!("{:?}", err))?
+        wat::parse_file(path)?
     };
 
     let isa = match fisa.isa {
         Some(isa) => isa,
         None => {
-            return Err(String::from(
-                "Error: the wasm command requires an explicit isa.",
-            ));
+            anyhow::bail!("Error: the wasm command requires an explicit isa.");
         }
     };
 
     let debug_info = flag_calc_value_ranges;
     let mut dummy_environ =
         DummyEnvironment::new(isa.frontend_config(), ReturnMode::NormalReturns, debug_info);
-    translate_module(&module_binary, &mut dummy_environ).map_err(|e| e.to_string())?;
+    translate_module(&module_binary, &mut dummy_environ)?;
 
     vcprintln!(flag_verbose, use_color, terminal, term::color::GREEN, "ok");
 
@@ -222,12 +219,15 @@ fn handle_module(
         let mut stack_maps = PrintStackMaps::new(flag_print);
         if flag_check_translation {
             if let Err(errors) = context.verify(fisa) {
-                return Err(pretty_verifier_error(&context.func, fisa.isa, None, errors));
+                anyhow::bail!(
+                    "{}",
+                    pretty_verifier_error(&context.func, fisa.isa, None, errors)
+                );
             }
         } else {
             let code_info = context
                 .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stack_maps)
-                .map_err(|err| pretty_error(&context.func, fisa.isa, err))?;
+                .map_err(|err| anyhow::anyhow!("{}", pretty_error(&context.func, fisa.isa, err)))?;
 
             if flag_print_size {
                 println!(

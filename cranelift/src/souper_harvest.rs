@@ -1,4 +1,5 @@
 use crate::utils::parse_sets_and_triple;
+use anyhow::{Context as _, Result};
 use cranelift_codegen::Context;
 use cranelift_wasm::{DummyEnvironment, ReturnMode};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -6,32 +7,32 @@ use std::{fs, io};
 
 static WASM_MAGIC: &[u8] = &[0x00, 0x61, 0x73, 0x6D];
 
-pub fn run(target: &str, input: &str, output: &str, flag_set: &[String]) -> Result<(), String> {
+pub fn run(target: &str, input: &str, output: &str, flag_set: &[String]) -> Result<()> {
     let parsed = parse_sets_and_triple(flag_set, target)?;
     let fisa = parsed.as_fisa();
     if fisa.isa.is_none() {
-        return Err("`souper-harvest` requires a target isa".into());
+        anyhow::bail!("`souper-harvest` requires a target isa");
     }
 
     let stdin = io::stdin();
     let mut input: Box<dyn io::BufRead> = match input {
         "-" => Box::new(stdin.lock()),
         _ => Box::new(io::BufReader::new(
-            fs::File::open(input).map_err(|e| format!("failed to open input file: {}", e))?,
+            fs::File::open(input).context("failed to open input file")?,
         )),
     };
 
     let mut output: Box<dyn io::Write + Send> = match output {
         "-" => Box::new(io::stdout()),
         _ => Box::new(io::BufWriter::new(
-            fs::File::create(output).map_err(|e| format!("failed to create output file: {}", e))?,
+            fs::File::create(output).context("failed to create output file")?,
         )),
     };
 
     let mut contents = vec![];
     input
         .read_to_end(&mut contents)
-        .map_err(|e| format!("failed to read from input file: {}", e))?;
+        .context("failed to read input file")?;
 
     let funcs = if &contents[..WASM_MAGIC.len()] == WASM_MAGIC {
         let mut dummy_environ = DummyEnvironment::new(
@@ -40,7 +41,7 @@ pub fn run(target: &str, input: &str, output: &str, flag_set: &[String]) -> Resu
             false,
         );
         cranelift_wasm::translate_module(&contents, &mut dummy_environ)
-            .map_err(|e| format!("failed to translate Wasm module to clif: {}", e))?;
+            .context("failed to translate Wasm module to clif")?;
         dummy_environ
             .info
             .function_bodies
@@ -48,19 +49,17 @@ pub fn run(target: &str, input: &str, output: &str, flag_set: &[String]) -> Resu
             .map(|(_, f)| f.clone())
             .collect()
     } else {
-        let contents = String::from_utf8(contents)
-            .map_err(|e| format!("input is not a UTF-8 string: {}", e))?;
-        cranelift_reader::parse_functions(&contents)
-            .map_err(|e| format!("failed to parse clif: {}", e))?
+        let contents = String::from_utf8(contents)?;
+        cranelift_reader::parse_functions(&contents)?
     };
 
     let (send, recv) = std::sync::mpsc::channel::<String>();
 
-    let writing_thread = std::thread::spawn(move || -> Result<(), String> {
+    let writing_thread = std::thread::spawn(move || -> Result<()> {
         for lhs in recv {
             output
                 .write_all(lhs.as_bytes())
-                .map_err(|e| format!("failed to write to output file: {}", e))?;
+                .context("failed to write to output file")?;
         }
         Ok(())
     });
@@ -73,14 +72,14 @@ pub fn run(target: &str, input: &str, output: &str, flag_set: &[String]) -> Resu
 
             ctx.compute_cfg();
             ctx.preopt(fisa.isa.unwrap())
-                .map_err(|e| format!("failed to run preopt: {}", e))?;
+                .context("failed to run preopt")?;
 
             ctx.souper_harvest(send)
-                .map_err(|e| format!("failed to run souper harvester: {}", e))?;
+                .context("failed to run souper harvester")?;
 
             Ok(())
         })
-        .collect::<Result<(), String>>()?;
+        .collect::<Result<()>>()?;
 
     match writing_thread.join() {
         Ok(result) => result?,

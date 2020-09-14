@@ -1,6 +1,7 @@
 //! CLI tool to compile Cranelift IR files to native code in memory and execute them.
 
 use crate::utils::{iterate_files, read_to_string};
+use anyhow::Result;
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_filetests::SingleFunctionCompiler;
 use cranelift_native::builder as host_isa_builder;
@@ -8,7 +9,7 @@ use cranelift_reader::{parse_run_command, parse_test, Details, IsaSpec, ParseOpt
 use std::path::PathBuf;
 use target_lexicon::Triple;
 
-pub fn run(files: Vec<String>, flag_print: bool) -> Result<(), String> {
+pub fn run(files: Vec<String>, flag_print: bool) -> Result<()> {
     let stdin_exist = files.iter().find(|file| *file == "-").is_some();
     let filtered_files = files
         .iter()
@@ -48,33 +49,33 @@ pub fn run(files: Vec<String>, flag_print: bool) -> Result<(), String> {
 
     match errors {
         0 => Ok(()),
-        1 => Err(String::from("1 failure")),
-        n => Err(format!("{} failures", n)),
+        1 => anyhow::bail!("1 failure"),
+        n => anyhow::bail!("{} failures", n),
     }
 }
 
 /// Run all functions in a file that are succeeded by "run:" comments
-fn run_single_file(path: &PathBuf) -> Result<(), String> {
-    let file_contents = read_to_string(&path).map_err(|e| e.to_string())?;
+fn run_single_file(path: &PathBuf) -> Result<()> {
+    let file_contents = read_to_string(&path)?;
     run_file_contents(file_contents)
 }
 
 /// Main body of `run_single_file` separated for testing
-fn run_file_contents(file_contents: String) -> Result<(), String> {
+fn run_file_contents(file_contents: String) -> Result<()> {
     let options = ParseOptions {
         default_calling_convention: CallConv::triple_default(&Triple::host()), // use the host's default calling convention
         ..ParseOptions::default()
     };
-    let test_file = parse_test(&file_contents, options).map_err(|e| e.to_string())?;
+    let test_file = parse_test(&file_contents, options)?;
     let isa = create_target_isa(&test_file.isa_spec)?;
     let mut compiler = SingleFunctionCompiler::new(isa);
     for (func, Details { comments, .. }) in test_file.functions {
         for comment in comments {
-            if let Some(command) =
-                parse_run_command(comment.text, &func.signature).map_err(|e| e.to_string())?
-            {
-                let compiled_fn = compiler.compile(func.clone()).map_err(|e| e.to_string())?;
-                command.run(|_, args| Ok(compiled_fn.call(args)))?;
+            if let Some(command) = parse_run_command(comment.text, &func.signature)? {
+                let compiled_fn = compiler.compile(func.clone())?;
+                command
+                    .run(|_, args| Ok(compiled_fn.call(args)))
+                    .map_err(|s| anyhow::anyhow!("{}", s))?;
             }
         }
     }
@@ -82,13 +83,16 @@ fn run_file_contents(file_contents: String) -> Result<(), String> {
 }
 
 /// Build an ISA based on the current machine running this code (the host)
-fn create_target_isa(isa_spec: &IsaSpec) -> Result<Box<dyn TargetIsa>, String> {
+fn create_target_isa(isa_spec: &IsaSpec) -> Result<Box<dyn TargetIsa>> {
     if let IsaSpec::None(flags) = isa_spec {
         // build an ISA for the current machine
-        let builder = host_isa_builder()?;
+        let builder = host_isa_builder().map_err(|s| anyhow::anyhow!("{}", s))?;
         Ok(builder.finish(flags.clone()))
     } else {
-        Err(String::from("A target ISA was specified in the file but should not have been--only the host ISA can be used for running CLIF files"))
+        anyhow::bail!(
+            "A target ISA was specified in the file but should not have been--only \
+             the host ISA can be used for running CLIF files"
+        )
     }
 }
 

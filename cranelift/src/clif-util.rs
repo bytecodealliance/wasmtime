@@ -16,9 +16,7 @@
 use clap::{arg_enum, App, Arg, SubCommand};
 use cranelift_codegen::dbg::LOG_FILENAME_PREFIX;
 use cranelift_codegen::VERSION;
-use std::io::{self, Write};
 use std::option::Option;
-use std::process;
 
 mod bugpoint;
 mod cat;
@@ -36,9 +34,6 @@ mod souper_to_peepmatic;
 
 #[cfg(feature = "wasm")]
 mod wasm;
-
-/// A command either succeeds or fails with an error message.
-pub type CommandResult = Result<(), String>;
 
 fn add_input_file_arg<'a>() -> clap::Arg<'a, 'a> {
     Arg::with_name("file")
@@ -199,7 +194,7 @@ fn handle_debug_flag(debug: bool) {
     }
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let app_cmds = App::new("Cranelift code generator utility")
         .version(VERSION)
         .subcommand(
@@ -276,10 +271,10 @@ fn main() {
                 .arg(add_set_flag()),
         );
 
-    let res_util = match app_cmds.get_matches().subcommand() {
+    match app_cmds.get_matches().subcommand() {
         ("cat", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
-            cat::run(&get_vec(rest_cmd.values_of("file")))
+            cat::run(&get_vec(rest_cmd.values_of("file")))?
         }
         ("test", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
@@ -288,23 +283,21 @@ fn main() {
                 rest_cmd.is_present("time-passes"),
                 &get_vec(rest_cmd.values_of("file")),
             )
-            .map(|_time| ())
+            .map_err(|s| anyhow::anyhow!("{}", s))?;
         }
         ("run", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
             run::run(
                 get_vec(rest_cmd.values_of("file")),
                 rest_cmd.is_present("verbose"),
-            )
-            .map(|_time| ())
+            )?;
         }
         ("interpret", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
             interpret::run(
                 get_vec(rest_cmd.values_of("file")),
                 rest_cmd.is_present("verbose"),
-            )
-            .map(|_time| ())
+            )?;
         }
         ("pass", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
@@ -322,11 +315,11 @@ fn main() {
                 target_val,
                 rest_cmd.value_of("single-file").unwrap(),
             )
-            .map(|_time| ())
+            .map_err(|s| anyhow::anyhow!("{}", s))?;
         }
         ("print-cfg", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
-            print_cfg::run(&get_vec(rest_cmd.values_of("file")))
+            print_cfg::run(&get_vec(rest_cmd.values_of("file")))?;
         }
         ("compile", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
@@ -343,13 +336,13 @@ fn main() {
                 rest_cmd.is_present("time-passes"),
                 &get_vec(rest_cmd.values_of("set")),
                 target_val,
-            )
+            )?;
         }
         ("wasm", Some(rest_cmd)) => {
             handle_debug_flag(rest_cmd.is_present("debug"));
 
             #[cfg(feature = "wasm")]
-            let result = {
+            {
                 let mut target_val: &str = "";
                 if let Some(clap_target) = rest_cmd.value_of("target") {
                     target_val = clap_target;
@@ -368,13 +361,13 @@ fn main() {
                     rest_cmd.is_present("print-size"),
                     rest_cmd.is_present("time-passes"),
                     rest_cmd.is_present("value-ranges"),
-                )
-            };
+                )?;
+            }
 
             #[cfg(not(feature = "wasm"))]
-            let result = Err("Error: clif-util was compiled without wasm support.".to_owned());
-
-            result
+            {
+                anyhow::bail!("Error: clif-util was compiled without wasm support.");
+            }
         }
         ("bugpoint", Some(rest_cmd)) => {
             let mut target_val: &str = "";
@@ -387,7 +380,7 @@ fn main() {
                 &get_vec(rest_cmd.values_of("set")),
                 target_val,
                 rest_cmd.is_present("verbose"),
-            )
+            )?;
         }
         ("souper-to-peepmatic", Some(rest_cmd)) => {
             #[cfg(feature = "peepmatic-souper")]
@@ -396,15 +389,15 @@ fn main() {
                 souper_to_peepmatic::run(
                     Path::new(rest_cmd.value_of("single-file").unwrap()),
                     Path::new(rest_cmd.value_of("output").unwrap()),
-                )
+                )?;
             }
             #[cfg(not(feature = "peepmatic-souper"))]
             {
-                Err(
-                    "Error: clif-util was compiled without support for the `souper-to-peepmatic` \
+                anyhow::bail!(
+                    "Error: clif-util was compiled without suport for the `souper-to-peepmatic` \
                      subcommand"
                         .into(),
-                )
+                );
             }
         }
         ("souper-harvest", Some(rest_cmd)) => {
@@ -415,23 +408,16 @@ fn main() {
                     rest_cmd.value_of("single-file").unwrap(),
                     rest_cmd.value_of("output").unwrap(),
                     &get_vec(rest_cmd.values_of("set")),
-                )
+                )?;
             }
 
             #[cfg(not(feature = "souper-harvest"))]
             {
-                Err("clif-util was compiled without `souper-harvest` support".into())
+                anyhow::bail!("clif-util was compiled without `souper-harvest` support");
             }
         }
-        _ => Err("Invalid subcommand.".to_owned()),
-    };
-
-    if let Err(mut msg) = res_util {
-        if !msg.ends_with('\n') {
-            msg.push('\n');
-        }
-        io::stdout().flush().expect("flushing stdout");
-        io::stderr().write_all(msg.as_bytes()).unwrap();
-        process::exit(1);
+        _ => anyhow::bail!("Invalid subcommand.".to_owned()),
     }
+
+    Ok(())
 }

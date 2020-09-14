@@ -1,5 +1,6 @@
 //! Utility functions.
 
+use anyhow::Context;
 use cranelift_codegen::isa;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::{self, FlagsOrIsa};
@@ -12,15 +13,19 @@ use target_lexicon::Triple;
 use walkdir::WalkDir;
 
 /// Read an entire file into a string.
-pub fn read_to_string<P: AsRef<Path>>(path: P) -> io::Result<String> {
+pub fn read_to_string<P: AsRef<Path>>(path: P) -> anyhow::Result<String> {
     let mut buffer = String::new();
-    if path.as_ref() == Path::new("-") {
+    let path = path.as_ref();
+    if path == Path::new("-") {
         let stdin = io::stdin();
         let mut stdin = stdin.lock();
-        stdin.read_to_string(&mut buffer)?;
+        stdin
+            .read_to_string(&mut buffer)
+            .context("failed to read stdin to string")?;
     } else {
         let mut file = File::open(path)?;
-        file.read_to_string(&mut buffer)?;
+        file.read_to_string(&mut buffer)
+            .with_context(|| format!("failed to read {} to string", path.display()))?;
     }
     Ok(buffer)
 }
@@ -45,7 +50,7 @@ impl OwnedFlagsOrIsa {
 pub fn parse_sets_and_triple(
     flag_set: &[String],
     flag_triple: &str,
-) -> Result<OwnedFlagsOrIsa, String> {
+) -> anyhow::Result<OwnedFlagsOrIsa> {
     let mut flag_builder = settings::builder();
 
     // Collect unknown system-wide settings, so we can try to parse them as target specific
@@ -59,7 +64,7 @@ pub fn parse_sets_and_triple(
         Err(ParseOptionError::UnknownFlag { name, .. }) => {
             unknown_settings.push(name);
         }
-        Err(ParseOptionError::Generic(err)) => return Err(err.to_string()),
+        Err(ParseOptionError::Generic(err)) => return Err(err.into()),
         Ok(()) => {}
     }
 
@@ -68,14 +73,14 @@ pub fn parse_sets_and_triple(
     if let Some(triple_name) = words.next() {
         let triple = match Triple::from_str(triple_name) {
             Ok(triple) => triple,
-            Err(parse_error) => return Err(parse_error.to_string()),
+            Err(parse_error) => return Err(parse_error.into()),
         };
 
         let mut isa_builder = isa::lookup(triple).map_err(|err| match err {
             isa::LookupError::SupportDisabled => {
-                format!("support for triple '{}' is disabled", triple_name)
+                anyhow::anyhow!("support for triple '{}' is disabled", triple_name)
             }
-            isa::LookupError::Unsupported => format!(
+            isa::LookupError::Unsupported => anyhow::anyhow!(
                 "support for triple '{}' is not implemented yet",
                 triple_name
             ),
@@ -87,21 +92,18 @@ pub fn parse_sets_and_triple(
             &mut isa_builder,
             Location { line_number: 0 },
         )
-        .map_err(|err| ParseError::from(err).to_string())?;
+        .map_err(ParseError::from)?;
 
         // Apply the ISA-specific settings to `isa_builder`.
         parse_options(words, &mut isa_builder, Location { line_number: 0 })
-            .map_err(|err| ParseError::from(err).to_string())?;
+            .map_err(ParseError::from)?;
 
         Ok(OwnedFlagsOrIsa::Isa(
             isa_builder.finish(settings::Flags::new(flag_builder)),
         ))
     } else {
         if !unknown_settings.is_empty() {
-            return Err(format!(
-                "unknown settings: '{}'",
-                unknown_settings.join("', '")
-            ));
+            anyhow::bail!("unknown settings: '{}'", unknown_settings.join("', '"));
         }
         Ok(OwnedFlagsOrIsa::Flags(settings::Flags::new(flag_builder)))
     }

@@ -1,21 +1,19 @@
-use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
+use crate::subtest::{run_filecheck, Context, SubTest};
 use cranelift_codegen::binemit::{self, Addend, CodeOffset, CodeSink, Reloc, StackMap};
 use cranelift_codegen::ir::*;
 use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::print_errors::pretty_error;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
 use std::fmt::Write;
 
 struct TestStackMaps;
 
-pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "stack_maps");
     if !parsed.options.is_empty() {
-        Err(format!("No options allowed on {}", parsed))
-    } else {
-        Ok(Box::new(TestStackMaps))
+        anyhow::bail!("No options allowed on {}", parsed);
     }
+    Ok(Box::new(TestStackMaps))
 }
 
 impl SubTest for TestStackMaps {
@@ -23,12 +21,12 @@ impl SubTest for TestStackMaps {
         "stack_maps"
     }
 
-    fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
+    fn run(&self, func: Cow<Function>, context: &Context) -> anyhow::Result<()> {
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
         comp_ctx
             .compile(context.isa.expect("`test stack_maps` requires an isa"))
-            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
+            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, context.isa, e))?;
 
         let mut sink = TestStackMapsSink::default();
         binemit::emit_function(
