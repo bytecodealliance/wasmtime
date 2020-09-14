@@ -1,13 +1,10 @@
-use crate::entry::{Entry, EntryHandle};
-use crate::handle::{AsBytes, HandleRights};
+use crate::handle::HandleRights;
 use crate::sys::{clock, poll};
 use crate::wasi::types;
 use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
-use crate::{path, sched, Error, Result, WasiCtx};
+use crate::{sched, Error, Result, WasiCtx};
 use std::convert::TryInto;
-use std::io::{self, SeekFrom};
-use std::ops::Deref;
-use tracing::{debug, trace};
+use std::ops::{Deref, DerefMut};
 use wiggle::{GuestPtr, GuestSlice};
 
 impl<'a> WasiSnapshotPreview1 for WasiCtx {
@@ -56,11 +53,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         len: types::Filesize,
         advice: types::Advice,
     ) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::FD_ADVISE);
-        let entry = self.get_entry(fd)?;
-        entry
-            .as_handle(&required_rights)?
-            .advise(advice, offset, len)
+        self.get_entry(fd)?.fd_advise(offset, len, advice)
     }
 
     fn fd_allocate(
@@ -69,46 +62,25 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         offset: types::Filesize,
         len: types::Filesize,
     ) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::FD_ALLOCATE);
-        let entry = self.get_entry(fd)?;
-        entry.as_handle(&required_rights)?.allocate(offset, len)
+        self.get_entry(fd)?.fd_allocate(offset, len)
     }
 
     fn fd_close(&self, fd: types::Fd) -> Result<()> {
-        if let Ok(fe) = self.get_entry(fd) {
-            // can't close preopened files
-            if fe.preopen_path.is_some() {
-                return Err(Error::Notsup);
-            }
-        }
+        self.get_entry(fd)?.fd_close()?;
         self.remove_entry(fd)?;
         Ok(())
     }
 
     fn fd_datasync(&self, fd: types::Fd) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::FD_DATASYNC);
-        let entry = self.get_entry(fd)?;
-        entry.as_handle(&required_rights)?.datasync()
+        self.get_entry(fd)?.fd_datasync()
     }
 
     fn fd_fdstat_get(&self, fd: types::Fd) -> Result<types::Fdstat> {
-        let entry = self.get_entry(fd)?;
-        let file = entry.as_handle(&HandleRights::empty())?;
-        let fs_flags = file.fdstat_get()?;
-        let rights = entry.get_rights();
-        let fdstat = types::Fdstat {
-            fs_filetype: entry.get_file_type(),
-            fs_rights_base: rights.base,
-            fs_rights_inheriting: rights.inheriting,
-            fs_flags,
-        };
-        Ok(fdstat)
+        self.get_entry(fd)?.fd_fdstat_get()
     }
 
     fn fd_fdstat_set_flags(&self, fd: types::Fd, flags: types::Fdflags) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::FD_FDSTAT_SET_FLAGS);
-        let entry = self.get_entry(fd)?;
-        entry.as_handle(&required_rights)?.fdstat_set_flags(flags)
+        self.get_entry(fd)?.fd_fdstat_set_flags(flags)
     }
 
     fn fd_fdstat_set_rights(
@@ -117,26 +89,16 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         fs_rights_base: types::Rights,
         fs_rights_inheriting: types::Rights,
     ) -> Result<()> {
-        let rights = HandleRights::new(fs_rights_base, fs_rights_inheriting);
-        let entry = self.get_entry(fd)?;
-        if !entry.get_rights().contains(&rights) {
-            return Err(Error::Notcapable);
-        }
-        entry.set_rights(rights);
-        Ok(())
+        self.get_entry(fd)?
+            .fd_fdstat_set_rights(fs_rights_base, fs_rights_inheriting)
     }
 
     fn fd_filestat_get(&self, fd: types::Fd) -> Result<types::Filestat> {
-        let required_rights = HandleRights::from_base(types::Rights::FD_FILESTAT_GET);
-        let entry = self.get_entry(fd)?;
-        let host_filestat = entry.as_handle(&required_rights)?.filestat_get()?;
-        Ok(host_filestat)
+        self.get_entry(fd)?.fd_filestat_get()
     }
 
     fn fd_filestat_set_size(&self, fd: types::Fd, size: types::Filesize) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::FD_FILESTAT_SET_SIZE);
-        let entry = self.get_entry(fd)?;
-        entry.as_handle(&required_rights)?.filestat_set_size(size)
+        self.get_entry(fd)?.fd_filestat_set_size(size)
     }
 
     fn fd_filestat_set_times(
@@ -146,11 +108,21 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         mtim: types::Timestamp,
         fst_flags: types::Fstflags,
     ) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::FD_FILESTAT_SET_TIMES);
+        self.get_entry(fd)?
+            .fd_filestat_set_times(atim, mtim, fst_flags)
+    }
+
+    fn fd_read(&self, fd: types::Fd, iovs: &types::IovecArray<'_>) -> Result<types::Size> {
         let entry = self.get_entry(fd)?;
-        entry
-            .as_handle(&required_rights)?
-            .filestat_set_times(atim, mtim, fst_flags)
+
+        let mut guest_slices = Vec::new();
+        for iov_ptr in iovs.iter() {
+            let iov_ptr = iov_ptr?;
+            let iov: types::Iovec = iov_ptr.read()?;
+            guest_slices.push(iov.buf.as_array(iov.buf_len).as_slice()?);
+        }
+
+        entry.fd_read(guest_slices)
     }
 
     fn fd_pread(
@@ -159,6 +131,10 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         iovs: &types::IovecArray<'_>,
         offset: types::Filesize,
     ) -> Result<types::Size> {
+        let entry = self.get_entry(fd)?;
+
+        // Rather than expose the details of our IovecArray to the Entry, it accepts a
+        // Vec<GuestSlice<u8>>
         let mut guest_slices: Vec<GuestSlice<'_, u8>> = Vec::new();
         for iov_ptr in iovs.iter() {
             let iov_ptr = iov_ptr?;
@@ -166,39 +142,40 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             guest_slices.push(iov.buf.as_array(iov.buf_len).as_slice()?);
         }
 
-        let required_rights =
-            HandleRights::from_base(types::Rights::FD_READ | types::Rights::FD_SEEK);
+        entry.fd_pread(guest_slices, offset)
+    }
+
+    fn fd_write(&self, fd: types::Fd, ciovs: &types::CiovecArray<'_>) -> Result<types::Size> {
         let entry = self.get_entry(fd)?;
-        if offset > i64::max_value() as u64 {
-            return Err(Error::Io);
+
+        let mut guest_slices = Vec::new();
+        for ciov_ptr in ciovs.iter() {
+            let ciov_ptr = ciov_ptr?;
+            let ciov: types::Ciovec = ciov_ptr.read()?;
+            guest_slices.push(ciov.buf.as_array(ciov.buf_len).as_slice()?);
+        }
+        entry.fd_write(guest_slices)
+    }
+    fn fd_pwrite(
+        &self,
+        fd: types::Fd,
+        ciovs: &types::CiovecArray<'_>,
+        offset: types::Filesize,
+    ) -> Result<types::Size> {
+        let entry = self.get_entry(fd)?;
+
+        let mut guest_slices = Vec::new();
+        for ciov_ptr in ciovs.iter() {
+            let ciov_ptr = ciov_ptr?;
+            let ciov: types::Ciovec = ciov_ptr.read()?;
+            guest_slices.push(ciov.buf.as_array(ciov.buf_len).as_slice()?);
         }
 
-        let host_nread = {
-            let mut buf = guest_slices
-                .iter_mut()
-                .map(|s| io::IoSliceMut::new(&mut *s))
-                .collect::<Vec<io::IoSliceMut<'_>>>();
-            entry
-                .as_handle(&required_rights)?
-                .preadv(&mut buf, offset)?
-                .try_into()?
-        };
-        Ok(host_nread)
+        entry.fd_pwrite(guest_slices, offset)
     }
 
     fn fd_prestat_get(&self, fd: types::Fd) -> Result<types::Prestat> {
-        // TODO: should we validate any rights here?
-        let entry = self.get_entry(fd)?;
-        let po_path = entry.preopen_path.as_ref().ok_or(Error::Notsup)?;
-        if entry.get_file_type() != types::Filetype::Directory {
-            return Err(Error::Notdir);
-        }
-
-        let path = path::from_host(po_path.as_os_str())?;
-        let prestat = types::PrestatDir {
-            pr_name_len: path.len().try_into()?,
-        };
-        Ok(types::Prestat::Dir(prestat))
+        self.get_entry(fd)?.fd_prestat_get()
     }
 
     fn fd_prestat_dir_name(
@@ -207,84 +184,10 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         path: &GuestPtr<u8>,
         path_len: types::Size,
     ) -> Result<()> {
-        // TODO: should we validate any rights here?
         let entry = self.get_entry(fd)?;
-        let po_path = entry.preopen_path.as_ref().ok_or(Error::Notsup)?;
-        if entry.get_file_type() != types::Filetype::Directory {
-            return Err(Error::Notdir);
-        }
-
-        let host_path = path::from_host(po_path.as_os_str())?;
-        let host_path_len = host_path.len().try_into()?;
-
-        if host_path_len > path_len {
-            return Err(Error::Nametoolong);
-        }
-
-        trace!("     | path='{}'", host_path);
-
-        path.as_array(host_path_len)
-            .copy_from_slice(host_path.as_bytes())?;
-
-        Ok(())
+        let mut path = path.as_array(path_len).as_slice()?;
+        entry.fd_prestat_dir_name(path.deref_mut())
     }
-
-    fn fd_pwrite(
-        &self,
-        fd: types::Fd,
-        ciovs: &types::CiovecArray<'_>,
-        offset: types::Filesize,
-    ) -> Result<types::Size> {
-        let mut guest_slices = Vec::new();
-        for ciov_ptr in ciovs.iter() {
-            let ciov_ptr = ciov_ptr?;
-            let ciov: types::Ciovec = ciov_ptr.read()?;
-            guest_slices.push(ciov.buf.as_array(ciov.buf_len).as_slice()?);
-        }
-
-        let required_rights =
-            HandleRights::from_base(types::Rights::FD_WRITE | types::Rights::FD_SEEK);
-        let entry = self.get_entry(fd)?;
-
-        if offset > i64::max_value() as u64 {
-            return Err(Error::Io);
-        }
-
-        let host_nwritten = {
-            let buf: Vec<io::IoSlice> =
-                guest_slices.iter().map(|s| io::IoSlice::new(&*s)).collect();
-            entry
-                .as_handle(&required_rights)?
-                .pwritev(&buf, offset)?
-                .try_into()?
-        };
-        Ok(host_nwritten)
-    }
-
-    fn fd_read(&self, fd: types::Fd, iovs: &types::IovecArray<'_>) -> Result<types::Size> {
-        let mut guest_slices = Vec::new();
-        for iov_ptr in iovs.iter() {
-            let iov_ptr = iov_ptr?;
-            let iov: types::Iovec = iov_ptr.read()?;
-            guest_slices.push(iov.buf.as_array(iov.buf_len).as_slice()?);
-        }
-
-        let required_rights = HandleRights::from_base(types::Rights::FD_READ);
-        let entry = self.get_entry(fd)?;
-        let host_nread = {
-            let mut slices: Vec<io::IoSliceMut> = guest_slices
-                .iter_mut()
-                .map(|s| io::IoSliceMut::new(&mut *s))
-                .collect();
-            entry
-                .as_handle(&required_rights)?
-                .read_vectored(&mut slices)?
-                .try_into()?
-        };
-
-        Ok(host_nread)
-    }
-
     fn fd_readdir(
         &self,
         fd: types::Fd,
@@ -292,30 +195,9 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         buf_len: types::Size,
         cookie: types::Dircookie,
     ) -> Result<types::Size> {
-        let required_rights = HandleRights::from_base(types::Rights::FD_READDIR);
         let entry = self.get_entry(fd)?;
-
-        let mut bufused = 0;
-        let mut buf = buf.clone();
-        for pair in entry.as_handle(&required_rights)?.readdir(cookie)? {
-            let (dirent, name) = pair?;
-            let dirent_raw = dirent.as_bytes()?;
-            let dirent_len: types::Size = dirent_raw.len().try_into()?;
-            let name_raw = name.as_bytes();
-            let name_len = name_raw.len().try_into()?;
-            let offset = dirent_len.checked_add(name_len).ok_or(Error::Overflow)?;
-            if (buf_len - bufused) < offset {
-                break;
-            } else {
-                buf.as_array(dirent_len).copy_from_slice(&dirent_raw)?;
-                buf = buf.add(dirent_len)?;
-                buf.as_array(name_len).copy_from_slice(name_raw)?;
-                buf = buf.add(name_len)?;
-                bufused += offset;
-            }
-        }
-
-        Ok(bufused)
+        let mut buf = buf.as_array(buf_len).as_slice()?;
+        entry.fd_readdir(buf.deref_mut(), cookie)
     }
 
     fn fd_renumber(&self, from: types::Fd, to: types::Fd) -> Result<()> {
@@ -347,71 +229,21 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         offset: types::Filedelta,
         whence: types::Whence,
     ) -> Result<types::Filesize> {
-        let base = if offset == 0 && whence == types::Whence::Cur {
-            types::Rights::FD_TELL
-        } else {
-            types::Rights::FD_SEEK | types::Rights::FD_TELL
-        };
-        let required_rights = HandleRights::from_base(base);
-        let entry = self.get_entry(fd)?;
-        let pos = match whence {
-            types::Whence::Cur => SeekFrom::Current(offset),
-            types::Whence::End => SeekFrom::End(offset),
-            types::Whence::Set => SeekFrom::Start(offset as u64),
-        };
-        let host_newoffset = entry.as_handle(&required_rights)?.seek(pos)?;
-        Ok(host_newoffset)
+        self.get_entry(fd)?.fd_seek(offset, whence)
     }
 
     fn fd_sync(&self, fd: types::Fd) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::FD_SYNC);
-        let entry = self.get_entry(fd)?;
-        entry.as_handle(&required_rights)?.sync()
+        self.get_entry(fd)?.fd_sync()
     }
 
     fn fd_tell(&self, fd: types::Fd) -> Result<types::Filesize> {
-        let required_rights = HandleRights::from_base(types::Rights::FD_TELL);
-        let entry = self.get_entry(fd)?;
-        let host_offset = entry
-            .as_handle(&required_rights)?
-            .seek(SeekFrom::Current(0))?;
-        Ok(host_offset)
-    }
-
-    fn fd_write(&self, fd: types::Fd, ciovs: &types::CiovecArray<'_>) -> Result<types::Size> {
-        let mut guest_slices = Vec::new();
-        for ciov_ptr in ciovs.iter() {
-            let ciov_ptr = ciov_ptr?;
-            let ciov: types::Ciovec = ciov_ptr.read()?;
-            guest_slices.push(ciov.buf.as_array(ciov.buf_len).as_slice()?);
-        }
-        let required_rights = HandleRights::from_base(types::Rights::FD_WRITE);
-        let entry = self.get_entry(fd)?;
-        let host_nwritten = {
-            let slices: Vec<io::IoSlice> =
-                guest_slices.iter().map(|s| io::IoSlice::new(&*s)).collect();
-            entry
-                .as_handle(&required_rights)?
-                .write_vectored(&slices)?
-                .try_into()?
-        };
-        Ok(host_nwritten)
+        self.get_entry(fd)?.fd_tell()
     }
 
     fn path_create_directory(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
-        let required_rights = HandleRights::from_base(
-            types::Rights::PATH_OPEN | types::Rights::PATH_CREATE_DIRECTORY,
-        );
         let entry = self.get_entry(dirfd)?;
         let path = path.as_str()?;
-        let (dirfd, path) = path::get(
-            &entry,
-            &required_rights,
-            types::Lookupflags::empty(),
-            path.deref(),
-            false,
-        )?;
-        dirfd.create_directory(&path)
+        entry.path_create_directory(path.deref())
     }
 
     fn path_filestat_get(
@@ -420,13 +252,9 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         flags: types::Lookupflags,
         path: &GuestPtr<'_, str>,
     ) -> Result<types::Filestat> {
-        let required_rights = HandleRights::from_base(types::Rights::PATH_FILESTAT_GET);
         let entry = self.get_entry(dirfd)?;
         let path = path.as_str()?;
-        let (dirfd, path) = path::get(&entry, &required_rights, flags, path.deref(), false)?;
-        let host_filestat =
-            dirfd.filestat_get_at(&path, flags.contains(&types::Lookupflags::SYMLINK_FOLLOW))?;
-        Ok(host_filestat)
+        entry.path_filestat_get(flags, path.deref())
     }
 
     fn path_filestat_set_times(
@@ -438,18 +266,9 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         mtim: types::Timestamp,
         fst_flags: types::Fstflags,
     ) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::PATH_FILESTAT_SET_TIMES);
         let entry = self.get_entry(dirfd)?;
         let path = path.as_str()?;
-        let (dirfd, path) = path::get(&entry, &required_rights, flags, path.deref(), false)?;
-        dirfd.filestat_set_times_at(
-            &path,
-            atim,
-            mtim,
-            fst_flags,
-            flags.contains(&types::Lookupflags::SYMLINK_FOLLOW),
-        )?;
-        Ok(())
+        entry.path_filestat_set_times(flags, path.deref(), atim, mtim, fst_flags)
     }
 
     fn path_link(
@@ -460,38 +279,9 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         new_fd: types::Fd,
         new_path: &GuestPtr<'_, str>,
     ) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::PATH_LINK_SOURCE);
         let old_entry = self.get_entry(old_fd)?;
-        let (old_dirfd, old_path) = {
-            // Borrow old_path for just this scope
-            let old_path = old_path.as_str()?;
-            path::get(
-                &old_entry,
-                &required_rights,
-                types::Lookupflags::empty(),
-                old_path.deref(),
-                false,
-            )?
-        };
-        let required_rights = HandleRights::from_base(types::Rights::PATH_LINK_TARGET);
         let new_entry = self.get_entry(new_fd)?;
-        let (new_dirfd, new_path) = {
-            // Borrow new_path for just this scope
-            let new_path = new_path.as_str()?;
-            path::get(
-                &new_entry,
-                &required_rights,
-                types::Lookupflags::empty(),
-                new_path.deref(),
-                false,
-            )?
-        };
-        old_dirfd.link(
-            &old_path,
-            new_dirfd,
-            &new_path,
-            old_flags.contains(&types::Lookupflags::SYMLINK_FOLLOW),
-        )
+        old_entry.path_link(old_flags, old_path, &new_entry, new_path)
     }
 
     fn path_open(
@@ -504,46 +294,17 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         fs_rights_inheriting: types::Rights,
         fdflags: types::Fdflags,
     ) -> Result<types::Fd> {
-        let needed_rights = path::open_rights(
-            &HandleRights::new(fs_rights_base, fs_rights_inheriting),
-            oflags,
-            fdflags,
-        );
-        trace!("     | needed_rights={}", needed_rights);
         let entry = self.get_entry(dirfd)?;
-        let (dirfd, path) = {
-            let path = path.as_str()?;
-            path::get(
-                &entry,
-                &needed_rights,
-                dirflags,
-                path.deref(),
-                oflags & types::Oflags::CREAT != types::Oflags::empty(),
-            )?
-        };
-        // which open mode do we need?
-        let read = fs_rights_base & (types::Rights::FD_READ | types::Rights::FD_READDIR)
-            != types::Rights::empty();
-        let write = fs_rights_base
-            & (types::Rights::FD_DATASYNC
-                | types::Rights::FD_WRITE
-                | types::Rights::FD_ALLOCATE
-                | types::Rights::FD_FILESTAT_SET_SIZE)
-            != types::Rights::empty();
-        trace!(
-            "     | calling path_open impl: read={}, write={}",
-            read,
-            write
-        );
-        let fd = dirfd.openat(&path, read, write, oflags, fdflags)?;
-        let entry = Entry::new(EntryHandle::from(fd));
-        // We need to manually deny the rights which are not explicitly requested
-        // because Entry::from will assign maximal consistent rights.
-        let mut rights = entry.get_rights();
-        rights.base &= fs_rights_base;
-        rights.inheriting &= fs_rights_inheriting;
-        entry.set_rights(rights);
-        let guest_fd = self.insert_entry(entry)?;
+        let path = path.as_str()?;
+        let opened_entry = entry.path_open(
+            dirflags,
+            path.deref(),
+            oflags,
+            fs_rights_base,
+            fs_rights_inheriting,
+            fdflags,
+        )?;
+        let guest_fd = self.insert_entry(opened_entry)?;
         Ok(guest_fd)
     }
 
@@ -554,38 +315,15 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         buf: &GuestPtr<u8>,
         buf_len: types::Size,
     ) -> Result<types::Size> {
-        let required_rights = HandleRights::from_base(types::Rights::PATH_READLINK);
         let entry = self.get_entry(dirfd)?;
-        let (dirfd, path) = {
-            // borrow path for just this scope
-            let path = path.as_str()?;
-            path::get(
-                &entry,
-                &required_rights,
-                types::Lookupflags::empty(),
-                path.deref(),
-                false,
-            )?
-        };
-        let mut slice = buf.as_array(buf_len).as_slice()?;
-        let host_bufused = dirfd.readlink(&path, &mut *slice)?.try_into()?;
-        Ok(host_bufused)
+        let buf = buf.as_array(buf_len);
+        entry.path_readlink(path, &buf)
     }
 
     fn path_remove_directory(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::PATH_REMOVE_DIRECTORY);
         let entry = self.get_entry(dirfd)?;
-        let (dirfd, path) = {
-            let path = path.as_str()?;
-            path::get(
-                &entry,
-                &required_rights,
-                types::Lookupflags::empty(),
-                path.deref(),
-                true,
-            )?
-        };
-        dirfd.remove_directory(&path)
+        let path = path.as_str()?;
+        entry.path_remove_directory(path.deref())
     }
 
     fn path_rename(
@@ -595,31 +333,9 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         new_fd: types::Fd,
         new_path: &GuestPtr<'_, str>,
     ) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::PATH_RENAME_SOURCE);
-        let entry = self.get_entry(old_fd)?;
-        let (old_dirfd, old_path) = {
-            let old_path = old_path.as_str()?;
-            path::get(
-                &entry,
-                &required_rights,
-                types::Lookupflags::empty(),
-                old_path.deref(),
-                true,
-            )?
-        };
-        let required_rights = HandleRights::from_base(types::Rights::PATH_RENAME_TARGET);
-        let entry = self.get_entry(new_fd)?;
-        let (new_dirfd, new_path) = {
-            let new_path = new_path.as_str()?;
-            path::get(
-                &entry,
-                &required_rights,
-                types::Lookupflags::empty(),
-                new_path.deref(),
-                true,
-            )?
-        };
-        old_dirfd.rename(&old_path, new_dirfd, &new_path)
+        let old_entry = self.get_entry(old_fd)?;
+        let new_entry = self.get_entry(new_fd)?;
+        old_entry.path_rename(old_path, &new_entry, new_path)
     }
 
     fn path_symlink(
@@ -628,38 +344,14 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         dirfd: types::Fd,
         new_path: &GuestPtr<'_, str>,
     ) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::PATH_SYMLINK);
         let entry = self.get_entry(dirfd)?;
-        let (new_fd, new_path) = {
-            let new_path = new_path.as_str()?;
-            path::get(
-                &entry,
-                &required_rights,
-                types::Lookupflags::empty(),
-                new_path.deref(),
-                true,
-            )?
-        };
-        let old_path = old_path.as_str()?;
-        trace!(old_path = old_path.deref());
-        new_fd.symlink(&old_path, &new_path)
+        entry.path_symlink(old_path, new_path)
     }
 
     fn path_unlink_file(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::PATH_UNLINK_FILE);
         let entry = self.get_entry(dirfd)?;
-        let (dirfd, path) = {
-            let path = path.as_str()?;
-            path::get(
-                &entry,
-                &required_rights,
-                types::Lookupflags::empty(),
-                path.deref(),
-                false,
-            )?
-        };
-        dirfd.unlink_file(&path)?;
-        Ok(())
+        let path = path.as_str()?;
+        entry.path_unlink_file(path.deref())
     }
 
     fn poll_oneoff(
@@ -668,6 +360,8 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         out: &GuestPtr<types::Event>,
         nsubscriptions: types::Size,
     ) -> Result<types::Size> {
+        use tracing::{debug, trace};
+
         if u64::from(nsubscriptions) > types::Filesize::max_value() {
             return Err(Error::Inval);
         }

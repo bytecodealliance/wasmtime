@@ -4,6 +4,9 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+mod fd;
+mod path;
+
 pub struct EntryHandle(Rc<dyn Handle>);
 
 impl EntryHandle {
