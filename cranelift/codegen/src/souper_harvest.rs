@@ -129,6 +129,7 @@ fn harvest_candidate_lhs(
                 | ir::Opcode::Clz
                 | ir::Opcode::Ctz
                 // TODO: ir::Opcode::IaddCarry
+                // TODO: ir::Opcode::IaddCout
                 | ir::Opcode::SaddSat
                 | ir::Opcode::SsubSat
                 | ir::Opcode::UsubSat => true,
@@ -404,6 +405,7 @@ fn harvest_candidate_lhs(
                         ast::Instruction::Cttz { a }.into()
                     }
                     // TODO: ir::Opcode::IaddCarry
+                    // TODO: ir::Opcode::IaddCout
                     (ir::Opcode::SaddSat, _) => {
                         let a = arg(allocs, 0);
                         let b = arg(allocs, 1);
