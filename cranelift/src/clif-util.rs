@@ -29,6 +29,9 @@ mod print_cfg;
 mod run;
 mod utils;
 
+#[cfg(feature = "peepmatic-souper")]
+mod souper_to_peepmatic;
+
 #[cfg(feature = "wasm")]
 mod wasm;
 
@@ -48,6 +51,15 @@ fn add_single_input_file_arg<'a>() -> clap::Arg<'a, 'a> {
         .required(true)
         .value_name("single-file")
         .help("Specify a file to be used. Use '-' for stdin.")
+}
+
+fn add_output_arg<'a>() -> clap::Arg<'a, 'a> {
+    Arg::with_name("output")
+        .required(true)
+        .default_value("-")
+        .value_name("output")
+        .short("o")
+        .help("Specify output file to be used. Use '-' for stdout.")
 }
 
 fn add_pass_arg<'a>() -> clap::Arg<'a, 'a> {
@@ -247,6 +259,12 @@ fn main() {
                 .arg(add_set_flag())
                 .arg(add_target_flag())
                 .arg(add_verbose_flag()),
+        )
+        .subcommand(
+            SubCommand::with_name("souper-to-peepmatic")
+                .about("Convert Souper optimizations into Peepmatic DSL.")
+                .arg(add_single_input_file_arg())
+                .arg(add_output_arg()),
         );
 
     let res_util = match app_cmds.get_matches().subcommand() {
@@ -361,6 +379,24 @@ fn main() {
                 target_val,
                 rest_cmd.is_present("verbose"),
             )
+        }
+        ("souper-to-peepmatic", Some(rest_cmd)) => {
+            #[cfg(feature = "peepmatic-souper")]
+            {
+                use std::path::Path;
+                souper_to_peepmatic::run(
+                    Path::new(rest_cmd.value_of("single-file").unwrap()),
+                    Path::new(rest_cmd.value_of("output").unwrap()),
+                )
+            }
+            #[cfg(not(feature = "peepmatic-souper"))]
+            {
+                Err(
+                    "Error: clif-util was compiled without suport for the `souper-to-peepmatic` \
+                     subcommand"
+                        .into(),
+                )
+            }
         }
         _ => Err("Invalid subcommand.".to_owned()),
     };
