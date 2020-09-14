@@ -148,4 +148,23 @@ impl Entry {
         )?;
         old_dirfd.rename(&old_path, new_dirfd, &new_path)
     }
+
+    pub fn path_symlink(&self, old_path: &str, new_path: &str) -> Result<()> {
+        let required_rights = HandleRights::from_base(Rights::PATH_SYMLINK);
+        let (new_fd, new_path) = crate::path::get(
+            &self,
+            &required_rights,
+            Lookupflags::empty(),
+            new_path,
+            true,
+        )?;
+        new_fd.symlink(&old_path, &new_path)
+    }
+
+    pub fn path_unlink_file(&self, path: &str) -> Result<()> {
+        let required_rights = HandleRights::from_base(Rights::PATH_UNLINK_FILE);
+        let (dirfd, path) =
+            crate::path::get(&self, &required_rights, Lookupflags::empty(), path, false)?;
+        dirfd.unlink_file(&path)
+    }
 }

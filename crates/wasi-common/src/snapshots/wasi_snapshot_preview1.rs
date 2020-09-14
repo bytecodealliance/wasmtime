@@ -352,38 +352,16 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         dirfd: types::Fd,
         new_path: &GuestPtr<'_, str>,
     ) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::PATH_SYMLINK);
         let entry = self.get_entry(dirfd)?;
-        let (new_fd, new_path) = {
-            let new_path = new_path.as_str()?;
-            path::get(
-                &entry,
-                &required_rights,
-                types::Lookupflags::empty(),
-                new_path.deref(),
-                true,
-            )?
-        };
         let old_path = old_path.as_str()?;
-        trace!(old_path = old_path.deref());
-        new_fd.symlink(&old_path, &new_path)
+        let new_path = new_path.as_str()?;
+        entry.path_symlink(old_path.deref(), new_path.deref())
     }
 
     fn path_unlink_file(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<()> {
-        let required_rights = HandleRights::from_base(types::Rights::PATH_UNLINK_FILE);
         let entry = self.get_entry(dirfd)?;
-        let (dirfd, path) = {
-            let path = path.as_str()?;
-            path::get(
-                &entry,
-                &required_rights,
-                types::Lookupflags::empty(),
-                path.deref(),
-                false,
-            )?
-        };
-        dirfd.unlink_file(&path)?;
-        Ok(())
+        let path = path.as_str()?;
+        entry.path_unlink_file(path.deref())
     }
 
     fn poll_oneoff(
