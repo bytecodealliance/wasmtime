@@ -5,7 +5,7 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-pub(crate) struct EntryHandle(Rc<dyn Handle>);
+pub struct EntryHandle(Rc<dyn Handle>);
 
 impl EntryHandle {
     #[allow(dead_code)]
