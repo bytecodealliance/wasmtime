@@ -6,32 +6,55 @@ use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_filetests::SingleFunctionCompiler;
 use cranelift_native::builder as host_isa_builder;
 use cranelift_reader::{parse_run_command, parse_test, Details, IsaSpec, ParseOptions};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use structopt::StructOpt;
 use target_lexicon::Triple;
 
-pub fn run(files: Vec<String>, flag_print: bool) -> Result<()> {
-    let stdin_exist = files.iter().find(|file| *file == "-").is_some();
-    let filtered_files = files
+/// Execute clif code and verify with test expressions
+#[derive(StructOpt)]
+pub struct Options {
+    /// Specify an input file to be used. Use '-' for stdin.
+    #[structopt(required(true), parse(from_os_str))]
+    files: Vec<PathBuf>,
+
+    /// Enable debug output on stderr/stdout
+    #[structopt(short = "d")]
+    debug: bool,
+
+    /// Be more verbose
+    #[structopt(short = "v", long = "verbose")]
+    verbose: bool,
+}
+
+pub fn run(options: &Options) -> Result<()> {
+    crate::handle_debug_flag(options.debug);
+    let stdin_exist = options
+        .files
         .iter()
-        .filter(|file| *file != "-")
-        .map(|file| file.to_string())
-        .collect::<Vec<String>>();
+        .find(|file| *file == Path::new("-"))
+        .is_some();
+    let filtered_files = options
+        .files
+        .iter()
+        .cloned()
+        .filter(|file| *file != Path::new("-"))
+        .collect::<Vec<_>>();
     let mut total = 0;
     let mut errors = 0;
     let mut special_files: Vec<PathBuf> = vec![];
     if stdin_exist {
         special_files.push("-".into());
     }
-    for file in iterate_files(filtered_files).chain(special_files) {
+    for file in iterate_files(&filtered_files).chain(special_files) {
         total += 1;
         match run_single_file(&file) {
             Ok(_) => {
-                if flag_print {
+                if options.verbose {
                     println!("{}", file.to_string_lossy());
                 }
             }
             Err(e) => {
-                if flag_print {
+                if options.verbose {
                     println!("{}: {}", file.to_string_lossy(), e);
                 }
                 errors += 1;
@@ -39,7 +62,7 @@ pub fn run(files: Vec<String>, flag_print: bool) -> Result<()> {
         }
     }
 
-    if flag_print {
+    if options.verbose {
         match total {
             0 => println!("0 files"),
             1 => println!("1 file"),

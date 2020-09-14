@@ -3,30 +3,57 @@ use anyhow::{Context as _, Result};
 use cranelift_codegen::Context;
 use cranelift_wasm::{DummyEnvironment, ReturnMode};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use std::path::{Path, PathBuf};
 use std::{fs, io};
+use structopt::StructOpt;
 
 static WASM_MAGIC: &[u8] = &[0x00, 0x61, 0x73, 0x6D];
 
-pub fn run(target: &str, input: &str, output: &str, flag_set: &[String]) -> Result<()> {
-    let parsed = parse_sets_and_triple(flag_set, target)?;
+/// Harvest candidates for superoptimization from a Wasm or Clif file.
+///
+/// Candidates are emitted in Souper's text format:
+/// https://github.com/google/souper
+#[derive(StructOpt)]
+pub struct Options {
+    /// Specify an input file to be used. Use '-' for stdin.
+    #[structopt(parse(from_os_str))]
+    input: PathBuf,
+
+    /// Specify the output file to be used. Use '-' for stdout.
+    #[structopt(short("o"), long("output"), default_value("-"), parse(from_os_str))]
+    output: PathBuf,
+
+    /// Configure Cranelift settings
+    #[structopt(long("set"))]
+    settings: Vec<String>,
+
+    /// Specify the Cranelift target
+    #[structopt(long("target"))]
+    target: String,
+}
+
+pub fn run(options: &Options) -> Result<()> {
+    let parsed = parse_sets_and_triple(&options.settings, &options.target)?;
     let fisa = parsed.as_fisa();
     if fisa.isa.is_none() {
         anyhow::bail!("`souper-harvest` requires a target isa");
     }
 
     let stdin = io::stdin();
-    let mut input: Box<dyn io::BufRead> = match input {
-        "-" => Box::new(stdin.lock()),
-        _ => Box::new(io::BufReader::new(
-            fs::File::open(input).context("failed to open input file")?,
-        )),
+    let mut input: Box<dyn io::BufRead> = if options.input == Path::new("-") {
+        Box::new(stdin.lock())
+    } else {
+        Box::new(io::BufReader::new(
+            fs::File::open(&options.input).context("failed to open input file")?,
+        ))
     };
 
-    let mut output: Box<dyn io::Write + Send> = match output {
-        "-" => Box::new(io::stdout()),
-        _ => Box::new(io::BufWriter::new(
-            fs::File::create(output).context("failed to create output file")?,
-        )),
+    let mut output: Box<dyn io::Write + Send> = if options.output == Path::new("-") {
+        Box::new(io::stdout())
+    } else {
+        Box::new(io::BufWriter::new(
+            fs::File::create(&options.output).context("failed to create output file")?,
+        ))
     };
 
     let mut contents = vec![];

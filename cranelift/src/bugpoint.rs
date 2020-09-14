@@ -16,17 +16,35 @@ use cranelift_entity::PrimaryMap;
 use cranelift_reader::{parse_test, ParseOptions};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::PathBuf;
+use structopt::StructOpt;
 
-pub fn run(filename: &str, flag_set: &[String], flag_isa: &str, verbose: bool) -> Result<()> {
-    let parsed = parse_sets_and_triple(flag_set, flag_isa)?;
+/// Reduce size of clif file causing panic during compilation.
+#[derive(StructOpt)]
+pub struct Options {
+    /// Specify an input file to be used. Use '-' for stdin.
+    #[structopt(parse(from_os_str))]
+    file: PathBuf,
+
+    /// Configure Cranelift settings
+    #[structopt(long("set"))]
+    settings: Vec<String>,
+
+    /// Specify the target architecture.
+    target: String,
+
+    /// Be more verbose
+    #[structopt(short = "v", long = "verbose")]
+    verbose: bool,
+}
+
+pub fn run(options: &Options) -> Result<()> {
+    let parsed = parse_sets_and_triple(&options.settings, &options.target)?;
     let fisa = parsed.as_fisa();
 
-    let path = Path::new(&filename).to_path_buf();
-
-    let buffer = read_to_string(&path)?;
+    let buffer = read_to_string(&options.file)?;
     let test_file = parse_test(&buffer, ParseOptions::default())
-        .with_context(|| format!("failed to parse {}", filename))?;
+        .with_context(|| format!("failed to parse {}", options.file.display()))?;
 
     // If we have an isa from the command-line, use that. Otherwise if the
     // file contains a unique isa, use that.
@@ -43,7 +61,7 @@ pub fn run(filename: &str, flag_set: &[String], flag_isa: &str, verbose: bool) -
     for (func, _) in test_file.functions {
         let (orig_block_count, orig_inst_count) = (block_count(&func), inst_count(&func));
 
-        match reduce(isa, func, verbose) {
+        match reduce(isa, func, options.verbose) {
             Ok((func, crash_msg)) => {
                 println!("Crash message: {}", crash_msg);
                 println!("\n{}", func);

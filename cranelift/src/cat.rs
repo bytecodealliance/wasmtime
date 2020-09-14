@@ -6,9 +6,24 @@
 use crate::utils::read_to_string;
 use anyhow::{Context, Result};
 use cranelift_reader::parse_functions;
+use std::path::{Path, PathBuf};
+use structopt::StructOpt;
 
-pub fn run(files: &[String]) -> Result<()> {
-    for (i, f) in files.iter().enumerate() {
+/// Outputs .clif file
+#[derive(StructOpt)]
+pub struct Options {
+    /// Specify input file(s) to be used. Use '-' for stdin.
+    #[structopt(required(true), parse(from_os_str))]
+    files: Vec<PathBuf>,
+
+    /// Enable debug output on stderr/stdout
+    #[structopt(short = "d")]
+    debug: bool,
+}
+
+pub fn run(options: &Options) -> Result<()> {
+    crate::handle_debug_flag(options.debug);
+    for (i, f) in options.files.iter().enumerate() {
         if i != 0 {
             println!();
         }
@@ -17,10 +32,10 @@ pub fn run(files: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn cat_one(filename: &str) -> Result<()> {
-    let buffer = read_to_string(&filename)?;
+fn cat_one(path: &Path) -> Result<()> {
+    let buffer = read_to_string(path)?;
     let items =
-        parse_functions(&buffer).with_context(|| format!("failed to parse {}", filename))?;
+        parse_functions(&buffer).with_context(|| format!("failed to parse {}", path.display()))?;
 
     for (idx, func) in items.into_iter().enumerate() {
         if idx != 0 {

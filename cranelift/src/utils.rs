@@ -110,9 +110,9 @@ pub fn parse_sets_and_triple(
 }
 
 /// Iterate over all of the files passed as arguments, recursively iterating through directories.
-pub fn iterate_files(files: Vec<String>) -> impl Iterator<Item = PathBuf> {
+pub fn iterate_files<'a>(files: &'a [PathBuf]) -> impl Iterator<Item = PathBuf> + 'a {
     files
-        .into_iter()
+        .iter()
         .flat_map(WalkDir::new)
         .filter(|f| match f {
             Ok(d) => {

@@ -10,40 +10,51 @@ use cranelift_codegen::Context;
 use cranelift_reader::{parse_test, ParseOptions};
 use std::path::Path;
 use std::path::PathBuf;
+use structopt::StructOpt;
 
-pub fn run(
-    files: Vec<String>,
-    flag_print: bool,
-    flag_disasm: bool,
-    flag_report_times: bool,
-    flag_set: &[String],
-    flag_isa: &str,
-) -> Result<()> {
-    let parsed = parse_sets_and_triple(flag_set, flag_isa)?;
+/// Compiles Cranelift IR into target language
+#[derive(StructOpt)]
+pub struct Options {
+    /// Print the resulting Cranelift IR
+    #[structopt(short("p"))]
+    print: bool,
 
-    for filename in files {
-        let path = Path::new(&filename);
+    /// Print pass timing report
+    #[structopt(short("T"))]
+    report_times: bool,
+
+    /// Print machine code disassembly
+    #[structopt(short("D"), long("disasm"))]
+    disasm: bool,
+
+    /// Configure Cranelift settings
+    #[structopt(long("set"))]
+    settings: Vec<String>,
+
+    /// Specify the Cranelift target
+    #[structopt(long("target"))]
+    target: String,
+
+    /// Specify an input file to be used. Use '-' for stdin.
+    #[structopt(parse(from_os_str))]
+    files: Vec<PathBuf>,
+
+    /// Enable debug output on stderr/stdout
+    #[structopt(short = "d")]
+    debug: bool,
+}
+
+pub fn run(options: &Options) -> Result<()> {
+    crate::handle_debug_flag(options.debug);
+    let parsed = parse_sets_and_triple(&options.settings, &options.target)?;
+    for path in &options.files {
         let name = String::from(path.as_os_str().to_string_lossy());
-        handle_module(
-            flag_print,
-            flag_disasm,
-            flag_report_times,
-            &path.to_path_buf(),
-            &name,
-            parsed.as_fisa(),
-        )?;
+        handle_module(options, path, &name, parsed.as_fisa())?;
     }
     Ok(())
 }
 
-fn handle_module(
-    flag_print: bool,
-    flag_disasm: bool,
-    flag_report_times: bool,
-    path: &PathBuf,
-    name: &str,
-    fisa: FlagsOrIsa,
-) -> Result<()> {
+fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -> Result<()> {
     let buffer = read_to_string(&path)?;
     let test_file = parse_test(&buffer, ParseOptions::default())
         .with_context(|| format!("failed to parse {}", name))?;
@@ -57,9 +68,9 @@ fn handle_module(
     };
 
     for (func, _) in test_file.functions {
-        let mut relocs = PrintRelocs::new(flag_print);
-        let mut traps = PrintTraps::new(flag_print);
-        let mut stack_maps = PrintStackMaps::new(flag_print);
+        let mut relocs = PrintRelocs::new(options.print);
+        let mut traps = PrintTraps::new(options.print);
+        let mut stack_maps = PrintStackMaps::new(options.print);
 
         if let Some(isa) = isa {
             let mut context = Context::new();
@@ -73,11 +84,11 @@ fn handle_module(
                     anyhow::anyhow!("{}", pretty_error(&context.func, Some(isa), err))
                 })?;
 
-            if flag_print {
+            if options.print {
                 println!("{}", context.func.display(isa));
             }
 
-            if flag_disasm {
+            if options.disasm {
                 print_all(
                     isa,
                     &mem,
@@ -91,7 +102,7 @@ fn handle_module(
         }
     }
 
-    if flag_report_times {
+    if options.report_times {
         print!("{}", timing::take_current());
     }
 
