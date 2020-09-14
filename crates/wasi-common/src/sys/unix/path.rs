@@ -1,7 +1,7 @@
-use crate::handle::{Handle, HandleRights};
+use crate::handle::{Fdflags, Filestat, Fstflags, Handle, HandleRights, Oflags, Rights};
+use crate::sched::Timestamp;
 use crate::sys::osdir::OsDir;
 use crate::sys::AsFile;
-use crate::wasi::types;
 use crate::{Error, Result};
 use std::convert::{TryFrom, TryInto};
 use std::ffi::OsStr;
@@ -23,29 +23,29 @@ pub(crate) fn from_host<S: AsRef<OsStr>>(s: S) -> Result<String> {
 
 pub(crate) fn open_rights(
     input_rights: &HandleRights,
-    oflags: types::Oflags,
-    fs_flags: types::Fdflags,
+    oflags: Oflags,
+    fs_flags: Fdflags,
 ) -> HandleRights {
     // which rights are needed on the dirfd?
-    let mut needed_base = types::Rights::PATH_OPEN;
+    let mut needed_base = Rights::PATH_OPEN;
     let mut needed_inheriting = input_rights.base | input_rights.inheriting;
 
     // convert open flags
     let oflags: OFlags = oflags.into();
     if oflags.contains(OFlags::CREAT) {
-        needed_base |= types::Rights::PATH_CREATE_FILE;
+        needed_base |= Rights::PATH_CREATE_FILE;
     }
     if oflags.contains(OFlags::TRUNC) {
-        needed_base |= types::Rights::PATH_FILESTAT_SET_SIZE;
+        needed_base |= Rights::PATH_FILESTAT_SET_SIZE;
     }
 
     // convert file descriptor flags
     let fdflags: OFlags = fs_flags.into();
     if fdflags.contains(OFlags::DSYNC) {
-        needed_inheriting |= types::Rights::FD_DATASYNC;
+        needed_inheriting |= Rights::FD_DATASYNC;
     }
     if fdflags.intersects(super::O_RSYNC | OFlags::SYNC) {
-        needed_inheriting |= types::Rights::FD_SYNC;
+        needed_inheriting |= Rights::FD_SYNC;
     }
 
     HandleRights::new(needed_base, needed_inheriting)
@@ -98,8 +98,8 @@ pub(crate) fn open(
     path: &str,
     read: bool,
     write: bool,
-    oflags: types::Oflags,
-    fs_flags: types::Fdflags,
+    oflags: Oflags,
+    fs_flags: Fdflags,
 ) -> Result<Box<dyn Handle>> {
     use yanix::file::{fstatat, openat, AtFlags, FileType, Mode, OFlags};
 
@@ -216,7 +216,7 @@ pub(crate) fn remove_directory(dirfd: &OsDir, path: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str, follow: bool) -> Result<types::Filestat> {
+pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str, follow: bool) -> Result<Filestat> {
     use yanix::file::{fstatat, AtFlags};
     let flags = if follow {
         AtFlags::empty()
@@ -231,18 +231,18 @@ pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str, follow: bool) -> Result
 pub(crate) fn filestat_set_times_at(
     dirfd: &OsDir,
     path: &str,
-    atim: types::Timestamp,
-    mtim: types::Timestamp,
-    fst_flags: types::Fstflags,
+    atim: Timestamp,
+    mtim: Timestamp,
+    fst_flags: Fstflags,
     follow: bool,
 ) -> Result<()> {
     use std::time::{Duration, UNIX_EPOCH};
     use yanix::filetime::*;
 
-    let set_atim = fst_flags.contains(&types::Fstflags::ATIM);
-    let set_atim_now = fst_flags.contains(&types::Fstflags::ATIM_NOW);
-    let set_mtim = fst_flags.contains(&types::Fstflags::MTIM);
-    let set_mtim_now = fst_flags.contains(&types::Fstflags::MTIM_NOW);
+    let set_atim = fst_flags.contains(&Fstflags::ATIM);
+    let set_atim_now = fst_flags.contains(&Fstflags::ATIM_NOW);
+    let set_mtim = fst_flags.contains(&Fstflags::MTIM);
+    let set_mtim_now = fst_flags.contains(&Fstflags::MTIM_NOW);
 
     if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
         return Err(Error::Inval);

@@ -1,7 +1,7 @@
 use super::oshandle::RawOsHandle;
 use super::{get_file_type, get_rights};
+use crate::handle::Filetype;
 use crate::sys::osother::OsOther;
-use crate::wasi::types;
 use std::convert::TryFrom;
 use std::fs::File;
 use std::io;
@@ -12,7 +12,7 @@ impl TryFrom<File> for OsOther {
 
     fn try_from(file: File) -> io::Result<Self> {
         let file_type = get_file_type(&file)?;
-        if file_type == types::Filetype::RegularFile || file_type == types::Filetype::Directory {
+        if file_type == Filetype::RegularFile || file_type == Filetype::Directory {
             return Err(io::Error::from_raw_os_error(libc::EINVAL));
         }
         let rights = get_rights(&file, &file_type)?;
