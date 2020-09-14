@@ -71,7 +71,11 @@ pub fn run(target: &str, input: &str, output: &str, flag_set: &[String]) -> Resu
             let mut ctx = Context::new();
             ctx.func = func;
 
-            ctx.souper_harvest(fisa.isa.unwrap(), send)
+            ctx.compute_cfg();
+            ctx.preopt(fisa.isa.unwrap())
+                .map_err(|e| format!("failed to run preopt: {}", e))?;
+
+            ctx.souper_harvest(send)
                 .map_err(|e| format!("failed to run souper harvester: {}", e))?;
 
             Ok(())

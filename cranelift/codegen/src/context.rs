@@ -457,10 +457,8 @@ impl Context {
     #[cfg(feature = "souper-harvest")]
     pub fn souper_harvest(
         &mut self,
-        isa: &dyn TargetIsa,
         out: &mut std::sync::mpsc::Sender<String>,
     ) -> CodegenResult<()> {
-        self.preopt(isa)?;
         do_souper_harvest(&self.func, out);
         Ok(())
     }
