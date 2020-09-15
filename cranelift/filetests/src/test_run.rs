@@ -3,7 +3,7 @@
 //! The `run` test command compiles each function on the host machine and executes it
 
 use crate::function_runner::SingleFunctionCompiler;
-use crate::subtest::{Context, SubTest, SubtestResult};
+use crate::subtest::{Context, SubTest};
 use cranelift_codegen::ir;
 use cranelift_reader::parse_run_command;
 use cranelift_reader::TestCommand;
@@ -13,13 +13,12 @@ use target_lexicon::Architecture;
 
 struct TestRun;
 
-pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "run");
     if !parsed.options.is_empty() {
-        Err(format!("No options allowed on {}", parsed))
-    } else {
-        Ok(Box::new(TestRun))
+        anyhow::bail!("No options allowed on {}", parsed);
     }
+    Ok(Box::new(TestRun))
 }
 
 impl SubTest for TestRun {
@@ -35,7 +34,7 @@ impl SubTest for TestRun {
         true
     }
 
-    fn run(&self, func: Cow<ir::Function>, context: &Context) -> SubtestResult<()> {
+    fn run(&self, func: Cow<ir::Function>, context: &Context) -> anyhow::Result<()> {
         // If this test requests to run on a completely different
         // architecture than the host platform then we skip it entirely,
         // since we won't be able to natively execute machine code.
@@ -50,9 +49,7 @@ impl SubTest for TestRun {
 
         let mut compiler = SingleFunctionCompiler::with_host_isa(context.flags.clone());
         for comment in context.details.comments.iter() {
-            if let Some(command) =
-                parse_run_command(comment.text, &func.signature).map_err(|e| e.to_string())?
-            {
+            if let Some(command) = parse_run_command(comment.text, &func.signature)? {
                 trace!("Parsed run command: {}", command);
 
                 // Note that here we're also explicitly ignoring `context.isa`,
@@ -60,10 +57,10 @@ impl SubTest for TestRun {
                 // host ISA no matter what here, so the ISA listed in the file
                 // is only used as a filter to not run into situations like
                 // running x86_64 code on aarch64 platforms.
-                let compiled_fn = compiler
-                    .compile(func.clone().into_owned())
-                    .map_err(|e| format!("{:?}", e))?;
-                command.run(|_, args| Ok(compiled_fn.call(args)))?;
+                let compiled_fn = compiler.compile(func.clone().into_owned())?;
+                command
+                    .run(|_, args| Ok(compiled_fn.call(args)))
+                    .map_err(|s| anyhow::anyhow!("{}", s))?;
             }
         }
         Ok(())

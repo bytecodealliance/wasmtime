@@ -1,13 +1,12 @@
 //! `SubTest` trait.
 
+use anyhow::Context as _;
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::{Flags, FlagsOrIsa};
 use cranelift_reader::{Comment, Details};
 use filecheck::{Checker, CheckerBuilder, NO_VARIABLES};
 use std::borrow::Cow;
-
-pub type SubtestResult<T> = Result<T, String>;
 
 /// Context for running a test on a single function.
 pub struct Context<'a> {
@@ -66,39 +65,39 @@ pub trait SubTest {
     }
 
     /// Run this test on `func`.
-    fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()>;
+    fn run(&self, func: Cow<Function>, context: &Context) -> anyhow::Result<()>;
 }
 
 /// Run filecheck on `text`, using directives extracted from `context`.
-pub fn run_filecheck(text: &str, context: &Context) -> SubtestResult<()> {
+pub fn run_filecheck(text: &str, context: &Context) -> anyhow::Result<()> {
     let checker = build_filechecker(context)?;
     if checker
         .check(text, NO_VARIABLES)
-        .map_err(|e| format!("filecheck: {}", e))?
+        .context("filecheck failed")?
     {
         Ok(())
     } else {
         // Filecheck mismatch. Emit an explanation as output.
         let (_, explain) = checker
             .explain(text, NO_VARIABLES)
-            .map_err(|e| format!("explain: {}", e))?;
-        Err(format!("filecheck failed:\n{}{}", checker, explain))
+            .context("filecheck explain failed")?;
+        anyhow::bail!("filecheck failed:\n{}{}", checker, explain);
     }
 }
 
 /// Build a filechecker using the directives in the file preamble and the function's comments.
-pub fn build_filechecker(context: &Context) -> SubtestResult<Checker> {
+pub fn build_filechecker(context: &Context) -> anyhow::Result<Checker> {
     let mut builder = CheckerBuilder::new();
     // Preamble comments apply to all functions.
     for comment in context.preamble_comments {
         builder
             .directive(comment.text)
-            .map_err(|e| format!("filecheck: {}", e))?;
+            .context("filecheck directive failed")?;
     }
     for comment in &context.details.comments {
         builder
             .directive(comment.text)
-            .map_err(|e| format!("filecheck: {}", e))?;
+            .context("filecheck directive failed")?;
     }
     Ok(builder.finish())
 }

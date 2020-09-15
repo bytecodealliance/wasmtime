@@ -5,7 +5,6 @@
 
 use crate::concurrent::{ConcurrentRunner, Reply};
 use crate::runone;
-use crate::TestResult;
 use cranelift_codegen::timing;
 use std::error::Error;
 use std::ffi::OsStr;
@@ -24,12 +23,12 @@ struct QueueEntry {
     state: State,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Debug)]
 enum State {
     New,
     Queued,
     Running,
-    Done(TestResult),
+    Done(anyhow::Result<time::Duration>),
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
@@ -205,7 +204,7 @@ impl TestRunner {
     /// Schedule any new jobs to run.
     fn schedule_jobs(&mut self) {
         for jobid in self.new_tests..self.tests.len() {
-            assert_eq!(self.tests[jobid].state, State::New);
+            assert!(matches!(self.tests[jobid].state, State::New));
             if let Some(ref mut conc) = self.threads {
                 // Queue test for concurrent execution.
                 self.tests[jobid].state = State::Queued;
@@ -228,7 +227,7 @@ impl TestRunner {
     /// Schedule any new job to run for the pass command.
     fn schedule_pass_job(&mut self, passes: &[String], target: &str) {
         self.tests[0].state = State::Running;
-        let result: Result<time::Duration, String>;
+        let result: anyhow::Result<time::Duration>;
 
         let specified_target = match target {
             "" => None,
@@ -240,8 +239,8 @@ impl TestRunner {
     }
 
     /// Report the end of a job.
-    fn finish_job(&mut self, jobid: usize, result: TestResult) {
-        assert_eq!(self.tests[jobid].state, State::Running);
+    fn finish_job(&mut self, jobid: usize, result: anyhow::Result<time::Duration>) {
+        assert!(matches!(self.tests[jobid].state, State::Running));
         if result.is_err() {
             self.errors += 1;
         }
@@ -257,7 +256,7 @@ impl TestRunner {
     fn handle_reply(&mut self, reply: Reply) {
         match reply {
             Reply::Starting { jobid, .. } => {
-                assert_eq!(self.tests[jobid].state, State::Queued);
+                assert!(matches!(self.tests[jobid].state, State::Queued));
                 self.tests[jobid].state = State::Running;
             }
             Reply::Done { jobid, result } => {
@@ -274,7 +273,7 @@ impl TestRunner {
                         self.tests.len()
                     );
                     for jobid in self.reported_tests..self.tests.len() {
-                        if self.tests[jobid].state == State::Running {
+                        if let State::Running = self.tests[jobid].state {
                             println!("slow: {}", self.tests[jobid]);
                         }
                     }
@@ -356,7 +355,7 @@ impl TestRunner {
     }
 
     /// Scan pushed directories for tests and run them.
-    pub fn run(&mut self) -> TestResult {
+    pub fn run(&mut self) -> anyhow::Result<time::Duration> {
         let started = time::Instant::now();
         self.scan_dirs(IsPass::NotPass);
         self.schedule_jobs();
@@ -366,13 +365,17 @@ impl TestRunner {
         println!("{} tests", self.tests.len());
         match self.errors {
             0 => Ok(started.elapsed()),
-            1 => Err("1 failure".to_string()),
-            n => Err(format!("{} failures", n)),
+            1 => anyhow::bail!("1 failure"),
+            n => anyhow::bail!("{} failures", n),
         }
     }
 
     /// Scan pushed directories for tests and run specified passes from commandline on them.
-    pub fn run_passes(&mut self, passes: &[String], target: &str) -> TestResult {
+    pub fn run_passes(
+        &mut self,
+        passes: &[String],
+        target: &str,
+    ) -> anyhow::Result<time::Duration> {
         let started = time::Instant::now();
         self.scan_dirs(IsPass::Pass);
         self.schedule_pass_job(passes, target);
@@ -381,8 +384,8 @@ impl TestRunner {
         println!("{} tests", self.tests.len());
         match self.errors {
             0 => Ok(started.elapsed()),
-            1 => Err("1 failure".to_string()),
-            n => Err(format!("{} failures", n)),
+            1 => anyhow::bail!("1 failure"),
+            n => anyhow::bail!("{} failures", n),
         }
     }
 }

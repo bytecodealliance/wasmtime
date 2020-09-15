@@ -7,23 +7,42 @@ use cranelift_reader::{parse_run_command, parse_test, ParseError, ParseOptions};
 use log::debug;
 use std::path::PathBuf;
 use std::{fs, io};
+use structopt::StructOpt;
 use thiserror::Error;
 
+/// Interpret clif code
+#[derive(StructOpt)]
+pub struct Options {
+    /// Specify an input file to be used. Use '-' for stdin.
+    #[structopt(required(true), parse(from_os_str))]
+    files: Vec<PathBuf>,
+
+    /// Enable debug output on stderr/stdout
+    #[structopt(short = "d")]
+    debug: bool,
+
+    /// Be more verbose
+    #[structopt(short = "v", long = "verbose")]
+    verbose: bool,
+}
+
 /// Run files through the Cranelift interpreter, interpreting any functions with annotations.
-pub fn run(files: Vec<String>, flag_print: bool) -> Result<(), String> {
+pub fn run(options: &Options) -> anyhow::Result<()> {
+    crate::handle_debug_flag(options.debug);
+
     let mut total = 0;
     let mut errors = 0;
-    for file in iterate_files(files) {
+    for file in iterate_files(&options.files) {
         total += 1;
-        let runner = FileInterpreter::from_path(file).map_err(|e| e.to_string())?;
+        let runner = FileInterpreter::from_path(file)?;
         match runner.run() {
             Ok(_) => {
-                if flag_print {
+                if options.verbose {
                     println!("{}", runner.path());
                 }
             }
             Err(e) => {
-                if flag_print {
+                if options.verbose {
                     println!("{}: {}", runner.path(), e.to_string());
                 }
                 errors += 1;
@@ -31,7 +50,7 @@ pub fn run(files: Vec<String>, flag_print: bool) -> Result<(), String> {
         }
     }
 
-    if flag_print {
+    if options.verbose {
         match total {
             0 => println!("0 files"),
             1 => println!("1 file"),
@@ -41,8 +60,8 @@ pub fn run(files: Vec<String>, flag_print: bool) -> Result<(), String> {
 
     match errors {
         0 => Ok(()),
-        1 => Err(String::from("1 failure")),
-        n => Err(format!("{} failures", n)),
+        1 => anyhow::bail!("1 failure"),
+        n => anyhow::bail!("{} failures", n),
     }
 }
 
@@ -158,6 +177,11 @@ mod test {
 
     #[test]
     fn filetests() {
-        run(vec!["../filetests/filetests/interpreter".to_string()], true).unwrap()
+        run(&Options {
+            files: vec![PathBuf::from("../filetests/filetests/interpreter")],
+            debug: true,
+            verbose: true,
+        })
+        .unwrap()
     }
 }

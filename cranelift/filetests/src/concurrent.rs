@@ -4,7 +4,6 @@
 //! concurrently.
 
 use crate::runone;
-use crate::TestResult;
 use cranelift_codegen::dbg::LOG_FILENAME_PREFIX;
 use cranelift_codegen::timing;
 use file_per_thread_logger;
@@ -22,8 +21,14 @@ struct Request(usize, PathBuf);
 
 /// Reply from worker thread,
 pub enum Reply {
-    Starting { jobid: usize, thread_num: usize },
-    Done { jobid: usize, result: TestResult },
+    Starting {
+        jobid: usize,
+        thread_num: usize,
+    },
+    Done {
+        jobid: usize,
+        result: anyhow::Result<Duration>,
+    },
     Tick,
 }
 
@@ -147,11 +152,11 @@ fn worker_thread(
                         // The test panicked, leaving us a `Box<Any>`.
                         // Panics are usually strings.
                         if let Some(msg) = e.downcast_ref::<String>() {
-                            Err(format!("panicked in worker #{}: {}", thread_num, msg))
+                            anyhow::bail!("panicked in worker #{}: {}", thread_num, msg)
                         } else if let Some(msg) = e.downcast_ref::<&'static str>() {
-                            Err(format!("panicked in worker #{}: {}", thread_num, msg))
+                            anyhow::bail!("panicked in worker #{}: {}", thread_num, msg)
                         } else {
-                            Err(format!("panicked in worker #{}", thread_num))
+                            anyhow::bail!("panicked in worker #{}", thread_num)
                         }
                     });
 

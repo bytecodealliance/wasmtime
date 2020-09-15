@@ -1,3 +1,4 @@
+use anyhow::Result;
 use cfg_if::cfg_if;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{binemit, ir};
@@ -124,53 +125,52 @@ cfg_if! {
         use capstone::prelude::*;
         use target_lexicon::Architecture;
 
-        fn get_disassembler(isa: &dyn TargetIsa) -> Result<Capstone, String> {
+        fn get_disassembler(isa: &dyn TargetIsa) -> Result<Capstone> {
             let cs = match isa.triple().architecture {
                 Architecture::Riscv32 | Architecture::Riscv64 => {
-                    return Err(String::from("No disassembler for RiscV"))
+                    anyhow::bail!("No disassembler for RiscV");
                 }
                 Architecture::I386 | Architecture::I586 | Architecture::I686 => Capstone::new()
                     .x86()
                     .mode(arch::x86::ArchMode::Mode32)
-                    .build(),
+                    .build()?,
                 Architecture::X86_64 => Capstone::new()
                     .x86()
                     .mode(arch::x86::ArchMode::Mode64)
-                    .build(),
+                    .build()?,
                 Architecture::Arm(arm) => {
                     if arm.is_thumb() {
                         Capstone::new()
                             .arm()
                             .mode(arch::arm::ArchMode::Thumb)
-                            .build()
+                            .build()?
                     } else {
                         Capstone::new()
                             .arm()
                             .mode(arch::arm::ArchMode::Arm)
-                            .build()
+                            .build()?
                     }
                 }
                 Architecture::Aarch64 {..} => {
                     let mut cs = Capstone::new()
                         .arm64()
                         .mode(arch::arm64::ArchMode::Arm)
-                        .build()
-                        .map_err(|err| err.to_string())?;
+                        .build()?;
                     // AArch64 uses inline constants rather than a separate constant pool right now.
                     // Without this option, Capstone will stop disassembling as soon as it sees
                     // an inline constant that is not also a valid instruction. With this option,
                     // Capstone will print a `.byte` directive with the bytes of the inline constant
                     // and continue to the next instruction.
-                    cs.set_skipdata(true).map_err(|err| err.to_string())?;
-                    Ok(cs)
+                    cs.set_skipdata(true)?;
+                    cs
                 }
-                _ => return Err(String::from("Unknown ISA")),
+                _ => anyhow::bail!("Unknown ISA"),
             };
 
-            cs.map_err(|err| err.to_string())
+            Ok(cs)
         }
 
-        pub fn print_disassembly(isa: &dyn TargetIsa, mem: &[u8]) -> Result<(), String> {
+        pub fn print_disassembly(isa: &dyn TargetIsa, mem: &[u8]) -> Result<()> {
             let cs = get_disassembler(isa)?;
 
             println!("\nDisassembly of {} bytes:", mem.len());
@@ -209,7 +209,7 @@ cfg_if! {
             Ok(())
         }
     } else {
-        pub fn print_disassembly(_: &dyn TargetIsa, _: &[u8]) -> Result<(), String> {
+        pub fn print_disassembly(_: &dyn TargetIsa, _: &[u8]) -> Result<()> {
             println!("\nNo disassembly available.");
             Ok(())
         }
@@ -224,7 +224,7 @@ pub fn print_all(
     relocs: &PrintRelocs,
     traps: &PrintTraps,
     stack_maps: &PrintStackMaps,
-) -> Result<(), String> {
+) -> Result<()> {
     print_bytes(&mem);
     print_disassembly(isa, &mem[0..code_size as usize])?;
     print_readonly_data(&mem[code_size as usize..(code_size + rodata_size) as usize]);

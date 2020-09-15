@@ -25,6 +25,7 @@ memmap = "0.7.0"
 num_cpus = "1.8.0"
 target-lexicon = "0.10"
 thiserror = "1.0.15"
+anyhow = "1.0.32"
 
 [features]
 enable-peepmatic = []

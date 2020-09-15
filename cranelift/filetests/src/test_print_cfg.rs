@@ -5,7 +5,7 @@
 
 use std::borrow::Cow;
 
-use crate::subtest::{self, Context, SubTest, SubtestResult};
+use crate::subtest::{self, Context, SubTest};
 use cranelift_codegen::cfg_printer::CFGPrinter;
 use cranelift_codegen::ir::Function;
 use cranelift_reader::TestCommand;
@@ -13,13 +13,12 @@ use cranelift_reader::TestCommand;
 /// Object implementing the `test print-cfg` sub-test.
 struct TestPrintCfg;
 
-pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "print-cfg");
     if !parsed.options.is_empty() {
-        Err(format!("No options allowed on {}", parsed))
-    } else {
-        Ok(Box::new(TestPrintCfg))
+        anyhow::bail!("No options allowed on {}", parsed);
     }
+    Ok(Box::new(TestPrintCfg))
 }
 
 impl SubTest for TestPrintCfg {
@@ -31,7 +30,7 @@ impl SubTest for TestPrintCfg {
         false
     }
 
-    fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
+    fn run(&self, func: Cow<Function>, context: &Context) -> anyhow::Result<()> {
         subtest::run_filecheck(&CFGPrinter::new(&func).to_string(), context)
     }
 }

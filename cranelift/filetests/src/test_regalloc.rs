@@ -5,22 +5,20 @@
 //!
 //! The resulting function is sent to `filecheck`.
 
-use crate::subtest::{run_filecheck, Context, SubTest, SubtestResult};
+use crate::subtest::{run_filecheck, Context, SubTest};
 use cranelift_codegen;
 use cranelift_codegen::ir::Function;
-use cranelift_codegen::print_errors::pretty_error;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
 
 struct TestRegalloc;
 
-pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "regalloc");
     if !parsed.options.is_empty() {
-        Err(format!("No options allowed on {}", parsed))
-    } else {
-        Ok(Box::new(TestRegalloc))
+        anyhow::bail!("No options allowed on {}", parsed);
     }
+    Ok(Box::new(TestRegalloc))
 }
 
 impl SubTest for TestRegalloc {
@@ -36,7 +34,7 @@ impl SubTest for TestRegalloc {
         true
     }
 
-    fn run(&self, func: Cow<Function>, context: &Context) -> SubtestResult<()> {
+    fn run(&self, func: Cow<Function>, context: &Context) -> anyhow::Result<()> {
         let isa = context.isa.expect("register allocator needs an ISA");
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
@@ -44,11 +42,11 @@ impl SubTest for TestRegalloc {
         // TODO: Should we have an option to skip legalization?
         comp_ctx
             .legalize(isa)
-            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
+            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, context.isa, e))?;
         comp_ctx.compute_domtree();
         comp_ctx
             .regalloc(isa)
-            .map_err(|e| pretty_error(&comp_ctx.func, context.isa, e))?;
+            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, context.isa, e))?;
 
         let text = comp_ctx.func.display(Some(isa)).to_string();
         run_filecheck(&text, context)

@@ -4,7 +4,7 @@
 //! functions and compares the results to the expected output.
 
 use crate::match_directive::match_directive;
-use crate::subtest::{Context, SubTest, SubtestResult};
+use crate::subtest::{Context, SubTest};
 use cranelift_codegen::binemit::{self, CodeInfo, CodeSink, RegDiversions};
 use cranelift_codegen::dbg::DisplayList;
 use cranelift_codegen::dominator_tree::DominatorTree;
@@ -12,7 +12,6 @@ use cranelift_codegen::flowgraph::ControlFlowGraph;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
 use cranelift_codegen::isa;
-use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings::OptLevel;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;
@@ -21,10 +20,10 @@ use std::fmt::Write;
 
 struct TestBinEmit;
 
-pub fn subtest(parsed: &TestCommand) -> SubtestResult<Box<dyn SubTest>> {
+pub fn subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn SubTest>> {
     assert_eq!(parsed.command, "binemit");
     if !parsed.options.is_empty() {
-        Err(format!("No options allowed on {}", parsed))
+        anyhow::bail!("No options allowed on {}", parsed)
     } else {
         Ok(Box::new(TestBinEmit))
     }
@@ -130,7 +129,7 @@ impl SubTest for TestBinEmit {
         true
     }
 
-    fn run(&self, func: Cow<ir::Function>, context: &Context) -> SubtestResult<()> {
+    fn run(&self, func: Cow<ir::Function>, context: &Context) -> anyhow::Result<()> {
         let isa = context.isa.expect("binemit needs an ISA");
         let encinfo = isa.encoding_info();
         // TODO: Run a verifier pass over the code first to detect any bad encodings or missing/bad
@@ -187,7 +186,7 @@ impl SubTest for TestBinEmit {
         let mut domtree = DominatorTree::with_function(&func, &cfg);
         let CodeInfo { total_size, .. } =
             binemit::relax_branches(&mut func, &mut cfg, &mut domtree, isa)
-                .map_err(|e| pretty_error(&func, context.isa, e))?;
+                .map_err(|e| crate::pretty_anyhow_error(&func, context.isa, e))?;
 
         // Collect all of the 'bin:' directives on instructions.
         let mut bins = HashMap::new();
@@ -196,25 +195,26 @@ impl SubTest for TestBinEmit {
                 match comment.entity {
                     AnyEntity::Inst(inst) => {
                         if let Some(prev) = bins.insert(inst, want) {
-                            return Err(format!(
+                            anyhow::bail!(
                                 "multiple 'bin:' directives on {}: '{}' and '{}'",
                                 func.dfg.display_inst(inst, isa),
                                 prev,
                                 want
-                            ));
+                            );
                         }
                     }
                     _ => {
-                        return Err(format!(
+                        anyhow::bail!(
                             "'bin:' directive on non-inst {}: {}",
-                            comment.entity, comment.text
-                        ));
+                            comment.entity,
+                            comment.text
+                        );
                     }
                 }
             }
         }
         if bins.is_empty() {
-            return Err("No 'bin:' directives found".to_string());
+            anyhow::bail!("No 'bin:' directives found");
         }
 
         // Now emit all instructions.
@@ -265,26 +265,26 @@ impl SubTest for TestBinEmit {
                             .collect::<Vec<_>>();
 
                         if encodings.is_empty() {
-                            return Err(format!(
+                            anyhow::bail!(
                                 "No encodings found for: {}",
                                 func.dfg.display_inst(inst, isa)
-                            ));
+                            );
                         }
-                        return Err(format!(
+                        anyhow::bail!(
                             "No matching encodings for {} in {}",
                             func.dfg.display_inst(inst, isa),
                             DisplayList(&encodings),
-                        ));
+                        );
                     }
                     let have = sink.text.trim();
                     if have != want {
-                        return Err(format!(
+                        anyhow::bail!(
                             "Bad machine code for {}: {}\nWant: {}\nGot:  {}",
                             inst,
                             func.dfg.display_inst(inst, isa),
                             want,
                             have
-                        ));
+                        );
                     }
                 }
             }
@@ -312,10 +312,7 @@ impl SubTest for TestBinEmit {
         sink.end_codegen();
 
         if sink.offset != total_size {
-            return Err(format!(
-                "Expected code size {}, got {}",
-                total_size, sink.offset
-            ));
+            anyhow::bail!("Expected code size {}, got {}", total_size, sink.offset);
         }
 
         Ok(())
@@ -328,7 +325,7 @@ fn validate_location_annotations(
     inst: ir::Inst,
     isa: &dyn isa::TargetIsa,
     validate_inputs: bool,
-) -> SubtestResult<()> {
+) -> anyhow::Result<()> {
     let values = if validate_inputs {
         func.dfg.inst_args(inst)
     } else {
@@ -336,12 +333,11 @@ fn validate_location_annotations(
     };
 
     if let Some(&v) = values.iter().find(|&&v| !func.locations[v].is_assigned()) {
-        Err(format!(
+        anyhow::bail!(
             "Need register/stack slot annotation for {} in {}",
             v,
             func.dfg.display_inst(inst, isa)
-        ))
-    } else {
-        Ok(())
+        );
     }
+    Ok(())
 }
