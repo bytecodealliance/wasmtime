@@ -128,7 +128,9 @@ impl ControlStackFrame {
             Self::Loop { header, .. } => header,
         }
     }
-    pub fn original_stack_size(&self) -> usize {
+    /// Private helper. Use `truncate_value_stack_to_else_params()` or
+    /// `truncate_value_stack_to_original_size()` to restore value-stack state.
+    fn original_stack_size(&self) -> usize {
         match *self {
             Self::If {
                 original_stack_size,
@@ -177,6 +179,33 @@ impl ControlStackFrame {
             } => *exit_is_branched_to = true,
             Self::Loop { .. } => {}
         }
+    }
+
+    /// Pop values from the value stack so that it is left at the
+    /// input-parameters to an else-block.
+    pub fn truncate_value_stack_to_else_params(&self, stack: &mut Vec<Value>) {
+        debug_assert!(matches!(self, &ControlStackFrame::If { .. }));
+        stack.truncate(self.original_stack_size());
+    }
+
+    /// Pop values from the value stack so that it is left at the state it was
+    /// before this control-flow frame.
+    pub fn truncate_value_stack_to_original_size(&self, stack: &mut Vec<Value>) {
+        // The "If" frame pushes its parameters twice, so they're available to the else block
+        // (see also `FuncTranslationState::push_if`).
+        // Yet, the original_stack_size member accounts for them only once, so that the else
+        // block can see the same number of parameters as the consequent block. As a matter of
+        // fact, we need to substract an extra number of parameter values for if blocks.
+        let num_duplicated_params = match self {
+            &ControlStackFrame::If {
+                num_param_values, ..
+            } => {
+                debug_assert!(num_param_values <= self.original_stack_size());
+                num_param_values
+            }
+            _ => 0,
+        };
+        stack.truncate(self.original_stack_size() - num_duplicated_params);
     }
 }
 
