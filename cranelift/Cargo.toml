@@ -38,14 +38,16 @@ wat = { version = "1.0.18", optional = true }
 target-lexicon = "0.10"
 peepmatic-souper = { path = "./peepmatic/crates/souper", version = "0.66.0", optional = true }
 pretty_env_logger = "0.4.0"
+rayon = { version = "1", optional = true }
 file-per-thread-logger = "0.1.2"
 indicatif = "0.13.0"
 thiserror = "1.0.15"
 walkdir = "2.2"
 
 [features]
-default = ["disas", "wasm", "cranelift-codegen/all-arch", "peepmatic-souper"]
+default = ["disas", "wasm", "cranelift-codegen/all-arch", "peepmatic-souper", "souper-harvest"]
 disas = ["capstone"]
 enable-peepmatic = ["cranelift-codegen/enable-peepmatic", "cranelift-filetests/enable-peepmatic"]
 wasm = ["wat", "cranelift-wasm"]
 experimental_x64 = ["cranelift-codegen/x64"]
+souper-harvest = ["cranelift-codegen/souper-harvest", "rayon"]

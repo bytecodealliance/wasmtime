@@ -116,6 +116,9 @@ mod value_label;
 #[cfg(feature = "enable-peepmatic")]
 mod peepmatic;
 
+#[cfg(feature = "souper-harvest")]
+mod souper_harvest;
+
 pub use crate::result::{CodegenError, CodegenResult};
 
 /// Version number of this crate.

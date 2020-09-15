@@ -36,8 +36,13 @@ use crate::timing;
 use crate::unreachable_code::eliminate_unreachable_code;
 use crate::value_label::{build_value_labels_ranges, ComparableSourceLoc, ValueLabelsRanges};
 use crate::verifier::{verify_context, verify_locations, VerifierErrors, VerifierResult};
+#[cfg(feature = "souper-harvest")]
+use alloc::string::String;
 use alloc::vec::Vec;
 use log::debug;
+
+#[cfg(feature = "souper-harvest")]
+use crate::souper_harvest::do_souper_harvest;
 
 /// Persistent data structures and compilation pipeline.
 pub struct Context {
@@ -446,5 +451,15 @@ impl Context {
             &self.regalloc,
             isa,
         ))
+    }
+
+    /// Harvest candidate left-hand sides for superoptimization with Souper.
+    #[cfg(feature = "souper-harvest")]
+    pub fn souper_harvest(
+        &mut self,
+        out: &mut std::sync::mpsc::Sender<String>,
+    ) -> CodegenResult<()> {
+        do_souper_harvest(&self.func, out);
+        Ok(())
     }
 }

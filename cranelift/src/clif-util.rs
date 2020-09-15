@@ -27,6 +27,8 @@ mod disasm;
 mod interpret;
 mod print_cfg;
 mod run;
+#[cfg(feature = "souper-harvest")]
+mod souper_harvest;
 mod utils;
 
 #[cfg(feature = "peepmatic-souper")]
@@ -265,6 +267,13 @@ fn main() {
                 .about("Convert Souper optimizations into Peepmatic DSL.")
                 .arg(add_single_input_file_arg())
                 .arg(add_output_arg()),
+        )
+        .subcommand(
+            SubCommand::with_name("souper-harvest")
+                .arg(add_single_input_file_arg())
+                .arg(add_output_arg())
+                .arg(add_target_flag())
+                .arg(add_set_flag()),
         );
 
     let res_util = match app_cmds.get_matches().subcommand() {
@@ -392,10 +401,26 @@ fn main() {
             #[cfg(not(feature = "peepmatic-souper"))]
             {
                 Err(
-                    "Error: clif-util was compiled without suport for the `souper-to-peepmatic` \
+                    "Error: clif-util was compiled without support for the `souper-to-peepmatic` \
                      subcommand"
                         .into(),
                 )
+            }
+        }
+        ("souper-harvest", Some(rest_cmd)) => {
+            #[cfg(feature = "souper-harvest")]
+            {
+                souper_harvest::run(
+                    rest_cmd.value_of("target").unwrap_or_default(),
+                    rest_cmd.value_of("single-file").unwrap(),
+                    rest_cmd.value_of("output").unwrap(),
+                    &get_vec(rest_cmd.values_of("set")),
+                )
+            }
+
+            #[cfg(not(feature = "souper-harvest"))]
+            {
+                Err("clif-util was compiled without `souper-harvest` support".into())
             }
         }
         _ => Err("Invalid subcommand.".to_owned()),
