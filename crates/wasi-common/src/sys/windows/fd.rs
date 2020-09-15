@@ -1,9 +1,9 @@
 use super::file_serial_no;
 use super::oshandle::RawOsHandle;
 use crate::handle::{Advice, Dircookie, Dirent, Fdflags, Filesize, Filestat};
-use crate::path;
 use crate::sys::osdir::OsDir;
 use crate::sys::osfile::OsFile;
+use crate::sys::windows::path::from_host;
 use crate::sys::AsFile;
 use crate::Result;
 use std::convert::TryInto;
@@ -141,7 +141,7 @@ pub(crate) fn readdir(
     let iter = path.read_dir()?.zip(3..).map(|(dir, no)| {
         let dir: std::fs::DirEntry = dir?;
         let ftype = dir.file_type()?;
-        let name = path::from_host(dir.file_name())?;
+        let name = from_host(dir.file_name())?;
         let d_ino = File::open(dir.path()).and_then(|f| file_serial_no(&f))?;
         let dirent = Dirent {
             d_namlen: name.len().try_into()?,
