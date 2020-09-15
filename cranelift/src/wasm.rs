@@ -99,7 +99,7 @@ pub struct Options {
     #[structopt(short("X"))]
     print_size: bool,
 
-    /// Juse decode Wasm into Cranelift IR, don't compile it to native code
+    /// Just decode Wasm into Cranelift IR, don't compile it to native code
     #[structopt(short("t"))]
     just_decode: bool,
 
