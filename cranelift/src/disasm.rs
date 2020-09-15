@@ -127,10 +127,10 @@ cfg_if! {
 
         fn get_disassembler(isa: &dyn TargetIsa) -> Result<Capstone> {
             let cs = match isa.triple().architecture {
-                Architecture::Riscv32 | Architecture::Riscv64 => {
+                Architecture::Riscv32(_) | Architecture::Riscv64(_) => {
                     anyhow::bail!("No disassembler for RiscV");
                 }
-                Architecture::I386 | Architecture::I586 | Architecture::I686 => Capstone::new()
+                Architecture::X86_32(_) => Capstone::new()
                     .x86()
                     .mode(arch::x86::ArchMode::Mode32)
                     .build()?,

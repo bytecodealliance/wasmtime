@@ -57,11 +57,15 @@ impl ObjectBuilder {
             target_lexicon::BinaryFormat::Unknown => {
                 return Err(ModuleError::Backend(anyhow!("binary format is unknown")))
             }
+            other => {
+                return Err(ModuleError::Backend(anyhow!(
+                    "binary format {} not recognized",
+                    other
+                )))
+            }
         };
         let architecture = match isa.triple().architecture {
-            target_lexicon::Architecture::I386
-            | target_lexicon::Architecture::I586
-            | target_lexicon::Architecture::I686 => object::Architecture::I386,
+            target_lexicon::Architecture::X86_32(_) => object::Architecture::I386,
             target_lexicon::Architecture::X86_64 => object::Architecture::X86_64,
             target_lexicon::Architecture::Arm(_) => object::Architecture::Arm,
             target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,

@@ -238,7 +238,7 @@ impl State {
     fn get_e_machine(&self) -> u32 {
         match target_lexicon::HOST.architecture {
             Architecture::X86_64 => elf::EM_X86_64 as u32,
-            Architecture::I686 => elf::EM_386 as u32,
+            Architecture::X86_32(_) => elf::EM_386 as u32,
             Architecture::Arm(_) => elf::EM_ARM as u32,
             Architecture::Aarch64(_) => elf::EM_AARCH64 as u32,
             _ => unimplemented!("unrecognized architecture"),

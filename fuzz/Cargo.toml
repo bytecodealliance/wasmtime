@@ -13,7 +13,7 @@ cranelift-codegen = { path = "../cranelift/codegen" }
 cranelift-reader = { path = "../cranelift/reader" }
 cranelift-wasm = { path = "../cranelift/wasm" }
 libfuzzer-sys = "0.3.3"
-target-lexicon = "0.10"
+target-lexicon = "0.11"
 peepmatic-fuzzing = { path = "../cranelift/peepmatic/crates/fuzzing", optional = true }
 wasmtime = { path = "../crates/wasmtime" }
 wasmtime-fuzzing = { path = "../crates/fuzzing" }
