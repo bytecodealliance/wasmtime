@@ -13,10 +13,9 @@ use yanix::poll::{poll, PollFd, PollFlags};
 pub(crate) fn oneoff(
     timeout: Option<ClockEventData>,
     fd_events: Vec<FdEventData>,
-    events: &mut Vec<Event>,
-) -> Result<()> {
+) -> Result<Vec<Event>> {
     if fd_events.is_empty() && timeout.is_none() {
-        return Ok(());
+        return Ok(Vec::new());
     }
 
     let poll_fds: Result<Vec<_>> = fd_events
@@ -59,16 +58,17 @@ pub(crate) fn oneoff(
         }
     };
 
-    Ok(if ready == 0 {
-        handle_timeout_event(timeout.expect("timeout should not be None"), events)
+    if ready == 0 {
+        let e = handle_timeout_event(timeout.expect("timeout should not be None"));
+        Ok(vec![e])
     } else {
         let ready_events = fd_events.into_iter().zip(poll_fds.into_iter()).take(ready);
-        handle_fd_event(ready_events, events)?
-    })
+        handle_fd_events(ready_events)
+    }
 }
 
-fn handle_timeout_event(timeout: ClockEventData, events: &mut Vec<Event>) {
-    events.push(Event {
+fn handle_timeout_event(timeout: ClockEventData) -> Event {
+    Event {
         userdata: timeout.userdata,
         error: Errno::Success,
         type_: Eventtype::Clock,
@@ -76,13 +76,12 @@ fn handle_timeout_event(timeout: ClockEventData, events: &mut Vec<Event>) {
             flags: Eventrwflags::empty(),
             nbytes: 0,
         },
-    });
+    }
 }
 
-fn handle_fd_event(
+fn handle_fd_events(
     ready_events: impl Iterator<Item = (FdEventData, yanix::poll::PollFd)>,
-    events: &mut Vec<Event>,
-) -> Result<()> {
+) -> Result<Vec<Event>> {
     fn query_nbytes(handle: EntryHandle) -> Result<u64> {
         let file = handle.as_file()?;
         if handle.get_file_type() == Filetype::RegularFile {
@@ -96,11 +95,13 @@ fn handle_fd_event(
         Ok(unsafe { fionread(file.as_raw_fd())?.into() })
     }
 
+    let mut events = Vec::new();
+
     for (fd_event, poll_fd) in ready_events {
         tracing::debug!(
             poll_fd = tracing::field::debug(poll_fd),
             poll_event = tracing::field::debug(&fd_event),
-            "poll_oneoff handle_fd_event"
+            "poll_oneoff handle_fd_events"
         );
 
         let revents = match poll_fd.revents() {
@@ -114,8 +115,8 @@ fn handle_fd_event(
             0
         };
 
-        let output_event = if revents.contains(PollFlags::POLLNVAL) {
-            Event {
+        if revents.contains(PollFlags::POLLNVAL) {
+            events.push(Event {
                 userdata: fd_event.userdata,
                 error: Error::Badf.into(),
                 type_: fd_event.r#type,
@@ -123,9 +124,9 @@ fn handle_fd_event(
                     nbytes: 0,
                     flags: Eventrwflags::FD_READWRITE_HANGUP,
                 },
-            }
+            })
         } else if revents.contains(PollFlags::POLLERR) {
-            Event {
+            events.push(Event {
                 userdata: fd_event.userdata,
                 error: Error::Io.into(),
                 type_: fd_event.r#type,
@@ -133,9 +134,9 @@ fn handle_fd_event(
                     nbytes: 0,
                     flags: Eventrwflags::FD_READWRITE_HANGUP,
                 },
-            }
+            })
         } else if revents.contains(PollFlags::POLLHUP) {
-            Event {
+            events.push(Event {
                 userdata: fd_event.userdata,
                 error: Errno::Success,
                 type_: fd_event.r#type,
@@ -143,9 +144,9 @@ fn handle_fd_event(
                     nbytes: 0,
                     flags: Eventrwflags::FD_READWRITE_HANGUP,
                 },
-            }
+            })
         } else if revents.contains(PollFlags::POLLIN) | revents.contains(PollFlags::POLLOUT) {
-            Event {
+            events.push(Event {
                 userdata: fd_event.userdata,
                 error: Errno::Success,
                 type_: fd_event.r#type,
@@ -153,13 +154,9 @@ fn handle_fd_event(
                     nbytes: nbytes.try_into()?,
                     flags: Eventrwflags::empty(),
                 },
-            }
-        } else {
-            continue;
+            })
         };
-
-        events.push(output_event);
     }
 
-    Ok(())
+    Ok(events)
 }

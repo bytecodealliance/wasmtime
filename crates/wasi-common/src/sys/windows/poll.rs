@@ -179,8 +179,9 @@ fn handle_error_event(event: FdEventData, error: Errno, out_events: &mut Vec<Eve
 pub(crate) fn oneoff(
     timeout: Option<ClockEventData>,
     fd_events: Vec<FdEventData>,
-    events: &mut Vec<Event>,
-) -> Result<()> {
+) -> Result<Vec<Event>> {
+    let mut events = Vec::new();
+
     let timeout = timeout
         .map(|event| {
             event
@@ -309,5 +310,5 @@ pub(crate) fn oneoff(
         }
     }
 
-    Ok(())
+    Ok(events)
 }

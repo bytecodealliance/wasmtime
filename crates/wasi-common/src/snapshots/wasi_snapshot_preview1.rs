@@ -1,8 +1,8 @@
-use crate::handle::HandleRights;
-use crate::sys::{clock, poll};
+use crate::sched::PollBuilder;
+use crate::sys::clock;
 use crate::wasi::types;
 use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
-use crate::{sched, Error, Result, WasiCtx};
+use crate::{Error, Result, WasiCtx};
 use std::convert::TryInto;
 use std::ops::{Deref, DerefMut};
 use wiggle::{GuestPtr, GuestSlice};
@@ -360,122 +360,76 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         out: &GuestPtr<types::Event>,
         nsubscriptions: types::Size,
     ) -> Result<types::Size> {
-        use tracing::{debug, trace};
+        let write_results = move |values: Vec<types::Event>| -> Result<types::Size> {
+            let nevents = values
+                .len()
+                .try_into()
+                .expect("nevents will always fit in Size");
+            let out_array = out.as_array(nevents);
+            for (event, event_ptr) in values.into_iter().zip(out_array.iter()) {
+                let event_ptr = event_ptr?;
+                event_ptr.write(event)?;
+            }
+            Ok(nevents)
+        };
 
-        if u64::from(nsubscriptions) > types::Filesize::max_value() {
+        if nsubscriptions == 0 {
+            // As mandated by the WASI spec:
+            // > If `nsubscriptions` is 0, returns `errno::inval`.
             return Err(Error::Inval);
         }
 
-        let mut subscriptions = Vec::new();
+        let mut poll_builder = PollBuilder::new(&self);
+        let mut error_events = Vec::new();
+
         let subs = in_.as_array(nsubscriptions);
         for sub_ptr in subs.iter() {
             let sub_ptr = sub_ptr?;
             let sub: types::Subscription = sub_ptr.read()?;
-            subscriptions.push(sub);
-        }
-
-        let mut events = Vec::new();
-        let mut timeout: Option<sched::ClockEventData> = None;
-        let mut fd_events = Vec::new();
-
-        // As mandated by the WASI spec:
-        // > If `nsubscriptions` is 0, returns `errno::inval`.
-        if subscriptions.is_empty() {
-            return Err(Error::Inval);
-        }
-
-        for subscription in subscriptions {
-            match subscription.u {
+            match sub.u {
                 types::SubscriptionU::Clock(clock) => {
-                    let delay = clock::to_relative_ns_delay(&clock)?;
-                    debug!(
-                        clock = tracing::field::debug(&clock),
-                        delay_ns = tracing::field::debug(delay),
-                        "poll_oneoff"
-                    );
-                    let current = sched::ClockEventData {
-                        delay,
-                        userdata: subscription.userdata,
-                    };
-                    let timeout = timeout.get_or_insert(current);
-                    if current.delay < timeout.delay {
-                        *timeout = current;
-                    }
+                    poll_builder.subscribe_clock(clock, sub.userdata)?;
                 }
                 types::SubscriptionU::FdRead(fd_read) => {
-                    let fd = fd_read.file_descriptor;
-                    let required_rights = HandleRights::from_base(
-                        types::Rights::FD_READ | types::Rights::POLL_FD_READWRITE,
-                    );
-                    let entry = match self.get_entry(fd) {
-                        Ok(entry) => entry,
-                        Err(error) => {
-                            events.push(types::Event {
-                                userdata: subscription.userdata,
-                                error: error.into(),
-                                type_: types::Eventtype::FdRead,
-                                fd_readwrite: types::EventFdReadwrite {
-                                    nbytes: 0,
-                                    flags: types::Eventrwflags::empty(),
-                                },
-                            });
-                            continue;
-                        }
-                    };
-                    fd_events.push(sched::FdEventData {
-                        handle: entry.as_handle(&required_rights)?,
-                        r#type: types::Eventtype::FdRead,
-                        userdata: subscription.userdata,
-                    });
+                    if let Err(e) =
+                        poll_builder.subscribe_fd_read(fd_read.file_descriptor, sub.userdata)
+                    {
+                        error_events.push(types::Event {
+                            userdata: sub.userdata,
+                            error: types::Errno::from(e),
+                            type_: types::Eventtype::FdRead,
+                            fd_readwrite: types::EventFdReadwrite {
+                                nbytes: 0,
+                                flags: types::Eventrwflags::empty(),
+                            },
+                        });
+                    }
                 }
                 types::SubscriptionU::FdWrite(fd_write) => {
-                    let fd = fd_write.file_descriptor;
-                    let required_rights = HandleRights::from_base(
-                        types::Rights::FD_WRITE | types::Rights::POLL_FD_READWRITE,
-                    );
-                    let entry = match self.get_entry(fd) {
-                        Ok(entry) => entry,
-                        Err(error) => {
-                            events.push(types::Event {
-                                userdata: subscription.userdata,
-                                error: error.into(),
-                                type_: types::Eventtype::FdWrite,
-                                fd_readwrite: types::EventFdReadwrite {
-                                    nbytes: 0,
-                                    flags: types::Eventrwflags::empty(),
-                                },
-                            });
-                            continue;
-                        }
-                    };
-                    fd_events.push(sched::FdEventData {
-                        handle: entry.as_handle(&required_rights)?,
-                        r#type: types::Eventtype::FdWrite,
-                        userdata: subscription.userdata,
-                    });
+                    if let Err(e) =
+                        poll_builder.subscribe_fd_write(fd_write.file_descriptor, sub.userdata)
+                    {
+                        error_events.push(types::Event {
+                            userdata: sub.userdata,
+                            error: types::Errno::from(e),
+                            type_: types::Eventtype::FdWrite,
+                            fd_readwrite: types::EventFdReadwrite {
+                                nbytes: 0,
+                                flags: types::Eventrwflags::empty(),
+                            },
+                        });
+                    }
                 }
             }
         }
-        debug!(
-            events = tracing::field::debug(&events),
-            timeout = tracing::field::debug(timeout),
-            "poll_oneoff"
-        );
-        // The underlying implementation should successfully and immediately return
-        // if no events have been passed. Such situation may occur if all provided
-        // events have been filtered out as errors in the code above.
-        poll::oneoff(timeout, fd_events, &mut events)?;
-        let nevents = events.len().try_into()?;
 
-        let out_events = out.as_array(nevents);
-        for (event, event_ptr) in events.into_iter().zip(out_events.iter()) {
-            let event_ptr = event_ptr?;
-            event_ptr.write(event)?;
+        if !error_events.is_empty() {
+            return write_results(error_events);
         }
 
-        trace!(nevents = nevents);
+        let polled_events = poll_builder.poll()?;
 
-        Ok(nevents)
+        write_results(polled_events)
     }
 
     fn proc_exit(&self, _rval: types::Exitcode) -> std::result::Result<(), ()> {
