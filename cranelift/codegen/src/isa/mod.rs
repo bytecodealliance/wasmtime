@@ -119,8 +119,10 @@ macro_rules! isa_builder {
 /// Return a builder that can create a corresponding `TargetIsa`.
 pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
     match triple.architecture {
-        Architecture::Riscv32 | Architecture::Riscv64 => isa_builder!(riscv, "riscv", triple),
-        Architecture::I386 | Architecture::I586 | Architecture::I686 | Architecture::X86_64 => {
+        Architecture::Riscv32 { .. } | Architecture::Riscv64 { .. } => {
+            isa_builder!(riscv, "riscv", triple)
+        }
+        Architecture::X86_32 { .. } | Architecture::X86_64 => {
             if cfg!(feature = "x64") {
                 isa_builder!(x64, "x64", triple)
             } else {

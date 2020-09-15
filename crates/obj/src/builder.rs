@@ -98,7 +98,7 @@ fn to_object_architecture(
 ) -> Result<Architecture, anyhow::Error> {
     use target_lexicon::Architecture::*;
     Ok(match arch {
-        I386 | I586 | I686 => Architecture::I386,
+        X86_32(_) => Architecture::I386,
         X86_64 => Architecture::X86_64,
         Arm(_) => Architecture::Arm,
         Aarch64(_) => Architecture::Aarch64,
@@ -238,6 +238,7 @@ impl ObjectBuilderTarget {
             target_lexicon::BinaryFormat::Unknown => {
                 bail!("binary format is unknown");
             }
+            other => bail!("binary format {} is unsupported", other),
         };
         let architecture = to_object_architecture(triple.architecture)?;
         let endianness = match triple.endianness().unwrap() {

@@ -34,7 +34,7 @@ wasi-common = { path = "crates/wasi-common", version = "0.19.0" }
 structopt = { version = "0.3.5", features = ["color", "suggestions"] }
 object = { version = "0.21.1", default-features = false, features = ["write"] }
 anyhow = "1.0.19"
-target-lexicon = { version = "0.10.0", default-features = false }
+target-lexicon = { version = "0.11.0", default-features = false }
 pretty_env_logger = "0.4.0"
 file-per-thread-logger = "0.1.1"
 wat = "1.0.23"
