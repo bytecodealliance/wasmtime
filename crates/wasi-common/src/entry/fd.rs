@@ -4,6 +4,7 @@ use crate::handle::{
     HandleRights, Prestat, PrestatDir, Rights, Size, Whence,
 };
 use crate::sched::Timestamp;
+use crate::sys::path::from_host;
 use crate::{Error, Result};
 use std::convert::TryInto;
 use std::ops::{Deref, DerefMut};
@@ -111,7 +112,7 @@ impl Entry {
             return Err(Error::Notdir);
         }
 
-        let path = crate::path::from_host(po_path.as_os_str())?;
+        let path = from_host(po_path.as_os_str())?;
         let prestat = PrestatDir {
             pr_name_len: path.len().try_into()?,
         };
@@ -125,7 +126,7 @@ impl Entry {
             return Err(Error::Notdir);
         }
 
-        let host_path = crate::path::from_host(po_path.as_os_str())?;
+        let host_path = from_host(po_path.as_os_str())?;
         let host_path = host_path.as_bytes();
         let host_path_len = host_path.len();
 
