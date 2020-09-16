@@ -1,0 +1,47 @@
+test compile
+target arm
+
+function %args(i32) -> i32 {
+    sig0 = (i32, i32, i32, i32) -> i32
+block0(v0: i32):
+    v1 = iconst.i32 1
+    v2 = iconst.i32 2
+    v3 = iconst.i32 3
+    v4 = iconst.i32 4
+    v5 = call_indirect.i32 sig0, v0(v1, v2, v3, v4)
+    return v5
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: push {r4, ip}
+; nextln: virtual_sp_offset_adjust 8
+; nextln: mov r4, r0
+; nextln: mov r0, #1
+; nextln: mov r1, #2
+; nextln: mov r2, #3
+; nextln: mov r3, #4
+; nextln: blx r4
+; nextln: pop {r4, ip}
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %multi_return() -> i32, i32, i32, i32 {
+block0:
+    v0 = iconst.i32 1
+    v1 = iconst.i32 2
+    v2 = iconst.i32 3
+    v3 = iconst.i32 4
+    return v0, v1, v2, v3
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: mov r0, #1
+; nextln: mov r1, #2
+; nextln: mov r2, #3
+; nextln: mov r3, #4
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr

@@ -1,0 +1,131 @@
+test compile
+target arm
+
+function %brnz(b1) -> i32 {
+block0(v0: b1):
+    brnz v0, block1
+    jump block2
+
+block1:
+    v1 = iconst.i32 1
+    return v1
+
+block2:
+    v2 = iconst.i32 2
+    return v2
+}
+
+; check: Block 0:
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: and r0, r0, #1
+; nextln: cmp r0, #0
+; nextln: bne label1 ; b label2
+; check: Block 1:
+; check: mov r0, #1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+; check: Block 2:
+; check: mov r0, #2
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %brz(b1) -> i32 {
+block0(v0: b1):
+    brz v0, block1
+    jump block2
+
+block1:
+    v1 = iconst.i32 1
+    return v1
+
+block2:
+    v2 = iconst.i32 2
+    return v2
+}
+
+; check: Block 0:
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: and r0, r0, #1
+; nextln: cmp r0, #0
+; nextln: beq label1 ; b label2
+; check: Block 1:
+; check: mov r0, #1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+; check: Block 2:  
+; check: mov r0, #2
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %trap() {
+block0:
+    trap user0
+}
+
+; check: udf #0
+
+function %trapif(i32, i32) {
+block0(v0: i32, v1: i32):
+    v2 = ifcmp v0, v1
+    trapif eq v2, user0
+    return
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: cmp r0, r1
+; nextln: bne 2 ; udf #0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %debugtrap() {
+block0:
+    debugtrap
+    return
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: bkpt #0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %call(i32) -> i32 {
+    fn0 = %f(i32) -> i32
+block0(v0: i32):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: ldr r1, [pc, #4] ; b 4 ; data
+; nextln: blx r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+
+function %call_indirect(i32, i32) -> i32 {
+    sig0 = (i32) -> i32
+block0(v0: i32, v1: i32):
+    v2 = call_indirect.i32 sig0, v1(v0)
+    return v2
+}
+
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: blx r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+

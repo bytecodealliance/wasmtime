@@ -1149,24 +1149,14 @@ mod tests {
     use super::{Move, Solver};
     use crate::entity::EntityRef;
     use crate::ir::Value;
-    use crate::isa::{RegClass, RegInfo, RegUnit, TargetIsa};
+    use crate::isa::registers::{RegBank, RegClassData};
+    use crate::isa::{RegClass, RegInfo, RegUnit};
     use crate::regalloc::RegisterSet;
-    use alloc::boxed::Box;
-    use core::str::FromStr;
-    use target_lexicon::triple;
+    use core::borrow::Borrow;
 
-    // Make an arm32 `TargetIsa`, if possible.
-    fn arm32() -> Option<Box<dyn TargetIsa>> {
-        use crate::isa;
-        use crate::settings;
-
-        let shared_builder = settings::builder();
-        let shared_flags = settings::Flags::new(shared_builder);
-
-        isa::lookup(triple!("arm"))
-            .ok()
-            .map(|b| b.finish(shared_flags))
-    }
+    // Arm32 `TargetIsa` is now `TargetIsaAdapter`, which does not hold any info
+    // about registers, so we directly access `INFO` from registers-arm32.rs.
+    include!(concat!(env!("OUT_DIR"), "/registers-arm32.rs"));
 
     // Get a register class by name.
     fn rc_by_name(reginfo: &RegInfo, name: &str) -> RegClass {
@@ -1207,8 +1197,7 @@ mod tests {
 
     #[test]
     fn simple_moves() {
-        let isa = arm32().expect("This test requires arm32 support");
-        let reginfo = isa.register_info();
+        let reginfo = INFO.borrow();
         let gpr = rc_by_name(&reginfo, "GPR");
         let r0 = gpr.unit(0);
         let r1 = gpr.unit(1);
@@ -1260,8 +1249,7 @@ mod tests {
 
     #[test]
     fn harder_move_cycles() {
-        let isa = arm32().expect("This test requires arm32 support");
-        let reginfo = isa.register_info();
+        let reginfo = INFO.borrow();
         let s = rc_by_name(&reginfo, "S");
         let d = rc_by_name(&reginfo, "D");
         let d0 = d.unit(0);
@@ -1322,8 +1310,7 @@ mod tests {
 
     #[test]
     fn emergency_spill() {
-        let isa = arm32().expect("This test requires arm32 support");
-        let reginfo = isa.register_info();
+        let reginfo = INFO.borrow();
         let gpr = rc_by_name(&reginfo, "GPR");
         let r0 = gpr.unit(0);
         let r1 = gpr.unit(1);

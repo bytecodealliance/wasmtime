@@ -59,6 +59,10 @@ pub(crate) struct X64ABIMachineSpec;
 impl ABIMachineSpec for X64ABIMachineSpec {
     type I = Inst;
 
+    fn word_bits() -> u32 {
+        64
+    }
+
     fn compute_arg_locs(
         call_conv: isa::CallConv,
         params: &[ir::AbiParam],

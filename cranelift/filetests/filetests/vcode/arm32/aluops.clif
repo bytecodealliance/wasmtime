@@ -1,0 +1,269 @@
+test compile
+target arm
+
+function %iadd(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = iadd v0, v1
+    return v2
+}
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: add r0, r0, r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %iadd(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2 = iadd v0, v1
+    return v2
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: add r0, r0, r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %iadd(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    return v2
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: add r0, r0, r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %sadd_sat(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = sadd_sat v0, v1
+    return v2
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: qadd r0, r0, r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %isub(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = isub v0, v1
+    return v2
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: sub r0, r0, r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %ssub_sat(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = ssub_sat v0, v1
+    return v2
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: qsub r0, r0, r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %ineg(i32) -> i32 {
+block0(v0: i32):
+    v1 = ineg v0
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: rsb r0, r0, #0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %imul(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = imul v0, v1
+    return v2
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: mul r0, r0, r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %umulhi(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = umulhi v0, v1
+    return v2
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: umull r1, r0, r0, r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %smulhi(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = smulhi v0, v1
+    return v2
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: smull r1, r0, r0, r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %udiv(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = udiv v0, v1
+    return v2
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: udiv r0, r0, r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %sdiv(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = sdiv v0, v1
+    return v2
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: sdiv r0, r0, r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %iadd_flags(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2, v3 = iadd_ifcout v0, v1
+    v4, v5 = iadd_ifcarry v1, v2, v3
+    v6 = iadd_ifcin v1, v4, v5
+    return v6
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: adds r0, r0, r1
+; nextln: adcs r0, r1, r0
+; nextln: adc r0, r1, r0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %isub_flags(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2, v3 = isub_ifbout v0, v1
+    v4, v5 = isub_ifborrow v1, v2, v3
+    v6 = isub_ifbin v1, v4, v5
+    return v6
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: subs r0, r0, r1
+; nextln: sbcs r0, r1, r0
+; nextln: sbc r0, r1, r0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %band(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = band v0, v1
+    return v2
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: and r0, r0, r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %bor(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor v0, v1
+    return v2
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: orr r0, r0, r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %bxor(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bxor v0, v1
+    return v2
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: eor r0, r0, r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %bnot(i32) -> i32 {
+block0(v0: i32):
+    v1 = bnot v0
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: mvn r0, r0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %band_not(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = band_not v0, v1
+    return v2
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: bic r0, r0, r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %bor_not(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = bor_not v0, v1
+    return v2
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: orn r0, r0, r1
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr

@@ -1,0 +1,80 @@
+test compile
+target arm
+
+function %uextend_i8_i32(i8) -> i32 {
+block0(v0: i8):
+    v1 = uextend.i32 v0
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: uxtb r0, r0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %uextend_i8_i16(i8) -> i16 {
+block0(v0: i8):
+    v1 = uextend.i16 v0
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: uxtb r0, r0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %uextend_i16_i32(i16) -> i32 {
+block0(v0: i16):
+    v1 = uextend.i32 v0
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: uxth r0, r0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %sextend_i8_i32(i8) -> i32 {
+block0(v0: i8):
+    v1 = sextend.i32 v0
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: sxtb r0, r0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %sextend_i8_i16(i8) -> i16 {
+block0(v0: i8):
+    v1 = sextend.i16 v0
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: sxtb r0, r0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %sextend_i16_i32(i16) -> i32 {
+block0(v0: i16):
+    v1 = sextend.i32 v0
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: sxth r0, r0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
