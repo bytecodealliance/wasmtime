@@ -131,17 +131,12 @@ fn make_timeout_event(timeout: &ClockEventData) -> Event {
     }
 }
 
-fn handle_timeout(timeout_event: ClockEventData, timeout: Duration, events: &mut Vec<Event>) {
+fn handle_timeout(timeout_event: ClockEventData, timeout: Duration) -> Event {
     thread::sleep(timeout);
-    handle_timeout_event(timeout_event, events);
+    make_timeout_event(&timeout_event)
 }
 
-fn handle_timeout_event(timeout_event: ClockEventData, events: &mut Vec<Event>) {
-    let new_event = make_timeout_event(&timeout_event);
-    events.push(new_event);
-}
-
-fn handle_rw_event(event: FdEventData, out_events: &mut Vec<Event>) {
+fn handle_rw_event(event: FdEventData) -> Event {
     let handle = &event.handle;
     let size = if let Some(_) = handle.as_any().downcast_ref::<Stdin>() {
         // We return the only universally correct lower bound, see the comment later in the function.
@@ -167,21 +162,13 @@ fn handle_rw_event(event: FdEventData, out_events: &mut Vec<Event>) {
             Ok(0)
         }
     };
-    let new_event = make_rw_event(&event, size);
-    out_events.push(new_event);
-}
-
-fn handle_error_event(event: FdEventData, error: Errno, out_events: &mut Vec<Event>) {
-    let new_event = make_rw_event(&event, Err(error));
-    out_events.push(new_event);
+    make_rw_event(&event, size)
 }
 
 pub(crate) fn oneoff(
     timeout: Option<ClockEventData>,
     fd_events: Vec<FdEventData>,
 ) -> Result<Vec<Event>> {
-    let mut events = Vec::new();
-
     let timeout = timeout
         .map(|event| {
             event
@@ -196,14 +183,16 @@ pub(crate) fn oneoff(
     if fd_events.is_empty() {
         match timeout {
             Some((event, dur)) => {
-                handle_timeout(event, dur, &mut events);
-                return Ok(events);
+                let event = handle_timeout(event, dur);
+                return Ok(vec![event]);
             }
-            // The implementation has to return Ok(()) in this case,
+            // The implementation has to return Ok(vec![]) in this case,
             // cf. the comment in src/hostcalls_impl/misc.rs
-            None => return Ok(events),
+            None => return Ok(vec![]),
         }
     }
+
+    let mut events = Vec::new();
 
     let mut stdin_events = vec![];
     let mut immediate_events = vec![];
@@ -240,7 +229,7 @@ pub(crate) fn oneoff(
                     "poll_oneoff: unsupported file type: {}",
                     other.get_file_type()
                 );
-                handle_error_event(event, Errno::Notsup, &mut events);
+                events.push(make_rw_event(&event, Err(Errno::Notsup)));
             }
         } else {
             tracing::error!("can poll FdEvent for OS resources only");
@@ -251,9 +240,9 @@ pub(crate) fn oneoff(
     let immediate = !immediate_events.is_empty();
     // Process all the events that do not require waiting.
     if immediate {
-        trace!("    | have immediate events, will return immediately");
+        trace!("have immediate events, will return immediately");
         for event in immediate_events {
-            handle_rw_event(event, &mut events);
+            events.push(handle_rw_event(event));
         }
     }
     if !stdin_events.is_empty() {
@@ -277,10 +266,10 @@ pub(crate) fn oneoff(
         // There appears to be no way of achieving (2) on Windows.
         // [1]: https://github.com/rust-lang/rust/pull/12422
         let waitmode = if immediate {
-            trace!("     | tentatively checking stdin");
+            trace!("tentatively checking stdin");
             WaitMode::Immediate
         } else {
-            trace!("     | passively waiting on stdin");
+            trace!("passively waiting on stdin");
             match timeout {
                 Some((_event, dur)) => WaitMode::Timeout(dur),
                 None => WaitMode::Infinite,
@@ -289,22 +278,22 @@ pub(crate) fn oneoff(
         let state = STDIN_POLL.lock().unwrap().poll(waitmode);
         for event in stdin_events {
             match state {
-                PollState::Ready => handle_rw_event(event, &mut events),
+                PollState::Ready => events.push(handle_rw_event(event)),
                 PollState::NotReady => {} // not immediately available, so just ignore
-                PollState::TimedOut => handle_timeout_event(timeout.unwrap().0, &mut events),
-                PollState::Error(e) => handle_error_event(event, e, &mut events),
+                PollState::TimedOut => events.push(make_timeout_event(&timeout.unwrap().0)),
+                PollState::Error(e) => events.push(make_rw_event(&event, Err(e))),
             }
         }
     }
 
     if !immediate && !pipe_events.is_empty() {
-        trace!("     | actively polling pipes");
+        trace!("actively polling pipes");
         match timeout {
             Some((event, dur)) => {
                 // In the tests stdin is replaced with a dummy pipe, so for now
                 // we just time out. Support for pipes will be decided later on.
                 warn!("Polling pipes not supported on Windows, will just time out.");
-                handle_timeout(event, dur, &mut events);
+                events.push(handle_timeout(event, dur));
             }
             None => {
                 error!("Polling only pipes with no timeout not supported on Windows.");
