@@ -195,10 +195,13 @@ pub(crate) fn oneoff(
     // With no events to listen, poll_oneoff just becomes a sleep.
     if fd_events.is_empty() {
         match timeout {
-            Some((event, dur)) => return Ok(handle_timeout(event, dur, events)),
+            Some((event, dur)) => {
+                handle_timeout(event, dur, &mut events);
+                return Ok(events);
+            }
             // The implementation has to return Ok(()) in this case,
             // cf. the comment in src/hostcalls_impl/misc.rs
-            None => return Ok(()),
+            None => return Ok(events),
         }
     }
 
@@ -237,7 +240,7 @@ pub(crate) fn oneoff(
                     "poll_oneoff: unsupported file type: {}",
                     other.get_file_type()
                 );
-                handle_error_event(event, Errno::Notsup, events);
+                handle_error_event(event, Errno::Notsup, &mut events);
             }
         } else {
             tracing::error!("can poll FdEvent for OS resources only");
@@ -250,7 +253,7 @@ pub(crate) fn oneoff(
     if immediate {
         trace!("    | have immediate events, will return immediately");
         for event in immediate_events {
-            handle_rw_event(event, events);
+            handle_rw_event(event, &mut events);
         }
     }
     if !stdin_events.is_empty() {
@@ -286,10 +289,10 @@ pub(crate) fn oneoff(
         let state = STDIN_POLL.lock().unwrap().poll(waitmode);
         for event in stdin_events {
             match state {
-                PollState::Ready => handle_rw_event(event, events),
+                PollState::Ready => handle_rw_event(event, &mut events),
                 PollState::NotReady => {} // not immediately available, so just ignore
-                PollState::TimedOut => handle_timeout_event(timeout.unwrap().0, events),
-                PollState::Error(e) => handle_error_event(event, e, events),
+                PollState::TimedOut => handle_timeout_event(timeout.unwrap().0, &mut events),
+                PollState::Error(e) => handle_error_event(event, e, &mut events),
             }
         }
     }
@@ -301,7 +304,7 @@ pub(crate) fn oneoff(
                 // In the tests stdin is replaced with a dummy pipe, so for now
                 // we just time out. Support for pipes will be decided later on.
                 warn!("Polling pipes not supported on Windows, will just time out.");
-                handle_timeout(event, dur, events);
+                handle_timeout(event, dur, &mut events);
             }
             None => {
                 error!("Polling only pipes with no timeout not supported on Windows.");
