@@ -1,5 +1,8 @@
-use crate::handle::{Handle, HandleRights};
-use crate::wasi::{self, types, RightsExt};
+use crate::handle::{
+    Advice, Dircookie, Dirent, Fdflags, Filesize, Filestat, Filetype, Fstflags, Handle,
+    HandleRights, Oflags, Rights, RightsExt, Size, DIRCOOKIE_START,
+};
+use crate::sched::Timestamp;
 use crate::{Error, Result};
 use std::any::Any;
 use std::cell::{Cell, RefCell};
@@ -39,44 +42,44 @@ pub(crate) trait MovableFile {
 pub trait FileContents {
     /// The implementation-defined maximum size of the store corresponding to a `FileContents`
     /// implementation.
-    fn max_size(&self) -> types::Filesize;
+    fn max_size(&self) -> Filesize;
     /// The current number of bytes this `FileContents` describes.
-    fn size(&self) -> types::Filesize;
+    fn size(&self) -> Filesize;
     /// Resize to hold `new_size` number of bytes, or error if this is not possible.
-    fn resize(&mut self, new_size: types::Filesize) -> Result<()>;
+    fn resize(&mut self, new_size: Filesize) -> Result<()>;
     /// Write a list of `IoSlice` starting at `offset`. `offset` plus the total size of all `iovs`
     /// is guaranteed to not exceed `max_size`. Implementations must not indicate more bytes have
     /// been written than can be held by `iovs`.
-    fn pwritev(&mut self, iovs: &[io::IoSlice], offset: types::Filesize) -> Result<usize>;
+    fn pwritev(&mut self, iovs: &[io::IoSlice], offset: Filesize) -> Result<usize>;
     /// Read from the file from `offset`, filling a list of `IoSlice`. The returend size must not
     /// be more than the capactiy of `iovs`, and must not exceed the limit reported by
     /// `self.max_size()`.
-    fn preadv(&self, iovs: &mut [io::IoSliceMut], offset: types::Filesize) -> Result<usize>;
+    fn preadv(&self, iovs: &mut [io::IoSliceMut], offset: Filesize) -> Result<usize>;
     /// Write contents from `buf` to this file starting at `offset`. `offset` plus the length of
     /// `buf` is guaranteed to not exceed `max_size`. Implementations must not indicate more bytes
     /// have been written than the size of `buf`.
-    fn pwrite(&mut self, buf: &[u8], offset: types::Filesize) -> Result<usize>;
+    fn pwrite(&mut self, buf: &[u8], offset: Filesize) -> Result<usize>;
     /// Read from the file at `offset`, filling `buf`. The returned size must not be more than the
     /// capacity of `buf`, and `offset` plus the returned size must not exceed `self.max_size()`.
-    fn pread(&self, buf: &mut [u8], offset: types::Filesize) -> Result<usize>;
+    fn pread(&self, buf: &mut [u8], offset: Filesize) -> Result<usize>;
 }
 
 impl FileContents for VecFileContents {
-    fn max_size(&self) -> types::Filesize {
-        std::usize::MAX as types::Filesize
+    fn max_size(&self) -> Filesize {
+        std::usize::MAX as Filesize
     }
 
-    fn size(&self) -> types::Filesize {
-        self.content.len() as types::Filesize
+    fn size(&self) -> Filesize {
+        self.content.len() as Filesize
     }
 
-    fn resize(&mut self, new_size: types::Filesize) -> Result<()> {
+    fn resize(&mut self, new_size: Filesize) -> Result<()> {
         let new_size: usize = new_size.try_into().map_err(|_| Error::Inval)?;
         self.content.resize(new_size, 0);
         Ok(())
     }
 
-    fn preadv(&self, iovs: &mut [io::IoSliceMut], offset: types::Filesize) -> Result<usize> {
+    fn preadv(&self, iovs: &mut [io::IoSliceMut], offset: Filesize) -> Result<usize> {
         let mut read_total = 0usize;
         for iov in iovs.iter_mut() {
             let skip: u64 = read_total.try_into().map_err(|_| Error::Inval)?;
@@ -86,7 +89,7 @@ impl FileContents for VecFileContents {
         Ok(read_total)
     }
 
-    fn pwritev(&mut self, iovs: &[io::IoSlice], offset: types::Filesize) -> Result<usize> {
+    fn pwritev(&mut self, iovs: &[io::IoSlice], offset: Filesize) -> Result<usize> {
         let mut write_total = 0usize;
         for iov in iovs.iter() {
             let skip: u64 = write_total.try_into().map_err(|_| Error::Inval)?;
@@ -96,7 +99,7 @@ impl FileContents for VecFileContents {
         Ok(write_total)
     }
 
-    fn pread(&self, buf: &mut [u8], offset: types::Filesize) -> Result<usize> {
+    fn pread(&self, buf: &mut [u8], offset: Filesize) -> Result<usize> {
         trace!(buffer_length = buf.len(), offset = offset, "pread");
         let offset: usize = offset.try_into().map_err(|_| Error::Inval)?;
 
@@ -109,7 +112,7 @@ impl FileContents for VecFileContents {
         Ok(read_count)
     }
 
-    fn pwrite(&mut self, buf: &[u8], offset: types::Filesize) -> Result<usize> {
+    fn pwrite(&mut self, buf: &[u8], offset: Filesize) -> Result<usize> {
         let offset: usize = offset.try_into().map_err(|_| Error::Inval)?;
 
         let write_end = offset.checked_add(buf.len()).ok_or(Error::Fbig)?;
@@ -141,9 +144,9 @@ impl VecFileContents {
 /// of data and permissions on a filesystem.
 pub struct InMemoryFile {
     rights: Cell<HandleRights>,
-    cursor: Cell<types::Filesize>,
+    cursor: Cell<Filesize>,
     parent: Rc<RefCell<Option<Box<dyn Handle>>>>,
-    fd_flags: Cell<types::Fdflags>,
+    fd_flags: Cell<Fdflags>,
     data: Rc<RefCell<Box<dyn FileContents>>>,
 }
 
@@ -154,14 +157,14 @@ impl InMemoryFile {
 
     pub fn new(contents: Box<dyn FileContents>) -> Self {
         let rights = HandleRights::new(
-            types::Rights::regular_file_base(),
-            types::Rights::regular_file_inheriting(),
+            Rights::regular_file_base(),
+            Rights::regular_file_inheriting(),
         );
         let rights = Cell::new(rights);
         Self {
             rights,
             cursor: Cell::new(0),
-            fd_flags: Cell::new(types::Fdflags::empty()),
+            fd_flags: Cell::new(Fdflags::empty()),
             parent: Rc::new(RefCell::new(None)),
             data: Rc::new(RefCell::new(contents)),
         }
@@ -187,8 +190,8 @@ impl Handle for InMemoryFile {
             data: Rc::clone(&self.data),
         }))
     }
-    fn get_file_type(&self) -> types::Filetype {
-        types::Filetype::RegularFile
+    fn get_file_type(&self) -> Filetype {
+        Filetype::RegularFile
     }
     fn get_rights(&self) -> HandleRights {
         self.rights.get()
@@ -197,16 +200,11 @@ impl Handle for InMemoryFile {
         self.rights.set(rights)
     }
     // FdOps
-    fn advise(
-        &self,
-        _advice: types::Advice,
-        _offset: types::Filesize,
-        _len: types::Filesize,
-    ) -> Result<()> {
+    fn advise(&self, _advice: Advice, _offset: Filesize, _len: Filesize) -> Result<()> {
         // we'll just ignore advice for now, unless it's totally invalid
         Ok(())
     }
-    fn allocate(&self, offset: types::Filesize, len: types::Filesize) -> Result<()> {
+    fn allocate(&self, offset: Filesize, len: Filesize) -> Result<()> {
         let new_limit = offset.checked_add(len).ok_or(Error::Fbig)?;
         let mut data = self.data.borrow_mut();
 
@@ -220,15 +218,15 @@ impl Handle for InMemoryFile {
 
         Ok(())
     }
-    fn fdstat_get(&self) -> Result<types::Fdflags> {
+    fn fdstat_get(&self) -> Result<Fdflags> {
         Ok(self.fd_flags.get())
     }
-    fn fdstat_set_flags(&self, fdflags: types::Fdflags) -> Result<()> {
+    fn fdstat_set_flags(&self, fdflags: Fdflags) -> Result<()> {
         self.fd_flags.set(fdflags);
         Ok(())
     }
-    fn filestat_get(&self) -> Result<types::Filestat> {
-        let stat = types::Filestat {
+    fn filestat_get(&self) -> Result<Filestat> {
+        let stat = Filestat {
             dev: 0,
             ino: 0,
             nlink: 0,
@@ -240,17 +238,17 @@ impl Handle for InMemoryFile {
         };
         Ok(stat)
     }
-    fn filestat_set_size(&self, st_size: types::Filesize) -> Result<()> {
+    fn filestat_set_size(&self, st_size: Filesize) -> Result<()> {
         let mut data = self.data.borrow_mut();
         if st_size > data.max_size() {
             return Err(Error::Fbig);
         }
         data.resize(st_size)
     }
-    fn preadv(&self, buf: &mut [io::IoSliceMut], offset: types::Filesize) -> Result<usize> {
+    fn preadv(&self, buf: &mut [io::IoSliceMut], offset: Filesize) -> Result<usize> {
         self.data.borrow_mut().preadv(buf, offset)
     }
-    fn pwritev(&self, buf: &[io::IoSlice], offset: types::Filesize) -> Result<usize> {
+    fn pwritev(&self, buf: &[io::IoSlice], offset: Filesize) -> Result<usize> {
         self.data.borrow_mut().pwritev(buf, offset)
     }
     fn read_vectored(&self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
@@ -262,7 +260,7 @@ impl Handle for InMemoryFile {
         self.cursor.set(update);
         Ok(read)
     }
-    fn seek(&self, offset: SeekFrom) -> Result<types::Filesize> {
+    fn seek(&self, offset: SeekFrom) -> Result<Filesize> {
         let content_len = self.data.borrow().size();
         match offset {
             SeekFrom::Current(offset) => {
@@ -297,7 +295,7 @@ impl Handle for InMemoryFile {
         trace!("write_vectored(iovs={:?})", iovs);
         let mut data = self.data.borrow_mut();
 
-        let append_mode = self.fd_flags.get().contains(&types::Fdflags::APPEND);
+        let append_mode = self.fd_flags.get().contains(&Fdflags::APPEND);
         trace!("     | fd_flags={}", self.fd_flags.get());
 
         // If this file is in append mode, we write to the end.
@@ -310,7 +308,7 @@ impl Handle for InMemoryFile {
         let max_size = iovs
             .iter()
             .map(|iov| {
-                let cast_iovlen: types::Size = iov
+                let cast_iovlen: Size = iov
                     .len()
                     .try_into()
                     .expect("iovec are bounded by wasi max sizes");
@@ -319,7 +317,7 @@ impl Handle for InMemoryFile {
             .fold(Some(0u32), |len, iov| len.and_then(|x| x.checked_add(iov)))
             .expect("write_vectored will not be called with invalid iovs");
 
-        if let Some(end) = write_start.checked_add(max_size as types::Filesize) {
+        if let Some(end) = write_start.checked_add(max_size as Filesize) {
             if end > data.max_size() {
                 return Err(Error::Fbig);
             }
@@ -348,10 +346,10 @@ impl Handle for InMemoryFile {
         path: &str,
         _read: bool,
         _write: bool,
-        oflags: types::Oflags,
-        _fd_flags: types::Fdflags,
+        oflags: Oflags,
+        _fd_flags: Fdflags,
     ) -> Result<Box<dyn Handle>> {
-        if oflags.contains(&types::Oflags::DIRECTORY) {
+        if oflags.contains(&Oflags::DIRECTORY) {
             tracing::trace!(
                 "InMemoryFile::openat was passed oflags DIRECTORY, but {:?} is a file.",
                 path
@@ -411,10 +409,7 @@ pub struct VirtualDir {
 
 impl VirtualDir {
     pub fn new(writable: bool) -> Self {
-        let rights = HandleRights::new(
-            types::Rights::directory_base(),
-            types::Rights::directory_inheriting(),
-        );
+        let rights = HandleRights::new(Rights::directory_base(), Rights::directory_inheriting());
         let rights = Cell::new(rights);
         Self {
             rights,
@@ -480,8 +475,8 @@ impl Handle for VirtualDir {
             entries: Rc::clone(&self.entries),
         }))
     }
-    fn get_file_type(&self) -> types::Filetype {
-        types::Filetype::Directory
+    fn get_file_type(&self) -> Filetype {
+        Filetype::Directory
     }
     fn get_rights(&self) -> HandleRights {
         self.rights.get()
@@ -490,8 +485,8 @@ impl Handle for VirtualDir {
         self.rights.set(rights)
     }
     // FdOps
-    fn filestat_get(&self) -> Result<types::Filestat> {
-        let stat = types::Filestat {
+    fn filestat_get(&self) -> Result<Filestat> {
+        let stat = Filestat {
             dev: 0,
             ino: 0,
             nlink: 0,
@@ -505,36 +500,36 @@ impl Handle for VirtualDir {
     }
     fn readdir(
         &self,
-        cookie: types::Dircookie,
-    ) -> Result<Box<dyn Iterator<Item = Result<(types::Dirent, String)>>>> {
+        cookie: Dircookie,
+    ) -> Result<Box<dyn Iterator<Item = Result<(Dirent, String)>>>> {
         struct VirtualDirIter {
             start: u32,
             entries: Rc<RefCell<HashMap<PathBuf, Box<dyn Handle>>>>,
         }
         impl Iterator for VirtualDirIter {
-            type Item = Result<(types::Dirent, String)>;
+            type Item = Result<(Dirent, String)>;
 
             fn next(&mut self) -> Option<Self::Item> {
                 tracing::trace!("VirtualDirIter::next continuing from {}", self.start);
                 if self.start == SELF_DIR_COOKIE {
                     self.start += 1;
                     let name = ".".to_owned();
-                    let dirent = types::Dirent {
+                    let dirent = Dirent {
                         d_next: self.start as u64,
                         d_ino: 0,
                         d_namlen: name.len() as _,
-                        d_type: types::Filetype::Directory,
+                        d_type: Filetype::Directory,
                     };
                     return Some(Ok((dirent, name)));
                 }
                 if self.start == PARENT_DIR_COOKIE {
                     self.start += 1;
                     let name = "..".to_owned();
-                    let dirent = types::Dirent {
+                    let dirent = Dirent {
                         d_next: self.start as u64,
                         d_ino: 0,
                         d_namlen: name.len() as _,
-                        d_type: types::Filetype::Directory,
+                        d_type: Filetype::Directory,
                     };
                     return Some(Ok((dirent, name)));
                 }
@@ -559,8 +554,8 @@ impl Handle for VirtualDir {
                     .to_str()
                     .expect("wasi paths are valid utf8 strings")
                     .to_owned();
-                let dirent = || -> Result<types::Dirent> {
-                    let dirent = types::Dirent {
+                let dirent = || -> Result<Dirent> {
+                    let dirent = Dirent {
                         d_namlen: name.len().try_into()?,
                         d_type: file.get_file_type(),
                         d_ino: 0,
@@ -601,34 +596,22 @@ impl Handle for VirtualDir {
             }
         }
     }
-    fn filestat_get_at(&self, path: &str, _follow: bool) -> Result<types::Filestat> {
+    fn filestat_get_at(&self, path: &str, _follow: bool) -> Result<Filestat> {
         let stat = self
-            .openat(
-                path,
-                false,
-                false,
-                types::Oflags::empty(),
-                types::Fdflags::empty(),
-            )?
+            .openat(path, false, false, Oflags::empty(), Fdflags::empty())?
             .filestat_get()?;
         Ok(stat)
     }
     fn filestat_set_times_at(
         &self,
         path: &str,
-        atim: types::Timestamp,
-        mtim: types::Timestamp,
-        fst_flags: types::Fstflags,
+        atim: Timestamp,
+        mtim: Timestamp,
+        fst_flags: Fstflags,
         _follow: bool,
     ) -> Result<()> {
-        self.openat(
-            path,
-            false,
-            false,
-            types::Oflags::empty(),
-            types::Fdflags::empty(),
-        )?
-        .filestat_set_times(atim, mtim, fst_flags)?;
+        self.openat(path, false, false, Oflags::empty(), Fdflags::empty())?
+            .filestat_set_times(atim, mtim, fst_flags)?;
         Ok(())
     }
     fn openat(
@@ -636,8 +619,8 @@ impl Handle for VirtualDir {
         path: &str,
         _read: bool,
         _write: bool,
-        oflags: types::Oflags,
-        fd_flags: types::Fdflags,
+        oflags: Oflags,
+        fd_flags: Fdflags,
     ) -> Result<Box<dyn Handle>> {
         if path == "." {
             return self.try_clone().map_err(Into::into);
@@ -659,14 +642,14 @@ impl Handle for VirtualDir {
         let entry_count = entries.len();
         match entries.entry(Path::new(file_name).to_path_buf()) {
             Entry::Occupied(e) => {
-                let creat_excl_mask = types::Oflags::CREAT | types::Oflags::EXCL;
+                let creat_excl_mask = Oflags::CREAT | Oflags::EXCL;
                 if (oflags & creat_excl_mask) == creat_excl_mask {
                     tracing::trace!("VirtualDir::openat was passed oflags CREAT|EXCL, but the file {:?} exists.", file_name);
                     return Err(Error::Exist);
                 }
 
-                if oflags.contains(&types::Oflags::DIRECTORY)
-                    && e.get().get_file_type() != types::Filetype::Directory
+                if oflags.contains(&Oflags::DIRECTORY)
+                    && e.get().get_file_type() != Filetype::Directory
                 {
                     tracing::trace!(
                         "VirtualDir::openat was passed oflags DIRECTORY, but {:?} is a file.",
@@ -709,12 +692,12 @@ impl Handle for VirtualDir {
         match entries.entry(Path::new(trimmed_path).to_path_buf()) {
             Entry::Occupied(e) => {
                 // first, does this name a directory?
-                if e.get().get_file_type() != types::Filetype::Directory {
+                if e.get().get_file_type() != Filetype::Directory {
                     return Err(Error::Notdir);
                 }
 
                 // Okay, but is the directory empty?
-                let iter = e.get().readdir(wasi::DIRCOOKIE_START)?;
+                let iter = e.get().readdir(DIRCOOKIE_START)?;
                 if iter.skip(RESERVED_ENTRY_COUNT as usize).next().is_some() {
                     return Err(Error::Notempty);
                 }
@@ -757,7 +740,7 @@ impl Handle for VirtualDir {
         match entries.entry(Path::new(trimmed_path).to_path_buf()) {
             Entry::Occupied(e) => {
                 // Directories must be removed through `remove_directory`, not `unlink_file`.
-                if e.get().get_file_type() == types::Filetype::Directory {
+                if e.get().get_file_type() == Filetype::Directory {
                     return Err(Error::Isdir);
                 }
 

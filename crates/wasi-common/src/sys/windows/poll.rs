@@ -1,11 +1,12 @@
-use crate::handle::Handle;
-use crate::poll::{ClockEventData, FdEventData};
+use crate::handle::{Filetype, Handle};
+use crate::sched::{
+    ClockEventData, Errno, Event, EventFdReadwrite, Eventrwflags, Eventtype, FdEventData,
+};
 use crate::sys::osdir::OsDir;
 use crate::sys::osfile::OsFile;
 use crate::sys::osother::OsOther;
 use crate::sys::stdio::{Stderr, Stdin, Stdout};
 use crate::sys::AsFile;
-use crate::wasi::types;
 use crate::{Error, Result};
 use lazy_static::lazy_static;
 use std::convert::TryInto;
@@ -24,7 +25,7 @@ enum PollState {
     Ready,
     NotReady, // it's not ready, but we didn't wait
     TimedOut, // it's not ready and a timeout has occurred
-    Error(types::Errno),
+    Error(Errno),
 }
 
 enum WaitMode {
@@ -80,7 +81,7 @@ impl StdinPoll {
             // Linux returns `POLLIN` in both cases, and we imitate this behavior.
             let resp = match std::io::stdin().lock().fill_buf() {
                 Ok(_) => PollState::Ready,
-                Err(e) => PollState::Error(types::Errno::from(Error::from(e))),
+                Err(e) => PollState::Error(Errno::from(Error::from(e))),
             };
 
             // Notify the requestor about data in stdin. They may have already timed out,
@@ -102,52 +103,45 @@ lazy_static! {
     };
 }
 
-fn make_rw_event(
-    event: &FdEventData,
-    nbytes: std::result::Result<u64, types::Errno>,
-) -> types::Event {
+fn make_rw_event(event: &FdEventData, nbytes: std::result::Result<u64, Errno>) -> Event {
     let (nbytes, error) = match nbytes {
-        Ok(nbytes) => (nbytes, types::Errno::Success),
+        Ok(nbytes) => (nbytes, Errno::Success),
         Err(e) => (u64::default(), e),
     };
-    types::Event {
+    Event {
         userdata: event.userdata,
         type_: event.r#type,
         error,
-        fd_readwrite: types::EventFdReadwrite {
+        fd_readwrite: EventFdReadwrite {
             nbytes,
-            flags: types::Eventrwflags::empty(),
+            flags: Eventrwflags::empty(),
         },
     }
 }
 
-fn make_timeout_event(timeout: &ClockEventData) -> types::Event {
-    types::Event {
+fn make_timeout_event(timeout: &ClockEventData) -> Event {
+    Event {
         userdata: timeout.userdata,
-        type_: types::Eventtype::Clock,
-        error: types::Errno::Success,
-        fd_readwrite: types::EventFdReadwrite {
+        type_: Eventtype::Clock,
+        error: Errno::Success,
+        fd_readwrite: EventFdReadwrite {
             nbytes: 0,
-            flags: types::Eventrwflags::empty(),
+            flags: Eventrwflags::empty(),
         },
     }
 }
 
-fn handle_timeout(
-    timeout_event: ClockEventData,
-    timeout: Duration,
-    events: &mut Vec<types::Event>,
-) {
+fn handle_timeout(timeout_event: ClockEventData, timeout: Duration, events: &mut Vec<Event>) {
     thread::sleep(timeout);
     handle_timeout_event(timeout_event, events);
 }
 
-fn handle_timeout_event(timeout_event: ClockEventData, events: &mut Vec<types::Event>) {
+fn handle_timeout_event(timeout_event: ClockEventData, events: &mut Vec<Event>) {
     let new_event = make_timeout_event(&timeout_event);
     events.push(new_event);
 }
 
-fn handle_rw_event(event: FdEventData, out_events: &mut Vec<types::Event>) {
+fn handle_rw_event(event: FdEventData, out_events: &mut Vec<Event>) {
     let handle = &event.handle;
     let size = if let Some(_) = handle.as_any().downcast_ref::<Stdin>() {
         // We return the only universally correct lower bound, see the comment later in the function.
@@ -159,12 +153,12 @@ fn handle_rw_event(event: FdEventData, out_events: &mut Vec<types::Event>) {
         // On Unix, ioctl(FIONREAD) will return 0 for stdout/stderr. Emulate the same behavior on Windows.
         Ok(0)
     } else {
-        if event.r#type == types::Eventtype::FdRead {
+        if event.r#type == Eventtype::FdRead {
             handle
                 .as_file()
                 .and_then(|f| f.metadata())
                 .map(|m| m.len())
-                .map_err(|ioerror| types::Errno::from(Error::from(ioerror)))
+                .map_err(|ioerror| Errno::from(Error::from(ioerror)))
         } else {
             // The spec is unclear what nbytes should actually be for __WASI_EVENTTYPE_FD_WRITE and
             // the implementation on Unix just returns 0 here, so it's probably fine
@@ -177,7 +171,7 @@ fn handle_rw_event(event: FdEventData, out_events: &mut Vec<types::Event>) {
     out_events.push(new_event);
 }
 
-fn handle_error_event(event: FdEventData, error: types::Errno, out_events: &mut Vec<types::Event>) {
+fn handle_error_event(event: FdEventData, error: Errno, out_events: &mut Vec<Event>) {
     let new_event = make_rw_event(&event, Err(error));
     out_events.push(new_event);
 }
@@ -185,7 +179,7 @@ fn handle_error_event(event: FdEventData, error: types::Errno, out_events: &mut 
 pub(crate) fn oneoff(
     timeout: Option<ClockEventData>,
     fd_events: Vec<FdEventData>,
-    events: &mut Vec<types::Event>,
+    events: &mut Vec<Event>,
 ) -> Result<()> {
     let timeout = timeout
         .map(|event| {
@@ -234,7 +228,7 @@ pub(crate) fn oneoff(
             // considered immediately ready, following the behavior on Linux.
             immediate_events.push(event);
         } else if let Some(other) = handle.as_any().downcast_ref::<OsOther>() {
-            if other.get_file_type() == types::Filetype::SocketStream {
+            if other.get_file_type() == Filetype::SocketStream {
                 // We map pipe to SocketStream
                 pipe_events.push(event);
             } else {
@@ -242,7 +236,7 @@ pub(crate) fn oneoff(
                     "poll_oneoff: unsupported file type: {}",
                     other.get_file_type()
                 );
-                handle_error_event(event, types::Errno::Notsup, events);
+                handle_error_event(event, Errno::Notsup, events);
             }
         } else {
             tracing::error!("can poll FdEvent for OS resources only");

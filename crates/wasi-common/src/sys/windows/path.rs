@@ -1,7 +1,7 @@
-use crate::handle::{Handle, HandleRights};
+use crate::handle::{Fdflags, Filestat, Fstflags, Handle, HandleRights, Oflags, Rights};
+use crate::sched::Timestamp;
 use crate::sys::osdir::OsDir;
 use crate::sys::{fd, AsFile};
-use crate::wasi::types;
 use crate::{Error, Result};
 use std::convert::TryFrom;
 use std::ffi::{OsStr, OsString};
@@ -52,7 +52,7 @@ fn concatenate<P: AsRef<Path>>(file: &OsDir, path: P) -> Result<PathBuf> {
     Ok(out_path)
 }
 
-fn file_access_mode_from_fdflags(fdflags: types::Fdflags, read: bool, write: bool) -> AccessMode {
+fn file_access_mode_from_fdflags(fdflags: Fdflags, read: bool, write: bool) -> AccessMode {
     let mut access_mode = AccessMode::READ_CONTROL;
 
     // We always need `FILE_WRITE_ATTRIBUTES` so that we can set attributes such as filetimes, etc.
@@ -72,7 +72,7 @@ fn file_access_mode_from_fdflags(fdflags: types::Fdflags, read: bool, write: boo
     // For append, grant the handle FILE_APPEND_DATA access but *not* FILE_WRITE_DATA.
     // This makes the handle "append only".
     // Changes to the file pointer will be ignored (like POSIX's O_APPEND behavior).
-    if fdflags.contains(&types::Fdflags::APPEND) {
+    if fdflags.contains(&Fdflags::APPEND) {
         access_mode.insert(AccessMode::FILE_APPEND_DATA);
         access_mode.remove(AccessMode::FILE_WRITE_DATA);
     }
@@ -92,27 +92,27 @@ pub(crate) fn from_host<S: AsRef<OsStr>>(s: S) -> Result<String> {
 
 pub(crate) fn open_rights(
     input_rights: &HandleRights,
-    oflags: types::Oflags,
-    fdflags: types::Fdflags,
+    oflags: Oflags,
+    fdflags: Fdflags,
 ) -> HandleRights {
     // which rights are needed on the dirfd?
-    let mut needed_base = types::Rights::PATH_OPEN;
+    let mut needed_base = Rights::PATH_OPEN;
     let mut needed_inheriting = input_rights.base | input_rights.inheriting;
 
     // convert open flags
-    if oflags.contains(&types::Oflags::CREAT) {
-        needed_base |= types::Rights::PATH_CREATE_FILE;
-    } else if oflags.contains(&types::Oflags::TRUNC) {
-        needed_base |= types::Rights::PATH_FILESTAT_SET_SIZE;
+    if oflags.contains(&Oflags::CREAT) {
+        needed_base |= Rights::PATH_CREATE_FILE;
+    } else if oflags.contains(&Oflags::TRUNC) {
+        needed_base |= Rights::PATH_FILESTAT_SET_SIZE;
     }
 
     // convert file descriptor flags
-    if fdflags.contains(&types::Fdflags::DSYNC)
-        || fdflags.contains(&types::Fdflags::RSYNC)
-        || fdflags.contains(&types::Fdflags::SYNC)
+    if fdflags.contains(&Fdflags::DSYNC)
+        || fdflags.contains(&Fdflags::RSYNC)
+        || fdflags.contains(&Fdflags::SYNC)
     {
-        needed_inheriting |= types::Rights::FD_DATASYNC;
-        needed_inheriting |= types::Rights::FD_SYNC;
+        needed_inheriting |= Rights::FD_DATASYNC;
+        needed_inheriting |= Rights::FD_SYNC;
     }
 
     HandleRights::new(needed_base, needed_inheriting)
@@ -206,18 +206,18 @@ pub(crate) fn open(
     path: &str,
     read: bool,
     write: bool,
-    oflags: types::Oflags,
-    fdflags: types::Fdflags,
+    oflags: Oflags,
+    fdflags: Fdflags,
 ) -> Result<Box<dyn Handle>> {
     use winx::file::{AccessMode, CreationDisposition, Flags};
 
-    let is_trunc = oflags.contains(&types::Oflags::TRUNC);
+    let is_trunc = oflags.contains(&Oflags::TRUNC);
 
     if is_trunc {
         // Windows does not support append mode when opening for truncation
         // This is because truncation requires `GENERIC_WRITE` access, which will override the removal
         // of the `FILE_WRITE_DATA` permission.
-        if fdflags.contains(&types::Fdflags::APPEND) {
+        if fdflags.contains(&Fdflags::APPEND) {
             return Err(Error::Notsup);
         }
     }
@@ -246,7 +246,7 @@ pub(crate) fn open(
                 return Err(Error::Loop);
             }
             // check if we are trying to open a file as a dir
-            if file_type.is_file() && oflags.contains(&types::Oflags::DIRECTORY) {
+            if file_type.is_file() && oflags.contains(&Oflags::DIRECTORY) {
                 return Err(Error::Notdir);
             }
         }
@@ -499,7 +499,7 @@ pub(crate) fn remove_directory(dirfd: &OsDir, path: &str) -> Result<()> {
     std::fs::remove_dir(&path).map_err(Into::into)
 }
 
-pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str, follow: bool) -> Result<types::Filestat> {
+pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str, follow: bool) -> Result<Filestat> {
     use winx::file::Flags;
     let path = concatenate(dirfd, path)?;
     let mut opts = OpenOptions::new();
@@ -517,9 +517,9 @@ pub(crate) fn filestat_get_at(dirfd: &OsDir, path: &str, follow: bool) -> Result
 pub(crate) fn filestat_set_times_at(
     dirfd: &OsDir,
     path: &str,
-    atim: types::Timestamp,
-    mtim: types::Timestamp,
-    fst_flags: types::Fstflags,
+    atim: Timestamp,
+    mtim: Timestamp,
+    fst_flags: Fstflags,
     follow: bool,
 ) -> Result<()> {
     use winx::file::{AccessMode, Flags};

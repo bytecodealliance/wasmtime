@@ -1,9 +1,9 @@
 use crate::entry::{Entry, EntryHandle};
-use crate::handle::HandleRights;
-use crate::sys::clock;
+use crate::handle::{AsBytes, HandleRights};
+use crate::sys::{clock, poll};
+use crate::wasi::types;
 use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
-use crate::wasi::{types, AsBytes};
-use crate::{path, poll, Error, Result, WasiCtx};
+use crate::{path, sched, Error, Result, WasiCtx};
 use std::convert::TryInto;
 use std::io::{self, SeekFrom};
 use std::ops::Deref;
@@ -681,7 +681,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         }
 
         let mut events = Vec::new();
-        let mut timeout: Option<poll::ClockEventData> = None;
+        let mut timeout: Option<sched::ClockEventData> = None;
         let mut fd_events = Vec::new();
 
         // As mandated by the WASI spec:
@@ -699,7 +699,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                         delay_ns = tracing::field::debug(delay),
                         "poll_oneoff"
                     );
-                    let current = poll::ClockEventData {
+                    let current = sched::ClockEventData {
                         delay,
                         userdata: subscription.userdata,
                     };
@@ -728,7 +728,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                             continue;
                         }
                     };
-                    fd_events.push(poll::FdEventData {
+                    fd_events.push(sched::FdEventData {
                         handle: entry.as_handle(&required_rights)?,
                         r#type: types::Eventtype::FdRead,
                         userdata: subscription.userdata,
@@ -754,7 +754,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                             continue;
                         }
                     };
-                    fd_events.push(poll::FdEventData {
+                    fd_events.push(sched::FdEventData {
                         handle: entry.as_handle(&required_rights)?,
                         r#type: types::Eventtype::FdWrite,
                         userdata: subscription.userdata,

@@ -1,4 +1,4 @@
-use crate::wasi::types::{Subclockflags, SubscriptionClock};
+use crate::sched::{Subclockflags, SubscriptionClock};
 use crate::{Error, Result};
 use std::time::SystemTime;
 

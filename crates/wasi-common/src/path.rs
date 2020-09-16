@@ -1,6 +1,5 @@
 use crate::entry::Entry;
-use crate::handle::{Handle, HandleRights};
-use crate::wasi::types;
+use crate::handle::{Fdflags, Filetype, Handle, HandleRights, Lookupflags, Oflags};
 use crate::{Error, Result};
 use std::path::{Component, Path};
 use std::str;
@@ -13,7 +12,7 @@ pub(crate) use crate::sys::path::{from_host, open_rights};
 pub(crate) fn get(
     entry: &Entry,
     required_rights: &HandleRights,
-    dirflags: types::Lookupflags,
+    dirflags: Lookupflags,
     path: &str,
     needs_final_component: bool,
 ) -> Result<(Box<dyn Handle>, String)> {
@@ -26,7 +25,7 @@ pub(crate) fn get(
         return Err(Error::Ilseq);
     }
 
-    if entry.get_file_type() != types::Filetype::Directory {
+    if entry.get_file_type() != Filetype::Directory {
         // if `dirfd` doesn't refer to a directory, return `Notdir`.
         return Err(Error::Notdir);
     }
@@ -102,8 +101,8 @@ pub(crate) fn get(
                                 &head,
                                 false,
                                 false,
-                                types::Oflags::DIRECTORY,
-                                types::Fdflags::empty(),
+                                Oflags::DIRECTORY,
+                                Fdflags::empty(),
                             ) {
                                 Ok(new_dir) => {
                                     dir_stack.push(new_dir);
@@ -141,8 +140,7 @@ pub(crate) fn get(
                             }
 
                             continue;
-                        } else if ends_with_slash
-                            || dirflags.contains(&types::Lookupflags::SYMLINK_FOLLOW)
+                        } else if ends_with_slash || dirflags.contains(&Lookupflags::SYMLINK_FOLLOW)
                         {
                             // if there's a trailing slash, or if `LOOKUP_SYMLINK_FOLLOW` is set, attempt
                             // symlink expansion

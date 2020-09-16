@@ -1,4 +1,4 @@
-use crate::wasi::types;
+use crate::handle::{Fstflags, Timestamp};
 use crate::{Error, Result};
 use filetime::{set_file_handle_times, FileTime};
 use std::fs::File;
@@ -8,14 +8,14 @@ pub(crate) use super::sys_impl::fd::*;
 
 pub(crate) fn filestat_set_times(
     file: &File,
-    st_atim: types::Timestamp,
-    st_mtim: types::Timestamp,
-    fst_flags: types::Fstflags,
+    st_atim: Timestamp,
+    st_mtim: Timestamp,
+    fst_flags: Fstflags,
 ) -> Result<()> {
-    let set_atim = fst_flags.contains(&types::Fstflags::ATIM);
-    let set_atim_now = fst_flags.contains(&types::Fstflags::ATIM_NOW);
-    let set_mtim = fst_flags.contains(&types::Fstflags::MTIM);
-    let set_mtim_now = fst_flags.contains(&types::Fstflags::MTIM_NOW);
+    let set_atim = fst_flags.contains(&Fstflags::ATIM);
+    let set_atim_now = fst_flags.contains(&Fstflags::ATIM_NOW);
+    let set_mtim = fst_flags.contains(&Fstflags::MTIM);
+    let set_mtim_now = fst_flags.contains(&Fstflags::MTIM_NOW);
 
     if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
         return Err(Error::Inval);

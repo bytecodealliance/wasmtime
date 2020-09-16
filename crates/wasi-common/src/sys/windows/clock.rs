@@ -1,4 +1,4 @@
-use crate::wasi::types;
+use crate::sched::{Clockid, Timestamp};
 use crate::{Error, Result};
 use cpu_time::{ProcessTime, ThreadTime};
 use lazy_static::lazy_static;
@@ -12,7 +12,7 @@ lazy_static! {
 
 // Timer resolution on Windows is really hard. We may consider exposing the resolution of the respective
 // timers as an associated function in the future.
-pub(crate) fn res_get(clock_id: types::Clockid) -> Result<types::Timestamp> {
+pub(crate) fn res_get(clock_id: Clockid) -> Result<Timestamp> {
     let ts = match clock_id {
         // This is the best that we can do with std::time::SystemTime.
         // Rust uses GetSystemTimeAsFileTime, which is said to have the resolution of
@@ -47,25 +47,25 @@ pub(crate) fn res_get(clock_id: types::Clockid) -> Result<types::Timestamp> {
         // [4] https://www.codeproject.com/Tips/1011902/High-Resolution-Time-For-Windows
         // [5] https://stackoverflow.com/questions/7685762/windows-7-timing-functions-how-to-use-getsystemtimeadjustment-correctly
         // [6] https://bugs.python.org/issue19007
-        types::Clockid::Realtime => 55_000_000,
+        Clockid::Realtime => 55_000_000,
         // std::time::Instant uses QueryPerformanceCounter & QueryPerformanceFrequency internally
-        types::Clockid::Monotonic => *PERF_COUNTER_RES,
+        Clockid::Monotonic => *PERF_COUNTER_RES,
         // The best we can do is to hardcode the value from the docs.
         // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getprocesstimes
-        types::Clockid::ProcessCputimeId => 100,
+        Clockid::ProcessCputimeId => 100,
         // The best we can do is to hardcode the value from the docs.
         // https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getthreadtimes
-        types::Clockid::ThreadCputimeId => 100,
+        Clockid::ThreadCputimeId => 100,
     };
     Ok(ts)
 }
 
-pub(crate) fn time_get(clock_id: types::Clockid) -> Result<types::Timestamp> {
+pub(crate) fn time_get(clock_id: Clockid) -> Result<Timestamp> {
     let duration = match clock_id {
-        types::Clockid::Realtime => get_monotonic_time(),
-        types::Clockid::Monotonic => get_realtime_time()?,
-        types::Clockid::ProcessCputimeId => get_proc_cputime()?,
-        types::Clockid::ThreadCputimeId => get_thread_cputime()?,
+        Clockid::Realtime => get_monotonic_time(),
+        Clockid::Monotonic => get_realtime_time()?,
+        Clockid::ProcessCputimeId => get_proc_cputime()?,
+        Clockid::ThreadCputimeId => get_thread_cputime()?,
     };
     let duration = duration.as_nanos().try_into()?;
     Ok(duration)
