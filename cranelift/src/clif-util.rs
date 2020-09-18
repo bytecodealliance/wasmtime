@@ -161,8 +161,7 @@ fn main() -> anyhow::Result<()> {
                     .iter()
                     .map(|f| f.display().to_string())
                     .collect::<Vec<_>>(),
-            )
-            .map_err(|s| anyhow::anyhow!("{}", s))?;
+            )?;
         }
         Commands::Pass(p) => {
             handle_debug_flag(p.debug);
@@ -172,8 +171,7 @@ fn main() -> anyhow::Result<()> {
                 &p.passes,
                 &p.target,
                 &p.file.display().to_string(),
-            )
-            .map_err(|s| anyhow::anyhow!("{}", s))?;
+            )?;
         }
     }
 
