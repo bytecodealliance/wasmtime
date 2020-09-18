@@ -33,7 +33,7 @@ pub(super) fn define_struct(
                     let pointee_type = names.type_ref(&pointee, quote!('a));
                     quote!(#rt::GuestPtr<'a, #pointee_type>)
                 }
-                _ => unimplemented!("other anonymous struct members"),
+                _ => unimplemented!("other anonymous struct members: {:?}", m.tref),
             },
         };
         quote!(pub #name: #type_)
@@ -63,7 +63,7 @@ pub(super) fn define_struct(
                         let #name = <#rt::GuestPtr::<#pointee_type> as #rt::GuestType>::read(&#location)?;
                     }
                 }
-                _ => unimplemented!("other anonymous struct members"),
+                _ => unimplemented!("other anonymous struct members: {:?}", ty),
             },
         }
     });
