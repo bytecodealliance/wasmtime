@@ -11,7 +11,7 @@ use syn::parse_macro_input;
 ///   CamelCase.
 ///
 /// * For each `module` defined in the witx document, a Rust module is defined
-///   containing definitions for that module. Module names are teanslated to the
+///   containing definitions for that module. Module names are translated to the
 ///   Rust-idiomatic snake\_case.
 ///
 ///     * For each `@interface func` defined in a witx module, an abi-level
