@@ -276,6 +276,11 @@ impl Switch {
                 bx.switch_to_block(new_block);
 
                 // Cast to u32, as br_table is not implemented for integers bigger than 32bits.
+                let discr = if bx.func.dfg.value_type(discr) == types::I128 {
+                    bx.ins().isplit(discr).0
+                } else {
+                    discr
+                };
                 bx.ins().ireduce(types::I32, discr)
             } else {
                 discr
@@ -648,8 +653,9 @@ block4:
     jump block5
 
 block5:
-    v2 = ireduce.i32 v0
-    br_table v2, block3, jt0"
+    v2, v3 = isplit.i128 v0
+    v4 = ireduce.i32 v2
+    br_table v4, block3, jt0"
         );
     }
 }

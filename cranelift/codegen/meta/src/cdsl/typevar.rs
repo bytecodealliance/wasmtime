@@ -302,7 +302,7 @@ impl TypeVar {
     pub fn to_rust_code(&self) -> String {
         match &self.base {
             Some(base) => format!(
-                "{}.{}()",
+                "{}.{}().unwrap()",
                 base.type_var.to_rust_code(),
                 base.derived_func.name()
             ),
