@@ -709,6 +709,48 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::Imax | Opcode::Umax | Opcode::Imin | Opcode::Umin => {
+            let lhs = put_input_in_reg(ctx, inputs[0]);
+            let rhs = input_to_reg_mem(ctx, inputs[1]);
+            let dst = get_output_reg(ctx, outputs[0]);
+            let ty = ty.unwrap();
+            if ty.is_vector() {
+                let sse_op = match op {
+                    Opcode::Imax => match ty {
+                        types::I8X16 => SseOpcode::Pmaxsb,
+                        types::I16X8 => SseOpcode::Pmaxsw,
+                        types::I32X4 => SseOpcode::Pmaxsd,
+                        _ => panic!("Unsupported type for packed {} instruction: {}", op, ty),
+                    },
+                    Opcode::Umax => match ty {
+                        types::I8X16 => SseOpcode::Pmaxub,
+                        types::I16X8 => SseOpcode::Pmaxuw,
+                        types::I32X4 => SseOpcode::Pmaxud,
+                        _ => panic!("Unsupported type for packed {} instruction: {}", op, ty),
+                    },
+                    Opcode::Imin => match ty {
+                        types::I8X16 => SseOpcode::Pminsb,
+                        types::I16X8 => SseOpcode::Pminsw,
+                        types::I32X4 => SseOpcode::Pminsd,
+                        _ => panic!("Unsupported type for packed {} instruction: {}", op, ty),
+                    },
+                    Opcode::Umin => match ty {
+                        types::I8X16 => SseOpcode::Pminub,
+                        types::I16X8 => SseOpcode::Pminuw,
+                        types::I32X4 => SseOpcode::Pminud,
+                        _ => panic!("Unsupported type for packed {} instruction: {}", op, ty),
+                    },
+                    _ => unreachable!("This is a bug: the external and internal `match op` should be over the same opcodes."),
+                };
+
+                // Move the `lhs` to the same register as `dst`.
+                ctx.emit(Inst::gen_move(dst, lhs, ty));
+                ctx.emit(Inst::xmm_rm_r(sse_op, rhs, dst));
+            } else {
+                panic!("Unsupported type for {} instruction: {}", op, ty);
+            }
+        }
+
         Opcode::Bnot => {
             let ty = ty.unwrap();
             if ty.is_vector() {
