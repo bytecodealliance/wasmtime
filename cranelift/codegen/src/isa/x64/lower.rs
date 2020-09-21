@@ -508,6 +508,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::IaddIfcout
         | Opcode::Isub
         | Opcode::Imul
+        | Opcode::AvgRound
         | Opcode::Band
         | Opcode::Bor
         | Opcode::Bxor => {
@@ -633,6 +634,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                             return Ok(());
                         }
                         _ => panic!("Unsupported type for packed Imul instruction"),
+                    },
+                    Opcode::AvgRound => match ty {
+                        types::I8X16 => SseOpcode::Pavgb,
+                        types::I16X8 => SseOpcode::Pavgw,
+                        _ => panic!("Unsupported type for packed AvgRound instruction: {}", ty),
                     },
                     _ => panic!("Unsupported packed instruction"),
                 };

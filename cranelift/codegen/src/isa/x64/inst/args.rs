@@ -401,6 +401,8 @@ pub enum SseOpcode {
     Paddd,
     Paddq,
     Paddw,
+    Pavgb,
+    Pavgw,
     Pmulld,
     Pmullw,
     Pmuludq,
@@ -503,6 +505,8 @@ impl SseOpcode {
             | SseOpcode::Paddd
             | SseOpcode::Paddq
             | SseOpcode::Paddw
+            | SseOpcode::Pavgb
+            | SseOpcode::Pavgw
             | SseOpcode::Pmullw
             | SseOpcode::Pmuludq
             | SseOpcode::Psllw
@@ -603,6 +607,8 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Paddd => "paddd",
             SseOpcode::Paddq => "paddq",
             SseOpcode::Paddw => "paddw",
+            SseOpcode::Pavgb => "pavgb",
+            SseOpcode::Pavgw => "pavgw",
             SseOpcode::Pmulld => "pmulld",
             SseOpcode::Pmullw => "pmullw",
             SseOpcode::Pmuludq => "pmuludq",
