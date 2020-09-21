@@ -3112,6 +3112,18 @@ fn test_x64_emit() {
     ));
 
     insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pavgb, RegMem::reg(xmm12), w_xmm13),
+        "66450FE0EC",
+        "pavgb   %xmm12, %xmm13",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pavgw, RegMem::reg(xmm1), w_xmm8),
+        "66440FE3C1",
+        "pavgw   %xmm1, %xmm8",
+    ));
+
+    insns.push((
         Inst::xmm_rm_r(SseOpcode::Psubb, RegMem::reg(xmm5), w_xmm9),
         "66440FF8CD",
         "psubb   %xmm5, %xmm9",

@@ -1778,6 +1778,8 @@ pub(crate) fn emit(
                 SseOpcode::Paddd => (LegacyPrefixes::_66, 0x0FFE, 2),
                 SseOpcode::Paddq => (LegacyPrefixes::_66, 0x0FD4, 2),
                 SseOpcode::Paddw => (LegacyPrefixes::_66, 0x0FFD, 2),
+                SseOpcode::Pavgb => (LegacyPrefixes::_66, 0x0FE0, 2),
+                SseOpcode::Pavgw => (LegacyPrefixes::_66, 0x0FE3, 2),
                 SseOpcode::Pmulld => (LegacyPrefixes::_66, 0x0F3840, 3),
                 SseOpcode::Pmullw => (LegacyPrefixes::_66, 0x0FD5, 2),
                 SseOpcode::Pmuludq => (LegacyPrefixes::_66, 0x0FF4, 2),
