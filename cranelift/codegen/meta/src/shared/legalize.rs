@@ -402,6 +402,17 @@ pub(crate) fn define(insts: &InstructionGroup, imm: &Immediates) -> TransformGro
         );
     }
 
+    let zero = Literal::constant(&imm.imm64, 0);
+    narrow.legalize(
+        def!(a = iadd_imm.I128(x, c)),
+        vec![
+            def!(yh = iconst.I64(zero)),
+            def!(yl = iconst.I64(c)),
+            def!(y = iconcat.I64(yh, yl)),
+            def!(a = iadd(x, y)),
+        ],
+    );
+
     // Widen instructions with one input operand.
     for &op in &[bnot, popcnt] {
         for &int_ty in &[I8, I16] {
