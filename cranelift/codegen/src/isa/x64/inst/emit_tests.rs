@@ -3166,6 +3166,78 @@ fn test_x64_emit() {
     ));
 
     insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pmaxsb, RegMem::reg(xmm15), w_xmm6),
+        "66410F383CF7",
+        "pmaxsb  %xmm15, %xmm6",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pmaxsw, RegMem::reg(xmm15), w_xmm6),
+        "66410FEEF7",
+        "pmaxsw  %xmm15, %xmm6",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pmaxsd, RegMem::reg(xmm15), w_xmm6),
+        "66410F383DF7",
+        "pmaxsd  %xmm15, %xmm6",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pmaxub, RegMem::reg(xmm14), w_xmm1),
+        "66410FDECE",
+        "pmaxub  %xmm14, %xmm1",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pmaxuw, RegMem::reg(xmm14), w_xmm1),
+        "66410F383ECE",
+        "pmaxuw  %xmm14, %xmm1",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pmaxud, RegMem::reg(xmm14), w_xmm1),
+        "66410F383FCE",
+        "pmaxud  %xmm14, %xmm1",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pminsb, RegMem::reg(xmm8), w_xmm9),
+        "66450F3838C8",
+        "pminsb  %xmm8, %xmm9",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pminsw, RegMem::reg(xmm8), w_xmm9),
+        "66450FEAC8",
+        "pminsw  %xmm8, %xmm9",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pminsd, RegMem::reg(xmm8), w_xmm9),
+        "66450F3839C8",
+        "pminsd  %xmm8, %xmm9",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pminub, RegMem::reg(xmm3), w_xmm2),
+        "660FDAD3",
+        "pminub  %xmm3, %xmm2",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pminuw, RegMem::reg(xmm3), w_xmm2),
+        "660F383AD3",
+        "pminuw  %xmm3, %xmm2",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pminud, RegMem::reg(xmm3), w_xmm2),
+        "660F383BD3",
+        "pminud  %xmm3, %xmm2",
+    ));
+
+    insns.push((
         Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::reg(xmm11), w_xmm2),
         "66410FEFD3",
         "pxor    %xmm11, %xmm2",

@@ -403,6 +403,18 @@ pub enum SseOpcode {
     Paddw,
     Pavgb,
     Pavgw,
+    Pmaxsb,
+    Pmaxsw,
+    Pmaxsd,
+    Pmaxub,
+    Pmaxuw,
+    Pmaxud,
+    Pminsb,
+    Pminsw,
+    Pminsd,
+    Pminub,
+    Pminuw,
+    Pminud,
     Pmulld,
     Pmullw,
     Pmuludq,
@@ -507,6 +519,10 @@ impl SseOpcode {
             | SseOpcode::Paddw
             | SseOpcode::Pavgb
             | SseOpcode::Pavgw
+            | SseOpcode::Pmaxsw
+            | SseOpcode::Pmaxub
+            | SseOpcode::Pminsw
+            | SseOpcode::Pminub
             | SseOpcode::Pmullw
             | SseOpcode::Pmuludq
             | SseOpcode::Psllw
@@ -531,9 +547,18 @@ impl SseOpcode {
 
             SseOpcode::Pabsb | SseOpcode::Pabsw | SseOpcode::Pabsd => SSSE3,
 
-            SseOpcode::Insertps | SseOpcode::Pmulld | SseOpcode::Roundss | SseOpcode::Roundsd => {
-                SSE41
-            }
+            SseOpcode::Insertps
+            | SseOpcode::Pmaxsb
+            | SseOpcode::Pmaxsd
+            | SseOpcode::Pmaxuw
+            | SseOpcode::Pmaxud
+            | SseOpcode::Pminsb
+            | SseOpcode::Pminsd
+            | SseOpcode::Pminuw
+            | SseOpcode::Pminud
+            | SseOpcode::Pmulld
+            | SseOpcode::Roundss
+            | SseOpcode::Roundsd => SSE41,
         }
     }
 
@@ -609,6 +634,18 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Paddw => "paddw",
             SseOpcode::Pavgb => "pavgb",
             SseOpcode::Pavgw => "pavgw",
+            SseOpcode::Pmaxsb => "pmaxsb",
+            SseOpcode::Pmaxsw => "pmaxsw",
+            SseOpcode::Pmaxsd => "pmaxsd",
+            SseOpcode::Pmaxub => "pmaxub",
+            SseOpcode::Pmaxuw => "pmaxuw",
+            SseOpcode::Pmaxud => "pmaxud",
+            SseOpcode::Pminsb => "pminsb",
+            SseOpcode::Pminsw => "pminsw",
+            SseOpcode::Pminsd => "pminsd",
+            SseOpcode::Pminub => "pminub",
+            SseOpcode::Pminuw => "pminuw",
+            SseOpcode::Pminud => "pminud",
             SseOpcode::Pmulld => "pmulld",
             SseOpcode::Pmullw => "pmullw",
             SseOpcode::Pmuludq => "pmuludq",
