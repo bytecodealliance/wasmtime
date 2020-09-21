@@ -335,8 +335,10 @@ impl Backend for ObjectBackend {
                 sec.clone().into_bytes(),
                 if writable {
                     SectionKind::Data
-                } else {
+                } else if relocs.is_empty() {
                     SectionKind::ReadOnlyData
+                } else {
+                    SectionKind::Data
                 },
             )
         };
