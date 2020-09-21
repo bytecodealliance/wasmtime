@@ -3226,6 +3226,22 @@ fn test_x64_emit() {
         "cvtsd2ss %xmm1, %xmm0",
     ));
 
+    insns.push((
+        Inst::xmm_unary_rm_r(SseOpcode::Pabsb, RegMem::reg(xmm2), w_xmm1),
+        "660F381CCA",
+        "pabsb   %xmm2, %xmm1",
+    ));
+    insns.push((
+        Inst::xmm_unary_rm_r(SseOpcode::Pabsw, RegMem::reg(xmm0), w_xmm0),
+        "660F381DC0",
+        "pabsw   %xmm0, %xmm0",
+    ));
+    insns.push((
+        Inst::xmm_unary_rm_r(SseOpcode::Pabsd, RegMem::reg(xmm10), w_xmm11),
+        "66450F381EDA",
+        "pabsd   %xmm10, %xmm11",
+    ));
+
     // Xmm to int conversions, and conversely.
 
     insns.push((

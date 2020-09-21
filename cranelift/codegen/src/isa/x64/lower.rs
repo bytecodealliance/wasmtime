@@ -686,6 +686,23 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::Iabs => {
+            let src = input_to_reg_mem(ctx, inputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
+            let ty = ty.unwrap();
+            if ty.is_vector() {
+                let opcode = match ty {
+                    types::I8X16 => SseOpcode::Pabsb,
+                    types::I16X8 => SseOpcode::Pabsw,
+                    types::I32X4 => SseOpcode::Pabsd,
+                    _ => panic!("Unsupported type for packed iabs instruction: {}", ty),
+                };
+                ctx.emit(Inst::xmm_unary_rm_r(opcode, src, dst));
+            } else {
+                unimplemented!("iabs is unimplemented for non-vector type: {}", ty);
+            }
+        }
+
         Opcode::Bnot => {
             let ty = ty.unwrap();
             if ty.is_vector() {

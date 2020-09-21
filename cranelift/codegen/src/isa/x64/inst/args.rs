@@ -336,6 +336,7 @@ impl fmt::Display for UnaryRmROpcode {
 pub(crate) enum InstructionSet {
     SSE,
     SSE2,
+    SSSE3,
     SSE41,
 }
 
@@ -393,6 +394,9 @@ pub enum SseOpcode {
     Mulsd,
     Orps,
     Orpd,
+    Pabsb,
+    Pabsw,
+    Pabsd,
     Paddb,
     Paddd,
     Paddq,
@@ -521,6 +525,8 @@ impl SseOpcode {
             | SseOpcode::Ucomisd
             | SseOpcode::Xorpd => SSE2,
 
+            SseOpcode::Pabsb | SseOpcode::Pabsw | SseOpcode::Pabsd => SSSE3,
+
             SseOpcode::Insertps | SseOpcode::Pmulld | SseOpcode::Roundss | SseOpcode::Roundsd => {
                 SSE41
             }
@@ -590,6 +596,9 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Mulsd => "mulsd",
             SseOpcode::Orpd => "orpd",
             SseOpcode::Orps => "orps",
+            SseOpcode::Pabsb => "pabsb",
+            SseOpcode::Pabsw => "pabsw",
+            SseOpcode::Pabsd => "pabsd",
             SseOpcode::Paddb => "paddb",
             SseOpcode::Paddd => "paddd",
             SseOpcode::Paddq => "paddq",
