@@ -12,4 +12,6 @@ cargo +nightly \
             --exclude peepmatic-fuzzing \
             --exclude peepmatic-macro \
             --exclude peepmatic-runtime \
-            --exclude peepmatic-test --exclude lightbeam
+            --exclude peepmatic-test \
+            --exclude peepmatic-souper \
+            --exclude lightbeam
