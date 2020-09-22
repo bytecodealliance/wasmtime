@@ -30,6 +30,7 @@ pub struct ObjectBuilder {
     name: Vec<u8>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     function_alignment: u64,
+    per_function_section: bool,
 }
 
 impl ObjectBuilder {
@@ -88,12 +89,19 @@ impl ObjectBuilder {
             name: name.into(),
             libcall_names,
             function_alignment: 1,
+            per_function_section: false,
         })
     }
 
     /// Set the alignment used for functions.
     pub fn function_alignment(&mut self, alignment: u64) -> &mut Self {
         self.function_alignment = alignment;
+        self
+    }
+
+    /// Set if every function should end up in their own section.
+    pub fn per_function_section(&mut self, per_function_section: bool) -> &mut Self {
+        self.per_function_section = per_function_section;
         self
     }
 }
@@ -110,6 +118,7 @@ pub struct ObjectBackend {
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     function_alignment: u64,
+    per_function_section: bool,
 }
 
 impl Backend for ObjectBackend {
@@ -138,6 +147,7 @@ impl Backend for ObjectBackend {
             libcalls: HashMap::new(),
             libcall_names: builder.libcall_names,
             function_alignment: builder.function_alignment,
+            per_function_section: builder.per_function_section,
         }
     }
 
@@ -230,10 +240,26 @@ impl Backend for ObjectBackend {
         };
 
         let symbol = self.functions[func_id].unwrap();
-        let section = self.object.section_id(StandardSection::Text);
-        let offset = self
-            .object
-            .add_symbol_data(symbol, section, &code, self.function_alignment);
+
+        let (section, offset) = if self.per_function_section {
+            let symbol_name = self.object.symbol(symbol).name.clone();
+            let (section, offset) = self.object.add_subsection(
+                StandardSection::Text,
+                &symbol_name,
+                &code,
+                self.function_alignment,
+            );
+            self.object.symbol_mut(symbol).section = SymbolSection::Section(section);
+            self.object.symbol_mut(symbol).value = offset;
+            (section, offset)
+        } else {
+            let section = self.object.section_id(StandardSection::Text);
+            let offset =
+                self.object
+                    .add_symbol_data(symbol, section, &code, self.function_alignment);
+            (section, offset)
+        };
+
         if !reloc_sink.relocs.is_empty() {
             self.relocs.push(SymbolRelocs {
                 section,
@@ -252,10 +278,24 @@ impl Backend for ObjectBackend {
         _namespace: &ModuleNamespace<Self>,
     ) -> ModuleResult<ObjectCompiledFunction> {
         let symbol = self.functions[func_id].unwrap();
-        let section = self.object.section_id(StandardSection::Text);
-        let _offset = self
-            .object
-            .add_symbol_data(symbol, section, bytes, self.function_alignment);
+
+        if self.per_function_section {
+            let symbol_name = self.object.symbol(symbol).name.clone();
+            let (section, offset) = self.object.add_subsection(
+                StandardSection::Text,
+                &symbol_name,
+                bytes,
+                self.function_alignment,
+            );
+            self.object.symbol_mut(symbol).section = SymbolSection::Section(section);
+            self.object.symbol_mut(symbol).value = offset;
+        } else {
+            let section = self.object.section_id(StandardSection::Text);
+            let _offset =
+                self.object
+                    .add_symbol_data(symbol, section, bytes, self.function_alignment);
+        }
+
         Ok(ObjectCompiledFunction)
     }
 
