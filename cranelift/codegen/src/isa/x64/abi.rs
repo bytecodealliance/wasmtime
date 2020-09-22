@@ -195,65 +195,23 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I {
-        let (is_int, ext_mode) = match ty {
-            types::B1 | types::B8 | types::I8 => (true, Some(ExtMode::BQ)),
-            types::B16 | types::I16 => (true, Some(ExtMode::WQ)),
-            types::B32 | types::I32 => (true, Some(ExtMode::LQ)),
-            types::B64 | types::I64 | types::R64 => (true, None),
-            types::F32 | types::F64 => (false, None),
+        let ext_kind = match ty {
+            types::B1
+            | types::B8
+            | types::I8
+            | types::B16
+            | types::I16
+            | types::B32
+            | types::I32 => ExtKind::SignExtend,
+            types::B64 | types::I64 | types::R64 | types::F32 | types::F64 => ExtKind::None,
+            _ if ty.bytes() == 16 => ExtKind::None,
             _ => panic!("load_stack({})", ty),
         };
-
-        let mem = SyntheticAmode::from(mem);
-
-        if is_int {
-            match ext_mode {
-                Some(ext_mode) => Inst::movsx_rm_r(
-                    ext_mode,
-                    RegMem::mem(mem),
-                    into_reg,
-                    /* infallible load */ None,
-                ),
-                None => Inst::mov64_m_r(mem, into_reg, None /* infallible */),
-            }
-        } else {
-            let sse_op = match ty {
-                types::F32 => SseOpcode::Movss,
-                types::F64 => SseOpcode::Movsd,
-                _ => unreachable!(),
-            };
-            Inst::xmm_mov(
-                sse_op,
-                RegMem::mem(mem),
-                into_reg,
-                None, /* infallible */
-            )
-        }
+        Inst::load(ty, mem, into_reg, ext_kind, /* infallible */ None)
     }
 
     fn gen_store_stack(mem: StackAMode, from_reg: Reg, ty: Type) -> Self::I {
-        let (is_int, size) = match ty {
-            types::B1 | types::B8 | types::I8 => (true, 1),
-            types::B16 | types::I16 => (true, 2),
-            types::B32 | types::I32 => (true, 4),
-            types::B64 | types::I64 | types::R64 => (true, 8),
-            types::F32 => (false, 4),
-            types::F64 => (false, 8),
-            _ => unimplemented!("store_stack({})", ty),
-        };
-
-        let mem = SyntheticAmode::from(mem);
-
-        if is_int {
-            Inst::mov_r_m(size, from_reg, mem, /* infallible store */ None)
-        } else {
-            let sse_op = match size {
-                4 => SseOpcode::Movss,
-                8 => SseOpcode::Movsd,
-                _ => unreachable!(),
-            };
-            Inst::xmm_mov_r_m(sse_op, from_reg, mem, /* infallible store */ None)
-        }
+        Inst::store(ty, from_reg, mem, /* infallible */ None)
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self::I {
