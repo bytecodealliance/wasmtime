@@ -14,4 +14,5 @@ cargo +nightly \
             --exclude peepmatic-runtime \
             --exclude peepmatic-test \
             --exclude peepmatic-souper \
-            --exclude lightbeam
+            --exclude lightbeam \
+            $@
