@@ -1,6 +1,11 @@
 #!/bin/bash
 
-cargo +nightly \
+# Use the Nightly variant of the compiler to properly unify the
+# experimental_x64 feature across all crates.  Once the feature has stabilized
+# and become the default, we can remove this.
+CARGO_VERSION=${CARGO_VERSION:-"+nightly"}
+
+cargo $CARGO_VERSION \
             -Zfeatures=all -Zpackage-features \
             test \
             --features test-programs/test_programs \
