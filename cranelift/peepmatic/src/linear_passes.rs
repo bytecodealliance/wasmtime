@@ -70,7 +70,7 @@ fn compare_optimizations<TOperator>(
 where
     TOperator: Copy + Debug + Eq + Hash,
 {
-    for (a, b) in a.increments.iter().zip(b.increments.iter()) {
+    for (a, b) in a.matches.iter().zip(b.matches.iter()) {
         let c = compare_match_op_generality(paths, a.operation, b.operation);
         if c != Ordering::Equal {
             return c;
@@ -87,7 +87,7 @@ where
         }
     }
 
-    compare_lengths(a.increments.len(), b.increments.len())
+    compare_lengths(a.matches.len(), b.matches.len())
 }
 
 fn compare_optimization_generality<TOperator>(
@@ -238,28 +238,27 @@ where
     let mut prefix = vec![];
 
     for opt in &mut opts.optimizations {
-        assert!(!opt.increments.is_empty());
+        assert!(!opt.matches.is_empty());
 
-        let mut old_increments = opt.increments.iter().peekable();
-        let mut new_increments = vec![];
+        let mut old_matches = opt.matches.iter().peekable();
+        let mut new_matches = vec![];
 
         for (last_op, last_expected) in &prefix {
-            match old_increments.peek() {
+            match old_matches.peek() {
                 None => {
                     break;
                 }
                 Some(inc) if *last_op == inc.operation => {
-                    let inc = old_increments.next().unwrap();
-                    new_increments.push(inc.clone());
+                    let inc = old_matches.next().unwrap();
+                    new_matches.push(inc.clone());
                     if inc.expected != *last_expected {
                         break;
                     }
                 }
                 Some(_) => {
-                    new_increments.push(linear::Increment {
+                    new_matches.push(linear::Match {
                         operation: *last_op,
                         expected: Err(linear::Else),
-                        actions: vec![],
                     });
                     if last_expected.is_ok() {
                         break;
@@ -268,16 +267,12 @@ where
             }
         }
 
-        new_increments.extend(old_increments.cloned());
-        assert!(new_increments.len() >= opt.increments.len());
-        opt.increments = new_increments;
+        new_matches.extend(old_matches.cloned());
+        assert!(new_matches.len() >= opt.matches.len());
+        opt.matches = new_matches;
 
         prefix.clear();
-        prefix.extend(
-            opt.increments
-                .iter()
-                .map(|inc| (inc.operation, inc.expected)),
-        );
+        prefix.extend(opt.matches.iter().map(|inc| (inc.operation, inc.expected)));
     }
 
     // Should still be sorted after this pass.
@@ -291,21 +286,20 @@ where
 /// for the DSL's edge-cases than it is to try and statically eliminate their
 /// existence completely. So we just emit nop match operations for all variable
 /// patterns, and then in this post-processing pass, we fuse them and their
-/// actions with their preceding increment.
+/// actions with their preceding match.
 pub fn remove_unnecessary_nops<TOperator>(opts: &mut linear::Optimizations<TOperator>)
 where
     TOperator: Copy + Debug + Eq + Hash,
 {
     for opt in &mut opts.optimizations {
-        if opt.increments.len() < 2 {
-            debug_assert!(!opt.increments.is_empty());
+        if opt.matches.len() < 2 {
+            debug_assert!(!opt.matches.is_empty());
             continue;
         }
 
-        for i in (1..opt.increments.len()).rev() {
-            if let linear::MatchOp::Nop = opt.increments[i].operation {
-                let nop = opt.increments.remove(i);
-                opt.increments[i - 1].actions.extend(nop.actions);
+        for i in (1..opt.matches.len()).rev() {
+            if let linear::MatchOp::Nop = opt.matches[i].operation {
+                opt.matches.remove(i);
             }
         }
     }
@@ -357,7 +351,7 @@ mod tests {
                     .optimizations
                     .iter()
                     .map(|o| {
-                        o.increments
+                        o.matches
                             .iter()
                             .map(|i| format!("{:?} == {:?}", i.operation, i.expected))
                             .collect::<Vec<_>>()
@@ -371,7 +365,7 @@ mod tests {
                     .optimizations
                     .iter()
                     .map(|o| {
-                        o.increments
+                        o.matches
                             .iter()
                             .map(|i| format!("{:?} == {:?}", i.operation, i.expected))
                             .collect::<Vec<_>>()
@@ -388,7 +382,7 @@ mod tests {
                 let actual: Vec<Vec<_>> = optimizations
                     .iter()
                     .map(|o| {
-                        o.increments
+                        o.matches
                             .iter()
                             .map(|i| (i.operation, i.expected))
                             .collect()
@@ -435,7 +429,7 @@ mod tests {
                     .optimizations
                     .iter()
                     .map(|o| {
-                        o.increments
+                        o.matches
                             .iter()
                             .map(|i| format!("{:?} == {:?}", i.operation, i.expected))
                             .collect::<Vec<_>>()
@@ -449,7 +443,7 @@ mod tests {
                     .optimizations
                     .iter()
                     .map(|o| {
-                        o.increments
+                        o.matches
                             .iter()
                             .map(|i| format!("{:?} == {:?}", i.operation, i.expected))
                             .collect::<Vec<_>>()
@@ -466,7 +460,7 @@ mod tests {
                 let actual: Vec<Vec<_>> = optimizations
                     .iter()
                     .map(|o| {
-                        o.increments
+                        o.matches
                             .iter()
                             .map(|i| (i.operation, i.expected))
                             .collect()

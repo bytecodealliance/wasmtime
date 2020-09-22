@@ -37,8 +37,13 @@ pub struct Optimization<TOperator>
 where
     TOperator: 'static + Copy + Debug + Eq + Hash,
 {
-    /// The chain of increments for this optimization.
-    pub increments: Vec<Increment<TOperator>>,
+    /// The chain of match operations and expected results for this
+    /// optimization.
+    pub matches: Vec<Match>,
+
+    /// Actions to perform, given that the operation resulted in the expected
+    /// value.
+    pub actions: Vec<Action<TOperator>>,
 }
 
 /// Match any value.
@@ -61,31 +66,20 @@ pub fn bool_to_match_result(b: bool) -> MatchResult {
     unsafe { Ok(NonZeroU32::new_unchecked(b + 1)) }
 }
 
-/// A partial match of an optimization's LHS and partial construction of its
-/// RHS.
+/// A partial match of an optimization's LHS.
 ///
-/// An increment is a matching operation, the expected result from that
-/// operation to continue to the next increment, and the actions to take to
-/// build up the LHS scope and RHS instructions given that we got the expected
-/// result from this increment's matching operation. Each increment will
-/// basically become a state and a transition edge out of that state in the
-/// final automata.
+/// An match is composed of a matching operation and the expected result of that
+/// operation. Each match will basically become a state and a transition edge
+/// out of that state in the final automata.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Increment<TOperator>
-where
-    TOperator: 'static + Copy + Debug + Eq + Hash,
-{
+pub struct Match {
     /// The matching operation to perform.
     pub operation: MatchOp,
 
     /// The expected result of our matching operation, that enables us to
-    /// continue to the next increment, or `Else` for "don't care"
-    /// wildcard-style matching.
+    /// continue to the next match, or `Else` for "don't care" wildcard-style
+    /// matching.
     pub expected: MatchResult,
-
-    /// Actions to perform, given that the operation resulted in the expected
-    /// value.
-    pub actions: Vec<Action<TOperator>>,
 }
 
 /// A matching operation to be performed on some Cranelift instruction as part
