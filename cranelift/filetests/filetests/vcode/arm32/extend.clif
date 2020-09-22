@@ -1,5 +1,6 @@
 test compile
 target arm
+feature "experimental_arm32"
 
 function %uextend_i8_i32(i8) -> i32 {
 block0(v0: i8):

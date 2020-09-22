@@ -1,5 +1,6 @@
 test compile
 target arm
+feature "experimental_arm32"
 
 function %brnz(b1) -> i32 {
 block0(v0: b1):

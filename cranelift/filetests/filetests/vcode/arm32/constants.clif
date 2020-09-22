@@ -1,5 +1,6 @@
 test compile
 target arm
+feature "experimental_arm32"
 
 function %b1() -> b1 {
 block0:

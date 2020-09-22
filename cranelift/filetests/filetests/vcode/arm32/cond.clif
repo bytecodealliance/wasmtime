@@ -1,5 +1,6 @@
 test compile
 target arm
+feature "experimental_arm32"
 
 function %icmp(i32, i32) -> b1 {
 block0(v0: i32, v1: i32):
