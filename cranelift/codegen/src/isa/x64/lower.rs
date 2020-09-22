@@ -1394,7 +1394,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::gen_move(dst, lhs, input_ty));
 
                 // Emit the comparison.
-                ctx.emit(Inst::xmm_rm_r_imm(op, rhs, dst, imm.encode()));
+                ctx.emit(Inst::xmm_rm_r_imm(op, rhs, dst, imm.encode(), false));
             }
         }
 
@@ -1859,6 +1859,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         RegMem::reg(tmp.to_reg()),
                         tmp,
                         cond.encode(),
+                        false,
                     );
                     ctx.emit(cmpps);
 
@@ -2637,6 +2638,56 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let dst = get_output_reg(ctx, outputs[0]);
             let ty = ty.unwrap();
             ctx.emit(Inst::gen_move(dst, src, ty));
+        }
+
+        Opcode::Insertlane => {
+            // The instruction format maps to variables like: %dst = insertlane %in_vec, %src, %lane
+            let ty = ty.unwrap();
+            let dst = get_output_reg(ctx, outputs[0]);
+            let in_vec = put_input_in_reg(ctx, inputs[0]);
+            let src_ty = ctx.input_ty(insn, 1);
+            debug_assert!(!src_ty.is_vector());
+            let src = input_to_reg_mem(ctx, inputs[1]);
+            let lane = if let InstructionData::TernaryImm8 { imm, .. } = ctx.data(insn) {
+                *imm
+            } else {
+                unreachable!();
+            };
+            debug_assert!(lane < ty.lane_count() as u8);
+
+            ctx.emit(Inst::gen_move(dst, in_vec, ty));
+            if !src_ty.is_float() {
+                let (sse_op, w_bit) = match ty.lane_bits() {
+                    8 => (SseOpcode::Pinsrb, false),
+                    16 => (SseOpcode::Pinsrw, false),
+                    32 => (SseOpcode::Pinsrd, false),
+                    64 => (SseOpcode::Pinsrd, true),
+                    _ => panic!("Unable to insertlane for lane size: {}", ty.lane_bits()),
+                };
+                ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, lane, w_bit));
+            } else if src_ty == types::F32 {
+                let sse_op = SseOpcode::Insertps;
+                // Insert 32-bits from replacement (at index 00, bits 7:8) to vector (lane
+                // shifted into bits 5:6).
+                let lane = 0b00_00_00_00 | lane << 4;
+                ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, lane, false));
+            } else if src_ty == types::F64 {
+                let sse_op = match lane {
+                    // Move the lowest quadword in replacement to vector without changing
+                    // the upper bits.
+                    0 => SseOpcode::Movsd,
+                    // Move the low 64 bits of replacement vector to the high 64 bits of the
+                    // vector.
+                    1 => SseOpcode::Movlhps,
+                    _ => unreachable!(),
+                };
+                // Here we use the `xmm_rm_r` encoding because it correctly tells the register
+                // allocator how we are using `dst`: we are using `dst` as a `mod` whereas other
+                // encoding formats like `xmm_unary_rm_r` treat it as a `def`.
+                ctx.emit(Inst::xmm_rm_r(sse_op, src, dst));
+            } else {
+                panic!("Unable to insertlane for type: {}", ty);
+            }
         }
 
         Opcode::IaddImm
