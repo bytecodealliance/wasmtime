@@ -1,0 +1,61 @@
+test compile
+target arm
+feature "experimental_arm32"
+
+function %icmp(i32, i32) -> b1 {
+block0(v0: i32, v1: i32):
+    v2 = icmp eq v0, v1
+    return v2
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: cmp r0, r1
+; nextln: ite eq ; mov r0, #1 ; mov r0, #0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %ifcmp_trueif(i32, i32) -> b1 {
+block0(v0: i32, v1: i32):
+    v2 = ifcmp v0, v1
+    v3 = trueif eq v2
+  return v3
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: cmp r0, r1
+; nextln: ite eq ; mov r0, #1 ; mov r0, #0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %select(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = select v0, v1, v2
+    return v3
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: cmp r0, #0
+; nextln: ite ne ; mov r0, r1 ; mov r0, r2
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %selectif(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    v4 = ifcmp v0, v1
+    v5 = selectif.i32 eq v4, v2, v3
+    return v5
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: cmp r0, r1
+; nextln: ite eq ; mov r0, r2 ; mov r0, r3
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr

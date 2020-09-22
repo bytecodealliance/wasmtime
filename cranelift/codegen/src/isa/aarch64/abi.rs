@@ -109,6 +109,10 @@ pub(crate) struct AArch64MachineDeps;
 impl ABIMachineSpec for AArch64MachineDeps {
     type I = Inst;
 
+    fn word_bits() -> u32 {
+        64
+    }
+
     fn compute_arg_locs(
         call_conv: isa::CallConv,
         params: &[ir::AbiParam],

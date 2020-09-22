@@ -61,15 +61,14 @@ unwind = ["gimli"]
 # ISA targets for which we should build.
 # If no ISA targets are explicitly enabled, the ISA target for the host machine is enabled.
 x86 = []
-arm32 = []
 arm64 = []
 riscv = []
 x64 = [] # New work-in-progress codegen backend for x86_64 based on the new isel.
+arm32 = [] # Work-in-progress codegen backend for ARM.
 
 # Option to enable all architectures.
 all-arch = [
     "x86",
-    "arm32",
     "arm64",
     "riscv"
 ]

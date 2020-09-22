@@ -1,0 +1,133 @@
+test compile
+target arm
+feature "experimental_arm32"
+
+function %bitrev_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = bitrev v0
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: mov r0, r0, lsl #24 
+; nextln: rbit r0, r0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %bitrev_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = bitrev v0
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: mov r0, r0, lsl #16
+; nextln: rbit r0, r0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %bitrev_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = bitrev v0
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: rbit r0, r0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %clz_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = clz v0
+   return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: uxtb r0, r0 
+; nextln: clz r0, r0
+; nextln: sub r0, r0, #24
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %clz_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = clz v0
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: uxth r0, r0 
+; nextln: clz r0, r0
+; nextln: sub r0, r0, #16
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %clz_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = clz v0
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: clz r0, r0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %ctz_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = ctz v0
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: uxtb r0, r0
+; nextln: rbit r0, r0
+; nextln: clz r0, r0
+; nextln: sub r0, r0, #24
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %ctz_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = ctz v0
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: uxth r0, r0
+; nextln: rbit r0, r0
+; nextln: clz r0, r0
+; nextln: sub r0, r0, #16
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
+
+function %ctz_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = ctz v0
+    return v1
+}
+
+; check: push {fp, lr}
+; nextln: mov fp, sp
+; nextln: rbit r0, r0
+; nextln: clz r0, r0
+; nextln: mov sp, fp
+; nextln: pop {fp, lr}
+; nextln: bx lr
