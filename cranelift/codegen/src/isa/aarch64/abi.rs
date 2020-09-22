@@ -31,6 +31,11 @@ static BALDRDASH_SIG_REG: u8 = 10;
 /// This is SpiderMonkey's `WasmTlsReg`.
 static BALDRDASH_TLS_REG: u8 = 23;
 
+/// Offset in stack-arg area to callee-TLS slot in Baldrdash-2020 calling convention.
+static BALDRDASH_CALLEE_TLS_OFFSET: i64 = 0;
+/// Offset in stack-arg area to caller-TLS slot in Baldrdash-2020 calling convention.
+static BALDRDASH_CALLER_TLS_OFFSET: i64 = 8;
+
 // These two lists represent the registers the JIT may *not* use at any point in generated code.
 //
 // So these are callee-preserved from the JIT's point of view, and every register not in this list
@@ -75,6 +80,7 @@ fn try_fill_baldrdash_reg(call_conv: isa::CallConv, param: &ir::AbiParam) -> Opt
                     xreg(BALDRDASH_TLS_REG).to_real_reg(),
                     ir::types::I64,
                     param.extension,
+                    param.purpose,
                 ))
             }
             &ir::ArgumentPurpose::SignatureId => {
@@ -83,6 +89,27 @@ fn try_fill_baldrdash_reg(call_conv: isa::CallConv, param: &ir::AbiParam) -> Opt
                     xreg(BALDRDASH_SIG_REG).to_real_reg(),
                     ir::types::I64,
                     param.extension,
+                    param.purpose,
+                ))
+            }
+            &ir::ArgumentPurpose::CalleeTLS => {
+                // This is SpiderMonkey's callee TLS slot in the extended frame of Wasm's ABI-2020.
+                assert!(call_conv == isa::CallConv::Baldrdash2020);
+                Some(ABIArg::Stack(
+                    BALDRDASH_CALLEE_TLS_OFFSET,
+                    ir::types::I64,
+                    ir::ArgumentExtension::None,
+                    param.purpose,
+                ))
+            }
+            &ir::ArgumentPurpose::CallerTLS => {
+                // This is SpiderMonkey's caller TLS slot in the extended frame of Wasm's ABI-2020.
+                assert!(call_conv == isa::CallConv::Baldrdash2020);
+                Some(ABIArg::Stack(
+                    BALDRDASH_CALLER_TLS_OFFSET,
+                    ir::types::I64,
+                    ir::ArgumentExtension::None,
+                    param.purpose,
                 ))
             }
             _ => None,
@@ -120,12 +147,19 @@ impl ABIMachineSpec for AArch64MachineDeps {
         add_ret_area_ptr: bool,
     ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
         let is_baldrdash = call_conv.extends_baldrdash();
+        let has_baldrdash_tls = call_conv == isa::CallConv::Baldrdash2020;
 
         // See AArch64 ABI (https://c9x.me/compile/bib/abi-arm64.pdf), sections 5.4.
         let mut next_xreg = 0;
         let mut next_vreg = 0;
         let mut next_stack: u64 = 0;
         let mut ret = vec![];
+
+        if args_or_rets == ArgsOrRets::Args && has_baldrdash_tls {
+            // Baldrdash ABI-2020 always has two stack-arg slots reserved, for the callee and
+            // caller TLS-register values, respectively.
+            next_stack = 16;
+        }
 
         // Note on return values: on the regular non-baldrdash ABI, we may return values in 8
         // registers for V128 and I64 registers independently of the number of register values
@@ -155,7 +189,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 &ir::ArgumentPurpose::VMContext
                 | &ir::ArgumentPurpose::Normal
                 | &ir::ArgumentPurpose::StackLimit
-                | &ir::ArgumentPurpose::SignatureId => {}
+                | &ir::ArgumentPurpose::SignatureId
+                | &ir::ArgumentPurpose::CallerTLS
+                | &ir::ArgumentPurpose::CalleeTLS => {}
                 _ => panic!(
                     "Unsupported argument purpose {:?} in signature: {:?}",
                     param.purpose, params
@@ -188,6 +224,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     reg.to_real_reg(),
                     param.value_type,
                     param.extension,
+                    param.purpose,
                 ));
                 *next_reg += 1;
                 remaining_reg_vals -= 1;
@@ -203,6 +240,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     next_stack as i64,
                     param.value_type,
                     param.extension,
+                    param.purpose,
                 ));
                 next_stack += size;
             }
@@ -219,12 +257,14 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     xreg(next_xreg).to_real_reg(),
                     I64,
                     ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
                 ));
             } else {
                 ret.push(ABIArg::Stack(
                     next_stack as i64,
                     I64,
                     ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
                 ));
                 next_stack += 8;
             }
@@ -453,6 +493,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     // nominal SP offset; abi_impl generic code will do that.
     fn gen_clobber_save(
         call_conv: isa::CallConv,
+        _: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
     ) -> (u64, SmallVec<[Inst; 16]>) {
         let mut insts = SmallVec::new();
@@ -503,6 +544,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
+        flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
@@ -547,6 +589,18 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     SImm7Scaled::maybe_from_i64(16, types::I64).unwrap(),
                 ),
             });
+        }
+
+        // If this is Baldrdash-2020, restore the callee (i.e., our) TLS
+        // register. We may have allocated it for something else and clobbered
+        // it, but the ABI expects us to leave the TLS register unchanged.
+        if call_conv == isa::CallConv::Baldrdash2020 {
+            let off = BALDRDASH_CALLEE_TLS_OFFSET + Self::fp_to_arg_offset(call_conv, flags);
+            insts.push(Inst::gen_load(
+                writable_xreg(BALDRDASH_TLS_REG),
+                AMode::UnsignedOffset(fp_reg(), UImm12Scaled::maybe_from_i64(off, I64).unwrap()),
+                I64,
+            ));
         }
 
         insts
