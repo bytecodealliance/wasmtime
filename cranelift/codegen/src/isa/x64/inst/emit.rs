@@ -1760,14 +1760,16 @@ pub(crate) fn emit(
                 SseOpcode::Divpd => (LegacyPrefixes::_66, 0x0F5E, 2),
                 SseOpcode::Divss => (LegacyPrefixes::_F3, 0x0F5E, 2),
                 SseOpcode::Divsd => (LegacyPrefixes::_F2, 0x0F5E, 2),
-                SseOpcode::Minps => (LegacyPrefixes::None, 0x0F5D, 2),
-                SseOpcode::Minpd => (LegacyPrefixes::_66, 0x0F5D, 2),
-                SseOpcode::Minss => (LegacyPrefixes::_F3, 0x0F5D, 2),
-                SseOpcode::Minsd => (LegacyPrefixes::_F2, 0x0F5D, 2),
                 SseOpcode::Maxps => (LegacyPrefixes::None, 0x0F5F, 2),
                 SseOpcode::Maxpd => (LegacyPrefixes::_66, 0x0F5F, 2),
                 SseOpcode::Maxss => (LegacyPrefixes::_F3, 0x0F5F, 2),
                 SseOpcode::Maxsd => (LegacyPrefixes::_F2, 0x0F5F, 2),
+                SseOpcode::Minps => (LegacyPrefixes::None, 0x0F5D, 2),
+                SseOpcode::Minpd => (LegacyPrefixes::_66, 0x0F5D, 2),
+                SseOpcode::Minss => (LegacyPrefixes::_F3, 0x0F5D, 2),
+                SseOpcode::Minsd => (LegacyPrefixes::_F2, 0x0F5D, 2),
+                SseOpcode::Movlhps => (LegacyPrefixes::None, 0x0F16, 2),
+                SseOpcode::Movsd => (LegacyPrefixes::_F2, 0x0F10, 2),
                 SseOpcode::Mulps => (LegacyPrefixes::None, 0x0F59, 2),
                 SseOpcode::Mulpd => (LegacyPrefixes::_66, 0x0F59, 2),
                 SseOpcode::Mulss => (LegacyPrefixes::_F3, 0x0F59, 2),
@@ -1906,23 +1908,36 @@ pub(crate) fn emit(
             sink.bind_label(done);
         }
 
-        Inst::XmmRmRImm { op, src, dst, imm } => {
-            let prefix = match op {
-                SseOpcode::Cmpps => LegacyPrefixes::None,
-                SseOpcode::Cmppd => LegacyPrefixes::_66,
-                SseOpcode::Cmpss => LegacyPrefixes::_F3,
-                SseOpcode::Cmpsd => LegacyPrefixes::_F2,
+        Inst::XmmRmRImm {
+            op,
+            src,
+            dst,
+            imm,
+            is64: w,
+        } => {
+            let (prefix, opcode, num_opcodes) = match op {
+                SseOpcode::Cmpps => (LegacyPrefixes::None, 0x0FC2, 2),
+                SseOpcode::Cmppd => (LegacyPrefixes::_66, 0x0FC2, 2),
+                SseOpcode::Cmpss => (LegacyPrefixes::_F3, 0x0FC2, 2),
+                SseOpcode::Cmpsd => (LegacyPrefixes::_F2, 0x0FC2, 2),
+                SseOpcode::Insertps => (LegacyPrefixes::_66, 0x0F3A21, 3),
+                SseOpcode::Pinsrb => (LegacyPrefixes::_66, 0x0F3A20, 3),
+                SseOpcode::Pinsrw => (LegacyPrefixes::_66, 0x0FC4, 2),
+                SseOpcode::Pinsrd => (LegacyPrefixes::_66, 0x0F3A22, 3),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
-            let opcode = 0x0FC2;
-            let rex = RexFlags::clear_w();
+            let rex = if *w {
+                RexFlags::set_w()
+            } else {
+                RexFlags::clear_w()
+            };
             match src {
                 RegMem::Reg { reg } => {
-                    emit_std_reg_reg(sink, prefix, opcode, 2, dst.to_reg(), *reg, rex);
+                    emit_std_reg_reg(sink, prefix, opcode, num_opcodes, dst.to_reg(), *reg, rex);
                 }
                 RegMem::Mem { addr } => {
                     let addr = &addr.finalize(state);
-                    emit_std_reg_mem(sink, prefix, opcode, 2, dst.to_reg(), addr, rex);
+                    emit_std_reg_mem(sink, prefix, opcode, num_opcodes, dst.to_reg(), addr, rex);
                 }
             }
             sink.put1(*imm)

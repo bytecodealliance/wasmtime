@@ -333,12 +333,13 @@ pub enum Inst {
         dst: Reg,
     },
 
-    /// A binary XMM instruction with an 8-bit immediate: cmp (ps pd) imm (reg addr) reg
+    /// A binary XMM instruction with an 8-bit immediate: e.g. cmp (ps pd) imm (reg addr) reg
     XmmRmRImm {
         op: SseOpcode,
         src: RegMem,
         dst: Writable<Reg>,
         imm: u8,
+        is64: bool,
     },
 
     // =====================================
@@ -780,11 +781,22 @@ impl Inst {
         }
     }
 
-    pub(crate) fn xmm_rm_r_imm(op: SseOpcode, src: RegMem, dst: Writable<Reg>, imm: u8) -> Inst {
-        src.assert_regclass_is(RegClass::V128);
+    pub(crate) fn xmm_rm_r_imm(
+        op: SseOpcode,
+        src: RegMem,
+        dst: Writable<Reg>,
+        imm: u8,
+        w: bool,
+    ) -> Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
         debug_assert!(imm < 8);
-        Inst::XmmRmRImm { op, src, dst, imm }
+        Inst::XmmRmRImm {
+            op,
+            src,
+            dst,
+            imm,
+            is64: w,
+        }
     }
 
     pub(crate) fn movzx_rm_r(
@@ -1118,7 +1130,9 @@ impl Inst {
                         || *op == SseOpcode::Pxor)
             }
 
-            Self::XmmRmRImm { op, src, dst, imm } => {
+            Self::XmmRmRImm {
+                op, src, dst, imm, ..
+            } => {
                 src.to_reg() == Some(dst.to_reg())
                     && (*op == SseOpcode::Cmppd || *op == SseOpcode::Cmpps)
                     && *imm == FcmpImm::Equal.encode()
@@ -1300,9 +1314,9 @@ impl ShowWithRRU for Inst {
                 show_ireg_sized(rhs_dst.to_reg(), mb_rru, 8),
             ),
 
-            Inst::XmmRmRImm { op, src, dst, imm } => format!(
+            Inst::XmmRmRImm { op, src, dst, imm, is64 } => format!(
                 "{} ${}, {}, {}",
-                ljustify(op.to_string()),
+                ljustify(format!("{}{}", op.to_string(), if *is64 { ".w" } else { "" })),
                 imm,
                 src.show_rru(mb_rru),
                 dst.show_rru(mb_rru),

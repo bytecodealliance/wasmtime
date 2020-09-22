@@ -383,6 +383,7 @@ pub enum SseOpcode {
     Movd,
     Movdqa,
     Movdqu,
+    Movlhps,
     Movq,
     Movss,
     Movsd,
@@ -403,6 +404,9 @@ pub enum SseOpcode {
     Paddw,
     Pavgb,
     Pavgw,
+    Pinsrb,
+    Pinsrw,
+    Pinsrd,
     Pmaxsb,
     Pmaxsw,
     Pmaxsd,
@@ -471,6 +475,7 @@ impl SseOpcode {
             | SseOpcode::Minps
             | SseOpcode::Minss
             | SseOpcode::Movaps
+            | SseOpcode::Movlhps
             | SseOpcode::Movss
             | SseOpcode::Movups
             | SseOpcode::Mulps
@@ -519,6 +524,7 @@ impl SseOpcode {
             | SseOpcode::Paddw
             | SseOpcode::Pavgb
             | SseOpcode::Pavgw
+            | SseOpcode::Pinsrw
             | SseOpcode::Pmaxsw
             | SseOpcode::Pmaxub
             | SseOpcode::Pminsw
@@ -548,6 +554,8 @@ impl SseOpcode {
             SseOpcode::Pabsb | SseOpcode::Pabsw | SseOpcode::Pabsd => SSSE3,
 
             SseOpcode::Insertps
+            | SseOpcode::Pinsrb
+            | SseOpcode::Pinsrd
             | SseOpcode::Pmaxsb
             | SseOpcode::Pmaxsd
             | SseOpcode::Pmaxuw
@@ -614,6 +622,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Movd => "movd",
             SseOpcode::Movdqa => "movdqa",
             SseOpcode::Movdqu => "movdqu",
+            SseOpcode::Movlhps => "movlhps",
             SseOpcode::Movq => "movq",
             SseOpcode::Movss => "movss",
             SseOpcode::Movsd => "movsd",
@@ -634,6 +643,9 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Paddw => "paddw",
             SseOpcode::Pavgb => "pavgb",
             SseOpcode::Pavgw => "pavgw",
+            SseOpcode::Pinsrb => "pinsrb",
+            SseOpcode::Pinsrw => "pinsrw",
+            SseOpcode::Pinsrd => "pinsrd",
             SseOpcode::Pmaxsb => "pmaxsb",
             SseOpcode::Pmaxsw => "pmaxsw",
             SseOpcode::Pmaxsd => "pmaxsd",
