@@ -79,7 +79,7 @@ impl FuncTranslator {
         environ: &mut FE,
     ) -> WasmResult<()> {
         let _tt = timing::wasm_translate_function();
-        info!(
+        debug!(
             "translate({} bytes, {}{})",
             reader.bytes_remaining(),
             func.name,
