@@ -2640,6 +2640,75 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::gen_move(dst, src, ty));
         }
 
+        Opcode::Shuffle => {
+            let ty = ty.unwrap();
+            let dst = get_output_reg(ctx, outputs[0]);
+            let lhs_ty = ctx.input_ty(insn, 0);
+            let lhs = put_input_in_reg(ctx, inputs[0]);
+            let rhs = put_input_in_reg(ctx, inputs[1]);
+            let mask = if let &InstructionData::Shuffle { mask, .. } = ctx.data(insn) {
+                ctx.get_immediate(mask).clone()
+            } else {
+                unreachable!("shuffle should always have the shuffle format")
+            };
+
+            // A mask-building helper: in 128-bit SIMD, 0-15 indicate which lane to read from and a
+            // 1 in the most significant position zeroes the lane.
+            let zero_unknown_lane_index = |b: u8| if b > 15 { 0b10000000 } else { b };
+
+            ctx.emit(Inst::gen_move(dst, rhs, ty));
+            if rhs == lhs {
+                // If `lhs` and `rhs` are the same we can use a single PSHUFB to shuffle the XMM
+                // register. We statically build `constructed_mask` to zero out any unknown lane
+                // indices (may not be completely necessary: verification could fail incorrect mask
+                // values) and fix the indexes to all point to the `dst` vector.
+                let constructed_mask = mask
+                    .iter()
+                    // If the mask is greater than 15 it still may be referring to a lane in b.
+                    .map(|&b| if b > 15 { b.wrapping_sub(16) } else { b })
+                    .map(zero_unknown_lane_index)
+                    .collect();
+                let tmp = ctx.alloc_tmp(RegClass::V128, types::I8X16);
+                ctx.emit(Inst::xmm_load_const_seq(constructed_mask, tmp, ty));
+                // After loading the constructed mask in a temporary register, we use this to
+                // shuffle the `dst` register (remember that, in this case, it is the same as
+                // `src` so we disregard this register).
+                let tmp = RegMem::reg(tmp.to_reg());
+                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, tmp, dst));
+            } else {
+                // If `lhs` and `rhs` are different, we must shuffle each separately and then OR
+                // them together. This is necessary due to PSHUFB semantics. As in the case above,
+                // we build the `constructed_mask` for each case statically.
+
+                // PSHUFB the `lhs` argument into `tmp0`, placing zeroes for unused lanes.
+                let tmp0 = ctx.alloc_tmp(RegClass::V128, lhs_ty);
+                ctx.emit(Inst::gen_move(tmp0, lhs, lhs_ty));
+                let constructed_mask = mask.iter().cloned().map(zero_unknown_lane_index).collect();
+                let tmp1 = ctx.alloc_tmp(RegClass::V128, types::I8X16);
+                ctx.emit(Inst::xmm_load_const_seq(constructed_mask, tmp1, ty));
+                let tmp1 = RegMem::reg(tmp1.to_reg());
+                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, tmp1, tmp0));
+
+                // PSHUFB the second argument, placing zeroes for unused lanes.
+                let constructed_mask = mask
+                    .iter()
+                    .map(|b| b.wrapping_sub(16))
+                    .map(zero_unknown_lane_index)
+                    .collect();
+                let tmp2 = ctx.alloc_tmp(RegClass::V128, types::I8X16);
+                ctx.emit(Inst::xmm_load_const_seq(constructed_mask, tmp2, ty));
+                let tmp2 = RegMem::reg(tmp2.to_reg());
+                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, tmp2, dst));
+
+                // OR the shuffled registers (the mechanism and lane-size for OR-ing the registers
+                // is not important).
+                let tmp0 = RegMem::reg(tmp0.to_reg());
+                ctx.emit(Inst::xmm_rm_r(SseOpcode::Orps, tmp0, dst));
+
+                // TODO when AVX512 is enabled we should replace this sequence with a single VPERMB
+            }
+        }
+
         Opcode::Insertlane => {
             // The instruction format maps to variables like: %dst = insertlane %in_vec, %src, %lane
             let ty = ty.unwrap();
