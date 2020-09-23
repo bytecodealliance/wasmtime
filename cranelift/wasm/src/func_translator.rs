@@ -14,7 +14,6 @@ use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
-use log::info;
 use wasmparser::{self, BinaryReader};
 
 /// WebAssembly to Cranelift IR function translator.
@@ -79,7 +78,7 @@ impl FuncTranslator {
         environ: &mut FE,
     ) -> WasmResult<()> {
         let _tt = timing::wasm_translate_function();
-        info!(
+        log::debug!(
             "translate({} bytes, {}{})",
             reader.bytes_remaining(),
             func.name,
