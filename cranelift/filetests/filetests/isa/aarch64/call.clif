@@ -130,3 +130,162 @@ block0(v0: i8):
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
+
+function %f8() {
+    fn0 = %g0() -> f32
+    fn1 = %g1() -> f64
+    fn2 = %g2()
+    fn3 = %g3(f32)
+    fn4 = %g4(f64)
+
+block0:
+    v0 = call fn0()
+    v1 = call fn1()
+    v2 = call fn1()
+    call fn2()
+    call fn3(v0)
+    call fn4(v1)
+    call fn4(v2)
+    return
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  sub sp, sp, #48
+; nextln:  str q8, [sp]
+; nextln:  str q9, [sp, #16]
+; nextln:  str q10, [sp, #32]
+; nextln:  virtual_sp_offset_adjust 48
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v8.16b, v0.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v9.16b, v0.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v10.16b, v0.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v0.16b, v8.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v0.16b, v9.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v0.16b, v10.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  ldr q8, [sp]
+; nextln:  ldr q9, [sp, #16]
+; nextln:  ldr q10, [sp, #32]
+; nextln:  add sp, sp, #48
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f9() {
+    fn0 = %g0() -> i8x16
+    fn1 = %g1()
+    fn2 = %g2(i8x16)
+
+block0:
+    v0 = call fn0()
+    v1 = call fn0()
+    v2 = call fn0()
+    call fn1()
+    call fn2(v0)
+    call fn2(v1)
+    call fn2(v2)
+    return
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  sub sp, sp, #48
+; nextln:  str q8, [sp]
+; nextln:  str q9, [sp, #16]
+; nextln:  str q10, [sp, #32]
+; nextln:  virtual_sp_offset_adjust 48
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v8.16b, v0.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v9.16b, v0.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v10.16b, v0.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v0.16b, v8.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v0.16b, v9.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v0.16b, v10.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  ldr q8, [sp]
+; nextln:  ldr q9, [sp, #16]
+; nextln:  ldr q10, [sp, #32]
+; nextln:  add sp, sp, #48
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f10() {
+    fn0 = %g0() -> f32
+    fn1 = %g1() -> f64
+    fn2 = %g2() -> i8x16
+    fn3 = %g3()
+    fn4 = %g4(f32)
+    fn5 = %g5(f64)
+    fn6 = %g6(i8x16)
+
+block0:
+    v0 = call fn0()
+    v1 = call fn1()
+    v2 = call fn2()
+    call fn3()
+    call fn4(v0)
+    call fn5(v1)
+    call fn6(v2)
+    return
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  sub sp, sp, #48
+; nextln:  str q8, [sp]
+; nextln:  str q9, [sp, #16]
+; nextln:  str q10, [sp, #32]
+; nextln:  virtual_sp_offset_adjust 48
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v8.16b, v0.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v9.16b, v0.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v10.16b, v0.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v0.16b, v8.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v0.16b, v9.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  mov v0.16b, v10.16b
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  ldr q8, [sp]
+; nextln:  ldr q9, [sp, #16]
+; nextln:  ldr q10, [sp, #32]
+; nextln:  add sp, sp, #48
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
