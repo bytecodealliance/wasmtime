@@ -2721,6 +2721,38 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::Swizzle => {
+            // SIMD swizzle; the following inefficient implementation is due to the Wasm SIMD spec
+            // requiring mask indexes greater than 15 to have the same semantics as a 0 index. For
+            // the spec discussion, see https://github.com/WebAssembly/simd/issues/93. The CLIF
+            // semantics match the Wasm SIMD semantics for this instruction.
+            // The instruction format maps to variables like: %dst = swizzle %src, %mask
+            let ty = ty.unwrap();
+            let dst = get_output_reg(ctx, outputs[0]);
+            let src = put_input_in_reg(ctx, inputs[0]);
+            let swizzle_mask = put_input_in_reg(ctx, inputs[1]);
+
+            // Inform the register allocator that `src` and `dst` should be in the same register.
+            ctx.emit(Inst::gen_move(dst, src, ty));
+
+            // Create a mask for zeroing out-of-bounds lanes of the swizzle mask.
+            let zero_mask = ctx.alloc_tmp(RegClass::V128, types::I8X16);
+            let zero_mask_value = vec![
+                0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70,
+                0x70, 0x70,
+            ];
+            ctx.emit(Inst::xmm_load_const_seq(zero_mask_value, zero_mask, ty));
+
+            // Use the `zero_mask` on a writable `swizzle_mask`.
+            let zero_mask = RegMem::reg(zero_mask.to_reg());
+            let swizzle_mask = Writable::from_reg(swizzle_mask);
+            ctx.emit(Inst::xmm_rm_r(SseOpcode::Paddusb, zero_mask, swizzle_mask));
+
+            // Shuffle `dst` using the fixed-up `swizzle_mask`.
+            let swizzle_mask = RegMem::reg(swizzle_mask.to_reg());
+            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, swizzle_mask, dst));
+        }
+
         Opcode::Insertlane => {
             // The instruction format maps to variables like: %dst = insertlane %in_vec, %src, %lane
             let ty = ty.unwrap();
