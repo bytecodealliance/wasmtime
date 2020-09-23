@@ -404,6 +404,9 @@ pub enum SseOpcode {
     Paddw,
     Pavgb,
     Pavgw,
+    Pextrb,
+    Pextrw,
+    Pextrd,
     Pinsrb,
     Pinsrw,
     Pinsrd,
@@ -422,6 +425,7 @@ pub enum SseOpcode {
     Pmulld,
     Pmullw,
     Pmuludq,
+    Pshufd,
     Psllw,
     Pslld,
     Psllq,
@@ -524,6 +528,7 @@ impl SseOpcode {
             | SseOpcode::Paddw
             | SseOpcode::Pavgb
             | SseOpcode::Pavgw
+            | SseOpcode::Pextrw
             | SseOpcode::Pinsrw
             | SseOpcode::Pmaxsw
             | SseOpcode::Pmaxub
@@ -531,6 +536,7 @@ impl SseOpcode {
             | SseOpcode::Pminub
             | SseOpcode::Pmullw
             | SseOpcode::Pmuludq
+            | SseOpcode::Pshufd
             | SseOpcode::Psllw
             | SseOpcode::Pslld
             | SseOpcode::Psllq
@@ -554,6 +560,8 @@ impl SseOpcode {
             SseOpcode::Pabsb | SseOpcode::Pabsw | SseOpcode::Pabsd => SSSE3,
 
             SseOpcode::Insertps
+            | SseOpcode::Pextrb
+            | SseOpcode::Pextrd
             | SseOpcode::Pinsrb
             | SseOpcode::Pinsrd
             | SseOpcode::Pmaxsb
@@ -643,6 +651,9 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Paddw => "paddw",
             SseOpcode::Pavgb => "pavgb",
             SseOpcode::Pavgw => "pavgw",
+            SseOpcode::Pextrb => "pextrb",
+            SseOpcode::Pextrw => "pextrw",
+            SseOpcode::Pextrd => "pextrd",
             SseOpcode::Pinsrb => "pinsrb",
             SseOpcode::Pinsrw => "pinsrw",
             SseOpcode::Pinsrd => "pinsrd",
@@ -661,6 +672,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pmulld => "pmulld",
             SseOpcode::Pmullw => "pmullw",
             SseOpcode::Pmuludq => "pmuludq",
+            SseOpcode::Pshufd => "pshufd",
             SseOpcode::Psllw => "psllw",
             SseOpcode::Pslld => "pslld",
             SseOpcode::Psllq => "psllq",

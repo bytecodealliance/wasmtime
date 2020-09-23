@@ -2690,6 +2690,55 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::Extractlane => {
+            // The instruction format maps to variables like: %dst = extractlane %src, %lane
+            let ty = ty.unwrap();
+            let dst = get_output_reg(ctx, outputs[0]);
+            let src_ty = ctx.input_ty(insn, 0);
+            assert_eq!(src_ty.bits(), 128);
+            let src = put_input_in_reg(ctx, inputs[0]);
+            let lane = if let InstructionData::BinaryImm8 { imm, .. } = ctx.data(insn) {
+                *imm
+            } else {
+                unreachable!();
+            };
+
+            if !ty.is_float() {
+                let (sse_op, w_bit) = match ty.lane_bits() {
+                    8 => (SseOpcode::Pextrb, false),
+                    16 => (SseOpcode::Pextrw, false),
+                    32 => (SseOpcode::Pextrd, false),
+                    64 => (SseOpcode::Pextrd, true),
+                    _ => panic!("Unable to extractlane for lane size: {}", ty.lane_bits()),
+                };
+                let src = RegMem::reg(src);
+                ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, lane, w_bit));
+            } else {
+                if lane == 0 {
+                    // Remove the extractlane instruction, leaving the float where it is. The upper
+                    // bits will remain unchanged; for correctness, this relies on Cranelift type
+                    // checking to avoid using those bits.
+                    ctx.emit(Inst::gen_move(dst, src, ty));
+                } else {
+                    // Otherwise, shuffle the bits in `lane` to the lowest lane.
+                    let sse_op = SseOpcode::Pshufd;
+                    let mask = match src_ty {
+                        // Move the value at `lane` to lane 0, copying existing value at lane 0 to
+                        // other lanes. Again, this relies on Cranelift type checking to avoid
+                        // using those bits.
+                        types::F32X4 => 0b00_00_00_00 | lane,
+                        // Move the value at `lane` 1 (we know it must be 1 because of the `if`
+                        // statement above) to lane 0 and leave lane 1 unchanged. The Cranelift type
+                        // checking assumption also applies here.
+                        types::F64X2 => 0b11_10_11_10,
+                        _ => unreachable!(),
+                    };
+                    let src = RegMem::reg(src);
+                    ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, mask, false));
+                }
+            }
+        }
+
         Opcode::IaddImm
         | Opcode::ImulImm
         | Opcode::UdivImm
