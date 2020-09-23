@@ -3,6 +3,8 @@ name = "peepmatic-traits"
 version = "0.67.0"
 authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 edition = "2018"
+license = "Apache-2.0 WITH LLVM-exception"
+description = 'Common traits for peepmatic'
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
