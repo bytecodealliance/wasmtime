@@ -5,7 +5,7 @@ use super::EmitState;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::machinst::*;
 use core::fmt::Debug;
-use regalloc::{RealRegUniverse, Reg, RegClass, RegUsageCollector, RegUsageMapper};
+use regalloc::{RealRegUniverse, Reg, RegClass, RegUsageCollector, RegUsageMapper, Writable};
 use std::fmt;
 use std::string::{String, ToString};
 
@@ -262,6 +262,12 @@ impl RegMem {
             RegMem::Reg { reg } => Some(*reg),
             _ => None,
         }
+    }
+}
+
+impl From<Writable<Reg>> for RegMem {
+    fn from(r: Writable<Reg>) -> Self {
+        RegMem::reg(r.to_reg())
     }
 }
 
