@@ -506,6 +506,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Iadd
         | Opcode::IaddIfcout
+        | Opcode::SaddSat
+        | Opcode::UaddSat
         | Opcode::Isub
         | Opcode::Imul
         | Opcode::AvgRound
@@ -520,14 +522,24 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         types::I16X8 => SseOpcode::Paddw,
                         types::I32X4 => SseOpcode::Paddd,
                         types::I64X2 => SseOpcode::Paddq,
-                        _ => panic!("Unsupported type for packed Iadd instruction"),
+                        _ => panic!("Unsupported type for packed iadd instruction: {}", ty),
+                    },
+                    Opcode::SaddSat => match ty {
+                        types::I8X16 => SseOpcode::Paddsb,
+                        types::I16X8 => SseOpcode::Paddsw,
+                        _ => panic!("Unsupported type for packed sadd_sat instruction: {}", ty),
+                    },
+                    Opcode::UaddSat => match ty {
+                        types::I8X16 => SseOpcode::Paddusb,
+                        types::I16X8 => SseOpcode::Paddusw,
+                        _ => panic!("Unsupported type for packed uadd_sat instruction: {}", ty),
                     },
                     Opcode::Isub => match ty {
                         types::I8X16 => SseOpcode::Psubb,
                         types::I16X8 => SseOpcode::Psubw,
                         types::I32X4 => SseOpcode::Psubd,
                         types::I64X2 => SseOpcode::Psubq,
-                        _ => panic!("Unsupported type for packed Isub instruction"),
+                        _ => panic!("Unsupported type for packed isub instruction: {}", ty),
                     },
                     Opcode::Imul => match ty {
                         types::I16X8 => SseOpcode::Pmullw,
@@ -633,14 +645,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                             ctx.emit(Inst::gen_move(dst, rhs_1.to_reg(), ty));
                             return Ok(());
                         }
-                        _ => panic!("Unsupported type for packed Imul instruction"),
+                        _ => panic!("Unsupported type for packed imul instruction: {}", ty),
                     },
                     Opcode::AvgRound => match ty {
                         types::I8X16 => SseOpcode::Pavgb,
                         types::I16X8 => SseOpcode::Pavgw,
-                        _ => panic!("Unsupported type for packed AvgRound instruction: {}", ty),
+                        _ => panic!("Unsupported type for packed avg_round instruction: {}", ty),
                     },
-                    _ => panic!("Unsupported packed instruction"),
+                    _ => panic!("Unsupported packed instruction: {}", op),
                 };
                 let lhs = put_input_in_reg(ctx, inputs[0]);
                 let rhs = input_to_reg_mem(ctx, inputs[1]);
