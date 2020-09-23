@@ -3243,6 +3243,12 @@ fn test_x64_emit() {
         "pxor    %xmm11, %xmm2",
     ));
 
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::reg(xmm11), w_xmm2),
+        "66410F3800D3",
+        "pshufb  %xmm11, %xmm2",
+    ));
+
     // XMM_Mov_R_M: float stores
     insns.push((
         Inst::xmm_mov_r_m(SseOpcode::Movss, xmm15, Amode::imm_reg(128, r12), None),

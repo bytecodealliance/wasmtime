@@ -425,6 +425,7 @@ pub enum SseOpcode {
     Pmulld,
     Pmullw,
     Pmuludq,
+    Pshufb,
     Pshufd,
     Psllw,
     Pslld,
@@ -557,7 +558,7 @@ impl SseOpcode {
             | SseOpcode::Ucomisd
             | SseOpcode::Xorpd => SSE2,
 
-            SseOpcode::Pabsb | SseOpcode::Pabsw | SseOpcode::Pabsd => SSSE3,
+            SseOpcode::Pabsb | SseOpcode::Pabsw | SseOpcode::Pabsd | SseOpcode::Pshufb => SSSE3,
 
             SseOpcode::Insertps
             | SseOpcode::Pextrb
@@ -672,6 +673,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pmulld => "pmulld",
             SseOpcode::Pmullw => "pmullw",
             SseOpcode::Pmuludq => "pmuludq",
+            SseOpcode::Pshufb => "pshufb",
             SseOpcode::Pshufd => "pshufd",
             SseOpcode::Psllw => "psllw",
             SseOpcode::Pslld => "pslld",
