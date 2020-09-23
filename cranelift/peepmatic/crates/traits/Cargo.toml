@@ -1,6 +1,6 @@
 [package]
 name = "peepmatic-traits"
-version = "0.66.0"
+version = "0.67.0"
 authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 edition = "2018"
 
