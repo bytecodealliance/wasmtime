@@ -2685,8 +2685,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // After loading the constructed mask in a temporary register, we use this to
                 // shuffle the `dst` register (remember that, in this case, it is the same as
                 // `src` so we disregard this register).
-                let tmp = RegMem::reg(tmp.to_reg());
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, tmp, dst));
+                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::from(tmp), dst));
             } else {
                 // If `lhs` and `rhs` are different, we must shuffle each separately and then OR
                 // them together. This is necessary due to PSHUFB semantics. As in the case above,
@@ -2698,8 +2697,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let constructed_mask = mask.iter().cloned().map(zero_unknown_lane_index).collect();
                 let tmp1 = ctx.alloc_tmp(RegClass::V128, types::I8X16);
                 ctx.emit(Inst::xmm_load_const_seq(constructed_mask, tmp1, ty));
-                let tmp1 = RegMem::reg(tmp1.to_reg());
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, tmp1, tmp0));
+                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::from(tmp1), tmp0));
 
                 // PSHUFB the second argument, placing zeroes for unused lanes.
                 let constructed_mask = mask
@@ -2709,13 +2707,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     .collect();
                 let tmp2 = ctx.alloc_tmp(RegClass::V128, types::I8X16);
                 ctx.emit(Inst::xmm_load_const_seq(constructed_mask, tmp2, ty));
-                let tmp2 = RegMem::reg(tmp2.to_reg());
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, tmp2, dst));
+                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::from(tmp2), dst));
 
                 // OR the shuffled registers (the mechanism and lane-size for OR-ing the registers
                 // is not important).
-                let tmp0 = RegMem::reg(tmp0.to_reg());
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Orps, tmp0, dst));
+                ctx.emit(Inst::xmm_rm_r(SseOpcode::Orps, RegMem::from(tmp0), dst));
 
                 // TODO when AVX512 is enabled we should replace this sequence with a single VPERMB
             }
@@ -2744,13 +2740,19 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::xmm_load_const_seq(zero_mask_value, zero_mask, ty));
 
             // Use the `zero_mask` on a writable `swizzle_mask`.
-            let zero_mask = RegMem::reg(zero_mask.to_reg());
             let swizzle_mask = Writable::from_reg(swizzle_mask);
-            ctx.emit(Inst::xmm_rm_r(SseOpcode::Paddusb, zero_mask, swizzle_mask));
+            ctx.emit(Inst::xmm_rm_r(
+                SseOpcode::Paddusb,
+                RegMem::from(zero_mask),
+                swizzle_mask,
+            ));
 
             // Shuffle `dst` using the fixed-up `swizzle_mask`.
-            let swizzle_mask = RegMem::reg(swizzle_mask.to_reg());
-            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, swizzle_mask, dst));
+            ctx.emit(Inst::xmm_rm_r(
+                SseOpcode::Pshufb,
+                RegMem::from(swizzle_mask),
+                dst,
+            ));
         }
 
         Opcode::Insertlane => {
