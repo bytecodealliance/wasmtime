@@ -1,12 +1,12 @@
 [package]
 name = "peepmatic-test-operator"
-version = "0.66.0"
+version = "0.67.0"
 authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-peepmatic-traits = { version = "0.66.0", path = "../traits" }
+peepmatic-traits = { version = "0.67.0", path = "../traits" }
 serde = { version = "1.0.105", features = ["derive"] }
 wast = "22.0.0"

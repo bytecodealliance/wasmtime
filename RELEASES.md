@@ -2,6 +2,41 @@
 
 --------------------------------------------------------------------------------
 
+## 0.20.0
+
+Released 2020-09-23.
+
+### Added
+
+* Support for explicitly serializing and deserializing compiled wasm modules has
+  been added.
+  [#2020](https://github.com/bytecodealliance/wasmtime/pull/2020)
+
+* A `wasmtime_store_gc` C API was added to run GC for `externref`.
+  [#2052](https://github.com/bytecodealliance/wasmtime/pull/2052)
+
+* Support for atomics in Cranelift has been added. Support is not fully
+  implemented in Wasmtime at this time, however.
+  [#2077](https://github.com/bytecodealliance/wasmtime/pull/2077)
+
+* The `Caller::get_export` function is now implemented for `Func` references as
+  well.
+  [#2108](https://github.com/bytecodealliance/wasmtime/pull/2108)
+
+### Fixed
+
+* Leaks in the C API have been fixed.
+  [#2040](https://github.com/bytecodealliance/wasmtime/pull/2040)
+
+* The `wasm_val_copy` C API has been fixed for reference types.
+  [#2041](https://github.com/bytecodealliance/wasmtime/pull/2041)
+
+* Fix a panic with `Func::new` and reference types when the store doesn't have
+  reference types enabled.
+  [#2039](https://github.com/bytecodealliance/wasmtime/pull/2039)
+
+--------------------------------------------------------------------------------
+
 ## 0.19.0
 
 Released 2020-07-14.
