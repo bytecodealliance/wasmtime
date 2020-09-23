@@ -788,8 +788,6 @@ impl Inst {
         imm: u8,
         w: bool,
     ) -> Inst {
-        debug_assert!(dst.to_reg().get_class() == RegClass::V128);
-        debug_assert!(imm < 8);
         Inst::XmmRmRImm {
             op,
             src,
@@ -1736,9 +1734,16 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
                 collector.add_mod(*dst);
             }
         }
-        Inst::XmmRmRImm { src, dst, .. } => {
+        Inst::XmmRmRImm { op, src, dst, .. } => {
             if inst.produces_const() {
                 // No need to account for src, since src == dst.
+                collector.add_def(*dst);
+            } else if *op == SseOpcode::Pextrb
+                || *op == SseOpcode::Pextrw
+                || *op == SseOpcode::Pextrd
+                || *op == SseOpcode::Pshufd
+            {
+                src.get_regs_as_uses(collector);
                 collector.add_def(*dst);
             } else {
                 src.get_regs_as_uses(collector);
@@ -2038,12 +2043,20 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_def(mapper, dst);
         }
         Inst::XmmRmRImm {
+            ref op,
             ref mut src,
             ref mut dst,
             ..
         } => {
             if produces_const {
                 src.map_as_def(mapper);
+                map_def(mapper, dst);
+            } else if *op == SseOpcode::Pextrb
+                || *op == SseOpcode::Pextrw
+                || *op == SseOpcode::Pextrd
+                || *op == SseOpcode::Pshufd
+            {
+                src.map_uses(mapper);
                 map_def(mapper, dst);
             } else {
                 src.map_uses(mapper);
