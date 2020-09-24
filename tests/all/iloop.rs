@@ -99,7 +99,6 @@ fn loop_interrupt_from_afar() -> anyhow::Result<()> {
 }
 
 #[test]
-#[cfg_attr(feature = "experimental_x64", ignore)] // TODO #2079 interrupts in wasmtime
 fn function_interrupt_from_afar() -> anyhow::Result<()> {
     // Create an instance which calls an imported function on each iteration of
     // the loop so we can count the number of loop iterations we've executed so
