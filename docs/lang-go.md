@@ -35,10 +35,11 @@ import (
 )
 
 func main() {
-    store := wasmtime.NewStore(wasmtime.NewEngine())
-    module, err := wasmtime.NewModuleFromFile(store, "gcd.wat")
+    engine := wasmtime.NewEngine()
+    store := wasmtime.NewStore(engine)
+    module, err := wasmtime.NewModuleFromFile(engine, "gcd.wat")
     check(err)
-    instance, err := wasmtime.NewInstance(module, []*wasmtime.Extern{})
+    instance, err := wasmtime.NewInstance(store, module, []*wasmtime.Extern{})
     check(err)
 
     gcd := instance.GetExport("gcd").Func()
