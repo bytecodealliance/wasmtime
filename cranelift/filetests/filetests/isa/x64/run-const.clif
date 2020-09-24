@@ -1,0 +1,13 @@
+test run
+target x86_64
+feature "experimental_x64"
+
+function %test_compare_i32() -> b1 {
+block0:
+    v0 = iconst.i32 42
+    v1 = iconst.i32 42
+    v2 = icmp eq v0, v1
+    return v2
+}
+
+; run

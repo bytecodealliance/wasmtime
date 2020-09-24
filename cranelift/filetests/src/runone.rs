@@ -9,12 +9,54 @@ use cranelift_codegen::print_errors::pretty_verifier_error;
 use cranelift_codegen::settings::Flags;
 use cranelift_codegen::timing;
 use cranelift_codegen::verify_function;
-use cranelift_reader::{parse_test, Feature, IsaSpec, ParseOptions};
+use cranelift_reader::{parse_test, Feature, IsaSpec, ParseOptions, TestFile};
 use log::info;
 use std::borrow::Cow;
 use std::fs;
 use std::path::Path;
 use std::time;
+
+/// Skip the tests which define features and for which there's a feature mismatch.
+///
+/// When a test must be skipped, returns an Option with a string containing an explanation why;
+/// otherwise, return None.
+fn skip_feature_mismatches(testfile: &TestFile) -> Option<&'static str> {
+    let mut has_experimental_x64 = false;
+    let mut has_experimental_arm32 = false;
+
+    for feature in &testfile.features {
+        if let Feature::With(name) = feature {
+            match *name {
+                "experimental_x64" => has_experimental_x64 = true,
+                "experimental_arm32" => has_experimental_arm32 = true,
+                _ => {}
+            }
+        }
+    }
+
+    // On the experimental x64 backend, skip tests which are not marked with the feature and
+    // that want to run on the x86_64 target isa.
+    #[cfg(feature = "experimental_x64")]
+    if let IsaSpec::Some(ref isas) = testfile.isa_spec {
+        if isas.iter().any(|isa| isa.name() == "x64") && !has_experimental_x64 {
+            return Some("test requiring x86_64 not marked with experimental_x64");
+        }
+    }
+
+    // On other targets, ignore tests marked as experimental_x64 only.
+    #[cfg(not(feature = "experimental_x64"))]
+    if has_experimental_x64 {
+        return Some("missing support for experimental_x64");
+    }
+
+    // Don't run tests if the experimental support for arm32 is disabled.
+    #[cfg(not(feature = "experimental_arm32"))]
+    if has_experimental_arm32 {
+        return Some("missing support for experimental_arm32");
+    }
+
+    None
+}
 
 /// Load `path` and run the test in it.
 ///
@@ -51,12 +93,8 @@ pub fn run(
         }
     };
 
-    #[cfg(not(feature = "experimental_arm32"))]
-    if testfile
-        .features
-        .contains(&Feature::With("experimental_arm32"))
-    {
-        println!("skipped {:?}: no experimental_arm32 feature", path);
+    if let Some(msg) = skip_feature_mismatches(&testfile) {
+        println!("skipped {:?}: {}", path, msg);
         return Ok(started.elapsed());
     }
 

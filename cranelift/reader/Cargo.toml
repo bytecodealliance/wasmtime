@@ -17,3 +17,7 @@ thiserror = "1.0.15"
 
 [badges]
 maintenance = { status = "experimental" }
+
+[features]
+default = []
+experimental_x64 = []
