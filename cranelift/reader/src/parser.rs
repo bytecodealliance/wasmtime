@@ -90,6 +90,33 @@ pub fn parse_test<'a>(text: &'a str, options: ParseOptions<'a>) -> ParseResult<T
     };
     let features = parser.parse_cranelift_features()?;
 
+    #[cfg(feature = "experimental_x64")]
+    {
+        // If the test mentioned that it must run on x86_64, and the experimental_x64 feature is
+        // not present, we might run into parsing errors, because some TargetIsa information is
+        // left unimplemented in the new backend (e.g. register names).
+        //
+        // Users of this function must do some special treatment when the test requires to run on
+        // x86_64 without the experimental_x64 feature, until we switch to using the new x64
+        // backend by default.
+        //
+        // In the meanwhile, return a minimal TestFile containing the features/isa_spec, so the
+        // caller can ignore this.
+        if let isaspec::IsaSpec::Some(ref isas) = isa_spec {
+            if isas.iter().any(|isa| isa.name() == "x64")
+                && !features.contains(&Feature::With("experimental_x64"))
+            {
+                return Ok(TestFile {
+                    commands,
+                    isa_spec,
+                    features,
+                    preamble_comments: Vec::new(),
+                    functions: Vec::new(),
+                });
+            }
+        }
+    }
+
     // Decide between using the calling convention passed in the options or using the
     // host's calling convention--if any tests are to be run on the host we should default to the
     // host's calling convention.
