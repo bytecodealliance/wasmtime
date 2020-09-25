@@ -1763,12 +1763,204 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let is_min = op == Opcode::Fmin;
             let output_ty = ty.unwrap();
             ctx.emit(Inst::gen_move(dst, rhs, output_ty));
-            let op_size = match output_ty {
-                types::F32 => OperandSize::Size32,
-                types::F64 => OperandSize::Size64,
-                _ => panic!("unexpected type {:?} for fmin/fmax", output_ty),
-            };
-            ctx.emit(Inst::xmm_min_max_seq(op_size, is_min, lhs, dst));
+            if !output_ty.is_vector() {
+                let op_size = match output_ty {
+                    types::F32 => OperandSize::Size32,
+                    types::F64 => OperandSize::Size64,
+                    _ => panic!("unexpected type {:?} for fmin/fmax", output_ty),
+                };
+                ctx.emit(Inst::xmm_min_max_seq(op_size, is_min, lhs, dst));
+            } else {
+                // X64's implementation of floating point min and floating point max does not
+                // propagate NaNs and +0's in a way that is friendly to the SIMD spec. For the
+                // scalar approach we use jumps to handle cases where NaN and +0 propagation is
+                // not consistent with what is needed. However for packed floating point min and
+                // floating point max we implement a different approach to avoid the sequence
+                // of jumps that would be required on a per lane basis. Because we do not need to
+                // lower labels and jumps but do need ctx for creating temporaries we implement
+                // the lowering here in lower.rs instead of emit.rs as is done in the case for scalars.
+                // The outline of approach is as follows:
+                //
+                // First we preform the Min/Max in both directions. This is because in the
+                // case of an operand's lane containing a NaN or in the case of the lanes of the
+                // two operands containing 0 but with mismatched signs, x64 will return the second
+                // operand regardless of its contents. So in order to make sure we capture NaNs and
+                // normalize NaNs and 0 values we capture the operation in both directions and merge the
+                // results. Then we normalize the results through operations that create a mask for the
+                // lanes containing NaNs, we use that mask to adjust NaNs to quite NaNs and normalize
+                // 0s.
+                //
+                // The following sequence is generated for min:
+                //
+                // movap{s,d} %lhs, %tmp
+                // minp{s,d} %dst, %tmp
+                // minp,{s,d} %lhs, %dst
+                // orp{s,d} %dst, %tmp
+                // cmpp{s,d} %tmp, %dst, $3
+                // orps{s,d} %dst, %tmp
+                // psrl{s,d} {$10, $13}, %dst
+                // andnp{s,d} %tmp, %dst
+                //
+                // and for max the sequence is:
+                //
+                // movap{s,d} %lhs, %tmp
+                // minp{s,d} %dst, %tmp
+                // minp,{s,d} %lhs, %dst
+                // xorp{s,d} %tmp, %dst
+                // orp{s,d} %dst, %tmp
+                // subp{s,d} %dst, %tmp
+                // cmpp{s,d} %tmp, %dst, $3
+                // psrl{s,d} {$10, $13}, %dst
+                // andnp{s,d} %tmp, %dst
+
+                if is_min {
+                    let (mov_op, min_op, or_op, cmp_op, shift_op, shift_by, andn_op) =
+                        match output_ty {
+                            types::F32X4 => (
+                                SseOpcode::Movaps,
+                                SseOpcode::Minps,
+                                SseOpcode::Orps,
+                                SseOpcode::Cmpps,
+                                SseOpcode::Psrld,
+                                10,
+                                SseOpcode::Andnps,
+                            ),
+                            types::F64X2 => (
+                                SseOpcode::Movapd,
+                                SseOpcode::Minpd,
+                                SseOpcode::Orpd,
+                                SseOpcode::Cmppd,
+                                SseOpcode::Psrlq,
+                                13,
+                                SseOpcode::Andnpd,
+                            ),
+                            _ => unimplemented!("unsupported op type {:?}", output_ty),
+                        };
+
+                    // Copy lhs into tmp
+                    let tmp_xmm1 = ctx.alloc_tmp(RegClass::V128, output_ty);
+                    ctx.emit(Inst::xmm_mov(mov_op, RegMem::reg(lhs), tmp_xmm1, None));
+
+                    // Perform min in reverse direction
+                    ctx.emit(Inst::xmm_rm_r(min_op, RegMem::from(dst), tmp_xmm1));
+
+                    // Perform min in original direction
+                    ctx.emit(Inst::xmm_rm_r(min_op, RegMem::reg(lhs), dst));
+
+                    // X64 handles propagation of -0's and Nans differently between left and right
+                    // operands. After doing the min in both directions, this OR will
+                    // guarrentee capture of -0's and Nan in our tmp register
+                    ctx.emit(Inst::xmm_rm_r(or_op, RegMem::from(dst), tmp_xmm1));
+
+                    // Compare unordered to create mask for lanes containing NaNs and then use
+                    // that mask to saturate the NaN containing lanes in the tmp register with 1s.
+                    // TODO: Would a check for NaN and then a jump be better here in the
+                    // common case than continuing on to normalize NaNs that might not exist?
+                    let cond = FcmpImm::from(FloatCC::Unordered);
+                    ctx.emit(Inst::xmm_rm_r_imm(
+                        cmp_op,
+                        RegMem::reg(tmp_xmm1.to_reg()),
+                        dst,
+                        cond.encode(),
+                        false,
+                    ));
+                    ctx.emit(Inst::xmm_rm_r(or_op, RegMem::reg(dst.to_reg()), tmp_xmm1));
+
+                    // The dst register holds a mask for lanes containing NaNs.
+                    // We take that mask and shift in preparation for creating a different mask
+                    // to normalize NaNs (create a quite NaN) by zeroing out the appropriate
+                    // number of least signficant bits. We shift right each lane by 10 bits
+                    // (1 sign + 8 exp. + 1 MSB sig.) for F32X4 and by 13 bits (1 sign +
+                    // 11 exp. + 1 MSB sig.) for F64X2.
+                    ctx.emit(Inst::xmm_rmi_reg(shift_op, RegMemImm::imm(shift_by), dst));
+
+                    // Finally we do a nand with the tmp register to produce the final results
+                    // in the dst.
+                    ctx.emit(Inst::xmm_rm_r(andn_op, RegMem::reg(tmp_xmm1.to_reg()), dst));
+                } else {
+                    let (
+                        mov_op,
+                        max_op,
+                        xor_op,
+                        or_op,
+                        sub_op,
+                        cmp_op,
+                        shift_op,
+                        shift_by,
+                        andn_op,
+                    ) = match output_ty {
+                        types::F32X4 => (
+                            SseOpcode::Movaps,
+                            SseOpcode::Maxps,
+                            SseOpcode::Xorps,
+                            SseOpcode::Orps,
+                            SseOpcode::Subps,
+                            SseOpcode::Cmpps,
+                            SseOpcode::Psrld,
+                            10,
+                            SseOpcode::Andnps,
+                        ),
+                        types::F64X2 => (
+                            SseOpcode::Movapd,
+                            SseOpcode::Maxpd,
+                            SseOpcode::Xorpd,
+                            SseOpcode::Orpd,
+                            SseOpcode::Subpd,
+                            SseOpcode::Cmppd,
+                            SseOpcode::Psrlq,
+                            13,
+                            SseOpcode::Andnpd,
+                        ),
+                        _ => unimplemented!("unsupported op type {:?}", output_ty),
+                    };
+
+                    // Copy lhs into tmp.
+                    let tmp_xmm1 = ctx.alloc_tmp(RegClass::V128, types::F32);
+                    ctx.emit(Inst::xmm_mov(mov_op, RegMem::reg(lhs), tmp_xmm1, None));
+
+                    // Perform max in reverse direction.
+                    ctx.emit(Inst::xmm_rm_r(max_op, RegMem::reg(dst.to_reg()), tmp_xmm1));
+
+                    // Perform max in original direction.
+                    ctx.emit(Inst::xmm_rm_r(max_op, RegMem::reg(lhs), dst));
+
+                    // Get the difference between the two results and store in tmp.
+                    // Max uses a different approach than min to account for potential
+                    // discrepancies with plus/minus 0.
+                    ctx.emit(Inst::xmm_rm_r(xor_op, RegMem::reg(tmp_xmm1.to_reg()), dst));
+
+                    // X64 handles propagation of -0's and Nans differently between left and right
+                    // operands. After doing the max in both directions, this OR will
+                    // guarentee capture of 0's and Nan in our tmp register.
+                    ctx.emit(Inst::xmm_rm_r(or_op, RegMem::reg(dst.to_reg()), tmp_xmm1));
+
+                    // Capture NaNs and sign discrepancies.
+                    ctx.emit(Inst::xmm_rm_r(sub_op, RegMem::reg(dst.to_reg()), tmp_xmm1));
+
+                    // Compare unordered to create mask for lanes containing NaNs and then use
+                    // that mask to saturate the NaN containing lanes in the tmp register with 1s.
+                    let cond = FcmpImm::from(FloatCC::Unordered);
+                    ctx.emit(Inst::xmm_rm_r_imm(
+                        cmp_op,
+                        RegMem::reg(tmp_xmm1.to_reg()),
+                        dst,
+                        cond.encode(),
+                        false,
+                    ));
+
+                    // The dst register holds a mask for lanes containing NaNs.
+                    // We take that mask and shift in preparation for creating a different mask
+                    // to normalize NaNs (create a quite NaN) by zeroing out the appropriate
+                    // number of least signficant bits. We shift right each lane by 10 bits
+                    // (1 sign + 8 exp. + 1 MSB sig.) for F32X4 and by 13 bits (1 sign +
+                    // 11 exp. + 1 MSB sig.) for F64X2.
+                    ctx.emit(Inst::xmm_rmi_reg(shift_op, RegMemImm::imm(shift_by), dst));
+
+                    // Finally we do a nand with the tmp register to produce the final results
+                    // in the dst.
+                    ctx.emit(Inst::xmm_rm_r(andn_op, RegMem::reg(tmp_xmm1.to_reg()), dst));
+                }
+            }
         }
 
         Opcode::Sqrt => {
