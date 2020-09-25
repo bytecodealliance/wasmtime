@@ -128,10 +128,6 @@ fn make_trampoline(
         let values_vec_ptr_val = builder.ins().stack_addr(pointer_type, ss, 0);
         let mflags = MemFlags::trusted();
         for i in 2..signature.params.len() {
-            if i == 0 {
-                continue;
-            }
-
             let val = builder.func.dfg.block_params(block0)[i];
             builder.ins().store(
                 mflags,
