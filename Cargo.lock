@@ -6,7 +6,7 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b6a2d3371669ab3ca9797670853d61402b03d0b4b9ebf33d677dfa720203072"
 dependencies = [
- "gimli 0.22.0",
+ "gimli",
 ]
 
 [[package]]
@@ -381,7 +381,7 @@ dependencies = [
  "cranelift-codegen-meta",
  "cranelift-codegen-shared",
  "cranelift-entity",
- "gimli 0.21.0",
+ "gimli",
  "hashbrown 0.7.2",
  "log",
  "peepmatic",
@@ -429,7 +429,7 @@ dependencies = [
  "cranelift-reader",
  "file-per-thread-logger",
  "filecheck",
- "gimli 0.21.0",
+ "gimli",
  "log",
  "memmap",
  "num_cpus",
@@ -907,20 +907,14 @@ dependencies = [
 
 [[package]]
 name = "gimli"
-version = "0.21.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bcc8e0c9bce37868955864dbecd2b1ab2bdf967e6f28066d65aaac620444b65c"
+checksum = "aaf91faf136cb47367fa430cd46e37a788775e7fa104f8b4bcb3861dc389b724"
 dependencies = [
  "fallible-iterator",
  "indexmap",
  "stable_deref_trait",
 ]
-
-[[package]]
-name = "gimli"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaf91faf136cb47367fa430cd46e37a788775e7fa104f8b4bcb3861dc389b724"
 
 [[package]]
 name = "glob"
@@ -1215,12 +1209,6 @@ name = "number_prefix"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17b02fc0ff9a9e4b35b3342880f48e896ebf69f2967921fe8646bf5b7125956a"
-
-[[package]]
-name = "object"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cbca9424c482ee628fa549d9c812e2cd22f1180b9222c9200fdfa6eb31aecb2"
 
 [[package]]
 name = "object"
@@ -2482,7 +2470,7 @@ name = "wasmtime-debug"
 version = "0.20.0"
 dependencies = [
  "anyhow",
- "gimli 0.21.0",
+ "gimli",
  "more-asserts",
  "object 0.21.1",
  "target-lexicon",
@@ -2500,7 +2488,7 @@ dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
  "cranelift-wasm",
- "gimli 0.21.0",
+ "gimli",
  "indexmap",
  "log",
  "more-asserts",
@@ -2552,7 +2540,7 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-native",
  "cranelift-wasm",
- "gimli 0.21.0",
+ "gimli",
  "log",
  "more-asserts",
  "object 0.21.1",
@@ -2600,11 +2588,11 @@ version = "0.20.0"
 dependencies = [
  "anyhow",
  "cfg-if",
- "gimli 0.21.0",
+ "gimli",
  "ittapi-rs",
  "lazy_static",
  "libc",
- "object 0.19.0",
+ "object 0.21.1",
  "scroll",
  "serde",
  "target-lexicon",
