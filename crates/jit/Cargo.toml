@@ -33,7 +33,7 @@ more-asserts = "0.2.1"
 anyhow = "1.0"
 cfg-if = "0.1.9"
 log = "0.4"
-gimli = { version = "0.21.0", default-features = false, features = ["write"] }
+gimli = { version = "0.22.0", default-features = false, features = ["write"] }
 object = { version = "0.21.1", default-features = false, features = ["write"] }
 serde = { version = "1.0.94", features = ["derive"] }
 
