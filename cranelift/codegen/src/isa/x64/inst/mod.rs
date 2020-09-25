@@ -2278,18 +2278,27 @@ impl MachInst for Inst {
     }
 
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
-        // Note (carefully!) that a 32-bit mov *isn't* a no-op since it zeroes
-        // out the upper 32 bits of the destination.  For example, we could
-        // conceivably use `movl %reg, %reg` to zero out the top 32 bits of
-        // %reg.
         match self {
+            // Note (carefully!) that a 32-bit mov *isn't* a no-op since it zeroes
+            // out the upper 32 bits of the destination.  For example, we could
+            // conceivably use `movl %reg, %reg` to zero out the top 32 bits of
+            // %reg.
             Self::Mov_R_R {
                 is_64, src, dst, ..
             } if *is_64 => Some((*dst, *src)),
+            // Note as well that MOVS[S|D] when used in the `XmmUnaryRmR` context are pure moves of
+            // scalar floating-point values (and annotate `dst` as `def`s to the register allocator)
+            // whereas the same operation in a packed context, e.g. `XMM_RM_R`, is used to merge a
+            // value into the lowest lane of a vector (not a move).
             Self::XmmUnaryRmR { op, src, dst, .. }
                 if *op == SseOpcode::Movss
                     || *op == SseOpcode::Movsd
-                    || *op == SseOpcode::Movaps =>
+                    || *op == SseOpcode::Movaps
+                    || *op == SseOpcode::Movapd
+                    || *op == SseOpcode::Movups
+                    || *op == SseOpcode::Movupd
+                    || *op == SseOpcode::Movdqa
+                    || *op == SseOpcode::Movdqu =>
             {
                 if let RegMem::Reg { reg } = src {
                     Some((*dst, *reg))
