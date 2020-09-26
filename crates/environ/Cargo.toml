@@ -23,7 +23,7 @@ serde = { version = "1.0.94", features = ["derive"] }
 log = { version = "0.4.8", default-features = false }
 more-asserts = "0.2.1"
 cfg-if = "0.1.9"
-gimli = "0.21"
+gimli = "0.22"
 
 [badges]
 maintenance = { status = "actively-developed" }
