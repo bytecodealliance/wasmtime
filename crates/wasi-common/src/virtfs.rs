@@ -661,23 +661,30 @@ impl Handle for VirtualDir {
                 e.get().try_clone().map_err(Into::into)
             }
             Entry::Vacant(v) => {
-                if self.writable {
-                    // Enforce a hard limit at `u32::MAX - 2` files.
-                    // This is to have a constant limit (rather than target-dependent limit we
-                    // would have with `usize`. The limit is the full `u32` range minus two so we
-                    // can reserve "self" and "parent" cookie values.
-                    if entry_count >= (std::u32::MAX - RESERVED_ENTRY_COUNT) as usize {
-                        return Err(Error::Nospc);
+                if oflags.contains(&Oflags::CREAT) {
+                    if self.writable {
+                        // Enforce a hard limit at `u32::MAX - 2` files.
+                        // This is to have a constant limit (rather than target-dependent limit we
+                        // would have with `usize`. The limit is the full `u32` range minus two so we
+                        // can reserve "self" and "parent" cookie values.
+                        if entry_count >= (std::u32::MAX - RESERVED_ENTRY_COUNT) as usize {
+                            return Err(Error::Nospc);
+                        }
+
+                        tracing::trace!(
+                            "VirtualDir::openat creating an InMemoryFile named {}",
+                            path
+                        );
+
+                        let file = Box::new(InMemoryFile::memory_backed());
+                        file.fd_flags.set(fd_flags);
+                        file.set_parent(Some(self.try_clone().expect("can clone self")));
+                        v.insert(file).try_clone().map_err(Into::into)
+                    } else {
+                        Err(Error::Acces)
                     }
-
-                    tracing::trace!("VirtualDir::openat creating an InMemoryFile named {}", path);
-
-                    let file = Box::new(InMemoryFile::memory_backed());
-                    file.fd_flags.set(fd_flags);
-                    file.set_parent(Some(self.try_clone().expect("can clone self")));
-                    v.insert(file).try_clone().map_err(Into::into)
                 } else {
-                    Err(Error::Acces)
+                    Err(Error::Noent)
                 }
             }
         }
