@@ -1,0 +1,10 @@
+[package]
+name = "example-wasi-fs-wasm"
+version = "0.0.0"
+authors = ["The Wasmtime Project Developers"]
+edition = "2018"
+publish = false
+
+[[bin]]
+path = "wasi-fs.rs"
+name = "wasi-fs"

@@ -127,15 +127,19 @@ impl FileContents for VecFileContents {
     }
 }
 
-struct VecFileContents {
+pub struct VecFileContents {
     content: Vec<u8>,
 }
 
 impl VecFileContents {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             content: Vec::new(),
         }
+    }
+
+    pub fn with_content(content: Vec<u8>) -> Self {
+        Self { content }
     }
 }
 
