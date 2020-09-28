@@ -9,7 +9,7 @@ If a proposal is not listed, then it is not supported by Wasmtime.
 Wasmtime will never enable a proposal by default unless it has reached phase 4
 of [the WebAssembly standardizations process][phases] and its implementation in
 Wasmtime has been [thoroughly
-vetted](./contributing-supporting-new-wasm-proposals.html).
+vetted](./contributing-implementing-wasm-proposals.html).
 
 | WebAssembly Proposal                        | Supported in Wasmtime?           | Command Line Flag      | [`Config`][config] Method |
 |---------------------------------------------|----------------------------------|------------------------|---------------------------|
