@@ -1,0 +1,21 @@
+test compile
+set enable_simd
+target x86_64 skylake
+feature "experimental_x64"
+
+function %move_registers(i32x4) -> b8x16 {
+block0(v0: i32x4):
+    ;; In the x64 backend, all of these pseudo-instructions are lowered to moves between registers (e.g. MOVAPD, MOVDQA,
+    ;; etc.). Because these have been marked as moves, no instructions are emitted by this function besides the prologue
+    ;; and epilogue.
+    v1 = raw_bitcast.f32x4 v0
+    v2 = raw_bitcast.f64x2 v1
+    v3 = raw_bitcast.b8x16 v2
+    return v3
+}
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+
