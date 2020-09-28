@@ -226,12 +226,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         from_bits: u8,
         to_bits: u8,
     ) -> Self::I {
-        let ext_mode = match from_bits {
-            1 | 8 => ExtMode::BQ,
-            16 => ExtMode::WQ,
-            32 => ExtMode::LQ,
-            _ => panic!("Bad extension: {} bits to {} bits", from_bits, to_bits),
-        };
+        let ext_mode = ExtMode::new(from_bits as u16, to_bits as u16)
+            .expect(&format!("invalid extension: {} -> {}", from_bits, to_bits));
         if is_signed {
             Inst::movsx_rm_r(ext_mode, RegMem::reg(from_reg), to_reg, None)
         } else {

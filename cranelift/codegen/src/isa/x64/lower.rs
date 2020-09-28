@@ -131,12 +131,7 @@ fn extend_input_to_reg(ctx: Ctx, spec: InsnInput, ext_spec: ExtSpec) -> Reg {
     let ext_mode = match (input_size, requested_size) {
         (a, b) if a == b => return put_input_in_reg(ctx, spec),
         (1, 8) => return put_input_in_reg(ctx, spec),
-        (a, 16) | (a, 32) if a == 1 || a == 8 => ExtMode::BL,
-        (a, 64) if a == 1 || a == 8 => ExtMode::BQ,
-        (16, 32) => ExtMode::WL,
-        (16, 64) => ExtMode::WQ,
-        (32, 64) => ExtMode::LQ,
-        _ => unreachable!("extend {} -> {}", input_size, requested_size),
+        (a, b) => ExtMode::new(a, b).expect(&format!("invalid extension: {} -> {}", a, b)),
     };
 
     let src = input_to_reg_mem(ctx, spec);
@@ -1266,18 +1261,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let src = input_to_reg_mem(ctx, inputs[0]);
             let dst = get_output_reg(ctx, outputs[0]);
 
-            let ext_mode = match (src_ty.bits(), dst_ty.bits()) {
-                (1, 8) | (1, 16) | (1, 32) | (8, 16) | (8, 32) => Some(ExtMode::BL),
-                (1, 64) | (8, 64) => Some(ExtMode::BQ),
-                (16, 32) => Some(ExtMode::WL),
-                (16, 64) => Some(ExtMode::WQ),
-                (32, 64) => Some(ExtMode::LQ),
-                (x, y) if x >= y => None,
-                _ => unreachable!(
-                    "unexpected extension kind from {:?} to {:?}",
-                    src_ty, dst_ty
-                ),
-            };
+            let ext_mode = ExtMode::new(src_ty.bits(), dst_ty.bits());
+            assert!(
+                (src_ty.bits() < dst_ty.bits() && ext_mode.is_some()) || ext_mode.is_none(),
+                "unexpected extension: {} -> {}",
+                src_ty,
+                dst_ty
+            );
 
             // All of these other opcodes are simply a move from a zero-extended source.  Here
             // is why this works, in each case:
@@ -2015,12 +2005,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 _ => unimplemented!(),
             };
 
-            let ext_mode = match elem_ty.bytes() {
-                1 => Some(ExtMode::BQ),
-                2 => Some(ExtMode::WQ),
-                4 => Some(ExtMode::LQ),
-                _ => None,
-            };
+            let ext_mode = ExtMode::new(elem_ty.bits(), 64);
 
             let sign_extend = match op {
                 Opcode::Sload8
@@ -2275,12 +2260,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             if ty_access == types::I64 {
                 ctx.emit(Inst::mov64_rm_r(rm, data, srcloc));
             } else {
-                let ext_mode = match ty_access {
-                    types::I8 => ExtMode::BQ,
-                    types::I16 => ExtMode::WQ,
-                    types::I32 => ExtMode::LQ,
-                    _ => panic!("lowering AtomicLoad: invalid type"),
-                };
+                let ext_mode = ExtMode::new(ty_access.bits(), 64).expect(&format!(
+                    "invalid extension during AtomicLoad: {} -> {}",
+                    ty_access.bits(),
+                    64
+                ));
                 ctx.emit(Inst::movzx_rm_r(ext_mode, rm, data, srcloc));
             }
         }
