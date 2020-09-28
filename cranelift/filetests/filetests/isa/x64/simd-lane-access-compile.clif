@@ -1,0 +1,50 @@
+test compile
+set enable_simd
+target x86_64
+feature "experimental_x64"
+
+;; shuffle
+
+function %shuffle_different_ssa_values() -> i8x16 {
+block0:
+    v0 = vconst.i8x16 0x00
+    v1 = vconst.i8x16 0x01
+    v2 = shuffle v0, v1, 0x11000000000000000000000000000000     ; pick the second lane of v1, the rest use the first lane of v0
+    return v2
+}
+; check:  load_const $$[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], %xmm1
+; nextln: load_const $$[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], %xmm0
+; nextln: load_const $$[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128], %xmm2
+; nextln: pshufb  %xmm2, %xmm1
+; nextln: load_const $$[128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 1], %xmm2
+; nextln: pshufb  %xmm2, %xmm0
+; nextln: orps    %xmm1, %xmm0
+
+
+function %shuffle_same_ssa_value() -> i8x16 {
+block0:
+    v1 = vconst.i8x16 0x01
+    v2 = shuffle v1, v1, 0x13000000000000000000000000000000     ; pick the fourth lane of v1 and the rest from the first lane of v1
+    return v2
+}
+; check:  load_const $$[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], %xmm0
+; nextln: load_const $$[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3], %xmm1
+; nextln: pshufb  %xmm1, %xmm0
+
+
+
+;; swizzle
+
+function %swizzle() -> i8x16 {
+block0:
+    v0 = vconst.i8x16 [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15]
+    v1 = vconst.i8x16 [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15]
+    v2 = swizzle.i8x16 v0, v1
+    return v2
+}
+; check:  load_const $$[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], %xmm1
+; nextln: load_const $$[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], %xmm0
+; nextln: load_const $$[112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 112, 112], %xmm2
+; nextln: paddusb %xmm2, %xmm0
+; nextln: pshufb  %xmm0, %xmm1
+; nextln: movdqa  %xmm1, %xmm0
