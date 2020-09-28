@@ -1,0 +1,157 @@
+test run
+set enable_simd
+target x86_64
+feature "experimental_x64"
+
+;; shuffle
+
+function %shuffle_different_ssa_values() -> i8x16 {
+block0:
+    v0 = vconst.i8x16 0x00
+    v1 = vconst.i8x16 [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42]
+    v2 = shuffle v0, v1, [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 31] ; use the first lane of v0 throughout except use the last lane of v1
+    return v2
+}
+; run: %shuffle_different_ssa_values() == [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42]
+
+function %shuffle_same_ssa_value() -> i8x16 {
+block0:
+    v0 = vconst.i8x16 0x01000000_00000000_00000000_00000000     ; note where lane 15 is when written with hexadecimal syntax
+    v1 = shuffle v0, v0, 0x0f0f0f0f_0f0f0f0f_0f0f0f0f_0f0f0f0f  ; use the last lane of v0 to fill all lanes
+    return v1
+}
+; run: %shuffle_same_ssa_value() == [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+
+function %shuffle_i32x4_in_same_place() -> i32x4 {
+block0:
+    v1 = vconst.i32x4 [0 1 2 3]
+    v2 = raw_bitcast.i8x16 v1 ; we have to cast because shuffle is type-limited to Tx16
+    ; keep each lane in place from the first vector
+    v3 = shuffle v2, v2, [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15]
+    v4 = raw_bitcast.i32x4 v3
+    return v4
+}
+; run: %shuffle_in_same_place() == [0 1 2 3]
+
+function %shuffle_b32x4_to_all_true() -> i32x4 {
+block0:
+    v1 = vconst.b32x4 [true false true false]
+    v2 = raw_bitcast.b8x16 v1 ; we have to cast because shuffle is type-limited to Tx16
+    ; pair up the true values to make the entire vector true
+    v3 = shuffle v2, v2, [0 1 2 3 0 1 2 3 8 9 10 11 8 9 10 11]
+    v4 = raw_bitcast.i32x4 v3 ; TODO store.b32x4 is unavailable; see https://github.com/bytecodealliance/wasmtime/issues/2237
+    return v4
+}
+; run: %shuffle_b32x4_to_all_true() == [0xffffffff 0xffffffff 0xffffffff 0xffffffff]
+
+
+
+;; swizzle
+
+function %swizzle(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = swizzle.i8x16 v0, v1
+    return v2
+}
+; reverse the lanes, with over-large index 42 using lane 0
+; run: %swizzle([0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15], [15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 42]) == [15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0]
+; 250 should overflow but saturate so that the MSB is set (PSHUFB uses this to shuffle from lane 0)
+; run: %swizzle([0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15], [16 250 0 0 0 0 0 0 0 0 0 0 0 0 0 0]) == [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+
+
+
+;; insertlane
+
+function %insertlane_i8x16_first(i8x16, i8) -> i8x16 {
+block0(v1: i8x16, v2: i8):
+    v3 = insertlane v1, v2, 0
+    return v3
+}
+; run: %insertlane_i8x16_first([0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0], 0xff) == [0xff 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+
+function %insertlane_f32x4_second(f32x4, f32) -> f32x4 {
+block0(v1: f32x4, v2: f32):
+    v3 = insertlane v1, v2, 1
+    return v3
+}
+; run: %insertlane_f32x4_second([0.0 0.0 0.0 0.0], 0x42.42) == [0.0 0x42.42 0.0 0.0]
+
+function %insertlane_f64x2_first(f64x2, f64) -> f64x2 {
+block0(v1: f64x2, v2: f64):
+    v3 = insertlane v1, v2, 0
+    return v3
+}
+; run: %insertlane_f64x2_first([0.0 0.0], 0x42.42) == [0x42.42 0.0]
+
+function %insertlane_f64x2_second(f64x2, f64) -> f64x2 {
+block0(v1: f64x2, v2: f64):
+    v3 = insertlane v1, v2, 1
+    return v3
+}
+; run: %insertlane_f64x2_second([0.0 0.0], 0x42.42) == [0.0 0x42.42]
+
+
+
+;; extractlane
+
+function %extractlane_b8x16() -> i8 {
+block0:
+    v1 = vconst.b8x16 [false false false false false false false false false false true false false
+    false false false]
+    v2 = extractlane v1, 10
+    v3 = raw_bitcast.i8 v2
+    return v3
+}
+; run: %extractlane_b8x16_last() == 0xff
+
+function %extractlane_i16x8_second(i16x8) -> i16 {
+block0(v0: i16x8):
+    v1 = extractlane v0, 1
+    return v1
+}
+; run: %extractlane_i16x8_second(0x00080007000600050004000300020001) == 2
+
+function %extractlane_f32x4_last(f32x4) -> f32 {
+block0(v0: f32x4):
+    v1 = extractlane v0, 3
+    return v1
+}
+; run: %extractlane_f32x4_last([0x00.00 0x00.00 0x00.00 0x42.42]) == 0x42.42
+
+function %extractlane_i32_with_vector_reuse() -> b1 {
+block0:
+    v0 = iconst.i32 42
+    v1 = iconst.i32 99
+
+    v2 = vconst.i32x4 [42 42 42 42]
+    v3 = insertlane v2, v1, 2
+
+    v4 = extractlane v3, 3
+    v5 = icmp eq v4, v0
+
+    v6 = extractlane v3, 2
+    v7 = icmp eq v6, v1
+
+    v8 = band v5, v7
+    return v8
+}
+; run
+
+function %extractlane_f32_with_vector_reuse() -> b1 {
+block0:
+    v0 = f32const 0x42.42
+    v1 = f32const 0x99.99
+
+    v2 = vconst.f32x4 [0x42.42 0x42.42 0x42.42 0x42.42]
+    v3 = insertlane v2, v1, 2
+
+    v4 = extractlane v3, 3
+    v5 = fcmp eq v4, v0
+
+    v6 = extractlane v3, 2
+    v7 = fcmp eq v6, v1
+
+    v8 = band v5, v7
+    return v8
+}
+; run
