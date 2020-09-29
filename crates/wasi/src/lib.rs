@@ -2,6 +2,7 @@ use wasmtime::Trap;
 
 pub mod old;
 
+pub use wasi_common::virtfs;
 pub use wasi_common::{WasiCtx, WasiCtxBuilder};
 
 // Defines a `struct Wasi` with member fields and appropriate APIs for dealing

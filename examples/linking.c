@@ -4,7 +4,7 @@ together.
 
 You can compile and run this example on Linux with:
 
-   cargo build --release -p wasmtime
+   cargo build --release -p wasmtime-c-api
    cc examples/linking.c \
        -I crates/c-api/include \
        -I crates/c-api/wasm-c-api/include \

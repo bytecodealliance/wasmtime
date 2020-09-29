@@ -4,13 +4,13 @@ Example of instantiating a WebAssembly which uses WASI imports.
 You can compile and run this example on Linux with:
 
    cargo build --release -p wasmtime-c-api
-   cc examples/wasi/main.c \
+   cc examples/wasi-fs/main.c \
        -I crates/c-api/include \
        -I crates/c-api/wasm-c-api/include \
        target/release/libwasmtime.a \
        -lpthread -ldl -lm \
-       -o wasi
-   ./wasi
+       -o wasi-fs
+   ./wasi-fs
 
 Note that on Windows and macOS the command will be similar, but you'll need
 to tweak the `-lpthread` and such annotations.
@@ -37,7 +37,7 @@ int main() {
 
   wasm_byte_vec_t wasm;
   // Load our input file to parse it next
-  FILE* file = fopen("target/wasm32-wasi/debug/wasi.wasm", "rb");
+  FILE* file = fopen("target/wasm32-wasi/debug/wasi-fs.wasm", "rb");
   if (!file) {
     printf("> Error loading file!\n");
     exit(1);
@@ -67,6 +67,7 @@ int main() {
   wasi_config_inherit_stdin(wasi_config);
   wasi_config_inherit_stdout(wasi_config);
   wasi_config_inherit_stderr(wasi_config);
+  wasi_config_preopen_dir(wasi_config, "examples/wasi-fs", ".");
   wasm_trap_t *trap = NULL;
   wasi_instance_t *wasi = wasi_instance_new(store, "wasi_snapshot_preview1", wasi_config, &trap);
   if (wasi == NULL)

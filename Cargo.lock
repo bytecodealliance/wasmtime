@@ -814,6 +814,10 @@ name = "example-fib-debug-wasm"
 version = "0.0.0"
 
 [[package]]
+name = "example-wasi-fs-wasm"
+version = "0.0.0"
+
+[[package]]
 name = "example-wasi-wasm"
 version = "0.0.0"
 

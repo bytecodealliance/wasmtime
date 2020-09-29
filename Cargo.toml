@@ -70,6 +70,7 @@ members = [
   "crates/wiggle/wasmtime",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
+  "examples/wasi-fs/wasm",
   "fuzz",
 ]
 
