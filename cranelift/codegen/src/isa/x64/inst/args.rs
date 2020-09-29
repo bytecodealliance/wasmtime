@@ -344,6 +344,7 @@ pub(crate) enum InstructionSet {
     SSE2,
     SSSE3,
     SSE41,
+    SSE42,
 }
 
 /// Some SSE operations requiring 2 operands r/m and r.
@@ -414,6 +415,14 @@ pub enum SseOpcode {
     Paddusw,
     Pavgb,
     Pavgw,
+    Pcmpeqb,
+    Pcmpeqw,
+    Pcmpeqd,
+    Pcmpeqq,
+    Pcmpgtb,
+    Pcmpgtw,
+    Pcmpgtd,
+    Pcmpgtq,
     Pextrb,
     Pextrw,
     Pextrd,
@@ -543,6 +552,12 @@ impl SseOpcode {
             | SseOpcode::Paddusw
             | SseOpcode::Pavgb
             | SseOpcode::Pavgw
+            | SseOpcode::Pcmpeqb
+            | SseOpcode::Pcmpeqw
+            | SseOpcode::Pcmpeqd
+            | SseOpcode::Pcmpgtb
+            | SseOpcode::Pcmpgtw
+            | SseOpcode::Pcmpgtd
             | SseOpcode::Pextrw
             | SseOpcode::Pinsrw
             | SseOpcode::Pmaxsw
@@ -575,6 +590,7 @@ impl SseOpcode {
             SseOpcode::Pabsb | SseOpcode::Pabsw | SseOpcode::Pabsd | SseOpcode::Pshufb => SSSE3,
 
             SseOpcode::Insertps
+            | SseOpcode::Pcmpeqq
             | SseOpcode::Pextrb
             | SseOpcode::Pextrd
             | SseOpcode::Pinsrb
@@ -590,6 +606,8 @@ impl SseOpcode {
             | SseOpcode::Pmulld
             | SseOpcode::Roundss
             | SseOpcode::Roundsd => SSE41,
+
+            SseOpcode::Pcmpgtq => SSE42,
         }
     }
 
@@ -670,6 +688,14 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Paddusw => "paddusw",
             SseOpcode::Pavgb => "pavgb",
             SseOpcode::Pavgw => "pavgw",
+            SseOpcode::Pcmpeqb => "pcmpeqb",
+            SseOpcode::Pcmpeqw => "pcmpeqw",
+            SseOpcode::Pcmpeqd => "pcmpeqd",
+            SseOpcode::Pcmpeqq => "pcmpeqq",
+            SseOpcode::Pcmpgtb => "pcmpgtb",
+            SseOpcode::Pcmpgtw => "pcmpgtw",
+            SseOpcode::Pcmpgtd => "pcmpgtd",
+            SseOpcode::Pcmpgtq => "pcmpgtq",
             SseOpcode::Pextrb => "pextrb",
             SseOpcode::Pextrw => "pextrw",
             SseOpcode::Pextrd => "pextrd",
