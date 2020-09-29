@@ -2945,6 +2945,138 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::Splat => {
+            let ty = ty.unwrap();
+            assert_eq!(ty.bits(), 128);
+            let src_ty = ctx.input_ty(insn, 0);
+            assert!(src_ty.bits() < 128);
+            let src = input_to_reg_mem(ctx, inputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
+
+            fn emit_insert_lane<C: LowerCtx<I = Inst>>(
+                ctx: &mut C,
+                src: RegMem,
+                dst: Writable<Reg>,
+                lane: u8,
+                ty: Type,
+            ) {
+                if !ty.is_float() {
+                    let (sse_op, is64) = match ty.lane_bits() {
+                        8 => (SseOpcode::Pinsrb, false),
+                        16 => (SseOpcode::Pinsrw, false),
+                        32 => (SseOpcode::Pinsrd, false),
+                        64 => (SseOpcode::Pinsrd, true),
+                        _ => panic!("Unable to insertlane for lane size: {}", ty.lane_bits()),
+                    };
+                    ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, lane, is64));
+                } else if ty == types::F32 {
+                    let sse_op = SseOpcode::Insertps;
+                    // Insert 32-bits from replacement (at index 00, bits 7:8) to vector (lane
+                    // shifted into bits 5:6).
+                    let lane = 0b00_00_00_00 | lane << 4;
+                    ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, lane, false));
+                } else if ty == types::F64 {
+                    let sse_op = match lane {
+                        // Move the lowest quadword in replacement to vector without changing
+                        // the upper bits.
+                        0 => SseOpcode::Movsd,
+                        // Move the low 64 bits of replacement vector to the high 64 bits of the
+                        // vector.
+                        1 => SseOpcode::Movlhps,
+                        _ => unreachable!(),
+                    };
+                    // Here we use the `xmm_rm_r` encoding because it correctly tells the register
+                    // allocator how we are using `dst`: we are using `dst` as a `mod` whereas other
+                    // encoding formats like `xmm_unary_rm_r` treat it as a `def`.
+                    ctx.emit(Inst::xmm_rm_r(sse_op, src, dst));
+                }
+            };
+
+            // We know that splat will overwrite all of the lanes of `dst` but it takes several
+            // instructions to do so. Because of the multiple instructions, there is no good way to
+            // declare `dst` a `def` except with the following pseudo-instruction.
+            ctx.emit(Inst::xmm_fake_def(dst));
+            match ty.lane_bits() {
+                8 => {
+                    emit_insert_lane(ctx, src, dst, 0, ty.lane_type());
+                    // Initialize a register with all 0s.
+                    let tmp = ctx.alloc_tmp(RegClass::V128, ty);
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp), tmp));
+                    // Shuffle the lowest byte lane to all other lanes.
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::from(tmp), dst))
+                }
+                16 => {
+                    emit_insert_lane(ctx, src.clone(), dst, 0, ty.lane_type());
+                    emit_insert_lane(ctx, src, dst, 1, ty.lane_type());
+                    // Shuffle the lowest two lanes to all other lanes.
+                    ctx.emit(Inst::xmm_rm_r_imm(
+                        SseOpcode::Pshufd,
+                        RegMem::from(dst),
+                        dst,
+                        0,
+                        false,
+                    ))
+                }
+                32 => {
+                    emit_insert_lane(ctx, src, dst, 0, ty.lane_type());
+                    // Shuffle the lowest lane to all other lanes.
+                    ctx.emit(Inst::xmm_rm_r_imm(
+                        SseOpcode::Pshufd,
+                        RegMem::from(dst),
+                        dst,
+                        0,
+                        false,
+                    ))
+                }
+                64 => {
+                    emit_insert_lane(ctx, src.clone(), dst, 0, ty.lane_type());
+                    emit_insert_lane(ctx, src, dst, 1, ty.lane_type());
+                }
+                _ => panic!("Invalid type to splat: {}", ty),
+            }
+        }
+
+        Opcode::VanyTrue => {
+            let dst = get_output_reg(ctx, outputs[0]);
+            let src_ty = ctx.input_ty(insn, 0);
+            assert_eq!(src_ty.bits(), 128);
+            let src = put_input_in_reg(ctx, inputs[0]);
+            // Set the ZF if the result is all zeroes.
+            ctx.emit(Inst::xmm_cmp_rm_r(SseOpcode::Ptest, RegMem::reg(src), src));
+            // If the ZF is not set, place a 1 in `dst`.
+            ctx.emit(Inst::setcc(CC::NZ, dst));
+        }
+
+        Opcode::VallTrue => {
+            let ty = ty.unwrap();
+            let dst = get_output_reg(ctx, outputs[0]);
+            let src_ty = ctx.input_ty(insn, 0);
+            assert_eq!(src_ty.bits(), 128);
+            let src = input_to_reg_mem(ctx, inputs[0]);
+
+            let eq = |ty: Type| match ty.lane_bits() {
+                8 => SseOpcode::Pcmpeqb,
+                16 => SseOpcode::Pcmpeqw,
+                32 => SseOpcode::Pcmpeqd,
+                64 => SseOpcode::Pcmpeqq,
+                _ => panic!("Unable to find an instruction for {} for type: {}", op, ty),
+            };
+
+            // Initialize a register with all 0s.
+            let tmp = ctx.alloc_tmp(RegClass::V128, ty);
+            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp), tmp));
+            // Compare to see what lanes are filled with all 1s.
+            ctx.emit(Inst::xmm_rm_r(eq(src_ty), src, tmp));
+            // Set the ZF if the result is all zeroes.
+            ctx.emit(Inst::xmm_cmp_rm_r(
+                SseOpcode::Ptest,
+                RegMem::from(tmp),
+                tmp.to_reg(),
+            ));
+            // If the ZF is set, place a 1 in `dst`.
+            ctx.emit(Inst::setcc(CC::Z, dst));
+        }
+
         Opcode::IaddImm
         | Opcode::ImulImm
         | Opcode::UdivImm

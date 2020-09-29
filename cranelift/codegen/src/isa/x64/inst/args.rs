@@ -459,6 +459,7 @@ pub enum SseOpcode {
     Psubd,
     Psubq,
     Psubw,
+    Ptest,
     Pxor,
     Rcpss,
     Roundss,
@@ -606,6 +607,7 @@ impl SseOpcode {
             | SseOpcode::Pminuw
             | SseOpcode::Pminud
             | SseOpcode::Pmulld
+            | SseOpcode::Ptest
             | SseOpcode::Roundss
             | SseOpcode::Roundsd => SSE41,
 
@@ -734,6 +736,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Psubd => "psubd",
             SseOpcode::Psubq => "psubq",
             SseOpcode::Psubw => "psubw",
+            SseOpcode::Ptest => "ptest",
             SseOpcode::Pxor => "pxor",
             SseOpcode::Rcpss => "rcpss",
             SseOpcode::Roundss => "roundss",
