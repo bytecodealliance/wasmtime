@@ -2817,6 +2817,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 unreachable!();
             };
+            debug_assert!(lane < src_ty.lane_count() as u8);
 
             if !ty.is_float() {
                 let (sse_op, w_bit) = match ty.lane_bits() {
