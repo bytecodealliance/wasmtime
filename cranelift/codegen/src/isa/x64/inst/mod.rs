@@ -342,6 +342,10 @@ pub enum Inst {
         is64: bool,
     },
 
+    /// Provides a way to tell the register allocator that the upcoming sequence of instructions
+    /// will overwrite `dst` so it should be considered as a `def`; use with care.
+    XmmFakeDef { dst: Writable<Reg> },
+
     // =====================================
     // Control flow instructions.
     /// Direct call: call simm32.
@@ -638,6 +642,11 @@ impl Inst {
         src.assert_regclass_is(RegClass::V128);
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
         Inst::XMM_RM_R { op, src, dst }
+    }
+
+    pub(crate) fn xmm_fake_def(dst: Writable<Reg>) -> Self {
+        debug_assert!(dst.to_reg().get_class() == RegClass::V128);
+        Inst::XmmFakeDef { dst }
     }
 
     pub(crate) fn xmm_mov_r_m(
@@ -1324,6 +1333,12 @@ impl ShowWithRRU for Inst {
                 dst.show_rru(mb_rru),
             ),
 
+            Inst::XmmFakeDef { dst } => format!(
+                "{} {}",
+                ljustify("fake_def".into()),
+                dst.show_rru(mb_rru),
+            ),
+
             Inst::XmmLoadConstSeq { val, dst, .. } => {
                 format!("load_const ${:?}, {}", val, dst.show_rru(mb_rru),)
             }
@@ -1754,6 +1769,7 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
                 collector.add_mod(*dst);
             }
         }
+        Inst::XmmFakeDef { dst } => collector.add_def(*dst),
         Inst::XmmLoadConstSeq { dst, .. } => collector.add_def(*dst),
         Inst::XmmMinMaxSeq { lhs, rhs_dst, .. } => {
             collector.add_use(*lhs);
@@ -2087,6 +2103,9 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         } => {
             src.map_uses(mapper);
             map_mod(mapper, dst);
+        }
+        Inst::XmmFakeDef { ref mut dst, .. } => {
+            map_def(mapper, dst);
         }
         Inst::XmmLoadConstSeq { ref mut dst, .. } => {
             map_def(mapper, dst);

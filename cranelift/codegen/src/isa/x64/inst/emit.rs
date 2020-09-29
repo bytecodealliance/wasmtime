@@ -2003,6 +2003,11 @@ pub(crate) fn emit(
             sink.bind_label(constant_end_label);
         }
 
+        Inst::XmmFakeDef { .. } => {
+            // This instruction format only exists to declare a register as a `def`; no code is
+            // emitted.
+        }
+
         Inst::Xmm_Mov_R_M {
             op,
             src,
@@ -2087,19 +2092,20 @@ pub(crate) fn emit(
 
         Inst::XMM_Cmp_RM_R { op, src, dst } => {
             let rex = RexFlags::clear_w();
-            let (prefix, opcode) = match op {
-                SseOpcode::Ucomisd => (LegacyPrefixes::_66, 0x0F2E),
-                SseOpcode::Ucomiss => (LegacyPrefixes::None, 0x0F2E),
+            let (prefix, opcode, len) = match op {
+                SseOpcode::Ptest => (LegacyPrefixes::_66, 0x0F3817, 3),
+                SseOpcode::Ucomisd => (LegacyPrefixes::_66, 0x0F2E, 2),
+                SseOpcode::Ucomiss => (LegacyPrefixes::None, 0x0F2E, 2),
                 _ => unimplemented!("Emit xmm cmp rm r"),
             };
 
             match src {
                 RegMem::Reg { reg } => {
-                    emit_std_reg_reg(sink, prefix, opcode, 2, *dst, *reg, rex);
+                    emit_std_reg_reg(sink, prefix, opcode, len, *dst, *reg, rex);
                 }
                 RegMem::Mem { addr } => {
                     let addr = &addr.finalize(state);
-                    emit_std_reg_mem(sink, prefix, opcode, 2, *dst, addr, rex);
+                    emit_std_reg_mem(sink, prefix, opcode, len, *dst, addr, rex);
                 }
             }
         }
