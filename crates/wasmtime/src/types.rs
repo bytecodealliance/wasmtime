@@ -252,21 +252,20 @@ impl FuncType {
         use wasmtime_environ::ir::{AbiParam, ArgumentPurpose, Signature};
         use wasmtime_jit::native;
         let call_conv = native::call_conv();
-        let mut params = self
-            .params
-            .iter()
-            .map(|p| AbiParam::new(p.get_wasmtime_type()))
-            .collect::<Vec<_>>();
+        let mut params = vec![
+            AbiParam::special(pointer_type, ArgumentPurpose::VMContext),
+            AbiParam::new(pointer_type),
+        ];
+        params.extend(
+            self.params
+                .iter()
+                .map(|p| AbiParam::new(p.get_wasmtime_type())),
+        );
         let returns = self
             .results
             .iter()
             .map(|p| AbiParam::new(p.get_wasmtime_type()))
             .collect::<Vec<_>>();
-        params.insert(
-            0,
-            AbiParam::special(pointer_type, ArgumentPurpose::VMContext),
-        );
-        params.insert(1, AbiParam::new(pointer_type));
 
         Signature {
             params,
