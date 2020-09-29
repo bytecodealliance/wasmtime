@@ -444,6 +444,7 @@ pub enum SseOpcode {
     Pmulld,
     Pmullw,
     Pmuludq,
+    Por,
     Pshufb,
     Pshufd,
     Psllw,
@@ -566,6 +567,7 @@ impl SseOpcode {
             | SseOpcode::Pminub
             | SseOpcode::Pmullw
             | SseOpcode::Pmuludq
+            | SseOpcode::Por
             | SseOpcode::Pshufd
             | SseOpcode::Psllw
             | SseOpcode::Pslld
@@ -717,6 +719,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pmulld => "pmulld",
             SseOpcode::Pmullw => "pmullw",
             SseOpcode::Pmuludq => "pmuludq",
+            SseOpcode::Por => "por",
             SseOpcode::Pshufb => "pshufb",
             SseOpcode::Pshufd => "pshufd",
             SseOpcode::Psllw => "psllw",
