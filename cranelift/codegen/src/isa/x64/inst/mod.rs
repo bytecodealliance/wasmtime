@@ -786,14 +786,14 @@ impl Inst {
         src: RegMem,
         dst: Writable<Reg>,
         imm: u8,
-        w: bool,
+        is64: bool,
     ) -> Inst {
         Inst::XmmRmRImm {
             op,
             src,
             dst,
             imm,
-            is64: w,
+            is64,
         }
     }
 
