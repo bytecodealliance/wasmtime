@@ -3,8 +3,8 @@
 #![allow(non_snake_case)]
 
 use crate::ir::{
-    condcodes::FloatCC, types, AbiParam, ArgumentPurpose, ExternalName, Inst as IRInst,
-    InstructionData, LibCall, Opcode, Signature, Type,
+    condcodes::FloatCC, condcodes::IntCC, types, AbiParam, ArgumentPurpose, ExternalName,
+    Inst as IRInst, InstructionData, LibCall, Opcode, Signature, Type,
 };
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
@@ -1297,12 +1297,118 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Icmp => {
-            emit_cmp(ctx, insn);
-
             let condcode = ctx.data(insn).cond_code().unwrap();
-            let cc = CC::from_intcc(condcode);
             let dst = get_output_reg(ctx, outputs[0]);
-            ctx.emit(Inst::setcc(cc, dst));
+            let ty = ctx.input_ty(insn, 0);
+            if !ty.is_vector() {
+                emit_cmp(ctx, insn);
+                let cc = CC::from_intcc(condcode);
+                ctx.emit(Inst::setcc(cc, dst));
+            } else {
+                assert_eq!(ty.bits(), 128);
+                let eq = |ty| match ty {
+                    types::I8X16 => SseOpcode::Pcmpeqb,
+                    types::I16X8 => SseOpcode::Pcmpeqw,
+                    types::I32X4 => SseOpcode::Pcmpeqd,
+                    types::I64X2 => SseOpcode::Pcmpeqq,
+                    _ => panic!(
+                        "Unable to find an instruction for {} for type: {}",
+                        condcode, ty
+                    ),
+                };
+                let gt = |ty| match ty {
+                    types::I8X16 => SseOpcode::Pcmpgtb,
+                    types::I16X8 => SseOpcode::Pcmpgtw,
+                    types::I32X4 => SseOpcode::Pcmpgtd,
+                    types::I64X2 => SseOpcode::Pcmpgtq,
+                    _ => panic!(
+                        "Unable to find an instruction for {} for type: {}",
+                        condcode, ty
+                    ),
+                };
+                let maxu = |ty| match ty {
+                    types::I8X16 => SseOpcode::Pmaxub,
+                    types::I16X8 => SseOpcode::Pmaxuw,
+                    types::I32X4 => SseOpcode::Pmaxud,
+                    _ => panic!(
+                        "Unable to find an instruction for {} for type: {}",
+                        condcode, ty
+                    ),
+                };
+                let mins = |ty| match ty {
+                    types::I8X16 => SseOpcode::Pminsb,
+                    types::I16X8 => SseOpcode::Pminsw,
+                    types::I32X4 => SseOpcode::Pminsd,
+                    _ => panic!(
+                        "Unable to find an instruction for {} for type: {}",
+                        condcode, ty
+                    ),
+                };
+                let minu = |ty| match ty {
+                    types::I8X16 => SseOpcode::Pminub,
+                    types::I16X8 => SseOpcode::Pminuw,
+                    types::I32X4 => SseOpcode::Pminud,
+                    _ => panic!(
+                        "Unable to find an instruction for {} for type: {}",
+                        condcode, ty
+                    ),
+                };
+
+                // Here we decide which operand to use as the read/write `dst` (ModRM reg field)
+                // and which to use as the read `input` (ModRM r/m field). In the normal case we
+                // use Cranelift's first operand, the `lhs`, as `dst` but we flip the operands for
+                // the less-than cases so that we can reuse the greater-than implementation.
+                let input = match condcode {
+                    IntCC::SignedLessThan
+                    | IntCC::SignedLessThanOrEqual
+                    | IntCC::UnsignedLessThan
+                    | IntCC::UnsignedLessThanOrEqual => {
+                        let lhs = input_to_reg_mem(ctx, inputs[0]);
+                        let rhs = put_input_in_reg(ctx, inputs[1]);
+                        ctx.emit(Inst::gen_move(dst, rhs, ty));
+                        lhs
+                    }
+                    _ => {
+                        let lhs = put_input_in_reg(ctx, inputs[0]);
+                        let rhs = input_to_reg_mem(ctx, inputs[1]);
+                        ctx.emit(Inst::gen_move(dst, lhs, ty));
+                        rhs
+                    }
+                };
+
+                match condcode {
+                    IntCC::Equal => ctx.emit(Inst::xmm_rm_r(eq(ty), input, dst)),
+                    IntCC::NotEqual => {
+                        ctx.emit(Inst::xmm_rm_r(eq(ty), input, dst));
+                        // Emit all 1s into the `tmp` register.
+                        let tmp = ctx.alloc_tmp(RegClass::V128, ty);
+                        ctx.emit(Inst::xmm_rm_r(eq(ty), RegMem::from(tmp), tmp));
+                        // Invert the result of the `PCMPEQ*`.
+                        ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp), dst));
+                    }
+                    IntCC::SignedGreaterThan | IntCC::SignedLessThan => {
+                        ctx.emit(Inst::xmm_rm_r(gt(ty), input, dst))
+                    }
+                    IntCC::SignedGreaterThanOrEqual | IntCC::SignedLessThanOrEqual => {
+                        ctx.emit(Inst::xmm_rm_r(mins(ty), input.clone(), dst));
+                        ctx.emit(Inst::xmm_rm_r(eq(ty), input, dst))
+                    }
+                    IntCC::UnsignedGreaterThan | IntCC::UnsignedLessThan => {
+                        ctx.emit(Inst::xmm_rm_r(maxu(ty), input.clone(), dst));
+                        ctx.emit(Inst::xmm_rm_r(eq(ty), input, dst));
+                        // Emit all 1s into the `tmp` register.
+                        let tmp = ctx.alloc_tmp(RegClass::V128, ty);
+                        ctx.emit(Inst::xmm_rm_r(eq(ty), RegMem::from(tmp), tmp));
+                        // Invert the result of the `PCMPEQ*`.
+                        ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp), dst));
+                    }
+                    IntCC::UnsignedGreaterThanOrEqual | IntCC::UnsignedLessThanOrEqual => {
+                        ctx.emit(Inst::xmm_rm_r(minu(ty), input.clone(), dst));
+                        ctx.emit(Inst::xmm_rm_r(eq(ty), input, dst))
+                    }
+                    _ => unimplemented!("Unimplemented comparison code for icmp: {}", condcode),
+                }
+            }
         }
 
         Opcode::Fcmp => {

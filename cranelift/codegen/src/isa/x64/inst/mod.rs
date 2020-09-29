@@ -1125,7 +1125,11 @@ impl Inst {
                 src.to_reg() == Some(dst.to_reg())
                     && (*op == SseOpcode::Xorps
                         || *op == SseOpcode::Xorpd
-                        || *op == SseOpcode::Pxor)
+                        || *op == SseOpcode::Pxor
+                        || *op == SseOpcode::Pcmpeqb
+                        || *op == SseOpcode::Pcmpeqw
+                        || *op == SseOpcode::Pcmpeqd
+                        || *op == SseOpcode::Pcmpeqq)
             }
 
             Self::XmmRmRImm {
