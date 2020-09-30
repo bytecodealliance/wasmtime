@@ -8,8 +8,8 @@ use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, binemit, ir};
 use cranelift_module::{
-    Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleError,
-    ModuleContents, ModuleResult,
+    Backend, DataContext, DataDescription, DataId, FuncId, FuncOrDataId, Init, Linkage,
+    ModuleContents, ModuleError, ModuleResult,
 };
 use object::write::{
     Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
@@ -126,11 +126,6 @@ impl Backend for ObjectBackend {
 
     type CompiledFunction = ObjectCompiledFunction;
     type CompiledData = ObjectCompiledData;
-
-    // There's no need to return individual artifacts; we're writing them into
-    // the output file instead.
-    type FinalizedFunction = ();
-    type FinalizedData = ();
 
     type Product = ObjectProduct;
 
@@ -433,10 +428,6 @@ impl Backend for ObjectBackend {
         // Nothing to do.
     }
 
-    fn get_finalized_function(&self, _func: &ObjectCompiledFunction) {
-        // Nothing to do.
-    }
-
     fn finalize_data(
         &mut self,
         _id: DataId,
@@ -446,15 +437,15 @@ impl Backend for ObjectBackend {
         // Nothing to do.
     }
 
-    fn get_finalized_data(&self, _data: &ObjectCompiledData) {
-        // Nothing to do.
-    }
-
     fn publish(&mut self) {
         // Nothing to do.
     }
 
-    fn finish(mut self, contents: &ModuleContents<Self>) -> ObjectProduct {
+    fn finish(
+        mut self,
+        _names: HashMap<String, FuncOrDataId>,
+        contents: ModuleContents<Self>,
+    ) -> ObjectProduct {
         let symbol_relocs = mem::take(&mut self.relocs);
         for symbol in symbol_relocs {
             for &RelocRecord {
@@ -466,7 +457,7 @@ impl Backend for ObjectBackend {
                 addend,
             } in &symbol.relocs
             {
-                let target_symbol = self.get_symbol(contents, name);
+                let target_symbol = self.get_symbol(&contents, name);
                 self.object
                     .add_relocation(
                         symbol.section,
@@ -503,11 +494,7 @@ impl Backend for ObjectBackend {
 impl ObjectBackend {
     // This should only be called during finish because it creates
     // symbols for missing libcalls.
-    fn get_symbol(
-        &mut self,
-        contents: &ModuleContents<Self>,
-        name: &ir::ExternalName,
-    ) -> SymbolId {
+    fn get_symbol(&mut self, contents: &ModuleContents<Self>, name: &ir::ExternalName) -> SymbolId {
         match *name {
             ir::ExternalName::User { .. } => {
                 if contents.is_function(name) {

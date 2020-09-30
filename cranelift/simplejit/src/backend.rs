@@ -8,8 +8,8 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings};
 use cranelift_module::{
-    Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleContents,
-    ModuleResult,
+    Backend, DataContext, DataDescription, DataId, FuncId, FuncOrDataId, Init, Linkage,
+    ModuleContents, ModuleResult,
 };
 use cranelift_native;
 #[cfg(not(windows))]
@@ -154,10 +154,58 @@ pub struct SimpleJITCompiledData {
 }
 
 /// A handle to allow freeing memory allocated by the `Backend`.
-pub struct SimpleJITMemoryHandle {
+struct SimpleJITMemoryHandle {
     code: Memory,
     readonly: Memory,
     writable: Memory,
+}
+
+/// A `SimpleJITProduct` allows looking up the addresses of all functions and data objects
+/// defined in the original module.
+pub struct SimpleJITProduct {
+    memory: SimpleJITMemoryHandle,
+    names: HashMap<String, FuncOrDataId>,
+    contents: ModuleContents<SimpleJITBackend>,
+}
+
+impl SimpleJITProduct {
+    /// Free memory allocated for code and data segments of compiled functions.
+    ///
+    /// # Safety
+    ///
+    /// Because this function invalidates any pointers retrived from the
+    /// corresponding module, it should only be used when none of the functions
+    /// from that module are currently executing and none of the `fn` pointers
+    /// are called afterwards.
+    pub unsafe fn free_memory(&mut self) {
+        self.memory.code.free_memory();
+        self.memory.readonly.free_memory();
+        self.memory.writable.free_memory();
+    }
+
+    /// Get the `FuncOrDataId` associated with the given name.
+    pub fn func_or_data_for_func(&self, name: &str) -> Option<FuncOrDataId> {
+        self.names.get(name).copied()
+    }
+
+    /// Return the address of a function.
+    pub fn lookup_func(&self, func_id: FuncId) -> *const u8 {
+        self.contents
+            .get_function_definition(&func_id.into())
+            .0
+            .unwrap_or_else(|| panic!("{} is not defined", func_id))
+            .code
+    }
+
+    /// Return the address and size of a data object.
+    pub fn lookup_data(&self, data_id: DataId) -> (*const u8, usize) {
+        let data = self
+            .contents
+            .get_data_definition(&data_id.into())
+            .0
+            .unwrap_or_else(|| panic!("{} is not defined", data_id));
+        (data.storage, data.size)
+    }
 }
 
 impl SimpleJITBackend {
@@ -225,19 +273,11 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     type CompiledFunction = SimpleJITCompiledFunction;
     type CompiledData = SimpleJITCompiledData;
 
-    /// SimpleJIT emits code and data into memory, and provides raw pointers
-    /// to them. They are valid for the remainder of the program's life, unless
-    /// [`free_memory`] is used.
-    ///
-    /// [`free_memory`]: #method.free_memory
-    type FinalizedFunction = *const u8;
-    type FinalizedData = (*mut u8, usize);
-
     /// SimpleJIT emits code and data into memory as it processes them, so it
     /// doesn't need to provide anything after the `Module` is complete.
     /// The handle object that is returned can optionally be used to free
     /// allocated memory if required.
-    type Product = SimpleJITMemoryHandle;
+    type Product = SimpleJITProduct;
 
     /// Create a new `SimpleJITBackend`.
     fn new(builder: SimpleJITBuilder) -> Self {
@@ -444,7 +484,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         _id: FuncId,
         func: &Self::CompiledFunction,
         contents: &ModuleContents<Self>,
-    ) -> Self::FinalizedFunction {
+    ) {
         use std::ptr::write_unaligned;
 
         for &RelocRecord {
@@ -486,11 +526,6 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                 _ => unimplemented!(),
             }
         }
-        func.code
-    }
-
-    fn get_finalized_function(&self, func: &Self::CompiledFunction) -> Self::FinalizedFunction {
-        func.code
     }
 
     fn finalize_data(
@@ -498,7 +533,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         _id: DataId,
         data: &Self::CompiledData,
         contents: &ModuleContents<Self>,
-    ) -> Self::FinalizedData {
+    ) {
         use std::ptr::write_unaligned;
 
         for &RelocRecord {
@@ -535,11 +570,6 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
                 _ => unimplemented!(),
             }
         }
-        (data.storage, data.size)
-    }
-
-    fn get_finalized_data(&self, data: &Self::CompiledData) -> Self::FinalizedData {
-        (data.storage, data.size)
     }
 
     fn publish(&mut self) {
@@ -555,8 +585,16 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     ///
     /// This method does not need to be called when access to the memory
     /// handle is not required.
-    fn finish(self, _contents: &ModuleContents<Self>) -> Self::Product {
-        self.memory
+    fn finish(
+        self,
+        names: HashMap<String, FuncOrDataId>,
+        contents: ModuleContents<Self>,
+    ) -> Self::Product {
+        SimpleJITProduct {
+            memory: self.memory,
+            names,
+            contents,
+        }
     }
 }
 
@@ -600,22 +638,6 @@ fn lookup_with_dlsym(name: &str) -> *const u8 {
             ""
         };
         panic!("cannot resolve address of symbol {} {}", name, msg);
-    }
-}
-
-impl SimpleJITMemoryHandle {
-    /// Free memory allocated for code and data segments of compiled functions.
-    ///
-    /// # Safety
-    ///
-    /// Because this function invalidates any pointers retrived from the
-    /// corresponding module, it should only be used when none of the functions
-    /// from that module are currently executing and none of the`fn` pointers
-    /// are called afterwards.
-    pub unsafe fn free_memory(&mut self) {
-        self.code.free_memory();
-        self.readonly.free_memory();
-        self.writable.free_memory();
     }
 }
 

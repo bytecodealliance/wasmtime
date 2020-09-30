@@ -717,34 +717,6 @@ where
         self.backend.publish();
     }
 
-    /// Return the finalized artifact from the backend, if it provides one.
-    pub fn get_finalized_function(&mut self, func: FuncId) -> B::FinalizedFunction {
-        let info = &self.contents.functions[func];
-        debug_assert!(
-            !self.functions_to_finalize.iter().any(|x| *x == func),
-            "function not yet finalized"
-        );
-        self.backend.get_finalized_function(
-            info.compiled
-                .as_ref()
-                .expect("function must be compiled before it can be finalized"),
-        )
-    }
-
-    /// Return the finalized artifact from the backend, if it provides one.
-    pub fn get_finalized_data(&mut self, data: DataId) -> B::FinalizedData {
-        let info = &self.contents.data_objects[data];
-        debug_assert!(
-            !self.data_objects_to_finalize.iter().any(|x| *x == data),
-            "data object not yet finalized"
-        );
-        self.backend.get_finalized_data(
-            info.compiled
-                .as_ref()
-                .expect("data object must be compiled before it can be finalized"),
-        )
-    }
-
     /// Return the target isa
     pub fn isa(&self) -> &dyn isa::TargetIsa {
         self.backend.isa()
@@ -754,6 +726,6 @@ where
     /// implementations may provide additional functionality available after
     /// a `Module` is complete.
     pub fn finish(self) -> B::Product {
-        self.backend.finish(&self.contents)
+        self.backend.finish(self.names, self.contents)
     }
 }

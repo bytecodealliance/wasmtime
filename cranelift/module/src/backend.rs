@@ -1,6 +1,6 @@
 //! Defines the `Backend` trait.
 
-use crate::DataContext;
+use crate::{DataContext, FuncOrDataId};
 use crate::DataId;
 use crate::FuncId;
 use crate::Linkage;
@@ -11,7 +11,7 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
 
-use std::borrow::ToOwned;
+use std::{borrow::ToOwned, collections::HashMap};
 use std::boxed::Box;
 use std::string::String;
 
@@ -37,14 +37,6 @@ where
 
     /// The results of "compiling" a data object.
     type CompiledData;
-
-    /// The completed output artifact for a function, if this is meaningful for
-    /// the `Backend`.
-    type FinalizedFunction;
-
-    /// The completed output artifact for a data object, if this is meaningful for
-    /// the `Backend`.
-    type FinalizedData;
 
     /// This is an object returned by `Module`'s
     /// [`finish`](struct.Module.html#method.finish) function,
@@ -140,10 +132,7 @@ where
         id: FuncId,
         func: &Self::CompiledFunction,
         contents: &ModuleContents<Self>,
-    ) -> Self::FinalizedFunction;
-
-    /// Return the finalized artifact from the backend, if relevant.
-    fn get_finalized_function(&self, func: &Self::CompiledFunction) -> Self::FinalizedFunction;
+    );
 
     /// Perform all outstanding relocations on the given data object. This requires all
     /// `Local` and `Export` entities referenced to be defined.
@@ -155,10 +144,7 @@ where
         id: DataId,
         data: &Self::CompiledData,
         contents: &ModuleContents<Self>,
-    ) -> Self::FinalizedData;
-
-    /// Return the finalized artifact from the backend, if relevant.
-    fn get_finalized_data(&self, data: &Self::CompiledData) -> Self::FinalizedData;
+    );
 
     /// "Publish" all finalized functions and data objects to their ultimate destinations.
     ///
@@ -168,7 +154,11 @@ where
 
     /// Consume this `Backend` and return a result. Some implementations may
     /// provide additional functionality through this result.
-    fn finish(self, contents: &ModuleContents<Self>) -> Self::Product;
+    fn finish(
+        self,
+        names: HashMap<String, FuncOrDataId>,
+        contents: ModuleContents<Self>,
+    ) -> Self::Product;
 }
 
 /// Default names for `ir::LibCall`s. A function by this name is imported into the object as
