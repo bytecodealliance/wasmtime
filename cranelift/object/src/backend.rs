@@ -455,8 +455,7 @@ impl Backend for ObjectBackend {
     }
 
     fn finish(mut self, contents: &ModuleContents<Self>) -> ObjectProduct {
-        let mut symbol_relocs = Vec::new();
-        mem::swap(&mut symbol_relocs, &mut self.relocs);
+        let symbol_relocs = mem::take(&mut self.relocs);
         for symbol in symbol_relocs {
             for &RelocRecord {
                 offset,
