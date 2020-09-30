@@ -26,7 +26,7 @@
 mod backend;
 mod memory;
 
-pub use crate::backend::{SimpleJITBackend, SimpleJITBuilder, SimpleJITProduct};
+pub use crate::backend::{SimpleJITModule, SimpleJITBuilder, SimpleJITProduct};
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

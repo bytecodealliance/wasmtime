@@ -27,7 +27,7 @@
 
 mod backend;
 
-pub use crate::backend::{ObjectBackend, ObjectBuilder, ObjectProduct};
+pub use crate::backend::{ObjectModule, ObjectBuilder, ObjectProduct};
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

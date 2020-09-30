@@ -8,7 +8,7 @@ use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, ir};
 use cranelift_module::{
-    Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleCompiledFunction,
+    DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
     ModuleDeclarations, ModuleError, ModuleResult,
 };
 use log::info;
@@ -108,10 +108,10 @@ impl ObjectBuilder {
     }
 }
 
-/// A `ObjectBackend` implements `Backend` and emits ".o" files using the `object` library.
+/// An `ObjectModule` implements `Module` and emits ".o" files using the `object` library.
 ///
-/// See the `ObjectBuilder` for a convenient way to construct `ObjectBackend` instances.
-pub struct ObjectBackend {
+/// See the `ObjectBuilder` for a convenient way to construct `ObjectModule` instances.
+pub struct ObjectModule {
     isa: Box<dyn TargetIsa>,
     object: Object,
     declarations: ModuleDeclarations,
@@ -124,13 +124,9 @@ pub struct ObjectBackend {
     per_function_section: bool,
 }
 
-impl Backend for ObjectBackend {
-    type Builder = ObjectBuilder;
-
-    type Product = ObjectProduct;
-
-    /// Create a new `ObjectBackend` using the given Cranelift target.
-    fn new(builder: ObjectBuilder) -> Self {
+impl ObjectModule {
+    /// Create a new `ObjectModule` using the given Cranelift target.
+    pub fn new(builder: ObjectBuilder) -> Self {
         let mut object = Object::new(builder.binary_format, builder.architecture, builder.endian);
         object.add_file_symbol(builder.name);
         Self {
@@ -146,7 +142,9 @@ impl Backend for ObjectBackend {
             per_function_section: builder.per_function_section,
         }
     }
+}
 
+impl Module for ObjectModule {
     fn isa(&self) -> &dyn TargetIsa {
         &*self.isa
     }
@@ -452,8 +450,11 @@ impl Backend for ObjectBackend {
         }
         Ok(())
     }
+}
 
-    fn finish(mut self) -> ObjectProduct {
+impl ObjectModule {
+    /// Finalize all relocations and output an object.
+    pub fn finish(mut self) -> ObjectProduct {
         let symbol_relocs = mem::take(&mut self.relocs);
         for symbol in symbol_relocs {
             for &RelocRecord {
@@ -497,11 +498,9 @@ impl Backend for ObjectBackend {
             data_objects: self.data_objects,
         }
     }
-}
 
-impl ObjectBackend {
-    // This should only be called during finish because it creates
-    // symbols for missing libcalls.
+    /// This should only be called during finish because it creates
+    /// symbols for missing libcalls.
     fn get_symbol(&mut self, name: &ir::ExternalName) -> SymbolId {
         match *name {
             ir::ExternalName::User { .. } => {

@@ -1,4 +1,4 @@
-//! Defines `SimpleJITBackend`.
+//! Defines `SimpleJITModule`.
 
 use crate::memory::Memory;
 use cranelift_codegen::binemit::{
@@ -9,7 +9,7 @@ use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings};
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
-    Backend, DataContext, DataDescription, DataId, FuncId, FuncOrDataId, Init, Linkage,
+    DataContext, DataDescription, DataId, FuncId, FuncOrDataId, Init, Linkage, Module,
     ModuleCompiledFunction, ModuleDeclarations, ModuleError, ModuleResult,
 };
 use cranelift_native;
@@ -29,7 +29,7 @@ const EXECUTABLE_DATA_ALIGNMENT: u64 = 0x10;
 const WRITABLE_DATA_ALIGNMENT: u64 = 0x8;
 const READONLY_DATA_ALIGNMENT: u64 = 0x1;
 
-/// A builder for `SimpleJITBackend`.
+/// A builder for `SimpleJITModule`.
 pub struct SimpleJITBuilder {
     isa: Box<dyn TargetIsa>,
     symbols: HashMap<String, *const u8>,
@@ -118,11 +118,11 @@ impl SimpleJITBuilder {
     }
 }
 
-/// A `SimpleJITBackend` implements `Backend` and emits code and data into memory where it can be
+/// A `SimpleJITModule` implements `Module` and emits code and data into memory where it can be
 /// directly called and accessed.
 ///
-/// See the `SimpleJITBuilder` for a convenient way to construct `SimpleJITBackend` instances.
-pub struct SimpleJITBackend {
+/// See the `SimpleJITBuilder` for a convenient way to construct `SimpleJITModule` instances.
+pub struct SimpleJITModule {
     isa: Box<dyn TargetIsa>,
     symbols: HashMap<String, *const u8>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
@@ -217,7 +217,7 @@ impl SimpleJITProduct {
     }
 }
 
-impl SimpleJITBackend {
+impl SimpleJITModule {
     fn lookup_symbol(&self, name: &str) -> *const u8 {
         match self.symbols.get(name) {
             Some(&ptr) => ptr,
@@ -232,7 +232,9 @@ impl SimpleJITBackend {
                     let func_id = self.declarations.get_function_id(name);
                     match &self.functions[func_id] {
                         Some(compiled) => compiled.code,
-                        None => self.lookup_symbol(&self.declarations.get_function_decl(func_id).name),
+                        None => {
+                            self.lookup_symbol(&self.declarations.get_function_decl(func_id).name)
+                        }
                     }
                 } else {
                     let data_id = self.declarations.get_data_id(name);
@@ -357,19 +359,9 @@ impl SimpleJITBackend {
             }
         }
     }
-}
-
-impl<'simple_jit_backend> Backend for SimpleJITBackend {
-    type Builder = SimpleJITBuilder;
-
-    /// SimpleJIT emits code and data into memory as it processes them, so it
-    /// doesn't need to provide anything after the `Module` is complete.
-    /// The handle object that is returned can optionally be used to free
-    /// allocated memory if required.
-    type Product = SimpleJITProduct;
 
     /// Create a new `SimpleJITBackend`.
-    fn new(builder: SimpleJITBuilder) -> Self {
+    pub fn new(builder: SimpleJITBuilder) -> Self {
         let memory = SimpleJITMemoryHandle {
             code: Memory::new(),
             readonly: Memory::new(),
@@ -388,7 +380,9 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             data_objects_to_finalize: Vec::new(),
         }
     }
+}
 
+impl<'simple_jit_backend> Module for SimpleJITModule {
     fn isa(&self) -> &dyn TargetIsa {
         &*self.isa
     }
@@ -601,7 +595,9 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
         Ok(())
     }
+}
 
+impl SimpleJITModule {
     /// SimpleJIT emits code and data into memory as it processes them. This
     /// method performs no additional processing, but returns a handle which
     /// allows freeing the allocated memory. Otherwise said memory is leaked
@@ -609,7 +605,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     ///
     /// This method does not need to be called when access to the memory
     /// handle is not required.
-    fn finish(mut self) -> Self::Product {
+    pub fn finish(mut self) -> SimpleJITProduct {
         for func in std::mem::take(&mut self.functions_to_finalize) {
             let decl = self.declarations.get_function_decl(func);
             debug_assert!(decl.linkage.is_definable());

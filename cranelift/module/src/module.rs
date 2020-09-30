@@ -7,7 +7,6 @@
 
 use super::HashMap;
 use crate::data_context::DataContext;
-use crate::Backend;
 use cranelift_codegen::binemit;
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::{ir, isa, CodegenError, Context};
@@ -318,40 +317,29 @@ impl ModuleDeclarations {
     }
 }
 
-/// A `Module` is a utility for collecting functions and data objects, and linking them together.
-pub struct Module<B>
-where
-    B: Backend,
-{
-    backend: B,
-}
-
 /// Information about the compiled function.
 pub struct ModuleCompiledFunction {
     /// The size of the compiled function.
     pub size: binemit::CodeOffset,
 }
 
-impl<B> Module<B>
-where
-    B: Backend,
-{
-    /// Create a new `Module`.
-    pub fn new(backend_builder: B::Builder) -> Self {
-        Self {
-            backend: B::new(backend_builder),
-        }
-    }
+/// A `Module` is a utility for collecting functions and data objects, and linking them together.
+pub trait Module {
+    /// Return the `TargetIsa` to compile for.
+    fn isa(&self) -> &dyn isa::TargetIsa;
+
+    /// Get all declarations in this module.
+    fn declarations(&self) -> &ModuleDeclarations;
 
     /// Get the module identifier for a given name, if that name
     /// has been declared.
-    pub fn get_name(&self, name: &str) -> Option<FuncOrDataId> {
-        self.backend.declarations().get_name(name)
+    fn get_name(&self, name: &str) -> Option<FuncOrDataId> {
+        self.declarations().get_name(name)
     }
 
     /// Return the target information needed by frontends to produce Cranelift IR
     /// for the current target.
-    pub fn target_config(&self) -> isa::TargetFrontendConfig {
+    fn target_config(&self) -> isa::TargetFrontendConfig {
         self.isa().frontend_config()
     }
 
@@ -359,7 +347,7 @@ where
     ///
     /// This ensures that the `Context` is initialized with the default calling
     /// convention for the `TargetIsa`.
-    pub fn make_context(&self) -> Context {
+    fn make_context(&self) -> Context {
         let mut ctx = Context::new();
         ctx.func.signature.call_conv = self.isa().default_call_conv();
         ctx
@@ -369,7 +357,7 @@ where
     ///
     /// This ensures that the `Context` is initialized with the default calling
     /// convention for the `TargetIsa`.
-    pub fn clear_context(&self, ctx: &mut Context) {
+    fn clear_context(&self, ctx: &mut Context) {
         ctx.clear();
         ctx.func.signature.call_conv = self.isa().default_call_conv();
     }
@@ -377,7 +365,7 @@ where
     /// Create a new empty `Signature` with the default calling convention for
     /// the `TargetIsa`, to which parameter and return types can be added for
     /// declaring a function to be called by this `Module`.
-    pub fn make_signature(&self) -> ir::Signature {
+    fn make_signature(&self) -> ir::Signature {
         ir::Signature::new(self.isa().default_call_conv())
     }
 
@@ -385,38 +373,33 @@ where
     ///
     /// This ensures that the `Signature` is initialized with the default
     /// calling convention for the `TargetIsa`.
-    pub fn clear_signature(&self, sig: &mut ir::Signature) {
+    fn clear_signature(&self, sig: &mut ir::Signature) {
         sig.clear(self.isa().default_call_conv());
     }
 
     /// Declare a function in this module.
-    pub fn declare_function(
+    fn declare_function(
         &mut self,
         name: &str,
         linkage: Linkage,
         signature: &ir::Signature,
-    ) -> ModuleResult<FuncId> {
-        self.backend.declare_function(name, linkage, signature)
-    }
+    ) -> ModuleResult<FuncId>;
 
     /// Declare a data object in this module.
-    pub fn declare_data(
+    fn declare_data(
         &mut self,
         name: &str,
         linkage: Linkage,
         writable: bool,
         tls: bool,
-    ) -> ModuleResult<DataId> {
-        self.backend
-            .declare_data(name, linkage, writable, tls)
-    }
+    ) -> ModuleResult<DataId>;
 
     /// Use this when you're building the IR of a function to reference a function.
     ///
     /// TODO: Coalesce redundant decls and signatures.
     /// TODO: Look into ways to reduce the risk of using a FuncRef in the wrong function.
-    pub fn declare_func_in_func(&self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {
-        let decl = &self.backend.declarations().functions[func];
+    fn declare_func_in_func(&self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {
+        let decl = &self.declarations().functions[func];
         let signature = in_func.import_signature(decl.signature.clone());
         let colocated = decl.linkage.is_final();
         in_func.import_function(ir::ExtFuncData {
@@ -429,8 +412,8 @@ where
     /// Use this when you're building the IR of a function to reference a data object.
     ///
     /// TODO: Same as above.
-    pub fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalValue {
-        let decl = &self.backend.declarations().data_objects[data];
+    fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalValue {
+        let decl = &self.declarations().data_objects[data];
         let colocated = decl.linkage.is_final();
         func.create_global_value(ir::GlobalValueData::Symbol {
             name: ir::ExternalName::user(1, data.as_u32()),
@@ -441,12 +424,12 @@ where
     }
 
     /// TODO: Same as above.
-    pub fn declare_func_in_data(&self, func: FuncId, ctx: &mut DataContext) -> ir::FuncRef {
+    fn declare_func_in_data(&self, func: FuncId, ctx: &mut DataContext) -> ir::FuncRef {
         ctx.import_function(ir::ExternalName::user(0, func.as_u32()))
     }
 
     /// TODO: Same as above.
-    pub fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalValue {
+    fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalValue {
         ctx.import_global_value(ir::ExternalName::user(1, data.as_u32()))
     }
 
@@ -455,17 +438,14 @@ where
     /// Returns the size of the function's code and constant data.
     ///
     /// Note: After calling this function the given `Context` will contain the compiled function.
-    pub fn define_function<TS>(
+    fn define_function<TS>(
         &mut self,
         func: FuncId,
         ctx: &mut Context,
         trap_sink: &mut TS,
     ) -> ModuleResult<ModuleCompiledFunction>
     where
-        TS: binemit::TrapSink,
-    {
-        self.backend.define_function(func, ctx, trap_sink)
-    }
+        TS: binemit::TrapSink;
 
     /// Define a function, taking the function body from the given `bytes`.
     ///
@@ -474,28 +454,12 @@ where
     /// `define_function`.
     ///
     /// Returns the size of the function's code.
-    pub fn define_function_bytes(
+    fn define_function_bytes(
         &mut self,
         func: FuncId,
         bytes: &[u8],
-    ) -> ModuleResult<ModuleCompiledFunction> {
-        self.backend.define_function_bytes(func, bytes)
-    }
+    ) -> ModuleResult<ModuleCompiledFunction>;
 
     /// Define a data object, producing the data contents from the given `DataContext`.
-    pub fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
-        self.backend.define_data(data, data_ctx)
-    }
-
-    /// Return the target isa
-    pub fn isa(&self) -> &dyn isa::TargetIsa {
-        self.backend.isa()
-    }
-
-    /// Consume the module and return the resulting `Product`. Some `Backend`
-    /// implementations may provide additional functionality available after
-    /// a `Module` is complete.
-    pub fn finish(self) -> B::Product {
-        self.backend.finish()
-    }
+    fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()>;
 }
