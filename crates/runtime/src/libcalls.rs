@@ -351,35 +351,19 @@ pub unsafe extern "C" fn wasmtime_elem_drop(vmctx: *mut VMContext, elem_index: u
 }
 
 /// Implementation of `memory.copy` for locally defined memories.
-pub unsafe extern "C" fn wasmtime_defined_memory_copy(
+pub unsafe extern "C" fn wasmtime_memory_copy(
     vmctx: *mut VMContext,
-    memory_index: u32,
+    dst_index: u32,
     dst: u32,
+    src_index: u32,
     src: u32,
     len: u32,
 ) {
     let result = {
-        let memory_index = DefinedMemoryIndex::from_u32(memory_index);
+        let src_index = MemoryIndex::from_u32(src_index);
+        let dst_index = MemoryIndex::from_u32(dst_index);
         let instance = (&mut *vmctx).instance();
-        instance.defined_memory_copy(memory_index, dst, src, len)
-    };
-    if let Err(trap) = result {
-        raise_lib_trap(trap);
-    }
-}
-
-/// Implementation of `memory.copy` for imported memories.
-pub unsafe extern "C" fn wasmtime_imported_memory_copy(
-    vmctx: *mut VMContext,
-    memory_index: u32,
-    dst: u32,
-    src: u32,
-    len: u32,
-) {
-    let result = {
-        let memory_index = MemoryIndex::from_u32(memory_index);
-        let instance = (&mut *vmctx).instance();
-        instance.imported_memory_copy(memory_index, dst, src, len)
+        instance.memory_copy(dst_index, dst, src_index, src, len)
     };
     if let Err(trap) = result {
         raise_lib_trap(trap);

@@ -238,7 +238,7 @@ impl Config {
         self
     }
 
-    /// Configures whether the WebAssembly multi-value proposal will
+    /// Configures whether the WebAssembly multi-value [proposal] will
     /// be enabled for compilation.
     ///
     /// This feature gates functions and blocks returning multiple values in a
@@ -249,6 +249,20 @@ impl Config {
     /// [proposal]: https://github.com/webassembly/multi-value
     pub fn wasm_multi_value(&mut self, enable: bool) -> &mut Self {
         self.features.multi_value = enable;
+        self
+    }
+
+    /// Configures whether the WebAssembly multi-memory [proposal] will
+    /// be enabled for compilation.
+    ///
+    /// This feature gates modules having more than one linear memory
+    /// declaration or import.
+    ///
+    /// This is `false` by default.
+    ///
+    /// [proposal]: https://github.com/webassembly/multi-memory
+    pub fn wasm_multi_memory(&mut self, enable: bool) -> &mut Self {
+        self.features.multi_memory = enable;
         self
     }
 

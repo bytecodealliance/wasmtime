@@ -18,10 +18,8 @@ macro_rules! foreach_builtin_function {
             table_init(vmctx, i32, i32, i32, i32, i32) -> ();
             /// Returns an index for wasm's `elem.drop`.
             elem_drop(vmctx, i32) -> ();
-            /// Returns an index for wasm's `memory.copy` for locally defined memories.
-            defined_memory_copy(vmctx, i32, i32, i32, i32) -> ();
-            /// Returns an index for wasm's `memory.copy` for imported memories.
-            imported_memory_copy(vmctx, i32, i32, i32, i32) -> ();
+            /// Returns an index for wasm's `memory.copy`
+            memory_copy(vmctx, i32, i32, i32, i32, i32) -> ();
             /// Returns an index for wasm's `memory.fill` for locally defined memories.
             memory_fill(vmctx, i32, i32, i32, i32) -> ();
             /// Returns an index for wasm's `memory.fill` for imported memories.
