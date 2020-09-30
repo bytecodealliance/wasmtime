@@ -108,6 +108,13 @@ fn main() {
             for krate in crates.iter() {
                 publish(&krate);
             }
+            println!("");
+            println!("===================================================================");
+            println!("");
+            println!("Don't forget to push a git tag for this release!");
+            println!("");
+            println!("    $ git tag vX.Y.Z");
+            println!("    $ git push git@github.com:bytecodealliance/wasmtime.git vX.Y.Z");
         }
 
         "verify" => {
