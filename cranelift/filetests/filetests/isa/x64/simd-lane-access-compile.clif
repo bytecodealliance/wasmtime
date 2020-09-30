@@ -48,3 +48,46 @@ block0:
 ; nextln: paddusb %xmm2, %xmm0
 ; nextln: pshufb  %xmm0, %xmm1
 ; nextln: movdqa  %xmm1, %xmm0
+
+
+
+;; splat
+
+function %splat_i8(i8) -> i8x16 {
+block0(v0: i8):
+    v1 = splat.i8x16 v0
+    return v1
+}
+; check:  fake_def %xmm0
+; nextln: pinsrb  $$0, %rdi, %xmm0
+; nextln: pxor    %xmm1, %xmm1
+; nextln: pshufb  %xmm1, %xmm0
+
+function %splat_b16() -> b16x8 {
+block0:
+    v0 = bconst.b16 true
+    v1 = splat.b16x8 v0
+    return v1
+}
+; check:  fake_def %xmm0
+; nextln: pinsrw  $$0, %r12, %xmm0
+; nextln: pinsrw  $$1, %r12, %xmm0
+; nextln: pshufd  $$0, %xmm0, %xmm0
+
+function %splat_i32(i32) -> i32x4 {
+block0(v0: i32):
+    v1 = splat.i32x4 v0
+    return v1
+}
+; check:  fake_def %xmm0
+; nextln: pinsrd  $$0, %rdi, %xmm0
+; nextln: pshufd  $$0, %xmm0, %xmm0
+
+function %splat_f64(f64) -> f64x2 {
+block0(v0: f64):
+    v1 = splat.f64x2 v0
+    return v1
+}
+; check:  fake_def %xmm1
+; nextln: movsd   %xmm0, %xmm1
+; nextln: movlhps %xmm0, %xmm1
