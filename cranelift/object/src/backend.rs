@@ -8,8 +8,8 @@ use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, ir};
 use cranelift_module::{
-    Backend, DataContext, DataDescription, DataId, FuncId, FuncOrDataId, Init, Linkage,
-    ModuleDeclarations, ModuleError, ModuleResult,
+    Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleDeclarations,
+    ModuleError, ModuleResult,
 };
 use object::write::{
     Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
@@ -410,11 +410,7 @@ impl Backend for ObjectBackend {
         Ok(())
     }
 
-    fn finish(
-        mut self,
-        _names: HashMap<String, FuncOrDataId>,
-        declarations: ModuleDeclarations,
-    ) -> ObjectProduct {
+    fn finish(mut self, declarations: ModuleDeclarations) -> ObjectProduct {
         let symbol_relocs = mem::take(&mut self.relocs);
         for symbol in symbol_relocs {
             for &RelocRecord {

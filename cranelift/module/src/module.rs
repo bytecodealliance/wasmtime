@@ -202,11 +202,18 @@ impl DataDeclaration {
 /// This provides a view to the state of a module which allows `ir::ExternalName`s to be translated
 /// into `FunctionDeclaration`s and `DataDeclaration`s.
 pub struct ModuleDeclarations {
+    names: HashMap<String, FuncOrDataId>,
     functions: PrimaryMap<FuncId, FunctionDeclaration>,
     data_objects: PrimaryMap<DataId, DataDeclaration>,
 }
 
 impl ModuleDeclarations {
+    /// Get the module identifier for a given name, if that name
+    /// has been declared.
+    pub fn get_name(&self, name: &str) -> Option<FuncOrDataId> {
+        self.names.get(name).copied()
+    }
+
     /// Get the `FuncId` for the function named by `name`.
     pub fn get_function_id(&self, name: &ir::ExternalName) -> FuncId {
         if let ir::ExternalName::User { namespace, index } = *name {
@@ -245,6 +252,75 @@ impl ModuleDeclarations {
             panic!("unexpected ExternalName kind {}", name)
         }
     }
+
+    /// Declare a function in this module.
+    pub fn declare_function(
+        &mut self,
+        name: &str,
+        linkage: Linkage,
+        signature: &ir::Signature,
+    ) -> ModuleResult<(FuncId, &FunctionDeclaration)> {
+        // TODO: Can we avoid allocating names so often?
+        use super::hash_map::Entry::*;
+        match self.names.entry(name.to_owned()) {
+            Occupied(entry) => match *entry.get() {
+                FuncOrDataId::Func(id) => {
+                    let existing = &mut self.functions[id];
+                    existing.merge(linkage, signature)?;
+                    Ok((id, existing))
+                }
+                FuncOrDataId::Data(..) => {
+                    Err(ModuleError::IncompatibleDeclaration(name.to_owned()))
+                }
+            },
+            Vacant(entry) => {
+                let id = self.functions.push(FunctionDeclaration {
+                    name: name.to_owned(),
+                    linkage,
+                    signature: signature.clone(),
+                });
+                entry.insert(FuncOrDataId::Func(id));
+                Ok((id, &self.functions[id]))
+            }
+        }
+    }
+
+    /// Declare a data object in this module.
+    pub fn declare_data(
+        &mut self,
+        name: &str,
+        linkage: Linkage,
+        writable: bool,
+        tls: bool,
+        align: Option<u8>, // An alignment bigger than 128 is unlikely
+    ) -> ModuleResult<(DataId, &DataDeclaration)> {
+        // TODO: Can we avoid allocating names so often?
+        use super::hash_map::Entry::*;
+        match self.names.entry(name.to_owned()) {
+            Occupied(entry) => match *entry.get() {
+                FuncOrDataId::Data(id) => {
+                    let existing = &mut self.data_objects[id];
+                    existing.merge(linkage, writable, tls, align);
+                    Ok((id, existing))
+                }
+
+                FuncOrDataId::Func(..) => {
+                    Err(ModuleError::IncompatibleDeclaration(name.to_owned()))
+                }
+            },
+            Vacant(entry) => {
+                let id = self.data_objects.push(DataDeclaration {
+                    name: name.to_owned(),
+                    linkage,
+                    writable,
+                    tls,
+                    align,
+                });
+                entry.insert(FuncOrDataId::Data(id));
+                Ok((id, &self.data_objects[id]))
+            }
+        }
+    }
 }
 
 /// A `Module` is a utility for collecting functions and data objects, and linking them together.
@@ -252,7 +328,6 @@ pub struct Module<B>
 where
     B: Backend,
 {
-    names: HashMap<String, FuncOrDataId>,
     declarations: ModuleDeclarations,
     backend: B,
 }
@@ -268,8 +343,8 @@ where
     /// Create a new `Module`.
     pub fn new(backend_builder: B::Builder) -> Self {
         Self {
-            names: HashMap::new(),
             declarations: ModuleDeclarations {
+                names: HashMap::new(),
                 functions: PrimaryMap::new(),
                 data_objects: PrimaryMap::new(),
             },
@@ -280,7 +355,7 @@ where
     /// Get the module identifier for a given name, if that name
     /// has been declared.
     pub fn get_name(&self, name: &str) -> Option<FuncOrDataId> {
-        self.names.get(name).cloned()
+        self.declarations.names.get(name).cloned()
     }
 
     /// Return the target information needed by frontends to produce Cranelift IR
@@ -330,31 +405,11 @@ where
         linkage: Linkage,
         signature: &ir::Signature,
     ) -> ModuleResult<FuncId> {
-        // TODO: Can we avoid allocating names so often?
-        use super::hash_map::Entry::*;
-        match self.names.entry(name.to_owned()) {
-            Occupied(entry) => match *entry.get() {
-                FuncOrDataId::Func(id) => {
-                    let existing = &mut self.declarations.functions[id];
-                    existing.merge(linkage, signature)?;
-                    self.backend.declare_function(id, name, existing.linkage);
-                    Ok(id)
-                }
-                FuncOrDataId::Data(..) => {
-                    Err(ModuleError::IncompatibleDeclaration(name.to_owned()))
-                }
-            },
-            Vacant(entry) => {
-                let id = self.declarations.functions.push(FunctionDeclaration {
-                    name: name.to_owned(),
-                    linkage,
-                    signature: signature.clone(),
-                });
-                entry.insert(FuncOrDataId::Func(id));
-                self.backend.declare_function(id, name, linkage);
-                Ok(id)
-            }
-        }
+        let (id, decl) = self
+            .declarations
+            .declare_function(name, linkage, signature)?;
+        self.backend.declare_function(id, name, decl.linkage);
+        Ok(id)
     }
 
     /// An iterator over functions that have been declared in this module.
@@ -371,42 +426,18 @@ where
         tls: bool,
         align: Option<u8>, // An alignment bigger than 128 is unlikely
     ) -> ModuleResult<DataId> {
-        // TODO: Can we avoid allocating names so often?
-        use super::hash_map::Entry::*;
-        match self.names.entry(name.to_owned()) {
-            Occupied(entry) => match *entry.get() {
-                FuncOrDataId::Data(id) => {
-                    let existing = &mut self.declarations.data_objects[id];
-                    existing.merge(linkage, writable, tls, align);
-                    self.backend.declare_data(
-                        id,
-                        name,
-                        existing.linkage,
-                        existing.writable,
-                        existing.tls,
-                        existing.align,
-                    );
-                    Ok(id)
-                }
-
-                FuncOrDataId::Func(..) => {
-                    Err(ModuleError::IncompatibleDeclaration(name.to_owned()))
-                }
-            },
-            Vacant(entry) => {
-                let id = self.declarations.data_objects.push(DataDeclaration {
-                    name: name.to_owned(),
-                    linkage,
-                    writable,
-                    tls,
-                    align,
-                });
-                entry.insert(FuncOrDataId::Data(id));
-                self.backend
-                    .declare_data(id, name, linkage, writable, tls, align);
-                Ok(id)
-            }
-        }
+        let (id, decl) = self
+            .declarations
+            .declare_data(name, linkage, writable, tls, align)?;
+        self.backend.declare_data(
+            id,
+            name,
+            decl.linkage,
+            decl.writable,
+            decl.tls,
+            decl.align,
+        );
+        Ok(id)
     }
 
     /// Use this when you're building the IR of a function to reference a function.
@@ -542,6 +573,6 @@ where
     /// implementations may provide additional functionality available after
     /// a `Module` is complete.
     pub fn finish(self) -> B::Product {
-        self.backend.finish(self.names, self.declarations)
+        self.backend.finish(self.declarations)
     }
 }

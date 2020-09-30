@@ -5,7 +5,7 @@ use crate::FuncId;
 use crate::Linkage;
 use crate::ModuleDeclarations;
 use crate::ModuleResult;
-use crate::{DataContext, FuncOrDataId};
+use crate::DataContext;
 use core::marker;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
@@ -13,7 +13,7 @@ use cranelift_codegen::{binemit, ir};
 
 use std::boxed::Box;
 use std::string::String;
-use std::{borrow::ToOwned, collections::HashMap};
+use std::borrow::ToOwned;
 
 /// A `Backend` implements the functionality needed to support a `Module`.
 ///
@@ -99,11 +99,7 @@ where
 
     /// Consume this `Backend` and return a result. Some implementations may
     /// provide additional functionality through this result.
-    fn finish(
-        self,
-        names: HashMap<String, FuncOrDataId>,
-        declarations: ModuleDeclarations,
-    ) -> Self::Product;
+    fn finish(self, declarations: ModuleDeclarations) -> Self::Product;
 }
 
 /// Default names for `ir::LibCall`s. A function by this name is imported into the object as

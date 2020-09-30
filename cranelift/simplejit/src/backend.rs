@@ -172,7 +172,7 @@ struct SimpleJITMemoryHandle {
 /// defined in the original module.
 pub struct SimpleJITProduct {
     memory: SimpleJITMemoryHandle,
-    names: HashMap<String, FuncOrDataId>,
+    declarations: ModuleDeclarations,
     functions: SecondaryMap<FuncId, Option<SimpleJITCompiledFunction>>,
     data_objects: SecondaryMap<DataId, Option<SimpleJITCompiledData>>,
 }
@@ -194,7 +194,7 @@ impl SimpleJITProduct {
 
     /// Get the `FuncOrDataId` associated with the given name.
     pub fn func_or_data_for_func(&self, name: &str) -> Option<FuncOrDataId> {
-        self.names.get(name).copied()
+        self.declarations.get_name(name)
     }
 
     /// Return the address of a function.
@@ -583,11 +583,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     ///
     /// This method does not need to be called when access to the memory
     /// handle is not required.
-    fn finish(
-        mut self,
-        names: HashMap<String, FuncOrDataId>,
-        declarations: ModuleDeclarations,
-    ) -> Self::Product {
+    fn finish(mut self, declarations: ModuleDeclarations) -> Self::Product {
         for func in std::mem::take(&mut self.functions_to_finalize) {
             let decl = declarations.get_function_decl(func);
             debug_assert!(decl.linkage.is_definable());
@@ -605,7 +601,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
         SimpleJITProduct {
             memory: self.memory,
-            names,
+            declarations,
             functions: self.functions,
             data_objects: self.data_objects,
         }
