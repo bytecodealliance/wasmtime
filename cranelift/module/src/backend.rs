@@ -103,30 +103,6 @@ where
         contents: &ModuleContents<Self>,
     ) -> ModuleResult<Self::CompiledData>;
 
-    /// Perform all outstanding relocations on the given function. This requires all `Local`
-    /// and `Export` entities referenced to be defined.
-    ///
-    /// This method is not relevant for `Backend` implementations that do not provide
-    /// `Backend::FinalizedFunction`.
-    fn finalize_function(
-        &mut self,
-        id: FuncId,
-        func: &Self::CompiledFunction,
-        contents: &ModuleContents<Self>,
-    );
-
-    /// Perform all outstanding relocations on the given data object. This requires all
-    /// `Local` and `Export` entities referenced to be defined.
-    ///
-    /// This method is not relevant for `Backend` implementations that do not provide
-    /// `Backend::FinalizedData`.
-    fn finalize_data(
-        &mut self,
-        id: DataId,
-        data: &Self::CompiledData,
-        contents: &ModuleContents<Self>,
-    );
-
     /// Consume this `Backend` and return a result. Some implementations may
     /// provide additional functionality through this result.
     fn finish(

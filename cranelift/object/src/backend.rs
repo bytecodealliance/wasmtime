@@ -400,24 +400,6 @@ impl Backend for ObjectBackend {
         Ok(ObjectCompiledData)
     }
 
-    fn finalize_function(
-        &mut self,
-        _id: FuncId,
-        _func: &ObjectCompiledFunction,
-        _contents: &ModuleContents<Self>,
-    ) {
-        // Nothing to do.
-    }
-
-    fn finalize_data(
-        &mut self,
-        _id: DataId,
-        _data: &ObjectCompiledData,
-        _contents: &ModuleContents<Self>,
-    ) {
-        // Nothing to do.
-    }
-
     fn finish(
         mut self,
         _names: HashMap<String, FuncOrDataId>,

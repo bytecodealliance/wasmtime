@@ -213,14 +213,14 @@ pub struct DataDeclaration {
 }
 
 /// A data object belonging to a `Module`.
-struct ModuleData<B>
+pub struct ModuleData<B>
 where
     B: Backend,
 {
     /// The data object declaration.
-    decl: DataDeclaration,
+    pub decl: DataDeclaration,
     /// The "compiled" artifact, once it's available.
-    compiled: Option<B::CompiledData>,
+    pub compiled: Option<B::CompiledData>,
 }
 
 impl<B> ModuleData<B>
@@ -282,9 +282,19 @@ where
         }
     }
 
+    /// Get the `ModuleFunction` for the given function.
+    pub fn get_function_info(&self, func_id: FuncId) -> &ModuleFunction<B> {
+        &self.functions[func_id]
+    }
+
     /// Get the `FunctionDeclaration` for the function named by `name`.
     pub fn get_function_decl(&self, name: &ir::ExternalName) -> &FunctionDeclaration {
         &self.functions[self.get_function_id(name)].decl
+    }
+
+    /// Get the `ModuleData` for the given data object.
+    pub fn get_data_info(&self, data_id: DataId) -> &ModuleData<B> {
+        &self.data_objects[data_id]
     }
 
     /// Get the `DataDeclaration` for the data object named by `name`.
@@ -647,29 +657,7 @@ where
     /// Consume the module and return the resulting `Product`. Some `Backend`
     /// implementations may provide additional functionality available after
     /// a `Module` is complete.
-    pub fn finish(mut self) -> B::Product {
-        for func in self.functions_to_finalize.drain(..) {
-            let info = &self.contents.functions[func];
-            debug_assert!(info.decl.linkage.is_definable());
-            self.backend.finalize_function(
-                func,
-                info.compiled
-                    .as_ref()
-                    .expect("function must be compiled before it can be finalized"),
-                &self.contents,
-            );
-        }
-        for data in self.data_objects_to_finalize.drain(..) {
-            let info = &self.contents.data_objects[data];
-            debug_assert!(info.decl.linkage.is_definable());
-            self.backend.finalize_data(
-                data,
-                info.compiled
-                    .as_ref()
-                    .expect("data object must be compiled before it can be finalized"),
-                &self.contents,
-            );
-        }
+    pub fn finish(self) -> B::Product {
         self.backend.finish(self.names, self.contents)
     }
 }

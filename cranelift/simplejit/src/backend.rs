@@ -124,6 +124,8 @@ pub struct SimpleJITBackend {
     symbols: HashMap<String, *const u8>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     memory: SimpleJITMemoryHandle,
+    functions_to_finalize: Vec<FuncId>,
+    data_objects_to_finalize: Vec<DataId>,
 }
 
 /// A record of a relocation to perform.
@@ -261,6 +263,100 @@ impl SimpleJITBackend {
             let _ = writeln!(map_file, "{:x} {:x} {}", ptr as usize, size, name);
         }
     }
+
+
+    fn finalize_function(
+        &mut self,
+        _id: FuncId,
+        func: &SimpleJITCompiledFunction,
+        contents: &ModuleContents<Self>,
+    ) {
+        use std::ptr::write_unaligned;
+
+        for &RelocRecord {
+            reloc,
+            offset,
+            ref name,
+            addend,
+        } in &func.relocs
+        {
+            let ptr = func.code;
+            debug_assert!((offset as usize) < func.size);
+            let at = unsafe { ptr.offset(offset as isize) };
+            let base = self.get_definition(contents, name);
+            // TODO: Handle overflow.
+            let what = unsafe { base.offset(addend as isize) };
+            match reloc {
+                Reloc::Abs4 => {
+                    // TODO: Handle overflow.
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
+                    unsafe {
+                        write_unaligned(at as *mut u32, what as u32)
+                    };
+                }
+                Reloc::Abs8 => {
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
+                    unsafe {
+                        write_unaligned(at as *mut u64, what as u64)
+                    };
+                }
+                Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
+                    // TODO: Handle overflow.
+                    let pcrel = ((what as isize) - (at as isize)) as i32;
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
+                    unsafe {
+                        write_unaligned(at as *mut i32, pcrel)
+                    };
+                }
+                Reloc::X86GOTPCRel4 | Reloc::X86CallPLTRel4 => panic!("unexpected PIC relocation"),
+                _ => unimplemented!(),
+            }
+        }
+    }
+
+    fn finalize_data(
+        &mut self,
+        _id: DataId,
+        data: &SimpleJITCompiledData,
+        contents: &ModuleContents<Self>,
+    ) {
+        use std::ptr::write_unaligned;
+
+        for &RelocRecord {
+            reloc,
+            offset,
+            ref name,
+            addend,
+        } in &data.relocs
+        {
+            let ptr = data.storage;
+            debug_assert!((offset as usize) < data.size);
+            let at = unsafe { ptr.offset(offset as isize) };
+            let base = self.get_definition(contents, name);
+            // TODO: Handle overflow.
+            let what = unsafe { base.offset(addend as isize) };
+            match reloc {
+                Reloc::Abs4 => {
+                    // TODO: Handle overflow.
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
+                    unsafe {
+                        write_unaligned(at as *mut u32, what as u32)
+                    };
+                }
+                Reloc::Abs8 => {
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
+                    unsafe {
+                        write_unaligned(at as *mut u64, what as u64)
+                    };
+                }
+                Reloc::X86PCRel4
+                | Reloc::X86CallPCRel4
+                | Reloc::X86GOTPCRel4
+                | Reloc::X86CallPLTRel4 => panic!("unexpected text relocation in data"),
+                _ => unimplemented!(),
+            }
+        }
+    }
 }
 
 impl<'simple_jit_backend> Backend for SimpleJITBackend {
@@ -292,6 +388,8 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             symbols: builder.symbols,
             libcall_names: builder.libcall_names,
             memory,
+            functions_to_finalize: Vec::new(),
+            data_objects_to_finalize: Vec::new(),
         }
     }
 
@@ -318,7 +416,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
     fn define_function<TS>(
         &mut self,
-        _id: FuncId,
+        id: FuncId,
         name: &str,
         ctx: &cranelift_codegen::Context,
         _contents: &ModuleContents<Self>,
@@ -328,6 +426,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     where
         TS: TrapSink,
     {
+        self.functions_to_finalize.push(id);
         let size = code_size as usize;
         let ptr = self
             .memory
@@ -358,11 +457,12 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
     fn define_function_bytes(
         &mut self,
-        _id: FuncId,
+        id: FuncId,
         name: &str,
         bytes: &[u8],
         _contents: &ModuleContents<Self>,
     ) -> ModuleResult<Self::CompiledFunction> {
+        self.functions_to_finalize.push(id);
         let size = bytes.len();
         let ptr = self
             .memory
@@ -385,7 +485,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
     fn define_data(
         &mut self,
-        _id: DataId,
+        id: DataId,
         _name: &str,
         writable: bool,
         tls: bool,
@@ -394,6 +494,8 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         _contents: &ModuleContents<Self>,
     ) -> ModuleResult<Self::CompiledData> {
         assert!(!tls, "SimpleJIT doesn't yet support TLS");
+
+        self.data_objects_to_finalize.push(id);
 
         let &DataDescription {
             ref init,
@@ -460,99 +562,6 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         })
     }
 
-    fn finalize_function(
-        &mut self,
-        _id: FuncId,
-        func: &Self::CompiledFunction,
-        contents: &ModuleContents<Self>,
-    ) {
-        use std::ptr::write_unaligned;
-
-        for &RelocRecord {
-            reloc,
-            offset,
-            ref name,
-            addend,
-        } in &func.relocs
-        {
-            let ptr = func.code;
-            debug_assert!((offset as usize) < func.size);
-            let at = unsafe { ptr.offset(offset as isize) };
-            let base = self.get_definition(contents, name);
-            // TODO: Handle overflow.
-            let what = unsafe { base.offset(addend as isize) };
-            match reloc {
-                Reloc::Abs4 => {
-                    // TODO: Handle overflow.
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut u32, what as u32)
-                    };
-                }
-                Reloc::Abs8 => {
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut u64, what as u64)
-                    };
-                }
-                Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
-                    // TODO: Handle overflow.
-                    let pcrel = ((what as isize) - (at as isize)) as i32;
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut i32, pcrel)
-                    };
-                }
-                Reloc::X86GOTPCRel4 | Reloc::X86CallPLTRel4 => panic!("unexpected PIC relocation"),
-                _ => unimplemented!(),
-            }
-        }
-    }
-
-    fn finalize_data(
-        &mut self,
-        _id: DataId,
-        data: &Self::CompiledData,
-        contents: &ModuleContents<Self>,
-    ) {
-        use std::ptr::write_unaligned;
-
-        for &RelocRecord {
-            reloc,
-            offset,
-            ref name,
-            addend,
-        } in &data.relocs
-        {
-            let ptr = data.storage;
-            debug_assert!((offset as usize) < data.size);
-            let at = unsafe { ptr.offset(offset as isize) };
-            let base = self.get_definition(contents, name);
-            // TODO: Handle overflow.
-            let what = unsafe { base.offset(addend as isize) };
-            match reloc {
-                Reloc::Abs4 => {
-                    // TODO: Handle overflow.
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut u32, what as u32)
-                    };
-                }
-                Reloc::Abs8 => {
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut u64, what as u64)
-                    };
-                }
-                Reloc::X86PCRel4
-                | Reloc::X86CallPCRel4
-                | Reloc::X86GOTPCRel4
-                | Reloc::X86CallPLTRel4 => panic!("unexpected text relocation in data"),
-                _ => unimplemented!(),
-            }
-        }
-    }
-
     /// SimpleJIT emits code and data into memory as it processes them. This
     /// method performs no additional processing, but returns a handle which
     /// allows freeing the allocated memory. Otherwise said memory is leaked
@@ -565,6 +574,29 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         names: HashMap<String, FuncOrDataId>,
         contents: ModuleContents<Self>,
     ) -> Self::Product {
+        for func in std::mem::take(&mut self.functions_to_finalize) {
+            let info = contents.get_function_info(func);
+            debug_assert!(info.decl.linkage.is_definable());
+            self.finalize_function(
+                func,
+                info.compiled
+                    .as_ref()
+                    .expect("function must be compiled before it can be finalized"),
+                &contents,
+            );
+        }
+        for data in std::mem::take(&mut self.data_objects_to_finalize) {
+            let info = contents.get_data_info(data);
+            debug_assert!(info.decl.linkage.is_definable());
+            self.finalize_data(
+                data,
+                info.compiled
+                    .as_ref()
+                    .expect("data object must be compiled before it can be finalized"),
+                &contents,
+            );
+        }
+
         // Now that we're done patching, prepare the memory for execution!
         self.memory.readonly.set_readonly();
         self.memory.code.set_readable_and_executable();
