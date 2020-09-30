@@ -1,8 +1,9 @@
 //! CLI tool to interpret Cranelift IR files.
 
 use crate::utils::iterate_files;
-use cranelift_interpreter::environment::Environment;
-use cranelift_interpreter::interpreter::{ControlFlow, Interpreter};
+use cranelift_interpreter::environment::FunctionStore;
+use cranelift_interpreter::interpreter::{Interpreter, InterpreterState};
+use cranelift_interpreter::step::ControlFlow;
 use cranelift_reader::{parse_run_command, parse_test, ParseError, ParseOptions};
 use log::debug;
 use std::path::PathBuf;
@@ -109,10 +110,10 @@ impl FileInterpreter {
             .map_err(|e| FileInterpreterFailure::ParsingClif(self.path(), e))?;
 
         // collect functions
-        let mut env = Environment::default();
+        let mut env = FunctionStore::default();
         let mut commands = vec![];
-        for (func, details) in test.functions.into_iter() {
-            for comment in details.comments {
+        for (func, details) in test.functions.iter() {
+            for comment in &details.comments {
                 if let Some(command) = parse_run_command(comment.text, &func.signature)
                     .map_err(|e| FileInterpreterFailure::ParsingClif(self.path(), e))?
                 {
@@ -124,14 +125,14 @@ impl FileInterpreter {
         }
 
         // Run assertion commands
-        let interpreter = Interpreter::new(env);
         for command in commands {
             command
                 .run(|func_name, args| {
                     // Because we have stored function names with a leading %, we need to re-add it.
                     let func_name = &format!("%{}", func_name);
-                    match interpreter.call_by_name(func_name, args) {
-                        Ok(ControlFlow::Return(results)) => Ok(results),
+                    let state = InterpreterState::default().with_function_store(env.clone());
+                    match Interpreter::new(state).call_by_name(func_name, args) {
+                        Ok(ControlFlow::Return(results)) => Ok(results.to_vec()),
                         Ok(_) => panic!("Unexpected returned control flow--this is likely a bug."),
                         Err(t) => Err(t.to_string()),
                     }

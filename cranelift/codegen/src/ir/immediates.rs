@@ -5,6 +5,7 @@
 //! `cranelift-codegen/meta/src/shared/immediates` crate in the meta language.
 
 use alloc::vec::Vec;
+use core::cmp::Ordering;
 use core::fmt::{self, Display, Formatter};
 use core::str::FromStr;
 use core::{i32, u32};
@@ -739,6 +740,17 @@ impl Ieee32 {
     pub fn bits(self) -> u32 {
         self.0
     }
+
+    /// Check if the value is a NaN.
+    pub fn is_nan(&self) -> bool {
+        f32::from_bits(self.0).is_nan()
+    }
+}
+
+impl PartialOrd for Ieee32 {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        f32::from_bits(self.0).partial_cmp(&f32::from_bits(other.0))
+    }
 }
 
 impl Display for Ieee32 {
@@ -811,6 +823,18 @@ impl Ieee64 {
     /// Get the bitwise representation.
     pub fn bits(self) -> u64 {
         self.0
+    }
+
+    /// Check if the value is a NaN. For [Ieee64], this means checking that the 11 exponent bits are
+    /// all set.
+    pub fn is_nan(&self) -> bool {
+        f64::from_bits(self.0).is_nan()
+    }
+}
+
+impl PartialOrd for Ieee64 {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        f64::from_bits(self.0).partial_cmp(&f64::from_bits(other.0))
     }
 }
 

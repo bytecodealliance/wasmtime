@@ -3,14 +3,14 @@
 use cranelift_codegen::ir::{FuncRef, Function};
 use std::collections::HashMap;
 
-#[derive(Default)]
-pub struct Environment {
-    functions: HashMap<FuncRef, Function>,
+#[derive(Default, Clone)]
+pub struct FunctionStore<'a> {
+    functions: HashMap<FuncRef, &'a Function>,
     function_name_to_func_ref: HashMap<String, FuncRef>,
 }
 
-impl From<Function> for Environment {
-    fn from(f: Function) -> Self {
+impl<'a> From<&'a Function> for FunctionStore<'a> {
+    fn from(f: &'a Function) -> Self {
         let func_ref = FuncRef::from_u32(0);
         let mut function_name_to_func_ref = HashMap::new();
         function_name_to_func_ref.insert(f.name.to_string(), func_ref);
@@ -23,9 +23,9 @@ impl From<Function> for Environment {
     }
 }
 
-impl Environment {
+impl<'a> FunctionStore<'a> {
     /// Add a function by name.
-    pub fn add(&mut self, name: String, function: Function) {
+    pub fn add(&mut self, name: String, function: &'a Function) {
         let func_ref = FuncRef::with_number(self.function_name_to_func_ref.len() as u32)
             .expect("a valid function reference");
         self.function_name_to_func_ref.insert(name, func_ref);
@@ -38,12 +38,12 @@ impl Environment {
     }
 
     /// Retrieve a function by its function reference.
-    pub fn get_by_func_ref(&self, func_ref: FuncRef) -> Option<&Function> {
-        self.functions.get(&func_ref)
+    pub fn get_by_func_ref(&self, func_ref: FuncRef) -> Option<&'a Function> {
+        self.functions.get(&func_ref).cloned()
     }
 
     /// Retrieve a function by its name.
-    pub fn get_by_name(&self, name: &str) -> Option<&Function> {
+    pub fn get_by_name(&self, name: &str) -> Option<&'a Function> {
         let func_ref = self.index_of(name)?;
         self.get_by_func_ref(func_ref)
     }
@@ -57,17 +57,17 @@ mod tests {
 
     #[test]
     fn addition() {
-        let mut env = Environment::default();
+        let mut env = FunctionStore::default();
         let a = "a";
         let f = Function::new();
 
-        env.add(a.to_string(), f);
+        env.add(a.to_string(), &f);
         assert!(env.get_by_name(a).is_some());
     }
 
     #[test]
     fn nonexistence() {
-        let env = Environment::default();
+        let env = FunctionStore::default();
         assert!(env.get_by_name("a").is_none());
     }
 
@@ -75,8 +75,8 @@ mod tests {
     fn from() {
         let name = ExternalName::testcase("test");
         let signature = Signature::new(CallConv::Fast);
-        let func = Function::with_name_signature(name, signature);
-        let env: Environment = func.into();
+        let func = &Function::with_name_signature(name, signature);
+        let env: FunctionStore = func.into();
         assert_eq!(env.index_of("%test"), FuncRef::with_number(0));
     }
 }
