@@ -191,6 +191,16 @@ where
         }
         Ok(())
     }
+
+    fn validate_for_define(&self) -> ModuleResult<()> {
+        if self.compiled.is_some() {
+            return Err(ModuleError::DuplicateDefinition(self.decl.name.clone()));
+        }
+        if !self.decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(self.decl.name.clone()));
+        }
+        Ok(())
+    }
 }
 
 /// Information about a data object which can be accessed.
@@ -225,6 +235,16 @@ where
             self.decl.tls, tls,
             "Can't change TLS data object to normal or in the opposite way",
         );
+    }
+
+    fn validate_for_define(&self) -> ModuleResult<()> {
+        if self.compiled.is_some() {
+            return Err(ModuleError::DuplicateDefinition(self.decl.name.clone()));
+        }
+        if !self.decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(self.decl.name.clone()));
+        }
+        Ok(())
     }
 }
 
@@ -553,12 +573,7 @@ where
         );
         let CodeInfo { total_size, .. } = ctx.compile(self.backend.isa())?;
         let info = &self.contents.functions[func];
-        if info.compiled.is_some() {
-            return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
-        }
-        if !info.decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
-        }
+        info.validate_for_define()?;
 
         let compiled = self.backend.define_function(
             func,
@@ -588,12 +603,7 @@ where
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {} with bytes", func);
         let info = &self.contents.functions[func];
-        if info.compiled.is_some() {
-            return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
-        }
-        if !info.decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
-        }
+        info.validate_for_define()?;
 
         let total_size: u32 = match bytes.len().try_into() {
             Ok(total_size) => total_size,
@@ -613,12 +623,7 @@ where
     pub fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
         let compiled = {
             let info = &self.contents.data_objects[data];
-            if info.compiled.is_some() {
-                return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
-            }
-            if !info.decl.linkage.is_definable() {
-                return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
-            }
+            info.validate_for_define()?;
             Some(self.backend.define_data(
                 data,
                 &info.decl.name,
