@@ -155,3 +155,39 @@ block0:
     return v8
 }
 ; run
+
+
+
+;; splat
+
+function %splat_i64x2() -> b1 {
+block0:
+    v0 = iconst.i64 -1
+    v1 = splat.i64x2 v0
+    v2 = vconst.i64x2 [-1 -1]
+    v3 = icmp eq v1, v2
+    v8 = vall_true v3
+    return v8
+}
+; run
+
+function %splat_i8(i8) -> i8x16 {
+block0(v0: i8):
+    v1 = splat.i8x16 v0
+    return v1
+}
+; run: %splat_i8(0xff) == [0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff]
+
+function %splat_i32(i32) -> i32x4 {
+block0(v0: i32):
+    v1 = splat.i32x4 v0
+    return v1
+}
+; run: %splat_i32(42) == [42 42 42 42]
+
+function %splat_f64(f64) -> f64x2 {
+block0(v0: f64):
+    v1 = splat.f64x2 v0
+    return v1
+}
+; run: %splat_f64(-0x1.1) == [-0x1.1 -0x1.1]
