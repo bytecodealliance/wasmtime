@@ -44,28 +44,34 @@ where
     /// Return the `TargetIsa` to compile for.
     fn isa(&self) -> &dyn TargetIsa;
 
+    /// Get all declarations in this module.
+    fn declarations(&self) -> &ModuleDeclarations;
+
     /// Declare a function.
-    fn declare_function(&mut self, id: FuncId, name: &str, linkage: Linkage);
+    fn declare_function(
+        &mut self,
+        name: &str,
+        linkage: Linkage,
+        signature: &ir::Signature,
+    ) -> ModuleResult<FuncId>;
 
     /// Declare a data object.
     fn declare_data(
         &mut self,
-        id: DataId,
         name: &str,
         linkage: Linkage,
         writable: bool,
         tls: bool,
         align: Option<u8>,
-    );
+    ) -> ModuleResult<DataId>;
 
     /// Define a function, producing the function body from the given `Context`.
     ///
     /// Functions must be declared before being defined.
     fn define_function<TS>(
         &mut self,
-        id: FuncId,
+        func: FuncId,
         ctx: &mut Context,
-        declarations: &ModuleDeclarations,
         trap_sink: &mut TS,
     ) -> ModuleResult<ModuleCompiledFunction>
     where
@@ -78,7 +84,6 @@ where
         &mut self,
         id: FuncId,
         bytes: &[u8],
-        declarations: &ModuleDeclarations,
     ) -> ModuleResult<ModuleCompiledFunction>;
 
     /// Define a zero-initialized data object of the given size.
@@ -88,12 +93,11 @@ where
         &mut self,
         id: DataId,
         data_ctx: &DataContext,
-        declarations: &ModuleDeclarations,
     ) -> ModuleResult<()>;
 
     /// Consume this `Backend` and return a result. Some implementations may
     /// provide additional functionality through this result.
-    fn finish(self, declarations: ModuleDeclarations) -> Self::Product;
+    fn finish(self) -> Self::Product;
 }
 
 /// Default names for `ir::LibCall`s. A function by this name is imported into the object as

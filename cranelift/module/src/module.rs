@@ -327,7 +327,6 @@ pub struct Module<B>
 where
     B: Backend,
 {
-    declarations: ModuleDeclarations,
     backend: B,
 }
 
@@ -344,11 +343,6 @@ where
     /// Create a new `Module`.
     pub fn new(backend_builder: B::Builder) -> Self {
         Self {
-            declarations: ModuleDeclarations {
-                names: HashMap::new(),
-                functions: PrimaryMap::new(),
-                data_objects: PrimaryMap::new(),
-            },
             backend: B::new(backend_builder),
         }
     }
@@ -356,7 +350,7 @@ where
     /// Get the module identifier for a given name, if that name
     /// has been declared.
     pub fn get_name(&self, name: &str) -> Option<FuncOrDataId> {
-        self.declarations.names.get(name).cloned()
+        self.backend.declarations().get_name(name)
     }
 
     /// Return the target information needed by frontends to produce Cranelift IR
@@ -406,16 +400,7 @@ where
         linkage: Linkage,
         signature: &ir::Signature,
     ) -> ModuleResult<FuncId> {
-        let (id, decl) = self
-            .declarations
-            .declare_function(name, linkage, signature)?;
-        self.backend.declare_function(id, name, decl.linkage);
-        Ok(id)
-    }
-
-    /// An iterator over functions that have been declared in this module.
-    pub fn declared_functions(&self) -> core::slice::Iter<'_, FunctionDeclaration> {
-        self.declarations.functions.values()
+        self.backend.declare_function(name, linkage, signature)
     }
 
     /// Declare a data object in this module.
@@ -427,12 +412,8 @@ where
         tls: bool,
         align: Option<u8>, // An alignment bigger than 128 is unlikely
     ) -> ModuleResult<DataId> {
-        let (id, decl) = self
-            .declarations
-            .declare_data(name, linkage, writable, tls, align)?;
         self.backend
-            .declare_data(id, name, decl.linkage, decl.writable, decl.tls, decl.align);
-        Ok(id)
+            .declare_data(name, linkage, writable, tls, align)
     }
 
     /// Use this when you're building the IR of a function to reference a function.
@@ -440,7 +421,7 @@ where
     /// TODO: Coalesce redundant decls and signatures.
     /// TODO: Look into ways to reduce the risk of using a FuncRef in the wrong function.
     pub fn declare_func_in_func(&self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {
-        let decl = &self.declarations.functions[func];
+        let decl = &self.backend.declarations().functions[func];
         let signature = in_func.import_signature(decl.signature.clone());
         let colocated = decl.linkage.is_final();
         in_func.import_function(ir::ExtFuncData {
@@ -454,7 +435,7 @@ where
     ///
     /// TODO: Same as above.
     pub fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalValue {
-        let decl = &self.declarations.data_objects[data];
+        let decl = &self.backend.declarations().data_objects[data];
         let colocated = decl.linkage.is_final();
         func.create_global_value(ir::GlobalValueData::Symbol {
             name: ir::ExternalName::user(1, data.as_u32()),
@@ -488,8 +469,7 @@ where
     where
         TS: binemit::TrapSink,
     {
-        self.backend
-            .define_function(func, ctx, &self.declarations, trap_sink)
+        self.backend.define_function(func, ctx, trap_sink)
     }
 
     /// Define a function, taking the function body from the given `bytes`.
@@ -504,13 +484,12 @@ where
         func: FuncId,
         bytes: &[u8],
     ) -> ModuleResult<ModuleCompiledFunction> {
-        self.backend
-            .define_function_bytes(func, bytes, &self.declarations)
+        self.backend.define_function_bytes(func, bytes)
     }
 
     /// Define a data object, producing the data contents from the given `DataContext`.
     pub fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
-        self.backend.define_data(data, data_ctx, &self.declarations)
+        self.backend.define_data(data, data_ctx)
     }
 
     /// Return the target isa
@@ -522,6 +501,6 @@ where
     /// implementations may provide additional functionality available after
     /// a `Module` is complete.
     pub fn finish(self) -> B::Product {
-        self.backend.finish(self.declarations)
+        self.backend.finish()
     }
 }

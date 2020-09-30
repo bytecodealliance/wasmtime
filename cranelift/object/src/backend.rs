@@ -114,6 +114,7 @@ impl ObjectBuilder {
 pub struct ObjectBackend {
     isa: Box<dyn TargetIsa>,
     object: Object,
+    declarations: ModuleDeclarations,
     functions: SecondaryMap<FuncId, Option<(SymbolId, bool)>>,
     data_objects: SecondaryMap<DataId, Option<(SymbolId, bool)>>,
     relocs: Vec<SymbolRelocs>,
@@ -135,6 +136,7 @@ impl Backend for ObjectBackend {
         Self {
             isa: builder.isa,
             object,
+            declarations: ModuleDeclarations::default(),
             functions: SecondaryMap::new(),
             data_objects: SecondaryMap::new(),
             relocs: Vec::new(),
@@ -149,8 +151,21 @@ impl Backend for ObjectBackend {
         &*self.isa
     }
 
-    fn declare_function(&mut self, id: FuncId, name: &str, linkage: Linkage) {
-        let (scope, weak) = translate_linkage(linkage);
+    fn declarations(&self) -> &ModuleDeclarations {
+        &self.declarations
+    }
+
+    fn declare_function(
+        &mut self,
+        name: &str,
+        linkage: Linkage,
+        signature: &ir::Signature,
+    ) -> ModuleResult<FuncId> {
+        let (id, decl) = self
+            .declarations
+            .declare_function(name, linkage, signature)?;
+
+        let (scope, weak) = translate_linkage(decl.linkage);
 
         if let Some((function, _defined)) = self.functions[id] {
             let symbol = self.object.symbol_mut(function);
@@ -169,23 +184,28 @@ impl Backend for ObjectBackend {
             });
             self.functions[id] = Some((symbol_id, false));
         }
+
+        Ok(id)
     }
 
     fn declare_data(
         &mut self,
-        id: DataId,
         name: &str,
         linkage: Linkage,
-        _writable: bool,
+        writable: bool,
         tls: bool,
-        _align: Option<u8>,
-    ) {
-        let kind = if tls {
+        align: Option<u8>,
+    ) -> ModuleResult<DataId> {
+        let (id, decl) = self
+            .declarations
+            .declare_data(name, linkage, writable, tls, align)?;
+
+        let kind = if decl.tls {
             SymbolKind::Tls
         } else {
             SymbolKind::Data
         };
-        let (scope, weak) = translate_linkage(linkage);
+        let (scope, weak) = translate_linkage(decl.linkage);
 
         if let Some((data, _defined)) = self.data_objects[id] {
             let symbol = self.object.symbol_mut(data);
@@ -205,13 +225,14 @@ impl Backend for ObjectBackend {
             });
             self.data_objects[id] = Some((symbol_id, false));
         }
+
+        Ok(id)
     }
 
     fn define_function<TS>(
         &mut self,
         func_id: FuncId,
         ctx: &mut cranelift_codegen::Context,
-        declarations: &ModuleDeclarations,
         trap_sink: &mut TS,
     ) -> ModuleResult<ModuleCompiledFunction>
     where
@@ -227,7 +248,7 @@ impl Backend for ObjectBackend {
             ..
         } = ctx.compile(self.isa())?;
 
-        let decl = declarations.get_function_decl(func_id);
+        let decl = self.declarations.get_function_decl(func_id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
@@ -286,11 +307,10 @@ impl Backend for ObjectBackend {
         &mut self,
         func_id: FuncId,
         bytes: &[u8],
-        declarations: &ModuleDeclarations,
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {} with bytes", func_id);
 
-        let decl = declarations.get_function_decl(func_id);
+        let decl = self.declarations.get_function_decl(func_id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
@@ -326,13 +346,8 @@ impl Backend for ObjectBackend {
         Ok(ModuleCompiledFunction { size: total_size })
     }
 
-    fn define_data(
-        &mut self,
-        data_id: DataId,
-        data_ctx: &DataContext,
-        declarations: &ModuleDeclarations,
-    ) -> ModuleResult<()> {
-        let decl = declarations.get_data_decl(data_id);
+    fn define_data(&mut self, data_id: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
+        let decl = self.declarations.get_data_decl(data_id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
@@ -438,7 +453,7 @@ impl Backend for ObjectBackend {
         Ok(())
     }
 
-    fn finish(mut self, declarations: ModuleDeclarations) -> ObjectProduct {
+    fn finish(mut self) -> ObjectProduct {
         let symbol_relocs = mem::take(&mut self.relocs);
         for symbol in symbol_relocs {
             for &RelocRecord {
@@ -450,7 +465,7 @@ impl Backend for ObjectBackend {
                 addend,
             } in &symbol.relocs
             {
-                let target_symbol = self.get_symbol(&declarations, name);
+                let target_symbol = self.get_symbol(name);
                 self.object
                     .add_relocation(
                         symbol.section,
@@ -487,18 +502,14 @@ impl Backend for ObjectBackend {
 impl ObjectBackend {
     // This should only be called during finish because it creates
     // symbols for missing libcalls.
-    fn get_symbol(
-        &mut self,
-        declarations: &ModuleDeclarations,
-        name: &ir::ExternalName,
-    ) -> SymbolId {
+    fn get_symbol(&mut self, name: &ir::ExternalName) -> SymbolId {
         match *name {
             ir::ExternalName::User { .. } => {
-                if declarations.is_function(name) {
-                    let id = declarations.get_function_id(name);
+                if self.declarations.is_function(name) {
+                    let id = self.declarations.get_function_id(name);
                     self.functions[id].unwrap().0
                 } else {
-                    let id = declarations.get_data_id(name);
+                    let id = self.declarations.get_data_id(name);
                     self.data_objects[id].unwrap().0
                 }
             }

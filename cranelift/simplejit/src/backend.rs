@@ -127,6 +127,7 @@ pub struct SimpleJITBackend {
     symbols: HashMap<String, *const u8>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     memory: SimpleJITMemoryHandle,
+    declarations: ModuleDeclarations,
     functions: SecondaryMap<FuncId, Option<SimpleJITCompiledFunction>>,
     data_objects: SecondaryMap<DataId, Option<SimpleJITCompiledData>>,
     functions_to_finalize: Vec<FuncId>,
@@ -224,24 +225,20 @@ impl SimpleJITBackend {
         }
     }
 
-    fn get_definition(
-        &self,
-        declarations: &ModuleDeclarations,
-        name: &ir::ExternalName,
-    ) -> *const u8 {
+    fn get_definition(&self, name: &ir::ExternalName) -> *const u8 {
         match *name {
             ir::ExternalName::User { .. } => {
-                if declarations.is_function(name) {
-                    let func_id = declarations.get_function_id(name);
+                if self.declarations.is_function(name) {
+                    let func_id = self.declarations.get_function_id(name);
                     match &self.functions[func_id] {
                         Some(compiled) => compiled.code,
-                        None => self.lookup_symbol(&declarations.get_function_decl(func_id).name),
+                        None => self.lookup_symbol(&self.declarations.get_function_decl(func_id).name),
                     }
                 } else {
-                    let data_id = declarations.get_data_id(name);
+                    let data_id = self.declarations.get_data_id(name);
                     match &self.data_objects[data_id] {
                         Some(compiled) => compiled.storage,
-                        None => self.lookup_symbol(&declarations.get_data_decl(data_id).name),
+                        None => self.lookup_symbol(&self.declarations.get_data_decl(data_id).name),
                     }
                 }
             }
@@ -270,7 +267,7 @@ impl SimpleJITBackend {
         }
     }
 
-    fn finalize_function(&mut self, id: FuncId, declarations: &ModuleDeclarations) {
+    fn finalize_function(&mut self, id: FuncId) {
         use std::ptr::write_unaligned;
 
         let func = self.functions[id]
@@ -287,7 +284,7 @@ impl SimpleJITBackend {
             let ptr = func.code;
             debug_assert!((offset as usize) < func.size);
             let at = unsafe { ptr.offset(offset as isize) };
-            let base = self.get_definition(declarations, name);
+            let base = self.get_definition(name);
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };
             match reloc {
@@ -318,7 +315,7 @@ impl SimpleJITBackend {
         }
     }
 
-    fn finalize_data(&mut self, id: DataId, declarations: &ModuleDeclarations) {
+    fn finalize_data(&mut self, id: DataId) {
         use std::ptr::write_unaligned;
 
         let data = self.data_objects[id]
@@ -335,7 +332,7 @@ impl SimpleJITBackend {
             let ptr = data.storage;
             debug_assert!((offset as usize) < data.size);
             let at = unsafe { ptr.offset(offset as isize) };
-            let base = self.get_definition(declarations, name);
+            let base = self.get_definition(name);
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };
             match reloc {
@@ -384,6 +381,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             symbols: builder.symbols,
             libcall_names: builder.libcall_names,
             memory,
+            declarations: ModuleDeclarations::default(),
             functions: SecondaryMap::new(),
             data_objects: SecondaryMap::new(),
             functions_to_finalize: Vec::new(),
@@ -395,28 +393,41 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         &*self.isa
     }
 
-    fn declare_function(&mut self, _id: FuncId, _name: &str, _linkage: Linkage) {
-        // Nothing to do.
+    fn declarations(&self) -> &ModuleDeclarations {
+        &self.declarations
+    }
+
+    fn declare_function(
+        &mut self,
+        name: &str,
+        linkage: Linkage,
+        signature: &ir::Signature,
+    ) -> ModuleResult<FuncId> {
+        let (id, _decl) = self
+            .declarations
+            .declare_function(name, linkage, signature)?;
+        Ok(id)
     }
 
     fn declare_data(
         &mut self,
-        _id: DataId,
-        _name: &str,
-        _linkage: Linkage,
-        _writable: bool,
+        name: &str,
+        linkage: Linkage,
+        writable: bool,
         tls: bool,
-        _align: Option<u8>,
-    ) {
+        align: Option<u8>,
+    ) -> ModuleResult<DataId> {
         assert!(!tls, "SimpleJIT doesn't yet support TLS");
-        // Nothing to do.
+        let (id, _decl) = self
+            .declarations
+            .declare_data(name, linkage, writable, tls, align)?;
+        Ok(id)
     }
 
     fn define_function<TS>(
         &mut self,
         id: FuncId,
         ctx: &mut cranelift_codegen::Context,
-        declarations: &ModuleDeclarations,
         trap_sink: &mut TS,
     ) -> ModuleResult<ModuleCompiledFunction>
     where
@@ -428,7 +439,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             ..
         } = ctx.compile(self.isa())?;
 
-        let decl = declarations.get_function_decl(id);
+        let decl = self.declarations.get_function_decl(id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
@@ -472,9 +483,8 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         &mut self,
         id: FuncId,
         bytes: &[u8],
-        declarations: &ModuleDeclarations,
     ) -> ModuleResult<ModuleCompiledFunction> {
-        let decl = declarations.get_function_decl(id);
+        let decl = self.declarations.get_function_decl(id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
@@ -511,13 +521,8 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         Ok(ModuleCompiledFunction { size: total_size })
     }
 
-    fn define_data(
-        &mut self,
-        id: DataId,
-        data: &DataContext,
-        declarations: &ModuleDeclarations,
-    ) -> ModuleResult<()> {
-        let decl = declarations.get_data_decl(id);
+    fn define_data(&mut self, id: DataId, data: &DataContext) -> ModuleResult<()> {
+        let decl = self.declarations.get_data_decl(id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
@@ -604,16 +609,16 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     ///
     /// This method does not need to be called when access to the memory
     /// handle is not required.
-    fn finish(mut self, declarations: ModuleDeclarations) -> Self::Product {
+    fn finish(mut self) -> Self::Product {
         for func in std::mem::take(&mut self.functions_to_finalize) {
-            let decl = declarations.get_function_decl(func);
+            let decl = self.declarations.get_function_decl(func);
             debug_assert!(decl.linkage.is_definable());
-            self.finalize_function(func, &declarations);
+            self.finalize_function(func);
         }
         for data in std::mem::take(&mut self.data_objects_to_finalize) {
-            let decl = declarations.get_data_decl(data);
+            let decl = self.declarations.get_data_decl(data);
             debug_assert!(decl.linkage.is_definable());
-            self.finalize_data(data, &declarations);
+            self.finalize_data(data);
         }
 
         // Now that we're done patching, prepare the memory for execution!
@@ -622,7 +627,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
 
         SimpleJITProduct {
             memory: self.memory,
-            declarations,
+            declarations: self.declarations,
             functions: self.functions,
             data_objects: self.data_objects,
         }
