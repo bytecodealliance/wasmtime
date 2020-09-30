@@ -9,7 +9,7 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, binemit, ir};
 use cranelift_module::{
     Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleError,
-    ModuleNamespace, ModuleResult,
+    ModuleContents, ModuleResult,
 };
 use object::write::{
     Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
@@ -218,7 +218,7 @@ impl Backend for ObjectBackend {
         func_id: FuncId,
         _name: &str,
         ctx: &cranelift_codegen::Context,
-        _namespace: &ModuleNamespace<Self>,
+        _contents: &ModuleContents<Self>,
         code_size: u32,
         trap_sink: &mut TS,
     ) -> ModuleResult<ObjectCompiledFunction>
@@ -275,7 +275,7 @@ impl Backend for ObjectBackend {
         func_id: FuncId,
         _name: &str,
         bytes: &[u8],
-        _namespace: &ModuleNamespace<Self>,
+        _contents: &ModuleContents<Self>,
     ) -> ModuleResult<ObjectCompiledFunction> {
         let symbol = self.functions[func_id].unwrap();
 
@@ -307,7 +307,7 @@ impl Backend for ObjectBackend {
         tls: bool,
         align: Option<u8>,
         data_ctx: &DataContext,
-        _namespace: &ModuleNamespace<Self>,
+        _contents: &ModuleContents<Self>,
     ) -> ModuleResult<ObjectCompiledData> {
         let &DataDescription {
             ref init,
@@ -428,7 +428,7 @@ impl Backend for ObjectBackend {
         &mut self,
         _id: FuncId,
         _func: &ObjectCompiledFunction,
-        _namespace: &ModuleNamespace<Self>,
+        _contents: &ModuleContents<Self>,
     ) {
         // Nothing to do.
     }
@@ -441,7 +441,7 @@ impl Backend for ObjectBackend {
         &mut self,
         _id: DataId,
         _data: &ObjectCompiledData,
-        _namespace: &ModuleNamespace<Self>,
+        _contents: &ModuleContents<Self>,
     ) {
         // Nothing to do.
     }
@@ -454,7 +454,7 @@ impl Backend for ObjectBackend {
         // Nothing to do.
     }
 
-    fn finish(mut self, namespace: &ModuleNamespace<Self>) -> ObjectProduct {
+    fn finish(mut self, contents: &ModuleContents<Self>) -> ObjectProduct {
         let mut symbol_relocs = Vec::new();
         mem::swap(&mut symbol_relocs, &mut self.relocs);
         for symbol in symbol_relocs {
@@ -467,7 +467,7 @@ impl Backend for ObjectBackend {
                 addend,
             } in &symbol.relocs
             {
-                let target_symbol = self.get_symbol(namespace, name);
+                let target_symbol = self.get_symbol(contents, name);
                 self.object
                     .add_relocation(
                         symbol.section,
@@ -506,16 +506,16 @@ impl ObjectBackend {
     // symbols for missing libcalls.
     fn get_symbol(
         &mut self,
-        namespace: &ModuleNamespace<Self>,
+        contents: &ModuleContents<Self>,
         name: &ir::ExternalName,
     ) -> SymbolId {
         match *name {
             ir::ExternalName::User { .. } => {
-                if namespace.is_function(name) {
-                    let id = namespace.get_function_id(name);
+                if contents.is_function(name) {
+                    let id = contents.get_function_id(name);
                     self.functions[id].unwrap()
                 } else {
-                    let id = namespace.get_data_id(name);
+                    let id = contents.get_data_id(name);
                     self.data_objects[id].unwrap()
                 }
             }

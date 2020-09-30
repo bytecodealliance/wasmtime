@@ -4,7 +4,7 @@ use crate::DataContext;
 use crate::DataId;
 use crate::FuncId;
 use crate::Linkage;
-use crate::ModuleNamespace;
+use crate::ModuleContents;
 use crate::ModuleResult;
 use core::marker;
 use cranelift_codegen::isa::TargetIsa;
@@ -79,7 +79,7 @@ where
         id: FuncId,
         name: &str,
         ctx: &Context,
-        namespace: &ModuleNamespace<Self>,
+        contents: &ModuleContents<Self>,
         code_size: u32,
         trap_sink: &mut TS,
     ) -> ModuleResult<Self::CompiledFunction>
@@ -94,7 +94,7 @@ where
         id: FuncId,
         name: &str,
         bytes: &[u8],
-        namespace: &ModuleNamespace<Self>,
+        contents: &ModuleContents<Self>,
     ) -> ModuleResult<Self::CompiledFunction>;
 
     /// Define a zero-initialized data object of the given size.
@@ -108,7 +108,7 @@ where
         tls: bool,
         align: Option<u8>,
         data_ctx: &DataContext,
-        namespace: &ModuleNamespace<Self>,
+        contents: &ModuleContents<Self>,
     ) -> ModuleResult<Self::CompiledData>;
 
     /// Write the address of `what` into the data for `data` at `offset`. `data` must refer to a
@@ -139,7 +139,7 @@ where
         &mut self,
         id: FuncId,
         func: &Self::CompiledFunction,
-        namespace: &ModuleNamespace<Self>,
+        contents: &ModuleContents<Self>,
     ) -> Self::FinalizedFunction;
 
     /// Return the finalized artifact from the backend, if relevant.
@@ -154,7 +154,7 @@ where
         &mut self,
         id: DataId,
         data: &Self::CompiledData,
-        namespace: &ModuleNamespace<Self>,
+        contents: &ModuleContents<Self>,
     ) -> Self::FinalizedData;
 
     /// Return the finalized artifact from the backend, if relevant.
@@ -168,7 +168,7 @@ where
 
     /// Consume this `Backend` and return a result. Some implementations may
     /// provide additional functionality through this result.
-    fn finish(self, namespace: &ModuleNamespace<Self>) -> Self::Product;
+    fn finish(self, contents: &ModuleContents<Self>) -> Self::Product;
 }
 
 /// Default names for `ir::LibCall`s. A function by this name is imported into the object as

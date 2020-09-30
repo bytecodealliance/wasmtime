@@ -8,7 +8,7 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings};
 use cranelift_module::{
-    Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleNamespace,
+    Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleContents,
     ModuleResult,
 };
 use cranelift_native;
@@ -170,19 +170,19 @@ impl SimpleJITBackend {
 
     fn get_definition(
         &self,
-        namespace: &ModuleNamespace<Self>,
+        contents: &ModuleContents<Self>,
         name: &ir::ExternalName,
     ) -> *const u8 {
         match *name {
             ir::ExternalName::User { .. } => {
-                if namespace.is_function(name) {
-                    let (def, name_str, _signature) = namespace.get_function_definition(&name);
+                if contents.is_function(name) {
+                    let (def, name_str, _signature) = contents.get_function_definition(&name);
                     match def {
                         Some(compiled) => compiled.code,
                         None => self.lookup_symbol(name_str),
                     }
                 } else {
-                    let (def, name_str, _writable) = namespace.get_data_definition(&name);
+                    let (def, name_str, _writable) = contents.get_data_definition(&name);
                     match def {
                         Some(compiled) => compiled.storage,
                         None => self.lookup_symbol(name_str),
@@ -281,7 +281,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         _id: FuncId,
         name: &str,
         ctx: &cranelift_codegen::Context,
-        _namespace: &ModuleNamespace<Self>,
+        _contents: &ModuleContents<Self>,
         code_size: u32,
         trap_sink: &mut TS,
     ) -> ModuleResult<Self::CompiledFunction>
@@ -321,7 +321,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         _id: FuncId,
         name: &str,
         bytes: &[u8],
-        _namespace: &ModuleNamespace<Self>,
+        _contents: &ModuleContents<Self>,
     ) -> ModuleResult<Self::CompiledFunction> {
         let size = bytes.len();
         let ptr = self
@@ -351,7 +351,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         tls: bool,
         align: Option<u8>,
         data: &DataContext,
-        _namespace: &ModuleNamespace<Self>,
+        _contents: &ModuleContents<Self>,
     ) -> ModuleResult<Self::CompiledData> {
         assert!(!tls, "SimpleJIT doesn't yet support TLS");
 
@@ -443,7 +443,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         &mut self,
         _id: FuncId,
         func: &Self::CompiledFunction,
-        namespace: &ModuleNamespace<Self>,
+        contents: &ModuleContents<Self>,
     ) -> Self::FinalizedFunction {
         use std::ptr::write_unaligned;
 
@@ -457,7 +457,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             let ptr = func.code;
             debug_assert!((offset as usize) < func.size);
             let at = unsafe { ptr.offset(offset as isize) };
-            let base = self.get_definition(namespace, name);
+            let base = self.get_definition(contents, name);
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };
             match reloc {
@@ -497,7 +497,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         &mut self,
         _id: DataId,
         data: &Self::CompiledData,
-        namespace: &ModuleNamespace<Self>,
+        contents: &ModuleContents<Self>,
     ) -> Self::FinalizedData {
         use std::ptr::write_unaligned;
 
@@ -511,7 +511,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             let ptr = data.storage;
             debug_assert!((offset as usize) < data.size);
             let at = unsafe { ptr.offset(offset as isize) };
-            let base = self.get_definition(namespace, name);
+            let base = self.get_definition(contents, name);
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };
             match reloc {
@@ -555,7 +555,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     ///
     /// This method does not need to be called when access to the memory
     /// handle is not required.
-    fn finish(self, _namespace: &ModuleNamespace<Self>) -> Self::Product {
+    fn finish(self, _contents: &ModuleContents<Self>) -> Self::Product {
         self.memory
     }
 }

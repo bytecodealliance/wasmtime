@@ -228,8 +228,9 @@ where
     }
 }
 
-/// The functions and data objects belonging to a module.
-struct ModuleContents<B>
+/// This provides a view to the state of a module which allows `ir::ExternalName`s to be translated
+/// into `FunctionDeclaration`s and `DataDeclaration`s.
+pub struct ModuleContents<B>
 where
     B: Backend,
 {
@@ -241,7 +242,8 @@ impl<B> ModuleContents<B>
 where
     B: Backend,
 {
-    fn get_function_id(&self, name: &ir::ExternalName) -> FuncId {
+    /// Get the `FuncId` for the function named by `name`.
+    pub fn get_function_id(&self, name: &ir::ExternalName) -> FuncId {
         if let ir::ExternalName::User { namespace, index } = *name {
             debug_assert_eq!(namespace, 0);
             FuncId::from_u32(index)
@@ -250,7 +252,8 @@ where
         }
     }
 
-    fn get_data_id(&self, name: &ir::ExternalName) -> DataId {
+    /// Get the `DataId` for the data object named by `name`.
+    pub fn get_data_id(&self, name: &ir::ExternalName) -> DataId {
         if let ir::ExternalName::User { namespace, index } = *name {
             debug_assert_eq!(namespace, 1);
             DataId::from_u32(index)
@@ -259,47 +262,14 @@ where
         }
     }
 
-    fn get_function_info(&self, name: &ir::ExternalName) -> &ModuleFunction<B> {
-        &self.functions[self.get_function_id(name)]
-    }
-
-    /// Get the `DataDeclaration` for the function named by `name`.
-    fn get_data_info(&self, name: &ir::ExternalName) -> &ModuleData<B> {
-        &self.data_objects[self.get_data_id(name)]
-    }
-}
-
-/// This provides a view to the state of a module which allows `ir::ExternalName`s to be translated
-/// into `FunctionDeclaration`s and `DataDeclaration`s.
-pub struct ModuleNamespace<'a, B: 'a>
-where
-    B: Backend,
-{
-    contents: &'a ModuleContents<B>,
-}
-
-impl<'a, B> ModuleNamespace<'a, B>
-where
-    B: Backend,
-{
-    /// Get the `FuncId` for the function named by `name`.
-    pub fn get_function_id(&self, name: &ir::ExternalName) -> FuncId {
-        self.contents.get_function_id(name)
-    }
-
-    /// Get the `DataId` for the data object named by `name`.
-    pub fn get_data_id(&self, name: &ir::ExternalName) -> DataId {
-        self.contents.get_data_id(name)
-    }
-
     /// Get the `FunctionDeclaration` for the function named by `name`.
     pub fn get_function_decl(&self, name: &ir::ExternalName) -> &FunctionDeclaration {
-        &self.contents.get_function_info(name).decl
+        &self.functions[self.get_function_id(name)].decl
     }
 
     /// Get the `DataDeclaration` for the data object named by `name`.
     pub fn get_data_decl(&self, name: &ir::ExternalName) -> &DataDeclaration {
-        &self.contents.get_data_info(name).decl
+        &self.data_objects[self.get_data_id(name)].decl
     }
 
     /// Get the definition for the function named by `name`, along with its name
@@ -308,7 +278,7 @@ where
         &self,
         name: &ir::ExternalName,
     ) -> (Option<&B::CompiledFunction>, &str, &ir::Signature) {
-        let info = self.contents.get_function_info(name);
+        let info = &self.functions[self.get_function_id(name)];
         debug_assert!(
             !info.decl.linkage.is_definable() || info.compiled.is_some(),
             "Finalization requires a definition for function {}.",
@@ -329,7 +299,7 @@ where
         &self,
         name: &ir::ExternalName,
     ) -> (Option<&B::CompiledData>, &str, bool) {
-        let info = self.contents.get_data_info(name);
+        let info = &self.data_objects[self.get_data_id(name)];
         debug_assert!(
             !info.decl.linkage.is_definable() || info.compiled.is_some(),
             "Finalization requires a definition for data object {}.",
@@ -594,9 +564,7 @@ where
             func,
             &info.decl.name,
             ctx,
-            &ModuleNamespace::<B> {
-                contents: &self.contents,
-            },
+            &self.contents,
             total_size,
             trap_sink,
         )?;
@@ -632,14 +600,9 @@ where
             _ => Err(ModuleError::FunctionTooLarge(info.decl.name.clone()))?,
         };
 
-        let compiled = self.backend.define_function_bytes(
-            func,
-            &info.decl.name,
-            bytes,
-            &ModuleNamespace::<B> {
-                contents: &self.contents,
-            },
-        )?;
+        let compiled =
+            self.backend
+                .define_function_bytes(func, &info.decl.name, bytes, &self.contents)?;
 
         self.contents.functions[func].compiled = Some(compiled);
         self.functions_to_finalize.push(func);
@@ -663,9 +626,7 @@ where
                 info.decl.tls,
                 info.decl.align,
                 data_ctx,
-                &ModuleNamespace::<B> {
-                    contents: &self.contents,
-                },
+                &self.contents,
             )?)
         };
         self.contents.data_objects[data].compiled = compiled;
@@ -734,9 +695,7 @@ where
                 info.compiled
                     .as_ref()
                     .expect("function must be compiled before it can be finalized"),
-                &ModuleNamespace::<B> {
-                    contents: &self.contents,
-                },
+                &self.contents,
             );
         }
         for data in self.data_objects_to_finalize.drain(..) {
@@ -747,9 +706,7 @@ where
                 info.compiled
                     .as_ref()
                     .expect("data object must be compiled before it can be finalized"),
-                &ModuleNamespace::<B> {
-                    contents: &self.contents,
-                },
+                &self.contents,
             );
         }
         self.backend.publish();
@@ -792,8 +749,6 @@ where
     /// implementations may provide additional functionality available after
     /// a `Module` is complete.
     pub fn finish(self) -> B::Product {
-        self.backend.finish(&ModuleNamespace::<B> {
-            contents: &self.contents,
-        })
+        self.backend.finish(&self.contents)
     }
 }
