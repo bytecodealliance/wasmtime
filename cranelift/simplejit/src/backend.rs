@@ -2,7 +2,7 @@
 
 use crate::memory::Memory;
 use cranelift_codegen::binemit::{
-    Addend, CodeOffset, Reloc, RelocSink, StackMap, StackMapSink, TrapSink,
+    Addend, CodeInfo, CodeOffset, Reloc, RelocSink, StackMap, StackMapSink, TrapSink,
 };
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
@@ -10,12 +10,14 @@ use cranelift_codegen::{self, ir, settings};
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
     Backend, DataContext, DataDescription, DataId, FuncId, FuncOrDataId, Init, Linkage,
-    ModuleDeclarations, ModuleError, ModuleResult,
+    ModuleCompiledFunction, ModuleDeclarations, ModuleError, ModuleResult,
 };
 use cranelift_native;
 #[cfg(not(windows))]
 use libc;
+use log::info;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::ffi::CString;
 use std::io::Write;
 use std::ptr;
@@ -413,14 +415,19 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     fn define_function<TS>(
         &mut self,
         id: FuncId,
-        ctx: &cranelift_codegen::Context,
+        ctx: &mut cranelift_codegen::Context,
         declarations: &ModuleDeclarations,
-        code_size: u32,
         trap_sink: &mut TS,
-    ) -> ModuleResult<()>
+    ) -> ModuleResult<ModuleCompiledFunction>
     where
         TS: TrapSink,
     {
+        info!("defining function {}: {}", id, ctx.func.display(self.isa()));
+        let CodeInfo {
+            total_size: code_size,
+            ..
+        } = ctx.compile(self.isa())?;
+
         let decl = declarations.get_function_decl(id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
@@ -458,7 +465,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             relocs: reloc_sink.relocs,
         });
 
-        Ok(())
+        Ok(ModuleCompiledFunction { size: code_size })
     }
 
     fn define_function_bytes(
@@ -466,11 +473,16 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         id: FuncId,
         bytes: &[u8],
         declarations: &ModuleDeclarations,
-    ) -> ModuleResult<()> {
+    ) -> ModuleResult<ModuleCompiledFunction> {
         let decl = declarations.get_function_decl(id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
+
+        let total_size: u32 = match bytes.len().try_into() {
+            Ok(total_size) => total_size,
+            _ => Err(ModuleError::FunctionTooLarge(decl.name.clone()))?,
+        };
 
         if !self.functions[id].is_none() {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
@@ -496,7 +508,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             relocs: vec![],
         });
 
-        Ok(())
+        Ok(ModuleCompiledFunction { size: total_size })
     }
 
     fn define_data(

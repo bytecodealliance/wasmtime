@@ -1,19 +1,20 @@
 //! Defines the `Backend` trait.
 
+use crate::module::ModuleCompiledFunction;
+use crate::DataContext;
 use crate::DataId;
 use crate::FuncId;
 use crate::Linkage;
 use crate::ModuleDeclarations;
 use crate::ModuleResult;
-use crate::DataContext;
 use core::marker;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
 
+use std::borrow::ToOwned;
 use std::boxed::Box;
 use std::string::String;
-use std::borrow::ToOwned;
 
 /// A `Backend` implements the functionality needed to support a `Module`.
 ///
@@ -63,11 +64,10 @@ where
     fn define_function<TS>(
         &mut self,
         id: FuncId,
-        ctx: &Context,
+        ctx: &mut Context,
         declarations: &ModuleDeclarations,
-        code_size: u32,
         trap_sink: &mut TS,
-    ) -> ModuleResult<()>
+    ) -> ModuleResult<ModuleCompiledFunction>
     where
         TS: binemit::TrapSink;
 
@@ -79,7 +79,7 @@ where
         id: FuncId,
         bytes: &[u8],
         declarations: &ModuleDeclarations,
-    ) -> ModuleResult<()>;
+    ) -> ModuleResult<ModuleCompiledFunction>;
 
     /// Define a zero-initialized data object of the given size.
     ///

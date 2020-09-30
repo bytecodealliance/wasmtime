@@ -2,15 +2,16 @@
 
 use anyhow::anyhow;
 use cranelift_codegen::binemit::{
-    Addend, CodeOffset, NullStackMapSink, Reloc, RelocSink, TrapSink,
+    Addend, CodeInfo, CodeOffset, NullStackMapSink, Reloc, RelocSink, TrapSink,
 };
 use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, ir};
 use cranelift_module::{
-    Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleDeclarations,
-    ModuleError, ModuleResult,
+    Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleCompiledFunction,
+    ModuleDeclarations, ModuleError, ModuleResult,
 };
+use log::info;
 use object::write::{
     Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
 };
@@ -18,6 +19,7 @@ use object::{
     RelocationEncoding, RelocationKind, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
 };
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::mem;
 use target_lexicon::PointerWidth;
 
@@ -208,14 +210,23 @@ impl Backend for ObjectBackend {
     fn define_function<TS>(
         &mut self,
         func_id: FuncId,
-        ctx: &cranelift_codegen::Context,
+        ctx: &mut cranelift_codegen::Context,
         declarations: &ModuleDeclarations,
-        code_size: u32,
         trap_sink: &mut TS,
-    ) -> ModuleResult<()>
+    ) -> ModuleResult<ModuleCompiledFunction>
     where
         TS: TrapSink,
     {
+        info!(
+            "defining function {}: {}",
+            func_id,
+            ctx.func.display(self.isa())
+        );
+        let CodeInfo {
+            total_size: code_size,
+            ..
+        } = ctx.compile(self.isa())?;
+
         let decl = declarations.get_function_decl(func_id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
@@ -267,7 +278,8 @@ impl Backend for ObjectBackend {
                 relocs: reloc_sink.relocs,
             });
         }
-        Ok(())
+
+        Ok(ModuleCompiledFunction { size: code_size })
     }
 
     fn define_function_bytes(
@@ -275,11 +287,18 @@ impl Backend for ObjectBackend {
         func_id: FuncId,
         bytes: &[u8],
         declarations: &ModuleDeclarations,
-    ) -> ModuleResult<()> {
+    ) -> ModuleResult<ModuleCompiledFunction> {
+        info!("defining function {} with bytes", func_id);
+
         let decl = declarations.get_function_decl(func_id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
+
+        let total_size: u32 = match bytes.len().try_into() {
+            Ok(total_size) => total_size,
+            _ => Err(ModuleError::FunctionTooLarge(decl.name.clone()))?,
+        };
 
         let &mut (symbol, ref mut defined) = self.functions[func_id].as_mut().unwrap();
         if *defined {
@@ -304,7 +323,7 @@ impl Backend for ObjectBackend {
                     .add_symbol_data(symbol, section, bytes, self.function_alignment);
         }
 
-        Ok(())
+        Ok(ModuleCompiledFunction { size: total_size })
     }
 
     fn define_data(

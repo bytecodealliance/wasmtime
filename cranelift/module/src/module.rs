@@ -8,12 +8,10 @@
 use super::HashMap;
 use crate::data_context::DataContext;
 use crate::Backend;
-use cranelift_codegen::binemit::{self, CodeInfo};
+use cranelift_codegen::binemit;
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::{ir, isa, CodegenError, Context};
-use log::info;
 use std::borrow::ToOwned;
-use std::convert::TryInto;
 use std::string::String;
 use thiserror::Error;
 
@@ -333,7 +331,9 @@ where
     backend: B,
 }
 
+/// Information about the compiled function.
 pub struct ModuleCompiledFunction {
+    /// The size of the compiled function.
     pub size: binemit::CodeOffset,
 }
 
@@ -488,17 +488,8 @@ where
     where
         TS: binemit::TrapSink,
     {
-        info!(
-            "defining function {}: {}",
-            func,
-            ctx.func.display(self.backend.isa())
-        );
-        let CodeInfo { total_size, .. } = ctx.compile(self.backend.isa())?;
-
         self.backend
-            .define_function(func, ctx, &self.declarations, total_size, trap_sink)?;
-
-        Ok(ModuleCompiledFunction { size: total_size })
+            .define_function(func, ctx, &self.declarations, trap_sink)
     }
 
     /// Define a function, taking the function body from the given `bytes`.
@@ -513,27 +504,13 @@ where
         func: FuncId,
         bytes: &[u8],
     ) -> ModuleResult<ModuleCompiledFunction> {
-        info!("defining function {} with bytes", func);
-        let decl = &self.declarations.functions[func];
-
-        let total_size: u32 = match bytes.len().try_into() {
-            Ok(total_size) => total_size,
-            _ => Err(ModuleError::FunctionTooLarge(decl.name.clone()))?,
-        };
-
         self.backend
-            .define_function_bytes(func, bytes, &self.declarations)?;
-
-        Ok(ModuleCompiledFunction { size: total_size })
+            .define_function_bytes(func, bytes, &self.declarations)
     }
 
     /// Define a data object, producing the data contents from the given `DataContext`.
     pub fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
-        self.backend.define_data(
-            data,
-            data_ctx,
-            &self.declarations,
-        )
+        self.backend.define_data(data, data_ctx, &self.declarations)
     }
 
     /// Return the target isa

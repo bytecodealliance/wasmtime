@@ -40,7 +40,8 @@ mod traps;
 pub use crate::backend::{default_libcall_names, Backend};
 pub use crate::data_context::{DataContext, DataDescription, Init};
 pub use crate::module::{
-    DataId, FuncId, FuncOrDataId, Linkage, Module, ModuleDeclarations, ModuleError, ModuleResult,
+    DataId, FuncId, FuncOrDataId, Linkage, Module, ModuleCompiledFunction, ModuleDeclarations,
+    ModuleError, ModuleResult,
 };
 pub use crate::traps::TrapSite;
 

@@ -489,6 +489,7 @@ dependencies = [
  "anyhow",
  "cranelift-codegen",
  "cranelift-module",
+ "log",
  "object 0.21.1",
  "target-lexicon",
 ]
@@ -535,6 +536,7 @@ dependencies = [
  "cranelift-native",
  "errno",
  "libc",
+ "log",
  "memmap",
  "region",
  "target-lexicon",
