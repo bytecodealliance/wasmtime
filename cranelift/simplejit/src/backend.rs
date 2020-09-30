@@ -25,9 +25,9 @@ use target_lexicon::PointerWidth;
 #[cfg(windows)]
 use winapi;
 
-const EXECUTABLE_DATA_ALIGNMENT: u8 = 0x10;
-const WRITABLE_DATA_ALIGNMENT: u8 = 0x8;
-const READONLY_DATA_ALIGNMENT: u8 = 0x1;
+const EXECUTABLE_DATA_ALIGNMENT: u64 = 0x10;
+const WRITABLE_DATA_ALIGNMENT: u64 = 0x8;
+const READONLY_DATA_ALIGNMENT: u64 = 0x1;
 
 /// A builder for `SimpleJITBackend`.
 pub struct SimpleJITBuilder {
@@ -415,12 +415,11 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         linkage: Linkage,
         writable: bool,
         tls: bool,
-        align: Option<u8>,
     ) -> ModuleResult<DataId> {
         assert!(!tls, "SimpleJIT doesn't yet support TLS");
         let (id, _decl) = self
             .declarations
-            .declare_data(name, linkage, writable, tls, align)?;
+            .declare_data(name, linkage, writable, tls)?;
         Ok(id)
     }
 
@@ -542,18 +541,19 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             ref function_relocs,
             ref data_relocs,
             custom_segment_section: _,
+            align,
         } = data.description();
 
         let size = init.size();
         let storage = if decl.writable {
             self.memory
                 .writable
-                .allocate(size, decl.align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
+                .allocate(size, align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
                 .expect("TODO: handle OOM etc.")
         } else {
             self.memory
                 .readonly
-                .allocate(size, decl.align.unwrap_or(READONLY_DATA_ALIGNMENT))
+                .allocate(size, align.unwrap_or(READONLY_DATA_ALIGNMENT))
                 .expect("TODO: handle OOM etc.")
         };
 

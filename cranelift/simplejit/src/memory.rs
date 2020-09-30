@@ -8,6 +8,7 @@ use libc;
 use memmap::MmapMut;
 
 use region;
+use std::convert::TryFrom;
 use std::mem;
 use std::ptr;
 
@@ -149,10 +150,11 @@ impl Memory {
     }
 
     /// TODO: Use a proper error type.
-    pub fn allocate(&mut self, size: usize, align: u8) -> Result<*mut u8, String> {
-        if self.position % align as usize != 0 {
-            self.position += align as usize - self.position % align as usize;
-            debug_assert!(self.position % align as usize == 0);
+    pub fn allocate(&mut self, size: usize, align: u64) -> Result<*mut u8, String> {
+        let align = usize::try_from(align).expect("alignment too big");
+        if self.position % align != 0 {
+            self.position += align - self.position % align;
+            debug_assert!(self.position % align == 0);
         }
 
         if size <= self.current.len - self.position {

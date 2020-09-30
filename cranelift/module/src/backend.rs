@@ -62,7 +62,6 @@ where
         linkage: Linkage,
         writable: bool,
         tls: bool,
-        align: Option<u8>,
     ) -> ModuleResult<DataId>;
 
     /// Define a function, producing the function body from the given `Context`.

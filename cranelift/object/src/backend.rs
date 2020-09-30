@@ -194,11 +194,10 @@ impl Backend for ObjectBackend {
         linkage: Linkage,
         writable: bool,
         tls: bool,
-        align: Option<u8>,
     ) -> ModuleResult<DataId> {
         let (id, decl) = self
             .declarations
-            .declare_data(name, linkage, writable, tls, align)?;
+            .declare_data(name, linkage, writable, tls)?;
 
         let kind = if decl.tls {
             SymbolKind::Tls
@@ -365,6 +364,7 @@ impl Backend for ObjectBackend {
             ref function_relocs,
             ref data_relocs,
             ref custom_segment_section,
+            align,
         } = data_ctx.description();
 
         let reloc_size = match self.isa.triple().pointer_width().unwrap() {
@@ -431,7 +431,7 @@ impl Backend for ObjectBackend {
             )
         };
 
-        let align = u64::from(decl.align.unwrap_or(1));
+        let align = align.unwrap_or(1);
         let offset = match *init {
             Init::Uninitialized => {
                 panic!("data is not initialized yet");

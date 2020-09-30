@@ -182,14 +182,12 @@ pub struct DataDeclaration {
     pub linkage: Linkage,
     pub writable: bool,
     pub tls: bool,
-    pub align: Option<u8>,
 }
 
 impl DataDeclaration {
-    fn merge(&mut self, linkage: Linkage, writable: bool, tls: bool, align: Option<u8>) {
+    fn merge(&mut self, linkage: Linkage, writable: bool, tls: bool) {
         self.linkage = Linkage::merge(self.linkage, linkage);
         self.writable = self.writable || writable;
-        self.align = self.align.max(align);
         assert_eq!(
             self.tls, tls,
             "Can't change TLS data object to normal or in the opposite way",
@@ -291,7 +289,6 @@ impl ModuleDeclarations {
         linkage: Linkage,
         writable: bool,
         tls: bool,
-        align: Option<u8>, // An alignment bigger than 128 is unlikely
     ) -> ModuleResult<(DataId, &DataDeclaration)> {
         // TODO: Can we avoid allocating names so often?
         use super::hash_map::Entry::*;
@@ -299,7 +296,7 @@ impl ModuleDeclarations {
             Occupied(entry) => match *entry.get() {
                 FuncOrDataId::Data(id) => {
                     let existing = &mut self.data_objects[id];
-                    existing.merge(linkage, writable, tls, align);
+                    existing.merge(linkage, writable, tls);
                     Ok((id, existing))
                 }
 
@@ -313,7 +310,6 @@ impl ModuleDeclarations {
                     linkage,
                     writable,
                     tls,
-                    align,
                 });
                 entry.insert(FuncOrDataId::Data(id));
                 Ok((id, &self.data_objects[id]))
@@ -410,10 +406,9 @@ where
         linkage: Linkage,
         writable: bool,
         tls: bool,
-        align: Option<u8>, // An alignment bigger than 128 is unlikely
     ) -> ModuleResult<DataId> {
         self.backend
-            .declare_data(name, linkage, writable, tls, align)
+            .declare_data(name, linkage, writable, tls)
     }
 
     /// Use this when you're building the IR of a function to reference a function.
