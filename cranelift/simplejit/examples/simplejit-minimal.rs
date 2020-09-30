@@ -1,12 +1,12 @@
 use cranelift::prelude::*;
 use cranelift_codegen::binemit::NullTrapSink;
 use cranelift_module::{default_libcall_names, Linkage, Module};
-use cranelift_simplejit::{SimpleJITBackend, SimpleJITBuilder};
+use cranelift_simplejit::{SimpleJITBuilder, SimpleJITModule};
 use std::mem;
 
 fn main() {
-    let mut module: Module<SimpleJITBackend> =
-        Module::new(SimpleJITBuilder::new(default_libcall_names()));
+    let mut module: SimpleJITModule =
+        SimpleJITModule::new(SimpleJITBuilder::new(default_libcall_names()));
     let mut ctx = module.make_context();
     let mut func_ctx = FunctionBuilderContext::new();
 
@@ -70,10 +70,10 @@ fn main() {
     module.clear_context(&mut ctx);
 
     // Perform linking.
-    module.finalize_definitions();
+    let product = module.finish();
 
     // Get a raw pointer to the generated code.
-    let code_b = module.get_finalized_function(func_b);
+    let code_b = product.lookup_func(func_b);
 
     // Cast it to a rust function pointer type.
     let ptr_b = unsafe { mem::transmute::<_, fn() -> u32>(code_b) };

@@ -9,8 +9,8 @@ use cranelift_simplejit::*;
 
 #[test]
 fn error_on_incompatible_sig_in_declare_function() {
-    let mut module: Module<SimpleJITBackend> =
-        Module::new(SimpleJITBuilder::new(default_libcall_names()));
+    let mut module: SimpleJITModule =
+        SimpleJITModule::new(SimpleJITBuilder::new(default_libcall_names()));
     let mut sig = Signature {
         params: vec![AbiParam::new(types::I64)],
         returns: vec![],
@@ -26,7 +26,7 @@ fn error_on_incompatible_sig_in_declare_function() {
         .unwrap(); // Make sure this is an error
 }
 
-fn define_simple_function(module: &mut Module<SimpleJITBackend>) -> FuncId {
+fn define_simple_function(module: &mut SimpleJITModule) -> FuncId {
     let sig = Signature {
         params: vec![],
         returns: vec![],
@@ -56,26 +56,12 @@ fn define_simple_function(module: &mut Module<SimpleJITBackend>) -> FuncId {
 }
 
 #[test]
-fn double_finalize() {
-    let mut module: Module<SimpleJITBackend> =
-        Module::new(SimpleJITBuilder::new(default_libcall_names()));
-
-    define_simple_function(&mut module);
-    module.finalize_definitions();
-
-    // Calling `finalize_definitions` a second time without any new definitions
-    // should have no effect.
-    module.finalize_definitions();
-}
-
-#[test]
 #[should_panic(expected = "Result::unwrap()` on an `Err` value: DuplicateDefinition(\"abc\")")]
 fn panic_on_define_after_finalize() {
-    let mut module: Module<SimpleJITBackend> =
-        Module::new(SimpleJITBuilder::new(default_libcall_names()));
+    let mut module: SimpleJITModule =
+        SimpleJITModule::new(SimpleJITBuilder::new(default_libcall_names()));
 
     define_simple_function(&mut module);
-    module.finalize_definitions();
     define_simple_function(&mut module);
 }
 
@@ -154,8 +140,8 @@ fn switch_error() {
 
 #[test]
 fn libcall_function() {
-    let mut module: Module<SimpleJITBackend> =
-        Module::new(SimpleJITBuilder::new(default_libcall_names()));
+    let mut module: SimpleJITModule =
+        SimpleJITModule::new(SimpleJITBuilder::new(default_libcall_names()));
 
     let sig = Signature {
         params: vec![],
@@ -200,5 +186,5 @@ fn libcall_function() {
         .define_function(func_id, &mut ctx, &mut trap_sink)
         .unwrap();
 
-    module.finalize_definitions();
+    module.finish();
 }
