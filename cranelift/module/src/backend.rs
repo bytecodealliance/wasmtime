@@ -146,12 +146,6 @@ where
         contents: &ModuleContents<Self>,
     );
 
-    /// "Publish" all finalized functions and data objects to their ultimate destinations.
-    ///
-    /// This method is not relevant for `Backend` implementations that do not provide
-    /// `Backend::FinalizedFunction` or `Backend::FinalizedData`.
-    fn publish(&mut self);
-
     /// Consume this `Backend` and return a result. Some implementations may
     /// provide additional functionality through this result.
     fn finish(

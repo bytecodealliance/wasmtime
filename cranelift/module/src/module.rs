@@ -682,16 +682,15 @@ where
         );
     }
 
-    /// Finalize all functions and data objects that are defined but not yet finalized.
-    /// All symbols referenced in their bodies that are declared as needing a definition
-    /// must be defined by this point.
-    ///
-    /// Use `get_finalized_function` and `get_finalized_data` to obtain the final
-    /// artifacts.
-    ///
-    /// This method is not relevant for `Backend` implementations that do not provide
-    /// `Backend::FinalizedFunction` or `Backend::FinalizedData`.
-    pub fn finalize_definitions(&mut self) {
+    /// Return the target isa
+    pub fn isa(&self) -> &dyn isa::TargetIsa {
+        self.backend.isa()
+    }
+
+    /// Consume the module and return the resulting `Product`. Some `Backend`
+    /// implementations may provide additional functionality available after
+    /// a `Module` is complete.
+    pub fn finish(mut self) -> B::Product {
         for func in self.functions_to_finalize.drain(..) {
             let info = &self.contents.functions[func];
             debug_assert!(info.decl.linkage.is_definable());
@@ -714,18 +713,6 @@ where
                 &self.contents,
             );
         }
-        self.backend.publish();
-    }
-
-    /// Return the target isa
-    pub fn isa(&self) -> &dyn isa::TargetIsa {
-        self.backend.isa()
-    }
-
-    /// Consume the module and return the resulting `Product`. Some `Backend`
-    /// implementations may provide additional functionality available after
-    /// a `Module` is complete.
-    pub fn finish(self) -> B::Product {
         self.backend.finish(self.names, self.contents)
     }
 }

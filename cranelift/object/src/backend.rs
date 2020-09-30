@@ -437,10 +437,6 @@ impl Backend for ObjectBackend {
         // Nothing to do.
     }
 
-    fn publish(&mut self) {
-        // Nothing to do.
-    }
-
     fn finish(
         mut self,
         _names: HashMap<String, FuncOrDataId>,

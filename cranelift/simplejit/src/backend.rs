@@ -572,12 +572,6 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         }
     }
 
-    fn publish(&mut self) {
-        // Now that we're done patching, prepare the memory for execution!
-        self.memory.readonly.set_readonly();
-        self.memory.code.set_readable_and_executable();
-    }
-
     /// SimpleJIT emits code and data into memory as it processes them. This
     /// method performs no additional processing, but returns a handle which
     /// allows freeing the allocated memory. Otherwise said memory is leaked
@@ -586,10 +580,14 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     /// This method does not need to be called when access to the memory
     /// handle is not required.
     fn finish(
-        self,
+        mut self,
         names: HashMap<String, FuncOrDataId>,
         contents: ModuleContents<Self>,
     ) -> Self::Product {
+        // Now that we're done patching, prepare the memory for execution!
+        self.memory.readonly.set_readonly();
+        self.memory.code.set_readable_and_executable();
+
         SimpleJITProduct {
             memory: self.memory,
             names,
