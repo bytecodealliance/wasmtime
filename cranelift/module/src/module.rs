@@ -201,6 +201,7 @@ impl DataDeclaration {
 
 /// This provides a view to the state of a module which allows `ir::ExternalName`s to be translated
 /// into `FunctionDeclaration`s and `DataDeclaration`s.
+#[derive(Default)]
 pub struct ModuleDeclarations {
     names: HashMap<String, FuncOrDataId>,
     functions: PrimaryMap<FuncId, FunctionDeclaration>,
@@ -361,7 +362,7 @@ where
     /// Return the target information needed by frontends to produce Cranelift IR
     /// for the current target.
     pub fn target_config(&self) -> isa::TargetFrontendConfig {
-        self.backend.isa().frontend_config()
+        self.isa().frontend_config()
     }
 
     /// Create a new `Context` initialized for use with this `Module`.
@@ -370,7 +371,7 @@ where
     /// convention for the `TargetIsa`.
     pub fn make_context(&self) -> Context {
         let mut ctx = Context::new();
-        ctx.func.signature.call_conv = self.backend.isa().default_call_conv();
+        ctx.func.signature.call_conv = self.isa().default_call_conv();
         ctx
     }
 
@@ -380,14 +381,14 @@ where
     /// convention for the `TargetIsa`.
     pub fn clear_context(&self, ctx: &mut Context) {
         ctx.clear();
-        ctx.func.signature.call_conv = self.backend.isa().default_call_conv();
+        ctx.func.signature.call_conv = self.isa().default_call_conv();
     }
 
     /// Create a new empty `Signature` with the default calling convention for
     /// the `TargetIsa`, to which parameter and return types can be added for
     /// declaring a function to be called by this `Module`.
     pub fn make_signature(&self) -> ir::Signature {
-        ir::Signature::new(self.backend.isa().default_call_conv())
+        ir::Signature::new(self.isa().default_call_conv())
     }
 
     /// Clear the given `Signature` and reset for use with a new function.
@@ -395,7 +396,7 @@ where
     /// This ensures that the `Signature` is initialized with the default
     /// calling convention for the `TargetIsa`.
     pub fn clear_signature(&self, sig: &mut ir::Signature) {
-        sig.clear(self.backend.isa().default_call_conv());
+        sig.clear(self.isa().default_call_conv());
     }
 
     /// Declare a function in this module.
@@ -429,14 +430,8 @@ where
         let (id, decl) = self
             .declarations
             .declare_data(name, linkage, writable, tls, align)?;
-        self.backend.declare_data(
-            id,
-            name,
-            decl.linkage,
-            decl.writable,
-            decl.tls,
-            decl.align,
-        );
+        self.backend
+            .declare_data(id, name, decl.linkage, decl.writable, decl.tls, decl.align);
         Ok(id)
     }
 
@@ -499,19 +494,9 @@ where
             ctx.func.display(self.backend.isa())
         );
         let CodeInfo { total_size, .. } = ctx.compile(self.backend.isa())?;
-        let decl = &self.declarations.functions[func];
-        if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
-        }
 
-        self.backend.define_function(
-            func,
-            &decl.name,
-            ctx,
-            &self.declarations,
-            total_size,
-            trap_sink,
-        )?;
+        self.backend
+            .define_function(func, ctx, &self.declarations, total_size, trap_sink)?;
 
         Ok(ModuleCompiledFunction { size: total_size })
     }
@@ -530,9 +515,6 @@ where
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {} with bytes", func);
         let decl = &self.declarations.functions[func];
-        if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
-        }
 
         let total_size: u32 = match bytes.len().try_into() {
             Ok(total_size) => total_size,
@@ -540,28 +522,18 @@ where
         };
 
         self.backend
-            .define_function_bytes(func, &decl.name, bytes, &self.declarations)?;
+            .define_function_bytes(func, bytes, &self.declarations)?;
 
         Ok(ModuleCompiledFunction { size: total_size })
     }
 
     /// Define a data object, producing the data contents from the given `DataContext`.
     pub fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
-        let decl = &self.declarations.data_objects[data];
-        if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
-        }
-
         self.backend.define_data(
             data,
-            &decl.name,
-            decl.writable,
-            decl.tls,
-            decl.align,
             data_ctx,
             &self.declarations,
-        )?;
-        Ok(())
+        )
     }
 
     /// Return the target isa

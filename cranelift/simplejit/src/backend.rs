@@ -413,17 +413,21 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     fn define_function<TS>(
         &mut self,
         id: FuncId,
-        name: &str,
         ctx: &cranelift_codegen::Context,
-        _declarations: &ModuleDeclarations,
+        declarations: &ModuleDeclarations,
         code_size: u32,
         trap_sink: &mut TS,
     ) -> ModuleResult<()>
     where
         TS: TrapSink,
     {
+        let decl = declarations.get_function_decl(id);
+        if !decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+        }
+
         if !self.functions[id].is_none() {
-            return Err(ModuleError::DuplicateDefinition(name.to_owned()));
+            return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
         self.functions_to_finalize.push(id);
@@ -434,7 +438,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        self.record_function_for_perf(ptr, size, name);
+        self.record_function_for_perf(ptr, size, &decl.name);
 
         let mut reloc_sink = SimpleJITRelocSink::new();
         let mut stack_map_sink = SimpleJITStackMapSink::new();
@@ -460,12 +464,16 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     fn define_function_bytes(
         &mut self,
         id: FuncId,
-        name: &str,
         bytes: &[u8],
-        _declarations: &ModuleDeclarations,
+        declarations: &ModuleDeclarations,
     ) -> ModuleResult<()> {
+        let decl = declarations.get_function_decl(id);
+        if !decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+        }
+
         if !self.functions[id].is_none() {
-            return Err(ModuleError::DuplicateDefinition(name.to_owned()));
+            return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
         self.functions_to_finalize.push(id);
@@ -476,7 +484,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        self.record_function_for_perf(ptr, size, name);
+        self.record_function_for_perf(ptr, size, &decl.name);
 
         unsafe {
             ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, size);
@@ -494,18 +502,19 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     fn define_data(
         &mut self,
         id: DataId,
-        name: &str,
-        writable: bool,
-        tls: bool,
-        align: Option<u8>,
         data: &DataContext,
-        _declarations: &ModuleDeclarations,
+        declarations: &ModuleDeclarations,
     ) -> ModuleResult<()> {
-        if !self.data_objects[id].is_none() {
-            return Err(ModuleError::DuplicateDefinition(name.to_owned()));
+        let decl = declarations.get_data_decl(id);
+        if !decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
 
-        assert!(!tls, "SimpleJIT doesn't yet support TLS");
+        if !self.data_objects[id].is_none() {
+            return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
+        }
+
+        assert!(!decl.tls, "SimpleJIT doesn't yet support TLS");
 
         self.data_objects_to_finalize.push(id);
 
@@ -519,15 +528,15 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         } = data.description();
 
         let size = init.size();
-        let storage = if writable {
+        let storage = if decl.writable {
             self.memory
                 .writable
-                .allocate(size, align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
+                .allocate(size, decl.align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
                 .expect("TODO: handle OOM etc.")
         } else {
             self.memory
                 .readonly
-                .allocate(size, align.unwrap_or(READONLY_DATA_ALIGNMENT))
+                .allocate(size, decl.align.unwrap_or(READONLY_DATA_ALIGNMENT))
                 .expect("TODO: handle OOM etc.")
         };
 

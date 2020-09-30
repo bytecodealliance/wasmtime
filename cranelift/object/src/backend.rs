@@ -208,18 +208,22 @@ impl Backend for ObjectBackend {
     fn define_function<TS>(
         &mut self,
         func_id: FuncId,
-        name: &str,
         ctx: &cranelift_codegen::Context,
-        _declarations: &ModuleDeclarations,
+        declarations: &ModuleDeclarations,
         code_size: u32,
         trap_sink: &mut TS,
     ) -> ModuleResult<()>
     where
         TS: TrapSink,
     {
+        let decl = declarations.get_function_decl(func_id);
+        if !decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+        }
+
         let &mut (symbol, ref mut defined) = self.functions[func_id].as_mut().unwrap();
         if *defined {
-            return Err(ModuleError::DuplicateDefinition(name.to_owned()));
+            return Err(ModuleError::DuplicateDefinition(decl.name.clone()));
         }
         *defined = true;
 
@@ -269,13 +273,17 @@ impl Backend for ObjectBackend {
     fn define_function_bytes(
         &mut self,
         func_id: FuncId,
-        name: &str,
         bytes: &[u8],
-        _declarations: &ModuleDeclarations,
+        declarations: &ModuleDeclarations,
     ) -> ModuleResult<()> {
+        let decl = declarations.get_function_decl(func_id);
+        if !decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+        }
+
         let &mut (symbol, ref mut defined) = self.functions[func_id].as_mut().unwrap();
         if *defined {
-            return Err(ModuleError::DuplicateDefinition(name.to_owned()));
+            return Err(ModuleError::DuplicateDefinition(decl.name.clone()));
         }
         *defined = true;
 
@@ -302,16 +310,17 @@ impl Backend for ObjectBackend {
     fn define_data(
         &mut self,
         data_id: DataId,
-        name: &str,
-        writable: bool,
-        tls: bool,
-        align: Option<u8>,
         data_ctx: &DataContext,
-        _declarations: &ModuleDeclarations,
+        declarations: &ModuleDeclarations,
     ) -> ModuleResult<()> {
+        let decl = declarations.get_data_decl(data_id);
+        if !decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+        }
+
         let &mut (symbol, ref mut defined) = self.data_objects[data_id].as_mut().unwrap();
         if *defined {
-            return Err(ModuleError::DuplicateDefinition(name.to_owned()));
+            return Err(ModuleError::DuplicateDefinition(decl.name.clone()));
         }
         *defined = true;
 
@@ -353,14 +362,14 @@ impl Backend for ObjectBackend {
 
         let section = if custom_segment_section.is_none() {
             let section_kind = if let Init::Zeros { .. } = *init {
-                if tls {
+                if decl.tls {
                     StandardSection::UninitializedTls
                 } else {
                     StandardSection::UninitializedData
                 }
-            } else if tls {
+            } else if decl.tls {
                 StandardSection::Tls
-            } else if writable {
+            } else if decl.writable {
                 StandardSection::Data
             } else if relocs.is_empty() {
                 StandardSection::ReadOnlyData
@@ -369,7 +378,7 @@ impl Backend for ObjectBackend {
             };
             self.object.section_id(section_kind)
         } else {
-            if tls {
+            if decl.tls {
                 return Err(cranelift_module::ModuleError::Backend(anyhow::anyhow!(
                     "Custom section not supported for TLS"
                 )));
@@ -378,7 +387,7 @@ impl Backend for ObjectBackend {
             self.object.add_section(
                 seg.clone().into_bytes(),
                 sec.clone().into_bytes(),
-                if writable {
+                if decl.writable {
                     SectionKind::Data
                 } else if relocs.is_empty() {
                     SectionKind::ReadOnlyData
@@ -388,7 +397,7 @@ impl Backend for ObjectBackend {
             )
         };
 
-        let align = u64::from(align.unwrap_or(1));
+        let align = u64::from(decl.align.unwrap_or(1));
         let offset = match *init {
             Init::Uninitialized => {
                 panic!("data is not initialized yet");

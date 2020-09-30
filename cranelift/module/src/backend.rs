@@ -63,7 +63,6 @@ where
     fn define_function<TS>(
         &mut self,
         id: FuncId,
-        name: &str,
         ctx: &Context,
         declarations: &ModuleDeclarations,
         code_size: u32,
@@ -78,7 +77,6 @@ where
     fn define_function_bytes(
         &mut self,
         id: FuncId,
-        name: &str,
         bytes: &[u8],
         declarations: &ModuleDeclarations,
     ) -> ModuleResult<()>;
@@ -89,10 +87,6 @@ where
     fn define_data(
         &mut self,
         id: DataId,
-        name: &str,
-        writable: bool,
-        tls: bool,
-        align: Option<u8>,
         data_ctx: &DataContext,
         declarations: &ModuleDeclarations,
     ) -> ModuleResult<()>;
