@@ -103,25 +103,6 @@ where
         contents: &ModuleContents<Self>,
     ) -> ModuleResult<Self::CompiledData>;
 
-    /// Write the address of `what` into the data for `data` at `offset`. `data` must refer to a
-    /// defined data object.
-    fn write_data_funcaddr(
-        &mut self,
-        data: &mut Self::CompiledData,
-        offset: usize,
-        what: ir::FuncRef,
-    );
-
-    /// Write the address of `what` plus `addend` into the data for `data` at `offset`. `data` must
-    /// refer to a defined data object.
-    fn write_data_dataaddr(
-        &mut self,
-        data: &mut Self::CompiledData,
-        offset: usize,
-        what: ir::GlobalValue,
-        addend: binemit::Addend,
-    );
-
     /// Perform all outstanding relocations on the given function. This requires all `Local`
     /// and `Export` entities referenced to be defined.
     ///

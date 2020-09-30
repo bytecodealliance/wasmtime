@@ -6,7 +6,7 @@ use cranelift_codegen::binemit::{
 };
 use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::{self, binemit, ir};
+use cranelift_codegen::{self, ir};
 use cranelift_module::{
     Backend, DataContext, DataDescription, DataId, FuncId, FuncOrDataId, Init, Linkage,
     ModuleContents, ModuleError, ModuleResult,
@@ -398,25 +398,6 @@ impl Backend for ObjectBackend {
             });
         }
         Ok(ObjectCompiledData)
-    }
-
-    fn write_data_funcaddr(
-        &mut self,
-        _data: &mut ObjectCompiledData,
-        _offset: usize,
-        _what: ir::FuncRef,
-    ) {
-        unimplemented!()
-    }
-
-    fn write_data_dataaddr(
-        &mut self,
-        _data: &mut ObjectCompiledData,
-        _offset: usize,
-        _what: ir::GlobalValue,
-        _usize: binemit::Addend,
-    ) {
-        unimplemented!()
     }
 
     fn finalize_function(

@@ -460,25 +460,6 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         })
     }
 
-    fn write_data_funcaddr(
-        &mut self,
-        _data: &mut Self::CompiledData,
-        _offset: usize,
-        _what: ir::FuncRef,
-    ) {
-        unimplemented!();
-    }
-
-    fn write_data_dataaddr(
-        &mut self,
-        _data: &mut Self::CompiledData,
-        _offset: usize,
-        _what: ir::GlobalValue,
-        _usize: Addend,
-    ) {
-        unimplemented!();
-    }
-
     fn finalize_function(
         &mut self,
         _id: FuncId,

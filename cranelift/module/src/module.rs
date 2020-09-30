@@ -639,49 +639,6 @@ where
         Ok(())
     }
 
-    /// Write the address of `what` into the data for `data` at `offset`. `data` must refer to a
-    /// defined data object.
-    pub fn write_data_funcaddr(&mut self, data: DataId, offset: usize, what: ir::FuncRef) {
-        let info = &mut self.contents.data_objects[data];
-        debug_assert!(
-            info.decl.linkage.is_definable(),
-            "imported data cannot contain references"
-        );
-        self.backend.write_data_funcaddr(
-            &mut info
-                .compiled
-                .as_mut()
-                .expect("`data` must refer to a defined data object"),
-            offset,
-            what,
-        );
-    }
-
-    /// Write the address of `what` plus `addend` into the data for `data` at `offset`. `data` must
-    /// refer to a defined data object.
-    pub fn write_data_dataaddr(
-        &mut self,
-        data: DataId,
-        offset: usize,
-        what: ir::GlobalValue,
-        addend: binemit::Addend,
-    ) {
-        let info = &mut self.contents.data_objects[data];
-        debug_assert!(
-            info.decl.linkage.is_definable(),
-            "imported data cannot contain references"
-        );
-        self.backend.write_data_dataaddr(
-            &mut info
-                .compiled
-                .as_mut()
-                .expect("`data` must refer to a defined data object"),
-            offset,
-            what,
-            addend,
-        );
-    }
-
     /// Return the target isa
     pub fn isa(&self) -> &dyn isa::TargetIsa {
         self.backend.isa()
