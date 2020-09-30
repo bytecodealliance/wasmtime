@@ -225,8 +225,7 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     // The control stack is initialized with a single block representing the whole function.
     debug_assert_eq!(state.control_stack.len(), 1, "State not initialized");
 
-    // Keep going until the final `End` operator which pops the outermost block.
-    while !state.control_stack.is_empty() {
+    while !reader.eof() {
         let pos = reader.original_position();
         builder.set_srcloc(cur_srcloc(&reader));
         let op = reader.read_operator()?;
@@ -262,8 +261,6 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     // Discard any remaining values on the stack. Either we just returned them,
     // or the end of the function is unreachable.
     state.stack.clear();
-
-    debug_assert!(reader.eof());
 
     Ok(())
 }
