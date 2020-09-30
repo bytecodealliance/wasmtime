@@ -1,19 +1,19 @@
 //! Defines the `Backend` trait.
 
-use crate::{DataContext, FuncOrDataId};
 use crate::DataId;
 use crate::FuncId;
 use crate::Linkage;
-use crate::ModuleContents;
+use crate::ModuleDeclarations;
 use crate::ModuleResult;
+use crate::{DataContext, FuncOrDataId};
 use core::marker;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::Context;
 use cranelift_codegen::{binemit, ir};
 
-use std::{borrow::ToOwned, collections::HashMap};
 use std::boxed::Box;
 use std::string::String;
+use std::{borrow::ToOwned, collections::HashMap};
 
 /// A `Backend` implements the functionality needed to support a `Module`.
 ///
@@ -31,12 +31,6 @@ where
 {
     /// A builder for constructing `Backend` instances.
     type Builder;
-
-    /// The results of compiling a function.
-    type CompiledFunction;
-
-    /// The results of "compiling" a data object.
-    type CompiledData;
 
     /// This is an object returned by `Module`'s
     /// [`finish`](struct.Module.html#method.finish) function,
@@ -71,10 +65,10 @@ where
         id: FuncId,
         name: &str,
         ctx: &Context,
-        contents: &ModuleContents<Self>,
+        declarations: &ModuleDeclarations,
         code_size: u32,
         trap_sink: &mut TS,
-    ) -> ModuleResult<Self::CompiledFunction>
+    ) -> ModuleResult<()>
     where
         TS: binemit::TrapSink;
 
@@ -86,8 +80,8 @@ where
         id: FuncId,
         name: &str,
         bytes: &[u8],
-        contents: &ModuleContents<Self>,
-    ) -> ModuleResult<Self::CompiledFunction>;
+        declarations: &ModuleDeclarations,
+    ) -> ModuleResult<()>;
 
     /// Define a zero-initialized data object of the given size.
     ///
@@ -100,15 +94,15 @@ where
         tls: bool,
         align: Option<u8>,
         data_ctx: &DataContext,
-        contents: &ModuleContents<Self>,
-    ) -> ModuleResult<Self::CompiledData>;
+        declarations: &ModuleDeclarations,
+    ) -> ModuleResult<()>;
 
     /// Consume this `Backend` and return a result. Some implementations may
     /// provide additional functionality through this result.
     fn finish(
         self,
         names: HashMap<String, FuncOrDataId>,
-        contents: ModuleContents<Self>,
+        declarations: ModuleDeclarations,
     ) -> Self::Product;
 }
 

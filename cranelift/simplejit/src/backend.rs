@@ -7,9 +7,10 @@ use cranelift_codegen::binemit::{
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings};
+use cranelift_entity::SecondaryMap;
 use cranelift_module::{
     Backend, DataContext, DataDescription, DataId, FuncId, FuncOrDataId, Init, Linkage,
-    ModuleContents, ModuleResult,
+    ModuleDeclarations, ModuleError, ModuleResult,
 };
 use cranelift_native;
 #[cfg(not(windows))]
@@ -124,11 +125,14 @@ pub struct SimpleJITBackend {
     symbols: HashMap<String, *const u8>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     memory: SimpleJITMemoryHandle,
+    functions: SecondaryMap<FuncId, Option<SimpleJITCompiledFunction>>,
+    data_objects: SecondaryMap<DataId, Option<SimpleJITCompiledData>>,
     functions_to_finalize: Vec<FuncId>,
     data_objects_to_finalize: Vec<DataId>,
 }
 
 /// A record of a relocation to perform.
+#[derive(Clone)]
 struct RelocRecord {
     offset: CodeOffset,
     reloc: Reloc,
@@ -143,12 +147,14 @@ struct StackMapRecord {
     stack_map: StackMap,
 }
 
+#[derive(Clone)]
 pub struct SimpleJITCompiledFunction {
     code: *mut u8,
     size: usize,
     relocs: Vec<RelocRecord>,
 }
 
+#[derive(Clone)]
 pub struct SimpleJITCompiledData {
     storage: *mut u8,
     size: usize,
@@ -167,7 +173,8 @@ struct SimpleJITMemoryHandle {
 pub struct SimpleJITProduct {
     memory: SimpleJITMemoryHandle,
     names: HashMap<String, FuncOrDataId>,
-    contents: ModuleContents<SimpleJITBackend>,
+    functions: SecondaryMap<FuncId, Option<SimpleJITCompiledFunction>>,
+    data_objects: SecondaryMap<DataId, Option<SimpleJITCompiledData>>,
 }
 
 impl SimpleJITProduct {
@@ -192,19 +199,16 @@ impl SimpleJITProduct {
 
     /// Return the address of a function.
     pub fn lookup_func(&self, func_id: FuncId) -> *const u8 {
-        self.contents
-            .get_function_definition(&func_id.into())
-            .0
+        self.functions[func_id]
+            .as_ref()
             .unwrap_or_else(|| panic!("{} is not defined", func_id))
             .code
     }
 
     /// Return the address and size of a data object.
     pub fn lookup_data(&self, data_id: DataId) -> (*const u8, usize) {
-        let data = self
-            .contents
-            .get_data_definition(&data_id.into())
-            .0
+        let data = self.data_objects[data_id]
+            .as_ref()
             .unwrap_or_else(|| panic!("{} is not defined", data_id));
         (data.storage, data.size)
     }
@@ -220,22 +224,22 @@ impl SimpleJITBackend {
 
     fn get_definition(
         &self,
-        contents: &ModuleContents<Self>,
+        declarations: &ModuleDeclarations,
         name: &ir::ExternalName,
     ) -> *const u8 {
         match *name {
             ir::ExternalName::User { .. } => {
-                if contents.is_function(name) {
-                    let (def, name_str, _signature) = contents.get_function_definition(&name);
-                    match def {
+                if declarations.is_function(name) {
+                    let func_id = declarations.get_function_id(name);
+                    match &self.functions[func_id] {
                         Some(compiled) => compiled.code,
-                        None => self.lookup_symbol(name_str),
+                        None => self.lookup_symbol(&declarations.get_function_decl(func_id).name),
                     }
                 } else {
-                    let (def, name_str, _writable) = contents.get_data_definition(&name);
-                    match def {
+                    let data_id = declarations.get_data_id(name);
+                    match &self.data_objects[data_id] {
                         Some(compiled) => compiled.storage,
-                        None => self.lookup_symbol(name_str),
+                        None => self.lookup_symbol(&declarations.get_data_decl(data_id).name),
                     }
                 }
             }
@@ -264,14 +268,12 @@ impl SimpleJITBackend {
         }
     }
 
-
-    fn finalize_function(
-        &mut self,
-        _id: FuncId,
-        func: &SimpleJITCompiledFunction,
-        contents: &ModuleContents<Self>,
-    ) {
+    fn finalize_function(&mut self, id: FuncId, declarations: &ModuleDeclarations) {
         use std::ptr::write_unaligned;
+
+        let func = self.functions[id]
+            .as_ref()
+            .expect("function must be compiled before it can be finalized");
 
         for &RelocRecord {
             reloc,
@@ -283,7 +285,7 @@ impl SimpleJITBackend {
             let ptr = func.code;
             debug_assert!((offset as usize) < func.size);
             let at = unsafe { ptr.offset(offset as isize) };
-            let base = self.get_definition(contents, name);
+            let base = self.get_definition(declarations, name);
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };
             match reloc {
@@ -314,13 +316,12 @@ impl SimpleJITBackend {
         }
     }
 
-    fn finalize_data(
-        &mut self,
-        _id: DataId,
-        data: &SimpleJITCompiledData,
-        contents: &ModuleContents<Self>,
-    ) {
+    fn finalize_data(&mut self, id: DataId, declarations: &ModuleDeclarations) {
         use std::ptr::write_unaligned;
+
+        let data = self.data_objects[id]
+            .as_ref()
+            .expect("data object must be compiled before it can be finalized");
 
         for &RelocRecord {
             reloc,
@@ -332,7 +333,7 @@ impl SimpleJITBackend {
             let ptr = data.storage;
             debug_assert!((offset as usize) < data.size);
             let at = unsafe { ptr.offset(offset as isize) };
-            let base = self.get_definition(contents, name);
+            let base = self.get_definition(declarations, name);
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };
             match reloc {
@@ -362,13 +363,6 @@ impl SimpleJITBackend {
 impl<'simple_jit_backend> Backend for SimpleJITBackend {
     type Builder = SimpleJITBuilder;
 
-    /// SimpleJIT compiled function and data objects may have outstanding
-    /// relocations that need to be performed before the memory can be used.
-    /// These relocations are performed within `finalize_function` and
-    /// `finalize_data`.
-    type CompiledFunction = SimpleJITCompiledFunction;
-    type CompiledData = SimpleJITCompiledData;
-
     /// SimpleJIT emits code and data into memory as it processes them, so it
     /// doesn't need to provide anything after the `Module` is complete.
     /// The handle object that is returned can optionally be used to free
@@ -388,6 +382,8 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             symbols: builder.symbols,
             libcall_names: builder.libcall_names,
             memory,
+            functions: SecondaryMap::new(),
+            data_objects: SecondaryMap::new(),
             functions_to_finalize: Vec::new(),
             data_objects_to_finalize: Vec::new(),
         }
@@ -419,13 +415,17 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         id: FuncId,
         name: &str,
         ctx: &cranelift_codegen::Context,
-        _contents: &ModuleContents<Self>,
+        _declarations: &ModuleDeclarations,
         code_size: u32,
         trap_sink: &mut TS,
-    ) -> ModuleResult<Self::CompiledFunction>
+    ) -> ModuleResult<()>
     where
         TS: TrapSink,
     {
+        if !self.functions[id].is_none() {
+            return Err(ModuleError::DuplicateDefinition(name.to_owned()));
+        }
+
         self.functions_to_finalize.push(id);
         let size = code_size as usize;
         let ptr = self
@@ -448,11 +448,13 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             )
         };
 
-        Ok(Self::CompiledFunction {
+        self.functions[id] = Some(SimpleJITCompiledFunction {
             code: ptr,
             size,
             relocs: reloc_sink.relocs,
-        })
+        });
+
+        Ok(())
     }
 
     fn define_function_bytes(
@@ -460,8 +462,12 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         id: FuncId,
         name: &str,
         bytes: &[u8],
-        _contents: &ModuleContents<Self>,
-    ) -> ModuleResult<Self::CompiledFunction> {
+        _declarations: &ModuleDeclarations,
+    ) -> ModuleResult<()> {
+        if !self.functions[id].is_none() {
+            return Err(ModuleError::DuplicateDefinition(name.to_owned()));
+        }
+
         self.functions_to_finalize.push(id);
         let size = bytes.len();
         let ptr = self
@@ -476,23 +482,29 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, size);
         }
 
-        Ok(Self::CompiledFunction {
+        self.functions[id] = Some(SimpleJITCompiledFunction {
             code: ptr,
             size,
             relocs: vec![],
-        })
+        });
+
+        Ok(())
     }
 
     fn define_data(
         &mut self,
         id: DataId,
-        _name: &str,
+        name: &str,
         writable: bool,
         tls: bool,
         align: Option<u8>,
         data: &DataContext,
-        _contents: &ModuleContents<Self>,
-    ) -> ModuleResult<Self::CompiledData> {
+        _declarations: &ModuleDeclarations,
+    ) -> ModuleResult<()> {
+        if !self.data_objects[id].is_none() {
+            return Err(ModuleError::DuplicateDefinition(name.to_owned()));
+        }
+
         assert!(!tls, "SimpleJIT doesn't yet support TLS");
 
         self.data_objects_to_finalize.push(id);
@@ -555,11 +567,13 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             });
         }
 
-        Ok(Self::CompiledData {
+        self.data_objects[id] = Some(SimpleJITCompiledData {
             storage,
             size,
             relocs,
-        })
+        });
+
+        Ok(())
     }
 
     /// SimpleJIT emits code and data into memory as it processes them. This
@@ -572,29 +586,17 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     fn finish(
         mut self,
         names: HashMap<String, FuncOrDataId>,
-        contents: ModuleContents<Self>,
+        declarations: ModuleDeclarations,
     ) -> Self::Product {
         for func in std::mem::take(&mut self.functions_to_finalize) {
-            let info = contents.get_function_info(func);
-            debug_assert!(info.decl.linkage.is_definable());
-            self.finalize_function(
-                func,
-                info.compiled
-                    .as_ref()
-                    .expect("function must be compiled before it can be finalized"),
-                &contents,
-            );
+            let decl = declarations.get_function_decl(func);
+            debug_assert!(decl.linkage.is_definable());
+            self.finalize_function(func, &declarations);
         }
         for data in std::mem::take(&mut self.data_objects_to_finalize) {
-            let info = contents.get_data_info(data);
-            debug_assert!(info.decl.linkage.is_definable());
-            self.finalize_data(
-                data,
-                info.compiled
-                    .as_ref()
-                    .expect("data object must be compiled before it can be finalized"),
-                &contents,
-            );
+            let decl = declarations.get_data_decl(data);
+            debug_assert!(decl.linkage.is_definable());
+            self.finalize_data(data, &declarations);
         }
 
         // Now that we're done patching, prepare the memory for execution!
@@ -604,7 +606,8 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
         SimpleJITProduct {
             memory: self.memory,
             names,
-            contents,
+            functions: self.functions,
+            data_objects: self.data_objects,
         }
     }
 }
