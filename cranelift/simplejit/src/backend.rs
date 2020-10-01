@@ -164,7 +164,7 @@ pub struct SimpleJITCompiledData {
     relocs: Vec<RelocRecord>,
 }
 
-/// A handle to allow freeing memory allocated by the `Backend`.
+/// A handle to allow freeing memory allocated by the `Module`.
 struct SimpleJITMemoryHandle {
     code: Memory,
     readonly: Memory,
@@ -360,7 +360,7 @@ impl SimpleJITModule {
         }
     }
 
-    /// Create a new `SimpleJITBackend`.
+    /// Create a new `SimpleJITModule`.
     pub fn new(builder: SimpleJITBuilder) -> Self {
         let memory = SimpleJITMemoryHandle {
             code: Memory::new(),

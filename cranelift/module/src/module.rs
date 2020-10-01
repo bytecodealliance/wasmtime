@@ -142,7 +142,7 @@ impl FunctionDeclaration {
     }
 }
 
-/// Error messages for all `Module` and `Backend` methods
+/// Error messages for all `Module` methods
 #[derive(Error, Debug)]
 pub enum ModuleError {
     /// Indicates an identifier was used before it was declared

@@ -1,4 +1,4 @@
-//! Defines `ObjectBackend`.
+//! Defines `ObjectModule`.
 
 use anyhow::anyhow;
 use cranelift_codegen::binemit::{
@@ -23,7 +23,7 @@ use std::convert::TryInto;
 use std::mem;
 use target_lexicon::PointerWidth;
 
-/// A builder for `ObjectBackend`.
+/// A builder for `ObjectModule`.
 pub struct ObjectBuilder {
     isa: Box<dyn TargetIsa>,
     binary_format: object::BinaryFormat,
@@ -37,7 +37,7 @@ pub struct ObjectBuilder {
 
 impl ObjectBuilder {
     /// Create a new `ObjectBuilder` using the given Cranelift target, that
-    /// can be passed to [`Module::new`](cranelift_module::Module::new).
+    /// can be passed to [`ObjectModule::new`].
     ///
     /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain

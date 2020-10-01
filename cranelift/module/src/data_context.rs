@@ -50,7 +50,8 @@ pub struct DataDescription {
     pub data_relocs: Vec<(CodeOffset, ir::GlobalValue, Addend)>,
     /// Object file section
     pub custom_segment_section: Option<(String, String)>,
-    /// Alignment
+    /// Alignment in bytes. `None` means that the default alignment of the respective module should
+    /// be used.
     pub align: Option<u64>,
 }
 
