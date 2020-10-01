@@ -202,6 +202,48 @@ fn input_to_reg_mem_imm(ctx: Ctx, spec: InsnInput) -> RegMemImm {
     }
 }
 
+/// Emit an instruction to insert a value `src` into a lane of `dst`.
+fn emit_insert_lane<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    src: RegMem,
+    dst: Writable<Reg>,
+    lane: u8,
+    ty: Type,
+) {
+    if !ty.is_float() {
+        let (sse_op, is64) = match ty.lane_bits() {
+            8 => (SseOpcode::Pinsrb, false),
+            16 => (SseOpcode::Pinsrw, false),
+            32 => (SseOpcode::Pinsrd, false),
+            64 => (SseOpcode::Pinsrd, true),
+            _ => panic!("Unable to insertlane for lane size: {}", ty.lane_bits()),
+        };
+        ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, lane, is64));
+    } else if ty == types::F32 {
+        let sse_op = SseOpcode::Insertps;
+        // Insert 32-bits from replacement (at index 00, bits 7:8) to vector (lane
+        // shifted into bits 5:6).
+        let lane = 0b00_00_00_00 | lane << 4;
+        ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, lane, false));
+    } else if ty == types::F64 {
+        let sse_op = match lane {
+            // Move the lowest quadword in replacement to vector without changing
+            // the upper bits.
+            0 => SseOpcode::Movsd,
+            // Move the low 64 bits of replacement vector to the high 64 bits of the
+            // vector.
+            1 => SseOpcode::Movlhps,
+            _ => unreachable!(),
+        };
+        // Here we use the `xmm_rm_r` encoding because it correctly tells the register
+        // allocator how we are using `dst`: we are using `dst` as a `mod` whereas other
+        // encoding formats like `xmm_unary_rm_r` treat it as a `def`.
+        ctx.emit(Inst::xmm_rm_r(sse_op, src, dst));
+    } else {
+        panic!("unable to emit insertlane for type: {}", ty)
+    }
+}
+
 /// Emits an int comparison instruction.
 ///
 /// Note: make sure that there are no instructions modifying the flags between a call to this
@@ -2861,38 +2903,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             debug_assert!(lane < ty.lane_count() as u8);
 
             ctx.emit(Inst::gen_move(dst, in_vec, ty));
-            if !src_ty.is_float() {
-                let (sse_op, is64) = match ty.lane_bits() {
-                    8 => (SseOpcode::Pinsrb, false),
-                    16 => (SseOpcode::Pinsrw, false),
-                    32 => (SseOpcode::Pinsrd, false),
-                    64 => (SseOpcode::Pinsrd, true),
-                    _ => panic!("Unable to insertlane for lane size: {}", ty.lane_bits()),
-                };
-                ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, lane, is64));
-            } else if src_ty == types::F32 {
-                let sse_op = SseOpcode::Insertps;
-                // Insert 32-bits from replacement (at index 00, bits 7:8) to vector (lane
-                // shifted into bits 5:6).
-                let lane = 0b00_00_00_00 | lane << 4;
-                ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, lane, false));
-            } else if src_ty == types::F64 {
-                let sse_op = match lane {
-                    // Move the lowest quadword in replacement to vector without changing
-                    // the upper bits.
-                    0 => SseOpcode::Movsd,
-                    // Move the low 64 bits of replacement vector to the high 64 bits of the
-                    // vector.
-                    1 => SseOpcode::Movlhps,
-                    _ => unreachable!(),
-                };
-                // Here we use the `xmm_rm_r` encoding because it correctly tells the register
-                // allocator how we are using `dst`: we are using `dst` as a `mod` whereas other
-                // encoding formats like `xmm_unary_rm_r` treat it as a `def`.
-                ctx.emit(Inst::xmm_rm_r(sse_op, src, dst));
-            } else {
-                panic!("Unable to insertlane for type: {}", ty);
-            }
+            emit_insert_lane(ctx, src, dst, lane, ty.lane_type());
         }
 
         Opcode::Extractlane => {
@@ -2952,45 +2963,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             assert!(src_ty.bits() < 128);
             let src = input_to_reg_mem(ctx, inputs[0]);
             let dst = get_output_reg(ctx, outputs[0]);
-
-            fn emit_insert_lane<C: LowerCtx<I = Inst>>(
-                ctx: &mut C,
-                src: RegMem,
-                dst: Writable<Reg>,
-                lane: u8,
-                ty: Type,
-            ) {
-                if !ty.is_float() {
-                    let (sse_op, is64) = match ty.lane_bits() {
-                        8 => (SseOpcode::Pinsrb, false),
-                        16 => (SseOpcode::Pinsrw, false),
-                        32 => (SseOpcode::Pinsrd, false),
-                        64 => (SseOpcode::Pinsrd, true),
-                        _ => panic!("Unable to insertlane for lane size: {}", ty.lane_bits()),
-                    };
-                    ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, lane, is64));
-                } else if ty == types::F32 {
-                    let sse_op = SseOpcode::Insertps;
-                    // Insert 32-bits from replacement (at index 00, bits 7:8) to vector (lane
-                    // shifted into bits 5:6).
-                    let lane = 0b00_00_00_00 | lane << 4;
-                    ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, lane, false));
-                } else if ty == types::F64 {
-                    let sse_op = match lane {
-                        // Move the lowest quadword in replacement to vector without changing
-                        // the upper bits.
-                        0 => SseOpcode::Movsd,
-                        // Move the low 64 bits of replacement vector to the high 64 bits of the
-                        // vector.
-                        1 => SseOpcode::Movlhps,
-                        _ => unreachable!(),
-                    };
-                    // Here we use the `xmm_rm_r` encoding because it correctly tells the register
-                    // allocator how we are using `dst`: we are using `dst` as a `mod` whereas other
-                    // encoding formats like `xmm_unary_rm_r` treat it as a `def`.
-                    ctx.emit(Inst::xmm_rm_r(sse_op, src, dst));
-                }
-            };
 
             // We know that splat will overwrite all of the lanes of `dst` but it takes several
             // instructions to do so. Because of the multiple instructions, there is no good way to
