@@ -63,6 +63,11 @@ impl ConstantData {
         self.0.is_empty()
     }
 
+    /// Return the data as a slice.
+    pub fn as_slice(&self) -> &[u8] {
+        self.0.as_slice()
+    }
+
     /// Convert the data to a vector.
     pub fn into_vec(self) -> Vec<u8> {
         self.0
