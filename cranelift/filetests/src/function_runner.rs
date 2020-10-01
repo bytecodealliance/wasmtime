@@ -1,12 +1,12 @@
 //! Provides functionality for compiling and running CLIF IR for `run` tests.
 use core::{mem, ptr};
 use cranelift_codegen::binemit::{NullRelocSink, NullStackMapSink, NullTrapSink};
+use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{condcodes::IntCC, Function, InstBuilder, Signature, Type};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{ir, settings, CodegenError, Context};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_native::builder as host_isa_builder;
-use cranelift_reader::DataValue;
 use log::trace;
 use memmap::{Mmap, MmapMut};
 use std::cmp::max;
@@ -126,7 +126,8 @@ impl Trampoline {
 ///
 /// ```
 /// use cranelift_filetests::SingleFunctionCompiler;
-/// use cranelift_reader::{parse_functions, DataValue};
+/// use cranelift_reader::parse_functions;
+/// use cranelift_codegen::data_value::DataValue;
 ///
 /// let code = "test run \n function %add(i32, i32) -> i32 {  block0(v0:i32, v1:i32):  v2 = iadd v0, v1  return v2 }".into();
 /// let func = parse_functions(code).unwrap().into_iter().nth(0).unwrap();

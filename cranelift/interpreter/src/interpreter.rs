@@ -5,12 +5,12 @@
 use crate::environment::Environment;
 use crate::frame::Frame;
 use crate::interpreter::Trap::InvalidType;
+use cranelift_codegen::data_value::{DataValue, DataValueCastFailure};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{
     Block, FuncRef, Function, Inst, InstructionData, InstructionData::*, Opcode, Opcode::*, Type,
     Value as ValueRef, ValueList,
 };
-use cranelift_reader::{DataValue, DataValueCastFailure};
 use log::trace;
 use std::ops::{Add, Div, Mul, Sub};
 use thiserror::Error;
