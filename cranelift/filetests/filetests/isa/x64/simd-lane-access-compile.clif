@@ -58,7 +58,7 @@ block0(v0: i8):
     v1 = splat.i8x16 v0
     return v1
 }
-; check:  fake_def %xmm0
+; check:  uninit  %xmm0
 ; nextln: pinsrb  $$0, %rdi, %xmm0
 ; nextln: pxor    %xmm1, %xmm1
 ; nextln: pshufb  %xmm1, %xmm0
@@ -69,7 +69,7 @@ block0:
     v1 = splat.b16x8 v0
     return v1
 }
-; check:  fake_def %xmm0
+; check:  uninit  %xmm0
 ; nextln: pinsrw  $$0, %r12, %xmm0
 ; nextln: pinsrw  $$1, %r12, %xmm0
 ; nextln: pshufd  $$0, %xmm0, %xmm0
@@ -79,7 +79,7 @@ block0(v0: i32):
     v1 = splat.i32x4 v0
     return v1
 }
-; check:  fake_def %xmm0
+; check:  uninit  %xmm0
 ; nextln: pinsrd  $$0, %rdi, %xmm0
 ; nextln: pshufd  $$0, %xmm0, %xmm0
 
@@ -88,6 +88,6 @@ block0(v0: f64):
     v1 = splat.f64x2 v0
     return v1
 }
-; check:  fake_def %xmm1
+; check:  uninit  %xmm1
 ; nextln: movsd   %xmm0, %xmm1
 ; nextln: movlhps %xmm0, %xmm1

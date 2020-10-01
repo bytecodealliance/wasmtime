@@ -342,10 +342,6 @@ pub enum Inst {
         is64: bool,
     },
 
-    /// Provides a way to tell the register allocator that the upcoming sequence of instructions
-    /// will overwrite `dst` so it should be considered as a `def`; use with care.
-    XmmFakeDef { dst: Writable<Reg> },
-
     // =====================================
     // Control flow instructions.
     /// Direct call: call simm32.
@@ -486,6 +482,20 @@ pub enum Inst {
     /// Marker, no-op in generated code: SP "virtual offset" is adjusted. This
     /// controls how MemArg::NominalSPOffset args are lowered.
     VirtualSPOffsetAdj { offset: i64 },
+
+    /// Provides a way to tell the register allocator that the upcoming sequence of instructions
+    /// will overwrite `dst` so it should be considered as a `def`; use this with care.
+    ///
+    /// This is useful when we have a sequence of instructions whose register usages are nominally
+    /// `mod`s, but such that the combination of operations creates a result that is independent of
+    /// the initial register value. It's thus semantically a `def`, not a `mod`, when all the
+    /// instructions are taken together, so we want to ensure the register is defined (its
+    /// live-range starts) prior to the sequence to keep analyses happy.
+    ///
+    /// One alternative would be a compound instruction that somehow encapsulates the others and
+    /// reports its own `def`s/`use`s/`mod`s; this adds complexity (the instruction list is no
+    /// longer flat) and requires knowledge about semantics and initial-value independence anyway.
+    XmmUninitializedValue { dst: Writable<Reg> },
 }
 
 pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
@@ -644,9 +654,9 @@ impl Inst {
         Inst::XMM_RM_R { op, src, dst }
     }
 
-    pub(crate) fn xmm_fake_def(dst: Writable<Reg>) -> Self {
+    pub(crate) fn xmm_uninit_value(dst: Writable<Reg>) -> Self {
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
-        Inst::XmmFakeDef { dst }
+        Inst::XmmUninitializedValue { dst }
     }
 
     pub(crate) fn xmm_mov_r_m(
@@ -1333,9 +1343,9 @@ impl ShowWithRRU for Inst {
                 dst.show_rru(mb_rru),
             ),
 
-            Inst::XmmFakeDef { dst } => format!(
+            Inst::XmmUninitializedValue { dst } => format!(
                 "{} {}",
-                ljustify("fake_def".into()),
+                ljustify("uninit".into()),
                 dst.show_rru(mb_rru),
             ),
 
@@ -1769,7 +1779,7 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
                 collector.add_mod(*dst);
             }
         }
-        Inst::XmmFakeDef { dst } => collector.add_def(*dst),
+        Inst::XmmUninitializedValue { dst } => collector.add_def(*dst),
         Inst::XmmLoadConstSeq { dst, .. } => collector.add_def(*dst),
         Inst::XmmMinMaxSeq { lhs, rhs_dst, .. } => {
             collector.add_use(*lhs);
@@ -2104,7 +2114,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             src.map_uses(mapper);
             map_mod(mapper, dst);
         }
-        Inst::XmmFakeDef { ref mut dst, .. } => {
+        Inst::XmmUninitializedValue { ref mut dst, .. } => {
             map_def(mapper, dst);
         }
         Inst::XmmLoadConstSeq { ref mut dst, .. } => {
