@@ -29,7 +29,7 @@
 pub use crate::error::{Location, ParseError, ParseResult};
 pub use crate::isaspec::{parse_options, IsaSpec, ParseOptionError};
 pub use crate::parser::{parse_functions, parse_run_command, parse_test, ParseOptions};
-pub use crate::run_command::{Comparison, DataValue, DataValueCastFailure, Invocation, RunCommand};
+pub use crate::run_command::{Comparison, Invocation, RunCommand};
 pub use crate::sourcemap::SourceMap;
 pub use crate::testcommand::{TestCommand, TestOption};
 pub use crate::testfile::{Comment, Details, Feature, TestFile};

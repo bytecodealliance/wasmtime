@@ -1,7 +1,7 @@
 //! Implements a call frame (activation record) for the Cranelift interpreter.
 
+use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{Function, Value as ValueRef};
-use cranelift_reader::DataValue;
 use log::trace;
 use std::collections::HashMap;
 
@@ -78,9 +78,9 @@ impl<'a> Frame<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cranelift_codegen::data_value::DataValue;
     use cranelift_codegen::ir::InstBuilder;
     use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
-    use cranelift_reader::DataValue;
 
     /// Build an empty function with a single return.
     fn empty_function() -> Function {

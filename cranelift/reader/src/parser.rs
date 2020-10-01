@@ -3,10 +3,11 @@
 use crate::error::{Location, ParseError, ParseResult};
 use crate::isaspec;
 use crate::lexer::{LexError, Lexer, LocatedError, LocatedToken, Token};
-use crate::run_command::{Comparison, DataValue, Invocation, RunCommand};
+use crate::run_command::{Comparison, Invocation, RunCommand};
 use crate::sourcemap::SourceMap;
 use crate::testcommand::TestCommand;
 use crate::testfile::{Comment, Details, Feature, TestFile};
+use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;

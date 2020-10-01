@@ -71,6 +71,7 @@ pub use cranelift_entity as entity;
 pub mod binemit;
 pub mod cfg_printer;
 pub mod cursor;
+pub mod data_value;
 pub mod dbg;
 pub mod dominator_tree;
 pub mod flowgraph;
