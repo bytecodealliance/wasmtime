@@ -8,9 +8,8 @@ use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::instructions::BranchInfo;
 use crate::ir::types::I64;
 use crate::ir::{
-    ArgumentPurpose, Block, Constant, ConstantData, ExternalName, Function, GlobalValueData,
-    Immediate, Inst, InstructionData, MemFlags, Opcode, Signature, SourceLoc, Type, Value,
-    ValueDef,
+    ArgumentPurpose, Block, Constant, ConstantData, ExternalName, Function, GlobalValueData, Inst,
+    InstructionData, MemFlags, Opcode, Signature, SourceLoc, Type, Value, ValueDef,
 };
 use crate::machinst::{
     ABICallee, BlockIndex, BlockLoweringOrder, LoweredBlock, MachLabel, VCode, VCodeBuilder,
@@ -20,8 +19,10 @@ use crate::CodegenResult;
 
 use regalloc::{Reg, RegClass, StackmapRequestInfo, VirtualReg, Writable};
 
+use crate::data_value::DataValue;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::convert::TryInto;
 use log::debug;
 use smallvec::SmallVec;
 
@@ -161,8 +162,9 @@ pub trait LowerCtx {
     fn is_reg_needed(&self, ir_inst: Inst, reg: Reg) -> bool;
     /// Retrieve constant data given a handle.
     fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData;
-    /// Retrieve an immediate given a reference.
-    fn get_immediate(&self, imm: Immediate) -> &ConstantData;
+    /// Retrieve the value immediate from an instruction. This will perform necessary lookups on the
+    /// `DataFlowGraph` to retrieve even large immediates.
+    fn get_immediate(&self, ir_inst: Inst) -> Option<DataValue>;
     /// Cause the value in `reg` to be in a virtual reg, by copying it into a new virtual reg
     /// if `reg` is a real reg.  `ty` describes the type of the value in `reg`.
     fn ensure_in_vreg(&mut self, reg: Reg, ty: Type) -> Reg;
@@ -1007,8 +1009,23 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         self.f.dfg.constants.get(constant_handle)
     }
 
-    fn get_immediate(&self, imm: Immediate) -> &ConstantData {
-        self.f.dfg.immediates.get(imm).unwrap()
+    fn get_immediate(&self, ir_inst: Inst) -> Option<DataValue> {
+        let inst_data = self.data(ir_inst);
+        match inst_data {
+            InstructionData::Shuffle { mask, .. } => {
+                let buffer = self.f.dfg.immediates.get(mask.clone()).unwrap().as_slice();
+                let value = DataValue::V128(buffer.try_into().expect("a 16-byte data buffer"));
+                Some(value)
+            }
+            InstructionData::UnaryConst {
+                constant_handle, ..
+            } => {
+                let buffer = self.f.dfg.constants.get(constant_handle.clone()).as_slice();
+                let value = DataValue::V128(buffer.try_into().expect("a 16-byte data buffer"));
+                Some(value)
+            }
+            _ => inst_data.imm_value(),
+        }
     }
 
     fn ensure_in_vreg(&mut self, reg: Reg, ty: Type) -> Reg {

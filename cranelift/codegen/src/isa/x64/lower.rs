@@ -1,5 +1,6 @@
 //! Lowering rules for X64.
 
+use crate::data_value::DataValue;
 use crate::ir::{
     condcodes::FloatCC, condcodes::IntCC, types, AbiParam, ArgumentPurpose, ExternalName,
     Inst as IRInst, InstructionData, LibCall, Opcode, Signature, Type,
@@ -2985,10 +2986,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let lhs_ty = ctx.input_ty(insn, 0);
             let lhs = put_input_in_reg(ctx, inputs[0]);
             let rhs = put_input_in_reg(ctx, inputs[1]);
-            let mask = if let &InstructionData::Shuffle { mask, .. } = ctx.data(insn) {
-                ctx.get_immediate(mask).clone()
-            } else {
-                unreachable!("shuffle should always have the shuffle format")
+            let mask = match ctx.get_immediate(insn) {
+                Some(DataValue::V128(bytes)) => bytes.to_vec(),
+                _ => unreachable!("shuffle should always have a 16-byte immediate"),
             };
 
             // A mask-building helper: in 128-bit SIMD, 0-15 indicate which lane to read from and a
