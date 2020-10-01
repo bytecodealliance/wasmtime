@@ -1,6 +1,6 @@
 //! This module gives users to instantiate values that Cranelift understands. These values are used,
 //! for example, during interpretation and for wrapping immediates.
-use crate::ir::immediates::{Ieee32, Ieee64, Imm64};
+use crate::ir::immediates::{Ieee32, Ieee64, Imm64, Offset32};
 use crate::ir::{types, ConstantData, Type};
 use core::convert::TryInto;
 use core::fmt::{self, Display, Formatter};
@@ -100,6 +100,21 @@ build_conversion_impl!(i64, I64, I64);
 build_conversion_impl!(f32, F32, F32);
 build_conversion_impl!(f64, F64, F64);
 build_conversion_impl!([u8; 16], V128, I8X16);
+impl From<Ieee64> for DataValue {
+    fn from(f: Ieee64) -> Self {
+        DataValue::from(f64::from_bits(f.bits()))
+    }
+}
+impl From<Ieee32> for DataValue {
+    fn from(f: Ieee32) -> Self {
+        DataValue::from(f32::from_bits(f.bits()))
+    }
+}
+impl From<Offset32> for DataValue {
+    fn from(o: Offset32) -> Self {
+        DataValue::from(Into::<i32>::into(o))
+    }
+}
 
 impl Display for DataValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
