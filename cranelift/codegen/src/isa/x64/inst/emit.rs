@@ -2003,7 +2003,7 @@ pub(crate) fn emit(
             sink.bind_label(constant_end_label);
         }
 
-        Inst::XmmFakeDef { .. } => {
+        Inst::XmmUninitializedValue { .. } => {
             // This instruction format only exists to declare a register as a `def`; no code is
             // emitted.
         }

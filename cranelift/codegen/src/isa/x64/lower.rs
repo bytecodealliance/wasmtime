@@ -2995,7 +2995,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // We know that splat will overwrite all of the lanes of `dst` but it takes several
             // instructions to do so. Because of the multiple instructions, there is no good way to
             // declare `dst` a `def` except with the following pseudo-instruction.
-            ctx.emit(Inst::xmm_fake_def(dst));
+            ctx.emit(Inst::xmm_uninit_value(dst));
             match ty.lane_bits() {
                 8 => {
                     emit_insert_lane(ctx, src, dst, 0, ty.lane_type());
