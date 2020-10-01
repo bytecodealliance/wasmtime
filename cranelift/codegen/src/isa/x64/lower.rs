@@ -2862,14 +2862,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             ctx.emit(Inst::gen_move(dst, in_vec, ty));
             if !src_ty.is_float() {
-                let (sse_op, w_bit) = match ty.lane_bits() {
+                let (sse_op, is64) = match ty.lane_bits() {
                     8 => (SseOpcode::Pinsrb, false),
                     16 => (SseOpcode::Pinsrw, false),
                     32 => (SseOpcode::Pinsrd, false),
                     64 => (SseOpcode::Pinsrd, true),
                     _ => panic!("Unable to insertlane for lane size: {}", ty.lane_bits()),
                 };
-                ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, lane, w_bit));
+                ctx.emit(Inst::xmm_rm_r_imm(sse_op, src, dst, lane, is64));
             } else if src_ty == types::F32 {
                 let sse_op = SseOpcode::Insertps;
                 // Insert 32-bits from replacement (at index 00, bits 7:8) to vector (lane
