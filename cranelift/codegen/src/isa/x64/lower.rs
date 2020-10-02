@@ -1,7 +1,5 @@
 //! Lowering rules for X64.
 
-#![allow(non_snake_case)]
-
 use crate::ir::{
     condcodes::FloatCC, condcodes::IntCC, types, AbiParam, ArgumentPurpose, ExternalName,
     Inst as IRInst, InstructionData, LibCall, Opcode, Signature, Type,

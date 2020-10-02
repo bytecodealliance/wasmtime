@@ -517,8 +517,8 @@ pub(crate) fn emit(
                     }
 
                     RegMemImm::Imm { simm32 } => {
-                        let useImm8 = low8_will_sign_extend_to_32(*simm32);
-                        let opcode = if useImm8 { 0x6B } else { 0x69 };
+                        let use_imm8 = low8_will_sign_extend_to_32(*simm32);
+                        let opcode = if use_imm8 { 0x6B } else { 0x69 };
                         // Yes, really, reg_g twice.
                         emit_std_reg_reg(
                             sink,
@@ -529,7 +529,7 @@ pub(crate) fn emit(
                             reg_g.to_reg(),
                             rex,
                         );
-                        emit_simm(sink, if useImm8 { 1 } else { 4 }, *simm32);
+                        emit_simm(sink, if use_imm8 { 1 } else { 4 }, *simm32);
                     }
                 }
             } else {
@@ -1424,13 +1424,12 @@ pub(crate) fn emit(
         }
 
         Inst::Pop64 { dst } => {
-            let encDst = int_reg_enc(dst.to_reg());
-            if encDst >= 8 {
-                // 0x41 == REX.{W=0, B=1}.  It seems that REX.W is irrelevant
-                // here.
+            let enc_dst = int_reg_enc(dst.to_reg());
+            if enc_dst >= 8 {
+                // 0x41 == REX.{W=0, B=1}.  It seems that REX.W is irrelevant here.
                 sink.put1(0x41);
             }
-            sink.put1(0x58 + (encDst & 7));
+            sink.put1(0x58 + (enc_dst & 7));
         }
 
         Inst::CallKnown {
