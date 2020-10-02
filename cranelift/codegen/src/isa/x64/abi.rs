@@ -389,13 +389,15 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         call_conv: isa::CallConv,
         _: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
+        fixed_frame_storage_size: u32,
     ) -> (u64, SmallVec<[Self::I; 16]>) {
         let mut insts = SmallVec::new();
         // Find all clobbered registers that are callee-save. These are only I64
         // registers (all XMM registers are caller-save) so we can compute the
         // total size of the needed stack space easily.
         let clobbered = get_callee_saves(&call_conv, clobbers);
-        let stack_size = 8 * clobbered.len() as u32;
+        let clobbered_size = 8 * clobbered.len() as u32;
+        let stack_size = clobbered_size + fixed_frame_storage_size;
         // Align to 16 bytes.
         let stack_size = (stack_size + 15) & !15;
         // Adjust the stack pointer downward with one `sub rsp, IMM`
@@ -428,7 +430,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             }
         }
 
-        (stack_size as u64, insts)
+        (clobbered_size as u64, insts)
     }
 
     fn gen_clobber_restore(

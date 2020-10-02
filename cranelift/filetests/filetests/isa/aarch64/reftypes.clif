@@ -77,8 +77,8 @@ block3(v7: r64, v8: r64):
 ; check: Block 0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: sub sp, sp, #32
-; nextln: stp x19, x20, [sp, #-16]!
+; nextln: sub sp, sp, #48
+; nextln: stp x19, x20, [sp]
 ; nextln: virtual_sp_offset_adjust 16
 ; nextln: mov x19, x0
 ; nextln: mov x20, x1
@@ -111,7 +111,7 @@ block3(v7: r64, v8: r64):
 ; nextln: ldr x1, [x1]
 ; nextln: mov x2, x1
 ; nextln: mov x1, x19
-; nextln: ldp x19, x20, [sp], #16
+; nextln: ldp x19, x20, [sp]
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret

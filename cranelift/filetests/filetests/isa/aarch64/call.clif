@@ -179,7 +179,6 @@ block0:
 ; nextln:  ldr q8, [sp]
 ; nextln:  ldr q9, [sp, #16]
 ; nextln:  ldr q10, [sp, #32]
-; nextln:  add sp, sp, #48
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
@@ -230,7 +229,6 @@ block0:
 ; nextln:  ldr q8, [sp]
 ; nextln:  ldr q9, [sp, #16]
 ; nextln:  ldr q10, [sp, #32]
-; nextln:  add sp, sp, #48
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
@@ -285,7 +283,6 @@ block0:
 ; nextln:  ldr q8, [sp]
 ; nextln:  ldr q9, [sp, #16]
 ; nextln:  ldr q10, [sp, #32]
-; nextln:  add sp, sp, #48
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
