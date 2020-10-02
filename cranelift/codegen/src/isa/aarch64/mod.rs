@@ -20,6 +20,8 @@ mod lower_inst;
 
 use inst::create_reg_universe;
 
+use self::inst::EmitInfo;
+
 /// An AArch64 backend.
 pub struct AArch64Backend {
     triple: Triple,
@@ -45,8 +47,9 @@ impl AArch64Backend {
         func: &Function,
         flags: settings::Flags,
     ) -> CodegenResult<VCode<inst::Inst>> {
+        let emit_info = EmitInfo::new(flags.clone());
         let abi = Box::new(abi::AArch64ABICallee::new(func, flags)?);
-        compile::compile::<AArch64Backend>(func, self, abi)
+        compile::compile::<AArch64Backend>(func, self, abi, emit_info)
     }
 }
 
@@ -58,6 +61,7 @@ impl MachBackend for AArch64Backend {
     ) -> CodegenResult<MachCompileResult> {
         let flags = self.flags();
         let vcode = self.compile_vcode(func, flags.clone())?;
+
         let buffer = vcode.emit();
         let frame_size = vcode.frame_size();
 

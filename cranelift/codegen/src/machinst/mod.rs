@@ -275,10 +275,19 @@ pub enum MachTerminator<'a> {
 pub trait MachInstEmit: MachInst {
     /// Persistent state carried across `emit` invocations.
     type State: MachInstEmitState<Self>;
+    /// Constant information used in `emit` invocations.
+    type Info: MachInstEmitInfo;
     /// Emit the instruction.
-    fn emit(&self, code: &mut MachBuffer<Self>, flags: &Flags, state: &mut Self::State);
+    fn emit(&self, code: &mut MachBuffer<Self>, info: &Self::Info, state: &mut Self::State);
     /// Pretty-print the instruction.
     fn pretty_print(&self, mb_rru: Option<&RealRegUniverse>, state: &mut Self::State) -> String;
+}
+
+/// Constant information used to emit an instruction.
+pub trait MachInstEmitInfo {
+    /// Return the target-independent settings used for the compilation of this
+    /// particular function.
+    fn flags(&self) -> &Flags;
 }
 
 /// A trait describing the emission state carried between MachInsts when

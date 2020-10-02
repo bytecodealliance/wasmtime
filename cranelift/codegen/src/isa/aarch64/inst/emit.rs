@@ -463,10 +463,26 @@ impl EmitState {
     }
 }
 
+/// Constant state used during function compilation.
+pub struct EmitInfo(settings::Flags);
+
+impl EmitInfo {
+    pub(crate) fn new(flags: settings::Flags) -> Self {
+        Self(flags)
+    }
+}
+
+impl MachInstEmitInfo for EmitInfo {
+    fn flags(&self) -> &settings::Flags {
+        &self.0
+    }
+}
+
 impl MachInstEmit for Inst {
     type State = EmitState;
+    type Info = EmitInfo;
 
-    fn emit(&self, sink: &mut MachBuffer<Inst>, flags: &settings::Flags, state: &mut EmitState) {
+    fn emit(&self, sink: &mut MachBuffer<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
         // N.B.: we *must* not exceed the "worst-case size" used to compute
         // where to insert islands, except when islands are explicitly triggered
         // (with an `EmitIsland`). We check this in debug builds. This is `mut`
@@ -742,7 +758,7 @@ impl MachInstEmit for Inst {
                 let (mem_insts, mem) = mem_finalize(sink.cur_offset(), mem, state);
 
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink, flags, state);
+                    inst.emit(sink, emit_info, state);
                 }
 
                 // ldst encoding helpers take Reg, not Writable<Reg>.
@@ -887,7 +903,7 @@ impl MachInstEmit for Inst {
                 let (mem_insts, mem) = mem_finalize(sink.cur_offset(), mem, state);
 
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink, flags, state);
+                    inst.emit(sink, emit_info, state);
                 }
 
                 let (op, bits) = match self {
@@ -1500,11 +1516,11 @@ impl MachInstEmit for Inst {
                     mem: AMode::Label(MemLabel::PCRel(8)),
                     srcloc: None,
                 };
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(8),
                 };
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
                 sink.put4(const_data.to_bits());
             }
             &Inst::LoadFpuConst64 { rd, const_data } => {
@@ -1513,11 +1529,11 @@ impl MachInstEmit for Inst {
                     mem: AMode::Label(MemLabel::PCRel(8)),
                     srcloc: None,
                 };
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(12),
                 };
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
                 sink.put8(const_data.to_bits());
             }
             &Inst::LoadFpuConst128 { rd, const_data } => {
@@ -1526,11 +1542,11 @@ impl MachInstEmit for Inst {
                     mem: AMode::Label(MemLabel::PCRel(8)),
                     srcloc: None,
                 };
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(20),
                 };
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
 
                 for i in const_data.to_le_bytes().iter() {
                     sink.put1(*i);
@@ -1854,7 +1870,7 @@ impl MachInstEmit for Inst {
                 if top22 != 0 {
                     sink.put4(enc_extend(top22, rd, rn));
                 } else {
-                    Inst::mov32(rd, rn).emit(sink, flags, state);
+                    Inst::mov32(rd, rn).emit(sink, emit_info, state);
                 }
             }
             &Inst::Extend {
@@ -1877,7 +1893,7 @@ impl MachInstEmit for Inst {
                     rn: zero_reg(),
                     rm: rd.to_reg(),
                 };
-                sub_inst.emit(sink, flags, state);
+                sub_inst.emit(sink, emit_info, state);
             }
             &Inst::Extend {
                 rd,
@@ -1964,7 +1980,7 @@ impl MachInstEmit for Inst {
                 sink.use_label_at_offset(off, label, LabelUse::Branch19);
                 // udf
                 let trap = Inst::Udf { trap_info };
-                trap.emit(sink, flags, state);
+                trap.emit(sink, emit_info, state);
                 // LABEL:
                 sink.bind_label(label);
             }
@@ -2022,10 +2038,10 @@ impl MachInstEmit for Inst {
                 // Save index in a tmp (the live range of ridx only goes to start of this
                 // sequence; rtmp1 or rtmp2 may overwrite it).
                 let inst = Inst::gen_move(rtmp2, ridx, I64);
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
                 // Load address of jump table
                 let inst = Inst::Adr { rd: rtmp1, off: 16 };
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
                 // Load value out of jump table
                 let inst = Inst::SLoad32 {
                     rd: rtmp2,
@@ -2037,7 +2053,7 @@ impl MachInstEmit for Inst {
                     ),
                     srcloc: None, // can't cause a user trap.
                 };
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
                 // Add base of jump table to jump-table-sourced block offset
                 let inst = Inst::AluRRR {
                     alu_op: ALUOp::Add64,
@@ -2045,14 +2061,14 @@ impl MachInstEmit for Inst {
                     rn: rtmp1.to_reg(),
                     rm: rtmp2.to_reg(),
                 };
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
                 // Branch to computed address. (`targets` here is only used for successor queries
                 // and is not needed for emission.)
                 let inst = Inst::IndirectBr {
                     rn: rtmp1.to_reg(),
                     targets: vec![],
                 };
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
                 // Emit jump table (table of 32-bit offsets).
                 let jt_off = sink.cur_offset();
                 for &target in info.targets.iter() {
@@ -2085,13 +2101,13 @@ impl MachInstEmit for Inst {
                     mem: AMode::Label(MemLabel::PCRel(8)),
                     srcloc: None, // can't cause a user trap.
                 };
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(12),
                 };
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
                 sink.add_reloc(srcloc, Reloc::Abs8, name, offset);
-                if flags.emit_all_ones_funcaddrs() {
+                if emit_info.flags().emit_all_ones_funcaddrs() {
                     sink.put8(u64::max_value());
                 } else {
                     sink.put8(0);
@@ -2100,7 +2116,7 @@ impl MachInstEmit for Inst {
             &Inst::LoadAddr { rd, ref mem } => {
                 let (mem_insts, mem) = mem_finalize(sink.cur_offset(), mem, state);
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink, flags, state);
+                    inst.emit(sink, emit_info, state);
                 }
 
                 let (reg, offset) = match mem {
@@ -2121,7 +2137,7 @@ impl MachInstEmit for Inst {
 
                 if offset == 0 {
                     let mov = Inst::mov(rd, reg);
-                    mov.emit(sink, flags, state);
+                    mov.emit(sink, emit_info, state);
                 } else if let Some(imm12) = Imm12::maybe_from_u64(abs_offset) {
                     let add = Inst::AluRRImm12 {
                         alu_op,
@@ -2129,7 +2145,7 @@ impl MachInstEmit for Inst {
                         rn: reg,
                         imm12,
                     };
-                    add.emit(sink, flags, state);
+                    add.emit(sink, emit_info, state);
                 } else {
                     // Use `tmp2` here: `reg` may be `spilltmp` if the `AMode` on this instruction
                     // was initially an `SPOffset`. Assert that `tmp2` is truly free to use. Note
@@ -2140,7 +2156,7 @@ impl MachInstEmit for Inst {
                     debug_assert!(reg != tmp2_reg());
                     let tmp = writable_tmp2_reg();
                     for insn in Inst::load_constant(tmp, abs_offset).into_iter() {
-                        insn.emit(sink, flags, state);
+                        insn.emit(sink, emit_info, state);
                     }
                     let add = Inst::AluRRR {
                         alu_op,
@@ -2148,7 +2164,7 @@ impl MachInstEmit for Inst {
                         rn: reg,
                         rm: tmp.to_reg(),
                     };
-                    add.emit(sink, flags, state);
+                    add.emit(sink, emit_info, state);
                 }
             }
             &Inst::VirtualSPOffsetAdj { offset } => {
@@ -2165,7 +2181,7 @@ impl MachInstEmit for Inst {
                     let jmp = Inst::Jump {
                         dest: BranchTarget::Label(jump_around_label),
                     };
-                    jmp.emit(sink, flags, state);
+                    jmp.emit(sink, emit_info, state);
                     sink.emit_island();
                     sink.bind_label(jump_around_label);
                 }

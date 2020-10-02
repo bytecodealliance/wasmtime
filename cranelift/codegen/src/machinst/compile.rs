@@ -14,6 +14,7 @@ pub fn compile<B: LowerBackend + MachBackend>(
     f: &Function,
     b: &B,
     abi: Box<dyn ABICallee<I = B::MInst>>,
+    emit_info: <B::MInst as MachInstEmit>::Info,
 ) -> CodegenResult<VCode<B::MInst>>
 where
     B::MInst: PrettyPrint,
@@ -21,7 +22,7 @@ where
     // Compute lowered block order.
     let block_order = BlockLoweringOrder::new(f);
     // Build the lowering context.
-    let lower = Lower::new(f, abi, block_order)?;
+    let lower = Lower::new(f, abi, emit_info, block_order)?;
     // Lower the IR.
     let (mut vcode, stack_map_request_info) = {
         let _tt = timing::vcode_lower();
