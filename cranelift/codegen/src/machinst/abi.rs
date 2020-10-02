@@ -146,6 +146,10 @@ pub trait ABICallee {
         from_slot: SpillSlot,
         ty: Option<Type>,
     ) -> Self::I;
+
+    /// Desired unwind info type.
+    #[cfg(feature = "unwind")]
+    fn unwind_info_kind(&self) -> UnwindInfoKind;
 }
 
 /// Trait implemented by an object that tracks ABI-related state and can

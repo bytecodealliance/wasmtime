@@ -996,6 +996,17 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let ty = ty_from_ty_hint_or_reg_class::<M>(to_reg.to_reg().to_reg(), ty);
         self.load_spillslot(from_slot, ty, to_reg.map(|r| r.to_reg()))
     }
+
+    #[cfg(feature = "unwind")]
+    fn unwind_info_kind(&self) -> UnwindInfoKind {
+        match self.sig.call_conv {
+            isa::CallConv::Fast | isa::CallConv::Cold | isa::CallConv::SystemV => {
+                UnwindInfoKind::SystemV
+            }
+            isa::CallConv::WindowsFastcall => UnwindInfoKind::Windows,
+            _ => UnwindInfoKind::None,
+        }
+    }
 }
 
 fn abisig_to_uses_and_defs<M: ABIMachineSpec>(sig: &ABISig) -> (Vec<Reg>, Vec<Writable<Reg>>) {

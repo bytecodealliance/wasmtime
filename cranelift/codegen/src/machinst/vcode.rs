@@ -20,6 +20,7 @@
 use crate::ir::{self, types, SourceLoc};
 use crate::isa::unwind;
 use crate::machinst::*;
+use crate::result::CodegenResult;
 use crate::settings;
 use crate::timing;
 
@@ -527,8 +528,9 @@ impl<I: VCodeInst> VCode<I> {
     }
 
     /// Generates unwind info.
-    pub fn unwind_info(&self) -> Option<unwind::UnwindInfo> {
-        I::create_unwind_info(
+    pub fn unwind_info(&self) -> CodegenResult<Option<unwind::UnwindInfo>> {
+        I::UnwindInfo::create_unwind_info(
+            self.abi.unwind_info_kind(),
             &self.insts,
             &self.insts_layout.borrow(),
             self.prologue_epilogue_ranges.as_ref().unwrap(),

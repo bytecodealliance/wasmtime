@@ -57,7 +57,7 @@ impl MachBackend for X64Backend {
         let buffer = vcode.emit();
         let buffer = buffer.finish();
         let frame_size = vcode.frame_size();
-        let unwind_info = vcode.unwind_info();
+        let unwind_info = vcode.unwind_info()?;
 
         let disasm = if want_disasm {
             Some(vcode.show_rru(Some(&create_reg_universe_systemv(flags))))
@@ -104,7 +104,7 @@ impl MachBackend for X64Backend {
     #[cfg(feature = "unwind")]
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         // By default, an ISA cannot create a System V CIE
-        Some(inst::unwind::systemv::create_cie())
+        Some(inst::unwind::create_cie())
     }
 }
 

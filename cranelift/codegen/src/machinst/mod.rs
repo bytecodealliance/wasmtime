@@ -207,13 +207,6 @@ pub trait MachInst: Clone + Debug {
     /// be dependent on compilation flags.
     fn ref_type_regclass(_flags: &Flags) -> RegClass;
 
-    /// Creates unwind info.
-    fn create_unwind_info(
-        insts: &[Self],
-        insts_layout: &[(u32, CodeOffset)],
-        prologue_epilogue: &(u32, u32, Box<[u32]>),
-    ) -> Option<unwind::UnwindInfo>;
-
     /// A label-use kind: a type that describes the types of label references that
     /// can occur in an instruction.
     type LabelUse: MachInstLabelUse;
@@ -280,6 +273,9 @@ pub enum MachTerminator<'a> {
 pub trait MachInstEmit: MachInst {
     /// Persistent state carried across `emit` invocations.
     type State: MachInstEmitState<Self>;
+    /// Unwind info generator.
+    #[cfg(feature = "unwind")]
+    type UnwindInfo: UnwindInfoGenerator<Self>;
     /// Emit the instruction.
     fn emit(&self, code: &mut MachBuffer<Self>, flags: &Flags, state: &mut Self::State);
     /// Pretty-print the instruction.
@@ -360,4 +356,29 @@ pub trait MachBackend {
         // By default, an ISA cannot create a System V CIE
         None
     }
+}
+
+/// Expected unwind info type.
+#[cfg(feature = "unwind")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnwindInfoKind {
+    /// No unwind info.
+    None,
+    /// SystemV CIE/FDE unwind info.
+    SystemV,
+    /// Windows X64 Unwind info
+    Windows,
+}
+
+/// UnwindInfo generator/helper.
+#[cfg(feature = "unwind")]
+pub trait UnwindInfoGenerator<I: MachInstEmit> {
+    /// Creates unwind info based on function signature and
+    /// emitted instructions.
+    fn create_unwind_info(
+        kind: UnwindInfoKind,
+        insts: &[I],
+        insts_layout: &[(u32, CodeOffset)],
+        prologue_epilogue: &(u32, u32, Box<[u32]>),
+    ) -> CodegenResult<Option<unwind::UnwindInfo>>;
 }

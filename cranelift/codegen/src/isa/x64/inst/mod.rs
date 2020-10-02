@@ -5,7 +5,6 @@
 
 use crate::binemit::{CodeOffset, StackMap};
 use crate::ir::{types, ExternalName, Opcode, SourceLoc, TrapCode, Type};
-use crate::isa::unwind::UnwindInfo;
 use crate::machinst::*;
 use crate::{settings, settings::Flags, CodegenError, CodegenResult};
 use alloc::boxed::Box;
@@ -2514,22 +2513,6 @@ impl MachInst for Inst {
         RegClass::I64
     }
 
-    #[cfg(feature = "unwind")]
-    fn create_unwind_info(
-        insts: &[Self],
-        insts_layout: &[(u32, CodeOffset)],
-        prologue_epilogue: &(u32, u32, Box<[u32]>),
-    ) -> Option<UnwindInfo> {
-        unwind::systemv::create_unwind_info(
-            insts,
-            insts_layout,
-            prologue_epilogue,
-            Some(regs::rbp()),
-        )
-        .unwrap()
-        .map(UnwindInfo::SystemV)
-    }
-
     type LabelUse = LabelUse;
 }
 
@@ -2547,6 +2530,7 @@ pub struct EmitState {
 
 impl MachInstEmit for Inst {
     type State = EmitState;
+    type UnwindInfo = unwind::X64UnwindInfo;
 
     fn emit(&self, sink: &mut MachBuffer<Inst>, flags: &settings::Flags, state: &mut Self::State) {
         emit::emit(self, sink, flags, state);

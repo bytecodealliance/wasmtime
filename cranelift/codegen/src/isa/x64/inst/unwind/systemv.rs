@@ -186,16 +186,6 @@ pub(crate) fn create_unwind_info(
     prologue_epilogue: &(u32, u32, Box<[u32]>),
     frame_register: Option<Reg>,
 ) -> CodegenResult<Option<UnwindInfo>> {
-    // Only System V-like calling conventions are supported
-    // match func.signature.call_conv {
-    //     CallConv::Fast | CallConv::Cold | CallConv::SystemV => {}
-    //     _ => return Ok(None),
-    // }
-
-    // if func.prologue_end.is_none() || isa.name() != "x86" || isa.pointer_bits() != 64 {
-    //     return Ok(None);
-    // }
-
     let mut layout = insts_layout
         .iter()
         .map(|(i, j)| (*i as usize, *j))
@@ -217,6 +207,7 @@ pub(crate) fn create_unwind_info(
         }
         let offset = layout[layout_index].1; // TODO protect layout_index oob
 
+        // TODO sub and `mov reg, imm(rsp)`
         match inst {
             Inst::Push64 { src } => {
                 builder
