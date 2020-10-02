@@ -253,6 +253,14 @@ impl Context {
         &self,
         isa: &dyn TargetIsa,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
+        if self.mach_compile_result.is_some() {
+            return Ok(self
+                .mach_compile_result
+                .as_ref()
+                .unwrap()
+                .unwind_info
+                .clone());
+        }
         isa.create_unwind_info(&self.func)
     }
 

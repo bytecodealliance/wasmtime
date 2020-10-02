@@ -5,6 +5,7 @@
 
 use crate::binemit::{CodeOffset, StackMap};
 use crate::ir::{types, ExternalName, Opcode, SourceLoc, TrapCode, Type};
+use crate::isa::unwind::UnwindInfo;
 use crate::machinst::*;
 use crate::{settings, settings::Flags, CodegenError, CodegenResult};
 use alloc::boxed::Box;
@@ -22,6 +23,8 @@ mod emit;
 #[cfg(test)]
 mod emit_tests;
 pub mod regs;
+#[cfg(feature = "unwind")]
+pub mod unwind;
 
 use args::*;
 use regs::{create_reg_universe_systemv, show_ireg_sized};
@@ -2509,6 +2512,22 @@ impl MachInst for Inst {
 
     fn ref_type_regclass(_: &settings::Flags) -> RegClass {
         RegClass::I64
+    }
+
+    #[cfg(feature = "unwind")]
+    fn create_unwind_info(
+        insts: &[Self],
+        insts_layout: &[(u32, CodeOffset)],
+        prologue_epilogue: &(u32, u32, Box<[u32]>),
+    ) -> Option<UnwindInfo> {
+        unwind::systemv::create_unwind_info(
+            insts,
+            insts_layout,
+            prologue_epilogue,
+            Some(regs::rbp()),
+        )
+        .unwrap()
+        .map(UnwindInfo::SystemV)
     }
 
     type LabelUse = LabelUse;

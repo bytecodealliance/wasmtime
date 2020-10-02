@@ -99,6 +99,7 @@
 use crate::binemit::{CodeInfo, CodeOffset, StackMap};
 use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, Type};
+use crate::isa::unwind;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
 
@@ -206,6 +207,13 @@ pub trait MachInst: Clone + Debug {
     /// be dependent on compilation flags.
     fn ref_type_regclass(_flags: &Flags) -> RegClass;
 
+    /// Creates unwind info.
+    fn create_unwind_info(
+        insts: &[Self],
+        insts_layout: &[(u32, CodeOffset)],
+        prologue_epilogue: &(u32, u32, Box<[u32]>),
+    ) -> Option<unwind::UnwindInfo>;
+
     /// A label-use kind: a type that describes the types of label references that
     /// can occur in an instruction.
     type LabelUse: MachInstLabelUse;
@@ -297,6 +305,9 @@ pub struct MachCompileResult {
     pub frame_size: u32,
     /// Disassembly, if requested.
     pub disasm: Option<String>,
+    /// Unwind info.
+    #[cfg(feature = "unwind")]
+    pub unwind_info: Option<unwind::UnwindInfo>,
 }
 
 impl MachCompileResult {
@@ -341,4 +352,12 @@ pub trait MachBackend {
     /// Machine-specific condcode info needed by TargetIsa.
     /// Condition that will be true when an IsubIfcout overflows.
     fn unsigned_sub_overflow_condition(&self) -> IntCC;
+
+    /// Machine-specific condcode info needed by TargetIsa.
+    /// Creates a new System V Common Information Entry for the ISA.
+    #[cfg(feature = "unwind")]
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        // By default, an ISA cannot create a System V CIE
+        None
+    }
 }
