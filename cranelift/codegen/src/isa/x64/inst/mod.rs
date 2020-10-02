@@ -1,6 +1,5 @@
 //! This module defines x86_64-specific machine instruction types.
 #![allow(dead_code)]
-#![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 
 use crate::binemit::{CodeOffset, StackMap};
@@ -1183,11 +1182,11 @@ impl ShowWithRRU for Inst {
             ljustify(s1 + &s2)
         }
 
-        fn suffixLQ(is_64: bool) -> String {
+        fn suffix_lq(is_64: bool) -> String {
             (if is_64 { "q" } else { "l" }).to_string()
         }
 
-        fn sizeLQ(is_64: bool) -> u8 {
+        fn size_lq(is_64: bool) -> u8 {
             if is_64 {
                 8
             } else {
@@ -1195,7 +1194,7 @@ impl ShowWithRRU for Inst {
             }
         }
 
-        fn suffixBWLQ(size: u8) -> String {
+        fn suffix_bwlq(size: u8) -> String {
             match size {
                 1 => "b".to_string(),
                 2 => "w".to_string(),
@@ -1215,27 +1214,27 @@ impl ShowWithRRU for Inst {
                 dst,
             } => format!(
                 "{} {}, {}",
-                ljustify2(op.to_string(), suffixLQ(*is_64)),
-                src.show_rru_sized(mb_rru, sizeLQ(*is_64)),
-                show_ireg_sized(dst.to_reg(), mb_rru, sizeLQ(*is_64)),
+                ljustify2(op.to_string(), suffix_lq(*is_64)),
+                src.show_rru_sized(mb_rru, size_lq(*is_64)),
+                show_ireg_sized(dst.to_reg(), mb_rru, size_lq(*is_64)),
             ),
 
             Inst::UnaryRmR { src, dst, op, size } => format!(
                 "{} {}, {}",
-                ljustify2(op.to_string(), suffixBWLQ(*size)),
+                ljustify2(op.to_string(), suffix_bwlq(*size)),
                 src.show_rru_sized(mb_rru, *size),
                 show_ireg_sized(dst.to_reg(), mb_rru, *size),
             ),
 
             Inst::Not { size, src } => format!(
                 "{} {}",
-                ljustify2("not".to_string(), suffixBWLQ(*size)),
+                ljustify2("not".to_string(), suffix_bwlq(*size)),
                 show_ireg_sized(src.to_reg(), mb_rru, *size)
             ),
 
             Inst::Neg { size, src } => format!(
                 "{} {}",
-                ljustify2("neg".to_string(), suffixBWLQ(*size)),
+                ljustify2("neg".to_string(), suffix_bwlq(*size)),
                 show_ireg_sized(src.to_reg(), mb_rru, *size)
             ),
 
@@ -1476,9 +1475,9 @@ impl ShowWithRRU for Inst {
 
             Inst::Mov_R_R { is_64, src, dst } => format!(
                 "{} {}, {}",
-                ljustify2("mov".to_string(), suffixLQ(*is_64)),
-                show_ireg_sized(*src, mb_rru, sizeLQ(*is_64)),
-                show_ireg_sized(dst.to_reg(), mb_rru, sizeLQ(*is_64))
+                ljustify2("mov".to_string(), suffix_lq(*is_64)),
+                show_ireg_sized(*src, mb_rru, size_lq(*is_64)),
+                show_ireg_sized(dst.to_reg(), mb_rru, size_lq(*is_64))
             ),
 
             Inst::MovZX_RM_R {
@@ -1526,7 +1525,7 @@ impl ShowWithRRU for Inst {
 
             Inst::Mov_R_M { size, src, dst, .. } => format!(
                 "{} {}, {}",
-                ljustify2("mov".to_string(), suffixBWLQ(*size)),
+                ljustify2("mov".to_string(), suffix_bwlq(*size)),
                 show_ireg_sized(*src, mb_rru, *size),
                 dst.show_rru(mb_rru)
             ),
@@ -1539,13 +1538,13 @@ impl ShowWithRRU for Inst {
             } => match num_bits {
                 None => format!(
                     "{} %cl, {}",
-                    ljustify2(kind.to_string(), suffixBWLQ(*size)),
+                    ljustify2(kind.to_string(), suffix_bwlq(*size)),
                     show_ireg_sized(dst.to_reg(), mb_rru, *size)
                 ),
 
                 Some(num_bits) => format!(
                     "{} ${}, {}",
-                    ljustify2(kind.to_string(), suffixBWLQ(*size)),
+                    ljustify2(kind.to_string(), suffix_bwlq(*size)),
                     num_bits,
                     show_ireg_sized(dst.to_reg(), mb_rru, *size)
                 ),
@@ -1560,7 +1559,7 @@ impl ShowWithRRU for Inst {
 
             Inst::Cmp_RMI_R { size, src, dst } => format!(
                 "{} {}, {}",
-                ljustify2("cmp".to_string(), suffixBWLQ(*size)),
+                ljustify2("cmp".to_string(), suffix_bwlq(*size)),
                 src.show_rru_sized(mb_rru, *size),
                 show_ireg_sized(*dst, mb_rru, *size)
             ),
@@ -1573,7 +1572,7 @@ impl ShowWithRRU for Inst {
 
             Inst::Cmove { size, cc, src, dst } => format!(
                 "{} {}, {}",
-                ljustify(format!("cmov{}{}", cc.to_string(), suffixBWLQ(*size))),
+                ljustify(format!("cmov{}{}", cc.to_string(), suffix_bwlq(*size))),
                 src.show_rru_sized(mb_rru, *size),
                 show_ireg_sized(dst.to_reg(), mb_rru, *size)
             ),
@@ -1662,7 +1661,7 @@ impl ShowWithRRU for Inst {
             Inst::LockCmpxchg { ty, src, dst, .. } => {
                 let size = ty.bytes() as u8;
                 format!("lock cmpxchg{} {}, {}",
-                        suffixBWLQ(size), show_ireg_sized(*src, mb_rru, size), dst.show_rru(mb_rru))
+                        suffix_bwlq(size), show_ireg_sized(*src, mb_rru, size), dst.show_rru(mb_rru))
             }
 
             Inst::AtomicRmwSeq { ty, op, .. } => {
