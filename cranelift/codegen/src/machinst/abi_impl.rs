@@ -325,6 +325,7 @@ pub trait ABIMachineSpec {
         call_conv: isa::CallConv,
         flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
+        fixed_frame_storage_size: u32,
     ) -> (u64, SmallVec<[Self::I; 16]>);
 
     /// Generate a clobber-restore sequence. This sequence should perform the
@@ -931,7 +932,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let mask = 2 * bytes - 1;
         let total_stacksize = (total_stacksize + mask) & !mask; // 16-align the stack.
 
-        let mut total_sp_adjust = 0;
+        let mut fixed_frame_storage_size = 0;
 
         if !self.call_conv.extends_baldrdash() {
             // Leaf functions with zero stack don't need a stack check if one's
@@ -943,7 +944,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                 }
             }
             if total_stacksize > 0 {
-                total_sp_adjust += total_stacksize as u64;
+                fixed_frame_storage_size += total_stacksize;
             }
         }
 
@@ -957,15 +958,13 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         // [crate::machinst::abi_impl](this module) for more details on
         // stackframe layout and nominal SP maintenance.
 
-        if total_sp_adjust > 0 {
-            // sub sp, sp, #total_stacksize
-            let adj = total_sp_adjust as i32;
-            insts.extend(M::gen_sp_reg_adjust(-adj));
-        }
-
         // Save clobbered registers.
-        let (clobber_size, clobber_insts) =
-            M::gen_clobber_save(self.call_conv, &self.flags, &self.clobbered);
+        let (clobber_size, clobber_insts) = M::gen_clobber_save(
+            self.call_conv,
+            &self.flags,
+            &self.clobbered,
+            fixed_frame_storage_size,
+        );
         insts.extend(clobber_insts);
 
         if clobber_size > 0 {
