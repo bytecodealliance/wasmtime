@@ -475,6 +475,16 @@ pub(crate) fn emit(
     info: &EmitInfo,
     state: &mut EmitState,
 ) {
+    if let Some(iset_requirement) = inst.isa_requirement() {
+        match iset_requirement {
+            // Cranelift assumes SSE2 at least.
+            InstructionSet::SSE | InstructionSet::SSE2 => {}
+            InstructionSet::SSSE3 => assert!(info.isa_flags.has_ssse3()),
+            InstructionSet::SSE41 => assert!(info.isa_flags.has_sse41()),
+            InstructionSet::SSE42 => assert!(info.isa_flags.has_sse42()),
+        }
+    }
+
     match inst {
         Inst::AluRmiR {
             is_64,

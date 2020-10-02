@@ -502,6 +502,71 @@ pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
     xs == ((xs << 32) >> 32)
 }
 
+impl Inst {
+    fn isa_requirement(&self) -> Option<InstructionSet> {
+        match self {
+            // These instructions are part of SSE2, which is a basic requirement in Cranelift, and
+            // don't have to be checked.
+            Inst::AluRmiR { .. }
+            | Inst::AtomicRmwSeq { .. }
+            | Inst::CallKnown { .. }
+            | Inst::CallUnknown { .. }
+            | Inst::CheckedDivOrRemSeq { .. }
+            | Inst::Cmove { .. }
+            | Inst::CmpRmiR { .. }
+            | Inst::CvtFloatToSintSeq { .. }
+            | Inst::CvtFloatToUintSeq { .. }
+            | Inst::CvtUint64ToFloatSeq { .. }
+            | Inst::Div { .. }
+            | Inst::EpiloguePlaceholder
+            | Inst::Fence { .. }
+            | Inst::Hlt
+            | Inst::Imm { .. }
+            | Inst::JmpCond { .. }
+            | Inst::JmpIf { .. }
+            | Inst::JmpKnown { .. }
+            | Inst::JmpTableSeq { .. }
+            | Inst::JmpUnknown { .. }
+            | Inst::LoadEffectiveAddress { .. }
+            | Inst::LoadExtName { .. }
+            | Inst::LockCmpxchg { .. }
+            | Inst::Mov64MR { .. }
+            | Inst::MovRM { .. }
+            | Inst::MovRR { .. }
+            | Inst::MovsxRmR { .. }
+            | Inst::MovzxRmR { .. }
+            | Inst::MulHi { .. }
+            | Inst::Neg { .. }
+            | Inst::Not { .. }
+            | Inst::Nop { .. }
+            | Inst::Pop64 { .. }
+            | Inst::Push64 { .. }
+            | Inst::Ret
+            | Inst::Setcc { .. }
+            | Inst::ShiftR { .. }
+            | Inst::SignExtendData { .. }
+            | Inst::TrapIf { .. }
+            | Inst::Ud2 { .. }
+            | Inst::UnaryRmR { .. }
+            | Inst::VirtualSPOffsetAdj { .. }
+            | Inst::XmmCmove { .. }
+            | Inst::XmmCmpRmR { .. }
+            | Inst::XmmLoadConstSeq { .. }
+            | Inst::XmmMinMaxSeq { .. }
+            | Inst::XmmUninitializedValue { .. } => None,
+
+            // These use dynamic SSE opcodes.
+            Inst::GprToXmm { op, .. }
+            | Inst::XmmMovRM { op, .. }
+            | Inst::XmmRmiReg { opcode: op, .. }
+            | Inst::XmmRmR { op, .. }
+            | Inst::XmmRmRImm { op, .. }
+            | Inst::XmmToGpr { op, .. }
+            | Inst::XmmUnaryRmR { op, .. } => Some(op.available_from()),
+        }
+    }
+}
+
 // Handy constructors for Insts.
 
 impl Inst {
