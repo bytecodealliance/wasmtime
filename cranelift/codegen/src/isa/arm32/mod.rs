@@ -17,7 +17,7 @@ mod inst;
 mod lower;
 mod lower_inst;
 
-use inst::create_reg_universe;
+use inst::{create_reg_universe, EmitInfo};
 
 /// An ARM32 backend.
 pub struct Arm32Backend {
@@ -44,8 +44,9 @@ impl Arm32Backend {
     ) -> CodegenResult<VCode<inst::Inst>> {
         // This performs lowering to VCode, register-allocates the code, computes
         // block layout and finalizes branches. The result is ready for binary emission.
+        let emit_info = EmitInfo::new(flags.clone());
         let abi = Box::new(abi::Arm32ABICallee::new(func, flags)?);
-        compile::compile::<Arm32Backend>(func, self, abi)
+        compile::compile::<Arm32Backend>(func, self, abi, emit_info)
     }
 }
 

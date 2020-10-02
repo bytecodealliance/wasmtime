@@ -255,10 +255,27 @@ impl EmitState {
     }
 }
 
+pub struct EmitInfo {
+    flags: settings::Flags,
+}
+
+impl EmitInfo {
+    pub(crate) fn new(flags: settings::Flags) -> Self {
+        EmitInfo { flags }
+    }
+}
+
+impl MachInstEmitInfo for EmitInfo {
+    fn flags(&self) -> &settings::Flags {
+        &self.flags
+    }
+}
+
 impl MachInstEmit for Inst {
+    type Info = EmitInfo;
     type State = EmitState;
 
-    fn emit(&self, sink: &mut MachBuffer<Inst>, flags: &settings::Flags, state: &mut EmitState) {
+    fn emit(&self, sink: &mut MachBuffer<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
         let start_off = sink.cur_offset();
 
         match self {
@@ -446,7 +463,7 @@ impl MachInstEmit for Inst {
             } => {
                 let (mem_insts, mem) = mem_finalize(mem, state);
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink, flags, state);
+                    inst.emit(sink, emit_info, state);
                 }
                 if let Some(srcloc) = srcloc {
                     // Register the offset at which the store instruction starts.
@@ -484,7 +501,7 @@ impl MachInstEmit for Inst {
             } => {
                 let (mem_insts, mem) = mem_finalize(mem, state);
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink, flags, state);
+                    inst.emit(sink, emit_info, state);
                 }
                 if let Some(srcloc) = srcloc {
                     // Register the offset at which the load instruction starts.
@@ -537,7 +554,7 @@ impl MachInstEmit for Inst {
             &Inst::LoadAddr { rd, ref mem } => {
                 let (mem_insts, mem) = mem_finalize(mem, state);
                 for inst in mem_insts.into_iter() {
-                    inst.emit(sink, flags, state);
+                    inst.emit(sink, emit_info, state);
                 }
                 let inst = match mem {
                     AMode::RegReg(reg1, reg2, shift) => {
@@ -574,7 +591,7 @@ impl MachInstEmit for Inst {
                     }
                     _ => unreachable!(),
                 };
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
             }
             &Inst::Extend {
                 rd,
@@ -617,7 +634,7 @@ impl MachInstEmit for Inst {
                     rn: rm,
                     imm8: UImm8::maybe_from_i64(1).unwrap(),
                 };
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
 
                 if signed {
                     let inst = Inst::AluRRImm8 {
@@ -626,7 +643,7 @@ impl MachInstEmit for Inst {
                         rn: rd.to_reg(),
                         imm8: UImm8::maybe_from_i64(1).unwrap(),
                     };
-                    inst.emit(sink, flags, state);
+                    inst.emit(sink, emit_info, state);
                 }
             }
             &Inst::Extend { .. } => {
@@ -638,7 +655,7 @@ impl MachInstEmit for Inst {
 
                 sink.put2(enc_16_it(cond, insts));
                 for inst in insts.iter() {
-                    inst.inst.emit(sink, flags, state);
+                    inst.inst.emit(sink, emit_info, state);
                 }
             }
             &Inst::Push { ref reg_list } => match reg_list.len() {
@@ -703,7 +720,7 @@ impl MachInstEmit for Inst {
                 // continue:
                 //
                 if start_off & 0x3 != 0 {
-                    Inst::Nop2.emit(sink, flags, state);
+                    Inst::Nop2.emit(sink, emit_info, state);
                 }
                 assert_eq!(sink.cur_offset() & 0x3, 0);
 
@@ -715,12 +732,12 @@ impl MachInstEmit for Inst {
                     bits: 32,
                     sign_extend: false,
                 };
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
 
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(4),
                 };
-                inst.emit(sink, flags, state);
+                inst.emit(sink, emit_info, state);
 
                 sink.add_reloc(srcloc, Reloc::Abs4, name, offset.into());
                 sink.put4(0);
@@ -779,7 +796,7 @@ impl MachInstEmit for Inst {
                 emit_32(enc_32_cond_branch(cond, dest), sink);
 
                 let trap = Inst::Udf { trap_info };
-                trap.emit(sink, flags, state);
+                trap.emit(sink, emit_info, state);
             }
             &Inst::VirtualSPOffsetAdj { offset } => {
                 debug!(

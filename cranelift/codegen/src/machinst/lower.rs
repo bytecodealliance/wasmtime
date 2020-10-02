@@ -315,9 +315,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     pub fn new(
         f: &'func Function,
         abi: Box<dyn ABICallee<I = I>>,
+        emit_info: I::Info,
         block_order: BlockLoweringOrder,
     ) -> CodegenResult<Lower<'func, I>> {
-        let mut vcode = VCodeBuilder::new(abi, block_order);
+        let mut vcode = VCodeBuilder::new(abi, emit_info, block_order);
 
         let mut next_vreg: u32 = 0;
 

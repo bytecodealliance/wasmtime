@@ -3,6 +3,7 @@
 
 use crate::binemit::{CodeOffset, StackMap};
 use crate::ir::{types, ExternalName, Opcode, SourceLoc, TrapCode, Type};
+use crate::isa::x64::settings as x64_settings;
 use crate::machinst::*;
 use crate::{settings, settings::Flags, CodegenError, CodegenResult};
 use alloc::boxed::Box;
@@ -2559,11 +2560,30 @@ pub struct EmitState {
     stack_map: Option<StackMap>,
 }
 
+/// Constant state used during emissions of a sequence of instructions.
+pub struct EmitInfo {
+    flags: settings::Flags,
+    isa_flags: x64_settings::Flags,
+}
+
+impl EmitInfo {
+    pub(crate) fn new(flags: settings::Flags, isa_flags: x64_settings::Flags) -> Self {
+        Self { flags, isa_flags }
+    }
+}
+
+impl MachInstEmitInfo for EmitInfo {
+    fn flags(&self) -> &Flags {
+        &self.flags
+    }
+}
+
 impl MachInstEmit for Inst {
     type State = EmitState;
+    type Info = EmitInfo;
 
-    fn emit(&self, sink: &mut MachBuffer<Inst>, flags: &settings::Flags, state: &mut Self::State) {
-        emit::emit(self, sink, flags, state);
+    fn emit(&self, sink: &mut MachBuffer<Inst>, info: &Self::Info, state: &mut Self::State) {
+        emit::emit(self, sink, info, state);
     }
 
     fn pretty_print(&self, mb_rru: Option<&RealRegUniverse>, _: &mut Self::State) -> String {

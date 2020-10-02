@@ -9,7 +9,6 @@ use alloc::vec::Vec;
 
 #[test]
 fn test_aarch64_binemit() {
-    let flags = settings::Flags::new(settings::builder());
     let mut insns = Vec::<(Inst, &str, &str)>::new();
 
     // N.B.: the architecture is little-endian, so when transcribing the 32-bit
@@ -4668,7 +4667,9 @@ fn test_aarch64_binemit() {
 
     insns.push((Inst::Fence {}, "BF3B03D5", "dmb ish"));
 
-    let rru = create_reg_universe(&settings::Flags::new(settings::builder()));
+    let flags = settings::Flags::new(settings::builder());
+    let rru = create_reg_universe(&flags);
+    let emit_info = EmitInfo::new(flags);
     for (insn, expected_encoding, expected_printing) in insns {
         println!(
             "AArch64: {:?}, {}, {}",
@@ -4681,7 +4682,7 @@ fn test_aarch64_binemit() {
 
         let mut sink = test_utils::TestCodeSink::new();
         let mut buffer = MachBuffer::new();
-        insn.emit(&mut buffer, &flags, &mut Default::default());
+        insn.emit(&mut buffer, &emit_info, &mut Default::default());
         let buffer = buffer.finish();
         buffer.emit(&mut sink);
         let actual_encoding = &sink.stringify();
