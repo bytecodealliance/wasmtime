@@ -476,7 +476,7 @@ pub(crate) fn emit(
     state: &mut EmitState,
 ) {
     match inst {
-        Inst::Alu_RMI_R {
+        Inst::AluRmiR {
             is_64,
             op,
             src,
@@ -891,7 +891,7 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::Mov_R_R { is_64, src, dst } => {
+        Inst::MovRR { is_64, src, dst } => {
             let rex = if *is_64 {
                 RexFlags::set_w()
             } else {
@@ -900,7 +900,7 @@ pub(crate) fn emit(
             emit_std_reg_reg(sink, LegacyPrefixes::None, 0x89, 1, *src, dst.to_reg(), rex);
         }
 
-        Inst::MovZX_RM_R {
+        Inst::MovzxRmR {
             ext_mode,
             src,
             dst,
@@ -981,7 +981,7 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::Mov64_M_R { src, dst, srcloc } => {
+        Inst::Mov64MR { src, dst, srcloc } => {
             let src = &src.finalize(state);
 
             if let Some(srcloc) = *srcloc {
@@ -1010,7 +1010,7 @@ pub(crate) fn emit(
             RexFlags::set_w(),
         ),
 
-        Inst::MovSX_RM_R {
+        Inst::MovsxRmR {
             ext_mode,
             src,
             dst,
@@ -1083,7 +1083,7 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::Mov_R_M {
+        Inst::MovRM {
             size,
             src,
             dst,
@@ -1155,7 +1155,7 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::Shift_R {
+        Inst::ShiftR {
             size,
             kind,
             num_bits,
@@ -1255,7 +1255,7 @@ pub(crate) fn emit(
             };
         }
 
-        Inst::Cmp_RMI_R {
+        Inst::CmpRmiR {
             size,
             src: src_e,
             dst: reg_g,
@@ -1740,7 +1740,7 @@ pub(crate) fn emit(
             };
         }
 
-        Inst::XMM_RM_R {
+        Inst::XmmRmR {
             op,
             src: src_e,
             dst: reg_g,
@@ -2007,7 +2007,7 @@ pub(crate) fn emit(
             // emitted.
         }
 
-        Inst::Xmm_Mov_R_M {
+        Inst::XmmMovRM {
             op,
             src,
             dst,
@@ -2089,7 +2089,7 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::XMM_Cmp_RM_R { op, src, dst } => {
+        Inst::XmmCmpRmR { op, src, dst } => {
             let rex = RexFlags::clear_w();
             let (prefix, opcode, len) = match op {
                 SseOpcode::Ptest => (LegacyPrefixes::_66, 0x0F3817, 3),
