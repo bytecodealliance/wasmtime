@@ -517,7 +517,7 @@ impl SSABuilder {
             ZeroOneOrMore::Zero => {
                 // The variable is used but never defined before. This is an irregularity in the
                 // code, but rather than throwing an error we silently initialize the variable to
-                // 0. This will have no effect since this situation happens in unreachable code.
+                // 0.
                 if !func.layout.is_block_inserted(dest_block) {
                     func.layout.append_block(dest_block);
                 }
