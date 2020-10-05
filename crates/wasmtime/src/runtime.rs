@@ -945,7 +945,8 @@ impl Store {
             .any(|(start, end)| *start <= addr && addr < *end)
     }
 
-    pub(crate) fn register_jit_code(&self, mut ranges: impl Iterator<Item = (usize, usize)>) {
+    pub(crate) fn register_jit_code(&self, module: &Module) {
+        let mut ranges = module.compiled_module().jit_code_ranges();
         // Checking of we already registered JIT code ranges by searching
         // first range start.
         match ranges.next() {
