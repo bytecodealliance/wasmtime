@@ -163,7 +163,7 @@ impl Instance {
 
         let host_info = Box::new({
             let frame_info_registration = module.register_frame_info();
-            store.register_jit_code(module.compiled_module().jit_code_ranges());
+            store.register_jit_code(&module);
             store.register_stack_maps(&module);
             frame_info_registration
         });
