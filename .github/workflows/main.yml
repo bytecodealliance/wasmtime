@@ -34,7 +34,7 @@ jobs:
     - run: |
         set -e
         curl -L https://github.com/rust-lang-nursery/mdBook/releases/download/v0.3.1/mdbook-v0.3.1-x86_64-unknown-linux-gnu.tar.gz | tar xzf -
-        echo ::add-path::`pwd`
+        echo `pwd` >> $GITHUB_PATH
     - run: (cd docs && mdbook build)
     - run: cargo build -p wasmtime
     - run: (cd docs && mdbook test -L ../target/debug/deps)
@@ -216,8 +216,8 @@ jobs:
       run: |
         curl https://releases.llvm.org/9.0.0/LLVM-9.0.0-win64.exe -o llvm-installer.exe
         7z x llvm-installer.exe -oC:/llvm-binary
-        echo ::set-env name=LIBCLANG_PATH::C:/llvm-binary/bin/libclang.dll
-        echo ::add-path::C:/llvm-binary/bin
+        echo LIBCLANG_PATH=C:/llvm-binary/bin/libclang.dll >> $GITHUB_ENV
+        echo C:/llvm-binary/bin >> $GITHUB_PATH
 
     - name: Query Clang Version
       if: matrix.os == 'windows-latest'
@@ -354,7 +354,7 @@ jobs:
 
     - name: Configure Cargo target
       run: |
-        echo ::set-env name=CARGO_BUILD_TARGET::${{ matrix.target }}
+        echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
         rustup target add ${{ matrix.target }}
       if: matrix.target != ''
 
@@ -376,12 +376,12 @@ jobs:
         # Configure Cargo for cross compilation and tell it how it can run
         # cross executables
         upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
-        echo ::set-env name=CARGO_TARGET_${upcase}_RUNNER::$HOME/qemu/bin/${{ matrix.qemu }}
-        echo ::set-env name=CARGO_TARGET_${upcase}_LINKER::${{ matrix.gcc }}
+        echo CARGO_TARGET_${upcase}_RUNNER=$HOME/qemu/bin/${{ matrix.qemu }} >> $GITHUB_ENV
+        echo CARGO_TARGET_${upcase}_LINKER=${{ matrix.gcc }} >> $GITHUB_ENV
 
         # See comments in the source for why we enable this during QEMU
         # emulation.
-        echo ::set-env name=WASMTIME_TEST_NO_HOG_MEMORY::1
+        echo WASMTIME_TEST_NO_HOG_MEMORY=1 >> $GITHUB_ENV
       if: matrix.target != '' && matrix.os == 'ubuntu-latest'
 
     # Install wasm32-wasi target in order to build wasi-common's integration
@@ -538,7 +538,7 @@ jobs:
           name=${GITHUB_REF:10}
         fi
         echo ::set-output name=val::$name
-        echo ::set-env name=TAG::$name
+        echo TAG=$name >> $GITHUB_ENV
       id: tagname
 
     # Assemble all the build artifacts into tarballs and zip archives.
@@ -588,7 +588,7 @@ jobs:
       with:
         path: ${{ runner.tool_cache }}/cargo-audit
         key: cargo-audit-bin-${{ env.CARGO_AUDIT_VERSION }}
-    - run: echo "::add-path::${{ runner.tool_cache }}/cargo-audit/bin"
+    - run: echo "${{ runner.tool_cache }}/cargo-audit/bin" >> $GITHUB_PATH
     - run: |
         cargo install --root ${{ runner.tool_cache }}/cargo-audit --version ${{ env.CARGO_AUDIT_VERSION }} cargo-audit
         cargo audit
@@ -603,8 +603,8 @@ jobs:
     - run: |
         cd ${{ runner.tool_cache }}
         curl -L https://github.com/mozilla/sccache/releases/download/0.2.13/sccache-0.2.13-x86_64-unknown-linux-musl.tar.gz | tar xzf -
-        echo "::add-path::`pwd`/sccache-0.2.13-x86_64-unknown-linux-musl"
-        echo ::set-env name=RUSTC_WRAPPER::sccache
+        echo "`pwd`/sccache-0.2.13-x86_64-unknown-linux-musl" >> $GITHUB_PATH
+        echo RUSTC_WRAPPER=sccache >> $GITHUB_ENV
     - run: |
         rustc scripts/publish.rs
         ./publish verify
