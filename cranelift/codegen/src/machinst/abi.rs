@@ -44,6 +44,11 @@ pub trait ABICallee {
     /// register.
     fn gen_copy_arg_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Self::I;
 
+    /// Is the given argument needed in the body (as opposed to, e.g., serving
+    /// only as a special ABI-specific placeholder)? This controls whether
+    /// lowering will copy it to a virtual reg use by CLIF instructions.
+    fn arg_is_needed_in_body(&self, idx: usize) -> bool;
+
     /// Generate any setup instruction needed to save values to the
     /// return-value area. This is usually used when were are multiple return
     /// values or an otherwise large return value that must be passed on the

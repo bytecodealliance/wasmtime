@@ -267,8 +267,11 @@ fn get_function_address_map<'data>(
     // Generate artificial srcloc for function start/end to identify boundary
     // within module. Similar to FuncTranslator::cur_srcloc(): it will wrap around
     // if byte code is larger than 4 GB.
-    let start_srcloc = ir::SourceLoc::new(data.module_offset as u32);
-    let end_srcloc = ir::SourceLoc::new((data.module_offset + data.data.len()) as u32);
+    let data = data.body.get_binary_reader();
+    let offset = data.original_position();
+    let len = data.bytes_remaining();
+    let start_srcloc = ir::SourceLoc::new(offset as u32);
+    let end_srcloc = ir::SourceLoc::new((offset + len) as u32);
 
     FunctionAddressMap {
         instructions,
@@ -302,7 +305,7 @@ impl Compiler for Cranelift {
         &self,
         translation: &ModuleTranslation<'_>,
         func_index: DefinedFuncIndex,
-        input: &FunctionBodyData<'_>,
+        mut input: FunctionBodyData<'_>,
         isa: &dyn isa::TargetIsa,
     ) -> Result<CompiledFunction, CompileError> {
         let module = &translation.module;
@@ -351,14 +354,15 @@ impl Compiler for Cranelift {
         });
         context.func.stack_limit = Some(stack_limit);
         let mut func_translator = self.take_translator();
-        let result = func_translator.translate(
-            translation.module_translation.as_ref().unwrap(),
-            input.data,
-            input.module_offset,
+        let result = func_translator.translate_body(
+            &mut input.validator,
+            input.body.clone(),
             &mut context.func,
             &mut func_env,
         );
-        self.save_translator(func_translator);
+        if result.is_ok() {
+            self.save_translator(func_translator);
+        }
         result?;
 
         let mut code_buf: Vec<u8> = Vec::new();
@@ -381,7 +385,7 @@ impl Compiler for Cranelift {
             CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
         })?;
 
-        let address_transform = get_function_address_map(&context, input, code_buf.len(), isa);
+        let address_transform = get_function_address_map(&context, &input, code_buf.len(), isa);
 
         let ranges = if tunables.debug_info {
             let ranges = context.build_value_labels_ranges(isa).map_err(|error| {

@@ -420,6 +420,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 self.f.dfg.block_params(entry_bb)
             );
             for (i, param) in self.f.dfg.block_params(entry_bb).iter().enumerate() {
+                if !self.vcode.abi().arg_is_needed_in_body(i) {
+                    continue;
+                }
                 let reg = Writable::from_reg(self.value_regs[*param]);
                 let insn = self.vcode.abi().gen_copy_arg_to_reg(i, reg);
                 self.emit(insn);

@@ -31,6 +31,11 @@ static BALDRDASH_SIG_REG: u8 = 10;
 /// This is SpiderMonkey's `WasmTlsReg`.
 static BALDRDASH_TLS_REG: u8 = 23;
 
+/// Offset in stack-arg area to callee-TLS slot in Baldrdash-2020 calling convention.
+static BALDRDASH_CALLEE_TLS_OFFSET: i64 = 0;
+/// Offset in stack-arg area to caller-TLS slot in Baldrdash-2020 calling convention.
+static BALDRDASH_CALLER_TLS_OFFSET: i64 = 8;
+
 // These two lists represent the registers the JIT may *not* use at any point in generated code.
 //
 // So these are callee-preserved from the JIT's point of view, and every register not in this list
@@ -75,6 +80,7 @@ fn try_fill_baldrdash_reg(call_conv: isa::CallConv, param: &ir::AbiParam) -> Opt
                     xreg(BALDRDASH_TLS_REG).to_real_reg(),
                     ir::types::I64,
                     param.extension,
+                    param.purpose,
                 ))
             }
             &ir::ArgumentPurpose::SignatureId => {
@@ -83,6 +89,27 @@ fn try_fill_baldrdash_reg(call_conv: isa::CallConv, param: &ir::AbiParam) -> Opt
                     xreg(BALDRDASH_SIG_REG).to_real_reg(),
                     ir::types::I64,
                     param.extension,
+                    param.purpose,
+                ))
+            }
+            &ir::ArgumentPurpose::CalleeTLS => {
+                // This is SpiderMonkey's callee TLS slot in the extended frame of Wasm's ABI-2020.
+                assert!(call_conv == isa::CallConv::Baldrdash2020);
+                Some(ABIArg::Stack(
+                    BALDRDASH_CALLEE_TLS_OFFSET,
+                    ir::types::I64,
+                    ir::ArgumentExtension::None,
+                    param.purpose,
+                ))
+            }
+            &ir::ArgumentPurpose::CallerTLS => {
+                // This is SpiderMonkey's caller TLS slot in the extended frame of Wasm's ABI-2020.
+                assert!(call_conv == isa::CallConv::Baldrdash2020);
+                Some(ABIArg::Stack(
+                    BALDRDASH_CALLER_TLS_OFFSET,
+                    ir::types::I64,
+                    ir::ArgumentExtension::None,
+                    param.purpose,
                 ))
             }
             _ => None,
@@ -100,6 +127,18 @@ impl Into<AMode> for StackAMode {
             StackAMode::SPOffset(off, ty) => AMode::SPOffset(off, ty),
         }
     }
+}
+
+// Returns the size of stack space needed to store the
+// `int_reg` and `vec_reg`.
+fn saved_reg_stack_size(
+    int_reg: &[Writable<RealReg>],
+    vec_reg: &[Writable<RealReg>],
+) -> (usize, usize) {
+    // Round up to multiple of 2, to keep 16-byte stack alignment.
+    let int_save_bytes = (int_reg.len() + (int_reg.len() & 1)) * 8;
+    let vec_save_bytes = vec_reg.len() * 16;
+    (int_save_bytes, vec_save_bytes)
 }
 
 /// AArch64-specific ABI behavior. This struct just serves as an implementation
@@ -120,12 +159,19 @@ impl ABIMachineSpec for AArch64MachineDeps {
         add_ret_area_ptr: bool,
     ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
         let is_baldrdash = call_conv.extends_baldrdash();
+        let has_baldrdash_tls = call_conv == isa::CallConv::Baldrdash2020;
 
         // See AArch64 ABI (https://c9x.me/compile/bib/abi-arm64.pdf), sections 5.4.
         let mut next_xreg = 0;
         let mut next_vreg = 0;
         let mut next_stack: u64 = 0;
         let mut ret = vec![];
+
+        if args_or_rets == ArgsOrRets::Args && has_baldrdash_tls {
+            // Baldrdash ABI-2020 always has two stack-arg slots reserved, for the callee and
+            // caller TLS-register values, respectively.
+            next_stack = 16;
+        }
 
         // Note on return values: on the regular non-baldrdash ABI, we may return values in 8
         // registers for V128 and I64 registers independently of the number of register values
@@ -155,7 +201,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 &ir::ArgumentPurpose::VMContext
                 | &ir::ArgumentPurpose::Normal
                 | &ir::ArgumentPurpose::StackLimit
-                | &ir::ArgumentPurpose::SignatureId => {}
+                | &ir::ArgumentPurpose::SignatureId
+                | &ir::ArgumentPurpose::CallerTLS
+                | &ir::ArgumentPurpose::CalleeTLS => {}
                 _ => panic!(
                     "Unsupported argument purpose {:?} in signature: {:?}",
                     param.purpose, params
@@ -188,6 +236,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     reg.to_real_reg(),
                     param.value_type,
                     param.extension,
+                    param.purpose,
                 ));
                 *next_reg += 1;
                 remaining_reg_vals -= 1;
@@ -203,6 +252,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     next_stack as i64,
                     param.value_type,
                     param.extension,
+                    param.purpose,
                 ));
                 next_stack += size;
             }
@@ -219,12 +269,14 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     xreg(next_xreg).to_real_reg(),
                     I64,
                     ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
                 ));
             } else {
                 ret.push(ABIArg::Stack(
                     next_stack as i64,
                     I64,
                     ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
                 ));
                 next_stack += 8;
             }
@@ -453,12 +505,20 @@ impl ABIMachineSpec for AArch64MachineDeps {
     // nominal SP offset; abi_impl generic code will do that.
     fn gen_clobber_save(
         call_conv: isa::CallConv,
+        _: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
+        fixed_frame_storage_size: u32,
     ) -> (u64, SmallVec<[Inst; 16]>) {
         let mut insts = SmallVec::new();
         let (clobbered_int, clobbered_vec) = get_callee_saves(call_conv, clobbers);
-        let mut clobber_size = 0;
-        for reg_pair in clobbered_int.chunks(2) {
+
+        let (int_save_bytes, vec_save_bytes) = saved_reg_stack_size(&clobbered_int, &clobbered_vec);
+        let total_save_bytes = (vec_save_bytes + int_save_bytes) as i32;
+        insts.extend(Self::gen_sp_reg_adjust(
+            -(total_save_bytes + fixed_frame_storage_size as i32),
+        ));
+
+        for (i, reg_pair) in clobbered_int.chunks(2).enumerate() {
             let (r1, r2) = if reg_pair.len() == 2 {
                 // .to_reg().to_reg(): Writable<RealReg> --> RealReg --> Reg
                 (reg_pair[0].to_reg().to_reg(), reg_pair[1].to_reg().to_reg())
@@ -469,63 +529,42 @@ impl ABIMachineSpec for AArch64MachineDeps {
             debug_assert!(r1.get_class() == RegClass::I64);
             debug_assert!(r2.get_class() == RegClass::I64);
 
-            // stp r1, r2, [sp, #-16]!
+            // stp r1, r2, [sp, #(i * #16)]
             insts.push(Inst::StoreP64 {
                 rt: r1,
                 rt2: r2,
-                mem: PairAMode::PreIndexed(
-                    writable_stack_reg(),
-                    SImm7Scaled::maybe_from_i64(-16, types::I64).unwrap(),
+                mem: PairAMode::SignedOffset(
+                    stack_reg(),
+                    SImm7Scaled::maybe_from_i64((i * 16) as i64, types::I64).unwrap(),
                 ),
             });
-            clobber_size += 16;
         }
-        let vec_save_bytes = clobbered_vec.len() * 16;
-        if vec_save_bytes != 0 {
-            insts.push(Inst::AluRRImm12 {
-                alu_op: ALUOp::Sub64,
-                rd: writable_stack_reg(),
-                rn: stack_reg(),
-                imm12: Imm12::maybe_from_u64(vec_save_bytes as u64).unwrap(),
-            });
-            clobber_size += vec_save_bytes;
-        }
+
+        let vec_offset = int_save_bytes;
         for (i, reg) in clobbered_vec.iter().enumerate() {
             insts.push(Inst::FpuStore128 {
                 rd: reg.to_reg().to_reg(),
-                mem: AMode::Unscaled(stack_reg(), SImm9::maybe_from_i64((i * 16) as i64).unwrap()),
+                mem: AMode::Unscaled(
+                    stack_reg(),
+                    SImm9::maybe_from_i64((vec_offset + (i * 16)) as i64).unwrap(),
+                ),
                 srcloc: None,
             });
         }
 
-        (clobber_size as u64, insts)
+        (total_save_bytes as u64, insts)
     }
 
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
+        flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
         let (clobbered_int, clobbered_vec) = get_callee_saves(call_conv, clobbers);
 
-        for (i, reg) in clobbered_vec.iter().enumerate() {
-            insts.push(Inst::FpuLoad128 {
-                rd: Writable::from_reg(reg.to_reg().to_reg()),
-                mem: AMode::Unscaled(stack_reg(), SImm9::maybe_from_i64((i * 16) as i64).unwrap()),
-                srcloc: None,
-            });
-        }
-        let vec_save_bytes = clobbered_vec.len() * 16;
-        if vec_save_bytes != 0 {
-            insts.push(Inst::AluRRImm12 {
-                alu_op: ALUOp::Add64,
-                rd: writable_stack_reg(),
-                rn: stack_reg(),
-                imm12: Imm12::maybe_from_u64(vec_save_bytes as u64).unwrap(),
-            });
-        }
-
-        for reg_pair in clobbered_int.chunks(2).rev() {
+        let (int_save_bytes, vec_save_bytes) = saved_reg_stack_size(&clobbered_int, &clobbered_vec);
+        for (i, reg_pair) in clobbered_int.chunks(2).enumerate() {
             let (r1, r2) = if reg_pair.len() == 2 {
                 (
                     reg_pair[0].map(|r| r.to_reg()),
@@ -538,15 +577,46 @@ impl ABIMachineSpec for AArch64MachineDeps {
             debug_assert!(r1.to_reg().get_class() == RegClass::I64);
             debug_assert!(r2.to_reg().get_class() == RegClass::I64);
 
-            // ldp r1, r2, [sp], #16
+            // ldp r1, r2, [sp, #(i * 16)]
             insts.push(Inst::LoadP64 {
                 rt: r1,
                 rt2: r2,
-                mem: PairAMode::PostIndexed(
-                    writable_stack_reg(),
-                    SImm7Scaled::maybe_from_i64(16, types::I64).unwrap(),
+                mem: PairAMode::SignedOffset(
+                    stack_reg(),
+                    SImm7Scaled::maybe_from_i64((i * 16) as i64, types::I64).unwrap(),
                 ),
             });
+        }
+
+        for (i, reg) in clobbered_vec.iter().enumerate() {
+            insts.push(Inst::FpuLoad128 {
+                rd: Writable::from_reg(reg.to_reg().to_reg()),
+                mem: AMode::Unscaled(
+                    stack_reg(),
+                    SImm9::maybe_from_i64(((i * 16) + int_save_bytes) as i64).unwrap(),
+                ),
+                srcloc: None,
+            });
+        }
+
+        // For non-baldrdash calling conventions, the frame pointer
+        // will be moved into the stack pointer in the epilogue, so we
+        // can skip restoring the stack pointer value with this `add`.
+        if call_conv.extends_baldrdash() {
+            let total_save_bytes = (int_save_bytes + vec_save_bytes) as i32;
+            insts.extend(Self::gen_sp_reg_adjust(total_save_bytes));
+        }
+
+        // If this is Baldrdash-2020, restore the callee (i.e., our) TLS
+        // register. We may have allocated it for something else and clobbered
+        // it, but the ABI expects us to leave the TLS register unchanged.
+        if call_conv == isa::CallConv::Baldrdash2020 {
+            let off = BALDRDASH_CALLEE_TLS_OFFSET + Self::fp_to_arg_offset(call_conv, flags);
+            insts.push(Inst::gen_load(
+                writable_xreg(BALDRDASH_TLS_REG),
+                AMode::UnsignedOffset(fp_reg(), UImm12Scaled::maybe_from_i64(off, I64).unwrap()),
+                I64,
+            ));
         }
 
         insts

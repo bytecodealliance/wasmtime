@@ -8,7 +8,7 @@ use crate::sections_translator::{
 };
 use crate::state::ModuleTranslationState;
 use cranelift_codegen::timing;
-use wasmparser::{NameSectionReader, Parser, Payload};
+use wasmparser::{NameSectionReader, Parser, Payload, Validator};
 
 /// Translate a sequence of bytes forming a valid Wasm binary into a list of valid Cranelift IR
 /// [`Function`](cranelift_codegen::ir::Function).
@@ -18,75 +18,105 @@ pub fn translate_module<'data>(
 ) -> WasmResult<ModuleTranslationState> {
     let _tt = timing::wasm_translate_module();
     let mut module_translation_state = ModuleTranslationState::new();
+    let mut validator = Validator::new();
+    validator.wasm_features(environ.wasm_features());
 
     for payload in Parser::new(0).parse_all(data) {
         match payload? {
-            Payload::Version { .. } | Payload::End => {}
+            Payload::Version { num, range } => {
+                validator.version(num, &range)?;
+            }
+            Payload::End => {
+                validator.end()?;
+            }
 
             Payload::TypeSection(types) => {
+                validator.type_section(&types)?;
                 parse_type_section(types, &mut module_translation_state, environ)?;
             }
 
             Payload::ImportSection(imports) => {
+                validator.import_section(&imports)?;
                 parse_import_section(imports, environ)?;
             }
 
             Payload::FunctionSection(functions) => {
+                validator.function_section(&functions)?;
                 parse_function_section(functions, environ)?;
             }
 
             Payload::TableSection(tables) => {
+                validator.table_section(&tables)?;
                 parse_table_section(tables, environ)?;
             }
 
             Payload::MemorySection(memories) => {
+                validator.memory_section(&memories)?;
                 parse_memory_section(memories, environ)?;
             }
 
             Payload::GlobalSection(globals) => {
+                validator.global_section(&globals)?;
                 parse_global_section(globals, environ)?;
             }
 
             Payload::ExportSection(exports) => {
+                validator.export_section(&exports)?;
                 parse_export_section(exports, environ)?;
             }
 
-            Payload::StartSection { func, .. } => {
+            Payload::StartSection { func, range } => {
+                validator.start_section(func, &range)?;
                 parse_start_section(func, environ)?;
             }
 
             Payload::ElementSection(elements) => {
+                validator.element_section(&elements)?;
                 parse_element_section(elements, environ)?;
             }
 
             Payload::CodeSectionStart { count, range, .. } => {
+                validator.code_section_start(count, &range)?;
                 environ.reserve_function_bodies(count, range.start as u64);
             }
 
-            Payload::CodeSectionEntry(code) => {
-                let mut code = code.get_binary_reader();
-                let size = code.bytes_remaining();
-                let offset = code.original_position();
-                environ.define_function_body(
-                    &module_translation_state,
-                    code.read_bytes(size)?,
-                    offset,
-                )?;
+            Payload::CodeSectionEntry(body) => {
+                let func_validator = validator.code_section_entry()?;
+                environ.define_function_body(func_validator, body)?;
             }
 
             Payload::DataSection(data) => {
+                validator.data_section(&data)?;
                 parse_data_section(data, environ)?;
             }
 
-            Payload::DataCountSection { count, .. } => {
+            Payload::DataCountSection { count, range } => {
+                validator.data_count_section(count, &range)?;
                 environ.reserve_passive_data(count)?;
             }
 
-            Payload::ModuleSection(_)
-            | Payload::InstanceSection(_)
-            | Payload::AliasSection(_)
-            | Payload::ModuleCodeSectionStart { .. }
-            | Payload::ModuleCodeSectionEntry { .. } => {
+            Payload::ModuleSection(s) => {
+                validator.module_section(&s)?;
+                unimplemented!("module linking not implemented yet")
+            }
+            Payload::InstanceSection(s) => {
+                validator.instance_section(&s)?;
+                unimplemented!("module linking not implemented yet")
+            }
+            Payload::AliasSection(s) => {
+                validator.alias_section(&s)?;
+                unimplemented!("module linking not implemented yet")
+            }
+            Payload::ModuleCodeSectionStart {
+                count,
+                range,
+                size: _,
+            } => {
+                validator.module_code_section_start(count, &range)?;
+                unimplemented!("module linking not implemented yet")
+            }
+
+            Payload::ModuleCodeSectionEntry { .. } => {
                 unimplemented!("module linking not implemented yet")
             }
 
@@ -105,7 +135,10 @@ pub fn translate_module<'data>(
 
             Payload::CustomSection { name, data, .. } => environ.custom_section(name, data)?,
 
-            Payload::UnknownSection { .. } => unreachable!(),
+            Payload::UnknownSection { id, range, .. } => {
+                validator.unknown_section(id, &range)?;
+                unreachable!();
+            }
         }
     }
 

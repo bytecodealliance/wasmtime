@@ -127,9 +127,24 @@ use std::mem;
 #[derive(Clone, Copy, Debug)]
 pub enum ABIArg {
     /// In a real register.
-    Reg(RealReg, ir::Type, ir::ArgumentExtension),
+    Reg(
+        RealReg,
+        ir::Type,
+        ir::ArgumentExtension,
+        ir::ArgumentPurpose,
+    ),
     /// Arguments only: on stack, at given offset from SP at entry.
-    Stack(i64, ir::Type, ir::ArgumentExtension),
+    Stack(i64, ir::Type, ir::ArgumentExtension, ir::ArgumentPurpose),
+}
+
+impl ABIArg {
+    /// Get the purpose of this arg.
+    fn get_purpose(self) -> ir::ArgumentPurpose {
+        match self {
+            ABIArg::Reg(_, _, _, purpose) => purpose,
+            ABIArg::Stack(_, _, _, purpose) => purpose,
+        }
+    }
 }
 
 /// Are we computing information about arguments or return values? Much of the
@@ -308,7 +323,9 @@ pub trait ABIMachineSpec {
     /// nominal SP offset; caller will do that.
     fn gen_clobber_save(
         call_conv: isa::CallConv,
+        flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
+        fixed_frame_storage_size: u32,
     ) -> (u64, SmallVec<[Self::I; 16]>);
 
     /// Generate a clobber-restore sequence. This sequence should perform the
@@ -317,6 +334,7 @@ pub trait ABIMachineSpec {
     /// clobber-save sequence finished.
     fn gen_clobber_restore(
         call_conv: isa::CallConv,
+        flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
     ) -> SmallVec<[Self::I; 16]>;
 
@@ -700,8 +718,8 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         match &self.sig.args[idx] {
             // Extension mode doesn't matter (we're copying out, not in; we
             // ignore high bits by convention).
-            &ABIArg::Reg(r, ty, _) => M::gen_move(into_reg, r.to_reg(), ty),
-            &ABIArg::Stack(off, ty, _) => M::gen_load_stack(
+            &ABIArg::Reg(r, ty, ..) => M::gen_move(into_reg, r.to_reg(), ty),
+            &ABIArg::Stack(off, ty, ..) => M::gen_load_stack(
                 StackAMode::FPOffset(M::fp_to_arg_offset(self.call_conv, &self.flags) + off, ty),
                 into_reg,
                 ty,
@@ -709,11 +727,21 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         }
     }
 
+    fn arg_is_needed_in_body(&self, idx: usize) -> bool {
+        match self.sig.args[idx].get_purpose() {
+            // Special Baldrdash-specific pseudo-args that are present only to
+            // fill stack slots.  Won't ever be used as ordinary values in the
+            // body.
+            ir::ArgumentPurpose::CalleeTLS | ir::ArgumentPurpose::CallerTLS => false,
+            _ => true,
+        }
+    }
+
     fn gen_copy_reg_to_retval(&self, idx: usize, from_reg: Writable<Reg>) -> Vec<Self::I> {
         let mut ret = Vec::new();
         let word_bits = M::word_bits() as u8;
         match &self.sig.rets[idx] {
-            &ABIArg::Reg(r, ty, ext) => {
+            &ABIArg::Reg(r, ty, ext, ..) => {
                 let from_bits = ty_bits(ty) as u8;
                 let dest_reg = Writable::from_reg(r.to_reg());
                 match (ext, from_bits) {
@@ -732,7 +760,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                     _ => ret.push(M::gen_move(dest_reg, from_reg.to_reg(), ty)),
                 };
             }
-            &ABIArg::Stack(off, mut ty, ext) => {
+            &ABIArg::Stack(off, mut ty, ext, ..) => {
                 let from_bits = ty_bits(ty) as u8;
                 // A machine ABI implementation should ensure that stack frames
                 // have "reasonable" size. All current ABIs for machinst
@@ -904,7 +932,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let mask = 2 * bytes - 1;
         let total_stacksize = (total_stacksize + mask) & !mask; // 16-align the stack.
 
-        let mut total_sp_adjust = 0;
+        let mut fixed_frame_storage_size = 0;
 
         if !self.call_conv.extends_baldrdash() {
             // Leaf functions with zero stack don't need a stack check if one's
@@ -916,7 +944,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                 }
             }
             if total_stacksize > 0 {
-                total_sp_adjust += total_stacksize as u64;
+                fixed_frame_storage_size += total_stacksize;
             }
         }
 
@@ -930,14 +958,13 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         // [crate::machinst::abi_impl](this module) for more details on
         // stackframe layout and nominal SP maintenance.
 
-        if total_sp_adjust > 0 {
-            // sub sp, sp, #total_stacksize
-            let adj = total_sp_adjust as i32;
-            insts.extend(M::gen_sp_reg_adjust(-adj));
-        }
-
         // Save clobbered registers.
-        let (clobber_size, clobber_insts) = M::gen_clobber_save(self.call_conv, &self.clobbered);
+        let (clobber_size, clobber_insts) = M::gen_clobber_save(
+            self.call_conv,
+            &self.flags,
+            &self.clobbered,
+            fixed_frame_storage_size,
+        );
         insts.extend(clobber_insts);
 
         if clobber_size > 0 {
@@ -952,7 +979,11 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let mut insts = vec![];
 
         // Restore clobbered registers.
-        insts.extend(M::gen_clobber_restore(self.call_conv, &self.clobbered));
+        insts.extend(M::gen_clobber_restore(
+            self.call_conv,
+            &self.flags,
+            &self.clobbered,
+        ));
 
         // N.B.: we do *not* emit a nominal SP adjustment here, because (i) there will be no
         // references to nominal SP offsets before the return below, and (ii) the instruction
@@ -1146,7 +1177,7 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         let word_rc = M::word_reg_class();
         let word_bits = M::word_bits() as usize;
         match &self.sig.args[idx] {
-            &ABIArg::Reg(reg, ty, ext)
+            &ABIArg::Reg(reg, ty, ext, _)
                 if ext != ir::ArgumentExtension::None && ty_bits(ty) < word_bits =>
             {
                 assert_eq!(word_rc, reg.get_class());
@@ -1163,10 +1194,10 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
                     word_bits as u8,
                 ));
             }
-            &ABIArg::Reg(reg, ty, _) => {
+            &ABIArg::Reg(reg, ty, _, _) => {
                 ctx.emit(M::gen_move(Writable::from_reg(reg.to_reg()), from_reg, ty));
             }
-            &ABIArg::Stack(off, mut ty, ext) => {
+            &ABIArg::Stack(off, mut ty, ext, _) => {
                 if ext != ir::ArgumentExtension::None && ty_bits(ty) < word_bits {
                     assert_eq!(word_rc, from_reg.get_class());
                     let signed = match ext {
@@ -1205,8 +1236,8 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         match &self.sig.rets[idx] {
             // Extension mode doesn't matter because we're copying out, not in,
             // and we ignore high bits in our own registers by convention.
-            &ABIArg::Reg(reg, ty, _) => ctx.emit(M::gen_move(into_reg, reg.to_reg(), ty)),
-            &ABIArg::Stack(off, ty, _) => {
+            &ABIArg::Reg(reg, ty, _, _) => ctx.emit(M::gen_move(into_reg, reg.to_reg(), ty)),
+            &ABIArg::Stack(off, ty, _, _) => {
                 let ret_area_base = self.sig.stack_arg_space;
                 ctx.emit(M::gen_load_stack(
                     StackAMode::SPOffset(off + ret_area_base, ty),

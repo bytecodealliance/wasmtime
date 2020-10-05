@@ -158,6 +158,7 @@ fn legalize_entry_params(func: &mut Function, entry: Block) {
                     has_stack_limit = true;
                 }
                 ArgumentPurpose::Link => panic!("Unexpected link arg {}", abi_type),
+                ArgumentPurpose::CallerTLS | ArgumentPurpose::CalleeTLS => {}
             }
             abi_arg += 1;
         } else {
@@ -217,6 +218,7 @@ fn legalize_entry_params(func: &mut Function, entry: Block) {
                 debug_assert!(!has_stack_limit, "Multiple stack_limit parameters found");
                 has_stack_limit = true;
             }
+            ArgumentPurpose::CallerTLS | ArgumentPurpose::CalleeTLS => {}
         }
 
         // Just create entry block values to match here. We will use them in `handle_return_abi()`

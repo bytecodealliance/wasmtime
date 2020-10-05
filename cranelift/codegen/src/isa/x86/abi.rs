@@ -506,6 +506,7 @@ pub fn prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> Codege
             baldrdash_prologue_epilogue(func, isa)
         }
         CallConv::Probestack => unimplemented!("probestack calling convention"),
+        CallConv::Baldrdash2020 => unimplemented!("Baldrdash ABI 2020"),
     }
 }
 

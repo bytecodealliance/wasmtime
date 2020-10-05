@@ -476,7 +476,7 @@ pub(crate) fn emit(
     state: &mut EmitState,
 ) {
     match inst {
-        Inst::Alu_RMI_R {
+        Inst::AluRmiR {
             is_64,
             op,
             src,
@@ -517,8 +517,8 @@ pub(crate) fn emit(
                     }
 
                     RegMemImm::Imm { simm32 } => {
-                        let useImm8 = low8_will_sign_extend_to_32(*simm32);
-                        let opcode = if useImm8 { 0x6B } else { 0x69 };
+                        let use_imm8 = low8_will_sign_extend_to_32(*simm32);
+                        let opcode = if use_imm8 { 0x6B } else { 0x69 };
                         // Yes, really, reg_g twice.
                         emit_std_reg_reg(
                             sink,
@@ -529,7 +529,7 @@ pub(crate) fn emit(
                             reg_g.to_reg(),
                             rex,
                         );
-                        emit_simm(sink, if useImm8 { 1 } else { 4 }, *simm32);
+                        emit_simm(sink, if use_imm8 { 1 } else { 4 }, *simm32);
                     }
                 }
             } else {
@@ -891,7 +891,7 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::Mov_R_R { is_64, src, dst } => {
+        Inst::MovRR { is_64, src, dst } => {
             let rex = if *is_64 {
                 RexFlags::set_w()
             } else {
@@ -900,7 +900,7 @@ pub(crate) fn emit(
             emit_std_reg_reg(sink, LegacyPrefixes::None, 0x89, 1, *src, dst.to_reg(), rex);
         }
 
-        Inst::MovZX_RM_R {
+        Inst::MovzxRmR {
             ext_mode,
             src,
             dst,
@@ -981,7 +981,7 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::Mov64_M_R { src, dst, srcloc } => {
+        Inst::Mov64MR { src, dst, srcloc } => {
             let src = &src.finalize(state);
 
             if let Some(srcloc) = *srcloc {
@@ -1010,7 +1010,7 @@ pub(crate) fn emit(
             RexFlags::set_w(),
         ),
 
-        Inst::MovSX_RM_R {
+        Inst::MovsxRmR {
             ext_mode,
             src,
             dst,
@@ -1083,7 +1083,7 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::Mov_R_M {
+        Inst::MovRM {
             size,
             src,
             dst,
@@ -1155,7 +1155,7 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::Shift_R {
+        Inst::ShiftR {
             size,
             kind,
             num_bits,
@@ -1255,7 +1255,7 @@ pub(crate) fn emit(
             };
         }
 
-        Inst::Cmp_RMI_R {
+        Inst::CmpRmiR {
             size,
             src: src_e,
             dst: reg_g,
@@ -1424,13 +1424,12 @@ pub(crate) fn emit(
         }
 
         Inst::Pop64 { dst } => {
-            let encDst = int_reg_enc(dst.to_reg());
-            if encDst >= 8 {
-                // 0x41 == REX.{W=0, B=1}.  It seems that REX.W is irrelevant
-                // here.
+            let enc_dst = int_reg_enc(dst.to_reg());
+            if enc_dst >= 8 {
+                // 0x41 == REX.{W=0, B=1}.  It seems that REX.W is irrelevant here.
                 sink.put1(0x41);
             }
-            sink.put1(0x58 + (encDst & 7));
+            sink.put1(0x58 + (enc_dst & 7));
         }
 
         Inst::CallKnown {
@@ -1741,7 +1740,7 @@ pub(crate) fn emit(
             };
         }
 
-        Inst::XMM_RM_R {
+        Inst::XmmRmR {
             op,
             src: src_e,
             dst: reg_g,
@@ -1786,6 +1785,14 @@ pub(crate) fn emit(
                 SseOpcode::Paddusw => (LegacyPrefixes::_66, 0x0FDD, 2),
                 SseOpcode::Pavgb => (LegacyPrefixes::_66, 0x0FE0, 2),
                 SseOpcode::Pavgw => (LegacyPrefixes::_66, 0x0FE3, 2),
+                SseOpcode::Pcmpeqb => (LegacyPrefixes::_66, 0x0F74, 2),
+                SseOpcode::Pcmpeqw => (LegacyPrefixes::_66, 0x0F75, 2),
+                SseOpcode::Pcmpeqd => (LegacyPrefixes::_66, 0x0F76, 2),
+                SseOpcode::Pcmpeqq => (LegacyPrefixes::_66, 0x0F3829, 3),
+                SseOpcode::Pcmpgtb => (LegacyPrefixes::_66, 0x0F64, 2),
+                SseOpcode::Pcmpgtw => (LegacyPrefixes::_66, 0x0F65, 2),
+                SseOpcode::Pcmpgtd => (LegacyPrefixes::_66, 0x0F66, 2),
+                SseOpcode::Pcmpgtq => (LegacyPrefixes::_66, 0x0F3837, 3),
                 SseOpcode::Pmaxsb => (LegacyPrefixes::_66, 0x0F383C, 3),
                 SseOpcode::Pmaxsw => (LegacyPrefixes::_66, 0x0FEE, 2),
                 SseOpcode::Pmaxsd => (LegacyPrefixes::_66, 0x0F383D, 3),
@@ -1801,6 +1808,7 @@ pub(crate) fn emit(
                 SseOpcode::Pmulld => (LegacyPrefixes::_66, 0x0F3840, 3),
                 SseOpcode::Pmullw => (LegacyPrefixes::_66, 0x0FD5, 2),
                 SseOpcode::Pmuludq => (LegacyPrefixes::_66, 0x0FF4, 2),
+                SseOpcode::Por => (LegacyPrefixes::_66, 0x0FEB, 2),
                 SseOpcode::Pshufb => (LegacyPrefixes::_66, 0x0F3800, 3),
                 SseOpcode::Psubb => (LegacyPrefixes::_66, 0x0FF8, 2),
                 SseOpcode::Psubd => (LegacyPrefixes::_66, 0x0FFA, 2),
@@ -1994,7 +2002,12 @@ pub(crate) fn emit(
             sink.bind_label(constant_end_label);
         }
 
-        Inst::Xmm_Mov_R_M {
+        Inst::XmmUninitializedValue { .. } => {
+            // This instruction format only exists to declare a register as a `def`; no code is
+            // emitted.
+        }
+
+        Inst::XmmMovRM {
             op,
             src,
             dst,
@@ -2076,21 +2089,22 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::XMM_Cmp_RM_R { op, src, dst } => {
+        Inst::XmmCmpRmR { op, src, dst } => {
             let rex = RexFlags::clear_w();
-            let (prefix, opcode) = match op {
-                SseOpcode::Ucomisd => (LegacyPrefixes::_66, 0x0F2E),
-                SseOpcode::Ucomiss => (LegacyPrefixes::None, 0x0F2E),
+            let (prefix, opcode, len) = match op {
+                SseOpcode::Ptest => (LegacyPrefixes::_66, 0x0F3817, 3),
+                SseOpcode::Ucomisd => (LegacyPrefixes::_66, 0x0F2E, 2),
+                SseOpcode::Ucomiss => (LegacyPrefixes::None, 0x0F2E, 2),
                 _ => unimplemented!("Emit xmm cmp rm r"),
             };
 
             match src {
                 RegMem::Reg { reg } => {
-                    emit_std_reg_reg(sink, prefix, opcode, 2, *dst, *reg, rex);
+                    emit_std_reg_reg(sink, prefix, opcode, len, *dst, *reg, rex);
                 }
                 RegMem::Mem { addr } => {
                     let addr = &addr.finalize(state);
-                    emit_std_reg_mem(sink, prefix, opcode, 2, *dst, addr, rex);
+                    emit_std_reg_mem(sink, prefix, opcode, len, *dst, addr, rex);
                 }
             }
         }

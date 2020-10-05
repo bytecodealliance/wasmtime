@@ -335,6 +335,20 @@ pub enum ArgumentPurpose {
     /// This is a pointer to a stack limit. It is used to check the current stack pointer
     /// against. Can only appear once in a signature.
     StackLimit,
+
+    /// A callee TLS value.
+    ///
+    /// In the Baldrdash-2020 calling convention, the stack upon entry to the callee contains the
+    /// TLS-register values for the caller and the callee. This argument is used to provide the
+    /// value for the callee.
+    CalleeTLS,
+
+    /// A caller TLS value.
+    ///
+    /// In the Baldrdash-2020 calling convention, the stack upon entry to the callee contains the
+    /// TLS-register values for the caller and the callee. This argument is used to provide the
+    /// value for the caller.
+    CallerTLS,
 }
 
 impl fmt::Display for ArgumentPurpose {
@@ -349,6 +363,8 @@ impl fmt::Display for ArgumentPurpose {
             Self::VMContext => "vmctx",
             Self::SignatureId => "sigid",
             Self::StackLimit => "stack_limit",
+            Self::CalleeTLS => "callee_tls",
+            Self::CallerTLS => "caller_tls",
         })
     }
 }
@@ -470,6 +486,7 @@ mod tests {
             CallConv::WindowsFastcall,
             CallConv::BaldrdashSystemV,
             CallConv::BaldrdashWindows,
+            CallConv::Baldrdash2020,
         ] {
             assert_eq!(Ok(cc), cc.to_string().parse())
         }

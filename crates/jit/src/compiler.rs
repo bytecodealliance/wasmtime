@@ -4,6 +4,8 @@ use crate::instantiate::SetupError;
 use crate::object::{build_object, ObjectUnwindInfo};
 use object::write::Object;
 use std::hash::{Hash, Hasher};
+use std::mem;
+use wasmparser::WasmFeatures;
 use wasmtime_debug::{emit_dwarf, DwarfSection};
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
@@ -40,11 +42,17 @@ pub struct Compiler {
     compiler: Box<dyn EnvCompiler>,
     strategy: CompilationStrategy,
     tunables: Tunables,
+    features: WasmFeatures,
 }
 
 impl Compiler {
     /// Construct a new `Compiler`.
-    pub fn new(isa: Box<dyn TargetIsa>, strategy: CompilationStrategy, tunables: Tunables) -> Self {
+    pub fn new(
+        isa: Box<dyn TargetIsa>,
+        strategy: CompilationStrategy,
+        tunables: Tunables,
+        features: WasmFeatures,
+    ) -> Self {
         Self {
             isa,
             strategy,
@@ -56,6 +64,7 @@ impl Compiler {
                 CompilationStrategy::Lightbeam => Box::new(wasmtime_lightbeam::Lightbeam),
             },
             tunables,
+            features,
         }
     }
 }
@@ -107,20 +116,26 @@ impl Compiler {
         &self.tunables
     }
 
+    /// Return the enabled wasm features.
+    pub fn features(&self) -> &WasmFeatures {
+        &self.features
+    }
+
     /// Compile the given function bodies.
     pub fn compile<'data>(
         &self,
-        translation: &ModuleTranslation,
+        translation: &mut ModuleTranslation,
     ) -> Result<Compilation, SetupError> {
+        let functions = mem::take(&mut translation.function_body_inputs);
         cfg_if::cfg_if! {
             if #[cfg(feature = "parallel-compilation")] {
                 use rayon::prelude::*;
-                let iter = translation.function_body_inputs
-                    .iter()
+                let iter = functions
+                    .into_iter()
                     .collect::<Vec<_>>()
                     .into_par_iter();
             } else {
-                let iter = translation.function_body_inputs.iter();
+                let iter = functions.into_iter();
             }
         }
         let funcs = iter
@@ -161,12 +176,14 @@ impl Hash for Compiler {
             compiler: _,
             isa,
             tunables,
+            features,
         } = self;
 
         // Hash compiler's flags: compilation strategy, isa, frontend config,
         // misc tunables.
         strategy.hash(hasher);
         isa.triple().hash(hasher);
+        features.hash(hasher);
         // TODO: if this `to_string()` is too expensive then we should upstream
         // a native hashing ability of flags into cranelift itself, but
         // compilation and/or cache loading is relatively expensive so seems

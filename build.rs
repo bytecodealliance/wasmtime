@@ -39,7 +39,6 @@ fn main() -> anyhow::Result<()> {
             // out.
             if spec_tests > 0 {
                 test_directory_module(out, "tests/spec_testsuite/proposals/simd", strategy)?;
-                test_directory_module(out, "tests/spec_testsuite/proposals/multi-value", strategy)?;
                 test_directory_module(
                     out,
                     "tests/spec_testsuite/proposals/reference-types",
@@ -184,15 +183,22 @@ fn experimental_x64_should_panic(testsuite: &str, testname: &str, strategy: &str
         ("simd", "simd_const") => return false,
         ("simd", "simd_i8x16_arith") => return false,
         ("simd", "simd_i8x16_arith2") => return false,
+        ("simd", "simd_i8x16_cmp") => return false,
         ("simd", "simd_i16x8_arith") => return false,
         ("simd", "simd_i16x8_arith2") => return false,
+        ("simd", "simd_i16x8_cmp") => return false,
         ("simd", "simd_i32x4_arith") => return false,
         ("simd", "simd_i32x4_arith2") => return false,
+        ("simd", "simd_i32x4_cmp") => return false,
         ("simd", "simd_i64x2_arith") => return false,
+        ("simd", "simd_f32x4") => return false,
         ("simd", "simd_f32x4_arith") => return false,
         ("simd", "simd_f32x4_cmp") => return false,
+        ("simd", "simd_f64x2") => return false,
         ("simd", "simd_f64x2_arith") => return false,
         ("simd", "simd_f64x2_cmp") => return false,
+        ("simd", "simd_lane") => return false,
+        ("simd", "simd_load_splat") => return false,
         ("simd", "simd_store") => return false,
         ("simd", _) => return true,
         _ => {}
@@ -218,6 +224,13 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("reference_types", _) => {
                 return env::var("CARGO_CFG_TARGET_ARCH").unwrap() != "x86_64";
             }
+
+            // These tests have simd operators which aren't implemented yet.
+            ("simd", "simd_boolean") => return true,
+            ("simd", "simd_f32x4_pmin_pmax") => return true,
+            ("simd", "simd_f32x4_rounding") => return true,
+            ("simd", "simd_f64x2_pmin_pmax") => return true,
+            ("simd", "simd_f64x2_rounding") => return true,
 
             _ => {}
         },

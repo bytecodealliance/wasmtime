@@ -81,6 +81,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
                     reg.to_real_reg(),
                     param.value_type,
                     param.extension,
+                    param.purpose,
                 ));
                 next_rreg += 1;
             } else {
@@ -88,7 +89,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
                 // https://static.docs.arm.com/ihi0042/g/aapcs32.pdf
 
                 // Stack offset is not known yet. Store param info for later.
-                stack_args.push((param.value_type, param.extension));
+                stack_args.push((param.value_type, param.extension, param.purpose));
                 next_stack += 4;
             }
         }
@@ -100,9 +101,14 @@ impl ABIMachineSpec for Arm32MachineDeps {
                     rreg(next_rreg).to_real_reg(),
                     I32,
                     ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
                 ));
             } else {
-                stack_args.push((I32, ir::ArgumentExtension::None));
+                stack_args.push((
+                    I32,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                ));
                 next_stack += 4;
             }
             Some(ret.len() - 1)
@@ -112,9 +118,14 @@ impl ABIMachineSpec for Arm32MachineDeps {
 
         // Now we can assign proper stack offsets to params.
         let max_stack = next_stack;
-        for (ty, ext) in stack_args.into_iter().rev() {
+        for (ty, ext, purpose) in stack_args.into_iter().rev() {
             next_stack -= 4;
-            ret.push(ABIArg::Stack((max_stack - next_stack) as i64, ty, ext));
+            ret.push(ABIArg::Stack(
+                (max_stack - next_stack) as i64,
+                ty,
+                ext,
+                purpose,
+            ));
         }
         assert_eq!(next_stack, 0);
 
@@ -294,9 +305,14 @@ impl ABIMachineSpec for Arm32MachineDeps {
     /// nominal SP offset; caller will do that.
     fn gen_clobber_save(
         _call_conv: isa::CallConv,
+        _flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
+        fixed_frame_storage_size: u32,
     ) -> (u64, SmallVec<[Inst; 16]>) {
         let mut insts = SmallVec::new();
+        if fixed_frame_storage_size > 0 {
+            insts.extend(Self::gen_sp_reg_adjust(-(fixed_frame_storage_size as i32)).into_iter());
+        }
         let clobbered_vec = get_callee_saves(clobbers);
         let mut clobbered_vec: Vec<_> = clobbered_vec
             .into_iter()
@@ -318,6 +334,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
 
     fn gen_clobber_restore(
         _call_conv: isa::CallConv,
+        _flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();

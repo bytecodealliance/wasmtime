@@ -204,12 +204,12 @@ pub(crate) fn create_unwind_info(
                     .push_reg(offset, src)
                     .map_err(CodegenError::RegisterMappingError)?;
             }
-            Inst::Mov_R_R { src, dst, .. } => {
+            Inst::MovRR { src, dst, .. } => {
                 builder
                     .move_reg(offset, *src, dst.to_reg())
                     .map_err(CodegenError::RegisterMappingError)?;
             }
-            Inst::Alu_RMI_R {
+            Inst::AluRmiR {
                 is_64: true,
                 op: AluRmiROpcode::Sub,
                 src: RegMemImm::Imm { simm32 },
@@ -219,7 +219,7 @@ pub(crate) fn create_unwind_info(
                 let imm = *simm32 as i32;
                 builder.adjust_sp_down_imm(offset, imm.into());
             }
-            Inst::Alu_RMI_R {
+            Inst::AluRmiR {
                 is_64: true,
                 op: AluRmiROpcode::Add,
                 src: RegMemImm::Imm { simm32 },
