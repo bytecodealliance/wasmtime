@@ -39,7 +39,6 @@ fn main() -> anyhow::Result<()> {
             // out.
             if spec_tests > 0 {
                 test_directory_module(out, "tests/spec_testsuite/proposals/simd", strategy)?;
-                test_directory_module(out, "tests/spec_testsuite/proposals/multi-value", strategy)?;
                 test_directory_module(
                     out,
                     "tests/spec_testsuite/proposals/reference-types",
@@ -225,6 +224,13 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("reference_types", _) => {
                 return env::var("CARGO_CFG_TARGET_ARCH").unwrap() != "x86_64";
             }
+
+            // These tests have simd operators which aren't implemented yet.
+            ("simd", "simd_boolean") => return true,
+            ("simd", "simd_f32x4_pmin_pmax") => return true,
+            ("simd", "simd_f32x4_rounding") => return true,
+            ("simd", "simd_f64x2_pmin_pmax") => return true,
+            ("simd", "simd_f64x2_rounding") => return true,
 
             _ => {}
         },

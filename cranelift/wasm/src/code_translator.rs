@@ -634,32 +634,32 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::V128Load { memarg } => {
             translate_load(memarg, ir::Opcode::Load, I8X16, builder, state, environ)?;
         }
-        Operator::I16x8Load8x8S { memarg } => {
+        Operator::V128Load8x8S { memarg } => {
             let (flags, base, offset) = prepare_load(memarg, 8, builder, state, environ)?;
             let loaded = builder.ins().sload8x8(flags, base, offset);
             state.push1(loaded);
         }
-        Operator::I16x8Load8x8U { memarg } => {
+        Operator::V128Load8x8U { memarg } => {
             let (flags, base, offset) = prepare_load(memarg, 8, builder, state, environ)?;
             let loaded = builder.ins().uload8x8(flags, base, offset);
             state.push1(loaded);
         }
-        Operator::I32x4Load16x4S { memarg } => {
+        Operator::V128Load16x4S { memarg } => {
             let (flags, base, offset) = prepare_load(memarg, 8, builder, state, environ)?;
             let loaded = builder.ins().sload16x4(flags, base, offset);
             state.push1(loaded);
         }
-        Operator::I32x4Load16x4U { memarg } => {
+        Operator::V128Load16x4U { memarg } => {
             let (flags, base, offset) = prepare_load(memarg, 8, builder, state, environ)?;
             let loaded = builder.ins().uload16x4(flags, base, offset);
             state.push1(loaded);
         }
-        Operator::I64x2Load32x2S { memarg } => {
+        Operator::V128Load32x2S { memarg } => {
             let (flags, base, offset) = prepare_load(memarg, 8, builder, state, environ)?;
             let loaded = builder.ins().sload32x2(flags, base, offset);
             state.push1(loaded);
         }
-        Operator::I64x2Load32x2U { memarg } => {
+        Operator::V128Load32x2U { memarg } => {
             let (flags, base, offset) = prepare_load(memarg, 8, builder, state, environ)?;
             let loaded = builder.ins().uload32x2(flags, base, offset);
             state.push1(loaded);
@@ -1372,10 +1372,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let splatted = builder.ins().splat(type_of(op), state.pop1());
             state.push1(splatted)
         }
-        Operator::V8x16LoadSplat { memarg }
-        | Operator::V16x8LoadSplat { memarg }
-        | Operator::V32x4LoadSplat { memarg }
-        | Operator::V64x2LoadSplat { memarg } => {
+        Operator::V128Load8Splat { memarg }
+        | Operator::V128Load16Splat { memarg }
+        | Operator::V128Load32Splat { memarg }
+        | Operator::V128Load64Splat { memarg } => {
             // TODO: For spec compliance, this is initially implemented as a combination of `load +
             // splat` but could be implemented eventually as a single instruction (`load_splat`).
             // See https://github.com/bytecodealliance/wasmtime/issues/1175.
@@ -1425,7 +1425,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let vector = optionally_bitcast_vector(vector, type_of(op), builder);
             state.push1(builder.ins().insertlane(vector, replacement, *lane))
         }
-        Operator::V8x16Shuffle { lanes, .. } => {
+        Operator::I8x16Shuffle { lanes, .. } => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
             let lanes = ConstantData::from(lanes.as_ref());
             let mask = builder.func.dfg.immediates.push(lanes);
@@ -1436,7 +1436,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             // to WASM using the less specific v128 type for certain operations and more specific
             // types (e.g. i8x16) for others.
         }
-        Operator::V8x16Swizzle => {
+        Operator::I8x16Swizzle => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
             state.push1(builder.ins().swizzle(I8X16, a, b))
         }
@@ -1444,11 +1444,11 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().iadd(a, b))
         }
-        Operator::I8x16AddSaturateS | Operator::I16x8AddSaturateS => {
+        Operator::I8x16AddSatS | Operator::I16x8AddSatS => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().sadd_sat(a, b))
         }
-        Operator::I8x16AddSaturateU | Operator::I16x8AddSaturateU => {
+        Operator::I8x16AddSatU | Operator::I16x8AddSatU => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().uadd_sat(a, b))
         }
@@ -1456,11 +1456,11 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().isub(a, b))
         }
-        Operator::I8x16SubSaturateS | Operator::I16x8SubSaturateS => {
+        Operator::I8x16SubSatS | Operator::I16x8SubSatS => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().ssub_sat(a, b))
         }
-        Operator::I8x16SubSaturateU | Operator::I16x8SubSaturateU => {
+        Operator::I8x16SubSatU | Operator::I16x8SubSatU => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().usub_sat(a, b))
         }
@@ -1713,7 +1713,22 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, I16X8, builder);
             state.push1(builder.ins().uwiden_high(a))
         }
-        Operator::I8x16Bitmask | Operator::I16x8Bitmask | Operator::I32x4Bitmask => {
+
+        Operator::F32x4Ceil
+        | Operator::F32x4Floor
+        | Operator::F32x4Trunc
+        | Operator::F32x4Nearest
+        | Operator::F32x4PMin
+        | Operator::F32x4PMax
+        | Operator::F64x2Ceil
+        | Operator::F64x2Floor
+        | Operator::F64x2Trunc
+        | Operator::F64x2PMin
+        | Operator::F64x2PMax
+        | Operator::F64x2Nearest
+        | Operator::I8x16Bitmask
+        | Operator::I16x8Bitmask
+        | Operator::I32x4Bitmask => {
             return Err(wasm_unsupported!("proposed SIMD operator {:?}", op));
         }
 
@@ -2345,9 +2360,9 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::V128Xor
         | Operator::V128Bitselect => I8X16, // default type representing V128
 
-        Operator::V8x16Shuffle { .. }
+        Operator::I8x16Shuffle { .. }
         | Operator::I8x16Splat
-        | Operator::V8x16LoadSplat { .. }
+        | Operator::V128Load8Splat { .. }
         | Operator::I8x16ExtractLaneS { .. }
         | Operator::I8x16ExtractLaneU { .. }
         | Operator::I8x16ReplaceLane { .. }
@@ -2369,11 +2384,11 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I8x16ShrS
         | Operator::I8x16ShrU
         | Operator::I8x16Add
-        | Operator::I8x16AddSaturateS
-        | Operator::I8x16AddSaturateU
+        | Operator::I8x16AddSatS
+        | Operator::I8x16AddSatU
         | Operator::I8x16Sub
-        | Operator::I8x16SubSaturateS
-        | Operator::I8x16SubSaturateU
+        | Operator::I8x16SubSatS
+        | Operator::I8x16SubSatU
         | Operator::I8x16MinS
         | Operator::I8x16MinU
         | Operator::I8x16MaxS
@@ -2382,7 +2397,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I8x16Bitmask => I8X16,
 
         Operator::I16x8Splat
-        | Operator::V16x8LoadSplat { .. }
+        | Operator::V128Load16Splat { .. }
         | Operator::I16x8ExtractLaneS { .. }
         | Operator::I16x8ExtractLaneU { .. }
         | Operator::I16x8ReplaceLane { .. }
@@ -2404,11 +2419,11 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I16x8ShrS
         | Operator::I16x8ShrU
         | Operator::I16x8Add
-        | Operator::I16x8AddSaturateS
-        | Operator::I16x8AddSaturateU
+        | Operator::I16x8AddSatS
+        | Operator::I16x8AddSatU
         | Operator::I16x8Sub
-        | Operator::I16x8SubSaturateS
-        | Operator::I16x8SubSaturateU
+        | Operator::I16x8SubSatS
+        | Operator::I16x8SubSatU
         | Operator::I16x8MinS
         | Operator::I16x8MinU
         | Operator::I16x8MaxS
@@ -2418,7 +2433,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I16x8Bitmask => I16X8,
 
         Operator::I32x4Splat
-        | Operator::V32x4LoadSplat { .. }
+        | Operator::V128Load32Splat { .. }
         | Operator::I32x4ExtractLane { .. }
         | Operator::I32x4ReplaceLane { .. }
         | Operator::I32x4Eq
@@ -2450,7 +2465,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I32x4Bitmask => I32X4,
 
         Operator::I64x2Splat
-        | Operator::V64x2LoadSplat { .. }
+        | Operator::V128Load64Splat { .. }
         | Operator::I64x2ExtractLane { .. }
         | Operator::I64x2ReplaceLane { .. }
         | Operator::I64x2Neg
