@@ -15,8 +15,8 @@ impl UnwindInfoGenerator<Inst> for X64UnwindInfo {
     fn create_unwind_info(
         kind: UnwindInfoKind,
         insts: &[Inst],
-        insts_layout: &[(u32, CodeOffset)],
-        prologue_epilogue: &(u32, u32, Box<[u32]>),
+        insts_layout: &[CodeOffset],
+        prologue_epilogue: &(u32, u32, Box<[(u32, u32)]>),
     ) -> CodegenResult<Option<UnwindInfo>> {
         // Assumption: RBP is being used as the frame pointer for both calling conventions
         // In the future, we should be omitting frame pointer as an optimization, so this will change

@@ -378,7 +378,7 @@ pub trait UnwindInfoGenerator<I: MachInstEmit> {
     fn create_unwind_info(
         kind: UnwindInfoKind,
         insts: &[I],
-        insts_layout: &[(u32, CodeOffset)],
-        prologue_epilogue: &(u32, u32, Box<[u32]>),
+        insts_layout: &[CodeOffset],
+        prologue_epilogue: &(u32, u32, Box<[(u32, u32)]>),
     ) -> CodegenResult<Option<unwind::UnwindInfo>>;
 }

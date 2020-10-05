@@ -102,10 +102,10 @@ pub struct VCode<I: VCodeInst> {
     safepoint_slots: Vec<Vec<SpillSlot>>,
 
     /// Ranges for prologue and epilogue instructions.
-    prologue_epilogue_ranges: Option<(InsnIndex, InsnIndex, Box<[InsnIndex]>)>,
+    prologue_epilogue_ranges: Option<(InsnIndex, InsnIndex, Box<[(InsnIndex, InsnIndex)]>)>,
 
     /// Instruction end offsets
-    insts_layout: RefCell<Vec<(InsnIndex, u32)>>,
+    insts_layout: RefCell<Vec<u32>>,
 }
 
 /// A builder for a VCode function body. This builder is designed for the
@@ -399,12 +399,12 @@ impl<I: VCodeInst> VCode<I> {
                 // with the epilogue.
                 let is_ret = insn.is_term() == MachTerminator::Ret;
                 if is_ret {
-                    epilogue_islands.push(final_insns.len() as InsnIndex);
+                    let epilogue_start = final_insns.len() as InsnIndex;
                     let epilogue = self.abi.gen_epilogue();
                     let len = epilogue.len();
                     final_insns.extend(epilogue.into_iter());
                     final_srclocs.extend(iter::repeat(srcloc).take(len));
-                    epilogue_islands.push(final_insns.len() as InsnIndex);
+                    epilogue_islands.push((epilogue_start, final_insns.len() as InsnIndex));
                 } else {
                     final_insns.push(insn.clone());
                     final_srclocs.push(srcloc);
@@ -457,7 +457,7 @@ impl<I: VCodeInst> VCode<I> {
 
         buffer.reserve_labels_for_blocks(self.num_blocks() as BlockIndex); // first N MachLabels are simply block indices.
 
-        let mut insts_layout = Vec::with_capacity(self.insts.len());
+        let mut insts_layout = vec![0; self.insts.len()];
 
         let flags = self.abi.flags();
         let mut safepoint_idx = 0;
@@ -499,7 +499,7 @@ impl<I: VCodeInst> VCode<I> {
 
                 self.insts[iix as usize].emit(&mut buffer, flags, &mut state);
 
-                insts_layout.push((iix, buffer.cur_offset()));
+                insts_layout[iix as usize] = buffer.cur_offset();
             }
 
             if cur_srcloc.is_some() {

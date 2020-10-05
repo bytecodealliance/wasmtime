@@ -182,30 +182,20 @@ impl InstructionBuilder {
 
 pub(crate) fn create_unwind_info(
     insts: &[Inst],
-    insts_layout: &[(u32, u32)],
-    prologue_epilogue: &(u32, u32, Box<[u32]>),
+    insts_layout: &[u32],
+    prologue_epilogue: &(u32, u32, Box<[(u32, u32)]>),
     frame_register: Option<Reg>,
 ) -> CodegenResult<Option<UnwindInfo>> {
-    let mut layout = insts_layout
-        .iter()
-        .map(|(i, j)| (*i as usize, *j))
-        .collect::<Vec<(usize, u32)>>();
-    layout.sort();
-    let len = layout.last().unwrap().1;
+    let len = *insts_layout.last().unwrap();
+    assert!(len > 0);
 
     let mut builder = InstructionBuilder::new(frame_register);
-
-    let mut layout_index = 0;
 
     let prologue_start = prologue_epilogue.0 as usize;
     let prologue_end = prologue_epilogue.1 as usize;
     for i in prologue_start..prologue_end {
         let inst = &insts[i];
-
-        while layout_index < layout.len() && layout[layout_index].0 < i {
-            layout_index += 1;
-        }
-        let offset = layout[layout_index].1; // TODO protect layout_index oob
+        let offset = insts_layout[i];
 
         // TODO sub and `mov reg, imm(rsp)`
         match inst {
@@ -243,12 +233,9 @@ pub(crate) fn create_unwind_info(
         }
     }
 
-    for (j, epilogue_point) in prologue_epilogue.2.iter().enumerate() {
+    for (j, (epilogue_point, _)) in prologue_epilogue.2.iter().enumerate() {
         let i = *epilogue_point as usize;
-        while layout_index < layout.len() && layout[layout_index].0 < i {
-            layout_index += 1;
-        }
-        let offset = layout[layout_index].1; // TODO protect layout_index oob
+        let offset = insts_layout[i];
 
         if j & 1 == 0 {
             builder.remember_state(offset);
