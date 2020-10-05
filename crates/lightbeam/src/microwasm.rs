@@ -437,8 +437,9 @@ pub struct MemoryImmediate {
 
 impl From<WasmMemoryImmediate> for MemoryImmediate {
     fn from(other: WasmMemoryImmediate) -> Self {
+        assert_eq!(other.memory, 0);
         MemoryImmediate {
-            flags: other.flags,
+            flags: other.align.into(),
             offset: other.offset,
         }
     }
@@ -544,12 +545,8 @@ pub enum Operator<Label> {
     Store32 {
         memarg: MemoryImmediate,
     },
-    MemorySize {
-        reserved: u32,
-    },
-    MemoryGrow {
-        reserved: u32,
-    },
+    MemorySize,
+    MemoryGrow,
     Const(Value),
     Eq(SignlessType),
     Ne(SignlessType),
@@ -1940,12 +1937,13 @@ where
             }
             WasmOperator::BrTable { table } => {
                 self.unreachable = true;
-                let (targets, default) = table.read_table()?;
+                let mut targets = table.targets().collect::<Result<Vec<_>, _>>()?;
+                let default = targets.pop().unwrap().0;
                 let control_frames = &mut self.control_frames;
                 let stack = &self.stack;
                 let targets = targets
                     .into_iter()
-                    .map(|&depth| {
+                    .map(|(depth, _)| {
                         control_frames[depth as _].mark_branched_to();
                         let block = &control_frames[depth as _];
 
@@ -2121,8 +2119,8 @@ where
             WasmOperator::I64Store32 { memarg } => one(Operator::Store32 {
                 memarg: memarg.into(),
             }),
-            WasmOperator::MemorySize { reserved } => one(Operator::MemorySize { reserved }),
-            WasmOperator::MemoryGrow { reserved } => one(Operator::MemoryGrow { reserved }),
+            WasmOperator::MemorySize { .. } => one(Operator::MemorySize),
+            WasmOperator::MemoryGrow { .. } => one(Operator::MemoryGrow),
             WasmOperator::I32Const { value } => one(Operator::Const(Value::I32(value))),
             WasmOperator::I64Const { value } => one(Operator::Const(Value::I64(value))),
             WasmOperator::F32Const { value } => one(Operator::Const(Value::F32(value.into()))),

@@ -4,6 +4,7 @@ use crate::types::{EntityType, ExportType, ExternType, ImportType};
 use anyhow::{bail, Context, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use wasmparser::Validator;
 #[cfg(feature = "cache")]
 use wasmtime_cache::ModuleCacheEntry;
 use wasmtime_jit::{CompilationArtifacts, CompiledModule};
@@ -238,70 +239,6 @@ impl Module {
     /// # }
     /// ```
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
-        Module::validate(engine, binary)?;
-        // Note that the call to `from_binary_unchecked` here should be ok
-        // because we previously validated the binary, meaning we're guaranteed
-        // to pass a valid binary for `engine`.
-        unsafe { Module::from_binary_unchecked(engine, binary) }
-    }
-
-    /// Creates a new WebAssembly `Module` from the given in-memory `binary`
-    /// data, skipping validation and asserting that `binary` is a valid
-    /// WebAssembly module.
-    ///
-    /// This function is the same as [`Module::new`] except that it skips the
-    /// call to [`Module::validate`] and it does not support the text format of
-    /// WebAssembly. The WebAssembly binary is not validated for
-    /// correctness and it is simply assumed as valid.
-    ///
-    /// For more information about creation of a module and the `engine` argument
-    /// see the documentation of [`Module::new`].
-    ///
-    /// # Unsafety
-    ///
-    /// This function is `unsafe` due to the unchecked assumption that the input
-    /// `binary` is valid. If the `binary` is not actually a valid wasm binary it
-    /// may cause invalid machine code to get generated, cause panics, etc.
-    ///
-    /// It is only safe to call this method if [`Module::validate`] succeeds on
-    /// the same arguments passed to this function.
-    ///
-    /// # Errors
-    ///
-    /// This function may fail for many of the same reasons as [`Module::new`].
-    /// While this assumes that the binary is valid it still needs to actually
-    /// be somewhat valid for decoding purposes, and the basics of decoding can
-    /// still fail.
-    pub unsafe fn from_binary_unchecked(engine: &Engine, binary: &[u8]) -> Result<Module> {
-        Module::compile(engine, binary)
-    }
-
-    /// Validates `binary` input data as a WebAssembly binary given the
-    /// configuration in `engine`.
-    ///
-    /// This function will perform a speedy validation of the `binary` input
-    /// WebAssembly module (which is in [binary form][binary], the text format
-    /// is not accepted by this function) and return either `Ok` or `Err`
-    /// depending on the results of validation. The `engine` argument indicates
-    /// configuration for WebAssembly features, for example, which are used to
-    /// indicate what should be valid and what shouldn't be.
-    ///
-    /// Validation automatically happens as part of [`Module::new`], but is a
-    /// requirement for [`Module::from_binary_unchecked`] to be safe.
-    ///
-    /// # Errors
-    ///
-    /// If validation fails for any reason (type check error, usage of a feature
-    /// that wasn't enabled, etc) then an error with a description of the
-    /// validation issue will be returned.
-    ///
-    /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
-    pub fn validate(engine: &Engine, binary: &[u8]) -> Result<()> {
-        engine.config().validator().validate_all(binary)?;
-        Ok(())
-    }
-
-    unsafe fn compile(engine: &Engine, binary: &[u8]) -> Result<Self> {
         #[cfg(feature = "cache")]
         let artifacts = ModuleCacheEntry::new("wasmtime", engine.cache_config())
             .get_data((engine.compiler(), binary), |(compiler, binary)| {
@@ -321,6 +258,32 @@ impl Module {
             compiled: Arc::new(compiled),
             frame_info_registration: Arc::new(Mutex::new(None)),
         })
+    }
+
+    /// Validates `binary` input data as a WebAssembly binary given the
+    /// configuration in `engine`.
+    ///
+    /// This function will perform a speedy validation of the `binary` input
+    /// WebAssembly module (which is in [binary form][binary], the text format
+    /// is not accepted by this function) and return either `Ok` or `Err`
+    /// depending on the results of validation. The `engine` argument indicates
+    /// configuration for WebAssembly features, for example, which are used to
+    /// indicate what should be valid and what shouldn't be.
+    ///
+    /// Validation automatically happens as part of [`Module::new`].
+    ///
+    /// # Errors
+    ///
+    /// If validation fails for any reason (type check error, usage of a feature
+    /// that wasn't enabled, etc) then an error with a description of the
+    /// validation issue will be returned.
+    ///
+    /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
+    pub fn validate(engine: &Engine, binary: &[u8]) -> Result<()> {
+        let mut validator = Validator::new();
+        validator.wasm_features(engine.config().features);
+        validator.validate_all(binary)?;
+        Ok(())
     }
 
     /// Serialize compilation artifacts to the buffer. See also `deseriaize`.

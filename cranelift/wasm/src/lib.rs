@@ -72,5 +72,10 @@ pub use crate::translation_utils::{
 };
 pub use cranelift_frontend::FunctionBuilder;
 
+// Convenience reexport of the wasmparser crate that we're linking against,
+// since a number of types in `wasmparser` show up in the public API of
+// `cranelift-wasm`.
+pub use wasmparser;
+
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

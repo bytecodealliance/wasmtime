@@ -6,7 +6,7 @@
 
 use crate::code_translator::{bitcast_arguments, translate_operator, wasm_param_types};
 use crate::environ::{FuncEnvironment, ReturnMode, WasmResult};
-use crate::state::{FuncTranslationState, ModuleTranslationState};
+use crate::state::FuncTranslationState;
 use crate::translation_utils::get_vmctx_value_label;
 use crate::wasm_unsupported;
 use core::convert::TryInto;
@@ -14,7 +14,7 @@ use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
-use wasmparser::{self, BinaryReader};
+use wasmparser::{self, BinaryReader, FuncValidator, FunctionBody, WasmModuleResources};
 
 /// WebAssembly to Cranelift IR function translator.
 ///
@@ -55,29 +55,30 @@ impl FuncTranslator {
     ///
     pub fn translate<FE: FuncEnvironment + ?Sized>(
         &mut self,
-        module_translation_state: &ModuleTranslationState,
+        validator: &mut FuncValidator<impl WasmModuleResources>,
         code: &[u8],
         code_offset: usize,
         func: &mut ir::Function,
         environ: &mut FE,
     ) -> WasmResult<()> {
-        self.translate_from_reader(
-            module_translation_state,
-            BinaryReader::new_with_offset(code, code_offset),
+        self.translate_body(
+            validator,
+            FunctionBody::new(code_offset, code),
             func,
             environ,
         )
     }
 
-    /// Translate a binary WebAssembly function from a `BinaryReader`.
-    pub fn translate_from_reader<FE: FuncEnvironment + ?Sized>(
+    /// Translate a binary WebAssembly function from a `FunctionBody`.
+    pub fn translate_body<FE: FuncEnvironment + ?Sized>(
         &mut self,
-        module_translation_state: &ModuleTranslationState,
-        mut reader: BinaryReader,
+        validator: &mut FuncValidator<impl WasmModuleResources>,
+        body: FunctionBody<'_>,
         func: &mut ir::Function,
         environ: &mut FE,
     ) -> WasmResult<()> {
         let _tt = timing::wasm_translate_function();
+        let mut reader = body.get_binary_reader();
         log::debug!(
             "translate({} bytes, {}{})",
             reader.bytes_remaining(),
@@ -107,14 +108,8 @@ impl FuncTranslator {
         builder.append_block_params_for_function_returns(exit_block);
         self.state.initialize(&builder.func.signature, exit_block);
 
-        parse_local_decls(&mut reader, &mut builder, num_params, environ)?;
-        parse_function_body(
-            module_translation_state,
-            reader,
-            &mut builder,
-            &mut self.state,
-            environ,
-        )?;
+        parse_local_decls(&mut reader, &mut builder, num_params, environ, validator)?;
+        parse_function_body(validator, reader, &mut builder, &mut self.state, environ)?;
 
         builder.finalize();
         Ok(())
@@ -161,14 +156,17 @@ fn parse_local_decls<FE: FuncEnvironment + ?Sized>(
     builder: &mut FunctionBuilder,
     num_params: usize,
     environ: &mut FE,
+    validator: &mut FuncValidator<impl WasmModuleResources>,
 ) -> WasmResult<()> {
     let mut next_local = num_params;
-    let local_count = reader.read_local_count()?;
+    let local_count = reader.read_var_u32()?;
 
-    let mut locals_total = 0;
     for _ in 0..local_count {
         builder.set_srcloc(cur_srcloc(reader));
-        let (count, ty) = reader.read_local_decl(&mut locals_total)?;
+        let pos = reader.original_position();
+        let count = reader.read_var_u32()?;
+        let ty = reader.read_type()?;
+        validator.define_locals(pos, count, ty)?;
         declare_locals(builder, count, ty, &mut next_local, environ)?;
     }
 
@@ -218,7 +216,7 @@ fn declare_locals<FE: FuncEnvironment + ?Sized>(
 /// This assumes that the local variable declarations have already been parsed and function
 /// arguments and locals are declared in the builder.
 fn parse_function_body<FE: FuncEnvironment + ?Sized>(
-    module_translation_state: &ModuleTranslationState,
+    validator: &mut FuncValidator<impl WasmModuleResources>,
     mut reader: BinaryReader,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
@@ -227,14 +225,17 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     // The control stack is initialized with a single block representing the whole function.
     debug_assert_eq!(state.control_stack.len(), 1, "State not initialized");
 
-    // Keep going until the final `End` operator which pops the outermost block.
-    while !state.control_stack.is_empty() {
+    while !reader.eof() {
+        let pos = reader.original_position();
         builder.set_srcloc(cur_srcloc(&reader));
         let op = reader.read_operator()?;
+        validator.op(pos, &op)?;
         environ.before_translate_operator(&op, builder, state)?;
-        translate_operator(module_translation_state, &op, builder, state, environ)?;
+        translate_operator(validator, &op, builder, state, environ)?;
         environ.after_translate_operator(&op, builder, state)?;
     }
+    let pos = reader.original_position();
+    validator.finish(pos)?;
 
     // The final `End` operator left us in the exit block where we need to manually add a return
     // instruction.
@@ -261,8 +262,6 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     // or the end of the function is unreachable.
     state.stack.clear();
 
-    debug_assert!(reader.eof());
-
     Ok(())
 }
 
@@ -277,26 +276,27 @@ fn cur_srcloc(reader: &BinaryReader) -> ir::SourceLoc {
 mod tests {
     use super::{FuncTranslator, ReturnMode};
     use crate::environ::DummyEnvironment;
-    use crate::ModuleTranslationState;
     use cranelift_codegen::ir::types::I32;
     use cranelift_codegen::{ir, isa, settings, Context};
     use log::debug;
     use target_lexicon::PointerWidth;
+    use wasmparser::{
+        FuncValidator, FunctionBody, Parser, ValidPayload, Validator, ValidatorResources,
+    };
 
     #[test]
     fn small1() {
         // Implicit return.
-        //
-        // (func $small1 (param i32) (result i32)
-        //     (i32.add (get_local 0) (i32.const 1))
-        // )
-        const BODY: [u8; 7] = [
-            0x00, // local decl count
-            0x20, 0x00, // get_local 0
-            0x41, 0x01, // i32.const 1
-            0x6a, // i32.add
-            0x0b, // end
-        ];
+        let wasm = wat::parse_str(
+            "
+                (module
+                    (func $small2 (param i32) (result i32)
+                        (i32.add (get_local 0) (i32.const 1))
+                    )
+                )
+            ",
+        )
+        .unwrap();
 
         let mut trans = FuncTranslator::new();
         let flags = settings::Flags::new(settings::builder());
@@ -309,21 +309,15 @@ mod tests {
             false,
         );
 
-        let module_translation_state = ModuleTranslationState::new();
         let mut ctx = Context::new();
 
         ctx.func.name = ir::ExternalName::testcase("small1");
         ctx.func.signature.params.push(ir::AbiParam::new(I32));
         ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
+        let (body, mut validator) = extract_func(&wasm);
         trans
-            .translate(
-                &module_translation_state,
-                &BODY,
-                0,
-                &mut ctx.func,
-                &mut runtime.func_env(),
-            )
+            .translate_body(&mut validator, body, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
         debug!("{}", ctx.func.display(None));
         ctx.verify(&flags).unwrap();
@@ -332,18 +326,16 @@ mod tests {
     #[test]
     fn small2() {
         // Same as above, but with an explicit return instruction.
-        //
-        // (func $small2 (param i32) (result i32)
-        //     (return (i32.add (get_local 0) (i32.const 1)))
-        // )
-        const BODY: [u8; 8] = [
-            0x00, // local decl count
-            0x20, 0x00, // get_local 0
-            0x41, 0x01, // i32.const 1
-            0x6a, // i32.add
-            0x0f, // return
-            0x0b, // end
-        ];
+        let wasm = wat::parse_str(
+            "
+                (module
+                    (func $small2 (param i32) (result i32)
+                        (return (i32.add (get_local 0) (i32.const 1)))
+                    )
+                )
+            ",
+        )
+        .unwrap();
 
         let mut trans = FuncTranslator::new();
         let flags = settings::Flags::new(settings::builder());
@@ -356,21 +348,15 @@ mod tests {
             false,
         );
 
-        let module_translation_state = ModuleTranslationState::new();
         let mut ctx = Context::new();
 
         ctx.func.name = ir::ExternalName::testcase("small2");
         ctx.func.signature.params.push(ir::AbiParam::new(I32));
         ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
+        let (body, mut validator) = extract_func(&wasm);
         trans
-            .translate(
-                &module_translation_state,
-                &BODY,
-                0,
-                &mut ctx.func,
-                &mut runtime.func_env(),
-            )
+            .translate_body(&mut validator, body, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
         debug!("{}", ctx.func.display(None));
         ctx.verify(&flags).unwrap();
@@ -379,27 +365,21 @@ mod tests {
     #[test]
     fn infloop() {
         // An infinite loop, no return instructions.
-        //
-        // (func $infloop (result i32)
-        //     (local i32)
-        //     (loop (result i32)
-        //         (i32.add (get_local 0) (i32.const 1))
-        //         (set_local 0)
-        //         (br 0)
-        //     )
-        // )
-        const BODY: [u8; 16] = [
-            0x01, // 1 local decl.
-            0x01, 0x7f, // 1 i32 local.
-            0x03, 0x7f, // loop i32
-            0x20, 0x00, // get_local 0
-            0x41, 0x01, // i32.const 0
-            0x6a, // i32.add
-            0x21, 0x00, // set_local 0
-            0x0c, 0x00, // br 0
-            0x0b, // end
-            0x0b, // end
-        ];
+        let wasm = wat::parse_str(
+            "
+                (module
+                    (func $infloop (result i32)
+                        (local i32)
+                        (loop (result i32)
+                            (i32.add (get_local 0) (i32.const 1))
+                            (set_local 0)
+                            (br 0)
+                        )
+                    )
+                )
+            ",
+        )
+        .unwrap();
 
         let mut trans = FuncTranslator::new();
         let flags = settings::Flags::new(settings::builder());
@@ -412,22 +392,27 @@ mod tests {
             false,
         );
 
-        let module_translation_state = ModuleTranslationState::new();
         let mut ctx = Context::new();
 
         ctx.func.name = ir::ExternalName::testcase("infloop");
         ctx.func.signature.returns.push(ir::AbiParam::new(I32));
 
+        let (body, mut validator) = extract_func(&wasm);
         trans
-            .translate(
-                &module_translation_state,
-                &BODY,
-                0,
-                &mut ctx.func,
-                &mut runtime.func_env(),
-            )
+            .translate_body(&mut validator, body, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
         debug!("{}", ctx.func.display(None));
         ctx.verify(&flags).unwrap();
+    }
+
+    fn extract_func(wat: &[u8]) -> (FunctionBody<'_>, FuncValidator<ValidatorResources>) {
+        let mut validator = Validator::new();
+        for payload in Parser::new(0).parse_all(wat) {
+            match validator.payload(&payload.unwrap()).unwrap() {
+                ValidPayload::Func(validator, body) => return (body, validator),
+                _ => {}
+            }
+        }
+        panic!("failed to find function");
     }
 }

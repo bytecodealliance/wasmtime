@@ -42,6 +42,7 @@ libc = "0.2.60"
 log = "0.4.8"
 rayon = "1.2.1"
 humantime = "1.3.0"
+wasmparser = "0.62"
 
 [dev-dependencies]
 env_logger = "0.7.1"
