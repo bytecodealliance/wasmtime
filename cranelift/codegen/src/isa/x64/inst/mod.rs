@@ -2401,10 +2401,12 @@ impl MachInst for Inst {
         match rc_dst {
             RegClass::I64 => Inst::mov_r_r(true, src_reg, dst_reg),
             RegClass::V128 => {
+                // The Intel optimization manual, in "3.5.1.13 Zero-Latency MOV Instructions",
+                // doesn't include MOVSS/MOVSD as instructions with zero-latency. Use movaps for
+                // those, which may write more lanes that we need, but are specified to have
+                // zero-latency.
                 let opcode = match ty {
-                    types::F32 => SseOpcode::Movss,
-                    types::F64 => SseOpcode::Movsd,
-                    types::F32X4 => SseOpcode::Movaps,
+                    types::F32 | types::F64 | types::F32X4 => SseOpcode::Movaps,
                     types::F64X2 => SseOpcode::Movapd,
                     _ if ty.is_vector() && ty.bits() == 128 => SseOpcode::Movdqa,
                     _ => unimplemented!("unable to move type: {}", ty),
