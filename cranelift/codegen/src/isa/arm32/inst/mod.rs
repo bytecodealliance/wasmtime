@@ -8,7 +8,7 @@ use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 
-use regalloc::{RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
+use regalloc::{PrettyPrint, RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
 use regalloc::{RegUsageCollector, RegUsageMapper};
 
 use alloc::boxed::Box;
@@ -897,7 +897,7 @@ fn mem_finalize_for_show(
     (mem_str, mem)
 }
 
-impl ShowWithRRU for Inst {
+impl PrettyPrint for Inst {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         self.pretty_print(mb_rru, &mut EmitState::default())
     }

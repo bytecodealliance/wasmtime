@@ -493,6 +493,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         loc: SourceLoc,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
+        _callee_conv: isa::CallConv,
+        _caller_conv: isa::CallConv,
     ) -> SmallVec<[(InstIsSafepoint, Self::I); 2]> {
         let mut insts = SmallVec::new();
         match dest {
@@ -545,7 +547,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         s.nominal_sp_to_fp
     }
 
-    fn get_caller_saves(call_conv: isa::CallConv) -> Vec<Writable<Reg>> {
+    fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> Vec<Writable<Reg>> {
         let mut caller_saved = vec![
             // Systemv calling convention:
             // - GPR: all except RBX, RBP, R12 to R15 (which are callee-saved).
@@ -577,7 +579,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             Writable::from_reg(regs::xmm15()),
         ];
 
-        if call_conv.extends_baldrdash() {
+        if call_conv_of_callee.extends_baldrdash() {
             caller_saved.push(Writable::from_reg(regs::r12()));
             caller_saved.push(Writable::from_reg(regs::r13()));
             // Not r14; implicitly preserved in the entry.

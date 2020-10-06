@@ -5,7 +5,10 @@ use super::EmitState;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::machinst::*;
 use core::fmt::Debug;
-use regalloc::{RealRegUniverse, Reg, RegClass, RegUsageCollector, RegUsageMapper, Writable};
+use regalloc::{
+    PrettyPrint, PrettyPrintSized, RealRegUniverse, Reg, RegClass, RegUsageCollector,
+    RegUsageMapper, Writable,
+};
 use std::fmt;
 use std::string::{String, ToString};
 
@@ -68,7 +71,7 @@ impl Amode {
     }
 }
 
-impl ShowWithRRU for Amode {
+impl PrettyPrint for Amode {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         match self {
             Amode::ImmReg { simm32, base } => {
@@ -156,7 +159,7 @@ impl Into<SyntheticAmode> for Amode {
     }
 }
 
-impl ShowWithRRU for SyntheticAmode {
+impl PrettyPrint for SyntheticAmode {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         match self {
             SyntheticAmode::Real(addr) => addr.show_rru(mb_rru),
@@ -214,11 +217,13 @@ impl RegMemImm {
     }
 }
 
-impl ShowWithRRU for RegMemImm {
+impl PrettyPrint for RegMemImm {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         self.show_rru_sized(mb_rru, 8)
     }
+}
 
+impl PrettyPrintSized for RegMemImm {
     fn show_rru_sized(&self, mb_rru: Option<&RealRegUniverse>, size: u8) -> String {
         match self {
             Self::Reg { reg } => show_ireg_sized(*reg, mb_rru, size),
@@ -271,11 +276,13 @@ impl From<Writable<Reg>> for RegMem {
     }
 }
 
-impl ShowWithRRU for RegMem {
+impl PrettyPrint for RegMem {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         self.show_rru_sized(mb_rru, 8)
     }
+}
 
+impl PrettyPrintSized for RegMem {
     fn show_rru_sized(&self, mb_rru: Option<&RealRegUniverse>, size: u8) -> String {
         match self {
             RegMem::Reg { reg } => show_ireg_sized(*reg, mb_rru, size),
@@ -1098,7 +1105,7 @@ pub enum BranchTarget {
     ResolvedOffset(isize),
 }
 
-impl ShowWithRRU for BranchTarget {
+impl PrettyPrint for BranchTarget {
     fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
         match self {
             BranchTarget::Label(l) => format!("{:?}", l),

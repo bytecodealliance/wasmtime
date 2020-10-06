@@ -8,8 +8,8 @@ use crate::{settings, settings::Flags, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc::{
-    RealRegUniverse, Reg, RegClass, RegUsageCollector, RegUsageMapper, SpillSlot, VirtualReg,
-    Writable,
+    PrettyPrint, PrettyPrintSized, RealRegUniverse, Reg, RegClass, RegUsageCollector,
+    RegUsageMapper, SpillSlot, VirtualReg, Writable,
 };
 use smallvec::SmallVec;
 use std::fmt;
@@ -1165,7 +1165,7 @@ impl Inst {
 //=============================================================================
 // Instructions: printing
 
-impl ShowWithRRU for Inst {
+impl PrettyPrint for Inst {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         fn ljustify(s: String) -> String {
             let w = 7;

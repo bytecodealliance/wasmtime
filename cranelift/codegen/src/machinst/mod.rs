@@ -125,8 +125,6 @@ pub mod abi;
 pub use abi::*;
 pub mod abi_impl;
 pub use abi_impl::*;
-pub mod pretty_print;
-pub use pretty_print::*;
 pub mod buffer;
 pub use buffer::*;
 pub mod adapter;
@@ -155,6 +153,11 @@ pub trait MachInst: Clone + Debug {
 
     /// Returns true if the instruction is an epilogue placeholder.
     fn is_epilogue_placeholder(&self) -> bool;
+
+    /// Should this instruction be included in the clobber-set?
+    fn is_included_in_clobbers(&self) -> bool {
+        true
+    }
 
     /// Generate a move.
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self;

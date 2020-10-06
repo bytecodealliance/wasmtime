@@ -2,6 +2,7 @@
 
 use crate::binemit::StackMap;
 use crate::ir::StackSlot;
+use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::settings;
 
@@ -24,6 +25,9 @@ pub trait ABICallee {
 
     /// Get the settings controlling this function's compilation.
     fn flags(&self) -> &settings::Flags;
+
+    /// Get the calling convention implemented by this ABI object.
+    fn call_conv(&self) -> CallConv;
 
     /// Get the liveins of the function.
     fn liveins(&self) -> Set<RealReg>;

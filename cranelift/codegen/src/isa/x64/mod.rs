@@ -4,13 +4,11 @@ use super::TargetIsa;
 use crate::ir::{condcodes::IntCC, Function};
 use crate::isa::x64::{inst::regs::create_reg_universe_systemv, settings as x64_settings};
 use crate::isa::Builder as IsaBuilder;
-use crate::machinst::{
-    compile, pretty_print::ShowWithRRU, MachBackend, MachCompileResult, TargetIsaAdapter, VCode,
-};
+use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter, VCode};
 use crate::result::CodegenResult;
 use crate::settings::{self as shared_settings, Flags};
 use alloc::boxed::Box;
-use regalloc::RealRegUniverse;
+use regalloc::{PrettyPrint, RealRegUniverse};
 use target_lexicon::Triple;
 
 mod abi;
