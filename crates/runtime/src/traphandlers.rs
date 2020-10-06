@@ -147,9 +147,9 @@ cfg_if::cfg_if! {
             {
                 libc::sigaction(signum, previous, ptr::null_mut());
             } else {
-                mem::transmute::<usize, extern "C" fn(libc::c_int)>(
+                mem::transmute::<usize, extern "C" fn(libc::c_int, *mut libc::siginfo_t, *mut libc::c_void)>(
                     previous.sa_sigaction
-                )(signum)
+                )(signum, siginfo, context)
             }
         }
 
