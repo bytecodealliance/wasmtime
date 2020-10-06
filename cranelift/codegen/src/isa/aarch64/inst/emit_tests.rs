@@ -1,6 +1,7 @@
 use crate::ir::types::*;
 use crate::isa::aarch64::inst::*;
 use crate::isa::test_utils;
+use crate::isa::CallConv;
 use crate::settings;
 
 use alloc::boxed::Box;
@@ -3789,6 +3790,8 @@ fn test_aarch64_binemit() {
                 defs: Vec::new(),
                 loc: SourceLoc::default(),
                 opcode: Opcode::Call,
+                caller_callconv: CallConv::SystemV,
+                callee_callconv: CallConv::SystemV,
             }),
         },
         "00000094",
@@ -3803,6 +3806,8 @@ fn test_aarch64_binemit() {
                 defs: Vec::new(),
                 loc: SourceLoc::default(),
                 opcode: Opcode::CallIndirect,
+                caller_callconv: CallConv::SystemV,
+                callee_callconv: CallConv::SystemV,
             }),
         },
         "40013FD6",

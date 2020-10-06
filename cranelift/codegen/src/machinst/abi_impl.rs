@@ -347,6 +347,8 @@ pub trait ABIMachineSpec {
         loc: SourceLoc,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
+        callee_conv: isa::CallConv,
+        callee_conv: isa::CallConv,
     ) -> SmallVec<[(InstIsSafepoint, Self::I); 2]>;
 
     /// Get the number of spillslots required for the given register-class and
@@ -359,8 +361,9 @@ pub trait ABIMachineSpec {
     /// Get the "nominal SP to FP" offset from an instruction-emission state.
     fn get_nominal_sp_to_fp(s: &<Self::I as MachInstEmit>::State) -> i64;
 
-    /// Get all caller-save registers.
-    fn get_caller_saves(call_conv: isa::CallConv) -> Vec<Writable<Reg>>;
+    /// Get all caller-save registers, that is, registers that we expect
+    /// not to be saved across a call to a callee with the given ABI.
+    fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> Vec<Writable<Reg>>;
 }
 
 /// ABI information shared between body (callee) and caller.
@@ -680,6 +683,10 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
 
     fn flags(&self) -> &settings::Flags {
         &self.flags
+    }
+
+    fn call_conv(&self) -> isa::CallConv {
+        self.sig.call_conv
     }
 
     fn liveins(&self) -> Set<RealReg> {
@@ -1040,7 +1047,7 @@ fn abisig_to_uses_and_defs<M: ABIMachineSpec>(sig: &ABISig) -> (Vec<Reg>, Vec<Wr
     }
 
     // Compute defs: all retval regs, and all caller-save (clobbered) regs.
-    let mut defs = M::get_caller_saves(sig.call_conv);
+    let mut defs = M::get_regs_clobbered_by_call(sig.call_conv);
     for ret in &sig.rets {
         match ret {
             &ABIArg::Reg(reg, ..) => defs.push(Writable::from_reg(reg.to_reg())),
@@ -1063,8 +1070,10 @@ pub struct ABICallerImpl<M: ABIMachineSpec> {
     dest: CallDest,
     /// Location of callsite.
     loc: ir::SourceLoc,
-    /// Actuall call opcode; used to distinguish various types of calls.
+    /// Actual call opcode; used to distinguish various types of calls.
     opcode: ir::Opcode,
+    /// Caller's calling convention.
+    caller_conv: isa::CallConv,
 
     _mach: PhantomData<M>,
 }
@@ -1085,6 +1094,7 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
         extname: &ir::ExternalName,
         dist: RelocDistance,
         loc: ir::SourceLoc,
+        caller_conv: isa::CallConv,
     ) -> CodegenResult<ABICallerImpl<M>> {
         let sig = ABISig::from_func_sig::<M>(sig)?;
         let (uses, defs) = abisig_to_uses_and_defs::<M>(&sig);
@@ -1095,6 +1105,7 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
             dest: CallDest::ExtName(extname.clone(), dist),
             loc,
             opcode: ir::Opcode::Call,
+            caller_conv,
             _mach: PhantomData,
         })
     }
@@ -1106,6 +1117,7 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
         ptr: Reg,
         loc: ir::SourceLoc,
         opcode: ir::Opcode,
+        caller_conv: isa::CallConv,
     ) -> CodegenResult<ABICallerImpl<M>> {
         let sig = ABISig::from_func_sig::<M>(sig)?;
         let (uses, defs) = abisig_to_uses_and_defs::<M>(&sig);
@@ -1116,6 +1128,7 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
             dest: CallDest::Reg(ptr),
             loc,
             opcode,
+            caller_conv,
             _mach: PhantomData,
         })
     }
@@ -1255,8 +1268,17 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
             self.emit_copy_reg_to_arg(ctx, i, rd.to_reg());
         }
         let tmp = ctx.alloc_tmp(word_rc, word_type);
-        for (is_safepoint, inst) in
-            M::gen_call(&self.dest, uses, defs, self.loc, self.opcode, tmp).into_iter()
+        for (is_safepoint, inst) in M::gen_call(
+            &self.dest,
+            uses,
+            defs,
+            self.loc,
+            self.opcode,
+            tmp,
+            self.sig.call_conv,
+            self.caller_conv,
+        )
+        .into_iter()
         {
             match is_safepoint {
                 InstIsSafepoint::Yes => ctx.emit_safepoint(inst),

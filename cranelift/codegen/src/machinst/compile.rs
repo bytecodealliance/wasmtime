@@ -6,7 +6,7 @@ use crate::settings;
 use crate::timing;
 
 use log::debug;
-use regalloc::{allocate_registers_with_opts, Algorithm, Options};
+use regalloc::{allocate_registers_with_opts, Algorithm, Options, PrettyPrint};
 
 /// Compile the given function down to VCode with allocated registers, ready
 /// for binary emission.
@@ -16,7 +16,7 @@ pub fn compile<B: LowerBackend + MachBackend>(
     abi: Box<dyn ABICallee<I = B::MInst>>,
 ) -> CodegenResult<VCode<B::MInst>>
 where
-    B::MInst: ShowWithRRU,
+    B::MInst: PrettyPrint,
 {
     // Compute lowered block order.
     let block_order = BlockLoweringOrder::new(f);

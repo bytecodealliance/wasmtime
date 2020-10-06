@@ -1,0 +1,99 @@
+test compile
+target aarch64
+
+function %f(f64) -> f64 {
+block0(v0: f64):
+    v1 = fadd.f64 v0, v0
+    v2 = fadd.f64 v0, v0
+    v3 = fadd.f64 v0, v0
+    v4 = fadd.f64 v0, v0
+    v5 = fadd.f64 v0, v0
+    v6 = fadd.f64 v0, v0
+    v7 = fadd.f64 v0, v0
+    v8 = fadd.f64 v0, v0
+    v9 = fadd.f64 v0, v0
+    v10 = fadd.f64 v0, v0
+    v11 = fadd.f64 v0, v0
+    v12 = fadd.f64 v0, v0
+    v13 = fadd.f64 v0, v0
+    v14 = fadd.f64 v0, v0
+    v15 = fadd.f64 v0, v0
+    v16 = fadd.f64 v0, v0
+    v17 = fadd.f64 v0, v0
+    v18 = fadd.f64 v0, v0
+    v19 = fadd.f64 v0, v0
+    v20 = fadd.f64 v0, v0
+    v21 = fadd.f64 v0, v0
+    v22 = fadd.f64 v0, v0
+    v23 = fadd.f64 v0, v0
+    v24 = fadd.f64 v0, v0
+    v25 = fadd.f64 v0, v0
+    v26 = fadd.f64 v0, v0
+    v27 = fadd.f64 v0, v0
+    v28 = fadd.f64 v0, v0
+    v29 = fadd.f64 v0, v0
+    v30 = fadd.f64 v0, v0
+    v31 = fadd.f64 v0, v0
+
+    v32 = fadd.f64 v0, v1
+    v33 = fadd.f64 v2, v3
+    v34 = fadd.f64 v4, v5
+    v35 = fadd.f64 v6, v7
+    v36 = fadd.f64 v8, v9
+    v37 = fadd.f64 v10, v11
+    v38 = fadd.f64 v12, v13
+    v39 = fadd.f64 v14, v15
+    v40 = fadd.f64 v16, v17
+    v41 = fadd.f64 v18, v19
+    v42 = fadd.f64 v20, v21
+    v43 = fadd.f64 v22, v23
+    v44 = fadd.f64 v24, v25
+    v45 = fadd.f64 v26, v27
+    v46 = fadd.f64 v28, v29
+    v47 = fadd.f64 v30, v31
+
+    v48 = fadd.f64 v32, v33
+    v49 = fadd.f64 v34, v35
+    v50 = fadd.f64 v36, v37
+    v51 = fadd.f64 v38, v39
+    v52 = fadd.f64 v40, v41
+    v53 = fadd.f64 v42, v43
+    v54 = fadd.f64 v44, v45
+    v55 = fadd.f64 v46, v47
+
+    v56 = fadd.f64 v48, v49
+    v57 = fadd.f64 v50, v51
+    v58 = fadd.f64 v52, v53
+    v59 = fadd.f64 v54, v55
+
+    v60 = fadd.f64 v56, v57
+    v61 = fadd.f64 v58, v59
+
+    v62 = fadd.f64 v60, v61
+
+    return v62
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sub sp, sp, #128
+; nextln: str q8, [sp]
+; nextln: str q9, [sp, #16]
+; nextln: str q10, [sp, #32]
+; nextln: str q11, [sp, #48]
+; nextln: str q12, [sp, #64]
+; nextln: str q13, [sp, #80]
+; nextln: str q14, [sp, #96]
+; nextln: str q15, [sp, #112]
+
+; check: ldr q8, [sp]
+; nextln: ldr q9, [sp, #16]
+; nextln: ldr q10, [sp, #32]
+; nextln: ldr q11, [sp, #48]
+; nextln: ldr q12, [sp, #64]
+; nextln: ldr q13, [sp, #80]
+; nextln: ldr q14, [sp, #96]
+; nextln: ldr q15, [sp, #112]
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret

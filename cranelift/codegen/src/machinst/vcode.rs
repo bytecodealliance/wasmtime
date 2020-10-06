@@ -25,8 +25,8 @@ use crate::timing;
 use regalloc::Function as RegallocFunction;
 use regalloc::Set as RegallocSet;
 use regalloc::{
-    BlockIx, InstIx, Range, RegAllocResult, RegClass, RegUsageCollector, RegUsageMapper, SpillSlot,
-    StackmapRequestInfo,
+    BlockIx, InstIx, PrettyPrint, Range, RegAllocResult, RegClass, RegUsageCollector,
+    RegUsageMapper, SpillSlot, StackmapRequestInfo,
 };
 
 use alloc::boxed::Box;
@@ -543,6 +543,10 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         }
     }
 
+    fn is_included_in_clobbers(&self, insn: &I) -> bool {
+        insn.is_included_in_clobbers()
+    }
+
     fn get_regs(insn: &I, collector: &mut RegUsageCollector) {
         insn.get_regs(collector)
     }
@@ -624,7 +628,7 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
 }
 
 /// Pretty-printing with `RealRegUniverse` context.
-impl<I: VCodeInst> ShowWithRRU for VCode<I> {
+impl<I: VCodeInst> PrettyPrint for VCode<I> {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         use std::fmt::Write;
 

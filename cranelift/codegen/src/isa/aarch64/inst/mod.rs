@@ -9,10 +9,11 @@ use crate::ir::types::{
     I32, I32X4, I64, I64X2, I8, I8X16, IFLAGS, R32, R64,
 };
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
+use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 
-use regalloc::{RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
+use regalloc::{PrettyPrint, RealRegUniverse, Reg, RegClass, SpillSlot, VirtualReg, Writable};
 use regalloc::{RegUsageCollector, RegUsageMapper};
 
 use alloc::boxed::Box;
@@ -392,6 +393,8 @@ pub struct CallInfo {
     pub defs: Vec<Writable<Reg>>,
     pub loc: SourceLoc,
     pub opcode: Opcode,
+    pub caller_callconv: CallConv,
+    pub callee_callconv: CallConv,
 }
 
 /// Additional information for CallInd instructions, left out of line to lower the size of the Inst
@@ -403,6 +406,8 @@ pub struct CallIndInfo {
     pub defs: Vec<Writable<Reg>>,
     pub loc: SourceLoc,
     pub opcode: Opcode,
+    pub caller_callconv: CallConv,
+    pub callee_callconv: CallConv,
 }
 
 /// Additional information for JTSequence instructions, left out of line to lower the size of the Inst
@@ -2491,6 +2496,24 @@ impl MachInst for Inst {
         }
     }
 
+    fn is_included_in_clobbers(&self) -> bool {
+        // We exclude call instructions from the clobber-set when they are calls
+        // from caller to callee with the same ABI. Such calls cannot possibly
+        // force any new registers to be saved in the prologue, because anything
+        // that the callee clobbers, the caller is also allowed to clobber. This
+        // both saves work and enables us to more precisely follow the
+        // half-caller-save, half-callee-save SysV ABI for some vector
+        // registers.
+        //
+        // See the note in [crate::isa::aarch64::abi::is_caller_save_reg] for
+        // more information on this ABI-implementation hack.
+        match self {
+            &Inst::Call { ref info } => info.caller_callconv != info.callee_callconv,
+            &Inst::CallInd { ref info } => info.caller_callconv != info.callee_callconv,
+            _ => true,
+        }
+    }
+
     fn is_term<'a>(&'a self) -> MachTerminator<'a> {
         match self {
             &Inst::Ret | &Inst::EpiloguePlaceholder => MachTerminator::Ret,
@@ -2623,7 +2646,7 @@ fn mem_finalize_for_show(
     (mem_str, mem)
 }
 
-impl ShowWithRRU for Inst {
+impl PrettyPrint for Inst {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         self.pretty_print(mb_rru, &mut EmitState::default())
     }
@@ -2883,13 +2906,13 @@ impl Inst {
             &Inst::StoreP64 { rt, rt2, ref mem } => {
                 let rt = rt.show_rru(mb_rru);
                 let rt2 = rt2.show_rru(mb_rru);
-                let mem = mem.show_rru_sized(mb_rru, /* size = */ 8);
+                let mem = mem.show_rru(mb_rru);
                 format!("stp {}, {}, {}", rt, rt2, mem)
             }
             &Inst::LoadP64 { rt, rt2, ref mem } => {
                 let rt = rt.to_reg().show_rru(mb_rru);
                 let rt2 = rt2.to_reg().show_rru(mb_rru);
-                let mem = mem.show_rru_sized(mb_rru, /* size = */ 8);
+                let mem = mem.show_rru(mb_rru);
                 format!("ldp {}, {}, {}", rt, rt2, mem)
             }
             &Inst::Mov64 { rd, rm } => {

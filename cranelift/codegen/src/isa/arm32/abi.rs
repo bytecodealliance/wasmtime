@@ -361,6 +361,8 @@ impl ABIMachineSpec for Arm32MachineDeps {
         loc: SourceLoc,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
+        _callee_conv: isa::CallConv,
+        _caller_conv: isa::CallConv,
     ) -> SmallVec<[(InstIsSafepoint, Inst); 2]> {
         let mut insts = SmallVec::new();
         match &dest {
@@ -431,11 +433,11 @@ impl ABIMachineSpec for Arm32MachineDeps {
         s.nominal_sp_to_fp
     }
 
-    fn get_caller_saves(_call_conv: isa::CallConv) -> Vec<Writable<Reg>> {
+    fn get_regs_clobbered_by_call(_: isa::CallConv) -> Vec<Writable<Reg>> {
         let mut caller_saved = Vec::new();
         for i in 0..15 {
             let r = writable_rreg(i);
-            if is_caller_save(r.to_reg().to_real_reg()) {
+            if is_reg_clobbered_by_call(r.to_reg().to_real_reg()) {
                 caller_saved.push(r);
             }
         }
@@ -461,7 +463,7 @@ fn get_callee_saves(regs: &Set<Writable<RealReg>>) -> Vec<Writable<RealReg>> {
     ret
 }
 
-fn is_caller_save(r: RealReg) -> bool {
+fn is_reg_clobbered_by_call(r: RealReg) -> bool {
     let enc = r.get_hw_encoding();
     enc <= 3
 }

@@ -3,10 +3,11 @@
 use crate::isa::aarch64::inst::OperandSize;
 use crate::isa::aarch64::inst::ScalarSize;
 use crate::isa::aarch64::inst::VectorSize;
-use crate::machinst::*;
 use crate::settings;
 
-use regalloc::{RealRegUniverse, Reg, RegClass, RegClassInfo, Writable, NUM_REG_CLASSES};
+use regalloc::{
+    PrettyPrint, RealRegUniverse, Reg, RegClass, RegClassInfo, Writable, NUM_REG_CLASSES,
+};
 
 use std::string::{String, ToString};
 

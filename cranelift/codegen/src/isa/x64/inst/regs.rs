@@ -10,9 +10,11 @@
 //! Also, they will have to be ABI dependent.  Need to find a way to avoid constructing a universe
 //! for each function we compile.
 
-use crate::{machinst::pretty_print::ShowWithRRU, settings};
+use crate::settings;
 use alloc::vec::Vec;
-use regalloc::{RealReg, RealRegUniverse, Reg, RegClass, RegClassInfo, NUM_REG_CLASSES};
+use regalloc::{
+    PrettyPrint, RealReg, RealRegUniverse, Reg, RegClass, RegClassInfo, NUM_REG_CLASSES,
+};
 use std::string::String;
 
 // Hardware encodings for a few registers.
