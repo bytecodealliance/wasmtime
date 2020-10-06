@@ -233,15 +233,14 @@ pub(crate) fn create_unwind_info(
         }
     }
 
-    for (j, (epilogue_point, _)) in prologue_epilogue.2.iter().enumerate() {
-        let i = *epilogue_point as usize;
+    for (epilogue_start, epilogue_end) in prologue_epilogue.2.iter() {
+        let i = *epilogue_start as usize;
         let offset = insts_layout[i];
+        builder.remember_state(offset);
 
-        if j & 1 == 0 {
-            builder.remember_state(offset);
-        } else {
-            builder.restore_state(offset);
-        }
+        let i = *epilogue_end as usize;
+        let offset = insts_layout[i];
+        builder.restore_state(offset);
     }
 
     Ok(Some(UnwindInfo::new(builder.instructions, len)))
@@ -249,10 +248,10 @@ pub(crate) fn create_unwind_info(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::{
-        types, AbiParam, ExternalName, InstBuilder, Signature, StackSlotData, StackSlotKind,
+        types, AbiParam, ExternalName, Function, InstBuilder, Signature, StackSlotData,
+        StackSlotKind,
     };
     use crate::isa::{lookup, CallConv};
     use crate::settings::{builder, Flags};
@@ -262,7 +261,6 @@ mod tests {
     use target_lexicon::triple;
 
     #[test]
-    #[cfg_attr(feature = "x64", should_panic)] // TODO #2079
     fn test_simple_func() {
         let isa = lookup(triple!("x86_64"))
             .expect("expect x86 ISA")
@@ -275,8 +273,8 @@ mod tests {
 
         context.compile(&*isa).expect("expected compilation");
 
-        let fde = match isa
-            .create_unwind_info(&context.func)
+        let fde = match context
+            .create_unwind_info(isa.as_ref())
             .expect("can create unwind info")
         {
             Some(crate::isa::unwind::UnwindInfo::SystemV(info)) => {
@@ -285,7 +283,7 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(1234), length: 16, lsda: None, instructions: [(2, CfaOffset(16)), (2, Offset(Register(6), -16)), (5, CfaRegister(Register(6))), (15, Cfa(Register(7), 8))] }");
+        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(1234), length: 13, lsda: None, instructions: [(1, CfaOffset(16)), (1, Offset(Register(6), -16)), (4, CfaRegister(Register(6)))] }");
     }
 
     fn create_function(call_conv: CallConv, stack_slot: Option<StackSlotData>) -> Function {
@@ -305,7 +303,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(feature = "x64", should_panic)] // TODO #2079
+    //#[cfg_attr(feature = "x64", should_panic)] // TODO #2079
     fn test_multi_return_func() {
         let isa = lookup(triple!("x86_64"))
             .expect("expect x86 ISA")
@@ -315,8 +313,8 @@ mod tests {
 
         context.compile(&*isa).expect("expected compilation");
 
-        let fde = match isa
-            .create_unwind_info(&context.func)
+        let fde = match context
+            .create_unwind_info(isa.as_ref())
             .expect("can create unwind info")
         {
             Some(crate::isa::unwind::UnwindInfo::SystemV(info)) => {
@@ -325,7 +323,7 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(4321), length: 16, lsda: None, instructions: [(2, CfaOffset(16)), (2, Offset(Register(6), -16)), (5, CfaRegister(Register(6))), (12, RememberState), (12, Cfa(Register(7), 8)), (13, RestoreState), (15, Cfa(Register(7), 0))] }");
+        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(4321), length: 23, lsda: None, instructions: [(1, CfaOffset(16)), (1, Offset(Register(6), -16)), (4, CfaRegister(Register(6))), (16, RememberState), (21, RestoreState)] }");
     }
 
     fn create_multi_return_function(call_conv: CallConv) -> Function {
