@@ -18,6 +18,7 @@
 //! backend pipeline.
 
 use crate::ir::{self, types, SourceLoc};
+#[cfg(feature = "unwind")]
 use crate::isa::unwind;
 use crate::machinst::*;
 use crate::result::CodegenResult;
@@ -437,7 +438,9 @@ impl<I: VCodeInst> VCode<I> {
         // target-specific translations of slot numbers to stack offsets.
         self.safepoint_slots = result.stackmaps;
 
+        // TODO need to drop last epilogue information?
         drop(epilogue_islands.pop());
+
         self.prologue_epilogue_ranges = Some((
             prologue_start.unwrap(),
             prologue_end.unwrap(),
@@ -528,6 +531,7 @@ impl<I: VCodeInst> VCode<I> {
     }
 
     /// Generates unwind info.
+    #[cfg(feature = "unwind")]
     pub fn unwind_info(&self) -> CodegenResult<Option<unwind::UnwindInfo>> {
         I::UnwindInfo::create_unwind_info(
             self.abi.unwind_info_kind(),
