@@ -170,7 +170,7 @@ cfg_if::cfg_if! {
                 } else if #[cfg(target_os = "freebsd")] {
                     let cx = &*(cx as *const libc::ucontext_t);
                     if #[cfg(target_arch = "i386")] {
-                        cx.uc_mcontext.mc_eip as *const u8	
+                        cx.uc_mcontext.mc_eip as *const u8
                     } else {
                         cx.uc_mcontext.mc_rip as *const u8
                     }
