@@ -257,6 +257,8 @@ impl EmitState {
 
 impl MachInstEmit for Inst {
     type State = EmitState;
+    #[cfg(feature = "unwind")]
+    type UnwindInfo = super::unwind::Arm32UnwindInfo;
 
     fn emit(&self, sink: &mut MachBuffer<Inst>, flags: &settings::Flags, state: &mut EmitState) {
         let start_off = sink.cur_offset();
