@@ -1,9 +1,9 @@
 use super::sys_impl::oshandle::RawOsHandle;
 use super::{fd, path, AsFile};
+use crate::clock::Timestamp;
 use crate::handle::{
     Dircookie, Dirent, Fdflags, Filestat, Filetype, Fstflags, Handle, HandleRights, Oflags,
 };
-use crate::sched::Timestamp;
 use crate::{Error, Result};
 use std::any::Any;
 use std::io;

@@ -1,5 +1,5 @@
+use crate::clock::Timestamp;
 use crate::handle::{Fdflags, Filestat, Fstflags, Handle, HandleRights, Oflags, Rights};
-use crate::sched::Timestamp;
 use crate::sys::osdir::OsDir;
 use crate::sys::AsFile;
 use crate::{Error, Result};

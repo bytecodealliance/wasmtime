@@ -1,8 +1,8 @@
+use crate::clock::Timestamp;
 use crate::handle::{
     Advice, Dircookie, Dirent, Fdflags, Filesize, Filestat, Filetype, Fstflags, Handle,
     HandleRights, Oflags, Rights, RightsExt, Size, DIRCOOKIE_START,
 };
-use crate::sched::Timestamp;
 use crate::{Error, Result};
 use std::any::Any;
 use std::cell::{Cell, RefCell};

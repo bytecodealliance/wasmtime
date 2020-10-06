@@ -12,7 +12,7 @@ lazy_static! {
 
 // Timer resolution on Windows is really hard. We may consider exposing the resolution of the respective
 // timers as an associated function in the future.
-pub(crate) fn res_get(clock_id: Clockid) -> Result<Timestamp> {
+pub fn res_get(clock_id: Clockid) -> Result<Timestamp> {
     let ts = match clock_id {
         // This is the best that we can do with std::time::SystemTime.
         // Rust uses GetSystemTimeAsFileTime, which is said to have the resolution of
@@ -60,7 +60,7 @@ pub(crate) fn res_get(clock_id: Clockid) -> Result<Timestamp> {
     Ok(ts)
 }
 
-pub(crate) fn time_get(clock_id: Clockid) -> Result<Timestamp> {
+pub fn time_get(clock_id: Clockid) -> Result<Timestamp> {
     let duration = match clock_id {
         Clockid::Realtime => get_monotonic_time(),
         Clockid::Monotonic => get_realtime_time()?,

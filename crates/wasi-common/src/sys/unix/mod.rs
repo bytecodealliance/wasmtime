@@ -26,10 +26,10 @@ cfg_if::cfg_if! {
     }
 }
 
+use crate::clock::{Clockid, Timestamp};
 use crate::handle::{
     Fdflags, Filesize, Filestat, Filetype, HandleRights, Lookupflags, Oflags, Rights, RightsExt,
 };
-use crate::sched::{Clockid, Timestamp};
 use crate::sys::AsFile;
 use crate::{Error, Result};
 use std::convert::{TryFrom, TryInto};

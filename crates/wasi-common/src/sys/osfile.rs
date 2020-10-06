@@ -1,9 +1,9 @@
 use super::sys_impl::oshandle::RawOsHandle;
 use super::{fd, AsFile};
+use crate::clock::Timestamp;
 use crate::handle::{
     Advice, Fdflags, Filesize, Filestat, Filetype, Fstflags, Handle, HandleRights,
 };
-use crate::sched::Timestamp;
 use crate::{Error, Result};
 use std::any::Any;
 use std::cell::Cell;

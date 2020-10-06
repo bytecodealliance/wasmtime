@@ -1,8 +1,8 @@
-use crate::sched::{Clockid, Timestamp};
+use crate::clock::{Clockid, Timestamp};
 use crate::{Error, Result};
 use yanix::clock::{clock_getres, clock_gettime, ClockId};
 
-pub(crate) fn res_get(clock_id: Clockid) -> Result<Timestamp> {
+pub fn res_get(clock_id: Clockid) -> Result<Timestamp> {
     let clock_id: ClockId = clock_id.into();
     let timespec = clock_getres(clock_id)?;
 
@@ -23,7 +23,7 @@ pub(crate) fn res_get(clock_id: Clockid) -> Result<Timestamp> {
         })
 }
 
-pub(crate) fn time_get(clock_id: Clockid) -> Result<Timestamp> {
+pub fn time_get(clock_id: Clockid) -> Result<Timestamp> {
     let clock_id: ClockId = clock_id.into();
     let timespec = clock_gettime(clock_id)?;
 

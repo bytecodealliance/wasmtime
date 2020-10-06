@@ -1,8 +1,8 @@
 use super::{Entry, EntryHandle};
+use crate::clock::Timestamp;
 use crate::handle::{
     Fdflags, Filestat, Filetype, Fstflags, Handle, HandleRights, Lookupflags, Oflags, Rights, Size,
 };
-use crate::sched::Timestamp;
 use crate::sys::path::{from_host, open_rights};
 use crate::{Error, Result};
 use std::convert::TryInto;

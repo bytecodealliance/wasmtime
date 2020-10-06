@@ -1,9 +1,9 @@
 use super::Entry;
+use crate::clock::Timestamp;
 use crate::handle::{
     Advice, Dircookie, Fdflags, Fdstat, Filedelta, Filesize, Filestat, Filetype, Fstflags,
     HandleRights, Prestat, PrestatDir, Rights, Size, Whence,
 };
-use crate::sched::Timestamp;
 use crate::sys::path::from_host;
 use crate::{Error, Result};
 use std::convert::TryInto;

@@ -1,12 +1,12 @@
+use crate::clock::Timestamp;
 use crate::ctx::WasiCtx;
 use crate::entry::EntryHandle;
 use crate::fs::Fd;
 use crate::handle::{Filesize, HandleRights, Rights};
+pub use crate::wasi::types::{Eventrwflags, Userdata};
 use crate::Error;
 use std::convert::TryInto;
 use std::time::{Duration, SystemTime};
-
-pub use crate::wasi::types::{Eventrwflags, Timestamp, Userdata};
 
 pub enum SchedResult<A, E> {
     /// The subscribed event did not happen
