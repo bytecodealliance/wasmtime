@@ -602,8 +602,7 @@ where
                     // Don't re-enter the loop here (i.e. continue), because the
                     // DW_OP_deref still needs to be kept.
                 }
-                Operation::Shr { .. }
-                | Operation::Shra { .. } => {
+                Operation::Shr { .. } | Operation::Shra { .. } => {
                     // Insert value normalisation part.
                     let mut writer = ExpressionWriter::new();
                     writer.write_op(gimli::constants::DW_OP_swap)?;
