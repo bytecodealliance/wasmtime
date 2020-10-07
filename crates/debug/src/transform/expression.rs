@@ -604,6 +604,10 @@ where
                 }
                 Operation::Shr { .. } | Operation::Shra { .. } => {
                     // Insert value normalisation part.
+                    // The semantic value is 32 bits (TODO: check unit)
+                    // but the target architecture is 64-bits. So we'll
+                    // clean out the upper 32 bits (in a sign-correct way)
+                    // to avoid contamination of the result with randomness.
                     let mut writer = ExpressionWriter::new();
                     writer.write_op(gimli::constants::DW_OP_swap)?;
                     writer.write_op(gimli::constants::DW_OP_const1u)?;
