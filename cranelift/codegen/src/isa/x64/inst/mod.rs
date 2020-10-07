@@ -2487,7 +2487,7 @@ impl MachInst for Inst {
     }
 
     fn gen_nop(preferred_size: usize) -> Inst {
-        Inst::nop(preferred_size as u8)
+        Inst::nop((preferred_size % 16) as u8)
     }
 
     fn maybe_direct_reload(&self, _reg: VirtualReg, _slot: SpillSlot) -> Option<Inst> {
