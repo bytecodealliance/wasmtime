@@ -1,0 +1,60 @@
+test run
+set enable_simd
+target x86_64
+feature "experimental_x64"
+
+function %bnot() -> b32 {
+block0:
+    v0 = vconst.b32x4 [true true true false]
+    v1 = bnot v0
+    v2 = extractlane v1, 3
+    return v2
+}
+; run
+
+function %band_not() -> b1 {
+block0:
+    v0 = vconst.i16x8 [1 0 0 0 0 0 0 0]
+    v1 = vconst.i16x8 [0 0 0 0 0 0 0 0]
+    v2 = band_not v0, v1
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 1
+    return v4
+}
+; run
+
+function %vany_true_i16x8() -> b1 {
+block0:
+    v0 = vconst.i16x8 [1 0 0 0 0 0 0 0]
+    v1 = vany_true v0
+    return v1
+}
+; run
+
+function %vany_true_b32x4() -> b1 {
+block0:
+    v0 = vconst.b32x4 [false false false false]
+    v1 = vany_true v0
+    v2 = bint.i32 v1
+    v3 = icmp_imm eq v2, 0
+    return v3
+}
+; run
+
+function %vall_true_i16x8() -> b1 {
+block0:
+    v0 = vconst.i16x8 [1 0 0 0 0 0 0 0]
+    v1 = vall_true v0
+    v2 = bint.i32 v1
+    v3 = icmp_imm eq v2, 0
+    return v3
+}
+; run
+
+function %vall_true_b32x4() -> b1 {
+block0:
+    v0 = vconst.b32x4 [true true true true]
+    v1 = vall_true v0
+    return v1
+}
+; run

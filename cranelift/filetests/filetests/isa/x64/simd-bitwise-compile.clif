@@ -1,0 +1,17 @@
+test compile
+set enable_simd
+target x86_64 skylake
+feature "experimental_x64"
+
+function %bitselect_i16x8() -> i16x8 {
+block0:
+    v0 = vconst.i16x8 [0 0 0 0 0 0 0 0]
+    v1 = vconst.i16x8 [0 0 0 0 0 0 0 0]
+    v2 = vconst.i16x8 [0 0 0 0 0 0 0 0]
+    v3 = bitselect v0, v1, v2
+    return v3
+}
+; check:  pand    %xmm0, %xmm1
+; nextln: pandn   %xmm2, %xmm0
+; nextln: por     %xmm1, %xmm0
+; not:    movdqa

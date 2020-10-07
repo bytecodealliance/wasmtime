@@ -1,0 +1,30 @@
+test compile
+set enable_simd
+target x86_64 skylake
+feature "experimental_x64"
+
+function %bnot_b32x4(b32x4) -> b32x4 {
+block0(v0: b32x4):
+    v1 = bnot v0
+    return v1
+}
+; check:  pcmpeqd %xmm1, %xmm1
+; nextln: pxor    %xmm1, %xmm0
+
+function %vany_true_b32x4(b32x4) -> b1 {
+block0(v0: b32x4):
+    v1 = vany_true v0
+    return v1
+}
+; check:  ptest   %xmm0, %xmm0
+; nextln: setnz   %r12b
+
+function %vall_true_i64x2(i64x2) -> b1 {
+block0(v0: i64x2):
+    v1 = vall_true v0
+    return v1
+}
+; check:  pxor    %xmm1, %xmm1
+; nextln: pcmpeqq %xmm0, %xmm1
+; nextln: ptest   %xmm1, %xmm1
+; nextln: setz    %r12b
