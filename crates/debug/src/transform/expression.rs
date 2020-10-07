@@ -547,8 +547,6 @@ where
                 | Operation::And { .. }
                 | Operation::Or { .. }
                 | Operation::Xor { .. }
-                | Operation::Shr { .. }
-                | Operation::Shra { .. }
                 | Operation::Shl { .. }
                 | Operation::Plus { .. }
                 | Operation::Minus { .. }
@@ -603,6 +601,24 @@ where
                     push!(CompiledExpressionPart::Deref);
                     // Don't re-enter the loop here (i.e. continue), because the
                     // DW_OP_deref still needs to be kept.
+                }
+                Operation::Shr { .. } | Operation::Shra { .. } => {
+                    // Insert value normalisation part.
+                    // The semantic value is 32 bits (TODO: check unit)
+                    // but the target architecture is 64-bits. So we'll
+                    // clean out the upper 32 bits (in a sign-correct way)
+                    // to avoid contamination of the result with randomness.
+                    let mut writer = ExpressionWriter::new();
+                    writer.write_op(gimli::constants::DW_OP_plus_uconst)?;
+                    writer.write_uleb128(32)?; // increase shift amount
+                    writer.write_op(gimli::constants::DW_OP_swap)?;
+                    writer.write_op(gimli::constants::DW_OP_const1u)?;
+                    writer.write_u8(32)?;
+                    writer.write_op(gimli::constants::DW_OP_shl)?;
+                    writer.write_op(gimli::constants::DW_OP_swap)?;
+                    code_chunk.extend(writer.into_vec());
+                    // Don't re-enter the loop here (i.e. continue), because the
+                    // DW_OP_shr* still needs to be kept.
                 }
                 Operation::Address { .. }
                 | Operation::AddressIndex { .. }
@@ -940,6 +956,31 @@ mod tests {
         );
 
         let e = expression!(
+            DW_OP_WASM_location,
+            0x0,
+            1,
+            DW_OP_lit16,
+            DW_OP_shra,
+            DW_OP_stack_value
+        );
+        let ce = compile_expression(&e, DWARF_ENCODING, None)
+            .expect("non-error")
+            .expect("expression");
+        assert_eq!(
+            ce,
+            CompiledExpression {
+                parts: vec![
+                    CompiledExpressionPart::Local {
+                        label: val1,
+                        trailing: false
+                    },
+                    CompiledExpressionPart::Code(vec![64, 35, 32, 22, 8, 32, 36, 22, 38, 159])
+                ],
+                need_deref: false,
+            }
+        );
+
+        let e = expression!(
             DW_OP_lit1,
             DW_OP_dup,
             DW_OP_WASM_location,
@@ -979,7 +1020,7 @@ mod tests {
                         conditionally: true,
                         target: targets[0].clone(),
                     },
-                    CompiledExpressionPart::Code(vec![22, 37]),
+                    CompiledExpressionPart::Code(vec![22, 35, 32, 22, 8, 32, 36, 22, 37]),
                     CompiledExpressionPart::Jump {
                         conditionally: false,
                         target: targets[1].clone(),
