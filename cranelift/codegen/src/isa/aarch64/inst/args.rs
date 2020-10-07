@@ -680,4 +680,19 @@ impl VectorSize {
             _ => *self,
         }
     }
+
+    /// Return the encoding bits that are used by some SIMD instructions
+    /// for a particular operand size.
+    pub fn enc_size(&self) -> (u32, u32) {
+        let q = self.is_128bits() as u32;
+        let size = match self.lane_size() {
+            ScalarSize::Size8 => 0b00,
+            ScalarSize::Size16 => 0b01,
+            ScalarSize::Size32 => 0b10,
+            ScalarSize::Size64 => 0b11,
+            _ => unreachable!(),
+        };
+
+        (q, size)
+    }
 }

@@ -1197,6 +1197,29 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::LoadSplat => {
+            let off = ctx.data(insn).load_store_offset().unwrap();
+            let ty = ty.unwrap();
+            let mem = lower_address(ctx, ty.lane_type(), &inputs[..], off);
+            let memflags = ctx.memflags(insn).expect("memory flags");
+            let rd = get_output_reg(ctx, outputs[0]);
+            let size = VectorSize::from_ty(ty);
+            let srcloc = if memflags.notrap() {
+                None
+            } else {
+                Some(ctx.srcloc(insn))
+            };
+            let tmp = ctx.alloc_tmp(RegClass::I64, I64);
+
+            ctx.emit(Inst::LoadAddr { rd: tmp, mem });
+            ctx.emit(Inst::VecLoadReplicate {
+                rd,
+                rn: tmp.to_reg(),
+                size,
+                srcloc,
+            });
+        }
+
         Opcode::Store
         | Opcode::Istore8
         | Opcode::Istore16
