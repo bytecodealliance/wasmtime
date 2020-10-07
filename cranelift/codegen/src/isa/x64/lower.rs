@@ -546,6 +546,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::SaddSat
         | Opcode::UaddSat
         | Opcode::Isub
+        | Opcode::SsubSat
+        | Opcode::UsubSat
         | Opcode::Imul
         | Opcode::AvgRound
         | Opcode::Band
@@ -577,6 +579,16 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         types::I32X4 => SseOpcode::Psubd,
                         types::I64X2 => SseOpcode::Psubq,
                         _ => panic!("Unsupported type for packed isub instruction: {}", ty),
+                    },
+                    Opcode::SsubSat => match ty {
+                        types::I8X16 => SseOpcode::Psubsb,
+                        types::I16X8 => SseOpcode::Psubsw,
+                        _ => panic!("Unsupported type for packed ssub_sat instruction: {}", ty),
+                    },
+                    Opcode::UsubSat => match ty {
+                        types::I8X16 => SseOpcode::Psubusb,
+                        types::I16X8 => SseOpcode::Psubusw,
+                        _ => panic!("Unsupported type for packed usub_sat instruction: {}", ty),
                     },
                     Opcode::Imul => match ty {
                         types::I16X8 => SseOpcode::Pmullw,
