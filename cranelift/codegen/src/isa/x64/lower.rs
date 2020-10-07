@@ -122,6 +122,22 @@ fn put_input_in_reg(ctx: Ctx, spec: InsnInput) -> Reg {
     }
 }
 
+/// Indicates whether the LHS vreg is dominating the RHS vreg.
+/// TODO This is using a heuristic, to be refined here. The order of vreg indexes is based on the
+/// layout traversal in forward order. This is a Good Enough proxy, since:
+/// - either the two vregs have been defined in the same block, and there's not much we can infer
+/// from that.
+/// - or they're not:
+///     - one has been defined in the current block, the other in another block: then using the
+///     vreg's order is sufficient to determine that LHS dominates RHS.
+///     - both have been defined in other blocks, and there's not much we can infer from that,
+///     apart that using the layout order may help.
+fn maybe_is_vreg_dominating(ctx: Ctx, lhs: InsnInput, rhs: InsnInput) -> bool {
+    let lhs_reg = ctx.get_input(lhs.insn, lhs.input).reg;
+    let rhs_reg = ctx.get_input(rhs.insn, rhs.input).reg;
+    lhs_reg < rhs_reg
+}
+
 /// An extension specification for `extend_input_to_reg`.
 #[derive(Clone, Copy)]
 enum ExtSpec {
@@ -767,6 +783,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         // immediate.
                         if let Some(imm) = input_to_sext_imm(ctx, inputs[0]) {
                             (put_input_in_reg(ctx, inputs[1]), RegMemImm::imm(imm))
+                        } else if let Some(imm) = input_to_sext_imm(ctx, inputs[1]) {
+                            (put_input_in_reg(ctx, inputs[0]), RegMemImm::imm(imm))
+                        } else if maybe_is_vreg_dominating(ctx, inputs[0], inputs[1]) {
+                            (
+                                put_input_in_reg(ctx, inputs[1]),
+                                input_to_reg_mem_imm(ctx, inputs[0]),
+                            )
                         } else {
                             (
                                 put_input_in_reg(ctx, inputs[0]),
@@ -1781,8 +1804,22 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv => {
-            let lhs = put_input_in_reg(ctx, inputs[0]);
-            let rhs = input_to_reg_mem(ctx, inputs[1]);
+            let (lhs, rhs) = {
+                if (op == Opcode::Fadd || op == Opcode::Fmul)
+                    && maybe_is_vreg_dominating(ctx, inputs[0], inputs[1])
+                {
+                    (
+                        put_input_in_reg(ctx, inputs[1]),
+                        input_to_reg_mem(ctx, inputs[0]),
+                    )
+                } else {
+                    (
+                        put_input_in_reg(ctx, inputs[0]),
+                        input_to_reg_mem(ctx, inputs[1]),
+                    )
+                }
+            };
+
             let dst = get_output_reg(ctx, outputs[0]);
             let ty = ty.unwrap();
 
