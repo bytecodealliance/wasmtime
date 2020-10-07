@@ -12,7 +12,7 @@ use cranelift_codegen::ir::{
     Value as ValueRef, ValueList,
 };
 use log::trace;
-use std::ops::{Add, Div, Mul, Sub};
+use std::ops::{Add, Mul, Sub};
 use thiserror::Error;
 
 /// The valid control flow states.
@@ -153,10 +153,11 @@ impl Interpreter {
                     Iadd => binary_op!(Add::add[arg1, arg2]; [I8, I16, I32, I64]; inst),
                     Isub => binary_op!(Sub::sub[arg1, arg2]; [I8, I16, I32, I64]; inst),
                     Imul => binary_op!(Mul::mul[arg1, arg2]; [I8, I16, I32, I64]; inst),
-                    Fadd => binary_op!(Add::add[arg1, arg2]; [F32, F64]; inst),
-                    Fsub => binary_op!(Sub::sub[arg1, arg2]; [F32, F64]; inst),
-                    Fmul => binary_op!(Mul::mul[arg1, arg2]; [F32, F64]; inst),
-                    Fdiv => binary_op!(Div::div[arg1, arg2]; [F32, F64]; inst),
+                    // TODO re-enable by importing something like rustc_apfloat for correctness.
+                    // Fadd => binary_op!(Add::add[arg1, arg2]; [F32, F64]; inst),
+                    // Fsub => binary_op!(Sub::sub[arg1, arg2]; [F32, F64]; inst),
+                    // Fmul => binary_op!(Mul::mul[arg1, arg2]; [F32, F64]; inst),
+                    // Fdiv => binary_op!(Div::div[arg1, arg2]; [F32, F64]; inst),
                     _ => unimplemented!("interpreter does not support opcode yet: {}", opcode),
                 }?;
                 frame.set(first_result(frame.function, inst), result);

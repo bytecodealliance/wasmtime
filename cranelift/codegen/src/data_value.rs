@@ -18,8 +18,8 @@ pub enum DataValue {
     I16(i16),
     I32(i32),
     I64(i64),
-    F32(f32),
-    F64(f64),
+    F32(Ieee32),
+    F64(Ieee64),
     V128([u8; 16]),
 }
 
@@ -97,19 +97,9 @@ build_conversion_impl!(i8, I8, I8);
 build_conversion_impl!(i16, I16, I16);
 build_conversion_impl!(i32, I32, I32);
 build_conversion_impl!(i64, I64, I64);
-build_conversion_impl!(f32, F32, F32);
-build_conversion_impl!(f64, F64, F64);
+build_conversion_impl!(Ieee32, F32, F32);
+build_conversion_impl!(Ieee64, F64, F64);
 build_conversion_impl!([u8; 16], V128, I8X16);
-impl From<Ieee64> for DataValue {
-    fn from(f: Ieee64) -> Self {
-        DataValue::from(f64::from_bits(f.bits()))
-    }
-}
-impl From<Ieee32> for DataValue {
-    fn from(f: Ieee32) -> Self {
-        DataValue::from(f32::from_bits(f.bits()))
-    }
-}
 impl From<Offset32> for DataValue {
     fn from(o: Offset32) -> Self {
         DataValue::from(Into::<i32>::into(o))
@@ -124,9 +114,9 @@ impl Display for DataValue {
             DataValue::I16(dv) => write!(f, "{}", dv),
             DataValue::I32(dv) => write!(f, "{}", dv),
             DataValue::I64(dv) => write!(f, "{}", dv),
-            // Use the Ieee* wrappers here to maintain a consistent syntax.
-            DataValue::F32(dv) => write!(f, "{}", Ieee32::from(*dv)),
-            DataValue::F64(dv) => write!(f, "{}", Ieee64::from(*dv)),
+            // The Ieee* wrappers here print the expected syntax.
+            DataValue::F32(dv) => write!(f, "{}", dv),
+            DataValue::F64(dv) => write!(f, "{}", dv),
             // Again, for syntax consistency, use ConstantData, which in this case displays as hex.
             DataValue::V128(dv) => write!(f, "{}", ConstantData::from(&dv[..])),
         }
