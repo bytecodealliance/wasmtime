@@ -954,6 +954,31 @@ mod tests {
         );
 
         let e = expression!(
+            DW_OP_WASM_location,
+            0x0,
+            1,
+            DW_OP_lit16,
+            DW_OP_shra,
+            DW_OP_stack_value
+        );
+        let ce = compile_expression(&e, DWARF_ENCODING, None)
+            .expect("non-error")
+            .expect("expression");
+        assert_eq!(
+            ce,
+            CompiledExpression {
+                parts: vec![
+                    CompiledExpressionPart::Local {
+                        label: val1,
+                        trailing: false
+                    },
+                    CompiledExpressionPart::Code(vec![64, 22, 8, 32, 36, 8, 32, 38, 22, 38, 159])
+                ],
+                need_deref: false,
+            }
+        );
+
+        let e = expression!(
             DW_OP_lit1,
             DW_OP_dup,
             DW_OP_WASM_location,
