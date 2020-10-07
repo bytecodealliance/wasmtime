@@ -609,14 +609,12 @@ where
                     // clean out the upper 32 bits (in a sign-correct way)
                     // to avoid contamination of the result with randomness.
                     let mut writer = ExpressionWriter::new();
+                    writer.write_op(gimli::constants::DW_OP_plus_uconst)?;
+                    writer.write_uleb128(32)?; // increase shift amount
                     writer.write_op(gimli::constants::DW_OP_swap)?;
                     writer.write_op(gimli::constants::DW_OP_const1u)?;
                     writer.write_u8(32)?;
                     writer.write_op(gimli::constants::DW_OP_shl)?;
-                    writer.write_op(gimli::constants::DW_OP_const1u)?;
-                    writer.write_u8(32)?;
-                    // Extend with the (arithmetic) shift.
-                    writer.write_u8(buf[pos])?;
                     writer.write_op(gimli::constants::DW_OP_swap)?;
                     code_chunk.extend(writer.into_vec());
                     // Don't re-enter the loop here (i.e. continue), because the
@@ -976,7 +974,7 @@ mod tests {
                         label: val1,
                         trailing: false
                     },
-                    CompiledExpressionPart::Code(vec![64, 22, 8, 32, 36, 8, 32, 38, 22, 38, 159])
+                    CompiledExpressionPart::Code(vec![64, 35, 32, 22, 8, 32, 36, 22, 38, 159])
                 ],
                 need_deref: false,
             }
@@ -1022,7 +1020,7 @@ mod tests {
                         conditionally: true,
                         target: targets[0].clone(),
                     },
-                    CompiledExpressionPart::Code(vec![22, 22, 8, 32, 36, 8, 32, 37, 22, 37]),
+                    CompiledExpressionPart::Code(vec![22, 35, 32, 22, 8, 32, 36, 22, 37]),
                     CompiledExpressionPart::Jump {
                         conditionally: false,
                         target: targets[1].clone(),
