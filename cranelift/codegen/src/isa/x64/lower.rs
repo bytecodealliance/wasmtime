@@ -449,6 +449,7 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i
     // We now either have an add that we must materialize, or some other input; as well as the
     // final offset.
     if let Some(add) = matches_input(ctx, spec, Opcode::Iadd) {
+        debug_assert_eq!(ctx.output_ty(add, 0), types::I64);
         let add_inputs = &[
             InsnInput {
                 insn: add,
@@ -480,7 +481,33 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i
             )
         } else {
             for i in 0..=1 {
-                if let Some(cst) = ctx.get_input(add, i).constant {
+                let input = ctx.get_input(add, i);
+
+                // Try to pierce through uextend.
+                if let Some(uextend) = matches_input(
+                    ctx,
+                    InsnInput {
+                        insn: add,
+                        input: i,
+                    },
+                    Opcode::Uextend,
+                ) {
+                    if let Some(cst) = ctx.get_input(uextend, 0).constant {
+                        // Zero the upper bits.
+                        let input_size = ctx.input_ty(uextend, 0).bits() as u64;
+                        let shift: u64 = 64 - input_size;
+                        let uext_cst: u64 = (cst << shift) >> shift;
+
+                        let final_offset = (offset as i64).wrapping_add(uext_cst as i64);
+                        if low32_will_sign_extend_to_64(final_offset as u64) {
+                            let base = put_input_in_reg(ctx, add_inputs[1 - i]);
+                            return Amode::imm_reg(final_offset as u32, base);
+                        }
+                    }
+                }
+
+                // If it's a constant, add it directly!
+                if let Some(cst) = input.constant {
                     let final_offset = (offset as i64).wrapping_add(cst as i64);
                     if low32_will_sign_extend_to_64(final_offset as u64) {
                         let base = put_input_in_reg(ctx, add_inputs[1 - i]);
