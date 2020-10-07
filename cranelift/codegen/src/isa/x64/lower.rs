@@ -3315,10 +3315,10 @@ impl LowerBackend for X64Backend {
             );
             assert!(op1 == Opcode::Jump || op1 == Opcode::Fallthrough);
 
-            let taken = BranchTarget::Label(targets[0]);
+            let taken = targets[0];
             let not_taken = match op1 {
-                Opcode::Jump => BranchTarget::Label(targets[1]),
-                Opcode::Fallthrough => BranchTarget::Label(fallthrough.unwrap()),
+                Opcode::Jump => targets[1],
+                Opcode::Fallthrough => fallthrough.unwrap(),
                 _ => unreachable!(), // assert above.
             };
 
@@ -3422,7 +3422,7 @@ impl LowerBackend for X64Backend {
             let op = ctx.data(branches[0]).opcode();
             match op {
                 Opcode::Jump | Opcode::Fallthrough => {
-                    ctx.emit(Inst::jmp_known(BranchTarget::Label(targets[0])));
+                    ctx.emit(Inst::jmp_known(targets[0]));
                 }
 
                 Opcode::BrTable => {
@@ -3465,13 +3465,9 @@ impl LowerBackend for X64Backend {
                     let tmp2 = ctx.alloc_tmp(RegClass::I64, types::I64);
 
                     let targets_for_term: Vec<MachLabel> = targets.to_vec();
-                    let default_target = BranchTarget::Label(targets[0]);
+                    let default_target = targets[0];
 
-                    let jt_targets: Vec<BranchTarget> = targets
-                        .iter()
-                        .skip(1)
-                        .map(|bix| BranchTarget::Label(*bix))
-                        .collect();
+                    let jt_targets: Vec<MachLabel> = targets.iter().skip(1).cloned().collect();
 
                     ctx.emit(Inst::JmpTableSeq {
                         idx,

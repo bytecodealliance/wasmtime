@@ -1766,17 +1766,9 @@ fn test_x64_emit() {
         "lea     179(%r10,%r9,1), %r8",
     ));
     insns.push((
-        Inst::lea(Amode::rip_relative(BranchTarget::ResolvedOffset(0)), w_rdi),
+        Inst::lea(Amode::rip_relative(MachLabel::from_block(0)), w_rdi),
         "488D3D00000000",
-        "lea     0(%rip), %rdi",
-    ));
-    insns.push((
-        Inst::lea(
-            Amode::rip_relative(BranchTarget::ResolvedOffset(1337)),
-            w_r15,
-        ),
-        "4C8D3D39050000",
-        "lea     1337(%rip), %r15",
+        "lea     label0(%rip), %rdi",
     ));
 
     // ========================================================
@@ -3676,7 +3668,13 @@ fn test_x64_emit() {
         assert_eq!(expected_printing, actual_printing);
         let mut sink = test_utils::TestCodeSink::new();
         let mut buffer = MachBuffer::new();
+
         insn.emit(&mut buffer, &emit_info, &mut Default::default());
+
+        // Allow one label just after the instruction (so the offset is 0).
+        let label = buffer.get_label();
+        buffer.bind_label(label);
+
         let buffer = buffer.finish();
         buffer.emit(&mut sink);
         let actual_encoding = &sink.stringify();

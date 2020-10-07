@@ -276,11 +276,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_ret() -> Self::I {
-        Inst::Ret
+        Inst::ret()
     }
 
     fn gen_epilogue_placeholder() -> Self::I {
-        Inst::EpiloguePlaceholder
+        Inst::epilogue_placeholder()
     }
 
     fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallVec<[Self::I; 4]> {
