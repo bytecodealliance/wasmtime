@@ -180,6 +180,7 @@ fn experimental_x64_should_panic(testsuite: &str, testname: &str, strategy: &str
 
     match (testsuite, testname) {
         ("simd", "simd_address") => return false,
+        ("simd", "simd_bitwise") => return false,
         ("simd", "simd_const") => return false,
         ("simd", "simd_i8x16_arith") => return false,
         ("simd", "simd_i8x16_arith2") => return false,
