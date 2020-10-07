@@ -3129,6 +3129,30 @@ fn test_x64_emit() {
     ));
 
     insns.push((
+        Inst::xmm_rm_r(SseOpcode::Psubsb, RegMem::reg(xmm9), w_xmm5),
+        "66410FE8E9",
+        "psubsb  %xmm9, %xmm5",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Psubsw, RegMem::reg(xmm7), w_xmm6),
+        "660FE9F7",
+        "psubsw  %xmm7, %xmm6",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Psubusb, RegMem::reg(xmm12), w_xmm13),
+        "66450FD8EC",
+        "psubusb %xmm12, %xmm13",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Psubusw, RegMem::reg(xmm1), w_xmm8),
+        "66440FD9C1",
+        "psubusw %xmm1, %xmm8",
+    ));
+
+    insns.push((
         Inst::xmm_rm_r(SseOpcode::Pavgb, RegMem::reg(xmm12), w_xmm13),
         "66450FE0EC",
         "pavgb   %xmm12, %xmm13",
