@@ -612,7 +612,7 @@ where
                     writer.write_op(gimli::constants::DW_OP_shl)?;
                     writer.write_op(gimli::constants::DW_OP_const1u)?;
                     writer.write_u8(32)?;
-                   // Extend with the (arithmetic) shift.
+                    // Extend with the (arithmetic) shift.
                     writer.write_u8(buf[pos])?;
                     writer.write_op(gimli::constants::DW_OP_swap)?;
                     code_chunk.extend(writer.into_vec());
