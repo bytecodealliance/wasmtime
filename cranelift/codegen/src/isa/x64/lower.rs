@@ -747,6 +747,21 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         types::I16X8 => SseOpcode::Pavgw,
                         _ => panic!("Unsupported type for packed avg_round instruction: {}", ty),
                     },
+                    Opcode::Band => match ty {
+                        types::F32X4 => SseOpcode::Andps,
+                        types::F64X2 => SseOpcode::Andpd,
+                        _ => SseOpcode::Pand,
+                    },
+                    Opcode::Bor => match ty {
+                        types::F32X4 => SseOpcode::Orps,
+                        types::F64X2 => SseOpcode::Orpd,
+                        _ => SseOpcode::Por,
+                    },
+                    Opcode::Bxor => match ty {
+                        types::F32X4 => SseOpcode::Xorps,
+                        types::F64X2 => SseOpcode::Xorpd,
+                        _ => SseOpcode::Pxor,
+                    },
                     _ => panic!("Unsupported packed instruction: {}", op),
                 };
                 let lhs = put_input_in_reg(ctx, inputs[0]);
@@ -797,6 +812,23 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::mov_r_r(true, lhs, dst));
                 ctx.emit(Inst::alu_rmi_r(is_64, alu_op, rhs, dst));
             }
+        }
+
+        Opcode::BandNot => {
+            let ty = ty.unwrap();
+            debug_assert!(ty.is_vector() && ty.bytes() == 16);
+            let lhs = input_to_reg_mem(ctx, inputs[0]);
+            let rhs = put_input_in_reg(ctx, inputs[1]);
+            let dst = get_output_reg(ctx, outputs[0]);
+            let sse_op = match ty {
+                types::F32X4 => SseOpcode::Andnps,
+                types::F64X2 => SseOpcode::Andnpd,
+                _ => SseOpcode::Pandn,
+            };
+            // Note the flipping of operands: the `rhs` operand is used as the destination instead
+            // of the `lhs` as in the other bit operations above (e.g. `band`).
+            ctx.emit(Inst::gen_move(dst, rhs, ty));
+            ctx.emit(Inst::xmm_rm_r(sse_op, lhs, dst));
         }
 
         Opcode::Iabs => {
