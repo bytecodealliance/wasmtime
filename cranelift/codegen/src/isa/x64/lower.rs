@@ -908,6 +908,29 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::Bitselect => {
+            let ty = ty.unwrap();
+            let condition = put_input_in_reg(ctx, inputs[0]);
+            let if_true = put_input_in_reg(ctx, inputs[1]);
+            let if_false = input_to_reg_mem(ctx, inputs[2]);
+            let dst = get_output_reg(ctx, outputs[0]);
+
+            if ty.is_vector() {
+                let tmp1 = ctx.alloc_tmp(RegClass::V128, ty);
+                ctx.emit(Inst::gen_move(tmp1, if_true, ty));
+                ctx.emit(Inst::and(ty, RegMem::reg(condition.clone()), tmp1));
+
+                let tmp2 = ctx.alloc_tmp(RegClass::V128, ty);
+                ctx.emit(Inst::gen_move(tmp2, condition, ty));
+                ctx.emit(Inst::and_not(ty, if_false, tmp2));
+
+                ctx.emit(Inst::gen_move(dst, tmp2.to_reg(), ty));
+                ctx.emit(Inst::or(ty, RegMem::from(tmp1), dst));
+            } else {
+                unimplemented!("scalar bitselect")
+            }
+        }
+
         Opcode::Ishl | Opcode::Ushr | Opcode::Sshr | Opcode::Rotl | Opcode::Rotr => {
             let dst_ty = ctx.output_ty(insn, 0);
             debug_assert_eq!(ctx.input_ty(insn, 0), dst_ty);
