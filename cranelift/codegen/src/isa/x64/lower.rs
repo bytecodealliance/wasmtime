@@ -70,6 +70,25 @@ fn matches_input<C: LowerCtx<I = Inst>>(
     })
 }
 
+/// Returns whether the given specified `input` is a result produced by an instruction with any of
+/// the opcodes specified in `ops`.
+fn matches_input_any<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    input: InsnInput,
+    ops: &[Opcode],
+) -> Option<IRInst> {
+    let inputs = ctx.get_input(input.insn, input.input);
+    inputs.inst.and_then(|(src_inst, _)| {
+        let data = ctx.data(src_inst);
+        for &op in ops {
+            if data.opcode() == op {
+                return Some(src_inst);
+            }
+        }
+        None
+    })
+}
+
 fn lowerinput_to_reg(ctx: Ctx, input: LowerInput) -> Reg {
     ctx.use_input_reg(input);
     input.reg
@@ -1339,28 +1358,54 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let src_ty = ctx.input_ty(insn, 0);
             let dst_ty = ctx.output_ty(insn, 0);
 
+            // Sextend requires a sign-extended move, but all the other opcodes are simply a move
+            // from a zero-extended source. Here is why this works, in each case:
+            //
+            // - Bint: Bool-to-int. We always represent a bool as a 0 or 1, so we merely need to
+            // zero-extend here.
+            //
+            // - Breduce, Bextend: changing width of a boolean. We represent a bool as a 0 or 1, so
+            // again, this is a zero-extend / no-op.
+            //
+            // - Ireduce: changing width of an integer. Smaller ints are stored with undefined
+            // high-order bits, so we can simply do a copy.
+
+            if src_ty == types::I32 && dst_ty == types::I64 && op != Opcode::Sextend {
+                // As a particular x64 extra-pattern matching opportunity, all the ALU opcodes on
+                // 32-bits will zero-extend the upper 32-bits, so we can even not generate a
+                // zero-extended move in this case.
+                // TODO add loads and shifts here.
+                if let Some(_) = matches_input_any(
+                    ctx,
+                    inputs[0],
+                    &[
+                        Opcode::Iadd,
+                        Opcode::IaddIfcout,
+                        Opcode::Isub,
+                        Opcode::Imul,
+                        Opcode::Band,
+                        Opcode::Bor,
+                        Opcode::Bxor,
+                    ],
+                ) {
+                    let src = put_input_in_reg(ctx, inputs[0]);
+                    let dst = get_output_reg(ctx, outputs[0]);
+                    ctx.emit(Inst::gen_move(dst, src, types::I64));
+                    return Ok(());
+                }
+            }
+
             let src = input_to_reg_mem(ctx, inputs[0]);
             let dst = get_output_reg(ctx, outputs[0]);
 
             let ext_mode = ExtMode::new(src_ty.bits(), dst_ty.bits());
-            assert!(
-                (src_ty.bits() < dst_ty.bits() && ext_mode.is_some()) || ext_mode.is_none(),
+            assert_eq!(
+                src_ty.bits() < dst_ty.bits(),
+                ext_mode.is_some(),
                 "unexpected extension: {} -> {}",
                 src_ty,
                 dst_ty
             );
-
-            // All of these other opcodes are simply a move from a zero-extended source.  Here
-            // is why this works, in each case:
-            //
-            // - Bint: Bool-to-int. We always represent a bool as a 0 or 1, so we
-            //   merely need to zero-extend here.
-            //
-            // - Breduce, Bextend: changing width of a boolean. We represent a
-            //   bool as a 0 or 1, so again, this is a zero-extend / no-op.
-            //
-            // - Ireduce: changing width of an integer. Smaller ints are stored
-            //   with undefined high-order bits, so we can simply do a copy.
 
             if let Some(ext_mode) = ext_mode {
                 if op == Opcode::Sextend {
