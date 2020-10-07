@@ -547,8 +547,6 @@ where
                 | Operation::And { .. }
                 | Operation::Or { .. }
                 | Operation::Xor { .. }
-                | Operation::Shr { .. }
-                | Operation::Shra { .. }
                 | Operation::Shl { .. }
                 | Operation::Plus { .. }
                 | Operation::Minus { .. }
@@ -603,6 +601,23 @@ where
                     push!(CompiledExpressionPart::Deref);
                     // Don't re-enter the loop here (i.e. continue), because the
                     // DW_OP_deref still needs to be kept.
+                }
+                Operation::Shr { .. }
+                | Operation::Shra { .. } => {
+                    // Insert value normalisation part.
+                    let mut writer = ExpressionWriter::new();
+                    writer.write_op(gimli::constants::DW_OP_swap)?;
+                    writer.write_op(gimli::constants::DW_OP_const1u)?;
+                    writer.write_u8(32)?;
+                    writer.write_op(gimli::constants::DW_OP_shl)?;
+                    writer.write_op(gimli::constants::DW_OP_const1u)?;
+                    writer.write_u8(32)?;
+		    // Extend with the (arithmetic) shift.
+                    writer.write_u8(buf[pos])?;
+                    writer.write_op(gimli::constants::DW_OP_swap)?;
+                    code_chunk.extend(writer.into_vec());
+                    // Don't re-enter the loop here (i.e. continue), because the
+                    // DW_OP_shr* still needs to be kept.
                 }
                 Operation::Address { .. }
                 | Operation::AddressIndex { .. }
