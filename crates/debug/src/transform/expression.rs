@@ -993,7 +993,7 @@ mod tests {
                         conditionally: true,
                         target: targets[0].clone(),
                     },
-                    CompiledExpressionPart::Code(vec![22, 37]),
+                    CompiledExpressionPart::Code(vec![22, 22, 8, 32, 36, 8, 32, 37, 22, 37]),
                     CompiledExpressionPart::Jump {
                         conditionally: false,
                         target: targets[1].clone(),
