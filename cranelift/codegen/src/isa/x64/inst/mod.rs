@@ -1105,6 +1105,33 @@ impl Inst {
         }
     }
 
+    /// Choose which instruction to use for comparing two values for equality.
+    pub(crate) fn equals(ty: Type, from: RegMem, to: Writable<Reg>) -> Inst {
+        match ty {
+            types::I8X16 => Inst::xmm_rm_r(SseOpcode::Pcmpeqb, from, to),
+            types::I16X8 => Inst::xmm_rm_r(SseOpcode::Pcmpeqw, from, to),
+            types::I32X4 => Inst::xmm_rm_r(SseOpcode::Pcmpeqd, from, to),
+            types::I64X2 => Inst::xmm_rm_r(SseOpcode::Pcmpeqq, from, to),
+            types::F32X4 => {
+                Inst::xmm_rm_r_imm(SseOpcode::Cmpps, from, to, FcmpImm::Equal.encode(), false)
+            }
+            types::F64X2 => {
+                Inst::xmm_rm_r_imm(SseOpcode::Cmppd, from, to, FcmpImm::Equal.encode(), false)
+            }
+            _ => unimplemented!("unimplemented type for Inst::equals: {}", ty),
+        }
+    }
+
+    /// Choose which instruction to use for computing a bitwise XOR on two values.
+    pub(crate) fn xor(ty: Type, from: RegMem, to: Writable<Reg>) -> Inst {
+        match ty {
+            types::F32X4 => Inst::xmm_rm_r(SseOpcode::Xorps, from, to),
+            types::F64X2 => Inst::xmm_rm_r(SseOpcode::Xorpd, from, to),
+            _ if ty.is_vector() => Inst::xmm_rm_r(SseOpcode::Pxor, from, to),
+            _ => unimplemented!("unimplemented type for Inst::xor: {}", ty),
+        }
+    }
+
     /// Choose which instruction to use for loading a register value from memory. For loads smaller
     /// than 64 bits, this method expects a way to extend the value (i.e. [ExtKind::SignExtend],
     /// [ExtKind::ZeroExtend]); loads with no extension necessary will ignore this.

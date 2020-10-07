@@ -892,15 +892,18 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Bnot => {
             let ty = ty.unwrap();
+            let size = ty.bytes() as u8;
+            let src = put_input_in_reg(ctx, inputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
+            ctx.emit(Inst::gen_move(dst, src, ty));
+
             if ty.is_vector() {
-                unimplemented!("vector bnot");
+                let tmp = ctx.alloc_tmp(RegClass::V128, ty);
+                ctx.emit(Inst::equals(ty, RegMem::from(tmp), tmp));
+                ctx.emit(Inst::xor(ty, RegMem::from(tmp), dst));
             } else if ty.is_bool() {
                 unimplemented!("bool bnot")
             } else {
-                let size = ty.bytes() as u8;
-                let src = put_input_in_reg(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]);
-                ctx.emit(Inst::gen_move(dst, src, ty));
                 ctx.emit(Inst::not(size, dst));
             }
         }
