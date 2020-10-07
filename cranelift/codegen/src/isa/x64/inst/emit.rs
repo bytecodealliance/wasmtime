@@ -7,7 +7,6 @@ use crate::machinst::{inst_common, MachBuffer, MachInstEmit, MachLabel};
 use core::convert::TryInto;
 use log::debug;
 use regalloc::{Reg, RegClass, Writable};
-use std::convert::TryFrom;
 
 fn low8_will_sign_extend_to_64(x: u32) -> bool {
     let xs = (x as i32) as i64;
@@ -296,18 +295,9 @@ fn emit_std_enc_mem(
             // RIP-relative is mod=00, rm=101.
             sink.put1(encode_modrm(0, enc_g & 7, 0b101));
 
-            match *target {
-                BranchTarget::Label(label) => {
-                    let offset = sink.cur_offset();
-                    sink.use_label_at_offset(offset, label, LabelUse::JmpRel32);
-                    sink.put4(0);
-                }
-                BranchTarget::ResolvedOffset(offset) => {
-                    let offset =
-                        u32::try_from(offset).expect("rip-relative can't hold >= U32_MAX values");
-                    sink.put4(offset);
-                }
-            }
+            let offset = sink.cur_offset();
+            sink.use_label_at_offset(offset, *target, LabelUse::JmpRel32);
+            sink.put4(0);
         }
     }
 }
@@ -808,7 +798,7 @@ pub(crate) fn emit(
                     );
                     inst.emit(sink, info, state);
 
-                    let inst = Inst::jmp_known(BranchTarget::Label(done_label));
+                    let inst = Inst::jmp_known(done_label);
                     inst.emit(sink, info, state);
 
                     (Some(do_op), Some(done_label))
@@ -1503,30 +1493,26 @@ pub(crate) fn emit(
             let br_start = sink.cur_offset();
             let br_disp_off = br_start + 1;
             let br_end = br_start + 5;
-            if let Some(l) = dst.as_label() {
-                sink.use_label_at_offset(br_disp_off, l, LabelUse::JmpRel32);
-                sink.add_uncond_branch(br_start, br_end, l);
-            }
 
-            let disp = dst.as_offset32_or_zero();
-            let disp = disp as u32;
+            sink.use_label_at_offset(br_disp_off, *dst, LabelUse::JmpRel32);
+            sink.add_uncond_branch(br_start, br_end, *dst);
+
             sink.put1(0xE9);
-            sink.put4(disp);
+            // Placeholder for the label value.
+            sink.put4(0x0);
         }
 
         Inst::JmpIf { cc, taken } => {
             let cond_start = sink.cur_offset();
             let cond_disp_off = cond_start + 2;
-            if let Some(l) = taken.as_label() {
-                sink.use_label_at_offset(cond_disp_off, l, LabelUse::JmpRel32);
-                // Since this is not a terminator, don't enroll in the branch inversion mechanism.
-            }
 
-            let taken_disp = taken.as_offset32_or_zero();
-            let taken_disp = taken_disp as u32;
+            sink.use_label_at_offset(cond_disp_off, *taken, LabelUse::JmpRel32);
+            // Since this is not a terminator, don't enroll in the branch inversion mechanism.
+
             sink.put1(0x0F);
             sink.put1(0x80 + cc.get_enc());
-            sink.put4(taken_disp);
+            // Placeholder for the label value.
+            sink.put4(0x0);
         }
 
         Inst::JmpCond {
@@ -1538,32 +1524,27 @@ pub(crate) fn emit(
             let cond_start = sink.cur_offset();
             let cond_disp_off = cond_start + 2;
             let cond_end = cond_start + 6;
-            if let Some(l) = taken.as_label() {
-                sink.use_label_at_offset(cond_disp_off, l, LabelUse::JmpRel32);
-                let inverted: [u8; 6] =
-                    [0x0F, 0x80 + (cc.invert().get_enc()), 0x00, 0x00, 0x00, 0x00];
-                sink.add_cond_branch(cond_start, cond_end, l, &inverted[..]);
-            }
 
-            let taken_disp = taken.as_offset32_or_zero();
-            let taken_disp = taken_disp as u32;
+            sink.use_label_at_offset(cond_disp_off, *taken, LabelUse::JmpRel32);
+            let inverted: [u8; 6] = [0x0F, 0x80 + (cc.invert().get_enc()), 0x00, 0x00, 0x00, 0x00];
+            sink.add_cond_branch(cond_start, cond_end, *taken, &inverted[..]);
+
             sink.put1(0x0F);
             sink.put1(0x80 + cc.get_enc());
-            sink.put4(taken_disp);
+            // Placeholder for the label value.
+            sink.put4(0x0);
 
             // If not taken.
             let uncond_start = sink.cur_offset();
             let uncond_disp_off = uncond_start + 1;
             let uncond_end = uncond_start + 5;
-            if let Some(l) = not_taken.as_label() {
-                sink.use_label_at_offset(uncond_disp_off, l, LabelUse::JmpRel32);
-                sink.add_uncond_branch(uncond_start, uncond_end, l);
-            }
 
-            let nt_disp = not_taken.as_offset32_or_zero();
-            let nt_disp = nt_disp as u32;
+            sink.use_label_at_offset(uncond_disp_off, *not_taken, LabelUse::JmpRel32);
+            sink.add_uncond_branch(uncond_start, uncond_end, *not_taken);
+
             sink.put1(0xE9);
-            sink.put4(nt_disp);
+            // Placeholder for the label value.
+            sink.put4(0x0);
         }
 
         Inst::JmpUnknown { target } => {
@@ -1625,11 +1606,7 @@ pub(crate) fn emit(
             // j *%tmp1
             // $start_of_jump_table:
             // -- jump table entries
-            let default_label = match default_target {
-                BranchTarget::Label(label) => label,
-                _ => unreachable!(),
-            };
-            one_way_jmp(sink, CC::NB, *default_label); // idx unsigned >= jmp table size
+            one_way_jmp(sink, CC::NB, *default_target); // idx unsigned >= jmp table size
 
             // Copy the index (and make sure to clear the high 32-bits lane of tmp2).
             let inst = Inst::movzx_rm_r(ExtMode::LQ, RegMem::reg(*idx), *tmp2, None);
@@ -1637,10 +1614,7 @@ pub(crate) fn emit(
 
             // Load base address of jump table.
             let start_of_jumptable = sink.get_label();
-            let inst = Inst::lea(
-                Amode::rip_relative(BranchTarget::Label(start_of_jumptable)),
-                *tmp1,
-            );
+            let inst = Inst::lea(Amode::rip_relative(start_of_jumptable), *tmp1);
             inst.emit(sink, info, state);
 
             // Load value out of the jump table. It's a relative offset to the target block, so it
@@ -1676,7 +1650,7 @@ pub(crate) fn emit(
                 // with the extra addend, it'll be relative to the jump table's start, after
                 // patching.
                 let off_into_table = word_off - jt_off;
-                sink.use_label_at_offset(word_off, target.as_label().unwrap(), LabelUse::PCRel32);
+                sink.use_label_at_offset(word_off, target, LabelUse::PCRel32);
                 sink.put4(off_into_table);
             }
         }
@@ -1912,7 +1886,7 @@ pub(crate) fn emit(
             let inst = Inst::xmm_rm_r(op, RegMem::reg(*lhs), *rhs_dst);
             inst.emit(sink, info, state);
 
-            let inst = Inst::jmp_known(BranchTarget::Label(done));
+            let inst = Inst::jmp_known(done);
             inst.emit(sink, info, state);
 
             // x86's min/max are not symmetric; if either operand is a NaN, they return the
@@ -1994,14 +1968,13 @@ pub(crate) fn emit(
 
             // Load the inline constant.
             let constant_start_label = sink.get_label();
-            let load_offset = Amode::rip_relative(BranchTarget::Label(constant_start_label));
+            let load_offset = Amode::rip_relative(constant_start_label);
             let load = Inst::load(*ty, load_offset, *dst, ExtKind::None, None);
             load.emit(sink, info, state);
 
             // Jump over the constant.
             let constant_end_label = sink.get_label();
-            let continue_at_offset = BranchTarget::Label(constant_end_label);
-            let jump = Inst::jmp_known(continue_at_offset);
+            let jump = Inst::jmp_known(constant_end_label);
             jump.emit(sink, info, state);
 
             // Emit the constant.
@@ -2169,7 +2142,7 @@ pub(crate) fn emit(
             // right thing.
             emit_signed_cvt(sink, info, state, src.to_reg(), *dst, *to_f64);
 
-            let inst = Inst::jmp_known(BranchTarget::Label(done));
+            let inst = Inst::jmp_known(done);
             inst.emit(sink, info, state);
 
             sink.bind_label(handle_negative);
@@ -2308,7 +2281,7 @@ pub(crate) fn emit(
                 );
                 inst.emit(sink, info, state);
 
-                let inst = Inst::jmp_known(BranchTarget::Label(done));
+                let inst = Inst::jmp_known(done);
                 inst.emit(sink, info, state);
 
                 sink.bind_label(not_nan);
@@ -2499,7 +2472,7 @@ pub(crate) fn emit(
                 );
                 inst.emit(sink, info, state);
 
-                let inst = Inst::jmp_known(BranchTarget::Label(done));
+                let inst = Inst::jmp_known(done);
                 inst.emit(sink, info, state);
             } else {
                 // Trap.
@@ -2531,7 +2504,7 @@ pub(crate) fn emit(
                 );
                 inst.emit(sink, info, state);
 
-                let inst = Inst::jmp_known(BranchTarget::Label(done));
+                let inst = Inst::jmp_known(done);
                 inst.emit(sink, info, state);
             } else {
                 // Trap.
@@ -2569,7 +2542,7 @@ pub(crate) fn emit(
                 );
                 inst.emit(sink, info, state);
 
-                let inst = Inst::jmp_known(BranchTarget::Label(done));
+                let inst = Inst::jmp_known(done);
                 inst.emit(sink, info, state);
             } else {
                 let inst = Inst::trap(*srcloc, TrapCode::IntegerOverflow);
@@ -2746,7 +2719,15 @@ pub(crate) fn emit(
             state.virtual_sp_offset += offset;
         }
 
-        Inst::Nop { .. } | Inst::EpiloguePlaceholder => {
+        Inst::Nop { len } => {
+            if *len == 0 {
+                // Nothing to emit.
+            } else {
+                unimplemented!("non-zero nop opcodes.");
+            }
+        }
+
+        Inst::EpiloguePlaceholder => {
             // Generate no code.
         }
     }

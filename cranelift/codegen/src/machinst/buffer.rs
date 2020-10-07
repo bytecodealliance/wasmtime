@@ -148,6 +148,7 @@ use crate::timing;
 use log::trace;
 use smallvec::SmallVec;
 use std::mem;
+use std::string::String;
 
 /// A buffer of output to be produced, fixed up, and then emitted to a CodeSink
 /// in bulk.
@@ -258,6 +259,11 @@ impl MachLabel {
     /// Get the numeric label index.
     pub fn get(self) -> u32 {
         self.0
+    }
+
+    /// Creates a string representing this label, for convenience.
+    pub fn to_string(&self) -> String {
+        format!("label{}", self.0)
     }
 }
 

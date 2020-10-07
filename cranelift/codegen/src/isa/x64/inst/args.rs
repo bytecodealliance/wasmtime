@@ -4,13 +4,12 @@ use super::regs::{self, show_ireg_sized};
 use super::EmitState;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::machinst::*;
-use core::fmt::Debug;
 use regalloc::{
     PrettyPrint, PrettyPrintSized, RealRegUniverse, Reg, RegClass, RegUsageCollector,
     RegUsageMapper, Writable,
 };
 use std::fmt;
-use std::string::{String, ToString};
+use std::string::String;
 
 /// A possible addressing mode (amode) that can be used in instructions.
 /// These denote a 64-bit value only.
@@ -29,7 +28,7 @@ pub enum Amode {
 
     /// sign-extend-32-to-64(Immediate) + RIP (instruction pointer).
     /// To wit: not supported in 32-bits mode.
-    RipRelative { target: BranchTarget },
+    RipRelative { target: MachLabel },
 }
 
 impl Amode {
@@ -50,7 +49,7 @@ impl Amode {
         }
     }
 
-    pub(crate) fn rip_relative(target: BranchTarget) -> Self {
+    pub(crate) fn rip_relative(target: MachLabel) -> Self {
         Self::RipRelative { target }
     }
 
@@ -89,13 +88,7 @@ impl PrettyPrint for Amode {
                 index.show_rru(mb_rru),
                 1 << shift
             ),
-            Amode::RipRelative { ref target } => format!(
-                "{}(%rip)",
-                match target {
-                    BranchTarget::Label(label) => format!("label{}", label.get()),
-                    BranchTarget::ResolvedOffset(offset) => offset.to_string(),
-                }
-            ),
+            Amode::RipRelative { ref target } => format!("label{}(%rip)", target.get()),
         }
     }
 }
@@ -1094,55 +1087,6 @@ impl From<FloatCC> for FcmpImm {
     }
 }
 
-/// A branch target. Either unresolved (basic-block index) or resolved (offset
-/// from end of current instruction).
-#[derive(Clone, Copy, Debug)]
-pub enum BranchTarget {
-    /// An unresolved reference to a MachLabel.
-    Label(MachLabel),
-
-    /// A resolved reference to another instruction, in bytes.
-    ResolvedOffset(isize),
-}
-
-impl PrettyPrint for BranchTarget {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
-        match self {
-            BranchTarget::Label(l) => format!("{:?}", l),
-            BranchTarget::ResolvedOffset(offs) => format!("(offset {})", offs),
-        }
-    }
-}
-
-impl BranchTarget {
-    /// Get the label.
-    pub fn as_label(&self) -> Option<MachLabel> {
-        match self {
-            &BranchTarget::Label(l) => Some(l),
-            _ => None,
-        }
-    }
-
-    /// Get the offset as a signed 32 bit byte offset.  This returns the
-    /// offset in bytes between the first byte of the source and the first
-    /// byte of the target.  It does not take into account the Intel-specific
-    /// rule that a branch offset is encoded as relative to the start of the
-    /// following instruction.  That is a problem for the emitter to deal
-    /// with. If a label, returns zero.
-    pub fn as_offset32_or_zero(&self) -> i32 {
-        match self {
-            &BranchTarget::ResolvedOffset(off) => {
-                // Leave a bit of slack so that the emitter is guaranteed to
-                // be able to add the length of the jump instruction encoding
-                // to this value and still have a value in signed-32 range.
-                assert!(off >= -0x7FFF_FF00 && off <= 0x7FFF_FF00);
-                off as i32
-            }
-            _ => 0,
-        }
-    }
-}
-
 /// An operand's size in bits.
 #[derive(Clone, Copy, PartialEq)]
 pub enum OperandSize {
@@ -1176,6 +1120,7 @@ impl OperandSize {
 
 /// An x64 memory fence kind.
 #[derive(Clone)]
+#[allow(dead_code)]
 pub enum FenceKind {
     /// `mfence` instruction ("Memory Fence")
     MFence,

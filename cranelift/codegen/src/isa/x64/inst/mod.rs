@@ -1,5 +1,4 @@
 //! This module defines x86_64-specific machine instruction types.
-#![allow(dead_code)]
 
 use crate::binemit::{CodeOffset, StackMap};
 use crate::ir::{types, ExternalName, Opcode, SourceLoc, TrapCode, Type};
@@ -369,7 +368,7 @@ pub enum Inst {
     EpiloguePlaceholder,
 
     /// Jump to a known target: jmp simm32.
-    JmpKnown { dst: BranchTarget },
+    JmpKnown { dst: MachLabel },
 
     /// One-way conditional branch: jcond cond target.
     ///
@@ -379,14 +378,14 @@ pub enum Inst {
     /// A note of caution: in contexts where the branch target is another block, this has to be the
     /// same successor as the one specified in the terminator branch of the current block.
     /// Otherwise, this might confuse register allocation by creating new invisible edges.
-    JmpIf { cc: CC, taken: BranchTarget },
+    JmpIf { cc: CC, taken: MachLabel },
 
     /// Two-way conditional branch: jcond cond target target.
     /// Emitted as a compound sequence; the MachBuffer will shrink it as appropriate.
     JmpCond {
         cc: CC,
-        taken: BranchTarget,
-        not_taken: BranchTarget,
+        taken: MachLabel,
+        not_taken: MachLabel,
     },
 
     /// Jump-table sequence, as one compound instruction (see note in lower.rs for rationale).
@@ -397,8 +396,8 @@ pub enum Inst {
         idx: Reg,
         tmp1: Writable<Reg>,
         tmp2: Writable<Reg>,
-        default_target: BranchTarget,
-        targets: Vec<BranchTarget>,
+        default_target: MachLabel,
+        targets: Vec<MachLabel>,
         targets_for_term: Vec<MachLabel>,
     },
 
@@ -1077,15 +1076,15 @@ impl Inst {
         Inst::EpiloguePlaceholder
     }
 
-    pub(crate) fn jmp_known(dst: BranchTarget) -> Inst {
+    pub(crate) fn jmp_known(dst: MachLabel) -> Inst {
         Inst::JmpKnown { dst }
     }
 
-    pub(crate) fn jmp_if(cc: CC, taken: BranchTarget) -> Inst {
+    pub(crate) fn jmp_if(cc: CC, taken: MachLabel) -> Inst {
         Inst::JmpIf { cc, taken }
     }
 
-    pub(crate) fn jmp_cond(cc: CC, taken: BranchTarget, not_taken: BranchTarget) -> Inst {
+    pub(crate) fn jmp_cond(cc: CC, taken: MachLabel, not_taken: MachLabel) -> Inst {
         Inst::JmpCond {
             cc,
             taken,
@@ -1679,13 +1678,13 @@ impl PrettyPrint for Inst {
             Inst::EpiloguePlaceholder => "epilogue placeholder".to_string(),
 
             Inst::JmpKnown { dst } => {
-                format!("{} {}", ljustify("jmp".to_string()), dst.show_rru(mb_rru))
+                format!("{} {}", ljustify("jmp".to_string()), dst.to_string())
             }
 
             Inst::JmpIf { cc, taken } => format!(
                 "{} {}",
                 ljustify2("j".to_string(), cc.to_string()),
-                taken.show_rru(mb_rru),
+                taken.to_string(),
             ),
 
             Inst::JmpCond {
@@ -1695,8 +1694,8 @@ impl PrettyPrint for Inst {
             } => format!(
                 "{} {}; j {}",
                 ljustify2("j".to_string(), cc.to_string()),
-                taken.show_rru(mb_rru),
-                not_taken.show_rru(mb_rru)
+                taken.to_string(),
+                not_taken.to_string()
             ),
 
             Inst::JmpTableSeq { idx, .. } => {
@@ -2446,10 +2445,10 @@ impl MachInst for Inst {
         match self {
             // Interesting cases.
             &Self::Ret | &Self::EpiloguePlaceholder => MachTerminator::Ret,
-            &Self::JmpKnown { dst } => MachTerminator::Uncond(dst.as_label().unwrap()),
+            &Self::JmpKnown { dst } => MachTerminator::Uncond(dst),
             &Self::JmpCond {
                 taken, not_taken, ..
-            } => MachTerminator::Cond(taken.as_label().unwrap(), not_taken.as_label().unwrap()),
+            } => MachTerminator::Cond(taken, not_taken),
             &Self::JmpTableSeq {
                 ref targets_for_term,
                 ..
@@ -2487,8 +2486,8 @@ impl MachInst for Inst {
         Inst::Nop { len: 0 }
     }
 
-    fn gen_nop(_preferred_size: usize) -> Inst {
-        unimplemented!()
+    fn gen_nop(preferred_size: usize) -> Inst {
+        Inst::nop(preferred_size as u8)
     }
 
     fn maybe_direct_reload(&self, _reg: VirtualReg, _slot: SpillSlot) -> Option<Inst> {
@@ -2519,7 +2518,7 @@ impl MachInst for Inst {
     }
 
     fn gen_jump(label: MachLabel) -> Inst {
-        Inst::jmp_known(BranchTarget::Label(label))
+        Inst::jmp_known(label)
     }
 
     fn gen_constant<F: FnMut(RegClass, Type) -> Writable<Reg>>(
