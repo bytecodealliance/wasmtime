@@ -90,7 +90,7 @@ impl UnwindRegistry {
         let mut eh_frame = EhFrame(EndianVec::new(RunTimeEndian::default()));
         table.write_eh_frame(&mut eh_frame).unwrap();
 
-        if cfg!(all(target_os = "linux", target_env = "gnu")) {
+        if cfg!(any(all(target_os = "linux", target_env = "gnu"), target_os = "freebsd")) {
             // libgcc expects a terminating "empty" length, so write a 0 length at the end of the table.
             eh_frame.0.write_u32(0).unwrap();
         }
@@ -101,7 +101,7 @@ impl UnwindRegistry {
     }
 
     unsafe fn register_frames(&mut self) {
-        if cfg!(all(target_os = "linux", target_env = "gnu")) {
+        if cfg!(any(all(target_os = "linux", target_env = "gnu"), target_os = "freebsd")) {
             // On gnu (libgcc), `__register_frame` will walk the FDEs until an entry of length 0
             let ptr = self.frame_table.as_ptr();
             __register_frame(ptr);
