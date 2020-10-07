@@ -73,7 +73,7 @@ cfg_if::cfg_if! {
 
             // On ARM, handle Unaligned Accesses.
             // On Darwin, guard page accesses are raised as SIGBUS.
-            if cfg!(target_arch = "arm") || cfg!(target_os = "macos") {
+            if cfg!(target_arch = "arm") || cfg!(target_os = "macos") || cfg!(target_os = "freebsd") {
                 register(&mut PREV_SIGBUS, libc::SIGBUS);
             }
         }
@@ -167,6 +167,9 @@ cfg_if::cfg_if! {
                 } else if #[cfg(target_os = "macos")] {
                     let cx = &*(cx as *const libc::ucontext_t);
                     (*cx.uc_mcontext).__ss.__rip as *const u8
+                } else if #[cfg(all(target_os = "freebsd", target_arch = "x86_64"))] {
+                    let cx = &*(cx as *const libc::ucontext_t);
+                    cx.uc_mcontext.mc_rip as *const u8
                 } else {
                     compile_error!("unsupported platform");
                 }
