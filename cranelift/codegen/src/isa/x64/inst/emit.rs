@@ -2720,10 +2720,85 @@ pub(crate) fn emit(
         }
 
         Inst::Nop { len } => {
-            if *len == 0 {
-                // Nothing to emit.
-            } else {
-                unimplemented!("non-zero nop opcodes.");
+            // These encodings can all be found in Intel's architecture manual, at the NOP
+            // instruction description.
+            let mut len = *len;
+            while len != 0 {
+                let emitted = u8::min(len, 9);
+                match emitted {
+                    0 => {}
+                    1 => sink.put1(0x90), // NOP
+                    2 => {
+                        // 66 NOP
+                        sink.put1(0x66);
+                        sink.put1(0x90);
+                    }
+                    3 => {
+                        // NOP [EAX]
+                        sink.put1(0x0F);
+                        sink.put1(0x1F);
+                        sink.put1(0x00);
+                    }
+                    4 => {
+                        // NOP 0(EAX), with 0 a 1-byte immediate.
+                        sink.put1(0x0F);
+                        sink.put1(0x1F);
+                        sink.put1(0x40);
+                        sink.put1(0x00);
+                    }
+                    5 => {
+                        // NOP [EAX, EAX, 1]
+                        sink.put1(0x0F);
+                        sink.put1(0x1F);
+                        sink.put1(0x44);
+                        sink.put1(0x00);
+                        sink.put1(0x00);
+                    }
+                    6 => {
+                        // 66 NOP [EAX, EAX, 1]
+                        sink.put1(0x66);
+                        sink.put1(0x0F);
+                        sink.put1(0x1F);
+                        sink.put1(0x44);
+                        sink.put1(0x00);
+                        sink.put1(0x00);
+                    }
+                    7 => {
+                        // NOP 0[EAX], but 0 is a 4 bytes immediate.
+                        sink.put1(0x0F);
+                        sink.put1(0x1F);
+                        sink.put1(0x80);
+                        sink.put1(0x00);
+                        sink.put1(0x00);
+                        sink.put1(0x00);
+                        sink.put1(0x00);
+                    }
+                    8 => {
+                        // NOP 0[EAX, EAX, 1], with 0 a 4 bytes immediate.
+                        sink.put1(0x0F);
+                        sink.put1(0x1F);
+                        sink.put1(0x84);
+                        sink.put1(0x00);
+                        sink.put1(0x00);
+                        sink.put1(0x00);
+                        sink.put1(0x00);
+                        sink.put1(0x00);
+                    }
+                    9 => {
+                        // 66 NOP 0[EAX, EAX, 1], with 0 a 4 bytes immediate.
+                        sink.put1(0x66);
+                        sink.put1(0x0F);
+                        sink.put1(0x1F);
+                        sink.put1(0x84);
+                        sink.put1(0x00);
+                        sink.put1(0x00);
+                        sink.put1(0x00);
+                        sink.put1(0x00);
+                        sink.put1(0x00);
+                    }
+                    _ => unreachable!(),
+                }
+                len -= emitted;
             }
         }
 
