@@ -104,8 +104,8 @@ pub struct Instance {
     module: Module,
 }
 
-#[allow(dead_code)]
 pub struct HostState {
+    #[allow(dead_code)]
     frame_info_registration: Option<Arc<GlobalFrameInfoRegistration>>,
     pub user_state: Option<Box<dyn Any>>,
 }
