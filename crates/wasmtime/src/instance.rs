@@ -105,11 +105,45 @@ pub struct Instance {
 }
 
 pub struct HostState {
-    frame_info_registration: Box<Option<Arc<GlobalFrameInfoRegistration>>>,
-    pub user_state: Option<dyn Any>,
+    frame_info_registration: Option<Arc<GlobalFrameInfoRegistration>>,
+    pub user_state: Option<Box<dyn Any>>,
 }
 
 impl Instance {
+    /// allows the caller to specify customimzed user_state, which can be accessed by
+    /// instance.host_state().downcast_ref(HostState).user_state
+    pub fn new_with_user_state(
+        store: &Store,
+        module: &Module,
+        imports: &[Extern],
+        user_state: Option<Box<dyn Any>>,
+    ) -> Result<Instance, Error> {
+        if !Engine::same(store.engine(), module.engine()) {
+            bail!("cross-`Engine` instantiation is not currently supported");
+        }
+
+        let host_info = Box::new({
+            let frame_info_registration = module.register_frame_info();
+            store.register_jit_code(&module);
+            store.register_stack_maps(&module);
+
+            HostState {
+                frame_info_registration,
+                user_state,
+            }
+        });
+
+        let handle = with_imports(store, module.compiled_module(), imports, |imports| {
+            instantiate(store, module.compiled_module(), imports, host_info)
+        })?;
+
+        Ok(Instance {
+            handle,
+            store: store.clone(),
+            module: module.clone(),
+        })
+    }
+
     /// Creates a new [`Instance`] from the previously compiled [`Module`] and
     /// list of `imports` specified.
     ///
@@ -163,38 +197,6 @@ impl Instance {
     /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     /// [`ExternType`]: crate::ExternType
-    pub fn new_with_user_state(
-        store: &Store,
-        module: &Module,
-        imports: &[Extern],
-        user_state: Option<dyn Any>,
-    ) -> Result<Instance, Error> {
-        if !Engine::same(store.engine(), module.engine()) {
-            bail!("cross-`Engine` instantiation is not currently supported");
-        }
-
-        let host_info = Box::new({
-            let frame_info_registration = module.register_frame_info();
-            store.register_jit_code(&module);
-            store.register_stack_maps(&module);
-
-            HostState {
-                frame_info_registration,
-                user_state,
-            }
-        });
-
-        let handle = with_imports(store, module.compiled_module(), imports, |imports| {
-            instantiate(store, module.compiled_module(), imports, host_info)
-        })?;
-
-        Ok(Instance {
-            handle,
-            store: store.clone(),
-            module: module.clone(),
-        })
-    }
-
     pub fn new(store: &Store, module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
         Instance::new_with_user_state(store, module, imports, None)
     }
