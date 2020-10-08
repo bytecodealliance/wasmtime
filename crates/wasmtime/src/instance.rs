@@ -163,7 +163,7 @@ impl Instance {
     /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     /// [`ExternType`]: crate::ExternType
-    fn _new(
+    fn new_with_user_state(
         store: &Store,
         module: &Module,
         imports: &[Extern],
@@ -196,16 +196,7 @@ impl Instance {
     }
 
     pub fn new(store: &Store, module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
-        return _new(store, module, imports, None);
-    }
-
-    pub fn new_with_user_state(
-        store: &Store,
-        module: &Module,
-        imports: &[Extern],
-        user_state: Option<dyn Any>,
-    ) -> Result<Instance, Error> {
-        return _new(store, module, imports, user_state);
+        return new_with_user_state(store, module, imports, None);
     }
 
     /// Returns the associated [`Store`] that this `Instance` is compiled into.
