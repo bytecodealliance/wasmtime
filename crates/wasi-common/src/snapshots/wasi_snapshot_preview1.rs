@@ -1,8 +1,9 @@
-use crate::sched::{Poll, SchedResult, SubscriptionResult, Userdata};
+use crate::sched::{Poll, SubscriptionResult, Userdata};
 use crate::sys::clock;
 use crate::wasi::types;
 use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
 use crate::{Error, WasiCtx};
+use std::convert::TryInto;
 use std::ops::{Deref, DerefMut};
 use wiggle::{GuestPtr, GuestSlice};
 
@@ -379,7 +380,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let subs = subs.as_array(nsubscriptions);
         let events = events.as_array(nsubscriptions);
 
-        let poll = {
+        let mut poll = {
             let mut error_events = Vec::new();
             let poll = poll_builder(&self, subs, &mut error_events)?;
             if !error_events.is_empty() {
@@ -388,7 +389,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             poll
         };
 
-        // TODO actually run the poll here
+        crate::sys::poll::oneoff(poll.subscriptions())?;
 
         poll_writer(poll.results(), events)
     }
@@ -456,17 +457,17 @@ pub fn poll_builder<'a>(
                     poll.subscribe_relative_time(clock.timeout, sub.userdata)
                 };
                 if let Err(e) = r {
-                    errors.push((SubscriptionResult::Timer(SchedResult::Err(e)), sub.userdata));
+                    errors.push((SubscriptionResult::Timer(Err(e)), sub.userdata));
                 }
             }
             types::SubscriptionU::FdRead(fd_read) => {
                 if let Err(e) = poll.subscribe_fd_read(fd_read.file_descriptor, sub.userdata) {
-                    errors.push((SubscriptionResult::Read(SchedResult::Err(e)), sub.userdata));
+                    errors.push((SubscriptionResult::Read(Err(e)), sub.userdata));
                 }
             }
             types::SubscriptionU::FdWrite(fd_write) => {
                 if let Err(e) = poll.subscribe_fd_write(fd_write.file_descriptor, sub.userdata) {
-                    errors.push((SubscriptionResult::Write(SchedResult::Err(e)), sub.userdata));
+                    errors.push((SubscriptionResult::Write(Err(e)), sub.userdata));
                 }
             }
         }
@@ -478,4 +479,59 @@ fn poll_writer(
     results: Vec<(SubscriptionResult, Userdata)>,
     events: GuestPtr<[types::Event]>,
 ) -> Result<types::Size, Error> {
+    fn fd_readwrite_from_result(
+        r: &Result<(types::Filesize, types::Eventrwflags), Error>,
+    ) -> types::EventFdReadwrite {
+        match r {
+            Ok((nbytes, flags)) => types::EventFdReadwrite {
+                nbytes: *nbytes,
+                flags: *flags,
+            },
+            Err(_) => types::EventFdReadwrite {
+                nbytes: 0,
+                flags: types::Eventrwflags::empty(),
+            },
+        }
+    }
+
+    fn errno_from_result<A>(r: Result<A, Error>) -> types::Errno {
+        match r {
+            Ok(_) => types::Errno::Success,
+            Err(e) => types::Errno::from(e),
+        }
+    }
+
+    let nresults: types::Size = results.len().try_into().expect("events fit in memory");
+    for ((sub_result, userdata), event_ptr) in results.into_iter().zip(events.iter()) {
+        event_ptr?.write(match sub_result {
+            SubscriptionResult::Read(r) => {
+                let fd_readwrite = fd_readwrite_from_result(&r);
+                types::Event {
+                    type_: types::Eventtype::FdRead,
+                    userdata,
+                    error: errno_from_result(r),
+                    fd_readwrite,
+                }
+            }
+            SubscriptionResult::Write(r) => {
+                let fd_readwrite = fd_readwrite_from_result(&r);
+                types::Event {
+                    type_: types::Eventtype::FdWrite,
+                    userdata,
+                    error: errno_from_result(r),
+                    fd_readwrite,
+                }
+            }
+            SubscriptionResult::Timer(r) => types::Event {
+                type_: types::Eventtype::Clock,
+                userdata,
+                error: errno_from_result(r),
+                fd_readwrite: types::EventFdReadwrite {
+                    nbytes: 0,
+                    flags: types::Eventrwflags::empty(),
+                },
+            },
+        })?
+    }
+    Ok(nresults)
 }

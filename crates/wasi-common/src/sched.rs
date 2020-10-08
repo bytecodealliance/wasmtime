@@ -5,47 +5,32 @@ use crate::fs::Fd;
 use crate::handle::{Filesize, HandleRights, Rights};
 pub use crate::wasi::types::{Eventrwflags, Userdata};
 use crate::Error;
+use std::cell::Cell;
 use std::convert::TryInto;
 use std::time::{Duration, SystemTime};
 
-pub enum SchedResult<A, E> {
-    /// The subscribed event did not happen
-    None,
-    /// The subscribed event did happen
-    Ok(A),
-    /// The subscribed event gave an error
-    Err(E),
-}
-
-impl<A, E> SchedResult<A, E> {
-    pub fn is_not_none(&self) -> bool {
-        match self {
-            Self::None => false,
-            _ => true,
-        }
-    }
-}
-
 pub struct RwSubscription {
     pub handle: EntryHandle,
-    status: SchedResult<(Filesize, Eventrwflags), Error>,
+    // Interior mutation makes RwSubscription a reasonable abstraction - otherwise the borrow
+    // checker often gets in the way
+    status: Cell<Option<Result<(Filesize, Eventrwflags), Error>>>,
 }
 
 impl RwSubscription {
     pub fn new(handle: EntryHandle) -> Self {
         Self {
             handle,
-            status: SchedResult::None,
+            status: Cell::new(None),
         }
     }
-    pub fn complete(&mut self, size: Filesize, flags: Eventrwflags) {
-        self.status = SchedResult::Ok((size, flags))
+    pub fn complete(&self, size: Filesize, flags: Eventrwflags) {
+        self.status.set(Some(Ok((size, flags))))
     }
-    pub fn error(&mut self, error: Error) {
-        self.status = SchedResult::Err(error)
+    pub fn error(&self, error: Error) {
+        self.status.set(Some(Err(error)))
     }
-    pub fn result(self) -> SchedResult<(Filesize, Eventrwflags), Error> {
-        self.status
+    pub fn result(self) -> Option<Result<(Filesize, Eventrwflags), Error>> {
+        self.status.into_inner()
     }
 }
 
@@ -73,11 +58,12 @@ impl TimerSubscription {
         Ok(Self { deadline })
     }
     /// Ok indicates deadline in the past, None indicates deadline yet to be reached
-    pub fn result(&self) -> SchedResult<(), Error> {
+    pub fn result(&self) -> Option<Result<(), Error>> {
+        // deadline is only an Ok(Duration) from now if now is in past:
         if self.deadline.duration_since(SystemTime::now()).is_ok() {
-            SchedResult::Ok(())
+            Some(Ok(()))
         } else {
-            SchedResult::None
+            None
         }
     }
 }
@@ -88,60 +74,54 @@ pub enum Subscription {
     Timer(TimerSubscription),
 }
 
-impl Subscription {
-    pub fn earliest_deadline<'a>(
-        subs: impl Iterator<Item = &'a Subscription> + 'a,
-    ) -> Option<SystemTime> {
-        subs.filter_map(|s| match s {
-            Subscription::Timer(ts) => Some(ts.deadline),
-            _ => None,
-        })
-        .fold(None, |early, ts| {
-            if let Some(early) = early {
-                Some(early.min(ts))
-            } else {
-                Some(ts)
-            }
-        })
+pub struct SubscriptionSet<'a> {
+    pub subs: Vec<&'a Subscription>,
+}
+
+impl<'a> SubscriptionSet<'a> {
+    pub fn earliest_deadline(&self) -> Option<SystemTime> {
+        self.subs
+            .iter()
+            .filter_map(|s| match s {
+                Subscription::Timer(ts) => Some(ts.deadline),
+                _ => None,
+            })
+            .fold(None, |early, ts| {
+                if let Some(early) = early {
+                    Some(early.min(ts))
+                } else {
+                    Some(ts)
+                }
+            })
     }
 }
 
 pub enum SubscriptionResult {
-    Read(SchedResult<(Filesize, Eventrwflags), Error>),
-    Write(SchedResult<(Filesize, Eventrwflags), Error>),
-    Timer(SchedResult<(), Error>),
+    Read(Result<(Filesize, Eventrwflags), Error>),
+    Write(Result<(Filesize, Eventrwflags), Error>),
+    Timer(Result<(), Error>),
 }
 
 impl SubscriptionResult {
-    pub fn is_not_none(&self) -> bool {
-        match self {
-            SubscriptionResult::Read(r) => r.is_not_none(),
-            SubscriptionResult::Write(r) => r.is_not_none(),
-            SubscriptionResult::Timer(r) => r.is_not_none(),
-        }
-    }
-}
-
-impl From<Subscription> for SubscriptionResult {
-    fn from(s: Subscription) -> SubscriptionResult {
+    fn from_subscription(s: Subscription) -> Option<SubscriptionResult> {
         match s {
-            Subscription::Read(s) => SubscriptionResult::Read(s.result()),
-            Subscription::Write(s) => SubscriptionResult::Write(s.result()),
-            Subscription::Timer(s) => SubscriptionResult::Timer(s.result()),
+            Subscription::Read(s) => s.result().map(SubscriptionResult::Read),
+            Subscription::Write(s) => s.result().map(SubscriptionResult::Write),
+            Subscription::Timer(s) => s.result().map(SubscriptionResult::Timer),
         }
     }
 }
 
 pub struct Poll<'a> {
     ctx: &'a WasiCtx,
-    subscriptions: Vec<(Subscription, Userdata)>,
+    subs: Vec<(Subscription, Userdata)>,
 }
 
 impl<'a> Poll<'a> {
     pub fn new(ctx: &'a WasiCtx) -> Self {
         Poll {
             ctx,
-            subscriptions: Vec::new(),
+            subs: Vec::new(),
         }
     }
 
@@ -151,7 +131,7 @@ impl<'a> Poll<'a> {
         ud: Userdata,
         is_absolute: bool,
     ) -> Result<(), Error> {
-        self.subscriptions.push((
+        self.subs.push((
             Subscription::Timer(if is_absolute {
                 TimerSubscription::from_absolute(at)?
             } else {
@@ -163,7 +143,7 @@ impl<'a> Poll<'a> {
     }
 
     pub fn subscribe_relative_time(&mut self, at: Timestamp, ud: Userdata) -> Result<(), Error> {
-        self.subscriptions.push((
+        self.subs.push((
             Subscription::Timer(TimerSubscription::from_relative(at)?),
             ud,
         ));
@@ -171,7 +151,7 @@ impl<'a> Poll<'a> {
     }
 
     pub fn subscribe_absolute_time(&mut self, at: Timestamp, ud: Userdata) -> Result<(), Error> {
-        self.subscriptions.push((
+        self.subs.push((
             Subscription::Timer(TimerSubscription::from_absolute(at)?),
             ud,
         ));
@@ -182,7 +162,7 @@ impl<'a> Poll<'a> {
         let entry = self.ctx.get_entry(fd)?;
         let required_rights = HandleRights::from_base(Rights::FD_READ | Rights::POLL_FD_READWRITE);
         let handle = entry.as_handle(&required_rights)?;
-        self.subscriptions
+        self.subs
             .push((Subscription::Read(RwSubscription::new(handle)), ud));
         Ok(())
     }
@@ -191,24 +171,21 @@ impl<'a> Poll<'a> {
         let entry = self.ctx.get_entry(fd)?;
         let required_rights = HandleRights::from_base(Rights::FD_WRITE | Rights::POLL_FD_READWRITE);
         let handle = entry.as_handle(&required_rights)?;
-        self.subscriptions
+        self.subs
             .push((Subscription::Write(RwSubscription::new(handle)), ud));
         Ok(())
     }
 
-    pub fn subsciptions(&mut self) -> Vec<&mut Subscription> {
-        self.subscriptions.iter_mut().map(|(s, _ud)| s).collect()
-    }
-
-    pub fn earliest_deadline(&self) -> Option<SystemTime> {
-        Subscription::earliest_deadline(self.subscriptions.iter().map(|(s, _ud)| s))
+    pub fn subscriptions(&mut self) -> SubscriptionSet {
+        SubscriptionSet {
+            subs: self.subs.iter().map(|(s, _ud)| s).collect(),
+        }
     }
 
     pub fn results(self) -> Vec<(SubscriptionResult, Userdata)> {
-        self.subscriptions
+        self.subs
             .into_iter()
-            .map(|(s, ud)| (SubscriptionResult::from(s), ud))
-            .filter(|(r, ud)| r.is_not_none())
+            .filter_map(|(s, ud)| SubscriptionResult::from_subscription(s).map(|r| (r, ud)))
             .collect()
     }
 }
