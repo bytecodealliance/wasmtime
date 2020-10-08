@@ -104,6 +104,7 @@ pub struct Instance {
     module: Module,
 }
 
+#[allow(dead_code)]
 pub struct HostState {
     frame_info_registration: Option<Arc<GlobalFrameInfoRegistration>>,
     pub user_state: Option<Box<dyn Any>>,
@@ -111,7 +112,7 @@ pub struct HostState {
 
 impl Instance {
     /// allows the caller to specify customimzed user_state, which can be accessed by
-    /// instance.host_state().downcast_ref(HostState).user_state
+    /// instance.host_state().downcast_ref::<HostState>.user_state
     pub fn new_with_user_state(
         store: &Store,
         module: &Module,
