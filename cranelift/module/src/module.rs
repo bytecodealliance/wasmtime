@@ -210,6 +210,11 @@ impl ModuleDeclarations {
         self.names.get(name).copied()
     }
 
+    /// Get an iterator of all function declarations
+    pub fn get_functions(&self) -> impl Iterator<Item = (FuncId, &FunctionDeclaration)> {
+        self.functions.iter()
+    }
+
     /// Get the `FuncId` for the function named by `name`.
     pub fn get_function_id(&self, name: &ir::ExternalName) -> FuncId {
         if let ir::ExternalName::User { namespace, index } = *name {
@@ -233,6 +238,11 @@ impl ModuleDeclarations {
     /// Get the `FunctionDeclaration` for the function named by `name`.
     pub fn get_function_decl(&self, func_id: FuncId) -> &FunctionDeclaration {
         &self.functions[func_id]
+    }
+
+    /// Get an iterator of all data declarations
+    pub fn get_data_objects(&self) -> impl Iterator<Item = (DataId, &DataDeclaration)> {
+        self.data_objects.iter()
     }
 
     /// Get the `DataDeclaration` for the data object named by `name`.
