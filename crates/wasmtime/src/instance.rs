@@ -196,7 +196,7 @@ impl Instance {
     }
 
     pub fn new(store: &Store, module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
-        return new_with_user_state(store, module, imports, None);
+        new_with_user_state(store, module, imports, None)
     }
 
     /// Returns the associated [`Store`] that this `Instance` is compiled into.
