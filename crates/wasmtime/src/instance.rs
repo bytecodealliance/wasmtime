@@ -163,7 +163,7 @@ impl Instance {
     /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     /// [`ExternType`]: crate::ExternType
-    fn new_with_user_state(
+    pub fn new_with_user_state(
         store: &Store,
         module: &Module,
         imports: &[Extern],
