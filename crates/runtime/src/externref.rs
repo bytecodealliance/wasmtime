@@ -669,7 +669,7 @@ impl VMExternRefActivationsTable {
         // The current `precise_stack_roots` becomes our new over-appoximated
         // set for the next GC cycle.
         let mut over_approximated = self.over_approximated_stack_roots.borrow_mut();
-        mem::swap(&mut *precise_stack_roots, &mut *over_approximated);
+        mem::swap(precise_stack_roots, &mut *over_approximated);
 
         // And finally, the new `precise_stack_roots` should be cleared and
         // remain empty until the next GC cycle.

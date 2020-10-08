@@ -1,8 +1,10 @@
+use crate::frame_info::GlobalFrameInfoRegistration;
 use crate::trampoline::StoreInstanceHandle;
 use crate::{Engine, Export, Extern, Func, Global, Memory, Module, Store, Table, Trap};
 use anyhow::{anyhow, bail, Context, Error, Result};
 use std::any::Any;
 use std::mem;
+use std::sync::Arc;
 use wasmtime_environ::EntityIndex;
 use wasmtime_jit::CompiledModule;
 use wasmtime_runtime::{
@@ -102,6 +104,11 @@ pub struct Instance {
     module: Module,
 }
 
+pub struct HostState {
+    frame_info_registration: Box<Option<Arc<GlobalFrameInfoRegistration>>>,
+    pub user_state: Option<dyn Any>,
+}
+
 impl Instance {
     /// Creates a new [`Instance`] from the previously compiled [`Module`] and
     /// list of `imports` specified.
@@ -156,7 +163,12 @@ impl Instance {
     /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     /// [`ExternType`]: crate::ExternType
-    pub fn new(store: &Store, module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
+    fn _new(
+        store: &Store,
+        module: &Module,
+        imports: &[Extern],
+        user_state: Option<dyn Any>,
+    ) -> Result<Instance, Error> {
         if !Engine::same(store.engine(), module.engine()) {
             bail!("cross-`Engine` instantiation is not currently supported");
         }
@@ -165,7 +177,11 @@ impl Instance {
             let frame_info_registration = module.register_frame_info();
             store.register_jit_code(&module);
             store.register_stack_maps(&module);
-            frame_info_registration
+
+            HostState {
+                frame_info_registration,
+                user_state,
+            }
         });
 
         let handle = with_imports(store, module.compiled_module(), imports, |imports| {
@@ -177,6 +193,19 @@ impl Instance {
             store: store.clone(),
             module: module.clone(),
         })
+    }
+
+    pub fn new(store: &Store, module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
+        return _new(store, module, imports, None);
+    }
+
+    pub fn new_with_user_state(
+        store: &Store,
+        module: &Module,
+        imports: &[Extern],
+        user_state: Option<dyn Any>,
+    ) -> Result<Instance, Error> {
+        return _new(store, module, imports, user_state);
     }
 
     /// Returns the associated [`Store`] that this `Instance` is compiled into.
