@@ -1,16 +1,17 @@
-//! Defines `ObjectBackend`.
+//! Defines `ObjectModule`.
 
 use anyhow::anyhow;
 use cranelift_codegen::binemit::{
-    Addend, CodeOffset, NullStackMapSink, Reloc, RelocSink, TrapSink,
+    Addend, CodeInfo, CodeOffset, NullStackMapSink, Reloc, RelocSink, TrapSink,
 };
 use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::{self, binemit, ir};
+use cranelift_codegen::{self, ir};
 use cranelift_module::{
-    Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleError,
-    ModuleNamespace, ModuleResult,
+    DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
+    ModuleDeclarations, ModuleError, ModuleResult,
 };
+use log::info;
 use object::write::{
     Object, Relocation, SectionId, StandardSection, Symbol, SymbolId, SymbolSection,
 };
@@ -18,10 +19,11 @@ use object::{
     RelocationEncoding, RelocationKind, SectionKind, SymbolFlags, SymbolKind, SymbolScope,
 };
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::mem;
 use target_lexicon::PointerWidth;
 
-/// A builder for `ObjectBackend`.
+/// A builder for `ObjectModule`.
 pub struct ObjectBuilder {
     isa: Box<dyn TargetIsa>,
     binary_format: object::BinaryFormat,
@@ -35,7 +37,7 @@ pub struct ObjectBuilder {
 
 impl ObjectBuilder {
     /// Create a new `ObjectBuilder` using the given Cranelift target, that
-    /// can be passed to [`Module::new`](cranelift_module::Module::new).
+    /// can be passed to [`ObjectModule::new`].
     ///
     /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
@@ -106,14 +108,15 @@ impl ObjectBuilder {
     }
 }
 
-/// A `ObjectBackend` implements `Backend` and emits ".o" files using the `object` library.
+/// An `ObjectModule` implements `Module` and emits ".o" files using the `object` library.
 ///
-/// See the `ObjectBuilder` for a convenient way to construct `ObjectBackend` instances.
-pub struct ObjectBackend {
+/// See the `ObjectBuilder` for a convenient way to construct `ObjectModule` instances.
+pub struct ObjectModule {
     isa: Box<dyn TargetIsa>,
     object: Object,
-    functions: SecondaryMap<FuncId, Option<SymbolId>>,
-    data_objects: SecondaryMap<DataId, Option<SymbolId>>,
+    declarations: ModuleDeclarations,
+    functions: SecondaryMap<FuncId, Option<(SymbolId, bool)>>,
+    data_objects: SecondaryMap<DataId, Option<(SymbolId, bool)>>,
     relocs: Vec<SymbolRelocs>,
     libcalls: HashMap<ir::LibCall, SymbolId>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
@@ -121,26 +124,15 @@ pub struct ObjectBackend {
     per_function_section: bool,
 }
 
-impl Backend for ObjectBackend {
-    type Builder = ObjectBuilder;
-
-    type CompiledFunction = ObjectCompiledFunction;
-    type CompiledData = ObjectCompiledData;
-
-    // There's no need to return individual artifacts; we're writing them into
-    // the output file instead.
-    type FinalizedFunction = ();
-    type FinalizedData = ();
-
-    type Product = ObjectProduct;
-
-    /// Create a new `ObjectBackend` using the given Cranelift target.
-    fn new(builder: ObjectBuilder) -> Self {
+impl ObjectModule {
+    /// Create a new `ObjectModule` using the given Cranelift target.
+    pub fn new(builder: ObjectBuilder) -> Self {
         let mut object = Object::new(builder.binary_format, builder.architecture, builder.endian);
         object.add_file_symbol(builder.name);
         Self {
             isa: builder.isa,
             object,
+            declarations: ModuleDeclarations::default(),
             functions: SecondaryMap::new(),
             data_objects: SecondaryMap::new(),
             relocs: Vec::new(),
@@ -150,15 +142,30 @@ impl Backend for ObjectBackend {
             per_function_section: builder.per_function_section,
         }
     }
+}
 
+impl Module for ObjectModule {
     fn isa(&self) -> &dyn TargetIsa {
         &*self.isa
     }
 
-    fn declare_function(&mut self, id: FuncId, name: &str, linkage: Linkage) {
-        let (scope, weak) = translate_linkage(linkage);
+    fn declarations(&self) -> &ModuleDeclarations {
+        &self.declarations
+    }
 
-        if let Some(function) = self.functions[id] {
+    fn declare_function(
+        &mut self,
+        name: &str,
+        linkage: Linkage,
+        signature: &ir::Signature,
+    ) -> ModuleResult<FuncId> {
+        let (id, decl) = self
+            .declarations
+            .declare_function(name, linkage, signature)?;
+
+        let (scope, weak) = translate_linkage(decl.linkage);
+
+        if let Some((function, _defined)) = self.functions[id] {
             let symbol = self.object.symbol_mut(function);
             symbol.scope = scope;
             symbol.weak = weak;
@@ -173,27 +180,31 @@ impl Backend for ObjectBackend {
                 section: SymbolSection::Undefined,
                 flags: SymbolFlags::None,
             });
-            self.functions[id] = Some(symbol_id);
+            self.functions[id] = Some((symbol_id, false));
         }
+
+        Ok(id)
     }
 
     fn declare_data(
         &mut self,
-        id: DataId,
         name: &str,
         linkage: Linkage,
-        _writable: bool,
+        writable: bool,
         tls: bool,
-        _align: Option<u8>,
-    ) {
-        let kind = if tls {
+    ) -> ModuleResult<DataId> {
+        let (id, decl) = self
+            .declarations
+            .declare_data(name, linkage, writable, tls)?;
+
+        let kind = if decl.tls {
             SymbolKind::Tls
         } else {
             SymbolKind::Data
         };
-        let (scope, weak) = translate_linkage(linkage);
+        let (scope, weak) = translate_linkage(decl.linkage);
 
-        if let Some(data) = self.data_objects[id] {
+        if let Some((data, _defined)) = self.data_objects[id] {
             let symbol = self.object.symbol_mut(data);
             symbol.kind = kind;
             symbol.scope = scope;
@@ -209,22 +220,42 @@ impl Backend for ObjectBackend {
                 section: SymbolSection::Undefined,
                 flags: SymbolFlags::None,
             });
-            self.data_objects[id] = Some(symbol_id);
+            self.data_objects[id] = Some((symbol_id, false));
         }
+
+        Ok(id)
     }
 
     fn define_function<TS>(
         &mut self,
         func_id: FuncId,
-        _name: &str,
-        ctx: &cranelift_codegen::Context,
-        _namespace: &ModuleNamespace<Self>,
-        code_size: u32,
+        ctx: &mut cranelift_codegen::Context,
         trap_sink: &mut TS,
-    ) -> ModuleResult<ObjectCompiledFunction>
+    ) -> ModuleResult<ModuleCompiledFunction>
     where
         TS: TrapSink,
     {
+        info!(
+            "defining function {}: {}",
+            func_id,
+            ctx.func.display(self.isa())
+        );
+        let CodeInfo {
+            total_size: code_size,
+            ..
+        } = ctx.compile(self.isa())?;
+
+        let decl = self.declarations.get_function_decl(func_id);
+        if !decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+        }
+
+        let &mut (symbol, ref mut defined) = self.functions[func_id].as_mut().unwrap();
+        if *defined {
+            return Err(ModuleError::DuplicateDefinition(decl.name.clone()));
+        }
+        *defined = true;
+
         let mut code: Vec<u8> = vec![0; code_size as usize];
         let mut reloc_sink = ObjectRelocSink::new(self.object.format());
         let mut stack_map_sink = NullStackMapSink {};
@@ -238,8 +269,6 @@ impl Backend for ObjectBackend {
                 &mut stack_map_sink,
             )
         };
-
-        let symbol = self.functions[func_id].unwrap();
 
         let (section, offset) = if self.per_function_section {
             let symbol_name = self.object.symbol(symbol).name.clone();
@@ -267,17 +296,32 @@ impl Backend for ObjectBackend {
                 relocs: reloc_sink.relocs,
             });
         }
-        Ok(ObjectCompiledFunction)
+
+        Ok(ModuleCompiledFunction { size: code_size })
     }
 
     fn define_function_bytes(
         &mut self,
         func_id: FuncId,
-        _name: &str,
         bytes: &[u8],
-        _namespace: &ModuleNamespace<Self>,
-    ) -> ModuleResult<ObjectCompiledFunction> {
-        let symbol = self.functions[func_id].unwrap();
+    ) -> ModuleResult<ModuleCompiledFunction> {
+        info!("defining function {} with bytes", func_id);
+
+        let decl = self.declarations.get_function_decl(func_id);
+        if !decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+        }
+
+        let total_size: u32 = match bytes.len().try_into() {
+            Ok(total_size) => total_size,
+            _ => Err(ModuleError::FunctionTooLarge(decl.name.clone()))?,
+        };
+
+        let &mut (symbol, ref mut defined) = self.functions[func_id].as_mut().unwrap();
+        if *defined {
+            return Err(ModuleError::DuplicateDefinition(decl.name.clone()));
+        }
+        *defined = true;
 
         if self.per_function_section {
             let symbol_name = self.object.symbol(symbol).name.clone();
@@ -296,19 +340,21 @@ impl Backend for ObjectBackend {
                     .add_symbol_data(symbol, section, bytes, self.function_alignment);
         }
 
-        Ok(ObjectCompiledFunction)
+        Ok(ModuleCompiledFunction { size: total_size })
     }
 
-    fn define_data(
-        &mut self,
-        data_id: DataId,
-        _name: &str,
-        writable: bool,
-        tls: bool,
-        align: Option<u8>,
-        data_ctx: &DataContext,
-        _namespace: &ModuleNamespace<Self>,
-    ) -> ModuleResult<ObjectCompiledData> {
+    fn define_data(&mut self, data_id: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
+        let decl = self.declarations.get_data_decl(data_id);
+        if !decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+        }
+
+        let &mut (symbol, ref mut defined) = self.data_objects[data_id].as_mut().unwrap();
+        if *defined {
+            return Err(ModuleError::DuplicateDefinition(decl.name.clone()));
+        }
+        *defined = true;
+
         let &DataDescription {
             ref init,
             ref function_decls,
@@ -316,6 +362,7 @@ impl Backend for ObjectBackend {
             ref function_relocs,
             ref data_relocs,
             ref custom_segment_section,
+            align,
         } = data_ctx.description();
 
         let reloc_size = match self.isa.triple().pointer_width().unwrap() {
@@ -345,17 +392,16 @@ impl Backend for ObjectBackend {
             });
         }
 
-        let symbol = self.data_objects[data_id].unwrap();
         let section = if custom_segment_section.is_none() {
             let section_kind = if let Init::Zeros { .. } = *init {
-                if tls {
+                if decl.tls {
                     StandardSection::UninitializedTls
                 } else {
                     StandardSection::UninitializedData
                 }
-            } else if tls {
+            } else if decl.tls {
                 StandardSection::Tls
-            } else if writable {
+            } else if decl.writable {
                 StandardSection::Data
             } else if relocs.is_empty() {
                 StandardSection::ReadOnlyData
@@ -364,7 +410,7 @@ impl Backend for ObjectBackend {
             };
             self.object.section_id(section_kind)
         } else {
-            if tls {
+            if decl.tls {
                 return Err(cranelift_module::ModuleError::Backend(anyhow::anyhow!(
                     "Custom section not supported for TLS"
                 )));
@@ -373,7 +419,7 @@ impl Backend for ObjectBackend {
             self.object.add_section(
                 seg.clone().into_bytes(),
                 sec.clone().into_bytes(),
-                if writable {
+                if decl.writable {
                     SectionKind::Data
                 } else if relocs.is_empty() {
                     SectionKind::ReadOnlyData
@@ -383,7 +429,7 @@ impl Backend for ObjectBackend {
             )
         };
 
-        let align = u64::from(align.unwrap_or(1));
+        let align = align.unwrap_or(1);
         let offset = match *init {
             Init::Uninitialized => {
                 panic!("data is not initialized yet");
@@ -402,61 +448,14 @@ impl Backend for ObjectBackend {
                 relocs,
             });
         }
-        Ok(ObjectCompiledData)
+        Ok(())
     }
+}
 
-    fn write_data_funcaddr(
-        &mut self,
-        _data: &mut ObjectCompiledData,
-        _offset: usize,
-        _what: ir::FuncRef,
-    ) {
-        unimplemented!()
-    }
-
-    fn write_data_dataaddr(
-        &mut self,
-        _data: &mut ObjectCompiledData,
-        _offset: usize,
-        _what: ir::GlobalValue,
-        _usize: binemit::Addend,
-    ) {
-        unimplemented!()
-    }
-
-    fn finalize_function(
-        &mut self,
-        _id: FuncId,
-        _func: &ObjectCompiledFunction,
-        _namespace: &ModuleNamespace<Self>,
-    ) {
-        // Nothing to do.
-    }
-
-    fn get_finalized_function(&self, _func: &ObjectCompiledFunction) {
-        // Nothing to do.
-    }
-
-    fn finalize_data(
-        &mut self,
-        _id: DataId,
-        _data: &ObjectCompiledData,
-        _namespace: &ModuleNamespace<Self>,
-    ) {
-        // Nothing to do.
-    }
-
-    fn get_finalized_data(&self, _data: &ObjectCompiledData) {
-        // Nothing to do.
-    }
-
-    fn publish(&mut self) {
-        // Nothing to do.
-    }
-
-    fn finish(mut self, namespace: &ModuleNamespace<Self>) -> ObjectProduct {
-        let mut symbol_relocs = Vec::new();
-        mem::swap(&mut symbol_relocs, &mut self.relocs);
+impl ObjectModule {
+    /// Finalize all relocations and output an object.
+    pub fn finish(mut self) -> ObjectProduct {
+        let symbol_relocs = mem::take(&mut self.relocs);
         for symbol in symbol_relocs {
             for &RelocRecord {
                 offset,
@@ -467,7 +466,7 @@ impl Backend for ObjectBackend {
                 addend,
             } in &symbol.relocs
             {
-                let target_symbol = self.get_symbol(namespace, name);
+                let target_symbol = self.get_symbol(name);
                 self.object
                     .add_relocation(
                         symbol.section,
@@ -499,24 +498,18 @@ impl Backend for ObjectBackend {
             data_objects: self.data_objects,
         }
     }
-}
 
-impl ObjectBackend {
-    // This should only be called during finish because it creates
-    // symbols for missing libcalls.
-    fn get_symbol(
-        &mut self,
-        namespace: &ModuleNamespace<Self>,
-        name: &ir::ExternalName,
-    ) -> SymbolId {
+    /// This should only be called during finish because it creates
+    /// symbols for missing libcalls.
+    fn get_symbol(&mut self, name: &ir::ExternalName) -> SymbolId {
         match *name {
             ir::ExternalName::User { .. } => {
-                if namespace.is_function(name) {
-                    let id = namespace.get_function_id(name);
-                    self.functions[id].unwrap()
+                if self.declarations.is_function(name) {
+                    let id = self.declarations.get_function_id(name);
+                    self.functions[id].unwrap().0
                 } else {
-                    let id = namespace.get_data_id(name);
-                    self.data_objects[id].unwrap()
+                    let id = self.declarations.get_data_id(name);
+                    self.data_objects[id].unwrap().0
                 }
             }
             ir::ExternalName::LibCall(ref libcall) => {
@@ -557,9 +550,6 @@ fn translate_linkage(linkage: Linkage) -> (SymbolScope, bool) {
     (scope, weak)
 }
 
-pub struct ObjectCompiledFunction;
-pub struct ObjectCompiledData;
-
 /// This is the output of `Module`'s
 /// [`finish`](../cranelift_module/struct.Module.html#method.finish) function.
 /// It contains the generated `Object` and other information produced during
@@ -568,22 +558,22 @@ pub struct ObjectProduct {
     /// Object artifact with all functions and data from the module defined.
     pub object: Object,
     /// Symbol IDs for functions (both declared and defined).
-    pub functions: SecondaryMap<FuncId, Option<SymbolId>>,
+    pub functions: SecondaryMap<FuncId, Option<(SymbolId, bool)>>,
     /// Symbol IDs for data objects (both declared and defined).
-    pub data_objects: SecondaryMap<DataId, Option<SymbolId>>,
+    pub data_objects: SecondaryMap<DataId, Option<(SymbolId, bool)>>,
 }
 
 impl ObjectProduct {
     /// Return the `SymbolId` for the given function.
     #[inline]
     pub fn function_symbol(&self, id: FuncId) -> SymbolId {
-        self.functions[id].unwrap()
+        self.functions[id].unwrap().0
     }
 
     /// Return the `SymbolId` for the given data object.
     #[inline]
     pub fn data_symbol(&self, id: DataId) -> SymbolId {
-        self.data_objects[id].unwrap()
+        self.data_objects[id].unwrap().0
     }
 
     /// Write the object bytes in memory.

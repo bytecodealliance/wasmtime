@@ -13,11 +13,13 @@ edition = "2018"
 cranelift-module = { path = "../module", version = "0.67.0" }
 cranelift-native = { path = "../native", version = "0.67.0" }
 cranelift-codegen = { path = "../codegen", version = "0.67.0", default-features = false, features = ["std"] }
+cranelift-entity = { path = "../entity", version = "0.67.0" }
 region = "2.2.0"
 libc = { version = "0.2.42" }
 errno = "0.2.4"
 target-lexicon = "0.11"
 memmap = { version = "0.7.0", optional = true }
+log = { version = "0.4.6", default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["winbase", "memoryapi"] }
