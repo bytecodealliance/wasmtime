@@ -1,0 +1,12 @@
+test run
+set enable_simd
+target x86_64 skylake
+feature "experimental_x64"
+
+function %bitselect_i8x16(i8x16, i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16, v2: i8x16):
+    v3 = bitselect v0, v1, v2
+    return v3
+}
+; Remember that bitselect accepts: 1) the selector vector, 2) the "if true" vector, and 3) the "if false" vector.
+; run: %bitselect_i8x16([0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 255], [127 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42], [42 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127]) == [42 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42]

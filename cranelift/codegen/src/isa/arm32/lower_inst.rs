@@ -513,6 +513,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
         Opcode::Call | Opcode::CallIndirect => {
             let loc = ctx.srcloc(insn);
+            let caller_conv = ctx.abi().call_conv();
             let (mut abi, inputs) = match op {
                 Opcode::Call => {
                     let (extname, dist) = ctx.call_target(insn).unwrap();
@@ -521,7 +522,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert_eq!(inputs.len(), sig.params.len());
                     assert_eq!(outputs.len(), sig.returns.len());
                     (
-                        Arm32ABICaller::from_func(sig, &extname, dist, loc)?,
+                        Arm32ABICaller::from_func(sig, &extname, dist, loc, caller_conv)?,
                         &inputs[..],
                     )
                 }
@@ -530,7 +531,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     let sig = ctx.call_sig(insn).unwrap();
                     assert_eq!(inputs.len() - 1, sig.params.len());
                     assert_eq!(outputs.len(), sig.returns.len());
-                    (Arm32ABICaller::from_ptr(sig, ptr, loc, op)?, &inputs[1..])
+                    (
+                        Arm32ABICaller::from_ptr(sig, ptr, loc, op, caller_conv)?,
+                        &inputs[1..],
+                    )
                 }
                 _ => unreachable!(),
             };

@@ -7,15 +7,11 @@
 
 use super::HashMap;
 use crate::data_context::DataContext;
-use crate::Backend;
-use cranelift_codegen::binemit::{self, CodeInfo};
+use cranelift_codegen::binemit;
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::{ir, isa, CodegenError, Context};
-use log::info;
 use std::borrow::ToOwned;
-use std::convert::TryInto;
 use std::string::String;
-use std::vec::Vec;
 use thiserror::Error;
 
 /// A function identifier for use in the `Module` interface.
@@ -132,7 +128,21 @@ pub struct FunctionDeclaration {
     pub signature: ir::Signature,
 }
 
-/// Error messages for all `Module` and `Backend` methods
+impl FunctionDeclaration {
+    fn merge(&mut self, linkage: Linkage, sig: &ir::Signature) -> Result<(), ModuleError> {
+        self.linkage = Linkage::merge(self.linkage, linkage);
+        if &self.signature != sig {
+            return Err(ModuleError::IncompatibleSignature(
+                self.name.clone(),
+                self.signature.clone(),
+                sig.clone(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Error messages for all `Module` methods
 #[derive(Error, Debug)]
 pub enum ModuleError {
     /// Indicates an identifier was used before it was declared
@@ -165,83 +175,48 @@ pub enum ModuleError {
 /// A convenient alias for a `Result` that uses `ModuleError` as the error type.
 pub type ModuleResult<T> = Result<T, ModuleError>;
 
-/// A function belonging to a `Module`.
-pub struct ModuleFunction<B>
-where
-    B: Backend,
-{
-    /// The function declaration.
-    pub decl: FunctionDeclaration,
-    /// The compiled artifact, once it's available.
-    pub compiled: Option<B::CompiledFunction>,
-}
-
-impl<B> ModuleFunction<B>
-where
-    B: Backend,
-{
-    fn merge(&mut self, linkage: Linkage, sig: &ir::Signature) -> Result<(), ModuleError> {
-        self.decl.linkage = Linkage::merge(self.decl.linkage, linkage);
-        if &self.decl.signature != sig {
-            return Err(ModuleError::IncompatibleSignature(
-                self.decl.name.clone(),
-                self.decl.signature.clone(),
-                sig.clone(),
-            ));
-        }
-        Ok(())
-    }
-}
-
 /// Information about a data object which can be accessed.
 pub struct DataDeclaration {
     pub name: String,
     pub linkage: Linkage,
     pub writable: bool,
     pub tls: bool,
-    pub align: Option<u8>,
 }
 
-/// A data object belonging to a `Module`.
-struct ModuleData<B>
-where
-    B: Backend,
-{
-    /// The data object declaration.
-    decl: DataDeclaration,
-    /// The "compiled" artifact, once it's available.
-    compiled: Option<B::CompiledData>,
-}
-
-impl<B> ModuleData<B>
-where
-    B: Backend,
-{
-    fn merge(&mut self, linkage: Linkage, writable: bool, tls: bool, align: Option<u8>) {
-        self.decl.linkage = Linkage::merge(self.decl.linkage, linkage);
-        self.decl.writable = self.decl.writable || writable;
-        self.decl.align = self.decl.align.max(align);
+impl DataDeclaration {
+    fn merge(&mut self, linkage: Linkage, writable: bool, tls: bool) {
+        self.linkage = Linkage::merge(self.linkage, linkage);
+        self.writable = self.writable || writable;
         assert_eq!(
-            self.decl.tls, tls,
+            self.tls, tls,
             "Can't change TLS data object to normal or in the opposite way",
         );
     }
 }
 
-/// The functions and data objects belonging to a module.
-struct ModuleContents<B>
-where
-    B: Backend,
-{
-    functions: PrimaryMap<FuncId, ModuleFunction<B>>,
-    data_objects: PrimaryMap<DataId, ModuleData<B>>,
+/// This provides a view to the state of a module which allows `ir::ExternalName`s to be translated
+/// into `FunctionDeclaration`s and `DataDeclaration`s.
+#[derive(Default)]
+pub struct ModuleDeclarations {
+    names: HashMap<String, FuncOrDataId>,
+    functions: PrimaryMap<FuncId, FunctionDeclaration>,
+    data_objects: PrimaryMap<DataId, DataDeclaration>,
 }
 
-impl<B> ModuleContents<B>
-where
-    B: Backend,
-{
-    fn get_function_id(&self, name: &ir::ExternalName) -> FuncId {
+impl ModuleDeclarations {
+    /// Get the module identifier for a given name, if that name
+    /// has been declared.
+    pub fn get_name(&self, name: &str) -> Option<FuncOrDataId> {
+        self.names.get(name).copied()
+    }
+
+    /// Get an iterator of all function declarations
+    pub fn get_functions(&self) -> impl Iterator<Item = (FuncId, &FunctionDeclaration)> {
+        self.functions.iter()
+    }
+
+    /// Get the `FuncId` for the function named by `name`.
+    pub fn get_function_id(&self, name: &ir::ExternalName) -> FuncId {
         if let ir::ExternalName::User { namespace, index } = *name {
             debug_assert_eq!(namespace, 0);
             FuncId::from_u32(index)
@@ -250,7 +225,8 @@ where
         }
     }
 
-    fn get_data_id(&self, name: &ir::ExternalName) -> DataId {
+    /// Get the `DataId` for the data object named by `name`.
+    pub fn get_data_id(&self, name: &ir::ExternalName) -> DataId {
         if let ir::ExternalName::User { namespace, index } = *name {
             debug_assert_eq!(namespace, 1);
             DataId::from_u32(index)
@@ -259,85 +235,19 @@ where
         }
     }
 
-    fn get_function_info(&self, name: &ir::ExternalName) -> &ModuleFunction<B> {
-        &self.functions[self.get_function_id(name)]
-    }
-
-    /// Get the `DataDeclaration` for the function named by `name`.
-    fn get_data_info(&self, name: &ir::ExternalName) -> &ModuleData<B> {
-        &self.data_objects[self.get_data_id(name)]
-    }
-}
-
-/// This provides a view to the state of a module which allows `ir::ExternalName`s to be translated
-/// into `FunctionDeclaration`s and `DataDeclaration`s.
-pub struct ModuleNamespace<'a, B: 'a>
-where
-    B: Backend,
-{
-    contents: &'a ModuleContents<B>,
-}
-
-impl<'a, B> ModuleNamespace<'a, B>
-where
-    B: Backend,
-{
-    /// Get the `FuncId` for the function named by `name`.
-    pub fn get_function_id(&self, name: &ir::ExternalName) -> FuncId {
-        self.contents.get_function_id(name)
-    }
-
-    /// Get the `DataId` for the data object named by `name`.
-    pub fn get_data_id(&self, name: &ir::ExternalName) -> DataId {
-        self.contents.get_data_id(name)
-    }
-
     /// Get the `FunctionDeclaration` for the function named by `name`.
-    pub fn get_function_decl(&self, name: &ir::ExternalName) -> &FunctionDeclaration {
-        &self.contents.get_function_info(name).decl
+    pub fn get_function_decl(&self, func_id: FuncId) -> &FunctionDeclaration {
+        &self.functions[func_id]
+    }
+
+    /// Get an iterator of all data declarations
+    pub fn get_data_objects(&self) -> impl Iterator<Item = (DataId, &DataDeclaration)> {
+        self.data_objects.iter()
     }
 
     /// Get the `DataDeclaration` for the data object named by `name`.
-    pub fn get_data_decl(&self, name: &ir::ExternalName) -> &DataDeclaration {
-        &self.contents.get_data_info(name).decl
-    }
-
-    /// Get the definition for the function named by `name`, along with its name
-    /// and signature.
-    pub fn get_function_definition(
-        &self,
-        name: &ir::ExternalName,
-    ) -> (Option<&B::CompiledFunction>, &str, &ir::Signature) {
-        let info = self.contents.get_function_info(name);
-        debug_assert!(
-            !info.decl.linkage.is_definable() || info.compiled.is_some(),
-            "Finalization requires a definition for function {}.",
-            name,
-        );
-        debug_assert_eq!(info.decl.linkage.is_definable(), info.compiled.is_some());
-
-        (
-            info.compiled.as_ref(),
-            &info.decl.name,
-            &info.decl.signature,
-        )
-    }
-
-    /// Get the definition for the data object named by `name`, along with its name
-    /// and writable flag
-    pub fn get_data_definition(
-        &self,
-        name: &ir::ExternalName,
-    ) -> (Option<&B::CompiledData>, &str, bool) {
-        let info = self.contents.get_data_info(name);
-        debug_assert!(
-            !info.decl.linkage.is_definable() || info.compiled.is_some(),
-            "Finalization requires a definition for data object {}.",
-            name,
-        );
-        debug_assert_eq!(info.decl.linkage.is_definable(), info.compiled.is_some());
-
-        (info.compiled.as_ref(), &info.decl.name, info.decl.writable)
+    pub fn get_data_decl(&self, data_id: DataId) -> &DataDeclaration {
+        &self.data_objects[data_id]
     }
 
     /// Return whether `name` names a function, rather than a data object.
@@ -348,87 +258,6 @@ where
             panic!("unexpected ExternalName kind {}", name)
         }
     }
-}
-
-/// A `Module` is a utility for collecting functions and data objects, and linking them together.
-pub struct Module<B>
-where
-    B: Backend,
-{
-    names: HashMap<String, FuncOrDataId>,
-    contents: ModuleContents<B>,
-    functions_to_finalize: Vec<FuncId>,
-    data_objects_to_finalize: Vec<DataId>,
-    backend: B,
-}
-
-pub struct ModuleCompiledFunction {
-    pub size: binemit::CodeOffset,
-}
-
-impl<B> Module<B>
-where
-    B: Backend,
-{
-    /// Create a new `Module`.
-    pub fn new(backend_builder: B::Builder) -> Self {
-        Self {
-            names: HashMap::new(),
-            contents: ModuleContents {
-                functions: PrimaryMap::new(),
-                data_objects: PrimaryMap::new(),
-            },
-            functions_to_finalize: Vec::new(),
-            data_objects_to_finalize: Vec::new(),
-            backend: B::new(backend_builder),
-        }
-    }
-
-    /// Get the module identifier for a given name, if that name
-    /// has been declared.
-    pub fn get_name(&self, name: &str) -> Option<FuncOrDataId> {
-        self.names.get(name).cloned()
-    }
-
-    /// Return the target information needed by frontends to produce Cranelift IR
-    /// for the current target.
-    pub fn target_config(&self) -> isa::TargetFrontendConfig {
-        self.backend.isa().frontend_config()
-    }
-
-    /// Create a new `Context` initialized for use with this `Module`.
-    ///
-    /// This ensures that the `Context` is initialized with the default calling
-    /// convention for the `TargetIsa`.
-    pub fn make_context(&self) -> Context {
-        let mut ctx = Context::new();
-        ctx.func.signature.call_conv = self.backend.isa().default_call_conv();
-        ctx
-    }
-
-    /// Clear the given `Context` and reset it for use with a new function.
-    ///
-    /// This ensures that the `Context` is initialized with the default calling
-    /// convention for the `TargetIsa`.
-    pub fn clear_context(&self, ctx: &mut Context) {
-        ctx.clear();
-        ctx.func.signature.call_conv = self.backend.isa().default_call_conv();
-    }
-
-    /// Create a new empty `Signature` with the default calling convention for
-    /// the `TargetIsa`, to which parameter and return types can be added for
-    /// declaring a function to be called by this `Module`.
-    pub fn make_signature(&self) -> ir::Signature {
-        ir::Signature::new(self.backend.isa().default_call_conv())
-    }
-
-    /// Clear the given `Signature` and reset for use with a new function.
-    ///
-    /// This ensures that the `Signature` is initialized with the default
-    /// calling convention for the `TargetIsa`.
-    pub fn clear_signature(&self, sig: &mut ir::Signature) {
-        sig.clear(self.backend.isa().default_call_conv());
-    }
 
     /// Declare a function in this module.
     pub fn declare_function(
@@ -436,41 +265,30 @@ where
         name: &str,
         linkage: Linkage,
         signature: &ir::Signature,
-    ) -> ModuleResult<FuncId> {
+    ) -> ModuleResult<(FuncId, &FunctionDeclaration)> {
         // TODO: Can we avoid allocating names so often?
         use super::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
             Occupied(entry) => match *entry.get() {
                 FuncOrDataId::Func(id) => {
-                    let existing = &mut self.contents.functions[id];
+                    let existing = &mut self.functions[id];
                     existing.merge(linkage, signature)?;
-                    self.backend
-                        .declare_function(id, name, existing.decl.linkage);
-                    Ok(id)
+                    Ok((id, existing))
                 }
                 FuncOrDataId::Data(..) => {
                     Err(ModuleError::IncompatibleDeclaration(name.to_owned()))
                 }
             },
             Vacant(entry) => {
-                let id = self.contents.functions.push(ModuleFunction {
-                    decl: FunctionDeclaration {
-                        name: name.to_owned(),
-                        linkage,
-                        signature: signature.clone(),
-                    },
-                    compiled: None,
+                let id = self.functions.push(FunctionDeclaration {
+                    name: name.to_owned(),
+                    linkage,
+                    signature: signature.clone(),
                 });
                 entry.insert(FuncOrDataId::Func(id));
-                self.backend.declare_function(id, name, linkage);
-                Ok(id)
+                Ok((id, &self.functions[id]))
             }
         }
-    }
-
-    /// An iterator over functions that have been declared in this module.
-    pub fn declared_functions(&self) -> core::slice::Iter<'_, ModuleFunction<B>> {
-        self.contents.functions.values()
     }
 
     /// Declare a data object in this module.
@@ -480,24 +298,15 @@ where
         linkage: Linkage,
         writable: bool,
         tls: bool,
-        align: Option<u8>, // An alignment bigger than 128 is unlikely
-    ) -> ModuleResult<DataId> {
+    ) -> ModuleResult<(DataId, &DataDeclaration)> {
         // TODO: Can we avoid allocating names so often?
         use super::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
             Occupied(entry) => match *entry.get() {
                 FuncOrDataId::Data(id) => {
-                    let existing = &mut self.contents.data_objects[id];
-                    existing.merge(linkage, writable, tls, align);
-                    self.backend.declare_data(
-                        id,
-                        name,
-                        existing.decl.linkage,
-                        existing.decl.writable,
-                        existing.decl.tls,
-                        existing.decl.align,
-                    );
-                    Ok(id)
+                    let existing = &mut self.data_objects[id];
+                    existing.merge(linkage, writable, tls);
+                    Ok((id, existing))
                 }
 
                 FuncOrDataId::Func(..) => {
@@ -505,30 +314,102 @@ where
                 }
             },
             Vacant(entry) => {
-                let id = self.contents.data_objects.push(ModuleData {
-                    decl: DataDeclaration {
-                        name: name.to_owned(),
-                        linkage,
-                        writable,
-                        tls,
-                        align,
-                    },
-                    compiled: None,
+                let id = self.data_objects.push(DataDeclaration {
+                    name: name.to_owned(),
+                    linkage,
+                    writable,
+                    tls,
                 });
                 entry.insert(FuncOrDataId::Data(id));
-                self.backend
-                    .declare_data(id, name, linkage, writable, tls, align);
-                Ok(id)
+                Ok((id, &self.data_objects[id]))
             }
         }
     }
+}
+
+/// Information about the compiled function.
+pub struct ModuleCompiledFunction {
+    /// The size of the compiled function.
+    pub size: binemit::CodeOffset,
+}
+
+/// A `Module` is a utility for collecting functions and data objects, and linking them together.
+pub trait Module {
+    /// Return the `TargetIsa` to compile for.
+    fn isa(&self) -> &dyn isa::TargetIsa;
+
+    /// Get all declarations in this module.
+    fn declarations(&self) -> &ModuleDeclarations;
+
+    /// Get the module identifier for a given name, if that name
+    /// has been declared.
+    fn get_name(&self, name: &str) -> Option<FuncOrDataId> {
+        self.declarations().get_name(name)
+    }
+
+    /// Return the target information needed by frontends to produce Cranelift IR
+    /// for the current target.
+    fn target_config(&self) -> isa::TargetFrontendConfig {
+        self.isa().frontend_config()
+    }
+
+    /// Create a new `Context` initialized for use with this `Module`.
+    ///
+    /// This ensures that the `Context` is initialized with the default calling
+    /// convention for the `TargetIsa`.
+    fn make_context(&self) -> Context {
+        let mut ctx = Context::new();
+        ctx.func.signature.call_conv = self.isa().default_call_conv();
+        ctx
+    }
+
+    /// Clear the given `Context` and reset it for use with a new function.
+    ///
+    /// This ensures that the `Context` is initialized with the default calling
+    /// convention for the `TargetIsa`.
+    fn clear_context(&self, ctx: &mut Context) {
+        ctx.clear();
+        ctx.func.signature.call_conv = self.isa().default_call_conv();
+    }
+
+    /// Create a new empty `Signature` with the default calling convention for
+    /// the `TargetIsa`, to which parameter and return types can be added for
+    /// declaring a function to be called by this `Module`.
+    fn make_signature(&self) -> ir::Signature {
+        ir::Signature::new(self.isa().default_call_conv())
+    }
+
+    /// Clear the given `Signature` and reset for use with a new function.
+    ///
+    /// This ensures that the `Signature` is initialized with the default
+    /// calling convention for the `TargetIsa`.
+    fn clear_signature(&self, sig: &mut ir::Signature) {
+        sig.clear(self.isa().default_call_conv());
+    }
+
+    /// Declare a function in this module.
+    fn declare_function(
+        &mut self,
+        name: &str,
+        linkage: Linkage,
+        signature: &ir::Signature,
+    ) -> ModuleResult<FuncId>;
+
+    /// Declare a data object in this module.
+    fn declare_data(
+        &mut self,
+        name: &str,
+        linkage: Linkage,
+        writable: bool,
+        tls: bool,
+    ) -> ModuleResult<DataId>;
 
     /// Use this when you're building the IR of a function to reference a function.
     ///
     /// TODO: Coalesce redundant decls and signatures.
     /// TODO: Look into ways to reduce the risk of using a FuncRef in the wrong function.
-    pub fn declare_func_in_func(&self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {
-        let decl = &self.contents.functions[func].decl;
+    fn declare_func_in_func(&self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {
+        let decl = &self.declarations().functions[func];
         let signature = in_func.import_signature(decl.signature.clone());
         let colocated = decl.linkage.is_final();
         in_func.import_function(ir::ExtFuncData {
@@ -541,8 +422,8 @@ where
     /// Use this when you're building the IR of a function to reference a data object.
     ///
     /// TODO: Same as above.
-    pub fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalValue {
-        let decl = &self.contents.data_objects[data].decl;
+    fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalValue {
+        let decl = &self.declarations().data_objects[data];
         let colocated = decl.linkage.is_final();
         func.create_global_value(ir::GlobalValueData::Symbol {
             name: ir::ExternalName::user(1, data.as_u32()),
@@ -553,12 +434,12 @@ where
     }
 
     /// TODO: Same as above.
-    pub fn declare_func_in_data(&self, func: FuncId, ctx: &mut DataContext) -> ir::FuncRef {
+    fn declare_func_in_data(&self, func: FuncId, ctx: &mut DataContext) -> ir::FuncRef {
         ctx.import_function(ir::ExternalName::user(0, func.as_u32()))
     }
 
     /// TODO: Same as above.
-    pub fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalValue {
+    fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalValue {
         ctx.import_global_value(ir::ExternalName::user(1, data.as_u32()))
     }
 
@@ -567,44 +448,14 @@ where
     /// Returns the size of the function's code and constant data.
     ///
     /// Note: After calling this function the given `Context` will contain the compiled function.
-    pub fn define_function<TS>(
+    fn define_function<TS>(
         &mut self,
         func: FuncId,
         ctx: &mut Context,
         trap_sink: &mut TS,
     ) -> ModuleResult<ModuleCompiledFunction>
     where
-        TS: binemit::TrapSink,
-    {
-        info!(
-            "defining function {}: {}",
-            func,
-            ctx.func.display(self.backend.isa())
-        );
-        let CodeInfo { total_size, .. } = ctx.compile(self.backend.isa())?;
-        let info = &self.contents.functions[func];
-        if info.compiled.is_some() {
-            return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
-        }
-        if !info.decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
-        }
-
-        let compiled = self.backend.define_function(
-            func,
-            &info.decl.name,
-            ctx,
-            &ModuleNamespace::<B> {
-                contents: &self.contents,
-            },
-            total_size,
-            trap_sink,
-        )?;
-
-        self.contents.functions[func].compiled = Some(compiled);
-        self.functions_to_finalize.push(func);
-        Ok(ModuleCompiledFunction { size: total_size })
-    }
+        TS: binemit::TrapSink;
 
     /// Define a function, taking the function body from the given `bytes`.
     ///
@@ -613,187 +464,12 @@ where
     /// `define_function`.
     ///
     /// Returns the size of the function's code.
-    pub fn define_function_bytes(
+    fn define_function_bytes(
         &mut self,
         func: FuncId,
         bytes: &[u8],
-    ) -> ModuleResult<ModuleCompiledFunction> {
-        info!("defining function {} with bytes", func);
-        let info = &self.contents.functions[func];
-        if info.compiled.is_some() {
-            return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
-        }
-        if !info.decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
-        }
-
-        let total_size: u32 = match bytes.len().try_into() {
-            Ok(total_size) => total_size,
-            _ => Err(ModuleError::FunctionTooLarge(info.decl.name.clone()))?,
-        };
-
-        let compiled = self.backend.define_function_bytes(
-            func,
-            &info.decl.name,
-            bytes,
-            &ModuleNamespace::<B> {
-                contents: &self.contents,
-            },
-        )?;
-
-        self.contents.functions[func].compiled = Some(compiled);
-        self.functions_to_finalize.push(func);
-        Ok(ModuleCompiledFunction { size: total_size })
-    }
+    ) -> ModuleResult<ModuleCompiledFunction>;
 
     /// Define a data object, producing the data contents from the given `DataContext`.
-    pub fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
-        let compiled = {
-            let info = &self.contents.data_objects[data];
-            if info.compiled.is_some() {
-                return Err(ModuleError::DuplicateDefinition(info.decl.name.clone()));
-            }
-            if !info.decl.linkage.is_definable() {
-                return Err(ModuleError::InvalidImportDefinition(info.decl.name.clone()));
-            }
-            Some(self.backend.define_data(
-                data,
-                &info.decl.name,
-                info.decl.writable,
-                info.decl.tls,
-                info.decl.align,
-                data_ctx,
-                &ModuleNamespace::<B> {
-                    contents: &self.contents,
-                },
-            )?)
-        };
-        self.contents.data_objects[data].compiled = compiled;
-        self.data_objects_to_finalize.push(data);
-        Ok(())
-    }
-
-    /// Write the address of `what` into the data for `data` at `offset`. `data` must refer to a
-    /// defined data object.
-    pub fn write_data_funcaddr(&mut self, data: DataId, offset: usize, what: ir::FuncRef) {
-        let info = &mut self.contents.data_objects[data];
-        debug_assert!(
-            info.decl.linkage.is_definable(),
-            "imported data cannot contain references"
-        );
-        self.backend.write_data_funcaddr(
-            &mut info
-                .compiled
-                .as_mut()
-                .expect("`data` must refer to a defined data object"),
-            offset,
-            what,
-        );
-    }
-
-    /// Write the address of `what` plus `addend` into the data for `data` at `offset`. `data` must
-    /// refer to a defined data object.
-    pub fn write_data_dataaddr(
-        &mut self,
-        data: DataId,
-        offset: usize,
-        what: ir::GlobalValue,
-        addend: binemit::Addend,
-    ) {
-        let info = &mut self.contents.data_objects[data];
-        debug_assert!(
-            info.decl.linkage.is_definable(),
-            "imported data cannot contain references"
-        );
-        self.backend.write_data_dataaddr(
-            &mut info
-                .compiled
-                .as_mut()
-                .expect("`data` must refer to a defined data object"),
-            offset,
-            what,
-            addend,
-        );
-    }
-
-    /// Finalize all functions and data objects that are defined but not yet finalized.
-    /// All symbols referenced in their bodies that are declared as needing a definition
-    /// must be defined by this point.
-    ///
-    /// Use `get_finalized_function` and `get_finalized_data` to obtain the final
-    /// artifacts.
-    ///
-    /// This method is not relevant for `Backend` implementations that do not provide
-    /// `Backend::FinalizedFunction` or `Backend::FinalizedData`.
-    pub fn finalize_definitions(&mut self) {
-        for func in self.functions_to_finalize.drain(..) {
-            let info = &self.contents.functions[func];
-            debug_assert!(info.decl.linkage.is_definable());
-            self.backend.finalize_function(
-                func,
-                info.compiled
-                    .as_ref()
-                    .expect("function must be compiled before it can be finalized"),
-                &ModuleNamespace::<B> {
-                    contents: &self.contents,
-                },
-            );
-        }
-        for data in self.data_objects_to_finalize.drain(..) {
-            let info = &self.contents.data_objects[data];
-            debug_assert!(info.decl.linkage.is_definable());
-            self.backend.finalize_data(
-                data,
-                info.compiled
-                    .as_ref()
-                    .expect("data object must be compiled before it can be finalized"),
-                &ModuleNamespace::<B> {
-                    contents: &self.contents,
-                },
-            );
-        }
-        self.backend.publish();
-    }
-
-    /// Return the finalized artifact from the backend, if it provides one.
-    pub fn get_finalized_function(&mut self, func: FuncId) -> B::FinalizedFunction {
-        let info = &self.contents.functions[func];
-        debug_assert!(
-            !self.functions_to_finalize.iter().any(|x| *x == func),
-            "function not yet finalized"
-        );
-        self.backend.get_finalized_function(
-            info.compiled
-                .as_ref()
-                .expect("function must be compiled before it can be finalized"),
-        )
-    }
-
-    /// Return the finalized artifact from the backend, if it provides one.
-    pub fn get_finalized_data(&mut self, data: DataId) -> B::FinalizedData {
-        let info = &self.contents.data_objects[data];
-        debug_assert!(
-            !self.data_objects_to_finalize.iter().any(|x| *x == data),
-            "data object not yet finalized"
-        );
-        self.backend.get_finalized_data(
-            info.compiled
-                .as_ref()
-                .expect("data object must be compiled before it can be finalized"),
-        )
-    }
-
-    /// Return the target isa
-    pub fn isa(&self) -> &dyn isa::TargetIsa {
-        self.backend.isa()
-    }
-
-    /// Consume the module and return the resulting `Product`. Some `Backend`
-    /// implementations may provide additional functionality available after
-    /// a `Module` is complete.
-    pub fn finish(self) -> B::Product {
-        self.backend.finish(&ModuleNamespace::<B> {
-            contents: &self.contents,
-        })
-    }
+    fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()>;
 }

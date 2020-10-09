@@ -510,7 +510,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         fixed_frame_storage_size: u32,
     ) -> (u64, SmallVec<[Inst; 16]>) {
         let mut insts = SmallVec::new();
-        let (clobbered_int, clobbered_vec) = get_callee_saves(call_conv, clobbers);
+        let (clobbered_int, clobbered_vec) = get_regs_saved_in_prologue(call_conv, clobbers);
 
         let (int_save_bytes, vec_save_bytes) = saved_reg_stack_size(&clobbered_int, &clobbered_vec);
         let total_save_bytes = (vec_save_bytes + int_save_bytes) as i32;
@@ -561,7 +561,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         clobbers: &Set<Writable<RealReg>>,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
-        let (clobbered_int, clobbered_vec) = get_callee_saves(call_conv, clobbers);
+        let (clobbered_int, clobbered_vec) = get_regs_saved_in_prologue(call_conv, clobbers);
 
         let (int_save_bytes, vec_save_bytes) = saved_reg_stack_size(&clobbered_int, &clobbered_vec);
         for (i, reg_pair) in clobbered_int.chunks(2).enumerate() {
@@ -629,6 +629,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
         loc: SourceLoc,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
+        callee_conv: isa::CallConv,
+        caller_conv: isa::CallConv,
     ) -> SmallVec<[(InstIsSafepoint, Inst); 2]> {
         let mut insts = SmallVec::new();
         match &dest {
@@ -641,6 +643,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
                         defs,
                         loc,
                         opcode,
+                        caller_callconv: caller_conv,
+                        callee_callconv: callee_conv,
                     }),
                 },
             )),
@@ -663,6 +667,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
                             defs,
                             loc,
                             opcode,
+                            caller_callconv: caller_conv,
+                            callee_callconv: callee_conv,
                         }),
                     },
                 ));
@@ -676,6 +682,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
                         defs,
                         loc,
                         opcode,
+                        caller_callconv: caller_conv,
+                        callee_callconv: callee_conv,
                     }),
                 },
             )),
@@ -704,17 +712,17 @@ impl ABIMachineSpec for AArch64MachineDeps {
         s.nominal_sp_to_fp
     }
 
-    fn get_caller_saves(call_conv: isa::CallConv) -> Vec<Writable<Reg>> {
+    fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> Vec<Writable<Reg>> {
         let mut caller_saved = Vec::new();
         for i in 0..29 {
             let x = writable_xreg(i);
-            if is_caller_save_reg(call_conv, x.to_reg().to_real_reg()) {
+            if is_reg_clobbered_by_call(call_conv_of_callee, x.to_reg().to_real_reg()) {
                 caller_saved.push(x);
             }
         }
         for i in 0..32 {
             let v = writable_vreg(i);
-            if is_caller_save_reg(call_conv, v.to_reg().to_real_reg()) {
+            if is_reg_clobbered_by_call(call_conv_of_callee, v.to_reg().to_real_reg()) {
                 caller_saved.push(v);
             }
         }
@@ -731,7 +739,9 @@ fn legal_type_for_machine(ty: Type) -> bool {
     }
 }
 
-fn is_callee_save_reg(call_conv: isa::CallConv, r: RealReg) -> bool {
+/// Is the given register saved in the prologue if clobbered, i.e., is it a
+/// callee-save?
+fn is_reg_saved_in_prologue(call_conv: isa::CallConv, r: RealReg) -> bool {
     if call_conv.extends_baldrdash() {
         match r.get_class() {
             RegClass::I64 => {
@@ -759,14 +769,17 @@ fn is_callee_save_reg(call_conv: isa::CallConv, r: RealReg) -> bool {
     }
 }
 
-fn get_callee_saves(
+/// Return the set of all integer and vector registers that must be saved in the
+/// prologue and restored in the epilogue, given the set of all registers
+/// written by the function's body.
+fn get_regs_saved_in_prologue(
     call_conv: isa::CallConv,
     regs: &Set<Writable<RealReg>>,
 ) -> (Vec<Writable<RealReg>>, Vec<Writable<RealReg>>) {
     let mut int_saves = vec![];
     let mut vec_saves = vec![];
     for &reg in regs.iter() {
-        if is_callee_save_reg(call_conv, reg.to_reg()) {
+        if is_reg_saved_in_prologue(call_conv, reg.to_reg()) {
             match reg.to_reg().get_class() {
                 RegClass::I64 => int_saves.push(reg),
                 RegClass::V128 => vec_saves.push(reg),
@@ -781,8 +794,8 @@ fn get_callee_saves(
     (int_saves, vec_saves)
 }
 
-fn is_caller_save_reg(call_conv: isa::CallConv, r: RealReg) -> bool {
-    if call_conv.extends_baldrdash() {
+fn is_reg_clobbered_by_call(call_conv_of_callee: isa::CallConv, r: RealReg) -> bool {
+    if call_conv_of_callee.extends_baldrdash() {
         match r.get_class() {
             RegClass::I64 => {
                 let enc = r.get_hw_encoding();
@@ -808,8 +821,21 @@ fn is_caller_save_reg(call_conv: isa::CallConv, r: RealReg) -> bool {
             r.get_hw_encoding() <= 17
         }
         RegClass::V128 => {
-            // v0 - v7 inclusive and v16 - v31 inclusive are caller-saves.
-            r.get_hw_encoding() <= 7 || (r.get_hw_encoding() >= 16 && r.get_hw_encoding() <= 31)
+            // v0 - v7 inclusive and v16 - v31 inclusive are caller-saves. The
+            // upper 64 bits of v8 - v15 inclusive are also caller-saves.
+            // However, because we cannot currently represent partial registers
+            // to regalloc.rs, we indicate here that every vector register is
+            // caller-save. Because this function is used at *callsites*,
+            // approximating in this direction (save more than necessary) is
+            // conservative and thus safe.
+            //
+            // Note that we set the 'not included in clobber set' flag in the
+            // regalloc.rs API when a call instruction's callee has the same ABI
+            // as the caller (the current function body); this is safe (anything
+            // clobbered by callee can be clobbered by caller as well) and
+            // avoids unnecessary saves of v8-v15 in the prologue even though we
+            // include them as defs here.
+            true
         }
         _ => panic!("Unexpected RegClass"),
     }

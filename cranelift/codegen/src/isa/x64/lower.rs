@@ -1,5 +1,6 @@
 //! Lowering rules for X64.
 
+use crate::data_value::DataValue;
 use crate::ir::{
     condcodes::FloatCC, condcodes::IntCC, types, AbiParam, ArgumentPurpose, ExternalName,
     Inst as IRInst, InstructionData, LibCall, Opcode, Signature, Type,
@@ -64,6 +65,25 @@ fn matches_input<C: LowerCtx<I = Inst>>(
         let data = ctx.data(src_inst);
         if data.opcode() == op {
             return Some(src_inst);
+        }
+        None
+    })
+}
+
+/// Returns whether the given specified `input` is a result produced by an instruction with any of
+/// the opcodes specified in `ops`.
+fn matches_input_any<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    input: InsnInput,
+    ops: &[Opcode],
+) -> Option<IRInst> {
+    let inputs = ctx.get_input(input.insn, input.input);
+    inputs.inst.and_then(|(src_inst, _)| {
+        let data = ctx.data(src_inst);
+        for &op in ops {
+            if data.opcode() == op {
+                return Some(src_inst);
+            }
         }
         None
     })
@@ -384,9 +404,10 @@ fn emit_vm_call<C: LowerCtx<I = Inst>>(
     // TODO avoid recreating signatures for every single Libcall function.
     let call_conv = CallConv::for_libcall(flags, CallConv::triple_default(triple));
     let sig = make_libcall_sig(ctx, insn, call_conv, types::I64);
+    let caller_conv = ctx.abi().call_conv();
 
     let loc = ctx.srcloc(insn);
-    let mut abi = X64ABICaller::from_func(&sig, &extname, dist, loc)?;
+    let mut abi = X64ABICaller::from_func(&sig, &extname, dist, loc, caller_conv)?;
 
     abi.emit_stack_pre_adjust(ctx);
 
@@ -447,6 +468,7 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i
     // We now either have an add that we must materialize, or some other input; as well as the
     // final offset.
     if let Some(add) = matches_input(ctx, spec, Opcode::Iadd) {
+        debug_assert_eq!(ctx.output_ty(add, 0), types::I64);
         let add_inputs = &[
             InsnInput {
                 insn: add,
@@ -478,7 +500,33 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i
             )
         } else {
             for i in 0..=1 {
-                if let Some(cst) = ctx.get_input(add, i).constant {
+                let input = ctx.get_input(add, i);
+
+                // Try to pierce through uextend.
+                if let Some(uextend) = matches_input(
+                    ctx,
+                    InsnInput {
+                        insn: add,
+                        input: i,
+                    },
+                    Opcode::Uextend,
+                ) {
+                    if let Some(cst) = ctx.get_input(uextend, 0).constant {
+                        // Zero the upper bits.
+                        let input_size = ctx.input_ty(uextend, 0).bits() as u64;
+                        let shift: u64 = 64 - input_size;
+                        let uext_cst: u64 = (cst << shift) >> shift;
+
+                        let final_offset = (offset as i64).wrapping_add(uext_cst as i64);
+                        if low32_will_sign_extend_to_64(final_offset as u64) {
+                            let base = put_input_in_reg(ctx, add_inputs[1 - i]);
+                            return Amode::imm_reg(final_offset as u32, base);
+                        }
+                    }
+                }
+
+                // If it's a constant, add it directly!
+                if let Some(cst) = input.constant {
                     let final_offset = (offset as i64).wrapping_add(cst as i64);
                     if low32_will_sign_extend_to_64(final_offset as u64) {
                         let base = put_input_in_reg(ctx, add_inputs[1 - i]);
@@ -544,6 +592,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::SaddSat
         | Opcode::UaddSat
         | Opcode::Isub
+        | Opcode::SsubSat
+        | Opcode::UsubSat
         | Opcode::Imul
         | Opcode::AvgRound
         | Opcode::Band
@@ -575,6 +625,16 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         types::I32X4 => SseOpcode::Psubd,
                         types::I64X2 => SseOpcode::Psubq,
                         _ => panic!("Unsupported type for packed isub instruction: {}", ty),
+                    },
+                    Opcode::SsubSat => match ty {
+                        types::I8X16 => SseOpcode::Psubsb,
+                        types::I16X8 => SseOpcode::Psubsw,
+                        _ => panic!("Unsupported type for packed ssub_sat instruction: {}", ty),
+                    },
+                    Opcode::UsubSat => match ty {
+                        types::I8X16 => SseOpcode::Psubusb,
+                        types::I16X8 => SseOpcode::Psubusw,
+                        _ => panic!("Unsupported type for packed usub_sat instruction: {}", ty),
                     },
                     Opcode::Imul => match ty {
                         types::I16X8 => SseOpcode::Pmullw,
@@ -687,6 +747,21 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         types::I16X8 => SseOpcode::Pavgw,
                         _ => panic!("Unsupported type for packed avg_round instruction: {}", ty),
                     },
+                    Opcode::Band => match ty {
+                        types::F32X4 => SseOpcode::Andps,
+                        types::F64X2 => SseOpcode::Andpd,
+                        _ => SseOpcode::Pand,
+                    },
+                    Opcode::Bor => match ty {
+                        types::F32X4 => SseOpcode::Orps,
+                        types::F64X2 => SseOpcode::Orpd,
+                        _ => SseOpcode::Por,
+                    },
+                    Opcode::Bxor => match ty {
+                        types::F32X4 => SseOpcode::Xorps,
+                        types::F64X2 => SseOpcode::Xorpd,
+                        _ => SseOpcode::Pxor,
+                    },
                     _ => panic!("Unsupported packed instruction: {}", op),
                 };
                 let lhs = put_input_in_reg(ctx, inputs[0]);
@@ -737,6 +812,23 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::mov_r_r(true, lhs, dst));
                 ctx.emit(Inst::alu_rmi_r(is_64, alu_op, rhs, dst));
             }
+        }
+
+        Opcode::BandNot => {
+            let ty = ty.unwrap();
+            debug_assert!(ty.is_vector() && ty.bytes() == 16);
+            let lhs = input_to_reg_mem(ctx, inputs[0]);
+            let rhs = put_input_in_reg(ctx, inputs[1]);
+            let dst = get_output_reg(ctx, outputs[0]);
+            let sse_op = match ty {
+                types::F32X4 => SseOpcode::Andnps,
+                types::F64X2 => SseOpcode::Andnpd,
+                _ => SseOpcode::Pandn,
+            };
+            // Note the flipping of operands: the `rhs` operand is used as the destination instead
+            // of the `lhs` as in the other bit operations above (e.g. `band`).
+            ctx.emit(Inst::gen_move(dst, rhs, ty));
+            ctx.emit(Inst::xmm_rm_r(sse_op, lhs, dst));
         }
 
         Opcode::Iabs => {
@@ -800,16 +892,42 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Bnot => {
             let ty = ty.unwrap();
+            let size = ty.bytes() as u8;
+            let src = put_input_in_reg(ctx, inputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
+            ctx.emit(Inst::gen_move(dst, src, ty));
+
             if ty.is_vector() {
-                unimplemented!("vector bnot");
+                let tmp = ctx.alloc_tmp(RegClass::V128, ty);
+                ctx.emit(Inst::equals(ty, RegMem::from(tmp), tmp));
+                ctx.emit(Inst::xor(ty, RegMem::from(tmp), dst));
             } else if ty.is_bool() {
                 unimplemented!("bool bnot")
             } else {
-                let size = ty.bytes() as u8;
-                let src = put_input_in_reg(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]);
-                ctx.emit(Inst::gen_move(dst, src, ty));
                 ctx.emit(Inst::not(size, dst));
+            }
+        }
+
+        Opcode::Bitselect => {
+            let ty = ty.unwrap();
+            let condition = put_input_in_reg(ctx, inputs[0]);
+            let if_true = put_input_in_reg(ctx, inputs[1]);
+            let if_false = input_to_reg_mem(ctx, inputs[2]);
+            let dst = get_output_reg(ctx, outputs[0]);
+
+            if ty.is_vector() {
+                let tmp1 = ctx.alloc_tmp(RegClass::V128, ty);
+                ctx.emit(Inst::gen_move(tmp1, if_true, ty));
+                ctx.emit(Inst::and(ty, RegMem::reg(condition.clone()), tmp1));
+
+                let tmp2 = ctx.alloc_tmp(RegClass::V128, ty);
+                ctx.emit(Inst::gen_move(tmp2, condition, ty));
+                ctx.emit(Inst::and_not(ty, if_false, tmp2));
+
+                ctx.emit(Inst::gen_move(dst, tmp2.to_reg(), ty));
+                ctx.emit(Inst::or(ty, RegMem::from(tmp1), dst));
+            } else {
+                unimplemented!("scalar bitselect")
             }
         }
 
@@ -1298,28 +1416,54 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let src_ty = ctx.input_ty(insn, 0);
             let dst_ty = ctx.output_ty(insn, 0);
 
+            // Sextend requires a sign-extended move, but all the other opcodes are simply a move
+            // from a zero-extended source. Here is why this works, in each case:
+            //
+            // - Bint: Bool-to-int. We always represent a bool as a 0 or 1, so we merely need to
+            // zero-extend here.
+            //
+            // - Breduce, Bextend: changing width of a boolean. We represent a bool as a 0 or 1, so
+            // again, this is a zero-extend / no-op.
+            //
+            // - Ireduce: changing width of an integer. Smaller ints are stored with undefined
+            // high-order bits, so we can simply do a copy.
+
+            if src_ty == types::I32 && dst_ty == types::I64 && op != Opcode::Sextend {
+                // As a particular x64 extra-pattern matching opportunity, all the ALU opcodes on
+                // 32-bits will zero-extend the upper 32-bits, so we can even not generate a
+                // zero-extended move in this case.
+                // TODO add loads and shifts here.
+                if let Some(_) = matches_input_any(
+                    ctx,
+                    inputs[0],
+                    &[
+                        Opcode::Iadd,
+                        Opcode::IaddIfcout,
+                        Opcode::Isub,
+                        Opcode::Imul,
+                        Opcode::Band,
+                        Opcode::Bor,
+                        Opcode::Bxor,
+                    ],
+                ) {
+                    let src = put_input_in_reg(ctx, inputs[0]);
+                    let dst = get_output_reg(ctx, outputs[0]);
+                    ctx.emit(Inst::gen_move(dst, src, types::I64));
+                    return Ok(());
+                }
+            }
+
             let src = input_to_reg_mem(ctx, inputs[0]);
             let dst = get_output_reg(ctx, outputs[0]);
 
             let ext_mode = ExtMode::new(src_ty.bits(), dst_ty.bits());
-            assert!(
-                (src_ty.bits() < dst_ty.bits() && ext_mode.is_some()) || ext_mode.is_none(),
+            assert_eq!(
+                src_ty.bits() < dst_ty.bits(),
+                ext_mode.is_some(),
                 "unexpected extension: {} -> {}",
                 src_ty,
                 dst_ty
             );
-
-            // All of these other opcodes are simply a move from a zero-extended source.  Here
-            // is why this works, in each case:
-            //
-            // - Bint: Bool-to-int. We always represent a bool as a 0 or 1, so we
-            //   merely need to zero-extend here.
-            //
-            // - Breduce, Bextend: changing width of a boolean. We represent a
-            //   bool as a 0 or 1, so again, this is a zero-extend / no-op.
-            //
-            // - Ireduce: changing width of an integer. Smaller ints are stored
-            //   with undefined high-order bits, so we can simply do a copy.
 
             if let Some(ext_mode) = ext_mode {
                 if op == Opcode::Sextend {
@@ -1558,6 +1702,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Call | Opcode::CallIndirect => {
             let loc = ctx.srcloc(insn);
+            let caller_conv = ctx.abi().call_conv();
             let (mut abi, inputs) = match op {
                 Opcode::Call => {
                     let (extname, dist) = ctx.call_target(insn).unwrap();
@@ -1565,7 +1710,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert_eq!(inputs.len(), sig.params.len());
                     assert_eq!(outputs.len(), sig.returns.len());
                     (
-                        X64ABICaller::from_func(sig, &extname, dist, loc)?,
+                        X64ABICaller::from_func(sig, &extname, dist, loc, caller_conv)?,
                         &inputs[..],
                     )
                 }
@@ -1575,7 +1720,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     let sig = ctx.call_sig(insn).unwrap();
                     assert_eq!(inputs.len() - 1, sig.params.len());
                     assert_eq!(outputs.len(), sig.returns.len());
-                    (X64ABICaller::from_ptr(sig, ptr, loc, op)?, &inputs[1..])
+                    (
+                        X64ABICaller::from_ptr(sig, ptr, loc, op, caller_conv)?,
+                        &inputs[1..],
+                    )
                 }
 
                 _ => unreachable!(),
@@ -2980,10 +3128,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let lhs_ty = ctx.input_ty(insn, 0);
             let lhs = put_input_in_reg(ctx, inputs[0]);
             let rhs = put_input_in_reg(ctx, inputs[1]);
-            let mask = if let &InstructionData::Shuffle { mask, .. } = ctx.data(insn) {
-                ctx.get_immediate(mask).clone()
-            } else {
-                unreachable!("shuffle should always have the shuffle format")
+            let mask = match ctx.get_immediate(insn) {
+                Some(DataValue::V128(bytes)) => bytes.to_vec(),
+                _ => unreachable!("shuffle should always have a 16-byte immediate"),
             };
 
             // A mask-building helper: in 128-bit SIMD, 0-15 indicate which lane to read from and a
@@ -3310,10 +3457,10 @@ impl LowerBackend for X64Backend {
             );
             assert!(op1 == Opcode::Jump || op1 == Opcode::Fallthrough);
 
-            let taken = BranchTarget::Label(targets[0]);
+            let taken = targets[0];
             let not_taken = match op1 {
-                Opcode::Jump => BranchTarget::Label(targets[1]),
-                Opcode::Fallthrough => BranchTarget::Label(fallthrough.unwrap()),
+                Opcode::Jump => targets[1],
+                Opcode::Fallthrough => fallthrough.unwrap(),
                 _ => unreachable!(), // assert above.
             };
 
@@ -3417,7 +3564,7 @@ impl LowerBackend for X64Backend {
             let op = ctx.data(branches[0]).opcode();
             match op {
                 Opcode::Jump | Opcode::Fallthrough => {
-                    ctx.emit(Inst::jmp_known(BranchTarget::Label(targets[0])));
+                    ctx.emit(Inst::jmp_known(targets[0]));
                 }
 
                 Opcode::BrTable => {
@@ -3460,13 +3607,9 @@ impl LowerBackend for X64Backend {
                     let tmp2 = ctx.alloc_tmp(RegClass::I64, types::I64);
 
                     let targets_for_term: Vec<MachLabel> = targets.to_vec();
-                    let default_target = BranchTarget::Label(targets[0]);
+                    let default_target = targets[0];
 
-                    let jt_targets: Vec<BranchTarget> = targets
-                        .iter()
-                        .skip(1)
-                        .map(|bix| BranchTarget::Label(*bix))
-                        .collect();
+                    let jt_targets: Vec<MachLabel> = targets.iter().skip(1).cloned().collect();
 
                     ctx.emit(Inst::JmpTableSeq {
                         idx,

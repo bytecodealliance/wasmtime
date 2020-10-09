@@ -4,10 +4,12 @@ use super::regs::{self, show_ireg_sized};
 use super::EmitState;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::machinst::*;
-use core::fmt::Debug;
-use regalloc::{RealRegUniverse, Reg, RegClass, RegUsageCollector, RegUsageMapper, Writable};
+use regalloc::{
+    PrettyPrint, PrettyPrintSized, RealRegUniverse, Reg, RegClass, RegUsageCollector,
+    RegUsageMapper, Writable,
+};
 use std::fmt;
-use std::string::{String, ToString};
+use std::string::String;
 
 /// A possible addressing mode (amode) that can be used in instructions.
 /// These denote a 64-bit value only.
@@ -26,7 +28,7 @@ pub enum Amode {
 
     /// sign-extend-32-to-64(Immediate) + RIP (instruction pointer).
     /// To wit: not supported in 32-bits mode.
-    RipRelative { target: BranchTarget },
+    RipRelative { target: MachLabel },
 }
 
 impl Amode {
@@ -47,7 +49,7 @@ impl Amode {
         }
     }
 
-    pub(crate) fn rip_relative(target: BranchTarget) -> Self {
+    pub(crate) fn rip_relative(target: MachLabel) -> Self {
         Self::RipRelative { target }
     }
 
@@ -68,7 +70,7 @@ impl Amode {
     }
 }
 
-impl ShowWithRRU for Amode {
+impl PrettyPrint for Amode {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         match self {
             Amode::ImmReg { simm32, base } => {
@@ -86,13 +88,7 @@ impl ShowWithRRU for Amode {
                 index.show_rru(mb_rru),
                 1 << shift
             ),
-            Amode::RipRelative { ref target } => format!(
-                "{}(%rip)",
-                match target {
-                    BranchTarget::Label(label) => format!("label{}", label.get()),
-                    BranchTarget::ResolvedOffset(offset) => offset.to_string(),
-                }
-            ),
+            Amode::RipRelative { ref target } => format!("label{}(%rip)", target.get()),
         }
     }
 }
@@ -156,7 +152,7 @@ impl Into<SyntheticAmode> for Amode {
     }
 }
 
-impl ShowWithRRU for SyntheticAmode {
+impl PrettyPrint for SyntheticAmode {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         match self {
             SyntheticAmode::Real(addr) => addr.show_rru(mb_rru),
@@ -214,11 +210,13 @@ impl RegMemImm {
     }
 }
 
-impl ShowWithRRU for RegMemImm {
+impl PrettyPrint for RegMemImm {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         self.show_rru_sized(mb_rru, 8)
     }
+}
 
+impl PrettyPrintSized for RegMemImm {
     fn show_rru_sized(&self, mb_rru: Option<&RealRegUniverse>, size: u8) -> String {
         match self {
             Self::Reg { reg } => show_ireg_sized(*reg, mb_rru, size),
@@ -271,11 +269,13 @@ impl From<Writable<Reg>> for RegMem {
     }
 }
 
-impl ShowWithRRU for RegMem {
+impl PrettyPrint for RegMem {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         self.show_rru_sized(mb_rru, 8)
     }
+}
 
+impl PrettyPrintSized for RegMem {
     fn show_rru_sized(&self, mb_rru: Option<&RealRegUniverse>, size: u8) -> String {
         match self {
             RegMem::Reg { reg } => show_ireg_sized(*reg, mb_rru, size),
@@ -413,6 +413,8 @@ pub enum SseOpcode {
     Paddsw,
     Paddusb,
     Paddusw,
+    Pand,
+    Pandn,
     Pavgb,
     Pavgw,
     Pcmpeqb,
@@ -459,6 +461,10 @@ pub enum SseOpcode {
     Psubd,
     Psubq,
     Psubw,
+    Psubsb,
+    Psubsw,
+    Psubusb,
+    Psubusw,
     Ptest,
     Pxor,
     Rcpss,
@@ -552,6 +558,8 @@ impl SseOpcode {
             | SseOpcode::Paddsw
             | SseOpcode::Paddusb
             | SseOpcode::Paddusw
+            | SseOpcode::Pand
+            | SseOpcode::Pandn
             | SseOpcode::Pavgb
             | SseOpcode::Pavgw
             | SseOpcode::Pcmpeqb
@@ -582,6 +590,10 @@ impl SseOpcode {
             | SseOpcode::Psubd
             | SseOpcode::Psubq
             | SseOpcode::Psubw
+            | SseOpcode::Psubsb
+            | SseOpcode::Psubsw
+            | SseOpcode::Psubusb
+            | SseOpcode::Psubusw
             | SseOpcode::Pxor
             | SseOpcode::Sqrtpd
             | SseOpcode::Sqrtsd
@@ -690,6 +702,8 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Paddsw => "paddsw",
             SseOpcode::Paddusb => "paddusb",
             SseOpcode::Paddusw => "paddusw",
+            SseOpcode::Pand => "pand",
+            SseOpcode::Pandn => "pandn",
             SseOpcode::Pavgb => "pavgb",
             SseOpcode::Pavgw => "pavgw",
             SseOpcode::Pcmpeqb => "pcmpeqb",
@@ -736,6 +750,10 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Psubd => "psubd",
             SseOpcode::Psubq => "psubq",
             SseOpcode::Psubw => "psubw",
+            SseOpcode::Psubsb => "psubsb",
+            SseOpcode::Psubsw => "psubsw",
+            SseOpcode::Psubusb => "psubusb",
+            SseOpcode::Psubusw => "psubusw",
             SseOpcode::Ptest => "ptest",
             SseOpcode::Pxor => "pxor",
             SseOpcode::Rcpss => "rcpss",
@@ -1087,55 +1105,6 @@ impl From<FloatCC> for FcmpImm {
     }
 }
 
-/// A branch target. Either unresolved (basic-block index) or resolved (offset
-/// from end of current instruction).
-#[derive(Clone, Copy, Debug)]
-pub enum BranchTarget {
-    /// An unresolved reference to a MachLabel.
-    Label(MachLabel),
-
-    /// A resolved reference to another instruction, in bytes.
-    ResolvedOffset(isize),
-}
-
-impl ShowWithRRU for BranchTarget {
-    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
-        match self {
-            BranchTarget::Label(l) => format!("{:?}", l),
-            BranchTarget::ResolvedOffset(offs) => format!("(offset {})", offs),
-        }
-    }
-}
-
-impl BranchTarget {
-    /// Get the label.
-    pub fn as_label(&self) -> Option<MachLabel> {
-        match self {
-            &BranchTarget::Label(l) => Some(l),
-            _ => None,
-        }
-    }
-
-    /// Get the offset as a signed 32 bit byte offset.  This returns the
-    /// offset in bytes between the first byte of the source and the first
-    /// byte of the target.  It does not take into account the Intel-specific
-    /// rule that a branch offset is encoded as relative to the start of the
-    /// following instruction.  That is a problem for the emitter to deal
-    /// with. If a label, returns zero.
-    pub fn as_offset32_or_zero(&self) -> i32 {
-        match self {
-            &BranchTarget::ResolvedOffset(off) => {
-                // Leave a bit of slack so that the emitter is guaranteed to
-                // be able to add the length of the jump instruction encoding
-                // to this value and still have a value in signed-32 range.
-                assert!(off >= -0x7FFF_FF00 && off <= 0x7FFF_FF00);
-                off as i32
-            }
-            _ => 0,
-        }
-    }
-}
-
 /// An operand's size in bits.
 #[derive(Clone, Copy, PartialEq)]
 pub enum OperandSize {
@@ -1169,6 +1138,7 @@ impl OperandSize {
 
 /// An x64 memory fence kind.
 #[derive(Clone)]
+#[allow(dead_code)]
 pub enum FenceKind {
     /// `mfence` instruction ("Memory Fence")
     MFence,

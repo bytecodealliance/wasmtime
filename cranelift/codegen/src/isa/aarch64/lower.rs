@@ -10,7 +10,7 @@
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
-use crate::ir::{InstructionData, Opcode, Type};
+use crate::ir::{Opcode, Type};
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::CodegenResult;
@@ -20,6 +20,7 @@ use crate::isa::aarch64::AArch64Backend;
 
 use super::lower_inst;
 
+use crate::data_value::DataValue;
 use log::{debug, trace};
 use regalloc::{Reg, RegClass, Writable};
 use smallvec::SmallVec;
@@ -126,22 +127,9 @@ pub(crate) fn const_param_to_u128<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     inst: IRInst,
 ) -> Option<u128> {
-    let data = match ctx.data(inst) {
-        &InstructionData::Shuffle { mask, .. } => ctx.get_immediate(mask),
-        &InstructionData::UnaryConst {
-            constant_handle, ..
-        } => ctx.get_constant_data(constant_handle),
-        _ => return None,
-    };
-    let data = data.clone().into_vec();
-
-    if data.len() == 16 {
-        let mut bytes = [0u8; 16];
-
-        bytes.copy_from_slice(&data);
-        Some(u128::from_le_bytes(bytes))
-    } else {
-        None
+    match ctx.get_immediate(inst) {
+        Some(DataValue::V128(bytes)) => Some(u128::from_le_bytes(bytes)),
+        _ => None,
     }
 }
 

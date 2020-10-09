@@ -28,8 +28,8 @@ use crate::timing;
 use regalloc::Function as RegallocFunction;
 use regalloc::Set as RegallocSet;
 use regalloc::{
-    BlockIx, InstIx, Range, RegAllocResult, RegClass, RegUsageCollector, RegUsageMapper, SpillSlot,
-    StackmapRequestInfo,
+    BlockIx, InstIx, PrettyPrint, Range, RegAllocResult, RegClass, RegUsageCollector,
+    RegUsageMapper, SpillSlot, StackmapRequestInfo,
 };
 
 use alloc::boxed::Box;
@@ -92,6 +92,10 @@ pub struct VCode<I: VCodeInst> {
     /// ABI object.
     abi: Box<dyn ABICallee<I = I>>,
 
+    /// Constant information used during code emission. This should be
+    /// immutable across function compilations within the same module.
+    emit_info: I::Info,
+
     /// Safepoint instruction indices. Filled in post-regalloc. (Prior to
     /// regalloc, the safepoint instructions are listed in the separate
     /// `StackmapRequestInfo` held separate from the `VCode`.)
@@ -142,9 +146,13 @@ pub struct VCodeBuilder<I: VCodeInst> {
 
 impl<I: VCodeInst> VCodeBuilder<I> {
     /// Create a new VCodeBuilder.
-    pub fn new(abi: Box<dyn ABICallee<I = I>>, block_order: BlockLoweringOrder) -> VCodeBuilder<I> {
+    pub fn new(
+        abi: Box<dyn ABICallee<I = I>>,
+        emit_info: I::Info,
+        block_order: BlockLoweringOrder,
+    ) -> VCodeBuilder<I> {
         let reftype_class = I::ref_type_regclass(abi.flags());
-        let vcode = VCode::new(abi, block_order);
+        let vcode = VCode::new(abi, emit_info, block_order);
         let stack_map_info = StackmapRequestInfo {
             reftype_class,
             reftyped_vregs: vec![],
@@ -273,7 +281,11 @@ fn is_reftype(ty: Type) -> bool {
 
 impl<I: VCodeInst> VCode<I> {
     /// New empty VCode.
-    fn new(abi: Box<dyn ABICallee<I = I>>, block_order: BlockLoweringOrder) -> VCode<I> {
+    fn new(
+        abi: Box<dyn ABICallee<I = I>>,
+        emit_info: I::Info,
+        block_order: BlockLoweringOrder,
+    ) -> VCode<I> {
         VCode {
             liveins: abi.liveins(),
             liveouts: abi.liveouts(),
@@ -287,6 +299,7 @@ impl<I: VCodeInst> VCode<I> {
             block_succs: vec![],
             block_order,
             abi,
+            emit_info,
             safepoint_insns: vec![],
             safepoint_slots: vec![],
             prologue_epilogue_ranges: None,
@@ -462,7 +475,6 @@ impl<I: VCodeInst> VCode<I> {
 
         let mut insts_layout = vec![0; self.insts.len()];
 
-        let flags = self.abi.flags();
         let mut safepoint_idx = 0;
         let mut cur_srcloc = None;
         for block in 0..self.num_blocks() {
@@ -471,7 +483,7 @@ impl<I: VCodeInst> VCode<I> {
             while new_offset > buffer.cur_offset() {
                 // Pad with NOPs up to the aligned block offset.
                 let nop = I::gen_nop((new_offset - buffer.cur_offset()) as usize);
-                nop.emit(&mut buffer, flags, &mut Default::default());
+                nop.emit(&mut buffer, &self.emit_info, &mut Default::default());
             }
             assert_eq!(buffer.cur_offset(), new_offset);
 
@@ -500,7 +512,7 @@ impl<I: VCodeInst> VCode<I> {
                     safepoint_idx += 1;
                 }
 
-                self.insts[iix as usize].emit(&mut buffer, flags, &mut state);
+                self.insts[iix as usize].emit(&mut buffer, &self.emit_info, &mut state);
 
                 insts_layout[iix as usize] = buffer.cur_offset();
             }
@@ -591,6 +603,10 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         }
     }
 
+    fn is_included_in_clobbers(&self, insn: &I) -> bool {
+        insn.is_included_in_clobbers()
+    }
+
     fn get_regs(insn: &I, collector: &mut RegUsageCollector) {
         insn.get_regs(collector)
     }
@@ -672,7 +688,7 @@ impl<I: VCodeInst> fmt::Debug for VCode<I> {
 }
 
 /// Pretty-printing with `RealRegUniverse` context.
-impl<I: VCodeInst> ShowWithRRU for VCode<I> {
+impl<I: VCodeInst> PrettyPrint for VCode<I> {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         use std::fmt::Write;
 

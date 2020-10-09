@@ -3,10 +3,11 @@
 use crate::error::{Location, ParseError, ParseResult};
 use crate::isaspec;
 use crate::lexer::{LexError, Lexer, LocatedError, LocatedToken, Token};
-use crate::run_command::{Comparison, DataValue, Invocation, RunCommand};
+use crate::run_command::{Comparison, Invocation, RunCommand};
 use crate::sourcemap::SourceMap;
 use crate::testcommand::TestCommand;
 use crate::testfile::{Comment, Details, Feature, TestFile};
+use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::entities::AnyEntity;
@@ -2699,8 +2700,8 @@ impl<'a> Parser<'a> {
             I16 => DataValue::from(self.match_imm16("expected an i16")?),
             I32 => DataValue::from(self.match_imm32("expected an i32")?),
             I64 => DataValue::from(Into::<i64>::into(self.match_imm64("expected an i64")?)),
-            F32 => DataValue::from(f32::from_bits(self.match_ieee32("expected an f32")?.bits())),
-            F64 => DataValue::from(f64::from_bits(self.match_ieee64("expected an f64")?.bits())),
+            F32 => DataValue::from(self.match_ieee32("expected an f32")?),
+            F64 => DataValue::from(self.match_ieee64("expected an f64")?),
             _ if ty.is_vector() => {
                 let as_vec = self.match_uimm128(ty)?.into_vec();
                 if as_vec.len() == 16 {

@@ -1,12 +1,13 @@
 //! Provides functionality for compiling and running CLIF IR for `run` tests.
 use core::{mem, ptr};
 use cranelift_codegen::binemit::{NullRelocSink, NullStackMapSink, NullTrapSink};
+use cranelift_codegen::data_value::DataValue;
+use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::{condcodes::IntCC, Function, InstBuilder, Signature, Type};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{ir, settings, CodegenError, Context};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_native::builder as host_isa_builder;
-use cranelift_reader::DataValue;
 use log::trace;
 use memmap::{Mmap, MmapMut};
 use std::cmp::max;
@@ -126,7 +127,8 @@ impl Trampoline {
 ///
 /// ```
 /// use cranelift_filetests::SingleFunctionCompiler;
-/// use cranelift_reader::{parse_functions, DataValue};
+/// use cranelift_reader::parse_functions;
+/// use cranelift_codegen::data_value::DataValue;
 ///
 /// let code = "test run \n function %add(i32, i32) -> i32 {  block0(v0:i32, v1:i32):  v2 = iadd v0, v1  return v2 }".into();
 /// let func = parse_functions(code).unwrap().into_iter().nth(0).unwrap();
@@ -232,8 +234,8 @@ impl UnboxedValues {
             DataValue::I16(i) => ptr::write(p as *mut i16, *i),
             DataValue::I32(i) => ptr::write(p as *mut i32, *i),
             DataValue::I64(i) => ptr::write(p as *mut i64, *i),
-            DataValue::F32(f) => ptr::write(p as *mut f32, *f),
-            DataValue::F64(f) => ptr::write(p as *mut f64, *f),
+            DataValue::F32(f) => ptr::write(p as *mut Ieee32, *f),
+            DataValue::F64(f) => ptr::write(p as *mut Ieee64, *f),
             DataValue::V128(b) => ptr::write(p as *mut [u8; 16], *b),
         }
     }
@@ -245,8 +247,8 @@ impl UnboxedValues {
             ir::types::I16 => DataValue::I16(ptr::read(p as *const i16)),
             ir::types::I32 => DataValue::I32(ptr::read(p as *const i32)),
             ir::types::I64 => DataValue::I64(ptr::read(p as *const i64)),
-            ir::types::F32 => DataValue::F32(ptr::read(p as *const f32)),
-            ir::types::F64 => DataValue::F64(ptr::read(p as *const f64)),
+            ir::types::F32 => DataValue::F32(ptr::read(p as *const Ieee32)),
+            ir::types::F64 => DataValue::F64(ptr::read(p as *const Ieee64)),
             _ if ty.is_bool() => DataValue::B(ptr::read(p as *const bool)),
             _ if ty.is_vector() && ty.bytes() == 16 => {
                 DataValue::V128(ptr::read(p as *const [u8; 16]))

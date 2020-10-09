@@ -450,6 +450,7 @@ impl FromStr for Offset32 {
 ///
 /// All bit patterns are allowed.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[repr(C)]
 pub struct Ieee32(u32);
 
 /// An IEEE binary64 immediate floating point value, represented as a u64
@@ -457,6 +458,7 @@ pub struct Ieee32(u32);
 ///
 /// All bit patterns are allowed.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[repr(C)]
 pub struct Ieee64(u64);
 
 /// Format a floating point number in a way that is reasonably human-readable, and that can be

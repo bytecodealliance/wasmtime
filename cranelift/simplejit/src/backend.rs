@@ -1,20 +1,23 @@
-//! Defines `SimpleJITBackend`.
+//! Defines `SimpleJITModule`.
 
 use crate::memory::Memory;
 use cranelift_codegen::binemit::{
-    Addend, CodeOffset, Reloc, RelocSink, StackMap, StackMapSink, TrapSink,
+    Addend, CodeInfo, CodeOffset, Reloc, RelocSink, StackMap, StackMapSink, TrapSink,
 };
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings};
+use cranelift_entity::SecondaryMap;
 use cranelift_module::{
-    Backend, DataContext, DataDescription, DataId, FuncId, Init, Linkage, ModuleNamespace,
-    ModuleResult,
+    DataContext, DataDescription, DataId, FuncId, FuncOrDataId, Init, Linkage, Module,
+    ModuleCompiledFunction, ModuleDeclarations, ModuleError, ModuleResult,
 };
 use cranelift_native;
 #[cfg(not(windows))]
 use libc;
+use log::info;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::ffi::CString;
 use std::io::Write;
 use std::ptr;
@@ -22,11 +25,11 @@ use target_lexicon::PointerWidth;
 #[cfg(windows)]
 use winapi;
 
-const EXECUTABLE_DATA_ALIGNMENT: u8 = 0x10;
-const WRITABLE_DATA_ALIGNMENT: u8 = 0x8;
-const READONLY_DATA_ALIGNMENT: u8 = 0x1;
+const EXECUTABLE_DATA_ALIGNMENT: u64 = 0x10;
+const WRITABLE_DATA_ALIGNMENT: u64 = 0x8;
+const READONLY_DATA_ALIGNMENT: u64 = 0x1;
 
-/// A builder for `SimpleJITBackend`.
+/// A builder for `SimpleJITModule`.
 pub struct SimpleJITBuilder {
     isa: Box<dyn TargetIsa>,
     symbols: HashMap<String, *const u8>,
@@ -115,18 +118,24 @@ impl SimpleJITBuilder {
     }
 }
 
-/// A `SimpleJITBackend` implements `Backend` and emits code and data into memory where it can be
+/// A `SimpleJITModule` implements `Module` and emits code and data into memory where it can be
 /// directly called and accessed.
 ///
-/// See the `SimpleJITBuilder` for a convenient way to construct `SimpleJITBackend` instances.
-pub struct SimpleJITBackend {
+/// See the `SimpleJITBuilder` for a convenient way to construct `SimpleJITModule` instances.
+pub struct SimpleJITModule {
     isa: Box<dyn TargetIsa>,
     symbols: HashMap<String, *const u8>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     memory: SimpleJITMemoryHandle,
+    declarations: ModuleDeclarations,
+    functions: SecondaryMap<FuncId, Option<SimpleJITCompiledFunction>>,
+    data_objects: SecondaryMap<DataId, Option<SimpleJITCompiledData>>,
+    functions_to_finalize: Vec<FuncId>,
+    data_objects_to_finalize: Vec<DataId>,
 }
 
 /// A record of a relocation to perform.
+#[derive(Clone)]
 struct RelocRecord {
     offset: CodeOffset,
     reloc: Reloc,
@@ -141,26 +150,74 @@ struct StackMapRecord {
     stack_map: StackMap,
 }
 
+#[derive(Clone)]
 pub struct SimpleJITCompiledFunction {
     code: *mut u8,
     size: usize,
     relocs: Vec<RelocRecord>,
 }
 
+#[derive(Clone)]
 pub struct SimpleJITCompiledData {
     storage: *mut u8,
     size: usize,
     relocs: Vec<RelocRecord>,
 }
 
-/// A handle to allow freeing memory allocated by the `Backend`.
-pub struct SimpleJITMemoryHandle {
+/// A handle to allow freeing memory allocated by the `Module`.
+struct SimpleJITMemoryHandle {
     code: Memory,
     readonly: Memory,
     writable: Memory,
 }
 
-impl SimpleJITBackend {
+/// A `SimpleJITProduct` allows looking up the addresses of all functions and data objects
+/// defined in the original module.
+pub struct SimpleJITProduct {
+    memory: SimpleJITMemoryHandle,
+    declarations: ModuleDeclarations,
+    functions: SecondaryMap<FuncId, Option<SimpleJITCompiledFunction>>,
+    data_objects: SecondaryMap<DataId, Option<SimpleJITCompiledData>>,
+}
+
+impl SimpleJITProduct {
+    /// Free memory allocated for code and data segments of compiled functions.
+    ///
+    /// # Safety
+    ///
+    /// Because this function invalidates any pointers retrived from the
+    /// corresponding module, it should only be used when none of the functions
+    /// from that module are currently executing and none of the `fn` pointers
+    /// are called afterwards.
+    pub unsafe fn free_memory(&mut self) {
+        self.memory.code.free_memory();
+        self.memory.readonly.free_memory();
+        self.memory.writable.free_memory();
+    }
+
+    /// Get the `FuncOrDataId` associated with the given name.
+    pub fn func_or_data_for_func(&self, name: &str) -> Option<FuncOrDataId> {
+        self.declarations.get_name(name)
+    }
+
+    /// Return the address of a function.
+    pub fn lookup_func(&self, func_id: FuncId) -> *const u8 {
+        self.functions[func_id]
+            .as_ref()
+            .unwrap_or_else(|| panic!("{} is not defined", func_id))
+            .code
+    }
+
+    /// Return the address and size of a data object.
+    pub fn lookup_data(&self, data_id: DataId) -> (*const u8, usize) {
+        let data = self.data_objects[data_id]
+            .as_ref()
+            .unwrap_or_else(|| panic!("{} is not defined", data_id));
+        (data.storage, data.size)
+    }
+}
+
+impl SimpleJITModule {
     fn lookup_symbol(&self, name: &str) -> *const u8 {
         match self.symbols.get(name) {
             Some(&ptr) => ptr,
@@ -168,24 +225,22 @@ impl SimpleJITBackend {
         }
     }
 
-    fn get_definition(
-        &self,
-        namespace: &ModuleNamespace<Self>,
-        name: &ir::ExternalName,
-    ) -> *const u8 {
+    fn get_definition(&self, name: &ir::ExternalName) -> *const u8 {
         match *name {
             ir::ExternalName::User { .. } => {
-                if namespace.is_function(name) {
-                    let (def, name_str, _signature) = namespace.get_function_definition(&name);
-                    match def {
+                if self.declarations.is_function(name) {
+                    let func_id = self.declarations.get_function_id(name);
+                    match &self.functions[func_id] {
                         Some(compiled) => compiled.code,
-                        None => self.lookup_symbol(name_str),
+                        None => {
+                            self.lookup_symbol(&self.declarations.get_function_decl(func_id).name)
+                        }
                     }
                 } else {
-                    let (def, name_str, _writable) = namespace.get_data_definition(&name);
-                    match def {
+                    let data_id = self.declarations.get_data_id(name);
+                    match &self.data_objects[data_id] {
                         Some(compiled) => compiled.storage,
-                        None => self.lookup_symbol(name_str),
+                        None => self.lookup_symbol(&self.declarations.get_data_decl(data_id).name),
                     }
                 }
             }
@@ -213,34 +268,100 @@ impl SimpleJITBackend {
             let _ = writeln!(map_file, "{:x} {:x} {}", ptr as usize, size, name);
         }
     }
-}
 
-impl<'simple_jit_backend> Backend for SimpleJITBackend {
-    type Builder = SimpleJITBuilder;
+    fn finalize_function(&mut self, id: FuncId) {
+        use std::ptr::write_unaligned;
 
-    /// SimpleJIT compiled function and data objects may have outstanding
-    /// relocations that need to be performed before the memory can be used.
-    /// These relocations are performed within `finalize_function` and
-    /// `finalize_data`.
-    type CompiledFunction = SimpleJITCompiledFunction;
-    type CompiledData = SimpleJITCompiledData;
+        let func = self.functions[id]
+            .as_ref()
+            .expect("function must be compiled before it can be finalized");
 
-    /// SimpleJIT emits code and data into memory, and provides raw pointers
-    /// to them. They are valid for the remainder of the program's life, unless
-    /// [`free_memory`] is used.
-    ///
-    /// [`free_memory`]: #method.free_memory
-    type FinalizedFunction = *const u8;
-    type FinalizedData = (*mut u8, usize);
+        for &RelocRecord {
+            reloc,
+            offset,
+            ref name,
+            addend,
+        } in &func.relocs
+        {
+            let ptr = func.code;
+            debug_assert!((offset as usize) < func.size);
+            let at = unsafe { ptr.offset(offset as isize) };
+            let base = self.get_definition(name);
+            // TODO: Handle overflow.
+            let what = unsafe { base.offset(addend as isize) };
+            match reloc {
+                Reloc::Abs4 => {
+                    // TODO: Handle overflow.
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
+                    unsafe {
+                        write_unaligned(at as *mut u32, what as u32)
+                    };
+                }
+                Reloc::Abs8 => {
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
+                    unsafe {
+                        write_unaligned(at as *mut u64, what as u64)
+                    };
+                }
+                Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
+                    // TODO: Handle overflow.
+                    let pcrel = ((what as isize) - (at as isize)) as i32;
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
+                    unsafe {
+                        write_unaligned(at as *mut i32, pcrel)
+                    };
+                }
+                Reloc::X86GOTPCRel4 | Reloc::X86CallPLTRel4 => panic!("unexpected PIC relocation"),
+                _ => unimplemented!(),
+            }
+        }
+    }
 
-    /// SimpleJIT emits code and data into memory as it processes them, so it
-    /// doesn't need to provide anything after the `Module` is complete.
-    /// The handle object that is returned can optionally be used to free
-    /// allocated memory if required.
-    type Product = SimpleJITMemoryHandle;
+    fn finalize_data(&mut self, id: DataId) {
+        use std::ptr::write_unaligned;
 
-    /// Create a new `SimpleJITBackend`.
-    fn new(builder: SimpleJITBuilder) -> Self {
+        let data = self.data_objects[id]
+            .as_ref()
+            .expect("data object must be compiled before it can be finalized");
+
+        for &RelocRecord {
+            reloc,
+            offset,
+            ref name,
+            addend,
+        } in &data.relocs
+        {
+            let ptr = data.storage;
+            debug_assert!((offset as usize) < data.size);
+            let at = unsafe { ptr.offset(offset as isize) };
+            let base = self.get_definition(name);
+            // TODO: Handle overflow.
+            let what = unsafe { base.offset(addend as isize) };
+            match reloc {
+                Reloc::Abs4 => {
+                    // TODO: Handle overflow.
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
+                    unsafe {
+                        write_unaligned(at as *mut u32, what as u32)
+                    };
+                }
+                Reloc::Abs8 => {
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
+                    unsafe {
+                        write_unaligned(at as *mut u64, what as u64)
+                    };
+                }
+                Reloc::X86PCRel4
+                | Reloc::X86CallPCRel4
+                | Reloc::X86GOTPCRel4
+                | Reloc::X86CallPLTRel4 => panic!("unexpected text relocation in data"),
+                _ => unimplemented!(),
+            }
+        }
+    }
+
+    /// Create a new `SimpleJITModule`.
+    pub fn new(builder: SimpleJITBuilder) -> Self {
         let memory = SimpleJITMemoryHandle {
             code: Memory::new(),
             readonly: Memory::new(),
@@ -252,42 +373,75 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             symbols: builder.symbols,
             libcall_names: builder.libcall_names,
             memory,
+            declarations: ModuleDeclarations::default(),
+            functions: SecondaryMap::new(),
+            data_objects: SecondaryMap::new(),
+            functions_to_finalize: Vec::new(),
+            data_objects_to_finalize: Vec::new(),
         }
     }
+}
 
+impl<'simple_jit_backend> Module for SimpleJITModule {
     fn isa(&self) -> &dyn TargetIsa {
         &*self.isa
     }
 
-    fn declare_function(&mut self, _id: FuncId, _name: &str, _linkage: Linkage) {
-        // Nothing to do.
+    fn declarations(&self) -> &ModuleDeclarations {
+        &self.declarations
+    }
+
+    fn declare_function(
+        &mut self,
+        name: &str,
+        linkage: Linkage,
+        signature: &ir::Signature,
+    ) -> ModuleResult<FuncId> {
+        let (id, _decl) = self
+            .declarations
+            .declare_function(name, linkage, signature)?;
+        Ok(id)
     }
 
     fn declare_data(
         &mut self,
-        _id: DataId,
-        _name: &str,
-        _linkage: Linkage,
-        _writable: bool,
+        name: &str,
+        linkage: Linkage,
+        writable: bool,
         tls: bool,
-        _align: Option<u8>,
-    ) {
+    ) -> ModuleResult<DataId> {
         assert!(!tls, "SimpleJIT doesn't yet support TLS");
-        // Nothing to do.
+        let (id, _decl) = self
+            .declarations
+            .declare_data(name, linkage, writable, tls)?;
+        Ok(id)
     }
 
     fn define_function<TS>(
         &mut self,
-        _id: FuncId,
-        name: &str,
-        ctx: &cranelift_codegen::Context,
-        _namespace: &ModuleNamespace<Self>,
-        code_size: u32,
+        id: FuncId,
+        ctx: &mut cranelift_codegen::Context,
         trap_sink: &mut TS,
-    ) -> ModuleResult<Self::CompiledFunction>
+    ) -> ModuleResult<ModuleCompiledFunction>
     where
         TS: TrapSink,
     {
+        info!("defining function {}: {}", id, ctx.func.display(self.isa()));
+        let CodeInfo {
+            total_size: code_size,
+            ..
+        } = ctx.compile(self.isa())?;
+
+        let decl = self.declarations.get_function_decl(id);
+        if !decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+        }
+
+        if !self.functions[id].is_none() {
+            return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
+        }
+
+        self.functions_to_finalize.push(id);
         let size = code_size as usize;
         let ptr = self
             .memory
@@ -295,7 +449,7 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        self.record_function_for_perf(ptr, size, name);
+        self.record_function_for_perf(ptr, size, &decl.name);
 
         let mut reloc_sink = SimpleJITRelocSink::new();
         let mut stack_map_sink = SimpleJITStackMapSink::new();
@@ -309,20 +463,35 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             )
         };
 
-        Ok(Self::CompiledFunction {
+        self.functions[id] = Some(SimpleJITCompiledFunction {
             code: ptr,
             size,
             relocs: reloc_sink.relocs,
-        })
+        });
+
+        Ok(ModuleCompiledFunction { size: code_size })
     }
 
     fn define_function_bytes(
         &mut self,
-        _id: FuncId,
-        name: &str,
+        id: FuncId,
         bytes: &[u8],
-        _namespace: &ModuleNamespace<Self>,
-    ) -> ModuleResult<Self::CompiledFunction> {
+    ) -> ModuleResult<ModuleCompiledFunction> {
+        let decl = self.declarations.get_function_decl(id);
+        if !decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+        }
+
+        let total_size: u32 = match bytes.len().try_into() {
+            Ok(total_size) => total_size,
+            _ => Err(ModuleError::FunctionTooLarge(decl.name.clone()))?,
+        };
+
+        if !self.functions[id].is_none() {
+            return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
+        }
+
+        self.functions_to_finalize.push(id);
         let size = bytes.len();
         let ptr = self
             .memory
@@ -330,30 +499,34 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        self.record_function_for_perf(ptr, size, name);
+        self.record_function_for_perf(ptr, size, &decl.name);
 
         unsafe {
             ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, size);
         }
 
-        Ok(Self::CompiledFunction {
+        self.functions[id] = Some(SimpleJITCompiledFunction {
             code: ptr,
             size,
             relocs: vec![],
-        })
+        });
+
+        Ok(ModuleCompiledFunction { size: total_size })
     }
 
-    fn define_data(
-        &mut self,
-        _id: DataId,
-        _name: &str,
-        writable: bool,
-        tls: bool,
-        align: Option<u8>,
-        data: &DataContext,
-        _namespace: &ModuleNamespace<Self>,
-    ) -> ModuleResult<Self::CompiledData> {
-        assert!(!tls, "SimpleJIT doesn't yet support TLS");
+    fn define_data(&mut self, id: DataId, data: &DataContext) -> ModuleResult<()> {
+        let decl = self.declarations.get_data_decl(id);
+        if !decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+        }
+
+        if !self.data_objects[id].is_none() {
+            return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
+        }
+
+        assert!(!decl.tls, "SimpleJIT doesn't yet support TLS");
+
+        self.data_objects_to_finalize.push(id);
 
         let &DataDescription {
             ref init,
@@ -362,10 +535,11 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             ref function_relocs,
             ref data_relocs,
             custom_segment_section: _,
+            align,
         } = data.description();
 
         let size = init.size();
-        let storage = if writable {
+        let storage = if decl.writable {
             self.memory
                 .writable
                 .allocate(size, align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
@@ -413,141 +587,17 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
             });
         }
 
-        Ok(Self::CompiledData {
+        self.data_objects[id] = Some(SimpleJITCompiledData {
             storage,
             size,
             relocs,
-        })
+        });
+
+        Ok(())
     }
+}
 
-    fn write_data_funcaddr(
-        &mut self,
-        _data: &mut Self::CompiledData,
-        _offset: usize,
-        _what: ir::FuncRef,
-    ) {
-        unimplemented!();
-    }
-
-    fn write_data_dataaddr(
-        &mut self,
-        _data: &mut Self::CompiledData,
-        _offset: usize,
-        _what: ir::GlobalValue,
-        _usize: Addend,
-    ) {
-        unimplemented!();
-    }
-
-    fn finalize_function(
-        &mut self,
-        _id: FuncId,
-        func: &Self::CompiledFunction,
-        namespace: &ModuleNamespace<Self>,
-    ) -> Self::FinalizedFunction {
-        use std::ptr::write_unaligned;
-
-        for &RelocRecord {
-            reloc,
-            offset,
-            ref name,
-            addend,
-        } in &func.relocs
-        {
-            let ptr = func.code;
-            debug_assert!((offset as usize) < func.size);
-            let at = unsafe { ptr.offset(offset as isize) };
-            let base = self.get_definition(namespace, name);
-            // TODO: Handle overflow.
-            let what = unsafe { base.offset(addend as isize) };
-            match reloc {
-                Reloc::Abs4 => {
-                    // TODO: Handle overflow.
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut u32, what as u32)
-                    };
-                }
-                Reloc::Abs8 => {
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut u64, what as u64)
-                    };
-                }
-                Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
-                    // TODO: Handle overflow.
-                    let pcrel = ((what as isize) - (at as isize)) as i32;
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut i32, pcrel)
-                    };
-                }
-                Reloc::X86GOTPCRel4 | Reloc::X86CallPLTRel4 => panic!("unexpected PIC relocation"),
-                _ => unimplemented!(),
-            }
-        }
-        func.code
-    }
-
-    fn get_finalized_function(&self, func: &Self::CompiledFunction) -> Self::FinalizedFunction {
-        func.code
-    }
-
-    fn finalize_data(
-        &mut self,
-        _id: DataId,
-        data: &Self::CompiledData,
-        namespace: &ModuleNamespace<Self>,
-    ) -> Self::FinalizedData {
-        use std::ptr::write_unaligned;
-
-        for &RelocRecord {
-            reloc,
-            offset,
-            ref name,
-            addend,
-        } in &data.relocs
-        {
-            let ptr = data.storage;
-            debug_assert!((offset as usize) < data.size);
-            let at = unsafe { ptr.offset(offset as isize) };
-            let base = self.get_definition(namespace, name);
-            // TODO: Handle overflow.
-            let what = unsafe { base.offset(addend as isize) };
-            match reloc {
-                Reloc::Abs4 => {
-                    // TODO: Handle overflow.
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut u32, what as u32)
-                    };
-                }
-                Reloc::Abs8 => {
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut u64, what as u64)
-                    };
-                }
-                Reloc::X86PCRel4
-                | Reloc::X86CallPCRel4
-                | Reloc::X86GOTPCRel4
-                | Reloc::X86CallPLTRel4 => panic!("unexpected text relocation in data"),
-                _ => unimplemented!(),
-            }
-        }
-        (data.storage, data.size)
-    }
-
-    fn get_finalized_data(&self, data: &Self::CompiledData) -> Self::FinalizedData {
-        (data.storage, data.size)
-    }
-
-    fn publish(&mut self) {
-        // Now that we're done patching, prepare the memory for execution!
-        self.memory.readonly.set_readonly();
-        self.memory.code.set_readable_and_executable();
-    }
-
+impl SimpleJITModule {
     /// SimpleJIT emits code and data into memory as it processes them. This
     /// method performs no additional processing, but returns a handle which
     /// allows freeing the allocated memory. Otherwise said memory is leaked
@@ -555,8 +605,28 @@ impl<'simple_jit_backend> Backend for SimpleJITBackend {
     ///
     /// This method does not need to be called when access to the memory
     /// handle is not required.
-    fn finish(self, _namespace: &ModuleNamespace<Self>) -> Self::Product {
-        self.memory
+    pub fn finish(mut self) -> SimpleJITProduct {
+        for func in std::mem::take(&mut self.functions_to_finalize) {
+            let decl = self.declarations.get_function_decl(func);
+            debug_assert!(decl.linkage.is_definable());
+            self.finalize_function(func);
+        }
+        for data in std::mem::take(&mut self.data_objects_to_finalize) {
+            let decl = self.declarations.get_data_decl(data);
+            debug_assert!(decl.linkage.is_definable());
+            self.finalize_data(data);
+        }
+
+        // Now that we're done patching, prepare the memory for execution!
+        self.memory.readonly.set_readonly();
+        self.memory.code.set_readable_and_executable();
+
+        SimpleJITProduct {
+            memory: self.memory,
+            declarations: self.declarations,
+            functions: self.functions,
+            data_objects: self.data_objects,
+        }
     }
 }
 
@@ -600,22 +670,6 @@ fn lookup_with_dlsym(name: &str) -> *const u8 {
             ""
         };
         panic!("cannot resolve address of symbol {} {}", name, msg);
-    }
-}
-
-impl SimpleJITMemoryHandle {
-    /// Free memory allocated for code and data segments of compiled functions.
-    ///
-    /// # Safety
-    ///
-    /// Because this function invalidates any pointers retrived from the
-    /// corresponding module, it should only be used when none of the functions
-    /// from that module are currently executing and none of the`fn` pointers
-    /// are called afterwards.
-    pub unsafe fn free_memory(&mut self) {
-        self.code.free_memory();
-        self.readonly.free_memory();
-        self.writable.free_memory();
     }
 }
 

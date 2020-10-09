@@ -126,8 +126,6 @@ pub mod abi;
 pub use abi::*;
 pub mod abi_impl;
 pub use abi_impl::*;
-pub mod pretty_print;
-pub use pretty_print::*;
 pub mod buffer;
 pub use buffer::*;
 pub mod adapter;
@@ -156,6 +154,11 @@ pub trait MachInst: Clone + Debug {
 
     /// Returns true if the instruction is an epilogue placeholder.
     fn is_epilogue_placeholder(&self) -> bool;
+
+    /// Should this instruction be included in the clobber-set?
+    fn is_included_in_clobbers(&self) -> bool {
+        true
+    }
 
     /// Generate a move.
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self;
@@ -273,13 +276,22 @@ pub enum MachTerminator<'a> {
 pub trait MachInstEmit: MachInst {
     /// Persistent state carried across `emit` invocations.
     type State: MachInstEmitState<Self>;
+    /// Constant information used in `emit` invocations.
+    type Info: MachInstEmitInfo;
     /// Unwind info generator.
     #[cfg(feature = "unwind")]
     type UnwindInfo: UnwindInfoGenerator<Self>;
     /// Emit the instruction.
-    fn emit(&self, code: &mut MachBuffer<Self>, flags: &Flags, state: &mut Self::State);
+    fn emit(&self, code: &mut MachBuffer<Self>, info: &Self::Info, state: &mut Self::State);
     /// Pretty-print the instruction.
     fn pretty_print(&self, mb_rru: Option<&RealRegUniverse>, state: &mut Self::State) -> String;
+}
+
+/// Constant information used to emit an instruction.
+pub trait MachInstEmitInfo {
+    /// Return the target-independent settings used for the compilation of this
+    /// particular function.
+    fn flags(&self) -> &Flags;
 }
 
 /// A trait describing the emission state carried between MachInsts when

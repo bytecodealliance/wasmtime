@@ -127,24 +127,24 @@ block0:
 }
 ; run
 
-;function %sub_sat_i8x16() -> b1 {
-;block0:
-;    v0 = vconst.i8x16 [128 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] ; 128 == 0x80 == -128
-;    v1 = vconst.i8x16 [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
-;
-;    v2 = ssub_sat v0, v1
-;    v3 = extractlane v2, 0
-;    v4 = icmp_imm eq v3, 0x80 ; 0x80 == -128
-;
-;    ; now re-use 0x80 as an unsigned 128
-;    v5 = usub_sat v0, v2
-;    v6 = extractlane v5, 0
-;    v7 = icmp_imm eq v6, 0
-;
-;    v8 = band v4, v7
-;    return v8
-;}
-; _run
+function %sub_sat_i8x16() -> b1 {
+block0:
+    v0 = vconst.i8x16 [128 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] ; 128 == 0x80 == -128
+    v1 = vconst.i8x16 [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+
+    v2 = ssub_sat v0, v1
+    v3 = extractlane v2, 0
+    v4 = icmp_imm eq v3, 0x80 ; 0x80 == -128
+
+    ; now re-use 0x80 as an unsigned 128
+    v5 = usub_sat v0, v2
+    v6 = extractlane v5, 0
+    v7 = icmp_imm eq v6, 0
+
+    v8 = band v4, v7
+    return v8
+}
+; run
 
 ;function %add_sub_f32x4() -> b1 {
 ;block0:

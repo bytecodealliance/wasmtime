@@ -151,34 +151,27 @@ block0:
 
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
-; nextln:  sub sp, sp, #48
-; nextln:  str q8, [sp]
-; nextln:  str q9, [sp, #16]
-; nextln:  str q10, [sp, #32]
-; nextln:  virtual_sp_offset_adjust 48
+; nextln:  sub sp, sp, #32
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v8.16b, v0.16b
+; nextln:  str s0, [sp]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v9.16b, v0.16b
+; nextln:  str d0, [sp, #8]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v10.16b, v0.16b
+; nextln:  str d0, [sp, #16]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v0.16b, v8.16b
+; nextln:  ldr s0, [sp]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v0.16b, v9.16b
+; nextln:  ldr d0, [sp, #8]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v0.16b, v10.16b
+; nextln:  ldr d0, [sp, #16]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  ldr q8, [sp]
-; nextln:  ldr q9, [sp, #16]
-; nextln:  ldr q10, [sp, #32]
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
@@ -202,33 +195,26 @@ block0:
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
 ; nextln:  sub sp, sp, #48
-; nextln:  str q8, [sp]
-; nextln:  str q9, [sp, #16]
-; nextln:  str q10, [sp, #32]
-; nextln:  virtual_sp_offset_adjust 48
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v8.16b, v0.16b
+; nextln:  str q0, [sp]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v9.16b, v0.16b
+; nextln:  str q0, [sp, #16]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v10.16b, v0.16b
+; nextln:  str q0, [sp, #32]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v0.16b, v8.16b
+; nextln:  ldr q0, [sp]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v0.16b, v9.16b
+; nextln:  ldr q0, [sp, #16]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v0.16b, v10.16b
+; nextln:  ldr q0, [sp, #32]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  ldr q8, [sp]
-; nextln:  ldr q9, [sp, #16]
-; nextln:  ldr q10, [sp, #32]
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
@@ -255,34 +241,27 @@ block0:
 
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
-; nextln:  sub sp, sp, #48
-; nextln:  str q8, [sp]
-; nextln:  str q9, [sp, #16]
-; nextln:  str q10, [sp, #32]
-; nextln:  virtual_sp_offset_adjust 48
+; nextln:  sub sp, sp, #32
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v8.16b, v0.16b
+; nextln:  str s0, [sp]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v9.16b, v0.16b
+; nextln:  str d0, [sp, #8]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v10.16b, v0.16b
+; nextln:  str q0, [sp, #16]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v0.16b, v8.16b
+; nextln:  ldr s0, [sp]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v0.16b, v9.16b
+; nextln:  ldr d0, [sp, #8]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov v0.16b, v10.16b
+; nextln:  ldr q0, [sp, #16]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  ldr q8, [sp]
-; nextln:  ldr q9, [sp, #16]
-; nextln:  ldr q10, [sp, #32]
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret

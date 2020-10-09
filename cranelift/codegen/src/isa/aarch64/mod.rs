@@ -3,15 +3,13 @@
 use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
 use crate::isa::Builder as IsaBuilder;
-use crate::machinst::{
-    compile, MachBackend, MachCompileResult, ShowWithRRU, TargetIsaAdapter, VCode,
-};
+use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter, VCode};
 use crate::result::CodegenResult;
 use crate::settings;
 
 use alloc::boxed::Box;
 
-use regalloc::RealRegUniverse;
+use regalloc::{PrettyPrint, RealRegUniverse};
 use target_lexicon::{Aarch64Architecture, Architecture, Triple};
 
 // New backend:
@@ -21,6 +19,8 @@ mod lower;
 mod lower_inst;
 
 use inst::create_reg_universe;
+
+use self::inst::EmitInfo;
 
 /// An AArch64 backend.
 pub struct AArch64Backend {
@@ -47,8 +47,9 @@ impl AArch64Backend {
         func: &Function,
         flags: settings::Flags,
     ) -> CodegenResult<VCode<inst::Inst>> {
+        let emit_info = EmitInfo::new(flags.clone());
         let abi = Box::new(abi::AArch64ABICallee::new(func, flags)?);
-        compile::compile::<AArch64Backend>(func, self, abi)
+        compile::compile::<AArch64Backend>(func, self, abi, emit_info)
     }
 }
 
@@ -60,6 +61,7 @@ impl MachBackend for AArch64Backend {
     ) -> CodegenResult<MachCompileResult> {
         let flags = self.flags();
         let vcode = self.compile_vcode(func, flags.clone())?;
+
         let buffer = vcode.emit();
         let frame_size = vcode.frame_size();
 
