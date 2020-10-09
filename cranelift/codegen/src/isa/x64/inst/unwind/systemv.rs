@@ -2,7 +2,7 @@
 
 use crate::isa::unwind::systemv::{CallFrameInstruction, RegisterMappingError, UnwindInfo};
 use crate::isa::x64::inst::{
-    args::{AluRmiROpcode, RegMemImm},
+    args::{AluRmiROpcode, Amode, RegMemImm, SyntheticAmode},
     regs, Inst,
 };
 use crate::result::{CodegenError, CodegenResult};
@@ -10,6 +10,7 @@ use alloc::vec::Vec;
 use gimli::{write::CommonInformationEntry, Encoding, Format, Register, X86_64};
 use regalloc::{Reg, RegClass};
 use std::boxed::Box;
+use std::collections::HashSet;
 
 /// Creates a new x86-64 common information entry (CIE).
 pub fn create_cie() -> CommonInformationEntry {
@@ -90,6 +91,7 @@ pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
 struct InstructionBuilder {
     cfa_offset: i32,
     frame_register: Option<Reg>,
+    saved_registers: HashSet<Reg>,
     instructions: Vec<(u32, CallFrameInstruction)>,
 }
 
@@ -98,19 +100,13 @@ impl InstructionBuilder {
         Self {
             cfa_offset: 8, // CFA offset starts at 8 to account to return address on stack
             frame_register,
+            saved_registers: HashSet::new(),
             instructions: Vec::new(),
         }
     }
 
-    fn push_reg(&mut self, offset: u32, arg: &RegMemImm) -> Result<(), RegisterMappingError> {
+    fn push_reg(&mut self, offset: u32, reg: Reg) -> Result<(), RegisterMappingError> {
         self.cfa_offset += 8;
-
-        let reg = *match arg {
-            RegMemImm::Reg { reg } => reg,
-            _ => {
-                panic!();
-            }
-        };
 
         // Update the CFA if this is the save of the frame pointer register or if a frame pointer isn't being used
         // When using a frame pointer, we only need to update the CFA to account for the push of the frame pointer itself
@@ -121,12 +117,26 @@ impl InstructionBuilder {
             self.instructions
                 .push((offset, CallFrameInstruction::CfaOffset(self.cfa_offset)));
         }
+        self.store_reg_at(offset, 0, reg)
+    }
+
+    fn store_reg_at(
+        &mut self,
+        offset: u32,
+        pos: u32,
+        reg: Reg,
+    ) -> Result<(), RegisterMappingError> {
+        if self.saved_registers.contains(&reg) {
+            // Already saved the register on stack.
+            return Ok(());
+        }
 
         // Pushes in the prologue are register saves, so record an offset of the save
         self.instructions.push((
             offset,
-            CallFrameInstruction::Offset(map_reg(reg)?.0, -self.cfa_offset),
+            CallFrameInstruction::Offset(map_reg(reg)?.0, pos as i32 - self.cfa_offset),
         ));
+        self.saved_registers.insert(reg);
 
         Ok(())
     }
@@ -134,12 +144,13 @@ impl InstructionBuilder {
     fn adjust_sp_down_imm(&mut self, offset: u32, imm: i64) {
         assert!(imm <= core::u32::MAX as i64);
 
+        self.cfa_offset += imm as i32;
+
         // Don't adjust the CFA if we're using a frame pointer
         if self.frame_register.is_some() {
             return;
         }
 
-        self.cfa_offset += imm as i32;
         self.instructions
             .push((offset, CallFrameInstruction::CfaOffset(self.cfa_offset)));
     }
@@ -147,12 +158,13 @@ impl InstructionBuilder {
     fn adjust_sp_up_imm(&mut self, offset: u32, imm: i64) {
         assert!(imm <= core::u32::MAX as i64);
 
+        self.cfa_offset -= imm as i32;
+
         // Don't adjust the CFA if we're using a frame pointer
         if self.frame_register.is_some() {
             return;
         }
 
-        self.cfa_offset -= imm as i32;
         self.instructions
             .push((offset, CallFrameInstruction::CfaOffset(self.cfa_offset)));
     }
@@ -197,9 +209,11 @@ pub(crate) fn create_unwind_info(
 
         // TODO sub and `mov reg, imm(rsp)`
         match inst {
-            Inst::Push64 { src } => {
+            Inst::Push64 {
+                src: RegMemImm::Reg { reg },
+            } => {
                 builder
-                    .push_reg(offset, src)
+                    .push_reg(offset, *reg)
                     .map_err(CodegenError::RegisterMappingError)?;
             }
             Inst::MovRR { src, dst, .. } => {
@@ -216,6 +230,16 @@ pub(crate) fn create_unwind_info(
             } if dst.to_reg() == regs::rsp() => {
                 let imm = *simm32 as i32;
                 builder.adjust_sp_down_imm(offset, imm.into());
+            }
+            Inst::MovRM {
+                src,
+                dst: SyntheticAmode::Real(Amode::ImmReg { simm32, base }),
+                ..
+            } if *base == regs::rsp() => {
+                // `mov reg, imm(rsp)` -- similar to push
+                builder
+                    .store_reg_at(offset, *simm32, *src)
+                    .map_err(CodegenError::RegisterMappingError)?;
             }
             Inst::AluRmiR {
                 is_64: true,
