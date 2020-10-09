@@ -18,10 +18,7 @@
 //! backend pipeline.
 
 use crate::ir::{self, types, SourceLoc};
-#[cfg(feature = "unwind")]
-use crate::isa::unwind;
 use crate::machinst::*;
-use crate::result::CodegenResult;
 use crate::settings;
 use crate::timing;
 
@@ -110,7 +107,7 @@ pub struct VCode<I: VCodeInst> {
     prologue_epilogue_ranges: Option<(InsnIndex, InsnIndex, Box<[(InsnIndex, InsnIndex)]>)>,
 
     /// Instruction end offsets
-    insts_layout: RefCell<Vec<u32>>,
+    insts_layout: RefCell<(Vec<u32>, u32)>,
 }
 
 /// A builder for a VCode function body. This builder is designed for the
@@ -303,7 +300,7 @@ impl<I: VCodeInst> VCode<I> {
             safepoint_insns: vec![],
             safepoint_slots: vec![],
             prologue_epilogue_ranges: None,
-            insts_layout: RefCell::new(vec![]),
+            insts_layout: RefCell::new((vec![], 0)),
         }
     }
 
@@ -535,20 +532,22 @@ impl<I: VCodeInst> VCode<I> {
             }
         }
 
-        self.insts_layout
-            .borrow_mut()
-            .extend(insts_layout.into_iter());
+        *self.insts_layout.borrow_mut() = (insts_layout, buffer.cur_offset());
 
         buffer
     }
 
     /// Generates unwind info.
     #[cfg(feature = "unwind")]
-    pub fn unwind_info(&self) -> CodegenResult<Option<unwind::UnwindInfo>> {
+    pub fn unwind_info(
+        &self,
+    ) -> crate::result::CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
+        let layout = &self.insts_layout.borrow();
         I::UnwindInfo::create_unwind_info(
             self.abi.unwind_info_kind(),
             &self.insts,
-            &self.insts_layout.borrow(),
+            &layout.0,
+            layout.1,
             self.prologue_epilogue_ranges.as_ref().unwrap(),
         )
     }

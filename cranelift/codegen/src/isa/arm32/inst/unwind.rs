@@ -11,6 +11,7 @@ impl UnwindInfoGenerator<Inst> for Arm32UnwindInfo {
         _kind: UnwindInfoKind,
         _insts: &[Inst],
         _insts_layout: &[CodeOffset],
+        _len: CodeOffset,
         _prologue_epilogue: &(u32, u32, Box<[(u32, u32)]>),
     ) -> CodegenResult<Option<UnwindInfo>> {
         // TODO

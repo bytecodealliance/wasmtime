@@ -16,6 +16,7 @@ impl UnwindInfoGenerator<Inst> for X64UnwindInfo {
         kind: UnwindInfoKind,
         insts: &[Inst],
         insts_layout: &[CodeOffset],
+        len: CodeOffset,
         prologue_epilogue: &(u32, u32, Box<[(u32, u32)]>),
     ) -> CodegenResult<Option<UnwindInfo>> {
         // Assumption: RBP is being used as the frame pointer for both calling conventions
@@ -24,6 +25,7 @@ impl UnwindInfoGenerator<Inst> for X64UnwindInfo {
             UnwindInfoKind::SystemV => systemv::create_unwind_info(
                 insts,
                 insts_layout,
+                len,
                 prologue_epilogue,
                 Some(regs::rbp()),
             )?

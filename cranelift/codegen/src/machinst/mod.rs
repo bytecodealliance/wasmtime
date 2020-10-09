@@ -99,6 +99,7 @@
 use crate::binemit::{CodeInfo, CodeOffset, StackMap};
 use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, Type};
+#[cfg(feature = "unwind")]
 use crate::isa::unwind;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
@@ -391,6 +392,7 @@ pub trait UnwindInfoGenerator<I: MachInstEmit> {
         kind: UnwindInfoKind,
         insts: &[I],
         insts_layout: &[CodeOffset],
+        len: CodeOffset,
         prologue_epilogue: &(u32, u32, Box<[(u32, u32)]>),
     ) -> CodegenResult<Option<unwind::UnwindInfo>>;
 }

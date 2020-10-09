@@ -183,12 +183,10 @@ impl InstructionBuilder {
 pub(crate) fn create_unwind_info(
     insts: &[Inst],
     insts_layout: &[u32],
+    len: u32,
     prologue_epilogue: &(u32, u32, Box<[(u32, u32)]>),
     frame_register: Option<Reg>,
 ) -> CodegenResult<Option<UnwindInfo>> {
-    let len = *insts_layout.last().unwrap();
-    assert!(len > 0);
-
     let mut builder = InstructionBuilder::new(frame_register);
 
     let prologue_start = prologue_epilogue.0 as usize;

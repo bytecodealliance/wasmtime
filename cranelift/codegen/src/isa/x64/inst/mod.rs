@@ -2708,6 +2708,7 @@ impl MachInstEmitInfo for EmitInfo {
 impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
+    #[cfg(feature = "unwind")]
     type UnwindInfo = unwind::X64UnwindInfo;
 
     fn emit(&self, sink: &mut MachBuffer<Inst>, info: &Self::Info, state: &mut Self::State) {
