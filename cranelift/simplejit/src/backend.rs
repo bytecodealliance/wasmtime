@@ -151,14 +151,14 @@ struct StackMapRecord {
 }
 
 #[derive(Clone)]
-pub struct SimpleJITCompiledFunction {
+struct SimpleJITCompiledFunction {
     code: *mut u8,
     size: usize,
     relocs: Vec<RelocRecord>,
 }
 
 #[derive(Clone)]
-pub struct SimpleJITCompiledData {
+struct SimpleJITCompiledData {
     storage: *mut u8,
     size: usize,
     relocs: Vec<RelocRecord>,
@@ -451,8 +451,8 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
 
         self.record_function_for_perf(ptr, size, &decl.name);
 
-        let mut reloc_sink = SimpleJITRelocSink::new();
-        let mut stack_map_sink = SimpleJITStackMapSink::new();
+        let mut reloc_sink = SimpleJITRelocSink::default();
+        let mut stack_map_sink = SimpleJITStackMapSink::default();
         unsafe {
             ctx.emit_to_memory(
                 &*self.isa,
@@ -673,14 +673,9 @@ fn lookup_with_dlsym(name: &str) -> *const u8 {
     }
 }
 
+#[derive(Default)]
 struct SimpleJITRelocSink {
-    pub relocs: Vec<RelocRecord>,
-}
-
-impl SimpleJITRelocSink {
-    pub fn new() -> Self {
-        Self { relocs: Vec::new() }
-    }
+    relocs: Vec<RelocRecord>,
 }
 
 impl RelocSink for SimpleJITRelocSink {
@@ -729,16 +724,9 @@ impl RelocSink for SimpleJITRelocSink {
     }
 }
 
+#[derive(Default)]
 struct SimpleJITStackMapSink {
-    pub stack_maps: Vec<StackMapRecord>,
-}
-
-impl SimpleJITStackMapSink {
-    pub fn new() -> Self {
-        Self {
-            stack_maps: Vec::new(),
-        }
-    }
+    stack_maps: Vec<StackMapRecord>,
 }
 
 impl StackMapSink for SimpleJITStackMapSink {
