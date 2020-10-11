@@ -218,35 +218,47 @@ impl SimpleJITProduct {
 }
 
 impl SimpleJITModule {
-    fn lookup_symbol(&self, name: &str) -> *const u8 {
-        match self.symbols.get(name) {
-            Some(&ptr) => ptr,
-            None => lookup_with_dlsym(name),
-        }
+    fn lookup_symbol(&self, name: &str) -> Option<*const u8> {
+        self.symbols
+            .get(name)
+            .copied()
+            .or_else(|| lookup_with_dlsym(name))
     }
 
     fn get_definition(&self, name: &ir::ExternalName) -> *const u8 {
         match *name {
             ir::ExternalName::User { .. } => {
-                if self.declarations.is_function(name) {
+                let (name, linkage) = if self.declarations.is_function(name) {
                     let func_id = self.declarations.get_function_id(name);
                     match &self.functions[func_id] {
-                        Some(compiled) => compiled.code,
+                        Some(compiled) => return compiled.code,
                         None => {
-                            self.lookup_symbol(&self.declarations.get_function_decl(func_id).name)
+                            let decl = self.declarations.get_function_decl(func_id);
+                            (&decl.name, decl.linkage)
                         }
                     }
                 } else {
                     let data_id = self.declarations.get_data_id(name);
                     match &self.data_objects[data_id] {
-                        Some(compiled) => compiled.storage,
-                        None => self.lookup_symbol(&self.declarations.get_data_decl(data_id).name),
+                        Some(compiled) => return compiled.storage,
+                        None => {
+                            let decl = self.declarations.get_data_decl(data_id);
+                            (&decl.name, decl.linkage)
+                        }
                     }
+                };
+                if let Some(ptr) = self.lookup_symbol(&name) {
+                    ptr
+                } else if linkage == Linkage::Preemptible {
+                    0 as *const u8
+                } else {
+                    panic!("can't resolve symbol {}", name);
                 }
             }
             ir::ExternalName::LibCall(ref libcall) => {
                 let sym = (self.libcall_names)(*libcall);
                 self.lookup_symbol(&sym)
+                    .unwrap_or_else(|| panic!("can't resolve libcall {}", sym))
             }
             _ => panic!("invalid ExternalName {}", name),
         }
@@ -667,18 +679,19 @@ impl SimpleJITModule {
 }
 
 #[cfg(not(windows))]
-fn lookup_with_dlsym(name: &str) -> *const u8 {
+fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
     let c_str = CString::new(name).unwrap();
     let c_str_ptr = c_str.as_ptr();
     let sym = unsafe { libc::dlsym(libc::RTLD_DEFAULT, c_str_ptr) };
     if sym.is_null() {
-        panic!("can't resolve symbol {}", name);
+        None
+    } else {
+        Some(sym as *const u8)
     }
-    sym as *const u8
 }
 
 #[cfg(windows)]
-fn lookup_with_dlsym(name: &str) -> *const u8 {
+fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
     const MSVCRT_DLL: &[u8] = b"msvcrt.dll\0";
 
     let c_str = CString::new(name).unwrap();
@@ -697,15 +710,10 @@ fn lookup_with_dlsym(name: &str) -> *const u8 {
             if addr.is_null() {
                 continue;
             }
-            return addr as *const u8;
+            return Some(addr as *const u8);
         }
 
-        let msg = if handles[1].is_null() {
-            "(msvcrt not loaded)"
-        } else {
-            ""
-        };
-        panic!("cannot resolve address of symbol {} {}", name, msg);
+        None
     }
 }
 
