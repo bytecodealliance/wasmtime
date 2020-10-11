@@ -252,6 +252,32 @@ impl SimpleJITModule {
         }
     }
 
+    /// Returns the address of a finalized function.
+    pub fn get_finalized_function(&self, func_id: FuncId) -> *const u8 {
+        let info = &self.functions[func_id];
+        debug_assert!(
+            !self.functions_to_finalize.iter().any(|x| *x == func_id),
+            "function not yet finalized"
+        );
+        info.as_ref()
+            .expect("function must be compiled before it can be finalized")
+            .code
+    }
+
+    /// Returns the address and size of a finalized data object.
+    pub fn get_finalized_data(&self, data_id: DataId) -> (*const u8, usize) {
+        let info = &self.data_objects[data_id];
+        debug_assert!(
+            !self.data_objects_to_finalize.iter().any(|x| *x == data_id),
+            "data object not yet finalized"
+        );
+        let compiled = info
+            .as_ref()
+            .expect("data object must be compiled before it can be finalized");
+
+        (compiled.storage, compiled.size)
+    }
+
     fn record_function_for_perf(&self, ptr: *mut u8, size: usize, name: &str) {
         // The Linux perf tool supports JIT code via a /tmp/perf-$PID.map file,
         // which contains memory regions and their associated names.  If we
@@ -358,6 +384,29 @@ impl SimpleJITModule {
                 _ => unimplemented!(),
             }
         }
+    }
+
+    /// Finalize all functions and data objects that are defined but not yet finalized.
+    /// All symbols referenced in their bodies that are declared as needing a definition
+    /// must be defined by this point.
+    ///
+    /// Use `get_finalized_function` and `get_finalized_data` to obtain the final
+    /// artifacts.
+    pub fn finalize_definitions(&mut self) {
+        for func in std::mem::take(&mut self.functions_to_finalize) {
+            let decl = self.declarations.get_function_decl(func);
+            debug_assert!(decl.linkage.is_definable());
+            self.finalize_function(func);
+        }
+        for data in std::mem::take(&mut self.data_objects_to_finalize) {
+            let decl = self.declarations.get_data_decl(data);
+            debug_assert!(decl.linkage.is_definable());
+            self.finalize_data(data);
+        }
+
+        // Now that we're done patching, prepare the memory for execution!
+        self.memory.readonly.set_readonly();
+        self.memory.code.set_readable_and_executable();
     }
 
     /// Create a new `SimpleJITModule`.
@@ -606,20 +655,7 @@ impl SimpleJITModule {
     /// This method does not need to be called when access to the memory
     /// handle is not required.
     pub fn finish(mut self) -> SimpleJITProduct {
-        for func in std::mem::take(&mut self.functions_to_finalize) {
-            let decl = self.declarations.get_function_decl(func);
-            debug_assert!(decl.linkage.is_definable());
-            self.finalize_function(func);
-        }
-        for data in std::mem::take(&mut self.data_objects_to_finalize) {
-            let decl = self.declarations.get_data_decl(data);
-            debug_assert!(decl.linkage.is_definable());
-            self.finalize_data(data);
-        }
-
-        // Now that we're done patching, prepare the memory for execution!
-        self.memory.readonly.set_readonly();
-        self.memory.code.set_readable_and_executable();
+        self.finalize_definitions();
 
         SimpleJITProduct {
             memory: self.memory,
