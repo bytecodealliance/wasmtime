@@ -126,10 +126,10 @@ pub struct SimpleJITModule {
     isa: Box<dyn TargetIsa>,
     symbols: HashMap<String, *const u8>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
-    memory: SimpleJITMemoryHandle,
+    memory: MemoryHandle,
     declarations: ModuleDeclarations,
-    functions: SecondaryMap<FuncId, Option<SimpleJITCompiledBlob>>,
-    data_objects: SecondaryMap<DataId, Option<SimpleJITCompiledBlob>>,
+    functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
+    data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
     functions_to_finalize: Vec<FuncId>,
     data_objects_to_finalize: Vec<DataId>,
 }
@@ -151,14 +151,14 @@ struct StackMapRecord {
 }
 
 #[derive(Clone)]
-struct SimpleJITCompiledBlob {
+struct CompiledBlob {
     ptr: *mut u8,
     size: usize,
     relocs: Vec<RelocRecord>,
 }
 
 /// A handle to allow freeing memory allocated by the `Module`.
-struct SimpleJITMemoryHandle {
+struct MemoryHandle {
     code: Memory,
     readonly: Memory,
     writable: Memory,
@@ -167,10 +167,10 @@ struct SimpleJITMemoryHandle {
 /// A `SimpleJITProduct` allows looking up the addresses of all functions and data objects
 /// defined in the original module.
 pub struct SimpleJITProduct {
-    memory: SimpleJITMemoryHandle,
+    memory: MemoryHandle,
     declarations: ModuleDeclarations,
-    functions: SecondaryMap<FuncId, Option<SimpleJITCompiledBlob>>,
-    data_objects: SecondaryMap<DataId, Option<SimpleJITCompiledBlob>>,
+    functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
+    data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
 }
 
 impl SimpleJITProduct {
@@ -414,7 +414,7 @@ impl SimpleJITModule {
 
     /// Create a new `SimpleJITModule`.
     pub fn new(builder: SimpleJITBuilder) -> Self {
-        let memory = SimpleJITMemoryHandle {
+        let memory = MemoryHandle {
             code: Memory::new(),
             readonly: Memory::new(),
             writable: Memory::new(),
@@ -515,7 +515,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             )
         };
 
-        self.functions[id] = Some(SimpleJITCompiledBlob {
+        self.functions[id] = Some(CompiledBlob {
             ptr,
             size,
             relocs: reloc_sink.relocs,
@@ -557,7 +557,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, size);
         }
 
-        self.functions[id] = Some(SimpleJITCompiledBlob {
+        self.functions[id] = Some(CompiledBlob {
             ptr,
             size,
             relocs: vec![],
@@ -639,11 +639,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             });
         }
 
-        self.data_objects[id] = Some(SimpleJITCompiledBlob {
-            ptr,
-            size,
-            relocs,
-        });
+        self.data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
 
         Ok(())
     }
