@@ -18,7 +18,9 @@ pub enum UnwindInfo {
 pub(crate) mod input {
     use crate::binemit::CodeOffset;
     use alloc::vec::Vec;
-        
+    #[cfg(feature = "enable-serde")]
+    use serde::{Deserialize, Serialize};
+
     #[derive(Clone, Debug, PartialEq, Eq)]
     #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
     pub(crate) enum UnwindCode<Reg> {

@@ -9,7 +9,7 @@ use crate::isa::{RegUnit, TargetIsa};
 use crate::result::CodegenResult;
 use alloc::vec::Vec;
 
-use crate::isa::unwind::input::{UnwindInfo, UnwindCode};
+use crate::isa::unwind::input::{UnwindCode, UnwindInfo};
 
 pub(crate) fn create_unwind_info(
     func: &Function,

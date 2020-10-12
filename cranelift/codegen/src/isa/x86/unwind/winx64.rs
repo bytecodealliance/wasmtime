@@ -1,22 +1,9 @@
 //! Unwind information for Windows x64 ABI.
 
 use crate::ir::Function;
-use crate::isa::x86::registers::GPR;
-use crate::isa::{
-    unwind::winx64::{UnwindCode, UnwindInfo},
-    CallConv, TargetIsa,
-};
-use crate::result::{CodegenError, CodegenResult};
-use alloc::vec::Vec;
-use log::warn;
-
-fn ensure_unwind_offset(offset: u32) -> CodegenResult<u8> {
-    if offset > 255 {
-        warn!("function prologues cannot exceed 255 bytes in size for Windows x64");
-        return Err(CodegenError::CodeTooLarge);
-    }
-    Ok(offset as u8)
-}
+use crate::isa::x86::registers::{FPR, GPR};
+use crate::isa::{unwind::winx64::UnwindInfo, CallConv, RegUnit, TargetIsa};
+use crate::result::CodegenResult;
 
 pub(crate) fn create_unwind_info(
     func: &Function,
@@ -27,9 +14,6 @@ pub(crate) fn create_unwind_info(
         return Ok(None);
     }
 
-    let mut unwind_codes = Vec::new();
-
-    use crate::isa::unwind::input::UnwindCode as SharedUnwindCode;
     let unwind = match super::create_unwind_info(func, isa, None)? {
         Some(u) => u,
         None => {
@@ -37,42 +21,22 @@ pub(crate) fn create_unwind_info(
         }
     };
 
-    for c in unwind.prologue_unwind_codes.iter() {
-        match c {
-            SharedUnwindCode::PushRegister { offset, reg } => {
-                unwind_codes.push(UnwindCode::PushRegister {
-                    offset: ensure_unwind_offset(*offset)?,
-                    reg: GPR.index_of(*reg) as u8,
-                });
-            }
-            SharedUnwindCode::StackAlloc { offset, size } => {
-                unwind_codes.push(UnwindCode::StackAlloc {
-                    offset: ensure_unwind_offset(*offset)?,
-                    size: *size,
-                });
-            }
-            SharedUnwindCode::SaveXmm {
-                offset,
-                reg,
-                stack_offset,
-            } => {
-                unwind_codes.push(UnwindCode::SaveXmm {
-                    offset: ensure_unwind_offset(*offset)?,
-                    reg: *reg as u8,
-                    stack_offset: *stack_offset,
-                });
-            }
-            _ => {}
+    Ok(Some(UnwindInfo::build::<RegisterMapper>(unwind)?))
+}
+
+struct RegisterMapper;
+
+impl crate::isa::unwind::winx64::RegisterMapper for RegisterMapper {
+    fn map(reg: RegUnit) -> u8 {
+        if GPR.contains(reg) {
+            GPR.index_of(reg) as u8
+        } else if FPR.contains(reg) {
+            // XMM register
+            reg as u8
+        } else {
+            panic!()
         }
     }
-
-    Ok(Some(UnwindInfo {
-        flags: 0, // this assumes cranelift functions have no SEH handlers
-        prologue_size: ensure_unwind_offset(unwind.prologue_size)?,
-        frame_register: None,
-        frame_register_offset: 0,
-        unwind_codes,
-    }))
 }
 
 #[cfg(test)]
@@ -80,6 +44,7 @@ mod tests {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::{ExternalName, InstBuilder, Signature, StackSlotData, StackSlotKind};
+    use crate::isa::unwind::winx64::UnwindCode;
     use crate::isa::x86::registers::RU;
     use crate::isa::{lookup, CallConv};
     use crate::settings::{builder, Flags};
