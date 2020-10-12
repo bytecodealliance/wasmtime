@@ -1,14 +1,22 @@
 //! Unwind information for Windows x64 ABI.
 
-use crate::ir::{Function, InstructionData, Opcode, ValueLoc};
-use crate::isa::x86::registers::{FPR, GPR, RU};
+use crate::ir::Function;
+use crate::isa::x86::registers::GPR;
 use crate::isa::{
     unwind::winx64::{UnwindCode, UnwindInfo},
-    CallConv, RegUnit, TargetIsa,
+    CallConv, TargetIsa,
 };
 use crate::result::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use log::warn;
+
+fn ensure_unwind_offset(offset: u32) -> CodegenResult<u8> {
+    if offset > 255 {
+        warn!("function prologues cannot exceed 255 bytes in size for Windows x64");
+        return Err(CodegenError::CodeTooLarge);
+    }
+    Ok(offset as u8)
+}
 
 pub(crate) fn create_unwind_info(
     func: &Function,
@@ -19,111 +27,48 @@ pub(crate) fn create_unwind_info(
         return Ok(None);
     }
 
-    let prologue_end = func.prologue_end.unwrap();
-    let entry_block = func.layout.entry_block().expect("missing entry block");
-
-    // Stores the stack size when SP is not adjusted via an immediate value
-    let mut stack_size = None;
-    let mut prologue_size = 0;
     let mut unwind_codes = Vec::new();
-    let mut found_end = false;
 
-    for (offset, inst, size) in func.inst_offsets(entry_block, &isa.encoding_info()) {
-        // x64 ABI prologues cannot exceed 255 bytes in length
-        if (offset + size) > 255 {
-            warn!("function prologues cannot exceed 255 bytes in size for Windows x64");
-            return Err(CodegenError::CodeTooLarge);
+    use crate::isa::unwind::input::UnwindCode as SharedUnwindCode;
+    let unwind = match super::create_unwind_info(func, isa, None)? {
+        Some(u) => u,
+        None => {
+            return Ok(None);
         }
+    };
 
-        prologue_size += size;
-
-        let unwind_offset = (offset + size) as u8;
-
-        match func.dfg[inst] {
-            InstructionData::Unary { opcode, arg } => {
-                match opcode {
-                    Opcode::X86Push => {
-                        unwind_codes.push(UnwindCode::PushRegister {
-                            offset: unwind_offset,
-                            reg: GPR.index_of(func.locations[arg].unwrap_reg()) as u8,
-                        });
-                    }
-                    Opcode::AdjustSpDown => {
-                        let stack_size =
-                            stack_size.expect("expected a previous stack size instruction");
-
-                        // This is used when calling a stack check function
-                        // We need to track the assignment to RAX which has the size of the stack
-                        unwind_codes.push(UnwindCode::StackAlloc {
-                            offset: unwind_offset,
-                            size: stack_size,
-                        });
-                    }
-                    _ => {}
-                }
+    for c in unwind.prologue_unwind_codes.iter() {
+        match c {
+            SharedUnwindCode::PushRegister { offset, reg } => {
+                unwind_codes.push(UnwindCode::PushRegister {
+                    offset: ensure_unwind_offset(*offset)?,
+                    reg: GPR.index_of(*reg) as u8,
+                });
             }
-            InstructionData::UnaryImm { opcode, imm } => {
-                match opcode {
-                    Opcode::Iconst => {
-                        let imm: i64 = imm.into();
-                        assert!(imm <= core::u32::MAX as i64);
-                        assert!(stack_size.is_none());
-
-                        // This instruction should only appear in a prologue to pass an
-                        // argument of the stack size to a stack check function.
-                        // Record the stack size so we know what it is when we encounter the adjustment
-                        // instruction (which will adjust via the register assigned to this instruction).
-                        stack_size = Some(imm as u32);
-                    }
-                    Opcode::AdjustSpDownImm => {
-                        let imm: i64 = imm.into();
-                        assert!(imm <= core::u32::MAX as i64);
-
-                        stack_size = Some(imm as u32);
-
-                        unwind_codes.push(UnwindCode::StackAlloc {
-                            offset: unwind_offset,
-                            size: imm as u32,
-                        });
-                    }
-                    _ => {}
-                }
+            SharedUnwindCode::StackAlloc { offset, size } => {
+                unwind_codes.push(UnwindCode::StackAlloc {
+                    offset: ensure_unwind_offset(*offset)?,
+                    size: *size,
+                });
             }
-            InstructionData::Store {
-                opcode: Opcode::Store,
-                args: [arg1, arg2],
+            SharedUnwindCode::SaveXmm {
                 offset,
-                ..
+                reg,
+                stack_offset,
             } => {
-                if let (ValueLoc::Reg(src), ValueLoc::Reg(dst)) =
-                    (func.locations[arg1], func.locations[arg2])
-                {
-                    // If this is a save of an FPR, record an unwind operation
-                    // Note: the stack_offset here is relative to an adjusted SP
-                    if dst == (RU::rsp as RegUnit) && FPR.contains(src) {
-                        let offset: i32 = offset.into();
-                        unwind_codes.push(UnwindCode::SaveXmm {
-                            offset: unwind_offset,
-                            reg: src as u8,
-                            stack_offset: offset as u32,
-                        });
-                    }
-                }
+                unwind_codes.push(UnwindCode::SaveXmm {
+                    offset: ensure_unwind_offset(*offset)?,
+                    reg: *reg as u8,
+                    stack_offset: *stack_offset,
+                });
             }
             _ => {}
-        };
-
-        if inst == prologue_end {
-            found_end = true;
-            break;
         }
     }
 
-    assert!(found_end);
-
     Ok(Some(UnwindInfo {
         flags: 0, // this assumes cranelift functions have no SEH handlers
-        prologue_size: prologue_size as u8,
+        prologue_size: ensure_unwind_offset(unwind.prologue_size)?,
         frame_register: None,
         frame_register_offset: 0,
         unwind_codes,
@@ -135,6 +80,7 @@ mod tests {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::{ExternalName, InstBuilder, Signature, StackSlotData, StackSlotKind};
+    use crate::isa::x86::registers::RU;
     use crate::isa::{lookup, CallConv};
     use crate::settings::{builder, Flags};
     use crate::Context;
