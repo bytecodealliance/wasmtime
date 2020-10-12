@@ -122,6 +122,7 @@ impl From<FuncOrDataId> for ir::ExternalName {
 }
 
 /// Information about a function which can be called.
+#[derive(Debug)]
 pub struct FunctionDeclaration {
     pub name: String,
     pub linkage: Linkage,
@@ -176,6 +177,7 @@ pub enum ModuleError {
 pub type ModuleResult<T> = Result<T, ModuleError>;
 
 /// Information about a data object which can be accessed.
+#[derive(Debug)]
 pub struct DataDeclaration {
     pub name: String,
     pub linkage: Linkage,
@@ -196,7 +198,7 @@ impl DataDeclaration {
 
 /// This provides a view to the state of a module which allows `ir::ExternalName`s to be translated
 /// into `FunctionDeclaration`s and `DataDeclaration`s.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ModuleDeclarations {
     names: HashMap<String, FuncOrDataId>,
     functions: PrimaryMap<FuncId, FunctionDeclaration>,
