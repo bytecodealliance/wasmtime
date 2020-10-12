@@ -128,8 +128,8 @@ pub struct SimpleJITModule {
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     memory: SimpleJITMemoryHandle,
     declarations: ModuleDeclarations,
-    functions: SecondaryMap<FuncId, Option<SimpleJITCompiledFunction>>,
-    data_objects: SecondaryMap<DataId, Option<SimpleJITCompiledData>>,
+    functions: SecondaryMap<FuncId, Option<SimpleJITCompiledBlob>>,
+    data_objects: SecondaryMap<DataId, Option<SimpleJITCompiledBlob>>,
     functions_to_finalize: Vec<FuncId>,
     data_objects_to_finalize: Vec<DataId>,
 }
@@ -151,15 +151,8 @@ struct StackMapRecord {
 }
 
 #[derive(Clone)]
-struct SimpleJITCompiledFunction {
-    code: *mut u8,
-    size: usize,
-    relocs: Vec<RelocRecord>,
-}
-
-#[derive(Clone)]
-struct SimpleJITCompiledData {
-    storage: *mut u8,
+struct SimpleJITCompiledBlob {
+    ptr: *mut u8,
     size: usize,
     relocs: Vec<RelocRecord>,
 }
@@ -176,8 +169,8 @@ struct SimpleJITMemoryHandle {
 pub struct SimpleJITProduct {
     memory: SimpleJITMemoryHandle,
     declarations: ModuleDeclarations,
-    functions: SecondaryMap<FuncId, Option<SimpleJITCompiledFunction>>,
-    data_objects: SecondaryMap<DataId, Option<SimpleJITCompiledData>>,
+    functions: SecondaryMap<FuncId, Option<SimpleJITCompiledBlob>>,
+    data_objects: SecondaryMap<DataId, Option<SimpleJITCompiledBlob>>,
 }
 
 impl SimpleJITProduct {
@@ -205,7 +198,7 @@ impl SimpleJITProduct {
         self.functions[func_id]
             .as_ref()
             .unwrap_or_else(|| panic!("{} is not defined", func_id))
-            .code
+            .ptr
     }
 
     /// Return the address and size of a data object.
@@ -213,7 +206,7 @@ impl SimpleJITProduct {
         let data = self.data_objects[data_id]
             .as_ref()
             .unwrap_or_else(|| panic!("{} is not defined", data_id));
-        (data.storage, data.size)
+        (data.ptr, data.size)
     }
 }
 
@@ -231,7 +224,7 @@ impl SimpleJITModule {
                 let (name, linkage) = if self.declarations.is_function(name) {
                     let func_id = self.declarations.get_function_id(name);
                     match &self.functions[func_id] {
-                        Some(compiled) => return compiled.code,
+                        Some(compiled) => return compiled.ptr,
                         None => {
                             let decl = self.declarations.get_function_decl(func_id);
                             (&decl.name, decl.linkage)
@@ -240,7 +233,7 @@ impl SimpleJITModule {
                 } else {
                     let data_id = self.declarations.get_data_id(name);
                     match &self.data_objects[data_id] {
-                        Some(compiled) => return compiled.storage,
+                        Some(compiled) => return compiled.ptr,
                         None => {
                             let decl = self.declarations.get_data_decl(data_id);
                             (&decl.name, decl.linkage)
@@ -273,7 +266,7 @@ impl SimpleJITModule {
         );
         info.as_ref()
             .expect("function must be compiled before it can be finalized")
-            .code
+            .ptr
     }
 
     /// Returns the address and size of a finalized data object.
@@ -287,7 +280,7 @@ impl SimpleJITModule {
             .as_ref()
             .expect("data object must be compiled before it can be finalized");
 
-        (compiled.storage, compiled.size)
+        (compiled.ptr, compiled.size)
     }
 
     fn record_function_for_perf(&self, ptr: *mut u8, size: usize, name: &str) {
@@ -321,9 +314,8 @@ impl SimpleJITModule {
             addend,
         } in &func.relocs
         {
-            let ptr = func.code;
             debug_assert!((offset as usize) < func.size);
-            let at = unsafe { ptr.offset(offset as isize) };
+            let at = unsafe { func.ptr.offset(offset as isize) };
             let base = self.get_definition(name);
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };
@@ -369,9 +361,8 @@ impl SimpleJITModule {
             addend,
         } in &data.relocs
         {
-            let ptr = data.storage;
             debug_assert!((offset as usize) < data.size);
-            let at = unsafe { ptr.offset(offset as isize) };
+            let at = unsafe { data.ptr.offset(offset as isize) };
             let base = self.get_definition(name);
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };
@@ -524,8 +515,8 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             )
         };
 
-        self.functions[id] = Some(SimpleJITCompiledFunction {
-            code: ptr,
+        self.functions[id] = Some(SimpleJITCompiledBlob {
+            ptr,
             size,
             relocs: reloc_sink.relocs,
         });
@@ -566,8 +557,8 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, size);
         }
 
-        self.functions[id] = Some(SimpleJITCompiledFunction {
-            code: ptr,
+        self.functions[id] = Some(SimpleJITCompiledBlob {
+            ptr,
             size,
             relocs: vec![],
         });
@@ -600,7 +591,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         } = data.description();
 
         let size = init.size();
-        let storage = if decl.writable {
+        let ptr = if decl.writable {
             self.memory
                 .writable
                 .allocate(size, align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
@@ -617,11 +608,11 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
                 panic!("data is not initialized yet");
             }
             Init::Zeros { .. } => {
-                unsafe { ptr::write_bytes(storage, 0, size) };
+                unsafe { ptr::write_bytes(ptr, 0, size) };
             }
             Init::Bytes { ref contents } => {
                 let src = contents.as_ptr();
-                unsafe { ptr::copy_nonoverlapping(src, storage, size) };
+                unsafe { ptr::copy_nonoverlapping(src, ptr, size) };
             }
         }
 
@@ -648,8 +639,8 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             });
         }
 
-        self.data_objects[id] = Some(SimpleJITCompiledData {
-            storage,
+        self.data_objects[id] = Some(SimpleJITCompiledBlob {
+            ptr,
             size,
             relocs,
         });
