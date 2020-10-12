@@ -1035,12 +1035,13 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         self.load_spillslot(from_slot, ty, to_reg.map(|r| r.to_reg()))
     }
 
-    #[cfg(feature = "unwind")]
     fn unwind_info_kind(&self) -> UnwindInfoKind {
         match self.sig.call_conv {
+            #[cfg(feature = "unwind")]
             isa::CallConv::Fast | isa::CallConv::Cold | isa::CallConv::SystemV => {
                 UnwindInfoKind::SystemV
             }
+            #[cfg(feature = "unwind")]
             isa::CallConv::WindowsFastcall => UnwindInfoKind::Windows,
             _ => UnwindInfoKind::None,
         }

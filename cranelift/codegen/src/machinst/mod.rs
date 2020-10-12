@@ -99,7 +99,6 @@
 use crate::binemit::{CodeInfo, CodeOffset, StackMap};
 use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, Type};
-#[cfg(feature = "unwind")]
 use crate::isa::unwind;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
@@ -280,7 +279,6 @@ pub trait MachInstEmit: MachInst {
     /// Constant information used in `emit` invocations.
     type Info: MachInstEmitInfo;
     /// Unwind info generator.
-    #[cfg(feature = "unwind")]
     type UnwindInfo: UnwindInfoGenerator<Self>;
     /// Emit the instruction.
     fn emit(&self, code: &mut MachBuffer<Self>, info: &Self::Info, state: &mut Self::State);
@@ -315,7 +313,6 @@ pub struct MachCompileResult {
     /// Disassembly, if requested.
     pub disasm: Option<String>,
     /// Unwind info.
-    #[cfg(feature = "unwind")]
     pub unwind_info: Option<unwind::UnwindInfo>,
 }
 
@@ -372,19 +369,19 @@ pub trait MachBackend {
 }
 
 /// Expected unwind info type.
-#[cfg(feature = "unwind")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnwindInfoKind {
     /// No unwind info.
     None,
     /// SystemV CIE/FDE unwind info.
+    #[cfg(feature = "unwind")]
     SystemV,
     /// Windows X64 Unwind info
+    #[cfg(feature = "unwind")]
     Windows,
 }
 
 /// UnwindInfo generator/helper.
-#[cfg(feature = "unwind")]
 pub trait UnwindInfoGenerator<I: MachInstEmit> {
     /// Creates unwind info based on function signature and
     /// emitted instructions.

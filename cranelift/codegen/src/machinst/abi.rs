@@ -157,7 +157,6 @@ pub trait ABICallee {
     ) -> Self::I;
 
     /// Desired unwind info type.
-    #[cfg(feature = "unwind")]
     fn unwind_info_kind(&self) -> UnwindInfoKind;
 }
 

@@ -29,7 +29,6 @@ pub mod args;
 pub use self::args::*;
 pub mod emit;
 pub use self::emit::*;
-#[cfg(feature = "unwind")]
 pub mod unwind;
 
 #[cfg(test)]

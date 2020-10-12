@@ -538,7 +538,6 @@ impl<I: VCodeInst> VCode<I> {
     }
 
     /// Generates unwind info.
-    #[cfg(feature = "unwind")]
     pub fn unwind_info(
         &self,
     ) -> crate::result::CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {

@@ -274,7 +274,6 @@ impl MachInstEmitInfo for EmitInfo {
 impl MachInstEmit for Inst {
     type Info = EmitInfo;
     type State = EmitState;
-    #[cfg(feature = "unwind")]
     type UnwindInfo = super::unwind::Arm32UnwindInfo;
 
     fn emit(&self, sink: &mut MachBuffer<Inst>, emit_info: &Self::Info, state: &mut EmitState) {

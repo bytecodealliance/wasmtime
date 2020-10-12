@@ -59,7 +59,6 @@ impl MachBackend for X64Backend {
         let buffer = vcode.emit();
         let buffer = buffer.finish();
         let frame_size = vcode.frame_size();
-        #[cfg(feature = "unwind")]
         let unwind_info = vcode.unwind_info()?;
 
         let disasm = if want_disasm {
@@ -72,7 +71,6 @@ impl MachBackend for X64Backend {
             buffer,
             frame_size,
             disasm,
-            #[cfg(feature = "unwind")]
             unwind_info,
         })
     }
