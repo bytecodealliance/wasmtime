@@ -8,6 +8,7 @@ use crate::isa::x86::registers::{FPR, RU};
 use crate::isa::{RegUnit, TargetIsa};
 use crate::result::CodegenResult;
 use alloc::vec::Vec;
+use std::collections::HashMap;
 
 use crate::isa::unwind::input::{UnwindCode, UnwindInfo};
 
@@ -16,17 +17,32 @@ pub(crate) fn create_unwind_info(
     isa: &dyn TargetIsa,
     frame_register: Option<RegUnit>,
 ) -> CodegenResult<Option<UnwindInfo<RegUnit>>> {
+    // The function size will not include data/code that comes after last
+    // epilogue.
     let mut len = 0;
 
     let entry_block = func.layout.entry_block().expect("missing entry block");
     let prologue_end = func.prologue_end.unwrap();
+    let epilogues_start = func
+        .epilogues_start
+        .iter()
+        .map(|(i, b)| (*b, *i))
+        .collect::<HashMap<_, _>>();
 
     let mut stack_size = None;
     let mut prologue_size = 0;
     let mut prologue_unwind_codes = Vec::new();
     let mut epilogues_unwind_codes = Vec::new();
 
-    let mut blocks = func.layout.blocks().collect::<Vec<_>>();
+    // Process only entry block and blocks with epilogues.
+    let mut blocks = func
+        .epilogues_start
+        .iter()
+        .map(|(_, b)| *b)
+        .collect::<Vec<_>>();
+    if !blocks.contains(&entry_block) {
+        blocks.push(entry_block);
+    }
     blocks.sort_by_key(|b| func.offsets[*b]);
 
     for (i, block) in blocks.iter().enumerate() {
@@ -34,12 +50,13 @@ pub(crate) fn create_unwind_info(
         let mut in_epilogue = false;
         let mut epilogue_pop_offsets = Vec::new();
 
+        let epilogue_start = epilogues_start.get(block);
+        let is_last_block = i == blocks.len() - 1;
+
         for (offset, inst, size) in func.inst_offsets(*block, &isa.encoding_info()) {
             let offset = offset + size;
             assert!(len <= offset);
             len = offset;
-
-            let is_last_block = i == blocks.len() - 1;
 
             let unwind_codes;
             if in_prologue {
@@ -49,7 +66,7 @@ pub(crate) fn create_unwind_info(
                 }
                 prologue_size += size;
                 unwind_codes = &mut prologue_unwind_codes;
-            } else if !in_epilogue && func.epilogues_start.contains(&inst) {
+            } else if !in_epilogue && epilogue_start == Some(&inst) {
                 // Now in an epilogue, emit a remember state instruction if not last block
                 in_epilogue = true;
 
