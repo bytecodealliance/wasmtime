@@ -66,11 +66,11 @@ pub fn instantiate(wasm: &[u8], strategy: Strategy) {
 pub fn instantiate_with_config(wasm: &[u8], mut config: Config, timeout: Option<Duration>) {
     crate::init_fuzzing();
 
+    config.interruptable(timeout.is_some());
     let engine = Engine::new(&config);
     let store = Store::new(&engine);
 
     if let Some(timeout) = timeout {
-        config.interruptable(true);
         let handle = store.interrupt_handle().unwrap();
         std::thread::spawn(move || {
             std::thread::sleep(timeout);
