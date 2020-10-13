@@ -14,14 +14,13 @@ use peepmatic_runtime::{
     cc::ConditionCode,
     instruction_set::InstructionSet,
     part::{Constant, Part},
-    paths::Path,
     r#type::{BitWidth, Kind, Type},
     PeepholeOptimizations, PeepholeOptimizer,
 };
-use peepmatic_traits::TypingRules;
 use std::borrow::Cow;
 use std::boxed::Box;
 use std::convert::{TryFrom, TryInto};
+use std::iter;
 use std::ptr;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
@@ -573,35 +572,6 @@ fn intcc_to_peepmatic(cc: IntCC) -> ConditionCode {
     }
 }
 
-fn get_immediate(dfg: &DataFlowGraph, inst: Inst, i: usize) -> Part<ValueOrInst> {
-    return match dfg[inst] {
-        InstructionData::BinaryImm64 { imm, .. } if i == 0 => imm.into(),
-        InstructionData::BranchIcmp { cond, .. } if i == 0 => intcc_to_peepmatic(cond).into(),
-        InstructionData::BranchInt { cond, .. } if i == 0 => intcc_to_peepmatic(cond).into(),
-        InstructionData::IntCompare { cond, .. } if i == 0 => intcc_to_peepmatic(cond).into(),
-        InstructionData::IntCompareImm { cond, .. } if i == 0 => intcc_to_peepmatic(cond).into(),
-        InstructionData::IntCompareImm { imm, .. } if i == 1 => imm.into(),
-        InstructionData::IntCond { cond, .. } if i == 0 => intcc_to_peepmatic(cond).into(),
-        InstructionData::IntCondTrap { cond, .. } if i == 0 => intcc_to_peepmatic(cond).into(),
-        InstructionData::IntSelect { cond, .. } if i == 0 => intcc_to_peepmatic(cond).into(),
-        InstructionData::UnaryBool { imm, .. } if i == 0 => {
-            Constant::Bool(imm, BitWidth::Polymorphic).into()
-        }
-        InstructionData::UnaryImm { imm, .. } if i == 0 => imm.into(),
-        ref otherwise => unsupported(otherwise),
-    };
-
-    #[inline(never)]
-    #[cold]
-    fn unsupported(data: &InstructionData) -> ! {
-        panic!("unsupported instruction data: {:?}", data)
-    }
-}
-
-fn get_argument(dfg: &DataFlowGraph, inst: Inst, i: usize) -> Option<Value> {
-    dfg.inst_args(inst).get(i).copied()
-}
-
 fn peepmatic_ty_to_ir_ty(ty: Type, dfg: &DataFlowGraph, root: Inst) -> types::Type {
     match (ty.kind, bit_width(dfg, ty.bit_width, root)) {
         (Kind::Int, 8) => types::I8,
@@ -681,39 +651,290 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
         }
     }
 
-    fn get_part_at_path(
+    fn operator<E>(
         &self,
         pos: &mut FuncCursor<'b>,
-        root: ValueOrInst,
-        path: Path,
-    ) -> Option<Part<ValueOrInst>> {
-        // The root is path [0].
-        debug_assert!(!path.0.is_empty());
-        debug_assert_eq!(path.0[0], 0);
-
-        let mut part = Part::Instruction(root);
-        for p in path.0[1..].iter().copied() {
-            let inst = part.as_instruction()?.resolve_inst(&pos.func.dfg)?;
-            let operator = pos.func.dfg[inst].opcode();
-
-            if p < operator.immediates_arity() {
-                part = get_immediate(&pos.func.dfg, inst, p as usize);
-                continue;
+        value_or_inst: ValueOrInst,
+        operands: &mut E,
+    ) -> Option<Opcode>
+    where
+        E: Extend<Part<Self::Instruction>>,
+    {
+        let inst = value_or_inst.resolve_inst(&pos.func.dfg)?;
+        Some(match pos.func.dfg[inst] {
+            InstructionData::Binary {
+                opcode: opcode @ Opcode::Band,
+                args,
+            }
+            | InstructionData::Binary {
+                opcode: opcode @ Opcode::Bor,
+                args,
+            }
+            | InstructionData::Binary {
+                opcode: opcode @ Opcode::Bxor,
+                args,
+            }
+            | InstructionData::Binary {
+                opcode: opcode @ Opcode::Iadd,
+                args,
+            }
+            | InstructionData::Binary {
+                opcode: opcode @ Opcode::Ifcmp,
+                args,
+            }
+            | InstructionData::Binary {
+                opcode: opcode @ Opcode::Imul,
+                args,
+            }
+            | InstructionData::Binary {
+                opcode: opcode @ Opcode::Ishl,
+                args,
+            }
+            | InstructionData::Binary {
+                opcode: opcode @ Opcode::Isub,
+                args,
+            }
+            | InstructionData::Binary {
+                opcode: opcode @ Opcode::Rotl,
+                args,
+            }
+            | InstructionData::Binary {
+                opcode: opcode @ Opcode::Rotr,
+                args,
+            }
+            | InstructionData::Binary {
+                opcode: opcode @ Opcode::Sdiv,
+                args,
+            }
+            | InstructionData::Binary {
+                opcode: opcode @ Opcode::Srem,
+                args,
+            }
+            | InstructionData::Binary {
+                opcode: opcode @ Opcode::Sshr,
+                args,
+            }
+            | InstructionData::Binary {
+                opcode: opcode @ Opcode::Udiv,
+                args,
+            }
+            | InstructionData::Binary {
+                opcode: opcode @ Opcode::Urem,
+                args,
+            }
+            | InstructionData::Binary {
+                opcode: opcode @ Opcode::Ushr,
+                args,
+            } => {
+                operands.extend(args.iter().map(|v| Part::Instruction((*v).into())));
+                opcode
             }
 
-            let arg = p - operator.immediates_arity();
-            let arg = arg as usize;
-            let value = get_argument(&pos.func.dfg, inst, arg)?;
-            part = Part::Instruction(value.into());
-        }
+            InstructionData::BinaryImm64 {
+                opcode: opcode @ Opcode::BandImm,
+                imm,
+                arg,
+            }
+            | InstructionData::BinaryImm64 {
+                opcode: opcode @ Opcode::BorImm,
+                imm,
+                arg,
+            }
+            | InstructionData::BinaryImm64 {
+                opcode: opcode @ Opcode::BxorImm,
+                imm,
+                arg,
+            }
+            | InstructionData::BinaryImm64 {
+                opcode: opcode @ Opcode::IaddImm,
+                imm,
+                arg,
+            }
+            | InstructionData::BinaryImm64 {
+                opcode: opcode @ Opcode::IfcmpImm,
+                imm,
+                arg,
+            }
+            | InstructionData::BinaryImm64 {
+                opcode: opcode @ Opcode::ImulImm,
+                imm,
+                arg,
+            }
+            | InstructionData::BinaryImm64 {
+                opcode: opcode @ Opcode::IrsubImm,
+                imm,
+                arg,
+            }
+            | InstructionData::BinaryImm64 {
+                opcode: opcode @ Opcode::IshlImm,
+                imm,
+                arg,
+            }
+            | InstructionData::BinaryImm64 {
+                opcode: opcode @ Opcode::RotlImm,
+                imm,
+                arg,
+            }
+            | InstructionData::BinaryImm64 {
+                opcode: opcode @ Opcode::RotrImm,
+                imm,
+                arg,
+            }
+            | InstructionData::BinaryImm64 {
+                opcode: opcode @ Opcode::SdivImm,
+                imm,
+                arg,
+            }
+            | InstructionData::BinaryImm64 {
+                opcode: opcode @ Opcode::SremImm,
+                imm,
+                arg,
+            }
+            | InstructionData::BinaryImm64 {
+                opcode: opcode @ Opcode::SshrImm,
+                imm,
+                arg,
+            }
+            | InstructionData::BinaryImm64 {
+                opcode: opcode @ Opcode::UdivImm,
+                imm,
+                arg,
+            }
+            | InstructionData::BinaryImm64 {
+                opcode: opcode @ Opcode::UremImm,
+                imm,
+                arg,
+            }
+            | InstructionData::BinaryImm64 {
+                opcode: opcode @ Opcode::UshrImm,
+                imm,
+                arg,
+            } => {
+                operands.extend(
+                    iter::once(imm.into()).chain(iter::once(Part::Instruction(arg.into()))),
+                );
+                opcode
+            }
 
-        log::trace!("get_part_at_path({:?}) = {:?}", path, part);
-        Some(part)
-    }
+            InstructionData::Branch {
+                opcode: opcode @ Opcode::Brnz,
+                ref args,
+                destination: _,
+            }
+            | InstructionData::Branch {
+                opcode: opcode @ Opcode::Brz,
+                ref args,
+                destination: _,
+            } => {
+                operands.extend(
+                    args.as_slice(&pos.func.dfg.value_lists)
+                        .iter()
+                        .map(|v| Part::Instruction((*v).into()))
+                        // NB: Peepmatic only knows about the condition, not any
+                        // of the arguments to the block, which are special
+                        // cased elsewhere, if/when we actually replace the
+                        // instruction.
+                        .take(1),
+                );
+                opcode
+            }
 
-    fn operator(&self, pos: &mut FuncCursor<'b>, value_or_inst: ValueOrInst) -> Option<Opcode> {
-        let inst = value_or_inst.resolve_inst(&pos.func.dfg)?;
-        Some(pos.func.dfg[inst].opcode())
+            InstructionData::CondTrap {
+                opcode: opcode @ Opcode::Trapnz,
+                arg,
+                code: _,
+            }
+            | InstructionData::CondTrap {
+                opcode: opcode @ Opcode::Trapz,
+                arg,
+                code: _,
+            } => {
+                operands.extend(iter::once(Part::Instruction(arg.into())));
+                opcode
+            }
+
+            InstructionData::IntCompare {
+                opcode: opcode @ Opcode::Icmp,
+                cond,
+                args,
+            } => {
+                operands.extend(
+                    iter::once(intcc_to_peepmatic(cond).into())
+                        .chain(args.iter().map(|v| Part::Instruction((*v).into()))),
+                );
+                opcode
+            }
+
+            InstructionData::IntCompareImm {
+                opcode: opcode @ Opcode::IcmpImm,
+                cond,
+                imm,
+                arg,
+            } => {
+                operands.extend(
+                    iter::once(intcc_to_peepmatic(cond).into())
+                        .chain(iter::once(Part::Constant(imm.into())))
+                        .chain(iter::once(Part::Instruction(arg.into()))),
+                );
+                opcode
+            }
+
+            InstructionData::Ternary {
+                opcode: opcode @ Opcode::Select,
+                ref args,
+            } => {
+                operands.extend(args.iter().map(|v| Part::Instruction((*v).into())));
+                opcode
+            }
+
+            InstructionData::Unary {
+                opcode: opcode @ Opcode::AdjustSpDown,
+                arg,
+            }
+            | InstructionData::Unary {
+                opcode: opcode @ Opcode::Bint,
+                arg,
+            }
+            | InstructionData::Unary {
+                opcode: opcode @ Opcode::Ireduce,
+                arg,
+            }
+            | InstructionData::Unary {
+                opcode: opcode @ Opcode::Sextend,
+                arg,
+            }
+            | InstructionData::Unary {
+                opcode: opcode @ Opcode::Uextend,
+                arg,
+            } => {
+                operands.extend(iter::once(Part::Instruction(arg.into())));
+                opcode
+            }
+
+            InstructionData::UnaryBool { opcode, imm } => {
+                operands.extend(iter::once(Part::Constant(Constant::Bool(
+                    imm,
+                    BitWidth::Polymorphic,
+                ))));
+                opcode
+            }
+
+            InstructionData::UnaryImm {
+                opcode: opcode @ Opcode::AdjustSpDownImm,
+                imm,
+            }
+            | InstructionData::UnaryImm {
+                opcode: opcode @ Opcode::Iconst,
+                imm,
+            } => {
+                operands.extend(iter::once(imm.into()));
+                opcode
+            }
+            ref otherwise => {
+                log::trace!("Not supported by Peepmatic: {:?}", otherwise);
+                return None;
+            }
+        })
     }
 
     fn make_inst_1(

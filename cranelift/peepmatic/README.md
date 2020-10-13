@@ -54,11 +54,6 @@ superoptimizer like [Souper][]. Eventually, `peepmatic` should have a verifier
 that ensures that the DSL's optimizations are sound, similar to what [Alive][]
 does for LLVM optimizations.
 
-Currently, `peepmatic` is targeting peephole optimizers that operate on
-Cranelift's clif intermediate representation. The intended next target is
-Cranelift's new backend's "vcode" intermediate representation. Supporting
-non-Cranelift targets is not a goal.
-
 [Cranelift]: https://github.com/bytecodealliance/wasmtime/tree/main/cranelift#readme
 [Souper]: https://github.com/google/souper
 [Alive]: https://github.com/AliveToolkit/alive2
