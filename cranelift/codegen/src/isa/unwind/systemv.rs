@@ -162,7 +162,7 @@ impl UnwindInfo {
         }
 
         let instructions = builder.instructions;
-        let len = unwind.code_len;
+        let len = unwind.function_size;
 
         Ok(Self { instructions, len })
     }

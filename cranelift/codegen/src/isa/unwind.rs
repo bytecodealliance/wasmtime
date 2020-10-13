@@ -63,6 +63,6 @@ pub(crate) mod input {
         pub(crate) prologue_size: CodeOffset,
         pub(crate) prologue_unwind_codes: Vec<UnwindCode<Reg>>,
         pub(crate) epilogues_unwind_codes: Vec<Vec<UnwindCode<Reg>>>,
-        pub(crate) code_len: CodeOffset,
+        pub(crate) function_size: CodeOffset,
     }
 }

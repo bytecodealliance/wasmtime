@@ -193,7 +193,7 @@ pub(crate) fn create_unwind_info(
         prologue_size,
         prologue_unwind_codes,
         epilogues_unwind_codes,
-        code_len: len,
+        function_size: len,
     }))
 }
 
@@ -252,7 +252,7 @@ mod tests {
                         reg: RU::rbp.into()
                     }
                 ]],
-                code_len: 16,
+                function_size: 16,
             }
         );
     }
@@ -299,7 +299,7 @@ mod tests {
                         reg: RU::rbp.into()
                     }
                 ]],
-                code_len: 37,
+                function_size: 37,
             }
         );
     }
@@ -346,7 +346,7 @@ mod tests {
                         reg: RU::rbp.into()
                     }
                 ]],
-                code_len: 37,
+                function_size: 37,
             }
         );
     }
@@ -410,7 +410,7 @@ mod tests {
                         reg: RU::rbp.into()
                     }]
                 ],
-                code_len: 16,
+                function_size: 16,
             }
         );
     }
