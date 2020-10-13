@@ -3380,18 +3380,30 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::Splat => {
+        Opcode::Splat | Opcode::LoadSplat => {
             let ty = ty.unwrap();
             assert_eq!(ty.bits(), 128);
             let src_ty = ctx.input_ty(insn, 0);
             assert!(src_ty.bits() < 128);
-            let src = input_to_reg_mem(ctx, inputs[0]);
+
+            let (src, srcloc) = match op {
+                Opcode::Splat => (input_to_reg_mem(ctx, inputs[0]), None),
+                Opcode::LoadSplat => {
+                    let offset = ctx.data(insn).load_store_offset().unwrap();
+                    let amode = lower_to_amode(ctx, inputs[0], offset);
+                    (RegMem::mem(amode), Some(ctx.srcloc(insn)))
+                }
+                _ => unreachable!(),
+            };
             let dst = get_output_reg(ctx, outputs[0]);
 
             // We know that splat will overwrite all of the lanes of `dst` but it takes several
             // instructions to do so. Because of the multiple instructions, there is no good way to
             // declare `dst` a `def` except with the following pseudo-instruction.
             ctx.emit(Inst::xmm_uninit_value(dst));
+
+            // TODO: eventually many of these sequences could be optimized with AVX's VBROADCAST*
+            // and VPBROADCAST*.
             match ty.lane_bits() {
                 8 => {
                     emit_insert_lane(ctx, src, dst, 0, ty.lane_type(), srcloc);
