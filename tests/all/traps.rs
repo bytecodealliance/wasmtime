@@ -31,7 +31,7 @@ fn test_trap_return() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1642)
+#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
 #[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn test_trap_trace() -> Result<()> {
     let store = Store::default();
@@ -74,7 +74,7 @@ fn test_trap_trace() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1642)
+#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
 #[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn test_trap_trace_cb() -> Result<()> {
     let store = Store::default();
@@ -111,7 +111,7 @@ fn test_trap_trace_cb() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1642)
+#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
 #[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn test_trap_stack_overflow() -> Result<()> {
     let store = Store::default();
@@ -144,7 +144,7 @@ fn test_trap_stack_overflow() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1642)
+#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
 #[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn trap_display_pretty() -> Result<()> {
     let store = Store::default();
@@ -177,7 +177,7 @@ wasm backtrace:
 }
 
 #[test]
-#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1642)
+#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
 #[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn trap_display_multi_module() -> Result<()> {
     let store = Store::default();
@@ -223,7 +223,7 @@ wasm backtrace:
 }
 
 #[test]
-#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1642)
+#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
 #[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn trap_start_function_import() -> Result<()> {
     let store = Store::default();
@@ -251,7 +251,7 @@ fn trap_start_function_import() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1642)
+#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
 #[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn rust_panic_import() -> Result<()> {
     let store = Store::default();
@@ -297,7 +297,7 @@ fn rust_panic_import() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1642)
+#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
 #[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn rust_panic_start_function() -> Result<()> {
     let store = Store::default();
@@ -332,7 +332,7 @@ fn rust_panic_start_function() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1642)
+#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
 #[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn mismatched_arguments() -> Result<()> {
     let store = Store::default();
@@ -365,7 +365,7 @@ fn mismatched_arguments() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1642)
+#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
 #[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn call_signature_mismatch() -> Result<()> {
     let store = Store::default();
@@ -397,7 +397,7 @@ fn call_signature_mismatch() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1642)
+#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
 #[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn start_trap_pretty() -> Result<()> {
     let store = Store::default();
