@@ -387,8 +387,10 @@ pub trait FuncEnvironment: TargetEnvironment {
     fn translate_memory_copy(
         &mut self,
         pos: FuncCursor,
-        index: MemoryIndex,
-        heap: ir::Heap,
+        src_index: MemoryIndex,
+        src_heap: ir::Heap,
+        dst_index: MemoryIndex,
+        dst_heap: ir::Heap,
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,

@@ -1,6 +1,7 @@
 //! Traversals over the AST.
 
 use crate::ast::*;
+use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::hash::Hash;
 
@@ -100,6 +101,44 @@ where
                 self.0.stack[start..].reverse();
             }
         }
+    }
+}
+
+/// A breadth-first traversal of an AST
+///
+/// This implementation is not recursive, and exposes an `Iterator` interface
+/// that yields `DynAstRef` items.
+///
+/// The traversal can walk a whole set of `Optimization`s or just a subtree of
+/// the AST, because the `new` constructor takes anything that can convert into
+/// a `DynAstRef`.
+#[derive(Clone, Debug)]
+pub struct Bfs<'a, TOperator> {
+    queue: VecDeque<DynAstRef<'a, TOperator>>,
+}
+
+impl<'a, TOperator> Bfs<'a, TOperator>
+where
+    TOperator: Copy + Debug + Eq + Hash,
+{
+    /// Construct a new `Bfs` traversal starting at the given `start` AST node.
+    pub fn new(start: impl Into<DynAstRef<'a, TOperator>>) -> Self {
+        let mut queue = VecDeque::with_capacity(16);
+        queue.push_back(start.into());
+        Bfs { queue }
+    }
+}
+
+impl<'a, TOperator> Iterator for Bfs<'a, TOperator>
+where
+    TOperator: Copy + Debug + Eq + Hash,
+{
+    type Item = DynAstRef<'a, TOperator>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let node = self.queue.pop_front()?;
+        node.child_nodes(&mut self.queue);
+        Some(node)
     }
 }
 

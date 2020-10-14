@@ -992,7 +992,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let index = FuncIndex::from_u32(*function_index);
             state.push1(environ.translate_ref_func(builder.cursor(), index)?);
         }
-        Operator::MemoryAtomicWait32 { .. } | Operator::MemoryAtomicWait64 { .. } => {
+        Operator::MemoryAtomicWait32 { memarg } | Operator::MemoryAtomicWait64 { memarg } => {
             // The WebAssembly MVP only supports one linear memory and
             // wasmparser will ensure that the memory indices specified are
             // zero.
@@ -1001,8 +1001,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 Operator::MemoryAtomicWait32 { .. } => I32,
                 _ => unreachable!(),
             };
-            let heap_index = MemoryIndex::from_u32(0);
-            let heap = state.get_heap(builder.func, 0, environ)?;
+            let heap_index = MemoryIndex::from_u32(memarg.memory);
+            let heap = state.get_heap(builder.func, memarg.memory, environ)?;
             let timeout = state.pop1(); // 64 (fixed)
             let expected = state.pop1(); // 32 or 64 (per the `Ixx` in `IxxAtomicWait`)
             let addr = state.pop1(); // 32 (fixed)
@@ -1019,12 +1019,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             )?;
             state.push1(res);
         }
-        Operator::MemoryAtomicNotify { .. } => {
-            // The WebAssembly MVP only supports one linear memory and
-            // wasmparser will ensure that the memory indices specified are
-            // zero.
-            let heap_index = MemoryIndex::from_u32(0);
-            let heap = state.get_heap(builder.func, 0, environ)?;
+        Operator::MemoryAtomicNotify { memarg } => {
+            let heap_index = MemoryIndex::from_u32(memarg.memory);
+            let heap = state.get_heap(builder.func, memarg.memory, environ)?;
             let count = state.pop1(); // 32 (fixed)
             let addr = state.pop1(); // 32 (fixed)
             let res =
@@ -1233,16 +1230,23 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             builder.ins().fence();
         }
         Operator::MemoryCopy { src, dst } => {
-            // The WebAssembly MVP only supports one linear memory and
-            // wasmparser will ensure that the memory indices specified are
-            // zero.
-            assert_eq!(src, dst, "unimplemented between-memories copy");
-            let heap_index = MemoryIndex::from_u32(*src);
-            let heap = state.get_heap(builder.func, *src, environ)?;
+            let src_index = MemoryIndex::from_u32(*src);
+            let dst_index = MemoryIndex::from_u32(*dst);
+            let src_heap = state.get_heap(builder.func, *src, environ)?;
+            let dst_heap = state.get_heap(builder.func, *dst, environ)?;
             let len = state.pop1();
-            let src = state.pop1();
-            let dest = state.pop1();
-            environ.translate_memory_copy(builder.cursor(), heap_index, heap, dest, src, len)?;
+            let src_pos = state.pop1();
+            let dst_pos = state.pop1();
+            environ.translate_memory_copy(
+                builder.cursor(),
+                src_index,
+                src_heap,
+                dst_index,
+                dst_heap,
+                dst_pos,
+                src_pos,
+                len,
+            )?;
         }
         Operator::MemoryFill { mem } => {
             let heap_index = MemoryIndex::from_u32(*mem);
