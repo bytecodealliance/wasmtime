@@ -7,6 +7,7 @@ use crate::isa::x64::inst::{
 };
 use crate::result::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
+use core::ops::Range;
 use gimli::{write::CommonInformationEntry, Encoding, Format, Register, X86_64};
 use regalloc::{Reg, RegClass};
 use std::boxed::Box;
@@ -196,18 +197,16 @@ pub(crate) fn create_unwind_info(
     insts: &[Inst],
     insts_layout: &[u32],
     len: u32,
-    prologue_epilogue: &(u32, u32, Box<[(u32, u32)]>),
+    (prologue, epilogues): &(Range<u32>, Box<[Range<u32>]>),
     frame_register: Option<Reg>,
 ) -> CodegenResult<Option<UnwindInfo>> {
     let mut builder = InstructionBuilder::new(frame_register);
 
-    let prologue_start = prologue_epilogue.0 as usize;
-    let prologue_end = prologue_epilogue.1 as usize;
-    for i in prologue_start..prologue_end {
+    for i in prologue.clone() {
+        let i = i as usize;
         let inst = &insts[i];
         let offset = insts_layout[i];
 
-        // TODO sub and `mov reg, imm(rsp)`
         match inst {
             Inst::Push64 {
                 src: RegMemImm::Reg { reg },
@@ -255,12 +254,12 @@ pub(crate) fn create_unwind_info(
         }
     }
 
-    for (epilogue_start, epilogue_end) in prologue_epilogue.2.iter() {
-        let i = *epilogue_start as usize;
+    for epilogue in epilogues.iter() {
+        let i = epilogue.start as usize;
         let offset = insts_layout[i];
         builder.remember_state(offset);
 
-        let i = *epilogue_end as usize;
+        let i = epilogue.end as usize;
         let offset = insts_layout[i];
         builder.restore_state(offset);
     }

@@ -106,6 +106,7 @@ use crate::settings::Flags;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt::Debug;
+use core::ops::Range;
 use regalloc::RegUsageCollector;
 use regalloc::{
     RealReg, RealRegUniverse, Reg, RegClass, RegUsageMapper, SpillSlot, VirtualReg, Writable,
@@ -390,6 +391,6 @@ pub trait UnwindInfoGenerator<I: MachInstEmit> {
         insts: &[I],
         insts_layout: &[CodeOffset],
         len: CodeOffset,
-        prologue_epilogue: &(u32, u32, Box<[(u32, u32)]>),
+        prologue_epilogue: &(Range<u32>, Box<[Range<u32>]>),
     ) -> CodegenResult<Option<unwind::UnwindInfo>>;
 }

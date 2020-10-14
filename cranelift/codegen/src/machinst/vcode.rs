@@ -40,6 +40,8 @@ use std::string::String;
 pub type InsnIndex = u32;
 /// Index referring to a basic block in VCode.
 pub type BlockIndex = u32;
+/// Range of an instructions in VCode.
+pub type InsnRange = core::ops::Range<InsnIndex>;
 
 /// VCodeInst wraps all requirements for a MachInst to be in VCode: it must be
 /// a `MachInst` and it must be able to emit itself at least to a `SizeCodeSink`.
@@ -104,7 +106,7 @@ pub struct VCode<I: VCodeInst> {
     safepoint_slots: Vec<Vec<SpillSlot>>,
 
     /// Ranges for prologue and epilogue instructions.
-    prologue_epilogue_ranges: Option<(InsnIndex, InsnIndex, Box<[(InsnIndex, InsnIndex)]>)>,
+    prologue_epilogue_ranges: Option<(InsnRange, Box<[InsnRange]>)>,
 
     /// Instruction end offsets
     insts_layout: RefCell<(Vec<u32>, u32)>,
@@ -415,7 +417,7 @@ impl<I: VCodeInst> VCode<I> {
                     let len = epilogue.len();
                     final_insns.extend(epilogue.into_iter());
                     final_srclocs.extend(iter::repeat(srcloc).take(len));
-                    epilogue_islands.push((epilogue_start, final_insns.len() as InsnIndex));
+                    epilogue_islands.push(epilogue_start..final_insns.len() as InsnIndex);
                 } else {
                     final_insns.push(insn.clone());
                     final_srclocs.push(srcloc);
@@ -452,8 +454,7 @@ impl<I: VCodeInst> VCode<I> {
         drop(epilogue_islands.pop());
 
         self.prologue_epilogue_ranges = Some((
-            prologue_start.unwrap(),
-            prologue_end.unwrap(),
+            prologue_start.unwrap()..prologue_end.unwrap(),
             epilogue_islands.into_boxed_slice(),
         ));
     }
