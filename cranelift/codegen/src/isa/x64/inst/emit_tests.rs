@@ -3290,6 +3290,14 @@ fn test_x64_emit() {
         "pshufb  %xmm11, %xmm2",
     ));
 
+    // ========================================================
+    // XMM_RM_R: Integer Conversion
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Cvtdq2ps, RegMem::reg(xmm1), w_xmm8),
+        "440F5BC1",
+        "cvtdq2ps %xmm1, %xmm8",
+    ));
+
     // XMM_Mov_R_M: float stores
     insns.push((
         Inst::xmm_mov_r_m(SseOpcode::Movss, xmm15, Amode::imm_reg(128, r12), None),
