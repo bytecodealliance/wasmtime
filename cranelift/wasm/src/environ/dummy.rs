@@ -393,8 +393,10 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     fn translate_memory_copy(
         &mut self,
         _pos: FuncCursor,
-        _index: MemoryIndex,
-        _heap: ir::Heap,
+        _src_index: MemoryIndex,
+        _src_heap: ir::Heap,
+        _dst_index: MemoryIndex,
+        _dst_heap: ir::Heap,
         _dst: ir::Value,
         _src: ir::Value,
         _len: ir::Value,

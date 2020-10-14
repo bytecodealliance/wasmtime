@@ -604,29 +604,31 @@ impl Instance {
         // dropping a non-passive element is a no-op (not a trap).
     }
 
-    /// Do a `memory.copy` for a locally defined memory.
+    /// Do a `memory.copy`
     ///
     /// # Errors
     ///
     /// Returns a `Trap` error when the source or destination ranges are out of
     /// bounds.
-    pub(crate) fn defined_memory_copy(
+    pub(crate) fn memory_copy(
         &self,
-        memory_index: DefinedMemoryIndex,
+        dst_index: MemoryIndex,
         dst: u32,
+        src_index: MemoryIndex,
         src: u32,
         len: u32,
     ) -> Result<(), Trap> {
         // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-memory-copy
 
-        let memory = self.memory(memory_index);
+        let src_mem = self.get_memory(src_index);
+        let dst_mem = self.get_memory(dst_index);
 
         if src
             .checked_add(len)
-            .map_or(true, |n| n as usize > memory.current_length)
+            .map_or(true, |n| n as usize > src_mem.current_length)
             || dst
                 .checked_add(len)
-                .map_or(true, |m| m as usize > memory.current_length)
+                .map_or(true, |m| m as usize > dst_mem.current_length)
         {
             return Err(Trap::wasm(ir::TrapCode::HeapOutOfBounds));
         }
@@ -637,29 +639,12 @@ impl Instance {
         // Bounds and casts are checked above, by this point we know that
         // everything is safe.
         unsafe {
-            let dst = memory.base.add(dst);
-            let src = memory.base.add(src);
+            let dst = dst_mem.base.add(dst);
+            let src = src_mem.base.add(src);
             ptr::copy(src, dst, len as usize);
         }
 
         Ok(())
-    }
-
-    /// Perform a `memory.copy` on an imported memory.
-    pub(crate) fn imported_memory_copy(
-        &self,
-        memory_index: MemoryIndex,
-        dst: u32,
-        src: u32,
-        len: u32,
-    ) -> Result<(), Trap> {
-        let import = self.imported_memory(memory_index);
-        unsafe {
-            let foreign_instance = (&*import.vmctx).instance();
-            let foreign_memory = &*import.from;
-            let foreign_index = foreign_instance.memory_index(foreign_memory);
-            foreign_instance.defined_memory_copy(foreign_index, dst, src, len)
-        }
     }
 
     /// Perform the `memory.fill` operation on a locally defined memory.
