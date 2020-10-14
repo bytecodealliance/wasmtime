@@ -2035,6 +2035,26 @@ fn test_aarch64_binemit() {
         "dup v18.2d, v10.d[0]",
     ));
     insns.push((
+        Inst::VecDupImm {
+            rd: writable_vreg(31),
+            imm: ASIMDMovModImm::maybe_from_u64(255, ScalarSize::Size8).unwrap(),
+            invert: false,
+            size: VectorSize::Size8x16,
+        },
+        "FFE7074F",
+        "movi v31.16b, #255",
+    ));
+    insns.push((
+        Inst::VecDupImm {
+            rd: writable_vreg(0),
+            imm: ASIMDMovModImm::zero(),
+            invert: true,
+            size: VectorSize::Size16x4,
+        },
+        "0084002F",
+        "mvni v0.4h, #0",
+    ));
+    insns.push((
         Inst::VecExtend {
             t: VecExtendOp::Sxtl8,
             rd: writable_vreg(4),
@@ -2099,8 +2119,8 @@ fn test_aarch64_binemit() {
         Inst::VecMovElement {
             rd: writable_vreg(0),
             rn: vreg(31),
-            idx1: 7,
-            idx2: 7,
+            dest_idx: 7,
+            src_idx: 7,
             size: VectorSize::Size16x8,
         },
         "E0771E6E",
@@ -2111,8 +2131,8 @@ fn test_aarch64_binemit() {
         Inst::VecMovElement {
             rd: writable_vreg(31),
             rn: vreg(16),
-            idx1: 1,
-            idx2: 0,
+            dest_idx: 1,
+            src_idx: 0,
             size: VectorSize::Size32x2,
         },
         "1F060C6E",
@@ -4782,18 +4802,9 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::LoadFpuConst32 {
-            rd: writable_vreg(16),
-            const_data: 1.0,
-        },
-        "5000001C020000140000803F",
-        "ldr s16, pc+8 ; b 8 ; data.f32 1",
-    ));
-
-    insns.push((
         Inst::LoadFpuConst64 {
             rd: writable_vreg(16),
-            const_data: 1.0,
+            const_data: 1.0_f64.to_bits(),
         },
         "5000005C03000014000000000000F03F",
         "ldr d16, pc+8 ; b 12 ; data.f64 1",

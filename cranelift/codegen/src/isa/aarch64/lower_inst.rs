@@ -2013,24 +2013,47 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::VecMovElement {
                     rd,
                     rn,
-                    idx1: idx,
-                    idx2: 0,
+                    dest_idx: idx,
+                    src_idx: 0,
                     size,
                 });
             }
         }
 
         Opcode::Splat => {
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let rd = get_output_reg(ctx, outputs[0]);
-            let input_ty = ctx.input_ty(insn, 0);
             let size = VectorSize::from_ty(ty.unwrap());
-            let inst = if ty_has_int_representation(input_ty) {
-                Inst::VecDup { rd, rn, size }
+
+            if let Some((_, insn)) = maybe_input_insn_multi(
+                ctx,
+                inputs[0],
+                &[
+                    Opcode::Bconst,
+                    Opcode::F32const,
+                    Opcode::F64const,
+                    Opcode::Iconst,
+                ],
+            ) {
+                lower_splat_const(ctx, rd, ctx.get_constant(insn).unwrap(), size);
+            } else if let Some(insn) =
+                maybe_input_insn_via_conv(ctx, inputs[0], Opcode::Iconst, Opcode::Ireduce)
+            {
+                lower_splat_const(ctx, rd, ctx.get_constant(insn).unwrap(), size);
+            } else if let Some(insn) =
+                maybe_input_insn_via_conv(ctx, inputs[0], Opcode::Bconst, Opcode::Breduce)
+            {
+                lower_splat_const(ctx, rd, ctx.get_constant(insn).unwrap(), size);
             } else {
-                Inst::VecDupFromFpu { rd, rn, size }
-            };
-            ctx.emit(inst);
+                let input_ty = ctx.input_ty(insn, 0);
+                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+                let inst = if ty_has_int_representation(input_ty) {
+                    Inst::VecDup { rd, rn, size }
+                } else {
+                    Inst::VecDupFromFpu { rd, rn, size }
+                };
+
+                ctx.emit(inst);
+            }
         }
 
         Opcode::VanyTrue | Opcode::VallTrue => {
@@ -2820,15 +2843,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let rtmp2 = ctx.alloc_tmp(RegClass::V128, in_ty);
 
                 if in_bits == 32 {
-                    ctx.emit(Inst::LoadFpuConst32 {
-                        rd: rtmp1,
-                        const_data: max as f32,
-                    });
+                    lower_constant_f32(ctx, rtmp1, max as f32);
                 } else {
-                    ctx.emit(Inst::LoadFpuConst64 {
-                        rd: rtmp1,
-                        const_data: max,
-                    });
+                    lower_constant_f64(ctx, rtmp1, max);
                 }
                 ctx.emit(Inst::FpuRRR {
                     fpu_op: choose_32_64(in_ty, FPUOp2::Min32, FPUOp2::Min64),
@@ -2837,15 +2854,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     rm: rtmp1.to_reg(),
                 });
                 if in_bits == 32 {
-                    ctx.emit(Inst::LoadFpuConst32 {
-                        rd: rtmp1,
-                        const_data: min as f32,
-                    });
+                    lower_constant_f32(ctx, rtmp1, min as f32);
                 } else {
-                    ctx.emit(Inst::LoadFpuConst64 {
-                        rd: rtmp1,
-                        const_data: min,
-                    });
+                    lower_constant_f64(ctx, rtmp1, min);
                 }
                 ctx.emit(Inst::FpuRRR {
                     fpu_op: choose_32_64(in_ty, FPUOp2::Max32, FPUOp2::Max64),
@@ -2855,15 +2866,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 });
                 if out_signed {
                     if in_bits == 32 {
-                        ctx.emit(Inst::LoadFpuConst32 {
-                            rd: rtmp1,
-                            const_data: 0.0,
-                        });
+                        lower_constant_f32(ctx, rtmp1, 0.0);
                     } else {
-                        ctx.emit(Inst::LoadFpuConst64 {
-                            rd: rtmp1,
-                            const_data: 0.0,
-                        });
+                        lower_constant_f64(ctx, rtmp1, 0.0);
                     }
                 }
                 if in_bits == 32 {

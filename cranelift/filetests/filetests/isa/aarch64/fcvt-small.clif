@@ -60,10 +60,12 @@ block0(v0: f32):
     v1 = fcvt_to_uint.i8 v0
     ; check: fcmp s0, s0
     ; check: b.vc 8 ; udf
-    ; check: ldr s1, pc+8 ; b 8 ; data.f32 -1
+    ; check: movz x0, #49024, LSL #16
+    ; check: fmov d1, x0
     ; check: fcmp s0, s1
     ; check: b.gt 8 ; udf
-    ; check: ldr s1, pc+8 ; b 8 ; data.f32 256
+    ; check: movz x0, #17280, LSL #16
+    ; check: fmov d1, x0
     ; check: fcmp s0, s1
     ; check: b.mi 8 ; udf
     ; check: fcvtzu w0, s0
@@ -80,10 +82,12 @@ block0(v0: f64):
     v1 = fcvt_to_uint.i8 v0
     ; check: fcmp d0, d0
     ; check: b.vc 8 ; udf
-    ; check: ldr d1, pc+8 ; b 12 ; data.f64 -1
+    ; check: movz x0, #49136, LSL #48
+    ; check: fmov d1, x0
     ; check: fcmp d0, d1
     ; check: b.gt 8 ; udf
-    ; check: ldr d1, pc+8 ; b 12 ; data.f64 256
+    ; check: movz x0, #16496, LSL #48
+    ; check: fmov d1, x0
     ; check: fcmp d0, d1
     ; check: b.mi 8 ; udf
     ; check: fcvtzu w0, d0
@@ -100,10 +104,12 @@ block0(v0: f32):
     v1 = fcvt_to_uint.i16 v0
     ; check: fcmp s0, s0
     ; check: b.vc 8 ; udf
-    ; check: ldr s1, pc+8 ; b 8 ; data.f32 -1
+    ; check: movz x0, #49024, LSL #16
+    ; check: fmov d1, x0
     ; check: fcmp s0, s1
     ; check: b.gt 8 ; udf
-    ; check: ldr s1, pc+8 ; b 8 ; data.f32 65536
+    ; check: movz x0, #18304, LSL #16
+    ; check: fmov d1, x0
     ; check: fcmp s0, s1
     ; check: b.mi 8 ; udf
     ; check: fcvtzu w0, s0
@@ -120,10 +126,12 @@ block0(v0: f64):
     v1 = fcvt_to_uint.i16 v0
     ; check: fcmp d0, d0
     ; check: b.vc 8 ; udf
-    ; check: ldr d1, pc+8 ; b 12 ; data.f64 -1
+    ; check: movz x0, #49136, LSL #48
+    ; check: fmov d1, x0
     ; check: fcmp d0, d1
     ; check: b.gt 8 ; udf
-    ; check: ldr d1, pc+8 ; b 12 ; data.f64 65536
+    ; check: movz x0, #16624, LSL #48
+    ; check: fmov d1, x0
     ; check: fcmp d0, d1
     ; check: b.mi 8 ; udf
     ; check: fcvtzu w0, d0

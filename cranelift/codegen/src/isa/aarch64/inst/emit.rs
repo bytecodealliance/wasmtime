@@ -437,6 +437,21 @@ fn enc_stxr(ty: Type, rs: Writable<Reg>, rt: Reg, rn: Reg) -> u32 {
         | machreg_to_gpr(rt)
 }
 
+fn enc_asimd_mod_imm(rd: Writable<Reg>, q_op: u32, cmode: u32, imm: u8) -> u32 {
+    let abc = (imm >> 5) as u32;
+    let defgh = (imm & 0b11111) as u32;
+
+    debug_assert_eq!(cmode & 0b1111, cmode);
+    debug_assert_eq!(q_op & 0b11, q_op);
+
+    0b0_0_0_0111100000_000_0000_01_00000_00000
+        | (q_op << 29)
+        | (abc << 16)
+        | (cmode << 12)
+        | (defgh << 5)
+        | machreg_to_vec(rd.to_reg())
+}
+
 /// State carried between emissions of a sequence of instructions.
 #[derive(Default, Clone, Debug)]
 pub struct EmitState {
@@ -1588,19 +1603,6 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_inttofpu(top16, rd, rn));
             }
-            &Inst::LoadFpuConst32 { rd, const_data } => {
-                let inst = Inst::FpuLoad32 {
-                    rd,
-                    mem: AMode::Label(MemLabel::PCRel(8)),
-                    srcloc: None,
-                };
-                inst.emit(sink, emit_info, state);
-                let inst = Inst::Jump {
-                    dest: BranchTarget::ResolvedOffset(8),
-                };
-                inst.emit(sink, emit_info, state);
-                sink.put4(const_data.to_bits());
-            }
             &Inst::LoadFpuConst64 { rd, const_data } => {
                 let inst = Inst::FpuLoad64 {
                     rd,
@@ -1612,7 +1614,7 @@ impl MachInstEmit for Inst {
                     dest: BranchTarget::ResolvedOffset(12),
                 };
                 inst.emit(sink, emit_info, state);
-                sink.put8(const_data.to_bits());
+                sink.put8(const_data);
             }
             &Inst::LoadFpuConst128 { rd, const_data } => {
                 let inst = Inst::FpuLoad128 {
@@ -1751,6 +1753,53 @@ impl MachInstEmit for Inst {
                         | machreg_to_vec(rd.to_reg()),
                 );
             }
+            &Inst::VecDupImm {
+                rd,
+                imm,
+                invert,
+                size,
+            } => {
+                let (imm, shift, shift_ones) = imm.value();
+                let (op, cmode) = match size.lane_size() {
+                    ScalarSize::Size8 => {
+                        assert!(!invert);
+                        assert_eq!(shift, 0);
+
+                        (0, 0b1110)
+                    }
+                    ScalarSize::Size16 => {
+                        let s = shift & 8;
+
+                        assert!(!shift_ones);
+                        assert_eq!(s, shift);
+
+                        (invert as u32, 0b1000 | (s >> 2))
+                    }
+                    ScalarSize::Size32 => {
+                        if shift_ones {
+                            assert!(shift == 8 || shift == 16);
+
+                            (invert as u32, 0b1100 | (shift >> 4))
+                        } else {
+                            let s = shift & 24;
+
+                            assert_eq!(s, shift);
+
+                            (invert as u32, 0b0000 | (s >> 2))
+                        }
+                    }
+                    ScalarSize::Size64 => {
+                        assert!(!invert);
+                        assert_eq!(shift, 0);
+
+                        (1, 0b1110)
+                    }
+                    _ => unreachable!(),
+                };
+                let q_op = op | ((size.is_128bits() as u32) << 1);
+
+                sink.put4(enc_asimd_mod_imm(rd, q_op, cmode, imm));
+            }
             &Inst::VecExtend {
                 t,
                 rd,
@@ -1803,8 +1852,8 @@ impl MachInstEmit for Inst {
             &Inst::VecMovElement {
                 rd,
                 rn,
-                idx1,
-                idx2,
+                dest_idx,
+                src_idx,
                 size,
             } => {
                 let (imm5, shift) = match size.lane_size() {
@@ -1815,10 +1864,10 @@ impl MachInstEmit for Inst {
                     _ => unreachable!(),
                 };
                 let mask = 0b11111 >> shift;
-                debug_assert_eq!(idx1 & mask, idx1);
-                debug_assert_eq!(idx2 & mask, idx2);
-                let imm4 = (idx2 as u32) << (shift - 1);
-                let imm5 = imm5 | ((idx1 as u32) << shift);
+                debug_assert_eq!(dest_idx & mask, dest_idx);
+                debug_assert_eq!(src_idx & mask, src_idx);
+                let imm4 = (src_idx as u32) << (shift - 1);
+                let imm5 = imm5 | ((dest_idx as u32) << shift);
                 sink.put4(
                     0b011_01110000_00000_0_0000_1_00000_00000
                         | (imm5 << 16)

@@ -1,6 +1,7 @@
 //! Instruction predicates/properties, shared by various analyses.
 
 use crate::ir::{DataFlowGraph, Function, Inst, InstructionData, Opcode};
+use crate::machinst::ty_bits;
 use cranelift_entity::EntityRef;
 
 /// Preserve instructions with used result values.
@@ -59,7 +60,21 @@ pub fn is_constant_64bit(func: &Function, inst: Inst) -> Option<u64> {
         &InstructionData::UnaryImm { imm, .. } => Some(imm.bits() as u64),
         &InstructionData::UnaryIeee32 { imm, .. } => Some(imm.bits() as u64),
         &InstructionData::UnaryIeee64 { imm, .. } => Some(imm.bits()),
-        &InstructionData::UnaryBool { imm, .. } => Some(if imm { 1 } else { 0 }),
+        &InstructionData::UnaryBool { imm, .. } => {
+            let imm = if imm {
+                let bits = ty_bits(func.dfg.value_type(func.dfg.inst_results(inst)[0]));
+
+                if bits < 64 {
+                    (1u64 << bits) - 1
+                } else {
+                    u64::MAX
+                }
+            } else {
+                0
+            };
+
+            Some(imm)
+        }
         _ => None,
     }
 }

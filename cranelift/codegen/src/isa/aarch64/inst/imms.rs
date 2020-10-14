@@ -4,7 +4,7 @@
 #[allow(dead_code)]
 use crate::ir::types::*;
 use crate::ir::Type;
-use crate::isa::aarch64::inst::OperandSize;
+use crate::isa::aarch64::inst::{OperandSize, ScalarSize};
 
 use regalloc::{PrettyPrint, RealRegUniverse};
 
@@ -667,6 +667,40 @@ impl MoveWideConst {
     }
 }
 
+/// Advanced SIMD modified immediate as used by MOVI/MVNI.
+#[derive(Clone, Copy, Debug)]
+pub struct ASIMDMovModImm {
+    imm: u8,
+    shift: u8,
+    shift_ones: bool,
+}
+
+impl ASIMDMovModImm {
+    pub fn maybe_from_u64(value: u64, size: ScalarSize) -> Option<ASIMDMovModImm> {
+        match size {
+            ScalarSize::Size8 => Some(ASIMDMovModImm {
+                imm: value as u8,
+                shift: 0,
+                shift_ones: false,
+            }),
+            _ => None,
+        }
+    }
+
+    /// Create a zero immediate of this format.
+    pub fn zero() -> Self {
+        ASIMDMovModImm {
+            imm: 0,
+            shift: 0,
+            shift_ones: false,
+        }
+    }
+
+    pub fn value(&self) -> (u8, u32, bool) {
+        (self.imm, self.shift as u32, self.shift_ones)
+    }
+}
+
 impl PrettyPrint for NZCV {
     fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
         let fmt = |c: char, v| if v { c.to_ascii_uppercase() } else { c };
@@ -742,6 +776,17 @@ impl PrettyPrint for MoveWideConst {
             format!("#{}", self.bits)
         } else {
             format!("#{}, LSL #{}", self.bits, self.shift * 16)
+        }
+    }
+}
+
+impl PrettyPrint for ASIMDMovModImm {
+    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+        if self.shift == 0 {
+            format!("#{}", self.imm)
+        } else {
+            let shift_type = if self.shift_ones { "MSL" } else { "LSL" };
+            format!("#{}, {} #{}", self.imm, shift_type, self.shift)
         }
     }
 }

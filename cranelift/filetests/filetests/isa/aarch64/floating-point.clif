@@ -427,10 +427,12 @@ block0(v0: f32):
 ; nextln:  mov fp, sp
 ; nextln:  fcmp s0, s0
 ; nextln:  b.vc 8 ; udf
-; nextln:  ldr s1, pc+8 ; b 8 ; data.f32 -1
+; nextln:  movz x0, #49024, LSL #16
+; nextln:  fmov d1, x0
 ; nextln:  fcmp s0, s1
 ; nextln:  b.gt 8 ; udf
-; nextln:  ldr s1, pc+8 ; b 8 ; data.f32 4294967300
+; nextln:  movz x0, #20352, LSL #16
+; nextln:  fmov d1, x0
 ; nextln:  fcmp s0, s1
 ; nextln:  b.mi 8 ; udf
 ; nextln:  fcvtzu w0, s0
@@ -448,10 +450,12 @@ block0(v0: f32):
 ; nextln:  mov fp, sp
 ; nextln:  fcmp s0, s0
 ; nextln:  b.vc 8 ; udf
-; nextln:  ldr s1, pc+8 ; b 8 ; data.f32 -2147483600
+; nextln:  movz x0, #52992, LSL #16
+; nextln:  fmov d1, x0
 ; nextln:  fcmp s0, s1
 ; nextln:  b.ge 8 ; udf
-; nextln:  ldr s1, pc+8 ; b 8 ; data.f32 2147483600
+; nextln:  movz x0, #20224, LSL #16
+; nextln:  fmov d1, x0
 ; nextln:  fcmp s0, s1
 ; nextln:  b.mi 8 ; udf
 ; nextln:  fcvtzs w0, s0
@@ -469,10 +473,12 @@ block0(v0: f32):
 ; nextln:  mov fp, sp
 ; nextln:  fcmp s0, s0
 ; nextln:  b.vc 8 ; udf
-; nextln:  ldr s1, pc+8 ; b 8 ; data.f32 -1
+; nextln:  movz x0, #49024, LSL #16
+; nextln:  fmov d1, x0
 ; nextln:  fcmp s0, s1
 ; nextln:  b.gt 8 ; udf
-; nextln:  ldr s1, pc+8 ; b 8 ; data.f32 18446744000000000000
+; nextln:  movz x0, #24448, LSL #16
+; nextln:  fmov d1, x0
 ; nextln:  fcmp s0, s1
 ; nextln:  b.mi 8 ; udf
 ; nextln:  fcvtzu x0, s0
@@ -490,10 +496,12 @@ block0(v0: f32):
 ; nextln:  mov fp, sp
 ; nextln:  fcmp s0, s0
 ; nextln:  b.vc 8 ; udf
-; nextln:  ldr s1, pc+8 ; b 8 ; data.f32 -9223372000000000000
+; nextln:  movz x0, #57088, LSL #16
+; nextln:  fmov d1, x0
 ; nextln:  fcmp s0, s1
 ; nextln:  b.ge 8 ; udf
-; nextln:  ldr s1, pc+8 ; b 8 ; data.f32 9223372000000000000
+; nextln:  movz x0, #24320, LSL #16
+; nextln:  fmov d1, x0
 ; nextln:  fcmp s0, s1
 ; nextln:  b.mi 8 ; udf
 ; nextln:  fcvtzs x0, s0
@@ -511,10 +519,12 @@ block0(v0: f64):
 ; nextln:  mov fp, sp
 ; nextln:  fcmp d0, d0
 ; nextln:  b.vc 8 ; udf
-; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 -1
+; nextln:  movz x0, #49136, LSL #48
+; nextln:  fmov d1, x0
 ; nextln:  fcmp d0, d1
 ; nextln:  b.gt 8 ; udf
-; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 4294967296
+; nextln:  movz x0, #16880, LSL #48
+; nextln:  fmov d1, x0
 ; nextln:  fcmp d0, d1
 ; nextln:  b.mi 8 ; udf
 ; nextln:  fcvtzu w0, d0
@@ -535,7 +545,8 @@ block0(v0: f64):
 ; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 -2147483649
 ; nextln:  fcmp d0, d1
 ; nextln:  b.gt 8 ; udf
-; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 2147483648
+; nextln:  movz x0, #16864, LSL #48
+; nextln:  fmov d1, x0
 ; nextln:  fcmp d0, d1
 ; nextln:  b.mi 8 ; udf
 ; nextln:  fcvtzs w0, d0
@@ -553,10 +564,12 @@ block0(v0: f64):
 ; nextln:  mov fp, sp
 ; nextln:  fcmp d0, d0
 ; nextln:  b.vc 8 ; udf
-; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 -1
+; nextln:  movz x0, #49136, LSL #48
+; nextln:  fmov d1, x0
 ; nextln:  fcmp d0, d1
 ; nextln:  b.gt 8 ; udf
-; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 18446744073709552000
+; nextln:  movz x0, #17392, LSL #48
+; nextln:  fmov d1, x0
 ; nextln:  fcmp d0, d1
 ; nextln:  b.mi 8 ; udf
 ; nextln:  fcvtzu x0, d0
@@ -574,10 +587,12 @@ block0(v0: f64):
 ; nextln:  mov fp, sp
 ; nextln:  fcmp d0, d0
 ; nextln:  b.vc 8 ; udf
-; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 -9223372036854776000
+; nextln:  movz x0, #50144, LSL #48
+; nextln:  fmov d1, x0
 ; nextln:  fcmp d0, d1
 ; nextln:  b.ge 8 ; udf
-; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 9223372036854776000
+; nextln:  movz x0, #17376, LSL #48
+; nextln:  fmov d1, x0
 ; nextln:  fcmp d0, d1
 ; nextln:  b.mi 8 ; udf
 ; nextln:  fcvtzs x0, d0
@@ -697,9 +712,10 @@ block0(v0: f32):
 
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
-; nextln: ldr s1, pc+8 ; b 8 ; data.f32 4294967300
+; nextln: movz x0, #20352, LSL #16
+; nextln: fmov d1, x0
 ; nextln: fmin s2, s0, s1
-; nextln: ldr s1, pc+8 ; b 8 ; data.f32 0
+; nextln: movi v1.8b, #0
 ; nextln: fmax s2, s2, s1
 ; nextln: fcmp s0, s0
 ; nextln: fcsel s0, s1, s2, ne
@@ -716,11 +732,13 @@ block0(v0: f32):
 
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
-; nextln: ldr s1, pc+8 ; b 8 ; data.f32 2147483600
+; nextln: movz x0, #20224, LSL #16
+; nextln: fmov d1, x0
 ; nextln: fmin s1, s0, s1
-; nextln: ldr s2, pc+8 ; b 8 ; data.f32 -2147483600
+; nextln: movz x0, #52992, LSL #16
+; nextln: fmov d2, x0
 ; nextln: fmax s1, s1, s2
-; nextln: ldr s2, pc+8 ; b 8 ; data.f32 0
+; nextln: movi v2.8b, #0
 ; nextln: fcmp s0, s0
 ; nextln: fcsel s0, s2, s1, ne
 ; nextln: fcvtzs w0, s0
@@ -736,9 +754,10 @@ block0(v0: f32):
 
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
-; nextln: ldr s1, pc+8 ; b 8 ; data.f32 18446744000000000000
+; nextln: movz x0, #24448, LSL #16
+; nextln: fmov d1, x0
 ; nextln: fmin s2, s0, s1
-; nextln: ldr s1, pc+8 ; b 8 ; data.f32 0
+; nextln: movi v1.8b, #0
 ; nextln: fmax s2, s2, s1
 ; nextln: fcmp s0, s0
 ; nextln: fcsel s0, s1, s2, ne
@@ -755,11 +774,13 @@ block0(v0: f32):
 
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
-; nextln: ldr s1, pc+8 ; b 8 ; data.f32 9223372000000000000
+; nextln: movz x0, #24320, LSL #16
+; nextln: fmov d1, x0
 ; nextln: fmin s1, s0, s1
-; nextln: ldr s2, pc+8 ; b 8 ; data.f32 -9223372000000000000
+; nextln: movz x0, #57088, LSL #16
+; nextln: fmov d2, x0
 ; nextln: fmax s1, s1, s2
-; nextln: ldr s2, pc+8 ; b 8 ; data.f32 0
+; nextln: movi v2.8b, #0
 ; nextln: fcmp s0, s0
 ; nextln: fcsel s0, s2, s1, ne
 ; nextln: fcvtzs x0, s0
@@ -777,7 +798,7 @@ block0(v0: f64):
 ; nextln:  mov fp, sp
 ; nextln: ldr d1, pc+8 ; b 12 ; data.f64 4294967295
 ; nextln: fmin d2, d0, d1
-; nextln: ldr d1, pc+8 ; b 12 ; data.f64 0
+; nextln: movi v1.8b, #0
 ; nextln: fmax d2, d2, d1
 ; nextln: fcmp d0, d0
 ; nextln: fcsel d0, d1, d2, ne
@@ -796,9 +817,10 @@ block0(v0: f64):
 ; nextln:  mov fp, sp
 ; nextln: ldr d1, pc+8 ; b 12 ; data.f64 2147483647
 ; nextln: fmin d1, d0, d1
-; nextln: ldr d2, pc+8 ; b 12 ; data.f64 -2147483648
+; nextln: movz x0, #49632, LSL #48
+; nextln: fmov d2, x0
 ; nextln: fmax d1, d1, d2
-; nextln: ldr d2, pc+8 ; b 12 ; data.f64 0
+; nextln: movi v2.8b, #0
 ; nextln: fcmp d0, d0
 ; nextln: fcsel d0, d2, d1, ne
 ; nextln: fcvtzs w0, d0
@@ -814,9 +836,10 @@ block0(v0: f64):
 
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
-; nextln: ldr d1, pc+8 ; b 12 ; data.f64 18446744073709552000
+; nextln: movz x0, #17392, LSL #48
+; nextln: fmov d1, x0
 ; nextln: fmin d2, d0, d1
-; nextln: ldr d1, pc+8 ; b 12 ; data.f64 0
+; nextln: movi v1.8b, #0
 ; nextln: fmax d2, d2, d1
 ; nextln: fcmp d0, d0
 ; nextln: fcsel d0, d1, d2, ne
@@ -833,11 +856,13 @@ block0(v0: f64):
 
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
-; nextln: ldr d1, pc+8 ; b 12 ; data.f64 9223372036854776000
+; nextln: movz x0, #17376, LSL #48
+; nextln: fmov d1, x0
 ; nextln: fmin d1, d0, d1
-; nextln: ldr d2, pc+8 ; b 12 ; data.f64 -9223372036854776000
+; nextln: movz x0, #50144, LSL #48
+; nextln: fmov d2, x0
 ; nextln: fmax d1, d1, d2
-; nextln: ldr d2, pc+8 ; b 12 ; data.f64 0
+; nextln: movi v2.8b, #0
 ; nextln: fcmp d0, d0
 ; nextln: fcsel d0, d2, d1, ne
 ; nextln: fcvtzs x0, d0
