@@ -24,15 +24,15 @@ pub(crate) mod input {
     #[derive(Clone, Debug, PartialEq, Eq)]
     #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
     pub(crate) enum UnwindCode<Reg> {
-        PushRegister {
+        SaveRegister {
             offset: CodeOffset,
             reg: Reg,
         },
-        PopRegister {
+        RestoreRegister {
             offset: CodeOffset,
             reg: Reg,
         },
-        SaveXmm {
+        SaveXmmRegister {
             offset: CodeOffset,
             reg: Reg,
             stack_offset: u32,
@@ -45,7 +45,7 @@ pub(crate) mod input {
             offset: CodeOffset,
             size: u32,
         },
-        SetCfaRegister {
+        SetFramePointer {
             offset: CodeOffset,
             reg: Reg,
         },

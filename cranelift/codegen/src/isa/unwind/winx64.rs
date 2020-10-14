@@ -222,7 +222,7 @@ impl UnwindInfo {
         let mut unwind_codes = Vec::new();
         for c in unwind.prologue_unwind_codes.iter() {
             match c {
-                InputUnwindCode::PushRegister { offset, reg } => {
+                InputUnwindCode::SaveRegister { offset, reg } => {
                     unwind_codes.push(UnwindCode::PushRegister {
                         offset: ensure_unwind_offset(*offset)?,
                         reg: MR::map(*reg),
@@ -234,7 +234,7 @@ impl UnwindInfo {
                         size: *size,
                     });
                 }
-                InputUnwindCode::SaveXmm {
+                InputUnwindCode::SaveXmmRegister {
                     offset,
                     reg,
                     stack_offset,

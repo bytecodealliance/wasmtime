@@ -130,7 +130,7 @@ impl UnwindInfo {
                 .flatten(),
         ) {
             match c {
-                UnwindCode::PushRegister { offset, reg } => {
+                UnwindCode::SaveRegister { offset, reg } => {
                     builder
                         .push_reg(*offset, *reg)
                         .map_err(CodegenError::RegisterMappingError)?;
@@ -141,12 +141,12 @@ impl UnwindInfo {
                 UnwindCode::StackDealloc { offset, size } => {
                     builder.adjust_sp_up_imm(*offset, *size as i64);
                 }
-                UnwindCode::PopRegister { offset, reg } => {
+                UnwindCode::RestoreRegister { offset, reg } => {
                     builder
                         .pop_reg(*offset, *reg)
                         .map_err(CodegenError::RegisterMappingError)?;
                 }
-                UnwindCode::SetCfaRegister { offset, reg } => {
+                UnwindCode::SetFramePointer { offset, reg } => {
                     builder
                         .set_cfa_reg(*offset, *reg)
                         .map_err(CodegenError::RegisterMappingError)?;
@@ -196,7 +196,7 @@ impl<'a> InstructionBuilder<'a> {
     ) -> Self {
         Self {
             word_size,
-            cfa_offset: word_size as i32, // CFA offset starts at 8 to account to return address on stack
+            cfa_offset: word_size as i32, // CFA offset starts at word size offset to account for the return address on stack
             saved_state: None,
             frame_register,
             map_reg,

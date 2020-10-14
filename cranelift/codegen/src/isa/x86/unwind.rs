@@ -93,7 +93,7 @@ pub(crate) fn create_unwind_info(
                     match opcode {
                         Opcode::X86Push => {
                             let reg = func.locations[arg].unwrap_reg();
-                            unwind_codes.push(UnwindCode::PushRegister { offset, reg });
+                            unwind_codes.push(UnwindCode::SaveRegister { offset, reg });
                         }
                         Opcode::AdjustSpDown => {
                             let stack_size =
@@ -160,7 +160,7 @@ pub(crate) fn create_unwind_info(
                         // Note: the stack_offset here is relative to an adjusted SP
                         if dst == (RU::rsp as RegUnit) && FPR.contains(src) {
                             let stack_offset: i32 = stack_offset.into();
-                            unwind_codes.push(UnwindCode::SaveXmm {
+                            unwind_codes.push(UnwindCode::SaveXmmRegister {
                                 offset,
                                 reg: src,
                                 stack_offset: stack_offset as u32,
@@ -172,7 +172,7 @@ pub(crate) fn create_unwind_info(
                     if let Some(fp) = frame_register {
                         // Check for change in CFA register (RSP is always the starting CFA)
                         if src == (RU::rsp as RegUnit) && dst == fp {
-                            unwind_codes.push(UnwindCode::SetCfaRegister { offset, reg: dst });
+                            unwind_codes.push(UnwindCode::SetFramePointer { offset, reg: dst });
                         }
                     }
                 }
@@ -194,7 +194,7 @@ pub(crate) fn create_unwind_info(
                             let offset = epilogue_pop_offsets[i];
 
                             let reg = func.locations[*arg].unwrap_reg();
-                            unwind_codes.push(UnwindCode::PopRegister { offset, reg });
+                            unwind_codes.push(UnwindCode::RestoreRegister { offset, reg });
                         }
                         epilogue_pop_offsets.clear();
 
@@ -255,7 +255,7 @@ mod tests {
             UnwindInfo {
                 prologue_size: 9,
                 prologue_unwind_codes: vec![
-                    UnwindCode::PushRegister {
+                    UnwindCode::SaveRegister {
                         offset: 2,
                         reg: RU::rbp.into(),
                     },
@@ -269,7 +269,7 @@ mod tests {
                         offset: 13,
                         size: 64
                     },
-                    UnwindCode::PopRegister {
+                    UnwindCode::RestoreRegister {
                         offset: 15,
                         reg: RU::rbp.into()
                     }
@@ -302,7 +302,7 @@ mod tests {
             UnwindInfo {
                 prologue_size: 27,
                 prologue_unwind_codes: vec![
-                    UnwindCode::PushRegister {
+                    UnwindCode::SaveRegister {
                         offset: 2,
                         reg: RU::rbp.into(),
                     },
@@ -316,7 +316,7 @@ mod tests {
                         offset: 34,
                         size: 10000
                     },
-                    UnwindCode::PopRegister {
+                    UnwindCode::RestoreRegister {
                         offset: 36,
                         reg: RU::rbp.into()
                     }
@@ -349,7 +349,7 @@ mod tests {
             UnwindInfo {
                 prologue_size: 27,
                 prologue_unwind_codes: vec![
-                    UnwindCode::PushRegister {
+                    UnwindCode::SaveRegister {
                         offset: 2,
                         reg: RU::rbp.into(),
                     },
@@ -363,7 +363,7 @@ mod tests {
                         offset: 34,
                         size: 1000000
                     },
-                    UnwindCode::PopRegister {
+                    UnwindCode::RestoreRegister {
                         offset: 36,
                         reg: RU::rbp.into()
                     }
@@ -409,11 +409,11 @@ mod tests {
             UnwindInfo {
                 prologue_size: 5,
                 prologue_unwind_codes: vec![
-                    UnwindCode::PushRegister {
+                    UnwindCode::SaveRegister {
                         offset: 2,
                         reg: RU::rbp.into()
                     },
-                    UnwindCode::SetCfaRegister {
+                    UnwindCode::SetFramePointer {
                         offset: 5,
                         reg: RU::rbp.into()
                     }
@@ -421,13 +421,13 @@ mod tests {
                 epilogues_unwind_codes: vec![
                     vec![
                         UnwindCode::RememberState { offset: 12 },
-                        UnwindCode::PopRegister {
+                        UnwindCode::RestoreRegister {
                             offset: 12,
                             reg: RU::rbp.into()
                         },
                         UnwindCode::RestoreState { offset: 13 }
                     ],
-                    vec![UnwindCode::PopRegister {
+                    vec![UnwindCode::RestoreRegister {
                         offset: 15,
                         reg: RU::rbp.into()
                     }]
