@@ -77,7 +77,6 @@ impl MachBackend for AArch64Backend {
             buffer,
             frame_size,
             disasm,
-            #[cfg(feature = "unwind")]
             unwind_info: None,
         })
     }

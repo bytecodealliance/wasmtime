@@ -73,7 +73,6 @@ impl MachBackend for Arm32Backend {
             buffer,
             frame_size,
             disasm,
-            #[cfg(feature = "unwind")]
             unwind_info: None,
         })
     }
