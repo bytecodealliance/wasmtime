@@ -2141,28 +2141,41 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FcvtFromSint => {
-            let (ext_spec, src_size) = match ctx.input_ty(insn, 0) {
-                types::I8 | types::I16 => (Some(ExtSpec::SignExtendTo32), OperandSize::Size32),
-                types::I32 => (None, OperandSize::Size32),
-                types::I64 => (None, OperandSize::Size64),
-                _ => unreachable!(),
-            };
-
-            let src = match ext_spec {
-                Some(ext_spec) => RegMem::reg(extend_input_to_reg(ctx, inputs[0], ext_spec)),
-                None => input_to_reg_mem(ctx, inputs[0]),
-            };
-
             let output_ty = ty.unwrap();
-            let opcode = if output_ty == types::F32 {
-                SseOpcode::Cvtsi2ss
-            } else {
-                assert_eq!(output_ty, types::F64);
-                SseOpcode::Cvtsi2sd
-            };
+            if !output_ty.is_vector() {
+                let (ext_spec, src_size) = match ctx.input_ty(insn, 0) {
+                    types::I8 | types::I16 => (Some(ExtSpec::SignExtendTo32), OperandSize::Size32),
+                    types::I32 => (None, OperandSize::Size32),
+                    types::I64 => (None, OperandSize::Size64),
+                    _ => unreachable!(),
+                };
 
-            let dst = get_output_reg(ctx, outputs[0]);
-            ctx.emit(Inst::gpr_to_xmm(opcode, src, src_size, dst));
+                let src = match ext_spec {
+                    Some(ext_spec) => RegMem::reg(extend_input_to_reg(ctx, inputs[0], ext_spec)),
+                    None => input_to_reg_mem(ctx, inputs[0]),
+                };
+
+                let opcode = if output_ty == types::F32 {
+                    SseOpcode::Cvtsi2ss
+                } else {
+                    assert_eq!(output_ty, types::F64);
+                    SseOpcode::Cvtsi2sd
+                };
+                let dst = get_output_reg(ctx, outputs[0]);
+                ctx.emit(Inst::gpr_to_xmm(opcode, src, src_size, dst));
+            } else {
+                let ty = ty.unwrap();
+                let src = put_input_in_reg(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]);
+                let opcode = match ctx.input_ty(insn, 0) {
+                    types::I32X4 => SseOpcode::Cvtdq2ps,
+                    _ => {
+                        unimplemented!("unable to use type {} for op {}", ctx.input_ty(insn, 0), op)
+                    }
+                };
+                ctx.emit(Inst::gen_move(dst, src, ty));
+                ctx.emit(Inst::xmm_rm_r(opcode, RegMem::from(dst), dst));
+            }
         }
 
         Opcode::FcvtFromUint => {
