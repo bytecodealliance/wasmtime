@@ -17,9 +17,16 @@ pub(crate) fn create_unwind_info(
     isa: &dyn TargetIsa,
     frame_register: Option<RegUnit>,
 ) -> CodegenResult<Option<UnwindInfo<RegUnit>>> {
-    // The function size will not include data/code that comes after last
-    // epilogue.
-    let mut len = 0;
+    // Find last block based on max offset.
+    let last_block = func
+        .layout
+        .blocks()
+        .max_by_key(|b| func.offsets[*b])
+        .expect("at least a block");
+    // Find last instruction offset + size, and make it function size.
+    let function_size = func
+        .inst_offsets(last_block, &isa.encoding_info())
+        .fold(0, |_, (offset, _, size)| offset + size);
 
     let entry_block = func.layout.entry_block().expect("missing entry block");
     let prologue_end = func.prologue_end.unwrap();
@@ -45,18 +52,16 @@ pub(crate) fn create_unwind_info(
     }
     blocks.sort_by_key(|b| func.offsets[*b]);
 
-    for (i, block) in blocks.iter().enumerate() {
+    for block in blocks.iter() {
         let mut in_prologue = block == &entry_block;
         let mut in_epilogue = false;
         let mut epilogue_pop_offsets = Vec::new();
 
         let epilogue_start = epilogues_start.get(block);
-        let is_last_block = i == blocks.len() - 1;
+        let is_last_block = block == &last_block;
 
         for (offset, inst, size) in func.inst_offsets(*block, &isa.encoding_info()) {
             let offset = offset + size;
-            assert!(len <= offset);
-            len = offset;
 
             let unwind_codes;
             if in_prologue {
@@ -210,7 +215,7 @@ pub(crate) fn create_unwind_info(
         prologue_size,
         prologue_unwind_codes,
         epilogues_unwind_codes,
-        function_size: len,
+        function_size,
     }))
 }
 
