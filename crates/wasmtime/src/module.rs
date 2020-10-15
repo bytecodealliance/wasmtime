@@ -299,7 +299,7 @@ impl Module {
         Ok(buffer)
     }
 
-    /// Deserializes and creates a module from the compilatio nartifacts.
+    /// Deserializes and creates a module from the compilation artifacts.
     /// The `serialize` saves the compilation artifacts along with the host
     /// fingerprint, which consists of target, compiler flags, and wasmtime
     /// package version.
