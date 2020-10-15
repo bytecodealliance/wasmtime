@@ -1,5 +1,7 @@
 //! System V ABI unwind information.
 
+use crate::isa::{unwind::input, RegUnit};
+use crate::result::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use gimli::write::{Address, FrameDescriptionEntry};
 use thiserror::Error;
@@ -92,6 +94,14 @@ impl Into<gimli::write::CallFrameInstruction> for CallFrameInstruction {
     }
 }
 
+/// Maps UnwindInfo register to gimli's index space.
+pub(crate) trait RegisterMapper {
+    /// Maps RegUnit.
+    fn map(&self, reg: RegUnit) -> Result<Register, RegisterMappingError>;
+    /// Gets RSP in gimli's index space.
+    fn rsp(&self) -> Register;
+}
+
 /// Represents unwind information for a single System V ABI function.
 ///
 /// This representation is not ISA specific.
@@ -103,8 +113,58 @@ pub struct UnwindInfo {
 }
 
 impl UnwindInfo {
-    pub(crate) fn new(instructions: Vec<(u32, CallFrameInstruction)>, len: u32) -> Self {
-        Self { instructions, len }
+    pub(crate) fn build<'b>(
+        unwind: input::UnwindInfo<RegUnit>,
+        word_size: u8,
+        frame_register: Option<RegUnit>,
+        map_reg: &'b dyn RegisterMapper,
+    ) -> CodegenResult<Self> {
+        use input::UnwindCode;
+        let mut builder = InstructionBuilder::new(word_size, frame_register, map_reg);
+
+        for c in unwind.prologue_unwind_codes.iter().chain(
+            unwind
+                .epilogues_unwind_codes
+                .iter()
+                .map(|c| c.iter())
+                .flatten(),
+        ) {
+            match c {
+                UnwindCode::SaveRegister { offset, reg } => {
+                    builder
+                        .push_reg(*offset, *reg)
+                        .map_err(CodegenError::RegisterMappingError)?;
+                }
+                UnwindCode::StackAlloc { offset, size } => {
+                    builder.adjust_sp_down_imm(*offset, *size as i64);
+                }
+                UnwindCode::StackDealloc { offset, size } => {
+                    builder.adjust_sp_up_imm(*offset, *size as i64);
+                }
+                UnwindCode::RestoreRegister { offset, reg } => {
+                    builder
+                        .pop_reg(*offset, *reg)
+                        .map_err(CodegenError::RegisterMappingError)?;
+                }
+                UnwindCode::SetFramePointer { offset, reg } => {
+                    builder
+                        .set_cfa_reg(*offset, *reg)
+                        .map_err(CodegenError::RegisterMappingError)?;
+                }
+                UnwindCode::RememberState { offset } => {
+                    builder.remember_state(*offset);
+                }
+                UnwindCode::RestoreState { offset } => {
+                    builder.restore_state(*offset);
+                }
+                _ => {}
+            }
+        }
+
+        let instructions = builder.instructions;
+        let len = unwind.function_size;
+
+        Ok(Self { instructions, len })
     }
 
     /// Converts the unwind information into a `FrameDescriptionEntry`.
@@ -116,5 +176,130 @@ impl UnwindInfo {
         }
 
         fde
+    }
+}
+
+struct InstructionBuilder<'a> {
+    word_size: u8,
+    cfa_offset: i32,
+    saved_state: Option<i32>,
+    frame_register: Option<RegUnit>,
+    map_reg: &'a dyn RegisterMapper,
+    instructions: Vec<(u32, CallFrameInstruction)>,
+}
+
+impl<'a> InstructionBuilder<'a> {
+    fn new(
+        word_size: u8,
+        frame_register: Option<RegUnit>,
+        map_reg: &'a (dyn RegisterMapper + 'a),
+    ) -> Self {
+        Self {
+            word_size,
+            cfa_offset: word_size as i32, // CFA offset starts at word size offset to account for the return address on stack
+            saved_state: None,
+            frame_register,
+            map_reg,
+            instructions: Vec::new(),
+        }
+    }
+
+    fn push_reg(&mut self, offset: u32, reg: RegUnit) -> Result<(), RegisterMappingError> {
+        self.cfa_offset += self.word_size as i32;
+        // Update the CFA if this is the save of the frame pointer register or if a frame pointer isn't being used
+        // When using a frame pointer, we only need to update the CFA to account for the push of the frame pointer itself
+        if match self.frame_register {
+            Some(fp) => reg == fp,
+            None => true,
+        } {
+            self.instructions
+                .push((offset, CallFrameInstruction::CfaOffset(self.cfa_offset)));
+        }
+
+        // Pushes in the prologue are register saves, so record an offset of the save
+        self.instructions.push((
+            offset,
+            CallFrameInstruction::Offset(self.map_reg.map(reg)?, -self.cfa_offset),
+        ));
+
+        Ok(())
+    }
+
+    fn adjust_sp_down_imm(&mut self, offset: u32, imm: i64) {
+        assert!(imm <= core::u32::MAX as i64);
+
+        // Don't adjust the CFA if we're using a frame pointer
+        if self.frame_register.is_some() {
+            return;
+        }
+
+        self.cfa_offset += imm as i32;
+        self.instructions
+            .push((offset, CallFrameInstruction::CfaOffset(self.cfa_offset)));
+    }
+
+    fn adjust_sp_up_imm(&mut self, offset: u32, imm: i64) {
+        assert!(imm <= core::u32::MAX as i64);
+
+        // Don't adjust the CFA if we're using a frame pointer
+        if self.frame_register.is_some() {
+            return;
+        }
+
+        self.cfa_offset -= imm as i32;
+        self.instructions
+            .push((offset, CallFrameInstruction::CfaOffset(self.cfa_offset)));
+    }
+
+    fn set_cfa_reg(&mut self, offset: u32, reg: RegUnit) -> Result<(), RegisterMappingError> {
+        self.instructions.push((
+            offset,
+            CallFrameInstruction::CfaRegister(self.map_reg.map(reg)?),
+        ));
+        Ok(())
+    }
+
+    fn pop_reg(&mut self, offset: u32, reg: RegUnit) -> Result<(), RegisterMappingError> {
+        self.cfa_offset -= self.word_size as i32;
+
+        // Update the CFA if this is the restore of the frame pointer register or if a frame pointer isn't being used
+        match self.frame_register {
+            Some(fp) => {
+                if reg == fp {
+                    self.instructions.push((
+                        offset,
+                        CallFrameInstruction::Cfa(self.map_reg.rsp(), self.cfa_offset),
+                    ));
+                }
+            }
+            None => {
+                self.instructions
+                    .push((offset, CallFrameInstruction::CfaOffset(self.cfa_offset)));
+
+                // Pops in the epilogue are register restores, so record a "same value" for the register
+                // This isn't necessary when using a frame pointer as the CFA doesn't change for CSR restores
+                self.instructions.push((
+                    offset,
+                    CallFrameInstruction::SameValue(self.map_reg.map(reg)?),
+                ));
+            }
+        };
+
+        Ok(())
+    }
+
+    fn remember_state(&mut self, offset: u32) {
+        self.saved_state = Some(self.cfa_offset);
+
+        self.instructions
+            .push((offset, CallFrameInstruction::RememberState));
+    }
+
+    fn restore_state(&mut self, offset: u32) {
+        let cfa_offset = self.saved_state.take().unwrap();
+        self.cfa_offset = cfa_offset;
+
+        self.instructions
+            .push((offset, CallFrameInstruction::RestoreState));
     }
 }

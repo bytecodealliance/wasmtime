@@ -1,7 +1,10 @@
 //! Windows x64 ABI unwind information.
 
+use crate::isa::{unwind::input, RegUnit};
+use crate::result::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use byteorder::{ByteOrder, LittleEndian};
+use log::warn;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
@@ -134,6 +137,12 @@ impl UnwindCode {
     }
 }
 
+/// Maps UnwindInfo register to Windows x64 unwind data.
+pub(crate) trait RegisterMapper {
+    /// Maps RegUnit.
+    fn map(reg: RegUnit) -> u8;
+}
+
 /// Represents Windows x64 unwind information.
 ///
 /// For information about Windows x64 unwind info, see:
@@ -204,4 +213,56 @@ impl UnwindInfo {
             .iter()
             .fold(0, |nodes, c| nodes + c.node_count())
     }
+
+    pub(crate) fn build<MR: RegisterMapper>(
+        unwind: input::UnwindInfo<RegUnit>,
+    ) -> CodegenResult<Self> {
+        use crate::isa::unwind::input::UnwindCode as InputUnwindCode;
+
+        let mut unwind_codes = Vec::new();
+        for c in unwind.prologue_unwind_codes.iter() {
+            match c {
+                InputUnwindCode::SaveRegister { offset, reg } => {
+                    unwind_codes.push(UnwindCode::PushRegister {
+                        offset: ensure_unwind_offset(*offset)?,
+                        reg: MR::map(*reg),
+                    });
+                }
+                InputUnwindCode::StackAlloc { offset, size } => {
+                    unwind_codes.push(UnwindCode::StackAlloc {
+                        offset: ensure_unwind_offset(*offset)?,
+                        size: *size,
+                    });
+                }
+                InputUnwindCode::SaveXmmRegister {
+                    offset,
+                    reg,
+                    stack_offset,
+                } => {
+                    unwind_codes.push(UnwindCode::SaveXmm {
+                        offset: ensure_unwind_offset(*offset)?,
+                        reg: MR::map(*reg),
+                        stack_offset: *stack_offset,
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        Ok(Self {
+            flags: 0, // this assumes cranelift functions have no SEH handlers
+            prologue_size: ensure_unwind_offset(unwind.prologue_size)?,
+            frame_register: None,
+            frame_register_offset: 0,
+            unwind_codes,
+        })
+    }
+}
+
+fn ensure_unwind_offset(offset: u32) -> CodegenResult<u8> {
+    if offset > 255 {
+        warn!("function prologues cannot exceed 255 bytes in size for Windows x64");
+        return Err(CodegenError::CodeTooLarge);
+    }
+    Ok(offset as u8)
 }

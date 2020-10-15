@@ -94,7 +94,7 @@ pub struct Function {
     /// The instructions that mark the start (inclusive) of an epilogue in the function.
     ///
     /// This is used for some ABIs to generate unwind information.
-    pub epilogues_start: Vec<Inst>,
+    pub epilogues_start: Vec<(Inst, Block)>,
 
     /// An optional global value which represents an expression evaluating to
     /// the stack limit for this function. This `GlobalValue` will be

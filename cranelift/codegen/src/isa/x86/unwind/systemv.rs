@@ -1,13 +1,11 @@
 //! Unwind information for System V ABI (x86-64).
 
-use crate::ir::{Function, Inst, InstructionData, Opcode, Value};
+use crate::ir::Function;
 use crate::isa::{
-    unwind::systemv::{CallFrameInstruction, RegisterMappingError, UnwindInfo},
-    x86::registers::RU,
+    unwind::systemv::{RegisterMappingError, UnwindInfo},
     CallConv, RegUnit, TargetIsa,
 };
-use crate::result::{CodegenError, CodegenResult};
-use alloc::vec::Vec;
+use crate::result::CodegenResult;
 use gimli::{write::CommonInformationEntry, Encoding, Format, Register, X86_64};
 
 /// Creates a new x86-64 common information entry (CIE).
@@ -94,191 +92,6 @@ pub fn map_reg(isa: &dyn TargetIsa, reg: RegUnit) -> Result<Register, RegisterMa
     }
 }
 
-struct InstructionBuilder<'a> {
-    func: &'a Function,
-    isa: &'a dyn TargetIsa,
-    cfa_offset: i32,
-    frame_register: Option<RegUnit>,
-    instructions: Vec<(u32, CallFrameInstruction)>,
-    stack_size: Option<i32>,
-    epilogue_pop_offsets: Vec<u32>,
-}
-
-impl<'a> InstructionBuilder<'a> {
-    fn new(func: &'a Function, isa: &'a dyn TargetIsa, frame_register: Option<RegUnit>) -> Self {
-        Self {
-            func,
-            isa,
-            cfa_offset: 8, // CFA offset starts at 8 to account to return address on stack
-            frame_register,
-            instructions: Vec::new(),
-            stack_size: None,
-            epilogue_pop_offsets: Vec::new(),
-        }
-    }
-
-    fn push_reg(&mut self, offset: u32, arg: Value) -> Result<(), RegisterMappingError> {
-        self.cfa_offset += 8;
-
-        let reg = self.func.locations[arg].unwrap_reg();
-
-        // Update the CFA if this is the save of the frame pointer register or if a frame pointer isn't being used
-        // When using a frame pointer, we only need to update the CFA to account for the push of the frame pointer itself
-        if match self.frame_register {
-            Some(fp) => reg == fp,
-            None => true,
-        } {
-            self.instructions
-                .push((offset, CallFrameInstruction::CfaOffset(self.cfa_offset)));
-        }
-
-        // Pushes in the prologue are register saves, so record an offset of the save
-        self.instructions.push((
-            offset,
-            CallFrameInstruction::Offset(map_reg(self.isa, reg)?.0, -self.cfa_offset),
-        ));
-
-        Ok(())
-    }
-
-    fn adjust_sp_down(&mut self, offset: u32) {
-        // Don't adjust the CFA if we're using a frame pointer
-        if self.frame_register.is_some() {
-            return;
-        }
-
-        self.cfa_offset += self
-            .stack_size
-            .expect("expected a previous stack size instruction");
-        self.instructions
-            .push((offset, CallFrameInstruction::CfaOffset(self.cfa_offset)));
-    }
-
-    fn adjust_sp_down_imm(&mut self, offset: u32, imm: i64) {
-        assert!(imm <= core::u32::MAX as i64);
-
-        // Don't adjust the CFA if we're using a frame pointer
-        if self.frame_register.is_some() {
-            return;
-        }
-
-        self.cfa_offset += imm as i32;
-        self.instructions
-            .push((offset, CallFrameInstruction::CfaOffset(self.cfa_offset)));
-    }
-
-    fn adjust_sp_up_imm(&mut self, offset: u32, imm: i64) {
-        assert!(imm <= core::u32::MAX as i64);
-
-        // Don't adjust the CFA if we're using a frame pointer
-        if self.frame_register.is_some() {
-            return;
-        }
-
-        self.cfa_offset -= imm as i32;
-        self.instructions
-            .push((offset, CallFrameInstruction::CfaOffset(self.cfa_offset)));
-    }
-
-    fn move_reg(
-        &mut self,
-        offset: u32,
-        src: RegUnit,
-        dst: RegUnit,
-    ) -> Result<(), RegisterMappingError> {
-        if let Some(fp) = self.frame_register {
-            // Check for change in CFA register (RSP is always the starting CFA)
-            if src == (RU::rsp as RegUnit) && dst == fp {
-                self.instructions.push((
-                    offset,
-                    CallFrameInstruction::CfaRegister(map_reg(self.isa, dst)?.0),
-                ));
-            }
-        }
-
-        Ok(())
-    }
-
-    fn prologue_imm_const(&mut self, imm: i64) {
-        assert!(imm <= core::u32::MAX as i64);
-        assert!(self.stack_size.is_none());
-
-        // This instruction should only appear in a prologue to pass an
-        // argument of the stack size to a stack check function.
-        // Record the stack size so we know what it is when we encounter the adjustment
-        // instruction (which will adjust via the register assigned to this instruction).
-        self.stack_size = Some(imm as i32);
-    }
-
-    fn ret(&mut self, inst: Inst) -> Result<(), RegisterMappingError> {
-        let args = self.func.dfg.inst_args(inst);
-
-        for (i, arg) in args.iter().rev().enumerate() {
-            // Only walk back the args for the pop instructions encountered
-            if i >= self.epilogue_pop_offsets.len() {
-                break;
-            }
-
-            self.cfa_offset -= 8;
-            let reg = self.func.locations[*arg].unwrap_reg();
-
-            // Update the CFA if this is the restore of the frame pointer register or if a frame pointer isn't being used
-            match self.frame_register {
-                Some(fp) => {
-                    if reg == fp {
-                        self.instructions.push((
-                            self.epilogue_pop_offsets[i],
-                            CallFrameInstruction::Cfa(
-                                map_reg(self.isa, RU::rsp as RegUnit)?.0,
-                                self.cfa_offset,
-                            ),
-                        ));
-                    }
-                }
-                None => {
-                    self.instructions.push((
-                        self.epilogue_pop_offsets[i],
-                        CallFrameInstruction::CfaOffset(self.cfa_offset),
-                    ));
-
-                    // Pops in the epilogue are register restores, so record a "same value" for the register
-                    // This isn't necessary when using a frame pointer as the CFA doesn't change for CSR restores
-                    self.instructions.push((
-                        self.epilogue_pop_offsets[i],
-                        CallFrameInstruction::SameValue(map_reg(self.isa, reg)?.0),
-                    ));
-                }
-            };
-        }
-
-        self.epilogue_pop_offsets.clear();
-
-        Ok(())
-    }
-
-    fn insert_pop_offset(&mut self, offset: u32) {
-        self.epilogue_pop_offsets.push(offset);
-    }
-
-    fn remember_state(&mut self, offset: u32) {
-        self.instructions
-            .push((offset, CallFrameInstruction::RememberState));
-    }
-
-    fn restore_state(&mut self, offset: u32) {
-        self.instructions
-            .push((offset, CallFrameInstruction::RestoreState));
-    }
-
-    fn is_prologue_end(&self, inst: Inst) -> bool {
-        self.func.prologue_end == Some(inst)
-    }
-
-    fn is_epilogue_start(&self, inst: Inst) -> bool {
-        self.func.epilogues_start.contains(&inst)
-    }
-}
-
 pub(crate) fn create_unwind_info(
     func: &Function,
     isa: &dyn TargetIsa,
@@ -293,93 +106,32 @@ pub(crate) fn create_unwind_info(
     if func.prologue_end.is_none() || isa.name() != "x86" || isa.pointer_bits() != 64 {
         return Ok(None);
     }
+    const WORD_SIZE: u8 = 8; // bytes
 
-    let mut builder = InstructionBuilder::new(func, isa, frame_register);
-    let mut in_prologue = true;
-    let mut in_epilogue = false;
-    let mut len = 0;
+    let unwind = match super::create_unwind_info(func, isa, frame_register)? {
+        Some(u) => u,
+        None => {
+            return Ok(None);
+        }
+    };
 
-    let mut blocks = func.layout.blocks().collect::<Vec<_>>();
-    blocks.sort_by_key(|b| func.offsets[*b]);
-
-    for (i, block) in blocks.iter().enumerate() {
-        for (offset, inst, size) in func.inst_offsets(*block, &isa.encoding_info()) {
-            let offset = offset + size;
-            assert!(len <= offset);
-            len = offset;
-
-            let is_last_block = i == blocks.len() - 1;
-
-            if in_prologue {
-                // Check for prologue end (inclusive)
-                in_prologue = !builder.is_prologue_end(inst);
-            } else if !in_epilogue && builder.is_epilogue_start(inst) {
-                // Now in an epilogue, emit a remember state instruction if not last block
-                in_epilogue = true;
-
-                if !is_last_block {
-                    builder.remember_state(offset);
-                }
-            } else if !in_epilogue {
-                // Ignore normal instructions
-                continue;
-            }
-
-            match builder.func.dfg[inst] {
-                InstructionData::Unary { opcode, arg } => match opcode {
-                    Opcode::X86Push => {
-                        builder
-                            .push_reg(offset, arg)
-                            .map_err(CodegenError::RegisterMappingError)?;
-                    }
-                    Opcode::AdjustSpDown => {
-                        builder.adjust_sp_down(offset);
-                    }
-                    _ => {}
-                },
-                InstructionData::CopySpecial { src, dst, .. } => {
-                    builder
-                        .move_reg(offset, src, dst)
-                        .map_err(CodegenError::RegisterMappingError)?;
-                }
-                InstructionData::NullAry { opcode } => match opcode {
-                    Opcode::X86Pop => {
-                        builder.insert_pop_offset(offset);
-                    }
-                    _ => {}
-                },
-                InstructionData::UnaryImm { opcode, imm } => match opcode {
-                    Opcode::Iconst => {
-                        builder.prologue_imm_const(imm.into());
-                    }
-                    Opcode::AdjustSpDownImm => {
-                        builder.adjust_sp_down_imm(offset, imm.into());
-                    }
-                    Opcode::AdjustSpUpImm => {
-                        builder.adjust_sp_up_imm(offset, imm.into());
-                    }
-                    _ => {}
-                },
-                InstructionData::MultiAry { opcode, .. } => match opcode {
-                    Opcode::Return => {
-                        builder
-                            .ret(inst)
-                            .map_err(CodegenError::RegisterMappingError)?;
-
-                        if !is_last_block {
-                            builder.restore_state(offset);
-                        }
-
-                        in_epilogue = false;
-                    }
-                    _ => {}
-                },
-                _ => {}
-            };
+    struct RegisterMapper<'a, 'b>(&'a (dyn TargetIsa + 'b));
+    impl<'a, 'b> crate::isa::unwind::systemv::RegisterMapper for RegisterMapper<'a, 'b> {
+        fn map(&self, reg: RegUnit) -> Result<u16, RegisterMappingError> {
+            Ok(map_reg(self.0, reg)?.0)
+        }
+        fn rsp(&self) -> u16 {
+            X86_64::RSP.0
         }
     }
+    let map = RegisterMapper(isa);
 
-    Ok(Some(UnwindInfo::new(builder.instructions, len)))
+    Ok(Some(UnwindInfo::build(
+        unwind,
+        WORD_SIZE,
+        frame_register,
+        &map,
+    )?))
 }
 
 #[cfg(test)]
@@ -460,7 +212,7 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(4321), length: 16, lsda: None, instructions: [(2, CfaOffset(16)), (2, Offset(Register(6), -16)), (5, CfaRegister(Register(6))), (12, RememberState), (12, Cfa(Register(7), 8)), (13, RestoreState), (15, Cfa(Register(7), 0))] }");
+        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(4321), length: 16, lsda: None, instructions: [(2, CfaOffset(16)), (2, Offset(Register(6), -16)), (5, CfaRegister(Register(6))), (12, RememberState), (12, Cfa(Register(7), 8)), (13, RestoreState), (15, Cfa(Register(7), 8))] }");
     }
 
     fn create_multi_return_function(call_conv: CallConv) -> Function {
