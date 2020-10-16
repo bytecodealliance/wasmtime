@@ -2241,41 +2241,93 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let ty = ty.unwrap();
 
             let input_ty = ctx.input_ty(insn, 0);
-            match input_ty {
-                types::I8 | types::I16 | types::I32 => {
-                    // Conversion from an unsigned int smaller than 64-bit is easy: zero-extend +
-                    // do a signed conversion (which won't overflow).
-                    let opcode = if ty == types::F32 {
-                        SseOpcode::Cvtsi2ss
-                    } else {
-                        assert_eq!(ty, types::F64);
-                        SseOpcode::Cvtsi2sd
-                    };
+            if !ty.is_vector() {
+                match input_ty {
+                    types::I8 | types::I16 | types::I32 => {
+                        // Conversion from an unsigned int smaller than 64-bit is easy: zero-extend +
+                        // do a signed conversion (which won't overflow).
+                        let opcode = if ty == types::F32 {
+                            SseOpcode::Cvtsi2ss
+                        } else {
+                            assert_eq!(ty, types::F64);
+                            SseOpcode::Cvtsi2sd
+                        };
 
-                    let src =
-                        RegMem::reg(extend_input_to_reg(ctx, inputs[0], ExtSpec::ZeroExtendTo64));
-                    ctx.emit(Inst::gpr_to_xmm(opcode, src, OperandSize::Size64, dst));
-                }
+                        let src = RegMem::reg(extend_input_to_reg(
+                            ctx,
+                            inputs[0],
+                            ExtSpec::ZeroExtendTo64,
+                        ));
+                        ctx.emit(Inst::gpr_to_xmm(opcode, src, OperandSize::Size64, dst));
+                    }
 
-                types::I64 => {
-                    let src = put_input_in_reg(ctx, inputs[0]);
+                    types::I64 => {
+                        let src = put_input_in_reg(ctx, inputs[0]);
 
-                    let src_copy = ctx.alloc_tmp(RegClass::I64, types::I64);
-                    ctx.emit(Inst::gen_move(src_copy, src, types::I64));
+                        let src_copy = ctx.alloc_tmp(RegClass::I64, types::I64);
+                        ctx.emit(Inst::gen_move(src_copy, src, types::I64));
 
-                    let tmp_gpr1 = ctx.alloc_tmp(RegClass::I64, types::I64);
-                    let tmp_gpr2 = ctx.alloc_tmp(RegClass::I64, types::I64);
-                    ctx.emit(Inst::cvt_u64_to_float_seq(
-                        ty == types::F64,
-                        src_copy,
-                        tmp_gpr1,
-                        tmp_gpr2,
-                        dst,
-                    ));
-                }
+                        let tmp_gpr1 = ctx.alloc_tmp(RegClass::I64, types::I64);
+                        let tmp_gpr2 = ctx.alloc_tmp(RegClass::I64, types::I64);
+                        ctx.emit(Inst::cvt_u64_to_float_seq(
+                            ty == types::F64,
+                            src_copy,
+                            tmp_gpr1,
+                            tmp_gpr2,
+                            dst,
+                        ));
+                    }
+                    _ => panic!("unexpected input type for FcvtFromUint: {:?}", input_ty),
+                };
+            } else {
+                // Converting packed unsigned integers to packed floats requires a few steps.
+                // There is no single instruction lowering for converting unsigned floats but there
+                // is for converted packed signed integers to float (cvtdq2ps). In the steps below
+                // we isolate the upper half (16 bits) and lower half (16 bits) of each lane and
+                // then we convert each half separately using cvtdq2ps meant for signed integers.
+                // In order for this to work for the upper half bits we must shift right by 1
+                // (divide by 2) these bits in order to ensure the most significant bit is 0 not
+                // signed, and then after the conversion we double the value. Finally we add the
+                // converted values where addition will correctly round.
+                assert_eq!(ctx.input_ty(insn, 0), types::I32X4);
+                let src = put_input_in_reg(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]);
 
-                _ => panic!("unexpected input type for FcvtFromUint: {:?}", input_ty),
-            };
+                // Create a temporary register
+                let tmp = ctx.alloc_tmp(RegClass::V128, types::I32X4);
+                ctx.emit(Inst::xmm_unary_rm_r(
+                    SseOpcode::Movapd,
+                    RegMem::reg(src),
+                    tmp,
+                ));
+                ctx.emit(Inst::gen_move(dst, src, ty));
+
+                // Get the low 16 bits
+                ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Pslld, RegMemImm::imm(16), tmp));
+                ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrld, RegMemImm::imm(16), tmp));
+
+                // Get the high 16 bits
+                ctx.emit(Inst::xmm_rm_r(SseOpcode::Psubd, RegMem::from(tmp), dst));
+
+                // Convert the low 16 bits
+                ctx.emit(Inst::xmm_rm_r(SseOpcode::Cvtdq2ps, RegMem::from(tmp), tmp));
+
+                // Shift the high bits by 1, convert, and double to get the correct value.
+                ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrld, RegMemImm::imm(1), dst));
+                ctx.emit(Inst::xmm_rm_r(SseOpcode::Cvtdq2ps, RegMem::from(dst), dst));
+                ctx.emit(Inst::xmm_rm_r(
+                    SseOpcode::Addps,
+                    RegMem::reg(dst.to_reg()),
+                    dst,
+                ));
+
+                // Add together the two converted values.
+                ctx.emit(Inst::xmm_rm_r(
+                    SseOpcode::Addps,
+                    RegMem::reg(tmp.to_reg()),
+                    dst,
+                ));
+            }
         }
 
         Opcode::FcvtToUint | Opcode::FcvtToUintSat | Opcode::FcvtToSint | Opcode::FcvtToSintSat => {
