@@ -10,7 +10,7 @@ description = "Converting Souper optimizations into Peepmatic DSL"
 
 [dependencies]
 anyhow = "1"
-souper-ir = { version = "1", features = ["parse"] }
+souper-ir = { version = "2.0.0", features = ["parse"] }
 log = "0.4.8"
 
 [dev-dependencies]
