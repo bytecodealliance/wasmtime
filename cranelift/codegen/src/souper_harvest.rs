@@ -392,6 +392,28 @@ fn harvest_candidate_lhs(
                     }
                     (ir::Opcode::Select, _) => {
                         let a = arg(allocs, 0);
+
+                        // While Cranelift allows any width condition for
+                        // `select`, Souper requires an `i1`.
+                        let a = match a {
+                            ast::Operand::Value(id) => match lhs.get_value(id).r#type {
+                                Some(ast::Type { width: 1 }) => a,
+                                _ => lhs
+                                    .assignment(
+                                        None,
+                                        Some(ast::Type { width: 1 }),
+                                        ast::Instruction::Trunc { a },
+                                        vec![],
+                                    )
+                                    .into(),
+                            },
+                            ast::Operand::Constant(ast::Constant { value, .. }) => ast::Constant {
+                                value: (value != 0) as _,
+                                r#type: Some(ast::Type { width: 1 }),
+                            }
+                            .into(),
+                        };
+
                         let b = arg(allocs, 1);
                         let c = arg(allocs, 2);
                         ast::Instruction::Select { a, b, c }.into()

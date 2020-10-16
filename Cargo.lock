@@ -1989,9 +1989,9 @@ checksum = "fbee7696b84bbf3d89a1c2eccff0850e3047ed46bfcd2e92c29a2d074d57e252"
 
 [[package]]
 name = "souper-ir"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c7eaed476845a4755001a900e0412dabd356d312ddc35dd32ff91de266b1558"
+checksum = "a50c18ce33988e1973003afbaa66e6a465ad7a614dc33f246879ccc209c2c044"
 dependencies = [
  "id-arena",
 ]
