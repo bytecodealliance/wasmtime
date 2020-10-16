@@ -25,7 +25,7 @@ pub fn create_handle_with_table(store: &Store, table: &TableType) -> Result<Stor
     let table_id = module.table_plans.push(table_plan);
     module
         .exports
-        .insert("table".to_string(), EntityIndex::Table(table_id));
+        .insert(String::new(), EntityIndex::Table(table_id));
 
     create_handle(
         module,

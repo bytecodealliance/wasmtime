@@ -61,7 +61,7 @@ pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<StoreIn
     let global_id = module.globals.push(global);
     module
         .exports
-        .insert("global".to_string(), EntityIndex::Global(global_id));
+        .insert(String::new(), EntityIndex::Global(global_id));
     let handle = create_handle(
         module,
         store,
@@ -72,7 +72,7 @@ pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<StoreIn
     )?;
 
     if let Some(x) = externref_init {
-        match handle.lookup("global").unwrap() {
+        match handle.lookup("").unwrap() {
             wasmtime_runtime::Export::Global(g) => unsafe {
                 *(*g.definition).as_externref_mut() = Some(x.inner);
             },
