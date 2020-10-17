@@ -2,7 +2,7 @@
 
 use super::Worker;
 use anyhow::{anyhow, bail, Context, Result};
-use directories::ProjectDirs;
+use directories_next::ProjectDirs;
 use log::{trace, warn};
 use serde::{
     de::{self, Deserializer},
