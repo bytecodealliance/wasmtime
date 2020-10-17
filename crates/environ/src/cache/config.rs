@@ -1,7 +1,7 @@
 //! Module for configuring the cache system.
 
 use super::worker;
-use directories::ProjectDirs;
+use directories_next::ProjectDirs;
 use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
 use serde::{
