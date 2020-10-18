@@ -230,7 +230,7 @@ pub fn create_handle_with_function(
     let func_id = module.functions.push(sig_id);
     module
         .exports
-        .insert("trampoline".to_string(), EntityIndex::Function(func_id));
+        .insert(String::new(), EntityIndex::Function(func_id));
     let trampoline = make_trampoline(isa.as_ref(), &mut code_memory, &mut fn_builder_ctx, &sig);
     finished_functions.push(trampoline);
 
@@ -289,7 +289,7 @@ pub unsafe fn create_handle_with_raw_function(
     let func_id = module.functions.push(sig_id);
     module
         .exports
-        .insert("trampoline".to_string(), EntityIndex::Function(func_id));
+        .insert(String::new(), EntityIndex::Function(func_id));
     finished_functions.push(func);
     let sig_id = store.register_signature(ft.to_wasm_func_type(), sig);
     trampolines.insert(sig_id, trampoline);
