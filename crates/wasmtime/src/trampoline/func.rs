@@ -11,14 +11,14 @@ use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::isa::TargetIsa;
-use wasmtime_environ::{ir, settings, CompiledFunction, EntityIndex, Module};
+use wasmtime_environ::{ir, CompiledFunction, EntityIndex, Module};
 use wasmtime_jit::trampoline::ir::{
     ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind,
 };
 use wasmtime_jit::trampoline::{
     self, binemit, pretty_error, Context, FunctionBuilder, FunctionBuilderContext,
 };
-use wasmtime_jit::{native, CodeMemory};
+use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody, VMTrampoline};
 
 struct TrampolineState {
@@ -270,13 +270,7 @@ pub unsafe fn create_handle_with_raw_function(
     store: &Store,
     state: Box<dyn Any>,
 ) -> Result<StoreInstanceHandle> {
-    let isa = {
-        let isa_builder = native::builder();
-        let flag_builder = settings::builder();
-        isa_builder.finish(settings::Flags::new(flag_builder))
-    };
-
-    let pointer_type = isa.pointer_type();
+    let pointer_type = store.engine().compiler().isa().pointer_type();
     let sig = ft.get_wasmtime_signature(pointer_type);
 
     let mut module = Module::new();
