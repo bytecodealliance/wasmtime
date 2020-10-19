@@ -1,6 +1,6 @@
 //! System V ABI unwind information.
 
-use crate::isa::{unwind::input, RegUnit};
+use crate::isa::unwind::input;
 use crate::result::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use gimli::write::{Address, FrameDescriptionEntry};
