@@ -224,26 +224,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         (sig, BuiltinFunctionIndex::elem_drop())
     }
 
-    fn get_memory_copy_func(
-        &mut self,
-        func: &mut Function,
-        memory_index: MemoryIndex,
-    ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
-        if let Some(defined_memory_index) = self.module.defined_memory_index(memory_index) {
-            (
-                self.builtin_function_signatures.defined_memory_copy(func),
-                defined_memory_index.index(),
-                BuiltinFunctionIndex::defined_memory_copy(),
-            )
-        } else {
-            (
-                self.builtin_function_signatures.imported_memory_copy(func),
-                memory_index.index(),
-                BuiltinFunctionIndex::imported_memory_copy(),
-            )
-        }
-    }
-
     fn get_memory_fill_func(
         &mut self,
         func: &mut Function,
@@ -1199,23 +1179,25 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn translate_memory_copy(
         &mut self,
         mut pos: FuncCursor,
-        memory_index: MemoryIndex,
-        _heap: ir::Heap,
+        src_index: MemoryIndex,
+        _src_heap: ir::Heap,
+        dst_index: MemoryIndex,
+        _dst_heap: ir::Heap,
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        let (func_sig, memory_index, func_idx) =
-            self.get_memory_copy_func(&mut pos.func, memory_index);
+        let src_index = pos.ins().iconst(I32, i64::from(src_index.as_u32()));
+        let dst_index = pos.ins().iconst(I32, i64::from(dst_index.as_u32()));
 
-        let memory_index_arg = pos.ins().iconst(I32, memory_index as i64);
+        let (vmctx, func_addr) = self
+            .translate_load_builtin_function_address(&mut pos, BuiltinFunctionIndex::memory_copy());
 
-        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
-
+        let func_sig = self.builtin_function_signatures.memory_copy(&mut pos.func);
         pos.ins().call_indirect(
             func_sig,
             func_addr,
-            &[vmctx, memory_index_arg, dst, src, len],
+            &[vmctx, dst_index, dst, src_index, src, len],
         );
 
         Ok(())

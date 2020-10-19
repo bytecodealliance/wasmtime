@@ -18,46 +18,49 @@
 //!     (ishl $x $(log2 C)))
 //! ```
 //!
-//! Then we should get the following linear chain of "increments":
+//! Then the left-hand side becomes the following linear chain of "matches":
 //!
 //! ```ignore
 //! [
-//!   // ( Match Operation, Expected Value, Actions )
-//!   ( Opcode@0,           imul,           [$x = GetLhs@0.0, $C = GetLhs@0.1, ...] ),
-//!   ( IsConst(C),         true,           [] ),
-//!   ( IsPowerOfTwo(C),    true,           [] ),
+//!   // ( Match Operation, Expected Value )
+//!   ( Opcode@0,           imul ),
+//!   ( IsConst(C),         true ),
+//!   ( IsPowerOfTwo(C),    true ),
 //! ]
 //! ```
 //!
-//! Each increment will essentially become a state and a transition out of that
-//! state in the final automata, along with the actions to perform when taking
-//! that transition. The actions record the scope of matches from the left-hand
-//! side and also incrementally build the right-hand side's instructions. (Note
-//! that we've elided the actions that build up the optimization's right-hand
-//! side in this example.)
+//! And the right-hand side becomes this linear chain of "actions":
+//!
+//! ```ignore
+//! [
+//!   $rhs0 = get lhs @ 0.0            // $x
+//!   $rhs1 = get lhs @ 0.1            // $C
+//!   $rhs2 = eval log2 $rhs1
+//!   $rhs3 = make ishl $rhs0, $rhs2
+//! ]
+//! ```
+//!
+//! Each match will essentially become a state and a transition out of that
+//! state in the final automata. The actions record the scope of matches from
+//! the left-hand side and also incrementally build the right-hand side's
+//! instructions.
 //!
 //! ## General Principles
 //!
 //! Here are the general principles that linearization should adhere to:
 //!
-//! * Actions should be pushed as early in the optimization's increment chain as
-//!   they can be. This means the tail has fewer side effects, and is therefore
-//!   more likely to be share-able with other optimizations in the automata that
-//!   we build.
+//! * Don't match on a subtree until we know it exists. That is, match on
+//!   parents before matching on children.
 //!
-//! * RHS actions cannot reference matches from the LHS until they've been
-//!   defined. And finally, an RHS operation's operands must be defined before
-//!   the RHS operation itself. In general, definitions must come before uses!
-//!
-//! * Shorter increment chains are better! This means fewer tests when matching
+//! * Shorter match chains are better! This means fewer tests when matching
 //!   left-hand sides, and a more-compact, more-cache-friendly automata, and
 //!   ultimately, a faster automata.
 //!
-//! * An increment's match operation should be a switch rather than a predicate
-//!   that returns a boolean. For example, we switch on an instruction's opcode,
-//!   rather than ask whether this operation is an `imul`. This allows for more
-//!   prefix sharing in the automata, which (again) makes it more compact and
-//!   more cache friendly.
+//! * An match operation should be a switch rather than a predicate that returns
+//!   a boolean. For example, we switch on an instruction's opcode, rather than
+//!   ask whether this operation is an `imul`. This allows for more prefix
+//!   sharing in the automata, which (again) makes it more compact and more
+//!   cache friendly.
 //!
 //! ## Implementation Overview
 //!
@@ -67,13 +70,15 @@
 //! precondition.
 //!
 //! Within matching the pattern structure, we emit matching operations in a
-//! pre-order traversal of the pattern. This ensures that we've already matched
-//! an operation before we consider its operands, and therefore we already know
-//! the operands exist. See `PatternPreOrder` for details.
+//! breadth-first traversal of the pattern. This ensures that we've already
+//! matched an operation before we consider its operands, and therefore we
+//! already know the operands exist. It also lets us fuse "what opcode does this
+//! instruction have?" and "define temporary variables for this instruction's
+//! operands" into a single operation. See `PatternBfs` for details.
 //!
 //! As we define the match operations for a pattern, we remember the path where
 //! each LHS id first occurred. These will later be reused when building the RHS
-//! actions. See `LhsIdToPath` for details.
+//! actions. See `LhsCanonicalizer` for details.
 //!
 //! After we've generated the match operations and expected result of those
 //! match operations, then we generate the right-hand side actions. The
@@ -85,12 +90,8 @@
 //! linear optimization translation function.
 
 use crate::ast::*;
-use crate::traversals::Dfs;
-use peepmatic_runtime::{
-    integer_interner::IntegerInterner,
-    linear,
-    paths::{Path, PathId, PathInterner},
-};
+use crate::traversals::{Bfs, Dfs};
+use peepmatic_runtime::{integer_interner::IntegerInterner, linear};
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::fmt::Debug;
@@ -105,79 +106,74 @@ where
     TOperator: Copy + Debug + Eq + Hash + Into<NonZeroU32>,
 {
     let mut optimizations = vec![];
-    let mut paths = PathInterner::new();
     let mut integers = IntegerInterner::new();
     for opt in &opts.optimizations {
-        let lin_opt = linearize_optimization(&mut paths, &mut integers, opt);
+        let lin_opt = linearize_optimization(&mut integers, opt);
         optimizations.push(lin_opt);
     }
     linear::Optimizations {
         optimizations,
-        paths,
         integers,
     }
 }
 
 /// Translate an AST optimization into a linear optimization!
 fn linearize_optimization<TOperator>(
-    paths: &mut PathInterner,
     integers: &mut IntegerInterner,
     opt: &Optimization<TOperator>,
 ) -> linear::Optimization<TOperator>
 where
     TOperator: Copy + Debug + Eq + Hash + Into<NonZeroU32>,
 {
-    let mut increments: Vec<linear::Increment<_>> = vec![];
+    let mut matches: Vec<linear::Match> = vec![];
 
-    let mut lhs_id_to_path = LhsIdToPath::new();
+    let mut lhs_canonicalizer = LhsCanonicalizer::new();
 
-    // We do a pre-order traversal of the LHS because we don't know whether a
-    // child actually exists to match on until we've matched its parent, and we
-    // don't want to emit matching operations on things that might not exist!
-    let mut patterns = PatternPreOrder::new(&opt.lhs.pattern);
-    while let Some((path, pattern)) = patterns.next(paths) {
-        // Create the matching parts of an `Increment` for this part of the
-        // pattern, without any actions yet.
-        let (operation, expected) = pattern.to_linear_match_op(integers, &lhs_id_to_path, path);
-        increments.push(linear::Increment {
+    // We do a breadth-first traversal of the LHS because we don't know whether
+    // a child actually exists to match on until we've matched its parent, and
+    // we don't want to emit matching operations on things that might not exist!
+    for (id, pattern) in PatternBfs::new(&opt.lhs.pattern) {
+        // Create the matching parts of an `Match` for this part of the
+        // pattern.
+        let (operation, expected) = pattern.to_linear_match_op(integers, &lhs_canonicalizer, id);
+        matches.push(linear::Match {
             operation,
             expected,
-            actions: vec![],
         });
 
-        lhs_id_to_path.remember_path_to_pattern_ids(pattern, path);
+        lhs_canonicalizer.remember_linear_id(pattern, id);
 
         // Some operations require type ascriptions for us to infer the correct
         // bit width of their results: `ireduce`, `sextend`, `uextend`, etc.
         // When there is such a type ascription in the pattern, insert another
-        // increment that checks the instruction-being-matched's bit width.
+        // match that checks the instruction-being-matched's bit width.
         if let Pattern::Operation(Operation { r#type, .. }) = pattern {
             if let Some(w) = r#type.get().and_then(|ty| ty.bit_width.fixed_width()) {
                 debug_assert!(w != 0, "All fixed-width bit widths are non-zero");
                 let expected = Ok(unsafe { NonZeroU32::new_unchecked(w as u32) });
 
-                increments.push(linear::Increment {
-                    operation: linear::MatchOp::BitWidth { path },
+                matches.push(linear::Match {
+                    operation: linear::MatchOp::BitWidth(id),
                     expected,
-                    actions: vec![],
                 });
             }
         }
     }
 
-    // Now that we've added all the increments for the LHS pattern, add the
-    // increments for its preconditions.
+    // Now that we've added all the matches for the LHS pattern, add the
+    // matches for its preconditions.
     for pre in &opt.lhs.preconditions {
-        increments.push(pre.to_linear_increment(&lhs_id_to_path));
+        matches.push(pre.to_linear_match(&lhs_canonicalizer));
     }
 
-    assert!(!increments.is_empty());
+    assert!(!matches.is_empty());
 
-    // Finally, generate the RHS-building actions and attach them to the first increment.
+    // Finally, generate the RHS-building actions and attach them to the first match.
     let mut rhs_builder = RhsBuilder::new(&opt.rhs);
-    rhs_builder.add_rhs_build_actions(integers, &lhs_id_to_path, &mut increments[0].actions);
+    let mut actions = vec![];
+    rhs_builder.add_rhs_build_actions(integers, &lhs_canonicalizer, &mut actions);
 
-    linear::Optimization { increments }
+    linear::Optimization { matches, actions }
 }
 
 /// A post-order, depth-first traversal of right-hand sides.
@@ -214,55 +210,46 @@ where
     }
 }
 
-/// A pre-order, depth-first traversal of left-hand side patterns.
+/// A breadth-first traversal of left-hand side patterns.
 ///
-/// Keeps track of the path to each pattern, and yields it along side the
+/// Keeps track of the `LhsId` of each pattern, and yields it along side the
 /// pattern AST node.
-struct PatternPreOrder<'a, TOperator> {
-    last_child: Option<u8>,
-    path: Vec<u8>,
-    dfs: Dfs<'a, TOperator>,
+///
+/// We use a breadth-first traversal because we fuse "which opcode is this?" and
+/// "assign operands to temporaries" into a single linear match operation. A
+/// breadth-first traversal aligns with "match this opcode, and on success bind
+/// all of its operands to temporaries". Fusing these operations into one is
+/// important for attaining similar performance as an open-coded Rust `match`
+/// expression, which would also fuse these operations via pattern matching.
+struct PatternBfs<'a, TOperator> {
+    next_id: u16,
+    bfs: Bfs<'a, TOperator>,
 }
 
-impl<'a, TOperator> PatternPreOrder<'a, TOperator>
+impl<'a, TOperator> PatternBfs<'a, TOperator>
 where
     TOperator: Copy + Debug + Eq + Hash,
 {
     fn new(pattern: &'a Pattern<'a, TOperator>) -> Self {
         Self {
-            last_child: None,
-            path: vec![],
-            dfs: Dfs::new(pattern),
+            next_id: 0,
+            bfs: Bfs::new(pattern),
         }
     }
+}
 
-    fn next(&mut self, paths: &mut PathInterner) -> Option<(PathId, &'a Pattern<'a, TOperator>)> {
-        use crate::traversals::TraversalEvent as TE;
+impl<'a, TOperator> Iterator for PatternBfs<'a, TOperator>
+where
+    TOperator: 'a + Copy + Debug + Eq + Hash,
+{
+    type Item = (linear::LhsId, &'a Pattern<'a, TOperator>);
+
+    fn next(&mut self) -> Option<Self::Item> {
         loop {
-            match self.dfs.next()? {
-                (TE::Enter, DynAstRef::Pattern(pattern)) => {
-                    let last_child = self.last_child.take();
-                    self.path.push(match last_child {
-                        None => 0,
-                        Some(c) => {
-                            assert!(
-                                c < std::u8::MAX,
-                                "operators must have less than or equal u8::MAX arity"
-                            );
-                            c + 1
-                        }
-                    });
-                    let path = paths.intern(Path(&self.path));
-                    return Some((path, pattern));
-                }
-                (TE::Exit, DynAstRef::Pattern(_)) => {
-                    self.last_child = Some(
-                        self.path
-                            .pop()
-                            .expect("should always have a non-empty path during traversal"),
-                    );
-                }
-                _ => {}
+            if let DynAstRef::Pattern(pattern) = self.bfs.next()? {
+                let id = linear::LhsId(self.next_id);
+                self.next_id = self.next_id.checked_add(1).unwrap();
+                return Some((id, pattern));
             }
         }
     }
@@ -270,42 +257,37 @@ where
 
 /// A map from left-hand side identifiers to the path in the left-hand side
 /// where they first occurred.
-struct LhsIdToPath<'a, TOperator> {
-    id_to_path: BTreeMap<&'a str, PathId>,
+struct LhsCanonicalizer<'a, TOperator> {
+    id_to_linear: BTreeMap<&'a str, linear::LhsId>,
     _marker: PhantomData<&'a TOperator>,
 }
 
-impl<'a, TOperator> LhsIdToPath<'a, TOperator> {
-    /// Construct a new, empty `LhsIdToPath`.
+impl<'a, TOperator> LhsCanonicalizer<'a, TOperator> {
+    /// Construct a new, empty `LhsCanonicalizer`.
     fn new() -> Self {
         Self {
-            id_to_path: Default::default(),
+            id_to_linear: Default::default(),
             _marker: PhantomData,
         }
     }
 
-    /// Have we already seen the given identifier?
-    fn get_first_occurrence(&self, id: &Id) -> Option<PathId> {
-        self.id_to_path.get(id.name()).copied()
+    /// Get the canonical `linear::LhsId` for the given variable, if any.
+    fn get(&self, id: &Id) -> Option<linear::LhsId> {
+        self.id_to_linear.get(id.name()).copied()
     }
 
-    /// Get the path within the left-hand side pattern where we first saw the
-    /// given AST id.
-    ///
-    /// ## Panics
-    ///
-    /// Panics if the given AST id has not already been canonicalized.
-    fn unwrap_first_occurrence(&self, id: &Id) -> PathId {
-        self.id_to_path[id.name()]
-    }
-
-    /// Remember the path to any LHS ids used in the given pattern.
-    fn remember_path_to_pattern_ids(&mut self, pattern: &'a Pattern<'a, TOperator>, path: PathId) {
+    /// Remember the canonical `linear::LhsId` for any variables or constants
+    /// used in the given pattern.
+    fn remember_linear_id(
+        &mut self,
+        pattern: &'a Pattern<'a, TOperator>,
+        linear_id: linear::LhsId,
+    ) {
         match pattern {
             // If this is the first time we've seen an identifier defined on the
             // left-hand side, remember it.
             Pattern::Variable(Variable { id, .. }) | Pattern::Constant(Constant { id, .. }) => {
-                self.id_to_path.entry(id.name()).or_insert(path);
+                self.id_to_linear.entry(id.name()).or_insert(linear_id);
             }
             _ => {}
         }
@@ -358,11 +340,11 @@ where
     fn add_rhs_build_actions(
         &mut self,
         integers: &mut IntegerInterner,
-        lhs_id_to_path: &LhsIdToPath<TOperator>,
+        lhs_canonicalizer: &LhsCanonicalizer<TOperator>,
         actions: &mut Vec<linear::Action<TOperator>>,
     ) {
         while let Some(rhs) = self.rhs_post_order.next() {
-            actions.push(self.rhs_to_linear_action(integers, lhs_id_to_path, rhs));
+            actions.push(self.rhs_to_linear_action(integers, lhs_canonicalizer, rhs));
             let id = linear::RhsId(self.rhs_span_to_id.len().try_into().unwrap());
             self.rhs_span_to_id.insert(rhs.span(), id);
         }
@@ -371,7 +353,7 @@ where
     fn rhs_to_linear_action(
         &self,
         integers: &mut IntegerInterner,
-        lhs_id_to_path: &LhsIdToPath<TOperator>,
+        lhs_canonicalizer: &LhsCanonicalizer<TOperator>,
         rhs: &Rhs<TOperator>,
     ) -> linear::Action<TOperator> {
         match rhs {
@@ -393,8 +375,8 @@ where
                 linear::Action::MakeConditionCode { cc: *cc }
             }
             Rhs::Variable(Variable { id, .. }) | Rhs::Constant(Constant { id, .. }) => {
-                let path = lhs_id_to_path.unwrap_first_occurrence(id);
-                linear::Action::GetLhs { path }
+                let lhs = lhs_canonicalizer.get(id).unwrap();
+                linear::Action::GetLhs { lhs }
             }
             Rhs::Unquote(unq) => match unq.operands.len() {
                 1 => linear::Action::UnaryUnquote {
@@ -452,22 +434,18 @@ impl<TOperator> Precondition<'_, TOperator>
 where
     TOperator: Copy + Debug + Eq + Hash + Into<NonZeroU32>,
 {
-    /// Convert this precondition into a `linear::Increment`.
-    fn to_linear_increment(
-        &self,
-        lhs_id_to_path: &LhsIdToPath<TOperator>,
-    ) -> linear::Increment<TOperator> {
+    /// Convert this precondition into a `linear::Match`.
+    fn to_linear_match(&self, lhs_canonicalizer: &LhsCanonicalizer<TOperator>) -> linear::Match {
         match self.constraint {
             Constraint::IsPowerOfTwo => {
                 let id = match &self.operands[0] {
                     ConstraintOperand::Constant(Constant { id, .. }) => id,
                     _ => unreachable!("checked in verification"),
                 };
-                let path = lhs_id_to_path.unwrap_first_occurrence(&id);
-                linear::Increment {
-                    operation: linear::MatchOp::IsPowerOfTwo { path },
+                let id = lhs_canonicalizer.get(&id).unwrap();
+                linear::Match {
+                    operation: linear::MatchOp::IsPowerOfTwo(id),
                     expected: linear::bool_to_match_result(true),
-                    actions: vec![],
                 }
             }
             Constraint::BitWidth => {
@@ -476,7 +454,7 @@ where
                     | ConstraintOperand::Variable(Variable { id, .. }) => id,
                     _ => unreachable!("checked in verification"),
                 };
-                let path = lhs_id_to_path.unwrap_first_occurrence(&id);
+                let id = lhs_canonicalizer.get(&id).unwrap();
 
                 let width = match &self.operands[1] {
                     ConstraintOperand::ValueLiteral(ValueLiteral::Integer(Integer {
@@ -490,10 +468,9 @@ where
                 assert!((width as u8).is_power_of_two());
                 let expected = Ok(unsafe { NonZeroU32::new_unchecked(width as u32) });
 
-                linear::Increment {
-                    operation: linear::MatchOp::BitWidth { path },
+                linear::Match {
+                    operation: linear::MatchOp::BitWidth(id),
                     expected,
-                    actions: vec![],
                 }
             }
             Constraint::FitsInNativeWord => {
@@ -502,11 +479,10 @@ where
                     | ConstraintOperand::Variable(Variable { id, .. }) => id,
                     _ => unreachable!("checked in verification"),
                 };
-                let path = lhs_id_to_path.unwrap_first_occurrence(&id);
-                linear::Increment {
-                    operation: linear::MatchOp::FitsInNativeWord { path },
+                let id = lhs_canonicalizer.get(&id).unwrap();
+                linear::Match {
+                    operation: linear::MatchOp::FitsInNativeWord(id),
                     expected: linear::bool_to_match_result(true),
-                    actions: vec![],
                 }
             }
         }
@@ -525,52 +501,46 @@ where
     fn to_linear_match_op(
         &self,
         integers: &mut IntegerInterner,
-        lhs_id_to_path: &LhsIdToPath<TOperator>,
-        path: PathId,
+        lhs_canonicalizer: &LhsCanonicalizer<TOperator>,
+        linear_lhs_id: linear::LhsId,
     ) -> (linear::MatchOp, linear::MatchResult)
     where
         TOperator: Into<NonZeroU32>,
     {
         match self {
             Pattern::ValueLiteral(ValueLiteral::Integer(Integer { value, .. })) => (
-                linear::MatchOp::IntegerValue { path },
+                linear::MatchOp::IntegerValue(linear_lhs_id),
                 Ok(integers.intern(*value as u64).into()),
             ),
             Pattern::ValueLiteral(ValueLiteral::Boolean(Boolean { value, .. })) => (
-                linear::MatchOp::BooleanValue { path },
+                linear::MatchOp::BooleanValue(linear_lhs_id),
                 linear::bool_to_match_result(*value),
             ),
             Pattern::ValueLiteral(ValueLiteral::ConditionCode(ConditionCode { cc, .. })) => {
                 let cc = *cc as u32;
                 debug_assert!(cc != 0, "no `ConditionCode` variants are zero");
                 let expected = Ok(unsafe { NonZeroU32::new_unchecked(cc) });
-                (linear::MatchOp::ConditionCode { path }, expected)
+                (linear::MatchOp::ConditionCode(linear_lhs_id), expected)
             }
             Pattern::Constant(Constant { id, .. }) => {
-                if let Some(path_b) = lhs_id_to_path.get_first_occurrence(id) {
-                    debug_assert!(path != path_b);
+                if let Some(linear_lhs_id2) = lhs_canonicalizer.get(id) {
+                    debug_assert!(linear_lhs_id != linear_lhs_id2);
                     (
-                        linear::MatchOp::Eq {
-                            path_a: path,
-                            path_b,
-                        },
+                        linear::MatchOp::Eq(linear_lhs_id, linear_lhs_id2),
                         linear::bool_to_match_result(true),
                     )
                 } else {
                     (
-                        linear::MatchOp::IsConst { path },
+                        linear::MatchOp::IsConst(linear_lhs_id),
                         linear::bool_to_match_result(true),
                     )
                 }
             }
             Pattern::Variable(Variable { id, .. }) => {
-                if let Some(path_b) = lhs_id_to_path.get_first_occurrence(id) {
-                    debug_assert!(path != path_b);
+                if let Some(linear_lhs_id2) = lhs_canonicalizer.get(id) {
+                    debug_assert!(linear_lhs_id != linear_lhs_id2);
                     (
-                        linear::MatchOp::Eq {
-                            path_a: path,
-                            path_b,
-                        },
+                        linear::MatchOp::Eq(linear_lhs_id, linear_lhs_id2),
                         linear::bool_to_match_result(true),
                     )
                 } else {
@@ -579,7 +549,7 @@ where
             }
             Pattern::Operation(op) => {
                 let expected = Ok(op.operator.into());
-                (linear::MatchOp::Opcode { path }, expected)
+                (linear::MatchOp::Opcode(linear_lhs_id), expected)
             }
         }
     }
@@ -590,8 +560,9 @@ mod tests {
     use super::*;
     use peepmatic_runtime::{
         integer_interner::IntegerId,
-        linear::{bool_to_match_result, Action::*, Else, MatchOp::*},
+        linear::{bool_to_match_result, Action::*, Else, LhsId, MatchOp::*, RhsId},
         r#type::{BitWidth, Kind, Type},
+        unquote::UnquoteOperator,
     };
     use peepmatic_test_operator::TestOperator;
 
@@ -625,24 +596,18 @@ mod tests {
                     panic!("should verify OK")
                 }
 
-                let mut paths = PathInterner::new();
-                let mut p = |p: &[u8]| paths.intern(Path::new(&p));
-
                 let mut integers = IntegerInterner::new();
                 let mut i = |i: u64| integers.intern(i);
 
                 #[allow(unused_variables)]
                 let make_expected: fn(
-                    &mut dyn FnMut(&[u8]) -> PathId,
                     &mut dyn FnMut(u64) -> IntegerId,
-                ) -> Vec<linear::Increment<TestOperator>> = $make_expected;
-                let expected = make_expected(&mut p, &mut i);
-                dbg!(&expected);
+                ) -> (Vec<linear::Match>, Vec<linear::Action<_>>) = $make_expected;
 
-                let actual = linearize_optimization(&mut paths, &mut integers, &opts.optimizations[0]);
-                dbg!(&actual.increments);
-
-                assert_eq!(expected, actual.increments);
+                let expected = make_expected(&mut i);
+                let actual = linearize_optimization(&mut integers, &opts.optimizations[0]);
+                assert_eq!(expected.0, actual.matches);
+                assert_eq!(expected.1, actual.actions);
             }
         };
     }
@@ -652,194 +617,191 @@ mod tests {
         "
 (=> (when (imul $x $C)
           (is-power-of-two $C))
-    (ishl $x $C))
+    (ishl $x $(log2 $C)))
         ",
-        |p, i| vec![
-            linear::Increment {
-                operation: Opcode { path: p(&[0]) },
-                expected: Ok(TestOperator::Imul.into()),
-                actions: vec![
-                    GetLhs { path: p(&[0, 0]) },
-                    GetLhs { path: p(&[0, 1]) },
-                    MakeBinaryInst {
-                        operator: TestOperator::Ishl,
-                        r#type: Type {
-                            kind: Kind::Int,
-                            bit_width: BitWidth::Polymorphic,
-                        },
-                        operands: [linear::RhsId(0), linear::RhsId(1)],
+        |i| (
+            vec![
+                linear::Match {
+                    operation: Opcode(LhsId(0)),
+                    expected: Ok(TestOperator::Imul.into()),
+                },
+                linear::Match {
+                    operation: Nop,
+                    expected: Err(Else),
+                },
+                linear::Match {
+                    operation: IsConst(LhsId(2)),
+                    expected: bool_to_match_result(true),
+                },
+                linear::Match {
+                    operation: IsPowerOfTwo(LhsId(2)),
+                    expected: bool_to_match_result(true),
+                },
+            ],
+            vec![
+                GetLhs { lhs: LhsId(1) },
+                GetLhs { lhs: LhsId(2) },
+                UnaryUnquote {
+                    operator: UnquoteOperator::Log2,
+                    operand: RhsId(1)
+                },
+                MakeBinaryInst {
+                    operator: TestOperator::Ishl,
+                    r#type: Type {
+                        kind: Kind::Int,
+                        bit_width: BitWidth::Polymorphic
                     },
-                ],
-            },
-            linear::Increment {
-                operation: Nop,
-                expected: Err(Else),
-                actions: vec![],
-            },
-            linear::Increment {
-                operation: IsConst { path: p(&[0, 1]) },
-                expected: bool_to_match_result(true),
-                actions: vec![],
-            },
-            linear::Increment {
-                operation: IsPowerOfTwo { path: p(&[0, 1]) },
-                expected: bool_to_match_result(true),
-                actions: vec![],
-            },
-        ],
+                    operands: [RhsId(0), RhsId(2)]
+                }
+            ],
+        ),
     );
 
-    linearizes_to!(variable_pattern_id_optimization, "(=> $x $x)", |p, i| vec![
-        linear::Increment {
+    linearizes_to!(variable_pattern_id_optimization, "(=> $x $x)", |i| (
+        vec![linear::Match {
             operation: Nop,
             expected: Err(Else),
-            actions: vec![GetLhs { path: p(&[0]) }],
-        }
-    ]);
+        }],
+        vec![GetLhs { lhs: LhsId(0) }],
+    ));
 
-    linearizes_to!(constant_pattern_id_optimization, "(=> $C $C)", |p, i| vec![
-        linear::Increment {
-            operation: IsConst { path: p(&[0]) },
+    linearizes_to!(constant_pattern_id_optimization, "(=> $C $C)", |i| (
+        vec![linear::Match {
+            operation: IsConst(LhsId(0)),
             expected: bool_to_match_result(true),
-            actions: vec![GetLhs { path: p(&[0]) }],
-        }
-    ]);
+        }],
+        vec![GetLhs { lhs: LhsId(0) }],
+    ));
 
-    linearizes_to!(
-        boolean_literal_id_optimization,
-        "(=> true true)",
-        |p, i| vec![linear::Increment {
-            operation: BooleanValue { path: p(&[0]) },
+    linearizes_to!(boolean_literal_id_optimization, "(=> true true)", |i| (
+        vec![linear::Match {
+            operation: BooleanValue(LhsId(0)),
             expected: bool_to_match_result(true),
-            actions: vec![MakeBooleanConst {
-                value: true,
-                bit_width: BitWidth::Polymorphic,
-            }],
-        }]
-    );
+        }],
+        vec![MakeBooleanConst {
+            value: true,
+            bit_width: BitWidth::Polymorphic,
+        }],
+    ));
 
-    linearizes_to!(number_literal_id_optimization, "(=> 5 5)", |p, i| vec![
-        linear::Increment {
-            operation: IntegerValue { path: p(&[0]) },
+    linearizes_to!(number_literal_id_optimization, "(=> 5 5)", |i| (
+        vec![linear::Match {
+            operation: IntegerValue(LhsId(0)),
             expected: Ok(i(5).into()),
-            actions: vec![MakeIntegerConst {
-                value: i(5),
-                bit_width: BitWidth::Polymorphic,
-            }],
-        }
-    ]);
+        }],
+        vec![MakeIntegerConst {
+            value: i(5),
+            bit_width: BitWidth::Polymorphic,
+        }],
+    ));
 
     linearizes_to!(
         operation_id_optimization,
         "(=> (iconst $C) (iconst $C))",
-        |p, i| vec![
-            linear::Increment {
-                operation: Opcode { path: p(&[0]) },
-                expected: Ok(TestOperator::Iconst.into()),
-                actions: vec![
-                    GetLhs { path: p(&[0, 0]) },
-                    MakeUnaryInst {
-                        operator: TestOperator::Iconst,
-                        r#type: Type {
-                            kind: Kind::Int,
-                            bit_width: BitWidth::Polymorphic,
-                        },
-                        operand: linear::RhsId(0),
+        |i| (
+            vec![
+                linear::Match {
+                    operation: Opcode(LhsId(0)),
+                    expected: Ok(TestOperator::Iconst.into()),
+                },
+                linear::Match {
+                    operation: IsConst(LhsId(1)),
+                    expected: bool_to_match_result(true),
+                },
+            ],
+            vec![
+                GetLhs { lhs: LhsId(1) },
+                MakeUnaryInst {
+                    operator: TestOperator::Iconst,
+                    r#type: Type {
+                        kind: Kind::Int,
+                        bit_width: BitWidth::Polymorphic,
                     },
-                ],
-            },
-            linear::Increment {
-                operation: IsConst { path: p(&[0, 0]) },
-                expected: bool_to_match_result(true),
-                actions: vec![],
-            },
-        ]
+                    operand: RhsId(0),
+                },
+            ],
+        ),
     );
 
     linearizes_to!(
         redundant_bor,
         "(=> (bor $x (bor $x $y)) (bor $x $y))",
-        |p, i| vec![
-            linear::Increment {
-                operation: Opcode { path: p(&[0]) },
-                expected: Ok(TestOperator::Bor.into()),
-                actions: vec![
-                    GetLhs { path: p(&[0, 0]) },
-                    GetLhs {
-                        path: p(&[0, 1, 1]),
-                    },
-                    MakeBinaryInst {
-                        operator: TestOperator::Bor,
-                        r#type: Type {
-                            kind: Kind::Int,
-                            bit_width: BitWidth::Polymorphic,
-                        },
-                        operands: [linear::RhsId(0), linear::RhsId(1)],
-                    },
-                ],
-            },
-            linear::Increment {
-                operation: Nop,
-                expected: Err(Else),
-                actions: vec![],
-            },
-            linear::Increment {
-                operation: Opcode { path: p(&[0, 1]) },
-                expected: Ok(TestOperator::Bor.into()),
-                actions: vec![],
-            },
-            linear::Increment {
-                operation: Eq {
-                    path_a: p(&[0, 1, 0]),
-                    path_b: p(&[0, 0]),
+        |i| (
+            vec![
+                linear::Match {
+                    operation: Opcode(LhsId(0)),
+                    expected: Ok(TestOperator::Bor.into()),
                 },
-                expected: bool_to_match_result(true),
-                actions: vec![],
-            },
-            linear::Increment {
-                operation: Nop,
-                expected: Err(Else),
-                actions: vec![],
-            },
-        ]
+                linear::Match {
+                    operation: Nop,
+                    expected: Err(Else),
+                },
+                linear::Match {
+                    operation: Opcode(LhsId(2)),
+                    expected: Ok(TestOperator::Bor.into()),
+                },
+                linear::Match {
+                    operation: Eq(LhsId(3), LhsId(1)),
+                    expected: bool_to_match_result(true),
+                },
+                linear::Match {
+                    operation: Nop,
+                    expected: Err(Else),
+                },
+            ],
+            vec![
+                GetLhs { lhs: LhsId(1) },
+                GetLhs { lhs: LhsId(4) },
+                MakeBinaryInst {
+                    operator: TestOperator::Bor,
+                    r#type: Type {
+                        kind: Kind::Int,
+                        bit_width: BitWidth::Polymorphic,
+                    },
+                    operands: [RhsId(0), RhsId(1)],
+                },
+            ],
+        ),
     );
 
     linearizes_to!(
         large_integers,
         // u64::MAX
         "(=> 18446744073709551615 0)",
-        |p, i| vec![linear::Increment {
-            operation: IntegerValue { path: p(&[0]) },
-            expected: Ok(i(std::u64::MAX).into()),
-            actions: vec![MakeIntegerConst {
+        |i| (
+            vec![linear::Match {
+                operation: IntegerValue(LhsId(0)),
+                expected: Ok(i(std::u64::MAX).into()),
+            }],
+            vec![MakeIntegerConst {
                 value: i(0),
                 bit_width: BitWidth::Polymorphic,
             }],
-        }]
+        ),
     );
 
     linearizes_to!(
         ireduce_with_type_ascription,
         "(=> (ireduce{i32} $x) 0)",
-        |p, i| vec![
-            linear::Increment {
-                operation: Opcode { path: p(&[0]) },
-                expected: Ok(TestOperator::Ireduce.into()),
-                actions: vec![MakeIntegerConst {
-                    value: i(0),
-                    bit_width: BitWidth::ThirtyTwo,
-                }],
-            },
-            linear::Increment {
-                operation: linear::MatchOp::BitWidth { path: p(&[0]) },
-                expected: Ok(NonZeroU32::new(32).unwrap()),
-                actions: vec![],
-            },
-            linear::Increment {
-                operation: Nop,
-                expected: Err(Else),
-                actions: vec![],
-            },
-        ]
+        |i| (
+            vec![
+                linear::Match {
+                    operation: Opcode(LhsId(0)),
+                    expected: Ok(TestOperator::Ireduce.into()),
+                },
+                linear::Match {
+                    operation: linear::MatchOp::BitWidth(LhsId(0)),
+                    expected: Ok(NonZeroU32::new(32).unwrap()),
+                },
+                linear::Match {
+                    operation: Nop,
+                    expected: Err(Else),
+                },
+            ],
+            vec![MakeIntegerConst {
+                value: i(0),
+                bit_width: BitWidth::ThirtyTwo,
+            }],
+        ),
     );
 }

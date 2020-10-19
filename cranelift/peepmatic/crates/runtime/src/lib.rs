@@ -25,7 +25,6 @@ pub mod linear;
 pub mod optimizations;
 pub mod optimizer;
 pub mod part;
-pub mod paths;
 pub mod r#type;
 pub mod unquote;
 

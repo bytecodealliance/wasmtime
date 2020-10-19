@@ -5,7 +5,6 @@ use crate::instruction_set::InstructionSet;
 use crate::integer_interner::IntegerInterner;
 use crate::linear::{Action, MatchOp, MatchResult};
 use crate::optimizer::PeepholeOptimizer;
-use crate::paths::PathInterner;
 use peepmatic_automata::Automaton;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -25,9 +24,6 @@ pub struct PeepholeOptimizations<TOperator>
 where
     TOperator: 'static + Copy + Debug + Eq + Hash,
 {
-    /// The instruction paths referenced by the peephole optimizations.
-    pub paths: PathInterner,
-
     /// Not all integers we're matching on fit in the `u32` that we use as the
     /// result of match operations. So we intern them and refer to them by id.
     pub integers: IntegerInterner,
@@ -88,6 +84,7 @@ where
         PeepholeOptimizer {
             peep_opt: self,
             instr_set,
+            left_hand_sides: vec![],
             right_hand_sides: vec![],
             actions: vec![],
             backtracking_states: vec![],

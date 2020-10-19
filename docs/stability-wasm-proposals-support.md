@@ -21,6 +21,7 @@ vetted](./contributing-implementing-wasm-proposals.html).
 | **[Reference Types]**                       | **Yes.**<br/>Enabled by default on x86_64. Aarch64 support in progress. | `--enable-reference-types` | [`wasm_reference_types`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_reference_types) |
 | **[Fixed-Width SIMD]**                      | **In progress.**                 | `--enable-simd`        | [`wasm_simd`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_simd) |
 | **[Threads and Atomics]**                   | **In progress.**                 | `--enable-threads`     | [`wasm_threads`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_threads) |
+| **[Multi-Memory]**                          | **Yes.**                         | `--enable-multi-memory`| [`wasm_multi_memory`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_multi_memory) |
 
 [config]: https://docs.rs/wasmtime/*/wasmtime/struct.Config.html
 [Multi-Value]: https://github.com/WebAssembly/spec/blob/master/proposals/multi-value/Overview.md
@@ -32,3 +33,4 @@ vetted](./contributing-implementing-wasm-proposals.html).
 [Fixed-Width SIMD]: https://github.com/WebAssembly/simd/blob/master/proposals/simd/SIMD.md
 [phases]: https://github.com/WebAssembly/meetings/blob/master/process/phases.md
 [Threads and Atomics]: https://github.com/WebAssembly/threads/blob/master/proposals/threads/Overview.md
+[Multi-Memory]: https://github.com/WebAssembly/multi-memory/blob/master/proposals/multi-memory/Overview.md

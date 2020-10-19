@@ -7,7 +7,6 @@
 
 use crate::cc::ConditionCode;
 use crate::integer_interner::{IntegerId, IntegerInterner};
-use crate::paths::{PathId, PathInterner};
 use crate::r#type::{BitWidth, Type};
 use crate::unquote::UnquoteOperator;
 use serde::{Deserialize, Serialize};
@@ -24,9 +23,6 @@ where
     /// The linear optimizations.
     pub optimizations: Vec<Optimization<TOperator>>,
 
-    /// The de-duplicated paths referenced by these optimizations.
-    pub paths: PathInterner,
-
     /// The integer literals referenced by these optimizations.
     pub integers: IntegerInterner,
 }
@@ -37,8 +33,13 @@ pub struct Optimization<TOperator>
 where
     TOperator: 'static + Copy + Debug + Eq + Hash,
 {
-    /// The chain of increments for this optimization.
-    pub increments: Vec<Increment<TOperator>>,
+    /// The chain of match operations and expected results for this
+    /// optimization.
+    pub matches: Vec<Match>,
+
+    /// Actions to perform, given that the operation resulted in the expected
+    /// value.
+    pub actions: Vec<Action<TOperator>>,
 }
 
 /// Match any value.
@@ -61,31 +62,20 @@ pub fn bool_to_match_result(b: bool) -> MatchResult {
     unsafe { Ok(NonZeroU32::new_unchecked(b + 1)) }
 }
 
-/// A partial match of an optimization's LHS and partial construction of its
-/// RHS.
+/// A partial match of an optimization's LHS.
 ///
-/// An increment is a matching operation, the expected result from that
-/// operation to continue to the next increment, and the actions to take to
-/// build up the LHS scope and RHS instructions given that we got the expected
-/// result from this increment's matching operation. Each increment will
-/// basically become a state and a transition edge out of that state in the
-/// final automata.
+/// An match is composed of a matching operation and the expected result of that
+/// operation. Each match will basically become a state and a transition edge
+/// out of that state in the final automata.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Increment<TOperator>
-where
-    TOperator: 'static + Copy + Debug + Eq + Hash,
-{
+pub struct Match {
     /// The matching operation to perform.
     pub operation: MatchOp,
 
     /// The expected result of our matching operation, that enables us to
-    /// continue to the next increment, or `Else` for "don't care"
-    /// wildcard-style matching.
+    /// continue to the next match, or `Else` for "don't care" wildcard-style
+    /// matching.
     pub expected: MatchResult,
-
-    /// Actions to perform, given that the operation resulted in the expected
-    /// value.
-    pub actions: Vec<Action<TOperator>>,
 }
 
 /// A matching operation to be performed on some Cranelift instruction as part
@@ -93,79 +83,54 @@ where
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum MatchOp {
     /// Switch on the opcode of an instruction.
-    Opcode {
-        /// The path to the instruction whose opcode we're switching on.
-        path: PathId,
-    },
+    ///
+    /// Upon successfully matching an instruction's opcode, bind each of its
+    /// operands to a LHS temporary.
+    Opcode(LhsId),
 
     /// Does an instruction have a constant value?
-    IsConst {
-        /// The path to the instruction (or immediate) that we're checking
-        /// whether it is constant or not.
-        path: PathId,
-    },
+    IsConst(LhsId),
 
     /// Is the constant value a power of two?
-    IsPowerOfTwo {
-        /// The path to the instruction (or immediate) that we are checking
-        /// whether it is a constant power of two or not.
-        path: PathId,
-    },
+    IsPowerOfTwo(LhsId),
 
     /// Switch on the bit width of a value.
-    BitWidth {
-        /// The path to the instruction (or immediate) whose result's bit width
-        /// we are checking.
-        path: PathId,
-    },
+    BitWidth(LhsId),
 
     /// Does the value fit in our target architecture's native word size?
-    FitsInNativeWord {
-        /// The path to the instruction (or immediate) whose result we are
-        /// checking whether it fits in a native word or not.
-        path: PathId,
-    },
+    FitsInNativeWord(LhsId),
 
-    /// Are the instructions (or immediates) at the given paths the same?
-    Eq {
-        /// The path to the first instruction (or immediate).
-        path_a: PathId,
-        /// The path to the second instruction (or immediate).
-        path_b: PathId,
-    },
+    /// Are the instructions (or immediates) the same?
+    Eq(LhsId, LhsId),
 
     /// Switch on the constant integer value of an instruction.
-    IntegerValue {
-        /// The path to the instruction.
-        path: PathId,
-    },
+    IntegerValue(LhsId),
 
     /// Switch on the constant boolean value of an instruction.
-    BooleanValue {
-        /// The path to the instruction.
-        path: PathId,
-    },
+    BooleanValue(LhsId),
 
     /// Switch on a condition code.
-    ConditionCode {
-        /// The path to the condition code.
-        path: PathId,
-    },
+    ConditionCode(LhsId),
 
-    /// No operation. Always evaluates to `None`.
+    /// No operation. Always evaluates to `Else`.
     ///
-    /// Exceedingly rare in real optimizations; nonetheless required to support
+    /// Never appears in real optimizations; nonetheless required to support
     /// corner cases of the DSL, such as a LHS pattern that is nothing but a
-    /// variable pattern.
+    /// variable.
     Nop,
 }
 
 /// A canonicalized identifier for a left-hand side value that was bound in a
 /// pattern.
+///
+/// These are defined in a pre-order traversal of the LHS pattern by successful
+/// `MatchOp::Opcode` matches.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct LhsId(pub u16);
 
 /// A canonicalized identifier for a right-hand side value.
+///
+/// These are defined by RHS actions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RhsId(pub u16);
 
@@ -177,8 +142,8 @@ pub struct RhsId(pub u16);
 pub enum Action<TOperator> {
     /// Reuse something from the left-hand side.
     GetLhs {
-        /// The path to the instruction or value.
-        path: PathId,
+        /// The left-hand side instruction or value.
+        lhs: LhsId,
     },
 
     /// Perform compile-time evaluation.

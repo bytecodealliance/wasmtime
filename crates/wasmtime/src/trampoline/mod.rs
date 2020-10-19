@@ -55,7 +55,7 @@ pub fn generate_func_export(
     VMTrampoline,
 )> {
     let (instance, trampoline) = create_handle_with_function(ft, func, store)?;
-    match instance.lookup("trampoline").expect("trampoline export") {
+    match instance.lookup("").expect("trampoline export") {
         wasmtime_runtime::Export::Function(f) => Ok((instance, f, trampoline)),
         _ => unreachable!(),
     }
@@ -72,7 +72,7 @@ pub unsafe fn generate_raw_func_export(
     state: Box<dyn Any>,
 ) -> Result<(StoreInstanceHandle, wasmtime_runtime::ExportFunction)> {
     let instance = func::create_handle_with_raw_function(ft, func, trampoline, store, state)?;
-    match instance.lookup("trampoline").expect("trampoline export") {
+    match instance.lookup("").expect("trampoline export") {
         wasmtime_runtime::Export::Function(f) => Ok((instance, f)),
         _ => unreachable!(),
     }
@@ -84,7 +84,7 @@ pub fn generate_global_export(
     val: Val,
 ) -> Result<(StoreInstanceHandle, wasmtime_runtime::ExportGlobal)> {
     let instance = create_global(store, gt, val)?;
-    match instance.lookup("global").expect("global export") {
+    match instance.lookup("").expect("global export") {
         wasmtime_runtime::Export::Global(g) => Ok((instance, g)),
         _ => unreachable!(),
     }
@@ -95,7 +95,7 @@ pub fn generate_memory_export(
     m: &MemoryType,
 ) -> Result<(StoreInstanceHandle, wasmtime_runtime::ExportMemory)> {
     let instance = create_handle_with_memory(store, m)?;
-    match instance.lookup("memory").expect("memory export") {
+    match instance.lookup("").expect("memory export") {
         wasmtime_runtime::Export::Memory(m) => Ok((instance, m)),
         _ => unreachable!(),
     }
@@ -106,7 +106,7 @@ pub fn generate_table_export(
     t: &TableType,
 ) -> Result<(StoreInstanceHandle, wasmtime_runtime::ExportTable)> {
     let instance = create_handle_with_table(store, t)?;
-    match instance.lookup("table").expect("table export") {
+    match instance.lookup("").expect("table export") {
         wasmtime_runtime::Export::Table(t) => Ok((instance, t)),
         _ => unreachable!(),
     }
