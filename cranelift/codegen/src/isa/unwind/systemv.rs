@@ -95,9 +95,9 @@ impl Into<gimli::write::CallFrameInstruction> for CallFrameInstruction {
 }
 
 /// Maps UnwindInfo register to gimli's index space.
-pub(crate) trait RegisterMapper {
-    /// Maps RegUnit.
-    fn map(&self, reg: RegUnit) -> Result<Register, RegisterMappingError>;
+pub(crate) trait RegisterMapper<Reg> {
+    /// Maps Reg.
+    fn map(&self, reg: Reg) -> Result<Register, RegisterMappingError>;
     /// Gets RSP in gimli's index space.
     fn rsp(&self) -> Register;
 }
@@ -113,11 +113,11 @@ pub struct UnwindInfo {
 }
 
 impl UnwindInfo {
-    pub(crate) fn build<'b>(
-        unwind: input::UnwindInfo<RegUnit>,
+    pub(crate) fn build<'b, Reg: PartialEq + Copy>(
+        unwind: input::UnwindInfo<Reg>,
         word_size: u8,
-        frame_register: Option<RegUnit>,
-        map_reg: &'b dyn RegisterMapper,
+        frame_register: Option<Reg>,
+        map_reg: &'b dyn RegisterMapper<Reg>,
     ) -> CodegenResult<Self> {
         use input::UnwindCode;
         let mut builder = InstructionBuilder::new(word_size, frame_register, map_reg);
@@ -179,20 +179,20 @@ impl UnwindInfo {
     }
 }
 
-struct InstructionBuilder<'a> {
+struct InstructionBuilder<'a, Reg: PartialEq + Copy> {
     word_size: u8,
     cfa_offset: i32,
     saved_state: Option<i32>,
-    frame_register: Option<RegUnit>,
-    map_reg: &'a dyn RegisterMapper,
+    frame_register: Option<Reg>,
+    map_reg: &'a dyn RegisterMapper<Reg>,
     instructions: Vec<(u32, CallFrameInstruction)>,
 }
 
-impl<'a> InstructionBuilder<'a> {
+impl<'a, Reg: PartialEq + Copy> InstructionBuilder<'a, Reg> {
     fn new(
         word_size: u8,
-        frame_register: Option<RegUnit>,
-        map_reg: &'a (dyn RegisterMapper + 'a),
+        frame_register: Option<Reg>,
+        map_reg: &'a (dyn RegisterMapper<Reg> + 'a),
     ) -> Self {
         Self {
             word_size,
@@ -204,7 +204,7 @@ impl<'a> InstructionBuilder<'a> {
         }
     }
 
-    fn push_reg(&mut self, offset: u32, reg: RegUnit) -> Result<(), RegisterMappingError> {
+    fn push_reg(&mut self, offset: u32, reg: Reg) -> Result<(), RegisterMappingError> {
         self.cfa_offset += self.word_size as i32;
         // Update the CFA if this is the save of the frame pointer register or if a frame pointer isn't being used
         // When using a frame pointer, we only need to update the CFA to account for the push of the frame pointer itself
@@ -251,7 +251,7 @@ impl<'a> InstructionBuilder<'a> {
             .push((offset, CallFrameInstruction::CfaOffset(self.cfa_offset)));
     }
 
-    fn set_cfa_reg(&mut self, offset: u32, reg: RegUnit) -> Result<(), RegisterMappingError> {
+    fn set_cfa_reg(&mut self, offset: u32, reg: Reg) -> Result<(), RegisterMappingError> {
         self.instructions.push((
             offset,
             CallFrameInstruction::CfaRegister(self.map_reg.map(reg)?),
@@ -259,7 +259,7 @@ impl<'a> InstructionBuilder<'a> {
         Ok(())
     }
 
-    fn pop_reg(&mut self, offset: u32, reg: RegUnit) -> Result<(), RegisterMappingError> {
+    fn pop_reg(&mut self, offset: u32, reg: Reg) -> Result<(), RegisterMappingError> {
         self.cfa_offset -= self.word_size as i32;
 
         // Update the CFA if this is the restore of the frame pointer register or if a frame pointer isn't being used

@@ -116,7 +116,7 @@ pub(crate) fn create_unwind_info(
     };
 
     struct RegisterMapper<'a, 'b>(&'a (dyn TargetIsa + 'b));
-    impl<'a, 'b> crate::isa::unwind::systemv::RegisterMapper for RegisterMapper<'a, 'b> {
+    impl<'a, 'b> crate::isa::unwind::systemv::RegisterMapper<RegUnit> for RegisterMapper<'a, 'b> {
         fn map(&self, reg: RegUnit) -> Result<u16, RegisterMappingError> {
             Ok(map_reg(self.0, reg)?.0)
         }
