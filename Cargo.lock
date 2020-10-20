@@ -590,6 +590,7 @@ dependencies = [
  "itertools 0.9.0",
  "log",
  "serde",
+ "smallvec",
  "target-lexicon",
  "thiserror",
  "wasmparser 0.63.0",

@@ -20,6 +20,7 @@ hashbrown = { version = "0.7", optional = true }
 itertools = "0.9.0"
 log = { version = "0.4.6", default-features = false }
 serde = { version = "1.0.94", features = ["derive"], optional = true }
+smallvec = "1.0.0"
 thiserror = "1.0.4"
 
 [dev-dependencies]
