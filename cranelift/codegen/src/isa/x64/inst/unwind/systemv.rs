@@ -145,20 +145,24 @@ pub(crate) fn create_unwind_info(
         }
     }
 
+    let last_epilogue_end = context.len;
     let epilogues_unwind_codes = context
         .epilogues
         .iter()
         .map(|epilogue| {
-            let mut codes = Vec::with_capacity(2);
-            let i = epilogue.start as usize;
-            let offset = context.insts_layout[i];
-            codes.push(UnwindCode::RememberState { offset });
+            let end = epilogue.end as usize - 1;
+            let end_offset = context.insts_layout[end];
+            if end_offset == last_epilogue_end {
+                // Do not remember/restore for very last epilogue.
+                return vec![];
+            }
 
-            let i = epilogue.end as usize;
-            let offset = context.insts_layout[i];
-            codes.push(UnwindCode::RestoreState { offset });
-
-            codes
+            let start = epilogue.start as usize;
+            let offset = context.insts_layout[start];
+            vec![
+                UnwindCode::RememberState { offset },
+                UnwindCode::RestoreState { offset: end_offset },
+            ]
         })
         .collect();
 
@@ -241,7 +245,6 @@ mod tests {
     }
 
     #[test]
-    //#[cfg_attr(feature = "x64", should_panic)] // TODO #2079
     fn test_multi_return_func() {
         let isa = lookup(triple!("x86_64"))
             .expect("expect x86 ISA")
@@ -261,7 +264,7 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(4321), length: 23, lsda: None, instructions: [(1, CfaOffset(16)), (1, Offset(Register(6), -16)), (4, CfaRegister(Register(6))), (16, RememberState), (21, RestoreState)] }");
+        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(4321), length: 23, lsda: None, instructions: [(1, CfaOffset(16)), (1, Offset(Register(6), -16)), (4, CfaRegister(Register(6))), (16, RememberState), (18, RestoreState)] }");
     }
 
     fn create_multi_return_function(call_conv: CallConv) -> Function {

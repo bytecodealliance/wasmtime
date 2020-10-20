@@ -450,9 +450,6 @@ impl<I: VCodeInst> VCode<I> {
         // target-specific translations of slot numbers to stack offsets.
         self.safepoint_slots = result.stackmaps;
 
-        // TODO need to drop last epilogue information?
-        drop(epilogue_islands.pop());
-
         self.prologue_epilogue_ranges = Some((
             prologue_start.unwrap()..prologue_end.unwrap(),
             epilogue_islands.into_boxed_slice(),

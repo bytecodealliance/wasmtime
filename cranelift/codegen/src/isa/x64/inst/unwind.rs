@@ -28,7 +28,7 @@ impl UnwindInfoGenerator<Inst> for X64UnwindInfo {
             }
             #[cfg(feature = "unwind")]
             UnwindInfoKind::Windows => {
-                //TODO super::unwind::winx64::create_unwind_info(func, isa)?.map(|u| UnwindInfo::WindowsX64(u))
+                //TODO winx64::create_unwind_info(context)?.map(|u| UnwindInfo::WindowsX64(u))
                 panic!();
             }
             UnwindInfoKind::None => None,
