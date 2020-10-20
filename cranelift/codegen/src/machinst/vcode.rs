@@ -543,13 +543,15 @@ impl<I: VCodeInst> VCode<I> {
         &self,
     ) -> crate::result::CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
         let layout = &self.insts_layout.borrow();
-        I::UnwindInfo::create_unwind_info(
-            self.abi.unwind_info_kind(),
-            &self.insts,
-            &layout.0,
-            layout.1,
-            self.prologue_epilogue_ranges.as_ref().unwrap(),
-        )
+        let (prologue, epilogues) = self.prologue_epilogue_ranges.as_ref().unwrap();
+        let context = UnwindInfoContext {
+            insts: &self.insts,
+            insts_layout: &layout.0,
+            len: layout.1,
+            prologue: prologue.clone(),
+            epilogues,
+        };
+        I::UnwindInfo::create_unwind_info(context, self.abi.unwind_info_kind())
     }
 
     /// Get the IR block for a BlockIndex, if one exists.

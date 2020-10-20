@@ -382,15 +382,26 @@ pub enum UnwindInfoKind {
     Windows,
 }
 
+/// Input data for UnwindInfoGenerator.
+pub struct UnwindInfoContext<'a, Inst: MachInstEmit> {
+    /// Function instructions.
+    pub insts: &'a [Inst],
+    /// Instruction layout: end offsets
+    pub insts_layout: &'a [CodeOffset],
+    /// Length of the function.
+    pub len: CodeOffset,
+    /// Prologue range.
+    pub prologue: Range<u32>,
+    /// Epilogue ranges.
+    pub epilogues: &'a [Range<u32>],
+}
+
 /// UnwindInfo generator/helper.
 pub trait UnwindInfoGenerator<I: MachInstEmit> {
     /// Creates unwind info based on function signature and
     /// emitted instructions.
     fn create_unwind_info(
+        context: UnwindInfoContext<I>,
         kind: UnwindInfoKind,
-        insts: &[I],
-        insts_layout: &[CodeOffset],
-        len: CodeOffset,
-        prologue_epilogue: &(Range<u32>, Box<[Range<u32>]>),
     ) -> CodegenResult<Option<unwind::UnwindInfo>>;
 }

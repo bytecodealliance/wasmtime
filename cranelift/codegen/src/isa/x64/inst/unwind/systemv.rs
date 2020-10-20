@@ -5,12 +5,11 @@ use crate::isa::x64::inst::{
     args::{AluRmiROpcode, Amode, RegMemImm, SyntheticAmode},
     regs, Inst,
 };
+use crate::machinst::UnwindInfoContext;
 use crate::result::CodegenResult;
 use alloc::vec::Vec;
-use core::ops::Range;
 use gimli::{write::CommonInformationEntry, Encoding, Format, Register, X86_64};
 use regalloc::{Reg, RegClass};
-use std::boxed::Box;
 
 /// Creates a new x86-64 common information entry (CIE).
 pub fn create_cie() -> CommonInformationEntry {
@@ -89,19 +88,16 @@ pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
 }
 
 pub(crate) fn create_unwind_info(
-    insts: &[Inst],
-    insts_layout: &[u32],
-    len: u32,
-    (prologue, epilogues): &(Range<u32>, Box<[Range<u32>]>),
+    context: UnwindInfoContext<Inst>,
     frame_register: Option<Reg>,
 ) -> CodegenResult<Option<UnwindInfo>> {
     use crate::isa::unwind::input::{self, UnwindCode};
     let mut codes = Vec::new();
 
-    for i in prologue.clone() {
+    for i in context.prologue.clone() {
         let i = i as usize;
-        let inst = &insts[i];
-        let offset = insts_layout[i];
+        let inst = &context.insts[i];
+        let offset = context.insts_layout[i];
 
         match inst {
             Inst::Push64 {
@@ -149,28 +145,29 @@ pub(crate) fn create_unwind_info(
         }
     }
 
-    let epilogues_unwind_codes = epilogues
+    let epilogues_unwind_codes = context
+        .epilogues
         .iter()
         .map(|epilogue| {
             let mut codes = Vec::with_capacity(2);
             let i = epilogue.start as usize;
-            let offset = insts_layout[i];
+            let offset = context.insts_layout[i];
             codes.push(UnwindCode::RememberState { offset });
 
             let i = epilogue.end as usize;
-            let offset = insts_layout[i];
+            let offset = context.insts_layout[i];
             codes.push(UnwindCode::RestoreState { offset });
 
             codes
         })
         .collect();
 
-    let prologue_size = insts_layout[prologue.end as usize];
+    let prologue_size = context.insts_layout[context.prologue.end as usize];
     let unwind = input::UnwindInfo {
         prologue_size,
         prologue_unwind_codes: codes,
         epilogues_unwind_codes,
-        function_size: len,
+        function_size: context.len,
     };
 
     struct RegisterMapper;
