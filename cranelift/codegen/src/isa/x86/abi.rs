@@ -1083,8 +1083,7 @@ pub fn create_unwind_info(
     // In the future, we should be omitting frame pointer as an optimization, so this will change
     Ok(match func.signature.call_conv {
         CallConv::Fast | CallConv::Cold | CallConv::SystemV => {
-            super::unwind::systemv::create_unwind_info(func, isa, Some(RU::rbp.into()))?
-                .map(|u| UnwindInfo::SystemV(u))
+            super::unwind::systemv::create_unwind_info(func, isa)?.map(|u| UnwindInfo::SystemV(u))
         }
         CallConv::WindowsFastcall => {
             super::unwind::winx64::create_unwind_info(func, isa)?.map(|u| UnwindInfo::WindowsX64(u))

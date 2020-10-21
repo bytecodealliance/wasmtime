@@ -15,7 +15,6 @@ use crate::isa::unwind::input::{UnwindCode, UnwindInfo};
 pub(crate) fn create_unwind_info(
     func: &Function,
     isa: &dyn TargetIsa,
-    frame_register: Option<RegUnit>,
 ) -> CodegenResult<Option<UnwindInfo<RegUnit>>> {
     // Find last block based on max offset.
     let last_block = func
@@ -40,6 +39,8 @@ pub(crate) fn create_unwind_info(
     let mut prologue_size = 0;
     let mut prologue_unwind_codes = Vec::new();
     let mut epilogues_unwind_codes = Vec::new();
+    let mut frame_register: Option<RegUnit> = None;
+    const WORD_SIZE: u32 = 8;
 
     // Process only entry block and blocks with epilogues.
     let mut blocks = func
@@ -93,7 +94,15 @@ pub(crate) fn create_unwind_info(
                     match opcode {
                         Opcode::X86Push => {
                             let reg = func.locations[arg].unwrap_reg();
-                            unwind_codes.push(UnwindCode::SaveRegister { offset, reg });
+                            unwind_codes.push(UnwindCode::StackAlloc {
+                                offset,
+                                size: WORD_SIZE,
+                            });
+                            unwind_codes.push(UnwindCode::SaveRegister {
+                                offset,
+                                reg,
+                                stack_offset: 0,
+                            });
                         }
                         Opcode::AdjustSpDown => {
                             let stack_size =
@@ -160,7 +169,7 @@ pub(crate) fn create_unwind_info(
                         // Note: the stack_offset here is relative to an adjusted SP
                         if dst == (RU::rsp as RegUnit) && FPR.contains(src) {
                             let stack_offset: i32 = stack_offset.into();
-                            unwind_codes.push(UnwindCode::SaveXmmRegister {
+                            unwind_codes.push(UnwindCode::SaveRegister {
                                 offset,
                                 reg: src,
                                 stack_offset: stack_offset as u32,
@@ -168,12 +177,11 @@ pub(crate) fn create_unwind_info(
                         }
                     }
                 }
-                InstructionData::CopySpecial { src, dst, .. } => {
-                    if let Some(fp) = frame_register {
-                        // Check for change in CFA register (RSP is always the starting CFA)
-                        if src == (RU::rsp as RegUnit) && dst == fp {
-                            unwind_codes.push(UnwindCode::SetFramePointer { offset, reg: dst });
-                        }
+                InstructionData::CopySpecial { src, dst, .. } if frame_register.is_none() => {
+                    // Check for change in CFA register (RSP is always the starting CFA)
+                    if src == (RU::rsp as RegUnit) {
+                        unwind_codes.push(UnwindCode::SetFramePointer { offset, reg: dst });
+                        frame_register = Some(dst);
                     }
                 }
                 InstructionData::NullAry { opcode } => match opcode {
@@ -195,8 +203,14 @@ pub(crate) fn create_unwind_info(
 
                             let reg = func.locations[*arg].unwrap_reg();
                             unwind_codes.push(UnwindCode::RestoreRegister { offset, reg });
+                            unwind_codes.push(UnwindCode::StackDealloc {
+                                offset,
+                                size: WORD_SIZE,
+                            });
                         }
                         epilogue_pop_offsets.clear();
+
+                        // TODO ensure unwind codes sorted by offsets ?
 
                         if !is_last_block {
                             unwind_codes.push(UnwindCode::RestoreState { offset });
@@ -246,7 +260,7 @@ mod tests {
 
         context.compile(&*isa).expect("expected compilation");
 
-        let unwind = create_unwind_info(&context.func, &*isa, None)
+        let unwind = create_unwind_info(&context.func, &*isa)
             .expect("can create unwind info")
             .expect("expected unwind info");
 
@@ -255,8 +269,14 @@ mod tests {
             UnwindInfo {
                 prologue_size: 9,
                 prologue_unwind_codes: vec![
+                    UnwindCode::StackAlloc { offset: 2, size: 8 },
                     UnwindCode::SaveRegister {
                         offset: 2,
+                        reg: RU::rbp.into(),
+                        stack_offset: 0,
+                    },
+                    UnwindCode::SetFramePointer {
+                        offset: 5,
                         reg: RU::rbp.into(),
                     },
                     UnwindCode::StackAlloc {
@@ -272,6 +292,10 @@ mod tests {
                     UnwindCode::RestoreRegister {
                         offset: 15,
                         reg: RU::rbp.into()
+                    },
+                    UnwindCode::StackDealloc {
+                        offset: 15,
+                        size: 8
                     }
                 ]],
                 function_size: 16,
@@ -293,7 +317,7 @@ mod tests {
 
         context.compile(&*isa).expect("expected compilation");
 
-        let unwind = create_unwind_info(&context.func, &*isa, None)
+        let unwind = create_unwind_info(&context.func, &*isa)
             .expect("can create unwind info")
             .expect("expected unwind info");
 
@@ -302,8 +326,14 @@ mod tests {
             UnwindInfo {
                 prologue_size: 27,
                 prologue_unwind_codes: vec![
+                    UnwindCode::StackAlloc { offset: 2, size: 8 },
                     UnwindCode::SaveRegister {
                         offset: 2,
+                        reg: RU::rbp.into(),
+                        stack_offset: 0,
+                    },
+                    UnwindCode::SetFramePointer {
+                        offset: 5,
                         reg: RU::rbp.into(),
                     },
                     UnwindCode::StackAlloc {
@@ -319,6 +349,10 @@ mod tests {
                     UnwindCode::RestoreRegister {
                         offset: 36,
                         reg: RU::rbp.into()
+                    },
+                    UnwindCode::StackDealloc {
+                        offset: 36,
+                        size: 8
                     }
                 ]],
                 function_size: 37,
@@ -340,7 +374,7 @@ mod tests {
 
         context.compile(&*isa).expect("expected compilation");
 
-        let unwind = create_unwind_info(&context.func, &*isa, None)
+        let unwind = create_unwind_info(&context.func, &*isa)
             .expect("can create unwind info")
             .expect("expected unwind info");
 
@@ -349,8 +383,14 @@ mod tests {
             UnwindInfo {
                 prologue_size: 27,
                 prologue_unwind_codes: vec![
+                    UnwindCode::StackAlloc { offset: 2, size: 8 },
                     UnwindCode::SaveRegister {
                         offset: 2,
+                        reg: RU::rbp.into(),
+                        stack_offset: 0,
+                    },
+                    UnwindCode::SetFramePointer {
+                        offset: 5,
                         reg: RU::rbp.into(),
                     },
                     UnwindCode::StackAlloc {
@@ -366,6 +406,10 @@ mod tests {
                     UnwindCode::RestoreRegister {
                         offset: 36,
                         reg: RU::rbp.into()
+                    },
+                    UnwindCode::StackDealloc {
+                        offset: 36,
+                        size: 8
                     }
                 ]],
                 function_size: 37,
@@ -400,7 +444,7 @@ mod tests {
 
         context.compile(&*isa).expect("expected compilation");
 
-        let unwind = create_unwind_info(&context.func, &*isa, Some(RU::rbp.into()))
+        let unwind = create_unwind_info(&context.func, &*isa)
             .expect("can create unwind info")
             .expect("expected unwind info");
 
@@ -409,9 +453,11 @@ mod tests {
             UnwindInfo {
                 prologue_size: 5,
                 prologue_unwind_codes: vec![
+                    UnwindCode::StackAlloc { offset: 2, size: 8 },
                     UnwindCode::SaveRegister {
                         offset: 2,
-                        reg: RU::rbp.into()
+                        reg: RU::rbp.into(),
+                        stack_offset: 0,
                     },
                     UnwindCode::SetFramePointer {
                         offset: 5,
@@ -425,12 +471,22 @@ mod tests {
                             offset: 12,
                             reg: RU::rbp.into()
                         },
+                        UnwindCode::StackDealloc {
+                            offset: 12,
+                            size: 8
+                        },
                         UnwindCode::RestoreState { offset: 13 }
                     ],
-                    vec![UnwindCode::RestoreRegister {
-                        offset: 15,
-                        reg: RU::rbp.into()
-                    }]
+                    vec![
+                        UnwindCode::RestoreRegister {
+                            offset: 15,
+                            reg: RU::rbp.into()
+                        },
+                        UnwindCode::StackDealloc {
+                            offset: 15,
+                            size: 8
+                        }
+                    ]
                 ],
                 function_size: 16,
             }

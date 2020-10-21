@@ -137,10 +137,15 @@ impl UnwindCode {
     }
 }
 
+pub(crate) enum MappedRegister {
+    Int(u8),
+    Xmm(u8),
+}
+
 /// Maps UnwindInfo register to Windows x64 unwind data.
 pub(crate) trait RegisterMapper {
     /// Maps RegUnit.
-    fn map(reg: RegUnit) -> u8;
+    fn map(reg: RegUnit) -> MappedRegister;
 }
 
 /// Represents Windows x64 unwind information.
@@ -219,30 +224,49 @@ impl UnwindInfo {
     ) -> CodegenResult<Self> {
         use crate::isa::unwind::input::UnwindCode as InputUnwindCode;
 
+        const WORD_SIZE: u32 = 8;
         let mut unwind_codes = Vec::new();
         for c in unwind.prologue_unwind_codes.iter() {
             match c {
-                InputUnwindCode::SaveRegister { offset, reg } => {
-                    unwind_codes.push(UnwindCode::PushRegister {
-                        offset: ensure_unwind_offset(*offset)?,
-                        reg: MR::map(*reg),
-                    });
+                InputUnwindCode::SaveRegister {
+                    offset,
+                    reg,
+                    stack_offset,
+                } => {
+                    let reg = MR::map(*reg);
+                    let offset = ensure_unwind_offset(*offset)?;
+                    match reg {
+                        MappedRegister::Int(reg) => {
+                            let push_reg_sequence = if let Some(UnwindCode::StackAlloc {
+                                offset: alloc_offset,
+                                size,
+                            }) = unwind_codes.last()
+                            {
+                                *size == WORD_SIZE && offset == *alloc_offset && *stack_offset == 0
+                            } else {
+                                false
+                            };
+                            if !push_reg_sequence {
+                                return Err(CodegenError::Unsupported(
+                                    "Unsupported UnwindCode::PushRegister sequence".into(),
+                                ));
+                            }
+                            *unwind_codes.last_mut().unwrap() =
+                                UnwindCode::PushRegister { offset, reg };
+                        }
+                        MappedRegister::Xmm(reg) => {
+                            unwind_codes.push(UnwindCode::SaveXmm {
+                                offset,
+                                reg,
+                                stack_offset: *stack_offset,
+                            });
+                        }
+                    }
                 }
                 InputUnwindCode::StackAlloc { offset, size } => {
                     unwind_codes.push(UnwindCode::StackAlloc {
                         offset: ensure_unwind_offset(*offset)?,
                         size: *size,
-                    });
-                }
-                InputUnwindCode::SaveXmmRegister {
-                    offset,
-                    reg,
-                    stack_offset,
-                } => {
-                    unwind_codes.push(UnwindCode::SaveXmm {
-                        offset: ensure_unwind_offset(*offset)?,
-                        reg: MR::map(*reg),
-                        stack_offset: *stack_offset,
                     });
                 }
                 _ => {}

@@ -27,15 +27,11 @@ pub(crate) mod input {
         SaveRegister {
             offset: CodeOffset,
             reg: Reg,
+            stack_offset: u32,
         },
         RestoreRegister {
             offset: CodeOffset,
             reg: Reg,
-        },
-        SaveXmmRegister {
-            offset: CodeOffset,
-            reg: Reg,
-            stack_offset: u32,
         },
         StackAlloc {
             offset: CodeOffset,

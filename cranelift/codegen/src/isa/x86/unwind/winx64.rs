@@ -14,7 +14,7 @@ pub(crate) fn create_unwind_info(
         return Ok(None);
     }
 
-    let unwind = match super::create_unwind_info(func, isa, None)? {
+    let unwind = match super::create_unwind_info(func, isa)? {
         Some(u) => u,
         None => {
             return Ok(None);
@@ -27,12 +27,12 @@ pub(crate) fn create_unwind_info(
 struct RegisterMapper;
 
 impl crate::isa::unwind::winx64::RegisterMapper for RegisterMapper {
-    fn map(reg: RegUnit) -> u8 {
+    fn map(reg: RegUnit) -> crate::isa::unwind::winx64::MappedRegister {
+        use crate::isa::unwind::winx64::MappedRegister;
         if GPR.contains(reg) {
-            GPR.index_of(reg) as u8
+            MappedRegister::Int(GPR.index_of(reg) as u8)
         } else if FPR.contains(reg) {
-            // XMM register
-            reg as u8
+            MappedRegister::Xmm(reg as u8)
         } else {
             panic!()
         }
