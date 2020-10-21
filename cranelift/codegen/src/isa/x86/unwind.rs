@@ -35,12 +35,13 @@ pub(crate) fn create_unwind_info(
         .map(|(i, b)| (*b, *i))
         .collect::<HashMap<_, _>>();
 
+    let word_size = isa.pointer_bytes();
+
     let mut stack_size = None;
     let mut prologue_size = 0;
     let mut prologue_unwind_codes = Vec::new();
     let mut epilogues_unwind_codes = Vec::new();
     let mut frame_register: Option<RegUnit> = None;
-    const WORD_SIZE: u32 = 8;
 
     // Process only entry block and blocks with epilogues.
     let mut blocks = func
@@ -96,7 +97,7 @@ pub(crate) fn create_unwind_info(
                             let reg = func.locations[arg].unwrap_reg();
                             unwind_codes.push(UnwindCode::StackAlloc {
                                 offset,
-                                size: WORD_SIZE,
+                                size: word_size.into(),
                             });
                             unwind_codes.push(UnwindCode::SaveRegister {
                                 offset,
@@ -205,7 +206,7 @@ pub(crate) fn create_unwind_info(
                             unwind_codes.push(UnwindCode::RestoreRegister { offset, reg });
                             unwind_codes.push(UnwindCode::StackDealloc {
                                 offset,
-                                size: WORD_SIZE,
+                                size: word_size.into(),
                             });
                         }
                         epilogue_pop_offsets.clear();
@@ -230,6 +231,7 @@ pub(crate) fn create_unwind_info(
         prologue_unwind_codes,
         epilogues_unwind_codes,
         function_size,
+        word_size,
     }))
 }
 
@@ -299,6 +301,7 @@ mod tests {
                     }
                 ]],
                 function_size: 16,
+                word_size: 8,
             }
         );
     }
@@ -356,6 +359,7 @@ mod tests {
                     }
                 ]],
                 function_size: 37,
+                word_size: 8,
             }
         );
     }
@@ -413,6 +417,7 @@ mod tests {
                     }
                 ]],
                 function_size: 37,
+                word_size: 8,
             }
         );
     }
@@ -489,6 +494,7 @@ mod tests {
                     ]
                 ],
                 function_size: 16,
+                word_size: 8,
             }
         );
     }

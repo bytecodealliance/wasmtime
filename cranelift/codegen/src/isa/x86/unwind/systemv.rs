@@ -105,7 +105,6 @@ pub(crate) fn create_unwind_info(
     if func.prologue_end.is_none() || isa.name() != "x86" || isa.pointer_bits() != 64 {
         return Ok(None);
     }
-    const WORD_SIZE: u8 = 8; // bytes
 
     let unwind = match super::create_unwind_info(func, isa)? {
         Some(u) => u,
@@ -125,7 +124,7 @@ pub(crate) fn create_unwind_info(
     }
     let map = RegisterMapper(isa);
 
-    Ok(Some(UnwindInfo::build(unwind, WORD_SIZE, &map)?))
+    Ok(Some(UnwindInfo::build(unwind, &map)?))
 }
 
 #[cfg(test)]

@@ -115,11 +115,10 @@ pub struct UnwindInfo {
 impl UnwindInfo {
     pub(crate) fn build<'b>(
         unwind: input::UnwindInfo<RegUnit>,
-        word_size: u8,
         map_reg: &'b dyn RegisterMapper,
     ) -> CodegenResult<Self> {
         use input::UnwindCode;
-        let mut builder = InstructionBuilder::new(word_size, map_reg);
+        let mut builder = InstructionBuilder::new(unwind.word_size, map_reg);
 
         for c in unwind.prologue_unwind_codes.iter().chain(
             unwind
@@ -183,7 +182,6 @@ impl UnwindInfo {
 }
 
 struct InstructionBuilder<'a> {
-    word_size: u8,
     sp_offset: i32,
     frame_register: Option<RegUnit>,
     saved_state: Option<(i32, Option<RegUnit>)>,
@@ -194,7 +192,6 @@ struct InstructionBuilder<'a> {
 impl<'a> InstructionBuilder<'a> {
     fn new(word_size: u8, map_reg: &'a (dyn RegisterMapper + 'a)) -> Self {
         Self {
-            word_size,
             sp_offset: word_size as i32, // CFA offset starts at word size offset to account for the return address on stack
             saved_state: None,
             frame_register: None,

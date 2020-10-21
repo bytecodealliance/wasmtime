@@ -224,7 +224,7 @@ impl UnwindInfo {
     ) -> CodegenResult<Self> {
         use crate::isa::unwind::input::UnwindCode as InputUnwindCode;
 
-        const WORD_SIZE: u32 = 8;
+        let word_size: u32 = unwind.word_size.into();
         let mut unwind_codes = Vec::new();
         for c in unwind.prologue_unwind_codes.iter() {
             match c {
@@ -242,7 +242,7 @@ impl UnwindInfo {
                                 size,
                             }) = unwind_codes.last()
                             {
-                                *size == WORD_SIZE && offset == *alloc_offset && *stack_offset == 0
+                                *size == word_size && offset == *alloc_offset && *stack_offset == 0
                             } else {
                                 false
                             };
