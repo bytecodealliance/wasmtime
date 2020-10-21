@@ -22,7 +22,7 @@ fn instantiate(
             imports,
             &mut store.signatures_mut(),
             config.memory_creator.as_ref().map(|a| a as _),
-            store.interrupts().clone(),
+            store.interrupts(),
             host,
             store.externref_activations_table() as *const VMExternRefActivationsTable as *mut _,
             store.stack_map_registry() as *const StackMapRegistry as *mut _,

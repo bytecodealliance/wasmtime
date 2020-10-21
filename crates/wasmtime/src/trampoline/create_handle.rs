@@ -42,7 +42,7 @@ pub(crate) fn create_handle(
             store.memory_creator(),
             signatures.into_boxed_slice(),
             state,
-            store.interrupts().clone(),
+            store.interrupts(),
             store.externref_activations_table() as *const VMExternRefActivationsTable as *mut _,
             store.stack_map_registry() as *const StackMapRegistry as *mut _,
         )?;

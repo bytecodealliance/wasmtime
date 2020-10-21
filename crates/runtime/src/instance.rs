@@ -71,10 +71,6 @@ pub(crate) struct Instance {
     /// Hosts can store arbitrary per-instance information here.
     host_state: Box<dyn Any>,
 
-    /// Externally allocated data indicating how this instance will be
-    /// interrupted.
-    pub(crate) interrupts: Arc<VMInterrupts>,
-
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
@@ -827,7 +823,7 @@ impl InstanceHandle {
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
         vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
         host_state: Box<dyn Any>,
-        interrupts: Arc<VMInterrupts>,
+        interrupts: *const VMInterrupts,
         externref_activations_table: *mut VMExternRefActivationsTable,
         stack_map_registry: *mut StackMapRegistry,
     ) -> Result<Self, InstantiationError> {
@@ -867,7 +863,6 @@ impl InstanceHandle {
                 finished_functions,
                 trampolines,
                 host_state,
-                interrupts,
                 vmctx: VMContext {},
             };
             let layout = instance.alloc_layout();
@@ -934,7 +929,7 @@ impl InstanceHandle {
             instance.builtin_functions_ptr() as *mut VMBuiltinFunctionsArray,
             VMBuiltinFunctionsArray::initialized(),
         );
-        *instance.interrupts() = &*instance.interrupts;
+        *instance.interrupts() = interrupts;
         *instance.externref_activations_table() = externref_activations_table;
         *instance.stack_map_registry() = stack_map_registry;
 
