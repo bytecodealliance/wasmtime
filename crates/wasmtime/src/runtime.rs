@@ -1030,7 +1030,7 @@ impl Store {
         self.inner.signal_handler.borrow_mut()
     }
 
-    pub(crate) fn interrupts(&self) -> &Arc<VMInterrupts> {
+    pub(crate) fn interrupts(&self) -> &VMInterrupts {
         &self.inner.interrupts
     }
 
@@ -1128,7 +1128,7 @@ impl Store {
     pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
         if self.engine().config().tunables.interruptable {
             Ok(InterruptHandle {
-                interrupts: self.interrupts().clone(),
+                interrupts: self.inner.interrupts.clone(),
             })
         } else {
             bail!("interrupts aren't enabled for this `Store`")

@@ -250,7 +250,7 @@ impl CompiledModule {
         imports: Imports<'_>,
         signature_registry: &mut SignatureRegistry,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
-        interrupts: Arc<VMInterrupts>,
+        interrupts: *const VMInterrupts,
         host_state: Box<dyn Any>,
         externref_activations_table: *mut VMExternRefActivationsTable,
         stack_map_registry: *mut StackMapRegistry,
