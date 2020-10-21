@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_debug::create_gdbjit_image;
-use wasmtime_environ::entity::{BoxedSlice, PrimaryMap};
+use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
 use wasmtime_environ::{
@@ -134,7 +134,7 @@ impl CompilationArtifacts {
     }
 }
 
-struct FinishedFunctions(BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>);
+struct FinishedFunctions(PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>);
 
 unsafe impl Send for FinishedFunctions {}
 unsafe impl Sync for FinishedFunctions {}
@@ -207,7 +207,7 @@ impl CompiledModule {
             None
         };
 
-        let finished_functions = FinishedFunctions(finished_functions.into_boxed_slice());
+        let finished_functions = FinishedFunctions(finished_functions);
 
         Ok(Self {
             module: Arc::new(module),
@@ -271,12 +271,10 @@ impl CompiledModule {
             trampolines.insert(signatures[i], trampoline.clone());
         }
 
-        let finished_functions = self.finished_functions.0.clone();
-
         InstanceHandle::new(
             self.module.clone(),
             self.code.clone(),
-            finished_functions,
+            &self.finished_functions.0,
             trampolines,
             imports,
             mem_creator,
@@ -310,7 +308,7 @@ impl CompiledModule {
     }
 
     /// Returns the map of all finished JIT functions compiled for this module
-    pub fn finished_functions(&self) -> &BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]> {
+    pub fn finished_functions(&self) -> &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]> {
         &self.finished_functions.0
     }
 
