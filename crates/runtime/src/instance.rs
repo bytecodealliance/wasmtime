@@ -62,9 +62,6 @@ pub(crate) struct Instance {
     /// get removed. A missing entry is considered equivalent to an empty slice.
     passive_data: RefCell<HashMap<DataIndex, Arc<[u8]>>>,
 
-    /// Pointers to functions in executable memory.
-    finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
-
     /// Pointers to trampoline functions used to enter particular signatures
     trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
 
@@ -821,7 +818,7 @@ impl InstanceHandle {
     pub unsafe fn new(
         module: Arc<Module>,
         code: Arc<dyn Any>,
-        finished_functions: BoxedSlice<DefinedFuncIndex, *mut [VMFunctionBody]>,
+        finished_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
         trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
         imports: Imports,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
@@ -864,7 +861,6 @@ impl InstanceHandle {
                 tables,
                 passive_elements: Default::default(),
                 passive_data,
-                finished_functions,
                 trampolines,
                 host_state,
                 interrupts,
@@ -944,7 +940,7 @@ impl InstanceHandle {
             let (func_ptr, vmctx) =
                 if let Some(def_index) = instance.module.defined_func_index(index) {
                     (
-                        NonNull::new(instance.finished_functions[def_index] as *mut _).unwrap(),
+                        NonNull::new(finished_functions[def_index] as *mut _).unwrap(),
                         instance.vmctx_ptr(),
                     )
                 } else {

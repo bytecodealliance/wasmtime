@@ -36,7 +36,7 @@ pub(crate) fn create_handle(
         let handle = InstanceHandle::new(
             Arc::new(module),
             Arc::new(()),
-            finished_functions.into_boxed_slice(),
+            &finished_functions,
             trampolines,
             imports,
             store.memory_creator(),
