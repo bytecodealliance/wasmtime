@@ -1441,8 +1441,66 @@ impl MachInstEmit for Inst {
                 };
                 let (u, opcode) = match op {
                     VecLanesOp::Uminv => (0b1, 0b11010),
+                    VecLanesOp::Addv => (0b0, 0b11011),
                 };
                 sink.put4(enc_vec_lanes(q, u, size, opcode, rd, rn));
+            }
+            &Inst::VecShiftImm {
+                op,
+                rd,
+                rn,
+                size,
+                imm,
+            } => {
+                let (is_shr, template) = match op {
+                    VecShiftImmOp::Ushr => (true, 0b_011_011110_0000_000_000001_00000_00000_u32),
+                    VecShiftImmOp::Sshr => (true, 0b_010_011110_0000_000_000001_00000_00000_u32),
+                    VecShiftImmOp::Shl => (false, 0b_010_011110_0000_000_010101_00000_00000_u32),
+                };
+                let imm = imm as u32;
+                // Deal with the somewhat strange encoding scheme for, and limits on,
+                // the shift amount.
+                let immh_immb = match (size, is_shr) {
+                    (VectorSize::Size64x2, true) if imm >= 1 && imm <= 64 => {
+                        0b_1000_000_u32 | (64 - imm)
+                    }
+                    (VectorSize::Size32x4, true) if imm >= 1 && imm <= 32 => {
+                        0b_0100_000_u32 | (32 - imm)
+                    }
+                    (VectorSize::Size16x8, true) if imm >= 1 && imm <= 16 => {
+                        0b_0010_000_u32 | (16 - imm)
+                    }
+                    (VectorSize::Size8x16, true) if imm >= 1 && imm <= 8 => {
+                        0b_0001_000_u32 | (8 - imm)
+                    }
+                    (VectorSize::Size64x2, false) if imm <= 63 => 0b_1000_000_u32 | imm,
+                    (VectorSize::Size32x4, false) if imm <= 31 => 0b_0100_000_u32 | imm,
+                    (VectorSize::Size16x8, false) if imm <= 15 => 0b_0010_000_u32 | imm,
+                    (VectorSize::Size8x16, false) if imm <= 7 => 0b_0001_000_u32 | imm,
+                    _ => panic!(
+                        "aarch64: Inst::VecShiftImm: emit: invalid op/size/imm {:?}, {:?}, {:?}",
+                        op, size, imm
+                    ),
+                };
+                let rn_enc = machreg_to_vec(rn);
+                let rd_enc = machreg_to_vec(rd.to_reg());
+                sink.put4(template | (immh_immb << 16) | (rn_enc << 5) | rd_enc);
+            }
+            &Inst::VecExtract { rd, rn, rm, imm4 } => {
+                if imm4 < 16 {
+                    let template = 0b_01_101110_000_00000_0_0000_0_00000_00000_u32;
+                    let rm_enc = machreg_to_vec(rm);
+                    let rn_enc = machreg_to_vec(rn);
+                    let rd_enc = machreg_to_vec(rd.to_reg());
+                    sink.put4(
+                        template | (rm_enc << 16) | ((imm4 as u32) << 11) | (rn_enc << 5) | rd_enc,
+                    );
+                } else {
+                    panic!(
+                        "aarch64: Inst::VecExtract: emit: invalid extract index {}",
+                        imm4
+                    );
+                }
             }
             &Inst::VecTbl {
                 rd,
@@ -1827,6 +1885,7 @@ impl MachInstEmit for Inst {
                         debug_assert!(!size.is_128bits());
                         (0b001_01110_00_1 | enc_size << 1, 0b100000)
                     }
+                    VecALUOp::Zip1 => (0b01001110_00_0 | enc_size << 1, 0b001110),
                 };
                 let top11 = if is_float {
                     top11 | enc_float_size << 1

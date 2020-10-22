@@ -2193,6 +2193,24 @@ pub(crate) fn define(
         .operands_out(vec![s]),
     );
 
+    let a = &Operand::new("a", TxN);
+    let x = &Operand::new("x", Int);
+
+    ig.push(
+        Inst::new(
+            "vhigh_bits",
+            r#"
+        Reduce a vector to a scalar integer.
+
+        Return a scalar integer, consisting of the concatenation of the most significant bit
+        of each lane of ``a``.
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![a])
+        .operands_out(vec![x]),
+    );
+
     let a = &Operand::new("a", &Int.as_bool());
     let Cond = &Operand::new("Cond", &imm.intcc);
     let x = &Operand::new("x", Int);
