@@ -237,6 +237,9 @@ impl UnwindInfo {
                     let offset = ensure_unwind_offset(*offset)?;
                     match reg {
                         MappedRegister::Int(reg) => {
+                            // Attempt to convert sequence of the `InputUnwindCode`:
+                            // `StackAlloc { size = word_size }`, `SaveRegister { stack_offset: 0 }`
+                            // to the shorter `UnwindCode::PushRegister`.
                             let push_reg_sequence = if let Some(UnwindCode::StackAlloc {
                                 offset: alloc_offset,
                                 size,
@@ -246,13 +249,16 @@ impl UnwindInfo {
                             } else {
                                 false
                             };
-                            if !push_reg_sequence {
+                            if push_reg_sequence {
+                                *unwind_codes.last_mut().unwrap() =
+                                    UnwindCode::PushRegister { offset, reg };
+                            } else {
+                                // TODO add `UnwindCode::SaveRegister` to handle multiple register
+                                // pushes with single `UnwindCode::StackAlloc`.
                                 return Err(CodegenError::Unsupported(
                                     "Unsupported UnwindCode::PushRegister sequence".into(),
                                 ));
                             }
-                            *unwind_codes.last_mut().unwrap() =
-                                UnwindCode::PushRegister { offset, reg };
                         }
                         MappedRegister::Xmm(reg) => {
                             unwind_codes.push(UnwindCode::SaveXmm {
