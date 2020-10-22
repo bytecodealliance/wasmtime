@@ -287,6 +287,8 @@ pub enum VecALUOp {
     Addp,
     /// Unsigned multiply add long
     Umlal,
+    /// Zip vectors (primary) [meaning, high halves]
+    Zip1,
 }
 
 /// A Vector miscellaneous operation with two registers.
@@ -332,8 +334,21 @@ pub enum VecMiscNarrowOp {
 /// An operation across the lanes of vectors.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum VecLanesOp {
+    /// Integer addition across a vector
+    Addv,
     /// Unsigned minimum across a vector
     Uminv,
+}
+
+/// A shift-by-immediate operation on each lane of a vector.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum VecShiftImmOp {
+    // Unsigned shift left
+    Shl,
+    // Unsigned shift right
+    Ushr,
+    // Signed shift right
+    Sshr,
 }
 
 /// An operation on the bits of a register. This can be paired with several instruction formats
@@ -947,6 +962,28 @@ pub enum Inst {
         rd: Writable<Reg>,
         rn: Reg,
         size: VectorSize,
+    },
+
+    /// Vector shift by immediate: Shift Left (immediate), Unsigned Shift Right (immediate),
+    /// Signed Shift Right (immediate).  These are somewhat unusual in that, for right shifts,
+    /// the allowed range of `imm` values is 1 to lane-size-in-bits, inclusive.  A zero
+    /// right-shift cannot be encoded.  Left shifts are "normal", though, having valid `imm`
+    /// values from 0 to lane-size-in-bits - 1 inclusive.
+    VecShiftImm {
+        op: VecShiftImmOp,
+        rd: Writable<Reg>,
+        rn: Reg,
+        size: VectorSize,
+        imm: u8,
+    },
+
+    /// Vector extract - create a new vector, being the concatenation of the lowest `imm4` bytes
+    /// of `rm` followed by the uppermost `16 - imm4` bytes of `rn`.
+    VecExtract {
+        rd: Writable<Reg>,
+        rn: Reg,
+        rm: Reg,
+        imm4: u8,
     },
 
     /// Table vector lookup - single register table. The table consists of 8-bit elements and is
@@ -1577,6 +1614,15 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             collector.add_use(rn);
         }
+        &Inst::VecShiftImm { rd, rn, .. } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
+        }
+        &Inst::VecExtract { rd, rn, rm, .. } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
+            collector.add_use(rm);
+        }
         &Inst::VecTbl {
             rd,
             rn,
@@ -2156,6 +2202,24 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         } => {
             map_def(mapper, rd);
             map_use(mapper, rn);
+        }
+        &mut Inst::VecShiftImm {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+        }
+        &mut Inst::VecExtract {
+            ref mut rd,
+            ref mut rn,
+            ref mut rm,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+            map_use(mapper, rm);
         }
         &mut Inst::VecTbl {
             ref mut rd,
@@ -3330,6 +3394,7 @@ impl Inst {
                     VecALUOp::Fmul => ("fmul", size),
                     VecALUOp::Addp => ("addp", size),
                     VecALUOp::Umlal => ("umlal", size),
+                    VecALUOp::Zip1 => ("zip1", size),
                 };
                 let rd_size = if alu_op == VecALUOp::Umlal {
                     size.widen()
@@ -3381,10 +3446,27 @@ impl Inst {
             &Inst::VecLanes { op, rd, rn, size } => {
                 let op = match op {
                     VecLanesOp::Uminv => "uminv",
+                    VecLanesOp::Addv => "addv",
                 };
                 let rd = show_vreg_scalar(rd.to_reg(), mb_rru, size.lane_size());
                 let rn = show_vreg_vector(rn, mb_rru, size);
                 format!("{} {}, {}", op, rd, rn)
+            }
+            &Inst::VecShiftImm { op, rd, rn, size, imm } => {
+                let op = match op {
+                    VecShiftImmOp::Shl => "shl",
+                    VecShiftImmOp::Ushr => "ushr",
+                    VecShiftImmOp::Sshr => "sshr",
+                };
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
+                let rn = show_vreg_vector(rn, mb_rru, size);
+                format!("{} {}, {}, #{}", op, rd, rn, imm)
+            }
+            &Inst::VecExtract { rd, rn, rm, imm4 } => {
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, VectorSize::Size8x16);
+                let rn = show_vreg_vector(rn, mb_rru, VectorSize::Size8x16);
+                let rm = show_vreg_vector(rm, mb_rru, VectorSize::Size8x16);
+                format!("ext {}, {}, {}, #{}", rd, rn, rm, imm4)
             }
             &Inst::VecTbl {
                 rd,

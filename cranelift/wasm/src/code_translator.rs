@@ -1600,6 +1600,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let bool_result = builder.ins().vall_true(a);
             state.push1(builder.ins().bint(I32, bool_result))
         }
+        Operator::I8x16Bitmask | Operator::I16x8Bitmask | Operator::I32x4Bitmask => {
+            let a = pop1_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().vhigh_bits(I32, a));
+        }
         Operator::I8x16Eq | Operator::I16x8Eq | Operator::I32x4Eq => {
             translate_vector_icmp(IntCC::Equal, type_of(op), builder, state)
         }
@@ -1763,10 +1767,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::F64x2Trunc
         | Operator::F64x2PMin
         | Operator::F64x2PMax
-        | Operator::F64x2Nearest
-        | Operator::I8x16Bitmask
-        | Operator::I16x8Bitmask
-        | Operator::I32x4Bitmask => {
+        | Operator::F64x2Nearest => {
             return Err(wasm_unsupported!("proposed SIMD operator {:?}", op));
         }
 
