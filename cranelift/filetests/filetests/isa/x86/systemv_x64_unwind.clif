@@ -38,7 +38,7 @@ block0:
 ; nextln:                 DW_CFA_def_cfa_register (r6)
 ; nextln:                 DW_CFA_advance_loc (1)
 ; nextln:                 DW_CFA_def_cfa (r7, 8)
-; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_same_value (r6)
 ; nextln:                 DW_CFA_nop
 
 ; check a function with medium-sized stack alloc
@@ -77,7 +77,7 @@ block0:
 ; nextln:                 DW_CFA_def_cfa_register (r6)
 ; nextln:                 DW_CFA_advance_loc (21)
 ; nextln:                 DW_CFA_def_cfa (r7, 8)
-; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_same_value (r6)
 ; nextln:                 DW_CFA_nop
 
 ; check a function with large-sized stack alloc
@@ -116,7 +116,7 @@ block0:
 ; nextln:                 DW_CFA_def_cfa_register (r6)
 ; nextln:                 DW_CFA_advance_loc (21)
 ; nextln:                 DW_CFA_def_cfa (r7, 8)
-; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_same_value (r6)
 ; nextln:                 DW_CFA_nop
 ; nextln: 
 
@@ -169,7 +169,7 @@ block0(v0: i64, v1: i64):
 ; nextln: 
 ; nextln: 
 ; nextln: 0x00000018: FDE
-; nextln:         length: 0x00000034
+; nextln:         length: 0x00000044
 ; nextln:    CIE_pointer: 0x00000000
 ; nextln:     start_addr: 0x0000000000000000
 ; nextln:     range_size: 0x0000000000000074 (end_addr = 0x0000000000000074)
@@ -189,9 +189,18 @@ block0(v0: i64, v1: i64):
 ; nextln:                 DW_CFA_offset (r14, 6)
 ; nextln:                 DW_CFA_advance_loc (2)
 ; nextln:                 DW_CFA_offset (r15, 7)
-; nextln:                 DW_CFA_advance_loc (102)
+; nextln:                 DW_CFA_advance_loc (94)
+; nextln:                 DW_CFA_same_value (r15)
+; nextln:                 DW_CFA_advance_loc (2)
+; nextln:                 DW_CFA_same_value (r14)
+; nextln:                 DW_CFA_advance_loc (2)
+; nextln:                 DW_CFA_same_value (r13)
+; nextln:                 DW_CFA_advance_loc (2)
+; nextln:                 DW_CFA_same_value (r12)
+; nextln:                 DW_CFA_advance_loc (1)
+; nextln:                 DW_CFA_same_value (r3)
+; nextln:                 DW_CFA_advance_loc (1)
 ; nextln:                 DW_CFA_def_cfa (r7, 8)
-; nextln:                 DW_CFA_nop
-; nextln:                 DW_CFA_nop
+; nextln:                 DW_CFA_same_value (r6)
 ; nextln:                 DW_CFA_nop
 ; nextln:                 DW_CFA_nop

@@ -27,15 +27,11 @@ pub(crate) mod input {
         SaveRegister {
             offset: CodeOffset,
             reg: Reg,
+            stack_offset: u32,
         },
         RestoreRegister {
             offset: CodeOffset,
             reg: Reg,
-        },
-        SaveXmmRegister {
-            offset: CodeOffset,
-            reg: Reg,
-            stack_offset: u32,
         },
         StackAlloc {
             offset: CodeOffset,
@@ -64,5 +60,6 @@ pub(crate) mod input {
         pub(crate) prologue_unwind_codes: Vec<UnwindCode<Reg>>,
         pub(crate) epilogues_unwind_codes: Vec<Vec<UnwindCode<Reg>>>,
         pub(crate) function_size: CodeOffset,
+        pub(crate) word_size: u8,
     }
 }
