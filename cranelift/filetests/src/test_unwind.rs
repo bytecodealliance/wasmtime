@@ -61,6 +61,9 @@ impl SubTest for TestUnwind {
                 table.write_eh_frame(&mut eh_frame).unwrap();
                 systemv::dump(&mut text, &eh_frame.0.into_vec(), isa.pointer_bytes())
             }
+            Some(ui) => {
+                anyhow::bail!("Unexpected unwind info type: {:?}", ui);
+            }
             None => {}
         }
 

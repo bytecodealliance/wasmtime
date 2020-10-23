@@ -20,6 +20,7 @@ mod emit;
 #[cfg(test)]
 mod emit_tests;
 pub mod regs;
+pub mod unwind;
 
 use args::*;
 use regs::{create_reg_universe_systemv, show_ireg_sized};
@@ -2706,6 +2707,7 @@ impl MachInstEmitInfo for EmitInfo {
 impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
+    type UnwindInfo = unwind::X64UnwindInfo;
 
     fn emit(&self, sink: &mut MachBuffer<Inst>, info: &Self::Info, state: &mut Self::State) {
         emit::emit(self, sink, info, state);

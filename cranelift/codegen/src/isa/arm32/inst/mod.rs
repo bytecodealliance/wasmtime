@@ -22,6 +22,7 @@ mod emit;
 pub use self::emit::*;
 mod regs;
 pub use self::regs::*;
+pub mod unwind;
 
 #[cfg(test)]
 mod emit_tests;

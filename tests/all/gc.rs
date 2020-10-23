@@ -24,6 +24,7 @@ impl Drop for GcOnDrop {
 }
 
 #[test]
+#[cfg_attr(feature = "experimental_x64", ignore)] // TODO #2079 investigate.
 fn smoke_test_gc() -> anyhow::Result<()> {
     let (store, module) = ref_types_module(
         r#"
@@ -120,6 +121,7 @@ fn wasm_dropping_refs() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(feature = "experimental_x64", ignore)] // TODO #2079 investigate.
 fn many_live_refs() -> anyhow::Result<()> {
     let mut wat = r#"
         (module

@@ -1,6 +1,6 @@
 //! System V ABI unwind information.
 
-use crate::isa::{unwind::input, RegUnit};
+use crate::isa::unwind::input;
 use crate::result::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use gimli::write::{Address, FrameDescriptionEntry};
@@ -95,9 +95,9 @@ impl Into<gimli::write::CallFrameInstruction> for CallFrameInstruction {
 }
 
 /// Maps UnwindInfo register to gimli's index space.
-pub(crate) trait RegisterMapper {
-    /// Maps RegUnit.
-    fn map(&self, reg: RegUnit) -> Result<Register, RegisterMappingError>;
+pub(crate) trait RegisterMapper<Reg> {
+    /// Maps Reg.
+    fn map(&self, reg: Reg) -> Result<Register, RegisterMappingError>;
     /// Gets RSP in gimli's index space.
     fn rsp(&self) -> Register;
 }
@@ -113,9 +113,9 @@ pub struct UnwindInfo {
 }
 
 impl UnwindInfo {
-    pub(crate) fn build<'b>(
-        unwind: input::UnwindInfo<RegUnit>,
-        map_reg: &'b dyn RegisterMapper,
+    pub(crate) fn build<'b, Reg: PartialEq + Copy>(
+        unwind: input::UnwindInfo<Reg>,
+        map_reg: &'b dyn RegisterMapper<Reg>,
     ) -> CodegenResult<Self> {
         use input::UnwindCode;
         let mut builder = InstructionBuilder::new(unwind.word_size, map_reg);
@@ -181,16 +181,16 @@ impl UnwindInfo {
     }
 }
 
-struct InstructionBuilder<'a> {
+struct InstructionBuilder<'a, Reg: PartialEq + Copy> {
     sp_offset: i32,
-    frame_register: Option<RegUnit>,
-    saved_state: Option<(i32, Option<RegUnit>)>,
-    map_reg: &'a dyn RegisterMapper,
+    frame_register: Option<Reg>,
+    saved_state: Option<(i32, Option<Reg>)>,
+    map_reg: &'a dyn RegisterMapper<Reg>,
     instructions: Vec<(u32, CallFrameInstruction)>,
 }
 
-impl<'a> InstructionBuilder<'a> {
-    fn new(word_size: u8, map_reg: &'a (dyn RegisterMapper + 'a)) -> Self {
+impl<'a, Reg: PartialEq + Copy> InstructionBuilder<'a, Reg> {
+    fn new(word_size: u8, map_reg: &'a (dyn RegisterMapper<Reg> + 'a)) -> Self {
         Self {
             sp_offset: word_size as i32, // CFA offset starts at word size offset to account for the return address on stack
             saved_state: None,
@@ -200,7 +200,7 @@ impl<'a> InstructionBuilder<'a> {
         }
     }
 
-    fn save_reg(&mut self, offset: u32, reg: RegUnit) -> Result<(), RegisterMappingError> {
+    fn save_reg(&mut self, offset: u32, reg: Reg) -> Result<(), RegisterMappingError> {
         // Pushes in the prologue are register saves, so record an offset of the save
         self.instructions.push((
             offset,
@@ -261,7 +261,7 @@ impl<'a> InstructionBuilder<'a> {
         }
     }
 
-    fn set_cfa_reg(&mut self, offset: u32, reg: RegUnit) -> Result<(), RegisterMappingError> {
+    fn set_cfa_reg(&mut self, offset: u32, reg: Reg) -> Result<(), RegisterMappingError> {
         self.instructions.push((
             offset,
             CallFrameInstruction::CfaRegister(self.map_reg.map(reg)?),
@@ -270,7 +270,7 @@ impl<'a> InstructionBuilder<'a> {
         Ok(())
     }
 
-    fn restore_reg(&mut self, offset: u32, reg: RegUnit) -> Result<(), RegisterMappingError> {
+    fn restore_reg(&mut self, offset: u32, reg: Reg) -> Result<(), RegisterMappingError> {
         // Update the CFA if this is the restore of the frame pointer register.
         if Some(reg) == self.frame_register {
             self.frame_register = None;

@@ -481,6 +481,7 @@ impl MachInstEmitInfo for EmitInfo {
 impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
+    type UnwindInfo = super::unwind::AArch64UnwindInfo;
 
     fn emit(&self, sink: &mut MachBuffer<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
         // N.B.: we *must* not exceed the "worst-case size" used to compute

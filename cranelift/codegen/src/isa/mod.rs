@@ -87,7 +87,6 @@ mod arm32;
 #[cfg(feature = "arm64")]
 pub(crate) mod aarch64;
 
-#[cfg(feature = "unwind")]
 pub mod unwind;
 
 mod call_conv;

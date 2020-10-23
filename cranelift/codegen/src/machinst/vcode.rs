@@ -31,6 +31,7 @@ use regalloc::{
 
 use alloc::boxed::Box;
 use alloc::{borrow::Cow, vec::Vec};
+use std::cell::RefCell;
 use std::fmt;
 use std::iter;
 use std::string::String;
@@ -39,6 +40,8 @@ use std::string::String;
 pub type InsnIndex = u32;
 /// Index referring to a basic block in VCode.
 pub type BlockIndex = u32;
+/// Range of an instructions in VCode.
+pub type InsnRange = core::ops::Range<InsnIndex>;
 
 /// VCodeInst wraps all requirements for a MachInst to be in VCode: it must be
 /// a `MachInst` and it must be able to emit itself at least to a `SizeCodeSink`.
@@ -101,6 +104,12 @@ pub struct VCode<I: VCodeInst> {
     /// These are used to generate actual stack maps at emission. Filled in
     /// post-regalloc.
     safepoint_slots: Vec<Vec<SpillSlot>>,
+
+    /// Ranges for prologue and epilogue instructions.
+    prologue_epilogue_ranges: Option<(InsnRange, Box<[InsnRange]>)>,
+
+    /// Instruction end offsets
+    insts_layout: RefCell<(Vec<u32>, u32)>,
 }
 
 /// A builder for a VCode function body. This builder is designed for the
@@ -292,6 +301,8 @@ impl<I: VCodeInst> VCode<I> {
             emit_info,
             safepoint_insns: vec![],
             safepoint_slots: vec![],
+            prologue_epilogue_ranges: None,
+            insts_layout: RefCell::new((vec![], 0)),
         }
     }
 
@@ -353,6 +364,10 @@ impl<I: VCodeInst> VCode<I> {
         let mut final_safepoint_insns = vec![];
         let mut safept_idx = 0;
 
+        let mut prologue_start = None;
+        let mut prologue_end = None;
+        let mut epilogue_islands = vec![];
+
         assert!(result.target_map.elems().len() == self.num_blocks());
         for block in 0..self.num_blocks() {
             let start = result.target_map.elems()[block].get() as usize;
@@ -365,11 +380,13 @@ impl<I: VCodeInst> VCode<I> {
             let final_start = final_insns.len() as InsnIndex;
 
             if block == self.entry {
+                prologue_start = Some(final_insns.len() as InsnIndex);
                 // Start with the prologue.
                 let prologue = self.abi.gen_prologue();
                 let len = prologue.len();
                 final_insns.extend(prologue.into_iter());
                 final_srclocs.extend(iter::repeat(SourceLoc::default()).take(len));
+                prologue_end = Some(final_insns.len() as InsnIndex);
             }
 
             for i in start..end {
@@ -395,10 +412,12 @@ impl<I: VCodeInst> VCode<I> {
                 // with the epilogue.
                 let is_ret = insn.is_term() == MachTerminator::Ret;
                 if is_ret {
+                    let epilogue_start = final_insns.len() as InsnIndex;
                     let epilogue = self.abi.gen_epilogue();
                     let len = epilogue.len();
                     final_insns.extend(epilogue.into_iter());
                     final_srclocs.extend(iter::repeat(srcloc).take(len));
+                    epilogue_islands.push(epilogue_start..final_insns.len() as InsnIndex);
                 } else {
                     final_insns.push(insn.clone());
                     final_srclocs.push(srcloc);
@@ -430,6 +449,11 @@ impl<I: VCodeInst> VCode<I> {
         // for the machine backend during emission so that it can do
         // target-specific translations of slot numbers to stack offsets.
         self.safepoint_slots = result.stackmaps;
+
+        self.prologue_epilogue_ranges = Some((
+            prologue_start.unwrap()..prologue_end.unwrap(),
+            epilogue_islands.into_boxed_slice(),
+        ));
     }
 
     /// Emit the instructions to a `MachBuffer`, containing fixed-up code and external
@@ -443,6 +467,8 @@ impl<I: VCodeInst> VCode<I> {
         let mut state = I::State::new(&*self.abi);
 
         buffer.reserve_labels_for_blocks(self.num_blocks() as BlockIndex); // first N MachLabels are simply block indices.
+
+        let mut insts_layout = vec![0; self.insts.len()];
 
         let mut safepoint_idx = 0;
         let mut cur_srcloc = None;
@@ -482,6 +508,8 @@ impl<I: VCodeInst> VCode<I> {
                 }
 
                 self.insts[iix as usize].emit(&mut buffer, &self.emit_info, &mut state);
+
+                insts_layout[iix as usize] = buffer.cur_offset();
             }
 
             if cur_srcloc.is_some() {
@@ -502,7 +530,25 @@ impl<I: VCodeInst> VCode<I> {
             }
         }
 
+        *self.insts_layout.borrow_mut() = (insts_layout, buffer.cur_offset());
+
         buffer
+    }
+
+    /// Generates unwind info.
+    pub fn unwind_info(
+        &self,
+    ) -> crate::result::CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
+        let layout = &self.insts_layout.borrow();
+        let (prologue, epilogues) = self.prologue_epilogue_ranges.as_ref().unwrap();
+        let context = UnwindInfoContext {
+            insts: &self.insts,
+            insts_layout: &layout.0,
+            len: layout.1,
+            prologue: prologue.clone(),
+            epilogues,
+        };
+        I::UnwindInfo::create_unwind_info(context, self.abi.unwind_info_kind())
     }
 
     /// Get the IR block for a BlockIndex, if one exists.

@@ -1,12 +1,15 @@
 //! Unwind information for System V ABI (x86-64).
 
-use crate::ir::Function;
-use crate::isa::{
-    unwind::systemv::{RegisterMappingError, UnwindInfo},
-    CallConv, RegUnit, TargetIsa,
+use crate::isa::unwind::systemv::{RegisterMappingError, UnwindInfo};
+use crate::isa::x64::inst::{
+    args::{AluRmiROpcode, Amode, RegMemImm, SyntheticAmode},
+    regs, Inst,
 };
+use crate::machinst::UnwindInfoContext;
 use crate::result::CodegenResult;
+use alloc::vec::Vec;
 use gimli::{write::CommonInformationEntry, Encoding, Format, Register, X86_64};
+use regalloc::{Reg, RegClass};
 
 /// Creates a new x86-64 common information entry (CIE).
 pub fn create_cie() -> CommonInformationEntry {
@@ -34,11 +37,7 @@ pub fn create_cie() -> CommonInformationEntry {
 }
 
 /// Map Cranelift registers to their corresponding Gimli registers.
-pub fn map_reg(isa: &dyn TargetIsa, reg: RegUnit) -> Result<Register, RegisterMappingError> {
-    if isa.name() != "x86" || isa.pointer_bits() != 64 {
-        return Err(RegisterMappingError::UnsupportedArchitecture);
-    }
-
+pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
     // Mapping from https://github.com/bytecodealliance/cranelift/pull/902 by @iximeow
     const X86_GP_REG_MAP: [gimli::Register; 16] = [
         X86_64::RAX,
@@ -77,62 +76,138 @@ pub fn map_reg(isa: &dyn TargetIsa, reg: RegUnit) -> Result<Register, RegisterMa
         X86_64::XMM15,
     ];
 
-    let reg_info = isa.register_info();
-    let bank = reg_info
-        .bank_containing_regunit(reg)
-        .ok_or_else(|| RegisterMappingError::MissingBank)?;
-    match bank.name {
-        "IntRegs" => {
+    match reg.get_class() {
+        RegClass::I64 => {
             // x86 GP registers have a weird mapping to DWARF registers, so we use a
             // lookup table.
-            Ok(X86_GP_REG_MAP[(reg - bank.first_unit) as usize])
+            Ok(X86_GP_REG_MAP[reg.get_hw_encoding() as usize])
         }
-        "FloatRegs" => Ok(X86_XMM_REG_MAP[(reg - bank.first_unit) as usize]),
-        _ => Err(RegisterMappingError::UnsupportedRegisterBank(bank.name)),
+        RegClass::V128 => Ok(X86_XMM_REG_MAP[reg.get_hw_encoding() as usize]),
+        _ => Err(RegisterMappingError::UnsupportedRegisterBank("class?")),
     }
 }
 
 pub(crate) fn create_unwind_info(
-    func: &Function,
-    isa: &dyn TargetIsa,
+    context: UnwindInfoContext<Inst>,
+    word_size: u8,
 ) -> CodegenResult<Option<UnwindInfo>> {
-    // Only System V-like calling conventions are supported
-    match func.signature.call_conv {
-        CallConv::Fast | CallConv::Cold | CallConv::SystemV => {}
-        _ => return Ok(None),
-    }
+    use crate::isa::unwind::input::{self, UnwindCode};
+    let mut codes = Vec::new();
 
-    if func.prologue_end.is_none() || isa.name() != "x86" || isa.pointer_bits() != 64 {
-        return Ok(None);
-    }
+    for i in context.prologue.clone() {
+        let i = i as usize;
+        let inst = &context.insts[i];
+        let offset = context.insts_layout[i];
 
-    let unwind = match super::create_unwind_info(func, isa)? {
-        Some(u) => u,
-        None => {
-            return Ok(None);
+        match inst {
+            Inst::Push64 {
+                src: RegMemImm::Reg { reg },
+            } => {
+                codes.push(UnwindCode::StackAlloc {
+                    offset,
+                    size: word_size.into(),
+                });
+                codes.push(UnwindCode::SaveRegister {
+                    offset,
+                    reg: *reg,
+                    stack_offset: 0,
+                });
+            }
+            Inst::MovRR { src, dst, .. } => {
+                if *src == regs::rsp() {
+                    codes.push(UnwindCode::SetFramePointer {
+                        offset,
+                        reg: dst.to_reg(),
+                    });
+                }
+            }
+            Inst::AluRmiR {
+                is_64: true,
+                op: AluRmiROpcode::Sub,
+                src: RegMemImm::Imm { simm32 },
+                dst,
+                ..
+            } if dst.to_reg() == regs::rsp() => {
+                let imm = *simm32;
+                codes.push(UnwindCode::StackAlloc { offset, size: imm });
+            }
+            Inst::MovRM {
+                src,
+                dst: SyntheticAmode::Real(Amode::ImmReg { simm32, base }),
+                ..
+            } if *base == regs::rsp() => {
+                // `mov reg, imm(rsp)`
+                let imm = *simm32;
+                codes.push(UnwindCode::SaveRegister {
+                    offset,
+                    reg: *src,
+                    stack_offset: imm,
+                });
+            }
+            Inst::AluRmiR {
+                is_64: true,
+                op: AluRmiROpcode::Add,
+                src: RegMemImm::Imm { simm32 },
+                dst,
+                ..
+            } if dst.to_reg() == regs::rsp() => {
+                let imm = *simm32;
+                codes.push(UnwindCode::StackDealloc { offset, size: imm });
+            }
+            _ => {}
         }
+    }
+
+    let last_epilogue_end = context.len;
+    let epilogues_unwind_codes = context
+        .epilogues
+        .iter()
+        .map(|epilogue| {
+            let end = epilogue.end as usize - 1;
+            let end_offset = context.insts_layout[end];
+            if end_offset == last_epilogue_end {
+                // Do not remember/restore for very last epilogue.
+                return vec![];
+            }
+
+            let start = epilogue.start as usize;
+            let offset = context.insts_layout[start];
+            vec![
+                UnwindCode::RememberState { offset },
+                UnwindCode::RestoreState { offset: end_offset },
+            ]
+        })
+        .collect();
+
+    let prologue_size = context.insts_layout[context.prologue.end as usize];
+    let unwind = input::UnwindInfo {
+        prologue_size,
+        prologue_unwind_codes: codes,
+        epilogues_unwind_codes,
+        function_size: context.len,
+        word_size,
     };
 
-    struct RegisterMapper<'a, 'b>(&'a (dyn TargetIsa + 'b));
-    impl<'a, 'b> crate::isa::unwind::systemv::RegisterMapper<RegUnit> for RegisterMapper<'a, 'b> {
-        fn map(&self, reg: RegUnit) -> Result<u16, RegisterMappingError> {
-            Ok(map_reg(self.0, reg)?.0)
+    struct RegisterMapper;
+    impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
+        fn map(&self, reg: Reg) -> Result<u16, RegisterMappingError> {
+            Ok(map_reg(reg)?.0)
         }
         fn rsp(&self) -> u16 {
-            X86_64::RSP.0
+            map_reg(regs::rsp()).unwrap().0
         }
     }
-    let map = RegisterMapper(isa);
+    let map = RegisterMapper;
 
     Ok(Some(UnwindInfo::build(unwind, &map)?))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::{
-        types, AbiParam, ExternalName, InstBuilder, Signature, StackSlotData, StackSlotKind,
+        types, AbiParam, ExternalName, Function, InstBuilder, Signature, StackSlotData,
+        StackSlotKind,
     };
     use crate::isa::{lookup, CallConv};
     use crate::settings::{builder, Flags};
@@ -142,7 +217,6 @@ mod tests {
     use target_lexicon::triple;
 
     #[test]
-    #[cfg_attr(feature = "x64", should_panic)] // TODO #2079
     fn test_simple_func() {
         let isa = lookup(triple!("x86_64"))
             .expect("expect x86 ISA")
@@ -155,8 +229,8 @@ mod tests {
 
         context.compile(&*isa).expect("expected compilation");
 
-        let fde = match isa
-            .create_unwind_info(&context.func)
+        let fde = match context
+            .create_unwind_info(isa.as_ref())
             .expect("can create unwind info")
         {
             Some(crate::isa::unwind::UnwindInfo::SystemV(info)) => {
@@ -165,7 +239,7 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(1234), length: 16, lsda: None, instructions: [(2, CfaOffset(16)), (2, Offset(Register(6), -16)), (5, CfaRegister(Register(6))), (15, Cfa(Register(7), 8)), (15, SameValue(Register(6)))] }");
+        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(1234), length: 13, lsda: None, instructions: [(1, CfaOffset(16)), (1, Offset(Register(6), -16)), (4, CfaRegister(Register(6)))] }");
     }
 
     fn create_function(call_conv: CallConv, stack_slot: Option<StackSlotData>) -> Function {
@@ -185,7 +259,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(feature = "x64", should_panic)] // TODO #2079
     fn test_multi_return_func() {
         let isa = lookup(triple!("x86_64"))
             .expect("expect x86 ISA")
@@ -195,8 +268,8 @@ mod tests {
 
         context.compile(&*isa).expect("expected compilation");
 
-        let fde = match isa
-            .create_unwind_info(&context.func)
+        let fde = match context
+            .create_unwind_info(isa.as_ref())
             .expect("can create unwind info")
         {
             Some(crate::isa::unwind::UnwindInfo::SystemV(info)) => {
@@ -205,7 +278,7 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(4321), length: 16, lsda: None, instructions: [(2, CfaOffset(16)), (2, Offset(Register(6), -16)), (5, CfaRegister(Register(6))), (12, RememberState), (12, Cfa(Register(7), 8)), (12, SameValue(Register(6))), (13, RestoreState), (15, Cfa(Register(7), 8)), (15, SameValue(Register(6)))] }");
+        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(4321), length: 23, lsda: None, instructions: [(1, CfaOffset(16)), (1, Offset(Register(6), -16)), (4, CfaRegister(Register(6))), (16, RememberState), (18, RestoreState)] }");
     }
 
     fn create_multi_return_function(call_conv: CallConv) -> Function {

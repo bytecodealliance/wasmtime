@@ -29,6 +29,7 @@ pub mod args;
 pub use self::args::*;
 pub mod emit;
 pub use self::emit::*;
+pub mod unwind;
 
 #[cfg(test)]
 mod emit_tests;

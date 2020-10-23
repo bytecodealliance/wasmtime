@@ -59,6 +59,7 @@ impl MachBackend for X64Backend {
         let buffer = vcode.emit();
         let buffer = buffer.finish();
         let frame_size = vcode.frame_size();
+        let unwind_info = vcode.unwind_info()?;
 
         let disasm = if want_disasm {
             Some(vcode.show_rru(Some(&create_reg_universe_systemv(flags))))
@@ -70,6 +71,7 @@ impl MachBackend for X64Backend {
             buffer,
             frame_size,
             disasm,
+            unwind_info,
         })
     }
 
@@ -99,6 +101,12 @@ impl MachBackend for X64Backend {
         // unsigned `>=`; this corresponds to the carry flag set on x86, which happens on
         // underflow of a subtract (carry is borrow for subtract).
         IntCC::UnsignedGreaterThanOrEqual
+    }
+
+    #[cfg(feature = "unwind")]
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        // By default, an ISA cannot create a System V CIE
+        Some(inst::unwind::create_cie())
     }
 }
 

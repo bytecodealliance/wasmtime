@@ -73,6 +73,7 @@ impl MachBackend for Arm32Backend {
             buffer,
             frame_size,
             disasm,
+            unwind_info: None,
         })
     }
 

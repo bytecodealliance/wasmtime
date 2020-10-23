@@ -99,12 +99,14 @@
 use crate::binemit::{CodeInfo, CodeOffset, StackMap};
 use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, Type};
+use crate::isa::unwind;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt::Debug;
+use core::ops::Range;
 use regalloc::RegUsageCollector;
 use regalloc::{
     RealReg, RealRegUniverse, Reg, RegClass, RegUsageMapper, SpillSlot, VirtualReg, Writable,
@@ -277,6 +279,8 @@ pub trait MachInstEmit: MachInst {
     type State: MachInstEmitState<Self>;
     /// Constant information used in `emit` invocations.
     type Info: MachInstEmitInfo;
+    /// Unwind info generator.
+    type UnwindInfo: UnwindInfoGenerator<Self>;
     /// Emit the instruction.
     fn emit(&self, code: &mut MachBuffer<Self>, info: &Self::Info, state: &mut Self::State);
     /// Pretty-print the instruction.
@@ -309,6 +313,8 @@ pub struct MachCompileResult {
     pub frame_size: u32,
     /// Disassembly, if requested.
     pub disasm: Option<String>,
+    /// Unwind info.
+    pub unwind_info: Option<unwind::UnwindInfo>,
 }
 
 impl MachCompileResult {
@@ -353,4 +359,50 @@ pub trait MachBackend {
     /// Machine-specific condcode info needed by TargetIsa.
     /// Condition that will be true when an IsubIfcout overflows.
     fn unsigned_sub_overflow_condition(&self) -> IntCC;
+
+    /// Machine-specific condcode info needed by TargetIsa.
+    /// Creates a new System V Common Information Entry for the ISA.
+    #[cfg(feature = "unwind")]
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        // By default, an ISA cannot create a System V CIE
+        None
+    }
+}
+
+/// Expected unwind info type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum UnwindInfoKind {
+    /// No unwind info.
+    None,
+    /// SystemV CIE/FDE unwind info.
+    #[cfg(feature = "unwind")]
+    SystemV,
+    /// Windows X64 Unwind info
+    #[cfg(feature = "unwind")]
+    Windows,
+}
+
+/// Input data for UnwindInfoGenerator.
+pub struct UnwindInfoContext<'a, Inst: MachInstEmit> {
+    /// Function instructions.
+    pub insts: &'a [Inst],
+    /// Instruction layout: end offsets
+    pub insts_layout: &'a [CodeOffset],
+    /// Length of the function.
+    pub len: CodeOffset,
+    /// Prologue range.
+    pub prologue: Range<u32>,
+    /// Epilogue ranges.
+    pub epilogues: &'a [Range<u32>],
+}
+
+/// UnwindInfo generator/helper.
+pub trait UnwindInfoGenerator<I: MachInstEmit> {
+    /// Creates unwind info based on function signature and
+    /// emitted instructions.
+    fn create_unwind_info(
+        context: UnwindInfoContext<I>,
+        kind: UnwindInfoKind,
+    ) -> CodegenResult<Option<unwind::UnwindInfo>>;
 }
