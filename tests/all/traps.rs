@@ -32,13 +32,7 @@ fn test_trap_return() -> Result<()> {
 
 #[test]
 #[cfg_attr(target_arch = "aarch64", ignore)] // FIXME(#1642)
-#[cfg_attr(
-    all(
-        target_os = "windows",
-        all(target_os = "windows", feature = "experimental_x64")
-    ),
-    ignore
-)] // FIXME(#2079)
+#[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn test_trap_trace() -> Result<()> {
     let store = Store::default();
     let wat = r#"
