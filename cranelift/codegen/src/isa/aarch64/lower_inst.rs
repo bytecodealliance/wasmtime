@@ -2373,6 +2373,43 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::FminPseudo | Opcode::FmaxPseudo => {
+            let ty = ctx.input_ty(insn, 0);
+            if ty == F32X4 || ty == F64X2 {
+                // pmin(a,b) => bitsel(b, a, cmpgt(a, b))
+                // pmax(a,b) => bitsel(b, a, cmpgt(b, a))
+                let r_dst = get_output_reg(ctx, outputs[0]);
+                let r_a = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+                let r_b = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+                // Since we're going to write the output register `r_dst` anyway, we might as
+                // well first use it to hold the comparison result.  This has the slightly unusual
+                // effect that we modify the output register in the first instruction (`fcmgt`)
+                // but read both the inputs again in the second instruction (`bsl`), which means
+                // that the output register can't be either of the input registers.  Regalloc
+                // should handle this correctly, nevertheless.
+                ctx.emit(Inst::VecRRR {
+                    alu_op: VecALUOp::Fcmgt,
+                    rd: r_dst,
+                    rn: if op == Opcode::FminPseudo { r_a } else { r_b },
+                    rm: if op == Opcode::FminPseudo { r_b } else { r_a },
+                    size: if ty == F32X4 {
+                        VectorSize::Size32x4
+                    } else {
+                        VectorSize::Size64x2
+                    },
+                });
+                ctx.emit(Inst::VecRRR {
+                    alu_op: VecALUOp::Bsl,
+                    rd: r_dst,
+                    rn: r_b,
+                    rm: r_a,
+                    size: VectorSize::Size8x16,
+                });
+            } else {
+                panic!("Opcode::FminPseudo | Opcode::FmaxPseudo: unhandled type");
+            }
+        }
+
         Opcode::Sqrt | Opcode::Fneg | Opcode::Fabs | Opcode::Fpromote | Opcode::Fdemote => {
             let ty = ty.unwrap();
             let bits = ty_bits(ty);
@@ -2411,21 +2448,39 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Ceil | Opcode::Floor | Opcode::Trunc | Opcode::Nearest => {
-            let bits = ty_bits(ctx.output_ty(insn, 0));
-            let op = match (op, bits) {
-                (Opcode::Ceil, 32) => FpuRoundMode::Plus32,
-                (Opcode::Ceil, 64) => FpuRoundMode::Plus64,
-                (Opcode::Floor, 32) => FpuRoundMode::Minus32,
-                (Opcode::Floor, 64) => FpuRoundMode::Minus64,
-                (Opcode::Trunc, 32) => FpuRoundMode::Zero32,
-                (Opcode::Trunc, 64) => FpuRoundMode::Zero64,
-                (Opcode::Nearest, 32) => FpuRoundMode::Nearest32,
-                (Opcode::Nearest, 64) => FpuRoundMode::Nearest64,
-                _ => panic!("Unknown op/bits combination"),
-            };
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rd = get_output_reg(ctx, outputs[0]);
-            ctx.emit(Inst::FpuRound { op, rd, rn });
+            let ty = ctx.output_ty(insn, 0);
+            if !ty.is_vector() {
+                let bits = ty_bits(ty);
+                let op = match (op, bits) {
+                    (Opcode::Ceil, 32) => FpuRoundMode::Plus32,
+                    (Opcode::Ceil, 64) => FpuRoundMode::Plus64,
+                    (Opcode::Floor, 32) => FpuRoundMode::Minus32,
+                    (Opcode::Floor, 64) => FpuRoundMode::Minus64,
+                    (Opcode::Trunc, 32) => FpuRoundMode::Zero32,
+                    (Opcode::Trunc, 64) => FpuRoundMode::Zero64,
+                    (Opcode::Nearest, 32) => FpuRoundMode::Nearest32,
+                    (Opcode::Nearest, 64) => FpuRoundMode::Nearest64,
+                    _ => panic!("Unknown op/bits combination (scalar)"),
+                };
+                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+                let rd = get_output_reg(ctx, outputs[0]);
+                ctx.emit(Inst::FpuRound { op, rd, rn });
+            } else {
+                let (op, size) = match (op, ty) {
+                    (Opcode::Ceil, F32X4) => (VecMisc2::Frintp, VectorSize::Size32x4),
+                    (Opcode::Ceil, F64X2) => (VecMisc2::Frintp, VectorSize::Size64x2),
+                    (Opcode::Floor, F32X4) => (VecMisc2::Frintm, VectorSize::Size32x4),
+                    (Opcode::Floor, F64X2) => (VecMisc2::Frintm, VectorSize::Size64x2),
+                    (Opcode::Trunc, F32X4) => (VecMisc2::Frintz, VectorSize::Size32x4),
+                    (Opcode::Trunc, F64X2) => (VecMisc2::Frintz, VectorSize::Size64x2),
+                    (Opcode::Nearest, F32X4) => (VecMisc2::Frintn, VectorSize::Size32x4),
+                    (Opcode::Nearest, F64X2) => (VecMisc2::Frintn, VectorSize::Size64x2),
+                    _ => panic!("Unknown op/ty combination (vector){:?}", ty),
+                };
+                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+                let rd = get_output_reg(ctx, outputs[0]);
+                ctx.emit(Inst::VecMisc { op, rd, rn, size });
+            }
         }
 
         Opcode::Fma => {

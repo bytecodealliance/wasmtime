@@ -319,6 +319,14 @@ pub enum VecMisc2 {
     Scvtf,
     /// Unsigned integer convert to floating-point
     Ucvtf,
+    /// Floating point round to integral, rounding towards nearest
+    Frintn,
+    /// Floating point round to integral, rounding towards zero
+    Frintz,
+    /// Floating point round to integral, rounding towards minus infinity
+    Frintm,
+    /// Floating point round to integral, rounding towards plus infinity
+    Frintp,
 }
 
 /// A Vector narrowing operation with two registers.
@@ -3436,6 +3444,10 @@ impl Inst {
                     VecMisc2::Fcvtzu => ("fcvtzu", size),
                     VecMisc2::Scvtf => ("scvtf", size),
                     VecMisc2::Ucvtf => ("ucvtf", size),
+                    VecMisc2::Frintn => ("frintn", size),
+                    VecMisc2::Frintz => ("frintz", size),
+                    VecMisc2::Frintm => ("frintm", size),
+                    VecMisc2::Frintp => ("frintp", size),
                 };
 
                 let rd_size = if is_shll { size.widen() } else { size };

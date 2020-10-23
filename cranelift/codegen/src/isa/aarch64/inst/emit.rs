@@ -1430,6 +1430,22 @@ impl MachInstEmit for Inst {
                         debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
                         (0b1, 0b11101, enc_size & 0b1)
                     }
+                    VecMisc2::Frintn => {
+                        debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
+                        (0b0, 0b11000, enc_size & 0b01)
+                    }
+                    VecMisc2::Frintz => {
+                        debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
+                        (0b0, 0b11001, enc_size | 0b10)
+                    }
+                    VecMisc2::Frintm => {
+                        debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
+                        (0b0, 0b11001, enc_size & 0b01)
+                    }
+                    VecMisc2::Frintp => {
+                        debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
+                        (0b0, 0b11000, enc_size | 0b10)
+                    }
                 };
                 sink.put4(enc_vec_rr_misc((q << 1) | u, size, bits_12_16, rd, rn));
             }

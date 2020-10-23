@@ -229,17 +229,17 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 return env::var("CARGO_CFG_TARGET_ARCH").unwrap() != "x86_64";
             }
 
-            // This is only implemented on aarch64.
-            ("simd", "simd_boolean") => {
+            // These are only implemented on aarch64.
+            ("simd", "simd_boolean")
+            | ("simd", "simd_f32x4_pmin_pmax")
+            | ("simd", "simd_f32x4_rounding")
+            | ("simd", "simd_f64x2_pmin_pmax")
+            | ("simd", "simd_f64x2_rounding") => {
                 return env::var("CARGO_CFG_TARGET_ARCH").unwrap() != "aarch64";
             }
 
             // These tests have simd operators which aren't implemented yet.
-            ("simd", "simd_f32x4_pmin_pmax") => return true,
-            ("simd", "simd_f32x4_rounding") => return true,
-            ("simd", "simd_f64x2_pmin_pmax") => return true,
-            ("simd", "simd_f64x2_rounding") => return true,
-
+            // (currently none)
             _ => {}
         },
         _ => panic!("unrecognized strategy"),
