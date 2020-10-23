@@ -371,6 +371,7 @@ pub trait MachBackend {
 
 /// Expected unwind info type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum UnwindInfoKind {
     /// No unwind info.
     None,

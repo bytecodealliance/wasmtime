@@ -11,6 +11,7 @@ pub mod winx64;
 /// Represents unwind information for a single function.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
 pub enum UnwindInfo {
     /// Windows x64 ABI unwind information.
     #[cfg(feature = "unwind")]
