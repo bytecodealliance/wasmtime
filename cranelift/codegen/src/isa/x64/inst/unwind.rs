@@ -5,8 +5,6 @@ use crate::result::CodegenResult;
 
 #[cfg(feature = "unwind")]
 pub use self::systemv::create_cie;
-#[cfg(feature = "unwind")]
-use super::regs;
 
 #[cfg(feature = "unwind")]
 mod systemv;
@@ -24,7 +22,8 @@ impl UnwindInfoGenerator<Inst> for X64UnwindInfo {
         Ok(match kind {
             #[cfg(feature = "unwind")]
             UnwindInfoKind::SystemV => {
-                systemv::create_unwind_info(context, Some(regs::rbp()))?.map(UnwindInfo::SystemV)
+                const WORD_SIZE: u8 = 8;
+                systemv::create_unwind_info(context, WORD_SIZE)?.map(UnwindInfo::SystemV)
             }
             #[cfg(feature = "unwind")]
             UnwindInfoKind::Windows => {

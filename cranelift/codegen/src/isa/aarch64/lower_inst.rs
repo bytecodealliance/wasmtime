@@ -2060,6 +2060,197 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             normalize_bool_result(ctx, insn, rd);
         }
 
+        Opcode::VhighBits => {
+            let dst_r = get_output_reg(ctx, outputs[0]);
+            let src_v = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let ty = ctx.input_ty(insn, 0);
+            // All three sequences use one integer temporary and two vector temporaries.  The
+            // shift is done early so as to give the register allocator the possibility of using
+            // the same reg for `tmp_v1` and `src_v` in the case that this is the last use of
+            // `src_v`.  See https://github.com/WebAssembly/simd/pull/201 for the background and
+            // derivation of these sequences.  Alternative sequences are discussed in
+            // https://github.com/bytecodealliance/wasmtime/issues/2296, although they are not
+            // used here.
+            // Also .. FIXME: when https://github.com/bytecodealliance/wasmtime/pull/2310 is
+            // merged, use `lower_splat_constant` instead to generate the constants.
+            let tmp_r0 = ctx.alloc_tmp(RegClass::I64, I64);
+            let tmp_v0 = ctx.alloc_tmp(RegClass::V128, I8X16);
+            let tmp_v1 = ctx.alloc_tmp(RegClass::V128, I8X16);
+            match ty {
+                I8X16 => {
+                    // sshr  tmp_v1.16b, src_v.16b, #7
+                    // mov   tmp_r0, #0x0201
+                    // movk  tmp_r0, #0x0804, lsl 16
+                    // movk  tmp_r0, #0x2010, lsl 32
+                    // movk  tmp_r0, #0x8040, lsl 48
+                    // dup   tmp_v0.2d, tmp_r0
+                    // and   tmp_v1.16b, tmp_v1.16b, tmp_v0.16b
+                    // ext   tmp_v0.16b, tmp_v1.16b, tmp_v1.16b, #8
+                    // zip1  tmp_v0.16b, tmp_v1.16b, tmp_v0.16b
+                    // addv  tmp_v0h, tmp_v0.8h
+                    // mov   dst_r, tmp_v0.h[0]
+                    ctx.emit(Inst::VecShiftImm {
+                        op: VecShiftImmOp::Sshr,
+                        rd: tmp_v1,
+                        rn: src_v,
+                        size: VectorSize::Size8x16,
+                        imm: 7,
+                    });
+                    lower_constant_u64(ctx, tmp_r0, 0x8040201008040201u64);
+                    ctx.emit(Inst::VecDup {
+                        rd: tmp_v0,
+                        rn: tmp_r0.to_reg(),
+                        size: VectorSize::Size64x2,
+                    });
+                    ctx.emit(Inst::VecRRR {
+                        alu_op: VecALUOp::And,
+                        rd: tmp_v1,
+                        rn: tmp_v1.to_reg(),
+                        rm: tmp_v0.to_reg(),
+                        size: VectorSize::Size8x16,
+                    });
+                    ctx.emit(Inst::VecExtract {
+                        rd: tmp_v0,
+                        rn: tmp_v1.to_reg(),
+                        rm: tmp_v1.to_reg(),
+                        imm4: 8,
+                    });
+                    ctx.emit(Inst::VecRRR {
+                        alu_op: VecALUOp::Zip1,
+                        rd: tmp_v0,
+                        rn: tmp_v1.to_reg(),
+                        rm: tmp_v0.to_reg(),
+                        size: VectorSize::Size8x16,
+                    });
+                    ctx.emit(Inst::VecLanes {
+                        op: VecLanesOp::Addv,
+                        rd: tmp_v0,
+                        rn: tmp_v0.to_reg(),
+                        size: VectorSize::Size16x8,
+                    });
+                    ctx.emit(Inst::MovFromVec {
+                        rd: dst_r,
+                        rn: tmp_v0.to_reg(),
+                        idx: 0,
+                        size: VectorSize::Size16x8,
+                    });
+                }
+                I16X8 => {
+                    // sshr  tmp_v1.8h, src_v.8h, #15
+                    // mov   tmp_r0, #0x1
+                    // movk  tmp_r0, #0x2, lsl 16
+                    // movk  tmp_r0, #0x4, lsl 32
+                    // movk  tmp_r0, #0x8, lsl 48
+                    // dup   tmp_v0.2d, tmp_r0
+                    // shl   tmp_r0, tmp_r0, #4
+                    // mov   tmp_v0.d[1], tmp_r0
+                    // and   tmp_v0.16b, tmp_v1.16b, tmp_v0.16b
+                    // addv  tmp_v0h, tmp_v0.8h
+                    // mov   dst_r, tmp_v0.h[0]
+                    ctx.emit(Inst::VecShiftImm {
+                        op: VecShiftImmOp::Sshr,
+                        rd: tmp_v1,
+                        rn: src_v,
+                        size: VectorSize::Size16x8,
+                        imm: 15,
+                    });
+                    lower_constant_u64(ctx, tmp_r0, 0x0008000400020001u64);
+                    ctx.emit(Inst::VecDup {
+                        rd: tmp_v0,
+                        rn: tmp_r0.to_reg(),
+                        size: VectorSize::Size64x2,
+                    });
+                    ctx.emit(Inst::AluRRImmShift {
+                        alu_op: ALUOp::Lsl64,
+                        rd: tmp_r0,
+                        rn: tmp_r0.to_reg(),
+                        immshift: ImmShift { imm: 4 },
+                    });
+                    ctx.emit(Inst::MovToVec {
+                        rd: tmp_v0,
+                        rn: tmp_r0.to_reg(),
+                        idx: 1,
+                        size: VectorSize::Size64x2,
+                    });
+                    ctx.emit(Inst::VecRRR {
+                        alu_op: VecALUOp::And,
+                        rd: tmp_v0,
+                        rn: tmp_v1.to_reg(),
+                        rm: tmp_v0.to_reg(),
+                        size: VectorSize::Size8x16,
+                    });
+                    ctx.emit(Inst::VecLanes {
+                        op: VecLanesOp::Addv,
+                        rd: tmp_v0,
+                        rn: tmp_v0.to_reg(),
+                        size: VectorSize::Size16x8,
+                    });
+                    ctx.emit(Inst::MovFromVec {
+                        rd: dst_r,
+                        rn: tmp_v0.to_reg(),
+                        idx: 0,
+                        size: VectorSize::Size16x8,
+                    });
+                }
+                I32X4 => {
+                    // sshr  tmp_v1.4s, src_v.4s, #31
+                    // mov   tmp_r0, #0x1
+                    // movk  tmp_r0, #0x2, lsl 32
+                    // dup   tmp_v0.2d, tmp_r0
+                    // shl   tmp_r0, tmp_r0, #2
+                    // mov   tmp_v0.d[1], tmp_r0
+                    // and   tmp_v0.16b, tmp_v1.16b, tmp_v0.16b
+                    // addv  tmp_v0s, tmp_v0.4s
+                    // mov   dst_r, tmp_v0.s[0]
+                    ctx.emit(Inst::VecShiftImm {
+                        op: VecShiftImmOp::Sshr,
+                        rd: tmp_v1,
+                        rn: src_v,
+                        size: VectorSize::Size32x4,
+                        imm: 31,
+                    });
+                    lower_constant_u64(ctx, tmp_r0, 0x0000000200000001u64);
+                    ctx.emit(Inst::VecDup {
+                        rd: tmp_v0,
+                        rn: tmp_r0.to_reg(),
+                        size: VectorSize::Size64x2,
+                    });
+                    ctx.emit(Inst::AluRRImmShift {
+                        alu_op: ALUOp::Lsl64,
+                        rd: tmp_r0,
+                        rn: tmp_r0.to_reg(),
+                        immshift: ImmShift { imm: 2 },
+                    });
+                    ctx.emit(Inst::MovToVec {
+                        rd: tmp_v0,
+                        rn: tmp_r0.to_reg(),
+                        idx: 1,
+                        size: VectorSize::Size64x2,
+                    });
+                    ctx.emit(Inst::VecRRR {
+                        alu_op: VecALUOp::And,
+                        rd: tmp_v0,
+                        rn: tmp_v1.to_reg(),
+                        rm: tmp_v0.to_reg(),
+                        size: VectorSize::Size8x16,
+                    });
+                    ctx.emit(Inst::VecLanes {
+                        op: VecLanesOp::Addv,
+                        rd: tmp_v0,
+                        rn: tmp_v0.to_reg(),
+                        size: VectorSize::Size32x4,
+                    });
+                    ctx.emit(Inst::MovFromVec {
+                        rd: dst_r,
+                        rn: tmp_v0.to_reg(),
+                        idx: 0,
+                        size: VectorSize::Size32x4,
+                    });
+                }
+                _ => panic!("arm64 isel: VhighBits unhandled, ty = {:?}", ty),
+            }
+        }
+
         Opcode::Shuffle => {
             let mask = const_param_to_u128(ctx, insn).expect("Invalid immediate mask bytes");
             let rd = get_output_reg(ctx, outputs[0]);

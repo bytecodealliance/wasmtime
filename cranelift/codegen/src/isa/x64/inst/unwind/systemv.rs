@@ -89,7 +89,7 @@ pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
 
 pub(crate) fn create_unwind_info(
     context: UnwindInfoContext<Inst>,
-    frame_register: Option<Reg>,
+    word_size: u8,
 ) -> CodegenResult<Option<UnwindInfo>> {
     use crate::isa::unwind::input::{self, UnwindCode};
     let mut codes = Vec::new();
@@ -103,10 +103,18 @@ pub(crate) fn create_unwind_info(
             Inst::Push64 {
                 src: RegMemImm::Reg { reg },
             } => {
-                codes.push(UnwindCode::SaveRegister { offset, reg: *reg });
+                codes.push(UnwindCode::StackAlloc {
+                    offset,
+                    size: word_size.into(),
+                });
+                codes.push(UnwindCode::SaveRegister {
+                    offset,
+                    reg: *reg,
+                    stack_offset: 0,
+                });
             }
             Inst::MovRR { src, dst, .. } => {
-                if *src == regs::rsp() && Some(dst.to_reg()) == frame_register {
+                if *src == regs::rsp() {
                     codes.push(UnwindCode::SetFramePointer {
                         offset,
                         reg: dst.to_reg(),
@@ -172,6 +180,7 @@ pub(crate) fn create_unwind_info(
         prologue_unwind_codes: codes,
         epilogues_unwind_codes,
         function_size: context.len,
+        word_size,
     };
 
     struct RegisterMapper;
@@ -185,7 +194,7 @@ pub(crate) fn create_unwind_info(
     }
     let map = RegisterMapper;
 
-    Ok(Some(UnwindInfo::build(unwind, 8, frame_register, &map)?))
+    Ok(Some(UnwindInfo::build(unwind, &map)?))
 }
 
 #[cfg(test)]

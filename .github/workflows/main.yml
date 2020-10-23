@@ -168,9 +168,9 @@ jobs:
     - name: Rebuild Peepmatic-based peephole optimizers and test them
       run: |
         cargo test \
-          --features 'enable-peepmatic cranelift-codegen/rebuild-peephole-optimizers' \
+          --features 'enable-peepmatic rebuild-peephole-optimizers' \
           peepmatic
-      working-directory: ./cranelift
+      working-directory: ./cranelift/codegen
     - name: Check that built peephole optimizers are up to date
       run: git diff --exit-code
     - name: Test with Peepmatic-based peephole optimizers

@@ -453,8 +453,8 @@ impl<'a> CallThreadState<'a> {
             UnwindReason::JitTrap { backtrace, pc } => {
                 debug_assert_eq!(ret, 0);
                 let maybe_interrupted = unsafe {
-                    (*self.vmctx).instance().interrupts.stack_limit.load(SeqCst)
-                        == wasmtime_environ::INTERRUPTED
+                    let interrupts = (*self.vmctx).instance().interrupts();
+                    (**interrupts).stack_limit.load(SeqCst) == wasmtime_environ::INTERRUPTED
                 };
                 Err(Trap::Jit {
                     pc,
