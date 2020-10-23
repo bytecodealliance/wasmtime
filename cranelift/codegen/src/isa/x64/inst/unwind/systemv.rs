@@ -132,12 +132,17 @@ pub(crate) fn create_unwind_info(
                 codes.push(UnwindCode::StackAlloc { offset, size: imm });
             }
             Inst::MovRM {
-                src: _,
-                dst: SyntheticAmode::Real(Amode::ImmReg { simm32: _, base }),
+                src,
+                dst: SyntheticAmode::Real(Amode::ImmReg { simm32, base }),
                 ..
             } if *base == regs::rsp() => {
-                // `mov reg, imm(rsp)` -- similar to push
-                // builder.store_reg_at(offset, *simm32, *src)
+                // `mov reg, imm(rsp)`
+                let imm = *simm32;
+                codes.push(UnwindCode::SaveRegister {
+                    offset,
+                    reg: *src,
+                    stack_offset: imm,
+                });
             }
             Inst::AluRmiR {
                 is_64: true,
