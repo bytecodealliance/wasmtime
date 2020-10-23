@@ -1,0 +1,15 @@
+[package]
+name = "wasi-nn-example"
+version = "0.19.0"
+authors = ["The Wasmtime Project Developers"]
+readme = "README.md"
+edition = "2018"
+publish = false
+
+[dependencies]
+wasi-nn = { path = "../wasi-nn-rust-bindings", version = "0.1.0" }
+
+# This crate is built with the wasm32-wasi target, so it's separate
+# from the main Wasmtime build, so use this directive to exclude it
+# from the parent directory's workspace.
+[workspace]

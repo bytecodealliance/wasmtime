@@ -7,3 +7,6 @@
 [submodule "WASI"]
 	path = crates/wasi-common/WASI
 	url = https://github.com/WebAssembly/WASI
+[submodule "crates/wasi-nn/spec"]
+	path = crates/wasi-nn/spec
+	url = https://github.com/WebAssembly/wasi-nn

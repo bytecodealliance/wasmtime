@@ -13,6 +13,7 @@ cargo $CARGO_VERSION \
             --features experimental_x64 \
             --all \
             --exclude wasmtime-lightbeam \
+            --exclude wasmtime-wasi-nn \
             --exclude peepmatic \
             --exclude peepmatic-automata \
             --exclude peepmatic-fuzzing \

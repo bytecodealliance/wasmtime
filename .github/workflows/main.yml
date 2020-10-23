@@ -51,6 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RUSTDOCFLAGS: -Dbroken_intra_doc_links
+      OPENVINO_SKIP_LINKING: 1
     steps:
     - uses: actions/checkout@v2
       with:
@@ -252,6 +253,7 @@ jobs:
             --all \
             --exclude lightbeam \
             --exclude wasmtime-lightbeam \
+            --exclude wasmtime-wasi-nn \
             --exclude peepmatic \
             --exclude peepmatic-automata \
             --exclude peepmatic-fuzzing \
@@ -411,6 +413,7 @@ jobs:
             --all \
             --exclude lightbeam \
             --exclude wasmtime-lightbeam \
+            --exclude wasmtime-wasi-nn \
             --exclude peepmatic \
             --exclude peepmatic-automata \
             --exclude peepmatic-fuzzing \
