@@ -3477,6 +3477,94 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Frintn,
+            rd: writable_vreg(11),
+            rn: vreg(18),
+            size: VectorSize::Size32x4,
+        },
+        "4B8A214E",
+        "frintn v11.4s, v18.4s",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Frintn,
+            rd: writable_vreg(12),
+            rn: vreg(17),
+            size: VectorSize::Size64x2,
+        },
+        "2C8A614E",
+        "frintn v12.2d, v17.2d",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Frintz,
+            rd: writable_vreg(11),
+            rn: vreg(18),
+            size: VectorSize::Size32x4,
+        },
+        "4B9AA14E",
+        "frintz v11.4s, v18.4s",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Frintz,
+            rd: writable_vreg(12),
+            rn: vreg(17),
+            size: VectorSize::Size64x2,
+        },
+        "2C9AE14E",
+        "frintz v12.2d, v17.2d",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Frintm,
+            rd: writable_vreg(11),
+            rn: vreg(18),
+            size: VectorSize::Size32x4,
+        },
+        "4B9A214E",
+        "frintm v11.4s, v18.4s",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Frintm,
+            rd: writable_vreg(12),
+            rn: vreg(17),
+            size: VectorSize::Size64x2,
+        },
+        "2C9A614E",
+        "frintm v12.2d, v17.2d",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Frintp,
+            rd: writable_vreg(11),
+            rn: vreg(18),
+            size: VectorSize::Size32x4,
+        },
+        "4B8AA14E",
+        "frintp v11.4s, v18.4s",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Frintp,
+            rd: writable_vreg(12),
+            rn: vreg(17),
+            size: VectorSize::Size64x2,
+        },
+        "2C8AE14E",
+        "frintp v12.2d, v17.2d",
+    ));
+
+    insns.push((
         Inst::VecLanes {
             op: VecLanesOp::Uminv,
             rd: writable_vreg(2),

@@ -3577,6 +3577,22 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    ig.push(
+        Inst::new(
+            "fmin_pseudo",
+            r#"
+        Floating point pseudo-minimum, propagating NaNs.  This behaves differently from ``fmin``.
+        See https://github.com/WebAssembly/simd/pull/122 for background.
+
+        The behaviour is defined as ``fmin_pseudo(a, b) = (b < a) ? b : a``, and the behaviour
+        for zero or NaN inputs follows from the behaviour of ``<`` with such inputs.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
     let a = &Operand::new("a", Float).with_doc("The larger of ``x`` and ``y``");
 
     ig.push(
@@ -3586,6 +3602,22 @@ pub(crate) fn define(
         Floating point maximum, propagating NaNs.
 
         If either operand is NaN, this returns a NaN.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "fmax_pseudo",
+            r#"
+        Floating point pseudo-maximum, propagating NaNs.  This behaves differently from ``fmax``.
+        See https://github.com/WebAssembly/simd/pull/122 for background.
+
+        The behaviour is defined as ``fmax_pseudo(a, b) = (a < b) ? b : a``, and the behaviour
+        for zero or NaN inputs follows from the behaviour of ``<`` with such inputs.
         "#,
             &formats.binary,
         )

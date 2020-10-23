@@ -1679,6 +1679,14 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().fmin(a, b))
         }
+        Operator::F32x4PMax | Operator::F64x2PMax => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().fmax_pseudo(a, b))
+        }
+        Operator::F32x4PMin | Operator::F64x2PMin => {
+            let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().fmin_pseudo(a, b))
+        }
         Operator::F32x4Sqrt | Operator::F64x2Sqrt => {
             let a = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().sqrt(a))
@@ -1756,19 +1764,24 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(builder.ins().uwiden_high(a))
         }
 
-        Operator::F32x4Ceil
-        | Operator::F32x4Floor
-        | Operator::F32x4Trunc
-        | Operator::F32x4Nearest
-        | Operator::F32x4PMin
-        | Operator::F32x4PMax
-        | Operator::F64x2Ceil
-        | Operator::F64x2Floor
-        | Operator::F64x2Trunc
-        | Operator::F64x2PMin
-        | Operator::F64x2PMax
-        | Operator::F64x2Nearest => {
-            return Err(wasm_unsupported!("proposed SIMD operator {:?}", op));
+        Operator::F32x4Ceil | Operator::F64x2Ceil => {
+            // This is something of a misuse of `type_of`, because that produces the return type
+            // of `op`.  In this case we want the arg type, but we know it's the same as the
+            // return type.  Same for the 3 cases below.
+            let arg = pop1_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().ceil(arg));
+        }
+        Operator::F32x4Floor | Operator::F64x2Floor => {
+            let arg = pop1_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().floor(arg));
+        }
+        Operator::F32x4Trunc | Operator::F64x2Trunc => {
+            let arg = pop1_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().trunc(arg));
+        }
+        Operator::F32x4Nearest | Operator::F64x2Nearest => {
+            let arg = pop1_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().nearest(arg));
         }
 
         Operator::ReturnCall { .. } | Operator::ReturnCallIndirect { .. } => {
@@ -2528,8 +2541,14 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::F32x4Div
         | Operator::F32x4Min
         | Operator::F32x4Max
+        | Operator::F32x4PMin
+        | Operator::F32x4PMax
         | Operator::I32x4TruncSatF32x4S
-        | Operator::I32x4TruncSatF32x4U => F32X4,
+        | Operator::I32x4TruncSatF32x4U
+        | Operator::F32x4Ceil
+        | Operator::F32x4Floor
+        | Operator::F32x4Trunc
+        | Operator::F32x4Nearest => F32X4,
 
         Operator::F64x2Splat
         | Operator::F64x2ExtractLane { .. }
@@ -2548,7 +2567,13 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::F64x2Mul
         | Operator::F64x2Div
         | Operator::F64x2Min
-        | Operator::F64x2Max => F64X2,
+        | Operator::F64x2Max
+        | Operator::F64x2PMin
+        | Operator::F64x2PMax
+        | Operator::F64x2Ceil
+        | Operator::F64x2Floor
+        | Operator::F64x2Trunc
+        | Operator::F64x2Nearest => F64X2,
 
         _ => unimplemented!(
             "Currently only SIMD instructions are mapped to their return type; the \
