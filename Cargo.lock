@@ -555,7 +555,7 @@ version = "0.66.0"
 dependencies = [
  "anyhow",
  "capstone",
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "cranelift",
  "cranelift-codegen",
  "cranelift-entity",
@@ -2092,7 +2092,7 @@ name = "test-programs"
 version = "0.19.0"
 dependencies = [
  "anyhow",
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "os_pipe",
  "pretty_env_logger",
  "target-lexicon",
@@ -2324,7 +2324,7 @@ name = "wasi-common"
 version = "0.20.0"
 dependencies = [
  "anyhow",
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "cpu-time",
  "filetime",
  "getrandom",
@@ -2378,7 +2378,7 @@ dependencies = [
  "anyhow",
  "backtrace",
  "bincode",
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "lazy_static",
  "libc",
  "log",
@@ -2510,7 +2510,7 @@ name = "wasmtime-environ"
 version = "0.20.0"
 dependencies = [
  "anyhow",
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "cranelift-codegen",
  "cranelift-entity",
  "cranelift-wasm",
@@ -2560,7 +2560,7 @@ name = "wasmtime-jit"
 version = "0.20.0"
 dependencies = [
  "anyhow",
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "cranelift-codegen",
  "cranelift-entity",
  "cranelift-frontend",
@@ -2613,7 +2613,7 @@ name = "wasmtime-profiling"
 version = "0.20.0"
 dependencies = [
  "anyhow",
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "gimli",
  "ittapi-rs",
  "lazy_static",
@@ -2632,7 +2632,7 @@ version = "0.20.0"
 dependencies = [
  "backtrace",
  "cc",
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "indexmap",
  "lazy_static",
  "libc",
@@ -2851,7 +2851,7 @@ name = "yanix"
 version = "0.20.0"
 dependencies = [
  "bitflags",
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "filetime",
  "libc",
  "tracing",
