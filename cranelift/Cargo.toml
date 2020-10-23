@@ -14,7 +14,7 @@ name = "clif-util"
 path = "src/clif-util.rs"
 
 [dependencies]
-cfg-if = "0.1"
+cfg-if = "1.0"
 cranelift-codegen = { path = "codegen", version = "0.67.0" }
 cranelift-entity = { path = "entity", version = "0.67.0" }
 cranelift-interpreter = { path = "interpreter", version = "0.67.0" }

@@ -21,7 +21,7 @@ anyhow = "1.0"
 thiserror = "1.0"
 libc = "0.2"
 getrandom = { version = "0.1.14", features = ["std"] }
-cfg-if = "0.1.9"
+cfg-if = "1.0"
 filetime = "0.2.7"
 lazy_static = "1.4.0"
 wig = { path = "wig", version = "0.20.0" }
