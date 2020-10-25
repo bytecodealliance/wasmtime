@@ -33,7 +33,7 @@ jobs:
         submodules: true
     - run: |
         set -e
-        curl -L https://github.com/rust-lang-nursery/mdBook/releases/download/v0.3.1/mdbook-v0.3.1-x86_64-unknown-linux-gnu.tar.gz | tar xzf -
+        curl -L https://github.com/rust-lang-nursery/mdBook/releases/download/v0.4.4/mdbook-v0.4.4-x86_64-unknown-linux-gnu.tar.gz | tar xzf -
         echo `pwd` >> $GITHUB_PATH
     - run: (cd docs && mdbook build)
     - run: cargo build -p wasmtime
