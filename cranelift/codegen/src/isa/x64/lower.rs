@@ -2335,39 +2335,106 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let dst = get_output_reg(ctx, outputs[0]);
 
             let input_ty = ctx.input_ty(insn, 0);
-            let src_size = if input_ty == types::F32 {
-                OperandSize::Size32
+            if !input_ty.is_vector() {
+                let src_size = if input_ty == types::F32 {
+                    OperandSize::Size32
+                } else {
+                    assert_eq!(input_ty, types::F64);
+                    OperandSize::Size64
+                };
+
+                let output_ty = ty.unwrap();
+                let dst_size = if output_ty == types::I32 {
+                    OperandSize::Size32
+                } else {
+                    assert_eq!(output_ty, types::I64);
+                    OperandSize::Size64
+                };
+
+                let to_signed = op == Opcode::FcvtToSint || op == Opcode::FcvtToSintSat;
+                let is_sat = op == Opcode::FcvtToUintSat || op == Opcode::FcvtToSintSat;
+
+                let src_copy = ctx.alloc_tmp(RegClass::V128, input_ty);
+                ctx.emit(Inst::gen_move(src_copy, src, input_ty));
+
+                let tmp_xmm = ctx.alloc_tmp(RegClass::V128, input_ty);
+                let tmp_gpr = ctx.alloc_tmp(RegClass::I64, output_ty);
+
+                let srcloc = ctx.srcloc(insn);
+                if to_signed {
+                    ctx.emit(Inst::cvt_float_to_sint_seq(
+                        src_size, dst_size, is_sat, src_copy, dst, tmp_gpr, tmp_xmm, srcloc,
+                    ));
+                } else {
+                    ctx.emit(Inst::cvt_float_to_uint_seq(
+                        src_size, dst_size, is_sat, src_copy, dst, tmp_gpr, tmp_xmm, srcloc,
+                    ));
+                }
             } else {
-                assert_eq!(input_ty, types::F64);
-                OperandSize::Size64
-            };
+                if op == Opcode::FcvtToSintSat {
+                    // Sets destination to zero if float is NaN
+                    let tmp = ctx.alloc_tmp(RegClass::V128, types::I32X4);
+                    ctx.emit(Inst::xmm_unary_rm_r(
+                        SseOpcode::Movapd,
+                        RegMem::reg(src),
+                        tmp,
+                    ));
+                    ctx.emit(Inst::gen_move(dst, src, input_ty));
+                    let cond = FcmpImm::from(FloatCC::Equal);
+                    ctx.emit(Inst::xmm_rm_r_imm(
+                        SseOpcode::Cmpps,
+                        RegMem::reg(tmp.to_reg()),
+                        tmp,
+                        cond.encode(),
+                        false,
+                    ));
+                    ctx.emit(Inst::xmm_rm_r(
+                        SseOpcode::Andps,
+                        RegMem::reg(tmp.to_reg()),
+                        dst,
+                    ));
 
-            let output_ty = ty.unwrap();
-            let dst_size = if output_ty == types::I32 {
-                OperandSize::Size32
-            } else {
-                assert_eq!(output_ty, types::I64);
-                OperandSize::Size64
-            };
+                    // Sets top bit of tmp if float is positive
+                    // Setting up to set top bit on negative float values
+                    ctx.emit(Inst::xmm_rm_r(
+                        SseOpcode::Pxor,
+                        RegMem::reg(dst.to_reg()),
+                        tmp,
+                    ));
 
-            let to_signed = op == Opcode::FcvtToSint || op == Opcode::FcvtToSintSat;
-            let is_sat = op == Opcode::FcvtToUintSat || op == Opcode::FcvtToSintSat;
+                    // Convert the packed float to packed doubleword.
+                    ctx.emit(Inst::xmm_rm_r(
+                        SseOpcode::Cvttps2dq,
+                        RegMem::reg(dst.to_reg()),
+                        dst,
+                    ));
 
-            let src_copy = ctx.alloc_tmp(RegClass::V128, input_ty);
-            ctx.emit(Inst::gen_move(src_copy, src, input_ty));
+                    // Set top bit only if < 0
+                    // Saturate lane with sign (top) bit.
+                    ctx.emit(Inst::xmm_rm_r(
+                        SseOpcode::Pand,
+                        RegMem::reg(dst.to_reg()),
+                        tmp,
+                    ));
+                    ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrad, RegMemImm::imm(31), tmp));
 
-            let tmp_xmm = ctx.alloc_tmp(RegClass::V128, input_ty);
-            let tmp_gpr = ctx.alloc_tmp(RegClass::I64, output_ty);
-
-            let srcloc = ctx.srcloc(insn);
-            if to_signed {
-                ctx.emit(Inst::cvt_float_to_sint_seq(
-                    src_size, dst_size, is_sat, src_copy, dst, tmp_gpr, tmp_xmm, srcloc,
-                ));
-            } else {
-                ctx.emit(Inst::cvt_float_to_uint_seq(
-                    src_size, dst_size, is_sat, src_copy, dst, tmp_gpr, tmp_xmm, srcloc,
-                ));
+                    // On overflow 0x80000000 is returned to a lane.
+                    // Below sets positive overflow lanes to 0x7FFFFFFF
+                    // Keeps negative overflow lanes as is.
+                    ctx.emit(Inst::xmm_rm_r(
+                        SseOpcode::Pxor,
+                        RegMem::reg(tmp.to_reg()),
+                        dst,
+                    ));
+                } else if op == Opcode::FcvtToUintSat {
+                    unimplemented!("f32x4.convert_i32x4_u");
+                } else {
+                    // Since this branch is also guarded by a check for vector types
+                    // neither Opcode::FcvtToUint nor Opcode::FcvtToSint can reach here
+                    // due to vector varients not existing. The first two branches will
+                    // cover all reachable cases.
+                    unreachable!();
+                }
             }
         }
 

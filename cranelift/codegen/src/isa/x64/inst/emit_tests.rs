@@ -3300,6 +3300,12 @@ fn test_x64_emit() {
         "cvtdq2ps %xmm1, %xmm8",
     ));
 
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Cvttps2dq, RegMem::reg(xmm9), w_xmm8),
+        "F3450F5BC1",
+        "cvttps2dq %xmm9, %xmm8",
+    ));
+
     // XMM_Mov_R_M: float stores
     insns.push((
         Inst::xmm_mov_r_m(SseOpcode::Movss, xmm15, Amode::imm_reg(128, r12), None),
