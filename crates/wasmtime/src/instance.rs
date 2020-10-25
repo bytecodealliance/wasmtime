@@ -20,7 +20,7 @@ fn instantiate(
     let instance = unsafe {
         let instance = compiled_module.instantiate(
             imports,
-            &mut store.signatures_mut(),
+            &store.lookup_shared_signature(compiled_module.module()),
             config.memory_creator.as_ref().map(|a| a as _),
             store.interrupts(),
             host,
@@ -161,12 +161,8 @@ impl Instance {
             bail!("cross-`Engine` instantiation is not currently supported");
         }
 
-        let host_info = Box::new({
-            let frame_info_registration = module.register_frame_info();
-            store.register_jit_code(&module);
-            store.register_stack_maps(&module);
-            frame_info_registration
-        });
+        store.register_module(&module);
+        let host_info = Box::new(module.register_frame_info());
 
         let handle = with_imports(store, module.compiled_module(), imports, |imports| {
             instantiate(store, module.compiled_module(), imports, host_info)
@@ -295,7 +291,8 @@ fn with_imports<R>(
                 // functions registered with that type, so `func` is guaranteed
                 // to not match.
                 let ty = store
-                    .signatures_mut()
+                    .signatures()
+                    .borrow()
                     .lookup(&m.signatures[m.functions[i]].0)
                     .ok_or_else(|| anyhow!("function types incompatible"))?;
                 if !func.matches_expected(ty) {

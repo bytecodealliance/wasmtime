@@ -6,7 +6,6 @@ use crate::{FuncType, Store, Trap};
 use anyhow::Result;
 use std::any::Any;
 use std::cmp;
-use std::collections::HashMap;
 use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use wasmtime_environ::entity::PrimaryMap;
@@ -215,18 +214,16 @@ pub fn create_handle_with_function(
 
     let pointer_type = isa.pointer_type();
     let sig = ft.get_wasmtime_signature(pointer_type);
+    let wft = ft.to_wasm_func_type();
 
     let mut fn_builder_ctx = FunctionBuilderContext::new();
     let mut module = Module::new();
     let mut finished_functions = PrimaryMap::new();
-    let mut trampolines = HashMap::new();
     let mut code_memory = CodeMemory::new();
 
     // First up we manufacture a trampoline which has the ABI specified by `ft`
     // and calls into `stub_fn`...
-    let sig_id = module
-        .signatures
-        .push((ft.to_wasm_func_type(), sig.clone()));
+    let sig_id = module.signatures.push((wft.clone(), sig.clone()));
     let func_id = module.functions.push(sig_id);
     module
         .exports
@@ -244,8 +241,10 @@ pub fn create_handle_with_function(
         &sig,
         mem::size_of::<u128>(),
     )?;
-    let sig_id = store.register_signature(ft.to_wasm_func_type(), sig);
-    trampolines.insert(sig_id, trampoline);
+    store
+        .signatures()
+        .borrow_mut()
+        .register(&wft, &sig, trampoline);
 
     // Next up we wrap everything up into an `InstanceHandle` by publishing our
     // code memory (makes it executable) and ensuring all our various bits of
@@ -256,7 +255,6 @@ pub fn create_handle_with_function(
         module,
         store,
         finished_functions,
-        trampolines,
         Box::new(trampoline_state),
         &[],
     )
@@ -272,21 +270,21 @@ pub unsafe fn create_handle_with_raw_function(
 ) -> Result<StoreInstanceHandle> {
     let pointer_type = store.engine().compiler().isa().pointer_type();
     let sig = ft.get_wasmtime_signature(pointer_type);
+    let wft = ft.to_wasm_func_type();
 
     let mut module = Module::new();
     let mut finished_functions = PrimaryMap::new();
-    let mut trampolines = HashMap::new();
 
-    let sig_id = module
-        .signatures
-        .push((ft.to_wasm_func_type(), sig.clone()));
+    let sig_id = module.signatures.push((wft.clone(), sig.clone()));
     let func_id = module.functions.push(sig_id);
     module
         .exports
         .insert(String::new(), EntityIndex::Function(func_id));
     finished_functions.push(func);
-    let sig_id = store.register_signature(ft.to_wasm_func_type(), sig);
-    trampolines.insert(sig_id, trampoline);
+    store
+        .signatures()
+        .borrow_mut()
+        .register(&wft, &sig, trampoline);
 
-    create_handle(module, store, finished_functions, trampolines, state, &[])
+    create_handle(module, store, finished_functions, state, &[])
 }

@@ -242,6 +242,7 @@ mod linker;
 mod module;
 mod r#ref;
 mod runtime;
+mod sig_registry;
 mod trampoline;
 mod trap;
 mod types;

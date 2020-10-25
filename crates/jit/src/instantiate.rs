@@ -10,7 +10,6 @@ use crate::object::ObjectUnwindInfo;
 use object::File as ObjectFile;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_debug::create_gdbjit_image;
@@ -24,8 +23,8 @@ use wasmtime_environ::{
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{
     GdbJitImageRegistration, Imports, InstanceHandle, InstantiationError, RuntimeMemoryCreator,
-    SignatureRegistry, StackMapRegistry, VMExternRefActivationsTable, VMFunctionBody, VMInterrupts,
-    VMTrampoline,
+    StackMapRegistry, VMExternRefActivationsTable, VMFunctionBody, VMInterrupts,
+    VMSharedSignatureIndex, VMTrampoline,
 };
 
 /// An error condition while setting up a wasm instance, be it validation,
@@ -248,37 +247,20 @@ impl CompiledModule {
     pub unsafe fn instantiate(
         &self,
         imports: Imports<'_>,
-        signature_registry: &mut SignatureRegistry,
+        lookup_shared_signature: &dyn Fn(SignatureIndex) -> VMSharedSignatureIndex,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
         interrupts: *const VMInterrupts,
         host_state: Box<dyn Any>,
         externref_activations_table: *mut VMExternRefActivationsTable,
         stack_map_registry: *mut StackMapRegistry,
     ) -> Result<InstanceHandle, InstantiationError> {
-        // Compute indices into the shared signature table.
-        let signatures = {
-            self.module
-                .signatures
-                .values()
-                .map(|(wasm_sig, native)| {
-                    signature_registry.register(wasm_sig.clone(), native.clone())
-                })
-                .collect::<PrimaryMap<_, _>>()
-        };
-
-        let mut trampolines = HashMap::new();
-        for (i, trampoline) in self.trampolines.iter() {
-            trampolines.insert(signatures[i], trampoline.clone());
-        }
-
         InstanceHandle::new(
             self.module.clone(),
             self.code.clone(),
             &self.finished_functions.0,
-            trampolines,
             imports,
             mem_creator,
-            signatures.into_boxed_slice(),
+            lookup_shared_signature,
             host_state,
             interrupts,
             externref_activations_table,
@@ -310,6 +292,11 @@ impl CompiledModule {
     /// Returns the map of all finished JIT functions compiled for this module
     pub fn finished_functions(&self) -> &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]> {
         &self.finished_functions.0
+    }
+
+    /// Returns the per-signature trampolines for this module.
+    pub fn trampolines(&self) -> &PrimaryMap<SignatureIndex, VMTrampoline> {
+        &self.trampolines
     }
 
     /// Returns the stack map information for all functions defined in this

@@ -29,14 +29,7 @@ pub fn create_handle_with_memory(
         .exports
         .insert(String::new(), EntityIndex::Memory(memory_id));
 
-    create_handle(
-        module,
-        store,
-        PrimaryMap::new(),
-        Default::default(),
-        Box::new(()),
-        &[],
-    )
+    create_handle(module, store, PrimaryMap::new(), Box::new(()), &[])
 }
 
 struct LinearMemoryProxy {
