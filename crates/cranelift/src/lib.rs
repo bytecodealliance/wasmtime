@@ -233,18 +233,16 @@ fn get_function_address_map<'data>(
     body_len: usize,
     isa: &dyn isa::TargetIsa,
 ) -> FunctionAddressMap {
-    let mut instructions = Vec::new();
-
-    if let Some(ref mcr) = &context.mach_compile_result {
+    let instructions = if let Some(ref mcr) = &context.mach_compile_result {
         // New-style backend: we have a `MachCompileResult` that will give us `MachSrcLoc` mapping
         // tuples.
-        for &MachSrcLoc { start, end, loc } in mcr.buffer.get_srclocs_sorted() {
-            instructions.push(InstructionAddressMap {
+        collect_address_maps(mcr.buffer.get_srclocs_sorted().into_iter().map(
+            |&MachSrcLoc { start, end, loc }| InstructionAddressMap {
                 srcloc: loc,
                 code_offset: start as usize,
                 code_len: (end - start) as usize,
-            });
-        }
+            },
+        ))
     } else {
         // Old-style backend: we need to traverse the instruction/encoding info in the function.
         let func = &context.func;
@@ -252,17 +250,17 @@ fn get_function_address_map<'data>(
         blocks.sort_by_key(|block| func.offsets[*block]); // Ensure inst offsets always increase
 
         let encinfo = isa.encoding_info();
-        for block in blocks {
-            for (offset, inst, size) in func.inst_offsets(block, &encinfo) {
-                let srcloc = func.srclocs[inst];
-                instructions.push(InstructionAddressMap {
-                    srcloc,
+        collect_address_maps(
+            blocks
+                .into_iter()
+                .flat_map(|block| func.inst_offsets(block, &encinfo))
+                .map(|(offset, inst, size)| InstructionAddressMap {
+                    srcloc: func.srclocs[inst],
                     code_offset: offset as usize,
                     code_len: size as usize,
-                });
-            }
-        }
-    }
+                }),
+        )
+    };
 
     // Generate artificial srcloc for function start/end to identify boundary
     // within module. Similar to FuncTranslator::cur_srcloc(): it will wrap around
@@ -280,6 +278,30 @@ fn get_function_address_map<'data>(
         body_offset: 0,
         body_len,
     }
+}
+
+// Collects an iterator of `InstructionAddressMap` into a `Vec` for insertion
+// into a `FunctionAddressMap`. This will automatically coalesce adjacent
+// instructions which map to the same original source position.
+fn collect_address_maps(
+    iter: impl IntoIterator<Item = InstructionAddressMap>,
+) -> Vec<InstructionAddressMap> {
+    let mut iter = iter.into_iter();
+    let mut cur = match iter.next() {
+        Some(i) => i,
+        None => return Vec::new(),
+    };
+    let mut ret = Vec::new();
+    for item in iter {
+        if cur.code_offset + cur.code_len == item.code_offset && item.srcloc == cur.srcloc {
+            cur.code_len += item.code_len;
+        } else {
+            ret.push(cur);
+            cur = item;
+        }
+    }
+    ret.push(cur);
+    return ret;
 }
 
 /// A compiler that compiles a WebAssembly module with Cranelift, translating the Wasm to Cranelift IR,
