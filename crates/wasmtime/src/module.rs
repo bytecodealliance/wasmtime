@@ -2,6 +2,7 @@ use crate::frame_info::GlobalFrameInfoRegistration;
 use crate::runtime::{Config, Engine};
 use crate::types::{EntityType, ExportType, ExternType, ImportType};
 use anyhow::{bail, Context, Result};
+use bincode::Options;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use wasmparser::Validator;
@@ -293,9 +294,7 @@ impl Module {
             self.compiled.to_compilation_artifacts(),
         );
 
-        let mut buffer = Vec::new();
-        bincode::serialize_into(&mut buffer, &artifacts)?;
-
+        let buffer = bincode_options().serialize(&artifacts)?;
         Ok(buffer)
     }
 
@@ -311,9 +310,9 @@ impl Module {
     pub fn deserialize(engine: &Engine, serialized: &[u8]) -> Result<Module> {
         let expected_fingerprint = compiler_fingerprint(engine.config());
 
-        let (fingerprint, artifacts) =
-            bincode::deserialize_from::<_, (u64, CompilationArtifacts)>(serialized)
-                .context("Deserialize compilation artifacts")?;
+        let (fingerprint, artifacts) = bincode_options()
+            .deserialize::<(u64, CompilationArtifacts)>(serialized)
+            .context("Deserialize compilation artifacts")?;
         if fingerprint != expected_fingerprint {
             bail!("Incompatible compilation artifact");
         }
@@ -555,6 +554,17 @@ impl Module {
         *info = Some(ret.clone());
         return ret;
     }
+}
+
+fn bincode_options() -> impl Options {
+    // Use a variable-length integer encoding instead of fixed length. The
+    // module shown on #2318 gets compressed from ~160MB to ~110MB simply using
+    // this, presumably because there's a lot of 8-byte integers which generally
+    // have small values. Local testing shows that the deserialization
+    // performance, while higher, is in the few-percent range. For huge size
+    // savings this seems worthwhile to lose a small percentage of
+    // deserialization performance.
+    bincode::DefaultOptions::new().with_varint_encoding()
 }
 
 fn compiler_fingerprint(config: &Config) -> u64 {
