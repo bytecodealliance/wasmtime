@@ -64,7 +64,7 @@ impl GlobalFrameInfo {
         // Use our relative position from the start of the function to find the
         // machine instruction that corresponds to `pc`, which then allows us to
         // map that to a wasm original source location.
-        let rel_pos = pc - func.start;
+        let rel_pos = (pc - func.start) as u32;
         let pos = match func
             .instr_map
             .instructions
@@ -77,19 +77,8 @@ impl GlobalFrameInfo {
             // instructions cover `pc`.
             Err(0) => None,
 
-            // This would be at the `nth` slot, so check `n-1` to see if we're
-            // part of that instruction. This happens due to the minus one when
-            // this function is called form trap symbolication, where we don't
-            // always get called with a `pc` that's an exact instruction
-            // boundary.
-            Err(n) => {
-                let instr = &func.instr_map.instructions[n - 1];
-                if instr.code_offset <= rel_pos && rel_pos < instr.code_offset + instr.code_len {
-                    Some(n - 1)
-                } else {
-                    None
-                }
-            }
+            // This would be at the `nth` slot, so we're at the `n-1`th slot.
+            Err(n) => Some(n - 1),
         };
 
         // In debug mode for now assert that we found a mapping for `pc` within

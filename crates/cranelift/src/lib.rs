@@ -229,19 +229,28 @@ impl StackMapSink {
 fn get_function_address_map<'data>(
     context: &Context,
     data: &FunctionBodyData<'data>,
-    body_len: usize,
+    body_len: u32,
     isa: &dyn isa::TargetIsa,
 ) -> FunctionAddressMap {
+    // Generate artificial srcloc for function start/end to identify boundary
+    // within module.
+    let data = data.body.get_binary_reader();
+    let offset = data.original_position();
+    let len = data.bytes_remaining();
+    assert!((offset + len) <= u32::max_value() as usize);
+    let start_srcloc = ir::SourceLoc::new(offset as u32);
+    let end_srcloc = ir::SourceLoc::new((offset + len) as u32);
+
     let instructions = if let Some(ref mcr) = &context.mach_compile_result {
         // New-style backend: we have a `MachCompileResult` that will give us `MachSrcLoc` mapping
         // tuples.
-        collect_address_maps(mcr.buffer.get_srclocs_sorted().into_iter().map(
-            |&MachSrcLoc { start, end, loc }| InstructionAddressMap {
-                srcloc: loc,
-                code_offset: start as usize,
-                code_len: (end - start) as usize,
-            },
-        ))
+        collect_address_maps(
+            body_len,
+            mcr.buffer
+                .get_srclocs_sorted()
+                .into_iter()
+                .map(|&MachSrcLoc { start, end, loc }| (loc, start, (end - start))),
+        )
     } else {
         // Old-style backend: we need to traverse the instruction/encoding info in the function.
         let func = &context.func;
@@ -250,28 +259,16 @@ fn get_function_address_map<'data>(
 
         let encinfo = isa.encoding_info();
         collect_address_maps(
+            body_len,
             blocks
                 .into_iter()
                 .flat_map(|block| func.inst_offsets(block, &encinfo))
-                .map(|(offset, inst, size)| InstructionAddressMap {
-                    srcloc: func.srclocs[inst],
-                    code_offset: offset as usize,
-                    code_len: size as usize,
-                }),
+                .map(|(offset, inst, size)| (func.srclocs[inst], offset, size)),
         )
     };
 
-    // Generate artificial srcloc for function start/end to identify boundary
-    // within module. Similar to FuncTranslator::cur_srcloc(): it will wrap around
-    // if byte code is larger than 4 GB.
-    let data = data.body.get_binary_reader();
-    let offset = data.original_position();
-    let len = data.bytes_remaining();
-    let start_srcloc = ir::SourceLoc::new(offset as u32);
-    let end_srcloc = ir::SourceLoc::new((offset + len) as u32);
-
     FunctionAddressMap {
-        instructions,
+        instructions: instructions.into(),
         start_srcloc,
         end_srcloc,
         body_offset: 0,
@@ -283,23 +280,54 @@ fn get_function_address_map<'data>(
 // into a `FunctionAddressMap`. This will automatically coalesce adjacent
 // instructions which map to the same original source position.
 fn collect_address_maps(
-    iter: impl IntoIterator<Item = InstructionAddressMap>,
+    code_size: u32,
+    iter: impl IntoIterator<Item = (ir::SourceLoc, u32, u32)>,
 ) -> Vec<InstructionAddressMap> {
     let mut iter = iter.into_iter();
-    let mut cur = match iter.next() {
+    let (mut cur_loc, mut cur_offset, mut cur_len) = match iter.next() {
         Some(i) => i,
         None => return Vec::new(),
     };
     let mut ret = Vec::new();
-    for item in iter {
-        if cur.code_offset + cur.code_len == item.code_offset && item.srcloc == cur.srcloc {
-            cur.code_len += item.code_len;
-        } else {
-            ret.push(cur);
-            cur = item;
+    for (loc, offset, len) in iter {
+        // If this instruction is adjacent to the previous and has the same
+        // source location then we can "coalesce" it with the current
+        // instruction.
+        if cur_offset + cur_len == offset && loc == cur_loc {
+            cur_len += len;
+            continue;
         }
+
+        // Push an entry for the previous source item.
+        ret.push(InstructionAddressMap {
+            srcloc: cur_loc,
+            code_offset: cur_offset,
+        });
+        // And push a "dummy" entry if necessary to cover the span of ranges,
+        // if any, between the previous source offset and this one.
+        if cur_offset + cur_len != offset {
+            ret.push(InstructionAddressMap {
+                srcloc: ir::SourceLoc::default(),
+                code_offset: cur_offset + cur_len,
+            });
+        }
+        // Update our current location to get extended later or pushed on at
+        // the end.
+        cur_loc = loc;
+        cur_offset = offset;
+        cur_len = len;
     }
-    ret.push(cur);
+    ret.push(InstructionAddressMap {
+        srcloc: cur_loc,
+        code_offset: cur_offset,
+    });
+    if cur_offset + cur_len != code_size {
+        ret.push(InstructionAddressMap {
+            srcloc: ir::SourceLoc::default(),
+            code_offset: cur_offset + cur_len,
+        });
+    }
+
     return ret;
 }
 
@@ -406,7 +434,8 @@ impl Compiler for Cranelift {
             CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
         })?;
 
-        let address_transform = get_function_address_map(&context, &input, code_buf.len(), isa);
+        let address_transform =
+            get_function_address_map(&context, &input, code_buf.len() as u32, isa);
 
         let ranges = if tunables.debug_info {
             let ranges = context.build_value_labels_ranges(isa).map_err(|error| {

@@ -7,22 +7,24 @@ use serde::{Deserialize, Serialize};
 /// Single source location to generated address mapping.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct InstructionAddressMap {
-    /// Original source location.
+    /// Where in the source this instruction comes from.
     pub srcloc: ir::SourceLoc,
 
-    /// Generated instructions offset.
-    pub code_offset: usize,
-
-    /// Generated instructions length.
-    pub code_len: usize,
+    /// Offset from the start of the function's compiled code to where this
+    /// instruction is located, or the region where it starts.
+    pub code_offset: u32,
 }
 
 /// Function and its instructions addresses mappings.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct FunctionAddressMap {
-    /// Instructions maps.
-    /// The array is sorted by the InstructionAddressMap::code_offset field.
-    pub instructions: Vec<InstructionAddressMap>,
+    /// An array of data for the instructions in this function, indicating where
+    /// each instruction maps back to in the original function.
+    ///
+    /// This array is sorted least-to-greatest by the `code_offset` field.
+    /// Additionally the span of each `InstructionAddressMap` is implicitly the
+    /// gap between it and the next item in the array.
+    pub instructions: Box<[InstructionAddressMap]>,
 
     /// Function start source location (normally declaration).
     pub start_srcloc: ir::SourceLoc,
@@ -34,7 +36,7 @@ pub struct FunctionAddressMap {
     pub body_offset: usize,
 
     /// Generated function body length.
-    pub body_len: usize,
+    pub body_len: u32,
 }
 
 /// Memory definition offset in the VMContext structure.

@@ -1145,14 +1145,21 @@ mod tests {
                     InstructionAddressMap {
                         srcloc: SourceLoc::new(code_section_offset + 12),
                         code_offset: 5,
-                        code_len: 3,
+                    },
+                    InstructionAddressMap {
+                        srcloc: SourceLoc::default(),
+                        code_offset: 8,
                     },
                     InstructionAddressMap {
                         srcloc: SourceLoc::new(code_section_offset + 17),
                         code_offset: 15,
-                        code_len: 8,
                     },
-                ],
+                    InstructionAddressMap {
+                        srcloc: SourceLoc::default(),
+                        code_offset: 23,
+                    },
+                ]
+                .into(),
                 start_srcloc: SourceLoc::new(code_section_offset + 10),
                 end_srcloc: SourceLoc::new(code_section_offset + 20),
                 body_offset: 0,
