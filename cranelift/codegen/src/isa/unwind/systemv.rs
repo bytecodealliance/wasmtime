@@ -120,7 +120,7 @@ impl UnwindInfo {
         use input::UnwindCode;
         let mut builder = InstructionBuilder::new(unwind.word_size, map_reg);
 
-        for c in unwind.prologue_unwind_codes.iter().chain(
+        for (offset, c) in unwind.prologue_unwind_codes.iter().chain(
             unwind
                 .epilogues_unwind_codes
                 .iter()
@@ -129,7 +129,6 @@ impl UnwindInfo {
         ) {
             match c {
                 UnwindCode::SaveRegister {
-                    offset,
                     reg,
                     stack_offset: 0,
                 } => {
@@ -137,26 +136,26 @@ impl UnwindInfo {
                         .save_reg(*offset, *reg)
                         .map_err(CodegenError::RegisterMappingError)?;
                 }
-                UnwindCode::StackAlloc { offset, size } => {
+                UnwindCode::StackAlloc { size } => {
                     builder.adjust_sp_down_imm(*offset, *size as i64);
                 }
-                UnwindCode::StackDealloc { offset, size } => {
+                UnwindCode::StackDealloc { size } => {
                     builder.adjust_sp_up_imm(*offset, *size as i64);
                 }
-                UnwindCode::RestoreRegister { offset, reg } => {
+                UnwindCode::RestoreRegister { reg } => {
                     builder
                         .restore_reg(*offset, *reg)
                         .map_err(CodegenError::RegisterMappingError)?;
                 }
-                UnwindCode::SetFramePointer { offset, reg } => {
+                UnwindCode::SetFramePointer { reg } => {
                     builder
                         .set_cfa_reg(*offset, *reg)
                         .map_err(CodegenError::RegisterMappingError)?;
                 }
-                UnwindCode::RememberState { offset } => {
+                UnwindCode::RememberState => {
                     builder.remember_state(*offset);
                 }
-                UnwindCode::RestoreState { offset } => {
+                UnwindCode::RestoreState => {
                     builder.restore_state(*offset);
                 }
                 _ => {}

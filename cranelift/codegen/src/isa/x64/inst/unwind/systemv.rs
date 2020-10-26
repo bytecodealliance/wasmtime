@@ -103,22 +103,23 @@ pub(crate) fn create_unwind_info(
             Inst::Push64 {
                 src: RegMemImm::Reg { reg },
             } => {
-                codes.push(UnwindCode::StackAlloc {
+                codes.push((
                     offset,
-                    size: word_size.into(),
-                });
-                codes.push(UnwindCode::SaveRegister {
+                    UnwindCode::StackAlloc {
+                        size: word_size.into(),
+                    },
+                ));
+                codes.push((
                     offset,
-                    reg: *reg,
-                    stack_offset: 0,
-                });
+                    UnwindCode::SaveRegister {
+                        reg: *reg,
+                        stack_offset: 0,
+                    },
+                ));
             }
             Inst::MovRR { src, dst, .. } => {
                 if *src == regs::rsp() {
-                    codes.push(UnwindCode::SetFramePointer {
-                        offset,
-                        reg: dst.to_reg(),
-                    });
+                    codes.push((offset, UnwindCode::SetFramePointer { reg: dst.to_reg() }));
                 }
             }
             Inst::AluRmiR {
@@ -129,7 +130,7 @@ pub(crate) fn create_unwind_info(
                 ..
             } if dst.to_reg() == regs::rsp() => {
                 let imm = *simm32;
-                codes.push(UnwindCode::StackAlloc { offset, size: imm });
+                codes.push((offset, UnwindCode::StackAlloc { size: imm }));
             }
             Inst::MovRM {
                 src,
@@ -138,11 +139,13 @@ pub(crate) fn create_unwind_info(
             } if *base == regs::rsp() => {
                 // `mov reg, imm(rsp)`
                 let imm = *simm32;
-                codes.push(UnwindCode::SaveRegister {
+                codes.push((
                     offset,
-                    reg: *src,
-                    stack_offset: imm,
-                });
+                    UnwindCode::SaveRegister {
+                        reg: *src,
+                        stack_offset: imm,
+                    },
+                ));
             }
             Inst::AluRmiR {
                 is_64: true,
@@ -152,7 +155,7 @@ pub(crate) fn create_unwind_info(
                 ..
             } if dst.to_reg() == regs::rsp() => {
                 let imm = *simm32;
-                codes.push(UnwindCode::StackDealloc { offset, size: imm });
+                codes.push((offset, UnwindCode::StackDealloc { size: imm }));
             }
             _ => {}
         }
@@ -173,8 +176,8 @@ pub(crate) fn create_unwind_info(
             let start = epilogue.start as usize;
             let offset = context.insts_layout[start];
             vec![
-                UnwindCode::RememberState { offset },
-                UnwindCode::RestoreState { offset: end_offset },
+                (offset, UnwindCode::RememberState),
+                (end_offset, UnwindCode::RestoreState),
             ]
         })
         .collect();
