@@ -17,7 +17,7 @@
 //! See the main module comment in `mod.rs` for more details on the VCode-based
 //! backend pipeline.
 
-use crate::ir::{self, types, SourceLoc};
+use crate::ir::{self, types, Constant, ConstantData, SourceLoc};
 use crate::machinst::*;
 use crate::settings;
 use crate::timing;
@@ -31,7 +31,9 @@ use regalloc::{
 
 use alloc::boxed::Box;
 use alloc::{borrow::Cow, vec::Vec};
+use cranelift_entity::{entity_impl, Keys, PrimaryMap};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 use std::iter;
 use std::string::String;
@@ -110,6 +112,9 @@ pub struct VCode<I: VCodeInst> {
 
     /// Instruction end offsets
     insts_layout: RefCell<(Vec<u32>, u32)>,
+
+    /// Constants.
+    constants: VCodeConstants,
 }
 
 /// A builder for a VCode function body. This builder is designed for the
@@ -149,9 +154,10 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         abi: Box<dyn ABICallee<I = I>>,
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
+        constants: VCodeConstants,
     ) -> VCodeBuilder<I> {
         let reftype_class = I::ref_type_regclass(abi.flags());
-        let vcode = VCode::new(abi, emit_info, block_order);
+        let vcode = VCode::new(abi, emit_info, block_order, constants);
         let stack_map_info = StackmapRequestInfo {
             reftype_class,
             reftyped_vregs: vec![],
@@ -255,6 +261,11 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         self.cur_srcloc = srcloc;
     }
 
+    /// Access the constants.
+    pub fn constants(&mut self) -> &mut VCodeConstants {
+        &mut self.vcode.constants
+    }
+
     /// Build the final VCode, returning the vcode itself as well as auxiliary
     /// information, such as the stack map request information.
     pub fn build(self) -> (VCode<I>, StackmapRequestInfo) {
@@ -284,6 +295,7 @@ impl<I: VCodeInst> VCode<I> {
         abi: Box<dyn ABICallee<I = I>>,
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
+        constants: VCodeConstants,
     ) -> VCode<I> {
         VCode {
             liveins: abi.liveins(),
@@ -303,6 +315,7 @@ impl<I: VCodeInst> VCode<I> {
             safepoint_slots: vec![],
             prologue_epilogue_ranges: None,
             insts_layout: RefCell::new((vec![], 0)),
+            constants,
         }
     }
 
@@ -466,7 +479,10 @@ impl<I: VCodeInst> VCode<I> {
         let mut buffer = MachBuffer::new();
         let mut state = I::State::new(&*self.abi);
 
-        buffer.reserve_labels_for_blocks(self.num_blocks() as BlockIndex); // first N MachLabels are simply block indices.
+        // The first M MachLabels are reserved for block indices, the next N MachLabels for
+        // constants.
+        buffer.reserve_labels_for_blocks(self.num_blocks() as BlockIndex);
+        buffer.reserve_labels_for_constants(&self.constants);
 
         let mut insts_layout = vec![0; self.insts.len()];
 
@@ -528,6 +544,12 @@ impl<I: VCodeInst> VCode<I> {
                     buffer.emit_island();
                 }
             }
+        }
+
+        // Emit the constants used by the function.
+        for (constant, data) in self.constants.iter() {
+            let label = buffer.get_label_for_constant(constant);
+            buffer.defer_constant(label, data.alignment(), data.as_slice(), u32::max_value());
         }
 
         *self.insts_layout.borrow_mut() = (insts_layout, buffer.cur_offset());
@@ -733,5 +755,143 @@ impl<I: VCodeInst> PrettyPrint for VCode<I> {
         write!(&mut s, "}}}}\n").unwrap();
 
         s
+    }
+}
+
+/// This structure tracks the large constants used in VCode that will be emitted separately by the
+/// [MachBuffer].
+///
+/// First, during the lowering phase, constants are inserted using
+/// [VCodeConstants.insert]; an intermediate handle, [VCodeConstant], tracks what constants are
+/// used in this phase. Some deduplication is performed, when possible, as constant
+/// values are inserted.
+///
+/// Secondly, during the emission phase, the [MachBuffer] assigns [MachLabel]s for each of the
+/// constants so that instructions can refer to the value's memory location. The [MachBuffer]
+/// then writes the constant values to the buffer.
+#[derive(Default)]
+pub struct VCodeConstants {
+    constants: PrimaryMap<VCodeConstant, VCodeConstantData>,
+    pool_uses: HashMap<Constant, VCodeConstant>,
+    well_known_uses: HashMap<*const [u8], VCodeConstant>,
+}
+impl VCodeConstants {
+    /// Initialize the structure with the expected number of constants.
+    pub fn with_capacity(expected_num_constants: usize) -> Self {
+        Self {
+            constants: PrimaryMap::with_capacity(expected_num_constants),
+            pool_uses: HashMap::with_capacity(expected_num_constants),
+            well_known_uses: HashMap::new(),
+        }
+    }
+
+    /// Insert a constant; using this method indicates that a constant value will be used and thus
+    /// will be emitted to the `MachBuffer`. The current implementation can deduplicate constants
+    /// that are [VCodeConstantData::Pool] or [VCodeConstantData::WellKnown] but not
+    /// [VCodeConstantData::Generated].
+    pub fn insert(&mut self, data: VCodeConstantData) -> VCodeConstant {
+        match data {
+            VCodeConstantData::Generated(_) => self.constants.push(data),
+            VCodeConstantData::Pool(constant, _) => match self.pool_uses.get(&constant) {
+                None => {
+                    let vcode_constant = self.constants.push(data);
+                    self.pool_uses.insert(constant, vcode_constant);
+                    vcode_constant
+                }
+                Some(&vcode_constant) => vcode_constant,
+            },
+            VCodeConstantData::WellKnown(data_ref) => {
+                match self.well_known_uses.get(&(data_ref as *const [u8])) {
+                    None => {
+                        let vcode_constant = self.constants.push(data);
+                        self.well_known_uses
+                            .insert(data_ref as *const [u8], vcode_constant);
+                        vcode_constant
+                    }
+                    Some(&vcode_constant) => vcode_constant,
+                }
+            }
+        }
+    }
+
+    /// Retrieve a byte slice for the given [VCodeConstant], if available.
+    pub fn get(&self, constant: VCodeConstant) -> Option<&[u8]> {
+        self.constants.get(constant).map(|d| d.as_slice())
+    }
+
+    /// Return the number of constants inserted.
+    pub fn len(&self) -> usize {
+        self.constants.len()
+    }
+
+    /// Iterate over the [VCodeConstant] keys inserted in this structure.
+    pub fn keys(&self) -> Keys<VCodeConstant> {
+        self.constants.keys()
+    }
+
+    /// Iterate over the [VCodeConstant] keys and the data (as a byte slice) inserted in this
+    /// structure.
+    pub fn iter(&self) -> impl Iterator<Item = (VCodeConstant, &VCodeConstantData)> {
+        self.constants.iter()
+    }
+}
+
+/// A use of a constant by one or more VCode instructions; see [VCodeConstants].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VCodeConstant(u32);
+entity_impl!(VCodeConstant);
+
+/// Identify the different types of constant that can be inserted into [VCodeConstants]. Tracking
+/// these separately instead of as raw byte buffers allows us to avoid some duplication.
+pub enum VCodeConstantData {
+    /// A constant already present in the Cranelift IR
+    /// [ConstantPool](crate::ir::constant::ConstantPool).
+    Pool(Constant, ConstantData),
+    /// A reference to a well-known constant value that is statically encoded within the compiler.
+    WellKnown(&'static [u8]),
+    /// A constant value generated during lowering; the value may depend on the instruction context
+    /// which makes it difficult to de-duplicate--if possible, use other variants.
+    Generated(ConstantData),
+}
+impl VCodeConstantData {
+    /// Retrieve the constant data as a byte slice.
+    pub fn as_slice(&self) -> &[u8] {
+        match self {
+            VCodeConstantData::Pool(_, d) | VCodeConstantData::Generated(d) => d.as_slice(),
+            VCodeConstantData::WellKnown(d) => d,
+        }
+    }
+
+    /// Calculate the alignment of the constant data.
+    pub fn alignment(&self) -> u32 {
+        if self.as_slice().len() <= 8 {
+            8
+        } else {
+            16
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::mem::{size_of, size_of_val};
+
+    #[test]
+    fn size_of_constant_structs() {
+        assert_eq!(size_of::<Constant>(), 4);
+        assert_eq!(size_of::<VCodeConstant>(), 4);
+        assert_eq!(size_of::<ConstantData>(), 24);
+        assert_eq!(size_of::<VCodeConstantData>(), 32);
+        assert_eq!(
+            size_of::<PrimaryMap<VCodeConstant, VCodeConstantData>>(),
+            24
+        );
+        assert_eq!(size_of::<HashMap<Constant, VCodeConstant>>(), 48);
+        assert_eq!(size_of::<HashMap<*const [u8], VCodeConstant>>(), 48);
+        assert_eq!(size_of::<VCodeConstants>(), 120);
+        assert_eq!(size_of_val(&VCodeConstants::with_capacity(0)), 120);
+        // TODO This structure could use some significant memory-size optimization. The use of
+        // HashMap to deduplicate both pool and well-known constants is clearly an issue.
     }
 }

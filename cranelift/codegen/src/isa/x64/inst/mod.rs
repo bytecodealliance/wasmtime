@@ -240,8 +240,8 @@ pub enum Inst {
     },
 
     /// XMM (vector) unary op (to move a constant value into an xmm register): movups
-    XmmLoadConstSeq {
-        val: Vec<u8>,
+    XmmLoadConst {
+        src: VCodeConstant,
         dst: Writable<Reg>,
         ty: Type,
     },
@@ -553,7 +553,7 @@ impl Inst {
             | Inst::VirtualSPOffsetAdj { .. }
             | Inst::XmmCmove { .. }
             | Inst::XmmCmpRmR { .. }
-            | Inst::XmmLoadConstSeq { .. }
+            | Inst::XmmLoadConst { .. }
             | Inst::XmmMinMaxSeq { .. }
             | Inst::XmmUninitializedValue { .. } => None,
 
@@ -695,11 +695,10 @@ impl Inst {
         }
     }
 
-    pub(crate) fn xmm_load_const_seq(val: Vec<u8>, dst: Writable<Reg>, ty: Type) -> Inst {
-        debug_assert!(val.len() == 16);
+    pub(crate) fn xmm_load_const(src: VCodeConstant, dst: Writable<Reg>, ty: Type) -> Inst {
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
         debug_assert!(ty.is_vector() && ty.bits() == 128);
-        Inst::XmmLoadConstSeq { val, dst, ty }
+        Inst::XmmLoadConst { src, dst, ty }
     }
 
     /// Convenient helper for unary float operations.
@@ -1506,8 +1505,8 @@ impl PrettyPrint for Inst {
                 dst.show_rru(mb_rru),
             ),
 
-            Inst::XmmLoadConstSeq { val, dst, .. } => {
-                format!("load_const ${:?}, {}", val, dst.show_rru(mb_rru),)
+            Inst::XmmLoadConst { src, dst, .. } => {
+                format!("load_const {:?}, {}", src, dst.show_rru(mb_rru),)
             }
 
             Inst::XmmToGpr {
@@ -1937,7 +1936,7 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             }
         }
         Inst::XmmUninitializedValue { dst } => collector.add_def(*dst),
-        Inst::XmmLoadConstSeq { dst, .. } => collector.add_def(*dst),
+        Inst::XmmLoadConst { dst, .. } => collector.add_def(*dst),
         Inst::XmmMinMaxSeq { lhs, rhs_dst, .. } => {
             collector.add_use(*lhs);
             collector.add_mod(*rhs_dst);
@@ -2274,7 +2273,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         Inst::XmmUninitializedValue { ref mut dst, .. } => {
             map_def(mapper, dst);
         }
-        Inst::XmmLoadConstSeq { ref mut dst, .. } => {
+        Inst::XmmLoadConst { ref mut dst, .. } => {
             map_def(mapper, dst);
         }
         Inst::XmmMinMaxSeq {
@@ -2685,7 +2684,7 @@ impl MachInst for Inst {
             } else {
                 ret.push(Inst::imm(
                     OperandSize::from_bytes(ty.bytes()),
-                    value,
+                    value.into(),
                     to_reg,
                 ));
             }

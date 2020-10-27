@@ -1979,29 +1979,10 @@ pub(crate) fn emit(
             sink.put1(*imm);
         }
 
-        Inst::XmmLoadConstSeq { val, dst, ty } => {
-            // This sequence is *one* instruction in the vcode, and is expanded only here at
-            // emission time, because we cannot allow the regalloc to insert spills/reloads in
-            // the middle; we depend on hardcoded PC-rel addressing below. TODO Eventually this
-            // "constant inline" code should be replaced by constant pool integration.
-
-            // Load the inline constant.
-            let constant_start_label = sink.get_label();
-            let load_offset = Amode::rip_relative(constant_start_label);
+        Inst::XmmLoadConst { src, dst, ty } => {
+            let load_offset = Amode::rip_relative(sink.get_label_for_constant(*src));
             let load = Inst::load(*ty, load_offset, *dst, ExtKind::None, None);
             load.emit(sink, info, state);
-
-            // Jump over the constant.
-            let constant_end_label = sink.get_label();
-            let jump = Inst::jmp_known(constant_end_label);
-            jump.emit(sink, info, state);
-
-            // Emit the constant.
-            sink.bind_label(constant_start_label);
-            for i in val.iter() {
-                sink.put1(*i);
-            }
-            sink.bind_label(constant_end_label);
         }
 
         Inst::XmmUninitializedValue { .. } => {

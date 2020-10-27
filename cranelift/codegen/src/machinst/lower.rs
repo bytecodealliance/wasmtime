@@ -13,7 +13,7 @@ use crate::ir::{
 };
 use crate::machinst::{
     ABICallee, BlockIndex, BlockLoweringOrder, LoweredBlock, MachLabel, VCode, VCodeBuilder,
-    VCodeInst,
+    VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst,
 };
 use crate::CodegenResult;
 
@@ -162,6 +162,8 @@ pub trait LowerCtx {
     fn is_reg_needed(&self, ir_inst: Inst, reg: Reg) -> bool;
     /// Retrieve constant data given a handle.
     fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData;
+    /// Indicate that a constant should be emitted.
+    fn use_constant(&mut self, constant: VCodeConstantData) -> VCodeConstant;
     /// Retrieve the value immediate from an instruction. This will perform necessary lookups on the
     /// `DataFlowGraph` to retrieve even large immediates.
     fn get_immediate(&self, ir_inst: Inst) -> Option<DataValue>;
@@ -318,7 +320,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
     ) -> CodegenResult<Lower<'func, I>> {
-        let mut vcode = VCodeBuilder::new(abi, emit_info, block_order);
+        let constants = VCodeConstants::with_capacity(f.dfg.constants.len());
+        let mut vcode = VCodeBuilder::new(abi, emit_info, block_order, constants);
 
         let mut next_vreg: u32 = 0;
 
@@ -1008,6 +1011,10 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
 
     fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData {
         self.f.dfg.constants.get(constant_handle)
+    }
+
+    fn use_constant(&mut self, constant: VCodeConstantData) -> VCodeConstant {
+        self.vcode.constants().insert(constant)
     }
 
     fn get_immediate(&self, ir_inst: Inst) -> Option<DataValue> {
