@@ -3,7 +3,7 @@ use crate::FrameInfo;
 use backtrace::Backtrace;
 use std::fmt;
 use std::sync::Arc;
-use wasmtime_environ::ir::TrapCode;
+use wasmtime_environ::ir;
 
 /// A struct representing an aborted instruction execution, with a message
 /// indicating the cause.
@@ -23,6 +23,9 @@ enum TrapReason {
 
     /// A structured error describing a trap.
     Error(Box<dyn std::error::Error + Send + Sync>),
+
+    /// A specific code for a trap triggered while executing WASM.
+    InstructionTrap(TrapCode),
 }
 
 impl fmt::Display for TrapReason {
@@ -31,7 +34,88 @@ impl fmt::Display for TrapReason {
             TrapReason::Message(s) => write!(f, "{}", s),
             TrapReason::I32Exit(status) => write!(f, "Exited with i32 exit status {}", status),
             TrapReason::Error(e) => write!(f, "{}", e),
+            TrapReason::InstructionTrap(code) => write!(f, "wasm trap: {}", code),
         }
+    }
+}
+
+/// A trap code describing the reason for a trap.
+///
+/// All trap instructions have an explicit trap code.
+#[non_exhaustive]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub enum TrapCode {
+    /// The current stack space was exhausted.
+    StackOverflow,
+
+    /// An out-of-bounds memory access.
+    MemoryOutOfBounds,
+
+    /// A wasm atomic operation was presented with a not-naturally-aligned linear-memory address.
+    HeapMisaligned,
+
+    /// An out-of-bounds access to a table.
+    TableOutOfBounds,
+
+    /// Indirect call to a null table entry.
+    IndirectCallToNull,
+
+    /// Signature mismatch on indirect call.
+    BadSignature,
+
+    /// An integer arithmetic operation caused an overflow.
+    IntegerOverflow,
+
+    /// An integer division by zero.
+    IntegerDivisionByZero,
+
+    /// Failed float-to-int conversion.
+    BadConversionToInteger,
+
+    /// Code that was supposed to have been unreachable was reached.
+    UnreachableCodeReached,
+
+    /// Execution has potentially run too long and may be interrupted.
+    Interrupt,
+}
+
+impl TrapCode {
+    /// Panics if `code` is `ir::TrapCode::User`.
+    fn from_non_user(code: ir::TrapCode) -> Self {
+        match code {
+            ir::TrapCode::StackOverflow => TrapCode::StackOverflow,
+            ir::TrapCode::HeapOutOfBounds => TrapCode::MemoryOutOfBounds,
+            ir::TrapCode::HeapMisaligned => TrapCode::HeapMisaligned,
+            ir::TrapCode::TableOutOfBounds => TrapCode::TableOutOfBounds,
+            ir::TrapCode::IndirectCallToNull => TrapCode::IndirectCallToNull,
+            ir::TrapCode::BadSignature => TrapCode::BadSignature,
+            ir::TrapCode::IntegerOverflow => TrapCode::IntegerOverflow,
+            ir::TrapCode::IntegerDivisionByZero => TrapCode::IntegerDivisionByZero,
+            ir::TrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
+            ir::TrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
+            ir::TrapCode::Interrupt => TrapCode::Interrupt,
+            ir::TrapCode::User(_) => panic!("Called `TrapCode::from_non_user` with user code"),
+        }
+    }
+}
+
+impl fmt::Display for TrapCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use TrapCode::*;
+        let desc = match self {
+            StackOverflow => "call stack exhausted",
+            MemoryOutOfBounds => "out of bounds memory access",
+            HeapMisaligned => "misaligned memory access",
+            TableOutOfBounds => "undefined element: out of bounds table access",
+            IndirectCallToNull => "uninitialized element",
+            BadSignature => "indirect call type mismatch",
+            IntegerOverflow => "integer overflow",
+            IntegerDivisionByZero => "integer divide by zero",
+            BadConversionToInteger => "invalid conversion to integer",
+            UnreachableCodeReached => "unreachable",
+            Interrupt => "interrupt",
+        };
+        write!(f, "{}", desc)
     }
 }
 
@@ -82,9 +166,9 @@ impl Trap {
                 let mut code = info
                     .lookup_trap_info(pc)
                     .map(|info| info.trap_code)
-                    .unwrap_or(TrapCode::StackOverflow);
-                if maybe_interrupted && code == TrapCode::StackOverflow {
-                    code = TrapCode::Interrupt;
+                    .unwrap_or(ir::TrapCode::StackOverflow);
+                if maybe_interrupted && code == ir::TrapCode::StackOverflow {
+                    code = ir::TrapCode::Interrupt;
                 }
                 Trap::new_wasm(&info, Some(pc), code, backtrace)
             }
@@ -102,26 +186,11 @@ impl Trap {
     fn new_wasm(
         info: &GlobalFrameInfo,
         trap_pc: Option<usize>,
-        code: TrapCode,
+        code: ir::TrapCode,
         backtrace: Backtrace,
     ) -> Self {
-        use wasmtime_environ::ir::TrapCode::*;
-        let desc = match code {
-            StackOverflow => "call stack exhausted",
-            HeapOutOfBounds => "out of bounds memory access",
-            HeapMisaligned => "misaligned memory access",
-            TableOutOfBounds => "undefined element: out of bounds table access",
-            IndirectCallToNull => "uninitialized element",
-            BadSignature => "indirect call type mismatch",
-            IntegerOverflow => "integer overflow",
-            IntegerDivisionByZero => "integer divide by zero",
-            BadConversionToInteger => "invalid conversion to integer",
-            UnreachableCodeReached => "unreachable",
-            Interrupt => "interrupt",
-            User(_) => unreachable!(),
-        };
-        let msg = TrapReason::Message(format!("wasm trap: {}", desc));
-        Trap::new_with_trace(info, trap_pc, msg, backtrace)
+        let code = TrapCode::from_non_user(code);
+        Trap::new_with_trace(info, trap_pc, TrapReason::InstructionTrap(code), backtrace)
     }
 
     fn new_with_trace(
@@ -174,6 +243,15 @@ impl Trap {
     pub fn trace(&self) -> &[FrameInfo] {
         &self.inner.wasm_trace
     }
+
+    /// Code of a trap that happened while executing a WASM instruction.
+    /// If the trap was triggered by a host export this will be `None`.
+    pub fn trap_code(&self) -> Option<TrapCode> {
+        match self.inner.reason {
+            TrapReason::InstructionTrap(code) => Some(code),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Debug for Trap {
@@ -214,7 +292,9 @@ impl std::error::Error for Trap {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match &self.inner.reason {
             TrapReason::Error(e) => e.source(),
-            TrapReason::I32Exit(_) | TrapReason::Message(_) => None,
+            TrapReason::I32Exit(_) | TrapReason::Message(_) | TrapReason::InstructionTrap(_) => {
+                None
+            }
         }
     }
 }
