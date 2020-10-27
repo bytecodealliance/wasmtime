@@ -452,3 +452,40 @@ fn present_after_module_drop() -> Result<()> {
         assert_eq!(t.trace()[0].func_index(), 0);
     }
 }
+
+fn assert_trap_code(wat: &str, code: wasmtime::TrapCode) {
+    let store = Store::default();
+    let module = Module::new(store.engine(), wat).unwrap();
+
+    let err = match Instance::new(&store, &module, &[]) {
+        Ok(_) => unreachable!(),
+        Err(e) => e,
+    };
+    let trap = err.downcast_ref::<Trap>().unwrap();
+    assert_eq!(trap.trap_code(), Some(code));
+}
+
+#[test]
+fn heap_out_of_bounds_trap() {
+    assert_trap_code(
+        r#"
+            (module
+              (memory 0)
+              (func $start (drop (i32.load (i32.const 1000000))))
+              (start $start)
+            )
+         "#,
+        TrapCode::MemoryOutOfBounds,
+    );
+
+    assert_trap_code(
+        r#"
+            (module
+              (memory 0)
+              (func $start (drop (i32.load memory.size)))
+              (start $start)
+            )
+         "#,
+        TrapCode::MemoryOutOfBounds,
+    );
+}
