@@ -165,12 +165,11 @@ impl binemit::TrapSink for TrapSink {
     fn trap(
         &mut self,
         code_offset: binemit::CodeOffset,
-        source_loc: ir::SourceLoc,
+        _source_loc: ir::SourceLoc,
         trap_code: ir::TrapCode,
     ) {
         self.traps.push(TrapInformation {
             code_offset,
-            source_loc,
             trap_code,
         });
     }

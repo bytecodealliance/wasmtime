@@ -61,8 +61,6 @@ pub enum RelocationTarget {
 pub struct TrapInformation {
     /// The offset of the trapping instruction in native code. It is relative to the beginning of the function.
     pub code_offset: binemit::CodeOffset,
-    /// Location of trapping instruction in WebAssembly binary module.
-    pub source_loc: ir::SourceLoc,
     /// Code of the trap.
     pub trap_code: ir::TrapCode,
 }
