@@ -1950,11 +1950,13 @@ impl MachInstEmit for Inst {
                         (0b001_01110_00_1 | enc_size << 1, 0b100000)
                     }
                     VecALUOp::Zip1 => (0b01001110_00_0 | enc_size << 1, 0b001110),
+                    VecALUOp::Smull => (0b000_01110_00_1 | enc_size << 1, 0b110000),
+                    VecALUOp::Smull2 => (0b010_01110_00_1 | enc_size << 1, 0b110000),
                 };
-                let top11 = if is_float {
-                    top11 | (q << 9) | enc_float_size << 1
-                } else {
-                    top11 | (q << 9)
+                let top11 = match alu_op {
+                    VecALUOp::Smull | VecALUOp::Smull2 => top11,
+                    _ if is_float => top11 | (q << 9) | enc_float_size << 1,
+                    _ => top11 | (q << 9),
                 };
                 sink.put4(enc_vec_rrr(top11, rm, bit15_10, rn, rd));
             }

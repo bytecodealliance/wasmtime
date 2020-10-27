@@ -2375,6 +2375,47 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
         }
 
+        Opcode::WideningPairwiseDotProductS => {
+            let r_y = get_output_reg(ctx, outputs[0]);
+            let r_a = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let r_b = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+            let ty = ty.unwrap();
+            if ty == I32X4 {
+                let tmp = ctx.alloc_tmp(RegClass::V128, I8X16);
+                // The args have type I16X8.
+                // "y = i32x4.dot_i16x8_s(a, b)"
+                // => smull  tmp, a, b
+                //    smull2 y,   a, b
+                //    addp   y,   tmp, y
+                ctx.emit(Inst::VecRRR {
+                    alu_op: VecALUOp::Smull,
+                    rd: tmp,
+                    rn: r_a,
+                    rm: r_b,
+                    size: VectorSize::Size16x8,
+                });
+                ctx.emit(Inst::VecRRR {
+                    alu_op: VecALUOp::Smull2,
+                    rd: r_y,
+                    rn: r_a,
+                    rm: r_b,
+                    size: VectorSize::Size16x8,
+                });
+                ctx.emit(Inst::VecRRR {
+                    alu_op: VecALUOp::Addp,
+                    rd: r_y,
+                    rn: tmp.to_reg(),
+                    rm: r_y.to_reg(),
+                    size: VectorSize::Size32x4,
+                });
+            } else {
+                return Err(CodegenError::Unsupported(format!(
+                    "Opcode::WideningPairwiseDotProductS: unsupported laneage: {:?}",
+                    ty
+                )));
+            }
+        }
+
         Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv | Opcode::Fmin | Opcode::Fmax => {
             let ty = ty.unwrap();
             let bits = ty_bits(ty);

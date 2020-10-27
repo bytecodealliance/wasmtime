@@ -1782,8 +1782,17 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(builder.ins().nearest(arg));
         }
 
+        Operator::I32x4DotI16x8S => {
+            let (a, b) = pop2_with_bitcast(state, I16X8, builder);
+            state.push1(builder.ins().widening_pairwise_dot_product_s(a, b));
+        }
+
         Operator::ReturnCall { .. } | Operator::ReturnCallIndirect { .. } => {
             return Err(wasm_unsupported!("proposed tail-call operator {:?}", op));
+        }
+
+        Operator::V128Load32Zero { .. } | Operator::V128Load64Zero { .. } => {
+            return Err(wasm_unsupported!("proposed SIMD operator {:?}", op));
         }
     };
     Ok(())

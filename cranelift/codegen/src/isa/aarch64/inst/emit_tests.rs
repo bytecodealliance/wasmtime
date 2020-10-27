@@ -3244,6 +3244,78 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Smull,
+            rd: writable_vreg(16),
+            rn: vreg(12),
+            rm: vreg(1),
+            size: VectorSize::Size8x16,
+        },
+        "90C1210E",
+        "smull v16.8h, v12.8b, v1.8b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Smull,
+            rd: writable_vreg(2),
+            rn: vreg(13),
+            rm: vreg(6),
+            size: VectorSize::Size16x8,
+        },
+        "A2C1660E",
+        "smull v2.4s, v13.4h, v6.4h",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Smull,
+            rd: writable_vreg(8),
+            rn: vreg(12),
+            rm: vreg(14),
+            size: VectorSize::Size32x4,
+        },
+        "88C1AE0E",
+        "smull v8.2d, v12.2s, v14.2s",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Smull2,
+            rd: writable_vreg(16),
+            rn: vreg(12),
+            rm: vreg(1),
+            size: VectorSize::Size8x16,
+        },
+        "90C1214E",
+        "smull2 v16.8h, v12.16b, v1.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Smull2,
+            rd: writable_vreg(2),
+            rn: vreg(13),
+            rm: vreg(6),
+            size: VectorSize::Size16x8,
+        },
+        "A2C1664E",
+        "smull2 v2.4s, v13.8h, v6.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Smull2,
+            rd: writable_vreg(8),
+            rn: vreg(12),
+            rm: vreg(14),
+            size: VectorSize::Size32x4,
+        },
+        "88C1AE4E",
+        "smull2 v8.2d, v12.4s, v14.4s",
+    ));
+
+    insns.push((
         Inst::VecMisc {
             op: VecMisc2::Not,
             rd: writable_vreg(20),
