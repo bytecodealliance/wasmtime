@@ -255,7 +255,7 @@ pub use crate::linker::*;
 pub use crate::module::Module;
 pub use crate::r#ref::ExternRef;
 pub use crate::runtime::*;
-pub use crate::trap::Trap;
+pub use crate::trap::*;
 pub use crate::types::*;
 pub use crate::values::*;
 

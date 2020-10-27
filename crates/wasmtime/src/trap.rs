@@ -46,22 +46,15 @@ impl fmt::Display for TrapReason {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum TrapCode {
     /// The current stack space was exhausted.
-    ///
-    /// On some platforms, a stack overflow may also be indicated by a segmentation fault from the
-    /// stack guard page.
     StackOverflow,
 
-    /// A `heap_addr` instruction detected an out-of-bounds error.
-    ///
-    /// Note that not all out-of-bounds heap accesses are reported this way;
-    /// some are detected by a segmentation fault on the heap unmapped or
-    /// offset-guard pages.
-    HeapOutOfBounds,
+    /// An out-of-bounds memory access.
+    MemoryOutOfBounds,
 
     /// A wasm atomic operation was presented with a not-naturally-aligned linear-memory address.
     HeapMisaligned,
 
-    /// A `table_addr` instruction detected an out-of-bounds error.
+    /// An out-of-bounds access to a table.
     TableOutOfBounds,
 
     /// Indirect call to a null table entry.
@@ -83,7 +76,6 @@ pub enum TrapCode {
     UnreachableCodeReached,
 
     /// Execution has potentially run too long and may be interrupted.
-    /// This trap is resumable.
     Interrupt,
 }
 
@@ -92,7 +84,7 @@ impl TrapCode {
     fn from_non_user(code: ir::TrapCode) -> Self {
         match code {
             ir::TrapCode::StackOverflow => TrapCode::StackOverflow,
-            ir::TrapCode::HeapOutOfBounds => TrapCode::HeapOutOfBounds,
+            ir::TrapCode::HeapOutOfBounds => TrapCode::MemoryOutOfBounds,
             ir::TrapCode::HeapMisaligned => TrapCode::HeapMisaligned,
             ir::TrapCode::TableOutOfBounds => TrapCode::TableOutOfBounds,
             ir::TrapCode::IndirectCallToNull => TrapCode::IndirectCallToNull,
@@ -112,7 +104,7 @@ impl fmt::Display for TrapCode {
         use TrapCode::*;
         let desc = match self {
             StackOverflow => "call stack exhausted",
-            HeapOutOfBounds => "out of bounds memory access",
+            MemoryOutOfBounds => "out of bounds memory access",
             HeapMisaligned => "misaligned memory access",
             TableOutOfBounds => "undefined element: out of bounds table access",
             IndirectCallToNull => "uninitialized element",
@@ -253,6 +245,7 @@ impl Trap {
     }
 
     /// Code of a trap that happened while executing a WASM instruction.
+    /// If the trap was triggered by a host export this will be `None`.
     pub fn trap_code(&self) -> Option<TrapCode> {
         match self.inner.reason {
             TrapReason::InstructionTrap(code) => Some(code),
@@ -323,4 +316,45 @@ impl From<Box<dyn std::error::Error + Send + Sync>> for Trap {
             Trap::new_with_trace(&info, None, reason, Backtrace::new_unresolved())
         }
     }
+}
+
+#[test]
+fn heap_out_of_bounds_trap() {
+    let store = crate::Store::default();
+    let module = crate::Module::new(
+        store.engine(),
+        r#"
+            (module
+              (memory 0)
+              (func $start (drop (i32.load (i32.const 1000000))))
+              (start $start)
+            )
+         "#,
+    )
+    .unwrap();
+
+    let err = match crate::Instance::new(&store, &module, &[]) {
+        Ok(_) => unreachable!(),
+        Err(e) => e,
+    };
+    let trap = err.downcast_ref::<Trap>().unwrap();
+    assert_eq!(trap.trap_code(), Some(TrapCode::MemoryOutOfBounds));
+
+    let module = crate::Module::new(
+        store.engine(),
+        r#"
+            (module
+              (memory 0)
+              (func $start (drop (i32.load memory.size)))
+              (start $start)
+            )
+         "#,
+    )
+    .unwrap();
+    let err = match crate::Instance::new(&store, &module, &[]) {
+        Ok(_) => unreachable!(),
+        Err(e) => e,
+    };
+    let trap = err.downcast_ref::<Trap>().unwrap();
+    assert_eq!(trap.trap_code(), Some(TrapCode::MemoryOutOfBounds));
 }

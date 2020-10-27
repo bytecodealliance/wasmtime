@@ -12,9 +12,6 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum TrapCode {
     /// The current stack space was exhausted.
-    ///
-    /// On some platforms, a stack overflow may also be indicated by a segmentation fault from the
-    /// stack guard page.
     StackOverflow,
 
     /// A `heap_addr` instruction detected an out-of-bounds error.
