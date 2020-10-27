@@ -118,9 +118,6 @@ pub(crate) fn create_unwind_info(
         fn map(&self, reg: RegUnit) -> Result<u16, RegisterMappingError> {
             Ok(map_reg(self.0, reg)?.0)
         }
-        fn rsp(&self) -> u16 {
-            X86_64::RSP.0
-        }
     }
     let map = RegisterMapper(isa);
 
@@ -165,7 +162,7 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(1234), length: 16, lsda: None, instructions: [(2, CfaOffset(16)), (2, Offset(Register(6), -16)), (5, CfaRegister(Register(6))), (15, Cfa(Register(7), 8)), (15, SameValue(Register(6)))] }");
+        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(1234), length: 16, lsda: None, instructions: [(2, CfaOffset(16)), (2, Offset(Register(6), -16)), (5, CfaRegister(Register(6))), (15, SameValue(Register(6))), (15, CfaRegister(Register(7)))] }");
     }
 
     fn create_function(call_conv: CallConv, stack_slot: Option<StackSlotData>) -> Function {
@@ -205,7 +202,7 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(4321), length: 16, lsda: None, instructions: [(2, CfaOffset(16)), (2, Offset(Register(6), -16)), (5, CfaRegister(Register(6))), (12, RememberState), (12, Cfa(Register(7), 8)), (12, SameValue(Register(6))), (13, RestoreState), (15, Cfa(Register(7), 8)), (15, SameValue(Register(6)))] }");
+        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(4321), length: 16, lsda: None, instructions: [(2, CfaOffset(16)), (2, Offset(Register(6), -16)), (5, CfaRegister(Register(6))), (12, RememberState), (12, SameValue(Register(6))), (12, CfaRegister(Register(7))), (13, RestoreState), (15, SameValue(Register(6))), (15, CfaRegister(Register(7)))] }");
     }
 
     fn create_multi_return_function(call_conv: CallConv) -> Function {

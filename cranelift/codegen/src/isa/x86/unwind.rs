@@ -210,6 +210,16 @@ pub(crate) fn create_unwind_info(
                                     size: word_size.into(),
                                 },
                             ));
+
+                            if Some(reg) == frame_register {
+                                unwind_codes.push((
+                                    offset,
+                                    UnwindCode::SetFramePointer {
+                                        reg: RU::rsp as RegUnit,
+                                    },
+                                ));
+                                // Keep frame_register assigned for next epilogue.
+                            }
                         }
                         epilogue_pop_offsets.clear();
 
@@ -297,7 +307,8 @@ mod tests {
                             reg: RU::rbp.into()
                         }
                     ),
-                    (15, UnwindCode::StackDealloc { size: 8 })
+                    (15, UnwindCode::StackDealloc { size: 8 }),
+                    (15, UnwindCode::SetFramePointer { reg: 20 })
                 ]],
                 function_size: 16,
                 word_size: 8,
@@ -352,7 +363,8 @@ mod tests {
                             reg: RU::rbp.into()
                         }
                     ),
-                    (36, UnwindCode::StackDealloc { size: 8 })
+                    (36, UnwindCode::StackDealloc { size: 8 }),
+                    (36, UnwindCode::SetFramePointer { reg: 20 })
                 ]],
                 function_size: 37,
                 word_size: 8,
@@ -407,7 +419,8 @@ mod tests {
                             reg: RU::rbp.into()
                         }
                     ),
-                    (36, UnwindCode::StackDealloc { size: 8 })
+                    (36, UnwindCode::StackDealloc { size: 8 }),
+                    (36, UnwindCode::SetFramePointer { reg: 20 })
                 ]],
                 function_size: 37,
                 word_size: 8,
@@ -476,6 +489,7 @@ mod tests {
                             }
                         ),
                         (12, UnwindCode::StackDealloc { size: 8 }),
+                        (12, UnwindCode::SetFramePointer { reg: 20 }),
                         (13, UnwindCode::RestoreState)
                     ],
                     vec![
@@ -485,7 +499,8 @@ mod tests {
                                 reg: RU::rbp.into()
                             }
                         ),
-                        (15, UnwindCode::StackDealloc { size: 8 })
+                        (15, UnwindCode::StackDealloc { size: 8 }),
+                        (15, UnwindCode::SetFramePointer { reg: 20 })
                     ]
                 ],
                 function_size: 16,

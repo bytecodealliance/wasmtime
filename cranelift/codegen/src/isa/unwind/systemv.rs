@@ -98,8 +98,6 @@ impl Into<gimli::write::CallFrameInstruction> for CallFrameInstruction {
 pub(crate) trait RegisterMapper<Reg> {
     /// Maps Reg.
     fn map(&self, reg: Reg) -> Result<Register, RegisterMappingError>;
-    /// Gets RSP in gimli's index space.
-    fn rsp(&self) -> Register;
 }
 
 /// Represents unwind information for a single System V ABI function.
@@ -270,14 +268,6 @@ impl<'a, Reg: PartialEq + Copy> InstructionBuilder<'a, Reg> {
     }
 
     fn restore_reg(&mut self, offset: u32, reg: Reg) -> Result<(), RegisterMappingError> {
-        // Update the CFA if this is the restore of the frame pointer register.
-        if Some(reg) == self.frame_register {
-            self.frame_register = None;
-            self.instructions.push((
-                offset,
-                CallFrameInstruction::Cfa(self.map_reg.rsp(), self.sp_offset),
-            ));
-        }
         // Pops in the epilogue are register restores, so record a "same value" for the register
         self.instructions.push((
             offset,

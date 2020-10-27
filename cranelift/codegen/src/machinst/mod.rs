@@ -99,7 +99,7 @@
 use crate::binemit::{CodeInfo, CodeOffset, StackMap};
 use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, Type};
-use crate::isa::unwind;
+use crate::isa::unwind::input as unwind_input;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
 
@@ -314,7 +314,7 @@ pub struct MachCompileResult {
     /// Disassembly, if requested.
     pub disasm: Option<String>,
     /// Unwind info.
-    pub unwind_info: Option<unwind::UnwindInfo>,
+    pub unwind_info: Option<unwind_input::UnwindInfo<Reg>>,
 }
 
 impl MachCompileResult {
@@ -360,6 +360,17 @@ pub trait MachBackend {
     /// Condition that will be true when an IsubIfcout overflows.
     fn unsigned_sub_overflow_condition(&self) -> IntCC;
 
+    /// Produces unwind info based on backend results.
+    #[cfg(feature = "unwind")]
+    fn emit_unwind_info(
+        &self,
+        _result: &MachCompileResult,
+        _kind: UnwindInfoKind,
+    ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
+        // By default, an backend cannot produce unwind info.
+        Ok(None)
+    }
+
     /// Machine-specific condcode info needed by TargetIsa.
     /// Creates a new System V Common Information Entry for the ISA.
     #[cfg(feature = "unwind")]
@@ -403,6 +414,5 @@ pub trait UnwindInfoGenerator<I: MachInstEmit> {
     /// emitted instructions.
     fn create_unwind_info(
         context: UnwindInfoContext<I>,
-        kind: UnwindInfoKind,
-    ) -> CodegenResult<Option<unwind::UnwindInfo>>;
+    ) -> CodegenResult<Option<unwind_input::UnwindInfo<Reg>>>;
 }
