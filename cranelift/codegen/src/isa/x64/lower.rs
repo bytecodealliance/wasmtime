@@ -3345,17 +3345,21 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Vconst => {
-            let val = if let &InstructionData::UnaryConst {
+            let used_constant = if let &InstructionData::UnaryConst {
                 constant_handle, ..
             } = ctx.data(insn)
             {
-                ctx.get_constant_data(constant_handle).clone().into_vec()
+                ctx.use_constant(VCodeConstantData::Pool(
+                    constant_handle,
+                    ctx.get_constant_data(constant_handle).clone(),
+                ))
             } else {
                 unreachable!("vconst should always have unary_const format")
             };
+            // TODO use Inst::gen_constant() instead.
             let dst = get_output_reg(ctx, outputs[0]);
             let ty = ty.unwrap();
-            ctx.emit(Inst::xmm_load_const_seq(val, dst, ty));
+            ctx.emit(Inst::xmm_load_const(used_constant, dst, ty));
         }
 
         Opcode::RawBitcast => {
@@ -3396,8 +3400,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     .map(|&b| if b > 15 { b.wrapping_sub(16) } else { b })
                     .map(zero_unknown_lane_index)
                     .collect();
+                let constant = ctx.use_constant(VCodeConstantData::Generated(constructed_mask));
                 let tmp = ctx.alloc_tmp(RegClass::V128, types::I8X16);
-                ctx.emit(Inst::xmm_load_const_seq(constructed_mask, tmp, ty));
+                ctx.emit(Inst::xmm_load_const(constant, tmp, ty));
                 // After loading the constructed mask in a temporary register, we use this to
                 // shuffle the `dst` register (remember that, in this case, it is the same as
                 // `src` so we disregard this register).
@@ -3416,8 +3421,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let tmp0 = ctx.alloc_tmp(RegClass::V128, lhs_ty);
                 ctx.emit(Inst::gen_move(tmp0, lhs, lhs_ty));
                 let constructed_mask = mask.iter().cloned().map(zero_unknown_lane_index).collect();
+                let constant = ctx.use_constant(VCodeConstantData::Generated(constructed_mask));
                 let tmp1 = ctx.alloc_tmp(RegClass::V128, types::I8X16);
-                ctx.emit(Inst::xmm_load_const_seq(constructed_mask, tmp1, ty));
+                ctx.emit(Inst::xmm_load_const(constant, tmp1, ty));
                 ctx.emit(Inst::xmm_rm_r(
                     SseOpcode::Pshufb,
                     RegMem::from(tmp1),
@@ -3431,8 +3437,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     .map(|b| b.wrapping_sub(16))
                     .map(zero_unknown_lane_index)
                     .collect();
+                let constant = ctx.use_constant(VCodeConstantData::Generated(constructed_mask));
                 let tmp2 = ctx.alloc_tmp(RegClass::V128, types::I8X16);
-                ctx.emit(Inst::xmm_load_const_seq(constructed_mask, tmp2, ty));
+                ctx.emit(Inst::xmm_load_const(constant, tmp2, ty));
                 ctx.emit(Inst::xmm_rm_r(
                     SseOpcode::Pshufb,
                     RegMem::from(tmp2),
@@ -3469,11 +3476,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             // Create a mask for zeroing out-of-bounds lanes of the swizzle mask.
             let zero_mask = ctx.alloc_tmp(RegClass::V128, types::I8X16);
-            let zero_mask_value = vec![
+            static ZERO_MASK_VALUE: [u8; 16] = [
                 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70,
                 0x70, 0x70,
             ];
-            ctx.emit(Inst::xmm_load_const_seq(zero_mask_value, zero_mask, ty));
+            let constant = ctx.use_constant(VCodeConstantData::WellKnown(&ZERO_MASK_VALUE));
+            ctx.emit(Inst::xmm_load_const(constant, zero_mask, ty));
 
             // Use the `zero_mask` on a writable `swizzle_mask`.
             let swizzle_mask = Writable::from_reg(swizzle_mask);

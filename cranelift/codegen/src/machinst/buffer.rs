@@ -142,8 +142,9 @@
 
 use crate::binemit::{Addend, CodeOffset, CodeSink, Reloc, StackMap};
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode};
-use crate::machinst::{BlockIndex, MachInstLabelUse, VCodeInst};
+use crate::machinst::{BlockIndex, MachInstLabelUse, VCodeConstant, VCodeConstants, VCodeInst};
 use crate::timing;
+use cranelift_entity::{entity_impl, SecondaryMap};
 
 use log::trace;
 use smallvec::SmallVec;
@@ -218,6 +219,8 @@ pub struct MachBuffer<I: VCodeInst> {
     /// when the offset has grown past this (`labels_at_tail_off`) point.
     /// Always <= `cur_offset()`.
     labels_at_tail_off: CodeOffset,
+    /// Map used constants to their [MachLabel].
+    constant_labels: SecondaryMap<VCodeConstant, MachLabel>,
 }
 
 /// A `MachBuffer` once emission is completed: holds generated code and records,
@@ -248,6 +251,7 @@ static UNKNOWN_LABEL: MachLabel = MachLabel(0xffff_ffff);
 /// appropriately when the label's location is eventually known.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MachLabel(u32);
+entity_impl!(MachLabel);
 
 impl MachLabel {
     /// Get a label for a block. (The first N MachLabels are always reseved for
@@ -264,6 +268,12 @@ impl MachLabel {
     /// Creates a string representing this label, for convenience.
     pub fn to_string(&self) -> String {
         format!("label{}", self.0)
+    }
+}
+
+impl Default for MachLabel {
+    fn default() -> Self {
+        UNKNOWN_LABEL
     }
 }
 
@@ -299,6 +309,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             latest_branches: SmallVec::new(),
             labels_at_tail: SmallVec::new(),
             labels_at_tail_off: 0,
+            constant_labels: SecondaryMap::new(),
         }
     }
 
@@ -466,6 +477,24 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.label_aliases.resize(blocks as usize, UNKNOWN_LABEL);
 
         // Post-invariant: as for `get_label()`.
+    }
+
+    /// Reserve the next N MachLabels for constants.
+    pub fn reserve_labels_for_constants(&mut self, constants: &VCodeConstants) {
+        trace!(
+            "MachBuffer: next {} labels are for constants",
+            constants.len()
+        );
+        for c in constants.keys() {
+            self.constant_labels[c] = self.get_label();
+        }
+
+        // Post-invariant: as for `get_label()`.
+    }
+
+    /// Retrieve the reserved label for a constant.
+    pub fn get_label_for_constant(&self, constant: VCodeConstant) -> MachLabel {
+        self.constant_labels[constant]
     }
 
     /// Bind a label to the current offset. A label can only be bound once.
@@ -998,7 +1027,13 @@ impl<I: VCodeInst> MachBuffer<I> {
         data: &[u8],
         max_distance: CodeOffset,
     ) {
-        let deadline = self.cur_offset() + max_distance;
+        trace!(
+            "defer_constant: eventually emit {} bytes aligned to {} at label {:?}",
+            data.len(),
+            align,
+            label
+        );
+        let deadline = self.cur_offset().saturating_add(max_distance);
         self.island_worst_case_size += data.len() as CodeOffset;
         self.island_worst_case_size &= !(I::LabelUse::ALIGN - 1);
         self.pending_constants.push(MachLabelConstant {
@@ -1136,20 +1171,17 @@ impl<I: VCodeInst> MachBuffer<I> {
     pub fn finish(mut self) -> MachBufferFinalized {
         let _tt = timing::vcode_emit_finish();
 
-        // Ensure that all labels are defined. This is a full (release-mode)
-        // assert because we must avoid looping indefinitely below; an
-        // unresolved label will prevent the fixup_records vec from emptying.
-        assert!(self
-            .label_offsets
-            .iter()
-            .all(|&off| off != UNKNOWN_LABEL_OFFSET));
-
         while !self.pending_constants.is_empty() || !self.fixup_records.is_empty() {
             // `emit_island()` will emit any pending veneers and constants, and
             // as a side-effect, will also take care of any fixups with resolved
             // labels eagerly.
             self.emit_island();
         }
+
+        // Ensure that all labels have been fixed up after the last island is emitted. This is a
+        // full (release-mode) assert because an unresolved label means the emitted code is
+        // incorrect.
+        assert!(self.fixup_records.is_empty());
 
         MachBufferFinalized {
             data: self.data,
