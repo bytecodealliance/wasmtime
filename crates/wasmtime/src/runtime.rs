@@ -52,15 +52,6 @@ impl Config {
     /// Creates a new configuration object with the default configuration
     /// specified.
     pub fn new() -> Config {
-        let mut tunables = Tunables::default();
-        if cfg!(windows) {
-            // For now, use a smaller footprint on Windows so that we don't
-            // don't outstrip the paging file.
-            tunables.static_memory_bound = cmp::min(tunables.static_memory_bound, 0x100);
-            tunables.static_memory_offset_guard_size =
-                cmp::min(tunables.static_memory_offset_guard_size, 0x10000);
-        }
-
         let mut flags = settings::builder();
 
         // There are two possible traps for division, and this way
@@ -85,7 +76,7 @@ impl Config {
             .expect("should be valid flag");
 
         Config {
-            tunables,
+            tunables: Tunables::default(),
             flags,
             isa_flags: native::builder(),
             strategy: CompilationStrategy::Auto,
