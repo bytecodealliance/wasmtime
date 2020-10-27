@@ -291,6 +291,10 @@ pub enum VecALUOp {
     Umlal,
     /// Zip vectors (primary) [meaning, high halves]
     Zip1,
+    /// Signed multiply long (low halves)
+    Smull,
+    /// Signed multiply long (high halves)
+    Smull2,
 }
 
 /// A Vector miscellaneous operation with two registers.
@@ -3546,15 +3550,21 @@ impl Inst {
                     VecALUOp::Addp => ("addp", size),
                     VecALUOp::Umlal => ("umlal", size),
                     VecALUOp::Zip1 => ("zip1", size),
+                    VecALUOp::Smull => ("smull", size),
+                    VecALUOp::Smull2 => ("smull2", size),
                 };
-                let rd_size = if alu_op == VecALUOp::Umlal {
-                    size.widen()
-                } else {
-                    size
+                let rd_size = match alu_op {
+                    VecALUOp::Umlal | VecALUOp::Smull | VecALUOp::Smull2 => size.widen(),
+                    _ => size
                 };
+                let rn_size = match alu_op {
+                    VecALUOp::Smull => size.halve(),
+                    _ => size
+                };
+                let rm_size = rn_size;
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, rd_size);
-                let rn = show_vreg_vector(rn, mb_rru, size);
-                let rm = show_vreg_vector(rm, mb_rru, size);
+                let rn = show_vreg_vector(rn, mb_rru, rn_size);
+                let rm = show_vreg_vector(rm, mb_rru, rm_size);
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
             &Inst::VecMisc { op, rd, rn, size } => {
