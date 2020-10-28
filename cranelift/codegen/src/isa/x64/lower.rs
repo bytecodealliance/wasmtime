@@ -2232,7 +2232,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     }
                 };
                 ctx.emit(Inst::gen_move(dst, src, ty));
-                ctx.emit(Inst::xmm_rm_r(opcode, RegMem::from(dst), dst));
+                ctx.emit(Inst::xmm_rm_r(opcode, RegMem::from(dst), dst, None));
             }
         }
 
@@ -2307,18 +2307,34 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrld, RegMemImm::imm(16), tmp));
 
                 // Get the high 16 bits
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Psubd, RegMem::from(tmp), dst));
+                ctx.emit(Inst::xmm_rm_r(
+                    SseOpcode::Psubd,
+                    RegMem::from(tmp),
+                    dst,
+                    None,
+                ));
 
                 // Convert the low 16 bits
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Cvtdq2ps, RegMem::from(tmp), tmp));
+                ctx.emit(Inst::xmm_rm_r(
+                    SseOpcode::Cvtdq2ps,
+                    RegMem::from(tmp),
+                    tmp,
+                    None,
+                ));
 
                 // Shift the high bits by 1, convert, and double to get the correct value.
                 ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrld, RegMemImm::imm(1), dst));
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Cvtdq2ps, RegMem::from(dst), dst));
+                ctx.emit(Inst::xmm_rm_r(
+                    SseOpcode::Cvtdq2ps,
+                    RegMem::from(dst),
+                    dst,
+                    None,
+                ));
                 ctx.emit(Inst::xmm_rm_r(
                     SseOpcode::Addps,
                     RegMem::reg(dst.to_reg()),
                     dst,
+                    None,
                 ));
 
                 // Add together the two converted values.
@@ -2326,6 +2342,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     SseOpcode::Addps,
                     RegMem::reg(tmp.to_reg()),
                     dst,
+                    None,
                 ));
             }
         }
@@ -2387,11 +2404,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         tmp,
                         cond.encode(),
                         false,
+                        None,
                     ));
                     ctx.emit(Inst::xmm_rm_r(
                         SseOpcode::Andps,
                         RegMem::reg(tmp.to_reg()),
                         dst,
+                        None,
                     ));
 
                     // Sets top bit of tmp if float is positive
@@ -2400,6 +2419,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         SseOpcode::Pxor,
                         RegMem::reg(dst.to_reg()),
                         tmp,
+                        None,
                     ));
 
                     // Convert the packed float to packed doubleword.
@@ -2407,6 +2427,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         SseOpcode::Cvttps2dq,
                         RegMem::reg(dst.to_reg()),
                         dst,
+                        None,
                     ));
 
                     // Set top bit only if < 0
@@ -2415,6 +2436,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         SseOpcode::Pand,
                         RegMem::reg(dst.to_reg()),
                         tmp,
+                        None,
                     ));
                     ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrad, RegMemImm::imm(31), tmp));
 
@@ -2425,6 +2447,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         SseOpcode::Pxor,
                         RegMem::reg(tmp.to_reg()),
                         dst,
+                        None,
                     ));
                 } else if op == Opcode::FcvtToUintSat {
                     unimplemented!("f32x4.convert_i32x4_u");
