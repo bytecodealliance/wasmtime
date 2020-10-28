@@ -371,7 +371,6 @@ pub enum SseOpcode {
     Cvtsi2sd,
     Cvtss2si,
     Cvtss2sd,
-    Cvttps2dq,
     Cvttss2si,
     Cvttsd2si,
     Divps,
@@ -536,7 +535,6 @@ impl SseOpcode {
             | SseOpcode::Cvtsd2si
             | SseOpcode::Cvtsi2sd
             | SseOpcode::Cvtss2sd
-            | SseOpcode::Cvttps2dq
             | SseOpcode::Cvttsd2si
             | SseOpcode::Divpd
             | SseOpcode::Divsd
@@ -664,7 +662,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Cvtsi2sd => "cvtsi2sd",
             SseOpcode::Cvtss2si => "cvtss2si",
             SseOpcode::Cvtss2sd => "cvtss2sd",
-            SseOpcode::Cvttps2dq => "cvttps2dq",
             SseOpcode::Cvttss2si => "cvttss2si",
             SseOpcode::Cvttsd2si => "cvttsd2si",
             SseOpcode::Divps => "divps",
