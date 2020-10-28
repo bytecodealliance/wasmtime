@@ -1762,6 +1762,7 @@ pub(crate) fn emit(
                 SseOpcode::Mulsd => (LegacyPrefixes::_F2, 0x0F59, 2),
                 SseOpcode::Orpd => (LegacyPrefixes::_66, 0x0F56, 2),
                 SseOpcode::Orps => (LegacyPrefixes::None, 0x0F56, 2),
+                SseOpcode::Packsswb => (LegacyPrefixes::_66, 0x0F63, 2),
                 SseOpcode::Paddb => (LegacyPrefixes::_66, 0x0FFC, 2),
                 SseOpcode::Paddd => (LegacyPrefixes::_66, 0x0FFE, 2),
                 SseOpcode::Paddq => (LegacyPrefixes::_66, 0x0FD4, 2),
@@ -2040,11 +2041,14 @@ pub(crate) fn emit(
             dst_size,
         } => {
             let (prefix, opcode, dst_first) = match op {
+                SseOpcode::Cvttss2si => (LegacyPrefixes::_F3, 0x0F2C, true),
+                SseOpcode::Cvttsd2si => (LegacyPrefixes::_F2, 0x0F2C, true),
                 // Movd and movq use the same opcode; the presence of the REX prefix (set below)
                 // actually determines which is used.
                 SseOpcode::Movd | SseOpcode::Movq => (LegacyPrefixes::_66, 0x0F7E, false),
-                SseOpcode::Cvttss2si => (LegacyPrefixes::_F3, 0x0F2C, true),
-                SseOpcode::Cvttsd2si => (LegacyPrefixes::_F2, 0x0F2C, true),
+                SseOpcode::Movmskps => (LegacyPrefixes::None, 0x0F50, true),
+                SseOpcode::Movmskpd => (LegacyPrefixes::_66, 0x0F50, true),
+                SseOpcode::Pmovmskb => (LegacyPrefixes::_66, 0x0FD7, true),
                 _ => panic!("unexpected opcode {:?}", op),
             };
             let rex = match dst_size {
