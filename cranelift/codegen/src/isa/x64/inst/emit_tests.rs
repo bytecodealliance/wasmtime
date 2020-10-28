@@ -3295,13 +3295,13 @@ fn test_x64_emit() {
     // ========================================================
     // XMM_RM_R: Integer Conversion
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Cvtdq2ps, RegMem::reg(xmm1), w_xmm8),
+        Inst::xmm_rm_r(SseOpcode::Cvtdq2ps, RegMem::reg(xmm1), w_xmm8, None),
         "440F5BC1",
         "cvtdq2ps %xmm1, %xmm8",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Cvttps2dq, RegMem::reg(xmm9), w_xmm8),
+        Inst::xmm_rm_r(SseOpcode::Cvttps2dq, RegMem::reg(xmm9), w_xmm8, None),
         "F3450F5BC1",
         "cvttps2dq %xmm9, %xmm8",
     ));
