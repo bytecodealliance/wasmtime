@@ -1414,17 +1414,19 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::V128Load16Splat { memarg }
         | Operator::V128Load32Splat { memarg }
         | Operator::V128Load64Splat { memarg } => {
-            let opcode = ir::Opcode::LoadSplat;
-            let result_ty = type_of(op);
-            let (flags, base, offset) = prepare_load(
+            // TODO: For spec compliance, this is initially implemented as a combination of `load +
+            // splat` but could be implemented eventually as a single instruction (`load_splat`).
+            // See https://github.com/bytecodealliance/wasmtime/issues/1175.
+            translate_load(
                 memarg,
-                mem_op_size(opcode, result_ty.lane_type()),
+                ir::Opcode::Load,
+                type_of(op).lane_type(),
                 builder,
                 state,
                 environ,
             )?;
-            let (load, dfg) = builder.ins().Load(opcode, result_ty, flags, offset, base);
-            state.push1(dfg.first_result(load))
+            let splatted = builder.ins().splat(type_of(op), state.pop1());
+            state.push1(splatted)
         }
         Operator::I8x16ExtractLaneS { lane } | Operator::I16x8ExtractLaneS { lane } => {
             let vector = pop1_with_bitcast(state, type_of(op), builder);
@@ -2086,7 +2088,7 @@ fn mem_op_size(opcode: ir::Opcode, ty: Type) -> u32 {
         ir::Opcode::Istore8 | ir::Opcode::Sload8 | ir::Opcode::Uload8 => 1,
         ir::Opcode::Istore16 | ir::Opcode::Sload16 | ir::Opcode::Uload16 => 2,
         ir::Opcode::Istore32 | ir::Opcode::Sload32 | ir::Opcode::Uload32 => 4,
-        ir::Opcode::Store | ir::Opcode::Load | ir::Opcode::LoadSplat => ty.bytes(),
+        ir::Opcode::Store | ir::Opcode::Load => ty.bytes(),
         _ => panic!("unknown size of mem op for {:?}", opcode),
     }
 }
