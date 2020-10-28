@@ -213,6 +213,7 @@ pub enum Inst {
         op: SseOpcode,
         src: RegMem,
         dst: Writable<Reg>,
+        srcloc: Option<SourceLoc>,
     },
 
     /// XMM (scalar or vector) unary op: mov between XMM registers (32 64) (reg addr) reg, sqrt,
@@ -339,6 +340,7 @@ pub enum Inst {
         dst: Writable<Reg>,
         imm: u8,
         is64: bool,
+        srcloc: Option<SourceLoc>,
     },
 
     // =====================================
@@ -712,10 +714,20 @@ impl Inst {
         }
     }
 
-    pub(crate) fn xmm_rm_r(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Self {
+    pub(crate) fn xmm_rm_r(
+        op: SseOpcode,
+        src: RegMem,
+        dst: Writable<Reg>,
+        srcloc: Option<SourceLoc>,
+    ) -> Self {
         src.assert_regclass_is(RegClass::V128);
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
-        Inst::XmmRmR { op, src, dst }
+        Inst::XmmRmR {
+            op,
+            src,
+            dst,
+            srcloc,
+        }
     }
 
     pub(crate) fn xmm_uninit_value(dst: Writable<Reg>) -> Self {
@@ -870,6 +882,7 @@ impl Inst {
         dst: Writable<Reg>,
         imm: u8,
         is64: bool,
+        srcloc: Option<SourceLoc>,
     ) -> Inst {
         Inst::XmmRmRImm {
             op,
@@ -877,6 +890,7 @@ impl Inst {
             dst,
             imm,
             is64,
+            srcloc,
         }
     }
 
@@ -1234,16 +1248,26 @@ impl Inst {
     /// Choose which instruction to use for comparing two values for equality.
     pub(crate) fn equals(ty: Type, from: RegMem, to: Writable<Reg>) -> Inst {
         match ty {
-            types::I8X16 | types::B8X16 => Inst::xmm_rm_r(SseOpcode::Pcmpeqb, from, to),
-            types::I16X8 | types::B16X8 => Inst::xmm_rm_r(SseOpcode::Pcmpeqw, from, to),
-            types::I32X4 | types::B32X4 => Inst::xmm_rm_r(SseOpcode::Pcmpeqd, from, to),
-            types::I64X2 | types::B64X2 => Inst::xmm_rm_r(SseOpcode::Pcmpeqq, from, to),
-            types::F32X4 => {
-                Inst::xmm_rm_r_imm(SseOpcode::Cmpps, from, to, FcmpImm::Equal.encode(), false)
-            }
-            types::F64X2 => {
-                Inst::xmm_rm_r_imm(SseOpcode::Cmppd, from, to, FcmpImm::Equal.encode(), false)
-            }
+            types::I8X16 | types::B8X16 => Inst::xmm_rm_r(SseOpcode::Pcmpeqb, from, to, None),
+            types::I16X8 | types::B16X8 => Inst::xmm_rm_r(SseOpcode::Pcmpeqw, from, to, None),
+            types::I32X4 | types::B32X4 => Inst::xmm_rm_r(SseOpcode::Pcmpeqd, from, to, None),
+            types::I64X2 | types::B64X2 => Inst::xmm_rm_r(SseOpcode::Pcmpeqq, from, to, None),
+            types::F32X4 => Inst::xmm_rm_r_imm(
+                SseOpcode::Cmpps,
+                from,
+                to,
+                FcmpImm::Equal.encode(),
+                false,
+                None,
+            ),
+            types::F64X2 => Inst::xmm_rm_r_imm(
+                SseOpcode::Cmppd,
+                from,
+                to,
+                FcmpImm::Equal.encode(),
+                false,
+                None,
+            ),
             _ => unimplemented!("unimplemented type for Inst::equals: {}", ty),
         }
     }
@@ -1251,9 +1275,11 @@ impl Inst {
     /// Choose which instruction to use for computing a bitwise AND on two values.
     pub(crate) fn and(ty: Type, from: RegMem, to: Writable<Reg>) -> Inst {
         match ty {
-            types::F32X4 => Inst::xmm_rm_r(SseOpcode::Andps, from, to),
-            types::F64X2 => Inst::xmm_rm_r(SseOpcode::Andpd, from, to),
-            _ if ty.is_vector() && ty.bits() == 128 => Inst::xmm_rm_r(SseOpcode::Pand, from, to),
+            types::F32X4 => Inst::xmm_rm_r(SseOpcode::Andps, from, to, None),
+            types::F64X2 => Inst::xmm_rm_r(SseOpcode::Andpd, from, to, None),
+            _ if ty.is_vector() && ty.bits() == 128 => {
+                Inst::xmm_rm_r(SseOpcode::Pand, from, to, None)
+            }
             _ => unimplemented!("unimplemented type for Inst::and: {}", ty),
         }
     }
@@ -1261,9 +1287,11 @@ impl Inst {
     /// Choose which instruction to use for computing a bitwise AND NOT on two values.
     pub(crate) fn and_not(ty: Type, from: RegMem, to: Writable<Reg>) -> Inst {
         match ty {
-            types::F32X4 => Inst::xmm_rm_r(SseOpcode::Andnps, from, to),
-            types::F64X2 => Inst::xmm_rm_r(SseOpcode::Andnpd, from, to),
-            _ if ty.is_vector() && ty.bits() == 128 => Inst::xmm_rm_r(SseOpcode::Pandn, from, to),
+            types::F32X4 => Inst::xmm_rm_r(SseOpcode::Andnps, from, to, None),
+            types::F64X2 => Inst::xmm_rm_r(SseOpcode::Andnpd, from, to, None),
+            _ if ty.is_vector() && ty.bits() == 128 => {
+                Inst::xmm_rm_r(SseOpcode::Pandn, from, to, None)
+            }
             _ => unimplemented!("unimplemented type for Inst::and_not: {}", ty),
         }
     }
@@ -1271,9 +1299,11 @@ impl Inst {
     /// Choose which instruction to use for computing a bitwise OR on two values.
     pub(crate) fn or(ty: Type, from: RegMem, to: Writable<Reg>) -> Inst {
         match ty {
-            types::F32X4 => Inst::xmm_rm_r(SseOpcode::Orps, from, to),
-            types::F64X2 => Inst::xmm_rm_r(SseOpcode::Orpd, from, to),
-            _ if ty.is_vector() && ty.bits() == 128 => Inst::xmm_rm_r(SseOpcode::Por, from, to),
+            types::F32X4 => Inst::xmm_rm_r(SseOpcode::Orps, from, to, None),
+            types::F64X2 => Inst::xmm_rm_r(SseOpcode::Orpd, from, to, None),
+            _ if ty.is_vector() && ty.bits() == 128 => {
+                Inst::xmm_rm_r(SseOpcode::Por, from, to, None)
+            }
             _ => unimplemented!("unimplemented type for Inst::or: {}", ty),
         }
     }
@@ -1281,9 +1311,11 @@ impl Inst {
     /// Choose which instruction to use for computing a bitwise XOR on two values.
     pub(crate) fn xor(ty: Type, from: RegMem, to: Writable<Reg>) -> Inst {
         match ty {
-            types::F32X4 => Inst::xmm_rm_r(SseOpcode::Xorps, from, to),
-            types::F64X2 => Inst::xmm_rm_r(SseOpcode::Xorpd, from, to),
-            _ if ty.is_vector() && ty.bits() == 128 => Inst::xmm_rm_r(SseOpcode::Pxor, from, to),
+            types::F32X4 => Inst::xmm_rm_r(SseOpcode::Xorps, from, to, None),
+            types::F64X2 => Inst::xmm_rm_r(SseOpcode::Xorpd, from, to, None),
+            _ if ty.is_vector() && ty.bits() == 128 => {
+                Inst::xmm_rm_r(SseOpcode::Pxor, from, to, None)
+            }
             _ => unimplemented!("unimplemented type for Inst::xor: {}", ty),
         }
     }
@@ -1430,7 +1462,7 @@ impl PrettyPrint for Inst {
                 dst.show_rru(mb_rru),
             ),
 
-            Inst::XmmRmR { op, src, dst } => format!(
+            Inst::XmmRmR { op, src, dst, .. } => format!(
                 "{} {}, {}",
                 ljustify(op.to_string()),
                 src.show_rru_sized(mb_rru, 8),
@@ -1460,7 +1492,7 @@ impl PrettyPrint for Inst {
                 show_ireg_sized(rhs_dst.to_reg(), mb_rru, 8),
             ),
 
-            Inst::XmmRmRImm { op, src, dst, imm, is64 } => format!(
+            Inst::XmmRmRImm { op, src, dst, imm, is64, .. } => format!(
                 "{} ${}, {}, {}",
                 ljustify(format!("{}{}", op.to_string(), if *is64 { ".w" } else { "" })),
                 imm,
@@ -2596,6 +2628,7 @@ impl MachInst for Inst {
                     SseOpcode::Xorps,
                     RegMem::reg(to_reg.to_reg()),
                     to_reg,
+                    None,
                 ));
             } else {
                 let tmp = alloc_tmp(RegClass::I64, types::I32);
@@ -2614,6 +2647,7 @@ impl MachInst for Inst {
                     SseOpcode::Xorpd,
                     RegMem::reg(to_reg.to_reg()),
                     to_reg,
+                    None,
                 ));
             } else {
                 let tmp = alloc_tmp(RegClass::I64, types::I64);

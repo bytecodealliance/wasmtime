@@ -248,6 +248,16 @@ fn enc_ldst_imm19(op_31_24: u32, imm19: u32, rd: Reg) -> u32 {
     (op_31_24 << 24) | (imm19 << 5) | machreg_to_gpr_or_vec(rd)
 }
 
+fn enc_ldst_vec(q: u32, size: u32, rn: Reg, rt: Writable<Reg>) -> u32 {
+    debug_assert_eq!(q & 0b1, q);
+    debug_assert_eq!(size & 0b11, size);
+    0b0_0_0011010_10_00000_110_0_00_00000_00000
+        | q << 30
+        | size << 10
+        | machreg_to_gpr(rn) << 5
+        | machreg_to_vec(rt.to_reg())
+}
+
 fn enc_extend(top22: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
     (top22 << 10) | (machreg_to_gpr(rn) << 5) | machreg_to_gpr(rd.to_reg())
 }
@@ -1381,14 +1391,7 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_fpurrrr(top17, rd, rn, rm, ra));
             }
             &Inst::VecMisc { op, rd, rn, size } => {
-                let enc_size = match size.lane_size() {
-                    ScalarSize::Size8 => 0b00,
-                    ScalarSize::Size16 => 0b01,
-                    ScalarSize::Size32 => 0b10,
-                    ScalarSize::Size64 => 0b11,
-                    _ => unreachable!(),
-                };
-                let q = if size.is_128bits() { 1 } else { 0 };
+                let (q, enc_size) = size.enc_size();
                 let (u, bits_12_16, size) = match op {
                     VecMisc2::Not => (0b1, 0b00101, 0b00),
                     VecMisc2::Neg => (0b1, 0b01011, enc_size),
@@ -1831,13 +1834,7 @@ impl MachInstEmit for Inst {
                 alu_op,
                 size,
             } => {
-                let enc_size = match size.lane_size() {
-                    ScalarSize::Size8 => 0b00,
-                    ScalarSize::Size16 => 0b01,
-                    ScalarSize::Size32 => 0b10,
-                    ScalarSize::Size64 => 0b11,
-                    _ => unreachable!(),
-                };
+                let (q, enc_size) = size.enc_size();
                 let is_float = match alu_op {
                     VecALUOp::Fcmeq
                     | VecALUOp::Fcmgt
@@ -1851,6 +1848,7 @@ impl MachInstEmit for Inst {
                     _ => false,
                 };
                 let enc_float_size = match (is_float, size) {
+                    (true, VectorSize::Size32x2) => 0b0,
                     (true, VectorSize::Size32x4) => 0b0,
                     (true, VectorSize::Size64x2) => 0b1,
                     (true, _) => unimplemented!(),
@@ -1858,46 +1856,46 @@ impl MachInstEmit for Inst {
                 };
 
                 let (top11, bit15_10) = match alu_op {
-                    VecALUOp::Sqadd => (0b010_01110_00_1 | enc_size << 1, 0b000011),
-                    VecALUOp::Sqsub => (0b010_01110_00_1 | enc_size << 1, 0b001011),
-                    VecALUOp::Uqadd => (0b011_01110_00_1 | enc_size << 1, 0b000011),
-                    VecALUOp::Uqsub => (0b011_01110_00_1 | enc_size << 1, 0b001011),
-                    VecALUOp::Cmeq => (0b011_01110_00_1 | enc_size << 1, 0b100011),
-                    VecALUOp::Cmge => (0b010_01110_00_1 | enc_size << 1, 0b001111),
-                    VecALUOp::Cmgt => (0b010_01110_00_1 | enc_size << 1, 0b001101),
-                    VecALUOp::Cmhi => (0b011_01110_00_1 | enc_size << 1, 0b001101),
-                    VecALUOp::Cmhs => (0b011_01110_00_1 | enc_size << 1, 0b001111),
-                    VecALUOp::Fcmeq => (0b010_01110_00_1, 0b111001),
-                    VecALUOp::Fcmgt => (0b011_01110_10_1, 0b111001),
-                    VecALUOp::Fcmge => (0b011_01110_00_1, 0b111001),
+                    VecALUOp::Sqadd => (0b000_01110_00_1 | enc_size << 1, 0b000011),
+                    VecALUOp::Sqsub => (0b000_01110_00_1 | enc_size << 1, 0b001011),
+                    VecALUOp::Uqadd => (0b001_01110_00_1 | enc_size << 1, 0b000011),
+                    VecALUOp::Uqsub => (0b001_01110_00_1 | enc_size << 1, 0b001011),
+                    VecALUOp::Cmeq => (0b001_01110_00_1 | enc_size << 1, 0b100011),
+                    VecALUOp::Cmge => (0b000_01110_00_1 | enc_size << 1, 0b001111),
+                    VecALUOp::Cmgt => (0b000_01110_00_1 | enc_size << 1, 0b001101),
+                    VecALUOp::Cmhi => (0b001_01110_00_1 | enc_size << 1, 0b001101),
+                    VecALUOp::Cmhs => (0b001_01110_00_1 | enc_size << 1, 0b001111),
+                    VecALUOp::Fcmeq => (0b000_01110_00_1, 0b111001),
+                    VecALUOp::Fcmgt => (0b001_01110_10_1, 0b111001),
+                    VecALUOp::Fcmge => (0b001_01110_00_1, 0b111001),
                     // The following logical instructions operate on bytes, so are not encoded differently
                     // for the different vector types.
-                    VecALUOp::And => (0b010_01110_00_1, 0b000111),
-                    VecALUOp::Bic => (0b010_01110_01_1, 0b000111),
-                    VecALUOp::Orr => (0b010_01110_10_1, 0b000111),
-                    VecALUOp::Eor => (0b011_01110_00_1, 0b000111),
-                    VecALUOp::Bsl => (0b011_01110_01_1, 0b000111),
-                    VecALUOp::Umaxp => (0b011_01110_00_1 | enc_size << 1, 0b101001),
-                    VecALUOp::Add => (0b010_01110_00_1 | enc_size << 1, 0b100001),
-                    VecALUOp::Sub => (0b011_01110_00_1 | enc_size << 1, 0b100001),
+                    VecALUOp::And => (0b000_01110_00_1, 0b000111),
+                    VecALUOp::Bic => (0b000_01110_01_1, 0b000111),
+                    VecALUOp::Orr => (0b000_01110_10_1, 0b000111),
+                    VecALUOp::Eor => (0b001_01110_00_1, 0b000111),
+                    VecALUOp::Bsl => (0b001_01110_01_1, 0b000111),
+                    VecALUOp::Umaxp => (0b001_01110_00_1 | enc_size << 1, 0b101001),
+                    VecALUOp::Add => (0b000_01110_00_1 | enc_size << 1, 0b100001),
+                    VecALUOp::Sub => (0b001_01110_00_1 | enc_size << 1, 0b100001),
                     VecALUOp::Mul => {
                         debug_assert_ne!(size, VectorSize::Size64x2);
-                        (0b010_01110_00_1 | enc_size << 1, 0b100111)
+                        (0b000_01110_00_1 | enc_size << 1, 0b100111)
                     }
-                    VecALUOp::Sshl => (0b010_01110_00_1 | enc_size << 1, 0b010001),
-                    VecALUOp::Ushl => (0b011_01110_00_1 | enc_size << 1, 0b010001),
-                    VecALUOp::Umin => (0b011_01110_00_1 | enc_size << 1, 0b011011),
-                    VecALUOp::Smin => (0b010_01110_00_1 | enc_size << 1, 0b011011),
-                    VecALUOp::Umax => (0b011_01110_00_1 | enc_size << 1, 0b011001),
-                    VecALUOp::Smax => (0b010_01110_00_1 | enc_size << 1, 0b011001),
-                    VecALUOp::Urhadd => (0b011_01110_00_1 | enc_size << 1, 0b000101),
-                    VecALUOp::Fadd => (0b010_01110_00_1, 0b110101),
-                    VecALUOp::Fsub => (0b010_01110_10_1, 0b110101),
-                    VecALUOp::Fdiv => (0b011_01110_00_1, 0b111111),
-                    VecALUOp::Fmax => (0b010_01110_00_1, 0b111101),
-                    VecALUOp::Fmin => (0b010_01110_10_1, 0b111101),
-                    VecALUOp::Fmul => (0b011_01110_00_1, 0b110111),
-                    VecALUOp::Addp => (0b010_01110_00_1 | enc_size << 1, 0b101111),
+                    VecALUOp::Sshl => (0b000_01110_00_1 | enc_size << 1, 0b010001),
+                    VecALUOp::Ushl => (0b001_01110_00_1 | enc_size << 1, 0b010001),
+                    VecALUOp::Umin => (0b001_01110_00_1 | enc_size << 1, 0b011011),
+                    VecALUOp::Smin => (0b000_01110_00_1 | enc_size << 1, 0b011011),
+                    VecALUOp::Umax => (0b001_01110_00_1 | enc_size << 1, 0b011001),
+                    VecALUOp::Smax => (0b000_01110_00_1 | enc_size << 1, 0b011001),
+                    VecALUOp::Urhadd => (0b001_01110_00_1 | enc_size << 1, 0b000101),
+                    VecALUOp::Fadd => (0b000_01110_00_1, 0b110101),
+                    VecALUOp::Fsub => (0b000_01110_10_1, 0b110101),
+                    VecALUOp::Fdiv => (0b001_01110_00_1, 0b111111),
+                    VecALUOp::Fmax => (0b000_01110_00_1, 0b111101),
+                    VecALUOp::Fmin => (0b000_01110_10_1, 0b111101),
+                    VecALUOp::Fmul => (0b001_01110_00_1, 0b110111),
+                    VecALUOp::Addp => (0b000_01110_00_1 | enc_size << 1, 0b101111),
                     VecALUOp::Umlal => {
                         debug_assert!(!size.is_128bits());
                         (0b001_01110_00_1 | enc_size << 1, 0b100000)
@@ -1905,11 +1903,26 @@ impl MachInstEmit for Inst {
                     VecALUOp::Zip1 => (0b01001110_00_0 | enc_size << 1, 0b001110),
                 };
                 let top11 = if is_float {
-                    top11 | enc_float_size << 1
+                    top11 | (q << 9) | enc_float_size << 1
                 } else {
-                    top11
+                    top11 | (q << 9)
                 };
                 sink.put4(enc_vec_rrr(top11, rm, bit15_10, rn, rd));
+            }
+            &Inst::VecLoadReplicate {
+                rd,
+                rn,
+                size,
+                srcloc,
+            } => {
+                let (q, size) = size.enc_size();
+
+                if let Some(srcloc) = srcloc {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                }
+
+                sink.put4(enc_ldst_vec(q, size, rn, rd));
             }
             &Inst::MovToNZCV { rn } => {
                 sink.put4(0xd51b4200 | machreg_to_gpr(rn));
@@ -2195,9 +2208,12 @@ impl MachInstEmit for Inst {
                     inst.emit(sink, emit_info, state);
                 }
 
-                let (reg, offset) = match mem {
-                    AMode::Unscaled(r, simm9) => (r, simm9.value()),
-                    AMode::UnsignedOffset(r, uimm12scaled) => (r, uimm12scaled.value() as i32),
+                let (reg, index_reg, offset) = match mem {
+                    AMode::RegExtended(r, idx, extendop) => (r, Some((idx, extendop)), 0),
+                    AMode::Unscaled(r, simm9) => (r, None, simm9.value()),
+                    AMode::UnsignedOffset(r, uimm12scaled) => {
+                        (r, None, uimm12scaled.value() as i32)
+                    }
                     _ => panic!("Unsupported case for LoadAddr: {:?}", mem),
                 };
                 let abs_offset = if offset < 0 {
@@ -2211,9 +2227,22 @@ impl MachInstEmit for Inst {
                     ALUOp::Add64
                 };
 
-                if offset == 0 {
-                    let mov = Inst::mov(rd, reg);
-                    mov.emit(sink, emit_info, state);
+                if let Some((idx, extendop)) = index_reg {
+                    let add = Inst::AluRRRExtend {
+                        alu_op: ALUOp::Add64,
+                        rd,
+                        rn: reg,
+                        rm: idx,
+                        extendop,
+                    };
+
+                    add.emit(sink, emit_info, state);
+                } else if offset == 0 {
+                    if reg != rd.to_reg() {
+                        let mov = Inst::mov(rd, reg);
+
+                        mov.emit(sink, emit_info, state);
+                    }
                 } else if let Some(imm12) = Imm12::maybe_from_u64(abs_offset) {
                     let add = Inst::AluRRImm12 {
                         alu_op,

@@ -1021,6 +1021,14 @@ pub enum Inst {
         is_extension: bool,
     },
 
+    /// Load an element and replicate to all lanes of a vector.
+    VecLoadReplicate {
+        rd: Writable<Reg>,
+        rn: Reg,
+        size: VectorSize,
+        srcloc: Option<SourceLoc>,
+    },
+
     /// Move to the NZCV flags (actually a `MSR NZCV, Xn` insn).
     MovToNZCV {
         rn: Reg,
@@ -1664,7 +1672,10 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
                 collector.add_def(rd);
             }
         }
-
+        &Inst::VecLoadReplicate { rd, rn, .. } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
+        }
         &Inst::FpuCmp32 { rn, rm } | &Inst::FpuCmp64 { rn, rm } => {
             collector.add_use(rn);
             collector.add_use(rm);
@@ -1817,8 +1828,9 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::LoadExtName { rd, .. } => {
             collector.add_def(rd);
         }
-        &Inst::LoadAddr { rd, mem: _ } => {
+        &Inst::LoadAddr { rd, ref mem } => {
             collector.add_def(rd);
+            memarg_regs(mem, collector);
         }
         &Inst::VirtualSPOffsetAdj { .. } => {}
         &Inst::EmitIsland { .. } => {}
@@ -2261,6 +2273,14 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             } else {
                 map_def(mapper, rd);
             }
+        }
+        &mut Inst::VecLoadReplicate {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
         }
         &mut Inst::FpuCmp32 {
             ref mut rn,
@@ -3506,6 +3526,12 @@ impl Inst {
                 let rn2 = show_vreg_vector(rn2, mb_rru, VectorSize::Size8x16);
                 let rm = show_vreg_vector(rm, mb_rru, VectorSize::Size8x16);
                 format!("{} {}, {{ {}, {} }}, {}", op, rd, rn, rn2, rm)
+            }
+            &Inst::VecLoadReplicate { rd, rn, size, .. } => {
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
+                let rn = rn.show_rru(mb_rru);
+
+                format!("ld1r {{ {} }}, [{}]", rd, rn)
             }
             &Inst::MovToNZCV { rn } => {
                 let rn = rn.show_rru(mb_rru);

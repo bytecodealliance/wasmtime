@@ -2983,12 +2983,12 @@ fn test_x64_emit() {
     // XMM_RM_R: float binary ops
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Addss, RegMem::reg(xmm1), w_xmm0),
+        Inst::xmm_rm_r(SseOpcode::Addss, RegMem::reg(xmm1), w_xmm0, None),
         "F30F58C1",
         "addss   %xmm1, %xmm0",
     ));
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Addss, RegMem::reg(xmm11), w_xmm13),
+        Inst::xmm_rm_r(SseOpcode::Addss, RegMem::reg(xmm11), w_xmm13, None),
         "F3450F58EB",
         "addss   %xmm11, %xmm13",
     ));
@@ -2997,23 +2997,24 @@ fn test_x64_emit() {
             SseOpcode::Addss,
             RegMem::mem(Amode::imm_reg_reg_shift(123, r10, rdx, 2)),
             w_xmm0,
+            None,
         ),
         "F3410F5844927B",
         "addss   123(%r10,%rdx,4), %xmm0",
     ));
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Addsd, RegMem::reg(xmm15), w_xmm4),
+        Inst::xmm_rm_r(SseOpcode::Addsd, RegMem::reg(xmm15), w_xmm4, None),
         "F2410F58E7",
         "addsd   %xmm15, %xmm4",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Subss, RegMem::reg(xmm0), w_xmm1),
+        Inst::xmm_rm_r(SseOpcode::Subss, RegMem::reg(xmm0), w_xmm1, None),
         "F30F5CC8",
         "subss   %xmm0, %xmm1",
     ));
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Subss, RegMem::reg(xmm12), w_xmm1),
+        Inst::xmm_rm_r(SseOpcode::Subss, RegMem::reg(xmm12), w_xmm1, None),
         "F3410F5CCC",
         "subss   %xmm12, %xmm1",
     ));
@@ -3022,57 +3023,58 @@ fn test_x64_emit() {
             SseOpcode::Subss,
             RegMem::mem(Amode::imm_reg_reg_shift(321, r10, rax, 3)),
             w_xmm10,
+            None,
         ),
         "F3450F5C94C241010000",
         "subss   321(%r10,%rax,8), %xmm10",
     ));
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Subsd, RegMem::reg(xmm5), w_xmm14),
+        Inst::xmm_rm_r(SseOpcode::Subsd, RegMem::reg(xmm5), w_xmm14, None),
         "F2440F5CF5",
         "subsd   %xmm5, %xmm14",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Mulss, RegMem::reg(xmm5), w_xmm4),
+        Inst::xmm_rm_r(SseOpcode::Mulss, RegMem::reg(xmm5), w_xmm4, None),
         "F30F59E5",
         "mulss   %xmm5, %xmm4",
     ));
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Mulsd, RegMem::reg(xmm5), w_xmm4),
+        Inst::xmm_rm_r(SseOpcode::Mulsd, RegMem::reg(xmm5), w_xmm4, None),
         "F20F59E5",
         "mulsd   %xmm5, %xmm4",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Divss, RegMem::reg(xmm8), w_xmm7),
+        Inst::xmm_rm_r(SseOpcode::Divss, RegMem::reg(xmm8), w_xmm7, None),
         "F3410F5EF8",
         "divss   %xmm8, %xmm7",
     ));
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Divsd, RegMem::reg(xmm5), w_xmm4),
+        Inst::xmm_rm_r(SseOpcode::Divsd, RegMem::reg(xmm5), w_xmm4, None),
         "F20F5EE5",
         "divsd   %xmm5, %xmm4",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Andps, RegMem::reg(xmm3), w_xmm12),
+        Inst::xmm_rm_r(SseOpcode::Andps, RegMem::reg(xmm3), w_xmm12, None),
         "440F54E3",
         "andps   %xmm3, %xmm12",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Andnps, RegMem::reg(xmm4), w_xmm11),
+        Inst::xmm_rm_r(SseOpcode::Andnps, RegMem::reg(xmm4), w_xmm11, None),
         "440F55DC",
         "andnps  %xmm4, %xmm11",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Orps, RegMem::reg(xmm1), w_xmm15),
+        Inst::xmm_rm_r(SseOpcode::Orps, RegMem::reg(xmm1), w_xmm15, None),
         "440F56F9",
         "orps    %xmm1, %xmm15",
     ));
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Orps, RegMem::reg(xmm5), w_xmm4),
+        Inst::xmm_rm_r(SseOpcode::Orps, RegMem::reg(xmm5), w_xmm4, None),
         "0F56E5",
         "orps    %xmm5, %xmm4",
     ));
@@ -3081,211 +3083,211 @@ fn test_x64_emit() {
     // XMM_RM_R: Integer Packed
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Paddb, RegMem::reg(xmm9), w_xmm5),
+        Inst::xmm_rm_r(SseOpcode::Paddb, RegMem::reg(xmm9), w_xmm5, None),
         "66410FFCE9",
         "paddb   %xmm9, %xmm5",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Paddw, RegMem::reg(xmm7), w_xmm6),
+        Inst::xmm_rm_r(SseOpcode::Paddw, RegMem::reg(xmm7), w_xmm6, None),
         "660FFDF7",
         "paddw   %xmm7, %xmm6",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Paddd, RegMem::reg(xmm12), w_xmm13),
+        Inst::xmm_rm_r(SseOpcode::Paddd, RegMem::reg(xmm12), w_xmm13, None),
         "66450FFEEC",
         "paddd   %xmm12, %xmm13",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Paddq, RegMem::reg(xmm1), w_xmm8),
+        Inst::xmm_rm_r(SseOpcode::Paddq, RegMem::reg(xmm1), w_xmm8, None),
         "66440FD4C1",
         "paddq   %xmm1, %xmm8",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Paddsb, RegMem::reg(xmm9), w_xmm5),
+        Inst::xmm_rm_r(SseOpcode::Paddsb, RegMem::reg(xmm9), w_xmm5, None),
         "66410FECE9",
         "paddsb  %xmm9, %xmm5",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Paddsw, RegMem::reg(xmm7), w_xmm6),
+        Inst::xmm_rm_r(SseOpcode::Paddsw, RegMem::reg(xmm7), w_xmm6, None),
         "660FEDF7",
         "paddsw  %xmm7, %xmm6",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Paddusb, RegMem::reg(xmm12), w_xmm13),
+        Inst::xmm_rm_r(SseOpcode::Paddusb, RegMem::reg(xmm12), w_xmm13, None),
         "66450FDCEC",
         "paddusb %xmm12, %xmm13",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Paddusw, RegMem::reg(xmm1), w_xmm8),
+        Inst::xmm_rm_r(SseOpcode::Paddusw, RegMem::reg(xmm1), w_xmm8, None),
         "66440FDDC1",
         "paddusw %xmm1, %xmm8",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Psubsb, RegMem::reg(xmm9), w_xmm5),
+        Inst::xmm_rm_r(SseOpcode::Psubsb, RegMem::reg(xmm9), w_xmm5, None),
         "66410FE8E9",
         "psubsb  %xmm9, %xmm5",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Psubsw, RegMem::reg(xmm7), w_xmm6),
+        Inst::xmm_rm_r(SseOpcode::Psubsw, RegMem::reg(xmm7), w_xmm6, None),
         "660FE9F7",
         "psubsw  %xmm7, %xmm6",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Psubusb, RegMem::reg(xmm12), w_xmm13),
+        Inst::xmm_rm_r(SseOpcode::Psubusb, RegMem::reg(xmm12), w_xmm13, None),
         "66450FD8EC",
         "psubusb %xmm12, %xmm13",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Psubusw, RegMem::reg(xmm1), w_xmm8),
+        Inst::xmm_rm_r(SseOpcode::Psubusw, RegMem::reg(xmm1), w_xmm8, None),
         "66440FD9C1",
         "psubusw %xmm1, %xmm8",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pavgb, RegMem::reg(xmm12), w_xmm13),
+        Inst::xmm_rm_r(SseOpcode::Pavgb, RegMem::reg(xmm12), w_xmm13, None),
         "66450FE0EC",
         "pavgb   %xmm12, %xmm13",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pavgw, RegMem::reg(xmm1), w_xmm8),
+        Inst::xmm_rm_r(SseOpcode::Pavgw, RegMem::reg(xmm1), w_xmm8, None),
         "66440FE3C1",
         "pavgw   %xmm1, %xmm8",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Psubb, RegMem::reg(xmm5), w_xmm9),
+        Inst::xmm_rm_r(SseOpcode::Psubb, RegMem::reg(xmm5), w_xmm9, None),
         "66440FF8CD",
         "psubb   %xmm5, %xmm9",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Psubw, RegMem::reg(xmm6), w_xmm7),
+        Inst::xmm_rm_r(SseOpcode::Psubw, RegMem::reg(xmm6), w_xmm7, None),
         "660FF9FE",
         "psubw   %xmm6, %xmm7",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Psubd, RegMem::reg(xmm13), w_xmm12),
+        Inst::xmm_rm_r(SseOpcode::Psubd, RegMem::reg(xmm13), w_xmm12, None),
         "66450FFAE5",
         "psubd   %xmm13, %xmm12",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Psubq, RegMem::reg(xmm8), w_xmm1),
+        Inst::xmm_rm_r(SseOpcode::Psubq, RegMem::reg(xmm8), w_xmm1, None),
         "66410FFBC8",
         "psubq   %xmm8, %xmm1",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmulld, RegMem::reg(xmm15), w_xmm6),
+        Inst::xmm_rm_r(SseOpcode::Pmulld, RegMem::reg(xmm15), w_xmm6, None),
         "66410F3840F7",
         "pmulld  %xmm15, %xmm6",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmullw, RegMem::reg(xmm14), w_xmm1),
+        Inst::xmm_rm_r(SseOpcode::Pmullw, RegMem::reg(xmm14), w_xmm1, None),
         "66410FD5CE",
         "pmullw  %xmm14, %xmm1",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmuludq, RegMem::reg(xmm8), w_xmm9),
+        Inst::xmm_rm_r(SseOpcode::Pmuludq, RegMem::reg(xmm8), w_xmm9, None),
         "66450FF4C8",
         "pmuludq %xmm8, %xmm9",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmaxsb, RegMem::reg(xmm15), w_xmm6),
+        Inst::xmm_rm_r(SseOpcode::Pmaxsb, RegMem::reg(xmm15), w_xmm6, None),
         "66410F383CF7",
         "pmaxsb  %xmm15, %xmm6",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmaxsw, RegMem::reg(xmm15), w_xmm6),
+        Inst::xmm_rm_r(SseOpcode::Pmaxsw, RegMem::reg(xmm15), w_xmm6, None),
         "66410FEEF7",
         "pmaxsw  %xmm15, %xmm6",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmaxsd, RegMem::reg(xmm15), w_xmm6),
+        Inst::xmm_rm_r(SseOpcode::Pmaxsd, RegMem::reg(xmm15), w_xmm6, None),
         "66410F383DF7",
         "pmaxsd  %xmm15, %xmm6",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmaxub, RegMem::reg(xmm14), w_xmm1),
+        Inst::xmm_rm_r(SseOpcode::Pmaxub, RegMem::reg(xmm14), w_xmm1, None),
         "66410FDECE",
         "pmaxub  %xmm14, %xmm1",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmaxuw, RegMem::reg(xmm14), w_xmm1),
+        Inst::xmm_rm_r(SseOpcode::Pmaxuw, RegMem::reg(xmm14), w_xmm1, None),
         "66410F383ECE",
         "pmaxuw  %xmm14, %xmm1",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmaxud, RegMem::reg(xmm14), w_xmm1),
+        Inst::xmm_rm_r(SseOpcode::Pmaxud, RegMem::reg(xmm14), w_xmm1, None),
         "66410F383FCE",
         "pmaxud  %xmm14, %xmm1",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pminsb, RegMem::reg(xmm8), w_xmm9),
+        Inst::xmm_rm_r(SseOpcode::Pminsb, RegMem::reg(xmm8), w_xmm9, None),
         "66450F3838C8",
         "pminsb  %xmm8, %xmm9",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pminsw, RegMem::reg(xmm8), w_xmm9),
+        Inst::xmm_rm_r(SseOpcode::Pminsw, RegMem::reg(xmm8), w_xmm9, None),
         "66450FEAC8",
         "pminsw  %xmm8, %xmm9",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pminsd, RegMem::reg(xmm8), w_xmm9),
+        Inst::xmm_rm_r(SseOpcode::Pminsd, RegMem::reg(xmm8), w_xmm9, None),
         "66450F3839C8",
         "pminsd  %xmm8, %xmm9",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pminub, RegMem::reg(xmm3), w_xmm2),
+        Inst::xmm_rm_r(SseOpcode::Pminub, RegMem::reg(xmm3), w_xmm2, None),
         "660FDAD3",
         "pminub  %xmm3, %xmm2",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pminuw, RegMem::reg(xmm3), w_xmm2),
+        Inst::xmm_rm_r(SseOpcode::Pminuw, RegMem::reg(xmm3), w_xmm2, None),
         "660F383AD3",
         "pminuw  %xmm3, %xmm2",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pminud, RegMem::reg(xmm3), w_xmm2),
+        Inst::xmm_rm_r(SseOpcode::Pminud, RegMem::reg(xmm3), w_xmm2, None),
         "660F383BD3",
         "pminud  %xmm3, %xmm2",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::reg(xmm11), w_xmm2),
+        Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::reg(xmm11), w_xmm2, None),
         "66410FEFD3",
         "pxor    %xmm11, %xmm2",
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::reg(xmm11), w_xmm2),
+        Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::reg(xmm11), w_xmm2, None),
         "66410F3800D3",
         "pshufb  %xmm11, %xmm2",
     ));
@@ -3496,12 +3498,12 @@ fn test_x64_emit() {
     // ========================================================
     // XmmRmRImm
     insns.push((
-        Inst::xmm_rm_r_imm(SseOpcode::Cmppd, RegMem::reg(xmm5), w_xmm1, 2, false),
+        Inst::xmm_rm_r_imm(SseOpcode::Cmppd, RegMem::reg(xmm5), w_xmm1, 2, false, None),
         "660FC2CD02",
         "cmppd   $2, %xmm5, %xmm1",
     ));
     insns.push((
-        Inst::xmm_rm_r_imm(SseOpcode::Cmpps, RegMem::reg(xmm15), w_xmm7, 0, false),
+        Inst::xmm_rm_r_imm(SseOpcode::Cmpps, RegMem::reg(xmm15), w_xmm7, 0, false, None),
         "410FC2FF00",
         "cmpps   $0, %xmm15, %xmm7",
     ));

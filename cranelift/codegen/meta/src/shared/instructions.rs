@@ -4459,5 +4459,24 @@ pub(crate) fn define(
         .other_side_effects(true),
     );
 
+    let Offset = &Operand::new("Offset", &imm.offset32).with_doc("Byte offset from base address");
+    let a = &Operand::new("a", TxN);
+
+    ig.push(
+        Inst::new(
+            "load_splat",
+            r#"
+        Load an element from memory at ``p + Offset`` and return a vector
+        whose lanes are all set to that element.
+
+        This is equivalent to ``load`` followed by ``splat``.
+        "#,
+            &formats.load,
+        )
+        .operands_in(vec![MemFlags, p, Offset])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
     ig.build()
 }

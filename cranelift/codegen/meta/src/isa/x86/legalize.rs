@@ -396,6 +396,7 @@ fn define_simd(
     let insertlane = insts.by_name("insertlane");
     let ishl = insts.by_name("ishl");
     let ishl_imm = insts.by_name("ishl_imm");
+    let load_splat = insts.by_name("load_splat");
     let raw_bitcast = insts.by_name("raw_bitcast");
     let scalar_to_vector = insts.by_name("scalar_to_vector");
     let splat = insts.by_name("splat");
@@ -820,6 +821,7 @@ fn define_simd(
     narrow.custom_legalize(fcvt_to_sint_sat, "expand_fcvt_to_sint_sat_vector");
     narrow.custom_legalize(fmin, "expand_minmax_vector");
     narrow.custom_legalize(fmax, "expand_minmax_vector");
+    narrow.custom_legalize(load_splat, "expand_load_splat");
 
     narrow_avx.custom_legalize(imul, "convert_i64x2_imul");
     narrow_avx.custom_legalize(fcvt_from_uint, "expand_fcvt_from_uint_vector");
