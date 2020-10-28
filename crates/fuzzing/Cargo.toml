@@ -9,7 +9,6 @@ version = "0.19.0"
 [dependencies]
 anyhow = "1.0.22"
 arbitrary = { version = "0.4.1", features = ["derive"] }
-binaryen = { version = "0.10.0", optional = true }
 env_logger = "0.7.1"
 log = "0.4.8"
 rayon = "1.2.1"
@@ -17,6 +16,7 @@ wasmparser = "0.63.0"
 wasmprinter = "0.2.10"
 wasmtime = { path = "../wasmtime" }
 wasmtime-wast = { path = "../wast" }
+wasm-smith = "0.1.9"
 
 [dev-dependencies]
 wat = "1.0.23"

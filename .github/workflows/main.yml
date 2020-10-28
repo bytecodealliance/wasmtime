@@ -146,7 +146,7 @@ jobs:
     - run: cargo install cargo-fuzz --vers "^0.8"
     - run: cargo fetch
       working-directory: ./fuzz
-    - run: cargo fuzz build --dev --features binaryen
+    - run: cargo fuzz build --dev
 
   rebuild_peephole_optimizers:
     name: Rebuild Peephole Optimizers

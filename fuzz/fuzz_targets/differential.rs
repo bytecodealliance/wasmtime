@@ -6,8 +6,9 @@ use wasmtime_fuzzing::{generators, oracles};
 fuzz_target!(|data: (
     generators::DifferentialConfig,
     generators::DifferentialConfig,
-    generators::WasmOptTtf
+    wasm_smith::Module,
 )| {
-    let (lhs, rhs, wasm) = data;
+    let (lhs, rhs, mut wasm) = data;
+    wasm.ensure_termination(1000);
     oracles::differential_execution(&wasm, &[lhs, rhs]);
 });
