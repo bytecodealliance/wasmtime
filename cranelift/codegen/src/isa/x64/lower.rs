@@ -2167,6 +2167,22 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::FminPseudo | Opcode::FmaxPseudo => {
+            let lhs = input_to_reg_mem(ctx, inputs[0]);
+            let rhs = put_input_in_reg(ctx, inputs[1]);
+            let dst = get_output_reg(ctx, outputs[0]);
+            let ty = ty.unwrap();
+            ctx.emit(Inst::gen_move(dst, rhs, ty));
+            let sse_opcode = match (ty, op) {
+                (types::F32X4, Opcode::FminPseudo) => SseOpcode::Minps,
+                (types::F32X4, Opcode::FmaxPseudo) => SseOpcode::Maxps,
+                (types::F64X2, Opcode::FminPseudo) => SseOpcode::Minpd,
+                (types::F64X2, Opcode::FmaxPseudo) => SseOpcode::Maxpd,
+                _ => unimplemented!("unsupported type {} for {}", ty, op),
+            };
+            ctx.emit(Inst::xmm_rm_r(sse_opcode, lhs, dst, None));
+        }
+
         Opcode::Sqrt => {
             let src = input_to_reg_mem(ctx, inputs[0]);
             let dst = get_output_reg(ctx, outputs[0]);
