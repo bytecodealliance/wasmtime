@@ -393,6 +393,8 @@ pub enum SseOpcode {
     Movdqa,
     Movdqu,
     Movlhps,
+    Movmskps,
+    Movmskpd,
     Movq,
     Movss,
     Movsd,
@@ -407,6 +409,7 @@ pub enum SseOpcode {
     Pabsb,
     Pabsw,
     Pabsd,
+    Packsswb,
     Paddb,
     Paddd,
     Paddq,
@@ -445,6 +448,7 @@ pub enum SseOpcode {
     Pminub,
     Pminuw,
     Pminud,
+    Pmovmskb,
     Pmulld,
     Pmullw,
     Pmuludq,
@@ -510,6 +514,7 @@ impl SseOpcode {
             | SseOpcode::Minss
             | SseOpcode::Movaps
             | SseOpcode::Movlhps
+            | SseOpcode::Movmskps
             | SseOpcode::Movss
             | SseOpcode::Movups
             | SseOpcode::Mulps
@@ -546,6 +551,7 @@ impl SseOpcode {
             | SseOpcode::Minsd
             | SseOpcode::Movapd
             | SseOpcode::Movd
+            | SseOpcode::Movmskpd
             | SseOpcode::Movq
             | SseOpcode::Movsd
             | SseOpcode::Movupd
@@ -554,6 +560,7 @@ impl SseOpcode {
             | SseOpcode::Mulpd
             | SseOpcode::Mulsd
             | SseOpcode::Orpd
+            | SseOpcode::Packsswb
             | SseOpcode::Paddb
             | SseOpcode::Paddd
             | SseOpcode::Paddq
@@ -578,6 +585,7 @@ impl SseOpcode {
             | SseOpcode::Pmaxub
             | SseOpcode::Pminsw
             | SseOpcode::Pminub
+            | SseOpcode::Pmovmskb
             | SseOpcode::Pmullw
             | SseOpcode::Pmuludq
             | SseOpcode::Por
@@ -686,6 +694,8 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Movdqa => "movdqa",
             SseOpcode::Movdqu => "movdqu",
             SseOpcode::Movlhps => "movlhps",
+            SseOpcode::Movmskps => "movmskps",
+            SseOpcode::Movmskpd => "movmskpd",
             SseOpcode::Movq => "movq",
             SseOpcode::Movss => "movss",
             SseOpcode::Movsd => "movsd",
@@ -700,6 +710,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pabsb => "pabsb",
             SseOpcode::Pabsw => "pabsw",
             SseOpcode::Pabsd => "pabsd",
+            SseOpcode::Packsswb => "packsswb",
             SseOpcode::Paddb => "paddb",
             SseOpcode::Paddd => "paddd",
             SseOpcode::Paddq => "paddq",
@@ -738,6 +749,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pminub => "pminub",
             SseOpcode::Pminuw => "pminuw",
             SseOpcode::Pminud => "pminud",
+            SseOpcode::Pmovmskb => "pmovmskb",
             SseOpcode::Pmulld => "pmulld",
             SseOpcode::Pmullw => "pmullw",
             SseOpcode::Pmuludq => "pmuludq",

@@ -3292,6 +3292,12 @@ fn test_x64_emit() {
         "pshufb  %xmm11, %xmm2",
     ));
 
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Packsswb, RegMem::reg(xmm11), w_xmm2, None),
+        "66410F63D3",
+        "packsswb %xmm11, %xmm2",
+    ));
+
     // ========================================================
     // XMM_RM_R: Integer Conversion
     insns.push((
@@ -3420,6 +3426,22 @@ fn test_x64_emit() {
         Inst::xmm_to_gpr(SseOpcode::Cvttsd2si, xmm0, w_r15, OperandSize::Size64),
         "F24C0F2CF8",
         "cvttsd2si %xmm0, %r15",
+    ));
+
+    insns.push((
+        Inst::xmm_to_gpr(SseOpcode::Pmovmskb, xmm10, w_rax, OperandSize::Size32),
+        "66410FD7C2",
+        "pmovmskb %xmm10, %eax",
+    ));
+    insns.push((
+        Inst::xmm_to_gpr(SseOpcode::Movmskps, xmm2, w_rax, OperandSize::Size32),
+        "0F50C2",
+        "movmskps %xmm2, %eax",
+    ));
+    insns.push((
+        Inst::xmm_to_gpr(SseOpcode::Movmskpd, xmm0, w_rcx, OperandSize::Size32),
+        "660F50C8",
+        "movmskpd %xmm0, %ecx",
     ));
 
     insns.push((
