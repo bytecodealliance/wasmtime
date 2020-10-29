@@ -237,13 +237,13 @@ struct TypingContext<'a, TOperator> {
 
 impl<'a, TOperator> TypingContext<'a, TOperator> {
     fn new(z3: &'a z3::Context) -> Self {
-        let type_kind_sort = z3::DatatypeBuilder::new(z3)
-            .variant("int", &[])
-            .variant("bool", &[])
-            .variant("cpu_flags", &[])
-            .variant("cc", &[])
-            .variant("void", &[])
-            .finish("TypeKind");
+        let type_kind_sort = z3::DatatypeBuilder::new(z3, "TypeKind")
+            .variant("int", vec![])
+            .variant("bool", vec![])
+            .variant("cpu_flags", vec![])
+            .variant("cc", vec![])
+            .variant("void", vec![])
+            .finish();
         TypingContext {
             z3,
             solver: z3::Solver::new(z3),
@@ -576,7 +576,7 @@ impl<'a, TOperator> TypingContext<'a, TOperator> {
         // Check if there is more than one satisfying assignment to
         // `ty_var`'s width variable. If so, then it must be polymorphic. If
         // not, then it must have a fixed value.
-        let model = self.solver.get_model();
+        let model = self.solver.get_model().unwrap();
         let width_var = model.eval(&ty_var.width).unwrap();
         let bit_width: u8 = width_var.as_u64().unwrap().try_into().unwrap();
 
