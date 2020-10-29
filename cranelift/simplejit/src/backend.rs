@@ -126,10 +126,10 @@ pub struct SimpleJITModule {
     isa: Box<dyn TargetIsa>,
     symbols: HashMap<String, *const u8>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
-    memory: SimpleJITMemoryHandle,
+    memory: MemoryHandle,
     declarations: ModuleDeclarations,
-    functions: SecondaryMap<FuncId, Option<SimpleJITCompiledFunction>>,
-    data_objects: SecondaryMap<DataId, Option<SimpleJITCompiledData>>,
+    functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
+    data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
     functions_to_finalize: Vec<FuncId>,
     data_objects_to_finalize: Vec<DataId>,
 }
@@ -151,21 +151,14 @@ struct StackMapRecord {
 }
 
 #[derive(Clone)]
-pub struct SimpleJITCompiledFunction {
-    code: *mut u8,
-    size: usize,
-    relocs: Vec<RelocRecord>,
-}
-
-#[derive(Clone)]
-pub struct SimpleJITCompiledData {
-    storage: *mut u8,
+struct CompiledBlob {
+    ptr: *mut u8,
     size: usize,
     relocs: Vec<RelocRecord>,
 }
 
 /// A handle to allow freeing memory allocated by the `Module`.
-struct SimpleJITMemoryHandle {
+struct MemoryHandle {
     code: Memory,
     readonly: Memory,
     writable: Memory,
@@ -174,10 +167,10 @@ struct SimpleJITMemoryHandle {
 /// A `SimpleJITProduct` allows looking up the addresses of all functions and data objects
 /// defined in the original module.
 pub struct SimpleJITProduct {
-    memory: SimpleJITMemoryHandle,
+    memory: MemoryHandle,
     declarations: ModuleDeclarations,
-    functions: SecondaryMap<FuncId, Option<SimpleJITCompiledFunction>>,
-    data_objects: SecondaryMap<DataId, Option<SimpleJITCompiledData>>,
+    functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
+    data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
 }
 
 impl SimpleJITProduct {
@@ -205,7 +198,7 @@ impl SimpleJITProduct {
         self.functions[func_id]
             .as_ref()
             .unwrap_or_else(|| panic!("{} is not defined", func_id))
-            .code
+            .ptr
     }
 
     /// Return the address and size of a data object.
@@ -213,43 +206,81 @@ impl SimpleJITProduct {
         let data = self.data_objects[data_id]
             .as_ref()
             .unwrap_or_else(|| panic!("{} is not defined", data_id));
-        (data.storage, data.size)
+        (data.ptr, data.size)
     }
 }
 
 impl SimpleJITModule {
-    fn lookup_symbol(&self, name: &str) -> *const u8 {
-        match self.symbols.get(name) {
-            Some(&ptr) => ptr,
-            None => lookup_with_dlsym(name),
-        }
+    fn lookup_symbol(&self, name: &str) -> Option<*const u8> {
+        self.symbols
+            .get(name)
+            .copied()
+            .or_else(|| lookup_with_dlsym(name))
     }
 
     fn get_definition(&self, name: &ir::ExternalName) -> *const u8 {
         match *name {
             ir::ExternalName::User { .. } => {
-                if self.declarations.is_function(name) {
+                let (name, linkage) = if self.declarations.is_function(name) {
                     let func_id = self.declarations.get_function_id(name);
                     match &self.functions[func_id] {
-                        Some(compiled) => compiled.code,
+                        Some(compiled) => return compiled.ptr,
                         None => {
-                            self.lookup_symbol(&self.declarations.get_function_decl(func_id).name)
+                            let decl = self.declarations.get_function_decl(func_id);
+                            (&decl.name, decl.linkage)
                         }
                     }
                 } else {
                     let data_id = self.declarations.get_data_id(name);
                     match &self.data_objects[data_id] {
-                        Some(compiled) => compiled.storage,
-                        None => self.lookup_symbol(&self.declarations.get_data_decl(data_id).name),
+                        Some(compiled) => return compiled.ptr,
+                        None => {
+                            let decl = self.declarations.get_data_decl(data_id);
+                            (&decl.name, decl.linkage)
+                        }
                     }
+                };
+                if let Some(ptr) = self.lookup_symbol(&name) {
+                    ptr
+                } else if linkage == Linkage::Preemptible {
+                    0 as *const u8
+                } else {
+                    panic!("can't resolve symbol {}", name);
                 }
             }
             ir::ExternalName::LibCall(ref libcall) => {
                 let sym = (self.libcall_names)(*libcall);
                 self.lookup_symbol(&sym)
+                    .unwrap_or_else(|| panic!("can't resolve libcall {}", sym))
             }
             _ => panic!("invalid ExternalName {}", name),
         }
+    }
+
+    /// Returns the address of a finalized function.
+    pub fn get_finalized_function(&self, func_id: FuncId) -> *const u8 {
+        let info = &self.functions[func_id];
+        debug_assert!(
+            !self.functions_to_finalize.iter().any(|x| *x == func_id),
+            "function not yet finalized"
+        );
+        info.as_ref()
+            .expect("function must be compiled before it can be finalized")
+            .ptr
+    }
+
+    /// Returns the address and size of a finalized data object.
+    pub fn get_finalized_data(&self, data_id: DataId) -> (*const u8, usize) {
+        let info = &self.data_objects[data_id];
+        debug_assert!(
+            !self.data_objects_to_finalize.iter().any(|x| *x == data_id),
+            "data object not yet finalized"
+        );
+        let compiled = info
+            .as_ref()
+            .expect("data object must be compiled before it can be finalized");
+
+        (compiled.ptr, compiled.size)
     }
 
     fn record_function_for_perf(&self, ptr: *mut u8, size: usize, name: &str) {
@@ -283,9 +314,8 @@ impl SimpleJITModule {
             addend,
         } in &func.relocs
         {
-            let ptr = func.code;
             debug_assert!((offset as usize) < func.size);
-            let at = unsafe { ptr.offset(offset as isize) };
+            let at = unsafe { func.ptr.offset(offset as isize) };
             let base = self.get_definition(name);
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };
@@ -331,9 +361,8 @@ impl SimpleJITModule {
             addend,
         } in &data.relocs
         {
-            let ptr = data.storage;
             debug_assert!((offset as usize) < data.size);
-            let at = unsafe { ptr.offset(offset as isize) };
+            let at = unsafe { data.ptr.offset(offset as isize) };
             let base = self.get_definition(name);
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };
@@ -360,9 +389,32 @@ impl SimpleJITModule {
         }
     }
 
+    /// Finalize all functions and data objects that are defined but not yet finalized.
+    /// All symbols referenced in their bodies that are declared as needing a definition
+    /// must be defined by this point.
+    ///
+    /// Use `get_finalized_function` and `get_finalized_data` to obtain the final
+    /// artifacts.
+    pub fn finalize_definitions(&mut self) {
+        for func in std::mem::take(&mut self.functions_to_finalize) {
+            let decl = self.declarations.get_function_decl(func);
+            debug_assert!(decl.linkage.is_definable());
+            self.finalize_function(func);
+        }
+        for data in std::mem::take(&mut self.data_objects_to_finalize) {
+            let decl = self.declarations.get_data_decl(data);
+            debug_assert!(decl.linkage.is_definable());
+            self.finalize_data(data);
+        }
+
+        // Now that we're done patching, prepare the memory for execution!
+        self.memory.readonly.set_readonly();
+        self.memory.code.set_readable_and_executable();
+    }
+
     /// Create a new `SimpleJITModule`.
     pub fn new(builder: SimpleJITBuilder) -> Self {
-        let memory = SimpleJITMemoryHandle {
+        let memory = MemoryHandle {
             code: Memory::new(),
             readonly: Memory::new(),
             writable: Memory::new(),
@@ -451,8 +503,8 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
 
         self.record_function_for_perf(ptr, size, &decl.name);
 
-        let mut reloc_sink = SimpleJITRelocSink::new();
-        let mut stack_map_sink = SimpleJITStackMapSink::new();
+        let mut reloc_sink = SimpleJITRelocSink::default();
+        let mut stack_map_sink = SimpleJITStackMapSink::default();
         unsafe {
             ctx.emit_to_memory(
                 &*self.isa,
@@ -463,8 +515,8 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             )
         };
 
-        self.functions[id] = Some(SimpleJITCompiledFunction {
-            code: ptr,
+        self.functions[id] = Some(CompiledBlob {
+            ptr,
             size,
             relocs: reloc_sink.relocs,
         });
@@ -505,8 +557,8 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, size);
         }
 
-        self.functions[id] = Some(SimpleJITCompiledFunction {
-            code: ptr,
+        self.functions[id] = Some(CompiledBlob {
+            ptr,
             size,
             relocs: vec![],
         });
@@ -539,7 +591,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         } = data.description();
 
         let size = init.size();
-        let storage = if decl.writable {
+        let ptr = if decl.writable {
             self.memory
                 .writable
                 .allocate(size, align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
@@ -556,11 +608,11 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
                 panic!("data is not initialized yet");
             }
             Init::Zeros { .. } => {
-                unsafe { ptr::write_bytes(storage, 0, size) };
+                unsafe { ptr::write_bytes(ptr, 0, size) };
             }
             Init::Bytes { ref contents } => {
                 let src = contents.as_ptr();
-                unsafe { ptr::copy_nonoverlapping(src, storage, size) };
+                unsafe { ptr::copy_nonoverlapping(src, ptr, size) };
             }
         }
 
@@ -587,11 +639,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             });
         }
 
-        self.data_objects[id] = Some(SimpleJITCompiledData {
-            storage,
-            size,
-            relocs,
-        });
+        self.data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
 
         Ok(())
     }
@@ -606,20 +654,7 @@ impl SimpleJITModule {
     /// This method does not need to be called when access to the memory
     /// handle is not required.
     pub fn finish(mut self) -> SimpleJITProduct {
-        for func in std::mem::take(&mut self.functions_to_finalize) {
-            let decl = self.declarations.get_function_decl(func);
-            debug_assert!(decl.linkage.is_definable());
-            self.finalize_function(func);
-        }
-        for data in std::mem::take(&mut self.data_objects_to_finalize) {
-            let decl = self.declarations.get_data_decl(data);
-            debug_assert!(decl.linkage.is_definable());
-            self.finalize_data(data);
-        }
-
-        // Now that we're done patching, prepare the memory for execution!
-        self.memory.readonly.set_readonly();
-        self.memory.code.set_readable_and_executable();
+        self.finalize_definitions();
 
         SimpleJITProduct {
             memory: self.memory,
@@ -631,18 +666,19 @@ impl SimpleJITModule {
 }
 
 #[cfg(not(windows))]
-fn lookup_with_dlsym(name: &str) -> *const u8 {
+fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
     let c_str = CString::new(name).unwrap();
     let c_str_ptr = c_str.as_ptr();
     let sym = unsafe { libc::dlsym(libc::RTLD_DEFAULT, c_str_ptr) };
     if sym.is_null() {
-        panic!("can't resolve symbol {}", name);
+        None
+    } else {
+        Some(sym as *const u8)
     }
-    sym as *const u8
 }
 
 #[cfg(windows)]
-fn lookup_with_dlsym(name: &str) -> *const u8 {
+fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
     const MSVCRT_DLL: &[u8] = b"msvcrt.dll\0";
 
     let c_str = CString::new(name).unwrap();
@@ -661,26 +697,16 @@ fn lookup_with_dlsym(name: &str) -> *const u8 {
             if addr.is_null() {
                 continue;
             }
-            return addr as *const u8;
+            return Some(addr as *const u8);
         }
 
-        let msg = if handles[1].is_null() {
-            "(msvcrt not loaded)"
-        } else {
-            ""
-        };
-        panic!("cannot resolve address of symbol {} {}", name, msg);
+        None
     }
 }
 
+#[derive(Default)]
 struct SimpleJITRelocSink {
-    pub relocs: Vec<RelocRecord>,
-}
-
-impl SimpleJITRelocSink {
-    pub fn new() -> Self {
-        Self { relocs: Vec::new() }
-    }
+    relocs: Vec<RelocRecord>,
 }
 
 impl RelocSink for SimpleJITRelocSink {
@@ -729,16 +755,9 @@ impl RelocSink for SimpleJITRelocSink {
     }
 }
 
+#[derive(Default)]
 struct SimpleJITStackMapSink {
-    pub stack_maps: Vec<StackMapRecord>,
-}
-
-impl SimpleJITStackMapSink {
-    pub fn new() -> Self {
-        Self {
-            stack_maps: Vec::new(),
-        }
-    }
+    stack_maps: Vec<StackMapRecord>,
 }
 
 impl StackMapSink for SimpleJITStackMapSink {
