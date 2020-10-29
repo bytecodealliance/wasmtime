@@ -32,25 +32,16 @@ test = false
 doc = false
 
 [[bin]]
-name = "instantiate_translated"
-path = "fuzz_targets/instantiate_translated.rs"
-test = false
-doc = false
-required-features = ["binaryen"]
-
-[[bin]]
 name = "api_calls"
 path = "fuzz_targets/api_calls.rs"
 test = false
 doc = false
-required-features = ["binaryen"]
 
 [[bin]]
 name = "differential"
 path = "fuzz_targets/differential.rs"
 test = false
 doc = false
-required-features = ["binaryen"]
 
 [[bin]]
 name = "spectests"
@@ -99,12 +90,15 @@ test = false
 doc = false
 required-features = ["peepmatic-fuzzing"]
 
-[features]
-binaryen = ["wasmtime-fuzzing/binaryen"]
-
 [[bin]]
 name = "instantiate-wasm-smith"
 path = "fuzz_targets/instantiate-wasm-smith.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "instantiate-swarm"
+path = "fuzz_targets/instantiate-swarm.rs"
 test = false
 doc = false
 
