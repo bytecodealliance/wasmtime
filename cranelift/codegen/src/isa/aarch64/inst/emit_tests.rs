@@ -2073,6 +2073,24 @@ fn test_aarch64_binemit() {
         "dup v18.2d, v10.d[0]",
     ));
     insns.push((
+        Inst::VecDupFPImm {
+            rd: writable_vreg(31),
+            imm: ASIMDFPModImm::maybe_from_u64(1_f32.to_bits() as u64, ScalarSize::Size32).unwrap(),
+            size: VectorSize::Size32x2,
+        },
+        "1FF6030F",
+        "fmov v31.2s, #1",
+    ));
+    insns.push((
+        Inst::VecDupFPImm {
+            rd: writable_vreg(0),
+            imm: ASIMDFPModImm::maybe_from_u64(2_f64.to_bits(), ScalarSize::Size64).unwrap(),
+            size: VectorSize::Size64x2,
+        },
+        "00F4006F",
+        "fmov v0.2d, #2",
+    ));
+    insns.push((
         Inst::VecDupImm {
             rd: writable_vreg(31),
             imm: ASIMDMovModImm::maybe_from_u64(255, ScalarSize::Size8).unwrap(),
@@ -2084,13 +2102,93 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::VecDupImm {
+            rd: writable_vreg(30),
+            imm: ASIMDMovModImm::maybe_from_u64(0, ScalarSize::Size16).unwrap(),
+            invert: false,
+            size: VectorSize::Size16x8,
+        },
+        "1E84004F",
+        "movi v30.8h, #0",
+    ));
+    insns.push((
+        Inst::VecDupImm {
             rd: writable_vreg(0),
-            imm: ASIMDMovModImm::zero(),
+            imm: ASIMDMovModImm::zero(ScalarSize::Size16),
             invert: true,
             size: VectorSize::Size16x4,
         },
         "0084002F",
         "mvni v0.4h, #0",
+    ));
+    insns.push((
+        Inst::VecDupImm {
+            rd: writable_vreg(0),
+            imm: ASIMDMovModImm::maybe_from_u64(256, ScalarSize::Size16).unwrap(),
+            invert: false,
+            size: VectorSize::Size16x8,
+        },
+        "20A4004F",
+        "movi v0.8h, #1, LSL #8",
+    ));
+    insns.push((
+        Inst::VecDupImm {
+            rd: writable_vreg(8),
+            imm: ASIMDMovModImm::maybe_from_u64(2228223, ScalarSize::Size32).unwrap(),
+            invert: false,
+            size: VectorSize::Size32x4,
+        },
+        "28D4014F",
+        "movi v8.4s, #33, MSL #16",
+    ));
+    insns.push((
+        Inst::VecDupImm {
+            rd: writable_vreg(16),
+            imm: ASIMDMovModImm::maybe_from_u64(35071, ScalarSize::Size32).unwrap(),
+            invert: true,
+            size: VectorSize::Size32x2,
+        },
+        "10C5042F",
+        "mvni v16.2s, #136, MSL #8",
+    ));
+    insns.push((
+        Inst::VecDupImm {
+            rd: writable_vreg(1),
+            imm: ASIMDMovModImm::maybe_from_u64(0, ScalarSize::Size32).unwrap(),
+            invert: false,
+            size: VectorSize::Size32x2,
+        },
+        "0104000F",
+        "movi v1.2s, #0",
+    ));
+    insns.push((
+        Inst::VecDupImm {
+            rd: writable_vreg(24),
+            imm: ASIMDMovModImm::maybe_from_u64(1107296256, ScalarSize::Size32).unwrap(),
+            invert: false,
+            size: VectorSize::Size32x4,
+        },
+        "5864024F",
+        "movi v24.4s, #66, LSL #24",
+    ));
+    insns.push((
+        Inst::VecDupImm {
+            rd: writable_vreg(8),
+            imm: ASIMDMovModImm::zero(ScalarSize::Size64),
+            invert: false,
+            size: VectorSize::Size64x2,
+        },
+        "08E4006F",
+        "movi v8.2d, #0",
+    ));
+    insns.push((
+        Inst::VecDupImm {
+            rd: writable_vreg(7),
+            imm: ASIMDMovModImm::maybe_from_u64(18374687574904995840, ScalarSize::Size64).unwrap(),
+            invert: false,
+            size: VectorSize::Size64x2,
+        },
+        "87E6046F",
+        "movi v7.2d, #18374687574904995840",
     ));
     insns.push((
         Inst::VecExtend {
@@ -4374,6 +4472,16 @@ fn test_aarch64_binemit() {
         },
         "7705085E",
         "mov d23, v11.d[0]",
+    ));
+
+    insns.push((
+        Inst::FpuExtend {
+            rd: writable_vreg(31),
+            rn: vreg(0),
+            size: ScalarSize::Size32,
+        },
+        "1F40201E",
+        "fmov s31, s0",
     ));
 
     insns.push((

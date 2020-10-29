@@ -127,3 +127,46 @@ block0(v0: i64, v1: i64):
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
+
+function %f9() -> i32x2 {
+block0:
+  v0 = iconst.i32 4278190335
+  v1 = splat.i32x2 v0
+  return v1
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  movi v0.2d, #18374687579166474495
+; nextln:  fmov d0, d0
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f10() -> i32x4 {
+block0:
+  v0 = iconst.i32 4293918720
+  v1 = splat.i32x4 v0
+  return v1
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  mvni v0.4s, #15, MSL #16
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f11() -> f32x4 {
+block0:
+  v0 = f32const 0x1.5
+  v1 = splat.f32x4 v0
+  return v1
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  fmov v0.4s, #1.3125
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret

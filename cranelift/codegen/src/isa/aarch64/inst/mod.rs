@@ -755,6 +755,13 @@ pub enum Inst {
         size: VectorSize,
     },
 
+    /// Zero-extend a SIMD & FP scalar to the full width of a vector register.
+    FpuExtend {
+        rd: Writable<Reg>,
+        rn: Reg,
+        size: ScalarSize,
+    },
+
     /// 1-op FPU instruction.
     FpuRR {
         fpu_op: FPUOp1,
@@ -925,6 +932,13 @@ pub enum Inst {
     VecDupFromFpu {
         rd: Writable<Reg>,
         rn: Reg,
+        size: VectorSize,
+    },
+
+    /// Duplicate FP immediate to vector.
+    VecDupFPImm {
+        rd: Writable<Reg>,
+        imm: ASIMDFPModImm,
         size: VectorSize,
     },
 
@@ -1295,12 +1309,15 @@ impl Inst {
         value: u32,
         mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
+        // Note that we must make sure that all bits outside the lowest 32 are set to 0
+        // because this function is also used to load wider constants (that have zeros
+        // in their most significant bits).
         if value == 0 {
             smallvec![Inst::VecDupImm {
                 rd,
-                imm: ASIMDMovModImm::zero(),
+                imm: ASIMDMovModImm::zero(ScalarSize::Size32),
                 invert: false,
-                size: VectorSize::Size8x8
+                size: VectorSize::Size32x2
             }]
         } else {
             // TODO: use FMOV immediate form when `value` has sufficiently few mantissa/exponent
@@ -1324,6 +1341,9 @@ impl Inst {
         const_data: u64,
         mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
+        // Note that we must make sure that all bits outside the lowest 64 are set to 0
+        // because this function is also used to load wider constants (that have zeros
+        // in their most significant bits).
         if let Ok(const_data) = u32::try_from(const_data) {
             Inst::load_fp_constant32(rd, const_data, alloc_tmp)
         // TODO: use FMOV immediate form when `const_data` has sufficiently few mantissa/exponent
@@ -1394,7 +1414,7 @@ impl Inst {
         r
     }
 
-    /// Create instructions that load a 128-bit vector constant consisting of elements with
+    /// Create instructions that load a vector constant consisting of elements with
     /// the same value.
     pub fn load_replicated_vector_pattern<F: FnMut(RegClass, Type) -> Writable<Reg>>(
         rd: Writable<Reg>,
@@ -1403,6 +1423,15 @@ impl Inst {
         mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 5]> {
         let lane_size = size.lane_size();
+        let widen_32_bit_pattern = |pattern, lane_size| {
+            if lane_size == ScalarSize::Size32 {
+                let pattern = pattern as u32 as u64;
+
+                ASIMDMovModImm::maybe_from_u64(pattern | (pattern << 32), ScalarSize::Size64)
+            } else {
+                None
+            }
+        };
 
         if let Some(imm) = ASIMDMovModImm::maybe_from_u64(pattern, lane_size) {
             smallvec![Inst::VecDupImm {
@@ -1421,6 +1450,27 @@ impl Inst {
                 invert: true,
                 size
             }]
+        } else if let Some(imm) = widen_32_bit_pattern(pattern, lane_size) {
+            let mut insts = smallvec![Inst::VecDupImm {
+                rd,
+                imm,
+                invert: false,
+                size: VectorSize::Size64x2,
+            }];
+
+            // TODO: Implement support for 64-bit scalar MOVI; we zero-extend the
+            // lower 64 bits instead.
+            if !size.is_128bits() {
+                insts.push(Inst::FpuExtend {
+                    rd,
+                    rn: rd.to_reg(),
+                    size: ScalarSize::Size64,
+                });
+            }
+
+            insts
+        } else if let Some(imm) = ASIMDFPModImm::maybe_from_u64(pattern, lane_size) {
+            smallvec![Inst::VecDupFPImm { rd, imm, size }]
         } else {
             let tmp = alloc_tmp(RegClass::I64, I64);
             let mut insts = SmallVec::from(&Inst::load_constant(tmp, pattern)[..]);
@@ -1721,6 +1771,10 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             collector.add_use(rn);
         }
+        &Inst::FpuExtend { rd, rn, .. } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
+        }
         &Inst::FpuRR { rd, rn, .. } => {
             collector.add_def(rd);
             collector.add_use(rn);
@@ -1869,6 +1923,9 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::VecDupFromFpu { rd, rn, .. } => {
             collector.add_def(rd);
             collector.add_use(rn);
+        }
+        &Inst::VecDupFPImm { rd, .. } => {
+            collector.add_def(rd);
         }
         &Inst::VecDupImm { rd, .. } => {
             collector.add_def(rd);
@@ -2299,6 +2356,14 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_def(mapper, rd);
             map_use(mapper, rn);
         }
+        &mut Inst::FpuExtend {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+        }
         &mut Inst::FpuRR {
             ref mut rd,
             ref mut rn,
@@ -2581,6 +2646,9 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         } => {
             map_def(mapper, rd);
             map_use(mapper, rn);
+        }
+        &mut Inst::VecDupFPImm { ref mut rd, .. } => {
+            map_def(mapper, rd);
         }
         &mut Inst::VecDupImm { ref mut rd, .. } => {
             map_def(mapper, rd);
@@ -3229,6 +3297,12 @@ impl Inst {
                 let rn = show_vreg_element(rn, mb_rru, idx, size);
                 format!("mov {}, {}", rd, rn)
             }
+            &Inst::FpuExtend { rd, rn, size } => {
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, size);
+                let rn = show_vreg_scalar(rn, mb_rru, size);
+
+                format!("fmov {}, {}", rd, rn)
+            }
             &Inst::FpuRR { fpu_op, rd, rn } => {
                 let (op, sizesrc, sizedest) = match fpu_op {
                     FPUOp1::Abs32 => ("fabs", ScalarSize::Size32, ScalarSize::Size32),
@@ -3464,6 +3538,12 @@ impl Inst {
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
                 let rn = show_vreg_element(rn, mb_rru, 0, size);
                 format!("dup {}, {}", rd, rn)
+            }
+            &Inst::VecDupFPImm { rd, imm, size } => {
+                let imm = imm.show_rru(mb_rru);
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
+
+                format!("fmov {}, {}", rd, imm)
             }
             &Inst::VecDupImm {
                 rd,
