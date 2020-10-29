@@ -16,7 +16,7 @@ peepmatic-runtime = { version = "0.67.0", path = "crates/runtime", features = ["
 peepmatic-traits = { version = "0.67.0", path = "crates/traits" }
 serde = { version = "1.0.105", features = ["derive"] }
 wast = "25.0.0"
-z3 = { version = "0.6.0", features = ["static-link-z3"] }
+z3 = { version = "0.7.0", features = ["static-link-z3"] }
 
 [dev-dependencies]
 peepmatic-test-operator = { version = "0.67.0", path = "crates/test-operator" }
