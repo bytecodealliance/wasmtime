@@ -299,3 +299,48 @@ block0(v0: i64):
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
+
+function %f18(i64, i32) -> i16x8 {
+block0(v0: i64, v1: i32):
+  v2 = uextend.i64 v1
+  v3 = sload8x8_complex v2+v0
+  return v3
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: ldr d0, [x0, w1, UXTW]
+; nextln: sxtl v0.8h, v0.8b
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f19(i64, i64) -> i32x4 {
+block0(v0: i64, v1: i64):
+  v2 = uload16x4_complex v0+v1+8
+  return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: add x0, x0, x1
+; nextln: ldr d0, [x0, #8]
+; nextln: uxtl v0.4s, v0.4h
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f20(i64, i32) -> i64x2 {
+block0(v0: i64, v1: i32):
+  v2 = sextend.i64 v1
+  v3 = uload32x2_complex v2+v0
+  return v3
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: ldr d0, [x0, w1, SXTW]
+; nextln: uxtl v0.2d, v0.2s
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
