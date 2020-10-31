@@ -2298,13 +2298,24 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 // Converting packed unsigned integers to packed floats requires a few steps.
                 // There is no single instruction lowering for converting unsigned floats but there
-                // is for converted packed signed integers to float (cvtdq2ps). In the steps below
+                // is for converting packed signed integers to float (cvtdq2ps). In the steps below
                 // we isolate the upper half (16 bits) and lower half (16 bits) of each lane and
                 // then we convert each half separately using cvtdq2ps meant for signed integers.
                 // In order for this to work for the upper half bits we must shift right by 1
                 // (divide by 2) these bits in order to ensure the most significant bit is 0 not
                 // signed, and then after the conversion we double the value. Finally we add the
                 // converted values where addition will correctly round.
+                //
+                // Sequence:
+                // -> A = 0xffffffff
+                // -> Ah = 0xffff0000
+                // -> Al = 0x0000ffff
+                // -> Convert(Al) // Convert int to float
+                // -> Ah = Ah >> 1 // Shift right 1 to assure Ah conversion isn't treated as signed
+                // -> Convert(Ah) // Convert .. with no loss of significant digits from previous shift
+                // -> Ah = Ah + Ah // Double Ah to account for shift right before the conversion.
+                // -> dst = Ah + Al // Add the two floats together
+
                 assert_eq!(ctx.input_ty(insn, 0), types::I32X4);
                 let src = put_input_in_reg(ctx, inputs[0]);
                 let dst = get_output_reg(ctx, outputs[0]);
