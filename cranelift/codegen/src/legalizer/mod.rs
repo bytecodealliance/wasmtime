@@ -774,12 +774,12 @@ fn narrow_icmp_imm(
     let ty = pos.func.dfg.ctrl_typevar(inst);
     let ty_half = ty.half_width().unwrap();
 
-    let imm_low = pos
-        .ins()
-        .iconst(ty_half, imm & ((1u128 << ty_half.bits()) - 1) as i64);
-    let imm_high = pos
-        .ins()
-        .iconst(ty_half, imm.wrapping_shr(ty_half.bits().into()));
+    let mask = ((1u128 << ty_half.bits()) - 1) as i64;
+    let imm_low = pos.ins().iconst(ty_half, imm & mask);
+    let imm_high = pos.ins().iconst(
+        ty_half,
+        imm.checked_shr(ty_half.bits().into()).unwrap_or(0) & mask,
+    );
     let (arg_low, arg_high) = pos.ins().isplit(arg);
 
     match cond {
