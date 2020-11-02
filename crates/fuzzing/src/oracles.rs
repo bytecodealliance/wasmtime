@@ -44,6 +44,7 @@ fn log_wat(wat: &str) {
 
     let i = CNT.fetch_add(1, SeqCst);
     let name = format!("testcase{}.wat", i);
+    log::debug!("wrote wat file to `{}`", name);
     std::fs::write(&name, wat).expect("failed to write wat file");
 }
 
