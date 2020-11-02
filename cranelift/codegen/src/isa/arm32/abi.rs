@@ -45,6 +45,11 @@ impl ABIMachineSpec for Arm32MachineDeps {
         32
     }
 
+    /// Return required stack alignment in bytes.
+    fn stack_align(_call_conv: isa::CallConv) -> u32 {
+        8
+    }
+
     fn compute_arg_locs(
         _call_conv: isa::CallConv,
         params: &[ir::AbiParam],

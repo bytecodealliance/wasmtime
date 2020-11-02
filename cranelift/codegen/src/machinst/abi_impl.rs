@@ -216,6 +216,9 @@ pub trait ABIMachineSpec {
         }
     }
 
+    /// Returns required stack alignment in bytes.
+    fn stack_align(call_conv: isa::CallConv) -> u32;
+
     /// Process a list of parameters or return values and allocate them to registers
     /// and stack slots.
     ///
@@ -936,7 +939,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
             );
             total_stacksize += self.flags.baldrdash_prologue_words() as u32 * bytes;
         }
-        let mask = 2 * bytes - 1;
+        let mask = M::stack_align(self.call_conv) - 1;
         let total_stacksize = (total_stacksize + mask) & !mask; // 16-align the stack.
 
         let mut fixed_frame_storage_size = 0;
