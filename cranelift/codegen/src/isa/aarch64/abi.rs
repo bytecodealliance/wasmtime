@@ -559,6 +559,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         call_conv: isa::CallConv,
         flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
+        _fixed_frame_storage_size: u32,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
         let (clobbered_int, clobbered_vec) = get_regs_saved_in_prologue(call_conv, clobbers);
