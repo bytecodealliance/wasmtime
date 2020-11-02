@@ -32,16 +32,16 @@ impl<'a> Frame<'a> {
 
     /// Retrieve the actual value associated with an SSA reference.
     #[inline]
-    pub fn get(&self, name: &ValueRef) -> &DataValue {
+    pub fn get(&self, name: ValueRef) -> &DataValue {
         trace!("Get {}", name);
         self.registers
-            .get(name)
+            .get(&name)
             .unwrap_or_else(|| panic!("unknown value: {}", name))
     }
 
     /// Retrieve multiple SSA references; see `get`.
     pub fn get_all(&self, names: &[ValueRef]) -> Vec<DataValue> {
-        names.iter().map(|r| self.get(r)).cloned().collect()
+        names.iter().map(|r| self.get(*r)).cloned().collect()
     }
 
     /// Assign `value` to the SSA reference `name`.
@@ -108,7 +108,7 @@ mod tests {
         let a = ValueRef::with_number(1).unwrap();
         let fortytwo = DataValue::I32(42);
         frame.set(a, fortytwo.clone());
-        assert_eq!(frame.get(&a), &fortytwo);
+        assert_eq!(frame.get(a), &fortytwo);
     }
 
     #[test]
@@ -118,6 +118,6 @@ mod tests {
         let frame = Frame::new(&func);
 
         let a = ValueRef::with_number(1).unwrap();
-        frame.get(&a);
+        frame.get(a);
     }
 }

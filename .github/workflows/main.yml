@@ -50,7 +50,7 @@ jobs:
     name: Doc - build the API documentation
     runs-on: ubuntu-latest
     env:
-      RUSTDOCFLAGS: -Dintra-doc-link-resolution-failure
+      RUSTDOCFLAGS: -Dbroken_intra_doc_links
     steps:
     - uses: actions/checkout@v2
       with:

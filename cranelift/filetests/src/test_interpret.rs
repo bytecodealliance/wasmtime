@@ -5,8 +5,9 @@
 
 use crate::subtest::{Context, SubTest};
 use cranelift_codegen::{self, ir};
-use cranelift_interpreter::environment::Environment;
-use cranelift_interpreter::interpreter::{ControlFlow, Interpreter};
+use cranelift_interpreter::environment::FunctionStore;
+use cranelift_interpreter::interpreter::{Interpreter, InterpreterState};
+use cranelift_interpreter::step::ControlFlow;
 use cranelift_reader::{parse_run_command, TestCommand};
 use log::trace;
 use std::borrow::Cow;
@@ -39,16 +40,16 @@ impl SubTest for TestInterpret {
             if let Some(command) = parse_run_command(comment.text, &func.signature)? {
                 trace!("Parsed run command: {}", command);
 
-                let mut env = Environment::default();
-                env.add(func.name.to_string(), func.clone().into_owned());
-                let interpreter = Interpreter::new(env);
+                let mut env = FunctionStore::default();
+                env.add(func.name.to_string(), &func);
 
                 command
                     .run(|func_name, args| {
                         // Because we have stored function names with a leading %, we need to re-add it.
                         let func_name = &format!("%{}", func_name);
-                        match interpreter.call_by_name(func_name, args) {
-                            Ok(ControlFlow::Return(results)) => Ok(results),
+                        let state = InterpreterState::default().with_function_store(env);
+                        match Interpreter::new(state).call_by_name(func_name, args) {
+                            Ok(ControlFlow::Return(results)) => Ok(results.to_vec()),
                             Ok(_) => {
                                 panic!("Unexpected returned control flow--this is likely a bug.")
                             }

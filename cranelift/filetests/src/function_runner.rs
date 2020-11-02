@@ -237,6 +237,7 @@ impl UnboxedValues {
             DataValue::F32(f) => ptr::write(p as *mut Ieee32, *f),
             DataValue::F64(f) => ptr::write(p as *mut Ieee64, *f),
             DataValue::V128(b) => ptr::write(p as *mut [u8; 16], *b),
+            _ => unimplemented!(),
         }
     }
 

@@ -413,6 +413,7 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-reader",
  "log",
+ "smallvec",
  "thiserror",
 ]
 
@@ -1884,9 +1885,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.4.1"
+version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3757cb9d89161a2f24e1cf78efa0c1fcff485d18e3f55e0aa3480824ddaa0f3f"
+checksum = "fbee7696b84bbf3d89a1c2eccff0850e3047ed46bfcd2e92c29a2d074d57e252"
 
 [[package]]
 name = "souper-ir"
