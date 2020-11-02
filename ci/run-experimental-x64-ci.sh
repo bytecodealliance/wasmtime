@@ -6,6 +6,7 @@
 CARGO_VERSION=${CARGO_VERSION:-"+nightly"}
 
 cargo $CARGO_VERSION \
+            --locked \
             -Zfeatures=all -Zpackage-features \
             test \
             --features test-programs/test_programs \
