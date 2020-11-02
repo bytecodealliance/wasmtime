@@ -813,7 +813,11 @@ pub(crate) fn lower_constant_f32<C: LowerCtx<I = Inst>>(
     rd: Writable<Reg>,
     value: f32,
 ) {
-    ctx.emit(Inst::load_fp_constant32(rd, value));
+    let alloc_tmp = |class, ty| ctx.alloc_tmp(class, ty);
+
+    for inst in Inst::load_fp_constant32(rd, value.to_bits(), alloc_tmp) {
+        ctx.emit(inst);
+    }
 }
 
 pub(crate) fn lower_constant_f64<C: LowerCtx<I = Inst>>(
@@ -821,7 +825,11 @@ pub(crate) fn lower_constant_f64<C: LowerCtx<I = Inst>>(
     rd: Writable<Reg>,
     value: f64,
 ) {
-    ctx.emit(Inst::load_fp_constant64(rd, value));
+    let alloc_tmp = |class, ty| ctx.alloc_tmp(class, ty);
+
+    for inst in Inst::load_fp_constant64(rd, value.to_bits(), alloc_tmp) {
+        ctx.emit(inst);
+    }
 }
 
 pub(crate) fn lower_constant_f128<C: LowerCtx<I = Inst>>(
@@ -829,7 +837,38 @@ pub(crate) fn lower_constant_f128<C: LowerCtx<I = Inst>>(
     rd: Writable<Reg>,
     value: u128,
 ) {
-    ctx.emit(Inst::load_fp_constant128(rd, value));
+    let alloc_tmp = |class, ty| ctx.alloc_tmp(class, ty);
+
+    for inst in Inst::load_fp_constant128(rd, value, alloc_tmp) {
+        ctx.emit(inst);
+    }
+}
+
+pub(crate) fn lower_splat_const<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    rd: Writable<Reg>,
+    value: u64,
+    size: VectorSize,
+) {
+    let (value, narrow_size) = match size.lane_size() {
+        ScalarSize::Size8 => (value as u8 as u64, ScalarSize::Size128),
+        ScalarSize::Size16 => (value as u16 as u64, ScalarSize::Size8),
+        ScalarSize::Size32 => (value as u32 as u64, ScalarSize::Size16),
+        ScalarSize::Size64 => (value, ScalarSize::Size32),
+        _ => unreachable!(),
+    };
+    let (value, size) = match Inst::get_replicated_vector_pattern(value as u128, narrow_size) {
+        Some((value, lane_size)) => (
+            value,
+            VectorSize::from_lane_size(lane_size, size.is_128bits()),
+        ),
+        None => (value, size),
+    };
+    let alloc_tmp = |class, ty| ctx.alloc_tmp(class, ty);
+
+    for inst in Inst::load_replicated_vector_pattern(rd, value, size, alloc_tmp) {
+        ctx.emit(inst);
+    }
 }
 
 pub(crate) fn lower_condcode(cc: IntCC) -> Cond {
