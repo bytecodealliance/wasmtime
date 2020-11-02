@@ -494,6 +494,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
                 let reference_type = self.reference_type(WasmType::ExternRef);
 
+                builder.ensure_inserted_block();
                 let continue_block = builder.create_block();
                 let non_null_elem_block = builder.create_block();
                 let gc_block = builder.create_block();
@@ -643,6 +644,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 //    drop the old table element *after* we've replaced it with
                 //    the new `value`!
 
+                builder.ensure_inserted_block();
                 let current_block = builder.current_block().unwrap();
                 let inc_ref_count_block = builder.create_block();
                 builder.insert_block_after(inc_ref_count_block, current_block);
