@@ -2,13 +2,14 @@
 //! [InstructionContext]; the interpretation is generic over [Value]s.
 use crate::instruction::InstructionContext;
 use crate::state::{MemoryError, State};
-use crate::value::{Value, ValueConversionKind, ValueError};
+use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
     types, Block, FuncRef, Function, InstructionData, Opcode, TrapCode, Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
+use std::ops::RangeFrom;
 use thiserror::Error;
 
 /// Interpret a single Cranelift instruction. Note that program traps and interpreter errors are
@@ -35,153 +36,93 @@ where
         }
     );
 
-    macro_rules! args {
-        () => {
-            state
-                .collect_values(inst_context.args())
-                .map_err(|v| StepError::UnknownValue(v))?
+    // The following closures make the `step` implementation much easier to express. Note that they
+    // frequently close over the `state` or `inst_context` for brevity.
+
+    // Retrieve the current value for an instruction argument.
+    let arg = |index: usize| -> Result<V, StepError> {
+        let value_ref = inst_context.args()[index];
+        state
+            .get_value(value_ref)
+            .ok_or(StepError::UnknownValue(value_ref))
+    };
+
+    // Retrieve the current values for all of an instruction's arguments.
+    let args = || -> Result<SmallVec<[V; 1]>, StepError> {
+        state
+            .collect_values(inst_context.args())
+            .map_err(|v| StepError::UnknownValue(v))
+    };
+
+    // Retrieve the current values for a range of an instruction's arguments.
+    let args_range = |indexes: RangeFrom<usize>| -> Result<SmallVec<[V; 1]>, StepError> {
+        Ok(SmallVec::<[V; 1]>::from(&args()?[indexes]))
+    };
+
+    // Retrieve the immediate value for an instruction, expecting it to exist.
+    let imm = || -> V { V::from(inst.imm_value().unwrap()) };
+
+    // Retrieve the immediate value for an instruction and convert it to the controlling type of the
+    // instruction. For example, since `InstructionData` stores all integer immediates in a 64-bit
+    // size, this will attempt to convert `iconst.i8 ...` to an 8-bit size.
+    let imm_as_ctrl_ty =
+        || -> Result<V, ValueError> { V::convert(imm(), ValueConversionKind::Exact(ctrl_ty)) };
+
+    // Indicate that the result of a step is to assign a single value to an instruction's results.
+    let assign = |value: V| ControlFlow::Assign(smallvec![value]);
+
+    // Interpret a binary instruction with the given `op`, assigning the resulting value to the
+    // instruction's results.
+    let binary = |op: fn(V, V) -> ValueResult<V>,
+                  left: V,
+                  right: V|
+     -> ValueResult<ControlFlow<V>> { Ok(assign(op(left, right)?)) };
+
+    // Same as `binary`, but converts the values to their unsigned form before the operation and
+    // back to signed form afterwards. Since Cranelift types have no notion of signedness, this
+    // enables operations that depend on sign.
+    let binary_unsigned =
+        |op: fn(V, V) -> ValueResult<V>, left: V, right: V| -> ValueResult<ControlFlow<V>> {
+            Ok(assign(
+                op(
+                    left.convert(ValueConversionKind::ToUnsigned)?,
+                    right.convert(ValueConversionKind::ToUnsigned)?,
+                )?
+                .convert(ValueConversionKind::ToSigned)?,
+            ))
         };
-        ($range:expr) => {{
-            SmallVec::<[V; 1]>::from(&args!()[$range])
-        }};
-    }
-    macro_rules! arg {
-        ($index:expr) => {{
-            let value_ref = inst_context.args()[$index];
-            state
-                .get_value(value_ref)
-                .ok_or(StepError::UnknownValue(value_ref))?
-        }};
-    }
-    macro_rules! imm {
-        () => {
-            V::from(inst.imm_value().unwrap())
-        };
-    }
-    macro_rules! imm_as_ctrl_ty {
-        () => {
-            V::convert(
-                V::from(inst.imm_value().unwrap()),
-                ValueConversionKind::Exact(ctrl_ty),
-            )?
-        };
-    }
-    macro_rules! binary {
-        ($op:path, $a:expr, $b:expr) => {
-            assign![$op($a, $b)?]
-        };
-    }
-    macro_rules! binary_unsigned {
-        ($op:path, $a:expr, $b:expr) => {
-            assign![$op(
-                $a.convert(ValueConversionKind::ToUnsigned)?,
-                $b.convert(ValueConversionKind::ToUnsigned)?
-            )?
-            .convert(ValueConversionKind::ToSigned)?]
-        };
-    }
-    macro_rules! assign {
-        ($a:expr) => {
-            ControlFlow::Assign(smallvec![$a])
-        };
-    }
-    macro_rules! choose {
-        ($op:expr, $a:expr, $b:expr) => {
-            assign!(if $op { $a } else { $b })
-        };
-    }
-    macro_rules! branch {
-        () => {
-            inst.branch_destination().unwrap()
-        };
-    }
-    macro_rules! branch_when {
-        ($e: expr) => {
-            if $e {
-                ControlFlow::ContinueAt(branch!(), args!(1..))
-            } else {
-                ControlFlow::Continue
-            }
-        };
-    }
-    macro_rules! trap_code {
-        () => {
-            inst.trap_code().unwrap()
-        };
-    }
-    macro_rules! trap_when {
-        ($e: expr, $t: expr) => {
-            if $e {
-                ControlFlow::Trap($t)
-            } else {
-                ControlFlow::Continue
-            }
-        };
-    }
-    macro_rules! icmp {
-        () => {
-            icmp!(inst.cond_code().unwrap(), &arg!(0), &arg!(1))
-        };
-        ($f: expr, $a: expr, $b: expr) => {
-            match $f {
-                IntCC::Equal => Value::eq($a, $b)?,
-                IntCC::NotEqual => !Value::eq($a, $b)?,
-                IntCC::SignedGreaterThan => Value::gt($a, $b)?,
-                IntCC::SignedGreaterThanOrEqual => Value::ge($a, $b)?,
-                IntCC::SignedLessThan => Value::lt($a, $b)?,
-                IntCC::SignedLessThanOrEqual => Value::le($a, $b)?,
-                IntCC::UnsignedGreaterThan => Value::gt(
-                    &$a.clone().convert(ValueConversionKind::ToUnsigned)?,
-                    &$b.clone().convert(ValueConversionKind::ToUnsigned)?,
-                )?,
-                IntCC::UnsignedGreaterThanOrEqual => Value::ge(
-                    &$a.clone().convert(ValueConversionKind::ToUnsigned)?,
-                    &$b.clone().convert(ValueConversionKind::ToUnsigned)?,
-                )?,
-                IntCC::UnsignedLessThan => Value::lt(
-                    &$a.clone().convert(ValueConversionKind::ToUnsigned)?,
-                    &$b.clone().convert(ValueConversionKind::ToUnsigned)?,
-                )?,
-                IntCC::UnsignedLessThanOrEqual => Value::le(
-                    &$a.clone().convert(ValueConversionKind::ToUnsigned)?,
-                    &$b.clone().convert(ValueConversionKind::ToUnsigned)?,
-                )?,
-                IntCC::Overflow => unimplemented!("IntCC::Overflow"),
-                IntCC::NotOverflow => unimplemented!("IntCC::NotOverflow"),
-            }
-        };
-    }
-    // TODO should not have to use signed less-than/greater-than
-    macro_rules! fcmp {
-        () => {
-            fcmp!(inst.fp_cond_code().unwrap(), &arg!(0), &arg!(1))
-        };
-        ($f: expr, $a: expr, $b: expr) => {
-            match $f {
-                FloatCC::Ordered => Value::eq($a, $b)? || Value::lt($a, $b)? || Value::gt($a, $b)?,
-                FloatCC::Unordered => Value::uno($a, $b)?,
-                FloatCC::Equal => Value::eq($a, $b)?,
-                FloatCC::NotEqual => {
-                    Value::lt($a, $b)? || Value::gt($a, $b)? || Value::uno($a, $b)?
-                }
-                FloatCC::OrderedNotEqual => Value::lt($a, $b)? || Value::gt($a, $b)?,
-                FloatCC::UnorderedOrEqual => Value::eq($a, $b)? || Value::uno($a, $b)?,
-                FloatCC::LessThan => Value::lt($a, $b)?,
-                FloatCC::LessThanOrEqual => Value::lt($a, $b)? || Value::eq($a, $b)?,
-                FloatCC::GreaterThan => Value::gt($a, $b)?,
-                FloatCC::GreaterThanOrEqual => Value::gt($a, $b)? || Value::eq($a, $b)?,
-                FloatCC::UnorderedOrLessThan => Value::uno($a, $b)? || Value::lt($a, $b)?,
-                FloatCC::UnorderedOrLessThanOrEqual => {
-                    Value::uno($a, $b)? || Value::lt($a, $b)? || Value::eq($a, $b)?
-                }
-                FloatCC::UnorderedOrGreaterThan => Value::uno($a, $b)? || Value::gt($a, $b)?,
-                FloatCC::UnorderedOrGreaterThanOrEqual => {
-                    Value::uno($a, $b)? || Value::gt($a, $b)? || Value::eq($a, $b)?
-                }
-            }
-        };
-    }
-    fn sum<V: Value>(head: V, tail: SmallVec<[V; 1]>) -> Result<i64, ValueError> {
+
+    // Choose whether to assign `left` or `right` to the instruction's result based on a `condition`.
+    let choose = |condition: bool, left: V, right: V| -> ControlFlow<V> {
+        assign(if condition { left } else { right })
+    };
+
+    // Retrieve an instruction's branch destination; expects the instruction to be a branch.
+    let branch = || -> Block { inst.branch_destination().unwrap() };
+
+    // Based on `condition`, indicate where to continue the control flow.
+    let branch_when = |condition: bool| -> Result<ControlFlow<V>, StepError> {
+        Ok(if condition {
+            ControlFlow::ContinueAt(branch(), args_range(1..)?)
+        } else {
+            ControlFlow::Continue
+        })
+    };
+
+    // Retrieve an instruction's trap code; expects the instruction to be a trap.
+    let trap_code = || -> TrapCode { inst.trap_code().unwrap() };
+
+    // Based on `condition`, either trap or not.
+    let trap_when = |condition: bool, trap: CraneliftTrap| -> ControlFlow<V> {
+        if condition {
+            ControlFlow::Trap(trap)
+        } else {
+            ControlFlow::Continue
+        }
+    };
+
+    // Helper for summing a sequence of values.
+    fn sum<V: Value>(head: V, tail: SmallVec<[V; 1]>) -> ValueResult<i64> {
         let mut acc = head;
         for t in tail {
             acc = Value::add(acc, t)?;
@@ -189,39 +130,40 @@ where
         acc.into_int()
     }
 
+    // Interpret a Cranelift instruction.
     Ok(match inst.opcode() {
-        Opcode::Jump | Opcode::Fallthrough => ControlFlow::ContinueAt(branch!(), args!()),
-        Opcode::Brz => branch_when!(!arg!(0).into_bool()?),
-        Opcode::Brnz => branch_when!(arg!(0).into_bool()?),
-        Opcode::BrIcmp => branch_when!(icmp!()),
-        Opcode::Brif => branch_when!(state.has_iflag(inst.cond_code().unwrap())),
-        Opcode::Brff => branch_when!(state.has_fflag(inst.fp_cond_code().unwrap())),
+        Opcode::Jump | Opcode::Fallthrough => ControlFlow::ContinueAt(branch(), args()?),
+        Opcode::Brz => branch_when(!arg(0)?.into_bool()?)?,
+        Opcode::Brnz => branch_when(arg(0)?.into_bool()?)?,
+        Opcode::BrIcmp => branch_when(icmp(inst.cond_code().unwrap(), &arg(1)?, &arg(2)?)?)?,
+        Opcode::Brif => branch_when(state.has_iflag(inst.cond_code().unwrap()))?,
+        Opcode::Brff => branch_when(state.has_fflag(inst.fp_cond_code().unwrap()))?,
         Opcode::BrTable => unimplemented!("BrTable"),
         Opcode::JumpTableEntry => unimplemented!("JumpTableEntry"),
         Opcode::JumpTableBase => unimplemented!("JumpTableBase"),
         Opcode::IndirectJumpTableBr => unimplemented!("IndirectJumpTableBr"),
-        Opcode::Trap => ControlFlow::Trap(CraneliftTrap::User(trap_code!())),
+        Opcode::Trap => ControlFlow::Trap(CraneliftTrap::User(trap_code())),
         Opcode::Debugtrap => ControlFlow::Trap(CraneliftTrap::Debug),
         Opcode::ResumableTrap => ControlFlow::Trap(CraneliftTrap::Resumable),
-        Opcode::Trapz => trap_when!(!arg!(0).into_bool()?, CraneliftTrap::User(trap_code!())),
-        Opcode::Trapnz => trap_when!(arg!(0).into_bool()?, CraneliftTrap::User(trap_code!())),
-        Opcode::ResumableTrapnz => trap_when!(arg!(0).into_bool()?, CraneliftTrap::Resumable),
-        Opcode::Trapif => trap_when!(
+        Opcode::Trapz => trap_when(!arg(0)?.into_bool()?, CraneliftTrap::User(trap_code())),
+        Opcode::Trapnz => trap_when(arg(0)?.into_bool()?, CraneliftTrap::User(trap_code())),
+        Opcode::ResumableTrapnz => trap_when(arg(0)?.into_bool()?, CraneliftTrap::Resumable),
+        Opcode::Trapif => trap_when(
             state.has_iflag(inst.cond_code().unwrap()),
-            CraneliftTrap::User(trap_code!())
+            CraneliftTrap::User(trap_code()),
         ),
-        Opcode::Trapff => trap_when!(
+        Opcode::Trapff => trap_when(
             state.has_fflag(inst.fp_cond_code().unwrap()),
-            CraneliftTrap::User(trap_code!())
+            CraneliftTrap::User(trap_code()),
         ),
-        Opcode::Return => ControlFlow::Return(args!()),
-        Opcode::FallthroughReturn => ControlFlow::Return(args!()),
+        Opcode::Return => ControlFlow::Return(args()?),
+        Opcode::FallthroughReturn => ControlFlow::Return(args()?),
         Opcode::Call => {
             if let InstructionData::Call { func_ref, .. } = inst {
                 let function = state
                     .get_function(func_ref)
                     .ok_or(StepError::UnknownFunction(func_ref))?;
-                ControlFlow::Call(function, args!())
+                ControlFlow::Call(function, args()?)
             } else {
                 unreachable!()
             }
@@ -254,7 +196,7 @@ where
         | Opcode::Uload32x2Complex
         | Opcode::Sload32x2
         | Opcode::Sload32x2Complex => {
-            let address = sum(imm!(), args!())? as usize;
+            let address = sum(imm(), args()?)? as usize;
             let ctrl_ty = inst_context.controlling_type().unwrap();
             let (load_ty, kind) = match inst.opcode() {
                 Opcode::Load | Opcode::LoadComplex => (ctrl_ty, None),
@@ -306,7 +248,7 @@ where
         | Opcode::Istore16Complex
         | Opcode::Istore32
         | Opcode::Istore32Complex => {
-            let address = sum(imm!(), args!(1..))? as usize;
+            let address = sum(imm(), args_range(1..)?)? as usize;
             let kind = match inst.opcode() {
                 Opcode::Store | Opcode::StoreComplex => None,
                 Opcode::Istore8 | Opcode::Istore8Complex => {
@@ -321,22 +263,23 @@ where
                 _ => unreachable!(),
             };
             let reduced = if let Some(c) = kind {
-                arg!(0).convert(c)?
+                arg(0)?.convert(c)?
             } else {
-                arg!(0)
+                arg(0)?
             };
             state.store_heap(address, reduced)?;
             ControlFlow::Continue
         }
         Opcode::StackLoad => {
-            let address = sum(imm!(), args!(1..))? as usize;
+            let address = sum(imm(), args_range(1..)?)? as usize;
             let load_ty = inst_context.controlling_type().unwrap();
             let loaded = state.load_stack(address, load_ty)?;
             ControlFlow::Assign(smallvec!(loaded))
         }
         Opcode::StackStore => {
-            let address = sum(imm!(), args!(1..))? as usize;
-            state.store_stack(address, arg!(0))?;
+            let address = sum(imm(), args_range(1..)?)? as usize;
+            let arg0 = arg(0)?;
+            state.store_stack(address, arg0)?;
             ControlFlow::Continue
         }
         Opcode::StackAddr => unimplemented!("StackAddr"),
@@ -347,30 +290,30 @@ where
         Opcode::GetPinnedReg => unimplemented!("GetPinnedReg"),
         Opcode::SetPinnedReg => unimplemented!("SetPinnedReg"),
         Opcode::TableAddr => unimplemented!("TableAddr"),
-        Opcode::Iconst => assign!(Value::int(imm!().into_int()?, ctrl_ty)?),
-        Opcode::F32const => assign!(imm!()),
-        Opcode::F64const => assign!(imm!()),
-        Opcode::Bconst => assign!(imm!()),
+        Opcode::Iconst => assign(Value::int(imm().into_int()?, ctrl_ty)?),
+        Opcode::F32const => assign(imm()),
+        Opcode::F64const => assign(imm()),
+        Opcode::Bconst => assign(imm()),
         Opcode::Vconst => unimplemented!("Vconst"),
         Opcode::ConstAddr => unimplemented!("ConstAddr"),
         Opcode::Null => unimplemented!("Null"),
         Opcode::Nop => ControlFlow::Continue,
-        Opcode::Select => choose!(arg!(0).into_bool()?, arg!(1), arg!(2)),
-        Opcode::Selectif => choose!(state.has_iflag(inst.cond_code().unwrap()), arg!(1), arg!(2)),
+        Opcode::Select => choose(arg(0)?.into_bool()?, arg(1)?, arg(2)?),
+        Opcode::Selectif => choose(state.has_iflag(inst.cond_code().unwrap()), arg(1)?, arg(2)?),
         Opcode::SelectifSpectreGuard => unimplemented!("SelectifSpectreGuard"),
         Opcode::Bitselect => {
-            let mask_a = Value::and(arg!(0), arg!(1))?;
-            let mask_b = Value::and(Value::not(arg!(0))?, arg!(2))?;
-            assign!(Value::or(mask_a, mask_b)?)
+            let mask_a = Value::and(arg(0)?, arg(1)?)?;
+            let mask_b = Value::and(Value::not(arg(0)?)?, arg(2)?)?;
+            assign(Value::or(mask_a, mask_b)?)
         }
-        Opcode::Copy => assign!(arg!(0)),
+        Opcode::Copy => assign(arg(0)?),
         Opcode::Spill => unimplemented!("Spill"),
         Opcode::Fill => unimplemented!("Fill"),
-        Opcode::FillNop => assign!(arg!(0)),
+        Opcode::FillNop => assign(arg(0)?),
         Opcode::DummySargT => unimplemented!("DummySargT"),
         Opcode::Regmove => ControlFlow::Continue,
         Opcode::CopySpecial => ControlFlow::Continue,
-        Opcode::CopyToSsa => assign!(arg!(0)),
+        Opcode::CopyToSsa => assign(arg(0)?),
         Opcode::CopyNop => unimplemented!("CopyNop"),
         Opcode::AdjustSpDown => unimplemented!("AdjustSpDown"),
         Opcode::AdjustSpUpImm => unimplemented!("AdjustSpUpImm"),
@@ -379,15 +322,19 @@ where
         Opcode::Regspill => unimplemented!("Regspill"),
         Opcode::Regfill => unimplemented!("Regfill"),
         Opcode::Safepoint => unimplemented!("Safepoint"),
-        Opcode::Icmp => assign!(Value::bool(icmp!(), ctrl_ty.as_bool())?),
-        Opcode::IcmpImm => assign!(Value::bool(
-            icmp!(inst.cond_code().unwrap(), &arg!(0), &imm_as_ctrl_ty!()),
-            ctrl_ty.as_bool()
+        Opcode::Icmp => assign(Value::bool(
+            icmp(inst.cond_code().unwrap(), &arg(0)?, &arg(1)?)?,
+            ctrl_ty.as_bool(),
+        )?),
+        Opcode::IcmpImm => assign(Value::bool(
+            icmp(inst.cond_code().unwrap(), &arg(0)?, &imm_as_ctrl_ty()?)?,
+            ctrl_ty.as_bool(),
         )?),
         Opcode::Ifcmp | Opcode::IfcmpImm => {
+            let arg0 = arg(0)?;
             let arg1 = match inst.opcode() {
-                Opcode::Ifcmp => arg!(1),
-                Opcode::IfcmpImm => imm_as_ctrl_ty!(),
+                Opcode::Ifcmp => arg(1)?,
+                Opcode::IfcmpImm => imm_as_ctrl_ty()?,
                 _ => unreachable!(),
             };
             state.clear_flags();
@@ -403,59 +350,59 @@ where
                 IntCC::UnsignedGreaterThan,
                 IntCC::UnsignedLessThanOrEqual,
             ] {
-                if icmp!(f, &arg!(0), &arg1) {
+                if icmp(*f, &arg0, &arg1)? {
                     state.set_iflag(*f);
                 }
             }
             ControlFlow::Continue
         }
-        Opcode::Imin => choose!(Value::gt(&arg!(1), &arg!(0))?, arg!(0), arg!(1)),
-        Opcode::Umin => choose!(
+        Opcode::Imin => choose(Value::gt(&arg(1)?, &arg(0)?)?, arg(0)?, arg(1)?),
+        Opcode::Umin => choose(
             Value::gt(
-                &arg!(1).convert(ValueConversionKind::ToUnsigned)?,
-                &arg!(0).convert(ValueConversionKind::ToUnsigned)?
+                &arg(1)?.convert(ValueConversionKind::ToUnsigned)?,
+                &arg(0)?.convert(ValueConversionKind::ToUnsigned)?,
             )?,
-            arg!(0),
-            arg!(1)
+            arg(0)?,
+            arg(1)?,
         ),
-        Opcode::Imax => choose!(Value::gt(&arg!(0), &arg!(1))?, arg!(0), arg!(1)),
-        Opcode::Umax => choose!(
+        Opcode::Imax => choose(Value::gt(&arg(0)?, &arg(1)?)?, arg(0)?, arg(1)?),
+        Opcode::Umax => choose(
             Value::gt(
-                &arg!(0).convert(ValueConversionKind::ToUnsigned)?,
-                &arg!(1).convert(ValueConversionKind::ToUnsigned)?
+                &arg(0)?.convert(ValueConversionKind::ToUnsigned)?,
+                &arg(1)?.convert(ValueConversionKind::ToUnsigned)?,
             )?,
-            arg!(0),
-            arg!(1)
+            arg(0)?,
+            arg(1)?,
         ),
         Opcode::AvgRound => {
-            let sum = Value::add(arg!(0), arg!(1))?;
-            let one = Value::int(1, arg!(0).ty())?;
+            let sum = Value::add(arg(0)?, arg(1)?)?;
+            let one = Value::int(1, arg(0)?.ty())?;
             let inc = Value::add(sum, one)?;
-            let two = Value::int(2, arg!(0).ty())?;
-            binary!(Value::div, inc, two)
+            let two = Value::int(2, arg(0)?.ty())?;
+            binary(Value::div, inc, two)?
         }
-        Opcode::Iadd => binary!(Value::add, arg!(0), arg!(1)),
+        Opcode::Iadd => binary(Value::add, arg(0)?, arg(1)?)?,
         Opcode::UaddSat => unimplemented!("UaddSat"),
         Opcode::SaddSat => unimplemented!("SaddSat"),
-        Opcode::Isub => binary!(Value::sub, arg!(0), arg!(1)),
+        Opcode::Isub => binary(Value::sub, arg(0)?, arg(1)?)?,
         Opcode::UsubSat => unimplemented!("UsubSat"),
         Opcode::SsubSat => unimplemented!("SsubSat"),
-        Opcode::Ineg => binary!(Value::sub, Value::int(0, ctrl_ty)?, arg!(0)),
+        Opcode::Ineg => binary(Value::sub, Value::int(0, ctrl_ty)?, arg(0)?)?,
         Opcode::Iabs => unimplemented!("Iabs"),
-        Opcode::Imul => binary!(Value::mul, arg!(0), arg!(1)),
+        Opcode::Imul => binary(Value::mul, arg(0)?, arg(1)?)?,
         Opcode::Umulhi => unimplemented!("Umulhi"),
         Opcode::Smulhi => unimplemented!("Smulhi"),
-        Opcode::Udiv => binary_unsigned!(Value::div, arg!(0), arg!(1)),
-        Opcode::Sdiv => binary!(Value::div, arg!(0), arg!(1)),
-        Opcode::Urem => binary_unsigned!(Value::rem, arg!(0), arg!(1)),
-        Opcode::Srem => binary!(Value::rem, arg!(0), arg!(1)),
-        Opcode::IaddImm => binary!(Value::add, arg!(0), imm_as_ctrl_ty!()),
-        Opcode::ImulImm => binary!(Value::mul, arg!(0), imm_as_ctrl_ty!()),
-        Opcode::UdivImm => binary_unsigned!(Value::div, arg!(0), imm!()),
-        Opcode::SdivImm => binary!(Value::div, arg!(0), imm_as_ctrl_ty!()),
-        Opcode::UremImm => binary_unsigned!(Value::rem, arg!(0), imm!()),
-        Opcode::SremImm => binary!(Value::rem, arg!(0), imm_as_ctrl_ty!()),
-        Opcode::IrsubImm => binary!(Value::sub, imm_as_ctrl_ty!(), arg!(0)),
+        Opcode::Udiv => binary_unsigned(Value::div, arg(0)?, arg(1)?)?,
+        Opcode::Sdiv => binary(Value::div, arg(0)?, arg(1)?)?,
+        Opcode::Urem => binary_unsigned(Value::rem, arg(0)?, arg(1)?)?,
+        Opcode::Srem => binary(Value::rem, arg(0)?, arg(1)?)?,
+        Opcode::IaddImm => binary(Value::add, arg(0)?, imm_as_ctrl_ty()?)?,
+        Opcode::ImulImm => binary(Value::mul, arg(0)?, imm_as_ctrl_ty()?)?,
+        Opcode::UdivImm => binary_unsigned(Value::div, arg(0)?, imm())?,
+        Opcode::SdivImm => binary(Value::div, arg(0)?, imm_as_ctrl_ty()?)?,
+        Opcode::UremImm => binary_unsigned(Value::rem, arg(0)?, imm())?,
+        Opcode::SremImm => binary(Value::rem, arg(0)?, imm_as_ctrl_ty()?)?,
+        Opcode::IrsubImm => binary(Value::sub, imm_as_ctrl_ty()?, arg(0)?)?,
         Opcode::IaddCin => unimplemented!("IaddCin"),
         Opcode::IaddIfcin => unimplemented!("IaddIfcin"),
         Opcode::IaddCout => unimplemented!("IaddCout"),
@@ -468,33 +415,38 @@ where
         Opcode::IsubIfbout => unimplemented!("IsubIfbout"),
         Opcode::IsubBorrow => unimplemented!("IsubBorrow"),
         Opcode::IsubIfborrow => unimplemented!("IsubIfborrow"),
-        Opcode::Band => binary!(Value::and, arg!(0), arg!(1)),
-        Opcode::Bor => binary!(Value::or, arg!(0), arg!(1)),
-        Opcode::Bxor => binary!(Value::xor, arg!(0), arg!(1)),
-        Opcode::Bnot => assign!(Value::not(arg!(0))?),
-        Opcode::BandNot => binary!(Value::and, arg!(0), Value::not(arg!(1))?),
-        Opcode::BorNot => binary!(Value::or, arg!(0), Value::not(arg!(1))?),
-        Opcode::BxorNot => binary!(Value::xor, arg!(0), Value::not(arg!(1))?),
-        Opcode::BandImm => binary!(Value::and, arg!(0), imm_as_ctrl_ty!()),
-        Opcode::BorImm => binary!(Value::or, arg!(0), imm_as_ctrl_ty!()),
-        Opcode::BxorImm => binary!(Value::xor, arg!(0), imm_as_ctrl_ty!()),
-        Opcode::Rotl => binary!(Value::rotl, arg!(0), arg!(1)),
-        Opcode::Rotr => binary!(Value::rotr, arg!(0), arg!(1)),
-        Opcode::RotlImm => binary!(Value::rotl, arg!(0), imm_as_ctrl_ty!()),
-        Opcode::RotrImm => binary!(Value::rotr, arg!(0), imm_as_ctrl_ty!()),
-        Opcode::Ishl => binary!(Value::shl, arg!(0), arg!(1)),
-        Opcode::Ushr => binary!(Value::ushr, arg!(0), arg!(1)),
-        Opcode::Sshr => binary!(Value::ishr, arg!(0), arg!(1)),
-        Opcode::IshlImm => binary!(Value::shl, arg!(0), imm_as_ctrl_ty!()),
-        Opcode::UshrImm => binary!(Value::ushr, arg!(0), imm_as_ctrl_ty!()),
-        Opcode::SshrImm => binary!(Value::ishr, arg!(0), imm_as_ctrl_ty!()),
+        Opcode::Band => binary(Value::and, arg(0)?, arg(1)?)?,
+        Opcode::Bor => binary(Value::or, arg(0)?, arg(1)?)?,
+        Opcode::Bxor => binary(Value::xor, arg(0)?, arg(1)?)?,
+        Opcode::Bnot => assign(Value::not(arg(0)?)?),
+        Opcode::BandNot => binary(Value::and, arg(0)?, Value::not(arg(1)?)?)?,
+        Opcode::BorNot => binary(Value::or, arg(0)?, Value::not(arg(1)?)?)?,
+        Opcode::BxorNot => binary(Value::xor, arg(0)?, Value::not(arg(1)?)?)?,
+        Opcode::BandImm => binary(Value::and, arg(0)?, imm_as_ctrl_ty()?)?,
+        Opcode::BorImm => binary(Value::or, arg(0)?, imm_as_ctrl_ty()?)?,
+        Opcode::BxorImm => binary(Value::xor, arg(0)?, imm_as_ctrl_ty()?)?,
+        Opcode::Rotl => binary(Value::rotl, arg(0)?, arg(1)?)?,
+        Opcode::Rotr => binary(Value::rotr, arg(0)?, arg(1)?)?,
+        Opcode::RotlImm => binary(Value::rotl, arg(0)?, imm_as_ctrl_ty()?)?,
+        Opcode::RotrImm => binary(Value::rotr, arg(0)?, imm_as_ctrl_ty()?)?,
+        Opcode::Ishl => binary(Value::shl, arg(0)?, arg(1)?)?,
+        Opcode::Ushr => binary(Value::ushr, arg(0)?, arg(1)?)?,
+        Opcode::Sshr => binary(Value::ishr, arg(0)?, arg(1)?)?,
+        Opcode::IshlImm => binary(Value::shl, arg(0)?, imm_as_ctrl_ty()?)?,
+        Opcode::UshrImm => binary(Value::ushr, arg(0)?, imm_as_ctrl_ty()?)?,
+        Opcode::SshrImm => binary(Value::ishr, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::Bitrev => unimplemented!("Bitrev"),
         Opcode::Clz => unimplemented!("Clz"),
         Opcode::Cls => unimplemented!("Cls"),
         Opcode::Ctz => unimplemented!("Ctz"),
         Opcode::Popcnt => unimplemented!("Popcnt"),
-        Opcode::Fcmp => assign!(Value::bool(fcmp!(), ctrl_ty.as_bool())?),
+        Opcode::Fcmp => assign(Value::bool(
+            fcmp(inst.fp_cond_code().unwrap(), &arg(0)?, &arg(1)?)?,
+            ctrl_ty.as_bool(),
+        )?),
         Opcode::Ffcmp => {
+            let arg0 = arg(0)?;
+            let arg1 = arg(1)?;
             state.clear_flags();
             for f in &[
                 FloatCC::Ordered,
@@ -512,31 +464,31 @@ where
                 FloatCC::UnorderedOrGreaterThan,
                 FloatCC::UnorderedOrGreaterThanOrEqual,
             ] {
-                if fcmp!(f, &arg!(0), &arg!(1)) {
+                if fcmp(*f, &arg0, &arg1)? {
                     state.set_fflag(*f);
                 }
             }
             ControlFlow::Continue
         }
-        Opcode::Fadd => binary!(Value::add, arg!(0), arg!(1)),
-        Opcode::Fsub => binary!(Value::sub, arg!(0), arg!(1)),
-        Opcode::Fmul => binary!(Value::mul, arg!(0), arg!(1)),
-        Opcode::Fdiv => binary!(Value::div, arg!(0), arg!(1)),
+        Opcode::Fadd => binary(Value::add, arg(0)?, arg(1)?)?,
+        Opcode::Fsub => binary(Value::sub, arg(0)?, arg(1)?)?,
+        Opcode::Fmul => binary(Value::mul, arg(0)?, arg(1)?)?,
+        Opcode::Fdiv => binary(Value::div, arg(0)?, arg(1)?)?,
         Opcode::Sqrt => unimplemented!("Sqrt"),
         Opcode::Fma => unimplemented!("Fma"),
-        Opcode::Fneg => binary!(Value::sub, Value::float(0, ctrl_ty)?, arg!(0)),
+        Opcode::Fneg => binary(Value::sub, Value::float(0, ctrl_ty)?, arg(0)?)?,
         Opcode::Fabs => unimplemented!("Fabs"),
         Opcode::Fcopysign => unimplemented!("Fcopysign"),
-        Opcode::Fmin => choose!(
-            Value::is_nan(&arg!(0))? || Value::lt(&arg!(0), &arg!(1))?,
-            arg!(0),
-            arg!(1)
+        Opcode::Fmin => choose(
+            Value::is_nan(&arg(0)?)? || Value::lt(&arg(0)?, &arg(1)?)?,
+            arg(0)?,
+            arg(1)?,
         ),
         Opcode::FminPseudo => unimplemented!("FminPseudo"),
-        Opcode::Fmax => choose!(
-            Value::is_nan(&arg!(0))? || Value::gt(&arg!(0), &arg!(1))?,
-            arg!(0),
-            arg!(1)
+        Opcode::Fmax => choose(
+            Value::is_nan(&arg(0)?)? || Value::gt(&arg(0)?, &arg(1)?)?,
+            arg(0)?,
+            arg(1)?,
         ),
         Opcode::FmaxPseudo => unimplemented!("FmaxPseudo"),
         Opcode::Ceil => unimplemented!("Ceil"),
@@ -545,15 +497,15 @@ where
         Opcode::Nearest => unimplemented!("Nearest"),
         Opcode::IsNull => unimplemented!("IsNull"),
         Opcode::IsInvalid => unimplemented!("IsInvalid"),
-        Opcode::Trueif => choose!(
+        Opcode::Trueif => choose(
             state.has_iflag(inst.cond_code().unwrap()),
             Value::bool(true, ctrl_ty)?,
-            Value::bool(false, ctrl_ty)?
+            Value::bool(false, ctrl_ty)?,
         ),
-        Opcode::Trueff => choose!(
+        Opcode::Trueff => choose(
             state.has_fflag(inst.fp_cond_code().unwrap()),
             Value::bool(true, ctrl_ty)?,
-            Value::bool(false, ctrl_ty)?
+            Value::bool(false, ctrl_ty)?,
         ),
         Opcode::Bitcast
         | Opcode::RawBitcast
@@ -562,33 +514,33 @@ where
         | Opcode::Bextend
         | Opcode::Bint
         | Opcode::Bmask
-        | Opcode::Ireduce => assign!(Value::convert(
-            arg!(0),
-            ValueConversionKind::Exact(ctrl_ty)
+        | Opcode::Ireduce => assign(Value::convert(
+            arg(0)?,
+            ValueConversionKind::Exact(ctrl_ty),
         )?),
-        Opcode::Snarrow => assign!(Value::convert(
-            arg!(0),
-            ValueConversionKind::Truncate(ctrl_ty)
+        Opcode::Snarrow => assign(Value::convert(
+            arg(0)?,
+            ValueConversionKind::Truncate(ctrl_ty),
         )?),
-        Opcode::Sextend => assign!(Value::convert(
-            arg!(0),
-            ValueConversionKind::SignExtend(ctrl_ty)
+        Opcode::Sextend => assign(Value::convert(
+            arg(0)?,
+            ValueConversionKind::SignExtend(ctrl_ty),
         )?),
-        Opcode::Unarrow => assign!(Value::convert(
-            arg!(0),
-            ValueConversionKind::Truncate(ctrl_ty)
+        Opcode::Unarrow => assign(Value::convert(
+            arg(0)?,
+            ValueConversionKind::Truncate(ctrl_ty),
         )?),
-        Opcode::Uextend => assign!(Value::convert(
-            arg!(0),
-            ValueConversionKind::ZeroExtend(ctrl_ty)
+        Opcode::Uextend => assign(Value::convert(
+            arg(0)?,
+            ValueConversionKind::ZeroExtend(ctrl_ty),
         )?),
-        Opcode::Fpromote => assign!(Value::convert(
-            arg!(0),
-            ValueConversionKind::Exact(ctrl_ty)
+        Opcode::Fpromote => assign(Value::convert(
+            arg(0)?,
+            ValueConversionKind::Exact(ctrl_ty),
         )?),
-        Opcode::Fdemote => assign!(Value::convert(
-            arg!(0),
-            ValueConversionKind::RoundNearestEven(ctrl_ty)
+        Opcode::Fdemote => assign(Value::convert(
+            arg(0)?,
+            ValueConversionKind::RoundNearestEven(ctrl_ty),
         )?),
         Opcode::Shuffle => unimplemented!("Shuffle"),
         Opcode::Swizzle => unimplemented!("Swizzle"),
@@ -716,4 +668,68 @@ pub enum CraneliftTrap {
     Debug,
     #[error("resumable")]
     Resumable,
+}
+
+/// Compare two values using the given integer condition `code`.
+fn icmp<V>(code: IntCC, left: &V, right: &V) -> ValueResult<bool>
+where
+    V: Value,
+{
+    Ok(match code {
+        IntCC::Equal => Value::eq(left, right)?,
+        IntCC::NotEqual => !Value::eq(left, right)?,
+        IntCC::SignedGreaterThan => Value::gt(left, right)?,
+        IntCC::SignedGreaterThanOrEqual => Value::ge(left, right)?,
+        IntCC::SignedLessThan => Value::lt(left, right)?,
+        IntCC::SignedLessThanOrEqual => Value::le(left, right)?,
+        IntCC::UnsignedGreaterThan => Value::gt(
+            &left.clone().convert(ValueConversionKind::ToUnsigned)?,
+            &right.clone().convert(ValueConversionKind::ToUnsigned)?,
+        )?,
+        IntCC::UnsignedGreaterThanOrEqual => Value::ge(
+            &left.clone().convert(ValueConversionKind::ToUnsigned)?,
+            &right.clone().convert(ValueConversionKind::ToUnsigned)?,
+        )?,
+        IntCC::UnsignedLessThan => Value::lt(
+            &left.clone().convert(ValueConversionKind::ToUnsigned)?,
+            &right.clone().convert(ValueConversionKind::ToUnsigned)?,
+        )?,
+        IntCC::UnsignedLessThanOrEqual => Value::le(
+            &left.clone().convert(ValueConversionKind::ToUnsigned)?,
+            &right.clone().convert(ValueConversionKind::ToUnsigned)?,
+        )?,
+        IntCC::Overflow => unimplemented!("IntCC::Overflow"),
+        IntCC::NotOverflow => unimplemented!("IntCC::NotOverflow"),
+    })
+}
+
+/// Compare two values using the given floating point condition `code`.
+fn fcmp<V>(code: FloatCC, left: &V, right: &V) -> ValueResult<bool>
+where
+    V: Value,
+{
+    Ok(match code {
+        FloatCC::Ordered => {
+            Value::eq(left, right)? || Value::lt(left, right)? || Value::gt(left, right)?
+        }
+        FloatCC::Unordered => Value::uno(left, right)?,
+        FloatCC::Equal => Value::eq(left, right)?,
+        FloatCC::NotEqual => {
+            Value::lt(left, right)? || Value::gt(left, right)? || Value::uno(left, right)?
+        }
+        FloatCC::OrderedNotEqual => Value::lt(left, right)? || Value::gt(left, right)?,
+        FloatCC::UnorderedOrEqual => Value::eq(left, right)? || Value::uno(left, right)?,
+        FloatCC::LessThan => Value::lt(left, right)?,
+        FloatCC::LessThanOrEqual => Value::lt(left, right)? || Value::eq(left, right)?,
+        FloatCC::GreaterThan => Value::gt(left, right)?,
+        FloatCC::GreaterThanOrEqual => Value::gt(left, right)? || Value::eq(left, right)?,
+        FloatCC::UnorderedOrLessThan => Value::uno(left, right)? || Value::lt(left, right)?,
+        FloatCC::UnorderedOrLessThanOrEqual => {
+            Value::uno(left, right)? || Value::lt(left, right)? || Value::eq(left, right)?
+        }
+        FloatCC::UnorderedOrGreaterThan => Value::uno(left, right)? || Value::gt(left, right)?,
+        FloatCC::UnorderedOrGreaterThanOrEqual => {
+            Value::uno(left, right)? || Value::gt(left, right)? || Value::eq(left, right)?
+        }
+    })
 }
