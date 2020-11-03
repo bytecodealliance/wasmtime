@@ -336,6 +336,7 @@ pub trait ABIMachineSpec {
         call_conv: isa::CallConv,
         flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
+        fixed_frame_storage_size: u32,
     ) -> SmallVec<[Self::I; 16]>;
 
     /// Generate a call instruction/sequence. This method is provided one
@@ -435,6 +436,10 @@ pub struct ABICalleeImpl<M: ABIMachineSpec> {
     clobbered: Set<Writable<RealReg>>,
     /// Total number of spillslots, from regalloc.
     spillslots: Option<usize>,
+    /// Storage allocated for the fixed part of the stack frame.  This is
+    /// usually the same as the total frame size below, except in the case
+    /// of the baldrdash calling convention.
+    fixed_frame_storage_size: u32,
     /// "Total frame size", as defined by "distance between FP and nominal SP".
     /// Some items are pushed below nominal SP, so the function may actually use
     /// more stack than this would otherwise imply. It is simply the initial
@@ -521,6 +526,7 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
             stackslots_size: stack_offset,
             clobbered: Set::empty(),
             spillslots: None,
+            fixed_frame_storage_size: 0,
             total_frame_size: None,
             ret_area_ptr: None,
             call_conv,
@@ -939,8 +945,6 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let mask = 2 * bytes - 1;
         let total_stacksize = (total_stacksize + mask) & !mask; // 16-align the stack.
 
-        let mut fixed_frame_storage_size = 0;
-
         if !self.call_conv.extends_baldrdash() {
             // Leaf functions with zero stack don't need a stack check if one's
             // specified, otherwise always insert the stack check.
@@ -951,7 +955,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                 }
             }
             if total_stacksize > 0 {
-                fixed_frame_storage_size += total_stacksize;
+                self.fixed_frame_storage_size += total_stacksize;
             }
         }
 
@@ -970,7 +974,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
             self.call_conv,
             &self.flags,
             &self.clobbered,
-            fixed_frame_storage_size,
+            self.fixed_frame_storage_size,
         );
         insts.extend(clobber_insts);
 
@@ -990,6 +994,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
             self.call_conv,
             &self.flags,
             &self.clobbered,
+            self.fixed_frame_storage_size,
         ));
 
         // N.B.: we do *not* emit a nominal SP adjustment here, because (i) there will be no
