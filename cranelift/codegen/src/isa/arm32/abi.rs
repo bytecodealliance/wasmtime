@@ -313,6 +313,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
         _flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
         fixed_frame_storage_size: u32,
+        _outgoing_args_size: u32,
     ) -> (u64, SmallVec<[Inst; 16]>) {
         let mut insts = SmallVec::new();
         if fixed_frame_storage_size > 0 {
@@ -342,6 +343,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
         _flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
         _fixed_frame_storage_size: u32,
+        _outgoing_args_size: u32,
     ) -> SmallVec<[Inst; 16]> {
         let mut insts = SmallVec::new();
         let clobbered_vec = get_callee_saves(clobbers);
