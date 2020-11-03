@@ -1,4 +1,5 @@
 use std::fmt;
+use wasmtime_environ::wasm::WasmFuncType;
 use wasmtime_environ::{ir, wasm, EntityIndex};
 
 // Type Representations
@@ -217,8 +218,7 @@ impl From<TableType> for ExternType {
 /// WebAssembly functions can have 0 or more parameters and results.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct FuncType {
-    params: Box<[ValType]>,
-    results: Box<[ValType]>,
+    sig: WasmFuncType,
 }
 
 impl FuncType {
@@ -226,25 +226,30 @@ impl FuncType {
     ///
     /// The function descriptor returned will represent a function which takes
     /// `params` as arguments and returns `results` when it is finished.
-    pub fn new(params: Box<[ValType]>, results: Box<[ValType]>) -> FuncType {
-        FuncType { params, results }
+    pub fn new(
+        params: impl IntoIterator<Item = ValType>,
+        results: impl IntoIterator<Item = ValType>,
+    ) -> FuncType {
+        FuncType {
+            sig: WasmFuncType {
+                params: params.into_iter().map(|t| t.to_wasm_type()).collect(),
+                returns: results.into_iter().map(|t| t.to_wasm_type()).collect(),
+            },
+        }
     }
 
     /// Returns the list of parameter types for this function.
-    pub fn params(&self) -> &[ValType] {
-        &self.params
+    pub fn params(&self) -> impl ExactSizeIterator<Item = ValType> + '_ {
+        self.sig.params.iter().map(ValType::from_wasm_type)
     }
 
     /// Returns the list of result types for this function.
-    pub fn results(&self) -> &[ValType] {
-        &self.results
+    pub fn results(&self) -> impl ExactSizeIterator<Item = ValType> + '_ {
+        self.sig.returns.iter().map(ValType::from_wasm_type)
     }
 
-    pub(crate) fn to_wasm_func_type(&self) -> wasm::WasmFuncType {
-        wasm::WasmFuncType {
-            params: self.params.iter().map(|p| p.to_wasm_type()).collect(),
-            returns: self.results.iter().map(|r| r.to_wasm_type()).collect(),
-        }
+    pub(crate) fn as_wasm_func_type(&self) -> &wasm::WasmFuncType {
+        &self.sig
     }
 
     /// Get the Cranelift-compatible function signature.
@@ -256,14 +261,9 @@ impl FuncType {
             AbiParam::special(pointer_type, ArgumentPurpose::VMContext),
             AbiParam::new(pointer_type),
         ];
-        params.extend(
-            self.params
-                .iter()
-                .map(|p| AbiParam::new(p.get_wasmtime_type())),
-        );
+        params.extend(self.params().map(|p| AbiParam::new(p.get_wasmtime_type())));
         let returns = self
-            .results
-            .iter()
+            .results()
             .map(|p| AbiParam::new(p.get_wasmtime_type()))
             .collect::<Vec<_>>();
 
@@ -274,24 +274,8 @@ impl FuncType {
         }
     }
 
-    /// Returns `None` if any types in the signature can't be converted to the
-    /// types in this crate, but that should very rarely happen and largely only
-    /// indicate a bug in our cranelift integration.
-    pub(crate) fn from_wasm_func_type(signature: &wasm::WasmFuncType) -> FuncType {
-        let params = signature
-            .params
-            .iter()
-            .map(|p| ValType::from_wasm_type(p))
-            .collect::<Vec<_>>();
-        let results = signature
-            .returns
-            .iter()
-            .map(|r| ValType::from_wasm_type(r))
-            .collect::<Vec<_>>();
-        FuncType {
-            params: params.into_boxed_slice(),
-            results: results.into_boxed_slice(),
-        }
+    pub(crate) fn from_wasm_func_type(sig: &wasm::WasmFuncType) -> FuncType {
+        FuncType { sig: sig.clone() }
     }
 }
 

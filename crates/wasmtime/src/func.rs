@@ -113,8 +113,8 @@ use wasmtime_runtime::{
 /// // Here we need to define the type signature of our `Double` function and
 /// // then wrap it up in a `Func`
 /// let double_type = wasmtime::FuncType::new(
-///     Box::new([wasmtime::ValType::I32]),
-///     Box::new([wasmtime::ValType::I32])
+///     [wasmtime::ValType::I32].iter().cloned(),
+///     [wasmtime::ValType::I32].iter().cloned(),
 /// );
 /// let double = Func::new(&store, double_type, |_, params, results| {
 ///     let mut value = params[0].unwrap_i32();
@@ -163,7 +163,7 @@ macro_rules! getters {
             // Verify all the paramers match the expected parameters, and that
             // there are no extra parameters...
             let ty = self.ty();
-            let mut params = ty.params().iter().cloned();
+            let mut params = ty.params();
             let n = 0;
             $(
                 let n = n + 1;
@@ -173,7 +173,7 @@ macro_rules! getters {
             ensure!(params.next().is_none(), "Type mismatch: too many arguments (expected {})", n);
 
             // ... then do the same for the results...
-            let mut results = ty.results().iter().cloned();
+            let mut results = ty.results();
             R::matches(&mut results)
                 .context("Type mismatch in return type")?;
             ensure!(results.next().is_none(), "Type mismatch: too many return values (expected 1)");
@@ -274,7 +274,7 @@ impl Func {
             let mut args: SmallVec<[Val; STACK_ARGS]> =
                 SmallVec::with_capacity(ty_clone.params().len());
             let store = Store::upgrade(&store_weak).unwrap();
-            for (i, ty) in ty_clone.params().iter().enumerate() {
+            for (i, ty) in ty_clone.params().enumerate() {
                 unsafe {
                     let val = Val::read_value_from(&store, values_vec.add(i), ty);
                     args.push(val);
@@ -298,7 +298,7 @@ impl Func {
             // produces the wrong number or wrong types of values, and we need
             // to catch that here.
             for (i, (ret, ty)) in returns.into_iter().zip(ty_clone.results()).enumerate() {
-                if ret.ty() != *ty {
+                if ret.ty() != ty {
                     return Err(Trap::new(
                         "function attempted to return an incompatible value",
                     ));
@@ -596,9 +596,9 @@ impl Func {
         let mut values_vec = vec![0; max(params.len(), my_ty.results().len())];
 
         // Store the argument values into `values_vec`.
-        let param_tys = my_ty.params().iter();
+        let param_tys = my_ty.params();
         for ((arg, slot), ty) in params.iter().cloned().zip(&mut values_vec).zip(param_tys) {
-            if arg.ty() != *ty {
+            if arg.ty() != ty {
                 bail!(
                     "argument type mismatch: found {} but expected {}",
                     arg.ty(),
@@ -628,7 +628,7 @@ impl Func {
 
         // Load the return values out of `values_vec`.
         let mut results = Vec::with_capacity(my_ty.results().len());
-        for (index, ty) in my_ty.results().iter().enumerate() {
+        for (index, ty) in my_ty.results().enumerate() {
             unsafe {
                 let ptr = values_vec.as_ptr().add(index);
                 results.push(Val::read_value_from(&self.instance.store, ptr, ty));
@@ -876,7 +876,7 @@ pub unsafe trait WasmTy {
 
     // Add this type to the given vec of expected valtypes.
     #[doc(hidden)]
-    fn push(dst: &mut Vec<ValType>);
+    fn valtype() -> Option<ValType>;
 
     // Does the next valtype(s) match this type?
     #[doc(hidden)]
@@ -923,7 +923,7 @@ pub unsafe trait WasmRet {
 
     // Same as `WasmTy::push`.
     #[doc(hidden)]
-    fn push(dst: &mut Vec<ValType>);
+    fn valtype() -> Option<ValType>;
 
     // Same as `WasmTy::matches`.
     #[doc(hidden)]
@@ -952,7 +952,9 @@ unsafe impl WasmTy for () {
     #[inline]
     unsafe fn from_abi<'a>(_abi: Self::Abi, _store: WeakStore<'a>) -> Self {}
 
-    fn push(_dst: &mut Vec<ValType>) {}
+    fn valtype() -> Option<ValType> {
+        None
+    }
 
     fn matches(_tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
         Ok(())
@@ -983,8 +985,8 @@ unsafe impl WasmTy for i32 {
         abi
     }
 
-    fn push(dst: &mut Vec<ValType>) {
-        dst.push(ValType::I32);
+    fn valtype() -> Option<ValType> {
+        Some(ValType::I32)
     }
 
     fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
@@ -1028,8 +1030,8 @@ unsafe impl WasmTy for u32 {
         abi as Self
     }
 
-    fn push(dst: &mut Vec<ValType>) {
-        <i32 as WasmTy>::push(dst)
+    fn valtype() -> Option<ValType> {
+        <i32 as WasmTy>::valtype()
     }
 
     fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
@@ -1065,8 +1067,8 @@ unsafe impl WasmTy for i64 {
         abi
     }
 
-    fn push(dst: &mut Vec<ValType>) {
-        dst.push(ValType::I64);
+    fn valtype() -> Option<ValType> {
+        Some(ValType::I64)
     }
 
     fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
@@ -1110,8 +1112,8 @@ unsafe impl WasmTy for u64 {
         abi as Self
     }
 
-    fn push(dst: &mut Vec<ValType>) {
-        <i64 as WasmTy>::push(dst)
+    fn valtype() -> Option<ValType> {
+        <i64 as WasmTy>::valtype()
     }
 
     fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
@@ -1147,8 +1149,8 @@ unsafe impl WasmTy for f32 {
         abi
     }
 
-    fn push(dst: &mut Vec<ValType>) {
-        dst.push(ValType::F32);
+    fn valtype() -> Option<ValType> {
+        Some(ValType::F32)
     }
 
     fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
@@ -1192,8 +1194,8 @@ unsafe impl WasmTy for f64 {
         abi
     }
 
-    fn push(dst: &mut Vec<ValType>) {
-        dst.push(ValType::F64);
+    fn valtype() -> Option<ValType> {
+        Some(ValType::F64)
     }
 
     fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
@@ -1254,8 +1256,8 @@ unsafe impl WasmTy for Option<ExternRef> {
         }
     }
 
-    fn push(dst: &mut Vec<ValType>) {
-        dst.push(ValType::ExternRef);
+    fn valtype() -> Option<ValType> {
+        Some(ValType::ExternRef)
     }
 
     fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
@@ -1307,8 +1309,8 @@ unsafe impl WasmTy for Option<Func> {
         Func::from_caller_checked_anyfunc(&store, abi)
     }
 
-    fn push(dst: &mut Vec<ValType>) {
-        dst.push(ValType::FuncRef);
+    fn valtype() -> Option<ValType> {
+        Some(ValType::FuncRef)
     }
 
     fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
@@ -1353,9 +1355,8 @@ where
         <Self as WasmTy>::from_abi(abi, store)
     }
 
-    #[inline]
-    fn push(dst: &mut Vec<ValType>) {
-        <Self as WasmTy>::push(dst)
+    fn valtype() -> Option<ValType> {
+        <Self as WasmTy>::valtype()
     }
 
     #[inline]
@@ -1405,8 +1406,8 @@ where
         Ok(<T as WasmTy>::from_abi(abi, store))
     }
 
-    fn push(dst: &mut Vec<ValType>) {
-        <T as WasmTy>::push(dst)
+    fn valtype() -> Option<ValType> {
+        <T as WasmTy>::valtype()
     }
 
     fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
@@ -1657,11 +1658,12 @@ macro_rules! impl_into_func {
                     R::store_to_args(ret, args);
                 }
 
-                let mut _args = Vec::new();
-                $($args::push(&mut _args);)*
-                let mut ret = Vec::new();
-                R::push(&mut ret);
-                let ty = FuncType::new(_args.into(), ret.into());
+                let ty = FuncType::new(
+                    None::<ValType>.into_iter()
+                        $(.chain($args::valtype()))*
+                    ,
+                    R::valtype(),
+                );
 
                 let store_weak = store.weak();
                 let trampoline = host_trampoline::<$($args,)* R>;

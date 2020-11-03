@@ -22,8 +22,8 @@ fn main() -> Result<()> {
     // Create external print functions.
     println!("Creating callback...");
     let callback_type = FuncType::new(
-        Box::new([ValType::I32, ValType::I64]),
-        Box::new([ValType::I64, ValType::I32]),
+        [ValType::I32, ValType::I64].iter().cloned(),
+        [ValType::I64, ValType::I32].iter().cloned(),
     );
     let callback_func = Func::new(&store, callback_type, |_, args, results| {
         println!("Calling back...");

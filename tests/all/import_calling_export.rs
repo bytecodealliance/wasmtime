@@ -22,21 +22,17 @@ fn test_import_calling_export() {
     let other = Rc::new(RefCell::new(None::<Func>));
     let other2 = Rc::downgrade(&other);
 
-    let callback_func = Func::new(
-        &store,
-        FuncType::new(Box::new([]), Box::new([])),
-        move |_, _, _| {
-            other2
-                .upgrade()
-                .unwrap()
-                .borrow()
-                .as_ref()
-                .expect("expected a function ref")
-                .call(&[])
-                .expect("expected function not to trap");
-            Ok(())
-        },
-    );
+    let callback_func = Func::new(&store, FuncType::new(None, None), move |_, _, _| {
+        other2
+            .upgrade()
+            .unwrap()
+            .borrow()
+            .as_ref()
+            .expect("expected a function ref")
+            .call(&[])
+            .expect("expected function not to trap");
+        Ok(())
+    });
 
     let imports = vec![callback_func.into()];
     let instance =
@@ -71,7 +67,7 @@ fn test_returns_incorrect_type() -> Result<()> {
 
     let callback_func = Func::new(
         &store,
-        FuncType::new(Box::new([]), Box::new([ValType::I32])),
+        FuncType::new(None, Some(ValType::I32)),
         |_, _, results| {
             // Evil! Returns I64 here instead of promised in the signature I32.
             results[0] = Val::I64(228);

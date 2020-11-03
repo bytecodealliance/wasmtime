@@ -78,26 +78,26 @@ fn signatures_match() {
     let store = Store::default();
 
     let f = Func::wrap(&store, || {});
-    assert_eq!(f.ty().params(), &[]);
+    assert_eq!(f.ty().params().collect::<Vec<_>>(), &[]);
     assert_eq!(f.param_arity(), 0);
-    assert_eq!(f.ty().results(), &[]);
+    assert_eq!(f.ty().results().collect::<Vec<_>>(), &[]);
     assert_eq!(f.result_arity(), 0);
 
     let f = Func::wrap(&store, || -> i32 { loop {} });
-    assert_eq!(f.ty().params(), &[]);
-    assert_eq!(f.ty().results(), &[ValType::I32]);
+    assert_eq!(f.ty().params().collect::<Vec<_>>(), &[]);
+    assert_eq!(f.ty().results().collect::<Vec<_>>(), &[ValType::I32]);
 
     let f = Func::wrap(&store, || -> i64 { loop {} });
-    assert_eq!(f.ty().params(), &[]);
-    assert_eq!(f.ty().results(), &[ValType::I64]);
+    assert_eq!(f.ty().params().collect::<Vec<_>>(), &[]);
+    assert_eq!(f.ty().results().collect::<Vec<_>>(), &[ValType::I64]);
 
     let f = Func::wrap(&store, || -> f32 { loop {} });
-    assert_eq!(f.ty().params(), &[]);
-    assert_eq!(f.ty().results(), &[ValType::F32]);
+    assert_eq!(f.ty().params().collect::<Vec<_>>(), &[]);
+    assert_eq!(f.ty().results().collect::<Vec<_>>(), &[ValType::F32]);
 
     let f = Func::wrap(&store, || -> f64 { loop {} });
-    assert_eq!(f.ty().params(), &[]);
-    assert_eq!(f.ty().results(), &[ValType::F64]);
+    assert_eq!(f.ty().params().collect::<Vec<_>>(), &[]);
+    assert_eq!(f.ty().results().collect::<Vec<_>>(), &[ValType::F64]);
 
     let f = Func::wrap(
         &store,
@@ -106,7 +106,7 @@ fn signatures_match() {
         },
     );
     assert_eq!(
-        f.ty().params(),
+        f.ty().params().collect::<Vec<_>>(),
         &[
             ValType::F32,
             ValType::F64,
@@ -117,7 +117,7 @@ fn signatures_match() {
             ValType::FuncRef,
         ]
     );
-    assert_eq!(f.ty().results(), &[ValType::F64]);
+    assert_eq!(f.ty().results().collect::<Vec<_>>(), &[ValType::F64]);
 }
 
 #[test]
@@ -283,13 +283,13 @@ fn get_from_wrapper() {
 #[test]
 fn get_from_signature() {
     let store = Store::default();
-    let ty = FuncType::new(Box::new([]), Box::new([]));
+    let ty = FuncType::new(None, None);
     let f = Func::new(&store, ty, |_, _, _| panic!());
     assert!(f.get0::<()>().is_ok());
     assert!(f.get0::<i32>().is_err());
     assert!(f.get1::<i32, ()>().is_err());
 
-    let ty = FuncType::new(Box::new([ValType::I32]), Box::new([ValType::F64]));
+    let ty = FuncType::new(Some(ValType::I32), Some(ValType::F64));
     let f = Func::new(&store, ty, |_, _, _| panic!());
     assert!(f.get0::<()>().is_err());
     assert!(f.get0::<i32>().is_err());
@@ -434,7 +434,7 @@ fn caller_memory() -> anyhow::Result<()> {
 #[test]
 fn func_write_nothing() -> anyhow::Result<()> {
     let store = Store::default();
-    let ty = FuncType::new(Box::new([]), Box::new([ValType::I32]));
+    let ty = FuncType::new(None, Some(ValType::I32));
     let f = Func::new(&store, ty, |_, _, _| Ok(()));
     let err = f.call(&[]).unwrap_err().downcast::<Trap>()?;
     assert!(err
@@ -515,8 +515,8 @@ fn externref_signature_no_reference_types() -> anyhow::Result<()> {
     Func::new(
         &store,
         FuncType::new(
-            Box::new([ValType::FuncRef, ValType::ExternRef]),
-            Box::new([ValType::FuncRef, ValType::ExternRef]),
+            [ValType::FuncRef, ValType::ExternRef].iter().cloned(),
+            [ValType::FuncRef, ValType::ExternRef].iter().cloned(),
         ),
         |_, _, _| Ok(()),
     );

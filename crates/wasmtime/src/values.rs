@@ -112,7 +112,7 @@ impl Val {
         }
     }
 
-    pub(crate) unsafe fn read_value_from(store: &Store, p: *const u128, ty: &ValType) -> Val {
+    pub(crate) unsafe fn read_value_from(store: &Store, p: *const u128, ty: ValType) -> Val {
         match ty {
             ValType::I32 => Val::I32(ptr::read(p as *const i32)),
             ValType::I64 => Val::I64(ptr::read(p as *const i64)),
