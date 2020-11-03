@@ -1906,9 +1906,9 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "staticvec"
-version = "0.10.2"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fbd8c65873d2e06991c33399d5e4bccba6ba04743fe99e9656afa0c64137d2c"
+checksum = "3c87f4be0fd89694157f3814ca88715ad8ba6010c453b1e89ca264aee04d70b9"
 
 [[package]]
 name = "strsim"
