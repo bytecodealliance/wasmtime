@@ -63,7 +63,7 @@ pub trait LowerCtx {
     // Function-level queries:
 
     /// Get the `ABICallee`.
-    fn abi(&mut self) -> &dyn ABICallee<I = Self::I>;
+    fn abi(&mut self) -> &mut dyn ABICallee<I = Self::I>;
     /// Get the (virtual) register that receives the return value. A return
     /// instruction should lower into a sequence that fills this register. (Why
     /// not allow the backend to specify its own result register for the return?
@@ -850,7 +850,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
     type I = I;
 
-    fn abi(&mut self) -> &dyn ABICallee<I = I> {
+    fn abi(&mut self) -> &mut dyn ABICallee<I = I> {
         self.vcode.abi()
     }
 

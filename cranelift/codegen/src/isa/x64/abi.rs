@@ -395,6 +395,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
         fixed_frame_storage_size: u32,
+        _outgoing_args_size: u32,
     ) -> (u64, SmallVec<[Self::I; 16]>) {
         let mut insts = SmallVec::new();
         // Find all clobbered registers that are callee-save. These are only I64
@@ -443,6 +444,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
         _fixed_frame_storage_size: u32,
+        _outgoing_args_size: u32,
     ) -> SmallVec<[Self::I; 16]> {
         let mut insts = SmallVec::new();
 
