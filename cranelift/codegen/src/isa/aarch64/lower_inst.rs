@@ -179,8 +179,16 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let vb = ctx.alloc_tmp(RegClass::V128, I128);
                 let ra = put_input_in_reg(ctx, inputs[0], narrow_mode);
                 let rb = put_input_in_reg(ctx, inputs[1], narrow_mode);
-                ctx.emit(Inst::MovToFpu { rd: va, rn: ra });
-                ctx.emit(Inst::MovToFpu { rd: vb, rn: rb });
+                ctx.emit(Inst::MovToFpu {
+                    rd: va,
+                    rn: ra,
+                    size: ScalarSize::Size64,
+                });
+                ctx.emit(Inst::MovToFpu {
+                    rd: vb,
+                    rn: rb,
+                    size: ScalarSize::Size64,
+                });
                 ctx.emit(Inst::FpuRRR {
                     fpu_op,
                     rd: va,
@@ -1703,7 +1711,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
                 (false, true) => {
                     let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::ZeroExtend64);
-                    ctx.emit(Inst::MovToFpu { rd, rn });
+                    ctx.emit(Inst::MovToFpu {
+                        rd,
+                        rn,
+                        size: ScalarSize::Size64,
+                    });
                 }
                 (true, false) => {
                     let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
@@ -2056,6 +2068,26 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::ScalarToVector => {
+            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let rd = get_output_reg(ctx, outputs[0]);
+            let input_ty = ctx.input_ty(insn, 0);
+            if (input_ty == I32 && ty.unwrap() == I32X4)
+                || (input_ty == I64 && ty.unwrap() == I64X2)
+            {
+                ctx.emit(Inst::MovToFpu {
+                    rd,
+                    rn,
+                    size: ScalarSize::from_ty(input_ty),
+                });
+            } else {
+                return Err(CodegenError::Unsupported(format!(
+                    "ScalarToVector: unsupported types {:?} -> {:?}",
+                    input_ty, ty
+                )));
+            }
+        }
+
         Opcode::VanyTrue | Opcode::VallTrue => {
             let rd = get_output_reg(ctx, outputs[0]);
             let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
@@ -2341,7 +2373,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Vsplit
         | Opcode::Vconcat
-        | Opcode::ScalarToVector
         | Opcode::Uload8x8Complex
         | Opcode::Sload8x8Complex
         | Opcode::Uload16x4Complex

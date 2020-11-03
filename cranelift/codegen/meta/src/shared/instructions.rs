@@ -3798,12 +3798,9 @@ pub(crate) fn define(
         Inst::new(
             "scalar_to_vector",
             r#"
-    Scalar To Vector -- move a value out of a scalar register and into a vector register; the
-    scalar will be moved to the lowest-order bits of the vector register. Note that this
-    instruction is intended as a low-level legalization instruction and frontends should prefer
-    insertlane; on certain architectures, scalar_to_vector may zero the highest-order bits for some
-    types (e.g. integers) but not for others (e.g. floats).
-    "#,
+            Copies a scalar value to a vector value.  The scalar is copied into the
+            least significant lane of the vector, and all other lanes will be zero.
+            "#,
             &formats.unary,
         )
         .operands_in(vec![s])

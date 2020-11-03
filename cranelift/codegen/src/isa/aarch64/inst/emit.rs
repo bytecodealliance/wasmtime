@@ -1651,12 +1651,13 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_fround(top22, rd, rn));
             }
-            &Inst::MovToFpu { rd, rn } => {
-                sink.put4(
-                    0b100_11110_01_1_00_111_000000_00000_00000
-                        | (machreg_to_gpr(rn) << 5)
-                        | machreg_to_vec(rd.to_reg()),
-                );
+            &Inst::MovToFpu { rd, rn, size } => {
+                let template = match size {
+                    ScalarSize::Size32 => 0b000_11110_00_1_00_111_000000_00000_00000,
+                    ScalarSize::Size64 => 0b100_11110_01_1_00_111_000000_00000_00000,
+                    _ => unreachable!(),
+                };
+                sink.put4(template | (machreg_to_gpr(rn) << 5) | machreg_to_vec(rd.to_reg()));
             }
             &Inst::MovToVec { rd, rn, idx, size } => {
                 let (imm5, shift) = match size.lane_size() {

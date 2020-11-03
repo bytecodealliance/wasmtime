@@ -1426,6 +1426,18 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (load, dfg) = builder.ins().Load(opcode, result_ty, flags, offset, base);
             state.push1(dfg.first_result(load))
         }
+        Operator::V128Load32Zero { memarg } | Operator::V128Load64Zero { memarg } => {
+            translate_load(
+                memarg,
+                ir::Opcode::Load,
+                type_of(op).lane_type(),
+                builder,
+                state,
+                environ,
+            )?;
+            let as_vector = builder.ins().scalar_to_vector(type_of(op), state.pop1());
+            state.push1(as_vector)
+        }
         Operator::I8x16ExtractLaneS { lane } | Operator::I16x8ExtractLaneS { lane } => {
             let vector = pop1_with_bitcast(state, type_of(op), builder);
             let extracted = builder.ins().extractlane(vector, lane.clone());
@@ -1789,10 +1801,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
 
         Operator::ReturnCall { .. } | Operator::ReturnCallIndirect { .. } => {
             return Err(wasm_unsupported!("proposed tail-call operator {:?}", op));
-        }
-
-        Operator::V128Load32Zero { .. } | Operator::V128Load64Zero { .. } => {
-            return Err(wasm_unsupported!("proposed SIMD operator {:?}", op));
         }
     };
     Ok(())
@@ -2516,7 +2524,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I32x4MaxU
         | Operator::F32x4ConvertI32x4S
         | Operator::F32x4ConvertI32x4U
-        | Operator::I32x4Bitmask => I32X4,
+        | Operator::I32x4Bitmask
+        | Operator::V128Load32Zero { .. } => I32X4,
 
         Operator::I64x2Splat
         | Operator::V128Load64Splat { .. }
@@ -2528,7 +2537,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I64x2ShrU
         | Operator::I64x2Add
         | Operator::I64x2Sub
-        | Operator::I64x2Mul => I64X2,
+        | Operator::I64x2Mul
+        | Operator::V128Load64Zero { .. } => I64X2,
 
         Operator::F32x4Splat
         | Operator::F32x4ExtractLane { .. }
