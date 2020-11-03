@@ -90,6 +90,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         64
     }
 
+    /// Return required stack alignment in bytes.
+    fn stack_align(_call_conv: isa::CallConv) -> u32 {
+        16
+    }
+
     fn compute_arg_locs(
         call_conv: isa::CallConv,
         params: &[ir::AbiParam],
