@@ -8,7 +8,7 @@ use wasmtime_debug::DwarfSection;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
 use wasmtime_environ::wasm::{FuncIndex, SignatureIndex};
-use wasmtime_environ::{CompiledFunctions, Module};
+use wasmtime_environ::{CompiledFunctions, ModuleTranslation};
 use wasmtime_obj::{ObjectBuilder, ObjectBuilderTarget};
 
 pub use wasmtime_obj::utils;
@@ -23,7 +23,7 @@ pub enum ObjectUnwindInfo {
 // Builds ELF image from the module `Compilation`.
 pub(crate) fn build_object(
     isa: &dyn TargetIsa,
-    module: &Module,
+    translation: &ModuleTranslation,
     funcs: &CompiledFunctions,
     dwarf_sections: Vec<DwarfSection>,
 ) -> Result<(Object, Vec<ObjectUnwindInfo>), anyhow::Error> {
@@ -39,13 +39,13 @@ pub(crate) fn build_object(
     unwind_info.extend(funcs.iter().filter_map(|(index, func)| {
         func.unwind_info
             .as_ref()
-            .map(|info| ObjectUnwindInfo::Func(module.func_index(index), info.clone()))
+            .map(|info| ObjectUnwindInfo::Func(translation.module.func_index(index), info.clone()))
     }));
 
-    let mut trampolines = PrimaryMap::with_capacity(module.signatures.len());
+    let mut trampolines = PrimaryMap::with_capacity(translation.module.signatures.len());
     let mut cx = FunctionBuilderContext::new();
     // Build trampolines for every signature.
-    for (i, (_, native_sig)) in module.signatures.iter() {
+    for (i, native_sig) in translation.native_signatures.iter() {
         let func = build_trampoline(isa, &mut cx, native_sig, std::mem::size_of::<u128>())?;
         // Preserve trampoline function unwind info.
         if let Some(info) = &func.unwind_info {
@@ -55,7 +55,7 @@ pub(crate) fn build_object(
     }
 
     let target = ObjectBuilderTarget::new(isa.triple().architecture)?;
-    let mut builder = ObjectBuilder::new(target, module, funcs);
+    let mut builder = ObjectBuilder::new(target, &translation.module, funcs);
     builder
         .set_code_alignment(CODE_SECTION_ALIGNMENT)
         .set_trampolines(trampolines)

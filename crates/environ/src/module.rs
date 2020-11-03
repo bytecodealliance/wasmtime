@@ -2,7 +2,6 @@
 
 use crate::tunables::Tunables;
 use crate::WASM_MAX_PAGES;
-use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{
     DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
@@ -169,7 +168,7 @@ pub struct Module {
     pub func_names: HashMap<FuncIndex, String>,
 
     /// Unprocessed signatures exactly as provided by `declare_signature()`.
-    pub signatures: PrimaryMap<SignatureIndex, (WasmFuncType, ir::Signature)>,
+    pub signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
 
     /// Number of imported functions in the module.
     pub num_imported_funcs: usize,
@@ -319,16 +318,10 @@ impl Module {
         index.index() < self.num_imported_globals
     }
 
-    /// Convenience method for looking up the native signature of a compiled
-    /// Wasm function.
-    pub fn native_func_signature(&self, func_index: FuncIndex) -> &ir::Signature {
-        &self.signatures[self.functions[func_index]].1
-    }
-
     /// Convenience method for looking up the original Wasm signature of a
     /// function.
     pub fn wasm_func_type(&self, func_index: FuncIndex) -> &WasmFuncType {
-        &self.signatures[self.functions[func_index]].0
+        &self.signatures[self.functions[func_index]]
     }
 }
 

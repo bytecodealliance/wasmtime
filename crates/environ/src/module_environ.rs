@@ -35,6 +35,9 @@ pub struct ModuleTranslation<'data> {
     /// Module information.
     pub module: Module,
 
+    /// Map of native signatures
+    pub native_signatures: PrimaryMap<SignatureIndex, ir::Signature>,
+
     /// References to the function bodies.
     pub function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
 
@@ -111,6 +114,7 @@ impl<'data> ModuleEnvironment<'data> {
             result: ModuleTranslation {
                 target_config,
                 module: Module::new(),
+                native_signatures: PrimaryMap::new(),
                 function_body_inputs: PrimaryMap::new(),
                 data_initializers: Vec::new(),
                 tunables: tunables.clone(),
@@ -198,17 +202,17 @@ impl<'data> TargetEnvironment for ModuleEnvironment<'data> {
 /// environment-dependent wasm instructions. These functions should not be called by the user.
 impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data> {
     fn reserve_signatures(&mut self, num: u32) -> WasmResult<()> {
-        self.result
-            .module
-            .signatures
-            .reserve_exact(usize::try_from(num).unwrap());
+        let num = usize::try_from(num).unwrap();
+        self.result.module.signatures.reserve_exact(num);
+        self.result.native_signatures.reserve_exact(num);
         Ok(())
     }
 
     fn declare_signature(&mut self, wasm: WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
         let sig = translate_signature(sig, self.pointer_type());
         // TODO: Deduplicate signatures.
-        self.result.module.signatures.push((wasm, sig));
+        self.result.module.signatures.push(wasm);
+        self.result.native_signatures.push(sig);
         Ok(())
     }
 
@@ -461,7 +465,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             }
             info.wasm_file.funcs.push(FunctionMetadata {
                 locals: locals.into_boxed_slice(),
-                params: sig.0.params.iter().cloned().map(|i| i.into()).collect(),
+                params: sig.params.iter().cloned().map(|i| i.into()).collect(),
             });
         }
         self.result

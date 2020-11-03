@@ -362,12 +362,18 @@ impl Compiler for Cranelift {
         let func_index = module.func_index(func_index);
         let mut context = Context::new();
         context.func.name = get_func_name(func_index);
-        context.func.signature = module.native_func_signature(func_index).clone();
+        let sig_index = module.functions[func_index];
+        context.func.signature = translation.native_signatures[sig_index].clone();
         if tunables.debug_info {
             context.func.collect_debug_info();
         }
 
-        let mut func_env = FuncEnvironment::new(isa.frontend_config(), module, tunables);
+        let mut func_env = FuncEnvironment::new(
+            isa.frontend_config(),
+            module,
+            &translation.native_signatures,
+            tunables,
+        );
 
         // We use these as constant offsets below in
         // `stack_limit_from_arguments`, so assert their values here. This

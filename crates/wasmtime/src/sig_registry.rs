@@ -3,7 +3,7 @@
 
 use std::collections::{hash_map, HashMap};
 use std::convert::TryFrom;
-use wasmtime_environ::{ir, wasm::WasmFuncType};
+use wasmtime_environ::wasm::WasmFuncType;
 use wasmtime_runtime::{VMSharedSignatureIndex, VMTrampoline};
 
 /// WebAssembly requires that the caller and callee signatures in an indirect
@@ -25,8 +25,6 @@ pub struct SignatureRegistry {
 struct Entry {
     // The WebAssembly type signature, using wasm types.
     wasm: WasmFuncType,
-    // The native signature we're using for this wasm type signature.
-    native: ir::Signature,
     // The native trampoline used to invoke this type signature from `Func`.
     // Note that the code memory for this trampoline is not owned by this
     // type, but instead it's expected to be owned by the store that this
@@ -39,7 +37,6 @@ impl SignatureRegistry {
     pub fn register(
         &mut self,
         wasm: &WasmFuncType,
-        native: &ir::Signature,
         trampoline: VMTrampoline,
     ) -> VMSharedSignatureIndex {
         let len = self.wasm2index.len();
@@ -57,7 +54,6 @@ impl SignatureRegistry {
                 let index = VMSharedSignatureIndex::new(u32::try_from(len).unwrap());
                 self.index_map.push(Entry {
                     wasm: wasm.clone(),
-                    native: native.clone(),
                     trampoline,
                 });
                 entry.insert(index);
@@ -78,9 +74,9 @@ impl SignatureRegistry {
     pub fn lookup_shared(
         &self,
         idx: VMSharedSignatureIndex,
-    ) -> Option<(&WasmFuncType, &ir::Signature, VMTrampoline)> {
+    ) -> Option<(&WasmFuncType, VMTrampoline)> {
         self.index_map
             .get(idx.bits() as usize)
-            .map(|e| (&e.wasm, &e.native, e.trampoline))
+            .map(|e| (&e.wasm, e.trampoline))
     }
 }

@@ -915,10 +915,9 @@ impl Store {
         module: &'a wasmtime_environ::Module,
     ) -> impl Fn(wasm::SignatureIndex) -> VMSharedSignatureIndex + 'a {
         move |index| {
-            let (wasm, _native) = &module.signatures[index];
             self.signatures()
                 .borrow()
-                .lookup(wasm)
+                .lookup(&module.signatures[index])
                 .expect("signature not previously registered")
         }
     }
@@ -993,8 +992,8 @@ impl Store {
         let trampolines = module.compiled_module().trampolines();
         let module = module.compiled_module().module();
         let mut signatures = self.signatures().borrow_mut();
-        for (index, (wasm, native)) in module.signatures.iter() {
-            signatures.register(wasm, native, trampolines[index]);
+        for (index, wasm) in module.signatures.iter() {
+            signatures.register(wasm, trampolines[index]);
         }
     }
 
