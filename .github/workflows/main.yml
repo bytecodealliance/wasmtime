@@ -57,7 +57,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2020-08-25
+        toolchain: nightly-2020-11-02
     - run: cargo doc --no-deps --all --exclude wasmtime-cli --exclude test-programs --exclude cranelift-codegen-meta
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
     - uses: actions/upload-artifact@v1
@@ -92,7 +92,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2020-08-25
+        toolchain: nightly-2020-11-02
 
     # Check some feature combinations of the `wasmtime` crate
     - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --no-default-features
@@ -142,7 +142,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2020-08-25
+        toolchain: nightly-2020-11-02
     - run: cargo install cargo-fuzz --vers "^0.8"
     - run: cargo fetch
       working-directory: ./fuzz
@@ -199,7 +199,7 @@ jobs:
             rust: beta
           - build: nightly
             os: ubuntu-latest
-            rust: nightly-2020-08-25
+            rust: nightly-2020-11-02
           - build: macos
             os: macos-latest
             rust: stable
@@ -290,7 +290,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2020-08-25
+        toolchain: nightly-2020-11-02
     - uses: ./.github/actions/define-llvm-env
 
     # Install wasm32 targets in order to build various tests throughout the
@@ -301,7 +301,7 @@ jobs:
     # Run the x64 CI script.
     - run: ./ci/run-experimental-x64-ci.sh
       env:
-        CARGO_VERSION: "+nightly-2020-08-25"
+        CARGO_VERSION: "+nightly-2020-11-02"
         RUST_BACKTRACE: 1
 
   # Verify that cranelift's code generation is deterministic
