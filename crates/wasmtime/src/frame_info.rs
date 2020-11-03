@@ -145,8 +145,13 @@ pub fn register(module: &CompiledModule) -> Option<GlobalFrameInfoRegistration> 
         let (start, end) = unsafe {
             let ptr = (*allocated).as_ptr();
             let len = (*allocated).len();
-            (ptr as usize, ptr as usize + len)
+            // First and last byte of the function text.
+            (ptr as usize, ptr as usize + len - 1)
         };
+        // Skip empty functions.
+        if end < start {
+            continue;
+        }
         min = cmp::min(min, start);
         max = cmp::max(max, end);
         let func = FunctionInfo {
@@ -259,4 +264,39 @@ impl FrameInfo {
     pub fn func_offset(&self) -> usize {
         (self.instr.bits() - self.func_start.bits()) as usize
     }
+}
+
+#[test]
+fn test_frame_info() -> Result<(), anyhow::Error> {
+    use crate::*;
+    let store = Store::default();
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (func (export "add") (param $x i32) (param $y i32) (result i32) (i32.add (local.get $x) (local.get $y)))
+                (func (export "sub") (param $x i32) (param $y i32) (result i32) (i32.sub (local.get $x) (local.get $y)))
+                (func (export "mul") (param $x i32) (param $y i32) (result i32) (i32.mul (local.get $x) (local.get $y)))
+                (func (export "div_s") (param $x i32) (param $y i32) (result i32) (i32.div_s (local.get $x) (local.get $y)))
+                (func (export "div_u") (param $x i32) (param $y i32) (result i32) (i32.div_u (local.get $x) (local.get $y)))
+                (func (export "rem_s") (param $x i32) (param $y i32) (result i32) (i32.rem_s (local.get $x) (local.get $y)))
+                (func (export "rem_u") (param $x i32) (param $y i32) (result i32) (i32.rem_u (local.get $x) (local.get $y)))
+            )
+         "#,
+    )?;
+    // Create an instance to ensure the frame information is registered.
+    let _ = Instance::new(&store, &module, &[])?;
+    let info = FRAME_INFO.read().unwrap();
+    for (i, alloc) in module.compiled_module().finished_functions() {
+        let (start, end) = unsafe {
+            let ptr = (**alloc).as_ptr();
+            let len = (**alloc).len();
+            (ptr as usize, ptr as usize + len)
+        };
+        for pc in start..end {
+            let frame = info.lookup_frame_info(pc).unwrap();
+            assert!(frame.func_index() == i.as_u32());
+        }
+    }
+    Ok(())
 }
