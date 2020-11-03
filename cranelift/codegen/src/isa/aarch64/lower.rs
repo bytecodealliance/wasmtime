@@ -837,10 +837,20 @@ pub(crate) fn lower_constant_f128<C: LowerCtx<I = Inst>>(
     rd: Writable<Reg>,
     value: u128,
 ) {
-    let alloc_tmp = |class, ty| ctx.alloc_tmp(class, ty);
-
-    for inst in Inst::load_fp_constant128(rd, value, alloc_tmp) {
-        ctx.emit(inst);
+    if value == 0 {
+        // Fast-track a common case.  The general case, viz, calling `Inst::load_fp_constant128`,
+        // is potentially expensive.
+        ctx.emit(Inst::VecDupImm {
+            rd,
+            imm: ASIMDMovModImm::zero(),
+            invert: false,
+            size: VectorSize::Size8x16,
+        });
+    } else {
+        let alloc_tmp = |class, ty| ctx.alloc_tmp(class, ty);
+        for inst in Inst::load_fp_constant128(rd, value, alloc_tmp) {
+            ctx.emit(inst);
+        }
     }
 }
 

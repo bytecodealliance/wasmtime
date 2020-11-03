@@ -579,6 +579,15 @@ impl ScalarSize {
         }
     }
 
+    /// Convert to an integer operand size.
+    pub fn operand_size(&self) -> OperandSize {
+        match self {
+            ScalarSize::Size32 => OperandSize::Size32,
+            ScalarSize::Size64 => OperandSize::Size64,
+            _ => panic!("Unexpected operand_size request for: {:?}", self),
+        }
+    }
+
     /// Convert from a type into the smallest size that fits.
     pub fn from_ty(ty: Type) -> ScalarSize {
         Self::from_bits(ty_bits(ty))

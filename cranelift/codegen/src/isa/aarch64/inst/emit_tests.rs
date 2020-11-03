@@ -1860,9 +1860,19 @@ fn test_aarch64_binemit() {
         Inst::MovToFpu {
             rd: writable_vreg(31),
             rn: xreg(0),
+            size: ScalarSize::Size64,
         },
         "1F00679E",
         "fmov d31, x0",
+    ));
+    insns.push((
+        Inst::MovToFpu {
+            rd: writable_vreg(1),
+            rn: xreg(28),
+            size: ScalarSize::Size32,
+        },
+        "8103271E",
+        "fmov s1, w28",
     ));
     insns.push((
         Inst::MovToVec {

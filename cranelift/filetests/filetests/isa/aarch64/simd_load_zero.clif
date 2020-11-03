@@ -1,0 +1,33 @@
+test compile
+target aarch64
+
+function %f1() -> i64x2 {
+block0:
+  v0 = iconst.i64 281474976710657
+  v1 = scalar_to_vector.i64x2 v0
+  return v1
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  movz x0, #1
+; nextln:  movk x0, #1, LSL #48
+; nextln:  fmov d0, x0
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f2() -> i32x4 {
+block0:
+  v0 = iconst.i32 42679
+  v1 = scalar_to_vector.i32x4 v0
+  return v1
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  movz x0, #42679
+; nextln:  fmov s0, w0
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
