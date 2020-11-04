@@ -314,7 +314,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-frontend",
@@ -322,14 +322,14 @@ dependencies = [
 
 [[package]]
 name = "cranelift-bforest"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "cranelift-entity",
 ]
 
 [[package]]
 name = "cranelift-codegen"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "bincode",
  "byteorder",
@@ -354,7 +354,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-meta"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "cranelift-codegen-shared",
  "cranelift-entity",
@@ -362,11 +362,11 @@ dependencies = [
 
 [[package]]
 name = "cranelift-codegen-shared"
-version = "0.67.0"
+version = "0.68.0"
 
 [[package]]
 name = "cranelift-entity"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "serde",
 ]
@@ -395,7 +395,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-frontend"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "cranelift-codegen",
  "hashbrown",
@@ -406,7 +406,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-interpreter"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -419,7 +419,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-module"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -431,7 +431,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-native"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "cranelift-codegen",
  "raw-cpuid",
@@ -440,7 +440,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-object"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
@@ -452,7 +452,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-preopt"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -460,7 +460,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-reader"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "cranelift-codegen",
  "smallvec",
@@ -470,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-serde"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "clap",
  "cranelift-codegen",
@@ -482,7 +482,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-simplejit"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "cranelift",
  "cranelift-codegen",
@@ -537,7 +537,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-wasm"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -1044,7 +1044,7 @@ dependencies = [
 
 [[package]]
 name = "lightbeam"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "capstone",
@@ -1224,7 +1224,7 @@ dependencies = [
 
 [[package]]
 name = "peepmatic"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "anyhow",
  "peepmatic-automata",
@@ -1239,7 +1239,7 @@ dependencies = [
 
 [[package]]
 name = "peepmatic-automata"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "serde",
 ]
@@ -1266,7 +1266,7 @@ dependencies = [
 
 [[package]]
 name = "peepmatic-macro"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1275,7 +1275,7 @@ dependencies = [
 
 [[package]]
 name = "peepmatic-runtime"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "bincode",
  "bumpalo",
@@ -1291,7 +1291,7 @@ dependencies = [
 
 [[package]]
 name = "peepmatic-souper"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "anyhow",
  "log",
@@ -1315,7 +1315,7 @@ dependencies = [
 
 [[package]]
 name = "peepmatic-test-operator"
-version = "0.67.0"
+version = "0.68.0"
 dependencies = [
  "peepmatic-traits",
  "serde",
@@ -1324,7 +1324,7 @@ dependencies = [
 
 [[package]]
 name = "peepmatic-traits"
-version = "0.67.0"
+version = "0.68.0"
 
 [[package]]
 name = "ppv-lite86"
@@ -2263,7 +2263,7 @@ checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
 
 [[package]]
 name = "wasi-common"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "cfg-if 1.0.0",
@@ -2315,7 +2315,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -2365,7 +2365,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-cache"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "base64 0.12.3",
@@ -2389,7 +2389,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-cli"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "env_logger",
@@ -2424,7 +2424,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-cranelift"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -2435,7 +2435,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-debug"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "gimli",
@@ -2449,7 +2449,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-environ"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "cfg-if 1.0.0",
@@ -2499,7 +2499,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-jit"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "cfg-if 1.0.0",
@@ -2530,7 +2530,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-lightbeam"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "cranelift-codegen",
  "lightbeam",
@@ -2540,7 +2540,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-obj"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "more-asserts",
@@ -2552,7 +2552,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-profiling"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "cfg-if 1.0.0",
@@ -2570,7 +2570,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-runtime"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "backtrace",
  "cc",
@@ -2590,7 +2590,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-rust"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "wasmtime",
@@ -2600,7 +2600,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-rust-macro"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2609,7 +2609,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wasi"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "tracing",
@@ -2623,7 +2623,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wast"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "wasmtime",
@@ -2632,7 +2632,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wiggle"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "wasmtime",
  "wasmtime-wiggle-macro",
@@ -2642,7 +2642,7 @@ dependencies = [
 
 [[package]]
 name = "wasmtime-wiggle-macro"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2680,7 +2680,7 @@ dependencies = [
 
 [[package]]
 name = "wig"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -2690,7 +2690,7 @@ dependencies = [
 
 [[package]]
 name = "wiggle"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "proptest",
  "thiserror",
@@ -2702,7 +2702,7 @@ dependencies = [
 
 [[package]]
 name = "wiggle-generate"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "heck",
@@ -2715,7 +2715,7 @@ dependencies = [
 
 [[package]]
 name = "wiggle-macro"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "quote",
  "syn",
@@ -2769,7 +2769,7 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "winx"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "bitflags",
  "cvt",
@@ -2791,7 +2791,7 @@ dependencies = [
 
 [[package]]
 name = "yanix"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",

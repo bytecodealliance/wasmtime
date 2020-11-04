@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-wiggle-macro"
-version = "0.20.0"
+version = "0.21.0"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkonk@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -16,7 +16,7 @@ test = false
 
 [dependencies]
 witx = { path = "../../../wasi-common/WASI/tools/witx", version = "0.8.7" }
-wiggle-generate = { path = "../../generate", version = "0.20.0" }
+wiggle-generate = { path = "../../generate", version = "0.21.0" }
 quote = "1.0"
 syn = { version = "1.0", features = ["full", "extra-traits"]  }
 proc-macro2 = "1.0"
