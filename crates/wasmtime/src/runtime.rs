@@ -1,4 +1,5 @@
 use crate::externals::MemoryCreator;
+use crate::sig_registry::SignatureRegistry;
 use crate::trampoline::{MemoryCreatorProxy, StoreInstanceHandle};
 use crate::Module;
 use anyhow::{bail, Result};
@@ -16,13 +17,12 @@ use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::settings::{self, Configurable, SetError};
-use wasmtime_environ::{ir, isa, isa::TargetIsa, wasm, Tunables};
+use wasmtime_environ::{isa, isa::TargetIsa, wasm, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{
-    debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, SignatureRegistry,
-    StackMapRegistry, VMExternRef, VMExternRefActivationsTable, VMInterrupts,
-    VMSharedSignatureIndex,
+    debug_builtins, InstanceHandle, RuntimeMemoryCreator, SignalHandler, StackMapRegistry,
+    VMExternRef, VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
 };
 
 // Runtime Environment
@@ -906,38 +906,21 @@ impl Store {
             .map(|x| x as _)
     }
 
-    pub(crate) fn lookup_signature(&self, sig_index: VMSharedSignatureIndex) -> wasm::WasmFuncType {
-        self.inner
-            .signatures
-            .borrow()
-            .lookup_wasm(sig_index)
-            .expect("failed to lookup signature")
+    pub(crate) fn signatures(&self) -> &RefCell<SignatureRegistry> {
+        &self.inner.signatures
     }
 
-    pub(crate) fn lookup_wasm_and_native_signatures(
-        &self,
-        sig_index: VMSharedSignatureIndex,
-    ) -> (wasm::WasmFuncType, ir::Signature) {
-        self.inner
-            .signatures
-            .borrow()
-            .lookup_wasm_and_native_signatures(sig_index)
-            .expect("failed to lookup signature")
-    }
-
-    pub(crate) fn register_signature(
-        &self,
-        wasm_sig: wasm::WasmFuncType,
-        native: ir::Signature,
-    ) -> VMSharedSignatureIndex {
-        self.inner
-            .signatures
-            .borrow_mut()
-            .register(wasm_sig, native)
-    }
-
-    pub(crate) fn signatures_mut(&self) -> std::cell::RefMut<'_, SignatureRegistry> {
-        self.inner.signatures.borrow_mut()
+    pub(crate) fn lookup_shared_signature<'a>(
+        &'a self,
+        module: &'a wasmtime_environ::Module,
+    ) -> impl Fn(wasm::SignatureIndex) -> VMSharedSignatureIndex + 'a {
+        move |index| {
+            let (wasm, _native) = &module.signatures[index];
+            self.signatures()
+                .borrow()
+                .lookup(wasm)
+                .expect("signature not previously registered")
+        }
     }
 
     /// Returns whether or not the given address falls within the JIT code
@@ -950,7 +933,32 @@ impl Store {
             .any(|(start, end)| *start <= addr && addr < *end)
     }
 
-    pub(crate) fn register_jit_code(&self, module: &Module) {
+    pub(crate) fn register_module(&self, module: &Module) {
+        // All modules register their JIT code in a store for two reasons
+        // currently:
+        //
+        // * First we only catch signals/traps if the program counter falls
+        //   within the jit code of an instantiated wasm module. This ensures
+        //   we don't catch accidental Rust/host segfaults.
+        //
+        // * Second when generating a backtrace we'll use this mapping to
+        //   only generate wasm frames for instruction pointers that fall
+        //   within jit code.
+        self.register_jit_code(module);
+
+        // We need to know about all the stack maps of all instantiated modules
+        // so when performing a GC we know about all wasm frames that we find
+        // on the stack.
+        self.register_stack_maps(module);
+
+        // Signatures are loaded into our `SignatureRegistry` here
+        // once-per-module (and once-per-signature). This allows us to create
+        // a `Func` wrapper for any function in the module, which requires that
+        // we know about the signature and trampoline for all instances.
+        self.register_signatures(module);
+    }
+
+    fn register_jit_code(&self, module: &Module) {
         let mut ranges = module.compiled_module().jit_code_ranges();
         // Checking of we already registered JIT code ranges by searching
         // first range start.
@@ -968,7 +976,7 @@ impl Store {
         }
     }
 
-    pub(crate) fn register_stack_maps(&self, module: &Module) {
+    fn register_stack_maps(&self, module: &Module) {
         let module = &module.compiled_module();
         self.stack_map_registry()
             .register_stack_maps(module.stack_maps().map(|(func, stack_maps)| unsafe {
@@ -979,6 +987,15 @@ impl Store {
                 let range = start..end;
                 (range, stack_maps)
             }));
+    }
+
+    fn register_signatures(&self, module: &Module) {
+        let trampolines = module.compiled_module().trampolines();
+        let module = module.compiled_module().module();
+        let mut signatures = self.signatures().borrow_mut();
+        for (index, (wasm, native)) in module.signatures.iter() {
+            signatures.register(wasm, native, trampolines[index]);
+        }
     }
 
     pub(crate) unsafe fn add_instance(&self, handle: InstanceHandle) -> StoreInstanceHandle {

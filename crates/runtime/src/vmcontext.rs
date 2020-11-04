@@ -492,6 +492,11 @@ impl VMSharedSignatureIndex {
     pub fn new(value: u32) -> Self {
         Self(value)
     }
+
+    /// Returns the underlying bits of the index.
+    pub fn bits(&self) -> u32 {
+        self.0
+    }
 }
 
 impl Default for VMSharedSignatureIndex {

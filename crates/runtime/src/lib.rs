@@ -28,7 +28,6 @@ mod instance;
 mod jit_int;
 mod memory;
 mod mmap;
-mod sig_registry;
 mod table;
 mod traphandlers;
 mod vmcontext;
@@ -43,7 +42,6 @@ pub use crate::instance::{InstanceHandle, InstantiationError, LinkError};
 pub use crate::jit_int::GdbJitImageRegistration;
 pub use crate::memory::{RuntimeLinearMemory, RuntimeMemoryCreator};
 pub use crate::mmap::Mmap;
-pub use crate::sig_registry::SignatureRegistry;
 pub use crate::table::{Table, TableElement};
 pub use crate::traphandlers::{
     catch_traps, init_traps, raise_lib_trap, raise_user_trap, resume_panic, SignalHandler, Trap,

@@ -11,7 +11,7 @@ use crate::traphandlers::Trap;
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport,
     VMGlobalDefinition, VMGlobalImport, VMInterrupts, VMMemoryDefinition, VMMemoryImport,
-    VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMTrampoline,
+    VMSharedSignatureIndex, VMTableDefinition, VMTableImport,
 };
 use crate::{ExportFunction, ExportGlobal, ExportMemory, ExportTable};
 use memoffset::offset_of;
@@ -61,9 +61,6 @@ pub(crate) struct Instance {
     /// Passive data segments from our module. As `data.drop`s happen, entries
     /// get removed. A missing entry is considered equivalent to an empty slice.
     passive_data: RefCell<HashMap<DataIndex, Arc<[u8]>>>,
-
-    /// Pointers to trampoline functions used to enter particular signatures
-    trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
 
     /// Hosts can store arbitrary per-instance information here.
     host_state: Box<dyn Any>,
@@ -815,10 +812,9 @@ impl InstanceHandle {
         module: Arc<Module>,
         code: Arc<dyn Any>,
         finished_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-        trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
         imports: Imports,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
-        vmshared_signatures: BoxedSlice<SignatureIndex, VMSharedSignatureIndex>,
+        lookup_shared_signature: &dyn Fn(SignatureIndex) -> VMSharedSignatureIndex,
         host_state: Box<dyn Any>,
         interrupts: *const VMInterrupts,
         externref_activations_table: *mut VMExternRefActivationsTable,
@@ -857,7 +853,6 @@ impl InstanceHandle {
                 tables,
                 passive_elements: Default::default(),
                 passive_data,
-                trampolines,
                 host_state,
                 vmctx: VMContext {},
             };
@@ -873,12 +868,12 @@ impl InstanceHandle {
         };
         let instance = handle.instance();
 
-        debug_assert_eq!(vmshared_signatures.len(), handle.module().signatures.len());
-        ptr::copy(
-            vmshared_signatures.values().as_slice().as_ptr(),
-            instance.signature_ids_ptr() as *mut VMSharedSignatureIndex,
-            vmshared_signatures.len(),
-        );
+        let mut ptr = instance.signature_ids_ptr();
+        for (signature, _) in handle.module().signatures.iter() {
+            *ptr = lookup_shared_signature(signature);
+            ptr = ptr.add(1);
+        }
+
         debug_assert_eq!(imports.functions.len(), handle.module().num_imported_funcs);
         ptr::copy(
             imports.functions.as_ptr(),
@@ -1126,11 +1121,6 @@ impl InstanceHandle {
     /// Get a table defined locally within this module.
     pub fn get_defined_table(&self, index: DefinedTableIndex) -> &Table {
         self.instance().get_defined_table(index)
-    }
-
-    /// Gets the trampoline pre-registered for a particular signature
-    pub fn trampoline(&self, sig: VMSharedSignatureIndex) -> Option<VMTrampoline> {
-        self.instance().trampolines.get(&sig).cloned()
     }
 
     /// Return a reference to the contained `Instance`.

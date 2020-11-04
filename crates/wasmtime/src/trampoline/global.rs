@@ -35,10 +35,12 @@ pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<StoreIn
             Val::FuncRef(Some(f)) => {
                 // Add a function import to the stub module, and then initialize
                 // our global with a `ref.func` to grab that imported function.
+                let signatures = store.signatures().borrow();
                 let shared_sig_index = f.sig_index();
-                let local_sig_index = module
-                    .signatures
-                    .push(store.lookup_wasm_and_native_signatures(shared_sig_index));
+                let (wasm, native, _) = signatures
+                    .lookup_shared(shared_sig_index)
+                    .expect("signature not registered");
+                let local_sig_index = module.signatures.push((wasm.clone(), native.clone()));
                 let func_index = module.functions.push(local_sig_index);
                 module.num_imported_funcs = 1;
                 module
@@ -66,7 +68,6 @@ pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<StoreIn
         module,
         store,
         PrimaryMap::new(),
-        Default::default(),
         Box::new(()),
         &func_imports,
     )?;

@@ -540,7 +540,10 @@ impl Func {
     pub fn ty(&self) -> FuncType {
         // Signatures should always be registered in the store's registry of
         // shared signatures, so we should be able to unwrap safely here.
-        let wft = self.instance.store.lookup_signature(self.sig_index());
+        let signatures = self.instance.store.signatures().borrow();
+        let (wft, _, _) = signatures
+            .lookup_shared(self.sig_index())
+            .expect("signature should be registered");
 
         // This is only called with `Export::Function`, and since it's coming
         // from wasmtime_runtime itself we should support all the types coming
@@ -550,19 +553,19 @@ impl Func {
 
     /// Returns the number of parameters that this function takes.
     pub fn param_arity(&self) -> usize {
-        let sig = self
-            .instance
-            .store
-            .lookup_signature(unsafe { self.export.anyfunc.as_ref().type_index });
+        let signatures = self.instance.store.signatures().borrow();
+        let (sig, _, _) = signatures
+            .lookup_shared(self.sig_index())
+            .expect("signature should be registered");
         sig.params.len()
     }
 
     /// Returns the number of results this function produces.
     pub fn result_arity(&self) -> usize {
-        let sig = self
-            .instance
-            .store
-            .lookup_signature(unsafe { self.export.anyfunc.as_ref().type_index });
+        let signatures = self.instance.store.signatures().borrow();
+        let (sig, _, _) = signatures
+            .lookup_shared(self.sig_index())
+            .expect("signature should be registered");
         sig.returns.len()
     }
 
@@ -649,8 +652,12 @@ impl Func {
         // on that module as well, so unwrap the result here since otherwise
         // it's a bug in wasmtime.
         let trampoline = instance
-            .trampoline(unsafe { export.anyfunc.as_ref().type_index })
-            .expect("failed to retrieve trampoline from module");
+            .store
+            .signatures()
+            .borrow()
+            .lookup_shared(unsafe { export.anyfunc.as_ref().type_index })
+            .expect("failed to retrieve trampoline from module")
+            .2;
 
         Func {
             instance,
