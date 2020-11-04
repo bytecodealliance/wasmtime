@@ -541,7 +541,7 @@ impl Func {
         // Signatures should always be registered in the store's registry of
         // shared signatures, so we should be able to unwrap safely here.
         let signatures = self.instance.store.signatures().borrow();
-        let (wft, _, _) = signatures
+        let (wft, _) = signatures
             .lookup_shared(self.sig_index())
             .expect("signature should be registered");
 
@@ -554,7 +554,7 @@ impl Func {
     /// Returns the number of parameters that this function takes.
     pub fn param_arity(&self) -> usize {
         let signatures = self.instance.store.signatures().borrow();
-        let (sig, _, _) = signatures
+        let (sig, _) = signatures
             .lookup_shared(self.sig_index())
             .expect("signature should be registered");
         sig.params.len()
@@ -563,7 +563,7 @@ impl Func {
     /// Returns the number of results this function produces.
     pub fn result_arity(&self) -> usize {
         let signatures = self.instance.store.signatures().borrow();
-        let (sig, _, _) = signatures
+        let (sig, _) = signatures
             .lookup_shared(self.sig_index())
             .expect("signature should be registered");
         sig.returns.len()
@@ -657,7 +657,7 @@ impl Func {
             .borrow()
             .lookup_shared(unsafe { export.anyfunc.as_ref().type_index })
             .expect("failed to retrieve trampoline from module")
-            .2;
+            .1;
 
         Func {
             instance,

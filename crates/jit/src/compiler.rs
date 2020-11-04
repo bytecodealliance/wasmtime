@@ -158,8 +158,7 @@ impl Compiler {
             vec![]
         };
 
-        let (obj, unwind_info) =
-            build_object(&*self.isa, &translation.module, &funcs, dwarf_sections)?;
+        let (obj, unwind_info) = build_object(&*self.isa, &translation, &funcs, dwarf_sections)?;
 
         Ok(Compilation {
             obj,

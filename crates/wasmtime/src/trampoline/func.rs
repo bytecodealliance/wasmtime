@@ -223,7 +223,7 @@ pub fn create_handle_with_function(
 
     // First up we manufacture a trampoline which has the ABI specified by `ft`
     // and calls into `stub_fn`...
-    let sig_id = module.signatures.push((wft.clone(), sig.clone()));
+    let sig_id = module.signatures.push(wft.clone());
     let func_id = module.functions.push(sig_id);
     module
         .exports
@@ -241,10 +241,7 @@ pub fn create_handle_with_function(
         &sig,
         mem::size_of::<u128>(),
     )?;
-    store
-        .signatures()
-        .borrow_mut()
-        .register(&wft, &sig, trampoline);
+    store.signatures().borrow_mut().register(&wft, trampoline);
 
     // Next up we wrap everything up into an `InstanceHandle` by publishing our
     // code memory (makes it executable) and ensuring all our various bits of
@@ -268,23 +265,18 @@ pub unsafe fn create_handle_with_raw_function(
     store: &Store,
     state: Box<dyn Any>,
 ) -> Result<StoreInstanceHandle> {
-    let pointer_type = store.engine().compiler().isa().pointer_type();
-    let sig = ft.get_wasmtime_signature(pointer_type);
     let wft = ft.to_wasm_func_type();
 
     let mut module = Module::new();
     let mut finished_functions = PrimaryMap::new();
 
-    let sig_id = module.signatures.push((wft.clone(), sig.clone()));
+    let sig_id = module.signatures.push(wft.clone());
     let func_id = module.functions.push(sig_id);
     module
         .exports
         .insert(String::new(), EntityIndex::Function(func_id));
     finished_functions.push(func);
-    store
-        .signatures()
-        .borrow_mut()
-        .register(&wft, &sig, trampoline);
+    store.signatures().borrow_mut().register(&wft, trampoline);
 
     create_handle(module, store, finished_functions, state, &[])
 }

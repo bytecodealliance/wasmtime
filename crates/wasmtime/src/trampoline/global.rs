@@ -37,10 +37,10 @@ pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<StoreIn
                 // our global with a `ref.func` to grab that imported function.
                 let signatures = store.signatures().borrow();
                 let shared_sig_index = f.sig_index();
-                let (wasm, native, _) = signatures
+                let (wasm, _) = signatures
                     .lookup_shared(shared_sig_index)
                     .expect("signature not registered");
-                let local_sig_index = module.signatures.push((wasm.clone(), native.clone()));
+                let local_sig_index = module.signatures.push(wasm.clone());
                 let func_index = module.functions.push(local_sig_index);
                 module.num_imported_funcs = 1;
                 module

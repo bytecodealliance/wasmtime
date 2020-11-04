@@ -5,7 +5,7 @@ use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature};
 use cranelift_codegen::isa::{self, TargetFrontendConfig};
-use cranelift_entity::EntityRef;
+use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
     self, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableIndex,
@@ -99,6 +99,9 @@ pub struct FuncEnvironment<'module_environment> {
     /// The module-level environment which this function-level environment belongs to.
     module: &'module_environment Module,
 
+    /// The native signatures for each type signature in this module
+    native_signatures: &'module_environment PrimaryMap<SignatureIndex, ir::Signature>,
+
     /// The Cranelift global holding the vmctx address.
     vmctx: Option<ir::GlobalValue>,
 
@@ -115,6 +118,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     pub fn new(
         target_config: TargetFrontendConfig,
         module: &'module_environment Module,
+        native_signatures: &'module_environment PrimaryMap<SignatureIndex, ir::Signature>,
         tunables: &'module_environment Tunables,
     ) -> Self {
         let builtin_function_signatures = BuiltinFunctionSignatures::new(
@@ -129,6 +133,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         Self {
             target_config,
             module,
+            native_signatures,
             vmctx: None,
             builtin_function_signatures,
             offsets: VMOffsets::new(target_config.pointer_bytes(), module),
@@ -993,7 +998,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: SignatureIndex,
     ) -> WasmResult<ir::SigRef> {
-        Ok(func.import_signature(self.module.signatures[index].1.clone()))
+        Ok(func.import_signature(self.native_signatures[index].clone()))
     }
 
     fn make_direct_func(
@@ -1001,8 +1006,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: FuncIndex,
     ) -> WasmResult<ir::FuncRef> {
-        let sig = self.module.native_func_signature(index);
-        let signature = func.import_signature(sig.clone());
+        let sig_index = self.module.functions[index];
+        let sig = self.native_signatures[sig_index].clone();
+        let signature = func.import_signature(sig);
         let name = get_func_name(index);
         Ok(func.import_function(ir::ExtFuncData {
             name,

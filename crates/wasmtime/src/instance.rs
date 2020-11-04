@@ -293,7 +293,7 @@ fn with_imports<R>(
                 let ty = store
                     .signatures()
                     .borrow()
-                    .lookup(&m.signatures[m.functions[i]].0)
+                    .lookup(&m.signatures[m.functions[i]])
                     .ok_or_else(|| anyhow!("function types incompatible"))?;
                 if !func.matches_expected(ty) {
                     bail!("function types incompatible");
