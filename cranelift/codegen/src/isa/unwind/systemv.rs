@@ -259,11 +259,23 @@ impl<'a, Reg: PartialEq + Copy> InstructionBuilder<'a, Reg> {
     }
 
     fn set_cfa_reg(&mut self, offset: u32, reg: Reg) -> Result<(), RegisterMappingError> {
-        self.instructions.push((
-            offset,
-            CallFrameInstruction::CfaRegister(self.map_reg.map(reg)?),
-        ));
-        self.frame_register = Some(reg);
+        match self.frame_register {
+            None => {
+                self.instructions.push((
+                    offset,
+                    CallFrameInstruction::CfaRegister(self.map_reg.map(reg)?),
+                ));
+                self.frame_register = Some(reg);
+            }
+            Some(_) => {
+                // Restore SP and its offset.
+                self.instructions.push((
+                    offset,
+                    CallFrameInstruction::Cfa(self.map_reg.map(reg)?, self.sp_offset),
+                ));
+                self.frame_register = None;
+            }
+        }
         Ok(())
     }
 
