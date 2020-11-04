@@ -499,9 +499,18 @@ impl<'a> CallThreadState<'a> {
     /// Note that this function must be called with `self` on the stack, not the
     /// heap/etc.
     fn update_stack_limit(&self, max_wasm_stack: usize) -> Result<impl Drop + '_, Trap> {
-        // Make an "educated guess" to figure out where the wasm sp value should
-        // start trapping if it drops below.
-        let wasm_stack_limit = self as *const _ as usize - max_wasm_stack;
+        // Determine the stack pointer where, after which, any wasm code will
+        // immediately trap. This is checked on the entry to all wasm functions.
+        //
+        // Note that this isn't 100% precise. We are requested to give wasm
+        // `max_wasm_stack` bytes, but what we're actually doing is giving wasm
+        // probably a little less than `max_wasm_stack` because we're
+        // calculating the limit relative to this function's approximate stack
+        // pointer. Wasm will be executed on a frame beneath this one (or next
+        // to it). In any case it's expected to be at most a few hundred bytes
+        // of slop one way or another. When wasm is typically given a MB or so
+        // (a million bytes) the slop shouldn't matter too much.
+        let wasm_stack_limit = psm::stack_pointer() as usize - max_wasm_stack;
 
         let interrupts = unsafe { &**(&*self.vmctx).instance().interrupts() };
         let reset_stack_limit = match interrupts.stack_limit.compare_exchange(

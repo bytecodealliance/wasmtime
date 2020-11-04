@@ -1398,6 +1398,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "psm"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96e0536f6528466dbbbbe6b986c34175a8d0ff25b794c4bacda22e068cd2f2c5"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2572,6 +2581,7 @@ dependencies = [
  "log",
  "memoffset",
  "more-asserts",
+ "psm",
  "region",
  "thiserror",
  "wasmtime-environ",
