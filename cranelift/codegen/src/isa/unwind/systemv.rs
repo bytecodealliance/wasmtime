@@ -116,7 +116,7 @@ impl UnwindInfo {
         map_reg: &'b dyn RegisterMapper<Reg>,
     ) -> CodegenResult<Self> {
         use input::UnwindCode;
-        let mut builder = InstructionBuilder::new(unwind.word_size, map_reg);
+        let mut builder = InstructionBuilder::new(unwind.initial_sp_offset, map_reg);
 
         for (offset, c) in unwind.prologue_unwind_codes.iter().chain(
             unwind
@@ -126,12 +126,9 @@ impl UnwindInfo {
                 .flatten(),
         ) {
             match c {
-                UnwindCode::SaveRegister {
-                    reg,
-                    stack_offset: 0,
-                } => {
+                UnwindCode::SaveRegister { reg, stack_offset } => {
                     builder
-                        .save_reg(*offset, *reg)
+                        .save_reg(*offset, *reg, *stack_offset)
                         .map_err(CodegenError::RegisterMappingError)?;
                 }
                 UnwindCode::StackAlloc { size } => {
@@ -156,7 +153,6 @@ impl UnwindInfo {
                 UnwindCode::RestoreState => {
                     builder.restore_state(*offset);
                 }
-                _ => {}
             }
         }
 
@@ -187,9 +183,9 @@ struct InstructionBuilder<'a, Reg: PartialEq + Copy> {
 }
 
 impl<'a, Reg: PartialEq + Copy> InstructionBuilder<'a, Reg> {
-    fn new(word_size: u8, map_reg: &'a (dyn RegisterMapper<Reg> + 'a)) -> Self {
+    fn new(sp_offset: u8, map_reg: &'a (dyn RegisterMapper<Reg> + 'a)) -> Self {
         Self {
-            sp_offset: word_size as i32, // CFA offset starts at word size offset to account for the return address on stack
+            sp_offset: sp_offset as i32, // CFA offset starts at word size offset to account for the return address on stack
             saved_state: None,
             frame_register: None,
             map_reg,
@@ -197,11 +193,19 @@ impl<'a, Reg: PartialEq + Copy> InstructionBuilder<'a, Reg> {
         }
     }
 
-    fn save_reg(&mut self, offset: u32, reg: Reg) -> Result<(), RegisterMappingError> {
+    fn save_reg(
+        &mut self,
+        offset: u32,
+        reg: Reg,
+        stack_offset: u32,
+    ) -> Result<(), RegisterMappingError> {
         // Pushes in the prologue are register saves, so record an offset of the save
         self.instructions.push((
             offset,
-            CallFrameInstruction::Offset(self.map_reg.map(reg)?, -self.sp_offset),
+            CallFrameInstruction::Offset(
+                self.map_reg.map(reg)?,
+                stack_offset as i32 - self.sp_offset,
+            ),
         ));
 
         Ok(())

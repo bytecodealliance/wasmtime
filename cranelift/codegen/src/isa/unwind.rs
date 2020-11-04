@@ -79,6 +79,8 @@ pub mod input {
         /// Entire function size.
         pub function_size: CodeOffset,
         /// Platform word size in bytes.
-        pub(crate) word_size: u8,
+        pub word_size: u8,
+        /// Initial stack pointer offset.
+        pub initial_sp_offset: u8,
     }
 }

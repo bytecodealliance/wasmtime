@@ -116,6 +116,7 @@ impl UnwindInfoGenerator<Inst> for X64UnwindInfo {
             epilogues_unwind_codes,
             function_size: context.len,
             word_size,
+            initial_sp_offset: word_size,
         }))
     }
 }

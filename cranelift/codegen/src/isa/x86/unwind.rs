@@ -244,6 +244,7 @@ pub(crate) fn create_unwind_info(
         epilogues_unwind_codes,
         function_size,
         word_size,
+        initial_sp_offset: word_size,
     }))
 }
 
@@ -312,6 +313,7 @@ mod tests {
                 ]],
                 function_size: 16,
                 word_size: 8,
+                initial_sp_offset: 8,
             }
         );
     }
@@ -368,6 +370,7 @@ mod tests {
                 ]],
                 function_size: 37,
                 word_size: 8,
+                initial_sp_offset: 8,
             }
         );
     }
@@ -424,6 +427,7 @@ mod tests {
                 ]],
                 function_size: 37,
                 word_size: 8,
+                initial_sp_offset: 8,
             }
         );
     }
@@ -505,6 +509,7 @@ mod tests {
                 ],
                 function_size: 16,
                 word_size: 8,
+                initial_sp_offset: 8,
             }
         );
     }
