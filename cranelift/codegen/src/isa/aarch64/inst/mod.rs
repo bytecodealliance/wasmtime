@@ -2315,11 +2315,15 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, rm);
         }
         &mut Inst::FpuRRI {
+            fpu_op,
             ref mut rd,
             ref mut rn,
             ..
         } => {
-            map_def(mapper, rd);
+            match fpu_op {
+                FPUOpRI::UShr32(..) | FPUOpRI::UShr64(..) => map_def(mapper, rd),
+                FPUOpRI::Sli32(..) | FPUOpRI::Sli64(..) => map_mod(mapper, rd),
+            }
             map_use(mapper, rn);
         }
         &mut Inst::FpuRRRR {
