@@ -597,6 +597,19 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         caller_saved
     }
+
+    fn get_ext_mode(
+        call_conv: isa::CallConv,
+        specified: ir::ArgumentExtension,
+    ) -> ir::ArgumentExtension {
+        if call_conv.extends_baldrdash() {
+            // Baldrdash (SpiderMonkey) always extends args and return values to the full register.
+            specified
+        } else {
+            // No other supported ABI on x64 does so.
+            ir::ArgumentExtension::None
+        }
+    }
 }
 
 impl From<StackAMode> for SyntheticAmode {

@@ -736,6 +736,19 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
         caller_saved
     }
+
+    fn get_ext_mode(
+        call_conv: isa::CallConv,
+        specified: ir::ArgumentExtension,
+    ) -> ir::ArgumentExtension {
+        if call_conv.extends_baldrdash() {
+            // Baldrdash (SpiderMonkey) always extends args and return values to the full register.
+            specified
+        } else {
+            // No other supported ABI on AArch64 does so.
+            ir::ArgumentExtension::None
+        }
+    }
 }
 
 /// Is this type supposed to be seen on this machine? E.g. references of the
