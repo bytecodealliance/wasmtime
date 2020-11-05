@@ -50,9 +50,7 @@ pub(crate) fn create_unwind_info(
         }
     }
     let map = RegisterMapper;
-    let unwind_info = UnwindInfo::build(unwind, &map)?;
-    //eprintln!("{:?}", unwind);
-    Ok(Some(unwind_info))
+    Ok(Some(UnwindInfo::build(unwind, &map)?))
 }
 
 #[cfg(test)]

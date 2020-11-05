@@ -124,7 +124,7 @@ impl MachBackend for AArch64Backend {
                 inst::unwind::systemv::create_unwind_info(info.clone())?.map(UnwindInfo::SystemV)
             }
             (Some(_info), UnwindInfoKind::Windows) => {
-                //TODO inst::unwind::winx64::create_unwind_info(info.clone())?.map(|u| UnwindInfo::WindowsX64(u))
+                // TODO: support Windows unwind info on AArch64
                 None
             }
             _ => None,
