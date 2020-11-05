@@ -19,7 +19,7 @@ impl UnwindInfoGenerator<Inst> for X64UnwindInfo {
     ) -> CodegenResult<Option<UnwindInfo<Reg>>> {
         use crate::isa::unwind::input::{self, UnwindCode};
         let mut codes = Vec::new();
-        let word_size = 8u8;
+        const WORD_SIZE: u8 = 8;
 
         for i in context.prologue.clone() {
             let i = i as usize;
@@ -33,7 +33,7 @@ impl UnwindInfoGenerator<Inst> for X64UnwindInfo {
                     codes.push((
                         offset,
                         UnwindCode::StackAlloc {
-                            size: word_size.into(),
+                            size: WORD_SIZE.into(),
                         },
                     ));
                     codes.push((
@@ -93,6 +93,8 @@ impl UnwindInfoGenerator<Inst> for X64UnwindInfo {
             .epilogues
             .iter()
             .map(|epilogue| {
+                // TODO add logic to process epilogue instruction instead of
+                // returning empty array.
                 let end = epilogue.end as usize - 1;
                 let end_offset = context.insts_layout[end];
                 if end_offset == last_epilogue_end {
@@ -104,6 +106,7 @@ impl UnwindInfoGenerator<Inst> for X64UnwindInfo {
                 let offset = context.insts_layout[start];
                 vec![
                     (offset, UnwindCode::RememberState),
+                    // TODO epilogue instructions
                     (end_offset, UnwindCode::RestoreState),
                 ]
             })
@@ -115,8 +118,8 @@ impl UnwindInfoGenerator<Inst> for X64UnwindInfo {
             prologue_unwind_codes: codes,
             epilogues_unwind_codes,
             function_size: context.len,
-            word_size,
-            initial_sp_offset: word_size,
+            word_size: WORD_SIZE,
+            initial_sp_offset: WORD_SIZE,
         }))
     }
 }

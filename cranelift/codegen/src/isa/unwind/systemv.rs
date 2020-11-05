@@ -185,7 +185,7 @@ struct InstructionBuilder<'a, Reg: PartialEq + Copy> {
 impl<'a, Reg: PartialEq + Copy> InstructionBuilder<'a, Reg> {
     fn new(sp_offset: u8, map_reg: &'a (dyn RegisterMapper<Reg> + 'a)) -> Self {
         Self {
-            sp_offset: sp_offset as i32, // CFA offset starts at word size offset to account for the return address on stack
+            sp_offset: sp_offset as i32, // CFA offset starts at the specified offset to account for the return address on stack
             saved_state: None,
             frame_register: None,
             map_reg,
