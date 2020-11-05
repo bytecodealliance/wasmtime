@@ -1035,7 +1035,8 @@ impl<I: VCodeInst> MachBuffer<I> {
         );
         let deadline = self.cur_offset().saturating_add(max_distance);
         self.island_worst_case_size += data.len() as CodeOffset;
-        self.island_worst_case_size &= !(I::LabelUse::ALIGN - 1);
+        self.island_worst_case_size =
+            (self.island_worst_case_size + I::LabelUse::ALIGN - 1) & !(I::LabelUse::ALIGN - 1);
         self.pending_constants.push(MachLabelConstant {
             label,
             align,
