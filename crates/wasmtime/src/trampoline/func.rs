@@ -214,7 +214,7 @@ pub fn create_handle_with_function(
 
     let pointer_type = isa.pointer_type();
     let sig = ft.get_wasmtime_signature(pointer_type);
-    let wft = ft.to_wasm_func_type();
+    let wft = ft.as_wasm_func_type();
 
     let mut fn_builder_ctx = FunctionBuilderContext::new();
     let mut module = Module::new();
@@ -241,7 +241,7 @@ pub fn create_handle_with_function(
         &sig,
         mem::size_of::<u128>(),
     )?;
-    store.signatures().borrow_mut().register(&wft, trampoline);
+    store.signatures().borrow_mut().register(wft, trampoline);
 
     // Next up we wrap everything up into an `InstanceHandle` by publishing our
     // code memory (makes it executable) and ensuring all our various bits of
@@ -265,7 +265,7 @@ pub unsafe fn create_handle_with_raw_function(
     store: &Store,
     state: Box<dyn Any>,
 ) -> Result<StoreInstanceHandle> {
-    let wft = ft.to_wasm_func_type();
+    let wft = ft.as_wasm_func_type();
 
     let mut module = Module::new();
     let mut finished_functions = PrimaryMap::new();
@@ -276,7 +276,7 @@ pub unsafe fn create_handle_with_raw_function(
         .exports
         .insert(String::new(), EntityIndex::Function(func_id));
     finished_functions.push(func);
-    store.signatures().borrow_mut().register(&wft, trampoline);
+    store.signatures().borrow_mut().register(wft, trampoline);
 
     create_handle(module, store, finished_functions, state, &[])
 }

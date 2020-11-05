@@ -8,18 +8,14 @@ use wasmtime::*;
 const N_THREADS: i32 = 10;
 const N_REPS: i32 = 3;
 
-fn print_message(_: Caller<'_>, args: &[Val], _: &mut [Val]) -> Result<(), Trap> {
-    println!("> Thread {} is running", args[0].unwrap_i32());
-    Ok(())
-}
-
 fn run(engine: &Engine, module: Module, id: i32) -> Result<()> {
     let store = Store::new(&engine);
 
     // Create external print functions.
     println!("Creating callback...");
-    let callback_type = FuncType::new(Box::new([ValType::I32]), Box::new([]));
-    let callback_func = Func::new(&store, callback_type, print_message);
+    let callback_func = Func::wrap(&store, |arg: i32| {
+        println!("> Thread {} is running", arg);
+    });
 
     let id_type = GlobalType::new(ValType::I32, Mutability::Const);
     let id_global = Global::new(&store, id_type, Val::I32(id))?;

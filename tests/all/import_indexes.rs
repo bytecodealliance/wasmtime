@@ -20,7 +20,7 @@ fn same_import_names_still_distinct() -> anyhow::Result<()> {
     let imports = [
         Func::new(
             &store,
-            FuncType::new(Box::new([]), Box::new([ValType::I32])),
+            FuncType::new(None, Some(ValType::I32)),
             |_, params, results| {
                 assert!(params.is_empty());
                 assert_eq!(results.len(), 1);
@@ -31,7 +31,7 @@ fn same_import_names_still_distinct() -> anyhow::Result<()> {
         .into(),
         Func::new(
             &store,
-            FuncType::new(Box::new([]), Box::new([ValType::F32])),
+            FuncType::new(None, Some(ValType::F32)),
             |_, params, results| {
                 assert!(params.is_empty());
                 assert_eq!(results.len(), 1);
