@@ -13,7 +13,7 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0"
 wasmtime-environ = { path = "../environ", version = "0.21.0" }
-object = { version = "0.21.1", default-features = false, features = ["write"] }
+object = { version = "0.22.0", default-features = false, features = ["write"] }
 more-asserts = "0.2.1"
 target-lexicon = { version = "0.11.0", default-features = false }
 wasmtime-debug = { path = "../debug", version = "0.21.0" }

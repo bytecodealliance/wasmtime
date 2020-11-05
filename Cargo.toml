@@ -32,7 +32,7 @@ wasmtime-wast = { path = "crates/wast", version = "0.21.0" }
 wasmtime-wasi = { path = "crates/wasi", version = "0.21.0" }
 wasi-common = { path = "crates/wasi-common", version = "0.21.0" }
 structopt = { version = "0.3.5", features = ["color", "suggestions"] }
-object = { version = "0.21.1", default-features = false, features = ["write"] }
+object = { version = "0.22.0", default-features = false, features = ["write"] }
 anyhow = "1.0.19"
 target-lexicon = { version = "0.11.0", default-features = false }
 pretty_env_logger = "0.4.0"
@@ -41,11 +41,11 @@ wat = "1.0.27"
 libc = "0.2.60"
 log = "0.4.8"
 rayon = "1.2.1"
-humantime = "1.3.0"
+humantime = "2.0.0"
 wasmparser = "0.65"
 
 [dev-dependencies]
-env_logger = "0.7.1"
+env_logger = "0.8.1"
 filecheck = "0.5.0"
 more-asserts = "0.2.1"
 tempfile = "3.1.0"

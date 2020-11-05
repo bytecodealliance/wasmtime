@@ -10,7 +10,7 @@ publish = false
 [dependencies]
 arbitrary = { version = "0.4.1", features = ["derive"] }
 bincode = "1.2.1"
-env_logger = "0.7.1"
+env_logger = "0.8.1"
 fst = "0.4.1"
 log = "0.4.8"
 peepmatic = { path = "../.." }

@@ -2,7 +2,7 @@
 
 use crate::object::utils::try_parse_func_name;
 use object::read::{Object, ObjectSection, Relocation, RelocationTarget};
-use object::{elf, File, RelocationEncoding, RelocationKind};
+use object::{elf, File, ObjectSymbol, RelocationEncoding, RelocationKind};
 use std::ptr::{read_unaligned, write_unaligned};
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::DefinedFuncIndex;
@@ -47,7 +47,7 @@ fn apply_reloc(
             // wasm function or runtime libcall.
             let sym = obj.symbol_by_index(i).unwrap();
             match sym.name() {
-                Some(name) => {
+                Ok(name) => {
                     if let Some(index) = try_parse_func_name(name) {
                         match module.defined_func_index(index) {
                             Some(f) => {
@@ -62,7 +62,7 @@ fn apply_reloc(
                         panic!("unknown function to link: {}", name);
                     }
                 }
-                None => panic!("unexpected relocation target: not a symbol"),
+                Err(_) => panic!("unexpected relocation target: not a symbol"),
             }
         }
         _ => panic!("unexpected relocation target"),

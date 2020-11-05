@@ -50,7 +50,7 @@ impl<'config> ModuleCacheEntry<'config> {
     {
         let mut hasher = Sha256Hasher(Sha256::new());
         state.hash(&mut hasher);
-        let hash: [u8; 32] = hasher.0.result().into();
+        let hash: [u8; 32] = hasher.0.finalize().into();
         // standard encoding uses '/' which can't be used for filename
         let hash = base64::encode_config(&hash, base64::URL_SAFE_NO_PAD);
 
@@ -181,7 +181,7 @@ impl Hasher for Sha256Hasher {
     }
 
     fn write(&mut self, bytes: &[u8]) {
-        self.0.input(bytes);
+        self.0.update(bytes);
     }
 }
 

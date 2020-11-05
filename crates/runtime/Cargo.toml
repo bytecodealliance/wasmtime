@@ -16,7 +16,7 @@ wasmtime-environ = { path = "../environ", version = "0.21.0" }
 region = "2.1.0"
 libc = { version = "0.2.70", default-features = false }
 log = "0.4.8"
-memoffset = "0.5.3"
+memoffset = "0.6.0"
 indexmap = "1.0.2"
 thiserror = "1.0.4"
 more-asserts = "0.2.1"

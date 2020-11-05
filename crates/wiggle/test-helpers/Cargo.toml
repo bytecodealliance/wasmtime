@@ -12,15 +12,14 @@ include = ["src/**/*", "LICENSE"]
 publish = false
 
 [dependencies]
-proptest = "0.9"
+proptest = "0.10"
 wiggle = { path = "..", features = ["tracing_log"] }
 
 [dev-dependencies]
 thiserror = "1.0"
 tracing = "0.1.14"
 tracing-subscriber = "0.2.4"
-env_logger = "0.7"
-
+env_logger = "0.8"
 
 [badges]
 maintenance = { status = "actively-developed" }
