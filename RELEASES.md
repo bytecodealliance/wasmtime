@@ -2,6 +2,46 @@
 
 --------------------------------------------------------------------------------
 
+## 0.21.0
+
+Released 2020-11-05.
+
+### Added
+
+* Experimental support for the multi-memory proposal was added.
+  [#2263](https://github.com/bytecodealliance/wasmtime/pull/2263)
+
+* The `Trap::trap_code` API enables learning what kind of trap was raised.
+  [#2309](https://github.com/bytecodealliance/wasmtime/pull/2309)
+
+### Changed
+
+* WebAssembly module validation is now parallelized.
+  [#2059](https://github.com/bytecodealliance/wasmtime/pull/2059)
+
+* Documentation is now available at docs.wasmtime.dev.
+  [#2317](https://github.com/bytecodealliance/wasmtime/pull/2317)
+
+* Windows now compiles like other platforms with a huge guard page instead of
+  having its own custom limit which made modules compile and run more slowly.
+  [#2326](https://github.com/bytecodealliance/wasmtime/pull/2326)
+
+* The size of the cache entry for serialized modules has been greatly reduced.
+  [#2321](https://github.com/bytecodealliance/wasmtime/pull/2321)
+  [#2322](https://github.com/bytecodealliance/wasmtime/pull/2322)
+  [#2324](https://github.com/bytecodealliance/wasmtime/pull/2324)
+  [#2325](https://github.com/bytecodealliance/wasmtime/pull/2325)
+
+* The `FuncType` API constructor and accessors are now iterator-based.
+  [#2365](https://github.com/bytecodealliance/wasmtime/pull/2365)
+
+### Fixed
+
+* A panic in compiling reference-types-using modules has been fixed.
+  [#2350](https://github.com/bytecodealliance/wasmtime/pull/2350)
+
+--------------------------------------------------------------------------------
+
 ## 0.20.0
 
 Released 2020-09-23.
