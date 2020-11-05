@@ -9,7 +9,7 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, ir};
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
-    ModuleDeclarations, ModuleError, ModuleResult,
+    ModuleDeclarations, ModuleError, ModuleResult, RelocRecord,
 };
 use log::info;
 use object::write::{
@@ -30,7 +30,7 @@ pub struct ObjectBuilder {
     architecture: object::Architecture,
     endian: object::Endianness,
     name: Vec<u8>,
-    libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
+    libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     function_alignment: u64,
     per_function_section: bool,
 }
@@ -46,7 +46,7 @@ impl ObjectBuilder {
     pub fn new<V: Into<Vec<u8>>>(
         isa: Box<dyn TargetIsa>,
         name: V,
-        libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
+        libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     ) -> ModuleResult<Self> {
         let binary_format = match isa.triple().binary_format {
             target_lexicon::BinaryFormat::Elf => object::BinaryFormat::Elf,
@@ -119,7 +119,7 @@ pub struct ObjectModule {
     data_objects: SecondaryMap<DataId, Option<(SymbolId, bool)>>,
     relocs: Vec<SymbolRelocs>,
     libcalls: HashMap<ir::LibCall, SymbolId>,
-    libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
+    libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     function_alignment: u64,
     per_function_section: bool,
 }
@@ -244,20 +244,8 @@ impl Module for ObjectModule {
             total_size: code_size,
             ..
         } = ctx.compile(self.isa())?;
-
-        let decl = self.declarations.get_function_decl(func_id);
-        if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
-        }
-
-        let &mut (symbol, ref mut defined) = self.functions[func_id].as_mut().unwrap();
-        if *defined {
-            return Err(ModuleError::DuplicateDefinition(decl.name.clone()));
-        }
-        *defined = true;
-
         let mut code: Vec<u8> = vec![0; code_size as usize];
-        let mut reloc_sink = ObjectRelocSink::new(self.object.format());
+        let mut reloc_sink = ObjectRelocSink::default();
         let mut stack_map_sink = NullStackMapSink {};
 
         unsafe {
@@ -270,40 +258,14 @@ impl Module for ObjectModule {
             )
         };
 
-        let (section, offset) = if self.per_function_section {
-            let symbol_name = self.object.symbol(symbol).name.clone();
-            let (section, offset) = self.object.add_subsection(
-                StandardSection::Text,
-                &symbol_name,
-                &code,
-                self.function_alignment,
-            );
-            self.object.symbol_mut(symbol).section = SymbolSection::Section(section);
-            self.object.symbol_mut(symbol).value = offset;
-            (section, offset)
-        } else {
-            let section = self.object.section_id(StandardSection::Text);
-            let offset =
-                self.object
-                    .add_symbol_data(symbol, section, &code, self.function_alignment);
-            (section, offset)
-        };
-
-        if !reloc_sink.relocs.is_empty() {
-            self.relocs.push(SymbolRelocs {
-                section,
-                offset,
-                relocs: reloc_sink.relocs,
-            });
-        }
-
-        Ok(ModuleCompiledFunction { size: code_size })
+        self.define_function_bytes(func_id, &code, &reloc_sink.relocs)
     }
 
     fn define_function_bytes(
         &mut self,
         func_id: FuncId,
         bytes: &[u8],
+        relocs: &[RelocRecord],
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {} with bytes", func_id);
 
@@ -323,7 +285,7 @@ impl Module for ObjectModule {
         }
         *defined = true;
 
-        if self.per_function_section {
+        let (section, offset) = if self.per_function_section {
             let symbol_name = self.object.symbol(symbol).name.clone();
             let (section, offset) = self.object.add_subsection(
                 StandardSection::Text,
@@ -333,11 +295,22 @@ impl Module for ObjectModule {
             );
             self.object.symbol_mut(symbol).section = SymbolSection::Section(section);
             self.object.symbol_mut(symbol).value = offset;
+            (section, offset)
         } else {
             let section = self.object.section_id(StandardSection::Text);
-            let _offset =
+            let offset =
                 self.object
                     .add_symbol_data(symbol, section, bytes, self.function_alignment);
+            (section, offset)
+        };
+
+        if !relocs.is_empty() {
+            let relocs = self.process_relocs(relocs);
+            self.relocs.push(SymbolRelocs {
+                section,
+                offset,
+                relocs,
+            });
         }
 
         Ok(ModuleCompiledFunction { size: total_size })
@@ -372,7 +345,7 @@ impl Module for ObjectModule {
         };
         let mut relocs = Vec::new();
         for &(offset, id) in function_relocs {
-            relocs.push(RelocRecord {
+            relocs.push(ObjectRelocRecord {
                 offset,
                 name: function_decls[id].clone(),
                 kind: RelocationKind::Absolute,
@@ -382,7 +355,7 @@ impl Module for ObjectModule {
             });
         }
         for &(offset, id, addend) in data_relocs {
-            relocs.push(RelocRecord {
+            relocs.push(ObjectRelocRecord {
                 offset,
                 name: data_decls[id].clone(),
                 kind: RelocationKind::Absolute,
@@ -457,7 +430,7 @@ impl ObjectModule {
     pub fn finish(mut self) -> ObjectProduct {
         let symbol_relocs = mem::take(&mut self.relocs);
         for symbol in symbol_relocs {
-            for &RelocRecord {
+            for &ObjectRelocRecord {
                 offset,
                 ref name,
                 kind,
@@ -536,6 +509,71 @@ impl ObjectModule {
             _ => panic!("invalid ExternalName {}", name),
         }
     }
+
+    fn process_relocs(&self, relocs: &[RelocRecord]) -> Vec<ObjectRelocRecord> {
+        relocs
+            .iter()
+            .map(|record| {
+                let mut addend = record.addend;
+                let (kind, encoding, size) = match record.reloc {
+                    Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
+                    Reloc::Abs8 => (RelocationKind::Absolute, RelocationEncoding::Generic, 64),
+                    Reloc::X86PCRel4 => (RelocationKind::Relative, RelocationEncoding::Generic, 32),
+                    Reloc::X86CallPCRel4 => {
+                        (RelocationKind::Relative, RelocationEncoding::X86Branch, 32)
+                    }
+                    // TODO: Get Cranelift to tell us when we can use
+                    // R_X86_64_GOTPCRELX/R_X86_64_REX_GOTPCRELX.
+                    Reloc::X86CallPLTRel4 => (
+                        RelocationKind::PltRelative,
+                        RelocationEncoding::X86Branch,
+                        32,
+                    ),
+                    Reloc::X86GOTPCRel4 => {
+                        (RelocationKind::GotRelative, RelocationEncoding::Generic, 32)
+                    }
+                    Reloc::ElfX86_64TlsGd => {
+                        assert_eq!(
+                            self.object.format(),
+                            object::BinaryFormat::Elf,
+                            "ElfX86_64TlsGd is not supported for this file format"
+                        );
+                        (
+                            RelocationKind::Elf(object::elf::R_X86_64_TLSGD),
+                            RelocationEncoding::Generic,
+                            32,
+                        )
+                    }
+                    Reloc::MachOX86_64Tlv => {
+                        assert_eq!(
+                            self.object.format(),
+                            object::BinaryFormat::MachO,
+                            "MachOX86_64Tlv is not supported for this file format"
+                        );
+                        addend += 4; // X86_64_RELOC_TLV has an implicit addend of -4
+                        (
+                            RelocationKind::MachO {
+                                value: object::macho::X86_64_RELOC_TLV,
+                                relative: true,
+                            },
+                            RelocationEncoding::Generic,
+                            32,
+                        )
+                    }
+                    // FIXME
+                    _ => unimplemented!(),
+                };
+                ObjectRelocRecord {
+                    offset: record.offset,
+                    name: record.name.clone(),
+                    kind,
+                    encoding,
+                    size,
+                    addend,
+                }
+            })
+            .collect()
+    }
 }
 
 fn translate_linkage(linkage: Linkage) -> (SymbolScope, bool) {
@@ -587,11 +625,11 @@ impl ObjectProduct {
 struct SymbolRelocs {
     section: SectionId,
     offset: u64,
-    relocs: Vec<RelocRecord>,
+    relocs: Vec<ObjectRelocRecord>,
 }
 
 #[derive(Clone)]
-struct RelocRecord {
+struct ObjectRelocRecord {
     offset: CodeOffset,
     name: ir::ExternalName,
     kind: RelocationKind,
@@ -600,18 +638,9 @@ struct RelocRecord {
     addend: Addend,
 }
 
+#[derive(Default)]
 struct ObjectRelocSink {
-    format: object::BinaryFormat,
     relocs: Vec<RelocRecord>,
-}
-
-impl ObjectRelocSink {
-    fn new(format: object::BinaryFormat) -> Self {
-        Self {
-            format,
-            relocs: vec![],
-        }
-    }
 }
 
 impl RelocSink for ObjectRelocSink {
@@ -625,61 +654,14 @@ impl RelocSink for ObjectRelocSink {
         _srcloc: ir::SourceLoc,
         reloc: Reloc,
         name: &ir::ExternalName,
-        mut addend: Addend,
+        addend: Addend,
     ) {
-        let (kind, encoding, size) = match reloc {
-            Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
-            Reloc::Abs8 => (RelocationKind::Absolute, RelocationEncoding::Generic, 64),
-            Reloc::X86PCRel4 => (RelocationKind::Relative, RelocationEncoding::Generic, 32),
-            Reloc::X86CallPCRel4 => (RelocationKind::Relative, RelocationEncoding::X86Branch, 32),
-            // TODO: Get Cranelift to tell us when we can use
-            // R_X86_64_GOTPCRELX/R_X86_64_REX_GOTPCRELX.
-            Reloc::X86CallPLTRel4 => (
-                RelocationKind::PltRelative,
-                RelocationEncoding::X86Branch,
-                32,
-            ),
-            Reloc::X86GOTPCRel4 => (RelocationKind::GotRelative, RelocationEncoding::Generic, 32),
-
-            Reloc::ElfX86_64TlsGd => {
-                assert_eq!(
-                    self.format,
-                    object::BinaryFormat::Elf,
-                    "ElfX86_64TlsGd is not supported for this file format"
-                );
-                (
-                    RelocationKind::Elf(object::elf::R_X86_64_TLSGD),
-                    RelocationEncoding::Generic,
-                    32,
-                )
-            }
-            Reloc::MachOX86_64Tlv => {
-                assert_eq!(
-                    self.format,
-                    object::BinaryFormat::MachO,
-                    "MachOX86_64Tlv is not supported for this file format"
-                );
-                addend += 4; // X86_64_RELOC_TLV has an implicit addend of -4
-                (
-                    RelocationKind::MachO {
-                        value: object::macho::X86_64_RELOC_TLV,
-                        relative: true,
-                    },
-                    RelocationEncoding::Generic,
-                    32,
-                )
-            }
-            // FIXME
-            _ => unimplemented!(),
-        };
         self.relocs.push(RelocRecord {
             offset,
-            name: name.clone(),
-            kind,
-            encoding,
-            size,
+            reloc,
             addend,
-        });
+            name: name.clone(),
+        })
     }
 
     fn reloc_jt(&mut self, _offset: CodeOffset, reloc: Reloc, _jt: ir::JumpTable) {
