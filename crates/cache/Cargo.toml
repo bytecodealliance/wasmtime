@@ -10,13 +10,13 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-base64 = "0.12.0"
+base64 = "0.13.0"
 bincode = "1.1.4"
-directories-next = "1.0"
+directories-next = "2.0"
 file-per-thread-logger = "0.1.1"
 log = { version = "0.4.8", default-features = false }
 serde = { version = "1.0.94", features = ["derive"] }
-sha2 = "0.8.0"
+sha2 = "0.9.0"
 toml = "0.5.5"
 zstd = "0.5"
 

@@ -1,7 +1,7 @@
 //! Helper utils for tracking and patching intra unit or section references.
 
 use gimli::write;
-use gimli::{CompilationUnitHeader, DebugInfoOffset, Reader, UnitOffset};
+use gimli::{DebugInfoOffset, Reader, UnitHeader, UnitOffset};
 use std::collections::HashMap;
 
 /// Stores compiled unit references: UnitEntryId+DwAt denotes a patch location
@@ -76,17 +76,15 @@ impl DebugInfoRefsMap {
             map: HashMap::new(),
         }
     }
-    pub fn insert<R>(
-        &mut self,
-        unit: &CompilationUnitHeader<R>,
-        unit_id: write::UnitId,
-        unit_map: UnitRefsMap,
-    ) where
+    pub fn insert<R>(&mut self, unit: &UnitHeader<R>, unit_id: write::UnitId, unit_map: UnitRefsMap)
+    where
         R: Reader<Offset = usize>,
     {
         self.map
             .extend(unit_map.map.into_iter().map(|(off, entry_id)| {
-                let off = off.to_debug_info_offset(unit);
+                let off = off
+                    .to_debug_info_offset(unit)
+                    .expect("should be in debug_info section");
                 (off, (unit_id, entry_id))
             }));
     }

@@ -37,16 +37,16 @@ fn relocate_dwarf_sections(
     defined_funcs_offset: usize,
     funcs: &[*const u8],
 ) -> Result<(), Error> {
-    use object::read::{File, Object, ObjectSection, RelocationTarget};
+    use object::read::{File, Object, ObjectSection, ObjectSymbol, RelocationTarget};
 
     let obj = File::parse(bytes)?;
     let mut func_symbols = HashMap::new();
-    for (id, sym) in obj.symbols() {
+    for sym in obj.symbols() {
         match (sym.name(), sym.section_index()) {
-            (Some(name), Some(_section_index)) if name.starts_with("_wasm_function_") => {
+            (Ok(name), Some(_section_index)) if name.starts_with("_wasm_function_") => {
                 let index = name["_wasm_function_".len()..].parse::<usize>()?;
                 let data = funcs[index - defined_funcs_offset];
-                func_symbols.insert(id, data);
+                func_symbols.insert(sym.index(), data);
             }
             _ => (),
         }

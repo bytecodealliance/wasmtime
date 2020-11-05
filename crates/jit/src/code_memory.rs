@@ -5,7 +5,7 @@ use crate::object::{
     ObjectUnwindInfo,
 };
 use crate::unwind::UnwindRegistry;
-use object::read::{File as ObjectFile, Object, ObjectSection};
+use object::read::{File as ObjectFile, Object, ObjectSection, ObjectSymbol};
 use region;
 use std::collections::BTreeMap;
 use std::mem::ManuallyDrop;
@@ -292,9 +292,9 @@ impl CodeMemory {
         // Track locations of all defined functions and trampolines.
         let mut funcs = BTreeMap::new();
         let mut trampolines = BTreeMap::new();
-        for (_id, sym) in obj.symbols() {
+        for sym in obj.symbols() {
             match sym.name() {
-                Some(name) => {
+                Ok(name) => {
                     if let Some(index) = try_parse_func_name(name) {
                         let is_import = sym.section_index().is_none();
                         if !is_import {
@@ -308,7 +308,7 @@ impl CodeMemory {
                             .insert(index, (start + sym.address() as usize, sym.size() as usize));
                     }
                 }
-                None => (),
+                Err(_) => (),
             }
         }
 
