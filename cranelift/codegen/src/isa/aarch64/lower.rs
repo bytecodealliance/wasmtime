@@ -111,7 +111,7 @@ pub(crate) enum ResultRegImmShift {
 
 /// Lower an instruction input to a 64-bit constant, if possible.
 pub(crate) fn input_to_const<C: LowerCtx<I = Inst>>(ctx: &mut C, input: InsnInput) -> Option<u64> {
-    let input = ctx.get_input(input.insn, input.input);
+    let input = ctx.get_input_as_source_or_const(input.insn, input.input);
     input.constant
 }
 
@@ -171,7 +171,7 @@ pub(crate) fn put_input_in_reg<C: LowerCtx<I = Inst>>(
     debug!("put_input_in_reg: input {:?}", input);
     let ty = ctx.input_ty(input.insn, input.input);
     let from_bits = ty_bits(ty) as u8;
-    let inputs = ctx.get_input(input.insn, input.input);
+    let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
     let in_reg = if let Some(c) = inputs.constant {
         // Generate constants fresh at each use to minimize long-range register pressure.
         let masked = if from_bits < 64 {
@@ -189,8 +189,7 @@ pub(crate) fn put_input_in_reg<C: LowerCtx<I = Inst>>(
         }
         to_reg.to_reg()
     } else {
-        ctx.use_input_reg(inputs);
-        inputs.reg
+        ctx.put_input_in_reg(input.insn, input.input)
     };
 
     match (narrow_mode, from_bits) {
@@ -272,7 +271,7 @@ fn put_input_in_rs<C: LowerCtx<I = Inst>>(
     input: InsnInput,
     narrow_mode: NarrowValueMode,
 ) -> ResultRS {
-    let inputs = ctx.get_input(input.insn, input.input);
+    let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
     if let Some((insn, 0)) = inputs.inst {
         let op = ctx.data(insn).opcode();
 
@@ -305,7 +304,7 @@ fn put_input_in_rse<C: LowerCtx<I = Inst>>(
     input: InsnInput,
     narrow_mode: NarrowValueMode,
 ) -> ResultRSE {
-    let inputs = ctx.get_input(input.insn, input.input);
+    let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
     if let Some((insn, 0)) = inputs.inst {
         let op = ctx.data(insn).opcode();
         let out_ty = ctx.output_ty(insn, 0);
@@ -1052,7 +1051,7 @@ pub(crate) fn maybe_input_insn<C: LowerCtx<I = Inst>>(
     input: InsnInput,
     op: Opcode,
 ) -> Option<IRInst> {
-    let inputs = c.get_input(input.insn, input.input);
+    let inputs = c.get_input_as_source_or_const(input.insn, input.input);
     debug!(
         "maybe_input_insn: input {:?} has options {:?}; looking for op {:?}",
         input, inputs, op
@@ -1092,14 +1091,14 @@ pub(crate) fn maybe_input_insn_via_conv<C: LowerCtx<I = Inst>>(
     op: Opcode,
     conv: Opcode,
 ) -> Option<IRInst> {
-    let inputs = c.get_input(input.insn, input.input);
+    let inputs = c.get_input_as_source_or_const(input.insn, input.input);
     if let Some((src_inst, _)) = inputs.inst {
         let data = c.data(src_inst);
         if data.opcode() == op {
             return Some(src_inst);
         }
         if data.opcode() == conv {
-            let inputs = c.get_input(src_inst, 0);
+            let inputs = c.get_input_as_source_or_const(src_inst, 0);
             if let Some((src_inst, _)) = inputs.inst {
                 let data = c.data(src_inst);
                 if data.opcode() == op {

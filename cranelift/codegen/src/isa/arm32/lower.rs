@@ -68,7 +68,7 @@ pub(crate) fn input_to_reg<C: LowerCtx<I = Inst>>(
 ) -> Reg {
     let ty = ctx.input_ty(input.insn, input.input);
     let from_bits = ty.bits() as u8;
-    let inputs = ctx.get_input(input.insn, input.input);
+    let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
     let in_reg = if let Some(c) = inputs.constant {
         let to_reg = ctx.alloc_tmp(Inst::rc_for_type(ty).unwrap(), ty);
         for inst in Inst::gen_constant(to_reg, c, ty, |reg_class, ty| ctx.alloc_tmp(reg_class, ty))
@@ -78,8 +78,7 @@ pub(crate) fn input_to_reg<C: LowerCtx<I = Inst>>(
         }
         to_reg.to_reg()
     } else {
-        ctx.use_input_reg(inputs);
-        inputs.reg
+        ctx.put_input_in_reg(input.insn, input.input)
     };
 
     match (narrow_mode, from_bits) {

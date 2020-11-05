@@ -60,7 +60,7 @@ fn matches_input<C: LowerCtx<I = Inst>>(
     input: InsnInput,
     op: Opcode,
 ) -> Option<IRInst> {
-    let inputs = ctx.get_input(input.insn, input.input);
+    let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
     inputs.inst.and_then(|(src_inst, _)| {
         let data = ctx.data(src_inst);
         if data.opcode() == op {
@@ -77,7 +77,7 @@ fn matches_input_any<C: LowerCtx<I = Inst>>(
     input: InsnInput,
     ops: &[Opcode],
 ) -> Option<IRInst> {
-    let inputs = ctx.get_input(input.insn, input.input);
+    let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
     inputs.inst.and_then(|(src_inst, _)| {
         let data = ctx.data(src_inst);
         for &op in ops {
@@ -89,14 +89,9 @@ fn matches_input_any<C: LowerCtx<I = Inst>>(
     })
 }
 
-fn lowerinput_to_reg(ctx: Ctx, input: LowerInput) -> Reg {
-    ctx.use_input_reg(input);
-    input.reg
-}
-
 /// Put the given input into a register, and mark it as used (side-effect).
 fn put_input_in_reg(ctx: Ctx, spec: InsnInput) -> Reg {
-    let input = ctx.get_input(spec.insn, spec.input);
+    let input = ctx.get_input_as_source_or_const(spec.insn, spec.input);
 
     if let Some(c) = input.constant {
         // Generate constants fresh at each use to minimize long-range register pressure.
@@ -118,7 +113,7 @@ fn put_input_in_reg(ctx: Ctx, spec: InsnInput) -> Reg {
         }
         cst_copy.to_reg()
     } else {
-        lowerinput_to_reg(ctx, input)
+        ctx.put_input_in_reg(spec.insn, spec.input)
     }
 }
 
@@ -165,21 +160,16 @@ fn extend_input_to_reg(ctx: Ctx, spec: InsnInput, ext_spec: ExtSpec) -> Reg {
     dst.to_reg()
 }
 
-fn lowerinput_to_reg_mem(ctx: Ctx, input: LowerInput) -> RegMem {
-    // TODO handle memory.
-    RegMem::reg(lowerinput_to_reg(ctx, input))
-}
-
 /// Put the given input into a register or a memory operand.
 /// Effectful: may mark the given input as used, when returning the register form.
 fn input_to_reg_mem(ctx: Ctx, spec: InsnInput) -> RegMem {
-    let input = ctx.get_input(spec.insn, spec.input);
-    lowerinput_to_reg_mem(ctx, input)
+    // TODO handle memory; merge a load directly, if possible.
+    RegMem::reg(ctx.put_input_in_reg(spec.insn, spec.input))
 }
 
 /// Returns whether the given input is an immediate that can be properly sign-extended, without any
 /// possible side-effect.
-fn lowerinput_to_sext_imm(input: LowerInput, input_ty: Type) -> Option<u32> {
+fn non_reg_input_to_sext_imm(input: NonRegInput, input_ty: Type) -> Option<u32> {
     input.constant.and_then(|x| {
         // For i64 instructions (prefixed with REX.W), require that the immediate will sign-extend
         // to 64 bits. For other sizes, it doesn't matter and we can just use the plain
@@ -193,23 +183,24 @@ fn lowerinput_to_sext_imm(input: LowerInput, input_ty: Type) -> Option<u32> {
 }
 
 fn input_to_sext_imm(ctx: Ctx, spec: InsnInput) -> Option<u32> {
-    let input = ctx.get_input(spec.insn, spec.input);
+    let input = ctx.get_input_as_source_or_const(spec.insn, spec.input);
     let input_ty = ctx.input_ty(spec.insn, spec.input);
-    lowerinput_to_sext_imm(input, input_ty)
+    non_reg_input_to_sext_imm(input, input_ty)
 }
 
 fn input_to_imm(ctx: Ctx, spec: InsnInput) -> Option<u64> {
-    ctx.get_input(spec.insn, spec.input).constant
+    ctx.get_input_as_source_or_const(spec.insn, spec.input)
+        .constant
 }
 
 /// Put the given input into an immediate, a register or a memory operand.
 /// Effectful: may mark the given input as used, when returning the register form.
 fn input_to_reg_mem_imm(ctx: Ctx, spec: InsnInput) -> RegMemImm {
-    let input = ctx.get_input(spec.insn, spec.input);
+    let input = ctx.get_input_as_source_or_const(spec.insn, spec.input);
     let input_ty = ctx.input_ty(spec.insn, spec.input);
-    match lowerinput_to_sext_imm(input, input_ty) {
+    match non_reg_input_to_sext_imm(input, input_ty) {
         Some(x) => RegMemImm::imm(x),
-        None => match lowerinput_to_reg_mem(ctx, input) {
+        None => match input_to_reg_mem(ctx, spec) {
             RegMem::Reg { reg } => RegMemImm::reg(reg),
             RegMem::Mem { addr } => RegMemImm::mem(addr),
         },
@@ -547,8 +538,6 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i
             )
         } else {
             for i in 0..=1 {
-                let input = ctx.get_input(add, i);
-
                 // Try to pierce through uextend.
                 if let Some(uextend) = matches_input(
                     ctx,
@@ -558,7 +547,7 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i
                     },
                     Opcode::Uextend,
                 ) {
-                    if let Some(cst) = ctx.get_input(uextend, 0).constant {
+                    if let Some(cst) = ctx.get_input_as_source_or_const(uextend, 0).constant {
                         // Zero the upper bits.
                         let input_size = ctx.input_ty(uextend, 0).bits() as u64;
                         let shift: u64 = 64 - input_size;
@@ -573,7 +562,7 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i
                 }
 
                 // If it's a constant, add it directly!
-                if let Some(cst) = input.constant {
+                if let Some(cst) = ctx.get_input_as_source_or_const(add, i).constant {
                     let final_offset = (offset as i64).wrapping_add(cst as i64);
                     if low32_will_sign_extend_to_64(final_offset as u64) {
                         let base = put_input_in_reg(ctx, add_inputs[1 - i]);
@@ -1010,13 +999,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     _ => unreachable!("unhandled output type for shift/rotates: {}", dst_ty),
                 };
 
-                let (count, rhs) = if let Some(cst) = ctx.get_input(insn, 1).constant {
-                    // Mask count, according to Cranelift's semantics.
-                    let cst = (cst as u8) & (dst_ty.bits() as u8 - 1);
-                    (Some(cst), None)
-                } else {
-                    (None, Some(put_input_in_reg(ctx, inputs[1])))
-                };
+                let (count, rhs) =
+                    if let Some(cst) = ctx.get_input_as_source_or_const(insn, 1).constant {
+                        // Mask count, according to Cranelift's semantics.
+                        let cst = (cst as u8) & (dst_ty.bits() as u8 - 1);
+                        (Some(cst), None)
+                    } else {
+                        (None, Some(put_input_in_reg(ctx, inputs[1])))
+                    };
 
                 let dst = get_output_reg(ctx, outputs[0]);
 
@@ -1248,7 +1238,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // Shift each value.
                 let mut shift = |reg: Writable<Reg>| {
                     let kind = ShiftKind::ShiftRightArithmetic;
-                    if let Some(shift_by) = ctx.get_input(insn, 1).constant {
+                    if let Some(shift_by) = ctx.get_input_as_source_or_const(insn, 1).constant {
                         // Mask the shift amount according to Cranelift's semantics.
                         let shift_by = (shift_by as u8) & (types::I64.bits() as u8 - 1);
                         ctx.emit(Inst::shift_r(8, kind, Some(shift_by), reg));
@@ -3351,7 +3341,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             // Verification ensures that the input is always a single-def ifcmp.
             let cmp_insn = ctx
-                .get_input(inputs[0].insn, inputs[0].input)
+                .get_input_as_source_or_const(inputs[0].insn, inputs[0].input)
                 .inst
                 .unwrap()
                 .0;

@@ -316,7 +316,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
         Opcode::Trueif => {
             let cmp_insn = ctx
-                .get_input(inputs[0].insn, inputs[0].input)
+                .get_input_as_source_or_const(inputs[0].insn, inputs[0].input)
                 .inst
                 .unwrap()
                 .0;
@@ -344,7 +344,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 // Verification ensures that the input is always a single-def ifcmp.
                 let cmp_insn = ctx
-                    .get_input(inputs[0].insn, inputs[0].input)
+                    .get_input_as_source_or_const(inputs[0].insn, inputs[0].input)
                     .inst
                     .unwrap()
                     .0;
@@ -471,7 +471,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
         Opcode::Trapif => {
             let cmp_insn = ctx
-                .get_input(inputs[0].insn, inputs[0].input)
+                .get_input_as_source_or_const(inputs[0].insn, inputs[0].input)
                 .inst
                 .unwrap()
                 .0;

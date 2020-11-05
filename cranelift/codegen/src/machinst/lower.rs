@@ -2,6 +2,9 @@
 //! to machine instructions with virtual registers. This is *almost* the final
 //! machine code, except for register allocation.
 
+// TODO: separate the IR-query core of `LowerCtx` from the lowering logic built
+// on top of it, e.g. the side-effect/coloring analysis and the scan support.
+
 use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
@@ -39,7 +42,7 @@ use smallvec::SmallVec;
 /// they can be freely permuted (modulo true dataflow dependencies) without
 /// affecting program behavior.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct InstColor(u32);
+struct InstColor(u32);
 impl InstColor {
     fn new(n: u32) -> InstColor {
         InstColor(n)
@@ -92,11 +95,6 @@ pub trait LowerCtx {
     fn memflags(&self, ir_inst: Inst) -> Option<MemFlags>;
     /// Get the source location for a given instruction.
     fn srcloc(&self, ir_inst: Inst) -> SourceLoc;
-    /// Get the side-effect color of the given instruction (specifically, at the
-    /// program point just prior to the instruction). The "color" changes at
-    /// every side-effecting op; the backend should not try to merge across
-    /// side-effect colors unless the op being merged is known to be pure.
-    fn inst_color(&self, ir_inst: Inst) -> InstColor;
 
     // Instruction input/output queries:
 
@@ -111,29 +109,25 @@ pub trait LowerCtx {
     /// Get the value of a constant instruction (`iconst`, etc.) as a 64-bit
     /// value, if possible.
     fn get_constant(&self, ir_inst: Inst) -> Option<u64>;
-    /// Get the input in any combination of three forms:
+    /// Get the input as one of two options other than a direct register:
     ///
-    /// - An instruction, if the same color as this instruction or if the
-    ///   producing instruction has no side effects (thus in both cases
-    ///   mergeable);
-    /// - A constant, if the value is a constant;
-    /// - A register.
+    /// - An instruction, given that it is effect-free or able to sink its
+    ///   effect to the current instruction being lowered, and given it has only
+    ///   one output, and if effect-ful, given that this is the only use;
+    /// - A constant, if the value is a constant.
     ///
-    /// The instruction input may be available in some or all of these
-    /// forms. More than one is possible: e.g., it may be produced by an
-    /// instruction in the same block, but may also have been forced into a
-    /// register already by an earlier op. It will *always* be available
-    /// in a register, at least.
+    /// The instruction input may be available in either of these forms.  It may
+    /// be available in neither form, if the conditions are not met; if so, use
+    /// `put_input_in_reg()` instead to get it in a register.
     ///
-    /// If the backend uses the register, rather than one of the other
-    /// forms (constant or merging of the producing op), it must call
-    /// `use_input_reg()` to ensure the producing inst is actually lowered
-    /// as well. Failing to do so may result in the instruction that generates
-    /// this value never being generated, thus resulting in incorrect execution.
-    /// For correctness, backends should thus wrap `get_input()` and
-    /// `use_input_regs()` with helpers that return a register only after
-    /// ensuring it is marked as used.
-    fn get_input(&self, ir_inst: Inst, idx: usize) -> LowerInput;
+    /// If the backend merges the effect of a side-effecting instruction, it
+    /// must call `sink_inst()`. When this is called, it indicates that the
+    /// effect has been sunk to the current scan location. The sunk
+    /// instruction's result(s) must have *no* uses remaining, because it will
+    /// not be codegen'd (it has been integrated into the current instruction).
+    fn get_input_as_source_or_const(&self, ir_inst: Inst, idx: usize) -> NonRegInput;
+    /// Put the `idx`th input into a register and return the assigned register.
+    fn put_input_in_reg(&mut self, ir_inst: Inst, idx: usize) -> Reg;
     /// Get the `idx`th output register of the given IR instruction. When
     /// `backend.lower_inst_to_regs(ctx, inst)` is called, it is expected that
     /// the backend will write results to these output register(s).  This
@@ -152,14 +146,11 @@ pub trait LowerCtx {
     fn emit(&mut self, mach_inst: Self::I);
     /// Emit a machine instruction that is a safepoint.
     fn emit_safepoint(&mut self, mach_inst: Self::I);
-    /// Indicate that the given input uses the register returned by
-    /// `get_input()`. Codegen may not happen otherwise for the producing
-    /// instruction if it has no side effects and no uses.
-    fn use_input_reg(&mut self, input: LowerInput);
-    /// Is the given register output needed after the given instruction? Allows
-    /// instructions with multiple outputs to make fine-grained decisions on
-    /// which outputs to actually generate.
-    fn is_reg_needed(&self, ir_inst: Inst, reg: Reg) -> bool;
+    /// Indicate that the side-effect of an instruction has been sunk to the
+    /// current scan location. This can only be done to an instruction with no
+    /// uses of its result register(s), because it will cause the instruction
+    /// not to be codegen'd at its original location.
+    fn sink_inst(&mut self, ir_inst: Inst);
     /// Retrieve constant data given a handle.
     fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData;
     /// Indicate that a constant should be emitted.
@@ -172,17 +163,22 @@ pub trait LowerCtx {
     fn ensure_in_vreg(&mut self, reg: Reg, ty: Type) -> Reg;
 }
 
-/// A representation of all of the ways in which an instruction input is
-/// available: as a producing instruction (in the same color-partition), as a
-/// constant, and/or in an existing register. See [LowerCtx::get_input] for more
-/// details.
+/// A representation of all of the ways in which a value is available, aside
+/// from as a direct register.
+///
+/// - An instruction, if it would be allowed to occur at the current location
+///   instead (see [LowerCtx::get_input_as_source_or_const()] for more
+///   details).
+///
+/// - A constant, if the value is known to be a constant.
 #[derive(Clone, Copy, Debug)]
-pub struct LowerInput {
-    /// The value is live in a register. This option is always available. Call
-    /// [LowerCtx::use_input_reg()] if the register is used.
-    pub reg: Reg,
-    /// An instruction produces this value; the instruction's result index that
-    /// produces this value is given.
+pub struct NonRegInput {
+    /// An instruction produces this value (as the given output), and its
+    /// computation (and side-effect if applicable) could occur at the
+    /// current instruction's location instead.
+    ///
+    /// If this instruction's operation is merged into the current instruction,
+    /// the backend must call [LowerCtx::sink_inst()].
     pub inst: Option<(Inst, usize)>,
     /// The value is a known constant.
     pub constant: Option<u64>,
@@ -242,17 +238,36 @@ pub struct Lower<'func, I: VCodeInst> {
     /// Return-value vregs.
     retval_regs: Vec<Reg>,
 
-    /// Instruction colors.
-    inst_colors: SecondaryMap<Inst, InstColor>,
+    /// Instruction colors at block exits. From this map, we can recover all
+    /// instruction colors by scanning backward from the block end and
+    /// decrementing on any color-changing (side-effecting) instruction.
+    block_end_colors: SecondaryMap<Block, InstColor>,
+
+    /// Instruction colors at side-effecting ops. This is the *entry* color,
+    /// i.e., the version of global state that exists before an instruction
+    /// executes.  For each side-effecting instruction, the *exit* color is its
+    /// entry color plus one.
+    side_effect_inst_entry_colors: FxHashMap<Inst, InstColor>,
+
+    /// Current color as we scan during lowering. While we are lowering an
+    /// instruction, this is equal to the color *at entry to* the instruction.
+    cur_scan_entry_color: Option<InstColor>,
+
+    /// Current instruction as we scan during lowering.
+    cur_inst: Option<Inst>,
 
     /// Instruction constant values, if known.
     inst_constants: FxHashMap<Inst, u64>,
 
-    /// Instruction has a side-effect and must be codegen'd.
-    inst_needed: SecondaryMap<Inst, bool>,
+    /// Use-counts per SSA value, as counted in the input IR.
+    value_uses: SecondaryMap<Value, u32>,
 
-    /// Value (vreg) is needed and producer must be codegen'd.
-    vreg_needed: Vec<bool>,
+    /// Actual uses of each SSA value so far, incremented while lowering.
+    value_lowered_uses: SecondaryMap<Value, u32>,
+
+    /// Effectful instructions that have been sunk; they are not codegen'd at
+    /// their original locations.
+    inst_sunk: FxHashSet<Inst>,
 
     /// Next virtual register number to allocate.
     next_vreg: u32,
@@ -371,20 +386,19 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // Compute instruction colors, find constant instructions, and find instructions with
         // side-effects, in one combined pass.
         let mut cur_color = 0;
-        let mut inst_colors = SecondaryMap::with_default(InstColor::new(0));
+        let mut block_end_colors = SecondaryMap::with_default(InstColor::new(0));
+        let mut side_effect_inst_entry_colors = FxHashMap::default();
         let mut inst_constants = FxHashMap::default();
-        let mut inst_needed = SecondaryMap::with_default(false);
+        let mut value_uses = SecondaryMap::with_default(0);
         for bb in f.layout.blocks() {
             cur_color += 1;
             for inst in f.layout.block_insts(bb) {
                 let side_effect = has_lowering_side_effect(f, inst);
 
-                // Assign colors. A new color is chosen *after* any side-effecting instruction.
-                inst_colors[inst] = InstColor::new(cur_color);
                 debug!("bb {} inst {} has color {}", bb, inst, cur_color);
                 if side_effect {
-                    debug!(" -> side-effecting");
-                    inst_needed[inst] = true;
+                    side_effect_inst_entry_colors.insert(inst, InstColor::new(cur_color));
+                    debug!(" -> side-effecting; incrementing color for next inst");
                     cur_color += 1;
                 }
 
@@ -393,21 +407,31 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     debug!(" -> constant: {}", c);
                     inst_constants.insert(inst, c);
                 }
-            }
-        }
 
-        let vreg_needed = std::iter::repeat(false).take(next_vreg as usize).collect();
+                // Count uses of all arguments.
+                for arg in f.dfg.inst_args(inst) {
+                    let arg = f.dfg.resolve_aliases(*arg);
+                    value_uses[arg] += 1;
+                }
+            }
+
+            block_end_colors[bb] = InstColor::new(cur_color);
+        }
 
         Ok(Lower {
             f,
             vcode,
             value_regs,
             retval_regs,
-            inst_colors,
+            block_end_colors,
+            side_effect_inst_entry_colors,
             inst_constants,
-            inst_needed,
-            vreg_needed,
             next_vreg,
+            value_uses,
+            value_lowered_uses: SecondaryMap::default(),
+            inst_sunk: FxHashSet::default(),
+            cur_scan_entry_color: None,
+            cur_inst: None,
             block_insts: vec![],
             block_ranges: vec![],
             bb_insts: vec![],
@@ -465,6 +489,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             return Ok(());
         }
 
+        self.cur_inst = Some(inst);
+
         // Make up two vectors of info:
         //
         // * one for dsts which are to be assigned constants.  We'll deal with those second, so
@@ -489,15 +515,16 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             debug_assert!(ty == self.f.dfg.value_type(*dst_val));
             let dst_reg = self.value_regs[*dst_val];
 
-            let input = self.get_input_for_val(inst, src_val);
-            debug!("jump arg {} is {}, reg {:?}", i, src_val, input.reg);
+            let input = self.get_value_as_source_or_const(src_val);
+            debug!("jump arg {} is {}", i, src_val);
             i += 1;
 
             if let Some(c) = input.constant {
+                debug!(" -> constant {}", c);
                 const_bundles.push((ty, Writable::from_reg(dst_reg), c));
             } else {
-                self.use_input_reg(input);
-                let src_reg = input.reg;
+                let src_reg = self.put_value_in_reg(src_val);
+                debug!(" -> reg {:?}", src_reg);
                 // Skip self-assignments.  Not only are they pointless, they falsely trigger the
                 // overlap-check below and hence can cause a lot of unnecessary copying through
                 // temporaries.
@@ -558,11 +585,27 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         Ok(())
     }
 
+    /// Has this instruction been sunk to a use-site (i.e., away from its
+    /// original location)?
+    fn is_inst_sunk(&self, inst: Inst) -> bool {
+        self.inst_sunk.contains(&inst)
+    }
+
+    // Is any result of this instruction needed?
+    fn is_any_inst_result_needed(&self, inst: Inst) -> bool {
+        self.f
+            .dfg
+            .inst_results(inst)
+            .iter()
+            .any(|&result| self.value_lowered_uses[result] > 0)
+    }
+
     fn lower_clif_block<B: LowerBackend<MInst = I>>(
         &mut self,
         backend: &B,
         block: Block,
     ) -> CodegenResult<()> {
+        self.cur_scan_entry_color = Some(self.block_end_colors[block]);
         // Lowering loop:
         // - For each non-branch instruction, in reverse order:
         //   - If side-effecting (load, store, branch/call/return, possible trap), or if
@@ -582,27 +625,41 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // end of the BB (in the toplevel driver `lower()`).
         for inst in self.f.layout.block_insts(block).rev() {
             let data = &self.f.dfg[inst];
-            let value_needed = self
-                .f
-                .dfg
-                .inst_results(inst)
-                .iter()
-                .any(|&result| self.vreg_needed[self.value_regs[result].get_index()]);
+            let has_side_effect = has_lowering_side_effect(self.f, inst);
+            // If  inst has been sunk to another location, skip it.
+            if self.is_inst_sunk(inst) {
+                continue;
+            }
+            // Are any outputs used at least once?
+            let value_needed = self.is_any_inst_result_needed(inst);
             debug!(
-                "lower_clif_block: block {} inst {} ({:?}) is_branch {} inst_needed {} value_needed {}",
+                "lower_clif_block: block {} inst {} ({:?}) is_branch {} side_effect {} value_needed {}",
                 block,
                 inst,
                 data,
                 data.opcode().is_branch(),
-                self.inst_needed[inst],
+                has_side_effect,
                 value_needed,
             );
+            // Skip lowering branches; these are handled separately.
             if self.f.dfg[inst].opcode().is_branch() {
                 continue;
             }
-            // Normal instruction: codegen if eager bit is set. (Other instructions may also be
-            // codegened if not eager when they are used by another instruction.)
-            if self.inst_needed[inst] || value_needed {
+
+            // Update scan state to color prior to this inst (as we are scanning
+            // backward).
+            self.cur_inst = Some(inst);
+            if has_side_effect {
+                let entry_color = *self
+                    .side_effect_inst_entry_colors
+                    .get(&inst)
+                    .expect("every side-effecting inst should have a color-map entry");
+                self.cur_scan_entry_color = Some(entry_color);
+            }
+
+            // Normal instruction: codegen if the instruction is side-effecting
+            // or any of its outputs its used.
+            if has_side_effect || value_needed {
                 debug!("lowering: inst {}: {:?}", inst, self.f.dfg[inst]);
                 backend.lower(self, inst)?;
             }
@@ -620,6 +677,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             let loc = self.srcloc(inst);
             self.finish_ir_inst(loc);
         }
+        self.cur_scan_entry_color = None;
         Ok(())
     }
 
@@ -667,6 +725,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             "lower_clif_branches: block {} branches {:?} targets {:?}",
             block, branches, targets,
         );
+        // When considering code-motion opportunities, consider the current
+        // program point to be the first branch.
+        self.cur_inst = Some(branches[0]);
         backend.lower_branch_group(self, branches, targets)?;
         let loc = self.srcloc(branches[0]);
         self.finish_ir_inst(loc);
@@ -786,60 +847,91 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         Ok((vcode, stack_map_info))
     }
 
-    /// Get the actual inputs for a value. This is the implementation for
-    /// `get_input()` but starting from the SSA value, which is not exposed to
-    /// the backend.
-    fn get_input_for_val(&self, at_inst: Inst, val: Value) -> LowerInput {
-        debug!("get_input_for_val: val {} at inst {}", val, at_inst);
+    fn put_value_in_reg(&mut self, val: Value) -> Reg {
+        debug!("put_value_in_reg: val {}", val,);
         let mut reg = self.value_regs[val];
         debug!(" -> reg {:?}", reg);
         assert!(reg.is_valid());
-        let mut inst = match self.f.dfg.value_def(val) {
-            // OK to merge source instruction if (i) we have a source
-            // instruction, and either (ii-a) it has no side effects, or (ii-b)
-            // it has the same color as this instruction.
-            ValueDef::Result(src_inst, result_idx) => {
-                debug!(" -> src inst {}", src_inst);
-                debug!(
-                    " -> has lowering side effect: {}",
-                    has_lowering_side_effect(self.f, src_inst)
-                );
-                debug!(
-                    " -> our color is {:?}, src inst is {:?}",
-                    self.inst_color(at_inst),
-                    self.inst_color(src_inst)
-                );
-                if !has_lowering_side_effect(self.f, src_inst)
-                    || self.inst_color(at_inst) == self.inst_color(src_inst)
-                {
-                    Some((src_inst, result_idx))
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        };
-        let constant = inst.and_then(|(inst, _)| self.get_constant(inst));
+
+        self.value_lowered_uses[val] += 1;
 
         // Pinned-reg hack: if backend specifies a fixed pinned register, use it
         // directly when we encounter a GetPinnedReg op, rather than lowering
         // the actual op, and do not return the source inst to the caller; the
         // value comes "out of the ether" and we will not force generation of
         // the superfluous move.
-        if let Some((i, _)) = inst {
+        if let ValueDef::Result(i, 0) = self.f.dfg.value_def(val) {
             if self.f.dfg[i].opcode() == Opcode::GetPinnedReg {
                 if let Some(pr) = self.pinned_reg {
                     reg = pr;
                 }
-                inst = None;
             }
         }
 
-        LowerInput {
-            reg,
-            inst,
-            constant,
-        }
+        reg
+    }
+
+    /// Get the actual inputs for a value. This is the implementation for
+    /// `get_input()` but starting from the SSA value, which is not exposed to
+    /// the backend.
+    fn get_value_as_source_or_const(&self, val: Value) -> NonRegInput {
+        debug!(
+            "get_input_for_val: val {} at cur_inst {:?} cur_scan_entry_color {:?}",
+            val, self.cur_inst, self.cur_scan_entry_color,
+        );
+        let inst = match self.f.dfg.value_def(val) {
+            // OK to merge source instruction if (i) we have a source
+            // instruction, and:
+            // - It has no side-effects, OR
+            // - It has a side-effect, has one output value, that one output has
+            //   only one use (this one), and the instruction's color is *one less
+            //   than* the current scan color.
+            //
+            //   This latter set of conditions is testing whether a
+            //   side-effecting instruction can sink to the current scan
+            //   location; this is possible if the in-color of this inst is
+            //   equal to the out-color of the producing inst, so no other
+            //   side-effecting ops occur between them (which will only be true
+            //   if they are in the same BB, because color increments at each BB
+            //   start).
+            //
+            //   If it is actually sunk, then in `merge_inst()`, we update the
+            //   scan color so that as we scan over the range past which the
+            //   instruction was sunk, we allow other instructions (that came
+            //   prior to the sunk instruction) to sink.
+            ValueDef::Result(src_inst, result_idx) => {
+                let src_side_effect = has_lowering_side_effect(self.f, src_inst);
+                debug!(" -> src inst {}", src_inst);
+                debug!(" -> has lowering side effect: {}", src_side_effect);
+                if !src_side_effect {
+                    // Pure instruction: always possible to sink.
+                    Some((src_inst, result_idx))
+                } else {
+                    // Side-effect: test whether this is the only use of the
+                    // only result of the instruction, and whether colors allow
+                    // the code-motion.
+                    if self.cur_scan_entry_color.is_some()
+                        && self.value_uses[val] == 1
+                        && self.num_outputs(src_inst) == 1
+                        && self
+                            .side_effect_inst_entry_colors
+                            .get(&src_inst)
+                            .unwrap()
+                            .get()
+                            + 1
+                            == self.cur_scan_entry_color.unwrap().get()
+                    {
+                        Some((src_inst, 0))
+                    } else {
+                        None
+                    }
+                }
+            }
+            _ => None,
+        };
+        let constant = inst.and_then(|(inst, _)| self.get_constant(inst));
+
+        NonRegInput { inst, constant }
     }
 }
 
@@ -928,10 +1020,6 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         self.f.srclocs[ir_inst]
     }
 
-    fn inst_color(&self, ir_inst: Inst) -> InstColor {
-        self.inst_colors[ir_inst]
-    }
-
     fn num_inputs(&self, ir_inst: Inst) -> usize {
         self.f.dfg.inst_args(ir_inst).len()
     }
@@ -954,10 +1042,16 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         self.inst_constants.get(&ir_inst).cloned()
     }
 
-    fn get_input(&self, ir_inst: Inst, idx: usize) -> LowerInput {
+    fn get_input_as_source_or_const(&self, ir_inst: Inst, idx: usize) -> NonRegInput {
         let val = self.f.dfg.inst_args(ir_inst)[idx];
         let val = self.f.dfg.resolve_aliases(val);
-        self.get_input_for_val(ir_inst, val)
+        self.get_value_as_source_or_const(val)
+    }
+
+    fn put_input_in_reg(&mut self, ir_inst: Inst, idx: usize) -> Reg {
+        let val = self.f.dfg.inst_args(ir_inst)[idx];
+        let val = self.f.dfg.resolve_aliases(val);
+        self.put_value_in_reg(val)
     }
 
     fn get_output(&self, ir_inst: Inst, idx: usize) -> Writable<Reg> {
@@ -989,17 +1083,19 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         });
     }
 
-    fn use_input_reg(&mut self, input: LowerInput) {
-        debug!("use_input_reg: vreg {:?} is needed", input.reg);
-        // We may directly return a real (machine) register when we know that register holds the
-        // result of an opcode (e.g. GetPinnedReg).
-        if input.reg.is_virtual() {
-            self.vreg_needed[input.reg.get_index()] = true;
-        }
-    }
+    fn sink_inst(&mut self, ir_inst: Inst) {
+        assert!(has_lowering_side_effect(self.f, ir_inst));
+        assert!(self.cur_scan_entry_color.is_some());
 
-    fn is_reg_needed(&self, ir_inst: Inst, reg: Reg) -> bool {
-        self.inst_needed[ir_inst] || self.vreg_needed[reg.get_index()]
+        let sunk_inst_entry_color = self
+            .side_effect_inst_entry_colors
+            .get(&ir_inst)
+            .cloned()
+            .unwrap();
+        let sunk_inst_exit_color = InstColor::new(sunk_inst_entry_color.get() + 1);
+        assert!(sunk_inst_exit_color == self.cur_scan_entry_color.unwrap());
+        self.cur_scan_entry_color = Some(sunk_inst_entry_color);
+        self.inst_sunk.insert(ir_inst);
     }
 
     fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData {
