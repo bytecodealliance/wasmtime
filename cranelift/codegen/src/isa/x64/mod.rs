@@ -104,9 +104,28 @@ impl MachBackend for X64Backend {
     }
 
     #[cfg(feature = "unwind")]
+    fn emit_unwind_info(
+        &self,
+        result: &MachCompileResult,
+        kind: crate::machinst::UnwindInfoKind,
+    ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
+        use crate::isa::unwind::UnwindInfo;
+        use crate::machinst::UnwindInfoKind;
+        Ok(match (result.unwind_info.as_ref(), kind) {
+            (Some(info), UnwindInfoKind::SystemV) => {
+                inst::unwind::systemv::create_unwind_info(info.clone())?.map(UnwindInfo::SystemV)
+            }
+            (Some(_info), UnwindInfoKind::Windows) => {
+                //TODO inst::unwind::winx64::create_unwind_info(info.clone())?.map(|u| UnwindInfo::WindowsX64(u))
+                None
+            }
+            _ => None,
+        })
+    }
+
+    #[cfg(feature = "unwind")]
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
-        // By default, an ISA cannot create a System V CIE
-        Some(inst::unwind::create_cie())
+        Some(inst::unwind::systemv::create_cie())
     }
 }
 

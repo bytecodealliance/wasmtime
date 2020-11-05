@@ -226,13 +226,9 @@ impl UnwindInfo {
 
         let word_size: u32 = unwind.word_size.into();
         let mut unwind_codes = Vec::new();
-        for c in unwind.prologue_unwind_codes.iter() {
+        for (offset, c) in unwind.prologue_unwind_codes.iter() {
             match c {
-                InputUnwindCode::SaveRegister {
-                    offset,
-                    reg,
-                    stack_offset,
-                } => {
+                InputUnwindCode::SaveRegister { reg, stack_offset } => {
                     let reg = MR::map(*reg);
                     let offset = ensure_unwind_offset(*offset)?;
                     match reg {
@@ -269,7 +265,7 @@ impl UnwindInfo {
                         }
                     }
                 }
-                InputUnwindCode::StackAlloc { offset, size } => {
+                InputUnwindCode::StackAlloc { size } => {
                     unwind_codes.push(UnwindCode::StackAlloc {
                         offset: ensure_unwind_offset(*offset)?,
                         size: *size,

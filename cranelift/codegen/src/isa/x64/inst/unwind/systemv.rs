@@ -1,13 +1,8 @@
 //! Unwind information for System V ABI (x86-64).
 
+use crate::isa::unwind::input;
 use crate::isa::unwind::systemv::{RegisterMappingError, UnwindInfo};
-use crate::isa::x64::inst::{
-    args::{AluRmiROpcode, Amode, RegMemImm, SyntheticAmode},
-    regs, Inst,
-};
-use crate::machinst::UnwindInfoContext;
 use crate::result::CodegenResult;
-use alloc::vec::Vec;
 use gimli::{write::CommonInformationEntry, Encoding, Format, Register, X86_64};
 use regalloc::{Reg, RegClass};
 
@@ -88,113 +83,15 @@ pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
 }
 
 pub(crate) fn create_unwind_info(
-    context: UnwindInfoContext<Inst>,
-    word_size: u8,
+    unwind: input::UnwindInfo<Reg>,
 ) -> CodegenResult<Option<UnwindInfo>> {
-    use crate::isa::unwind::input::{self, UnwindCode};
-    let mut codes = Vec::new();
-
-    for i in context.prologue.clone() {
-        let i = i as usize;
-        let inst = &context.insts[i];
-        let offset = context.insts_layout[i];
-
-        match inst {
-            Inst::Push64 {
-                src: RegMemImm::Reg { reg },
-            } => {
-                codes.push(UnwindCode::StackAlloc {
-                    offset,
-                    size: word_size.into(),
-                });
-                codes.push(UnwindCode::SaveRegister {
-                    offset,
-                    reg: *reg,
-                    stack_offset: 0,
-                });
-            }
-            Inst::MovRR { src, dst, .. } => {
-                if *src == regs::rsp() {
-                    codes.push(UnwindCode::SetFramePointer {
-                        offset,
-                        reg: dst.to_reg(),
-                    });
-                }
-            }
-            Inst::AluRmiR {
-                is_64: true,
-                op: AluRmiROpcode::Sub,
-                src: RegMemImm::Imm { simm32 },
-                dst,
-                ..
-            } if dst.to_reg() == regs::rsp() => {
-                let imm = *simm32;
-                codes.push(UnwindCode::StackAlloc { offset, size: imm });
-            }
-            Inst::MovRM {
-                src,
-                dst: SyntheticAmode::Real(Amode::ImmReg { simm32, base }),
-                ..
-            } if *base == regs::rsp() => {
-                // `mov reg, imm(rsp)`
-                let imm = *simm32;
-                codes.push(UnwindCode::SaveRegister {
-                    offset,
-                    reg: *src,
-                    stack_offset: imm,
-                });
-            }
-            Inst::AluRmiR {
-                is_64: true,
-                op: AluRmiROpcode::Add,
-                src: RegMemImm::Imm { simm32 },
-                dst,
-                ..
-            } if dst.to_reg() == regs::rsp() => {
-                let imm = *simm32;
-                codes.push(UnwindCode::StackDealloc { offset, size: imm });
-            }
-            _ => {}
-        }
-    }
-
-    let last_epilogue_end = context.len;
-    let epilogues_unwind_codes = context
-        .epilogues
-        .iter()
-        .map(|epilogue| {
-            let end = epilogue.end as usize - 1;
-            let end_offset = context.insts_layout[end];
-            if end_offset == last_epilogue_end {
-                // Do not remember/restore for very last epilogue.
-                return vec![];
-            }
-
-            let start = epilogue.start as usize;
-            let offset = context.insts_layout[start];
-            vec![
-                UnwindCode::RememberState { offset },
-                UnwindCode::RestoreState { offset: end_offset },
-            ]
-        })
-        .collect();
-
-    let prologue_size = context.insts_layout[context.prologue.end as usize];
-    let unwind = input::UnwindInfo {
-        prologue_size,
-        prologue_unwind_codes: codes,
-        epilogues_unwind_codes,
-        function_size: context.len,
-        word_size,
-    };
-
     struct RegisterMapper;
     impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
         fn map(&self, reg: Reg) -> Result<u16, RegisterMappingError> {
             Ok(map_reg(reg)?.0)
         }
-        fn rsp(&self) -> u16 {
-            map_reg(regs::rsp()).unwrap().0
+        fn sp(&self) -> u16 {
+            X86_64::RSP.0
         }
     }
     let map = RegisterMapper;

@@ -129,7 +129,7 @@ impl TargetIsa for TargetIsaAdapter {
         self.backend.unsigned_sub_overflow_condition()
     }
 
-    #[cfg(feature = "unwind")]
+    #[cfg(all(feature = "unwind", feature = "x64"))]
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         self.backend.create_systemv_cie()
     }

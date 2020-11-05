@@ -81,7 +81,7 @@ pub(crate) fn create_unwind_info(
                 unwind_codes = epilogues_unwind_codes.last_mut().unwrap();
 
                 if !is_last_block {
-                    unwind_codes.push(UnwindCode::RememberState { offset });
+                    unwind_codes.push((offset, UnwindCode::RememberState));
                 }
             } else if in_epilogue {
                 unwind_codes = epilogues_unwind_codes.last_mut().unwrap();
@@ -95,15 +95,19 @@ pub(crate) fn create_unwind_info(
                     match opcode {
                         Opcode::X86Push => {
                             let reg = func.locations[arg].unwrap_reg();
-                            unwind_codes.push(UnwindCode::StackAlloc {
+                            unwind_codes.push((
                                 offset,
-                                size: word_size.into(),
-                            });
-                            unwind_codes.push(UnwindCode::SaveRegister {
+                                UnwindCode::StackAlloc {
+                                    size: word_size.into(),
+                                },
+                            ));
+                            unwind_codes.push((
                                 offset,
-                                reg,
-                                stack_offset: 0,
-                            });
+                                UnwindCode::SaveRegister {
+                                    reg,
+                                    stack_offset: 0,
+                                },
+                            ));
                         }
                         Opcode::AdjustSpDown => {
                             let stack_size =
@@ -111,10 +115,8 @@ pub(crate) fn create_unwind_info(
 
                             // This is used when calling a stack check function
                             // We need to track the assignment to RAX which has the size of the stack
-                            unwind_codes.push(UnwindCode::StackAlloc {
-                                offset,
-                                size: stack_size,
-                            });
+                            unwind_codes
+                                .push((offset, UnwindCode::StackAlloc { size: stack_size }));
                         }
                         _ => {}
                     }
@@ -138,10 +140,8 @@ pub(crate) fn create_unwind_info(
 
                             stack_size = Some(imm as u32);
 
-                            unwind_codes.push(UnwindCode::StackAlloc {
-                                offset,
-                                size: imm as u32,
-                            });
+                            unwind_codes
+                                .push((offset, UnwindCode::StackAlloc { size: imm as u32 }));
                         }
                         Opcode::AdjustSpUpImm => {
                             let imm: i64 = imm.into();
@@ -149,10 +149,8 @@ pub(crate) fn create_unwind_info(
 
                             stack_size = Some(imm as u32);
 
-                            unwind_codes.push(UnwindCode::StackDealloc {
-                                offset,
-                                size: imm as u32,
-                            });
+                            unwind_codes
+                                .push((offset, UnwindCode::StackDealloc { size: imm as u32 }));
                         }
                         _ => {}
                     }
@@ -170,18 +168,20 @@ pub(crate) fn create_unwind_info(
                         // Note: the stack_offset here is relative to an adjusted SP
                         if dst == (RU::rsp as RegUnit) && FPR.contains(src) {
                             let stack_offset: i32 = stack_offset.into();
-                            unwind_codes.push(UnwindCode::SaveRegister {
+                            unwind_codes.push((
                                 offset,
-                                reg: src,
-                                stack_offset: stack_offset as u32,
-                            });
+                                UnwindCode::SaveRegister {
+                                    reg: src,
+                                    stack_offset: stack_offset as u32,
+                                },
+                            ));
                         }
                     }
                 }
                 InstructionData::CopySpecial { src, dst, .. } if frame_register.is_none() => {
                     // Check for change in CFA register (RSP is always the starting CFA)
                     if src == (RU::rsp as RegUnit) {
-                        unwind_codes.push(UnwindCode::SetFramePointer { offset, reg: dst });
+                        unwind_codes.push((offset, UnwindCode::SetFramePointer { reg: dst }));
                         frame_register = Some(dst);
                     }
                 }
@@ -203,18 +203,25 @@ pub(crate) fn create_unwind_info(
                             let offset = epilogue_pop_offsets[i];
 
                             let reg = func.locations[*arg].unwrap_reg();
-                            unwind_codes.push(UnwindCode::RestoreRegister { offset, reg });
-                            unwind_codes.push(UnwindCode::StackDealloc {
+                            unwind_codes.push((offset, UnwindCode::RestoreRegister { reg }));
+                            unwind_codes.push((
                                 offset,
-                                size: word_size.into(),
-                            });
+                                UnwindCode::StackDealloc {
+                                    size: word_size.into(),
+                                },
+                            ));
+
+                            if Some(reg) == frame_register {
+                                unwind_codes.push((offset, UnwindCode::RestoreFramePointer));
+                                // Keep frame_register assigned for next epilogue.
+                            }
                         }
                         epilogue_pop_offsets.clear();
 
                         // TODO ensure unwind codes sorted by offsets ?
 
                         if !is_last_block {
-                            unwind_codes.push(UnwindCode::RestoreState { offset });
+                            unwind_codes.push((offset, UnwindCode::RestoreState));
                         }
 
                         in_epilogue = false;
@@ -232,6 +239,7 @@ pub(crate) fn create_unwind_info(
         epilogues_unwind_codes,
         function_size,
         word_size,
+        initial_sp_offset: word_size,
     }))
 }
 
@@ -271,37 +279,36 @@ mod tests {
             UnwindInfo {
                 prologue_size: 9,
                 prologue_unwind_codes: vec![
-                    UnwindCode::StackAlloc { offset: 2, size: 8 },
-                    UnwindCode::SaveRegister {
-                        offset: 2,
-                        reg: RU::rbp.into(),
-                        stack_offset: 0,
-                    },
-                    UnwindCode::SetFramePointer {
-                        offset: 5,
-                        reg: RU::rbp.into(),
-                    },
-                    UnwindCode::StackAlloc {
-                        offset: 9,
-                        size: 64
-                    }
+                    (2, UnwindCode::StackAlloc { size: 8 }),
+                    (
+                        2,
+                        UnwindCode::SaveRegister {
+                            reg: RU::rbp.into(),
+                            stack_offset: 0,
+                        }
+                    ),
+                    (
+                        5,
+                        UnwindCode::SetFramePointer {
+                            reg: RU::rbp.into(),
+                        }
+                    ),
+                    (9, UnwindCode::StackAlloc { size: 64 })
                 ],
                 epilogues_unwind_codes: vec![vec![
-                    UnwindCode::StackDealloc {
-                        offset: 13,
-                        size: 64
-                    },
-                    UnwindCode::RestoreRegister {
-                        offset: 15,
-                        reg: RU::rbp.into()
-                    },
-                    UnwindCode::StackDealloc {
-                        offset: 15,
-                        size: 8
-                    }
+                    (13, UnwindCode::StackDealloc { size: 64 }),
+                    (
+                        15,
+                        UnwindCode::RestoreRegister {
+                            reg: RU::rbp.into()
+                        }
+                    ),
+                    (15, UnwindCode::StackDealloc { size: 8 }),
+                    (15, UnwindCode::RestoreFramePointer)
                 ]],
                 function_size: 16,
                 word_size: 8,
+                initial_sp_offset: 8,
             }
         );
     }
@@ -329,37 +336,36 @@ mod tests {
             UnwindInfo {
                 prologue_size: 27,
                 prologue_unwind_codes: vec![
-                    UnwindCode::StackAlloc { offset: 2, size: 8 },
-                    UnwindCode::SaveRegister {
-                        offset: 2,
-                        reg: RU::rbp.into(),
-                        stack_offset: 0,
-                    },
-                    UnwindCode::SetFramePointer {
-                        offset: 5,
-                        reg: RU::rbp.into(),
-                    },
-                    UnwindCode::StackAlloc {
-                        offset: 27,
-                        size: 10000
-                    }
+                    (2, UnwindCode::StackAlloc { size: 8 }),
+                    (
+                        2,
+                        UnwindCode::SaveRegister {
+                            reg: RU::rbp.into(),
+                            stack_offset: 0,
+                        }
+                    ),
+                    (
+                        5,
+                        UnwindCode::SetFramePointer {
+                            reg: RU::rbp.into(),
+                        }
+                    ),
+                    (27, UnwindCode::StackAlloc { size: 10000 })
                 ],
                 epilogues_unwind_codes: vec![vec![
-                    UnwindCode::StackDealloc {
-                        offset: 34,
-                        size: 10000
-                    },
-                    UnwindCode::RestoreRegister {
-                        offset: 36,
-                        reg: RU::rbp.into()
-                    },
-                    UnwindCode::StackDealloc {
-                        offset: 36,
-                        size: 8
-                    }
+                    (34, UnwindCode::StackDealloc { size: 10000 }),
+                    (
+                        36,
+                        UnwindCode::RestoreRegister {
+                            reg: RU::rbp.into()
+                        }
+                    ),
+                    (36, UnwindCode::StackDealloc { size: 8 }),
+                    (36, UnwindCode::RestoreFramePointer)
                 ]],
                 function_size: 37,
                 word_size: 8,
+                initial_sp_offset: 8,
             }
         );
     }
@@ -387,37 +393,36 @@ mod tests {
             UnwindInfo {
                 prologue_size: 27,
                 prologue_unwind_codes: vec![
-                    UnwindCode::StackAlloc { offset: 2, size: 8 },
-                    UnwindCode::SaveRegister {
-                        offset: 2,
-                        reg: RU::rbp.into(),
-                        stack_offset: 0,
-                    },
-                    UnwindCode::SetFramePointer {
-                        offset: 5,
-                        reg: RU::rbp.into(),
-                    },
-                    UnwindCode::StackAlloc {
-                        offset: 27,
-                        size: 1000000
-                    }
+                    (2, UnwindCode::StackAlloc { size: 8 }),
+                    (
+                        2,
+                        UnwindCode::SaveRegister {
+                            reg: RU::rbp.into(),
+                            stack_offset: 0,
+                        }
+                    ),
+                    (
+                        5,
+                        UnwindCode::SetFramePointer {
+                            reg: RU::rbp.into(),
+                        }
+                    ),
+                    (27, UnwindCode::StackAlloc { size: 1000000 })
                 ],
                 epilogues_unwind_codes: vec![vec![
-                    UnwindCode::StackDealloc {
-                        offset: 34,
-                        size: 1000000
-                    },
-                    UnwindCode::RestoreRegister {
-                        offset: 36,
-                        reg: RU::rbp.into()
-                    },
-                    UnwindCode::StackDealloc {
-                        offset: 36,
-                        size: 8
-                    }
+                    (34, UnwindCode::StackDealloc { size: 1000000 }),
+                    (
+                        36,
+                        UnwindCode::RestoreRegister {
+                            reg: RU::rbp.into()
+                        }
+                    ),
+                    (36, UnwindCode::StackDealloc { size: 8 }),
+                    (36, UnwindCode::RestoreFramePointer)
                 ]],
                 function_size: 37,
                 word_size: 8,
+                initial_sp_offset: 8,
             }
         );
     }
@@ -458,43 +463,48 @@ mod tests {
             UnwindInfo {
                 prologue_size: 5,
                 prologue_unwind_codes: vec![
-                    UnwindCode::StackAlloc { offset: 2, size: 8 },
-                    UnwindCode::SaveRegister {
-                        offset: 2,
-                        reg: RU::rbp.into(),
-                        stack_offset: 0,
-                    },
-                    UnwindCode::SetFramePointer {
-                        offset: 5,
-                        reg: RU::rbp.into()
-                    }
+                    (2, UnwindCode::StackAlloc { size: 8 }),
+                    (
+                        2,
+                        UnwindCode::SaveRegister {
+                            reg: RU::rbp.into(),
+                            stack_offset: 0,
+                        }
+                    ),
+                    (
+                        5,
+                        UnwindCode::SetFramePointer {
+                            reg: RU::rbp.into()
+                        }
+                    )
                 ],
                 epilogues_unwind_codes: vec![
                     vec![
-                        UnwindCode::RememberState { offset: 12 },
-                        UnwindCode::RestoreRegister {
-                            offset: 12,
-                            reg: RU::rbp.into()
-                        },
-                        UnwindCode::StackDealloc {
-                            offset: 12,
-                            size: 8
-                        },
-                        UnwindCode::RestoreState { offset: 13 }
+                        (12, UnwindCode::RememberState),
+                        (
+                            12,
+                            UnwindCode::RestoreRegister {
+                                reg: RU::rbp.into()
+                            }
+                        ),
+                        (12, UnwindCode::StackDealloc { size: 8 }),
+                        (12, UnwindCode::RestoreFramePointer),
+                        (13, UnwindCode::RestoreState)
                     ],
                     vec![
-                        UnwindCode::RestoreRegister {
-                            offset: 15,
-                            reg: RU::rbp.into()
-                        },
-                        UnwindCode::StackDealloc {
-                            offset: 15,
-                            size: 8
-                        }
+                        (
+                            15,
+                            UnwindCode::RestoreRegister {
+                                reg: RU::rbp.into()
+                            }
+                        ),
+                        (15, UnwindCode::StackDealloc { size: 8 }),
+                        (15, UnwindCode::RestoreFramePointer)
                     ]
                 ],
                 function_size: 16,
                 word_size: 8,
+                initial_sp_offset: 8,
             }
         );
     }
