@@ -98,6 +98,8 @@ impl Into<gimli::write::CallFrameInstruction> for CallFrameInstruction {
 pub(crate) trait RegisterMapper<Reg> {
     /// Maps Reg.
     fn map(&self, reg: Reg) -> Result<Register, RegisterMappingError>;
+    /// Gets stack pointer register.
+    fn sp(&self) -> Register;
 }
 
 /// Represents unwind information for a single System V ABI function.
@@ -146,6 +148,9 @@ impl UnwindInfo {
                     builder
                         .set_cfa_reg(*offset, *reg)
                         .map_err(CodegenError::RegisterMappingError)?;
+                }
+                UnwindCode::RestoreFramePointer => {
+                    builder.restore_cfa(*offset);
                 }
                 UnwindCode::RememberState => {
                     builder.remember_state(*offset);
@@ -263,24 +268,21 @@ impl<'a, Reg: PartialEq + Copy> InstructionBuilder<'a, Reg> {
     }
 
     fn set_cfa_reg(&mut self, offset: u32, reg: Reg) -> Result<(), RegisterMappingError> {
-        match self.frame_register {
-            None => {
-                self.instructions.push((
-                    offset,
-                    CallFrameInstruction::CfaRegister(self.map_reg.map(reg)?),
-                ));
-                self.frame_register = Some(reg);
-            }
-            Some(_) => {
-                // Restore SP and its offset.
-                self.instructions.push((
-                    offset,
-                    CallFrameInstruction::Cfa(self.map_reg.map(reg)?, self.sp_offset),
-                ));
-                self.frame_register = None;
-            }
-        }
+        self.instructions.push((
+            offset,
+            CallFrameInstruction::CfaRegister(self.map_reg.map(reg)?),
+        ));
+        self.frame_register = Some(reg);
         Ok(())
+    }
+
+    fn restore_cfa(&mut self, offset: u32) {
+        // Restore SP and its offset.
+        self.instructions.push((
+            offset,
+            CallFrameInstruction::Cfa(self.map_reg.sp(), self.sp_offset),
+        ));
+        self.frame_register = None;
     }
 
     fn restore_reg(&mut self, offset: u32, reg: Reg) -> Result<(), RegisterMappingError> {

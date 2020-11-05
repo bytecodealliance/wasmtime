@@ -90,6 +90,9 @@ pub(crate) fn create_unwind_info(
         fn map(&self, reg: Reg) -> Result<u16, RegisterMappingError> {
             Ok(map_reg(reg)?.0)
         }
+        fn sp(&self) -> u16 {
+            X86_64::RSP.0
+        }
     }
     let map = RegisterMapper;
 

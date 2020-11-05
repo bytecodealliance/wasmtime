@@ -60,6 +60,8 @@ pub mod input {
             /// The specified register.
             reg: Reg,
         },
+        /// Restores a frame pointer base to default register.
+        RestoreFramePointer,
         /// Saves the state.
         RememberState,
         /// Restores the state.

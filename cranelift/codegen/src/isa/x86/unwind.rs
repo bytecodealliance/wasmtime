@@ -212,12 +212,7 @@ pub(crate) fn create_unwind_info(
                             ));
 
                             if Some(reg) == frame_register {
-                                unwind_codes.push((
-                                    offset,
-                                    UnwindCode::SetFramePointer {
-                                        reg: RU::rsp as RegUnit,
-                                    },
-                                ));
+                                unwind_codes.push((offset, UnwindCode::RestoreFramePointer));
                                 // Keep frame_register assigned for next epilogue.
                             }
                         }
@@ -309,7 +304,7 @@ mod tests {
                         }
                     ),
                     (15, UnwindCode::StackDealloc { size: 8 }),
-                    (15, UnwindCode::SetFramePointer { reg: 20 })
+                    (15, UnwindCode::RestoreFramePointer)
                 ]],
                 function_size: 16,
                 word_size: 8,
@@ -366,7 +361,7 @@ mod tests {
                         }
                     ),
                     (36, UnwindCode::StackDealloc { size: 8 }),
-                    (36, UnwindCode::SetFramePointer { reg: 20 })
+                    (36, UnwindCode::RestoreFramePointer)
                 ]],
                 function_size: 37,
                 word_size: 8,
@@ -423,7 +418,7 @@ mod tests {
                         }
                     ),
                     (36, UnwindCode::StackDealloc { size: 8 }),
-                    (36, UnwindCode::SetFramePointer { reg: 20 })
+                    (36, UnwindCode::RestoreFramePointer)
                 ]],
                 function_size: 37,
                 word_size: 8,
@@ -493,7 +488,7 @@ mod tests {
                             }
                         ),
                         (12, UnwindCode::StackDealloc { size: 8 }),
-                        (12, UnwindCode::SetFramePointer { reg: 20 }),
+                        (12, UnwindCode::RestoreFramePointer),
                         (13, UnwindCode::RestoreState)
                     ],
                     vec![
@@ -504,7 +499,7 @@ mod tests {
                             }
                         ),
                         (15, UnwindCode::StackDealloc { size: 8 }),
-                        (15, UnwindCode::SetFramePointer { reg: 20 })
+                        (15, UnwindCode::RestoreFramePointer)
                     ]
                 ],
                 function_size: 16,
