@@ -1569,9 +1569,17 @@ where
     fn next(
         &mut self,
     ) -> Result<Option<impl ExactSizeIterator<Item = OperatorFromWasm> + '_>, Error> {
+        use arrayvec::ArrayVec;
         use derive_more::From;
         use iter_enum::{ExactSizeIterator, Iterator};
-        use staticvec::{staticvec, StaticVec, StaticVecIntoIter};
+
+        macro_rules! vec {
+            ($($a:expr),* $(,)?) => {{
+                let mut a = ArrayVec::new();
+                $(a.push($a);)*
+                vec(a)
+            }};
+        }
 
         struct Consts {
             inner: <Vec<Value> as IntoIterator>::IntoIter,
@@ -1601,13 +1609,13 @@ where
             Output::Consts(impl_trait_hack(consts))
         }
 
-        fn vec(vals: impl Into<StaticVec<OperatorFromWasm, 5>>) -> Output {
-            vals.into().into_iter().into()
+        fn vec(vals: ArrayVec<[OperatorFromWasm; 5]>) -> Output {
+            vals.into_iter().into()
         }
 
         fn iter(vals: impl IntoIterator<Item = OperatorFromWasm>) -> Output {
             let mut vals = vals.into_iter();
-            let v = StaticVec::from_iter(vals.by_ref());
+            let v = ArrayVec::from_iter(vals.by_ref());
             if let Some(next) = vals.next() {
                 let mut v = Vec::from_iter(v);
                 v.push(next);
@@ -1629,7 +1637,7 @@ where
         #[derive(From, Iterator, ExactSizeIterator)]
         enum Output {
             Consts(Consts),
-            FixedLength(StaticVecIntoIter<OperatorFromWasm, 5>),
+            FixedLength(arrayvec::IntoIter<[OperatorFromWasm; 5]>),
             VariableLength(std::vec::IntoIter<OperatorFromWasm>),
             None(std::iter::Empty<OperatorFromWasm>),
             One(std::iter::Once<OperatorFromWasm>),
@@ -1718,13 +1726,13 @@ where
                                 has_else: false, ..
                             } = block.kind
                             {
-                                break vec([
+                                break vec![
                                     Operator::Label((block.id, NameTag::Else)),
                                     Operator::Br {
                                         target: BrTarget::Label(end_label),
                                     },
                                     Operator::Label(end_label),
-                                ]);
+                                ];
                             } else {
                                 break one(Operator::Label((block.id, NameTag::End)));
                             }
@@ -1788,14 +1796,14 @@ where
                 let block_param_type_wasm = self.block_params_with_wasm_type(ty)?;
                 let label = (id, NameTag::Header);
 
-                vec([
+                vec![
                     Operator::loop_(self.block_params(), label),
                     Operator::end(block_param_type_wasm.collect(), (id, NameTag::End)),
                     Operator::Br {
                         target: BrTarget::Label(label),
                     },
                     Operator::Label(label),
-                ])
+                ]
             }
             WasmOperator::If { ty } => {
                 let id = self.next_id();
@@ -1814,7 +1822,7 @@ where
                     (id, NameTag::Else),
                     (id, NameTag::End),
                 );
-                vec([
+                vec![
                     Operator::block(self.block_params(), then),
                     Operator::block(self.block_params(), else_),
                     Operator::end(block_param_type_wasm.collect(), end),
@@ -1823,7 +1831,7 @@ where
                         else_: BrTarget::Label(else_).into(),
                     },
                     Operator::Label(then),
-                ])
+                ]
             }
             WasmOperator::Else => {
                 let block = self
@@ -1844,12 +1852,15 @@ where
 
                 let label = (block.id, NameTag::Else);
 
-                iter(to_drop.into_iter().map(Operator::Drop).chain(staticvec![
-                    Operator::Br {
-                        target: BrTarget::Label((block.id, NameTag::End)),
-                    },
-                    Operator::Label(label)
-                ]))
+                iter(
+                    to_drop
+                        .into_iter()
+                        .map(Operator::Drop)
+                        .chain(Some(Operator::Br {
+                            target: BrTarget::Label((block.id, NameTag::End)),
+                        }))
+                        .chain(Some(Operator::Label(label))),
+                )
             }
             WasmOperator::End => {
                 let block = self
@@ -1869,16 +1880,19 @@ where
                     let else_ = (block.id, NameTag::Else);
                     let end = (block.id, NameTag::End);
 
-                    iter(to_drop.map(Operator::Drop).into_iter().chain(staticvec![
-                        Operator::Br {
-                            target: BrTarget::Label(end),
-                        },
-                        Operator::Label(else_),
-                        Operator::Br {
-                            target: BrTarget::Label(end),
-                        },
-                        Operator::Label(end),
-                    ]))
+                    iter(
+                        to_drop
+                            .map(Operator::Drop)
+                            .into_iter()
+                            .chain(Some(Operator::Br {
+                                target: BrTarget::Label(end),
+                            }))
+                            .chain(Some(Operator::Label(else_)))
+                            .chain(Some(Operator::Br {
+                                target: BrTarget::Label(end),
+                            }))
+                            .chain(Some(Operator::Label(end))),
+                    )
                 } else {
                     if self.control_frames.is_empty() {
                         self.is_done = true;
@@ -1889,12 +1903,15 @@ where
                     } else if block.needs_end_label() {
                         let label = (block.id, NameTag::End);
 
-                        iter(to_drop.map(Operator::Drop).into_iter().chain(staticvec![
-                            Operator::Br {
-                                target: BrTarget::Label(label),
-                            },
-                            Operator::Label(label)
-                        ]))
+                        iter(
+                            to_drop
+                                .map(Operator::Drop)
+                                .into_iter()
+                                .chain(Some(Operator::Br {
+                                    target: BrTarget::Label(label),
+                                }))
+                                .chain(Some(Operator::Label(label))),
+                        )
                     } else {
                         iter(to_drop.map(Operator::Drop).into_iter())
                     }
@@ -1923,7 +1940,7 @@ where
                 let block = &mut self.control_frames[relative_depth as _];
                 block.mark_branched_to();
 
-                vec([
+                vec![
                     Operator::block(params, label),
                     Operator::BrIf {
                         then: BrTargetDrop {
@@ -1933,7 +1950,7 @@ where
                         else_: BrTarget::Label(label).into(),
                     },
                     Operator::Label(label),
-                ])
+                ]
             }
             WasmOperator::BrTable { table } => {
                 self.unreachable = true;
@@ -2007,7 +2024,7 @@ where
                 let depth = depth
                     .try_into()
                     .map_err(|_| Error::Microwasm("LocalSet - Local out of range".into()))?;
-                vec([Operator::Swap(depth), Operator::Drop(0..=0)])
+                vec![Operator::Swap(depth), Operator::Drop(0..=0)]
             }
             WasmOperator::LocalTee { local_index } => {
                 let depth = self
@@ -2017,11 +2034,11 @@ where
                 let depth = depth
                     .try_into()
                     .map_err(|_| Error::Microwasm("LocalTee - Local out of range".into()))?;
-                vec([
+                vec![
                     Operator::Pick(0),
                     Operator::Swap(depth),
                     Operator::Drop(0..=0),
-                ])
+                ]
             }
             WasmOperator::GlobalGet { global_index } => one(Operator::GlobalGet(global_index)),
             WasmOperator::GlobalSet { global_index } => one(Operator::GlobalSet(global_index)),

@@ -11,17 +11,17 @@ keywords = ["webassembly", "wasm", "compile", "compiler", "jit"]
 edition = "2018"
 
 [dependencies]
-capstone = "0.6.0"
+arrayvec = "0.5"
+capstone = "0.7.0"
 cranelift-codegen = { path = "../../cranelift/codegen", version = "0.68.0" }
 derive_more = "0.99"
-dynasm = "0.5.2"
-dynasmrt = "0.5.2"
+dynasm = "1.0.0"
+dynasmrt = "1.0.0"
 iter-enum = "0.2"
 itertools = "0.9.0"
 memoffset = "0.6.0"
 more-asserts = "0.2.1"
 smallvec = "1.0.0"
-staticvec = "0.10"
 thiserror = "1.0.9"
 typemap = "0.3"
 wasmparser = "0.65.0"

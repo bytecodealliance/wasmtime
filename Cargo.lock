@@ -183,20 +183,22 @@ checksum = "08c48aae112d48ed9f069b33538ea9e3e90aa263cfa3d1c24309612b1f7472de"
 
 [[package]]
 name = "capstone"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "031ba51c39151a1d6336ec859646153187204b0147c7b3f6fe2de636f1b8dbb3"
+checksum = "f60e7f097987a09a9b678c6214b5a5eb326f9fc1e3eac88cce5d086c2b3b8dc9"
 dependencies = [
  "capstone-sys",
+ "libc",
 ]
 
 [[package]]
 name = "capstone-sys"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fae25eddcb80e24f98c35952c37a91ff7f8d0f60dbbdafb9763e8d5cc566b8d7"
+checksum = "aebe07897b48983847943662bfc3198aabfa51636c81313c1955d04d857ed739"
 dependencies = [
  "cc",
+ "libc",
 ]
 
 [[package]]
@@ -710,14 +712,14 @@ dependencies = [
 
 [[package]]
 name = "dynasm"
-version = "0.5.2"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42a814e1edeb85dd2a3c6fc0d6bf76d02ca5695d438c70ecee3d90774f3259c5"
+checksum = "62a59fbab09460c1569eeea9b5e4cf62f13f5198b1c2ba0e5196dd7fdd17cd42"
 dependencies = [
  "bitflags",
  "byteorder",
  "lazy_static",
- "owning_ref",
+ "proc-macro-error",
  "proc-macro2",
  "quote",
  "syn",
@@ -725,11 +727,12 @@ dependencies = [
 
 [[package]]
 name = "dynasmrt"
-version = "0.5.2"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a393aaeb4441a48bcf47b5b6155971f82cc1eb77e22855403ccc0415ac8328d"
+checksum = "85bec3edae2841d37b1c3dc7f3fd403c9061f26e9ffeeee97a3ea909b1bb2ef1"
 dependencies = [
  "byteorder",
+ "dynasm",
  "memmap",
 ]
 
@@ -1070,6 +1073,7 @@ name = "lightbeam"
 version = "0.21.0"
 dependencies = [
  "anyhow",
+ "arrayvec",
  "capstone",
  "cranelift-codegen",
  "derive_more",
@@ -1082,7 +1086,6 @@ dependencies = [
  "more-asserts",
  "quickcheck",
  "smallvec",
- "staticvec",
  "thiserror",
  "typemap",
  "wasmparser 0.65.0",
@@ -1245,15 +1248,6 @@ checksum = "fb233f06c2307e1f5ce2ecad9f8121cffbbee2c95428f44ea85222e460d0d213"
 dependencies = [
  "libc",
  "winapi",
-]
-
-[[package]]
-name = "owning_ref"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ff55baddef9e4ad00f88b6c743a2a8062d4c6ade126c2a528644b8e444d52ce"
-dependencies = [
- "stable_deref_trait",
 ]
 
 [[package]]
@@ -1852,12 +1846,6 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
-
-[[package]]
-name = "staticvec"
-version = "0.10.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c87f4be0fd89694157f3814ca88715ad8ba6010c453b1e89ca264aee04d70b9"
 
 [[package]]
 name = "strsim"
