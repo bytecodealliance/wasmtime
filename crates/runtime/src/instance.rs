@@ -41,9 +41,6 @@ pub(crate) struct Instance {
     /// The `Module` this `Instance` was instantiated from.
     module: Arc<Module>,
 
-    /// The module's JIT code (if exists).
-    code: Arc<dyn Any>,
-
     /// Offsets in the `vmctx` region.
     offsets: VMOffsets,
 
@@ -814,7 +811,6 @@ impl InstanceHandle {
     /// instance.
     pub unsafe fn new(
         module: Arc<Module>,
-        code: Arc<dyn Any>,
         finished_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
         imports: Imports,
         mem_creator: Option<&dyn RuntimeMemoryCreator>,
@@ -851,7 +847,6 @@ impl InstanceHandle {
         let handle = {
             let instance = Instance {
                 module,
-                code,
                 offsets,
                 memories,
                 tables,

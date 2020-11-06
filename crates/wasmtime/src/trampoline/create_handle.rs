@@ -28,7 +28,6 @@ pub(crate) fn create_handle(
     unsafe {
         let handle = InstanceHandle::new(
             module,
-            Arc::new(()),
             &finished_functions,
             imports,
             store.memory_creator(),
