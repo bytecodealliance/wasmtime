@@ -64,6 +64,7 @@ impl MachBackend for AArch64Backend {
 
         let buffer = vcode.emit();
         let frame_size = vcode.frame_size();
+        let unwind_info = vcode.unwind_info()?;
 
         let disasm = if want_disasm {
             Some(vcode.show_rru(Some(&create_reg_universe(flags))))
@@ -77,7 +78,7 @@ impl MachBackend for AArch64Backend {
             buffer,
             frame_size,
             disasm,
-            unwind_info: None,
+            unwind_info,
         })
     }
 
@@ -108,6 +109,31 @@ impl MachBackend for AArch64Backend {
         // underflow of a subtract (aarch64 follows a carry-cleared-on-borrow convention, the
         // opposite of x86).
         IntCC::UnsignedLessThan
+    }
+
+    #[cfg(feature = "unwind")]
+    fn emit_unwind_info(
+        &self,
+        result: &MachCompileResult,
+        kind: crate::machinst::UnwindInfoKind,
+    ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
+        use crate::isa::unwind::UnwindInfo;
+        use crate::machinst::UnwindInfoKind;
+        Ok(match (result.unwind_info.as_ref(), kind) {
+            (Some(info), UnwindInfoKind::SystemV) => {
+                inst::unwind::systemv::create_unwind_info(info.clone())?.map(UnwindInfo::SystemV)
+            }
+            (Some(_info), UnwindInfoKind::Windows) => {
+                // TODO: support Windows unwind info on AArch64
+                None
+            }
+            _ => None,
+        })
+    }
+
+    #[cfg(feature = "unwind")]
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        Some(inst::unwind::systemv::create_cie())
     }
 }
 
