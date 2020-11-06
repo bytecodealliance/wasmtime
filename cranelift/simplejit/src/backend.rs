@@ -10,7 +10,7 @@ use cranelift_codegen::{self, ir, settings};
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, FuncOrDataId, Init, Linkage, Module,
-    ModuleCompiledFunction, ModuleDeclarations, ModuleError, ModuleResult,
+    ModuleCompiledFunction, ModuleDeclarations, ModuleError, ModuleResult, RelocRecord,
 };
 use cranelift_native;
 #[cfg(not(windows))]
@@ -132,15 +132,6 @@ pub struct SimpleJITModule {
     data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
     functions_to_finalize: Vec<FuncId>,
     data_objects_to_finalize: Vec<DataId>,
-}
-
-/// A record of a relocation to perform.
-#[derive(Clone)]
-struct RelocRecord {
-    offset: CodeOffset,
-    reloc: Reloc,
-    name: ir::ExternalName,
-    addend: Addend,
 }
 
 struct StackMapRecord {
@@ -528,6 +519,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         &mut self,
         id: FuncId,
         bytes: &[u8],
+        relocs: &[RelocRecord],
     ) -> ModuleResult<ModuleCompiledFunction> {
         let decl = self.declarations.get_function_decl(id);
         if !decl.linkage.is_definable() {
@@ -560,7 +552,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         self.functions[id] = Some(CompiledBlob {
             ptr,
             size,
-            relocs: vec![],
+            relocs: relocs.to_vec(),
         });
 
         Ok(ModuleCompiledFunction { size: total_size })
