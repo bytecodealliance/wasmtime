@@ -99,7 +99,7 @@ use std::sync::Mutex;
 use wasmtime_environ::{
     CompileError, CompiledFunction, Compiler, FunctionAddressMap, FunctionBodyData,
     InstructionAddressMap, ModuleTranslation, Relocation, RelocationTarget, StackMapInformation,
-    TrapInformation,
+    TrapInformation, Tunables,
 };
 
 mod func_environ;
@@ -356,9 +356,9 @@ impl Compiler for Cranelift {
         func_index: DefinedFuncIndex,
         mut input: FunctionBodyData<'_>,
         isa: &dyn isa::TargetIsa,
+        tunables: &Tunables,
     ) -> Result<CompiledFunction, CompileError> {
         let module = &translation.module;
-        let tunables = &translation.tunables;
         let func_index = module.func_index(func_index);
         let mut context = Context::new();
         context.func.name = get_func_name(func_index);

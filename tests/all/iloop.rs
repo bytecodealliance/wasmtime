@@ -82,6 +82,7 @@ fn loop_interrupt_from_afar() -> anyhow::Result<()> {
         while HITS.load(SeqCst) <= 100_000 {
             // continue ...
         }
+        println!("interrupting");
         handle.interrupt();
     });
 

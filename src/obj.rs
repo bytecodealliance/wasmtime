@@ -67,6 +67,7 @@ pub fn compile_to_obj(
     let mut translation = environ
         .translate(wasm)
         .context("failed to translate module")?;
-    let compilation = compiler.compile(&mut translation)?;
+    assert_eq!(translation.len(), 1);
+    let compilation = compiler.compile(&mut translation[0])?;
     Ok(compilation.obj)
 }

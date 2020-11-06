@@ -325,6 +325,12 @@ impl Module {
     }
 }
 
+impl Default for Module {
+    fn default() -> Module {
+        Module::new()
+    }
+}
+
 mod passive_data_serde {
     use super::{Arc, DataIndex, HashMap};
     use serde::{de::MapAccess, de::Visitor, ser::SerializeMap, Deserializer, Serializer};

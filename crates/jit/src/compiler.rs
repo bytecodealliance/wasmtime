@@ -3,6 +3,8 @@
 use crate::instantiate::SetupError;
 use crate::object::{build_object, ObjectUnwindInfo};
 use object::write::Object;
+#[cfg(feature = "parallel-compilation")]
+use rayon::prelude::*;
 use std::hash::{Hash, Hasher};
 use std::mem;
 use wasmparser::WasmFeatures;
@@ -127,31 +129,21 @@ impl Compiler {
         translation: &mut ModuleTranslation,
     ) -> Result<Compilation, SetupError> {
         let functions = mem::take(&mut translation.function_body_inputs);
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "parallel-compilation")] {
-                use rayon::prelude::*;
-                let iter = functions
-                    .into_iter()
-                    .collect::<Vec<_>>()
-                    .into_par_iter();
-            } else {
-                let iter = functions.into_iter();
-            }
-        }
-        let funcs = iter
+        let functions = functions.into_iter().collect::<Vec<_>>();
+        let funcs = maybe_parallel!(functions.(into_iter | into_par_iter))
             .map(|(index, func)| {
                 self.compiler
-                    .compile_function(translation, index, func, &*self.isa)
+                    .compile_function(translation, index, func, &*self.isa, &self.tunables)
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .collect::<CompiledFunctions>();
 
-        let dwarf_sections = if translation.debuginfo.is_some() && !funcs.is_empty() {
+        let dwarf_sections = if self.tunables.debug_info && !funcs.is_empty() {
             transform_dwarf_data(
                 &*self.isa,
                 &translation.module,
-                translation.debuginfo.as_ref().unwrap(),
+                &translation.debuginfo,
                 &funcs,
             )?
         } else {
@@ -190,6 +182,9 @@ impl Hash for Compiler {
         isa.flags().to_string().hash(hasher);
         isa.frontend_config().hash(hasher);
         tunables.hash(hasher);
+
+        // Catch accidental bugs of reusing across crate versions.
+        env!("CARGO_PKG_VERSION").hash(hasher);
 
         // TODO: ... and should we hash anything else? There's a lot of stuff in
         // `TargetIsa`, like registers/encodings/etc. Should we be hashing that

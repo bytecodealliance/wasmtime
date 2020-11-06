@@ -41,25 +41,43 @@ pub fn parse_type_section(
     environ.reserve_signatures(count)?;
 
     for entry in types {
-        if let Ok(TypeDef::Func(wasm_func_ty)) = entry {
-            let mut sig =
-                Signature::new(ModuleEnvironment::target_config(environ).default_call_conv);
-            sig.params.extend(wasm_func_ty.params.iter().map(|ty| {
-                let cret_arg: ir::Type = type_to_type(*ty, environ)
-                    .expect("only numeric types are supported in function signatures");
-                AbiParam::new(cret_arg)
-            }));
-            sig.returns.extend(wasm_func_ty.returns.iter().map(|ty| {
-                let cret_arg: ir::Type = type_to_type(*ty, environ)
-                    .expect("only numeric types are supported in function signatures");
-                AbiParam::new(cret_arg)
-            }));
-            environ.declare_signature(wasm_func_ty.clone().try_into()?, sig)?;
-            module_translation_state
-                .wasm_types
-                .push((wasm_func_ty.params, wasm_func_ty.returns));
-        } else {
-            unimplemented!("module linking not implemented yet")
+        match entry? {
+            TypeDef::Func(wasm_func_ty) => {
+                let mut sig =
+                    Signature::new(ModuleEnvironment::target_config(environ).default_call_conv);
+                sig.params.extend(wasm_func_ty.params.iter().map(|ty| {
+                    let cret_arg: ir::Type = type_to_type(*ty, environ)
+                        .expect("only numeric types are supported in function signatures");
+                    AbiParam::new(cret_arg)
+                }));
+                sig.returns.extend(wasm_func_ty.returns.iter().map(|ty| {
+                    let cret_arg: ir::Type = type_to_type(*ty, environ)
+                        .expect("only numeric types are supported in function signatures");
+                    AbiParam::new(cret_arg)
+                }));
+                environ.declare_signature(wasm_func_ty.clone().try_into()?, sig)?;
+                module_translation_state
+                    .wasm_types
+                    .push((wasm_func_ty.params, wasm_func_ty.returns));
+            }
+
+            // Not implemented yet for module linking. Push dummy function types
+            // though to keep the function type index space consistent. We'll
+            // want an actual implementation here that handles this eventually.
+            TypeDef::Module(_) | TypeDef::Instance(_) => {
+                let sig =
+                    Signature::new(ModuleEnvironment::target_config(environ).default_call_conv);
+                environ.declare_signature(
+                    crate::environ::WasmFuncType {
+                        params: Box::new([]),
+                        returns: Box::new([]),
+                    },
+                    sig,
+                )?;
+                module_translation_state
+                    .wasm_types
+                    .push((Box::new([]), Box::new([])));
+            }
         }
     }
     Ok(())

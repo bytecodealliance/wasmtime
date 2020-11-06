@@ -847,4 +847,31 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
     fn wasm_features(&self) -> WasmFeatures {
         WasmFeatures::default()
     }
+
+    /// Indicates that this module will have `amount` submodules.
+    ///
+    /// Note that this is just child modules of this module, and each child
+    /// module may have yet more submodules.
+    fn reserve_modules(&mut self, amount: u32) {
+        drop(amount);
+    }
+
+    /// Called at the beginning of translating a module.
+    ///
+    /// The `index` argument is a monotonically increasing index which
+    /// corresponds to the nth module that's being translated. This is not the
+    /// 32-bit index in the current module's index space. For example the first
+    /// call to `module_start` will have index 0.
+    ///
+    /// Note that for nested modules this may be called multiple times.
+    fn module_start(&mut self, index: usize) {
+        drop(index);
+    }
+
+    /// Called at the end of translating a module.
+    ///
+    /// Note that for nested modules this may be called multiple times.
+    fn module_end(&mut self, index: usize) {
+        drop(index);
+    }
 }
