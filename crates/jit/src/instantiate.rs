@@ -246,7 +246,6 @@ impl CompiledModule {
     ) -> Result<InstanceHandle, InstantiationError> {
         InstanceHandle::new(
             self.module.clone(),
-            self.code.clone(),
             &self.finished_functions.0,
             imports,
             mem_creator,
