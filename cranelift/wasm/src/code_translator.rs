@@ -77,7 +77,7 @@ use crate::state::{ControlStackFrame, ElseData, FuncTranslationState};
 use crate::translation_utils::{
     block_with_params, blocktype_params_results, f32_translation, f64_translation,
 };
-use crate::translation_utils::{FuncIndex, GlobalIndex, MemoryIndex, SignatureIndex, TableIndex};
+use crate::translation_utils::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex};
 use crate::wasm_unsupported;
 use core::convert::TryInto;
 use core::{i32, u32};
@@ -587,7 +587,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
                 builder.cursor(),
                 TableIndex::from_u32(*table_index),
                 table,
-                SignatureIndex::from_u32(*index),
+                TypeIndex::from_u32(*index),
                 sigref,
                 callee,
                 state.peekn(num_args),

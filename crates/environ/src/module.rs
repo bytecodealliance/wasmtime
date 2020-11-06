@@ -5,8 +5,8 @@ use crate::WASM_MAX_PAGES;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::{
     DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
-    ElemIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table,
-    TableIndex, WasmFuncType,
+    ElemIndex, EntityIndex, EntityType, FuncIndex, Global, GlobalIndex, InstanceIndex, Memory,
+    MemoryIndex, ModuleIndex, SignatureIndex, Table, TableIndex, TypeIndex, WasmFuncType,
 };
 use indexmap::IndexMap;
 use more_asserts::assert_ge;
@@ -28,19 +28,6 @@ pub struct TableElements {
     pub offset: usize,
     /// The values to write into the table elements.
     pub elements: Box<[FuncIndex]>,
-}
-
-/// An index of an entity.
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum EntityIndex {
-    /// Function index.
-    Function(FuncIndex),
-    /// Table index.
-    Table(TableIndex),
-    /// Memory index.
-    Memory(MemoryIndex),
-    /// Global index.
-    Global(GlobalIndex),
 }
 
 /// Implemenation styles for WebAssembly linear memory.
@@ -134,6 +121,36 @@ impl TablePlan {
     }
 }
 
+/// Different types that can appear in a module
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ModuleType {
+    /// A function type, indexed further into the `signatures` table.
+    Function(SignatureIndex),
+    /// A module type
+    Module {
+        /// The module's imports
+        imports: Vec<(String, Option<String>, EntityType)>,
+        /// The module's exports
+        exports: Vec<(String, EntityType)>,
+    },
+    /// An instance type
+    Instance {
+        /// the instance's exports
+        exports: Vec<(String, EntityType)>,
+    },
+}
+
+impl ModuleType {
+    /// Asserts this is a `ModuleType::Function`, returning the underlying
+    /// `SignatureIndex`.
+    pub fn unwrap_function(&self) -> SignatureIndex {
+        match self {
+            ModuleType::Function(f) => *f,
+            _ => panic!("not a function type"),
+        }
+    }
+}
+
 /// A translated WebAssembly module, excluding the function bodies and
 /// memory initializers.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -170,6 +187,9 @@ pub struct Module {
     /// Unprocessed signatures exactly as provided by `declare_signature()`.
     pub signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
 
+    /// Types declared in the wasm module.
+    pub types: PrimaryMap<TypeIndex, ModuleType>,
+
     /// Number of imported functions in the module.
     pub num_imported_funcs: usize,
 
@@ -193,6 +213,27 @@ pub struct Module {
 
     /// WebAssembly global variables.
     pub globals: PrimaryMap<GlobalIndex, Global>,
+
+    /// WebAssembly instances.
+    pub instances: PrimaryMap<InstanceIndex, Instance>,
+
+    /// WebAssembly modules.
+    pub modules: PrimaryMap<ModuleIndex, TypeIndex>,
+}
+
+/// Different forms an instance can take in a wasm module
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Instance {
+    /// This is an imported instance with the specified type
+    Import(TypeIndex),
+    /// This is a locally created instance which instantiates the specified
+    /// module with the given list of entities.
+    Instantiate {
+        /// The module that this instance is instantiating.
+        module: ModuleIndex,
+        /// The arguments provided to instantiation.
+        args: Vec<EntityIndex>,
+    },
 }
 
 impl Module {
@@ -217,6 +258,9 @@ impl Module {
             table_plans: PrimaryMap::new(),
             memory_plans: PrimaryMap::new(),
             globals: PrimaryMap::new(),
+            instances: PrimaryMap::new(),
+            modules: PrimaryMap::new(),
+            types: PrimaryMap::new(),
         }
     }
 

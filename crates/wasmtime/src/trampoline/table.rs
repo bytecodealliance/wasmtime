@@ -4,7 +4,7 @@ use crate::Store;
 use crate::{TableType, ValType};
 use anyhow::{bail, Result};
 use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::{wasm, EntityIndex, Module};
+use wasmtime_environ::{wasm, Module};
 
 pub fn create_handle_with_table(store: &Store, table: &TableType) -> Result<StoreInstanceHandle> {
     let mut module = Module::new();
@@ -25,7 +25,7 @@ pub fn create_handle_with_table(store: &Store, table: &TableType) -> Result<Stor
     let table_id = module.table_plans.push(table_plan);
     module
         .exports
-        .insert(String::new(), EntityIndex::Table(table_id));
+        .insert(String::new(), wasm::EntityIndex::Table(table_id));
 
     create_handle(module, store, PrimaryMap::new(), Box::new(()), &[])
 }

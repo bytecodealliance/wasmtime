@@ -516,6 +516,10 @@ impl Linker {
             ExternType::Global(f) => ImportKind::Global(f),
             ExternType::Memory(_) => ImportKind::Memory,
             ExternType::Table(_) => ImportKind::Table,
+
+            // FIXME(#2094)
+            ExternType::Module(_) => unimplemented!(),
+            ExternType::Instance(_) => unimplemented!(),
         }
     }
 

@@ -1,13 +1,13 @@
-use crate::module::{EntityIndex, MemoryPlan, Module, TableElements, TablePlan};
+use crate::module::{MemoryPlan, Module, ModuleType, TableElements, TablePlan};
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
-    self, translate_module, DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex,
-    Memory, MemoryIndex, SignatureIndex, Table, TableIndex, TargetEnvironment, WasmError,
-    WasmFuncType, WasmResult,
+    self, translate_module, DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType,
+    FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
+    TargetEnvironment, TypeIndex, WasmError, WasmFuncType, WasmResult,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -201,18 +201,54 @@ impl<'data> TargetEnvironment for ModuleEnvironment<'data> {
 /// This trait is useful for `translate_module` because it tells how to translate
 /// environment-dependent wasm instructions. These functions should not be called by the user.
 impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data> {
-    fn reserve_signatures(&mut self, num: u32) -> WasmResult<()> {
+    fn reserve_types(&mut self, num: u32) -> WasmResult<()> {
         let num = usize::try_from(num).unwrap();
-        self.result.module.signatures.reserve_exact(num);
+        self.result.module.types.reserve_exact(num);
         self.result.native_signatures.reserve_exact(num);
         Ok(())
     }
 
-    fn declare_signature(&mut self, wasm: WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
+    fn declare_type_func(&mut self, wasm: WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
         let sig = translate_signature(sig, self.pointer_type());
         // TODO: Deduplicate signatures.
-        self.result.module.signatures.push(wasm);
         self.result.native_signatures.push(sig);
+        let sig_index = self.result.module.signatures.push(wasm);
+        self.result
+            .module
+            .types
+            .push(ModuleType::Function(sig_index));
+        Ok(())
+    }
+
+    fn declare_type_module(
+        &mut self,
+        imports: &[(&'data str, Option<&'data str>, EntityType)],
+        exports: &[(&'data str, EntityType)],
+    ) -> WasmResult<()> {
+        let imports = imports
+            .iter()
+            .map(|i| (i.0.to_string(), i.1.map(|s| s.to_string()), i.2.clone()))
+            .collect();
+        let exports = exports
+            .iter()
+            .map(|e| (e.0.to_string(), e.1.clone()))
+            .collect();
+        self.result
+            .module
+            .types
+            .push(ModuleType::Module { imports, exports });
+        Ok(())
+    }
+
+    fn declare_type_instance(&mut self, exports: &[(&'data str, EntityType)]) -> WasmResult<()> {
+        let exports = exports
+            .iter()
+            .map(|e| (e.0.to_string(), e.1.clone()))
+            .collect();
+        self.result
+            .module
+            .types
+            .push(ModuleType::Instance { exports });
         Ok(())
     }
 
@@ -226,7 +262,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
 
     fn declare_func_import(
         &mut self,
-        sig_index: SignatureIndex,
+        index: TypeIndex,
         module: &str,
         field: &str,
     ) -> WasmResult<()> {
@@ -235,6 +271,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             self.result.module.num_imported_funcs,
             "Imported functions must be declared first"
         );
+        let sig_index = self.result.module.types[index].unwrap_function();
         let func_index = self.result.module.functions.push(sig_index);
         self.result.module.imports.push((
             module.to_owned(),
@@ -320,7 +357,8 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         Ok(())
     }
 
-    fn declare_func_type(&mut self, sig_index: SignatureIndex) -> WasmResult<()> {
+    fn declare_func_type(&mut self, index: TypeIndex) -> WasmResult<()> {
+        let sig_index = self.result.module.types[index].unwrap_function();
         self.result.module.functions.push(sig_index);
         Ok(())
     }

@@ -12,7 +12,7 @@ use crate::environ::{
 use crate::func_translator::FuncTranslator;
 use crate::translation_utils::{
     DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
-    SignatureIndex, Table, TableIndex,
+    Table, TableIndex, TypeIndex,
 };
 use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
@@ -58,7 +58,7 @@ pub struct DummyModuleInfo {
     config: TargetFrontendConfig,
 
     /// Signatures as provided by `declare_signature`.
-    pub signatures: PrimaryMap<SignatureIndex, ir::Signature>,
+    pub signatures: PrimaryMap<TypeIndex, ir::Signature>,
 
     /// Module and field names of imported functions as provided by `declare_func_import`.
     pub imported_funcs: Vec<(String, String)>,
@@ -73,7 +73,7 @@ pub struct DummyModuleInfo {
     pub imported_memories: Vec<(String, String)>,
 
     /// Functions, imported and local.
-    pub functions: PrimaryMap<FuncIndex, Exportable<SignatureIndex>>,
+    pub functions: PrimaryMap<FuncIndex, Exportable<TypeIndex>>,
 
     /// Function bodies.
     pub function_bodies: PrimaryMap<DefinedFuncIndex, ir::Function>,
@@ -157,7 +157,7 @@ impl DummyEnvironment {
         DummyFuncEnvironment::new(&self.info, self.return_mode)
     }
 
-    fn get_func_type(&self, func_index: FuncIndex) -> SignatureIndex {
+    fn get_func_type(&self, func_index: FuncIndex) -> TypeIndex {
         self.info.functions[func_index].entity
     }
 
@@ -190,7 +190,7 @@ impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
 
     // Create a signature for `sigidx` amended with a `vmctx` argument after the standard wasm
     // arguments.
-    fn vmctx_sig(&self, sigidx: SignatureIndex) -> ir::Signature {
+    fn vmctx_sig(&self, sigidx: TypeIndex) -> ir::Signature {
         let mut sig = self.mod_info.signatures[sigidx].clone();
         sig.params.push(ir::AbiParam::special(
             self.pointer_type(),
@@ -283,7 +283,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
     fn make_indirect_sig(
         &mut self,
         func: &mut ir::Function,
-        index: SignatureIndex,
+        index: TypeIndex,
     ) -> WasmResult<ir::SigRef> {
         // A real implementation would probably change the calling convention and add `vmctx` and
         // signature index arguments.
@@ -312,7 +312,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         mut pos: FuncCursor,
         _table_index: TableIndex,
         _table: ir::Table,
-        _sig_index: SignatureIndex,
+        _sig_index: TypeIndex,
         sig_ref: ir::SigRef,
         callee: ir::Value,
         call_args: &[ir::Value],
@@ -572,14 +572,14 @@ impl TargetEnvironment for DummyEnvironment {
 }
 
 impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
-    fn declare_signature(&mut self, _wasm: WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
+    fn declare_type_func(&mut self, _wasm: WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
         self.info.signatures.push(sig);
         Ok(())
     }
 
     fn declare_func_import(
         &mut self,
-        sig_index: SignatureIndex,
+        index: TypeIndex,
         module: &'data str,
         field: &'data str,
     ) -> WasmResult<()> {
@@ -588,15 +588,15 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
             self.info.imported_funcs.len(),
             "Imported functions must be declared first"
         );
-        self.info.functions.push(Exportable::new(sig_index));
+        self.info.functions.push(Exportable::new(index));
         self.info
             .imported_funcs
             .push((String::from(module), String::from(field)));
         Ok(())
     }
 
-    fn declare_func_type(&mut self, sig_index: SignatureIndex) -> WasmResult<()> {
-        self.info.functions.push(Exportable::new(sig_index));
+    fn declare_func_type(&mut self, index: TypeIndex) -> WasmResult<()> {
+        self.info.functions.push(Exportable::new(index));
         Ok(())
     }
 
