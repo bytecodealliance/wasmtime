@@ -55,9 +55,11 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
+    # Note that we use nightly Rust here to get intra-doc links which are a
+    # nightly-only feature right now.
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2020-11-02
+        toolchain: nightly
     - run: cargo doc --no-deps --all --exclude wasmtime-cli --exclude test-programs --exclude cranelift-codegen-meta
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
     - uses: actions/upload-artifact@v1
@@ -91,8 +93,6 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-      with:
-        toolchain: nightly-2020-11-02
 
     # Check some feature combinations of the `wasmtime` crate
     - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --no-default-features
@@ -140,9 +140,11 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
+    # Note that building with fuzzers requires nightly since it uses unstable
+    # flags to rustc.
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2020-11-02
+        toolchain: nightly
     - run: cargo install cargo-fuzz --vers "^0.8"
     - run: cargo fetch
       working-directory: ./fuzz
@@ -199,7 +201,7 @@ jobs:
             rust: beta
           - build: nightly
             os: ubuntu-latest
-            rust: nightly-2020-11-02
+            rust: nightly
           - build: macos
             os: macos-latest
             rust: stable
@@ -268,12 +270,10 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
-    # Build and test lightbeam if we're using the nightly toolchain. Note that
+    # Build and test lightbeam. Note that
     # Lightbeam tests fail right now, but we don't want to block on that.
     - run: cargo build --package lightbeam
-      if: matrix.build == 'nightly'
     - run: cargo test --package lightbeam
-      if: matrix.build == 'nightly'
       continue-on-error: true
       env:
         RUST_BACKTRACE: 1
@@ -290,7 +290,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2020-11-02
+        toolchain: nightly
     - uses: ./.github/actions/define-llvm-env
 
     # Install wasm32 targets in order to build various tests throughout the
@@ -301,7 +301,7 @@ jobs:
     # Run the x64 CI script.
     - run: ./ci/run-experimental-x64-ci.sh
       env:
-        CARGO_VERSION: "+nightly-2020-11-02"
+        CARGO_VERSION: "+nightly"
         RUST_BACKTRACE: 1
 
   # Verify that cranelift's code generation is deterministic

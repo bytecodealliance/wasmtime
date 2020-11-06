@@ -133,35 +133,40 @@ cfg_if! {
                 Architecture::X86_32(_) => Capstone::new()
                     .x86()
                     .mode(arch::x86::ArchMode::Mode32)
-                    .build()?,
+                    .build()
+                    .map_err(map_caperr)?,
                 Architecture::X86_64 => Capstone::new()
                     .x86()
                     .mode(arch::x86::ArchMode::Mode64)
-                    .build()?,
+                    .build()
+                    .map_err(map_caperr)?,
                 Architecture::Arm(arm) => {
                     if arm.is_thumb() {
                         Capstone::new()
                             .arm()
                             .mode(arch::arm::ArchMode::Thumb)
-                            .build()?
+                            .build()
+                            .map_err(map_caperr)?
                     } else {
                         Capstone::new()
                             .arm()
                             .mode(arch::arm::ArchMode::Arm)
-                            .build()?
+                            .build()
+                            .map_err(map_caperr)?
                     }
                 }
                 Architecture::Aarch64 {..} => {
                     let mut cs = Capstone::new()
                         .arm64()
                         .mode(arch::arm64::ArchMode::Arm)
-                        .build()?;
+                        .build()
+                        .map_err(map_caperr)?;
                     // AArch64 uses inline constants rather than a separate constant pool right now.
                     // Without this option, Capstone will stop disassembling as soon as it sees
                     // an inline constant that is not also a valid instruction. With this option,
                     // Capstone will print a `.byte` directive with the bytes of the inline constant
                     // and continue to the next instruction.
-                    cs.set_skipdata(true)?;
+                    cs.set_skipdata(true).map_err(map_caperr)?;
                     cs
                 }
                 _ => anyhow::bail!("Unknown ISA"),
@@ -207,6 +212,10 @@ cfg_if! {
                 println!("{}", line);
             }
             Ok(())
+        }
+
+        fn map_caperr(err: capstone::Error) -> anyhow::Error{
+            anyhow::format_err!("{}", err)
         }
     } else {
         pub fn print_disassembly(_: &dyn TargetIsa, _: &[u8]) -> Result<()> {
