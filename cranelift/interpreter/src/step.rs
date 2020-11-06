@@ -545,7 +545,6 @@ where
         Opcode::Shuffle => unimplemented!("Shuffle"),
         Opcode::Swizzle => unimplemented!("Swizzle"),
         Opcode::Splat => unimplemented!("Splat"),
-        Opcode::LoadSplat => unimplemented!("LoadSplat"),
         Opcode::Insertlane => unimplemented!("Insertlane"),
         Opcode::Extractlane => unimplemented!("Extractlane"),
         Opcode::VhighBits => unimplemented!("VhighBits"),

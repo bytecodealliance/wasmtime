@@ -1892,31 +1892,3 @@ fn expand_tls_value(
         unreachable!();
     }
 }
-
-fn expand_load_splat(
-    inst: ir::Inst,
-    func: &mut ir::Function,
-    _cfg: &mut ControlFlowGraph,
-    _isa: &dyn TargetIsa,
-) {
-    let mut pos = FuncCursor::new(func).at_inst(inst);
-
-    pos.use_srcloc(inst);
-
-    let (ptr, offset, flags) = match pos.func.dfg[inst] {
-        ir::InstructionData::Load {
-            opcode: ir::Opcode::LoadSplat,
-            arg,
-            offset,
-            flags,
-        } => (arg, offset, flags),
-        _ => panic!(
-            "Expected load_splat: {}",
-            pos.func.dfg.display_inst(inst, None)
-        ),
-    };
-    let ty = pos.func.dfg.ctrl_typevar(inst);
-    let load = pos.ins().load(ty.lane_type(), flags, ptr, offset);
-
-    pos.func.dfg.replace(inst).splat(ty, load);
-}

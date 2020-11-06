@@ -1219,6 +1219,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        /*
         Opcode::LoadSplat => {
             let off = ctx.data(insn).load_store_offset().unwrap();
             let ty = ty.unwrap();
@@ -1234,6 +1235,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 size,
             });
         }
+        */
 
         Opcode::Store
         | Opcode::Istore8
