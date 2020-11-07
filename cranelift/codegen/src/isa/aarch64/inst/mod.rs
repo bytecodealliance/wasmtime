@@ -1463,6 +1463,17 @@ impl Inst {
             }
         }
     }
+
+    /// Generate a LoadAddr instruction (load address of an amode into
+    /// register). Elides when possible (when amode is just a register). Returns
+    /// destination register: either `rd` or a register directly from the amode.
+    pub fn gen_load_addr(rd: Writable<Reg>, mem: AMode) -> (Reg, Option<Inst>) {
+        if let Some(r) = mem.is_reg() {
+            (r, None)
+        } else {
+            (rd.to_reg(), Some(Inst::LoadAddr { rd, mem }))
+        }
+    }
 }
 
 //=============================================================================

@@ -209,6 +209,19 @@ impl AMode {
     pub fn label(label: MemLabel) -> AMode {
         AMode::Label(label)
     }
+
+    /// Does the address resolve to just a register value, with no offset or
+    /// other computation?
+    pub fn is_reg(&self) -> Option<Reg> {
+        match self {
+            &AMode::UnsignedOffset(r, uimm12) if uimm12.value() == 0 => Some(r),
+            &AMode::Unscaled(r, imm9) if imm9.value() == 0 => Some(r),
+            &AMode::RegOffset(r, off, _) if off == 0 => Some(r),
+            &AMode::FPOffset(off, _) if off == 0 => Some(fp_reg()),
+            &AMode::SPOffset(off, _) if off == 0 => Some(stack_reg()),
+            _ => None,
+        }
+    }
 }
 
 /// A memory argument to a load/store-pair.
