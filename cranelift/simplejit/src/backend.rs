@@ -33,7 +33,7 @@ const READONLY_DATA_ALIGNMENT: u64 = 0x1;
 pub struct SimpleJITBuilder {
     isa: Box<dyn TargetIsa>,
     symbols: HashMap<String, *const u8>,
-    libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
+    libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
 }
 
 impl SimpleJITBuilder {
@@ -43,7 +43,7 @@ impl SimpleJITBuilder {
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
     /// floating point instructions, and for stack probes. If you don't know what to use for this
     /// argument, use `cranelift_module::default_libcall_names()`.
-    pub fn new(libcall_names: Box<dyn Fn(ir::LibCall) -> String>) -> Self {
+    pub fn new(libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>) -> Self {
         let mut flag_builder = settings::builder();
         // On at least AArch64, "colocated" calls use shorter-range relocations,
         // which might not reach all definitions; we can't handle that here, so
@@ -70,7 +70,7 @@ impl SimpleJITBuilder {
     /// argument, use `cranelift_module::default_libcall_names()`.
     pub fn with_isa(
         isa: Box<dyn TargetIsa>,
-        libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
+        libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     ) -> Self {
         debug_assert!(!isa.flags().is_pic(), "SimpleJIT requires non-PIC code");
         let symbols = HashMap::new();
