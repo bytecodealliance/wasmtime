@@ -223,7 +223,7 @@ fn predict_rss(wasm: &[u8]) -> Result<usize> {
                 for entry in s {
                     let initial = match entry? {
                         MemoryType::M32 { limits, .. } => limits.initial as usize,
-                        MemoryType::M64 { limits } => limits.initial as usize,
+                        MemoryType::M64 { limits, .. } => limits.initial as usize,
                     };
                     prediction += initial * 64 * 1024;
                 }
