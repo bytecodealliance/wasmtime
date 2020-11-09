@@ -270,6 +270,8 @@ where
             state.store_heap(address, reduced)?;
             ControlFlow::Continue
         }
+        Opcode::LoadRev => unimplemented!("LoadRev"),
+        Opcode::StoreRev => unimplemented!("StoreRev"),
         Opcode::StackLoad => {
             let address = sum(imm(), args_range(1..)?)? as usize;
             let load_ty = inst_context.controlling_type().unwrap();

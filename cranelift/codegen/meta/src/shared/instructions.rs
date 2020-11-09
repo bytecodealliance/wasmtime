@@ -829,6 +829,22 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
+            "load_rev",
+            r#"
+        Load byte-reversed value from memory at ``p + Offset``.
+
+        This is a polymorphic instruction that can load any value type which
+        has a memory representation.
+        "#,
+            &formats.load,
+        )
+        .operands_in(vec![MemFlags, p, Offset])
+        .operands_out(vec![a])
+        .can_load(true),
+    );
+
+    ig.push(
+        Inst::new(
             "load_complex",
             r#"
         Load from memory at ``sum(args) + Offset``.
@@ -848,6 +864,21 @@ pub(crate) fn define(
             "store",
             r#"
         Store ``x`` to memory at ``p + Offset``.
+
+        This is a polymorphic instruction that can store any value type with a
+        memory representation.
+        "#,
+            &formats.store,
+        )
+        .operands_in(vec![MemFlags, x, p, Offset])
+        .can_store(true),
+    );
+
+    ig.push(
+        Inst::new(
+            "store_rev",
+            r#"
+        Store byte-reversed value ``x`` to memory at ``p + Offset``.
 
         This is a polymorphic instruction that can store any value type with a
         memory representation.

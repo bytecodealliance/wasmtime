@@ -626,43 +626,95 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             translate_load(memarg, ir::Opcode::Uload8, I32, builder, state, environ)?;
         }
         Operator::I32Load16U { memarg } => {
-            translate_load(memarg, ir::Opcode::Uload16, I32, builder, state, environ)?;
+            if cfg!(target_endian = "big") {
+                translate_load(memarg, ir::Opcode::LoadRev, I16, builder, state, environ)?;
+                let val = state.pop1();
+                state.push1(builder.ins().uextend(I32, val));
+            } else {
+                translate_load(memarg, ir::Opcode::Uload16, I32, builder, state, environ)?;
+            }
         }
         Operator::I32Load8S { memarg } => {
             translate_load(memarg, ir::Opcode::Sload8, I32, builder, state, environ)?;
         }
         Operator::I32Load16S { memarg } => {
-            translate_load(memarg, ir::Opcode::Sload16, I32, builder, state, environ)?;
+            if cfg!(target_endian = "big") {
+                translate_load(memarg, ir::Opcode::LoadRev, I16, builder, state, environ)?;
+                let val = state.pop1();
+                state.push1(builder.ins().sextend(I32, val));
+            } else {
+                translate_load(memarg, ir::Opcode::Sload16, I32, builder, state, environ)?;
+            }
         }
         Operator::I64Load8U { memarg } => {
             translate_load(memarg, ir::Opcode::Uload8, I64, builder, state, environ)?;
         }
         Operator::I64Load16U { memarg } => {
-            translate_load(memarg, ir::Opcode::Uload16, I64, builder, state, environ)?;
+            if cfg!(target_endian = "big") {
+                translate_load(memarg, ir::Opcode::LoadRev, I16, builder, state, environ)?;
+                let val = state.pop1();
+                state.push1(builder.ins().uextend(I64, val));
+            } else {
+                translate_load(memarg, ir::Opcode::Uload16, I64, builder, state, environ)?;
+            }
         }
         Operator::I64Load8S { memarg } => {
             translate_load(memarg, ir::Opcode::Sload8, I64, builder, state, environ)?;
         }
         Operator::I64Load16S { memarg } => {
-            translate_load(memarg, ir::Opcode::Sload16, I64, builder, state, environ)?;
+            if cfg!(target_endian = "big") {
+                translate_load(memarg, ir::Opcode::LoadRev, I16, builder, state, environ)?;
+                let val = state.pop1();
+                state.push1(builder.ins().sextend(I64, val));
+            } else {
+                translate_load(memarg, ir::Opcode::Sload16, I64, builder, state, environ)?;
+            }
         }
         Operator::I64Load32S { memarg } => {
-            translate_load(memarg, ir::Opcode::Sload32, I64, builder, state, environ)?;
+            if cfg!(target_endian = "big") {
+                translate_load(memarg, ir::Opcode::LoadRev, I32, builder, state, environ)?;
+                let val = state.pop1();
+                state.push1(builder.ins().sextend(I64, val));
+            } else {
+                translate_load(memarg, ir::Opcode::Sload32, I64, builder, state, environ)?;
+            }
         }
         Operator::I64Load32U { memarg } => {
-            translate_load(memarg, ir::Opcode::Uload32, I64, builder, state, environ)?;
+            if cfg!(target_endian = "big") {
+                translate_load(memarg, ir::Opcode::LoadRev, I32, builder, state, environ)?;
+                let val = state.pop1();
+                state.push1(builder.ins().uextend(I64, val));
+            } else {
+                translate_load(memarg, ir::Opcode::Uload32, I64, builder, state, environ)?;
+            }
         }
         Operator::I32Load { memarg } => {
-            translate_load(memarg, ir::Opcode::Load, I32, builder, state, environ)?;
+            if cfg!(target_endian = "big") {
+                translate_load(memarg, ir::Opcode::LoadRev, I32, builder, state, environ)?;
+            } else {
+                translate_load(memarg, ir::Opcode::Load, I32, builder, state, environ)?;
+            }
         }
         Operator::F32Load { memarg } => {
-            translate_load(memarg, ir::Opcode::Load, F32, builder, state, environ)?;
+            if cfg!(target_endian = "big") {
+                translate_load(memarg, ir::Opcode::LoadRev, F32, builder, state, environ)?;
+            } else {
+                translate_load(memarg, ir::Opcode::Load, F32, builder, state, environ)?;
+            }
         }
         Operator::I64Load { memarg } => {
-            translate_load(memarg, ir::Opcode::Load, I64, builder, state, environ)?;
+            if cfg!(target_endian = "big") {
+                translate_load(memarg, ir::Opcode::LoadRev, I64, builder, state, environ)?;
+            } else {
+                translate_load(memarg, ir::Opcode::Load, I64, builder, state, environ)?;
+            }
         }
         Operator::F64Load { memarg } => {
-            translate_load(memarg, ir::Opcode::Load, F64, builder, state, environ)?;
+            if cfg!(target_endian = "big") {
+                translate_load(memarg, ir::Opcode::LoadRev, F64, builder, state, environ)?;
+            } else {
+                translate_load(memarg, ir::Opcode::Load, F64, builder, state, environ)?;
+            }
         }
         Operator::V128Load { memarg } => {
             translate_load(memarg, ir::Opcode::Load, I8X16, builder, state, environ)?;
@@ -705,16 +757,32 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64Store { memarg }
         | Operator::F32Store { memarg }
         | Operator::F64Store { memarg } => {
-            translate_store(memarg, ir::Opcode::Store, builder, state, environ)?;
+            if cfg!(target_endian = "big") {
+                translate_store(memarg, ir::Opcode::StoreRev, builder, state, environ)?;
+            } else {
+                translate_store(memarg, ir::Opcode::Store, builder, state, environ)?;
+            }
         }
         Operator::I32Store8 { memarg } | Operator::I64Store8 { memarg } => {
             translate_store(memarg, ir::Opcode::Istore8, builder, state, environ)?;
         }
         Operator::I32Store16 { memarg } | Operator::I64Store16 { memarg } => {
-            translate_store(memarg, ir::Opcode::Istore16, builder, state, environ)?;
+            if cfg!(target_endian = "big") {
+                let val = state.pop1();
+                state.push1(builder.ins().ireduce(I16, val));
+                translate_store(memarg, ir::Opcode::StoreRev, builder, state, environ)?;
+            } else {
+                translate_store(memarg, ir::Opcode::Istore16, builder, state, environ)?;
+            }
         }
         Operator::I64Store32 { memarg } => {
-            translate_store(memarg, ir::Opcode::Istore32, builder, state, environ)?;
+            if cfg!(target_endian = "big") {
+                let val = state.pop1();
+                state.push1(builder.ins().ireduce(I32, val));
+                translate_store(memarg, ir::Opcode::StoreRev, builder, state, environ)?;
+            } else {
+                translate_store(memarg, ir::Opcode::Istore32, builder, state, environ)?;
+            }
         }
         Operator::V128Store { memarg } => {
             translate_store(memarg, ir::Opcode::Store, builder, state, environ)?;
@@ -2104,6 +2172,7 @@ fn mem_op_size(opcode: ir::Opcode, ty: Type) -> u32 {
         ir::Opcode::Istore16 | ir::Opcode::Sload16 | ir::Opcode::Uload16 => 2,
         ir::Opcode::Istore32 | ir::Opcode::Sload32 | ir::Opcode::Uload32 => 4,
         ir::Opcode::Store | ir::Opcode::Load | ir::Opcode::LoadSplat => ty.bytes(),
+        ir::Opcode::StoreRev | ir::Opcode::LoadRev => ty.bytes(),
         _ => panic!("unknown size of mem op for {:?}", opcode),
     }
 }
