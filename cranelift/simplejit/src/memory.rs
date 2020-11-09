@@ -126,7 +126,7 @@ impl Drop for PtrLen {
 /// accessible memory. Memory will be leaked by default to have
 /// function pointers remain valid for the remainder of the
 /// program's life.
-pub struct Memory {
+pub(crate) struct Memory {
     allocations: Vec<PtrLen>,
     executable: usize,
     current: PtrLen,
@@ -134,7 +134,7 @@ pub struct Memory {
 }
 
 impl Memory {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             allocations: Vec::new(),
             executable: 0,
@@ -150,7 +150,7 @@ impl Memory {
     }
 
     /// TODO: Use a proper error type.
-    pub fn allocate(&mut self, size: usize, align: u64) -> Result<*mut u8, String> {
+    pub(crate) fn allocate(&mut self, size: usize, align: u64) -> Result<*mut u8, String> {
         let align = usize::try_from(align).expect("alignment too big");
         if self.position % align != 0 {
             self.position += align - self.position % align;
@@ -173,7 +173,7 @@ impl Memory {
     }
 
     /// Set all memory allocated in this `Memory` up to now as readable and executable.
-    pub fn set_readable_and_executable(&mut self) {
+    pub(crate) fn set_readable_and_executable(&mut self) {
         self.finish_current();
 
         #[cfg(feature = "selinux-fix")]
@@ -202,7 +202,7 @@ impl Memory {
     }
 
     /// Set all memory allocated in this `Memory` up to now as readonly.
-    pub fn set_readonly(&mut self) {
+    pub(crate) fn set_readonly(&mut self) {
         self.finish_current();
 
         #[cfg(feature = "selinux-fix")]
@@ -232,7 +232,7 @@ impl Memory {
 
     /// Frees all allocated memory regions that would be leaked otherwise.
     /// Likely to invalidate existing function pointers, causing unsafety.
-    pub unsafe fn free_memory(&mut self) {
+    pub(crate) unsafe fn free_memory(&mut self) {
         self.allocations.clear();
     }
 }
