@@ -28,10 +28,6 @@ pub(crate) fn build_object(
     dwarf_sections: Vec<DwarfSection>,
 ) -> Result<(Object, Vec<ObjectUnwindInfo>), anyhow::Error> {
     const CODE_SECTION_ALIGNMENT: u64 = 0x1000;
-    assert_eq!(
-        isa.triple().architecture.endianness(),
-        Ok(target_lexicon::Endianness::Little)
-    );
 
     let mut unwind_info = Vec::new();
 
