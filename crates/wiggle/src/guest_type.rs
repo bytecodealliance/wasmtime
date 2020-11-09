@@ -88,7 +88,7 @@ macro_rules! primitives {
                 if ptr.mem().is_borrowed(region) {
                     return Err(GuestError::PtrBorrowed(region));
                 }
-                Ok(unsafe { *host_ptr.cast::<Self>() })
+                Ok(unsafe { <$i>::from_le_bytes(*host_ptr.cast::<[u8; mem::size_of::<Self>()]>()) })
             }
 
             #[inline]
@@ -108,7 +108,7 @@ macro_rules! primitives {
                     return Err(GuestError::PtrBorrowed(region));
                 }
                 unsafe {
-                    *host_ptr.cast::<Self>() = val;
+                    *host_ptr.cast::<[u8; mem::size_of::<Self>()]>() = <$i>::to_le_bytes(val);
                 }
                 Ok(())
             }
