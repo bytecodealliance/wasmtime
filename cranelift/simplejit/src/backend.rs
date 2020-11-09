@@ -291,12 +291,8 @@ impl SimpleJITModule {
         }
     }
 
-    fn finalize_function(&mut self, id: FuncId) {
+    fn perform_relocations(&self, blob: &CompiledBlob) {
         use std::ptr::write_unaligned;
-
-        let func = self.functions[id]
-            .as_ref()
-            .expect("function must be compiled before it can be finalized");
 
         for &RelocRecord {
             reloc,
@@ -305,8 +301,8 @@ impl SimpleJITModule {
             addend,
         } in &func.relocs
         {
-            debug_assert!((offset as usize) < func.size);
-            let at = unsafe { func.ptr.offset(offset as isize) };
+            debug_assert!((offset as usize) < blob.size);
+            let at = unsafe { blob.ptr.offset(offset as isize) };
             let base = self.get_definition(name);
             // TODO: Handle overflow.
             let what = unsafe { base.offset(addend as isize) };
@@ -338,48 +334,6 @@ impl SimpleJITModule {
         }
     }
 
-    fn finalize_data(&mut self, id: DataId) {
-        use std::ptr::write_unaligned;
-
-        let data = self.data_objects[id]
-            .as_ref()
-            .expect("data object must be compiled before it can be finalized");
-
-        for &RelocRecord {
-            reloc,
-            offset,
-            ref name,
-            addend,
-        } in &data.relocs
-        {
-            debug_assert!((offset as usize) < data.size);
-            let at = unsafe { data.ptr.offset(offset as isize) };
-            let base = self.get_definition(name);
-            // TODO: Handle overflow.
-            let what = unsafe { base.offset(addend as isize) };
-            match reloc {
-                Reloc::Abs4 => {
-                    // TODO: Handle overflow.
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut u32, what as u32)
-                    };
-                }
-                Reloc::Abs8 => {
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut u64, what as u64)
-                    };
-                }
-                Reloc::X86PCRel4
-                | Reloc::X86CallPCRel4
-                | Reloc::X86GOTPCRel4
-                | Reloc::X86CallPLTRel4 => panic!("unexpected text relocation in data"),
-                _ => unimplemented!(),
-            }
-        }
-    }
-
     /// Finalize all functions and data objects that are defined but not yet finalized.
     /// All symbols referenced in their bodies that are declared as needing a definition
     /// must be defined by this point.
@@ -390,12 +344,18 @@ impl SimpleJITModule {
         for func in std::mem::take(&mut self.functions_to_finalize) {
             let decl = self.declarations.get_function_decl(func);
             debug_assert!(decl.linkage.is_definable());
-            self.finalize_function(func);
+            let func = self.functions[func]
+                .as_ref()
+                .expect("function must be compiled before it can be finalized");
+            self.perform_relocations(func);
         }
         for data in std::mem::take(&mut self.data_objects_to_finalize) {
             let decl = self.declarations.get_data_decl(data);
             debug_assert!(decl.linkage.is_definable());
-            self.finalize_data(data);
+            let data = self.data_objects[data]
+                .as_ref()
+                .expect("data object must be compiled before it can be finalized");
+            self.perform_relocations(data);
         }
 
         // Now that we're done patching, prepare the memory for execution!
