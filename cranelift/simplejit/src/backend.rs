@@ -5,7 +5,7 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings};
 use cranelift_codegen::{
-    binemit::{Addend, CodeInfo, CodeOffset, Reloc, RelocSink, StackMap, StackMapSink, TrapSink},
+    binemit::{self, Addend, CodeInfo, CodeOffset, Reloc, RelocSink, TrapSink},
     CodegenError,
 };
 use cranelift_entity::SecondaryMap;
@@ -133,13 +133,6 @@ pub struct SimpleJITModule {
     data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
     functions_to_finalize: Vec<FuncId>,
     data_objects_to_finalize: Vec<DataId>,
-}
-
-struct StackMapRecord {
-    #[allow(dead_code)]
-    offset: CodeOffset,
-    #[allow(dead_code)]
-    stack_map: StackMap,
 }
 
 /// A handle to allow freeing memory allocated by the `Module`.
@@ -371,7 +364,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             .expect("TODO: handle OOM etc.");
 
         let mut reloc_sink = SimpleJITRelocSink::default();
-        let mut stack_map_sink = SimpleJITStackMapSink::default();
+        let mut stack_map_sink = binemit::NullStackMapSink {};
         unsafe {
             ctx.emit_to_memory(
                 &*self.isa,
@@ -602,16 +595,5 @@ impl RelocSink for SimpleJITRelocSink {
                 panic!("Unhandled reloc");
             }
         }
-    }
-}
-
-#[derive(Default)]
-struct SimpleJITStackMapSink {
-    stack_maps: Vec<StackMapRecord>,
-}
-
-impl StackMapSink for SimpleJITStackMapSink {
-    fn add_stack_map(&mut self, offset: CodeOffset, stack_map: StackMap) {
-        self.stack_maps.push(StackMapRecord { offset, stack_map });
     }
 }
