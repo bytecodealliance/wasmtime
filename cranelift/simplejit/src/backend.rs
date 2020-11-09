@@ -10,8 +10,8 @@ use cranelift_codegen::{
 };
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
-    DataContext, DataDescription, DataId, FuncId, FuncOrDataId, Init, Linkage, Module,
-    ModuleCompiledFunction, ModuleDeclarations, ModuleError, ModuleResult, RelocRecord,
+    DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
+    ModuleDeclarations, ModuleError, ModuleResult, RelocRecord,
 };
 use cranelift_native;
 #[cfg(not(windows))]
@@ -149,16 +149,7 @@ struct MemoryHandle {
     writable: Memory,
 }
 
-/// A `SimpleJITProduct` allows looking up the addresses of all functions and data objects
-/// defined in the original module.
-pub struct SimpleJITProduct {
-    memory: MemoryHandle,
-    declarations: ModuleDeclarations,
-    functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
-    data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
-}
-
-impl SimpleJITProduct {
+impl SimpleJITModule {
     /// Free memory allocated for code and data segments of compiled functions.
     ///
     /// # Safety
@@ -173,29 +164,6 @@ impl SimpleJITProduct {
         self.memory.writable.free_memory();
     }
 
-    /// Get the `FuncOrDataId` associated with the given name.
-    pub fn func_or_data_for_func(&self, name: &str) -> Option<FuncOrDataId> {
-        self.declarations.get_name(name)
-    }
-
-    /// Return the address of a function.
-    pub fn lookup_func(&self, func_id: FuncId) -> *const u8 {
-        self.functions[func_id]
-            .as_ref()
-            .unwrap_or_else(|| panic!("{} is not defined", func_id))
-            .ptr
-    }
-
-    /// Return the address and size of a data object.
-    pub fn lookup_data(&self, data_id: DataId) -> (*const u8, usize) {
-        let data = self.data_objects[data_id]
-            .as_ref()
-            .unwrap_or_else(|| panic!("{} is not defined", data_id));
-        (data.ptr, data.size)
-    }
-}
-
-impl SimpleJITModule {
     fn lookup_symbol(&self, name: &str) -> Option<*const u8> {
         self.symbols
             .get(name)
@@ -544,26 +512,6 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         self.data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
 
         Ok(())
-    }
-}
-
-impl SimpleJITModule {
-    /// SimpleJIT emits code and data into memory as it processes them. This
-    /// method performs no additional processing, but returns a handle which
-    /// allows freeing the allocated memory. Otherwise said memory is leaked
-    /// to enable safe handling of the resulting pointers.
-    ///
-    /// This method does not need to be called when access to the memory
-    /// handle is not required.
-    pub fn finish(mut self) -> SimpleJITProduct {
-        self.finalize_definitions();
-
-        SimpleJITProduct {
-            memory: self.memory,
-            declarations: self.declarations,
-            functions: self.functions,
-            data_objects: self.data_objects,
-        }
     }
 }
 

@@ -186,5 +186,5 @@ fn libcall_function() {
         .define_function(func_id, &mut ctx, &mut trap_sink)
         .unwrap();
 
-    module.finish();
+    module.finalize_definitions();
 }
