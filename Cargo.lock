@@ -435,6 +435,8 @@ version = "0.68.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
+ "cranelift-entity",
+ "cranelift-frontend",
  "cranelift-module",
  "log",
  "object",
