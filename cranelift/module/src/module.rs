@@ -162,9 +162,6 @@ pub enum ModuleError {
     /// Indicates an identifier was defined, but was declared as an import
     #[error("Invalid to define identifier declared as an import: {0}")]
     InvalidImportDefinition(String),
-    /// Indicates a too-long function was defined
-    #[error("Function {0} exceeds the maximum function size")]
-    FunctionTooLarge(String),
     /// Wraps a `cranelift-codegen` error
     #[error("Compilation error: {0}")]
     Compilation(#[from] CodegenError),

@@ -1,12 +1,13 @@
 //! Defines `SimpleJITModule`.
 
 use crate::{compiled_blob::CompiledBlob, memory::Memory};
-use cranelift_codegen::binemit::{
-    Addend, CodeInfo, CodeOffset, Reloc, RelocSink, StackMap, StackMapSink, TrapSink,
-};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings};
+use cranelift_codegen::{
+    binemit::{Addend, CodeInfo, CodeOffset, Reloc, RelocSink, StackMap, StackMapSink, TrapSink},
+    CodegenError,
+};
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, FuncOrDataId, Init, Linkage, Module,
@@ -394,15 +395,12 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
-        self.functions_to_finalize.push(id);
         let size = code_size as usize;
         let ptr = self
             .memory
             .code
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
-
-        self.record_function_for_perf(ptr, size, &decl.name);
 
         let mut reloc_sink = SimpleJITRelocSink::default();
         let mut stack_map_sink = SimpleJITStackMapSink::default();
@@ -416,11 +414,13 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             )
         };
 
+        self.record_function_for_perf(ptr, size, &decl.name);
         self.functions[id] = Some(CompiledBlob {
             ptr,
             size,
             relocs: reloc_sink.relocs,
         });
+        self.functions_to_finalize.push(id);
 
         Ok(ModuleCompiledFunction { size: code_size })
     }
@@ -431,21 +431,21 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         bytes: &[u8],
         relocs: &[RelocRecord],
     ) -> ModuleResult<ModuleCompiledFunction> {
+        info!("defining function {} with bytes", id);
+        let total_size: u32 = match bytes.len().try_into() {
+            Ok(total_size) => total_size,
+            _ => Err(CodegenError::CodeTooLarge)?,
+        };
+
         let decl = self.declarations.get_function_decl(id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
 
-        let total_size: u32 = match bytes.len().try_into() {
-            Ok(total_size) => total_size,
-            _ => Err(ModuleError::FunctionTooLarge(decl.name.clone()))?,
-        };
-
         if !self.functions[id].is_none() {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
-        self.functions_to_finalize.push(id);
         let size = bytes.len();
         let ptr = self
             .memory
@@ -453,17 +453,17 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        self.record_function_for_perf(ptr, size, &decl.name);
-
         unsafe {
             ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, size);
         }
 
+        self.record_function_for_perf(ptr, size, &decl.name);
         self.functions[id] = Some(CompiledBlob {
             ptr,
             size,
             relocs: relocs.to_vec(),
         });
+        self.functions_to_finalize.push(id);
 
         Ok(ModuleCompiledFunction { size: total_size })
     }

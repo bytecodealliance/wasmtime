@@ -1,12 +1,13 @@
 //! Defines `ObjectModule`.
 
 use anyhow::anyhow;
-use cranelift_codegen::binemit::{
-    Addend, CodeInfo, CodeOffset, NullStackMapSink, Reloc, RelocSink, TrapSink,
-};
 use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, ir};
+use cranelift_codegen::{
+    binemit::{Addend, CodeInfo, CodeOffset, NullStackMapSink, Reloc, RelocSink, TrapSink},
+    CodegenError,
+};
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
     ModuleDeclarations, ModuleError, ModuleResult, RelocRecord,
@@ -268,16 +269,15 @@ impl Module for ObjectModule {
         relocs: &[RelocRecord],
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {} with bytes", func_id);
+        let total_size: u32 = match bytes.len().try_into() {
+            Ok(total_size) => total_size,
+            _ => Err(CodegenError::CodeTooLarge)?,
+        };
 
         let decl = self.declarations.get_function_decl(func_id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
-
-        let total_size: u32 = match bytes.len().try_into() {
-            Ok(total_size) => total_size,
-            _ => Err(ModuleError::FunctionTooLarge(decl.name.clone()))?,
-        };
 
         let &mut (symbol, ref mut defined) = self.functions[func_id].as_mut().unwrap();
         if *defined {
