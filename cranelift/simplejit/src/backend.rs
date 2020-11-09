@@ -167,8 +167,8 @@ impl SimpleJITModule {
     fn get_definition(&self, name: &ir::ExternalName) -> *const u8 {
         match *name {
             ir::ExternalName::User { .. } => {
-                let (name, linkage) = if self.declarations.is_function(name) {
-                    let func_id = self.declarations.get_function_id(name);
+                let (name, linkage) = if ModuleDeclarations::is_function(name) {
+                    let func_id = FuncId::from_name(name);
                     match &self.functions[func_id] {
                         Some(compiled) => return compiled.ptr,
                         None => {
@@ -177,7 +177,7 @@ impl SimpleJITModule {
                         }
                     }
                 } else {
-                    let data_id = self.declarations.get_data_id(name);
+                    let data_id = DataId::from_name(name);
                     match &self.data_objects[data_id] {
                         Some(compiled) => return compiled.ptr,
                         None => {

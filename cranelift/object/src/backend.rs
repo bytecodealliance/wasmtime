@@ -477,11 +477,11 @@ impl ObjectModule {
     fn get_symbol(&mut self, name: &ir::ExternalName) -> SymbolId {
         match *name {
             ir::ExternalName::User { .. } => {
-                if self.declarations.is_function(name) {
-                    let id = self.declarations.get_function_id(name);
+                if ModuleDeclarations::is_function(name) {
+                    let id = FuncId::from_name(name);
                     self.functions[id].unwrap().0
                 } else {
-                    let id = self.declarations.get_data_id(name);
+                    let id = DataId::from_name(name);
                     self.data_objects[id].unwrap().0
                 }
             }
