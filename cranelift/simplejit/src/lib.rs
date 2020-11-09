@@ -23,6 +23,7 @@
 )]
 
 mod backend;
+mod compiled_blob;
 mod memory;
 
 pub use crate::backend::{SimpleJITBuilder, SimpleJITModule, SimpleJITProduct};

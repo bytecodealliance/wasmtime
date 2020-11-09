@@ -1,6 +1,6 @@
 //! Defines `SimpleJITModule`.
 
-use crate::memory::Memory;
+use crate::{compiled_blob::CompiledBlob, memory::Memory};
 use cranelift_codegen::binemit::{
     Addend, CodeInfo, CodeOffset, Reloc, RelocSink, StackMap, StackMapSink, TrapSink,
 };
@@ -139,13 +139,6 @@ struct StackMapRecord {
     offset: CodeOffset,
     #[allow(dead_code)]
     stack_map: StackMap,
-}
-
-#[derive(Clone)]
-struct CompiledBlob {
-    ptr: *mut u8,
-    size: usize,
-    relocs: Vec<RelocRecord>,
 }
 
 /// A handle to allow freeing memory allocated by the `Module`.
@@ -291,49 +284,6 @@ impl SimpleJITModule {
         }
     }
 
-    fn perform_relocations(&self, blob: &CompiledBlob) {
-        use std::ptr::write_unaligned;
-
-        for &RelocRecord {
-            reloc,
-            offset,
-            ref name,
-            addend,
-        } in &func.relocs
-        {
-            debug_assert!((offset as usize) < blob.size);
-            let at = unsafe { blob.ptr.offset(offset as isize) };
-            let base = self.get_definition(name);
-            // TODO: Handle overflow.
-            let what = unsafe { base.offset(addend as isize) };
-            match reloc {
-                Reloc::Abs4 => {
-                    // TODO: Handle overflow.
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut u32, what as u32)
-                    };
-                }
-                Reloc::Abs8 => {
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut u64, what as u64)
-                    };
-                }
-                Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
-                    // TODO: Handle overflow.
-                    let pcrel = ((what as isize) - (at as isize)) as i32;
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut i32, pcrel)
-                    };
-                }
-                Reloc::X86GOTPCRel4 | Reloc::X86CallPLTRel4 => panic!("unexpected PIC relocation"),
-                _ => unimplemented!(),
-            }
-        }
-    }
-
     /// Finalize all functions and data objects that are defined but not yet finalized.
     /// All symbols referenced in their bodies that are declared as needing a definition
     /// must be defined by this point.
@@ -347,7 +297,7 @@ impl SimpleJITModule {
             let func = self.functions[func]
                 .as_ref()
                 .expect("function must be compiled before it can be finalized");
-            self.perform_relocations(func);
+            func.perform_relocations(|name| self.get_definition(name));
         }
         for data in std::mem::take(&mut self.data_objects_to_finalize) {
             let decl = self.declarations.get_data_decl(data);
@@ -355,7 +305,7 @@ impl SimpleJITModule {
             let data = self.data_objects[data]
                 .as_ref()
                 .expect("data object must be compiled before it can be finalized");
-            self.perform_relocations(data);
+            data.perform_relocations(|name| self.get_definition(name));
         }
 
         // Now that we're done patching, prepare the memory for execution!
