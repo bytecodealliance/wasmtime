@@ -55,7 +55,7 @@ pub fn define_func(
                 let method = names.user_error_conversion_method(&user_err);
                 quote!(UserErrorConversion::#method(ctx, e))
             } else {
-                quote!(e)
+                quote!(Ok(e))
             };
             quote! {
                 let e = #conversion;
@@ -63,7 +63,10 @@ pub fn define_func(
                     #rt::tracing::Level::TRACE,
                     #name = #rt::tracing::field::debug(&e),
                 );
-                return #abi_ret::from(e);
+		match e {
+		    Ok(e) => { return Ok(#abi_ret::from(e)); },
+		    Err(e) => { return Err(e); },
+		}
             }
         })
         .unwrap_or_else(|| quote!(()));
@@ -79,7 +82,13 @@ pub fn define_func(
             quote! {
                 let e = #rt::GuestError::InFunc { funcname: #funcname, location: #location, err: Box::new(e.into()) };
                 let err: #err_typename = GuestErrorConversion::#err_method(ctx, e);
-                return #abi_ret::from(err);
+		// TODO 11/13/2020: Similar to how a
+		// UserErrorConversion returns a result of either abi
+		// error or String to agnostically support a
+		// WebAssembly runtime terminating an instance with a
+		// panic! or Trap from a hostcall, enhance
+		// GuestErrorConversion to do the same.
+                return Ok(#abi_ret::from(err));
             }
         } else {
             quote! {
@@ -161,17 +170,17 @@ pub fn define_func(
                 #rt::tracing::Level::TRACE,
                 success=#rt::tracing::field::display(&success)
             );
-            #abi_ret::from(success)
+            Ok(#abi_ret::from(success))
         }
     } else {
-        quote!()
+        quote!(Ok(()))
     };
 
     let trait_name = names.trait_name(&module.name);
     let mod_name = &module.name.as_str();
     let func_name = &func.name.as_str();
 
-    quote!(pub fn #ident(#abi_args) -> #abi_ret {
+    quote!(pub fn #ident(#abi_args) -> Result<#abi_ret, String> {
         let _span = #rt::tracing::span!(
             #rt::tracing::Level::TRACE,
             "wiggle abi",

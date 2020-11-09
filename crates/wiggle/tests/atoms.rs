@@ -34,7 +34,7 @@ impl IntFloatExercise {
 
         let e = atoms::int_float_args(&ctx, &host_memory, self.an_int as i32, self.an_float);
 
-        assert_eq!(e, types::Errno::Ok.into(), "int_float_args error");
+        assert_eq!(e, Ok(types::Errno::Ok.into()), "int_float_args error");
     }
 
     pub fn strat() -> BoxedStrategy<Self> {
@@ -72,7 +72,7 @@ impl DoubleIntExercise {
             .ptr::<types::AliasToFloat>(self.return_loc.ptr)
             .read()
             .expect("failed to read return");
-        assert_eq!(e, types::Errno::Ok.into(), "errno");
+        assert_eq!(e, Ok(types::Errno::Ok.into()), "errno");
         assert_eq!(return_val, (self.input as f32) * 2.0, "return val");
     }
 

@@ -118,7 +118,7 @@ impl SumOfPairExercise {
             self.return_loc.ptr as i32,
         );
 
-        assert_eq!(sum_err, types::Errno::Ok.into(), "sum errno");
+        assert_eq!(sum_err, Ok(types::Errno::Ok.into()), "sum errno");
 
         let return_val: i64 = host_memory
             .ptr(self.return_loc.ptr)
@@ -216,7 +216,7 @@ impl SumPairPtrsExercise {
             self.return_loc.ptr as i32,
         );
 
-        assert_eq!(res, types::Errno::Ok.into(), "sum of pair of ptrs errno");
+        assert_eq!(res, Ok(types::Errno::Ok.into()), "sum of pair of ptrs errno");
 
         let doubled: i64 = host_memory
             .ptr(self.return_loc.ptr)
@@ -295,7 +295,7 @@ impl SumIntAndPtrExercise {
             self.return_loc.ptr as i32,
         );
 
-        assert_eq!(res, types::Errno::Ok.into(), "sum of int and ptr errno");
+        assert_eq!(res, Ok(types::Errno::Ok.into()), "sum of int and ptr errno");
 
         let doubled: i64 = host_memory
             .ptr(self.return_loc.ptr)
@@ -334,7 +334,7 @@ impl ReturnPairInts {
 
         let err = structs::return_pair_ints(&ctx, &host_memory, self.return_loc.ptr as i32);
 
-        assert_eq!(err, types::Errno::Ok.into(), "return struct errno");
+        assert_eq!(err, Ok(types::Errno::Ok.into()), "return struct errno");
 
         let return_struct: types::PairInts = host_memory
             .ptr(self.return_loc.ptr)
@@ -414,7 +414,7 @@ impl ReturnPairPtrsExercise {
             self.return_loc.ptr as i32,
         );
 
-        assert_eq!(res, types::Errno::Ok.into(), "return pair of ptrs errno");
+        assert_eq!(res, Ok(types::Errno::Ok.into()), "return pair of ptrs errno");
 
         let ptr_pair_int_ptrs: types::PairIntPtrs<'_> = host_memory
             .ptr(self.return_loc.ptr)
@@ -522,7 +522,7 @@ impl SumArrayExercise {
         );
 
         // should be no error - if hostcall did a GuestError it should eprintln it.
-        assert_eq!(res, types::Errno::Ok.into(), "reduce excuses errno");
+        assert_eq!(res, Ok(types::Errno::Ok.into()), "reduce excuses errno");
 
         // Sum is inputs upcasted to u16
         let expected: u16 = self.inputs.iter().map(|v| *v as u16).sum();

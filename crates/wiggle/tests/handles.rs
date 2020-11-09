@@ -37,7 +37,7 @@ impl HandleExercise {
 
         let e = handle_examples::fd_create(&ctx, &host_memory, self.return_loc.ptr as i32);
 
-        assert_eq!(e, types::Errno::Ok.into(), "fd_create error");
+        assert_eq!(e, Ok(types::Errno::Ok.into()), "fd_create error");
 
         let h_got: u32 = host_memory
             .ptr(self.return_loc.ptr)
@@ -48,13 +48,13 @@ impl HandleExercise {
 
         let e = handle_examples::fd_consume(&ctx, &host_memory, h_got as i32);
 
-        assert_eq!(e, types::Errno::Ok.into(), "fd_consume error");
+        assert_eq!(e, Ok(types::Errno::Ok.into()), "fd_consume error");
 
         let e = handle_examples::fd_consume(&ctx, &host_memory, h_got as i32 + 1);
 
         assert_eq!(
             e,
-            types::Errno::InvalidArg.into(),
+            Ok(types::Errno::InvalidArg.into()),
             "fd_consume invalid error"
         );
     }
