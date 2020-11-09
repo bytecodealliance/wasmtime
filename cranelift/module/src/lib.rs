@@ -52,7 +52,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Default names for `ir::LibCall`s. A function by this name is imported into the object as
 /// part of the translation of a `ir::ExternalName::LibCall` variant.
-pub fn default_libcall_names() -> Box<dyn Fn(ir::LibCall) -> String> {
+pub fn default_libcall_names() -> Box<dyn Fn(ir::LibCall) -> String + Send + Sync> {
     Box::new(move |libcall| match libcall {
         ir::LibCall::Probestack => "__cranelift_probestack".to_owned(),
         ir::LibCall::UdivI64 => "__udivdi3".to_owned(),
