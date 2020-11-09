@@ -1001,14 +1001,14 @@ unsafe impl WasmTy for i32 {
 
     #[inline]
     unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
-        let ret = **ptr as Self;
+        let ret = *(*ptr).cast::<Self>();
         *ptr = (*ptr).add(1);
         return ret;
     }
 
     #[inline]
     unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
-        *ptr = abi as u128;
+        *ptr.cast::<Self>() = abi;
     }
 }
 
@@ -1083,14 +1083,14 @@ unsafe impl WasmTy for i64 {
 
     #[inline]
     unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
-        let ret = **ptr as Self;
+        let ret = *(*ptr).cast::<Self>();
         *ptr = (*ptr).add(1);
         return ret;
     }
 
     #[inline]
     unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
-        *ptr = abi as u128;
+        *ptr.cast::<Self>() = abi;
     }
 }
 
@@ -1165,14 +1165,14 @@ unsafe impl WasmTy for f32 {
 
     #[inline]
     unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
-        let ret = f32::from_bits(**ptr as u32);
+        let ret = f32::from_bits(*(*ptr).cast::<u32>());
         *ptr = (*ptr).add(1);
         return ret;
     }
 
     #[inline]
     unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
-        *ptr = abi.to_bits() as u128;
+        *ptr.cast::<u32>() = abi.to_bits();
     }
 }
 
@@ -1210,14 +1210,14 @@ unsafe impl WasmTy for f64 {
 
     #[inline]
     unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
-        let ret = f64::from_bits(**ptr as u64);
+        let ret = f64::from_bits(*(*ptr).cast::<u64>());
         *ptr = (*ptr).add(1);
         return ret;
     }
 
     #[inline]
     unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
-        *ptr = abi.to_bits() as u128;
+        *ptr.cast::<u64>() = abi.to_bits();
     }
 }
 
@@ -1271,13 +1271,13 @@ unsafe impl WasmTy for Option<ExternRef> {
     }
 
     unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
-        let ret = **ptr as usize as *mut u8;
+        let ret = *(*ptr).cast::<usize>() as *mut u8;
         *ptr = (*ptr).add(1);
         ret
     }
 
     unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
-        ptr::write(ptr, abi as usize as u128);
+        ptr::write(ptr.cast::<usize>(), abi as usize);
     }
 }
 
@@ -1324,13 +1324,13 @@ unsafe impl WasmTy for Option<Func> {
     }
 
     unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
-        let ret = **ptr as usize as *mut wasmtime_runtime::VMCallerCheckedAnyfunc;
+        let ret = *(*ptr).cast::<usize>() as *mut wasmtime_runtime::VMCallerCheckedAnyfunc;
         *ptr = (*ptr).add(1);
         ret
     }
 
     unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
-        ptr::write(ptr, abi as usize as u128);
+        ptr::write(ptr.cast::<usize>(), abi as usize);
     }
 }
 
