@@ -22,9 +22,6 @@ use smallvec::SmallVec;
 use std::convert::TryFrom;
 use target_lexicon::Triple;
 
-/// Context passed to all lowering functions.
-type Ctx<'a> = &'a mut dyn LowerCtx<I = Inst>;
-
 //=============================================================================
 // Helpers for instruction lowering.
 
@@ -89,32 +86,104 @@ fn matches_input_any<C: LowerCtx<I = Inst>>(
     })
 }
 
+/// Emits instruction(s) to generate the given 64-bit constant value into a newly-allocated
+/// temporary register, returning that register.
+fn generate_constant<C: LowerCtx<I = Inst>>(ctx: &mut C, ty: Type, c: u64) -> Reg {
+    let from_bits = ty_bits(ty);
+    let masked = if from_bits < 64 {
+        c & ((1u64 << from_bits) - 1)
+    } else {
+        c
+    };
+
+    let cst_copy = ctx.alloc_tmp(Inst::rc_for_type(ty).unwrap(), ty);
+    for inst in Inst::gen_constant(cst_copy, masked, ty, |reg_class, ty| {
+        ctx.alloc_tmp(reg_class, ty)
+    })
+    .into_iter()
+    {
+        ctx.emit(inst);
+    }
+    cst_copy.to_reg()
+}
+
 /// Put the given input into a register, and mark it as used (side-effect).
-fn put_input_in_reg(ctx: Ctx, spec: InsnInput) -> Reg {
+fn put_input_in_reg<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Reg {
+    let ty = ctx.input_ty(spec.insn, spec.input);
     let input = ctx.get_input_as_source_or_const(spec.insn, spec.input);
 
     if let Some(c) = input.constant {
         // Generate constants fresh at each use to minimize long-range register pressure.
-        let ty = ctx.input_ty(spec.insn, spec.input);
-        let from_bits = ty_bits(ty);
-        let masked = if from_bits < 64 {
-            c & ((1u64 << from_bits) - 1)
-        } else {
-            c
-        };
-
-        let cst_copy = ctx.alloc_tmp(Inst::rc_for_type(ty).unwrap(), ty);
-        for inst in Inst::gen_constant(cst_copy, masked, ty, |reg_class, ty| {
-            ctx.alloc_tmp(reg_class, ty)
-        })
-        .into_iter()
-        {
-            ctx.emit(inst);
-        }
-        cst_copy.to_reg()
+        generate_constant(ctx, ty, c)
     } else {
         ctx.put_input_in_reg(spec.insn, spec.input)
     }
+}
+
+/// Determines whether a load operation (indicated by `src_insn`) can be merged
+/// into the current lowering point. If so, returns the address-base source (as
+/// an `InsnInput`) and an offset from that address from which to perform the
+/// load.
+fn is_mergeable_load<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    src_insn: IRInst,
+) -> Option<(InsnInput, i32)> {
+    let insn_data = ctx.data(src_insn);
+    let inputs = ctx.num_inputs(src_insn);
+    if inputs != 1 {
+        return None;
+    }
+
+    let load_ty = ctx.output_ty(src_insn, 0);
+    if ty_bits(load_ty) < 32 {
+        // Narrower values are handled by ALU insts that are at least 32 bits
+        // wide, which is normally OK as we ignore upper buts; but, if we
+        // generate, e.g., a direct-from-memory 32-bit add for a byte value and
+        // the byte is the last byte in a page, the extra data that we load is
+        // incorrectly accessed. So we only allow loads to merge for
+        // 32-bit-and-above widths.
+        return None;
+    }
+
+    // Just testing the opcode is enough, because the width will always match if
+    // the type does (and the type should match if the CLIF is properly
+    // constructed).
+    if insn_data.opcode() == Opcode::Load {
+        let offset = insn_data
+            .load_store_offset()
+            .expect("load should have offset");
+        Some((
+            InsnInput {
+                insn: src_insn,
+                input: 0,
+            },
+            offset,
+        ))
+    } else {
+        None
+    }
+}
+
+/// Put the given input into a register or a memory operand.
+/// Effectful: may mark the given input as used, when returning the register form.
+fn input_to_reg_mem<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> RegMem {
+    let inputs = ctx.get_input_as_source_or_const(spec.insn, spec.input);
+
+    if let Some(c) = inputs.constant {
+        // Generate constants fresh at each use to minimize long-range register pressure.
+        let ty = ctx.input_ty(spec.insn, spec.input);
+        return RegMem::reg(generate_constant(ctx, ty, c));
+    }
+
+    if let Some((src_insn, 0)) = inputs.inst {
+        if let Some((addr_input, offset)) = is_mergeable_load(ctx, src_insn) {
+            ctx.sink_inst(src_insn);
+            let amode = lower_to_amode(ctx, addr_input, offset);
+            return RegMem::mem(amode);
+        }
+    }
+
+    RegMem::reg(ctx.put_input_in_reg(spec.insn, spec.input))
 }
 
 /// An extension specification for `extend_input_to_reg`.
@@ -128,7 +197,11 @@ enum ExtSpec {
 
 /// Put the given input into a register, marking it as used, and do a zero- or signed- extension if
 /// required. (This obviously causes side-effects.)
-fn extend_input_to_reg(ctx: Ctx, spec: InsnInput, ext_spec: ExtSpec) -> Reg {
+fn extend_input_to_reg<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    spec: InsnInput,
+    ext_spec: ExtSpec,
+) -> Reg {
     let requested_size = match ext_spec {
         ExtSpec::ZeroExtendTo32 | ExtSpec::SignExtendTo32 => 32,
         ExtSpec::ZeroExtendTo64 | ExtSpec::SignExtendTo64 => 64,
@@ -160,13 +233,6 @@ fn extend_input_to_reg(ctx: Ctx, spec: InsnInput, ext_spec: ExtSpec) -> Reg {
     dst.to_reg()
 }
 
-/// Put the given input into a register or a memory operand.
-/// Effectful: may mark the given input as used, when returning the register form.
-fn input_to_reg_mem(ctx: Ctx, spec: InsnInput) -> RegMem {
-    // TODO handle memory; merge a load directly, if possible.
-    RegMem::reg(ctx.put_input_in_reg(spec.insn, spec.input))
-}
-
 /// Returns whether the given input is an immediate that can be properly sign-extended, without any
 /// possible side-effect.
 fn non_reg_input_to_sext_imm(input: NonRegInput, input_ty: Type) -> Option<u32> {
@@ -182,20 +248,20 @@ fn non_reg_input_to_sext_imm(input: NonRegInput, input_ty: Type) -> Option<u32> 
     })
 }
 
-fn input_to_sext_imm(ctx: Ctx, spec: InsnInput) -> Option<u32> {
+fn input_to_sext_imm<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Option<u32> {
     let input = ctx.get_input_as_source_or_const(spec.insn, spec.input);
     let input_ty = ctx.input_ty(spec.insn, spec.input);
     non_reg_input_to_sext_imm(input, input_ty)
 }
 
-fn input_to_imm(ctx: Ctx, spec: InsnInput) -> Option<u64> {
+fn input_to_imm<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Option<u64> {
     ctx.get_input_as_source_or_const(spec.insn, spec.input)
         .constant
 }
 
 /// Put the given input into an immediate, a register or a memory operand.
 /// Effectful: may mark the given input as used, when returning the register form.
-fn input_to_reg_mem_imm(ctx: Ctx, spec: InsnInput) -> RegMemImm {
+fn input_to_reg_mem_imm<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> RegMemImm {
     let input = ctx.get_input_as_source_or_const(spec.insn, spec.input);
     let input_ty = ctx.input_ty(spec.insn, spec.input);
     match non_reg_input_to_sext_imm(input, input_ty) {
@@ -305,7 +371,7 @@ fn emit_extract_lane<C: LowerCtx<I = Inst>>(
 ///
 /// Note: make sure that there are no instructions modifying the flags between a call to this
 /// function and the use of the flags!
-fn emit_cmp(ctx: Ctx, insn: IRInst) {
+fn emit_cmp<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
     let ty = ctx.input_ty(insn, 0);
 
     let inputs = [InsnInput { insn, input: 0 }, InsnInput { insn, input: 1 }];
@@ -355,7 +421,12 @@ enum FcmpCondResult {
 ///
 /// Note: make sure that there are no instructions modifying the flags between a call to this
 /// function and the use of the flags!
-fn emit_fcmp(ctx: Ctx, insn: IRInst, mut cond_code: FloatCC, spec: FcmpSpec) -> FcmpCondResult {
+fn emit_fcmp<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    insn: IRInst,
+    mut cond_code: FloatCC,
+    spec: FcmpSpec,
+) -> FcmpCondResult {
     let (flip_operands, inverted_equal) = match cond_code {
         FloatCC::LessThan
         | FloatCC::LessThanOrEqual
@@ -407,7 +478,12 @@ fn emit_fcmp(ctx: Ctx, insn: IRInst, mut cond_code: FloatCC, spec: FcmpSpec) -> 
     cond_result
 }
 
-fn make_libcall_sig(ctx: Ctx, insn: IRInst, call_conv: CallConv, ptr_ty: Type) -> Signature {
+fn make_libcall_sig<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    insn: IRInst,
+    call_conv: CallConv,
+    ptr_ty: Type,
+) -> Signature {
     let mut sig = Signature::new(call_conv);
     for i in 0..ctx.num_inputs(insn) {
         sig.params.push(AbiParam::new(ctx.input_ty(insn, i)));
@@ -827,14 +903,16 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     | Opcode::Bor
                     | Opcode::Bxor => {
                         // For commutative operations, try to commute operands if one is an
-                        // immediate.
-                        if let Some(imm) = input_to_sext_imm(ctx, inputs[0]) {
-                            (put_input_in_reg(ctx, inputs[1]), RegMemImm::imm(imm))
+                        // immediate or direct memory reference. Do so by converting LHS to RMI; if
+                        // reg, then always convert RHS to RMI; else, use LHS as RMI and convert
+                        // RHS to reg.
+                        let lhs = input_to_reg_mem_imm(ctx, inputs[0]);
+                        if let RegMemImm::Reg { reg: lhs_reg } = lhs {
+                            let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
+                            (lhs_reg, rhs)
                         } else {
-                            (
-                                put_input_in_reg(ctx, inputs[0]),
-                                input_to_reg_mem_imm(ctx, inputs[1]),
-                            )
+                            let rhs_reg = put_input_in_reg(ctx, inputs[1]);
+                            (rhs_reg, lhs)
                         }
                     }
                     Opcode::Isub => (
