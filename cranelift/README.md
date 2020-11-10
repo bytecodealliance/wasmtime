@@ -11,7 +11,6 @@ into executable machine code.
 [![Build Status](https://github.com/bytecodealliance/wasmtime/workflows/CI/badge.svg)](https://github.com/bytecodealliance/wasmtime/actions)
 [![Fuzzit Status](https://app.fuzzit.dev/badge?org_id=bytecodealliance)](https://app.fuzzit.dev/orgs/bytecodealliance/dashboard)
 [![Chat](https://img.shields.io/badge/chat-zulip-brightgreen.svg)](https://bytecodealliance.zulipchat.com/#narrow/stream/217117-cranelift/topic/general)
-![Minimum rustc 1.37](https://img.shields.io/badge/rustc-1.37+-green.svg)
 [![Documentation Status](https://docs.rs/cranelift/badge.svg)](https://docs.rs/cranelift)
 
 For more information, see [the documentation](docs/index.md).
@@ -85,10 +84,23 @@ Building Cranelift
 Cranelift uses a [conventional Cargo build
 process](https://doc.rust-lang.org/cargo/guide/working-on-an-existing-project.html).
 
+As a user of wasmtime and or Cranelift you can use stable rust 1.43 or newer.
+
+However if you want to develop Cranelift, you'll need a nightly version of
+Rust, as some tests use unstable features.
+
 Cranelift consists of a collection of crates, and uses a [Cargo
-Workspace](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html),
-so for some cargo commands, such as `cargo test`, the `--all` is needed
-to tell cargo to visit all of the crates.
+Workspace](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html).
+If you want to test the whole `wasmtime` repo, some cargo commands, such as
+`cargo test`, add `--all` to them, to tell cargo to visit all of the crates.
+
+Note, Lightbeam, one of the other crates that are part of `wasmtime`
+require a nightly version of Rust to test. So if you call `cargo test --all`
+you'll need to do so with a nightly version.
+Consider either setting it for this project `rustup override set nightly` or
+running the upcoming test commands with `cargo +nightly`, or only testing
+specific components such as Cranelift.
+
 
 `test-all.sh` at the top level is a script which runs all the cargo
 tests and also performs code format, lint, and documentation checks.

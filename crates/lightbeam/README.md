@@ -6,7 +6,7 @@ Lightbeam is an optimising one-pass streaming compiler for WebAssembly, intended
 
 ## Quality of output
 
-Already - with a very small number of relatively simple optimisation rules - Lightbeam produces surprisingly high-quality output considering how restricted it is. It even produces better code than Cranelift, Firefox or both for some workloads. Here's a very simple example, this recursive fibonacci function in Rust:
+Already - with a very small number of relatively simple optimizations rules - Lightbeam produces surprisingly high-quality output considering how restricted it is. It even produces better code than Cranelift, Firefox or both for some workloads. Here's a very simple example, this recursive fibonacci function in Rust:
 
 ```rust
 fn fib(n: i32) -> i32 {
@@ -18,7 +18,7 @@ fn fib(n: i32) -> i32 {
 }
 ```
 
-When compiled with optimisations enabled, rustc will produce the following WebAssembly:
+When compiled with optimizations enabled, rustc will produce the following WebAssembly:
 
 ```rust
 (module
@@ -87,7 +87,7 @@ fib:
   ret
 ```
 
-Cranelift with optimisations enabled produces similar:
+Cranelift with optimizationss enabled produces similar:
 
 ```asm
 fib:
@@ -154,7 +154,7 @@ fib:
   ret
 ```
 
-Now obviously I'm not advocating for replacing Firefox's optimising compiler with Lightbeam since the latter can only really produce better code when receiving optimised WebAssembly (and so debug-mode or hand-written WebAssembly may produce much worse output). However, this shows that even with the restrictions of a streaming compiler it's absolutely possible to produce high-quality assembly output. For the assembly above, the Lightbeam output runs within 15% of native speed. This is paramount for one of Lightbeam's intended usecases for real-time systems that want good runtime performance but cannot tolerate compiler bombs.
+Now obviously I'm not advocating for replacing Firefox's optimizing compiler with Lightbeam since the latter can only really produce better code when receiving optimized WebAssembly (and so debug-mode or hand-written WebAssembly may produce much worse output). However, this shows that even with the restrictions of a streaming compiler it's absolutely possible to produce high-quality assembly output. For the assembly above, the Lightbeam output runs within 15% of native speed. This is paramount for one of Lightbeam's intended usecases for real-time systems that want good runtime performance but cannot tolerate compiler bombs.
 
 ## Specification compliance
 
@@ -163,6 +163,8 @@ Lightbeam passes 100% of the specification test suite, but that doesn't necessar
 ## Getting involved
 
 You can file issues in the [Wasmtime issue tracker][Wasmtime issue tracker]. If you want to get involved jump into the [Bytecode Alliance Zulip][bytecodealliance-zulip] and someone can direct you to the right place. I wish I could say "the most useful thing you can do is play with it and open issues where you find problems" but until it passes the spec suite that won't be very helpful.
+
+Lightbeam can be built with stable Rust, however building and running the tests for Lightbeam requires a nightly version of Rust.
 
 [bytecodealliance-zulip]: https://bytecodealliance.zulipchat.com/
 [Wasmtime issue tracker]: https://github.com/bytecodealliance/wasmtime/issues
