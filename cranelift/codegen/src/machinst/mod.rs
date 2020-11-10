@@ -98,7 +98,7 @@
 
 use crate::binemit::{CodeInfo, CodeOffset, StackMap};
 use crate::ir::condcodes::IntCC;
-use crate::ir::{Function, Type};
+use crate::ir::{Function, SourceLoc, Type};
 use crate::isa::unwind::input as unwind_input;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
@@ -302,6 +302,9 @@ pub trait MachInstEmitState<I: MachInst>: Default + Clone + Debug {
     /// Update the emission state before emitting an instruction that is a
     /// safepoint.
     fn pre_safepoint(&mut self, _stack_map: StackMap) {}
+    /// Update the emission state to indicate instructions are associated with a
+    /// particular SourceLoc.
+    fn pre_sourceloc(&mut self, _srcloc: SourceLoc) {}
 }
 
 /// The result of a `MachBackend::compile_function()` call. Contains machine

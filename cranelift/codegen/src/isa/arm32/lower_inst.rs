@@ -386,19 +386,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let base = input_to_reg(ctx, inputs[1], NarrowValueMode::None);
 
             let mem = AMode::RegOffset(base, i64::from(off));
-            let memflags = ctx.memflags(insn).expect("memory flags");
 
-            let srcloc = if !memflags.notrap() {
-                Some(ctx.srcloc(insn))
-            } else {
-                None
-            };
-            ctx.emit(Inst::Store {
-                rt,
-                mem,
-                srcloc,
-                bits,
-            });
+            ctx.emit(Inst::Store { rt, mem, bits });
         }
         Opcode::Load
         | Opcode::Uload8
@@ -429,17 +418,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             assert_eq!(inputs.len(), 2, "only one input for store memory operands");
             let base = input_to_reg(ctx, inputs[1], NarrowValueMode::None);
             let mem = AMode::RegOffset(base, i64::from(off));
-            let memflags = ctx.memflags(insn).expect("memory flags");
 
-            let srcloc = if !memflags.notrap() {
-                Some(ctx.srcloc(insn))
-            } else {
-                None
-            };
             ctx.emit(Inst::Load {
                 rt: out_reg,
                 mem,
-                srcloc,
                 bits,
                 sign_extend,
             });
@@ -484,7 +466,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::Bkpt);
         }
         Opcode::Trap => {
-            let trap_info = (ctx.srcloc(insn), inst_trapcode(ctx.data(insn)).unwrap());
+            let trap_info = inst_trapcode(ctx.data(insn)).unwrap();
             ctx.emit(Inst::Udf { trap_info })
         }
         Opcode::Trapif => {
@@ -496,7 +478,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             debug_assert_eq!(ctx.data(cmp_insn).opcode(), Opcode::Ifcmp);
             emit_cmp(ctx, cmp_insn);
 
-            let trap_info = (ctx.srcloc(insn), inst_trapcode(ctx.data(insn)).unwrap());
+            let trap_info = inst_trapcode(ctx.data(insn)).unwrap();
             let condcode = inst_condcode(ctx.data(insn)).unwrap();
             let cond = lower_condcode(condcode);
 
@@ -512,7 +494,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
         Opcode::Call | Opcode::CallIndirect => {
-            let loc = ctx.srcloc(insn);
             let caller_conv = ctx.abi().call_conv();
             let (mut abi, inputs) = match op {
                 Opcode::Call => {
@@ -522,7 +503,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert_eq!(inputs.len(), sig.params.len());
                     assert_eq!(outputs.len(), sig.returns.len());
                     (
-                        Arm32ABICaller::from_func(sig, &extname, dist, loc, caller_conv)?,
+                        Arm32ABICaller::from_func(sig, &extname, dist, caller_conv)?,
                         &inputs[..],
                     )
                 }
@@ -532,7 +513,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert_eq!(inputs.len() - 1, sig.params.len());
                     assert_eq!(outputs.len(), sig.returns.len());
                     (
-                        Arm32ABICaller::from_ptr(sig, ptr, loc, op, caller_conv)?,
+                        Arm32ABICaller::from_ptr(sig, ptr, op, caller_conv)?,
                         &inputs[1..],
                     )
                 }
