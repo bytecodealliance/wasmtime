@@ -114,15 +114,6 @@ struct RelocSink {
 }
 
 impl binemit::RelocSink for RelocSink {
-    fn reloc_block(
-        &mut self,
-        _offset: binemit::CodeOffset,
-        _reloc: binemit::Reloc,
-        _block_offset: binemit::CodeOffset,
-    ) {
-        // This should use the `offsets` field of `ir::Function`.
-        panic!("block headers not yet implemented");
-    }
     fn reloc_external(
         &mut self,
         offset: binemit::CodeOffset,

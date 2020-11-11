@@ -1,16 +1,17 @@
 //! Defines `SimpleJITModule`.
 
-use crate::memory::Memory;
-use cranelift_codegen::binemit::{
-    Addend, CodeInfo, CodeOffset, Reloc, RelocSink, StackMap, StackMapSink, TrapSink,
-};
+use crate::{compiled_blob::CompiledBlob, memory::Memory};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings};
+use cranelift_codegen::{
+    binemit::{self, Addend, CodeInfo, CodeOffset, Reloc, RelocSink, TrapSink},
+    CodegenError,
+};
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
-    DataContext, DataDescription, DataId, FuncId, FuncOrDataId, Init, Linkage, Module,
-    ModuleCompiledFunction, ModuleDeclarations, ModuleError, ModuleResult, RelocRecord,
+    DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
+    ModuleDeclarations, ModuleError, ModuleResult, RelocRecord,
 };
 use cranelift_native;
 #[cfg(not(windows))]
@@ -128,24 +129,10 @@ pub struct SimpleJITModule {
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     memory: MemoryHandle,
     declarations: ModuleDeclarations,
-    functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
-    data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
+    compiled_functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
+    compiled_data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
     functions_to_finalize: Vec<FuncId>,
     data_objects_to_finalize: Vec<DataId>,
-}
-
-struct StackMapRecord {
-    #[allow(dead_code)]
-    offset: CodeOffset,
-    #[allow(dead_code)]
-    stack_map: StackMap,
-}
-
-#[derive(Clone)]
-struct CompiledBlob {
-    ptr: *mut u8,
-    size: usize,
-    relocs: Vec<RelocRecord>,
 }
 
 /// A handle to allow freeing memory allocated by the `Module`.
@@ -155,16 +142,7 @@ struct MemoryHandle {
     writable: Memory,
 }
 
-/// A `SimpleJITProduct` allows looking up the addresses of all functions and data objects
-/// defined in the original module.
-pub struct SimpleJITProduct {
-    memory: MemoryHandle,
-    declarations: ModuleDeclarations,
-    functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
-    data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
-}
-
-impl SimpleJITProduct {
+impl SimpleJITModule {
     /// Free memory allocated for code and data segments of compiled functions.
     ///
     /// # Safety
@@ -179,29 +157,6 @@ impl SimpleJITProduct {
         self.memory.writable.free_memory();
     }
 
-    /// Get the `FuncOrDataId` associated with the given name.
-    pub fn func_or_data_for_func(&self, name: &str) -> Option<FuncOrDataId> {
-        self.declarations.get_name(name)
-    }
-
-    /// Return the address of a function.
-    pub fn lookup_func(&self, func_id: FuncId) -> *const u8 {
-        self.functions[func_id]
-            .as_ref()
-            .unwrap_or_else(|| panic!("{} is not defined", func_id))
-            .ptr
-    }
-
-    /// Return the address and size of a data object.
-    pub fn lookup_data(&self, data_id: DataId) -> (*const u8, usize) {
-        let data = self.data_objects[data_id]
-            .as_ref()
-            .unwrap_or_else(|| panic!("{} is not defined", data_id));
-        (data.ptr, data.size)
-    }
-}
-
-impl SimpleJITModule {
     fn lookup_symbol(&self, name: &str) -> Option<*const u8> {
         self.symbols
             .get(name)
@@ -212,9 +167,9 @@ impl SimpleJITModule {
     fn get_definition(&self, name: &ir::ExternalName) -> *const u8 {
         match *name {
             ir::ExternalName::User { .. } => {
-                let (name, linkage) = if self.declarations.is_function(name) {
-                    let func_id = self.declarations.get_function_id(name);
-                    match &self.functions[func_id] {
+                let (name, linkage) = if ModuleDeclarations::is_function(name) {
+                    let func_id = FuncId::from_name(name);
+                    match &self.compiled_functions[func_id] {
                         Some(compiled) => return compiled.ptr,
                         None => {
                             let decl = self.declarations.get_function_decl(func_id);
@@ -222,8 +177,8 @@ impl SimpleJITModule {
                         }
                     }
                 } else {
-                    let data_id = self.declarations.get_data_id(name);
-                    match &self.data_objects[data_id] {
+                    let data_id = DataId::from_name(name);
+                    match &self.compiled_data_objects[data_id] {
                         Some(compiled) => return compiled.ptr,
                         None => {
                             let decl = self.declarations.get_data_decl(data_id);
@@ -250,7 +205,7 @@ impl SimpleJITModule {
 
     /// Returns the address of a finalized function.
     pub fn get_finalized_function(&self, func_id: FuncId) -> *const u8 {
-        let info = &self.functions[func_id];
+        let info = &self.compiled_functions[func_id];
         debug_assert!(
             !self.functions_to_finalize.iter().any(|x| *x == func_id),
             "function not yet finalized"
@@ -262,7 +217,7 @@ impl SimpleJITModule {
 
     /// Returns the address and size of a finalized data object.
     pub fn get_finalized_data(&self, data_id: DataId) -> (*const u8, usize) {
-        let info = &self.data_objects[data_id];
+        let info = &self.compiled_data_objects[data_id];
         debug_assert!(
             !self.data_objects_to_finalize.iter().any(|x| *x == data_id),
             "data object not yet finalized"
@@ -291,95 +246,6 @@ impl SimpleJITModule {
         }
     }
 
-    fn finalize_function(&mut self, id: FuncId) {
-        use std::ptr::write_unaligned;
-
-        let func = self.functions[id]
-            .as_ref()
-            .expect("function must be compiled before it can be finalized");
-
-        for &RelocRecord {
-            reloc,
-            offset,
-            ref name,
-            addend,
-        } in &func.relocs
-        {
-            debug_assert!((offset as usize) < func.size);
-            let at = unsafe { func.ptr.offset(offset as isize) };
-            let base = self.get_definition(name);
-            // TODO: Handle overflow.
-            let what = unsafe { base.offset(addend as isize) };
-            match reloc {
-                Reloc::Abs4 => {
-                    // TODO: Handle overflow.
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut u32, what as u32)
-                    };
-                }
-                Reloc::Abs8 => {
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut u64, what as u64)
-                    };
-                }
-                Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
-                    // TODO: Handle overflow.
-                    let pcrel = ((what as isize) - (at as isize)) as i32;
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut i32, pcrel)
-                    };
-                }
-                Reloc::X86GOTPCRel4 | Reloc::X86CallPLTRel4 => panic!("unexpected PIC relocation"),
-                _ => unimplemented!(),
-            }
-        }
-    }
-
-    fn finalize_data(&mut self, id: DataId) {
-        use std::ptr::write_unaligned;
-
-        let data = self.data_objects[id]
-            .as_ref()
-            .expect("data object must be compiled before it can be finalized");
-
-        for &RelocRecord {
-            reloc,
-            offset,
-            ref name,
-            addend,
-        } in &data.relocs
-        {
-            debug_assert!((offset as usize) < data.size);
-            let at = unsafe { data.ptr.offset(offset as isize) };
-            let base = self.get_definition(name);
-            // TODO: Handle overflow.
-            let what = unsafe { base.offset(addend as isize) };
-            match reloc {
-                Reloc::Abs4 => {
-                    // TODO: Handle overflow.
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut u32, what as u32)
-                    };
-                }
-                Reloc::Abs8 => {
-                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-                    unsafe {
-                        write_unaligned(at as *mut u64, what as u64)
-                    };
-                }
-                Reloc::X86PCRel4
-                | Reloc::X86CallPCRel4
-                | Reloc::X86GOTPCRel4
-                | Reloc::X86CallPLTRel4 => panic!("unexpected text relocation in data"),
-                _ => unimplemented!(),
-            }
-        }
-    }
-
     /// Finalize all functions and data objects that are defined but not yet finalized.
     /// All symbols referenced in their bodies that are declared as needing a definition
     /// must be defined by this point.
@@ -390,12 +256,18 @@ impl SimpleJITModule {
         for func in std::mem::take(&mut self.functions_to_finalize) {
             let decl = self.declarations.get_function_decl(func);
             debug_assert!(decl.linkage.is_definable());
-            self.finalize_function(func);
+            let func = self.compiled_functions[func]
+                .as_ref()
+                .expect("function must be compiled before it can be finalized");
+            func.perform_relocations(|name| self.get_definition(name));
         }
         for data in std::mem::take(&mut self.data_objects_to_finalize) {
             let decl = self.declarations.get_data_decl(data);
             debug_assert!(decl.linkage.is_definable());
-            self.finalize_data(data);
+            let data = self.compiled_data_objects[data]
+                .as_ref()
+                .expect("data object must be compiled before it can be finalized");
+            data.perform_relocations(|name| self.get_definition(name));
         }
 
         // Now that we're done patching, prepare the memory for execution!
@@ -417,8 +289,8 @@ impl SimpleJITModule {
             libcall_names: builder.libcall_names,
             memory,
             declarations: ModuleDeclarations::default(),
-            functions: SecondaryMap::new(),
-            data_objects: SecondaryMap::new(),
+            compiled_functions: SecondaryMap::new(),
+            compiled_data_objects: SecondaryMap::new(),
             functions_to_finalize: Vec::new(),
             data_objects_to_finalize: Vec::new(),
         }
@@ -480,11 +352,10 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
 
-        if !self.functions[id].is_none() {
+        if !self.compiled_functions[id].is_none() {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
-        self.functions_to_finalize.push(id);
         let size = code_size as usize;
         let ptr = self
             .memory
@@ -492,10 +363,8 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        self.record_function_for_perf(ptr, size, &decl.name);
-
         let mut reloc_sink = SimpleJITRelocSink::default();
-        let mut stack_map_sink = SimpleJITStackMapSink::default();
+        let mut stack_map_sink = binemit::NullStackMapSink {};
         unsafe {
             ctx.emit_to_memory(
                 &*self.isa,
@@ -506,11 +375,13 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             )
         };
 
-        self.functions[id] = Some(CompiledBlob {
+        self.record_function_for_perf(ptr, size, &decl.name);
+        self.compiled_functions[id] = Some(CompiledBlob {
             ptr,
             size,
             relocs: reloc_sink.relocs,
         });
+        self.functions_to_finalize.push(id);
 
         Ok(ModuleCompiledFunction { size: code_size })
     }
@@ -521,21 +392,21 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         bytes: &[u8],
         relocs: &[RelocRecord],
     ) -> ModuleResult<ModuleCompiledFunction> {
+        info!("defining function {} with bytes", id);
+        let total_size: u32 = match bytes.len().try_into() {
+            Ok(total_size) => total_size,
+            _ => Err(CodegenError::CodeTooLarge)?,
+        };
+
         let decl = self.declarations.get_function_decl(id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
 
-        let total_size: u32 = match bytes.len().try_into() {
-            Ok(total_size) => total_size,
-            _ => Err(ModuleError::FunctionTooLarge(decl.name.clone()))?,
-        };
-
-        if !self.functions[id].is_none() {
+        if !self.compiled_functions[id].is_none() {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
-        self.functions_to_finalize.push(id);
         let size = bytes.len();
         let ptr = self
             .memory
@@ -543,17 +414,17 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        self.record_function_for_perf(ptr, size, &decl.name);
-
         unsafe {
             ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, size);
         }
 
-        self.functions[id] = Some(CompiledBlob {
+        self.record_function_for_perf(ptr, size, &decl.name);
+        self.compiled_functions[id] = Some(CompiledBlob {
             ptr,
             size,
             relocs: relocs.to_vec(),
         });
+        self.functions_to_finalize.push(id);
 
         Ok(ModuleCompiledFunction { size: total_size })
     }
@@ -564,20 +435,18 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
 
-        if !self.data_objects[id].is_none() {
+        if !self.compiled_data_objects[id].is_none() {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
         assert!(!decl.tls, "SimpleJIT doesn't yet support TLS");
 
-        self.data_objects_to_finalize.push(id);
-
         let &DataDescription {
             ref init,
-            ref function_decls,
-            ref data_decls,
-            ref function_relocs,
-            ref data_relocs,
+            function_decls: _,
+            data_decls: _,
+            function_relocs: _,
+            data_relocs: _,
             custom_segment_section: _,
             align,
         } = data.description();
@@ -608,52 +477,20 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             }
         }
 
-        let reloc = match self.isa.triple().pointer_width().unwrap() {
+        let pointer_reloc = match self.isa.triple().pointer_width().unwrap() {
             PointerWidth::U16 => panic!(),
             PointerWidth::U32 => Reloc::Abs4,
             PointerWidth::U64 => Reloc::Abs8,
         };
-        let mut relocs = Vec::new();
-        for &(offset, id) in function_relocs {
-            relocs.push(RelocRecord {
-                reloc,
-                offset,
-                name: function_decls[id].clone(),
-                addend: 0,
-            });
-        }
-        for &(offset, id, addend) in data_relocs {
-            relocs.push(RelocRecord {
-                reloc,
-                offset,
-                name: data_decls[id].clone(),
-                addend,
-            });
-        }
+        let relocs = data
+            .description()
+            .all_relocs(pointer_reloc)
+            .collect::<Vec<_>>();
 
-        self.data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
+        self.compiled_data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
+        self.data_objects_to_finalize.push(id);
 
         Ok(())
-    }
-}
-
-impl SimpleJITModule {
-    /// SimpleJIT emits code and data into memory as it processes them. This
-    /// method performs no additional processing, but returns a handle which
-    /// allows freeing the allocated memory. Otherwise said memory is leaked
-    /// to enable safe handling of the resulting pointers.
-    ///
-    /// This method does not need to be called when access to the memory
-    /// handle is not required.
-    pub fn finish(mut self) -> SimpleJITProduct {
-        self.finalize_definitions();
-
-        SimpleJITProduct {
-            memory: self.memory,
-            declarations: self.declarations,
-            functions: self.functions,
-            data_objects: self.data_objects,
-        }
     }
 }
 
@@ -702,10 +539,6 @@ struct SimpleJITRelocSink {
 }
 
 impl RelocSink for SimpleJITRelocSink {
-    fn reloc_block(&mut self, _offset: CodeOffset, _reloc: Reloc, _block_offset: CodeOffset) {
-        unimplemented!();
-    }
-
     fn reloc_external(
         &mut self,
         offset: CodeOffset,
@@ -744,16 +577,5 @@ impl RelocSink for SimpleJITRelocSink {
                 panic!("Unhandled reloc");
             }
         }
-    }
-}
-
-#[derive(Default)]
-struct SimpleJITStackMapSink {
-    stack_maps: Vec<StackMapRecord>,
-}
-
-impl StackMapSink for SimpleJITStackMapSink {
-    fn add_stack_map(&mut self, offset: CodeOffset, stack_map: StackMap) {
-        self.stack_maps.push(StackMapRecord { offset, stack_map });
     }
 }

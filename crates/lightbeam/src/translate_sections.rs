@@ -83,10 +83,6 @@ pub fn element(elements: ElementSectionReader) -> Result<(), Error> {
 struct UnimplementedRelocSink;
 
 impl binemit::RelocSink for UnimplementedRelocSink {
-    fn reloc_block(&mut self, _: binemit::CodeOffset, _: binemit::Reloc, _: binemit::CodeOffset) {
-        unimplemented!()
-    }
-
     fn reloc_external(
         &mut self,
         _: binemit::CodeOffset,

@@ -29,6 +29,18 @@ impl From<FuncId> for ir::ExternalName {
     }
 }
 
+impl FuncId {
+    /// Get the `FuncId` for the function named by `name`.
+    pub fn from_name(name: &ir::ExternalName) -> FuncId {
+        if let ir::ExternalName::User { namespace, index } = *name {
+            debug_assert_eq!(namespace, 0);
+            FuncId::from_u32(index)
+        } else {
+            panic!("unexpected ExternalName kind {}", name)
+        }
+    }
+}
+
 /// A data object identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DataId(u32);
@@ -40,6 +52,18 @@ impl From<DataId> for ir::ExternalName {
         Self::User {
             namespace: 1,
             index: id.0,
+        }
+    }
+}
+
+impl DataId {
+    /// Get the `DataId` for the data object named by `name`.
+    pub fn from_name(name: &ir::ExternalName) -> DataId {
+        if let ir::ExternalName::User { namespace, index } = *name {
+            debug_assert_eq!(namespace, 1);
+            DataId::from_u32(index)
+        } else {
+            panic!("unexpected ExternalName kind {}", name)
         }
     }
 }
@@ -162,9 +186,6 @@ pub enum ModuleError {
     /// Indicates an identifier was defined, but was declared as an import
     #[error("Invalid to define identifier declared as an import: {0}")]
     InvalidImportDefinition(String),
-    /// Indicates a too-long function was defined
-    #[error("Function {0} exceeds the maximum function size")]
-    FunctionTooLarge(String),
     /// Wraps a `cranelift-codegen` error
     #[error("Compilation error: {0}")]
     Compilation(#[from] CodegenError),
@@ -217,21 +238,10 @@ impl ModuleDeclarations {
         self.functions.iter()
     }
 
-    /// Get the `FuncId` for the function named by `name`.
-    pub fn get_function_id(&self, name: &ir::ExternalName) -> FuncId {
-        if let ir::ExternalName::User { namespace, index } = *name {
-            debug_assert_eq!(namespace, 0);
-            FuncId::from_u32(index)
-        } else {
-            panic!("unexpected ExternalName kind {}", name)
-        }
-    }
-
-    /// Get the `DataId` for the data object named by `name`.
-    pub fn get_data_id(&self, name: &ir::ExternalName) -> DataId {
-        if let ir::ExternalName::User { namespace, index } = *name {
-            debug_assert_eq!(namespace, 1);
-            DataId::from_u32(index)
+    /// Return whether `name` names a function, rather than a data object.
+    pub fn is_function(name: &ir::ExternalName) -> bool {
+        if let ir::ExternalName::User { namespace, .. } = *name {
+            namespace == 0
         } else {
             panic!("unexpected ExternalName kind {}", name)
         }
@@ -250,15 +260,6 @@ impl ModuleDeclarations {
     /// Get the `DataDeclaration` for the data object named by `name`.
     pub fn get_data_decl(&self, data_id: DataId) -> &DataDeclaration {
         &self.data_objects[data_id]
-    }
-
-    /// Return whether `name` names a function, rather than a data object.
-    pub fn is_function(&self, name: &ir::ExternalName) -> bool {
-        if let ir::ExternalName::User { namespace, .. } = *name {
-            namespace == 0
-        } else {
-            panic!("unexpected ExternalName kind {}", name)
-        }
     }
 
     /// Declare a function in this module.

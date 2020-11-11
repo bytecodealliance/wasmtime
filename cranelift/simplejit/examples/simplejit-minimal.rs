@@ -70,10 +70,10 @@ fn main() {
     module.clear_context(&mut ctx);
 
     // Perform linking.
-    let product = module.finish();
+    module.finalize_definitions();
 
     // Get a raw pointer to the generated code.
-    let code_b = product.lookup_func(func_b);
+    let code_b = module.get_finalized_function(func_b);
 
     // Cast it to a rust function pointer type.
     let ptr_b = unsafe { mem::transmute::<_, fn() -> u32>(code_b) };

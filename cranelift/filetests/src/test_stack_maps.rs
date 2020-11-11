@@ -79,7 +79,6 @@ impl CodeSink for TestStackMapsSink {
         self.offset += 8;
     }
 
-    fn reloc_block(&mut self, _: Reloc, _: CodeOffset) {}
     fn reloc_external(&mut self, _: SourceLoc, _: Reloc, _: &ExternalName, _: Addend) {}
     fn reloc_constant(&mut self, _: Reloc, _: ConstantOffset) {}
     fn reloc_jt(&mut self, _: Reloc, _: JumpTable) {}

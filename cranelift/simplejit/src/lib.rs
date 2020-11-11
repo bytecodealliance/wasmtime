@@ -4,7 +4,8 @@
     missing_docs,
     trivial_numeric_casts,
     unused_extern_crates,
-    unstable_features
+    unstable_features,
+    unreachable_pub
 )]
 #![warn(unused_import_braces)]
 #![cfg_attr(feature = "clippy", plugin(clippy(conf_file = "../../clippy.toml")))]
@@ -23,9 +24,10 @@
 )]
 
 mod backend;
+mod compiled_blob;
 mod memory;
 
-pub use crate::backend::{SimpleJITBuilder, SimpleJITModule, SimpleJITProduct};
+pub use crate::backend::{SimpleJITBuilder, SimpleJITModule};
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
