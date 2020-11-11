@@ -129,8 +129,8 @@ pub struct SimpleJITModule {
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     memory: MemoryHandle,
     declarations: ModuleDeclarations,
-    functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
-    data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
+    compiled_functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
+    compiled_data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
     functions_to_finalize: Vec<FuncId>,
     data_objects_to_finalize: Vec<DataId>,
 }
@@ -169,7 +169,7 @@ impl SimpleJITModule {
             ir::ExternalName::User { .. } => {
                 let (name, linkage) = if ModuleDeclarations::is_function(name) {
                     let func_id = FuncId::from_name(name);
-                    match &self.functions[func_id] {
+                    match &self.compiled_functions[func_id] {
                         Some(compiled) => return compiled.ptr,
                         None => {
                             let decl = self.declarations.get_function_decl(func_id);
@@ -178,7 +178,7 @@ impl SimpleJITModule {
                     }
                 } else {
                     let data_id = DataId::from_name(name);
-                    match &self.data_objects[data_id] {
+                    match &self.compiled_data_objects[data_id] {
                         Some(compiled) => return compiled.ptr,
                         None => {
                             let decl = self.declarations.get_data_decl(data_id);
@@ -205,7 +205,7 @@ impl SimpleJITModule {
 
     /// Returns the address of a finalized function.
     pub fn get_finalized_function(&self, func_id: FuncId) -> *const u8 {
-        let info = &self.functions[func_id];
+        let info = &self.compiled_functions[func_id];
         debug_assert!(
             !self.functions_to_finalize.iter().any(|x| *x == func_id),
             "function not yet finalized"
@@ -217,7 +217,7 @@ impl SimpleJITModule {
 
     /// Returns the address and size of a finalized data object.
     pub fn get_finalized_data(&self, data_id: DataId) -> (*const u8, usize) {
-        let info = &self.data_objects[data_id];
+        let info = &self.compiled_data_objects[data_id];
         debug_assert!(
             !self.data_objects_to_finalize.iter().any(|x| *x == data_id),
             "data object not yet finalized"
@@ -256,7 +256,7 @@ impl SimpleJITModule {
         for func in std::mem::take(&mut self.functions_to_finalize) {
             let decl = self.declarations.get_function_decl(func);
             debug_assert!(decl.linkage.is_definable());
-            let func = self.functions[func]
+            let func = self.compiled_functions[func]
                 .as_ref()
                 .expect("function must be compiled before it can be finalized");
             func.perform_relocations(|name| self.get_definition(name));
@@ -264,7 +264,7 @@ impl SimpleJITModule {
         for data in std::mem::take(&mut self.data_objects_to_finalize) {
             let decl = self.declarations.get_data_decl(data);
             debug_assert!(decl.linkage.is_definable());
-            let data = self.data_objects[data]
+            let data = self.compiled_data_objects[data]
                 .as_ref()
                 .expect("data object must be compiled before it can be finalized");
             data.perform_relocations(|name| self.get_definition(name));
@@ -289,8 +289,8 @@ impl SimpleJITModule {
             libcall_names: builder.libcall_names,
             memory,
             declarations: ModuleDeclarations::default(),
-            functions: SecondaryMap::new(),
-            data_objects: SecondaryMap::new(),
+            compiled_functions: SecondaryMap::new(),
+            compiled_data_objects: SecondaryMap::new(),
             functions_to_finalize: Vec::new(),
             data_objects_to_finalize: Vec::new(),
         }
@@ -352,7 +352,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
 
-        if !self.functions[id].is_none() {
+        if !self.compiled_functions[id].is_none() {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
@@ -376,7 +376,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         };
 
         self.record_function_for_perf(ptr, size, &decl.name);
-        self.functions[id] = Some(CompiledBlob {
+        self.compiled_functions[id] = Some(CompiledBlob {
             ptr,
             size,
             relocs: reloc_sink.relocs,
@@ -403,7 +403,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
 
-        if !self.functions[id].is_none() {
+        if !self.compiled_functions[id].is_none() {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
@@ -419,7 +419,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         }
 
         self.record_function_for_perf(ptr, size, &decl.name);
-        self.functions[id] = Some(CompiledBlob {
+        self.compiled_functions[id] = Some(CompiledBlob {
             ptr,
             size,
             relocs: relocs.to_vec(),
@@ -435,13 +435,11 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
         }
 
-        if !self.data_objects[id].is_none() {
+        if !self.compiled_data_objects[id].is_none() {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
         assert!(!decl.tls, "SimpleJIT doesn't yet support TLS");
-
-        self.data_objects_to_finalize.push(id);
 
         let &DataDescription {
             ref init,
@@ -502,7 +500,8 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             });
         }
 
-        self.data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
+        self.compiled_data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
+        self.data_objects_to_finalize.push(id);
 
         Ok(())
     }
