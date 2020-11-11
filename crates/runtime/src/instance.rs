@@ -1270,15 +1270,19 @@ fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
         }
 
         for (i, func_idx) in init.elements.iter().enumerate() {
-            let anyfunc = instance.get_caller_checked_anyfunc(*func_idx).map_or(
-                ptr::null_mut(),
-                |f: &VMCallerCheckedAnyfunc| {
-                    f as *const VMCallerCheckedAnyfunc as *mut VMCallerCheckedAnyfunc
-                },
-            );
-            table
-                .set(u32::try_from(start + i).unwrap(), anyfunc.into())
-                .unwrap();
+            let item = match table.element_type() {
+                TableElementType::Func => instance
+                    .get_caller_checked_anyfunc(*func_idx)
+                    .map_or(ptr::null_mut(), |f: &VMCallerCheckedAnyfunc| {
+                        f as *const VMCallerCheckedAnyfunc as *mut VMCallerCheckedAnyfunc
+                    })
+                    .into(),
+                TableElementType::Val(_) => {
+                    assert!(*func_idx == FuncIndex::reserved_value());
+                    TableElement::ExternRef(None)
+                }
+            };
+            table.set(u32::try_from(start + i).unwrap(), item).unwrap();
         }
     }
 
