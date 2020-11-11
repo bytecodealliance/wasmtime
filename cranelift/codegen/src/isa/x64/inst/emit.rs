@@ -1826,6 +1826,8 @@ pub(crate) fn emit(
                 SseOpcode::Psubsw => (LegacyPrefixes::_66, 0x0FE9, 2),
                 SseOpcode::Psubusb => (LegacyPrefixes::_66, 0x0FD8, 2),
                 SseOpcode::Psubusw => (LegacyPrefixes::_66, 0x0FD9, 2),
+                SseOpcode::Punpckhbw => (LegacyPrefixes::_66, 0x0F68, 2),
+                SseOpcode::Punpcklbw => (LegacyPrefixes::_66, 0x0F60, 2),
                 SseOpcode::Pxor => (LegacyPrefixes::_66, 0x0FEF, 2),
                 SseOpcode::Subps => (LegacyPrefixes::None, 0x0F5C, 2),
                 SseOpcode::Subpd => (LegacyPrefixes::_66, 0x0F5C, 2),
