@@ -779,8 +779,9 @@ struct ModuleStackMaps {
     range: std::ops::Range<usize>,
 
     /// A map from a PC in this module (that is a GC safepoint) to its
-    /// associated stack map.
-    pc_to_stack_map: Vec<(usize, Rc<StackMap>)>,
+    /// associated stack map. If `None` then it means that the PC is the start
+    /// of a range which has no stack map.
+    pc_to_stack_map: Vec<(usize, Option<Rc<StackMap>>)>,
 }
 
 impl StackMapRegistry {
@@ -797,6 +798,7 @@ impl StackMapRegistry {
         let mut min = usize::max_value();
         let mut max = 0;
         let mut pc_to_stack_map = vec![];
+        let mut last_is_none_marker = true;
 
         for (range, infos) in stack_maps {
             let len = range.end - range.start;
@@ -804,12 +806,28 @@ impl StackMapRegistry {
             min = std::cmp::min(min, range.start);
             max = std::cmp::max(max, range.end);
 
+            // Add a marker between functions indicating that this function's pc
+            // starts with no stack map so when our binary search later on finds
+            // a pc between the start of the function and the function's first
+            // stack map it doesn't think the previous stack map is our stack
+            // map.
+            //
+            // We skip this if the previous entry pushed was also a `None`
+            // marker, in which case the starting pc already has no stack map.
+            // This is also skipped if the first `code_offset` is zero since
+            // what we'll push applies for the first pc anyway.
+            if !last_is_none_marker && (infos.is_empty() || infos[0].code_offset > 0) {
+                pc_to_stack_map.push((range.start, None));
+                last_is_none_marker = true;
+            }
+
             for info in infos {
                 assert!((info.code_offset as usize) < len);
                 pc_to_stack_map.push((
                     range.start + (info.code_offset as usize),
-                    Rc::new(info.stack_map.clone()),
+                    Some(Rc::new(info.stack_map.clone())),
                 ));
+                last_is_none_marker = false;
             }
         }
 
@@ -911,7 +929,7 @@ impl StackMapRegistry {
             Err(n) => n - 1,
         };
 
-        let stack_map = stack_maps.pc_to_stack_map[index].1.clone();
+        let stack_map = stack_maps.pc_to_stack_map[index].1.as_ref()?.clone();
         Some(stack_map)
     }
 }
