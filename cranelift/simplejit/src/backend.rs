@@ -539,10 +539,6 @@ struct SimpleJITRelocSink {
 }
 
 impl RelocSink for SimpleJITRelocSink {
-    fn reloc_block(&mut self, _offset: CodeOffset, _reloc: Reloc, _block_offset: CodeOffset) {
-        unimplemented!();
-    }
-
     fn reloc_external(
         &mut self,
         offset: CodeOffset,

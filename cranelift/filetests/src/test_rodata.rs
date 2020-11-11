@@ -106,7 +106,6 @@ impl binemit::CodeSink for RodataSink {
         }
     }
 
-    fn reloc_block(&mut self, _reloc: binemit::Reloc, _block_offset: binemit::CodeOffset) {}
     fn reloc_external(
         &mut self,
         _: ir::SourceLoc,

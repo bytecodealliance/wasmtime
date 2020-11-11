@@ -72,10 +72,6 @@ impl binemit::CodeSink for TextSink {
         self.offset += 8;
     }
 
-    fn reloc_block(&mut self, reloc: binemit::Reloc, block_offset: binemit::CodeOffset) {
-        write!(self.text, "{}({}) ", reloc, block_offset).unwrap();
-    }
-
     fn reloc_external(
         &mut self,
         _srcloc: ir::SourceLoc,
