@@ -542,7 +542,7 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.66.0",
+ "wasmparser 0.67.0",
  "wat",
 ]
 
@@ -1090,7 +1090,7 @@ dependencies = [
  "smallvec",
  "thiserror",
  "typemap",
- "wasmparser 0.66.0",
+ "wasmparser 0.67.0",
  "wat",
 ]
 
@@ -2224,6 +2224,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c97fc0456d6d09ca7b64bc33c34f4e8f29d5ccfa8e5595ef7a8957818339e6f6"
 
 [[package]]
+name = "wasmparser"
+version = "0.67.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f091cf3849e5fe76a60255bff169277459f2201435bc583b6656880553f0ad0"
+
+[[package]]
 name = "wasmprinter"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2250,7 +2256,7 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "tempfile",
- "wasmparser 0.66.0",
+ "wasmparser 0.67.0",
  "wasmtime-cache",
  "wasmtime-environ",
  "wasmtime-jit",
@@ -2328,7 +2334,7 @@ dependencies = [
  "test-programs",
  "tracing-subscriber",
  "wasi-common",
- "wasmparser 0.66.0",
+ "wasmparser 0.67.0",
  "wasmtime",
  "wasmtime-cache",
  "wasmtime-debug",
@@ -2363,7 +2369,7 @@ dependencies = [
  "object",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.66.0",
+ "wasmparser 0.67.0",
  "wasmtime-environ",
 ]
 
@@ -2382,7 +2388,7 @@ dependencies = [
  "more-asserts",
  "serde",
  "thiserror",
- "wasmparser 0.66.0",
+ "wasmparser 0.67.0",
 ]
 
 [[package]]
@@ -2410,7 +2416,7 @@ dependencies = [
  "log",
  "rayon",
  "wasm-smith",
- "wasmparser 0.66.0",
+ "wasmparser 0.67.0",
  "wasmprinter",
  "wasmtime",
  "wasmtime-wast",
@@ -2437,7 +2443,7 @@ dependencies = [
  "serde",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.66.0",
+ "wasmparser 0.67.0",
  "wasmtime-cranelift",
  "wasmtime-debug",
  "wasmtime-environ",
@@ -2454,7 +2460,7 @@ version = "0.21.0"
 dependencies = [
  "cranelift-codegen",
  "lightbeam",
- "wasmparser 0.66.0",
+ "wasmparser 0.67.0",
  "wasmtime-environ",
 ]
 

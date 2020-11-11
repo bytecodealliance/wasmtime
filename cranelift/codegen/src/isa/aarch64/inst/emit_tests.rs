@@ -3880,6 +3880,17 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::VecCSel {
+            rd: writable_vreg(5),
+            rn: vreg(10),
+            rm: vreg(19),
+            cond: Cond::Gt,
+        },
+        "6C000054651EB34E02000014451DAA4E",
+        "vcsel v5.16b, v10.16b, v19.16b, gt (if-then-else diamond)",
+    ));
+
+    insns.push((
         Inst::Extend {
             rd: writable_xreg(1),
             rn: xreg(2),

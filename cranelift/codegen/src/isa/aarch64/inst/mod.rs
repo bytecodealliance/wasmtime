@@ -1016,6 +1016,15 @@ pub enum Inst {
         size: VectorSize,
     },
 
+    /// Vector conditional select, 128 bit.  A synthetic instruction, which generates a 4-insn
+    /// control-flow diamond.
+    VecCSel {
+        rd: Writable<Reg>,
+        rn: Reg,
+        rm: Reg,
+        cond: Cond,
+    },
+
     /// Move to the NZCV flags (actually a `MSR NZCV, Xn` insn).
     MovToNZCV {
         rn: Reg,
@@ -1732,6 +1741,11 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             collector.add_use(rn);
         }
+        &Inst::VecCSel { rd, rn, rm, .. } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
+            collector.add_use(rm);
+        }
         &Inst::FpuCmp32 { rn, rm } | &Inst::FpuCmp64 { rn, rm } => {
             collector.add_use(rn);
             collector.add_use(rm);
@@ -2342,6 +2356,16 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         } => {
             map_def(mapper, rd);
             map_use(mapper, rn);
+        }
+        &mut Inst::VecCSel {
+            ref mut rd,
+            ref mut rn,
+            ref mut rm,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+            map_use(mapper, rm);
         }
         &mut Inst::FpuCmp32 {
             ref mut rn,
@@ -3590,6 +3614,13 @@ impl Inst {
                 let rn = rn.show_rru(mb_rru);
 
                 format!("ld1r {{ {} }}, [{}]", rd, rn)
+            }
+            &Inst::VecCSel { rd, rn, rm, cond } => {
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, VectorSize::Size8x16);
+                let rn = show_vreg_vector(rn, mb_rru, VectorSize::Size8x16);
+                let rm = show_vreg_vector(rm, mb_rru, VectorSize::Size8x16);
+                let cond = cond.show_rru(mb_rru);
+                format!("vcsel {}, {}, {}, {} (if-then-else diamond)", rd, rn, rm, cond)
             }
             &Inst::MovToNZCV { rn } => {
                 let rn = rn.show_rru(mb_rru);
