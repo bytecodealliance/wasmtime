@@ -533,7 +533,7 @@ pub(crate) fn emit(
                     }
 
                     RegMemImm::Mem { addr } => {
-                        let amode = addr.finalize(state);
+                        let amode = addr.finalize(state, sink);
                         emit_std_reg_mem(
                             sink,
                             state,
@@ -592,7 +592,7 @@ pub(crate) fn emit(
 
                     RegMemImm::Mem { addr } => {
                         // Here we revert to the "normal" G-E ordering.
-                        let amode = addr.finalize(state);
+                        let amode = addr.finalize(state, sink);
                         emit_std_reg_mem(
                             sink,
                             state,
@@ -649,7 +649,7 @@ pub(crate) fn emit(
                     rex_flags,
                 ),
                 RegMem::Mem { addr: src } => {
-                    let amode = src.finalize(state);
+                    let amode = src.finalize(state, sink);
                     emit_std_reg_mem(
                         sink,
                         state,
@@ -715,7 +715,7 @@ pub(crate) fn emit(
                     emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, src, rex_flags)
                 }
                 RegMem::Mem { addr: src } => {
-                    let amode = src.finalize(state);
+                    let amode = src.finalize(state, sink);
                     emit_std_enc_mem(sink, state, prefix, opcode, 1, subopcode, &amode, rex_flags);
                 }
             }
@@ -736,7 +736,7 @@ pub(crate) fn emit(
                     emit_std_enc_enc(sink, prefix, 0xF7, 1, subopcode, src, rex_flags)
                 }
                 RegMem::Mem { addr: src } => {
-                    let amode = src.finalize(state);
+                    let amode = src.finalize(state, sink);
                     emit_std_enc_mem(sink, state, prefix, 0xF7, 1, subopcode, &amode, rex_flags);
                 }
             }
@@ -981,7 +981,7 @@ pub(crate) fn emit(
                 }
 
                 RegMem::Mem { addr: src } => {
-                    let src = &src.finalize(state);
+                    let src = &src.finalize(state, sink);
 
                     emit_std_reg_mem(
                         sink,
@@ -998,7 +998,7 @@ pub(crate) fn emit(
         }
 
         Inst::Mov64MR { src, dst } => {
-            let src = &src.finalize(state);
+            let src = &src.finalize(state, sink);
 
             emit_std_reg_mem(
                 sink,
@@ -1013,7 +1013,7 @@ pub(crate) fn emit(
         }
 
         Inst::LoadEffectiveAddress { addr, dst } => {
-            let amode = addr.finalize(state);
+            let amode = addr.finalize(state, sink);
 
             emit_std_reg_mem(
                 sink,
@@ -1075,7 +1075,7 @@ pub(crate) fn emit(
                 }
 
                 RegMem::Mem { addr: src } => {
-                    let src = &src.finalize(state);
+                    let src = &src.finalize(state, sink);
 
                     emit_std_reg_mem(
                         sink,
@@ -1092,7 +1092,7 @@ pub(crate) fn emit(
         }
 
         Inst::MovRM { size, src, dst } => {
-            let dst = &dst.finalize(state);
+            let dst = &dst.finalize(state, sink);
 
             match size {
                 1 => {
@@ -1248,7 +1248,7 @@ pub(crate) fn emit(
                         emit_std_reg_reg(sink, prefix, opcode_bytes, 2, dst.to_reg(), *reg, rex);
                     }
                     RegMemImm::Mem { addr } => {
-                        let addr = &addr.finalize(state);
+                        let addr = &addr.finalize(state, sink);
                         emit_std_reg_mem(
                             sink,
                             state,
@@ -1307,7 +1307,7 @@ pub(crate) fn emit(
                 }
 
                 RegMemImm::Mem { addr } => {
-                    let addr = &addr.finalize(state);
+                    let addr = &addr.finalize(state, sink);
                     // Whereas here we revert to the "normal" G-E ordering.
                     let opcode = if *size == 1 { 0x3A } else { 0x3B };
                     emit_std_reg_mem(sink, state, prefix, opcode, 1, *reg_g, addr, rex);
@@ -1367,7 +1367,7 @@ pub(crate) fn emit(
                     emit_std_reg_reg(sink, prefix, opcode, 2, reg_g.to_reg(), *reg_e, rex_flags);
                 }
                 RegMem::Mem { addr } => {
-                    let addr = &addr.finalize(state);
+                    let addr = &addr.finalize(state, sink);
                     emit_std_reg_mem(
                         sink,
                         state,
@@ -1418,7 +1418,7 @@ pub(crate) fn emit(
                 }
 
                 RegMemImm::Mem { addr } => {
-                    let addr = &addr.finalize(state);
+                    let addr = &addr.finalize(state, sink);
                     emit_std_enc_mem(
                         sink,
                         state,
@@ -1484,7 +1484,7 @@ pub(crate) fn emit(
                 }
 
                 RegMem::Mem { addr } => {
-                    let addr = &addr.finalize(state);
+                    let addr = &addr.finalize(state, sink);
                     emit_std_enc_mem(
                         sink,
                         state,
@@ -1582,7 +1582,7 @@ pub(crate) fn emit(
                 }
 
                 RegMem::Mem { addr } => {
-                    let addr = &addr.finalize(state);
+                    let addr = &addr.finalize(state, sink);
                     emit_std_enc_mem(
                         sink,
                         state,
@@ -1728,7 +1728,7 @@ pub(crate) fn emit(
                     );
                 }
                 RegMem::Mem { addr } => {
-                    let addr = &addr.finalize(state);
+                    let addr = &addr.finalize(state, sink);
                     emit_std_reg_mem(
                         sink,
                         state,
@@ -1841,7 +1841,7 @@ pub(crate) fn emit(
                     emit_std_reg_reg(sink, prefix, opcode, length, reg_g.to_reg(), *reg_e, rex);
                 }
                 RegMem::Mem { addr } => {
-                    let addr = &addr.finalize(state);
+                    let addr = &addr.finalize(state, sink);
                     emit_std_reg_mem(
                         sink,
                         state,
@@ -1986,7 +1986,7 @@ pub(crate) fn emit(
                     }
                 }
                 RegMem::Mem { addr } => {
-                    let addr = &addr.finalize(state);
+                    let addr = &addr.finalize(state, sink);
                     assert!(
                         !regs_swapped,
                         "No existing way to encode a mem argument in the ModRM r/m field."
@@ -2020,7 +2020,7 @@ pub(crate) fn emit(
                 SseOpcode::Movupd => (LegacyPrefixes::_66, 0x0F11),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
-            let dst = &dst.finalize(state);
+            let dst = &dst.finalize(state, sink);
             emit_std_reg_mem(
                 sink,
                 state,
@@ -2087,7 +2087,7 @@ pub(crate) fn emit(
                     emit_std_reg_reg(sink, prefix, opcode, 2, reg_g.to_reg(), *reg_e, rex);
                 }
                 RegMem::Mem { addr } => {
-                    let addr = &addr.finalize(state);
+                    let addr = &addr.finalize(state, sink);
                     emit_std_reg_mem(sink, state, prefix, opcode, 2, reg_g.to_reg(), addr, rex);
                 }
             }
@@ -2107,7 +2107,7 @@ pub(crate) fn emit(
                     emit_std_reg_reg(sink, prefix, opcode, len, *dst, *reg, rex);
                 }
                 RegMem::Mem { addr } => {
-                    let addr = &addr.finalize(state);
+                    let addr = &addr.finalize(state, sink);
                     emit_std_reg_mem(sink, state, prefix, opcode, len, *dst, addr, rex);
                 }
             }
@@ -2621,7 +2621,7 @@ pub(crate) fn emit(
                 types::I64 => (LegacyPrefixes::_F0, RexFlags::set_w(), 0x0FB1),
                 _ => unreachable!(),
             };
-            let amode = dst.finalize(state);
+            let amode = dst.finalize(state, sink);
             emit_std_reg_mem(sink, state, prefix, opcodes, 2, *src, &amode, rex);
         }
 
