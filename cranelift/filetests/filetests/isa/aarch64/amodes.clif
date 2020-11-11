@@ -269,3 +269,33 @@ block0(v0: i32, v1: i32):
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
+
+function %f16(i64) -> i32 {
+block0(v0: i64):
+  v1 = iconst.i32 0
+  v2 = uextend.i64 v1
+  v3 = load_complex.i32 v0+v2
+  return v3
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: ldr w0, [x0]
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f17(i64) -> i32 {
+block0(v0: i64):
+  v1 = iconst.i32 4
+  v2 = uextend.i64 v1
+  v3 = load_complex.i32 v0+v2
+  return v3
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: ldur w0, [x0, #4]
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret

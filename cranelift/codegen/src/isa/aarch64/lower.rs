@@ -574,11 +574,11 @@ type AddressAddend64List = SmallVec<[Reg; 4]>;
 /// - NarrowValueMode::ZeroExtend64: the associated input is 32 bits wide;
 ///                                  do a zero-extension.
 ///
-/// We do not descend further into the inputs of extensions, because supporting
-/// (e.g.) a 32-bit add that is later extended would require additional masking
-/// of high-order bits, which is too complex. So, in essence, we descend any
-/// number of adds from the roots, collecting all 64-bit address addends; then
-/// possibly support extensions at these leaves.
+/// We do not descend further into the inputs of extensions (unless it is a constant),
+/// because supporting (e.g.) a 32-bit add that is later extended would require
+/// additional masking of high-order bits, which is too complex. So, in essence, we
+/// descend any number of adds from the roots, collecting all 64-bit address addends;
+/// then possibly support extensions at these leaves.
 fn collect_address_addends<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     roots: &[InsnInput],
@@ -609,8 +609,20 @@ fn collect_address_addends<C: LowerCtx<I = Inst>>(
                         ExtendOp::SXTW
                     };
                     let extendee_input = InsnInput { insn, input: 0 };
-                    let reg = put_input_in_reg(ctx, extendee_input, NarrowValueMode::None);
-                    result32.push((reg, extendop));
+                    // If the input is a zero-extension of a constant, add the value to the known
+                    // offset.
+                    // Only do this for zero-extension, as generating a sign-extended
+                    // constant may be more instructions than using the 'SXTW' addressing mode.
+                    if let (Some(insn), ExtendOp::UXTW) = (
+                        maybe_input_insn(ctx, extendee_input, Opcode::Iconst),
+                        extendop,
+                    ) {
+                        let value = ctx.get_constant(insn).unwrap() as i64;
+                        offset += value;
+                    } else {
+                        let reg = put_input_in_reg(ctx, extendee_input, NarrowValueMode::None);
+                        result32.push((reg, extendop));
+                    }
                 }
                 Opcode::Uextend | Opcode::Sextend => {
                     let reg = put_input_in_reg(ctx, input, NarrowValueMode::None);
