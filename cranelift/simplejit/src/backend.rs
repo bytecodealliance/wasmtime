@@ -443,10 +443,10 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
 
         let &DataDescription {
             ref init,
-            ref function_decls,
-            ref data_decls,
-            ref function_relocs,
-            ref data_relocs,
+            function_decls: _,
+            data_decls: _,
+            function_relocs: _,
+            data_relocs: _,
             custom_segment_section: _,
             align,
         } = data.description();
@@ -477,28 +477,15 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             }
         }
 
-        let reloc = match self.isa.triple().pointer_width().unwrap() {
+        let pointer_reloc = match self.isa.triple().pointer_width().unwrap() {
             PointerWidth::U16 => panic!(),
             PointerWidth::U32 => Reloc::Abs4,
             PointerWidth::U64 => Reloc::Abs8,
         };
-        let mut relocs = Vec::new();
-        for &(offset, id) in function_relocs {
-            relocs.push(RelocRecord {
-                reloc,
-                offset,
-                name: function_decls[id].clone(),
-                addend: 0,
-            });
-        }
-        for &(offset, id, addend) in data_relocs {
-            relocs.push(RelocRecord {
-                reloc,
-                offset,
-                name: data_decls[id].clone(),
-                addend,
-            });
-        }
+        let relocs = data
+            .description()
+            .all_relocs(pointer_reloc)
+            .collect::<Vec<_>>();
 
         self.compiled_data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
         self.data_objects_to_finalize.push(id);

@@ -1,12 +1,14 @@
 //! Defines `DataContext`.
 
-use cranelift_codegen::binemit::{Addend, CodeOffset};
+use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::PrimaryMap;
 use cranelift_codegen::ir;
 use std::borrow::ToOwned;
 use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
+
+use crate::RelocRecord;
 
 /// This specifies how data is to be initialized.
 #[derive(PartialEq, Eq, Debug)]
@@ -53,6 +55,34 @@ pub struct DataDescription {
     /// Alignment in bytes. `None` means that the default alignment of the respective module should
     /// be used.
     pub align: Option<u64>,
+}
+
+impl DataDescription {
+    /// An iterator over all relocations of the data object.
+    pub fn all_relocs<'a>(
+        &'a self,
+        pointer_reloc: Reloc,
+    ) -> impl Iterator<Item = RelocRecord> + 'a {
+        let func_relocs = self
+            .function_relocs
+            .iter()
+            .map(move |&(offset, id)| RelocRecord {
+                reloc: pointer_reloc,
+                offset,
+                name: self.function_decls[id].clone(),
+                addend: 0,
+            });
+        let data_relocs = self
+            .data_relocs
+            .iter()
+            .map(move |&(offset, id, addend)| RelocRecord {
+                reloc: pointer_reloc,
+                offset,
+                name: self.data_decls[id].clone(),
+                addend,
+            });
+        func_relocs.chain(data_relocs)
+    }
 }
 
 /// This is to data objects what cranelift_codegen::Context is to functions.

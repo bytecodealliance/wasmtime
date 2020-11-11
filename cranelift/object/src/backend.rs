@@ -305,7 +305,10 @@ impl Module for ObjectModule {
         };
 
         if !relocs.is_empty() {
-            let relocs = self.process_relocs(relocs);
+            let relocs = relocs
+                .iter()
+                .map(|record| self.process_reloc(record))
+                .collect();
             self.relocs.push(SymbolRelocs {
                 section,
                 offset,
@@ -330,40 +333,24 @@ impl Module for ObjectModule {
 
         let &DataDescription {
             ref init,
-            ref function_decls,
-            ref data_decls,
-            ref function_relocs,
-            ref data_relocs,
+            function_decls: _,
+            data_decls: _,
+            function_relocs: _,
+            data_relocs: _,
             ref custom_segment_section,
             align,
         } = data_ctx.description();
 
-        let reloc_size = match self.isa.triple().pointer_width().unwrap() {
-            PointerWidth::U16 => 16,
-            PointerWidth::U32 => 32,
-            PointerWidth::U64 => 64,
+        let pointer_reloc = match self.isa.triple().pointer_width().unwrap() {
+            PointerWidth::U16 => unimplemented!("16bit pointers"),
+            PointerWidth::U32 => Reloc::Abs4,
+            PointerWidth::U64 => Reloc::Abs8,
         };
-        let mut relocs = Vec::new();
-        for &(offset, id) in function_relocs {
-            relocs.push(ObjectRelocRecord {
-                offset,
-                name: function_decls[id].clone(),
-                kind: RelocationKind::Absolute,
-                encoding: RelocationEncoding::Generic,
-                size: reloc_size,
-                addend: 0,
-            });
-        }
-        for &(offset, id, addend) in data_relocs {
-            relocs.push(ObjectRelocRecord {
-                offset,
-                name: data_decls[id].clone(),
-                kind: RelocationKind::Absolute,
-                encoding: RelocationEncoding::Generic,
-                size: reloc_size,
-                addend,
-            });
-        }
+        let relocs = data_ctx
+            .description()
+            .all_relocs(pointer_reloc)
+            .map(|record| self.process_reloc(&record))
+            .collect::<Vec<_>>();
 
         let section = if custom_segment_section.is_none() {
             let section_kind = if let Init::Zeros { .. } = *init {
@@ -510,69 +497,60 @@ impl ObjectModule {
         }
     }
 
-    fn process_relocs(&self, relocs: &[RelocRecord]) -> Vec<ObjectRelocRecord> {
-        relocs
-            .iter()
-            .map(|record| {
-                let mut addend = record.addend;
-                let (kind, encoding, size) = match record.reloc {
-                    Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
-                    Reloc::Abs8 => (RelocationKind::Absolute, RelocationEncoding::Generic, 64),
-                    Reloc::X86PCRel4 => (RelocationKind::Relative, RelocationEncoding::Generic, 32),
-                    Reloc::X86CallPCRel4 => {
-                        (RelocationKind::Relative, RelocationEncoding::X86Branch, 32)
-                    }
-                    // TODO: Get Cranelift to tell us when we can use
-                    // R_X86_64_GOTPCRELX/R_X86_64_REX_GOTPCRELX.
-                    Reloc::X86CallPLTRel4 => (
-                        RelocationKind::PltRelative,
-                        RelocationEncoding::X86Branch,
-                        32,
-                    ),
-                    Reloc::X86GOTPCRel4 => {
-                        (RelocationKind::GotRelative, RelocationEncoding::Generic, 32)
-                    }
-                    Reloc::ElfX86_64TlsGd => {
-                        assert_eq!(
-                            self.object.format(),
-                            object::BinaryFormat::Elf,
-                            "ElfX86_64TlsGd is not supported for this file format"
-                        );
-                        (
-                            RelocationKind::Elf(object::elf::R_X86_64_TLSGD),
-                            RelocationEncoding::Generic,
-                            32,
-                        )
-                    }
-                    Reloc::MachOX86_64Tlv => {
-                        assert_eq!(
-                            self.object.format(),
-                            object::BinaryFormat::MachO,
-                            "MachOX86_64Tlv is not supported for this file format"
-                        );
-                        addend += 4; // X86_64_RELOC_TLV has an implicit addend of -4
-                        (
-                            RelocationKind::MachO {
-                                value: object::macho::X86_64_RELOC_TLV,
-                                relative: true,
-                            },
-                            RelocationEncoding::Generic,
-                            32,
-                        )
-                    }
-                    // FIXME
-                    _ => unimplemented!(),
-                };
-                ObjectRelocRecord {
-                    offset: record.offset,
-                    name: record.name.clone(),
-                    kind,
-                    encoding,
-                    size,
-                    addend,
-                }
-            })
-            .collect()
+    fn process_reloc(&self, record: &RelocRecord) -> ObjectRelocRecord {
+        let mut addend = record.addend;
+        let (kind, encoding, size) = match record.reloc {
+            Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
+            Reloc::Abs8 => (RelocationKind::Absolute, RelocationEncoding::Generic, 64),
+            Reloc::X86PCRel4 => (RelocationKind::Relative, RelocationEncoding::Generic, 32),
+            Reloc::X86CallPCRel4 => (RelocationKind::Relative, RelocationEncoding::X86Branch, 32),
+            // TODO: Get Cranelift to tell us when we can use
+            // R_X86_64_GOTPCRELX/R_X86_64_REX_GOTPCRELX.
+            Reloc::X86CallPLTRel4 => (
+                RelocationKind::PltRelative,
+                RelocationEncoding::X86Branch,
+                32,
+            ),
+            Reloc::X86GOTPCRel4 => (RelocationKind::GotRelative, RelocationEncoding::Generic, 32),
+            Reloc::ElfX86_64TlsGd => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "ElfX86_64TlsGd is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_X86_64_TLSGD),
+                    RelocationEncoding::Generic,
+                    32,
+                )
+            }
+            Reloc::MachOX86_64Tlv => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::MachO,
+                    "MachOX86_64Tlv is not supported for this file format"
+                );
+                addend += 4; // X86_64_RELOC_TLV has an implicit addend of -4
+                (
+                    RelocationKind::MachO {
+                        value: object::macho::X86_64_RELOC_TLV,
+                        relative: true,
+                    },
+                    RelocationEncoding::Generic,
+                    32,
+                )
+            }
+            // FIXME
+            _ => unimplemented!(),
+        };
+        ObjectRelocRecord {
+            offset: record.offset,
+            name: record.name.clone(),
+            kind,
+            encoding,
+            size,
+            addend,
+        }
     }
 }
 
