@@ -420,7 +420,6 @@ pub struct CallInfo {
     pub dest: ExternalName,
     pub uses: Vec<Reg>,
     pub defs: Vec<Writable<Reg>>,
-    pub loc: SourceLoc,
     pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
@@ -433,7 +432,6 @@ pub struct CallIndInfo {
     pub rn: Reg,
     pub uses: Vec<Reg>,
     pub defs: Vec<Writable<Reg>>,
-    pub loc: SourceLoc,
     pub opcode: Opcode,
     pub caller_callconv: CallConv,
     pub callee_callconv: CallConv,
@@ -524,68 +522,57 @@ pub enum Inst {
     ULoad8 {
         rd: Writable<Reg>,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
     /// A signed (sign-extending) 8-bit load.
     SLoad8 {
         rd: Writable<Reg>,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
     /// An unsigned (zero-extending) 16-bit load.
     ULoad16 {
         rd: Writable<Reg>,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
     /// A signed (sign-extending) 16-bit load.
     SLoad16 {
         rd: Writable<Reg>,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
     /// An unsigned (zero-extending) 32-bit load.
     ULoad32 {
         rd: Writable<Reg>,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
     /// A signed (sign-extending) 32-bit load.
     SLoad32 {
         rd: Writable<Reg>,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
     /// A 64-bit load.
     ULoad64 {
         rd: Writable<Reg>,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
 
     /// An 8-bit store.
     Store8 {
         rd: Reg,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
     /// A 16-bit store.
     Store16 {
         rd: Reg,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
     /// A 32-bit store.
     Store32 {
         rd: Reg,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
     /// A 64-bit store.
     Store64 {
         rd: Reg,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
 
     /// A store of a pair of registers.
@@ -686,7 +673,6 @@ pub enum Inst {
     AtomicRMW {
         ty: Type, // I8, I16, I32 or I64
         op: inst_common::AtomicRmwOp,
-        srcloc: Option<SourceLoc>,
     },
 
     /// Similar to AtomicRMW, a compare-and-swap operation implemented using a load-linked
@@ -703,7 +689,6 @@ pub enum Inst {
     /// x24   (wr) scratch reg; value afterwards has no meaning
     AtomicCAS {
         ty: Type, // I8, I16, I32 or I64
-        srcloc: Option<SourceLoc>,
     },
 
     /// Read `ty` bits from address `r_addr`, zero extend the loaded value to 64 bits and put it
@@ -713,7 +698,6 @@ pub enum Inst {
         ty: Type, // I8, I16, I32 or I64
         r_data: Writable<Reg>,
         r_addr: Reg,
-        srcloc: Option<SourceLoc>,
     },
 
     /// Write the lowest `ty` bits of `r_data` to address `r_addr`, with a memory fence
@@ -723,7 +707,6 @@ pub enum Inst {
         ty: Type, // I8, I16, I32 or I64
         r_data: Reg,
         r_addr: Reg,
-        srcloc: Option<SourceLoc>,
     },
 
     /// A memory fence.  This must provide ordering to ensure that, at a minimum, neither loads
@@ -798,37 +781,31 @@ pub enum Inst {
     FpuLoad32 {
         rd: Writable<Reg>,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
     /// Floating-point store, single-precision (32 bit).
     FpuStore32 {
         rd: Reg,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
     /// Floating-point load, double-precision (64 bit).
     FpuLoad64 {
         rd: Writable<Reg>,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
     /// Floating-point store, double-precision (64 bit).
     FpuStore64 {
         rd: Reg,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
     /// Floating-point/vector load, 128 bit.
     FpuLoad128 {
         rd: Writable<Reg>,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
     /// Floating-point/vector store, 128 bit.
     FpuStore128 {
         rd: Reg,
         mem: AMode,
-        srcloc: Option<SourceLoc>,
     },
 
     LoadFpuConst64 {
@@ -1037,7 +1014,6 @@ pub enum Inst {
         rd: Writable<Reg>,
         rn: Reg,
         size: VectorSize,
-        srcloc: Option<SourceLoc>,
     },
 
     /// Move to the NZCV flags (actually a `MSR NZCV, Xn` insn).
@@ -1095,7 +1071,7 @@ pub enum Inst {
     /// of this condition in a branch that skips the trap instruction.)
     TrapIf {
         kind: CondBrKind,
-        trap_info: (SourceLoc, TrapCode),
+        trap_code: TrapCode,
     },
 
     /// An indirect branch through a register, augmented with set of all
@@ -1111,7 +1087,7 @@ pub enum Inst {
     /// An instruction guaranteed to always be undefined and to trigger an illegal instruction at
     /// runtime.
     Udf {
-        trap_info: (SourceLoc, TrapCode),
+        trap_code: TrapCode,
     },
 
     /// Compute the address (using a PC-relative offset) of a memory location, using the `ADR`
@@ -1146,7 +1122,6 @@ pub enum Inst {
     LoadExtName {
         rd: Writable<Reg>,
         name: Box<ExternalName>,
-        srcloc: SourceLoc,
         offset: i64,
     },
 
@@ -1457,47 +1432,22 @@ impl Inst {
     /// Generic constructor for a load (zero-extending where appropriate).
     pub fn gen_load(into_reg: Writable<Reg>, mem: AMode, ty: Type) -> Inst {
         match ty {
-            B1 | B8 | I8 => Inst::ULoad8 {
-                rd: into_reg,
-                mem,
-                srcloc: None,
-            },
-            B16 | I16 => Inst::ULoad16 {
-                rd: into_reg,
-                mem,
-                srcloc: None,
-            },
-            B32 | I32 | R32 => Inst::ULoad32 {
-                rd: into_reg,
-                mem,
-                srcloc: None,
-            },
-            B64 | I64 | R64 => Inst::ULoad64 {
-                rd: into_reg,
-                mem,
-                srcloc: None,
-            },
-            F32 => Inst::FpuLoad32 {
-                rd: into_reg,
-                mem,
-                srcloc: None,
-            },
-            F64 => Inst::FpuLoad64 {
-                rd: into_reg,
-                mem,
-                srcloc: None,
-            },
+            B1 | B8 | I8 => Inst::ULoad8 { rd: into_reg, mem },
+            B16 | I16 => Inst::ULoad16 { rd: into_reg, mem },
+            B32 | I32 | R32 => Inst::ULoad32 { rd: into_reg, mem },
+            B64 | I64 | R64 => Inst::ULoad64 { rd: into_reg, mem },
+            F32 => Inst::FpuLoad32 { rd: into_reg, mem },
+            F64 => Inst::FpuLoad64 { rd: into_reg, mem },
             _ => {
                 if ty.is_vector() {
                     let bits = ty_bits(ty);
                     let rd = into_reg;
-                    let srcloc = None;
 
                     if bits == 128 {
-                        Inst::FpuLoad128 { rd, mem, srcloc }
+                        Inst::FpuLoad128 { rd, mem }
                     } else {
                         assert_eq!(bits, 64);
-                        Inst::FpuLoad64 { rd, mem, srcloc }
+                        Inst::FpuLoad64 { rd, mem }
                     }
                 } else {
                     unimplemented!("gen_load({})", ty);
@@ -1509,47 +1459,22 @@ impl Inst {
     /// Generic constructor for a store.
     pub fn gen_store(mem: AMode, from_reg: Reg, ty: Type) -> Inst {
         match ty {
-            B1 | B8 | I8 => Inst::Store8 {
-                rd: from_reg,
-                mem,
-                srcloc: None,
-            },
-            B16 | I16 => Inst::Store16 {
-                rd: from_reg,
-                mem,
-                srcloc: None,
-            },
-            B32 | I32 | R32 => Inst::Store32 {
-                rd: from_reg,
-                mem,
-                srcloc: None,
-            },
-            B64 | I64 | R64 => Inst::Store64 {
-                rd: from_reg,
-                mem,
-                srcloc: None,
-            },
-            F32 => Inst::FpuStore32 {
-                rd: from_reg,
-                mem,
-                srcloc: None,
-            },
-            F64 => Inst::FpuStore64 {
-                rd: from_reg,
-                mem,
-                srcloc: None,
-            },
+            B1 | B8 | I8 => Inst::Store8 { rd: from_reg, mem },
+            B16 | I16 => Inst::Store16 { rd: from_reg, mem },
+            B32 | I32 | R32 => Inst::Store32 { rd: from_reg, mem },
+            B64 | I64 | R64 => Inst::Store64 { rd: from_reg, mem },
+            F32 => Inst::FpuStore32 { rd: from_reg, mem },
+            F64 => Inst::FpuStore64 { rd: from_reg, mem },
             _ => {
                 if ty.is_vector() {
                     let bits = ty_bits(ty);
                     let rd = from_reg;
-                    let srcloc = None;
 
                     if bits == 128 {
-                        Inst::FpuStore128 { rd, mem, srcloc }
+                        Inst::FpuStore128 { rd, mem }
                     } else {
                         assert_eq!(bits, 64);
-                        Inst::FpuStore64 { rd, mem, srcloc }
+                        Inst::FpuStore64 { rd, mem }
                     }
                 } else {
                     unimplemented!("gen_store({})", ty);
@@ -3024,37 +2949,30 @@ impl Inst {
             &Inst::ULoad8 {
                 rd,
                 ref mem,
-                srcloc: _srcloc,
             }
             | &Inst::SLoad8 {
                 rd,
                 ref mem,
-                srcloc: _srcloc,
             }
             | &Inst::ULoad16 {
                 rd,
                 ref mem,
-                srcloc: _srcloc,
             }
             | &Inst::SLoad16 {
                 rd,
                 ref mem,
-                srcloc: _srcloc,
             }
             | &Inst::ULoad32 {
                 rd,
                 ref mem,
-                srcloc: _srcloc,
             }
             | &Inst::SLoad32 {
                 rd,
                 ref mem,
-                srcloc: _srcloc,
             }
             | &Inst::ULoad64 {
                 rd,
                 ref mem,
-                srcloc: _srcloc,
                 ..
             } => {
                 let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
@@ -3087,22 +3005,18 @@ impl Inst {
             &Inst::Store8 {
                 rd,
                 ref mem,
-                srcloc: _srcloc,
             }
             | &Inst::Store16 {
                 rd,
                 ref mem,
-                srcloc: _srcloc,
             }
             | &Inst::Store32 {
                 rd,
                 ref mem,
-                srcloc: _srcloc,
             }
             | &Inst::Store64 {
                 rd,
                 ref mem,
-                srcloc: _srcloc,
                 ..
             } => {
                 let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
@@ -3841,7 +3755,6 @@ impl Inst {
                 rd,
                 ref name,
                 offset,
-                srcloc: _srcloc,
             } => {
                 let rd = rd.show_rru(mb_rru);
                 format!("ldr {}, 8 ; b 12 ; data {:?} + {}", rd, name, offset)

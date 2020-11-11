@@ -462,6 +462,8 @@ pub struct EmitState {
     pub(crate) nominal_sp_to_fp: i64,
     /// Safepoint stack map for upcoming instruction, as provided to `pre_safepoint()`.
     stack_map: Option<StackMap>,
+    /// Current source-code location corresponding to instruction to be emitted.
+    cur_srcloc: SourceLoc,
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -470,11 +472,16 @@ impl MachInstEmitState<Inst> for EmitState {
             virtual_sp_offset: 0,
             nominal_sp_to_fp: abi.frame_size() as i64,
             stack_map: None,
+            cur_srcloc: SourceLoc::default(),
         }
     }
 
     fn pre_safepoint(&mut self, stack_map: StackMap) {
         self.stack_map = Some(stack_map);
+    }
+
+    fn pre_sourceloc(&mut self, srcloc: SourceLoc) {
+        self.cur_srcloc = srcloc;
     }
 }
 
@@ -485,6 +492,10 @@ impl EmitState {
 
     fn clear_post_insn(&mut self) {
         self.stack_map = None;
+    }
+
+    fn cur_srcloc(&self) -> SourceLoc {
+        self.cur_srcloc
     }
 }
 
@@ -730,57 +741,16 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_bit_rr(size, op1, op2, rn, rd))
             }
 
-            &Inst::ULoad8 {
-                rd,
-                ref mem,
-                srcloc,
-            }
-            | &Inst::SLoad8 {
-                rd,
-                ref mem,
-                srcloc,
-            }
-            | &Inst::ULoad16 {
-                rd,
-                ref mem,
-                srcloc,
-            }
-            | &Inst::SLoad16 {
-                rd,
-                ref mem,
-                srcloc,
-            }
-            | &Inst::ULoad32 {
-                rd,
-                ref mem,
-                srcloc,
-            }
-            | &Inst::SLoad32 {
-                rd,
-                ref mem,
-                srcloc,
-            }
-            | &Inst::ULoad64 {
-                rd,
-                ref mem,
-                srcloc,
-                ..
-            }
-            | &Inst::FpuLoad32 {
-                rd,
-                ref mem,
-                srcloc,
-            }
-            | &Inst::FpuLoad64 {
-                rd,
-                ref mem,
-                srcloc,
-            }
-            | &Inst::FpuLoad128 {
-                rd,
-                ref mem,
-                srcloc,
-            } => {
+            &Inst::ULoad8 { rd, ref mem }
+            | &Inst::SLoad8 { rd, ref mem }
+            | &Inst::ULoad16 { rd, ref mem }
+            | &Inst::SLoad16 { rd, ref mem }
+            | &Inst::ULoad32 { rd, ref mem }
+            | &Inst::SLoad32 { rd, ref mem }
+            | &Inst::ULoad64 { rd, ref mem, .. }
+            | &Inst::FpuLoad32 { rd, ref mem }
+            | &Inst::FpuLoad64 { rd, ref mem }
+            | &Inst::FpuLoad128 { rd, ref mem } => {
                 let (mem_insts, mem) = mem_finalize(sink.cur_offset(), mem, state);
 
                 for inst in mem_insts.into_iter() {
@@ -807,7 +777,8 @@ impl MachInstEmit for Inst {
                     _ => unreachable!(),
                 };
 
-                if let Some(srcloc) = srcloc {
+                let srcloc = state.cur_srcloc();
+                if srcloc != SourceLoc::default() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
@@ -890,42 +861,13 @@ impl MachInstEmit for Inst {
                 }
             }
 
-            &Inst::Store8 {
-                rd,
-                ref mem,
-                srcloc,
-            }
-            | &Inst::Store16 {
-                rd,
-                ref mem,
-                srcloc,
-            }
-            | &Inst::Store32 {
-                rd,
-                ref mem,
-                srcloc,
-            }
-            | &Inst::Store64 {
-                rd,
-                ref mem,
-                srcloc,
-                ..
-            }
-            | &Inst::FpuStore32 {
-                rd,
-                ref mem,
-                srcloc,
-            }
-            | &Inst::FpuStore64 {
-                rd,
-                ref mem,
-                srcloc,
-            }
-            | &Inst::FpuStore128 {
-                rd,
-                ref mem,
-                srcloc,
-            } => {
+            &Inst::Store8 { rd, ref mem }
+            | &Inst::Store16 { rd, ref mem }
+            | &Inst::Store32 { rd, ref mem }
+            | &Inst::Store64 { rd, ref mem, .. }
+            | &Inst::FpuStore32 { rd, ref mem }
+            | &Inst::FpuStore64 { rd, ref mem }
+            | &Inst::FpuStore128 { rd, ref mem } => {
                 let (mem_insts, mem) = mem_finalize(sink.cur_offset(), mem, state);
 
                 for inst in mem_insts.into_iter() {
@@ -943,7 +885,8 @@ impl MachInstEmit for Inst {
                     _ => unreachable!(),
                 };
 
-                if let Some(srcloc) = srcloc {
+                let srcloc = state.cur_srcloc();
+                if srcloc != SourceLoc::default() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
@@ -1086,7 +1029,7 @@ impl MachInstEmit for Inst {
             } => {
                 sink.put4(enc_ccmp_imm(size, rn, imm, nzcv, cond));
             }
-            &Inst::AtomicRMW { ty, op, srcloc } => {
+            &Inst::AtomicRMW { ty, op } => {
                 /* Emit this:
                       dmb         ish
                      again:
@@ -1124,7 +1067,8 @@ impl MachInstEmit for Inst {
 
                 // again:
                 sink.bind_label(again_label);
-                if let Some(srcloc) = srcloc {
+                let srcloc = state.cur_srcloc();
+                if srcloc != SourceLoc::default() {
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
                 sink.put4(enc_ldxr(ty, x27wr, x25)); // ldxr x27, [x25]
@@ -1145,7 +1089,8 @@ impl MachInstEmit for Inst {
                     sink.put4(enc_arith_rrr(bits_31_21, 0b000000, x28wr, x27, x26));
                 }
 
-                if let Some(srcloc) = srcloc {
+                let srcloc = state.cur_srcloc();
+                if srcloc != SourceLoc::default() {
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
                 sink.put4(enc_stxr(ty, x24wr, x28, x25)); // stxr w24, x28, [x25]
@@ -1162,7 +1107,7 @@ impl MachInstEmit for Inst {
 
                 sink.put4(enc_dmb_ish()); // dmb ish
             }
-            &Inst::AtomicCAS { ty, srcloc } => {
+            &Inst::AtomicCAS { ty } => {
                 /* Emit this:
                      dmb         ish
                     again:
@@ -1195,7 +1140,8 @@ impl MachInstEmit for Inst {
 
                 // again:
                 sink.bind_label(again_label);
-                if let Some(srcloc) = srcloc {
+                let srcloc = state.cur_srcloc();
+                if srcloc != SourceLoc::default() {
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
                 sink.put4(enc_ldxr(ty, x27wr, x25)); // ldxr x27, [x25]
@@ -1230,7 +1176,8 @@ impl MachInstEmit for Inst {
                 ));
                 sink.use_label_at_offset(br_out_offset, out_label, LabelUse::Branch19);
 
-                if let Some(srcloc) = srcloc {
+                let srcloc = state.cur_srcloc();
+                if srcloc != SourceLoc::default() {
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
                 sink.put4(enc_stxr(ty, x24wr, x28, x25)); // stxr w24, x28, [x25]
@@ -1249,12 +1196,7 @@ impl MachInstEmit for Inst {
                 sink.bind_label(out_label);
                 sink.put4(enc_dmb_ish()); // dmb ish
             }
-            &Inst::AtomicLoad {
-                ty,
-                r_data,
-                r_addr,
-                srcloc,
-            } => {
+            &Inst::AtomicLoad { ty, r_data, r_addr } => {
                 let op = match ty {
                     I8 => 0b0011100001,
                     I16 => 0b0111100001,
@@ -1264,7 +1206,8 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_dmb_ish()); // dmb ish
 
-                if let Some(srcloc) = srcloc {
+                let srcloc = state.cur_srcloc();
+                if srcloc != SourceLoc::default() {
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
                 let uimm12scaled_zero = UImm12Scaled::zero(I8 /*irrelevant*/);
@@ -1275,12 +1218,7 @@ impl MachInstEmit for Inst {
                     r_data.to_reg(),
                 ));
             }
-            &Inst::AtomicStore {
-                ty,
-                r_data,
-                r_addr,
-                srcloc,
-            } => {
+            &Inst::AtomicStore { ty, r_data, r_addr } => {
                 let op = match ty {
                     I8 => 0b0011100000,
                     I16 => 0b0111100000,
@@ -1289,7 +1227,8 @@ impl MachInstEmit for Inst {
                     _ => unreachable!(),
                 };
 
-                if let Some(srcloc) = srcloc {
+                let srcloc = state.cur_srcloc();
+                if srcloc != SourceLoc::default() {
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
                 let uimm12scaled_zero = UImm12Scaled::zero(I8 /*irrelevant*/);
@@ -1607,7 +1546,6 @@ impl MachInstEmit for Inst {
                 let inst = Inst::FpuLoad64 {
                     rd,
                     mem: AMode::Label(MemLabel::PCRel(8)),
-                    srcloc: None,
                 };
                 inst.emit(sink, emit_info, state);
                 let inst = Inst::Jump {
@@ -1620,7 +1558,6 @@ impl MachInstEmit for Inst {
                 let inst = Inst::FpuLoad128 {
                     rd,
                     mem: AMode::Label(MemLabel::PCRel(8)),
-                    srcloc: None,
                 };
                 inst.emit(sink, emit_info, state);
                 let inst = Inst::Jump {
@@ -1961,15 +1898,11 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(enc_vec_rrr(top11, rm, bit15_10, rn, rd));
             }
-            &Inst::VecLoadReplicate {
-                rd,
-                rn,
-                size,
-                srcloc,
-            } => {
+            &Inst::VecLoadReplicate { rd, rn, size } => {
                 let (q, size) = size.enc_size();
 
-                if let Some(srcloc) = srcloc {
+                let srcloc = state.cur_srcloc();
+                if srcloc != SourceLoc::default() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
@@ -2073,10 +2006,11 @@ impl MachInstEmit for Inst {
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
-                sink.add_reloc(info.loc, Reloc::Arm64Call, &info.dest, 0);
+                let loc = state.cur_srcloc();
+                sink.add_reloc(loc, Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b100101, 0));
                 if info.opcode.is_call() {
-                    sink.add_call_site(info.loc, info.opcode);
+                    sink.add_call_site(loc, info.opcode);
                 }
             }
             &Inst::CallInd { ref info } => {
@@ -2084,8 +2018,9 @@ impl MachInstEmit for Inst {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
                 sink.put4(0b1101011_0001_11111_000000_00000_00000 | (machreg_to_gpr(info.rn) << 5));
+                let loc = state.cur_srcloc();
                 if info.opcode.is_call() {
-                    sink.add_call_site(info.loc, info.opcode);
+                    sink.add_call_site(loc, info.opcode);
                 }
             }
             &Inst::CondBr {
@@ -2110,7 +2045,7 @@ impl MachInstEmit for Inst {
                 }
                 sink.put4(enc_jump26(0b000101, not_taken.as_offset26_or_zero()));
             }
-            &Inst::TrapIf { kind, trap_info } => {
+            &Inst::TrapIf { kind, trap_code } => {
                 // condbr KIND, LABEL
                 let off = sink.cur_offset();
                 let label = sink.get_label();
@@ -2120,7 +2055,7 @@ impl MachInstEmit for Inst {
                 ));
                 sink.use_label_at_offset(off, label, LabelUse::Branch19);
                 // udf
-                let trap = Inst::Udf { trap_info };
+                let trap = Inst::Udf { trap_code };
                 trap.emit(sink, emit_info, state);
                 // LABEL:
                 sink.bind_label(label);
@@ -2135,9 +2070,9 @@ impl MachInstEmit for Inst {
             &Inst::Brk => {
                 sink.put4(0xd4200000);
             }
-            &Inst::Udf { trap_info } => {
-                let (srcloc, code) = trap_info;
-                sink.add_trap(srcloc, code);
+            &Inst::Udf { trap_code } => {
+                let srcloc = state.cur_srcloc();
+                sink.add_trap(srcloc, trap_code);
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
                 }
@@ -2192,7 +2127,6 @@ impl MachInstEmit for Inst {
                         I32,
                         ExtendOp::UXTW,
                     ),
-                    srcloc: None, // can't cause a user trap.
                 };
                 inst.emit(sink, emit_info, state);
                 // Add base of jump table to jump-table-sourced block offset
@@ -2235,18 +2169,17 @@ impl MachInstEmit for Inst {
                 rd,
                 ref name,
                 offset,
-                srcloc,
             } => {
                 let inst = Inst::ULoad64 {
                     rd,
                     mem: AMode::Label(MemLabel::PCRel(8)),
-                    srcloc: None, // can't cause a user trap.
                 };
                 inst.emit(sink, emit_info, state);
                 let inst = Inst::Jump {
                     dest: BranchTarget::ResolvedOffset(12),
                 };
                 inst.emit(sink, emit_info, state);
+                let srcloc = state.cur_srcloc();
                 sink.add_reloc(srcloc, Reloc::Abs8, name, offset);
                 if emit_info.flags().emit_all_ones_funcaddrs() {
                     sink.put8(u64::max_value());

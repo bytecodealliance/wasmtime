@@ -1,7 +1,7 @@
 //! Implementation of the standard x64 ABI.
 
 use crate::ir::types::*;
-use crate::ir::{self, types, SourceLoc, TrapCode, Type};
+use crate::ir::{self, types, TrapCode, Type};
 use crate::isa;
 use crate::isa::{x64::inst::*, CallConv};
 use crate::machinst::abi_impl::*;
@@ -252,11 +252,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             _ if ty.bytes() == 16 => ExtKind::None,
             _ => panic!("load_stack({})", ty),
         };
-        Inst::load(ty, mem, into_reg, ext_kind, /* infallible */ None)
+        Inst::load(ty, mem, into_reg, ext_kind)
     }
 
     fn gen_store_stack(mem: StackAMode, from_reg: Reg, ty: Type) -> Self::I {
-        Inst::store(ty, from_reg, mem, /* infallible */ None)
+        Inst::store(ty, from_reg, mem)
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self::I {
@@ -274,9 +274,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let ext_mode = ExtMode::new(from_bits as u16, to_bits as u16)
             .expect(&format!("invalid extension: {} -> {}", from_bits, to_bits));
         if is_signed {
-            Inst::movsx_rm_r(ext_mode, RegMem::reg(from_reg), to_reg, None)
+            Inst::movsx_rm_r(ext_mode, RegMem::reg(from_reg), to_reg)
         } else {
-            Inst::movzx_rm_r(ext_mode, RegMem::reg(from_reg), to_reg, None)
+            Inst::movzx_rm_r(ext_mode, RegMem::reg(from_reg), to_reg)
         }
     }
 
@@ -308,7 +308,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             Inst::TrapIf {
                 // NBE == "> unsigned"; args above are reversed; this tests limit_reg > rsp.
                 cc: CC::NBE,
-                srcloc: SourceLoc::default(),
                 trap_code: TrapCode::StackOverflow,
             },
         ]
@@ -335,13 +334,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         assert_eq!(ty, I64);
         let simm32 = offset as u32;
         let mem = Amode::imm_reg(simm32, base);
-        Inst::load(ty, mem, into_reg, ExtKind::None, None)
+        Inst::load(ty, mem, into_reg, ExtKind::None)
     }
 
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Self::I {
         let simm32 = offset as u32;
         let mem = Amode::imm_reg(simm32, base);
-        Inst::store(ty, from_reg, mem, None)
+        Inst::store(ty, from_reg, mem)
     }
 
     fn gen_sp_reg_adjust(amount: i32) -> SmallVec<[Self::I; 2]> {
@@ -426,7 +425,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         /* bytes = */ 8,
                         r_reg.to_reg(),
                         Amode::imm_reg(cur_offset, regs::rsp()),
-                        None,
                     ));
                     cur_offset += 8;
                 }
@@ -461,7 +459,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     insts.push(Inst::mov64_m_r(
                         Amode::imm_reg(cur_offset, regs::rsp()),
                         Writable::from_reg(rreg.to_reg()),
-                        None,
                     ));
                     cur_offset += 8;
                 }
@@ -486,7 +483,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             insts.push(Inst::mov64_m_r(
                 Amode::imm_reg(off as u32, regs::rbp()),
                 Writable::from_reg(regs::r14()),
-                None,
             ));
         }
 
@@ -498,7 +494,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         dest: &CallDest,
         uses: Vec<Reg>,
         defs: Vec<Writable<Reg>>,
-        loc: SourceLoc,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
         _callee_conv: isa::CallConv,
@@ -509,7 +504,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             &CallDest::ExtName(ref name, RelocDistance::Near) => {
                 insts.push((
                     InstIsSafepoint::Yes,
-                    Inst::call_known(name.clone(), uses, defs, loc, opcode),
+                    Inst::call_known(name.clone(), uses, defs, opcode),
                 ));
             }
             &CallDest::ExtName(ref name, RelocDistance::Far) => {
@@ -519,18 +514,17 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                         dst: tmp,
                         name: Box::new(name.clone()),
                         offset: 0,
-                        srcloc: loc,
                     },
                 ));
                 insts.push((
                     InstIsSafepoint::Yes,
-                    Inst::call_unknown(RegMem::reg(tmp.to_reg()), uses, defs, loc, opcode),
+                    Inst::call_unknown(RegMem::reg(tmp.to_reg()), uses, defs, opcode),
                 ));
             }
             &CallDest::Reg(reg) => {
                 insts.push((
                     InstIsSafepoint::Yes,
-                    Inst::call_unknown(RegMem::reg(reg), uses, defs, loc, opcode),
+                    Inst::call_unknown(RegMem::reg(reg), uses, defs, opcode),
                 ));
             }
         }

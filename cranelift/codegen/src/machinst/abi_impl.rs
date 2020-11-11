@@ -111,7 +111,7 @@
 use super::abi::*;
 use crate::binemit::StackMap;
 use crate::ir::types::*;
-use crate::ir::{ArgumentExtension, SourceLoc, StackSlot};
+use crate::ir::{ArgumentExtension, StackSlot};
 use crate::machinst::*;
 use crate::settings;
 use crate::CodegenResult;
@@ -350,7 +350,6 @@ pub trait ABIMachineSpec {
         dest: &CallDest,
         uses: Vec<Reg>,
         defs: Vec<Writable<Reg>>,
-        loc: SourceLoc,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
         callee_conv: isa::CallConv,
@@ -1102,8 +1101,6 @@ pub struct ABICallerImpl<M: ABIMachineSpec> {
     defs: Vec<Writable<Reg>>,
     /// Call destination.
     dest: CallDest,
-    /// Location of callsite.
-    loc: ir::SourceLoc,
     /// Actual call opcode; used to distinguish various types of calls.
     opcode: ir::Opcode,
     /// Caller's calling convention.
@@ -1127,7 +1124,6 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
         sig: &ir::Signature,
         extname: &ir::ExternalName,
         dist: RelocDistance,
-        loc: ir::SourceLoc,
         caller_conv: isa::CallConv,
     ) -> CodegenResult<ABICallerImpl<M>> {
         let sig = ABISig::from_func_sig::<M>(sig)?;
@@ -1137,7 +1133,6 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
             uses,
             defs,
             dest: CallDest::ExtName(extname.clone(), dist),
-            loc,
             opcode: ir::Opcode::Call,
             caller_conv,
             _mach: PhantomData,
@@ -1149,7 +1144,6 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
     pub fn from_ptr(
         sig: &ir::Signature,
         ptr: Reg,
-        loc: ir::SourceLoc,
         opcode: ir::Opcode,
         caller_conv: isa::CallConv,
     ) -> CodegenResult<ABICallerImpl<M>> {
@@ -1160,7 +1154,6 @@ impl<M: ABIMachineSpec> ABICallerImpl<M> {
             uses,
             defs,
             dest: CallDest::Reg(ptr),
-            loc,
             opcode,
             caller_conv,
             _mach: PhantomData,
@@ -1311,7 +1304,6 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
             &self.dest,
             uses,
             defs,
-            self.loc,
             self.opcode,
             tmp,
             self.sig.call_conv,

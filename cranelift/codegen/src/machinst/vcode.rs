@@ -509,6 +509,7 @@ impl<I: VCodeInst> VCode<I> {
                     buffer.start_srcloc(srcloc);
                     cur_srcloc = Some(srcloc);
                 }
+                state.pre_sourceloc(cur_srcloc.unwrap_or(SourceLoc::default()));
 
                 if safepoint_idx < self.safepoint_insns.len()
                     && self.safepoint_insns[safepoint_idx] == iix

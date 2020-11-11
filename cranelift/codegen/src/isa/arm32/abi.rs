@@ -2,7 +2,6 @@
 
 use crate::ir;
 use crate::ir::types::*;
-use crate::ir::SourceLoc;
 use crate::isa;
 use crate::isa::arm32::inst::*;
 use crate::machinst::*;
@@ -217,7 +216,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
             rm: limit_reg,
         });
         insts.push(Inst::TrapIf {
-            trap_info: (ir::SourceLoc::default(), ir::TrapCode::StackOverflow),
+            trap_info: ir::TrapCode::StackOverflow,
             // Here `Lo` == "less than" when interpreting the two
             // operands as unsigned integers.
             cond: Cond::Lo,
@@ -366,7 +365,6 @@ impl ABIMachineSpec for Arm32MachineDeps {
         dest: &CallDest,
         uses: Vec<Reg>,
         defs: Vec<Writable<Reg>>,
-        loc: SourceLoc,
         opcode: ir::Opcode,
         tmp: Writable<Reg>,
         _callee_conv: isa::CallConv,
@@ -381,7 +379,6 @@ impl ABIMachineSpec for Arm32MachineDeps {
                         dest: name.clone(),
                         uses,
                         defs,
-                        loc,
                         opcode,
                     }),
                 },
@@ -393,7 +390,6 @@ impl ABIMachineSpec for Arm32MachineDeps {
                         rt: tmp,
                         name: Box::new(name.clone()),
                         offset: 0,
-                        srcloc: loc,
                     },
                 ));
                 insts.push((
@@ -403,7 +399,6 @@ impl ABIMachineSpec for Arm32MachineDeps {
                             rm: tmp.to_reg(),
                             uses,
                             defs,
-                            loc,
                             opcode,
                         }),
                     },
@@ -416,7 +411,6 @@ impl ABIMachineSpec for Arm32MachineDeps {
                         rm: *reg,
                         uses,
                         defs,
-                        loc,
                         opcode,
                     }),
                 },
