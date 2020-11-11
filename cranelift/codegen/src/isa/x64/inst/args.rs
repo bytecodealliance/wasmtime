@@ -482,6 +482,8 @@ pub enum SseOpcode {
     Psubusb,
     Psubusw,
     Ptest,
+    Punpckhbw,
+    Punpcklbw,
     Pxor,
     Rcpss,
     Roundss,
@@ -616,6 +618,8 @@ impl SseOpcode {
             | SseOpcode::Psubsw
             | SseOpcode::Psubusb
             | SseOpcode::Psubusw
+            | SseOpcode::Punpckhbw
+            | SseOpcode::Punpcklbw
             | SseOpcode::Pxor
             | SseOpcode::Sqrtpd
             | SseOpcode::Sqrtsd
@@ -783,6 +787,8 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Psubusb => "psubusb",
             SseOpcode::Psubusw => "psubusw",
             SseOpcode::Ptest => "ptest",
+            SseOpcode::Punpckhbw => "punpckhbw",
+            SseOpcode::Punpcklbw => "punpcklbw",
             SseOpcode::Pxor => "pxor",
             SseOpcode::Rcpss => "rcpss",
             SseOpcode::Roundss => "roundss",
