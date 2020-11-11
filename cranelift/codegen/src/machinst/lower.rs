@@ -209,7 +209,6 @@ pub trait LowerBackend {
         ctx: &mut C,
         insts: &[Inst],
         targets: &[MachLabel],
-        fallthrough: Option<MachLabel>,
     ) -> CodegenResult<()>;
 
     /// A bit of a hack: give a fixed register that always holds the result of a
@@ -663,13 +662,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         block: Block,
         branches: &SmallVec<[Inst; 2]>,
         targets: &SmallVec<[MachLabel; 2]>,
-        maybe_fallthrough: Option<MachLabel>,
     ) -> CodegenResult<()> {
         debug!(
-            "lower_clif_branches: block {} branches {:?} targets {:?} maybe_fallthrough {:?}",
-            block, branches, targets, maybe_fallthrough
+            "lower_clif_branches: block {} branches {:?} targets {:?}",
+            block, branches, targets,
         );
-        backend.lower_branch_group(self, branches, targets, maybe_fallthrough)?;
+        backend.lower_branch_group(self, branches, targets)?;
         let loc = self.srcloc(branches[0]);
         self.finish_ir_inst(loc);
         Ok(())
@@ -744,12 +742,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             if let Some(bb) = lb.orig_block() {
                 self.collect_branches_and_targets(bindex, bb, &mut branches, &mut targets);
                 if branches.len() > 0 {
-                    let maybe_fallthrough = if (bindex + 1) < (lowered_order.len() as BlockIndex) {
-                        Some(MachLabel::from_block(bindex + 1))
-                    } else {
-                        None
-                    };
-                    self.lower_clif_branches(backend, bb, &branches, &targets, maybe_fallthrough)?;
+                    self.lower_clif_branches(backend, bb, &branches, &targets)?;
                     self.finish_ir_inst(self.srcloc(branches[0]));
                 }
             } else {

@@ -1,0 +1,88 @@
+test compile
+target x86_64
+feature "experimental_x64"
+
+function %f0(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp eq v0, v1
+  brnz v2, block1
+  jump block2
+  ; check:  cmpl    %esi, %edi
+  ; nextln: jz      label1; j label2
+
+block1:
+  v3 = iconst.i32 1
+  ; check: movl    $$1, %eax
+  return v3
+  ; check: ret
+
+block2:
+  v4 = iconst.i32 2
+  ; check: movl    $$2, %eax
+  return v4
+  ; check: ret
+}
+
+function %f1(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = icmp eq v0, v1
+  brz v2, block1
+  jump block2
+  ; check:  cmpl    %esi, %edi
+  ; nextln: jnz     label1; j label2
+
+block1:
+  v3 = iconst.i32 1
+  ; check: movl    $$1, %eax
+  return v3
+  ; check: ret
+
+block2:
+  v4 = iconst.i32 2
+  ; check: movl    $$2, %eax
+  return v4
+  ; check: ret
+}
+
+function %f2(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = ifcmp v0, v1
+  brif eq v2, block1
+  jump block2
+  ; check:  cmpl    %esi, %edi
+  ; nextln: jz      label1; j label2
+
+block1:
+  v3 = iconst.i32 1
+  ; check: movl    $$1, %eax
+  return v3
+  ; check: ret
+
+block2:
+  v4 = iconst.i32 2
+  ; check: movl    $$2, %eax
+  return v4
+  ; check: ret
+}
+
+function %f3(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+  v2 = ffcmp v0, v1
+  brff eq v2, block1
+  jump block2
+  ; check:  ucomiss %xmm1, %xmm0
+  ; nextln: jp      label2
+  ; nextln: jnz     label2; j label1
+
+block1:
+  v3 = iconst.i32 1
+  ; check: movl    $$1, %eax
+  return v3
+  ; check: ret
+
+block2:
+  v4 = iconst.i32 2
+  ; check: movl    $$2, %eax
+  return v4
+  ; check: ret
+}
