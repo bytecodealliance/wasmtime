@@ -1412,6 +1412,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::FpuCSel32 { cond, rd, rn, rm });
             } else if is_float && bits == 64 {
                 ctx.emit(Inst::FpuCSel64 { cond, rd, rn, rm });
+            } else if is_float && bits == 128 {
+                ctx.emit(Inst::VecCSel { cond, rd, rn, rm });
             } else {
                 ctx.emit(Inst::CSel { cond, rd, rn, rm });
             }

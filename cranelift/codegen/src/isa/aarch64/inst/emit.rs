@@ -1909,6 +1909,46 @@ impl MachInstEmit for Inst {
 
                 sink.put4(enc_ldst_vec(q, size, rn, rd));
             }
+            &Inst::VecCSel { rd, rn, rm, cond } => {
+                /* Emit this:
+                      b.cond  else
+                      mov     rd, rm
+                      b       out
+                     else:
+                      mov     rd, rn
+                     out:
+
+                   Note, we could do better in the cases where rd == rn or rd == rm.
+                */
+                let else_label = sink.get_label();
+                let out_label = sink.get_label();
+
+                // b.cond else
+                let br_else_offset = sink.cur_offset();
+                sink.put4(enc_conditional_br(
+                    BranchTarget::Label(else_label),
+                    CondBrKind::Cond(cond),
+                ));
+                sink.use_label_at_offset(br_else_offset, else_label, LabelUse::Branch19);
+
+                // mov rd, rm
+                sink.put4(enc_vecmov(/* 16b = */ true, rd, rm));
+
+                // b out
+                let b_out_offset = sink.cur_offset();
+                sink.use_label_at_offset(b_out_offset, out_label, LabelUse::Branch26);
+                sink.add_uncond_branch(b_out_offset, b_out_offset + 4, out_label);
+                sink.put4(enc_jump26(0b000101, 0 /* will be fixed up later */));
+
+                // else:
+                sink.bind_label(else_label);
+
+                // mov rd, rn
+                sink.put4(enc_vecmov(/* 16b = */ true, rd, rn));
+
+                // out:
+                sink.bind_label(out_label);
+            }
             &Inst::MovToNZCV { rn } => {
                 sink.put4(0xd51b4200 | machreg_to_gpr(rn));
             }
