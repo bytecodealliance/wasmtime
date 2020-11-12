@@ -188,14 +188,7 @@ impl SimpleJITModule {
         match *name {
             ir::ExternalName::User { .. } => {
                 let (name, linkage) = if ModuleDeclarations::is_function(name) {
-                    let func_id = FuncId::from_name(name);
-                    match &self.compiled_functions[func_id] {
-                        Some(compiled) => return compiled.ptr,
-                        None => {
-                            let decl = self.declarations.get_function_decl(func_id);
-                            (&decl.name, decl.linkage)
-                        }
-                    }
+                    return self.get_plt_address(name);
                 } else {
                     let data_id = DataId::from_name(name);
                     match &self.compiled_data_objects[data_id] {
