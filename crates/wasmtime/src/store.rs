@@ -5,6 +5,7 @@ use crate::Engine;
 use anyhow::{bail, Result};
 use std::any::Any;
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::{Rc, Weak};
@@ -63,9 +64,9 @@ pub(crate) struct StoreInner {
     /// Information about JIT code which allows us to test if a program counter
     /// is in JIT code, lookup trap information, etc.
     frame_info: RefCell<StoreFrameInfo>,
-    /// List of all compiled modules that we're holding a strong reference to
+    /// Set of all compiled modules that we're holding a strong reference to
     /// the module's code for. This includes JIT functions, trampolines, etc.
-    modules: RefCell<Vec<Arc<ModuleCode>>>,
+    modules: RefCell<HashSet<ArcModuleCode>>,
 }
 
 struct HostInfoKey(VMExternRef);
@@ -169,6 +170,15 @@ impl Store {
         // a `Func` wrapper for any function in the module, which requires that
         // we know about the signature and trampoline for all instances.
         self.register_signatures(module);
+
+        // And finally with a module being instantiated into this `Store` we
+        // need to preserve its jit-code. References to this module's code and
+        // trampolines are not owning-references so it's our responsibility to
+        // keep it all alive within the `Store`.
+        self.inner
+            .modules
+            .borrow_mut()
+            .insert(ArcModuleCode(module.code().clone()));
     }
 
     fn register_jit_code(&self, module: &CompiledModule) {
@@ -180,7 +190,6 @@ impl Store {
         // Only register this module if it hasn't already been registered.
         if !self.is_wasm_code(first_pc) {
             self.inner.frame_info.borrow_mut().register(module);
-            self.inner.modules.borrow_mut().push(module.code().clone());
         }
     }
 
@@ -433,5 +442,23 @@ impl InterruptHandle {
     /// [`Store::interrupt_handle`].
     pub fn interrupt(&self) {
         self.interrupts.interrupt()
+    }
+}
+
+// Wrapper struct to implement hash/equality based on the pointer value of the
+// `Arc` in question.
+struct ArcModuleCode(Arc<ModuleCode>);
+
+impl PartialEq for ArcModuleCode {
+    fn eq(&self, other: &ArcModuleCode) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for ArcModuleCode {}
+
+impl Hash for ArcModuleCode {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        Arc::as_ptr(&self.0).hash(hasher)
     }
 }

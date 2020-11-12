@@ -16,6 +16,11 @@ fn instantiate(
     imports: Imports<'_>,
     host: Box<dyn Any>,
 ) -> Result<StoreInstanceHandle, Error> {
+    // Register the module just before instantiation to ensure we have a
+    // trampoline registered for every signature and to preserve the module's
+    // compiled JIT code within the `Store`.
+    store.register_module(compiled_module);
+
     let config = store.engine().config();
     let instance = unsafe {
         let instance = compiled_module.instantiate(
@@ -98,11 +103,6 @@ fn instantiate(
 #[derive(Clone)]
 pub struct Instance {
     pub(crate) handle: StoreInstanceHandle,
-    // Note that this is required to keep the module's code memory alive while
-    // we have a handle to this `Instance`. We may eventually want to shrink
-    // this to only hold onto the bare minimum each instance needs to allow
-    // deallocating some `Module` resources early, but until then we just hold
-    // on to everything.
     module: Module,
 }
 
@@ -165,7 +165,6 @@ impl Instance {
             bail!("cross-`Engine` instantiation is not currently supported");
         }
 
-        store.register_module(module.compiled_module());
         let handle = with_imports(store, module.compiled_module(), imports, |imports| {
             instantiate(store, module.compiled_module(), imports, Box::new(()))
         })?;

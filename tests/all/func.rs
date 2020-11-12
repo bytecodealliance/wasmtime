@@ -522,3 +522,30 @@ fn externref_signature_no_reference_types() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn trampolines_always_valid() -> anyhow::Result<()> {
+    let func = {
+        // Compile two modules up front
+        let store = Store::default();
+        let module1 = Module::new(store.engine(), "(module (import \"\" \"\" (func)))")?;
+        let module2 = Module::new(store.engine(), "(module (func (export \"\")))")?;
+        // Start instantiating the first module, but this will fail.
+        // Historically this registered the module's trampolines with `Store`
+        // before the failure, but then after the failure the `Store` didn't
+        // hold onto the trampoline.
+        drop(Instance::new(&store, &module1, &[]));
+        drop(module1);
+
+        // Then instantiate another module which has the same function type (no
+        // parameters or results) which tries to use the trampoline defined in
+        // the previous module. Then we extract the function and, in another
+        // scope where everything is dropped, we call the func.
+        let i = Instance::new(&store, &module2, &[])?;
+        i.get_func("").unwrap()
+    };
+
+    // ... and no segfaults! right? right? ...
+    func.call(&[])?;
+    Ok(())
+}
