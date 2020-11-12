@@ -21,27 +21,24 @@ impl CompiledBlob {
         } in &self.relocs
         {
             debug_assert!((offset as usize) < self.size);
-            let at = unsafe { self.ptr.offset(offset as isize) };
+            let at = unsafe { self.ptr.offset(isize::try_from(offset).unwrap()) };
             let base = get_definition(name);
-            // TODO: Handle overflow.
-            let what = unsafe { base.offset(addend as isize) };
+            let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
             match reloc {
                 Reloc::Abs4 => {
-                    // TODO: Handle overflow.
                     #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
                     unsafe {
-                        write_unaligned(at as *mut u32, what as u32)
+                        write_unaligned(at as *mut u32, u32::try_from(what as usize).unwrap())
                     };
                 }
                 Reloc::Abs8 => {
                     #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
                     unsafe {
-                        write_unaligned(at as *mut u64, what as u64)
+                        write_unaligned(at as *mut u64, u64::try_from(what as usize).unwrap())
                     };
                 }
                 Reloc::X86PCRel4 | Reloc::X86CallPCRel4 => {
-                    // TODO: Handle overflow.
-                    let pcrel = ((what as isize) - (at as isize)) as i32;
+                    let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
                     #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
                     unsafe {
                         write_unaligned(at as *mut i32, pcrel)
