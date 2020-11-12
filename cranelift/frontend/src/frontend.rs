@@ -459,19 +459,23 @@ impl<'a> FunctionBuilder<'a> {
     /// for another function.
     pub fn finalize(&mut self) {
         // Check that all the `Block`s are filled and sealed.
-        debug_assert!(
-            self.func_ctx.blocks.iter().all(
-                |(block, block_data)| block_data.pristine || self.func_ctx.ssa.is_sealed(block)
-            ),
-            "all blocks should be sealed before dropping a FunctionBuilder"
-        );
-        debug_assert!(
-            self.func_ctx
-                .blocks
-                .values()
-                .all(|block_data| block_data.pristine || block_data.filled),
-            "all blocks should be filled before dropping a FunctionBuilder"
-        );
+        #[cfg(debug_assertions)]
+        {
+            for (block, block_data) in self.func_ctx.blocks.iter() {
+                if !(block_data.pristine || self.func_ctx.ssa.is_sealed(block)) {
+                    panic!(
+                        "FunctionBuilder finalized, but block {} is not sealed",
+                        block
+                    );
+                }
+                if !(block_data.pristine || block_data.filled) {
+                    panic!(
+                        "FunctionBuilder finalized, but block {} is not filled",
+                        block
+                    );
+                }
+            }
+        }
 
         // In debug mode, check that all blocks are valid basic blocks.
         #[cfg(debug_assertions)]
