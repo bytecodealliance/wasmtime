@@ -1,4 +1,4 @@
-use crate::runtime::StoreInner;
+use crate::store::StoreInner;
 use crate::trampoline::StoreInstanceHandle;
 use crate::{Extern, ExternRef, FuncType, Memory, Store, Trap, Val, ValType};
 use anyhow::{bail, ensure, Context as _, Result};

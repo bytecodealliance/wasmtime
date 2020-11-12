@@ -234,6 +234,8 @@
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 
+mod config;
+mod engine;
 mod externals;
 mod frame_info;
 mod func;
@@ -241,13 +243,15 @@ mod instance;
 mod linker;
 mod module;
 mod r#ref;
-mod runtime;
 mod sig_registry;
+mod store;
 mod trampoline;
 mod trap;
 mod types;
 mod values;
 
+pub use crate::config::*;
+pub use crate::engine::*;
 pub use crate::externals::*;
 pub use crate::frame_info::FrameInfo;
 pub use crate::func::*;
@@ -255,7 +259,7 @@ pub use crate::instance::Instance;
 pub use crate::linker::*;
 pub use crate::module::Module;
 pub use crate::r#ref::ExternRef;
-pub use crate::runtime::*;
+pub use crate::store::*;
 pub use crate::trap::*;
 pub use crate::types::*;
 pub use crate::values::*;
@@ -268,4 +272,11 @@ cfg_if::cfg_if! {
     } else {
         // ... unknown os!
     }
+}
+
+fn _assert_send_sync() {
+    fn _assert<T: Send + Sync>() {}
+    _assert::<Engine>();
+    _assert::<Config>();
+    _assert::<InterruptHandle>();
 }
