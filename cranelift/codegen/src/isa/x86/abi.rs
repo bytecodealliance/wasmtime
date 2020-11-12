@@ -144,8 +144,13 @@ impl ArgAssigner for Args {
             return ValueConversion::VectorSplit.into();
         }
 
-        // Small integers are extended to the size of a pointer register.
-        if ty.is_int() && ty.bits() < u16::from(self.pointer_bits) {
+        // Small integers are extended to the size of a pointer register, but
+        // only in ABIs that require this. The Baldrdash (SpiderMonkey) ABI
+        // does, but our other supported ABIs on x86 do not.
+        if ty.is_int()
+            && ty.bits() < u16::from(self.pointer_bits)
+            && self.call_conv.extends_baldrdash()
+        {
             match arg.extension {
                 ArgumentExtension::None => {}
                 ArgumentExtension::Uext => return ValueConversion::Uext(self.pointer_type).into(),

@@ -445,6 +445,13 @@ impl ABIMachineSpec for Arm32MachineDeps {
         }
         caller_saved
     }
+
+    fn get_ext_mode(
+        _call_conv: isa::CallConv,
+        specified: ir::ArgumentExtension,
+    ) -> ir::ArgumentExtension {
+        specified
+    }
 }
 
 fn is_callee_save(r: RealReg) -> bool {

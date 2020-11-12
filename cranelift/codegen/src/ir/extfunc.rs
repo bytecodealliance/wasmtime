@@ -256,8 +256,19 @@ impl fmt::Display for AbiParam {
 
 /// Function argument extension options.
 ///
-/// On some architectures, small integer function arguments are extended to the width of a
-/// general-purpose register.
+/// On some architectures, small integer function arguments and/or return values are extended to
+/// the width of a general-purpose register.
+///
+/// This attribute specifies how an argument or return value should be extended *if the platform
+/// and ABI require it*. Because the frontend (CLIF generator) does not know anything about the
+/// particulars of the target's ABI, and the CLIF should be platform-independent, these attributes
+/// specify *how* to extend (according to the signedness of the original program) rather than
+/// *whether* to extend.
+///
+/// For example, on x86-64, the SystemV ABI does not require extensions of narrow values, so these
+/// `ArgumentExtension` attributes are ignored; but in the Baldrdash (SpiderMonkey) ABI on the same
+/// platform, all narrow values *are* extended, so these attributes may lead to extra
+/// zero/sign-extend instructions in the generated machine code.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum ArgumentExtension {
