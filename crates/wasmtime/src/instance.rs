@@ -43,7 +43,7 @@ fn instantiate(
             )
             .map_err(|e| -> Error {
                 match e {
-                    InstantiationError::Trap(trap) => Trap::from_runtime(trap).into(),
+                    InstantiationError::Trap(trap) => Trap::from_runtime(store, trap).into(),
                     other => other.into(),
                 }
             })?;
@@ -165,11 +165,9 @@ impl Instance {
             bail!("cross-`Engine` instantiation is not currently supported");
         }
 
-        store.register_module(&module);
-        let host_info = Box::new(module.register_frame_info());
-
+        store.register_module(module.compiled_module());
         let handle = with_imports(store, module.compiled_module(), imports, |imports| {
-            instantiate(store, module.compiled_module(), imports, host_info)
+            instantiate(store, module.compiled_module(), imports, Box::new(()))
         })?;
 
         Ok(Instance {

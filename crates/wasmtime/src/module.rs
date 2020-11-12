@@ -1,11 +1,10 @@
-use crate::frame_info::GlobalFrameInfoRegistration;
 use crate::types::{EntityType, ExportType, ExternType, ImportType};
 use crate::Engine;
 use anyhow::{bail, Context, Result};
 use bincode::Options;
 use std::hash::Hash;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use wasmparser::Validator;
 #[cfg(feature = "cache")]
 use wasmtime_cache::ModuleCacheEntry;
@@ -84,7 +83,6 @@ pub struct Module {
     engine: Engine,
     compiled: Arc<[CompiledModule]>,
     index: usize,
-    frame_info_registration: Arc<Mutex<Option<Option<Arc<GlobalFrameInfoRegistration>>>>>,
 }
 
 impl Module {
@@ -259,7 +257,6 @@ impl Module {
             engine: engine.clone(),
             index: compiled.len() - 1,
             compiled: compiled.into(),
-            frame_info_registration: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -333,7 +330,6 @@ impl Module {
             engine: engine.clone(),
             index,
             compiled: compiled.into(),
-            frame_info_registration: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -547,19 +543,6 @@ impl Module {
     /// Returns the [`Engine`] that this [`Module`] was compiled by.
     pub fn engine(&self) -> &Engine {
         &self.engine
-    }
-
-    /// Register this module's stack frame information into the global scope.
-    ///
-    /// This is required to ensure that any traps can be properly symbolicated.
-    pub(crate) fn register_frame_info(&self) -> Option<Arc<GlobalFrameInfoRegistration>> {
-        let mut info = self.frame_info_registration.lock().unwrap();
-        if let Some(info) = &*info {
-            return info.clone();
-        }
-        let ret = super::frame_info::register(self.compiled_module()).map(Arc::new);
-        *info = Some(ret.clone());
-        return ret;
     }
 }
 

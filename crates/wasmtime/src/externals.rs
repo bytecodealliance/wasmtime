@@ -492,13 +492,13 @@ impl Table {
         // come from different modules.
 
         let dst_table_index = dst_table.wasmtime_table_index();
-        let dst_table = dst_table.instance.get_defined_table(dst_table_index);
+        let dst_table_index = dst_table.instance.get_defined_table(dst_table_index);
 
         let src_table_index = src_table.wasmtime_table_index();
-        let src_table = src_table.instance.get_defined_table(src_table_index);
+        let src_table_index = src_table.instance.get_defined_table(src_table_index);
 
-        runtime::Table::copy(dst_table, src_table, dst_index, src_index, len)
-            .map_err(Trap::from_runtime)?;
+        runtime::Table::copy(dst_table_index, src_table_index, dst_index, src_index, len)
+            .map_err(|e| Trap::from_runtime(&dst_table.instance.store, e))?;
         Ok(())
     }
 
@@ -523,7 +523,7 @@ impl Table {
         self.instance
             .handle
             .defined_table_fill(table_index, dst, val.into_table_element()?, len)
-            .map_err(Trap::from_runtime)?;
+            .map_err(|e| Trap::from_runtime(&self.instance.store, e))?;
 
         Ok(())
     }

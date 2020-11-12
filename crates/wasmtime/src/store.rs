@@ -1,16 +1,18 @@
+use crate::frame_info::StoreFrameInfo;
 use crate::sig_registry::SignatureRegistry;
 use crate::trampoline::StoreInstanceHandle;
 use crate::Engine;
-use crate::Module;
 use anyhow::{bail, Result};
+use std::any::Any;
 use std::cell::RefCell;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use wasmtime_environ::wasm;
+use wasmtime_jit::{CompiledModule, ModuleCode};
 use wasmtime_runtime::{
-    InstanceHandle, RuntimeMemoryCreator, SignalHandler, StackMapRegistry, VMExternRef,
+    InstanceHandle, RuntimeMemoryCreator, SignalHandler, StackMapRegistry, TrapInfo, VMExternRef,
     VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
 };
 
@@ -18,8 +20,8 @@ use wasmtime_runtime::{
 ///
 /// All WebAssembly instances and items will be attached to and refer to a
 /// `Store`. For example instances, functions, globals, and tables are all
-/// attached to a `Store`. Instances are created by instantiating a [`Module`]
-/// within a `Store`.
+/// attached to a `Store`. Instances are created by instantiating a
+/// [`Module`](crate::Module) within a `Store`.
 ///
 /// `Store` is not thread-safe and cannot be sent to other threads. All items
 /// which refer to a `Store` additionally are not threadsafe and can only be
@@ -56,9 +58,14 @@ pub(crate) struct StoreInner {
     signatures: RefCell<SignatureRegistry>,
     instances: RefCell<Vec<InstanceHandle>>,
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
-    jit_code_ranges: RefCell<Vec<(usize, usize)>>,
     externref_activations_table: VMExternRefActivationsTable,
     stack_map_registry: StackMapRegistry,
+    /// Information about JIT code which allows us to test if a program counter
+    /// is in JIT code, lookup trap information, etc.
+    frame_info: RefCell<StoreFrameInfo>,
+    /// List of all compiled modules that we're holding a strong reference to
+    /// the module's code for. This includes JIT functions, trampolines, etc.
+    modules: RefCell<Vec<Arc<ModuleCode>>>,
 }
 
 struct HostInfoKey(VMExternRef);
@@ -97,9 +104,10 @@ impl Store {
                 signatures: RefCell::new(Default::default()),
                 instances: RefCell::new(Vec::new()),
                 signal_handler: RefCell::new(None),
-                jit_code_ranges: RefCell::new(Vec::new()),
                 externref_activations_table: VMExternRefActivationsTable::new(),
                 stack_map_registry: StackMapRegistry::default(),
+                frame_info: Default::default(),
+                modules: Default::default(),
             }),
         }
     }
@@ -138,17 +146,7 @@ impl Store {
         }
     }
 
-    /// Returns whether or not the given address falls within the JIT code
-    /// managed by the compiler
-    pub(crate) fn is_in_jit_code(&self, addr: usize) -> bool {
-        self.inner
-            .jit_code_ranges
-            .borrow()
-            .iter()
-            .any(|(start, end)| *start <= addr && addr < *end)
-    }
-
-    pub(crate) fn register_module(&self, module: &Module) {
+    pub(crate) fn register_module(&self, module: &CompiledModule) {
         // All modules register their JIT code in a store for two reasons
         // currently:
         //
@@ -173,26 +171,20 @@ impl Store {
         self.register_signatures(module);
     }
 
-    fn register_jit_code(&self, module: &Module) {
-        let mut ranges = module.compiled_module().jit_code_ranges();
-        // Checking of we already registered JIT code ranges by searching
-        // first range start.
-        match ranges.next() {
-            None => (),
-            Some(first) => {
-                if !self.is_in_jit_code(first.0) {
-                    // The range is not registered -- add all ranges (including
-                    // first one) to the jit_code_ranges.
-                    let mut jit_code_ranges = self.inner.jit_code_ranges.borrow_mut();
-                    jit_code_ranges.push(first);
-                    jit_code_ranges.extend(ranges);
-                }
-            }
+    fn register_jit_code(&self, module: &CompiledModule) {
+        let functions = module.finished_functions();
+        let first_pc = match functions.values().next() {
+            Some(f) => unsafe { (**f).as_ptr() as usize },
+            None => return,
+        };
+        // Only register this module if it hasn't already been registered.
+        if !self.is_wasm_code(first_pc) {
+            self.inner.frame_info.borrow_mut().register(module);
+            self.inner.modules.borrow_mut().push(module.code().clone());
         }
     }
 
-    fn register_stack_maps(&self, module: &Module) {
-        let module = &module.compiled_module();
+    fn register_stack_maps(&self, module: &CompiledModule) {
         self.stack_map_registry()
             .register_stack_maps(module.stack_maps().map(|(func, stack_maps)| unsafe {
                 let ptr = (*func).as_ptr();
@@ -204,9 +196,9 @@ impl Store {
             }));
     }
 
-    fn register_signatures(&self, module: &Module) {
-        let trampolines = module.compiled_module().trampolines();
-        let module = module.compiled_module().module();
+    fn register_signatures(&self, module: &CompiledModule) {
+        let trampolines = module.trampolines();
+        let module = module.module();
         let mut signatures = self.signatures().borrow_mut();
         for (index, wasm) in module.signatures.iter() {
             signatures.register(wasm, trampolines[index]);
@@ -243,14 +235,8 @@ impl Store {
         Some(Self { inner })
     }
 
-    pub(crate) fn signal_handler(&self) -> std::cell::Ref<'_, Option<Box<SignalHandler<'static>>>> {
-        self.inner.signal_handler.borrow()
-    }
-
-    pub(crate) fn signal_handler_mut(
-        &self,
-    ) -> std::cell::RefMut<'_, Option<Box<SignalHandler<'static>>>> {
-        self.inner.signal_handler.borrow_mut()
+    pub(crate) fn set_signal_handler(&self, handler: Option<Box<SignalHandler<'static>>>) {
+        *self.inner.signal_handler.borrow_mut() = handler;
     }
 
     pub(crate) fn interrupts(&self) -> &VMInterrupts {
@@ -367,6 +353,10 @@ impl Store {
         &self.inner.stack_map_registry
     }
 
+    pub(crate) fn frame_info(&self) -> &RefCell<StoreFrameInfo> {
+        &self.inner.frame_info
+    }
+
     /// Perform garbage collection of `ExternRef`s.
     pub fn gc(&self) {
         // For this crate's API, we ensure that `set_stack_canary` invariants
@@ -378,6 +368,27 @@ impl Store {
                 &self.inner.externref_activations_table,
             );
         }
+    }
+}
+
+unsafe impl TrapInfo for Store {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn is_wasm_code(&self, addr: usize) -> bool {
+        self.frame_info().borrow().contains_pc(addr)
+    }
+
+    fn custom_signal_handler(&self, call: &dyn Fn(&SignalHandler) -> bool) -> bool {
+        if let Some(handler) = &*self.inner.signal_handler.borrow() {
+            return call(handler);
+        }
+        false
+    }
+
+    fn max_wasm_stack(&self) -> usize {
+        self.engine().config().max_wasm_stack
     }
 }
 

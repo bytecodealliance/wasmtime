@@ -2247,7 +2247,6 @@ dependencies = [
  "backtrace",
  "bincode",
  "cfg-if 1.0.0",
- "lazy_static",
  "libc",
  "log",
  "region",
