@@ -435,6 +435,11 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
                 .allocate(std::mem::size_of::<[u8; 16]>(), EXECUTABLE_DATA_ALIGNMENT)
                 .unwrap()
                 .cast::<[u8; 16]>();
+            self.record_function_for_perf(
+                plt_entry as *mut _,
+                std::mem::size_of::<[u8; 16]>(),
+                &format!("{}@plt", name),
+            );
             self.function_plt_entries[id] = Some(NonNull::new(plt_entry).unwrap());
             unsafe {
                 Self::write_plt_entry_bytes(plt_entry, got_entry);
