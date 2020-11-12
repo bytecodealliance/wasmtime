@@ -69,7 +69,16 @@ macro_rules! declare_function_signatures {
             }
 
             fn i32(&self) -> AbiParam {
-                AbiParam::new(I32)
+                // Some platform ABIs require i32 values to be zero- or sign-
+                // extended to the full register width.  We need to indicate
+                // this here by using the appropriate .uext or .sext attribute.
+                // The attribute can be added unconditionally; platforms whose
+                // ABI does not require such extensions will simply ignore it.
+                // Note that currently all i32 arguments or return values used
+                // by builtin functions are unsigned, so we always use .uext.
+                // If that ever changes, we will have to add a second type
+                // marker here.
+                AbiParam::new(I32).uext()
             }
 
             $(
