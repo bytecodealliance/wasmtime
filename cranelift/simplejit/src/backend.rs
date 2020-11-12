@@ -393,6 +393,28 @@ impl SimpleJITModule {
             data_objects_to_finalize: Vec::new(),
         }
     }
+
+    /// Allow a single future `define_function` on a previously defined function. This allows for
+    /// hot code swapping and lazy compilation of functions.
+    pub fn prepare_for_function_redefine(&mut self, func_id: FuncId) -> ModuleResult<()> {
+        let decl = self.declarations.get_function_decl(func_id);
+        if !decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
+        }
+
+        if self.compiled_functions[func_id].is_none() {
+            return Err(ModuleError::Backend(anyhow::anyhow!(
+                "Tried to redefine not yet defined function {}",
+                decl.name
+            )));
+        }
+
+        self.compiled_functions[func_id] = None;
+
+        // FIXME return some kind of handle that allows for deallocating the function
+
+        Ok(())
+    }
 }
 
 impl<'simple_jit_backend> Module for SimpleJITModule {

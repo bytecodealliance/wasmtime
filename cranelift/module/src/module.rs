@@ -490,3 +490,97 @@ pub trait Module {
     /// Define a data object, producing the data contents from the given `DataContext`.
     fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()>;
 }
+
+impl<M: Module> Module for &mut M {
+    fn isa(&self) -> &dyn isa::TargetIsa {
+        (**self).isa()
+    }
+
+    fn declarations(&self) -> &ModuleDeclarations {
+        (**self).declarations()
+    }
+
+    fn get_name(&self, name: &str) -> Option<FuncOrDataId> {
+        (**self).get_name(name)
+    }
+
+    fn target_config(&self) -> isa::TargetFrontendConfig {
+        (**self).target_config()
+    }
+
+    fn make_context(&self) -> Context {
+        (**self).make_context()
+    }
+
+    fn clear_context(&self, ctx: &mut Context) {
+        (**self).clear_context(ctx)
+    }
+
+    fn make_signature(&self) -> ir::Signature {
+        (**self).make_signature()
+    }
+
+    fn clear_signature(&self, sig: &mut ir::Signature) {
+        (**self).clear_signature(sig)
+    }
+
+    fn declare_function(
+        &mut self,
+        name: &str,
+        linkage: Linkage,
+        signature: &ir::Signature,
+    ) -> ModuleResult<FuncId> {
+        (**self).declare_function(name, linkage, signature)
+    }
+
+    fn declare_data(
+        &mut self,
+        name: &str,
+        linkage: Linkage,
+        writable: bool,
+        tls: bool,
+    ) -> ModuleResult<DataId> {
+        (**self).declare_data(name, linkage, writable, tls)
+    }
+
+    fn declare_func_in_func(&self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {
+        (**self).declare_func_in_func(func, in_func)
+    }
+
+    fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalValue {
+        (**self).declare_data_in_func(data, func)
+    }
+
+    fn declare_func_in_data(&self, func: FuncId, ctx: &mut DataContext) -> ir::FuncRef {
+        (**self).declare_func_in_data(func, ctx)
+    }
+
+    fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalValue {
+        (**self).declare_data_in_data(data, ctx)
+    }
+
+    fn define_function<TS>(
+        &mut self,
+        func: FuncId,
+        ctx: &mut Context,
+        trap_sink: &mut TS,
+    ) -> ModuleResult<ModuleCompiledFunction>
+    where
+        TS: binemit::TrapSink,
+    {
+        (**self).define_function(func, ctx, trap_sink)
+    }
+
+    fn define_function_bytes(
+        &mut self,
+        func: FuncId,
+        bytes: &[u8],
+        relocs: &[RelocRecord],
+    ) -> ModuleResult<ModuleCompiledFunction> {
+        (**self).define_function_bytes(func, bytes, relocs)
+    }
+
+    fn define_data(&mut self, data: DataId, data_ctx: &DataContext) -> ModuleResult<()> {
+        (**self).define_data(data, data_ctx)
+    }
+}

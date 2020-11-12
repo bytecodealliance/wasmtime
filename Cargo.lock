@@ -477,6 +477,7 @@ dependencies = [
 name = "cranelift-simplejit"
 version = "0.68.0"
 dependencies = [
+ "anyhow",
  "cranelift",
  "cranelift-codegen",
  "cranelift-entity",
