@@ -1239,7 +1239,7 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_dmb_ish()); // dmb ish
             }
             &Inst::FpuMove64 { rd, rn } => {
-                sink.put4(enc_vecmov(/* 16b = */ false, rd, rn));
+                sink.put4(enc_fpurr(0b000_11110_01_1_000000_10000, rd, rn));
             }
             &Inst::FpuMove128 { rd, rn } => {
                 sink.put4(enc_vecmov(/* 16b = */ true, rd, rn));
@@ -1984,7 +1984,9 @@ impl MachInstEmit for Inst {
                 if top22 != 0 {
                     sink.put4(enc_extend(top22, rd, rn));
                 } else {
-                    Inst::mov32(rd, rn).emit(sink, emit_info, state);
+                    let mov = Inst::Mov32 { rd, rm: rn };
+
+                    mov.emit(sink, emit_info, state);
                 }
             }
             &Inst::Extend {
@@ -2264,7 +2266,7 @@ impl MachInstEmit for Inst {
                     add.emit(sink, emit_info, state);
                 } else if offset == 0 {
                     if reg != rd.to_reg() {
-                        let mov = Inst::mov(rd, reg);
+                        let mov = Inst::Mov64 { rd, rm: reg };
 
                         mov.emit(sink, emit_info, state);
                     }

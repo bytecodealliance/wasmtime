@@ -4219,8 +4219,8 @@ fn test_aarch64_binemit() {
             rd: writable_vreg(8),
             rn: vreg(4),
         },
-        "881CA40E",
-        "mov v8.8b, v4.8b",
+        "8840601E",
+        "fmov d8, d4",
     ));
 
     insns.push((

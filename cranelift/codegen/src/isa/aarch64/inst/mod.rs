@@ -5,8 +5,9 @@
 
 use crate::binemit::CodeOffset;
 use crate::ir::types::{
-    B1, B16, B16X8, B32, B32X4, B64, B64X2, B8, B8X16, F32, F32X4, F64, F64X2, FFLAGS, I16, I16X8,
-    I32, I32X4, I64, I64X2, I8, I8X16, IFLAGS, R32, R64,
+    B1, B16, B16X4, B16X8, B32, B32X2, B32X4, B64, B64X2, B8, B8X16, B8X8, F32, F32X2, F32X4, F64,
+    F64X2, FFLAGS, I16, I16X4, I16X8, I32, I32X2, I32X4, I64, I64X2, I8, I8X16, I8X8, IFLAGS, R32,
+    R64,
 };
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
 use crate::isa::CallConv;
@@ -1192,35 +1193,6 @@ fn inst_size_test() {
 }
 
 impl Inst {
-    /// Create a move instruction.
-    pub fn mov(to_reg: Writable<Reg>, from_reg: Reg) -> Inst {
-        assert!(to_reg.to_reg().get_class() == from_reg.get_class());
-        if from_reg.get_class() == RegClass::I64 {
-            Inst::Mov64 {
-                rd: to_reg,
-                rm: from_reg,
-            }
-        } else if from_reg.get_class() == RegClass::V128 {
-            Inst::FpuMove128 {
-                rd: to_reg,
-                rn: from_reg,
-            }
-        } else {
-            Inst::FpuMove64 {
-                rd: to_reg,
-                rn: from_reg,
-            }
-        }
-    }
-
-    /// Create a 32-bit move instruction.
-    pub fn mov32(to_reg: Writable<Reg>, from_reg: Reg) -> Inst {
-        Inst::Mov32 {
-            rd: to_reg,
-            rm: from_reg,
-        }
-    }
-
     /// Create an instruction that loads a constant, using one of serveral options (MOVZ, MOVN,
     /// logical immediate, or constant pool).
     pub fn load_constant(rd: Writable<Reg>, value: u64) -> SmallVec<[Inst; 4]> {
@@ -2709,8 +2681,31 @@ impl MachInst for Inst {
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
-        assert!(ty.bits() <= 128);
-        Inst::mov(to_reg, from_reg)
+        let bits = ty.bits();
+
+        assert!(bits <= 128);
+        assert!(to_reg.to_reg().get_class() == from_reg.get_class());
+
+        if from_reg.get_class() == RegClass::I64 {
+            Inst::Mov64 {
+                rd: to_reg,
+                rm: from_reg,
+            }
+        } else if from_reg.get_class() == RegClass::V128 {
+            if bits > 64 {
+                Inst::FpuMove128 {
+                    rd: to_reg,
+                    rn: from_reg,
+                }
+            } else {
+                Inst::FpuMove64 {
+                    rd: to_reg,
+                    rn: from_reg,
+                }
+            }
+        } else {
+            panic!("Unexpected register class: {:?}", from_reg.get_class());
+        }
     }
 
     fn gen_constant<F: FnMut(RegClass, Type) -> Writable<Reg>>(
@@ -2761,9 +2756,9 @@ impl MachInst for Inst {
             I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 | R32 | R64 => Ok(RegClass::I64),
             F32 | F64 => Ok(RegClass::V128),
             IFLAGS | FFLAGS => Ok(RegClass::I64),
-            B8X16 | I8X16 | B16X8 | I16X8 | B32X4 | I32X4 | B64X2 | I64X2 | F32X4 | F64X2 => {
-                Ok(RegClass::V128)
-            }
+            B8X8 | B8X16 | B16X4 | B16X8 | B32X2 | B32X4 | B64X2 => Ok(RegClass::V128),
+            F32X2 | I8X8 | I16X4 | I32X2 => Ok(RegClass::V128),
+            F32X4 | F64X2 | I8X16 | I16X8 | I32X4 | I64X2 => Ok(RegClass::V128),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty
@@ -3149,9 +3144,9 @@ impl Inst {
                 format!("dmb ish")
             }
             &Inst::FpuMove64 { rd, rn } => {
-                let rd = rd.to_reg().show_rru(mb_rru);
-                let rn = rn.show_rru(mb_rru);
-                format!("mov {}.8b, {}.8b", rd, rn)
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, ScalarSize::Size64);
+                let rn = show_vreg_scalar(rn, mb_rru, ScalarSize::Size64);
+                format!("fmov {}, {}", rd, rn)
             }
             &Inst::FpuMove128 { rd, rn } => {
                 let rd = rd.to_reg().show_rru(mb_rru);
@@ -3800,9 +3795,10 @@ impl Inst {
                 for inst in mem_insts.into_iter() {
                     ret.push_str(&inst.show_rru(mb_rru));
                 }
-                let (reg, offset) = match mem {
-                    AMode::Unscaled(r, simm9) => (r, simm9.value()),
-                    AMode::UnsignedOffset(r, uimm12scaled) => (r, uimm12scaled.value() as i32),
+                let (reg, index_reg, offset) = match mem {
+                    AMode::RegExtended(r, idx, extendop) => (r, Some((idx, extendop)), 0),
+                    AMode::Unscaled(r, simm9) => (r, None, simm9.value()),
+                    AMode::UnsignedOffset(r, uimm12scaled) => (r, None, uimm12scaled.value() as i32),
                     _ => panic!("Unsupported case for LoadAddr: {:?}", mem),
                 };
                 let abs_offset = if offset < 0 {
@@ -3816,8 +3812,18 @@ impl Inst {
                     ALUOp::Add64
                 };
 
-                if offset == 0 {
-                    let mov = Inst::mov(rd, reg);
+                if let Some((idx, extendop)) = index_reg {
+                    let add = Inst::AluRRRExtend {
+                        alu_op: ALUOp::Add64,
+                        rd,
+                        rn: reg,
+                        rm: idx,
+                        extendop,
+                    };
+
+                    ret.push_str(&add.show_rru(mb_rru));
+                } else if offset == 0 {
+                    let mov = Inst::gen_move(rd, reg, I64);
                     ret.push_str(&mov.show_rru(mb_rru));
                 } else if let Some(imm12) = Imm12::maybe_from_u64(abs_offset) {
                     let add = Inst::AluRRImm12 {
