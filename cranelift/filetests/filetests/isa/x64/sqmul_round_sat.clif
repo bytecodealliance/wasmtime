@@ -10,10 +10,11 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_const VCodeConstant(0), %xmm7
+;   movdqu  const(0), %xmm7
 ;   pmulhrsw %xmm0, %xmm1, %xmm0
 ;   pcmpeqw %xmm7, %xmm0, %xmm7
 ;   pxor    %xmm0, %xmm7, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
+

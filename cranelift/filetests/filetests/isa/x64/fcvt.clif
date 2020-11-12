@@ -170,9 +170,9 @@ block0(v0: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   load_const VCodeConstant(0), %xmm3
+;   movdqu  const(0), %xmm3
 ;   unpcklps %xmm0, %xmm3, %xmm0
-;   load_const VCodeConstant(1), %xmm7
+;   movdqu  const(1), %xmm7
 ;   subpd   %xmm0, %xmm7, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
