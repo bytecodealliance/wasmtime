@@ -137,7 +137,6 @@ pub struct SimpleJITModule {
     libcall_plt_entries: HashMap<ir::LibCall, NonNull<[u8; 16]>>,
     compiled_functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
     compiled_data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
-    functions_to_finalize: Vec<FuncId>,
     data_objects_to_finalize: Vec<DataId>,
 }
 
@@ -171,7 +170,10 @@ impl SimpleJITModule {
     }
 
     unsafe fn write_plt_entry_bytes(plt_ptr: *mut [u8; 16], got_ptr: *mut *const u8) {
-        assert!(cfg!(target_arch = "x86_64"), "PLT is currently only supported on x86_64");
+        assert!(
+            cfg!(target_arch = "x86_64"),
+            "PLT is currently only supported on x86_64"
+        );
         // jmp *got_ptr; ud2; ud2; ud2; ud2; ud2
         let mut plt_val = [
             0xff, 0x25, 0, 0, 0, 0, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b,
@@ -274,10 +276,6 @@ impl SimpleJITModule {
     /// Returns the address of a finalized function.
     pub fn get_finalized_function(&self, func_id: FuncId) -> *const u8 {
         let info = &self.compiled_functions[func_id];
-        assert!(
-            !self.functions_to_finalize.iter().any(|x| *x == func_id),
-            "function not yet finalized"
-        );
         info.as_ref()
             .expect("function must be compiled before it can be finalized")
             .ptr
@@ -321,18 +319,6 @@ impl SimpleJITModule {
     /// Use `get_finalized_function` and `get_finalized_data` to obtain the final
     /// artifacts.
     pub fn finalize_definitions(&mut self) {
-        for func in std::mem::take(&mut self.functions_to_finalize) {
-            let decl = self.declarations.get_function_decl(func);
-            assert!(decl.linkage.is_definable());
-            let func_blob = self.compiled_functions[func]
-                .as_ref()
-                .expect("function must be compiled before it can be finalized");
-            func_blob.perform_relocations(
-                |name| unreachable!("non-GOT/PLT relocation in function {} to {}", func, name),
-                |name| self.get_got_address(name),
-                |name| self.get_plt_address(name),
-            );
-        }
         for data in std::mem::take(&mut self.data_objects_to_finalize) {
             let decl = self.declarations.get_data_decl(data);
             assert!(decl.linkage.is_definable());
@@ -411,7 +397,6 @@ impl SimpleJITModule {
             libcall_plt_entries,
             compiled_functions: SecondaryMap::new(),
             compiled_data_objects: SecondaryMap::new(),
-            functions_to_finalize: Vec::new(),
             data_objects_to_finalize: Vec::new(),
         }
     }
@@ -582,11 +567,14 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             size,
             relocs: reloc_sink.relocs,
         });
-        // FIXME immediately perform relocations
-        self.functions_to_finalize.push(id);
         unsafe {
             std::ptr::write(self.function_got_entries[id].unwrap().as_ptr(), ptr);
         }
+        self.compiled_functions[id].as_ref().unwrap().perform_relocations(
+            |name| unreachable!("non GOT or PLT relocation in function {} to {}", id, name),
+            |name| self.get_got_address(name),
+            |name| self.get_plt_address(name),
+        );
 
         Ok(ModuleCompiledFunction { size: code_size })
     }
@@ -629,10 +617,14 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             size,
             relocs: relocs.to_vec(),
         });
-        self.functions_to_finalize.push(id);
         unsafe {
             std::ptr::write(self.function_got_entries[id].unwrap().as_ptr(), ptr);
         }
+        self.compiled_functions[id].as_ref().unwrap().perform_relocations(
+            |name| unreachable!("non GOT or PLT relocation in function {} to {}", id, name),
+            |name| self.get_got_address(name),
+            |name| self.get_plt_address(name),
+        );
 
         Ok(ModuleCompiledFunction { size: total_size })
     }
