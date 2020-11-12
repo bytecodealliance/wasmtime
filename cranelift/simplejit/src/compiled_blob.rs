@@ -15,6 +15,7 @@ impl CompiledBlob {
         &self,
         get_address: impl Fn(&ExternalName) -> *const u8,
         get_got_entry: impl Fn(&ExternalName) -> *const u8,
+        get_plt_entry: impl Fn(&ExternalName) -> *const u8,
     ) {
         use std::ptr::write_unaligned;
 
@@ -62,7 +63,15 @@ impl CompiledBlob {
                         write_unaligned(at as *mut i32, pcrel)
                     };
                 }
-                Reloc::X86CallPLTRel4 => todo!("PLT relocation"),
+                Reloc::X86CallPLTRel4 => {
+                    let base = get_plt_entry(name);
+                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
+                    unsafe {
+                        write_unaligned(at as *mut i32, pcrel)
+                    };
+                }
                 _ => unimplemented!(),
             }
         }

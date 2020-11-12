@@ -18,7 +18,7 @@ use cranelift_native;
 use libc;
 use log::info;
 use std::collections::HashMap;
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::ffi::CString;
 use std::io::Write;
 use std::ptr;
@@ -131,8 +131,10 @@ pub struct SimpleJITModule {
     memory: MemoryHandle,
     declarations: ModuleDeclarations,
     function_got_entries: SecondaryMap<FuncId, Option<NonNull<*const u8>>>,
+    function_plt_entries: SecondaryMap<FuncId, Option<NonNull<[u8; 16]>>>,
     data_object_got_entries: SecondaryMap<DataId, Option<NonNull<*const u8>>>,
     libcall_got_entries: HashMap<ir::LibCall, NonNull<*const u8>>,
+    libcall_plt_entries: HashMap<ir::LibCall, NonNull<[u8; 16]>>,
     compiled_functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
     compiled_data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
     functions_to_finalize: Vec<FuncId>,
@@ -166,6 +168,18 @@ impl SimpleJITModule {
             .get(name)
             .copied()
             .or_else(|| lookup_with_dlsym(name))
+    }
+
+    unsafe fn write_plt_entry_bytes(plt_ptr: *mut [u8; 16], got_ptr: *mut *const u8) {
+        assert!(cfg!(target_arch = "x86_64"), "PLT is currently only supported on x86_64");
+        // jmp *got_ptr; ud2; ud2; ud2; ud2; ud2
+        let mut plt_val = [
+            0xff, 0x25, 0, 0, 0, 0, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b,
+        ];
+        let what = got_ptr as isize - 4;
+        let at = plt_ptr as isize + 2;
+        plt_val[2..6].copy_from_slice(&i32::to_ne_bytes(i32::try_from(what - at).unwrap()));
+        std::ptr::write(plt_ptr, plt_val);
     }
 
     fn get_address(&self, name: &ir::ExternalName) -> *const u8 {
@@ -234,6 +248,29 @@ impl SimpleJITModule {
         }
     }
 
+    fn get_plt_address(&self, name: &ir::ExternalName) -> *const u8 {
+        match *name {
+            ir::ExternalName::User { .. } => {
+                if ModuleDeclarations::is_function(name) {
+                    let func_id = FuncId::from_name(name);
+                    self.function_plt_entries[func_id]
+                        .unwrap()
+                        .as_ptr()
+                        .cast::<u8>()
+                } else {
+                    unreachable!("PLT relocations can only have functions as target");
+                }
+            }
+            ir::ExternalName::LibCall(ref libcall) => self
+                .libcall_plt_entries
+                .get(libcall)
+                .unwrap_or_else(|| panic!("can't resolve libcall {}", libcall))
+                .as_ptr()
+                .cast::<u8>(),
+            _ => panic!("invalid ExternalName {}", name),
+        }
+    }
+
     /// Returns the address of a finalized function.
     pub fn get_finalized_function(&self, func_id: FuncId) -> *const u8 {
         let info = &self.compiled_functions[func_id];
@@ -293,6 +330,7 @@ impl SimpleJITModule {
             func_blob.perform_relocations(
                 |name| unreachable!("non-GOT/PLT relocation in function {} to {}", func, name),
                 |name| self.get_got_address(name),
+                |name| self.get_plt_address(name),
             );
         }
         for data in std::mem::take(&mut self.data_objects_to_finalize) {
@@ -304,6 +342,7 @@ impl SimpleJITModule {
             data.perform_relocations(
                 |name| self.get_address(name),
                 |name| self.get_got_address(name),
+                |name| self.get_plt_address(name),
             );
         }
 
@@ -321,6 +360,7 @@ impl SimpleJITModule {
         };
 
         let mut libcall_got_entries = HashMap::new();
+        let mut libcall_plt_entries = HashMap::new();
 
         // Pre-create a GOT entry for each libcall.
         for &libcall in ir::LibCall::all_libcalls() {
@@ -334,15 +374,27 @@ impl SimpleJITModule {
                 .cast::<*const u8>();
             libcall_got_entries.insert(libcall, NonNull::new(got_entry).unwrap());
             let sym = (builder.libcall_names)(libcall);
-            if let Some(addr) = builder
+            let addr = if let Some(addr) = builder
                 .symbols
                 .get(&sym)
                 .copied()
                 .or_else(|| lookup_with_dlsym(&sym))
             {
-                unsafe {
-                    std::ptr::write(got_entry, addr);
-                }
+                addr
+            } else {
+                continue;
+            };
+            unsafe {
+                std::ptr::write(got_entry, addr);
+            }
+            let plt_entry = memory
+                .code
+                .allocate(std::mem::size_of::<[u8; 16]>(), EXECUTABLE_DATA_ALIGNMENT)
+                .unwrap()
+                .cast::<[u8; 16]>();
+            libcall_plt_entries.insert(libcall, NonNull::new(plt_entry).unwrap());
+            unsafe {
+                Self::write_plt_entry_bytes(plt_entry, got_entry);
             }
         }
 
@@ -353,8 +405,10 @@ impl SimpleJITModule {
             memory,
             declarations: ModuleDeclarations::default(),
             function_got_entries: SecondaryMap::new(),
+            function_plt_entries: SecondaryMap::new(),
             data_object_got_entries: SecondaryMap::new(),
             libcall_got_entries,
+            libcall_plt_entries,
             compiled_functions: SecondaryMap::new(),
             compiled_data_objects: SecondaryMap::new(),
             functions_to_finalize: Vec::new(),
@@ -396,6 +450,16 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             let val = self.lookup_symbol(name).unwrap_or(std::ptr::null());
             unsafe {
                 std::ptr::write(got_entry, val);
+            }
+            let plt_entry = self
+                .memory
+                .code
+                .allocate(std::mem::size_of::<[u8; 16]>(), EXECUTABLE_DATA_ALIGNMENT)
+                .unwrap()
+                .cast::<[u8; 16]>();
+            self.function_plt_entries[id] = Some(NonNull::new(plt_entry).unwrap());
+            unsafe {
+                Self::write_plt_entry_bytes(plt_entry, got_entry);
             }
         }
         Ok(id)
