@@ -161,6 +161,12 @@ impl Into<SyntheticAmode> for Amode {
     }
 }
 
+impl Into<SyntheticAmode> for VCodeConstant {
+    fn into(self) -> SyntheticAmode {
+        SyntheticAmode::ConstantOffset(self)
+    }
+}
+
 impl PrettyPrint for SyntheticAmode {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         match self {
@@ -168,7 +174,7 @@ impl PrettyPrint for SyntheticAmode {
             SyntheticAmode::NominalSPOffset { simm32 } => {
                 format!("rsp({} + virtual offset)", *simm32 as i32)
             }
-            SyntheticAmode::ConstantOffset(c) => format!("const({:?})", c),
+            SyntheticAmode::ConstantOffset(c) => format!("const({})", c.as_u32()),
         }
     }
 }

@@ -3505,7 +3505,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // TODO use Inst::gen_constant() instead.
             let dst = get_output_reg(ctx, outputs[0]);
             let ty = ty.unwrap();
-            ctx.emit(Inst::xmm_load_const(used_constant, dst, ty));
+            ctx.emit(Inst::load(ty, used_constant, dst, ExtKind::None));
         }
 
         Opcode::RawBitcast => {
@@ -3548,7 +3548,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     .collect();
                 let constant = ctx.use_constant(VCodeConstantData::Generated(constructed_mask));
                 let tmp = ctx.alloc_tmp(RegClass::V128, types::I8X16);
-                ctx.emit(Inst::xmm_load_const(constant, tmp, ty));
+                ctx.emit(Inst::load(ty, constant, tmp, ExtKind::None));
                 // After loading the constructed mask in a temporary register, we use this to
                 // shuffle the `dst` register (remember that, in this case, it is the same as
                 // `src` so we disregard this register).
@@ -3564,7 +3564,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let constructed_mask = mask.iter().cloned().map(zero_unknown_lane_index).collect();
                 let constant = ctx.use_constant(VCodeConstantData::Generated(constructed_mask));
                 let tmp1 = ctx.alloc_tmp(RegClass::V128, types::I8X16);
-                ctx.emit(Inst::xmm_load_const(constant, tmp1, ty));
+                ctx.emit(Inst::load(ty, constant, tmp1, ExtKind::None));
                 ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::from(tmp1), tmp0));
 
                 // PSHUFB the second argument, placing zeroes for unused lanes.
@@ -3575,7 +3575,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     .collect();
                 let constant = ctx.use_constant(VCodeConstantData::Generated(constructed_mask));
                 let tmp2 = ctx.alloc_tmp(RegClass::V128, types::I8X16);
-                ctx.emit(Inst::xmm_load_const(constant, tmp2, ty));
+                ctx.emit(Inst::load(ty, constant, tmp2, ExtKind::None));
                 ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::from(tmp2), dst));
 
                 // OR the shuffled registers (the mechanism and lane-size for OR-ing the registers
@@ -3607,7 +3607,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 0x70, 0x70,
             ];
             let constant = ctx.use_constant(VCodeConstantData::WellKnown(&ZERO_MASK_VALUE));
-            ctx.emit(Inst::xmm_load_const(constant, zero_mask, ty));
+            ctx.emit(Inst::load(ty, constant, zero_mask, ExtKind::None));
 
             // Use the `zero_mask` on a writable `swizzle_mask`.
             let swizzle_mask = Writable::from_reg(swizzle_mask);

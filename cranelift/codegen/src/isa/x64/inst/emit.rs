@@ -1999,12 +1999,6 @@ pub(crate) fn emit(
             sink.put1(*imm);
         }
 
-        Inst::XmmLoadConst { src, dst, ty } => {
-            let load_offset = Amode::rip_relative(sink.get_label_for_constant(*src));
-            let load = Inst::load(*ty, load_offset, *dst, ExtKind::None);
-            load.emit(sink, info, state);
-        }
-
         Inst::XmmUninitializedValue { .. } => {
             // This instruction format only exists to declare a register as a `def`; no code is
             // emitted.
