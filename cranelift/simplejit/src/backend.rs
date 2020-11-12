@@ -51,6 +51,7 @@ impl SimpleJITBuilder {
         // which might not reach all definitions; we can't handle that here, so
         // we require long-range relocation types.
         flag_builder.set("use_colocated_libcalls", "false").unwrap();
+        flag_builder.set("is_pic", "true").unwrap();
         let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
             panic!("host machine is not supported: {}", msg);
         });
