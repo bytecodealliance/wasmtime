@@ -3566,7 +3566,6 @@ impl LowerBackend for X64Backend {
         ctx: &mut C,
         branches: &[IRInst],
         targets: &[MachLabel],
-        fallthrough: Option<MachLabel>,
     ) -> CodegenResult<()> {
         // A block should end with at most two branches. The first may be a
         // conditional branch; a conditional branch can be followed only by an
@@ -3589,11 +3588,11 @@ impl LowerBackend for X64Backend {
             assert!(op1 == Opcode::Jump || op1 == Opcode::Fallthrough);
 
             let taken = targets[0];
-            let not_taken = match op1 {
-                Opcode::Jump => targets[1],
-                Opcode::Fallthrough => fallthrough.unwrap(),
-                _ => unreachable!(), // assert above.
-            };
+            // not_taken target is the target of the second branch, even if it is a Fallthrough
+            // instruction: because we reorder blocks while we lower, the fallthrough in the new
+            // order is not (necessarily) the same as the fallthrough in CLIF. So we use the
+            // explicitly-provided target.
+            let not_taken = targets[1];
 
             match op0 {
                 Opcode::Brz | Opcode::Brnz => {
@@ -3683,6 +3682,67 @@ impl LowerBackend for X64Backend {
                         ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
                     } else {
                         unimplemented!("bricmp with non-int type {:?}", src_ty);
+                    }
+                }
+
+                Opcode::Brif => {
+                    let flag_input = InsnInput {
+                        insn: branches[0],
+                        input: 0,
+                    };
+
+                    if let Some(ifcmp) = matches_input(ctx, flag_input, Opcode::Ifcmp) {
+                        emit_cmp(ctx, ifcmp);
+                        let cond_code = ctx.data(branches[0]).cond_code().unwrap();
+                        let cc = CC::from_intcc(cond_code);
+                        ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
+                    } else if let Some(ifcmp_sp) = matches_input(ctx, flag_input, Opcode::IfcmpSp) {
+                        let operand = put_input_in_reg(
+                            ctx,
+                            InsnInput {
+                                insn: ifcmp_sp,
+                                input: 0,
+                            },
+                        );
+                        let ty = ctx.input_ty(ifcmp_sp, 0);
+                        ctx.emit(Inst::cmp_rmi_r(
+                            ty.bytes() as u8,
+                            RegMemImm::reg(operand),
+                            regs::rsp(),
+                        ));
+                        let cond_code = ctx.data(branches[0]).cond_code().unwrap();
+                        let cc = CC::from_intcc(cond_code);
+                        ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
+                    } else {
+                        // Should be disallowed by flags checks in verifier.
+                        unimplemented!("Brif with non-ifcmp input");
+                    }
+                }
+                Opcode::Brff => {
+                    let flag_input = InsnInput {
+                        insn: branches[0],
+                        input: 0,
+                    };
+
+                    if let Some(ffcmp) = matches_input(ctx, flag_input, Opcode::Ffcmp) {
+                        let cond_code = ctx.data(branches[0]).fp_cond_code().unwrap();
+                        match emit_fcmp(ctx, ffcmp, cond_code, FcmpSpec::Normal) {
+                            FcmpCondResult::Condition(cc) => {
+                                ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
+                            }
+                            FcmpCondResult::AndConditions(cc1, cc2) => {
+                                ctx.emit(Inst::jmp_if(cc1.invert(), not_taken));
+                                ctx.emit(Inst::jmp_cond(cc2.invert(), not_taken, taken));
+                            }
+                            FcmpCondResult::OrConditions(cc1, cc2) => {
+                                ctx.emit(Inst::jmp_if(cc1, taken));
+                                ctx.emit(Inst::jmp_cond(cc2, taken, not_taken));
+                            }
+                            FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
+                        }
+                    } else {
+                        // Should be disallowed by flags checks in verifier.
+                        unimplemented!("Brff with input not from ffcmp");
                     }
                 }
 

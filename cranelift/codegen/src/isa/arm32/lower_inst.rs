@@ -540,7 +540,6 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     branches: &[IRInst],
     targets: &[MachLabel],
-    fallthrough: Option<MachLabel>,
 ) -> CodegenResult<()> {
     // A block should end with at most two branches. The first may be a
     // conditional branch; a conditional branch can be followed only by an
@@ -557,11 +556,8 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
 
         assert!(op1 == Opcode::Jump || op1 == Opcode::Fallthrough);
         let taken = BranchTarget::Label(targets[0]);
-        let not_taken = match op1 {
-            Opcode::Jump => BranchTarget::Label(targets[1]),
-            Opcode::Fallthrough => BranchTarget::Label(fallthrough.unwrap()),
-            _ => unreachable!(), // assert above.
-        };
+        let not_taken = BranchTarget::Label(targets[1]);
+
         match op0 {
             Opcode::Brz | Opcode::Brnz => {
                 let rn = input_to_reg(

@@ -1185,9 +1185,8 @@ impl LowerBackend for AArch64Backend {
         ctx: &mut C,
         branches: &[IRInst],
         targets: &[MachLabel],
-        fallthrough: Option<MachLabel>,
     ) -> CodegenResult<()> {
-        lower_inst::lower_branch(ctx, branches, targets, fallthrough)
+        lower_inst::lower_branch(ctx, branches, targets)
     }
 
     fn maybe_pinned_reg(&self) -> Option<Reg> {

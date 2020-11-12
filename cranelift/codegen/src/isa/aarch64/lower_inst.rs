@@ -3115,7 +3115,6 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     branches: &[IRInst],
     targets: &[MachLabel],
-    fallthrough: Option<MachLabel>,
 ) -> CodegenResult<()> {
     // A block should end with at most two branches. The first may be a
     // conditional branch; a conditional branch can be followed only by an
@@ -3132,11 +3131,11 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
 
         assert!(op1 == Opcode::Jump || op1 == Opcode::Fallthrough);
         let taken = BranchTarget::Label(targets[0]);
-        let not_taken = match op1 {
-            Opcode::Jump => BranchTarget::Label(targets[1]),
-            Opcode::Fallthrough => BranchTarget::Label(fallthrough.unwrap()),
-            _ => unreachable!(), // assert above.
-        };
+        // not_taken target is the target of the second branch, even if it is a Fallthrough
+        // instruction: because we reorder blocks while we lower, the fallthrough in the new
+        // order is not (necessarily) the same as the fallthrough in CLIF. So we use the
+        // explicitly-provided target.
+        let not_taken = BranchTarget::Label(targets[1]);
 
         match op0 {
             Opcode::Brz | Opcode::Brnz => {
