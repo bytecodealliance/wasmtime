@@ -3813,6 +3813,23 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::ConstAddr => {
+            let dst = get_output_reg(ctx, outputs[0]);
+            debug_assert!(dst.to_reg().get_class() == RegClass::I64);
+
+            if let InstructionData::UnaryConst {
+                constant_handle, ..
+            } = *ctx.data(insn)
+            {
+                let constant_data = ctx.get_constant_data(constant_handle);
+                let constant = ctx.use_constant(VCodeConstantData::Pool(
+                    constant_handle,
+                    constant_data.clone(),
+                ));
+                ctx.emit(Inst::lea(SyntheticAmode::ConstantOffset(constant), dst));
+            };
+        }
+
         Opcode::IaddImm
         | Opcode::ImulImm
         | Opcode::UdivImm
