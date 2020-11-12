@@ -568,11 +568,14 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         unsafe {
             std::ptr::write(self.function_got_entries[id].unwrap().as_ptr(), ptr);
         }
-        self.compiled_functions[id].as_ref().unwrap().perform_relocations(
-            |name| unreachable!("non GOT or PLT relocation in function {} to {}", id, name),
-            |name| self.get_got_address(name),
-            |name| self.get_plt_address(name),
-        );
+        self.compiled_functions[id]
+            .as_ref()
+            .unwrap()
+            .perform_relocations(
+                |name| unreachable!("non GOT or PLT relocation in function {} to {}", id, name),
+                |name| self.get_got_address(name),
+                |name| self.get_plt_address(name),
+            );
 
         Ok(ModuleCompiledFunction { size: code_size })
     }
@@ -618,11 +621,14 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         unsafe {
             std::ptr::write(self.function_got_entries[id].unwrap().as_ptr(), ptr);
         }
-        self.compiled_functions[id].as_ref().unwrap().perform_relocations(
-            |name| unreachable!("non GOT or PLT relocation in function {} to {}", id, name),
-            |name| self.get_got_address(name),
-            |name| self.get_plt_address(name),
-        );
+        self.compiled_functions[id]
+            .as_ref()
+            .unwrap()
+            .perform_relocations(
+                |name| unreachable!("non GOT or PLT relocation in function {} to {}", id, name),
+                |name| self.get_got_address(name),
+                |name| self.get_plt_address(name),
+            );
 
         Ok(ModuleCompiledFunction { size: total_size })
     }
