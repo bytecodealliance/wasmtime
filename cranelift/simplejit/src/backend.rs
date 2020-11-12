@@ -22,6 +22,7 @@ use std::convert::TryInto;
 use std::ffi::CString;
 use std::io::Write;
 use std::ptr;
+use std::ptr::NonNull;
 use target_lexicon::PointerWidth;
 #[cfg(windows)]
 use winapi;
@@ -73,7 +74,7 @@ impl SimpleJITBuilder {
         isa: Box<dyn TargetIsa>,
         libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     ) -> Self {
-        debug_assert!(!isa.flags().is_pic(), "SimpleJIT requires non-PIC code");
+        assert!(isa.flags().is_pic(), "SimpleJIT requires PIC code");
         let symbols = HashMap::new();
         Self {
             isa,
@@ -129,6 +130,9 @@ pub struct SimpleJITModule {
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     memory: MemoryHandle,
     declarations: ModuleDeclarations,
+    function_got_entries: SecondaryMap<FuncId, Option<NonNull<*const u8>>>,
+    data_object_got_entries: SecondaryMap<DataId, Option<NonNull<*const u8>>>,
+    libcall_got_entries: HashMap<ir::LibCall, NonNull<*const u8>>,
     compiled_functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
     compiled_data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
     functions_to_finalize: Vec<FuncId>,
@@ -164,7 +168,7 @@ impl SimpleJITModule {
             .or_else(|| lookup_with_dlsym(name))
     }
 
-    fn get_definition(&self, name: &ir::ExternalName) -> *const u8 {
+    fn get_address(&self, name: &ir::ExternalName) -> *const u8 {
         match *name {
             ir::ExternalName::User { .. } => {
                 let (name, linkage) = if ModuleDeclarations::is_function(name) {
@@ -203,10 +207,37 @@ impl SimpleJITModule {
         }
     }
 
+    fn get_got_address(&self, name: &ir::ExternalName) -> *const u8 {
+        match *name {
+            ir::ExternalName::User { .. } => {
+                if ModuleDeclarations::is_function(name) {
+                    let func_id = FuncId::from_name(name);
+                    self.function_got_entries[func_id]
+                        .unwrap()
+                        .as_ptr()
+                        .cast::<u8>()
+                } else {
+                    let data_id = DataId::from_name(name);
+                    self.data_object_got_entries[data_id]
+                        .unwrap()
+                        .as_ptr()
+                        .cast::<u8>()
+                }
+            }
+            ir::ExternalName::LibCall(ref libcall) => self
+                .libcall_got_entries
+                .get(libcall)
+                .unwrap_or_else(|| panic!("can't resolve libcall {}", libcall))
+                .as_ptr()
+                .cast::<u8>(),
+            _ => panic!("invalid ExternalName {}", name),
+        }
+    }
+
     /// Returns the address of a finalized function.
     pub fn get_finalized_function(&self, func_id: FuncId) -> *const u8 {
         let info = &self.compiled_functions[func_id];
-        debug_assert!(
+        assert!(
             !self.functions_to_finalize.iter().any(|x| *x == func_id),
             "function not yet finalized"
         );
@@ -218,7 +249,7 @@ impl SimpleJITModule {
     /// Returns the address and size of a finalized data object.
     pub fn get_finalized_data(&self, data_id: DataId) -> (*const u8, usize) {
         let info = &self.compiled_data_objects[data_id];
-        debug_assert!(
+        assert!(
             !self.data_objects_to_finalize.iter().any(|x| *x == data_id),
             "data object not yet finalized"
         );
@@ -255,19 +286,25 @@ impl SimpleJITModule {
     pub fn finalize_definitions(&mut self) {
         for func in std::mem::take(&mut self.functions_to_finalize) {
             let decl = self.declarations.get_function_decl(func);
-            debug_assert!(decl.linkage.is_definable());
-            let func = self.compiled_functions[func]
+            assert!(decl.linkage.is_definable());
+            let func_blob = self.compiled_functions[func]
                 .as_ref()
                 .expect("function must be compiled before it can be finalized");
-            func.perform_relocations(|name| self.get_definition(name));
+            func_blob.perform_relocations(
+                |name| unreachable!("non-GOT/PLT relocation in function {} to {}", func, name),
+                |name| self.get_got_address(name),
+            );
         }
         for data in std::mem::take(&mut self.data_objects_to_finalize) {
             let decl = self.declarations.get_data_decl(data);
-            debug_assert!(decl.linkage.is_definable());
+            assert!(decl.linkage.is_definable());
             let data = self.compiled_data_objects[data]
                 .as_ref()
                 .expect("data object must be compiled before it can be finalized");
-            data.perform_relocations(|name| self.get_definition(name));
+            data.perform_relocations(
+                |name| self.get_address(name),
+                |name| self.get_got_address(name),
+            );
         }
 
         // Now that we're done patching, prepare the memory for execution!
@@ -277,11 +314,37 @@ impl SimpleJITModule {
 
     /// Create a new `SimpleJITModule`.
     pub fn new(builder: SimpleJITBuilder) -> Self {
-        let memory = MemoryHandle {
+        let mut memory = MemoryHandle {
             code: Memory::new(),
             readonly: Memory::new(),
             writable: Memory::new(),
         };
+
+        let mut libcall_got_entries = HashMap::new();
+
+        // Pre-create a GOT entry for each libcall.
+        for &libcall in ir::LibCall::all_libcalls() {
+            let got_entry = memory
+                .writable
+                .allocate(
+                    std::mem::size_of::<*const u8>(),
+                    std::mem::align_of::<*const u8>().try_into().unwrap(),
+                )
+                .unwrap()
+                .cast::<*const u8>();
+            libcall_got_entries.insert(libcall, NonNull::new(got_entry).unwrap());
+            let sym = (builder.libcall_names)(libcall);
+            if let Some(addr) = builder
+                .symbols
+                .get(&sym)
+                .copied()
+                .or_else(|| lookup_with_dlsym(&sym))
+            {
+                unsafe {
+                    std::ptr::write(got_entry, addr);
+                }
+            }
+        }
 
         Self {
             isa: builder.isa,
@@ -289,6 +352,9 @@ impl SimpleJITModule {
             libcall_names: builder.libcall_names,
             memory,
             declarations: ModuleDeclarations::default(),
+            function_got_entries: SecondaryMap::new(),
+            data_object_got_entries: SecondaryMap::new(),
+            libcall_got_entries,
             compiled_functions: SecondaryMap::new(),
             compiled_data_objects: SecondaryMap::new(),
             functions_to_finalize: Vec::new(),
@@ -315,6 +381,23 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         let (id, _decl) = self
             .declarations
             .declare_function(name, linkage, signature)?;
+        if self.function_got_entries[id].is_none() {
+            let got_entry = self
+                .memory
+                .writable
+                .allocate(
+                    std::mem::size_of::<*const u8>(),
+                    std::mem::align_of::<*const u8>().try_into().unwrap(),
+                )
+                .unwrap()
+                .cast::<*const u8>();
+            self.function_got_entries[id] = Some(NonNull::new(got_entry).unwrap());
+            // FIXME populate got entries with a null pointer when defined
+            let val = self.lookup_symbol(name).unwrap_or(std::ptr::null());
+            unsafe {
+                std::ptr::write(got_entry, val);
+            }
+        }
         Ok(id)
     }
 
@@ -329,7 +412,61 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         let (id, _decl) = self
             .declarations
             .declare_data(name, linkage, writable, tls)?;
+        if self.data_object_got_entries[id].is_none() {
+            let got_entry = self
+                .memory
+                .writable
+                .allocate(
+                    std::mem::size_of::<*const u8>(),
+                    std::mem::align_of::<*const u8>().try_into().unwrap(),
+                )
+                .unwrap()
+                .cast::<*const u8>();
+            self.data_object_got_entries[id] = Some(NonNull::new(got_entry).unwrap());
+            // FIXME populate got entries with a null pointer when defined
+            let val = self.lookup_symbol(name).unwrap_or(std::ptr::null());
+            unsafe {
+                std::ptr::write(got_entry, val);
+            }
+        }
         Ok(id)
+    }
+
+    /// Use this when you're building the IR of a function to reference a function.
+    ///
+    /// TODO: Coalesce redundant decls and signatures.
+    /// TODO: Look into ways to reduce the risk of using a FuncRef in the wrong function.
+    fn declare_func_in_func(&self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {
+        let decl = self.declarations.get_function_decl(func);
+        let signature = in_func.import_signature(decl.signature.clone());
+        in_func.import_function(ir::ExtFuncData {
+            name: ir::ExternalName::user(0, func.as_u32()),
+            signature,
+            colocated: false,
+        })
+    }
+
+    /// Use this when you're building the IR of a function to reference a data object.
+    ///
+    /// TODO: Same as above.
+    fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalValue {
+        let decl = self.declarations.get_data_decl(data);
+        func.create_global_value(ir::GlobalValueData::Symbol {
+            name: ir::ExternalName::user(1, data.as_u32()),
+            offset: ir::immediates::Imm64::new(0),
+            colocated: false,
+            tls: decl.tls,
+        })
+    }
+
+    /// TODO: Same as above.
+    fn declare_func_in_data(&self, func: FuncId, ctx: &mut DataContext) -> ir::FuncRef {
+        ctx.import_function(ir::ExternalName::user(0, func.as_u32()))
+    }
+
+    /// TODO: Same as above.
+    fn declare_data_in_data(&self, data: DataId, ctx: &mut DataContext) -> ir::GlobalValue {
+        ctx.import_global_value(ir::ExternalName::user(1, data.as_u32()))
     }
 
     fn define_function<TS>(
@@ -381,7 +518,11 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             size,
             relocs: reloc_sink.relocs,
         });
+        // FIXME immediately perform relocations
         self.functions_to_finalize.push(id);
+        unsafe {
+            std::ptr::write(self.function_got_entries[id].unwrap().as_ptr(), ptr);
+        }
 
         Ok(ModuleCompiledFunction { size: code_size })
     }
@@ -425,6 +566,9 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             relocs: relocs.to_vec(),
         });
         self.functions_to_finalize.push(id);
+        unsafe {
+            std::ptr::write(self.function_got_entries[id].unwrap().as_ptr(), ptr);
+        }
 
         Ok(ModuleCompiledFunction { size: total_size })
     }
@@ -489,6 +633,9 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
 
         self.compiled_data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
         self.data_objects_to_finalize.push(id);
+        unsafe {
+            std::ptr::write(self.data_object_got_entries[id].unwrap().as_ptr(), ptr);
+        }
 
         Ok(())
     }
