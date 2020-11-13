@@ -6,4 +6,19 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name = "wizer"
+required-features = ["env_logger", "structopt"]
+
 [dependencies]
+wasmtime = { path = "../wasmtime/crates/wasmtime" }
+wasm-encoder = { path = "../wasm-tools/crates/wasm-encoder" }
+structopt = { version = "0.3.20", optional = true }
+anyhow = "1.0.34"
+wasmparser = "0.68.0"
+log = "0.4.11"
+env_logger = { version = "0.8.1", optional = true }
+
+[dev-dependencies]
+wat = "1.0.28"
+env_logger = "0.8.2"
