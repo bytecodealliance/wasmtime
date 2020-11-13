@@ -22,7 +22,7 @@ use crate::legalize_function;
 use crate::legalizer::simple_legalize;
 use crate::licm::do_licm;
 use crate::loop_analysis::LoopAnalysis;
-use crate::machinst::MachCompileResult;
+use crate::machinst::{MachCompileResult, MachStackMap};
 use crate::nan_canonicalization::do_nan_canonicalization;
 use crate::postopt::do_postopt;
 use crate::redundant_reload_remover::RedundantReloadRemover;
@@ -239,10 +239,23 @@ impl Context {
         let mut sink = MemoryCodeSink::new(mem, relocs, traps, stack_maps);
         if let Some(ref result) = &self.mach_compile_result {
             result.buffer.emit(&mut sink);
+            let info = sink.info;
+            // New backends do not emit StackMaps through the `CodeSink` because its interface
+            // requires `Value`s; instead, the `StackMap` objects are directly accessible via
+            // `result.buffer.stack_maps()`.
+            for &MachStackMap {
+                offset_end,
+                ref stack_map,
+                ..
+            } in result.buffer.stack_maps()
+            {
+                stack_maps.add_stack_map(offset_end, stack_map.clone());
+            }
+            info
         } else {
             isa.emit_function_to_memory(&self.func, &mut sink);
+            sink.info
         }
-        sink.info
     }
 
     /// Creates unwind information for the function.
