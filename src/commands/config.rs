@@ -39,7 +39,7 @@ impl ConfigNewCommand {
         let path = wasmtime_cache::create_new_config(self.path.as_ref())?;
 
         println!(
-            "Successfully created a new configuation file at '{}'.",
+            "Successfully created a new configuration file at '{}'.",
             path.display()
         );
 
