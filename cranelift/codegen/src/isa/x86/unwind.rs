@@ -257,7 +257,6 @@ mod tests {
     use target_lexicon::triple;
 
     #[test]
-    #[cfg_attr(feature = "x64", should_panic)] // TODO #2079
     fn test_small_alloc() {
         let isa = lookup(triple!("x86_64"))
             .expect("expect x86 ISA")
@@ -314,7 +313,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(feature = "x64", should_panic)] // TODO #2079
     fn test_medium_alloc() {
         let isa = lookup(triple!("x86_64"))
             .expect("expect x86 ISA")
@@ -371,7 +369,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(feature = "x64", should_panic)] // TODO #2079
     fn test_large_alloc() {
         let isa = lookup(triple!("x86_64"))
             .expect("expect x86 ISA")
@@ -444,7 +441,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(feature = "x64", should_panic)] // TODO #2079
     fn test_multi_return_func() {
         let isa = lookup(triple!("x86_64"))
             .expect("expect x86 ISA")

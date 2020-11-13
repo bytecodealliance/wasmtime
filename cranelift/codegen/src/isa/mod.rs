@@ -75,7 +75,10 @@ use thiserror::Error;
 #[cfg(feature = "riscv")]
 mod riscv;
 
-#[cfg(feature = "x86")]
+// Exclude the old x86 backend when the new one is enabled; it is unreachable
+// anyway (requesting the x86-64 ISA will return the new backend), and a number
+// of old-backend-specific tests fail.
+#[cfg(all(feature = "x86", not(feature = "x64")))]
 mod x86;
 
 #[cfg(feature = "x64")]
@@ -102,12 +105,12 @@ mod test_utils;
 /// Returns a builder that can create a corresponding `TargetIsa`
 /// or `Err(LookupError::SupportDisabled)` if not enabled.
 macro_rules! isa_builder {
-    ($name: ident, $feature: tt, $triple: ident) => {{
-        #[cfg(feature = $feature)]
+    ($name: ident, $cfg_terms: tt, $triple: ident) => {{
+        #[cfg $cfg_terms]
         {
             Ok($name::isa_builder($triple))
         }
-        #[cfg(not(feature = $feature))]
+        #[cfg(not $cfg_terms)]
         {
             Err(LookupError::SupportDisabled)
         }
@@ -119,17 +122,17 @@ macro_rules! isa_builder {
 pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
     match triple.architecture {
         Architecture::Riscv32 { .. } | Architecture::Riscv64 { .. } => {
-            isa_builder!(riscv, "riscv", triple)
+            isa_builder!(riscv, (feature = "riscv"), triple)
         }
         Architecture::X86_32 { .. } | Architecture::X86_64 => {
             if cfg!(feature = "x64") {
-                isa_builder!(x64, "x64", triple)
+                isa_builder!(x64, (feature = "x64"), triple)
             } else {
-                isa_builder!(x86, "x86", triple)
+                isa_builder!(x86, (all(feature = "x86", not(feature = "x64"))), triple)
             }
         }
-        Architecture::Arm { .. } => isa_builder!(arm32, "arm32", triple),
-        Architecture::Aarch64 { .. } => isa_builder!(aarch64, "arm64", triple),
+        Architecture::Arm { .. } => isa_builder!(arm32, (feature = "arm32"), triple),
+        Architecture::Aarch64 { .. } => isa_builder!(aarch64, (feature = "arm64"), triple),
         _ => Err(LookupError::Unsupported),
     }
 }
