@@ -648,6 +648,12 @@ pub enum Inst {
         cond: Cond,
     },
 
+    /// A conditional-set-mask operation.
+    CSetm {
+        rd: Writable<Reg>,
+        cond: Cond,
+    },
+
     /// A conditional comparison with an immediate.
     CCmpImm {
         size: OperandSize,
@@ -1596,7 +1602,7 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(rn);
             collector.add_use(rm);
         }
-        &Inst::CSet { rd, .. } => {
+        &Inst::CSet { rd, .. } | &Inst::CSetm { rd, .. } => {
             collector.add_def(rd);
         }
         &Inst::CCmpImm { rn, .. } => {
@@ -2162,7 +2168,7 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, rn);
             map_use(mapper, rm);
         }
-        &mut Inst::CSet { ref mut rd, .. } => {
+        &mut Inst::CSet { ref mut rd, .. } | &mut Inst::CSetm { ref mut rd, .. } => {
             map_def(mapper, rd);
         }
         &mut Inst::CCmpImm { ref mut rn, .. } => {
@@ -3108,6 +3114,11 @@ impl Inst {
                 let cond = cond.show_rru(mb_rru);
                 format!("cset {}, {}", rd, cond)
             }
+            &Inst::CSetm { rd, cond } => {
+                let rd = rd.to_reg().show_rru(mb_rru);
+                let cond = cond.show_rru(mb_rru);
+                format!("csetm {}, {}", rd, cond)
+            }
             &Inst::CCmpImm {
                 size,
                 rn,
@@ -3628,63 +3639,60 @@ impl Inst {
             &Inst::Extend {
                 rd,
                 rn,
-                signed,
-                from_bits,
-                to_bits,
-            } if from_bits >= 8 => {
-                // Is the destination a 32-bit register? Corresponds to whether
-                // extend-to width is <= 32 bits, *unless* we have an unsigned
-                // 32-to-64-bit extension, which is implemented with a "mov" to a
-                // 32-bit (W-reg) dest, because this zeroes the top 32 bits.
-                let dest_size = if !signed && from_bits == 32 && to_bits == 64 {
-                    OperandSize::Size32
-                } else {
-                    OperandSize::from_bits(to_bits)
-                };
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, dest_size);
-                let rn = show_ireg_sized(rn, mb_rru, OperandSize::from_bits(from_bits));
-                let op = match (signed, from_bits, to_bits) {
-                    (false, 8, 32) => "uxtb",
-                    (true, 8, 32) => "sxtb",
-                    (false, 16, 32) => "uxth",
-                    (true, 16, 32) => "sxth",
-                    (false, 8, 64) => "uxtb",
-                    (true, 8, 64) => "sxtb",
-                    (false, 16, 64) => "uxth",
-                    (true, 16, 64) => "sxth",
-                    (false, 32, 64) => "mov", // special case (see above).
-                    (true, 32, 64) => "sxtw",
-                    _ => panic!("Unsupported Extend case: {:?}", self),
-                };
-                format!("{} {}, {}", op, rd, rn)
-            }
-            &Inst::Extend {
-                rd,
-                rn,
-                signed,
-                from_bits,
-                to_bits,
-            } if from_bits == 1 && signed => {
-                let dest_size = OperandSize::from_bits(to_bits);
-                let zr = if dest_size.is32() { "wzr" } else { "xzr" };
-                let rd32 = show_ireg_sized(rd.to_reg(), mb_rru, OperandSize::Size32);
-                let rd = show_ireg_sized(rd.to_reg(), mb_rru, dest_size);
-                let rn = show_ireg_sized(rn, mb_rru, OperandSize::Size32);
-                format!("and {}, {}, #1 ; sub {}, {}, {}", rd32, rn, rd, zr, rd)
-            }
-            &Inst::Extend {
-                rd,
-                rn,
-                signed,
-                from_bits,
+                signed: false,
+                from_bits: 1,
                 ..
-            } if from_bits == 1 && !signed => {
+            } => {
                 let rd = show_ireg_sized(rd.to_reg(), mb_rru, OperandSize::Size32);
                 let rn = show_ireg_sized(rn, mb_rru, OperandSize::Size32);
                 format!("and {}, {}, #1", rd, rn)
             }
-            &Inst::Extend { .. } => {
-                panic!("Unsupported Extend case");
+            &Inst::Extend {
+                rd,
+                rn,
+                signed: false,
+                from_bits: 32,
+                to_bits: 64,
+            } => {
+                // The case of a zero extension from 32 to 64 bits, is implemented
+                // with a "mov" to a 32-bit (W-reg) dest, because this zeroes
+                // the top 32 bits.
+                let rd = show_ireg_sized(rd.to_reg(), mb_rru, OperandSize::Size32);
+                let rn = show_ireg_sized(rn, mb_rru, OperandSize::Size32);
+                format!("mov {}, {}", rd, rn)
+            }
+            &Inst::Extend {
+                rd,
+                rn,
+                signed,
+                from_bits,
+                to_bits,
+            } => {
+                assert!(from_bits <= to_bits);
+                let op = match (signed, from_bits) {
+                    (false, 8) => "uxtb",
+                    (true, 8) => "sxtb",
+                    (false, 16) => "uxth",
+                    (true, 16) => "sxth",
+                    (true, 32) => "sxtw",
+                    (true, _) => "sbfx",
+                    (false, _) => "ubfx",
+                };
+                if op == "sbfx" || op == "ubfx" {
+                    let dest_size = OperandSize::from_bits(to_bits);
+                    let rd = show_ireg_sized(rd.to_reg(), mb_rru, dest_size);
+                    let rn = show_ireg_sized(rn, mb_rru, dest_size);
+                    format!("{} {}, {}, #0, #{}", op, rd, rn, from_bits)
+                } else {
+                    let dest_size = if signed {
+                        OperandSize::from_bits(to_bits)
+                    } else {
+                        OperandSize::Size32
+                    };
+                    let rd = show_ireg_sized(rd.to_reg(), mb_rru, dest_size);
+                    let rn = show_ireg_sized(rn, mb_rru, OperandSize::from_bits(from_bits));
+                    format!("{} {}, {}", op, rd, rn)
+                }
             }
             &Inst::Call { .. } => format!("bl 0"),
             &Inst::CallInd { ref info, .. } => {

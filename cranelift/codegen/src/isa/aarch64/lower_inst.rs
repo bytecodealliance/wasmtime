@@ -1521,8 +1521,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let ifcmp_insn = maybe_input_insn(ctx, inputs[0], Opcode::Ifcmp).unwrap();
             lower_icmp_or_ifcmp_to_flags(ctx, ifcmp_insn, is_signed);
             let rd = get_output_reg(ctx, outputs[0]);
-            ctx.emit(Inst::CSet { rd, cond });
-            normalize_bool_result(ctx, insn, rd);
+            materialize_bool_result(ctx, insn, rd, cond);
         }
 
         Opcode::Trueff => {
@@ -1531,8 +1530,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let ffcmp_insn = maybe_input_insn(ctx, inputs[0], Opcode::Ffcmp).unwrap();
             lower_fcmp_or_ffcmp_to_flags(ctx, ffcmp_insn);
             let rd = get_output_reg(ctx, outputs[0]);
-            ctx.emit(Inst::CSet { rd, cond });
-            normalize_bool_result(ctx, insn, rd);
+            materialize_bool_result(ctx, insn, rd, cond);
         }
 
         Opcode::IsNull | Opcode::IsInvalid => {
@@ -1555,8 +1553,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             };
             let const_value = ResultRSEImm12::Imm12(Imm12::maybe_from_u64(const_value).unwrap());
             ctx.emit(alu_inst_imm12(alu_op, writable_zero_reg(), rn, const_value));
-            ctx.emit(Inst::CSet { rd, cond: Cond::Eq });
-            normalize_bool_result(ctx, insn, rd);
+            materialize_bool_result(ctx, insn, rd, Cond::Eq);
         }
 
         Opcode::Copy => {
@@ -1581,11 +1578,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             //   sign-extend the -1 to a -1 in the wider width.
             // - Bmask, because the resulting integer mask value must be
             //   all-ones (-1) if the argument is true.
-            //
-            // For a sign-extension from a 1-bit value (Case 1 below), we need
-            // to do things a bit specially, because the ISA does not have a
-            // 1-to-N-bit sign extension instruction.  For 8-bit or wider
-            // sources (Case 2 below), we do a sign extension normally.
 
             let from_ty = ctx.input_ty(insn, 0);
             let to_ty = ctx.output_ty(insn, 0);
@@ -1600,41 +1592,23 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             if from_bits == to_bits {
                 // Nothing.
-            } else if from_bits == 1 {
-                assert!(to_bits >= 8);
-                // Case 1: 1-bit to N-bit extension: AND the LSB of source into
-                // dest, generating a value of 0 or 1, then negate to get
-                // 0x000... or 0xfff...
+            } else {
                 let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
                 let rd = get_output_reg(ctx, outputs[0]);
-                // AND Rdest, Rsource, #1
-                ctx.emit(Inst::AluRRImmLogic {
-                    alu_op: ALUOp::And64,
-                    rd,
-                    rn,
-                    imml: ImmLogic::maybe_from_u64(1, I64).unwrap(),
-                });
-                // SUB Rdest, XZR, Rdest  (i.e., NEG Rdest)
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::Sub64,
-                    rd,
-                    rn: zero_reg(),
-                    rm: rd.to_reg(),
-                });
-            } else {
-                // Case 2: 8-or-more-bit to N-bit extension: just sign-extend. A
-                // `true` (all ones, or `-1`) will be extended to -1 with the
-                // larger width.
-                assert!(from_bits >= 8);
-                let narrow_mode = if to_bits == 64 {
-                    NarrowValueMode::SignExtend64
+                let to_bits = if to_bits == 64 {
+                    64
                 } else {
                     assert!(to_bits <= 32);
-                    NarrowValueMode::SignExtend32
+                    32
                 };
-                let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
-                let rd = get_output_reg(ctx, outputs[0]);
-                ctx.emit(Inst::gen_move(rd, rn, to_ty));
+                let from_bits = from_bits as u8;
+                ctx.emit(Inst::Extend {
+                    rd,
+                    rn,
+                    signed: true,
+                    from_bits,
+                    to_bits,
+                });
             }
         }
 
@@ -1745,8 +1719,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let alu_op = choose_32_64(ty, ALUOp::SubS32, ALUOp::SubS64);
                 let rm = put_input_in_rse_imm12(ctx, inputs[1], narrow_mode);
                 ctx.emit(alu_inst_imm12(alu_op, writable_zero_reg(), rn, rm));
-                ctx.emit(Inst::CSet { cond, rd });
-                normalize_bool_result(ctx, insn, rd);
+                materialize_bool_result(ctx, insn, rd, cond);
             } else {
                 let rm = put_input_in_reg(ctx, inputs[1], narrow_mode);
                 lower_vector_compare(ctx, rd, rn, rm, ty, cond)?;
@@ -1771,8 +1744,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     }
                     _ => panic!("Bad float size"),
                 }
-                ctx.emit(Inst::CSet { cond, rd });
-                normalize_bool_result(ctx, insn, rd);
+                materialize_bool_result(ctx, insn, rd, cond);
             } else {
                 lower_vector_compare(ctx, rd, rn, rm, ty, cond)?;
             }
@@ -2105,8 +2077,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 imm12: Imm12::zero(),
             });
 
-            ctx.emit(Inst::CSet { rd, cond: Cond::Ne });
-            normalize_bool_result(ctx, insn, rd);
+            materialize_bool_result(ctx, insn, rd, Cond::Ne);
         }
 
         Opcode::VhighBits => {

@@ -258,10 +258,6 @@ fn enc_ldst_vec(q: u32, size: u32, rn: Reg, rt: Writable<Reg>) -> u32 {
         | machreg_to_vec(rt.to_reg())
 }
 
-fn enc_extend(top22: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
-    (top22 << 10) | (machreg_to_gpr(rn) << 5) | machreg_to_gpr(rd.to_reg())
-}
-
 fn enc_vec_rrr(top11: u32, rm: Reg, bit15_10: u32, rn: Reg, rd: Writable<Reg>) -> u32 {
     (top11 << 21)
         | (machreg_to_vec(rm) << 16)
@@ -313,6 +309,12 @@ fn enc_cset(rd: Writable<Reg>, cond: Cond) -> u32 {
         | (cond.invert().bits() << 12)
 }
 
+fn enc_csetm(rd: Writable<Reg>, cond: Cond) -> u32 {
+    0b110_11010100_11111_0000_00_11111_00000
+        | machreg_to_gpr(rd.to_reg())
+        | (cond.invert().bits() << 12)
+}
+
 fn enc_ccmp_imm(size: OperandSize, rn: Reg, imm: UImm5, nzcv: NZCV, cond: Cond) -> u32 {
     0b0_1_1_11010010_00000_0000_10_00000_0_0000
         | size.sf_bit() << 31
@@ -320,6 +322,29 @@ fn enc_ccmp_imm(size: OperandSize, rn: Reg, imm: UImm5, nzcv: NZCV, cond: Cond) 
         | cond.bits() << 12
         | machreg_to_gpr(rn) << 5
         | nzcv.bits()
+}
+
+fn enc_bfm(opc: u8, size: OperandSize, rd: Writable<Reg>, rn: Reg, immr: u8, imms: u8) -> u32 {
+    match size {
+        OperandSize::Size64 => {
+            debug_assert!(immr <= 63);
+            debug_assert!(imms <= 63);
+        }
+        OperandSize::Size32 => {
+            debug_assert!(immr <= 31);
+            debug_assert!(imms <= 31);
+        }
+    }
+    debug_assert_eq!(opc & 0b11, opc);
+    let n_bit = size.sf_bit();
+    0b0_00_100110_0_000000_000000_00000_00000
+        | size.sf_bit() << 31
+        | u32::from(opc) << 29
+        | n_bit << 22
+        | u32::from(immr) << 16
+        | u32::from(imms) << 10
+        | machreg_to_gpr(rn) << 5
+        | machreg_to_gpr(rd.to_reg())
 }
 
 fn enc_vecmov(is_16b: bool, rd: Writable<Reg>, rn: Reg) -> u32 {
@@ -1019,6 +1044,9 @@ impl MachInstEmit for Inst {
             }
             &Inst::CSet { rd, cond } => {
                 sink.put4(enc_cset(rd, cond));
+            }
+            &Inst::CSetm { rd, cond } => {
+                sink.put4(enc_csetm(rd, cond));
             }
             &Inst::CCmpImm {
                 size,
@@ -1958,75 +1986,47 @@ impl MachInstEmit for Inst {
             &Inst::Extend {
                 rd,
                 rn,
-                signed,
-                from_bits,
+                signed: false,
+                from_bits: 1,
                 to_bits,
-            } if from_bits >= 8 => {
-                let top22 = match (signed, from_bits, to_bits) {
-                    (false, 8, 32) => 0b010_100110_0_000000_000111, // UXTB (32)
-                    (false, 16, 32) => 0b010_100110_0_000000_001111, // UXTH (32)
-                    (true, 8, 32) => 0b000_100110_0_000000_000111,  // SXTB (32)
-                    (true, 16, 32) => 0b000_100110_0_000000_001111, // SXTH (32)
-                    // The 64-bit unsigned variants are the same as the 32-bit ones,
-                    // because writes to Wn zero out the top 32 bits of Xn
-                    (false, 8, 64) => 0b010_100110_0_000000_000111, // UXTB (64)
-                    (false, 16, 64) => 0b010_100110_0_000000_001111, // UXTH (64)
-                    (true, 8, 64) => 0b100_100110_1_000000_000111,  // SXTB (64)
-                    (true, 16, 64) => 0b100_100110_1_000000_001111, // SXTH (64)
-                    // 32-to-64: the unsigned case is a 'mov' (special-cased below).
-                    (false, 32, 64) => 0,                           // MOV
-                    (true, 32, 64) => 0b100_100110_1_000000_011111, // SXTW (64)
-                    _ => panic!(
-                        "Unsupported extend combination: signed = {}, from_bits = {}, to_bits = {}",
-                        signed, from_bits, to_bits
-                    ),
-                };
-                if top22 != 0 {
-                    sink.put4(enc_extend(top22, rd, rn));
-                } else {
-                    let mov = Inst::Mov32 { rd, rm: rn };
-
-                    mov.emit(sink, emit_info, state);
-                }
-            }
-            &Inst::Extend {
-                rd,
-                rn,
-                signed,
-                from_bits,
-                to_bits,
-            } if from_bits == 1 && signed => {
-                assert!(to_bits <= 64);
-                // Reduce sign-extend-from-1-bit to:
-                // - and rd, rn, #1
-                // - sub rd, zr, rd
-
-                // We don't have ImmLogic yet, so we just hardcode this. FIXME.
-                sink.put4(0x92400000 | (machreg_to_gpr(rn) << 5) | machreg_to_gpr(rd.to_reg()));
-                let sub_inst = Inst::AluRRR {
-                    alu_op: ALUOp::Sub64,
-                    rd,
-                    rn: zero_reg(),
-                    rm: rd.to_reg(),
-                };
-                sub_inst.emit(sink, emit_info, state);
-            }
-            &Inst::Extend {
-                rd,
-                rn,
-                signed,
-                from_bits,
-                to_bits,
-            } if from_bits == 1 && !signed => {
+            } => {
                 assert!(to_bits <= 64);
                 // Reduce zero-extend-from-1-bit to:
                 // - and rd, rn, #1
-
-                // We don't have ImmLogic yet, so we just hardcode this. FIXME.
-                sink.put4(0x92400000 | (machreg_to_gpr(rn) << 5) | machreg_to_gpr(rd.to_reg()));
+                // Note: This is special cased as UBFX may take more cycles
+                // than AND on smaller cores.
+                let imml = ImmLogic::maybe_from_u64(1, I32).unwrap();
+                Inst::AluRRImmLogic {
+                    alu_op: ALUOp::And32,
+                    rd,
+                    rn,
+                    imml,
+                }
+                .emit(sink, emit_info, state);
             }
-            &Inst::Extend { .. } => {
-                panic!("Unsupported extend variant");
+            &Inst::Extend {
+                rd,
+                rn,
+                signed: false,
+                from_bits: 32,
+                to_bits: 64,
+            } => {
+                let mov = Inst::Mov32 { rd, rm: rn };
+                mov.emit(sink, emit_info, state);
+            }
+            &Inst::Extend {
+                rd,
+                rn,
+                signed,
+                from_bits,
+                to_bits,
+            } => {
+                let (opc, size) = if signed {
+                    (0b00, OperandSize::from_bits(to_bits))
+                } else {
+                    (0b10, OperandSize::Size32)
+                };
+                sink.put4(enc_bfm(opc, size, rd, rn, 0, from_bits - 1));
             }
             &Inst::Jump { ref dest } => {
                 let off = sink.cur_offset();
