@@ -595,7 +595,18 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             .as_ref()
             .unwrap()
             .perform_relocations(
-                |name| unreachable!("non GOT or PLT relocation in function {} to {}", id, name),
+                |name| match *name {
+                    ir::ExternalName::User { .. } => {
+                        unreachable!("non GOT or PLT relocation in function {} to {}", id, name)
+                    }
+                    ir::ExternalName::LibCall(ref libcall) => self
+                        .libcall_plt_entries
+                        .get(libcall)
+                        .unwrap_or_else(|| panic!("can't resolve libcall {}", libcall))
+                        .as_ptr()
+                        .cast::<u8>(),
+                    _ => panic!("invalid ExternalName {}", name),
+                },
                 |name| self.get_got_address(name),
                 |name| self.get_plt_address(name),
             );
