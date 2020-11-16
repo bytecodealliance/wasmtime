@@ -1611,6 +1611,14 @@ macro_rules! impl_into_func {
                             )
                         }))
                     };
+
+                    // Note that we need to be careful when dealing with traps
+                    // here. Traps are implemented with longjmp/setjmp meaning
+                    // that it's not unwinding and consequently no Rust
+                    // destructors are run. We need to be careful to ensure that
+                    // nothing on the stack needs a destructor when we exit
+                    // abnormally from this `match`, e.g. on `Err`, on
+                    // cross-store-issues, or if `Ok(Err)` is raised.
                     match ret {
                         Err(panic) => wasmtime_runtime::resume_panic(panic),
                         Ok(ret) => {
@@ -1618,6 +1626,7 @@ macro_rules! impl_into_func {
                             // can't assume it returned a value that is
                             // compatible with this store.
                             if !ret.compatible_with_store(weak_store) {
+                                drop(ret);
                                 raise_cross_store_trap();
                             }
 
