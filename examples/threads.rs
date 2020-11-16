@@ -28,7 +28,7 @@ fn run(engine: &Engine, module: Module, id: i32) -> Result<()> {
     println!("Extracting export...");
     let g = instance
         .get_func("run")
-        .ok_or(format_err!("failed to find export `eun`"))?;
+        .ok_or(format_err!("failed to find export `run`"))?;
 
     for _ in 0..N_REPS {
         thread::sleep(time::Duration::from_millis(100));
