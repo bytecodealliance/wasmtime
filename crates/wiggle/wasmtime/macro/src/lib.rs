@@ -136,7 +136,7 @@ contained in the `cx` parameter.",
                 let cx = std::rc::Rc::new(std::cell::RefCell::new(cx));
                 #(#ctor_externs)*
 
-               Self {
+                Self {
                     #(#ctor_fields,)*
                 }
             }
@@ -185,7 +185,7 @@ fn generate_func(
             witx::CoreParamSignifies::Value(atom) => names.atom_type(atom),
             _ => unreachable!("coretype ret should always be passed by value"),
         };
-        (quote! { #ret_ty }, quote! { return e.into(); })
+        (quote! { #ret_ty }, quote! { return Ok(e.into()); })
     } else {
         (
             quote! {()},
@@ -195,13 +195,11 @@ fn generate_func(
 
     let runtime = names.runtime_mod();
 
-    // TLC TODO: Enhance the wasmtime wiggle integration to handle a
-    // Result instead of an i32.
     quote! {
         let my_cx = cx.clone();
         let #name_ident = wasmtime::Func::wrap(
             store,
-            move |caller: wasmtime::Caller<'_> #(,#arg_decls)*| -> #ret_ty {
+            move |caller: wasmtime::Caller<'_> #(,#arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
                 unsafe {
                     let mem = match caller.get_export("memory") {
                         Some(wasmtime::Extern::Memory(m)) => m,
@@ -211,13 +209,17 @@ fn generate_func(
                             #handle_early_error
                         }
                     };
-		    let mem = #runtime::WasmtimeGuestMemory::new(mem);
-		    #target_module::#name_ident(
-			&mut my_cx.borrow_mut(),
-			&mem,
-			#(#arg_names),*
-		    )		    
-		}
+            let mem = #runtime::WasmtimeGuestMemory::new(mem);
+            let result = #target_module::#name_ident(
+            &mut my_cx.borrow_mut(),
+            &mem,
+            #(#arg_names),*
+            );
+            match result {
+                Ok(r) => {return Ok(r.into());},
+                Err(err) => { return Err(wasmtime::Trap::new(err)); },
+            }
+        }
             }
         );
     }

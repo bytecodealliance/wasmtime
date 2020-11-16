@@ -162,7 +162,10 @@ mod convert_multiple_error_types {
         fn errno_from_rich_error(&self, _e: RichError) -> Result<types::Errno, String> {
             unimplemented!()
         }
-        fn errno2_from_another_rich_error(&self, _e: AnotherRichError) -> Result<types::Errno2, String> {
+        fn errno2_from_another_rich_error(
+            &self,
+            _e: AnotherRichError,
+        ) -> Result<types::Errno2, String> {
             unimplemented!()
         }
     }

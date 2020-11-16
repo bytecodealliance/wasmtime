@@ -23,8 +23,6 @@ impl types::GuestErrorConversion for WasiCtx {
 }
 
 impl types::UserErrorConversion for WasiCtx {
-    // TLC TODO: Enhance this implementation of UserErrorConversion to
-    // return a well-formed result instead of an i32.
     fn errno_from_error(&self, e: Error) -> Result<Errno, String> {
         debug!("Error: {:?}", e);
         Ok(e.into())

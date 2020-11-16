@@ -13,8 +13,6 @@ pub fn define(args: TokenStream) -> TokenStream {
 
     let mut ret = TokenStream::new();
 
-    let old = true;
-
     for module in doc.modules() {
         for func in module.funcs() {
             // `proc_exit` is special; it's essentially an unwinding primitive,
@@ -24,14 +22,14 @@ pub fn define(args: TokenStream) -> TokenStream {
                 continue;
             }
 
-            ret.extend(generate_wrappers(&func, old));
+            ret.extend(generate_wrappers(&func));
         }
     }
 
     return ret;
 }
 
-fn generate_wrappers(func: &witx::InterfaceFunc, old: bool) -> TokenStream {
+fn generate_wrappers(func: &witx::InterfaceFunc) -> TokenStream {
     let name = format_ident!("{}", func.name.as_str());
     let mut arg_declarations = Vec::new();
     let mut arg_names = Vec::new();
@@ -101,33 +99,13 @@ fn generate_wrappers(func: &witx::InterfaceFunc, old: bool) -> TokenStream {
         }
     };
 
-    let c_abi_name = if old {
-        format_ident!("old_wasi_common_{}", name)
-    } else {
-        format_ident!("wasi_common_{}", name)
-    };
-
     quote! {
         pub unsafe fn #name(
             wasi_ctx: &mut super::WasiCtx,
             memory: &mut [u8],
             #(#arg_declarations,)*
-        ) -> #ret {
-            #body
-        }
-
-        #[no_mangle]
-        pub unsafe fn #c_abi_name(
-            wasi_ctx: *mut super::WasiCtx,
-            memory: *mut u8,
-            memory_len: usize,
-            #(#arg_declarations,)*
-        ) -> #ret {
-            #name(
-                &mut *wasi_ctx,
-                std::slice::from_raw_parts_mut(memory, memory_len),
-                #(#arg_names,)*
-            )
+        ) -> Result<#ret, String> {
+            Ok({#body})
         }
     }
 }

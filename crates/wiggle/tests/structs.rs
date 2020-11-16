@@ -216,7 +216,11 @@ impl SumPairPtrsExercise {
             self.return_loc.ptr as i32,
         );
 
-        assert_eq!(res, Ok(types::Errno::Ok.into()), "sum of pair of ptrs errno");
+        assert_eq!(
+            res,
+            Ok(types::Errno::Ok.into()),
+            "sum of pair of ptrs errno"
+        );
 
         let doubled: i64 = host_memory
             .ptr(self.return_loc.ptr)
@@ -414,7 +418,11 @@ impl ReturnPairPtrsExercise {
             self.return_loc.ptr as i32,
         );
 
-        assert_eq!(res, Ok(types::Errno::Ok.into()), "return pair of ptrs errno");
+        assert_eq!(
+            res,
+            Ok(types::Errno::Ok.into()),
+            "return pair of ptrs errno"
+        );
 
         let ptr_pair_int_ptrs: types::PairIntPtrs<'_> = host_memory
             .ptr(self.return_loc.ptr)
