@@ -18,7 +18,7 @@ vetted](./contributing-implementing-wasm-proposals.html).
 | **[Non-Trapping Float-to-Int Conversions]** | **Yes.**<br/>Always enabled.     | (none)                 | (none)                    |
 | **[Multi-Value]**                           | **Yes.**<br/>Enabled by default. | `--enable-multi-value` | [`wasm_multi_value`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_multi_value) |
 | **[Bulk Memory Operations]**                | **Yes.**<br/>Enabled by default. | `--enable-bulk-memory` | [`wasm_bulk_memory`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_bulk_memory) |
-| **[Reference Types]**                       | **Yes.**<br/>Enabled by default on x86_64. Aarch64 support in progress. | `--enable-reference-types` | [`wasm_reference_types`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_reference_types) |
+| **[Reference Types]**                       | **Yes.**<br/>Enabled by default. | `--enable-reference-types` | [`wasm_reference_types`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_reference_types) |
 | **[Fixed-Width SIMD]**                      | **In progress.**                 | `--enable-simd`        | [`wasm_simd`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_simd) |
 | **[Threads and Atomics]**                   | **In progress.**                 | `--enable-threads`     | [`wasm_threads`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_threads) |
 | **[Multi-Memory]**                          | **Yes.**                         | `--enable-multi-memory`| [`wasm_multi_memory`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_multi_memory) |
