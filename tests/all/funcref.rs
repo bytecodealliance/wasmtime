@@ -110,3 +110,35 @@ fn wrong_store() -> anyhow::Result<()> {
         }
     }
 }
+
+#[test]
+fn func_new_returns_wrong_store() -> anyhow::Result<()> {
+    let dropped = Rc::new(Cell::new(false));
+    {
+        let store1 = Store::default();
+        let store2 = Store::default();
+
+        let set = SetOnDrop(dropped.clone());
+        let f1 = Func::wrap(&store1, move || drop(&set));
+        let f2 = Func::new(
+            &store2,
+            FuncType::new(None, Some(ValType::FuncRef)),
+            move |_, _, results| {
+                results[0] = f1.clone().into();
+                Ok(())
+            },
+        );
+        assert!(f2.call(&[]).is_err());
+    }
+    assert!(dropped.get());
+
+    return Ok(());
+
+    struct SetOnDrop(Rc<Cell<bool>>);
+
+    impl Drop for SetOnDrop {
+        fn drop(&mut self) {
+            self.0.set(true);
+        }
+    }
+}

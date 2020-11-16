@@ -295,12 +295,17 @@ impl Func {
 
             // Unlike our arguments we need to dynamically check that the return
             // values produced are correct. There could be a bug in `func` that
-            // produces the wrong number or wrong types of values, and we need
-            // to catch that here.
+            // produces the wrong number, wrong types, or wrong stores of
+            // values, and we need to catch that here.
             for (i, (ret, ty)) in returns.into_iter().zip(ty_clone.results()).enumerate() {
                 if ret.ty() != ty {
                     return Err(Trap::new(
                         "function attempted to return an incompatible value",
+                    ));
+                }
+                if !ret.comes_from_same_store(&store) {
+                    return Err(Trap::new(
+                        "cross-`Store` values are not currently supported",
                     ));
                 }
                 unsafe {
