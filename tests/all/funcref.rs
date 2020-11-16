@@ -1,4 +1,6 @@
 use super::ref_types_module;
+use std::cell::Cell;
+use std::rc::Rc;
 use wasmtime::*;
 
 #[test]
@@ -82,4 +84,29 @@ fn receive_null_funcref_from_wasm() -> anyhow::Result<()> {
     assert!(result_func.is_none());
 
     Ok(())
+}
+
+#[test]
+fn wrong_store() -> anyhow::Result<()> {
+    let dropped = Rc::new(Cell::new(false));
+    {
+        let store1 = Store::default();
+        let store2 = Store::default();
+
+        let set = SetOnDrop(dropped.clone());
+        let f1 = Func::wrap(&store1, move || drop(&set));
+        let f2 = Func::wrap(&store2, move || Some(f1.clone()));
+        assert!(f2.call(&[]).is_err());
+    }
+    assert!(dropped.get());
+
+    return Ok(());
+
+    struct SetOnDrop(Rc<Cell<bool>>);
+
+    impl Drop for SetOnDrop {
+        fn drop(&mut self) {
+            self.0.set(true);
+        }
+    }
 }
