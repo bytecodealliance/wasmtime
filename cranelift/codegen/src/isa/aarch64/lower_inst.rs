@@ -2959,10 +2959,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // register. We simply use the variant of the add instruction that
             // sets flags (`adds`) here.
 
-            // Ensure that the second output isn't directly called for: it
-            // should only be used by a flags-consuming op, which will directly
-            // understand this instruction and merge the comparison.
-            assert!(!ctx.is_reg_needed(insn, ctx.get_output(insn, 1).to_reg()));
+            // Note that the second output (the flags) need not be generated,
+            // because flags are never materialized into a register; the only
+            // instructions that can use a value of type `iflags` or `fflags`
+            // will look directly for the flags-producing instruction (which can
+            // always be found, by construction) and merge it.
 
             // Now handle the iadd as above, except use an AddS opcode that sets
             // flags.
