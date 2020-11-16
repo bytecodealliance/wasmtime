@@ -51,6 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RUSTDOCFLAGS: -Dbroken_intra_doc_links
+      OPENVINO_SKIP_LINKING: 1
     steps:
     - uses: actions/checkout@v2
       with:
@@ -252,6 +253,7 @@ jobs:
             --all \
             --exclude lightbeam \
             --exclude wasmtime-lightbeam \
+            --exclude wasmtime-wasi-nn \
             --exclude peepmatic \
             --exclude peepmatic-automata \
             --exclude peepmatic-fuzzing \
@@ -303,6 +305,23 @@ jobs:
       env:
         CARGO_VERSION: "+nightly"
         RUST_BACKTRACE: 1
+
+  # Build and test the wasi-nn module.
+  test_wasi_nn:
+    name: Test wasi-nn module
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - uses: ./.github/actions/install-rust
+        with:
+          toolchain: nightly-2020-08-25
+      - run: rustup target add wasm32-wasi
+      - uses: ./.github/actions/install-openvino
+      - run: ./ci/run-wasi-nn-example.sh
+        env:
+          RUST_BACKTRACE: 1
 
   # Verify that cranelift's code generation is deterministic
   meta_determinist_check:
@@ -411,6 +430,7 @@ jobs:
             --all \
             --exclude lightbeam \
             --exclude wasmtime-lightbeam \
+            --exclude wasmtime-wasi-nn \
             --exclude peepmatic \
             --exclude peepmatic-automata \
             --exclude peepmatic-fuzzing \

@@ -15,6 +15,9 @@ use wasi_common::{preopen_dir, WasiCtxBuilder};
 use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
 use wasmtime_wasi::Wasi;
 
+#[cfg(feature = "wasi-nn")]
+use wasmtime_wasi_nn::{WasiNn, WasiNnCtx};
+
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
     // Do not accept wasmtime subcommand names as the module name
     match s.to_str() {
@@ -352,6 +355,12 @@ fn populate_with_wasi(
     let cx = cx.build()?;
     let wasi = Wasi::new(linker.store(), cx);
     wasi.add_to_linker(linker)?;
+
+    #[cfg(feature = "wasi-nn")]
+    {
+        let wasi_nn = WasiNn::new(linker.store(), WasiNnCtx::new()?);
+        wasi_nn.add_to_linker(linker)?;
+    }
 
     // Repeat the above, but this time for snapshot 0.
     let mut cx = wasi_common::old::snapshot_0::WasiCtxBuilder::new();

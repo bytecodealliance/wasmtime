@@ -1,0 +1,14 @@
+name: 'Install OpenVINO'
+description: 'Install OpenVINO binaries from a package repository; this is significantly faster than building from source'
+
+inputs:
+  version:
+    description: 'The release version of OpenVINO to install'
+    required: false
+    default: '2020.4.287'
+
+runs:
+  using: composite
+  steps:
+    - run: ${{ github.action_path }}/install.sh ${{ inputs.version }}
+      shell: bash

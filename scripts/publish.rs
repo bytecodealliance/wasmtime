@@ -64,6 +64,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime",
     "wasmtime-wiggle",
     "wasmtime-wasi",
+    "wasmtime-wasi-nn",
     "wasmtime-rust-macro",
     "wasmtime-rust",
     "wasmtime-wast",
@@ -308,7 +309,10 @@ fn verify(crates: &[Crate]) {
             .arg("--manifest-path")
             .arg(&krate.manifest)
             .env("CARGO_TARGET_DIR", "./target");
-        if krate.name.contains("lightbeam") || krate.name == "witx" {
+        if krate.name.contains("lightbeam")
+            || krate.name == "witx"
+            || krate.name.contains("wasi-nn")
+        {
             cmd.arg("--no-verify");
         }
         let status = cmd.status().unwrap();
