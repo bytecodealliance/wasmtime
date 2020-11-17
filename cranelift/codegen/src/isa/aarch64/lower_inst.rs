@@ -1130,6 +1130,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 | Opcode::Sload32Complex => true,
                 _ => false,
             };
+            let flags = ctx
+                .memflags(insn)
+                .expect("Load instruction should have memflags");
 
             lower_load(
                 ctx,
@@ -1139,19 +1142,19 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 |ctx, rd, elem_ty, mem| {
                     let is_float = ty_has_float_or_vec_representation(elem_ty);
                     ctx.emit(match (ty_bits(elem_ty), sign_extend, is_float) {
-                        (1, _, _) => Inst::ULoad8 { rd, mem },
-                        (8, false, _) => Inst::ULoad8 { rd, mem },
-                        (8, true, _) => Inst::SLoad8 { rd, mem },
-                        (16, false, _) => Inst::ULoad16 { rd, mem },
-                        (16, true, _) => Inst::SLoad16 { rd, mem },
-                        (32, false, false) => Inst::ULoad32 { rd, mem },
-                        (32, true, false) => Inst::SLoad32 { rd, mem },
-                        (32, _, true) => Inst::FpuLoad32 { rd, mem },
-                        (64, _, false) => Inst::ULoad64 { rd, mem },
+                        (1, _, _) => Inst::ULoad8 { rd, mem, flags },
+                        (8, false, _) => Inst::ULoad8 { rd, mem, flags },
+                        (8, true, _) => Inst::SLoad8 { rd, mem, flags },
+                        (16, false, _) => Inst::ULoad16 { rd, mem, flags },
+                        (16, true, _) => Inst::SLoad16 { rd, mem, flags },
+                        (32, false, false) => Inst::ULoad32 { rd, mem, flags },
+                        (32, true, false) => Inst::SLoad32 { rd, mem, flags },
+                        (32, _, true) => Inst::FpuLoad32 { rd, mem, flags },
+                        (64, _, false) => Inst::ULoad64 { rd, mem, flags },
                         // Note that we treat some of the vector loads as scalar floating-point loads,
                         // which is correct in a little endian environment.
-                        (64, _, true) => Inst::FpuLoad64 { rd, mem },
-                        (128, _, _) => Inst::FpuLoad128 { rd, mem },
+                        (64, _, true) => Inst::FpuLoad64 { rd, mem, flags },
+                        (128, _, _) => Inst::FpuLoad128 { rd, mem, flags },
                         _ => panic!("Unsupported size in load"),
                     });
 
@@ -1200,18 +1203,21 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 _ => unreachable!(),
             };
             let is_float = ty_has_float_or_vec_representation(elem_ty);
+            let flags = ctx
+                .memflags(insn)
+                .expect("Store instruction should have memflags");
 
             let mem = lower_address(ctx, elem_ty, &inputs[1..], off);
             let rd = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
 
             ctx.emit(match (ty_bits(elem_ty), is_float) {
-                (1, _) | (8, _) => Inst::Store8 { rd, mem },
-                (16, _) => Inst::Store16 { rd, mem },
-                (32, false) => Inst::Store32 { rd, mem },
-                (32, true) => Inst::FpuStore32 { rd, mem },
-                (64, false) => Inst::Store64 { rd, mem },
-                (64, true) => Inst::FpuStore64 { rd, mem },
-                (128, _) => Inst::FpuStore128 { rd, mem },
+                (1, _) | (8, _) => Inst::Store8 { rd, mem, flags },
+                (16, _) => Inst::Store16 { rd, mem, flags },
+                (32, false) => Inst::Store32 { rd, mem, flags },
+                (32, true) => Inst::FpuStore32 { rd, mem, flags },
+                (64, false) => Inst::Store64 { rd, mem, flags },
+                (64, true) => Inst::FpuStore64 { rd, mem, flags },
+                (128, _) => Inst::FpuStore128 { rd, mem, flags },
                 _ => panic!("Unsupported size in store"),
             });
         }

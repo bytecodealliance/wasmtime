@@ -3,7 +3,7 @@
 use crate::binemit::{CodeOffset, Reloc, StackMap};
 use crate::ir::constant::ConstantData;
 use crate::ir::types::*;
-use crate::ir::TrapCode;
+use crate::ir::{MemFlags, TrapCode};
 use crate::isa::aarch64::inst::*;
 use crate::machinst::ty_bits;
 
@@ -741,16 +741,18 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_bit_rr(size, op1, op2, rn, rd))
             }
 
-            &Inst::ULoad8 { rd, ref mem }
-            | &Inst::SLoad8 { rd, ref mem }
-            | &Inst::ULoad16 { rd, ref mem }
-            | &Inst::SLoad16 { rd, ref mem }
-            | &Inst::ULoad32 { rd, ref mem }
-            | &Inst::SLoad32 { rd, ref mem }
-            | &Inst::ULoad64 { rd, ref mem, .. }
-            | &Inst::FpuLoad32 { rd, ref mem }
-            | &Inst::FpuLoad64 { rd, ref mem }
-            | &Inst::FpuLoad128 { rd, ref mem } => {
+            &Inst::ULoad8 { rd, ref mem, flags }
+            | &Inst::SLoad8 { rd, ref mem, flags }
+            | &Inst::ULoad16 { rd, ref mem, flags }
+            | &Inst::SLoad16 { rd, ref mem, flags }
+            | &Inst::ULoad32 { rd, ref mem, flags }
+            | &Inst::SLoad32 { rd, ref mem, flags }
+            | &Inst::ULoad64 {
+                rd, ref mem, flags, ..
+            }
+            | &Inst::FpuLoad32 { rd, ref mem, flags }
+            | &Inst::FpuLoad64 { rd, ref mem, flags }
+            | &Inst::FpuLoad128 { rd, ref mem, flags } => {
                 let (mem_insts, mem) = mem_finalize(sink.cur_offset(), mem, state);
 
                 for inst in mem_insts.into_iter() {
@@ -778,7 +780,7 @@ impl MachInstEmit for Inst {
                 };
 
                 let srcloc = state.cur_srcloc();
-                if srcloc != SourceLoc::default() {
+                if srcloc != SourceLoc::default() && !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
@@ -861,13 +863,13 @@ impl MachInstEmit for Inst {
                 }
             }
 
-            &Inst::Store8 { rd, ref mem }
-            | &Inst::Store16 { rd, ref mem }
-            | &Inst::Store32 { rd, ref mem }
-            | &Inst::Store64 { rd, ref mem, .. }
-            | &Inst::FpuStore32 { rd, ref mem }
-            | &Inst::FpuStore64 { rd, ref mem }
-            | &Inst::FpuStore128 { rd, ref mem } => {
+            &Inst::Store8 { rd, ref mem, flags }
+            | &Inst::Store16 { rd, ref mem, flags }
+            | &Inst::Store32 { rd, ref mem, flags }
+            | &Inst::Store64 { rd, ref mem, flags }
+            | &Inst::FpuStore32 { rd, ref mem, flags }
+            | &Inst::FpuStore64 { rd, ref mem, flags }
+            | &Inst::FpuStore128 { rd, ref mem, flags } => {
                 let (mem_insts, mem) = mem_finalize(sink.cur_offset(), mem, state);
 
                 for inst in mem_insts.into_iter() {
@@ -886,7 +888,7 @@ impl MachInstEmit for Inst {
                 };
 
                 let srcloc = state.cur_srcloc();
-                if srcloc != SourceLoc::default() {
+                if srcloc != SourceLoc::default() && !flags.notrap() {
                     // Register the offset at which the actual load instruction starts.
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
@@ -943,21 +945,44 @@ impl MachInstEmit for Inst {
                 }
             }
 
-            &Inst::StoreP64 { rt, rt2, ref mem } => match mem {
-                &PairAMode::SignedOffset(reg, simm7) => {
-                    assert_eq!(simm7.scale_ty, I64);
-                    sink.put4(enc_ldst_pair(0b1010100100, simm7, reg, rt, rt2));
+            &Inst::StoreP64 {
+                rt,
+                rt2,
+                ref mem,
+                flags,
+            } => {
+                let srcloc = state.cur_srcloc();
+                if srcloc != SourceLoc::default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
-                &PairAMode::PreIndexed(reg, simm7) => {
-                    assert_eq!(simm7.scale_ty, I64);
-                    sink.put4(enc_ldst_pair(0b1010100110, simm7, reg.to_reg(), rt, rt2));
+                match mem {
+                    &PairAMode::SignedOffset(reg, simm7) => {
+                        assert_eq!(simm7.scale_ty, I64);
+                        sink.put4(enc_ldst_pair(0b1010100100, simm7, reg, rt, rt2));
+                    }
+                    &PairAMode::PreIndexed(reg, simm7) => {
+                        assert_eq!(simm7.scale_ty, I64);
+                        sink.put4(enc_ldst_pair(0b1010100110, simm7, reg.to_reg(), rt, rt2));
+                    }
+                    &PairAMode::PostIndexed(reg, simm7) => {
+                        assert_eq!(simm7.scale_ty, I64);
+                        sink.put4(enc_ldst_pair(0b1010100010, simm7, reg.to_reg(), rt, rt2));
+                    }
                 }
-                &PairAMode::PostIndexed(reg, simm7) => {
-                    assert_eq!(simm7.scale_ty, I64);
-                    sink.put4(enc_ldst_pair(0b1010100010, simm7, reg.to_reg(), rt, rt2));
+            }
+            &Inst::LoadP64 {
+                rt,
+                rt2,
+                ref mem,
+                flags,
+            } => {
+                let srcloc = state.cur_srcloc();
+                if srcloc != SourceLoc::default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
-            },
-            &Inst::LoadP64 { rt, rt2, ref mem } => {
+
                 let rt = rt.to_reg();
                 let rt2 = rt2.to_reg();
                 match mem {
@@ -1546,6 +1571,7 @@ impl MachInstEmit for Inst {
                 let inst = Inst::FpuLoad64 {
                     rd,
                     mem: AMode::Label(MemLabel::PCRel(8)),
+                    flags: MemFlags::trusted(),
                 };
                 inst.emit(sink, emit_info, state);
                 let inst = Inst::Jump {
@@ -1558,6 +1584,7 @@ impl MachInstEmit for Inst {
                 let inst = Inst::FpuLoad128 {
                     rd,
                     mem: AMode::Label(MemLabel::PCRel(8)),
+                    flags: MemFlags::trusted(),
                 };
                 inst.emit(sink, emit_info, state);
                 let inst = Inst::Jump {
@@ -2169,6 +2196,7 @@ impl MachInstEmit for Inst {
                         I32,
                         ExtendOp::UXTW,
                     ),
+                    flags: MemFlags::trusted(),
                 };
                 inst.emit(sink, emit_info, state);
                 // Add base of jump table to jump-table-sourced block offset
@@ -2215,6 +2243,7 @@ impl MachInstEmit for Inst {
                 let inst = Inst::ULoad64 {
                     rd,
                     mem: AMode::Label(MemLabel::PCRel(8)),
+                    flags: MemFlags::trusted(),
                 };
                 inst.emit(sink, emit_info, state);
                 let inst = Inst::Jump {

@@ -61,7 +61,7 @@ impl UnwindInfoGenerator<Inst> for X64UnwindInfo {
                 }
                 Inst::MovRM {
                     src,
-                    dst: SyntheticAmode::Real(Amode::ImmReg { simm32, base }),
+                    dst: SyntheticAmode::Real(Amode::ImmReg { simm32, base, .. }),
                     ..
                 } if *base == regs::rsp() => {
                     // `mov reg, imm(rsp)`

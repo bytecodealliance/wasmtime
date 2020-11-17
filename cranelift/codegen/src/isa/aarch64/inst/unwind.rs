@@ -29,6 +29,7 @@ impl UnwindInfoGenerator<Inst> for AArch64UnwindInfo {
                     rt,
                     rt2,
                     mem: PairAMode::PreIndexed(rn, imm7),
+                    ..
                 } if *rt == regs::fp_reg()
                     && *rt2 == regs::link_reg()
                     && *rn == regs::writable_stack_reg()
@@ -60,6 +61,7 @@ impl UnwindInfoGenerator<Inst> for AArch64UnwindInfo {
                     rt,
                     rt2,
                     mem: PairAMode::PreIndexed(rn, imm7),
+                    ..
                 } if rn.to_reg() == regs::stack_reg() && imm7.value % (pair_size as i16) == 0 => {
                     // stp r1, r2, [sp, #(i * #16)]
                     let stack_offset = imm7.value as u32;

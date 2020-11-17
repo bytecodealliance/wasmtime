@@ -1,7 +1,7 @@
 //! Implementation of the standard x64 ABI.
 
 use crate::ir::types::*;
-use crate::ir::{self, types, TrapCode, Type};
+use crate::ir::{self, types, MemFlags, TrapCode, Type};
 use crate::isa;
 use crate::isa::{x64::inst::*, CallConv};
 use crate::machinst::abi_impl::*;
@@ -618,6 +618,7 @@ impl From<StackAMode> for SyntheticAmode {
                 SyntheticAmode::Real(Amode::ImmReg {
                     simm32,
                     base: regs::rbp(),
+                    flags: MemFlags::trusted(),
                 })
             }
             StackAMode::NominalSPOffset(off, _ty) => {
@@ -634,6 +635,7 @@ impl From<StackAMode> for SyntheticAmode {
                 SyntheticAmode::Real(Amode::ImmReg {
                     simm32,
                     base: regs::rsp(),
+                    flags: MemFlags::trusted(),
                 })
             }
         }
