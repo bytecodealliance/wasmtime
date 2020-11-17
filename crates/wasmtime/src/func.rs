@@ -819,21 +819,14 @@ pub(crate) fn invoke_wasm_and_catch_traps(
     store: &Store,
     closure: impl FnMut(),
 ) -> Result<(), Trap> {
-    let signalhandler = store.signal_handler();
     unsafe {
         let canary = 0;
         let _auto_reset_canary = store
             .externref_activations_table()
             .set_stack_canary(&canary);
 
-        wasmtime_runtime::catch_traps(
-            vmctx,
-            store.engine().config().max_wasm_stack,
-            |addr| store.is_in_jit_code(addr),
-            signalhandler.as_deref(),
-            closure,
-        )
-        .map_err(Trap::from_runtime)
+        wasmtime_runtime::catch_traps(vmctx, store, closure)
+            .map_err(|e| Trap::from_runtime(store, e))
     }
 }
 

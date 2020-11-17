@@ -370,9 +370,7 @@ impl Trap {
 /// Highly unsafe since `closure` won't have any dtors run.
 pub unsafe fn catch_traps<F>(
     vmctx: *mut VMContext,
-    max_wasm_stack: usize,
-    is_wasm_code: impl Fn(usize) -> bool,
-    signal_handler: Option<&SignalHandler>,
+    trap_info: &impl TrapInfo,
     mut closure: F,
 ) -> Result<(), Trap>
 where
@@ -382,7 +380,7 @@ where
     #[cfg(unix)]
     setup_unix_sigaltstack()?;
 
-    return CallThreadState::new(vmctx, &is_wasm_code, signal_handler).with(max_wasm_stack, |cx| {
+    return CallThreadState::new(vmctx, trap_info).with(|cx| {
         RegisterSetjmp(
             cx.jmp_buf.as_ptr(),
             call_closure::<F>,
@@ -398,6 +396,14 @@ where
     }
 }
 
+/// Runs `func` with the last `trap_info` object registered by `catch_traps`.
+///
+/// Calls `func` with `None` if `catch_traps` wasn't previously called from this
+/// stack frame.
+pub fn with_last_info<R>(func: impl FnOnce(Option<&dyn Any>) -> R) -> R {
+    tls::with(|state| func(state.map(|s| s.trap_info.as_any())))
+}
+
 /// Temporary state stored on the stack which is registered in the `tls` module
 /// below for calls into wasm.
 pub struct CallThreadState<'a> {
@@ -405,8 +411,31 @@ pub struct CallThreadState<'a> {
     jmp_buf: Cell<*const u8>,
     vmctx: *mut VMContext,
     handling_trap: Cell<bool>,
-    is_wasm_code: &'a (dyn Fn(usize) -> bool + 'a),
-    signal_handler: Option<&'a SignalHandler<'a>>,
+    trap_info: &'a (dyn TrapInfo + 'a),
+}
+
+/// A package of functionality needed by `catch_traps` to figure out what to do
+/// when handling a trap.
+///
+/// Note that this is an `unsafe` trait at least because it's being run in the
+/// context of a synchronous signal handler, so it needs to be careful to not
+/// access too much state in answering these queries.
+pub unsafe trait TrapInfo {
+    /// Converts this object into an `Any` to dynamically check its type.
+    fn as_any(&self) -> &dyn Any;
+
+    /// Returns whether the given program counter lies within wasm code,
+    /// indicating whether we should handle a trap or not.
+    fn is_wasm_code(&self, pc: usize) -> bool;
+
+    /// Uses `call` to call a custom signal handler, if one is specified.
+    ///
+    /// Returns `true` if `call` returns true, otherwise returns `false`.
+    fn custom_signal_handler(&self, call: &dyn Fn(&SignalHandler) -> bool) -> bool;
+
+    /// Returns the maximum size, in bytes, the wasm native stack is allowed to
+    /// grow to.
+    fn max_wasm_stack(&self) -> usize;
 }
 
 enum UnwindReason {
@@ -418,27 +447,18 @@ enum UnwindReason {
 }
 
 impl<'a> CallThreadState<'a> {
-    fn new(
-        vmctx: *mut VMContext,
-        is_wasm_code: &'a (dyn Fn(usize) -> bool + 'a),
-        signal_handler: Option<&'a SignalHandler<'a>>,
-    ) -> CallThreadState<'a> {
+    fn new(vmctx: *mut VMContext, trap_info: &'a (dyn TrapInfo + 'a)) -> CallThreadState<'a> {
         CallThreadState {
             unwind: Cell::new(UnwindReason::None),
             vmctx,
             jmp_buf: Cell::new(ptr::null()),
             handling_trap: Cell::new(false),
-            is_wasm_code,
-            signal_handler,
+            trap_info,
         }
     }
 
-    fn with(
-        self,
-        max_wasm_stack: usize,
-        closure: impl FnOnce(&CallThreadState) -> i32,
-    ) -> Result<(), Trap> {
-        let _reset = self.update_stack_limit(max_wasm_stack)?;
+    fn with(self, closure: impl FnOnce(&CallThreadState) -> i32) -> Result<(), Trap> {
+        let _reset = self.update_stack_limit()?;
         let ret = tls::set(&self, || closure(&self));
         match self.unwind.replace(UnwindReason::None) {
             UnwindReason::None => {
@@ -498,7 +518,7 @@ impl<'a> CallThreadState<'a> {
     ///
     /// Note that this function must be called with `self` on the stack, not the
     /// heap/etc.
-    fn update_stack_limit(&self, max_wasm_stack: usize) -> Result<impl Drop + '_, Trap> {
+    fn update_stack_limit(&self) -> Result<impl Drop + '_, Trap> {
         // Determine the stack pointer where, after which, any wasm code will
         // immediately trap. This is checked on the entry to all wasm functions.
         //
@@ -510,7 +530,7 @@ impl<'a> CallThreadState<'a> {
         // to it). In any case it's expected to be at most a few hundred bytes
         // of slop one way or another. When wasm is typically given a MB or so
         // (a million bytes) the slop shouldn't matter too much.
-        let wasm_stack_limit = psm::stack_pointer() as usize - max_wasm_stack;
+        let wasm_stack_limit = psm::stack_pointer() as usize - self.trap_info.max_wasm_stack();
 
         let interrupts = unsafe { &**(&*self.vmctx).instance().interrupts() };
         let reset_stack_limit = match interrupts.stack_limit.compare_exchange(
@@ -604,14 +624,12 @@ impl<'a> CallThreadState<'a> {
         // First up see if any instance registered has a custom trap handler,
         // in which case run them all. If anything handles the trap then we
         // return that the trap was handled.
-        if let Some(handler) = self.signal_handler {
-            if call_handler(handler) {
-                return 1 as *const _;
-            }
+        if self.trap_info.custom_signal_handler(&call_handler) {
+            return 1 as *const _;
         }
 
         // If this fault wasn't in wasm code, then it's not our problem
-        if !(self.is_wasm_code)(pc as usize) {
+        if !self.trap_info.is_wasm_code(pc as usize) {
             return ptr::null();
         }
 

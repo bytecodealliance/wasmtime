@@ -26,6 +26,6 @@ impl StoreExt for Store {
     where
         H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool,
     {
-        *self.signal_handler_mut() = Some(Box::new(handler));
+        self.set_signal_handler(Some(Box::new(handler)));
     }
 }

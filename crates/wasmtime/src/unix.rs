@@ -26,6 +26,6 @@ impl StoreExt for Store {
     where
         H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
     {
-        *self.signal_handler_mut() = Some(Box::new(handler));
+        self.set_signal_handler(Some(Box::new(handler)));
     }
 }
