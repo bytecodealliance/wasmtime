@@ -90,14 +90,67 @@ impl Instance {
     /// see why it failed, or bubble it upwards. If you'd like to specifically
     /// check for trap errors, you can use `error.downcast::<Trap>()`.
     ///
+    /// # Panics
+    ///
+    /// This function will panic if called within an asynchronous store
+    /// (created with [`Store::new_async`]).
+    ///
     /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     /// [`ExternType`]: crate::ExternType
     pub fn new(store: &Store, module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
+        assert!(
+            !store.is_async(),
+            "cannot instantiate synchronously within an asynchronous store"
+        );
         let mut i = Instantiator::new(store, module, imports)?;
         loop {
             if let Some((instance, items)) = i.step()? {
                 Instantiator::start_raw(&instance)?;
+                if let Some(items) = items {
+                    break Ok(Instance::from_wasmtime(&items, store));
+                }
+            }
+        }
+    }
+
+    /// Same as [`Instance::new`], except for usage in [asynchronous stores].
+    ///
+    /// For more details about this function see the documentation on
+    /// [`Instance::new`]. The only difference between these two methods is that
+    /// this one will asynchronously invoke the wasm start function in case it
+    /// calls any imported function which is an asynchronous host function (e.g.
+    /// created with [`Func::new_async`](crate::Func::new_async).
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if called within a non-asynchronous store
+    /// (created with [`Store::new`]). This is only compatible with asynchronous
+    /// stores created with [`Store::new_async`].
+    ///
+    /// [asynchronous stores]: Store::new_async
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub async fn new_async(
+        store: &Store,
+        module: &Module,
+        imports: &[Extern],
+    ) -> Result<Instance, Error> {
+        assert!(
+            store.is_async(),
+            "cannot instantiate asynchronously within a synchronous store"
+        );
+
+        assert!(
+            !store.is_async(),
+            "cannot instantiate synchronously within an asynchronous store"
+        );
+        let mut i = Instantiator::new(store, module, imports)?;
+        loop {
+            if let Some((instance, items)) = i.step()? {
+                store
+                    .on_fiber(|| Instantiator::start_raw(&instance))
+                    .await??;
                 if let Some(items) = items {
                     break Ok(Instance::from_wasmtime(&items, store));
                 }
@@ -123,6 +176,33 @@ impl Instance {
 
     pub(crate) fn wasmtime_export(&self) -> &RuntimeInstance {
         &self.items
+    }
+
+    fn start(&self) -> Result<(), Error> {
+        let start_func = match self.handle.module().start_func {
+            Some(func) => func,
+            None => return Ok(()),
+        };
+
+        let f = match self
+            .handle
+            .lookup_by_declaration(&EntityIndex::Function(start_func))
+        {
+            wasmtime_runtime::Export::Function(f) => f,
+            _ => unreachable!(), // valid modules shouldn't hit this
+        };
+        let vmctx_ptr = self.handle.vmctx_ptr();
+        unsafe {
+            super::func::invoke_wasm_and_catch_traps(vmctx_ptr, self.store(), || {
+                mem::transmute::<
+                    *const VMFunctionBody,
+                    unsafe extern "C" fn(*mut VMContext, *mut VMContext),
+                >(f.anyfunc.as_ref().func_ptr.as_ptr())(
+                    f.anyfunc.as_ref().vmctx, vmctx_ptr
+                )
+            })?;
+        }
+        Ok(())
     }
 
     /// Returns the associated [`Store`] that this `Instance` is compiled into.
