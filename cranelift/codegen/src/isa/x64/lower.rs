@@ -3661,21 +3661,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             emit_extract_lane(ctx, src, dst, lane, ty);
         }
 
-        Opcode::Splat | Opcode::LoadSplat => {
+        Opcode::Splat => {
             let ty = ty.unwrap();
             assert_eq!(ty.bits(), 128);
             let src_ty = ctx.input_ty(insn, 0);
             assert!(src_ty.bits() < 128);
 
-            let src = match op {
-                Opcode::Splat => input_to_reg_mem(ctx, inputs[0]),
-                Opcode::LoadSplat => {
-                    let offset = ctx.data(insn).load_store_offset().unwrap();
-                    let amode = lower_to_amode(ctx, inputs[0], offset);
-                    RegMem::mem(amode)
-                }
-                _ => unreachable!(),
-            };
+            let src = input_to_reg_mem(ctx, inputs[0]);
             let dst = get_output_reg(ctx, outputs[0]);
 
             // We know that splat will overwrite all of the lanes of `dst` but it takes several

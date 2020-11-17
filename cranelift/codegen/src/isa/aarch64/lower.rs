@@ -1169,6 +1169,59 @@ pub(crate) fn normalize_bool_result<C: LowerCtx<I = Inst>>(
     }
 }
 
+/// This is target-word-size dependent.  And it excludes booleans and reftypes.
+pub(crate) fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
+    match ty {
+        I8 | I16 | I32 | I64 => true,
+        _ => false,
+    }
+}
+
+fn load_op_to_ty(op: Opcode) -> Option<Type> {
+    match op {
+        Opcode::Sload8 | Opcode::Uload8 | Opcode::Sload8Complex | Opcode::Uload8Complex => Some(I8),
+        Opcode::Sload16 | Opcode::Uload16 | Opcode::Sload16Complex | Opcode::Uload16Complex => {
+            Some(I16)
+        }
+        Opcode::Sload32 | Opcode::Uload32 | Opcode::Sload32Complex | Opcode::Uload32Complex => {
+            Some(I32)
+        }
+        Opcode::Load | Opcode::LoadComplex => None,
+        Opcode::Sload8x8 | Opcode::Uload8x8 | Opcode::Sload8x8Complex | Opcode::Uload8x8Complex => {
+            Some(I8X8)
+        }
+        Opcode::Sload16x4
+        | Opcode::Uload16x4
+        | Opcode::Sload16x4Complex
+        | Opcode::Uload16x4Complex => Some(I16X4),
+        Opcode::Sload32x2
+        | Opcode::Uload32x2
+        | Opcode::Sload32x2Complex
+        | Opcode::Uload32x2Complex => Some(I32X2),
+        _ => None,
+    }
+}
+
+/// Helper to lower a load instruction; this is used in several places, because
+/// a load can sometimes be merged into another operation.
+pub(crate) fn lower_load<C: LowerCtx<I = Inst>, F: FnMut(&mut C, Writable<Reg>, Type, AMode)>(
+    ctx: &mut C,
+    ir_inst: IRInst,
+    inputs: &[InsnInput],
+    output: InsnOutput,
+    mut f: F,
+) {
+    let op = ctx.data(ir_inst).opcode();
+
+    let elem_ty = load_op_to_ty(op).unwrap_or_else(|| ctx.output_ty(ir_inst, 0));
+
+    let off = ctx.data(ir_inst).load_store_offset().unwrap();
+    let mem = lower_address(ctx, elem_ty, &inputs[..], off);
+    let rd = get_output_reg(ctx, output);
+
+    f(ctx, rd, elem_ty, mem);
+}
+
 //=============================================================================
 // Lowering-backend trait implementation.
 

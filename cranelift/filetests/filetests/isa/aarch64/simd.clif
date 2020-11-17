@@ -61,3 +61,69 @@ block0(v0: i32, v1: i8x16, v2: i8x16):
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
+
+function %f5(i64) -> i8x16 {
+block0(v0: i64):
+  v1 = load.i8 v0
+  v2 = splat.i8x16 v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  ld1r { v0.16b }, [x0]
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f6(i64, i64) -> i8x16, i8x16 {
+block0(v0: i64, v1: i64):
+  v2 = load.i8 v0
+  v3 = load.i8 v1
+  v4 = splat.i8x16 v2
+  v5 = splat.i8x16 v3
+  return v4, v5
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  ld1r { v0.16b }, [x0]
+; nextln:  ld1r { v1.16b }, [x1]
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f7(i64, i64) -> i8x16, i8x16 {
+block0(v0: i64, v1: i64):
+  v2 = load.i8 v0
+  v3 = load.i8 v1
+  v4 = splat.i8x16 v3
+  v5 = splat.i8x16 v2
+  return v4, v5
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  ldrb w0, [x0]
+; nextln:  ld1r { v0.16b }, [x1]
+; nextln:  dup v1.16b, w0
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f8(i64, i64) -> i8x16, i8x16 {
+block0(v0: i64, v1: i64):
+  v2 = load.i8 v0
+  v3 = splat.i8x16 v2
+  v4 = splat.i8x16 v2
+  return v3, v4
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  ldrb w0, [x0]
+; nextln:  dup v0.16b, w0
+; nextln:  dup v1.16b, w0
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret

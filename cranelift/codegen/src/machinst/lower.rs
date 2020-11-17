@@ -147,9 +147,10 @@ pub trait LowerCtx {
     /// Emit a machine instruction that is a safepoint.
     fn emit_safepoint(&mut self, mach_inst: Self::I);
     /// Indicate that the side-effect of an instruction has been sunk to the
-    /// current scan location. This can only be done to an instruction with no
-    /// uses of its result register(s), because it will cause the instruction
-    /// not to be codegen'd at its original location.
+    /// current scan location. This should only be done with the instruction's
+    /// original results are not used (i.e., `put_input_in_reg` is not invoked
+    /// for the input produced by the sunk instruction), otherwise the
+    /// side-effect will occur twice.
     fn sink_inst(&mut self, ir_inst: Inst);
     /// Retrieve constant data given a handle.
     fn get_constant_data(&self, constant_handle: Constant) -> &ConstantData;

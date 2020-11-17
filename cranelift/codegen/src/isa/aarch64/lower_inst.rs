@@ -17,17 +17,8 @@ use regalloc::{RegClass, Writable};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
-use smallvec::SmallVec;
 
 use super::lower::*;
-
-/// This is target-word-size dependent.  And it excludes booleans and reftypes.
-fn is_valid_atomic_transaction_ty(ty: Type) -> bool {
-    match ty {
-        I8 | I16 | I32 | I64 => true,
-        _ => false,
-    }
-}
 
 /// Actually codegen an instruction's results into registers.
 pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
@@ -35,12 +26,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     insn: IRInst,
 ) -> CodegenResult<()> {
     let op = ctx.data(insn).opcode();
-    let inputs: SmallVec<[InsnInput; 4]> = (0..ctx.num_inputs(insn))
-        .map(|i| InsnInput { insn, input: i })
-        .collect();
-    let outputs: SmallVec<[InsnOutput; 2]> = (0..ctx.num_outputs(insn))
-        .map(|i| InsnOutput { insn, output: i })
-        .collect();
+    let inputs = insn_inputs(ctx, insn);
+    let outputs = insn_outputs(ctx, insn);
     let ty = if outputs.len() > 0 {
         Some(ctx.output_ty(insn, 0))
     } else {
@@ -1134,34 +1121,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Sload16x4Complex
         | Opcode::Uload32x2Complex
         | Opcode::Sload32x2Complex => {
-            let off = ctx.data(insn).load_store_offset().unwrap();
-            let elem_ty = match op {
-                Opcode::Sload8 | Opcode::Uload8 | Opcode::Sload8Complex | Opcode::Uload8Complex => {
-                    I8
-                }
-                Opcode::Sload16
-                | Opcode::Uload16
-                | Opcode::Sload16Complex
-                | Opcode::Uload16Complex => I16,
-                Opcode::Sload32
-                | Opcode::Uload32
-                | Opcode::Sload32Complex
-                | Opcode::Uload32Complex => I32,
-                Opcode::Load | Opcode::LoadComplex => ctx.output_ty(insn, 0),
-                Opcode::Sload8x8
-                | Opcode::Uload8x8
-                | Opcode::Sload8x8Complex
-                | Opcode::Uload8x8Complex => I8X8,
-                Opcode::Sload16x4
-                | Opcode::Uload16x4
-                | Opcode::Sload16x4Complex
-                | Opcode::Uload16x4Complex => I16X4,
-                Opcode::Sload32x2
-                | Opcode::Uload32x2
-                | Opcode::Sload32x2Complex
-                | Opcode::Uload32x2Complex => I32X2,
-                _ => unreachable!(),
-            };
             let sign_extend = match op {
                 Opcode::Sload8
                 | Opcode::Sload8Complex
@@ -1171,68 +1130,57 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 | Opcode::Sload32Complex => true,
                 _ => false,
             };
-            let is_float = ty_has_float_or_vec_representation(elem_ty);
 
-            let mem = lower_address(ctx, elem_ty, &inputs[..], off);
-            let rd = get_output_reg(ctx, outputs[0]);
+            lower_load(
+                ctx,
+                insn,
+                &inputs[..],
+                outputs[0],
+                |ctx, rd, elem_ty, mem| {
+                    let is_float = ty_has_float_or_vec_representation(elem_ty);
+                    ctx.emit(match (ty_bits(elem_ty), sign_extend, is_float) {
+                        (1, _, _) => Inst::ULoad8 { rd, mem },
+                        (8, false, _) => Inst::ULoad8 { rd, mem },
+                        (8, true, _) => Inst::SLoad8 { rd, mem },
+                        (16, false, _) => Inst::ULoad16 { rd, mem },
+                        (16, true, _) => Inst::SLoad16 { rd, mem },
+                        (32, false, false) => Inst::ULoad32 { rd, mem },
+                        (32, true, false) => Inst::SLoad32 { rd, mem },
+                        (32, _, true) => Inst::FpuLoad32 { rd, mem },
+                        (64, _, false) => Inst::ULoad64 { rd, mem },
+                        // Note that we treat some of the vector loads as scalar floating-point loads,
+                        // which is correct in a little endian environment.
+                        (64, _, true) => Inst::FpuLoad64 { rd, mem },
+                        (128, _, _) => Inst::FpuLoad128 { rd, mem },
+                        _ => panic!("Unsupported size in load"),
+                    });
 
-            ctx.emit(match (ty_bits(elem_ty), sign_extend, is_float) {
-                (1, _, _) => Inst::ULoad8 { rd, mem },
-                (8, false, _) => Inst::ULoad8 { rd, mem },
-                (8, true, _) => Inst::SLoad8 { rd, mem },
-                (16, false, _) => Inst::ULoad16 { rd, mem },
-                (16, true, _) => Inst::SLoad16 { rd, mem },
-                (32, false, false) => Inst::ULoad32 { rd, mem },
-                (32, true, false) => Inst::SLoad32 { rd, mem },
-                (32, _, true) => Inst::FpuLoad32 { rd, mem },
-                (64, _, false) => Inst::ULoad64 { rd, mem },
-                // Note that we treat some of the vector loads as scalar floating-point loads,
-                // which is correct in a little endian environment.
-                (64, _, true) => Inst::FpuLoad64 { rd, mem },
-                (128, _, _) => Inst::FpuLoad128 { rd, mem },
-                _ => panic!("Unsupported size in load"),
-            });
+                    let vec_extend = match op {
+                        Opcode::Sload8x8 => Some(VecExtendOp::Sxtl8),
+                        Opcode::Sload8x8Complex => Some(VecExtendOp::Sxtl8),
+                        Opcode::Uload8x8 => Some(VecExtendOp::Uxtl8),
+                        Opcode::Uload8x8Complex => Some(VecExtendOp::Uxtl8),
+                        Opcode::Sload16x4 => Some(VecExtendOp::Sxtl16),
+                        Opcode::Sload16x4Complex => Some(VecExtendOp::Sxtl16),
+                        Opcode::Uload16x4 => Some(VecExtendOp::Uxtl16),
+                        Opcode::Uload16x4Complex => Some(VecExtendOp::Uxtl16),
+                        Opcode::Sload32x2 => Some(VecExtendOp::Sxtl32),
+                        Opcode::Sload32x2Complex => Some(VecExtendOp::Sxtl32),
+                        Opcode::Uload32x2 => Some(VecExtendOp::Uxtl32),
+                        Opcode::Uload32x2Complex => Some(VecExtendOp::Uxtl32),
+                        _ => None,
+                    };
 
-            let vec_extend = match op {
-                Opcode::Sload8x8 => Some(VecExtendOp::Sxtl8),
-                Opcode::Sload8x8Complex => Some(VecExtendOp::Sxtl8),
-                Opcode::Uload8x8 => Some(VecExtendOp::Uxtl8),
-                Opcode::Uload8x8Complex => Some(VecExtendOp::Uxtl8),
-                Opcode::Sload16x4 => Some(VecExtendOp::Sxtl16),
-                Opcode::Sload16x4Complex => Some(VecExtendOp::Sxtl16),
-                Opcode::Uload16x4 => Some(VecExtendOp::Uxtl16),
-                Opcode::Uload16x4Complex => Some(VecExtendOp::Uxtl16),
-                Opcode::Sload32x2 => Some(VecExtendOp::Sxtl32),
-                Opcode::Sload32x2Complex => Some(VecExtendOp::Sxtl32),
-                Opcode::Uload32x2 => Some(VecExtendOp::Uxtl32),
-                Opcode::Uload32x2Complex => Some(VecExtendOp::Uxtl32),
-                _ => None,
-            };
-
-            if let Some(t) = vec_extend {
-                ctx.emit(Inst::VecExtend {
-                    t,
-                    rd,
-                    rn: rd.to_reg(),
-                    high_half: false,
-                });
-            }
-        }
-
-        Opcode::LoadSplat => {
-            let off = ctx.data(insn).load_store_offset().unwrap();
-            let ty = ty.unwrap();
-            let mem = lower_address(ctx, ty.lane_type(), &inputs[..], off);
-            let rd = get_output_reg(ctx, outputs[0]);
-            let size = VectorSize::from_ty(ty);
-            let tmp = ctx.alloc_tmp(RegClass::I64, I64);
-
-            ctx.emit(Inst::LoadAddr { rd: tmp, mem });
-            ctx.emit(Inst::VecLoadReplicate {
-                rd,
-                rn: tmp.to_reg(),
-                size,
-            });
+                    if let Some(t) = vec_extend {
+                        ctx.emit(Inst::VecExtend {
+                            t,
+                            rd,
+                            rn: rd.to_reg(),
+                            high_half: false,
+                        });
+                    }
+                },
+            );
         }
 
         Opcode::Store
@@ -2026,6 +1974,36 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 maybe_input_insn_via_conv(ctx, inputs[0], Opcode::Bconst, Opcode::Breduce)
             {
                 lower_splat_const(ctx, rd, ctx.get_constant(insn).unwrap(), size);
+            } else if let Some((_, insn)) = maybe_input_insn_multi(
+                ctx,
+                inputs[0],
+                &[
+                    Opcode::Uload8,
+                    Opcode::Sload8,
+                    Opcode::Uload16,
+                    Opcode::Sload16,
+                    Opcode::Uload32,
+                    Opcode::Sload32,
+                    Opcode::Load,
+                ],
+            ) {
+                ctx.sink_inst(insn);
+                let load_inputs = insn_inputs(ctx, insn);
+                let load_outputs = insn_outputs(ctx, insn);
+                lower_load(
+                    ctx,
+                    insn,
+                    &load_inputs[..],
+                    load_outputs[0],
+                    |ctx, _rd, _elem_ty, mem| {
+                        let tmp = ctx.alloc_tmp(RegClass::I64, I64);
+                        let (addr, addr_inst) = Inst::gen_load_addr(tmp, mem);
+                        if let Some(addr_inst) = addr_inst {
+                            ctx.emit(addr_inst);
+                        }
+                        ctx.emit(Inst::VecLoadReplicate { rd, rn: addr, size });
+                    },
+                );
             } else {
                 let input_ty = ctx.input_ty(insn, 0);
                 let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
