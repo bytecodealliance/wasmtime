@@ -8,8 +8,8 @@
 
 use crate::state::FuncTranslationState;
 use crate::translation_utils::{
-    DataIndex, ElemIndex, EntityType, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, Table,
-    TableIndex, TypeIndex,
+    DataIndex, ElemIndex, EntityType, Event, EventIndex, FuncIndex, Global, GlobalIndex, Memory,
+    MemoryIndex, Table, TableIndex, TypeIndex,
 };
 use core::convert::From;
 use core::convert::TryFrom;
@@ -44,6 +44,8 @@ pub enum WasmType {
     FuncRef,
     /// ExternRef type
     ExternRef,
+    /// ExnRef type
+    ExnRef,
 }
 
 impl TryFrom<wasmparser::Type> for WasmType {
@@ -58,6 +60,7 @@ impl TryFrom<wasmparser::Type> for WasmType {
             V128 => Ok(WasmType::V128),
             FuncRef => Ok(WasmType::FuncRef),
             ExternRef => Ok(WasmType::ExternRef),
+            ExnRef => Ok(WasmType::ExnRef),
             EmptyBlockType | Func => Err(WasmError::InvalidWebAssembly {
                 message: "unexpected value type".to_string(),
                 offset: 0,
@@ -76,6 +79,7 @@ impl From<WasmType> for wasmparser::Type {
             WasmType::V128 => wasmparser::Type::V128,
             WasmType::FuncRef => wasmparser::Type::FuncRef,
             WasmType::ExternRef => wasmparser::Type::ExternRef,
+            WasmType::ExnRef => wasmparser::Type::ExnRef,
         }
     }
 }
@@ -689,6 +693,17 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         field: &'data str,
     ) -> WasmResult<()>;
 
+    /// Declares an event import to the environment.
+    fn declare_event_import(
+        &mut self,
+        event: Event,
+        module: &'data str,
+        field: &'data str,
+    ) -> WasmResult<()> {
+        drop((event, module, field));
+        Err(WasmError::Unsupported("wasm events".to_string()))
+    }
+
     /// Declares a global import to the environment.
     fn declare_global_import(
         &mut self,
@@ -751,6 +766,18 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
     /// Declares a memory to the environment
     fn declare_memory(&mut self, memory: Memory) -> WasmResult<()>;
 
+    /// Provides the number of defined events up front. By default this does nothing, but
+    /// implementations can use this to preallocate memory if desired.
+    fn reserve_events(&mut self, _num: u32) -> WasmResult<()> {
+        Ok(())
+    }
+
+    /// Declares an event to the environment
+    fn declare_event(&mut self, event: Event) -> WasmResult<()> {
+        drop(event);
+        Err(WasmError::Unsupported("wasm events".to_string()))
+    }
+
     /// Provides the number of defined globals up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
     fn reserve_globals(&mut self, _num: u32) -> WasmResult<()> {
@@ -779,6 +806,16 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         memory_index: MemoryIndex,
         name: &'data str,
     ) -> WasmResult<()>;
+
+    /// Declares an event export to the environment.
+    fn declare_event_export(
+        &mut self,
+        event_index: EventIndex,
+        name: &'data str,
+    ) -> WasmResult<()> {
+        drop((event_index, name));
+        Err(WasmError::Unsupported("wasm events".to_string()))
+    }
 
     /// Declares a global export to the environment.
     fn declare_global_export(

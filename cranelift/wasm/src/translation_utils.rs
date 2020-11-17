@@ -91,6 +91,12 @@ entity_impl!(ModuleIndex);
 pub struct InstanceIndex(u32);
 entity_impl!(InstanceIndex);
 
+/// Index type of an event inside the WebAssembly module.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct EventIndex(u32);
+entity_impl!(EventIndex);
+
 /// An index of an entity.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
@@ -119,6 +125,8 @@ pub enum EntityType {
     Global(Global),
     /// A linear memory with the specified limits
     Memory(Memory),
+    /// An event definition.
+    Event(Event),
     /// A table with the specified element type and limits
     Table(Table),
     /// A function type where the index points to the type section and records a
@@ -210,6 +218,14 @@ pub struct Memory {
     pub maximum: Option<u32>,
     /// Whether the memory may be shared between multiple threads.
     pub shared: bool,
+}
+
+/// WebAssembly event.
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub struct Event {
+    /// The event signature type.
+    pub ty: TypeIndex,
 }
 
 /// Helper function translating wasmparser types to Cranelift types when possible.

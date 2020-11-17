@@ -133,6 +133,7 @@ impl ValType {
             wasm::WasmType::V128 => Self::V128,
             wasm::WasmType::FuncRef => Self::FuncRef,
             wasm::WasmType::ExternRef => Self::ExternRef,
+            wasm::WasmType::ExnRef => unimplemented!(),
         }
     }
 }
@@ -222,6 +223,7 @@ impl ExternType {
                 };
                 InstanceType::from_wasmtime(module, exports).into()
             }
+            EntityType::Event(_) => unimplemented!("wasm event support"),
         }
     }
 }
