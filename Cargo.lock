@@ -1459,6 +1459,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c917123afa01924fc84bb20c4c03f004d9c38e5127e3c039bbf7f4b9c76a2f6b"
 
 [[package]]
+name = "posish"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a81e5017f1c873447782cd776e6ec307af670ecad29e934042005a0dec6864dd"
+dependencies = [
+ "bitflags",
+ "cfg-if 1.0.0",
+ "errno",
+ "itoa",
+ "libc",
+]
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1993,6 +2006,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "system-interface"
+version = "0.0.1-alpha.0"
+dependencies = [
+ "atty",
+ "posish",
+ "winapi",
+ "winx 0.20.0",
+]
+
+[[package]]
 name = "target-lexicon"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2284,6 +2307,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a143597ca7c7793eff794def352d41792a93c481eb1042423ff7ff72ba2c31f"
 
 [[package]]
+name = "wasi-c2"
+version = "0.21.0"
+dependencies = [
+ "anyhow",
+ "getrandom 0.2.0",
+ "libc",
+ "system-interface",
+ "thiserror",
+ "tracing",
+ "wiggle",
+]
+
+[[package]]
 name = "wasi-common"
 version = "0.21.0"
 dependencies = [
@@ -2298,7 +2334,7 @@ dependencies = [
  "tracing",
  "wiggle",
  "winapi",
- "winx",
+ "winx 0.21.0",
  "yanix",
 ]
 
@@ -2809,6 +2845,17 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
+
+[[package]]
+name = "winx"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b25e4ae373f2f2f7f5f187974ed315719ce74160859027c80deb1f68b3c0c966"
+dependencies = [
+ "bitflags",
+ "cvt",
+ "winapi",
+]
 
 [[package]]
 name = "winx"
