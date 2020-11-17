@@ -1,0 +1,46 @@
+test compile
+target x86_64
+feature "experimental_x64"
+
+function %add_from_mem_u32_1(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+  v2 = load.i32 v0
+  v3 = iadd.i32 v2, v1
+  ; check: addl    0(%rdi), %r12d
+  return v3
+}
+
+function %add_from_mem_u32_2(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+  v2 = load.i32 v0
+  v3 = iadd.i32 v1, v2
+  ; check: addl    0(%rdi), %r12d
+  return v3
+}
+
+function %add_from_mem_u64_1(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = load.i64 v0
+  v3 = iadd.i64 v2, v1
+  ; check: addq    0(%rdi), %r12
+  return v3
+}
+
+function %add_from_mem_u64_2(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = load.i64 v0
+  v3 = iadd.i64 v1, v2
+  ; check: addq    0(%rdi), %r12
+  return v3
+}
+
+; test narrow loads: 8-bit load should not merge because the `addl` is 32 bits
+; and would load 32 bits from memory, which may go beyond the end of the heap.
+function %add_from_mem_not_narrow(i64, i8) -> i8 {
+block0(v0: i64, v1: i8):
+  v2 = load.i8 v0
+  v3 = iadd.i8 v2, v1
+  ; check: movzbq  0(%rdi), %r12
+  ; nextln: addl    %esi, %r12d
+  return v3
+}
