@@ -29,7 +29,7 @@ impl ExternRef {
         self.inner.strong_count()
     }
 
-    /// Does this `ExternRef` point to the same inner value as `other`?0
+    /// Does this `ExternRef` point to the same inner value as `other`?
     ///
     /// This is *only* pointer equality, and does *not* run any inner value's
     /// `Eq` implementation.
