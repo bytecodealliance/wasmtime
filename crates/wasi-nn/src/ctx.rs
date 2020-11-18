@@ -9,7 +9,7 @@ use std::hash::Hash;
 use thiserror::Error;
 use wiggle::GuestError;
 
-/// Possible errors for interacting with [WasiNnCtx].
+/// Possible errors while interacting with [WasiNnCtx].
 #[derive(Debug, Error)]
 pub enum WasiNnError {
     #[error("guest error")]
@@ -46,20 +46,12 @@ where
         key
     }
 
-    pub fn remove(&mut self, key: K) -> Option<V> {
-        self.entries.remove(&key)
-    }
-
     pub fn get(&self, key: K) -> Option<&V> {
         self.entries.get(&key)
     }
 
     pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
         self.entries.get_mut(&key)
-    }
-
-    pub fn len(&self) -> usize {
-        self.entries.len()
     }
 
     fn use_next_key(&mut self) -> K {
