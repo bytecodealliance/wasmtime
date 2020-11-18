@@ -301,12 +301,14 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Arc<T> {
 /// Note that the type parameter does not need to implement the `Sized` trait,
 /// so you can implement types such as this:
 ///
-/// * `GuestPtr<'_, str>` - a pointer to a guest string. Has the method
-///   [`GuestPtr::as_str`], which gives a dynamically borrow-checked
-///   `GuestStr<'_>`, which `DerefMut`s to a `&mut str`.
-/// * `GuestPtr<'_, [T]>` - a pointer to a guest array. Has the method
-///   [`GuestPtr::as_slice`], which gives a dynamically borrow-checked
-///   `GuestSlice<'_, T>`, which `DerefMut`s to a `&mut [T]`.
+/// * `GuestPtr<'_, str>` - a pointer to a guest string. Has the methods
+///   [`GuestPtr::as_str_mut`], which gives a dynamically borrow-checked
+///   `GuestStrMut<'_>`, which `DerefMut`s to a `&mut str`, and
+///   [`GuestPtr::as_str`], which is the immutable version of same.
+/// * `GuestPtr<'_, [T]>` - a pointer to a guest array. Has methods
+///   [`GuestPtr::as_slice_mut`], which gives a dynamically borrow-checked
+///   `GuestSliceMut<'_, T>`, which `DerefMut`s to a `&mut [T]` and
+///   [`GuestPtr::as_slice`], which is the immutable version of same.
 ///
 /// Unsized types such as this may have extra methods and won't have methods
 /// like [`GuestPtr::read`] or [`GuestPtr::write`].
@@ -486,14 +488,58 @@ impl<'a, T> GuestPtr<'a, [T]> {
 
     /// Attempts to create a [`GuestSlice<'_, T>`] from this pointer, performing
     /// bounds checks and type validation. The `GuestSlice` is a smart pointer
-    /// that can be used as a `&[T]` or a `&mut [T]` via the `Deref` and `DerefMut`
-    /// traits. The region of memory backing the slice will be marked as borrowed
-    /// by the [`GuestMemory`] until the `GuestSlice` is dropped.
+    /// that can be used as a `&[T]` via the `Deref` trait.
+    /// The region of memory backing the slice will be marked as immutably
+    /// borrowed by the [`GuestMemory`] until the `GuestSlice` is dropped.
+    /// Multiple immutable borrows of the same memory are permitted, but only
+    /// one mutable borrow.
     ///
     /// This function will return a `GuestSlice` into host memory if all checks
     /// succeed (valid utf-8, valid pointers, memory is not borrowed, etc). If
     /// any checks fail then `GuestError` will be returned.
     pub fn as_slice(&self) -> Result<GuestSlice<'a, T>, GuestError>
+    where
+        T: GuestTypeTransparent<'a>,
+    {
+        let len = match self.pointer.1.checked_mul(T::guest_size()) {
+            Some(l) => l,
+            None => return Err(GuestError::PtrOverflow),
+        };
+        let ptr =
+            self.mem
+                .validate_size_align(self.pointer.0, T::guest_align(), len)? as *mut T;
+
+        let borrow = self.mem.immut_borrow(Region {
+            start: self.pointer.0,
+            len,
+        })?;
+
+        // Validate all elements in slice.
+        // SAFETY: ptr has been validated by self.mem.validate_size_align
+        for offs in 0..self.pointer.1 {
+            T::validate(unsafe { ptr.add(offs as usize) })?;
+        }
+
+        // SAFETY: iff there are no overlapping mut borrows it is valid to construct a &[T]
+        let ptr = unsafe { slice::from_raw_parts(ptr, self.pointer.1 as usize) };
+
+        Ok(GuestSlice {
+            ptr,
+            mem: self.mem,
+            borrow,
+        })
+    }
+
+    /// Attempts to create a [`GuestSliceMut<'_, T>`] from this pointer, performing
+    /// bounds checks and type validation. The `GuestSliceMut` is a smart pointer
+    /// that can be used as a `&[T]` or a `&mut [T]` via the `Deref` and `DerefMut`
+    /// traits. The region of memory backing the slice will be marked as borrowed
+    /// by the [`GuestMemory`] until the `GuestSlice` is dropped.
+    ///
+    /// This function will return a `GuestSliceMut` into host memory if all checks
+    /// succeed (valid utf-8, valid pointers, memory is not borrowed, etc). If
+    /// any checks fail then `GuestError` will be returned.
+    pub fn as_slice_mut(&self) -> Result<GuestSliceMut<'a, T>, GuestError>
     where
         T: GuestTypeTransparent<'a>,
     {
@@ -519,7 +565,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
         // SAFETY: iff there are no overlapping borrows it is valid to construct a &mut [T]
         let ptr = unsafe { slice::from_raw_parts_mut(ptr, self.pointer.1 as usize) };
 
-        Ok(GuestSlice {
+        Ok(GuestSliceMut {
             ptr,
             mem: self.mem,
             borrow,
@@ -543,7 +589,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
         T: GuestTypeTransparent<'a> + Copy,
     {
         // bounds check ...
-        let mut self_slice = self.as_slice()?;
+        let mut self_slice = self.as_slice_mut()?;
         // ... length check ...
         if self_slice.len() != slice.len() {
             return Err(GuestError::SliceLengthsDiffer);
@@ -621,14 +667,47 @@ impl<'a> GuestPtr<'a, str> {
 
     /// Attempts to create a [`GuestStr<'_>`] from this pointer, performing
     /// bounds checks and utf-8 checks. The resulting `GuestStr` can be used
-    /// as a `&str` or `&mut str` via the `Deref` and `DerefMut` traits. The
-    /// region of memory backing the `str` will be marked as borrowed by the
-    /// [`GuestMemory`] until the `GuestStr` is dropped.
+    /// as a `&str` via the `Deref` trait. The region of memory backing the
+    /// `str` will be marked as immutably borrowed by the [`GuestMemory`]
+    /// until the `GuestStr` is dropped.
     ///
     /// This function will return `GuestStr` into host memory if all checks
     /// succeed (valid utf-8, valid pointers, etc). If any checks fail then
     /// `GuestError` will be returned.
     pub fn as_str(&self) -> Result<GuestStr<'a>, GuestError> {
+        let ptr = self
+            .mem
+            .validate_size_align(self.pointer.0, 1, self.pointer.1)?;
+
+        let borrow = self.mem.immut_borrow(Region {
+            start: self.pointer.0,
+            len: self.pointer.1,
+        })?;
+
+        // SAFETY: iff there are no overlapping borrows it is ok to construct
+        // a &mut str.
+        let ptr = unsafe { slice::from_raw_parts(ptr, self.pointer.1 as usize) };
+        // Validate that contents are utf-8:
+        match str::from_utf8(ptr) {
+            Ok(ptr) => Ok(GuestStr {
+                ptr,
+                mem: self.mem,
+                borrow,
+            }),
+            Err(e) => Err(GuestError::InvalidUtf8(e)),
+        }
+    }
+
+    /// Attempts to create a [`GuestStrMut<'_>`] from this pointer, performing
+    /// bounds checks and utf-8 checks. The resulting `GuestStrMut` can be used
+    /// as a `&str` or `&mut str` via the `Deref` and `DerefMut` traits. The
+    /// region of memory backing the `str` will be marked as borrowed by the
+    /// [`GuestMemory`] until the `GuestStrMut` is dropped.
+    ///
+    /// This function will return `GuestStrMut` into host memory if all checks
+    /// succeed (valid utf-8, valid pointers, etc). If any checks fail then
+    /// `GuestError` will be returned.
+    pub fn as_str_mut(&self) -> Result<GuestStrMut<'a>, GuestError> {
         let ptr = self
             .mem
             .validate_size_align(self.pointer.0, 1, self.pointer.1)?;
@@ -643,7 +722,7 @@ impl<'a> GuestPtr<'a, str> {
         let ptr = unsafe { slice::from_raw_parts_mut(ptr, self.pointer.1 as usize) };
         // Validate that contents are utf-8:
         match str::from_utf8_mut(ptr) {
-            Ok(ptr) => Ok(GuestStr {
+            Ok(ptr) => Ok(GuestStrMut {
                 ptr,
                 mem: self.mem,
                 borrow,
@@ -675,11 +754,10 @@ impl<T: ?Sized + Pointee> fmt::Debug for GuestPtr<'_, T> {
     }
 }
 
-/// A smart pointer to a mutable slice in guest memory.
-/// Usable as a `&'a [T]` via [`std::ops::Deref`] and as a `&'a mut [T]` via
-/// [`std::ops::DerefMut`].
+/// A smart pointer to an immutable slice in guest memory.
+/// Usable as a `&'a [T]` via [`std::ops::Deref`].
 pub struct GuestSlice<'a, T> {
-    ptr: &'a mut [T],
+    ptr: &'a [T],
     mem: &'a dyn GuestMemory,
     borrow: BorrowHandle,
 }
@@ -691,23 +769,44 @@ impl<'a, T> std::ops::Deref for GuestSlice<'a, T> {
     }
 }
 
-impl<'a, T> std::ops::DerefMut for GuestSlice<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.ptr
-    }
-}
-
 impl<'a, T> Drop for GuestSlice<'a, T> {
     fn drop(&mut self) {
         self.mem.unborrow(self.borrow)
     }
 }
 
-/// A smart pointer to a mutable `str` in guest memory.
-/// Usable as a `&'a str` via [`std::ops::Deref`] and as a `&'a mut str` via
+/// A smart pointer to a mutable slice in guest memory.
+/// Usable as a `&'a [T]` via [`std::ops::Deref`] and as a `&'a mut [T]` via
 /// [`std::ops::DerefMut`].
+pub struct GuestSliceMut<'a, T> {
+    ptr: &'a mut [T],
+    mem: &'a dyn GuestMemory,
+    borrow: BorrowHandle,
+}
+
+impl<'a, T> std::ops::Deref for GuestSliceMut<'a, T> {
+    type Target = [T];
+    fn deref(&self) -> &Self::Target {
+        self.ptr
+    }
+}
+
+impl<'a, T> std::ops::DerefMut for GuestSliceMut<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.ptr
+    }
+}
+
+impl<'a, T> Drop for GuestSliceMut<'a, T> {
+    fn drop(&mut self) {
+        self.mem.unborrow(self.borrow)
+    }
+}
+
+/// A smart pointer to an immutable `str` in guest memory.
+/// Usable as a `&'a str` via [`std::ops::Deref`].
 pub struct GuestStr<'a> {
-    ptr: &'a mut str,
+    ptr: &'a str,
     mem: &'a dyn GuestMemory,
     borrow: BorrowHandle,
 }
@@ -719,13 +818,35 @@ impl<'a> std::ops::Deref for GuestStr<'a> {
     }
 }
 
-impl<'a> std::ops::DerefMut for GuestStr<'a> {
+impl<'a> Drop for GuestStr<'a> {
+    fn drop(&mut self) {
+        self.mem.unborrow(self.borrow)
+    }
+}
+
+/// A smart pointer to a mutable `str` in guest memory.
+/// Usable as a `&'a str` via [`std::ops::Deref`] and as a `&'a mut str` via
+/// [`std::ops::DerefMut`].
+pub struct GuestStrMut<'a> {
+    ptr: &'a mut str,
+    mem: &'a dyn GuestMemory,
+    borrow: BorrowHandle,
+}
+
+impl<'a> std::ops::Deref for GuestStrMut<'a> {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        self.ptr
+    }
+}
+
+impl<'a> std::ops::DerefMut for GuestStrMut<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.ptr
     }
 }
 
-impl<'a> Drop for GuestStr<'a> {
+impl<'a> Drop for GuestStrMut<'a> {
     fn drop(&mut self) {
         self.mem.unborrow(self.borrow)
     }
