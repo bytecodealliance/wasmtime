@@ -8,7 +8,7 @@ use std::convert::TryInto;
 use std::io::{self, SeekFrom};
 use std::ops::Deref;
 use tracing::{debug, trace};
-use wiggle::{GuestPtr, GuestSlice};
+use wiggle::{GuestPtr, GuestSliceMut};
 
 impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn args_get<'b>(
@@ -159,11 +159,11 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         iovs: &types::IovecArray<'_>,
         offset: types::Filesize,
     ) -> Result<types::Size> {
-        let mut guest_slices: Vec<GuestSlice<'_, u8>> = Vec::new();
+        let mut guest_slices: Vec<GuestSliceMut<'_, u8>> = Vec::new();
         for iov_ptr in iovs.iter() {
             let iov_ptr = iov_ptr?;
             let iov: types::Iovec = iov_ptr.read()?;
-            guest_slices.push(iov.buf.as_array(iov.buf_len).as_slice()?);
+            guest_slices.push(iov.buf.as_array(iov.buf_len).as_slice_mut()?);
         }
 
         let required_rights =
@@ -266,7 +266,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         for iov_ptr in iovs.iter() {
             let iov_ptr = iov_ptr?;
             let iov: types::Iovec = iov_ptr.read()?;
-            guest_slices.push(iov.buf.as_array(iov.buf_len).as_slice()?);
+            guest_slices.push(iov.buf.as_array(iov.buf_len).as_slice_mut()?);
         }
 
         let required_rights = HandleRights::from_base(types::Rights::FD_READ);
@@ -567,7 +567,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                 false,
             )?
         };
-        let mut slice = buf.as_array(buf_len).as_slice()?;
+        let mut slice = buf.as_array(buf_len).as_slice_mut()?;
         let host_bufused = dirfd.readlink(&path, &mut *slice)?.try_into()?;
         Ok(host_bufused)
     }
@@ -800,7 +800,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn random_get(&self, buf: &GuestPtr<u8>, buf_len: types::Size) -> Result<()> {
-        let mut slice = buf.as_array(buf_len).as_slice()?;
+        let mut slice = buf.as_array(buf_len).as_slice_mut()?;
         getrandom::getrandom(&mut *slice)?;
         Ok(())
     }
