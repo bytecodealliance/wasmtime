@@ -579,6 +579,10 @@ fn matches_small_constant_shift<C: LowerCtx<I = Inst>>(
 ///
 /// Note: the 32-bit offset in Cranelift has to be sign-extended, which maps x86's behavior.
 fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i32) -> Amode {
+    let flags = ctx
+        .memflags(spec.insn)
+        .expect("Instruction with amode should have memflags");
+
     // We now either have an add that we must materialize, or some other input; as well as the
     // final offset.
     if let Some(add) = matches_input(ctx, spec, Opcode::Iadd) {
@@ -632,7 +636,7 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i
                         let final_offset = (offset as i64).wrapping_add(uext_cst as i64);
                         if low32_will_sign_extend_to_64(final_offset as u64) {
                             let base = put_input_in_reg(ctx, add_inputs[1 - i]);
-                            return Amode::imm_reg(final_offset as u32, base);
+                            return Amode::imm_reg(final_offset as u32, base).with_flags(flags);
                         }
                     }
                 }
@@ -642,7 +646,7 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i
                     let final_offset = (offset as i64).wrapping_add(cst as i64);
                     if low32_will_sign_extend_to_64(final_offset as u64) {
                         let base = put_input_in_reg(ctx, add_inputs[1 - i]);
-                        return Amode::imm_reg(final_offset as u32, base);
+                        return Amode::imm_reg(final_offset as u32, base).with_flags(flags);
                     }
                 }
             }
@@ -654,11 +658,11 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i
             )
         };
 
-        return Amode::imm_reg_reg_shift(offset as u32, base, index, shift);
+        return Amode::imm_reg_reg_shift(offset as u32, base, index, shift).with_flags(flags);
     }
 
     let input = put_input_in_reg(ctx, spec);
-    Amode::imm_reg(offset as u32, input)
+    Amode::imm_reg(offset as u32, input).with_flags(flags)
 }
 
 //=============================================================================
@@ -3060,7 +3064,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     let base = put_input_in_reg(ctx, inputs[0]);
                     let index = put_input_in_reg(ctx, inputs[1]);
                     let shift = 0;
-                    Amode::imm_reg_reg_shift(offset as u32, base, index, shift)
+                    let flags = ctx.memflags(insn).expect("load should have memflags");
+                    Amode::imm_reg_reg_shift(offset as u32, base, index, shift).with_flags(flags)
                 }
 
                 _ => unreachable!(),
@@ -3132,7 +3137,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     let base = put_input_in_reg(ctx, inputs[1]);
                     let index = put_input_in_reg(ctx, inputs[2]);
                     let shift = 0;
-                    Amode::imm_reg_reg_shift(offset as u32, base, index, shift)
+                    let flags = ctx.memflags(insn).expect("store should have memflags");
+                    Amode::imm_reg_reg_shift(offset as u32, base, index, shift).with_flags(flags)
                 }
 
                 _ => unreachable!(),

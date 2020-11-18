@@ -9,7 +9,7 @@ use crate::ir::types::{
     F64X2, FFLAGS, I16, I16X4, I16X8, I32, I32X2, I32X4, I64, I64X2, I8, I8X16, I8X8, IFLAGS, R32,
     R64,
 };
-use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode, Type};
+use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, TrapCode, Type};
 use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
@@ -523,57 +523,68 @@ pub enum Inst {
     ULoad8 {
         rd: Writable<Reg>,
         mem: AMode,
+        flags: MemFlags,
     },
     /// A signed (sign-extending) 8-bit load.
     SLoad8 {
         rd: Writable<Reg>,
         mem: AMode,
+        flags: MemFlags,
     },
     /// An unsigned (zero-extending) 16-bit load.
     ULoad16 {
         rd: Writable<Reg>,
         mem: AMode,
+        flags: MemFlags,
     },
     /// A signed (sign-extending) 16-bit load.
     SLoad16 {
         rd: Writable<Reg>,
         mem: AMode,
+        flags: MemFlags,
     },
     /// An unsigned (zero-extending) 32-bit load.
     ULoad32 {
         rd: Writable<Reg>,
         mem: AMode,
+        flags: MemFlags,
     },
     /// A signed (sign-extending) 32-bit load.
     SLoad32 {
         rd: Writable<Reg>,
         mem: AMode,
+        flags: MemFlags,
     },
     /// A 64-bit load.
     ULoad64 {
         rd: Writable<Reg>,
         mem: AMode,
+        flags: MemFlags,
     },
 
     /// An 8-bit store.
     Store8 {
         rd: Reg,
         mem: AMode,
+        flags: MemFlags,
     },
     /// A 16-bit store.
     Store16 {
         rd: Reg,
         mem: AMode,
+        flags: MemFlags,
     },
     /// A 32-bit store.
     Store32 {
         rd: Reg,
         mem: AMode,
+        flags: MemFlags,
     },
     /// A 64-bit store.
     Store64 {
         rd: Reg,
         mem: AMode,
+        flags: MemFlags,
     },
 
     /// A store of a pair of registers.
@@ -581,12 +592,14 @@ pub enum Inst {
         rt: Reg,
         rt2: Reg,
         mem: PairAMode,
+        flags: MemFlags,
     },
     /// A load of a pair of registers.
     LoadP64 {
         rt: Writable<Reg>,
         rt2: Writable<Reg>,
         mem: PairAMode,
+        flags: MemFlags,
     },
 
     /// A MOV instruction. These are encoded as ORR's (AluRRR form) but we
@@ -782,31 +795,37 @@ pub enum Inst {
     FpuLoad32 {
         rd: Writable<Reg>,
         mem: AMode,
+        flags: MemFlags,
     },
     /// Floating-point store, single-precision (32 bit).
     FpuStore32 {
         rd: Reg,
         mem: AMode,
+        flags: MemFlags,
     },
     /// Floating-point load, double-precision (64 bit).
     FpuLoad64 {
         rd: Writable<Reg>,
         mem: AMode,
+        flags: MemFlags,
     },
     /// Floating-point store, double-precision (64 bit).
     FpuStore64 {
         rd: Reg,
         mem: AMode,
+        flags: MemFlags,
     },
     /// Floating-point/vector load, 128 bit.
     FpuLoad128 {
         rd: Writable<Reg>,
         mem: AMode,
+        flags: MemFlags,
     },
     /// Floating-point/vector store, 128 bit.
     FpuStore128 {
         rd: Reg,
         mem: AMode,
+        flags: MemFlags,
     },
 
     LoadFpuConst64 {
@@ -1411,24 +1430,48 @@ impl Inst {
     }
 
     /// Generic constructor for a load (zero-extending where appropriate).
-    pub fn gen_load(into_reg: Writable<Reg>, mem: AMode, ty: Type) -> Inst {
+    pub fn gen_load(into_reg: Writable<Reg>, mem: AMode, ty: Type, flags: MemFlags) -> Inst {
         match ty {
-            B1 | B8 | I8 => Inst::ULoad8 { rd: into_reg, mem },
-            B16 | I16 => Inst::ULoad16 { rd: into_reg, mem },
-            B32 | I32 | R32 => Inst::ULoad32 { rd: into_reg, mem },
-            B64 | I64 | R64 => Inst::ULoad64 { rd: into_reg, mem },
-            F32 => Inst::FpuLoad32 { rd: into_reg, mem },
-            F64 => Inst::FpuLoad64 { rd: into_reg, mem },
+            B1 | B8 | I8 => Inst::ULoad8 {
+                rd: into_reg,
+                mem,
+                flags,
+            },
+            B16 | I16 => Inst::ULoad16 {
+                rd: into_reg,
+                mem,
+                flags,
+            },
+            B32 | I32 | R32 => Inst::ULoad32 {
+                rd: into_reg,
+                mem,
+                flags,
+            },
+            B64 | I64 | R64 => Inst::ULoad64 {
+                rd: into_reg,
+                mem,
+                flags,
+            },
+            F32 => Inst::FpuLoad32 {
+                rd: into_reg,
+                mem,
+                flags,
+            },
+            F64 => Inst::FpuLoad64 {
+                rd: into_reg,
+                mem,
+                flags,
+            },
             _ => {
                 if ty.is_vector() {
                     let bits = ty_bits(ty);
                     let rd = into_reg;
 
                     if bits == 128 {
-                        Inst::FpuLoad128 { rd, mem }
+                        Inst::FpuLoad128 { rd, mem, flags }
                     } else {
                         assert_eq!(bits, 64);
-                        Inst::FpuLoad64 { rd, mem }
+                        Inst::FpuLoad64 { rd, mem, flags }
                     }
                 } else {
                     unimplemented!("gen_load({})", ty);
@@ -1438,24 +1481,48 @@ impl Inst {
     }
 
     /// Generic constructor for a store.
-    pub fn gen_store(mem: AMode, from_reg: Reg, ty: Type) -> Inst {
+    pub fn gen_store(mem: AMode, from_reg: Reg, ty: Type, flags: MemFlags) -> Inst {
         match ty {
-            B1 | B8 | I8 => Inst::Store8 { rd: from_reg, mem },
-            B16 | I16 => Inst::Store16 { rd: from_reg, mem },
-            B32 | I32 | R32 => Inst::Store32 { rd: from_reg, mem },
-            B64 | I64 | R64 => Inst::Store64 { rd: from_reg, mem },
-            F32 => Inst::FpuStore32 { rd: from_reg, mem },
-            F64 => Inst::FpuStore64 { rd: from_reg, mem },
+            B1 | B8 | I8 => Inst::Store8 {
+                rd: from_reg,
+                mem,
+                flags,
+            },
+            B16 | I16 => Inst::Store16 {
+                rd: from_reg,
+                mem,
+                flags,
+            },
+            B32 | I32 | R32 => Inst::Store32 {
+                rd: from_reg,
+                mem,
+                flags,
+            },
+            B64 | I64 | R64 => Inst::Store64 {
+                rd: from_reg,
+                mem,
+                flags,
+            },
+            F32 => Inst::FpuStore32 {
+                rd: from_reg,
+                mem,
+                flags,
+            },
+            F64 => Inst::FpuStore64 {
+                rd: from_reg,
+                mem,
+                flags,
+            },
             _ => {
                 if ty.is_vector() {
                     let bits = ty_bits(ty);
                     let rd = from_reg;
 
                     if bits == 128 {
-                        Inst::FpuStore128 { rd, mem }
+                        Inst::FpuStore128 { rd, mem, flags }
                     } else {
                         assert_eq!(bits, 64);
-                        Inst::FpuStore64 { rd, mem }
+                        Inst::FpuStore64 { rd, mem, flags }
                     }
                 } else {
                     unimplemented!("gen_store({})", ty);
@@ -2126,6 +2193,7 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut rt,
             ref mut rt2,
             ref mut mem,
+            ..
         } => {
             map_use(mapper, rt);
             map_use(mapper, rt2);
@@ -2135,6 +2203,7 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             ref mut rt,
             ref mut rt2,
             ref mut mem,
+            ..
         } => {
             map_def(mapper, rt);
             map_def(mapper, rt2);
@@ -2979,26 +3048,32 @@ impl Inst {
             &Inst::ULoad8 {
                 rd,
                 ref mem,
+                ..
             }
             | &Inst::SLoad8 {
                 rd,
                 ref mem,
+                ..
             }
             | &Inst::ULoad16 {
                 rd,
                 ref mem,
+                ..
             }
             | &Inst::SLoad16 {
                 rd,
                 ref mem,
+                ..
             }
             | &Inst::ULoad32 {
                 rd,
                 ref mem,
+                ..
             }
             | &Inst::SLoad32 {
                 rd,
                 ref mem,
+                ..
             }
             | &Inst::ULoad64 {
                 rd,
@@ -3035,14 +3110,17 @@ impl Inst {
             &Inst::Store8 {
                 rd,
                 ref mem,
+                ..
             }
             | &Inst::Store16 {
                 rd,
                 ref mem,
+                ..
             }
             | &Inst::Store32 {
                 rd,
                 ref mem,
+                ..
             }
             | &Inst::Store64 {
                 rd,
@@ -3070,13 +3148,13 @@ impl Inst {
                 let mem = mem.show_rru(mb_rru);
                 format!("{}{} {}, {}", mem_str, op, rd, mem)
             }
-            &Inst::StoreP64 { rt, rt2, ref mem } => {
+            &Inst::StoreP64 { rt, rt2, ref mem, .. } => {
                 let rt = rt.show_rru(mb_rru);
                 let rt2 = rt2.show_rru(mb_rru);
                 let mem = mem.show_rru(mb_rru);
                 format!("stp {}, {}, {}", rt, rt2, mem)
             }
-            &Inst::LoadP64 { rt, rt2, ref mem } => {
+            &Inst::LoadP64 { rt, rt2, ref mem, .. } => {
                 let rt = rt.to_reg().show_rru(mb_rru);
                 let rt2 = rt2.to_reg().show_rru(mb_rru);
                 let mem = mem.show_rru(mb_rru);

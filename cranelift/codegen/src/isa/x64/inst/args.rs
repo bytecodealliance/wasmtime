@@ -3,6 +3,7 @@
 use super::regs::{self, show_ireg_sized};
 use super::EmitState;
 use crate::ir::condcodes::{FloatCC, IntCC};
+use crate::ir::MemFlags;
 use crate::isa::x64::inst::Inst;
 use crate::machinst::*;
 use regalloc::{
@@ -14,10 +15,14 @@ use std::string::String;
 
 /// A possible addressing mode (amode) that can be used in instructions.
 /// These denote a 64-bit value only.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Amode {
     /// Immediate sign-extended and a Register.
-    ImmReg { simm32: u32, base: Reg },
+    ImmReg {
+        simm32: u32,
+        base: Reg,
+        flags: MemFlags,
+    },
 
     /// sign-extend-32-to-64(Immediate) + Register1 + (Register2 << Shift)
     ImmRegRegShift {
@@ -25,6 +30,7 @@ pub enum Amode {
         base: Reg,
         index: Reg,
         shift: u8, /* 0 .. 3 only */
+        flags: MemFlags,
     },
 
     /// sign-extend-32-to-64(Immediate) + RIP (instruction pointer).
@@ -35,7 +41,11 @@ pub enum Amode {
 impl Amode {
     pub(crate) fn imm_reg(simm32: u32, base: Reg) -> Self {
         debug_assert!(base.get_class() == RegClass::I64);
-        Self::ImmReg { simm32, base }
+        Self::ImmReg {
+            simm32,
+            base,
+            flags: MemFlags::trusted(),
+        }
     }
 
     pub(crate) fn imm_reg_reg_shift(simm32: u32, base: Reg, index: Reg, shift: u8) -> Self {
@@ -47,11 +57,36 @@ impl Amode {
             base,
             index,
             shift,
+            flags: MemFlags::trusted(),
         }
     }
 
     pub(crate) fn rip_relative(target: MachLabel) -> Self {
         Self::RipRelative { target }
+    }
+
+    pub(crate) fn with_flags(&self, flags: MemFlags) -> Self {
+        match self {
+            &Self::ImmReg { simm32, base, .. } => Self::ImmReg {
+                simm32,
+                base,
+                flags,
+            },
+            &Self::ImmRegRegShift {
+                simm32,
+                base,
+                index,
+                shift,
+                ..
+            } => Self::ImmRegRegShift {
+                simm32,
+                base,
+                index,
+                shift,
+                flags,
+            },
+            _ => panic!("Amode {:?} cannot take memflags", self),
+        }
     }
 
     /// Add the regs mentioned by `self` to `collector`.
@@ -69,12 +104,24 @@ impl Amode {
             }
         }
     }
+
+    pub(crate) fn get_flags(&self) -> MemFlags {
+        match self {
+            Amode::ImmReg { flags, .. } => *flags,
+            Amode::ImmRegRegShift { flags, .. } => *flags,
+            Amode::RipRelative { .. } => MemFlags::trusted(),
+        }
+    }
+
+    pub(crate) fn can_trap(&self) -> bool {
+        !self.get_flags().notrap()
+    }
 }
 
 impl PrettyPrint for Amode {
     fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
         match self {
-            Amode::ImmReg { simm32, base } => {
+            Amode::ImmReg { simm32, base, .. } => {
                 format!("{}({})", *simm32 as i32, base.show_rru(mb_rru))
             }
             Amode::ImmRegRegShift {
@@ -82,6 +129,7 @@ impl PrettyPrint for Amode {
                 base,
                 index,
                 shift,
+                ..
             } => format!(
                 "{}({},{},{})",
                 *simm32 as i32,

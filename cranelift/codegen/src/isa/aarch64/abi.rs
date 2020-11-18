@@ -3,6 +3,7 @@
 use crate::ir;
 use crate::ir::types;
 use crate::ir::types::*;
+use crate::ir::MemFlags;
 use crate::isa;
 use crate::isa::aarch64::{inst::EmitState, inst::*};
 use crate::machinst::*;
@@ -312,11 +313,11 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Inst {
-        Inst::gen_load(into_reg, mem.into(), ty)
+        Inst::gen_load(into_reg, mem.into(), ty, MemFlags::trusted())
     }
 
     fn gen_store_stack(mem: StackAMode, from_reg: Reg, ty: Type) -> Inst {
-        Inst::gen_store(mem.into(), from_reg, ty)
+        Inst::gen_store(mem.into(), from_reg, ty, MemFlags::trusted())
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Inst {
@@ -402,12 +403,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Inst {
         let mem = AMode::RegOffset(base, offset as i64, ty);
-        Inst::gen_load(into_reg, mem, ty)
+        Inst::gen_load(into_reg, mem, ty, MemFlags::trusted())
     }
 
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Inst {
         let mem = AMode::RegOffset(base, offset as i64, ty);
-        Inst::gen_store(mem, from_reg, ty)
+        Inst::gen_store(mem, from_reg, ty, MemFlags::trusted())
     }
 
     fn gen_sp_reg_adjust(amount: i32) -> SmallVec<[Inst; 2]> {
@@ -464,6 +465,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 writable_stack_reg(),
                 SImm7Scaled::maybe_from_i64(-16, types::I64).unwrap(),
             ),
+            flags: MemFlags::trusted(),
         });
         // mov fp (x29), sp. This uses the ADDI rd, rs, 0 form of `MOV` because
         // the usual encoding (`ORR`) does not work with SP.
@@ -500,6 +502,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 writable_stack_reg(),
                 SImm7Scaled::maybe_from_i64(16, types::I64).unwrap(),
             ),
+            flags: MemFlags::trusted(),
         });
 
         insts
@@ -542,6 +545,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     stack_reg(),
                     SImm7Scaled::maybe_from_i64((i * 16) as i64, types::I64).unwrap(),
                 ),
+                flags: MemFlags::trusted(),
             });
         }
 
@@ -553,6 +557,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     stack_reg(),
                     SImm9::maybe_from_i64((vec_offset + (i * 16)) as i64).unwrap(),
                 ),
+                flags: MemFlags::trusted(),
             });
         }
 
@@ -591,6 +596,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     stack_reg(),
                     SImm7Scaled::maybe_from_i64((i * 16) as i64, types::I64).unwrap(),
                 ),
+                flags: MemFlags::trusted(),
             });
         }
 
@@ -601,6 +607,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     stack_reg(),
                     SImm9::maybe_from_i64(((i * 16) + int_save_bytes) as i64).unwrap(),
                 ),
+                flags: MemFlags::trusted(),
             });
         }
 
@@ -621,6 +628,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 writable_xreg(BALDRDASH_TLS_REG),
                 AMode::UnsignedOffset(fp_reg(), UImm12Scaled::maybe_from_i64(off, I64).unwrap()),
                 I64,
+                MemFlags::trusted(),
             ));
         }
 

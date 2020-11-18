@@ -194,14 +194,14 @@ fn emit_std_enc_mem(
     // expression.  But `enc_g` can be derived from a register of any class.
 
     let srcloc = state.cur_srcloc();
-    if srcloc != SourceLoc::default() {
+    if srcloc != SourceLoc::default() && mem_e.can_trap() {
         sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
     }
 
     prefixes.emit(sink);
 
     match mem_e {
-        Amode::ImmReg { simm32, base } => {
+        Amode::ImmReg { simm32, base, .. } => {
             // First, the REX byte.
             let enc_e = int_reg_enc(*base);
             rex.emit_two_op(sink, enc_g, enc_e);
@@ -260,6 +260,7 @@ fn emit_std_enc_mem(
             base: reg_base,
             index: reg_index,
             shift,
+            ..
         } => {
             let enc_base = int_reg_enc(*reg_base);
             let enc_index = int_reg_enc(*reg_index);
