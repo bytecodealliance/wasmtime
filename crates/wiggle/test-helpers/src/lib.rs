@@ -3,8 +3,7 @@ use std::cell::UnsafeCell;
 use std::marker;
 use wiggle::{BorrowHandle, GuestMemory, Region};
 
-mod borrow;
-use borrow::BorrowChecker;
+use wiggle_borrow::BorrowChecker;
 
 #[derive(Debug, Clone)]
 pub struct MemAreas(Vec<MemArea>);
@@ -129,8 +128,11 @@ unsafe impl GuestMemory for HostMemory {
     fn is_borrowed(&self, r: Region) -> bool {
         self.bc.is_borrowed(r)
     }
-    fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        self.bc.borrow(r)
+    fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        self.bc.mut_borrow(r)
+    }
+    fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        self.bc.immut_borrow(r)
     }
     fn unborrow(&self, h: BorrowHandle) {
         self.bc.unborrow(h)

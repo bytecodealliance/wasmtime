@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use wiggle::{BorrowHandle, GuestError, Region};
 
 pub struct BorrowChecker {
+    /// Unfortunately, since the terminology of std::cell and the problem domain of borrow checking
+    /// overlap, the method calls on this member will be confusing.
     bc: RefCell<InnerBorrowChecker>,
 }
 
@@ -23,14 +25,16 @@ impl BorrowChecker {
     pub fn has_outstanding_borrows(&self) -> bool {
         self.bc.borrow().has_outstanding_borrows()
     }
-
-    pub(crate) fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        self.bc.borrow_mut().borrow(r)
+    pub fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        self.bc.borrow_mut().immut_borrow(r)
     }
-    pub(crate) fn unborrow(&self, h: BorrowHandle) {
+    pub fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        self.bc.borrow_mut().mut_borrow(r)
+    }
+    pub fn unborrow(&self, h: BorrowHandle) {
         self.bc.borrow_mut().unborrow(h)
     }
-    pub(crate) fn is_borrowed(&self, r: Region) -> bool {
+    pub fn is_borrowed(&self, r: Region) -> bool {
         self.bc.borrow().is_borrowed(r)
     }
 }
@@ -39,11 +43,12 @@ impl BorrowChecker {
 /// This is a pretty naive way to account for borrows. This datastructure
 /// could be made a lot more efficient with some effort.
 struct InnerBorrowChecker {
-    /// Map from handle to region borrowed. A HashMap is probably not ideal
+    /// Maps from handle to region borrowed. A HashMap is probably not ideal
     /// for this but it works. It would be more efficient if we could
     /// check `is_borrowed` without an O(n) iteration, by organizing borrows
     /// by an ordering of Region.
-    borrows: HashMap<BorrowHandle, Region>,
+    immut_borrows: HashMap<BorrowHandle, Region>,
+    mut_borrows: HashMap<BorrowHandle, Region>,
     /// Handle to give out for the next borrow. This is the bare minimum of
     /// bookkeeping of free handles, and in a pathological case we could run
     /// out, hence [`GuestError::BorrowCheckerOutOfHandles`]
@@ -53,22 +58,27 @@ struct InnerBorrowChecker {
 impl InnerBorrowChecker {
     fn new() -> Self {
         InnerBorrowChecker {
-            borrows: HashMap::new(),
+            immut_borrows: HashMap::new(),
+            mut_borrows: HashMap::new(),
             next_handle: BorrowHandle(0),
         }
     }
 
     fn has_outstanding_borrows(&self) -> bool {
-        !self.borrows.is_empty()
+        !(self.immut_borrows.is_empty() && self.mut_borrows.is_empty())
     }
 
     fn is_borrowed(&self, r: Region) -> bool {
-        !self.borrows.values().all(|b| !b.overlaps(r))
+        !self
+            .immut_borrows
+            .values()
+            .chain(self.mut_borrows.values())
+            .all(|b| !b.overlaps(r))
     }
 
     fn new_handle(&mut self) -> Result<BorrowHandle, GuestError> {
         // Reset handles to 0 if all handles have been returned.
-        if self.borrows.is_empty() {
+        if self.immut_borrows.is_empty() && self.mut_borrows.is_empty() {
             self.next_handle = BorrowHandle(0);
         }
         let h = self.next_handle;
@@ -84,17 +94,29 @@ impl InnerBorrowChecker {
         Ok(h)
     }
 
-    fn borrow(&mut self, r: Region) -> Result<BorrowHandle, GuestError> {
+    fn immut_borrow(&mut self, r: Region) -> Result<BorrowHandle, GuestError> {
+        if !self.mut_borrows.values().all(|b| !b.overlaps(r)) {
+            return Err(GuestError::PtrBorrowed(r));
+        }
+        let h = self.new_handle()?;
+        self.immut_borrows.insert(h, r);
+        Ok(h)
+    }
+
+    fn mut_borrow(&mut self, r: Region) -> Result<BorrowHandle, GuestError> {
         if self.is_borrowed(r) {
             return Err(GuestError::PtrBorrowed(r));
         }
         let h = self.new_handle()?;
-        self.borrows.insert(h, r);
+        self.mut_borrows.insert(h, r);
         Ok(h)
     }
 
     fn unborrow(&mut self, h: BorrowHandle) {
-        let _ = self.borrows.remove(&h);
+        let removed = self.mut_borrows.remove(&h);
+        if removed.is_none() {
+            let _ = self.immut_borrows.remove(&h);
+        }
     }
 }
 
@@ -107,15 +129,15 @@ mod test {
         let r1 = Region::new(0, 10);
         let r2 = Region::new(10, 10);
         assert!(!r1.overlaps(r2));
-        bs.borrow(r1).expect("can borrow r1");
-        bs.borrow(r2).expect("can borrow r2");
+        bs.mut_borrow(r1).expect("can borrow r1");
+        bs.mut_borrow(r2).expect("can borrow r2");
 
         let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(10, 10);
         let r2 = Region::new(0, 10);
         assert!(!r1.overlaps(r2));
-        bs.borrow(r1).expect("can borrow r1");
-        bs.borrow(r2).expect("can borrow r2");
+        bs.mut_borrow(r1).expect("can borrow r1");
+        bs.mut_borrow(r2).expect("can borrow r2");
     }
 
     #[test]
@@ -124,29 +146,33 @@ mod test {
         let r1 = Region::new(0, 10);
         let r2 = Region::new(9, 10);
         assert!(r1.overlaps(r2));
-        bs.borrow(r1).expect("can borrow r1");
-        assert!(bs.borrow(r2).is_err(), "cant borrow r2");
+        bs.immut_borrow(r1).expect("can borrow r1");
+        assert!(bs.mut_borrow(r2).is_err(), "cant mut borrow r2");
+        bs.immut_borrow(r2).expect("can immut borrow r2");
 
         let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(0, 10);
         let r2 = Region::new(2, 5);
         assert!(r1.overlaps(r2));
-        bs.borrow(r1).expect("can borrow r1");
-        assert!(bs.borrow(r2).is_err(), "cant borrow r2");
+        bs.immut_borrow(r1).expect("can borrow r1");
+        assert!(bs.mut_borrow(r2).is_err(), "cant borrow r2");
+        bs.immut_borrow(r2).expect("can immut borrow r2");
 
         let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(9, 10);
         let r2 = Region::new(0, 10);
         assert!(r1.overlaps(r2));
-        bs.borrow(r1).expect("can borrow r1");
-        assert!(bs.borrow(r2).is_err(), "cant borrow r2");
+        bs.immut_borrow(r1).expect("can borrow r1");
+        assert!(bs.mut_borrow(r2).is_err(), "cant borrow r2");
+        bs.immut_borrow(r2).expect("can immut borrow r2");
 
         let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(2, 5);
         let r2 = Region::new(0, 10);
         assert!(r1.overlaps(r2));
-        bs.borrow(r1).expect("can borrow r1");
-        assert!(bs.borrow(r2).is_err(), "cant borrow r2");
+        bs.immut_borrow(r1).expect("can borrow r1");
+        assert!(bs.mut_borrow(r2).is_err(), "cant borrow r2");
+        bs.immut_borrow(r2).expect("can immut borrow r2");
 
         let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(2, 5);
@@ -154,10 +180,11 @@ mod test {
         let r3 = Region::new(15, 5);
         let r4 = Region::new(0, 10);
         assert!(r1.overlaps(r4));
-        bs.borrow(r1).expect("can borrow r1");
-        bs.borrow(r2).expect("can borrow r2");
-        bs.borrow(r3).expect("can borrow r3");
-        assert!(bs.borrow(r4).is_err(), "cant borrow r4");
+        bs.immut_borrow(r1).expect("can borrow r1");
+        bs.immut_borrow(r2).expect("can borrow r2");
+        bs.immut_borrow(r3).expect("can borrow r3");
+        assert!(bs.mut_borrow(r4).is_err(), "cant mut borrow r4");
+        bs.immut_borrow(r4).expect("can immut borrow r4");
     }
 
     #[test]
@@ -167,11 +194,11 @@ mod test {
         let r2 = Region::new(10, 10);
         assert!(!r1.overlaps(r2));
         assert_eq!(bs.has_outstanding_borrows(), false, "start with no borrows");
-        let h1 = bs.borrow(r1).expect("can borrow r1");
+        let h1 = bs.mut_borrow(r1).expect("can borrow r1");
         assert_eq!(bs.has_outstanding_borrows(), true, "h1 is outstanding");
-        let h2 = bs.borrow(r2).expect("can borrow r2");
+        let h2 = bs.mut_borrow(r2).expect("can borrow r2");
 
-        assert!(bs.borrow(r2).is_err(), "can't borrow r2 twice");
+        assert!(bs.mut_borrow(r2).is_err(), "can't borrow r2 twice");
         bs.unborrow(h2);
         assert_eq!(
             bs.has_outstanding_borrows(),
@@ -182,7 +209,29 @@ mod test {
         assert_eq!(bs.has_outstanding_borrows(), false, "no remaining borrows");
 
         let _h3 = bs
-            .borrow(r2)
+            .mut_borrow(r2)
             .expect("can borrow r2 again now that its been unborrowed");
+
+        // Lets try again with immut:
+
+        let mut bs = InnerBorrowChecker::new();
+        let r1 = Region::new(0, 10);
+        let r2 = Region::new(10, 10);
+        assert!(!r1.overlaps(r2));
+        assert_eq!(bs.has_outstanding_borrows(), false, "start with no borrows");
+        let h1 = bs.immut_borrow(r1).expect("can borrow r1");
+        assert_eq!(bs.has_outstanding_borrows(), true, "h1 is outstanding");
+        let h2 = bs.immut_borrow(r2).expect("can borrow r2");
+        let h3 = bs.immut_borrow(r2).expect("can immut borrow r2 twice");
+
+        bs.unborrow(h2);
+        assert_eq!(
+            bs.has_outstanding_borrows(),
+            true,
+            "h1, h3 still outstanding"
+        );
+        bs.unborrow(h1);
+        bs.unborrow(h3);
+        assert_eq!(bs.has_outstanding_borrows(), false, "no remaining borrows");
     }
 }

@@ -2680,6 +2680,7 @@ dependencies = [
  "wasmtime",
  "wasmtime-wiggle-macro",
  "wiggle",
+ "wiggle-borrow",
  "witx",
 ]
 
@@ -2753,6 +2754,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "wiggle-borrow"
+version = "0.21.0"
+dependencies = [
+ "wiggle",
+]
+
+[[package]]
 name = "wiggle-generate"
 version = "0.21.0"
 dependencies = [
@@ -2778,7 +2786,7 @@ dependencies = [
 
 [[package]]
 name = "wiggle-test"
-version = "0.19.0"
+version = "0.21.0"
 dependencies = [
  "env_logger 0.8.1",
  "proptest",
@@ -2786,6 +2794,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wiggle",
+ "wiggle-borrow",
 ]
 
 [[package]]

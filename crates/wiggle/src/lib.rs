@@ -165,7 +165,8 @@ pub unsafe trait GuestMemory {
     /// `GuestMemory::has_outstanding_borrows` is true for the duration of the
     /// borrow, and that `GuestMemory::is_borrowed` of any overlapping region
     /// is false for the duration of the borrow.
-    fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError>;
+    fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError>;
+    fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError>;
     /// Unborrow a previously borrowed region. As long as `GuestSlice` and
     /// `GuestStr` are implemented correctly, a `BorrowHandle` should only be
     /// unborrowed once.
@@ -189,8 +190,11 @@ unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a T {
     fn is_borrowed(&self, r: Region) -> bool {
         T::is_borrowed(self, r)
     }
-    fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        T::borrow(self, r)
+    fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::mut_borrow(self, r)
+    }
+    fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::immut_borrow(self, r)
     }
     fn unborrow(&self, h: BorrowHandle) {
         T::unborrow(self, h)
@@ -207,8 +211,11 @@ unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a mut T {
     fn is_borrowed(&self, r: Region) -> bool {
         T::is_borrowed(self, r)
     }
-    fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        T::borrow(self, r)
+    fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::mut_borrow(self, r)
+    }
+    fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::immut_borrow(self, r)
     }
     fn unborrow(&self, h: BorrowHandle) {
         T::unborrow(self, h)
@@ -225,8 +232,11 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Box<T> {
     fn is_borrowed(&self, r: Region) -> bool {
         T::is_borrowed(self, r)
     }
-    fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        T::borrow(self, r)
+    fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::mut_borrow(self, r)
+    }
+    fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::immut_borrow(self, r)
     }
     fn unborrow(&self, h: BorrowHandle) {
         T::unborrow(self, h)
@@ -243,8 +253,11 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Rc<T> {
     fn is_borrowed(&self, r: Region) -> bool {
         T::is_borrowed(self, r)
     }
-    fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        T::borrow(self, r)
+    fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::mut_borrow(self, r)
+    }
+    fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::immut_borrow(self, r)
     }
     fn unborrow(&self, h: BorrowHandle) {
         T::unborrow(self, h)
@@ -261,8 +274,11 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Arc<T> {
     fn is_borrowed(&self, r: Region) -> bool {
         T::is_borrowed(self, r)
     }
-    fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        T::borrow(self, r)
+    fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::mut_borrow(self, r)
+    }
+    fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::immut_borrow(self, r)
     }
     fn unborrow(&self, h: BorrowHandle) {
         T::unborrow(self, h)
@@ -489,7 +505,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
             self.mem
                 .validate_size_align(self.pointer.0, T::guest_align(), len)? as *mut T;
 
-        let borrow = self.mem.borrow(Region {
+        let borrow = self.mem.mut_borrow(Region {
             start: self.pointer.0,
             len,
         })?;
@@ -617,7 +633,7 @@ impl<'a> GuestPtr<'a, str> {
             .mem
             .validate_size_align(self.pointer.0, 1, self.pointer.1)?;
 
-        let borrow = self.mem.borrow(Region {
+        let borrow = self.mem.mut_borrow(Region {
             start: self.pointer.0,
             len: self.pointer.1,
         })?;

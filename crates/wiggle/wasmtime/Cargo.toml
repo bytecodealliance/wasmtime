@@ -15,6 +15,7 @@ wasmtime = { path = "../../wasmtime", version = "0.21.0", default-features = fal
 wasmtime-wiggle-macro = { path = "./macro", version = "0.21.0" }
 witx = { path = "../../wasi-common/WASI/tools/witx", version = "0.8.7", optional = true }
 wiggle = { path = "..", version = "0.21.0" }
+wiggle-borrow = { path = "../borrow", version = "0.21.0" }
 
 [badges]
 maintenance = { status = "actively-developed" }
