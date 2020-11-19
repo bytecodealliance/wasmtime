@@ -52,6 +52,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasi-common",
     // wasmtime
     "lightbeam",
+    "wasmtime-fiber",
     "wasmtime-environ",
     "wasmtime-runtime",
     "wasmtime-debug",
