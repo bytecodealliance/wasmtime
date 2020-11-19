@@ -31,11 +31,17 @@ impl BorrowChecker {
     pub fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         self.bc.borrow_mut().mut_borrow(r)
     }
-    pub fn unborrow(&self, h: BorrowHandle) {
-        self.bc.borrow_mut().unborrow(h)
+    pub fn shared_unborrow(&self, h: BorrowHandle) {
+        self.bc.borrow_mut().shared_unborrow(h)
     }
-    pub fn is_borrowed(&self, r: Region) -> bool {
-        self.bc.borrow().is_borrowed(r)
+    pub fn mut_unborrow(&self, h: BorrowHandle) {
+        self.bc.borrow_mut().mut_unborrow(h)
+    }
+    pub fn is_shared_borrowed(&self, r: Region) -> bool {
+        self.bc.borrow().is_shared_borrowed(r)
+    }
+    pub fn is_mut_borrowed(&self, r: Region) -> bool {
+        self.bc.borrow().is_mut_borrowed(r)
     }
 }
 
@@ -68,12 +74,11 @@ impl InnerBorrowChecker {
         !(self.shared_borrows.is_empty() && self.mut_borrows.is_empty())
     }
 
-    fn is_borrowed(&self, r: Region) -> bool {
-        !self
-            .shared_borrows
-            .values()
-            .chain(self.mut_borrows.values())
-            .all(|b| !b.overlaps(r))
+    fn is_shared_borrowed(&self, r: Region) -> bool {
+        self.shared_borrows.values().any(|b| b.overlaps(r))
+    }
+    fn is_mut_borrowed(&self, r: Region) -> bool {
+        self.mut_borrows.values().any(|b| b.overlaps(r))
     }
 
     fn new_handle(&mut self) -> Result<BorrowHandle, GuestError> {
@@ -95,7 +100,7 @@ impl InnerBorrowChecker {
     }
 
     fn shared_borrow(&mut self, r: Region) -> Result<BorrowHandle, GuestError> {
-        if !self.mut_borrows.values().all(|b| !b.overlaps(r)) {
+        if self.is_mut_borrowed(r) {
             return Err(GuestError::PtrBorrowed(r));
         }
         let h = self.new_handle()?;
@@ -104,7 +109,7 @@ impl InnerBorrowChecker {
     }
 
     fn mut_borrow(&mut self, r: Region) -> Result<BorrowHandle, GuestError> {
-        if self.is_borrowed(r) {
+        if self.is_shared_borrowed(r) || self.is_mut_borrowed(r) {
             return Err(GuestError::PtrBorrowed(r));
         }
         let h = self.new_handle()?;
@@ -112,11 +117,12 @@ impl InnerBorrowChecker {
         Ok(h)
     }
 
-    fn unborrow(&mut self, h: BorrowHandle) {
-        let removed = self.mut_borrows.remove(&h);
-        if removed.is_none() {
-            let _ = self.shared_borrows.remove(&h);
-        }
+    fn shared_unborrow(&mut self, h: BorrowHandle) {
+        let _ = self.shared_borrows.remove(&h);
+    }
+
+    fn mut_unborrow(&mut self, h: BorrowHandle) {
+        let _ = self.mut_borrows.remove(&h);
     }
 }
 

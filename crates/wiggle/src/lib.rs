@@ -153,28 +153,36 @@ pub unsafe trait GuestMemory {
     /// safe to recursively call into a WebAssembly module, or to manipulate
     /// the WebAssembly memory by any other means.
     fn has_outstanding_borrows(&self) -> bool;
-    /// Check if a region of linear memory is borrowed. This is called during
-    /// any `GuestPtr::read` or `GuestPtr::write` operation to ensure that
-    /// wiggle is not reading or writing a region of memory which Rust believes
-    /// it has exclusive access to.
-    fn is_borrowed(&self, r: Region) -> bool;
-    /// Borrow a region of linear memory. This is used when constructing a
-    /// `GuestSlice` or `GuestStr`. Those types will give Rust `&mut` access
+    /// Check if a region of linear memory is exclusively borrowed. This is called during any
+    /// `GuestPtr::read` or `GuestPtr::write` operation to ensure that wiggle is not reading or
+    /// writing a region of memory which Rust believes it has exclusive access to.
+    fn is_mut_borrowed(&self, r: Region) -> bool;
+    /// Check if a region of linear memory has any shared borrows.
+    fn is_shared_borrowed(&self, r: Region) -> bool;
+    /// Exclusively borrow a region of linear memory. This is used when constructing a
+    /// `GuestSliceMut` or `GuestStrMut`. Those types will give Rust `&mut` access
     /// to the region of linear memory, therefore, the `GuestMemory` impl must
     /// guarantee that at most one `BorrowHandle` is issued to a given region,
     /// `GuestMemory::has_outstanding_borrows` is true for the duration of the
-    /// borrow, and that `GuestMemory::is_borrowed` of any overlapping region
+    /// borrow, and that `GuestMemory::is_mut_borrowed` of any overlapping region
     /// is false for the duration of the borrow.
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError>;
+    /// Shared borrow a region of linear memory. This is used when constructing a
+    /// `GuestSlice` or `GuestStr`. Those types will give Rust `&` (shared reference) access
+    /// to the region of linear memory.
     fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError>;
-    /// Unborrow a previously borrowed region. As long as `GuestSlice` and
-    /// `GuestStr` are implemented correctly, a `BorrowHandle` should only be
+    /// Unborrow a previously borrowed mutable region. As long as `GuestSliceMut` and
+    /// `GuestStrMut` are implemented correctly, a mut `BorrowHandle` should only be
     /// unborrowed once.
-    fn unborrow(&self, h: BorrowHandle);
+    fn mut_unborrow(&self, h: BorrowHandle);
+    /// Unborrow a previously borrowed shared region. As long as `GuestSlice` and
+    /// `GuestStr` are implemented correctly, a shared `BorrowHandle` should only be
+    /// unborrowed once.
+    fn shared_unborrow(&self, h: BorrowHandle);
 }
 
-/// A handle to a borrow on linear memory. It is produced by `borrow` and
-/// consumed by `unborrow`. Only the `GuestMemory` impl should ever construct
+/// A handle to a borrow on linear memory. It is produced by `{mut, shared}_borrow` and
+/// consumed by `{mut, shared}_unborrow`. Only the `GuestMemory` impl should ever construct
 /// a `BorrowHandle` or inspect its contents.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct BorrowHandle(pub usize);
@@ -187,8 +195,11 @@ unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a T {
     fn has_outstanding_borrows(&self) -> bool {
         T::has_outstanding_borrows(self)
     }
-    fn is_borrowed(&self, r: Region) -> bool {
-        T::is_borrowed(self, r)
+    fn is_mut_borrowed(&self, r: Region) -> bool {
+        T::is_mut_borrowed(self, r)
+    }
+    fn is_shared_borrowed(&self, r: Region) -> bool {
+        T::is_shared_borrowed(self, r)
     }
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::mut_borrow(self, r)
@@ -196,8 +207,11 @@ unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a T {
     fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::shared_borrow(self, r)
     }
-    fn unborrow(&self, h: BorrowHandle) {
-        T::unborrow(self, h)
+    fn mut_unborrow(&self, h: BorrowHandle) {
+        T::mut_unborrow(self, h)
+    }
+    fn shared_unborrow(&self, h: BorrowHandle) {
+        T::shared_unborrow(self, h)
     }
 }
 
@@ -208,8 +222,11 @@ unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a mut T {
     fn has_outstanding_borrows(&self) -> bool {
         T::has_outstanding_borrows(self)
     }
-    fn is_borrowed(&self, r: Region) -> bool {
-        T::is_borrowed(self, r)
+    fn is_mut_borrowed(&self, r: Region) -> bool {
+        T::is_mut_borrowed(self, r)
+    }
+    fn is_shared_borrowed(&self, r: Region) -> bool {
+        T::is_shared_borrowed(self, r)
     }
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::mut_borrow(self, r)
@@ -217,8 +234,11 @@ unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a mut T {
     fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::shared_borrow(self, r)
     }
-    fn unborrow(&self, h: BorrowHandle) {
-        T::unborrow(self, h)
+    fn mut_unborrow(&self, h: BorrowHandle) {
+        T::mut_unborrow(self, h)
+    }
+    fn shared_unborrow(&self, h: BorrowHandle) {
+        T::shared_unborrow(self, h)
     }
 }
 
@@ -229,8 +249,11 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Box<T> {
     fn has_outstanding_borrows(&self) -> bool {
         T::has_outstanding_borrows(self)
     }
-    fn is_borrowed(&self, r: Region) -> bool {
-        T::is_borrowed(self, r)
+    fn is_mut_borrowed(&self, r: Region) -> bool {
+        T::is_mut_borrowed(self, r)
+    }
+    fn is_shared_borrowed(&self, r: Region) -> bool {
+        T::is_shared_borrowed(self, r)
     }
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::mut_borrow(self, r)
@@ -238,8 +261,11 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Box<T> {
     fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::shared_borrow(self, r)
     }
-    fn unborrow(&self, h: BorrowHandle) {
-        T::unborrow(self, h)
+    fn mut_unborrow(&self, h: BorrowHandle) {
+        T::mut_unborrow(self, h)
+    }
+    fn shared_unborrow(&self, h: BorrowHandle) {
+        T::shared_unborrow(self, h)
     }
 }
 
@@ -250,8 +276,11 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Rc<T> {
     fn has_outstanding_borrows(&self) -> bool {
         T::has_outstanding_borrows(self)
     }
-    fn is_borrowed(&self, r: Region) -> bool {
-        T::is_borrowed(self, r)
+    fn is_mut_borrowed(&self, r: Region) -> bool {
+        T::is_mut_borrowed(self, r)
+    }
+    fn is_shared_borrowed(&self, r: Region) -> bool {
+        T::is_shared_borrowed(self, r)
     }
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::mut_borrow(self, r)
@@ -259,8 +288,11 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Rc<T> {
     fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::shared_borrow(self, r)
     }
-    fn unborrow(&self, h: BorrowHandle) {
-        T::unborrow(self, h)
+    fn mut_unborrow(&self, h: BorrowHandle) {
+        T::mut_unborrow(self, h)
+    }
+    fn shared_unborrow(&self, h: BorrowHandle) {
+        T::shared_unborrow(self, h)
     }
 }
 
@@ -271,8 +303,11 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Arc<T> {
     fn has_outstanding_borrows(&self) -> bool {
         T::has_outstanding_borrows(self)
     }
-    fn is_borrowed(&self, r: Region) -> bool {
-        T::is_borrowed(self, r)
+    fn is_mut_borrowed(&self, r: Region) -> bool {
+        T::is_mut_borrowed(self, r)
+    }
+    fn is_shared_borrowed(&self, r: Region) -> bool {
+        T::is_shared_borrowed(self, r)
     }
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::mut_borrow(self, r)
@@ -280,8 +315,11 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Arc<T> {
     fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::shared_borrow(self, r)
     }
-    fn unborrow(&self, h: BorrowHandle) {
-        T::unborrow(self, h)
+    fn mut_unborrow(&self, h: BorrowHandle) {
+        T::mut_unborrow(self, h)
+    }
+    fn shared_unborrow(&self, h: BorrowHandle) {
+        T::shared_unborrow(self, h)
     }
 }
 
@@ -771,7 +809,7 @@ impl<'a, T> std::ops::Deref for GuestSlice<'a, T> {
 
 impl<'a, T> Drop for GuestSlice<'a, T> {
     fn drop(&mut self) {
-        self.mem.unborrow(self.borrow)
+        self.mem.shared_unborrow(self.borrow)
     }
 }
 
@@ -799,7 +837,7 @@ impl<'a, T> std::ops::DerefMut for GuestSliceMut<'a, T> {
 
 impl<'a, T> Drop for GuestSliceMut<'a, T> {
     fn drop(&mut self) {
-        self.mem.unborrow(self.borrow)
+        self.mem.mut_unborrow(self.borrow)
     }
 }
 
@@ -820,7 +858,7 @@ impl<'a> std::ops::Deref for GuestStr<'a> {
 
 impl<'a> Drop for GuestStr<'a> {
     fn drop(&mut self) {
-        self.mem.unborrow(self.borrow)
+        self.mem.shared_unborrow(self.borrow)
     }
 }
 
@@ -848,7 +886,7 @@ impl<'a> std::ops::DerefMut for GuestStrMut<'a> {
 
 impl<'a> Drop for GuestStrMut<'a> {
     fn drop(&mut self) {
-        self.mem.unborrow(self.borrow)
+        self.mem.mut_unborrow(self.borrow)
     }
 }
 
