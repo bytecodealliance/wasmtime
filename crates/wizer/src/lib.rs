@@ -1,4 +1,6 @@
-//! TODO FITZGEN
+//! Wizer: the WebAssembly initializer!
+//!
+//! See the [`Wizer`] struct for details.
 
 #![deny(missing_docs)]
 
@@ -6,7 +8,7 @@ use anyhow::Context;
 use std::convert::TryFrom;
 use structopt::StructOpt;
 
-/// Wizer: the WebAssembly initializer.
+/// Wizer: the WebAssembly initializer!
 ///
 /// Don't wait for your Wasm module to initialize itself, pre-initialize it!
 /// Wizer instantiates your WebAssembly module, executes its initialization
@@ -207,106 +209,49 @@ impl Wizer {
             wasm = &wasm[consumed..];
 
             use wasmparser::Payload::*;
+            use wasmparser::SectionReader;
             match payload {
                 Version { .. } => continue,
-                TypeSection(mut types) => {
-                    let count = types.get_count();
-                    let mut types_encoder = wasm_encoder::TypeSection::new();
-                    for _ in 0..count {
-                        match types.read()? {
-                            wasmparser::TypeDef::Func(ft) => {
-                                types_encoder.function(
-                                    ft.params.iter().copied().map(translate_val_type),
-                                    ft.returns.iter().copied().map(translate_val_type),
-                                );
-                            }
-                            wasmparser::TypeDef::Instance(_) | wasmparser::TypeDef::Module(_) => {
-                                anyhow::bail!("module linking is not supported yet");
-                            }
-                        }
-                    }
-                    module.section(&types_encoder);
+                TypeSection(types) => {
+                    module.section(&wasm_encoder::RawSection {
+                        id: wasm_encoder::SectionId::Type as u8,
+                        data: &full_wasm[types.range().start..types.range().end],
+                    });
                 }
-                ImportSection(mut imports) => {
-                    let count = imports.get_count();
-                    let mut imports_encoder = wasm_encoder::ImportSection::new();
-                    for _ in 0..count {
-                        let imp = imports.read()?;
-                        imports_encoder.import(
-                            imp.module,
-                            imp.field.expect(
-                                "should always be `Some` when module linking isn't enabled",
-                            ),
-                            match imp.ty {
-                                wasmparser::ImportSectionEntryType::Function(ty) => {
-                                    wasm_encoder::ImportType::Function(ty)
-                                }
-                                wasmparser::ImportSectionEntryType::Table(ty) => {
-                                    translate_table_type(ty)?.into()
-                                }
-                                wasmparser::ImportSectionEntryType::Memory(ty) => {
-                                    memory_count += 1;
-                                    translate_memory_type(ty)?.into()
-                                }
-                                wasmparser::ImportSectionEntryType::Global(ty) => {
-                                    global_count += 1;
-                                    translate_global_type(ty).into()
-                                }
-                                wasmparser::ImportSectionEntryType::Module(_)
-                                | wasmparser::ImportSectionEntryType::Instance(_) => {
-                                    anyhow::bail!("module linking is not supported yet")
-                                }
-                                wasmparser::ImportSectionEntryType::Event(_) => {
-                                    anyhow::bail!("exceptions are not supported yet")
-                                }
-                            },
-                        );
-                    }
-                    module.section(&imports_encoder);
+                ImportSection(imports) => {
+                    module.section(&wasm_encoder::RawSection {
+                        id: wasm_encoder::SectionId::Import as u8,
+                        data: &full_wasm[imports.range().start..imports.range().end],
+                    });
                 }
                 AliasSection(_) | InstanceSection(_) | ModuleSection(_) => {
                     anyhow::bail!("module linking is not supported yet")
                 }
-                FunctionSection(mut funcs) => {
-                    let count = funcs.get_count();
-                    let mut funcs_encoder = wasm_encoder::FunctionSection::new();
-                    for _ in 0..count {
-                        let ty_idx = funcs.read()?;
-                        funcs_encoder.function(ty_idx);
-                    }
-                    module.section(&funcs_encoder);
+                FunctionSection(funcs) => {
+                    module.section(&wasm_encoder::RawSection {
+                        id: wasm_encoder::SectionId::Function as u8,
+                        data: &full_wasm[funcs.range().start..funcs.range().end],
+                    });
                 }
-                TableSection(mut tables) => {
-                    let count = tables.get_count();
-                    let mut tables_encoder = wasm_encoder::TableSection::new();
-                    for _ in 0..count {
-                        let table_ty = tables.read()?;
-                        tables_encoder.table(translate_table_type(table_ty)?);
-                    }
-                    module.section(&tables_encoder);
+                TableSection(tables) => {
+                    module.section(&wasm_encoder::RawSection {
+                        id: wasm_encoder::SectionId::Table as u8,
+                        data: &full_wasm[tables.range().start..tables.range().end],
+                    });
                 }
-                MemorySection(mut mems) => {
-                    let count = mems.get_count();
-                    memory_count += count;
-                    let mut mems_encoder = wasm_encoder::MemorySection::new();
-                    for _ in 0..count {
-                        let mem_ty = mems.read()?;
-                        mems_encoder.memory(translate_memory_type(mem_ty)?);
-                    }
-                    module.section(&mems_encoder);
+                MemorySection(mems) => {
+                    memory_count += mems.get_count();
+                    module.section(&wasm_encoder::RawSection {
+                        id: wasm_encoder::SectionId::Memory as u8,
+                        data: &full_wasm[mems.range().start..mems.range().end],
+                    });
                 }
-                GlobalSection(mut globals) => {
-                    let count = globals.get_count();
-                    global_count += count;
-                    let mut globals_encoder = wasm_encoder::GlobalSection::new();
-                    for _ in 0..count {
-                        let global = globals.read()?;
-                        globals_encoder.global(
-                            translate_global_type(global.ty),
-                            translate_init_expr(global.init_expr)?,
-                        );
-                    }
-                    module.section(&globals_encoder);
+                GlobalSection(globals) => {
+                    global_count += globals.get_count();
+                    module.section(&wasm_encoder::RawSection {
+                        id: wasm_encoder::SectionId::Global as u8,
+                        data: &full_wasm[globals.range().start..globals.range().end],
+                    });
                 }
                 ExportSection(mut exports) => {
                     let count = exports.get_count();
@@ -356,61 +301,18 @@ impl Wizer {
                         function_index: func,
                     });
                 }
-                ElementSection(mut elems) => {
-                    let count = elems.get_count();
-                    let mut elems_encoder = wasm_encoder::ElementSection::new();
-                    for _ in 0..count {
-                        let elem = elems.read()?;
-                        match elem.kind {
-                            wasmparser::ElementKind::Active {
-                                table_index,
-                                init_expr,
-                            } => {
-                                let init_expr = translate_init_expr(init_expr)?;
-                                let mut items = elem.items.get_items_reader()?;
-                                let mut funcs = Vec::with_capacity(items.get_count() as usize);
-                                for _ in 0..items.get_count() {
-                                    funcs.push(match items.read()? {
-                                        wasmparser::ElementItem::Func(idx) => idx,
-                                        wasmparser::ElementItem::Null(_) => {
-                                            anyhow::bail!("reference types are not supported yet")
-                                        }
-                                    });
-                                }
-                                elems_encoder.active(table_index, init_expr, funcs.drain(..));
-                            }
-                            wasmparser::ElementKind::Passive
-                            | wasmparser::ElementKind::Declared => {
-                                anyhow::bail!("bulk memory is not supported yet")
-                            }
-                        }
-                    }
-                    module.section(&elems_encoder);
+                ElementSection(elems) => {
+                    module.section(&wasm_encoder::RawSection {
+                        id: wasm_encoder::SectionId::Element as u8,
+                        data: &full_wasm[elems.range().start..elems.range().end],
+                    });
                 }
                 DataCountSection { .. } => anyhow::bail!("bulk memory is not supported yet"),
-                DataSection(mut data) => {
-                    let count = data.get_count();
-                    let mut data_encoder = wasm_encoder::DataSection::new();
-                    for _ in 0..count {
-                        let segment = data.read()?;
-                        match segment.kind {
-                            wasmparser::DataKind::Active {
-                                memory_index,
-                                init_expr,
-                            } => {
-                                let init_expr = translate_init_expr(init_expr)?;
-                                data_encoder.active(
-                                    memory_index,
-                                    init_expr,
-                                    segment.data.iter().copied(),
-                                );
-                            }
-                            wasmparser::DataKind::Passive => {
-                                anyhow::bail!("bulk memory is not supported yet")
-                            }
-                        }
-                    }
-                    module.section(&data_encoder);
+                DataSection(data) => {
+                    module.section(&wasm_encoder::RawSection {
+                        id: wasm_encoder::SectionId::Data as u8,
+                        data: &full_wasm[data.range().start..data.range().end],
+                    });
                 }
                 CustomSection {
                     name,
