@@ -5,7 +5,6 @@ inputs:
   version:
     description: 'The release version of OpenVINO to install'
     required: false
-    default: '2020.4.287'
 
 runs:
   using: composite
