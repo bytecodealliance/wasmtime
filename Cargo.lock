@@ -586,7 +586,7 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.67.0",
+ "wasmparser 0.68.0",
  "wat",
 ]
 
@@ -1150,7 +1150,7 @@ dependencies = [
  "smallvec",
  "thiserror",
  "typemap",
- "wasmparser 0.67.0",
+ "wasmparser 0.68.0",
  "wat",
 ]
 
@@ -2321,24 +2321,18 @@ checksum = "32fddd575d477c6e9702484139cf9f23dcd554b06d185ed0f56c857dd3a47aa6"
 
 [[package]]
 name = "wasmparser"
-version = "0.66.0"
+version = "0.68.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c97fc0456d6d09ca7b64bc33c34f4e8f29d5ccfa8e5595ef7a8957818339e6f6"
-
-[[package]]
-name = "wasmparser"
-version = "0.67.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f091cf3849e5fe76a60255bff169277459f2201435bc583b6656880553f0ad0"
+checksum = "29a00e14eed9c2ecbbdbdd4fb284f49d21b6808965de24769a6379a13ec47d4c"
 
 [[package]]
 name = "wasmprinter"
-version = "0.2.13"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b580bee9eb1f029fac6014620b31f82ea2afa22d0701b9bd7f879747e3f5242"
+checksum = "f39a73b5f09cfcb1b568b61968d39b19e4ddec9b49040cfc091adf3b0788bca6"
 dependencies = [
  "anyhow",
- "wasmparser 0.66.0",
+ "wasmparser 0.68.0",
 ]
 
 [[package]]
@@ -2357,7 +2351,7 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "tempfile",
- "wasmparser 0.67.0",
+ "wasmparser 0.68.0",
  "wasmtime-cache",
  "wasmtime-environ",
  "wasmtime-jit",
@@ -2435,7 +2429,7 @@ dependencies = [
  "test-programs",
  "tracing-subscriber",
  "wasi-common",
- "wasmparser 0.67.0",
+ "wasmparser 0.68.0",
  "wasmtime",
  "wasmtime-cache",
  "wasmtime-debug",
@@ -2471,7 +2465,7 @@ dependencies = [
  "object",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.67.0",
+ "wasmparser 0.68.0",
  "wasmtime-environ",
 ]
 
@@ -2490,7 +2484,7 @@ dependencies = [
  "more-asserts",
  "serde",
  "thiserror",
- "wasmparser 0.67.0",
+ "wasmparser 0.68.0",
 ]
 
 [[package]]
@@ -2518,7 +2512,7 @@ dependencies = [
  "log",
  "rayon",
  "wasm-smith",
- "wasmparser 0.67.0",
+ "wasmparser 0.68.0",
  "wasmprinter",
  "wasmtime",
  "wasmtime-wast",
@@ -2545,7 +2539,7 @@ dependencies = [
  "serde",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.67.0",
+ "wasmparser 0.68.0",
  "wasmtime-cranelift",
  "wasmtime-debug",
  "wasmtime-environ",
@@ -2562,7 +2556,7 @@ version = "0.21.0"
 dependencies = [
  "cranelift-codegen",
  "lightbeam",
- "wasmparser 0.67.0",
+ "wasmparser 0.68.0",
  "wasmtime-environ",
 ]
 

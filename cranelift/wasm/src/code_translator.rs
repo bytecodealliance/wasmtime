@@ -534,6 +534,17 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.popn(return_count);
             state.reachable = false;
         }
+        /********************************** Exception handing **********************************/
+        Operator::Try { .. }
+        | Operator::Catch
+        | Operator::BrOnExn { .. }
+        | Operator::Throw { .. }
+        | Operator::Rethrow => {
+            return Err(wasm_unsupported!(
+                "proposed exception handling operator {:?}",
+                op
+            ));
+        }
         /************************************ Calls ****************************************
          * The call instructions pop off their arguments from the stack and append their
          * return values to it. `call_indirect` needs environment support because there is an

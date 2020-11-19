@@ -10,8 +10,9 @@
 use crate::environ::{ModuleEnvironment, WasmError, WasmResult};
 use crate::state::ModuleTranslationState;
 use crate::translation_utils::{
-    tabletype_to_type, type_to_type, DataIndex, ElemIndex, EntityType, FuncIndex, Global,
-    GlobalIndex, GlobalInit, Memory, MemoryIndex, Table, TableElementType, TableIndex, TypeIndex,
+    tabletype_to_type, type_to_type, DataIndex, ElemIndex, EntityType, Event, EventIndex,
+    FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex, Table, TableElementType,
+    TableIndex, TypeIndex,
 };
 use crate::wasm_unsupported;
 use core::convert::TryFrom;
@@ -24,10 +25,10 @@ use std::boxed::Box;
 use std::vec::Vec;
 use wasmparser::{
     self, Data, DataKind, DataSectionReader, Element, ElementItem, ElementItems, ElementKind,
-    ElementSectionReader, Export, ExportSectionReader, ExternalKind, FunctionSectionReader,
-    GlobalSectionReader, GlobalType, ImportSectionEntryType, ImportSectionReader,
-    MemorySectionReader, MemoryType, NameSectionReader, Naming, Operator, TableSectionReader,
-    TableType, TypeDef, TypeSectionReader,
+    ElementSectionReader, EventSectionReader, EventType, Export, ExportSectionReader, ExternalKind,
+    FunctionSectionReader, GlobalSectionReader, GlobalType, ImportSectionEntryType,
+    ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader, Naming, Operator,
+    TableSectionReader, TableType, TypeDef, TypeSectionReader,
 };
 
 fn entity_type(
@@ -39,6 +40,7 @@ fn entity_type(
         ImportSectionEntryType::Module(sig) => EntityType::Module(TypeIndex::from_u32(sig)),
         ImportSectionEntryType::Instance(sig) => EntityType::Instance(TypeIndex::from_u32(sig)),
         ImportSectionEntryType::Memory(ty) => EntityType::Memory(memory(ty)),
+        ImportSectionEntryType::Event(evt) => EntityType::Event(event(evt)),
         ImportSectionEntryType::Global(ty) => {
             EntityType::Global(global(ty, environ, GlobalInit::Import)?)
         }
@@ -55,6 +57,12 @@ fn memory(ty: MemoryType) -> Memory {
         },
         // FIXME(#2361)
         MemoryType::M64 { .. } => unimplemented!(),
+    }
+}
+
+fn event(e: EventType) -> Event {
+    Event {
+        ty: TypeIndex::from_u32(e.type_index),
     }
 }
 
@@ -163,6 +171,7 @@ pub fn parse_import_section<'data>(
             EntityType::Memory(ty) => {
                 environ.declare_memory_import(ty, module_name, field_name)?;
             }
+            EntityType::Event(e) => environ.declare_event_import(e, module_name, field_name)?,
             EntityType::Global(ty) => {
                 environ.declare_global_import(ty, module_name, field_name)?;
             }
@@ -222,6 +231,21 @@ pub fn parse_memory_section(
     for entry in memories {
         let memory = memory(entry?);
         environ.declare_memory(memory)?;
+    }
+
+    Ok(())
+}
+
+/// Parses the Event section of the wasm module.
+pub fn parse_event_section(
+    events: EventSectionReader,
+    environ: &mut dyn ModuleEnvironment,
+) -> WasmResult<()> {
+    environ.reserve_events(events.get_count())?;
+
+    for entry in events {
+        let event = event(entry?);
+        environ.declare_event(event)?;
     }
 
     Ok(())
@@ -290,6 +314,7 @@ pub fn parse_export_section<'data>(
             ExternalKind::Memory => {
                 environ.declare_memory_export(MemoryIndex::new(index), field)?
             }
+            ExternalKind::Event => environ.declare_event_export(EventIndex::new(index), field)?,
             ExternalKind::Global => {
                 environ.declare_global_export(GlobalIndex::new(index), field)?
             }
