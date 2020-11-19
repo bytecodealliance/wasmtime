@@ -131,8 +131,8 @@ unsafe impl GuestMemory for HostMemory {
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         self.bc.mut_borrow(r)
     }
-    fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        self.bc.immut_borrow(r)
+    fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        self.bc.shared_borrow(r)
     }
     fn unborrow(&self, h: BorrowHandle) {
         self.bc.unborrow(h)

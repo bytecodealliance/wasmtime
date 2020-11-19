@@ -25,8 +25,8 @@ impl BorrowChecker {
     pub fn has_outstanding_borrows(&self) -> bool {
         self.bc.borrow().has_outstanding_borrows()
     }
-    pub fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        self.bc.borrow_mut().immut_borrow(r)
+    pub fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        self.bc.borrow_mut().shared_borrow(r)
     }
     pub fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         self.bc.borrow_mut().mut_borrow(r)
@@ -47,7 +47,7 @@ struct InnerBorrowChecker {
     /// for this but it works. It would be more efficient if we could
     /// check `is_borrowed` without an O(n) iteration, by organizing borrows
     /// by an ordering of Region.
-    immut_borrows: HashMap<BorrowHandle, Region>,
+    shared_borrows: HashMap<BorrowHandle, Region>,
     mut_borrows: HashMap<BorrowHandle, Region>,
     /// Handle to give out for the next borrow. This is the bare minimum of
     /// bookkeeping of free handles, and in a pathological case we could run
@@ -58,19 +58,19 @@ struct InnerBorrowChecker {
 impl InnerBorrowChecker {
     fn new() -> Self {
         InnerBorrowChecker {
-            immut_borrows: HashMap::new(),
+            shared_borrows: HashMap::new(),
             mut_borrows: HashMap::new(),
             next_handle: BorrowHandle(0),
         }
     }
 
     fn has_outstanding_borrows(&self) -> bool {
-        !(self.immut_borrows.is_empty() && self.mut_borrows.is_empty())
+        !(self.shared_borrows.is_empty() && self.mut_borrows.is_empty())
     }
 
     fn is_borrowed(&self, r: Region) -> bool {
         !self
-            .immut_borrows
+            .shared_borrows
             .values()
             .chain(self.mut_borrows.values())
             .all(|b| !b.overlaps(r))
@@ -78,7 +78,7 @@ impl InnerBorrowChecker {
 
     fn new_handle(&mut self) -> Result<BorrowHandle, GuestError> {
         // Reset handles to 0 if all handles have been returned.
-        if self.immut_borrows.is_empty() && self.mut_borrows.is_empty() {
+        if self.shared_borrows.is_empty() && self.mut_borrows.is_empty() {
             self.next_handle = BorrowHandle(0);
         }
         let h = self.next_handle;
@@ -94,12 +94,12 @@ impl InnerBorrowChecker {
         Ok(h)
     }
 
-    fn immut_borrow(&mut self, r: Region) -> Result<BorrowHandle, GuestError> {
+    fn shared_borrow(&mut self, r: Region) -> Result<BorrowHandle, GuestError> {
         if !self.mut_borrows.values().all(|b| !b.overlaps(r)) {
             return Err(GuestError::PtrBorrowed(r));
         }
         let h = self.new_handle()?;
-        self.immut_borrows.insert(h, r);
+        self.shared_borrows.insert(h, r);
         Ok(h)
     }
 
@@ -115,7 +115,7 @@ impl InnerBorrowChecker {
     fn unborrow(&mut self, h: BorrowHandle) {
         let removed = self.mut_borrows.remove(&h);
         if removed.is_none() {
-            let _ = self.immut_borrows.remove(&h);
+            let _ = self.shared_borrows.remove(&h);
         }
     }
 }
@@ -146,33 +146,33 @@ mod test {
         let r1 = Region::new(0, 10);
         let r2 = Region::new(9, 10);
         assert!(r1.overlaps(r2));
-        bs.immut_borrow(r1).expect("can borrow r1");
+        bs.shared_borrow(r1).expect("can borrow r1");
         assert!(bs.mut_borrow(r2).is_err(), "cant mut borrow r2");
-        bs.immut_borrow(r2).expect("can immut borrow r2");
+        bs.shared_borrow(r2).expect("can shared borrow r2");
 
         let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(0, 10);
         let r2 = Region::new(2, 5);
         assert!(r1.overlaps(r2));
-        bs.immut_borrow(r1).expect("can borrow r1");
+        bs.shared_borrow(r1).expect("can borrow r1");
         assert!(bs.mut_borrow(r2).is_err(), "cant borrow r2");
-        bs.immut_borrow(r2).expect("can immut borrow r2");
+        bs.shared_borrow(r2).expect("can shared borrow r2");
 
         let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(9, 10);
         let r2 = Region::new(0, 10);
         assert!(r1.overlaps(r2));
-        bs.immut_borrow(r1).expect("can borrow r1");
+        bs.shared_borrow(r1).expect("can borrow r1");
         assert!(bs.mut_borrow(r2).is_err(), "cant borrow r2");
-        bs.immut_borrow(r2).expect("can immut borrow r2");
+        bs.shared_borrow(r2).expect("can shared borrow r2");
 
         let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(2, 5);
         let r2 = Region::new(0, 10);
         assert!(r1.overlaps(r2));
-        bs.immut_borrow(r1).expect("can borrow r1");
+        bs.shared_borrow(r1).expect("can borrow r1");
         assert!(bs.mut_borrow(r2).is_err(), "cant borrow r2");
-        bs.immut_borrow(r2).expect("can immut borrow r2");
+        bs.shared_borrow(r2).expect("can shared borrow r2");
 
         let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(2, 5);
@@ -180,11 +180,11 @@ mod test {
         let r3 = Region::new(15, 5);
         let r4 = Region::new(0, 10);
         assert!(r1.overlaps(r4));
-        bs.immut_borrow(r1).expect("can borrow r1");
-        bs.immut_borrow(r2).expect("can borrow r2");
-        bs.immut_borrow(r3).expect("can borrow r3");
+        bs.shared_borrow(r1).expect("can borrow r1");
+        bs.shared_borrow(r2).expect("can borrow r2");
+        bs.shared_borrow(r3).expect("can borrow r3");
         assert!(bs.mut_borrow(r4).is_err(), "cant mut borrow r4");
-        bs.immut_borrow(r4).expect("can immut borrow r4");
+        bs.shared_borrow(r4).expect("can shared borrow r4");
     }
 
     #[test]
@@ -212,17 +212,17 @@ mod test {
             .mut_borrow(r2)
             .expect("can borrow r2 again now that its been unborrowed");
 
-        // Lets try again with immut:
+        // Lets try again with shared:
 
         let mut bs = InnerBorrowChecker::new();
         let r1 = Region::new(0, 10);
         let r2 = Region::new(10, 10);
         assert!(!r1.overlaps(r2));
         assert_eq!(bs.has_outstanding_borrows(), false, "start with no borrows");
-        let h1 = bs.immut_borrow(r1).expect("can borrow r1");
+        let h1 = bs.shared_borrow(r1).expect("can borrow r1");
         assert_eq!(bs.has_outstanding_borrows(), true, "h1 is outstanding");
-        let h2 = bs.immut_borrow(r2).expect("can borrow r2");
-        let h3 = bs.immut_borrow(r2).expect("can immut borrow r2 twice");
+        let h2 = bs.shared_borrow(r2).expect("can borrow r2");
+        let h3 = bs.shared_borrow(r2).expect("can shared borrow r2 twice");
 
         bs.unborrow(h2);
         assert_eq!(

@@ -38,8 +38,8 @@ unsafe impl GuestMemory for WasmtimeGuestMemory {
     fn is_borrowed(&self, r: Region) -> bool {
         self.bc.is_borrowed(r)
     }
-    fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        self.bc.immut_borrow(r)
+    fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        self.bc.shared_borrow(r)
     }
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         self.bc.mut_borrow(r)

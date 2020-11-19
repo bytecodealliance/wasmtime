@@ -166,7 +166,7 @@ pub unsafe trait GuestMemory {
     /// borrow, and that `GuestMemory::is_borrowed` of any overlapping region
     /// is false for the duration of the borrow.
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError>;
-    fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError>;
+    fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError>;
     /// Unborrow a previously borrowed region. As long as `GuestSlice` and
     /// `GuestStr` are implemented correctly, a `BorrowHandle` should only be
     /// unborrowed once.
@@ -193,8 +193,8 @@ unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a T {
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::mut_borrow(self, r)
     }
-    fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        T::immut_borrow(self, r)
+    fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::shared_borrow(self, r)
     }
     fn unborrow(&self, h: BorrowHandle) {
         T::unborrow(self, h)
@@ -214,8 +214,8 @@ unsafe impl<'a, T: ?Sized + GuestMemory> GuestMemory for &'a mut T {
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::mut_borrow(self, r)
     }
-    fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        T::immut_borrow(self, r)
+    fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::shared_borrow(self, r)
     }
     fn unborrow(&self, h: BorrowHandle) {
         T::unborrow(self, h)
@@ -235,8 +235,8 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Box<T> {
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::mut_borrow(self, r)
     }
-    fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        T::immut_borrow(self, r)
+    fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::shared_borrow(self, r)
     }
     fn unborrow(&self, h: BorrowHandle) {
         T::unborrow(self, h)
@@ -256,8 +256,8 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Rc<T> {
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::mut_borrow(self, r)
     }
-    fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        T::immut_borrow(self, r)
+    fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::shared_borrow(self, r)
     }
     fn unborrow(&self, h: BorrowHandle) {
         T::unborrow(self, h)
@@ -277,8 +277,8 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Arc<T> {
     fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
         T::mut_borrow(self, r)
     }
-    fn immut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        T::immut_borrow(self, r)
+    fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        T::shared_borrow(self, r)
     }
     fn unborrow(&self, h: BorrowHandle) {
         T::unborrow(self, h)
@@ -304,11 +304,11 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Arc<T> {
 /// * `GuestPtr<'_, str>` - a pointer to a guest string. Has the methods
 ///   [`GuestPtr::as_str_mut`], which gives a dynamically borrow-checked
 ///   `GuestStrMut<'_>`, which `DerefMut`s to a `&mut str`, and
-///   [`GuestPtr::as_str`], which is the immutable version of same.
+///   [`GuestPtr::as_str`], which is the sharedable version of same.
 /// * `GuestPtr<'_, [T]>` - a pointer to a guest array. Has methods
 ///   [`GuestPtr::as_slice_mut`], which gives a dynamically borrow-checked
 ///   `GuestSliceMut<'_, T>`, which `DerefMut`s to a `&mut [T]` and
-///   [`GuestPtr::as_slice`], which is the immutable version of same.
+///   [`GuestPtr::as_slice`], which is the sharedable version of same.
 ///
 /// Unsized types such as this may have extra methods and won't have methods
 /// like [`GuestPtr::read`] or [`GuestPtr::write`].
@@ -489,9 +489,9 @@ impl<'a, T> GuestPtr<'a, [T]> {
     /// Attempts to create a [`GuestSlice<'_, T>`] from this pointer, performing
     /// bounds checks and type validation. The `GuestSlice` is a smart pointer
     /// that can be used as a `&[T]` via the `Deref` trait.
-    /// The region of memory backing the slice will be marked as immutably
+    /// The region of memory backing the slice will be marked as sharedably
     /// borrowed by the [`GuestMemory`] until the `GuestSlice` is dropped.
-    /// Multiple immutable borrows of the same memory are permitted, but only
+    /// Multiple sharedable borrows of the same memory are permitted, but only
     /// one mutable borrow.
     ///
     /// This function will return a `GuestSlice` into host memory if all checks
@@ -509,7 +509,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
             self.mem
                 .validate_size_align(self.pointer.0, T::guest_align(), len)? as *mut T;
 
-        let borrow = self.mem.immut_borrow(Region {
+        let borrow = self.mem.shared_borrow(Region {
             start: self.pointer.0,
             len,
         })?;
@@ -668,7 +668,7 @@ impl<'a> GuestPtr<'a, str> {
     /// Attempts to create a [`GuestStr<'_>`] from this pointer, performing
     /// bounds checks and utf-8 checks. The resulting `GuestStr` can be used
     /// as a `&str` via the `Deref` trait. The region of memory backing the
-    /// `str` will be marked as immutably borrowed by the [`GuestMemory`]
+    /// `str` will be marked as sharedably borrowed by the [`GuestMemory`]
     /// until the `GuestStr` is dropped.
     ///
     /// This function will return `GuestStr` into host memory if all checks
@@ -679,7 +679,7 @@ impl<'a> GuestPtr<'a, str> {
             .mem
             .validate_size_align(self.pointer.0, 1, self.pointer.1)?;
 
-        let borrow = self.mem.immut_borrow(Region {
+        let borrow = self.mem.shared_borrow(Region {
             start: self.pointer.0,
             len: self.pointer.1,
         })?;
@@ -754,7 +754,7 @@ impl<T: ?Sized + Pointee> fmt::Debug for GuestPtr<'_, T> {
     }
 }
 
-/// A smart pointer to an immutable slice in guest memory.
+/// A smart pointer to an sharedable slice in guest memory.
 /// Usable as a `&'a [T]` via [`std::ops::Deref`].
 pub struct GuestSlice<'a, T> {
     ptr: &'a [T],
@@ -803,7 +803,7 @@ impl<'a, T> Drop for GuestSliceMut<'a, T> {
     }
 }
 
-/// A smart pointer to an immutable `str` in guest memory.
+/// A smart pointer to an sharedable `str` in guest memory.
 /// Usable as a `&'a str` via [`std::ops::Deref`].
 pub struct GuestStr<'a> {
     ptr: &'a str,
