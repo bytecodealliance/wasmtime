@@ -3045,41 +3045,13 @@ impl Inst {
                 let rn = show_ireg_sized(rn, mb_rru, size);
                 format!("{} {}, {}", op, rd, rn)
             }
-            &Inst::ULoad8 {
-                rd,
-                ref mem,
-                ..
-            }
-            | &Inst::SLoad8 {
-                rd,
-                ref mem,
-                ..
-            }
-            | &Inst::ULoad16 {
-                rd,
-                ref mem,
-                ..
-            }
-            | &Inst::SLoad16 {
-                rd,
-                ref mem,
-                ..
-            }
-            | &Inst::ULoad32 {
-                rd,
-                ref mem,
-                ..
-            }
-            | &Inst::SLoad32 {
-                rd,
-                ref mem,
-                ..
-            }
-            | &Inst::ULoad64 {
-                rd,
-                ref mem,
-                ..
-            } => {
+            &Inst::ULoad8 { rd, ref mem, .. }
+            | &Inst::SLoad8 { rd, ref mem, .. }
+            | &Inst::ULoad16 { rd, ref mem, .. }
+            | &Inst::SLoad16 { rd, ref mem, .. }
+            | &Inst::ULoad32 { rd, ref mem, .. }
+            | &Inst::SLoad32 { rd, ref mem, .. }
+            | &Inst::ULoad64 { rd, ref mem, .. } => {
                 let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
 
                 let is_unscaled = match &mem {
@@ -3107,26 +3079,10 @@ impl Inst {
                 let mem = mem.show_rru(mb_rru);
                 format!("{}{} {}, {}", mem_str, op, rd, mem)
             }
-            &Inst::Store8 {
-                rd,
-                ref mem,
-                ..
-            }
-            | &Inst::Store16 {
-                rd,
-                ref mem,
-                ..
-            }
-            | &Inst::Store32 {
-                rd,
-                ref mem,
-                ..
-            }
-            | &Inst::Store64 {
-                rd,
-                ref mem,
-                ..
-            } => {
+            &Inst::Store8 { rd, ref mem, .. }
+            | &Inst::Store16 { rd, ref mem, .. }
+            | &Inst::Store32 { rd, ref mem, .. }
+            | &Inst::Store64 { rd, ref mem, .. } => {
                 let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
 
                 let is_unscaled = match &mem {
@@ -3148,13 +3104,17 @@ impl Inst {
                 let mem = mem.show_rru(mb_rru);
                 format!("{}{} {}, {}", mem_str, op, rd, mem)
             }
-            &Inst::StoreP64 { rt, rt2, ref mem, .. } => {
+            &Inst::StoreP64 {
+                rt, rt2, ref mem, ..
+            } => {
                 let rt = rt.show_rru(mb_rru);
                 let rt2 = rt2.show_rru(mb_rru);
                 let mem = mem.show_rru(mb_rru);
                 format!("stp {}, {}, {}", rt, rt2, mem)
             }
-            &Inst::LoadP64 { rt, rt2, ref mem, .. } => {
+            &Inst::LoadP64 {
+                rt, rt2, ref mem, ..
+            } => {
                 let rt = rt.to_reg().show_rru(mb_rru);
                 let rt2 = rt2.to_reg().show_rru(mb_rru);
                 let mem = mem.show_rru(mb_rru);
@@ -3220,14 +3180,25 @@ impl Inst {
                     "atomically {{ compare-and-swap({}_bits_at_[x25], x26 -> x28), x27 = old_value_at_[x25]; x24 = trash }}",
                     ty.bits())
             }
-            &Inst::AtomicLoad { ty, r_data, r_addr, .. } => {
+            &Inst::AtomicLoad {
+                ty, r_data, r_addr, ..
+            } => {
                 format!(
                     "atomically {{ {} = zero_extend_{}_bits_at[{}] }}",
-                    r_data.show_rru(mb_rru), ty.bits(), r_addr.show_rru(mb_rru))
+                    r_data.show_rru(mb_rru),
+                    ty.bits(),
+                    r_addr.show_rru(mb_rru)
+                )
             }
-            &Inst::AtomicStore { ty, r_data, r_addr, .. } => {
+            &Inst::AtomicStore {
+                ty, r_data, r_addr, ..
+            } => {
                 format!(
-                    "atomically {{ {}_bits_at[{}] = {} }}", ty.bits(), r_addr.show_rru(mb_rru), r_data.show_rru(mb_rru))
+                    "atomically {{ {}_bits_at[{}] = {} }}",
+                    ty.bits(),
+                    r_addr.show_rru(mb_rru),
+                    r_data.show_rru(mb_rru)
+                )
             }
             &Inst::Fence {} => {
                 format!("dmb ish")
@@ -3370,7 +3341,11 @@ impl Inst {
             }
             &Inst::LoadFpuConst64 { rd, const_data } => {
                 let rd = show_vreg_scalar(rd.to_reg(), mb_rru, ScalarSize::Size64);
-                format!("ldr {}, pc+8 ; b 12 ; data.f64 {}", rd, f64::from_bits(const_data))
+                format!(
+                    "ldr {}, pc+8 ; b 12 ; data.f64 {}",
+                    rd,
+                    f64::from_bits(const_data)
+                )
             }
             &Inst::LoadFpuConst128 { rd, const_data } => {
                 let rd = show_vreg_scalar(rd.to_reg(), mb_rru, ScalarSize::Size128);
@@ -3479,31 +3454,61 @@ impl Inst {
                 let rn = show_vreg_element(rn, mb_rru, 0, size);
                 format!("dup {}, {}", rd, rn)
             }
-            &Inst::VecDupImm { rd, imm, invert, size } => {
+            &Inst::VecDupImm {
+                rd,
+                imm,
+                invert,
+                size,
+            } => {
                 let imm = imm.show_rru(mb_rru);
-                let op = if invert {
-                    "mvni"
-                } else {
-                    "movi"
-                };
+                let op = if invert { "mvni" } else { "movi" };
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
 
                 format!("{} {}, {}", op, rd, imm)
             }
-            &Inst::VecExtend { t, rd, rn, high_half } => {
+            &Inst::VecExtend {
+                t,
+                rd,
+                rn,
+                high_half,
+            } => {
                 let (op, dest, src) = match (t, high_half) {
-                    (VecExtendOp::Sxtl8, false) => ("sxtl", VectorSize::Size16x8, VectorSize::Size8x8),
-                    (VecExtendOp::Sxtl8, true) => ("sxtl2", VectorSize::Size16x8, VectorSize::Size8x16),
-                    (VecExtendOp::Sxtl16, false) => ("sxtl", VectorSize::Size32x4, VectorSize::Size16x4),
-                    (VecExtendOp::Sxtl16, true) => ("sxtl2", VectorSize::Size32x4, VectorSize::Size16x8),
-                    (VecExtendOp::Sxtl32, false) => ("sxtl", VectorSize::Size64x2, VectorSize::Size32x2),
-                    (VecExtendOp::Sxtl32, true) => ("sxtl2", VectorSize::Size64x2, VectorSize::Size32x4),
-                    (VecExtendOp::Uxtl8, false) => ("uxtl", VectorSize::Size16x8, VectorSize::Size8x8),
-                    (VecExtendOp::Uxtl8, true) => ("uxtl2", VectorSize::Size16x8, VectorSize::Size8x16),
-                    (VecExtendOp::Uxtl16, false) => ("uxtl", VectorSize::Size32x4, VectorSize::Size16x4),
-                    (VecExtendOp::Uxtl16, true) => ("uxtl2", VectorSize::Size32x4, VectorSize::Size16x8),
-                    (VecExtendOp::Uxtl32, false) => ("uxtl", VectorSize::Size64x2, VectorSize::Size32x2),
-                    (VecExtendOp::Uxtl32, true) => ("uxtl2", VectorSize::Size64x2, VectorSize::Size32x4),
+                    (VecExtendOp::Sxtl8, false) => {
+                        ("sxtl", VectorSize::Size16x8, VectorSize::Size8x8)
+                    }
+                    (VecExtendOp::Sxtl8, true) => {
+                        ("sxtl2", VectorSize::Size16x8, VectorSize::Size8x16)
+                    }
+                    (VecExtendOp::Sxtl16, false) => {
+                        ("sxtl", VectorSize::Size32x4, VectorSize::Size16x4)
+                    }
+                    (VecExtendOp::Sxtl16, true) => {
+                        ("sxtl2", VectorSize::Size32x4, VectorSize::Size16x8)
+                    }
+                    (VecExtendOp::Sxtl32, false) => {
+                        ("sxtl", VectorSize::Size64x2, VectorSize::Size32x2)
+                    }
+                    (VecExtendOp::Sxtl32, true) => {
+                        ("sxtl2", VectorSize::Size64x2, VectorSize::Size32x4)
+                    }
+                    (VecExtendOp::Uxtl8, false) => {
+                        ("uxtl", VectorSize::Size16x8, VectorSize::Size8x8)
+                    }
+                    (VecExtendOp::Uxtl8, true) => {
+                        ("uxtl2", VectorSize::Size16x8, VectorSize::Size8x16)
+                    }
+                    (VecExtendOp::Uxtl16, false) => {
+                        ("uxtl", VectorSize::Size32x4, VectorSize::Size16x4)
+                    }
+                    (VecExtendOp::Uxtl16, true) => {
+                        ("uxtl2", VectorSize::Size32x4, VectorSize::Size16x8)
+                    }
+                    (VecExtendOp::Uxtl32, false) => {
+                        ("uxtl", VectorSize::Size64x2, VectorSize::Size32x2)
+                    }
+                    (VecExtendOp::Uxtl32, true) => {
+                        ("uxtl2", VectorSize::Size64x2, VectorSize::Size32x4)
+                    }
                 };
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, dest);
                 let rn = show_vreg_vector(rn, mb_rru, src);
@@ -3520,7 +3525,13 @@ impl Inst {
                 let rn = show_vreg_element(rn, mb_rru, src_idx, size);
                 format!("mov {}, {}", rd, rn)
             }
-            &Inst::VecMiscNarrow { op, rd, rn, size, high_half } => {
+            &Inst::VecMiscNarrow {
+                op,
+                rd,
+                rn,
+                size,
+                high_half,
+            } => {
                 let dest_size = if high_half {
                     assert!(size.is_128bits());
                     size
@@ -3589,11 +3600,11 @@ impl Inst {
                 };
                 let rd_size = match alu_op {
                     VecALUOp::Umlal | VecALUOp::Smull | VecALUOp::Smull2 => size.widen(),
-                    _ => size
+                    _ => size,
                 };
                 let rn_size = match alu_op {
                     VecALUOp::Smull => size.halve(),
-                    _ => size
+                    _ => size,
                 };
                 let rm_size = rn_size;
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, rd_size);
@@ -3651,7 +3662,13 @@ impl Inst {
                 let rn = show_vreg_vector(rn, mb_rru, size);
                 format!("{} {}, {}", op, rd, rn)
             }
-            &Inst::VecShiftImm { op, rd, rn, size, imm } => {
+            &Inst::VecShiftImm {
+                op,
+                rd,
+                rn,
+                size,
+                imm,
+            } => {
                 let op = match op {
                     VecShiftImmOp::Shl => "shl",
                     VecShiftImmOp::Ushr => "ushr",
@@ -3704,7 +3721,10 @@ impl Inst {
                 let rn = show_vreg_vector(rn, mb_rru, VectorSize::Size8x16);
                 let rm = show_vreg_vector(rm, mb_rru, VectorSize::Size8x16);
                 let cond = cond.show_rru(mb_rru);
-                format!("vcsel {}, {}, {}, {} (if-then-else diamond)", rd, rn, rm, cond)
+                format!(
+                    "vcsel {}, {}, {}, {} (if-then-else diamond)",
+                    rd, rn, rm, cond
+                )
             }
             &Inst::MovToNZCV { rn } => {
                 let rn = rn.show_rru(mb_rru);
@@ -3887,7 +3907,9 @@ impl Inst {
                 let (reg, index_reg, offset) = match mem {
                     AMode::RegExtended(r, idx, extendop) => (r, Some((idx, extendop)), 0),
                     AMode::Unscaled(r, simm9) => (r, None, simm9.value()),
-                    AMode::UnsignedOffset(r, uimm12scaled) => (r, None, uimm12scaled.value() as i32),
+                    AMode::UnsignedOffset(r, uimm12scaled) => {
+                        (r, None, uimm12scaled.value() as i32)
+                    }
                     _ => panic!("Unsupported case for LoadAddr: {:?}", mem),
                 };
                 let abs_offset = if offset < 0 {

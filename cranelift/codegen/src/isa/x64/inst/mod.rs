@@ -1365,19 +1365,28 @@ impl PrettyPrint for Inst {
                 show_ireg_sized(rhs_dst.to_reg(), mb_rru, 8),
             ),
 
-            Inst::XmmRmRImm { op, src, dst, imm, is64, .. } => format!(
+            Inst::XmmRmRImm {
+                op,
+                src,
+                dst,
+                imm,
+                is64,
+                ..
+            } => format!(
                 "{} ${}, {}, {}",
-                ljustify(format!("{}{}", op.to_string(), if *is64 { ".w" } else { "" })),
+                ljustify(format!(
+                    "{}{}",
+                    op.to_string(),
+                    if *is64 { ".w" } else { "" }
+                )),
                 imm,
                 src.show_rru(mb_rru),
                 dst.show_rru(mb_rru),
             ),
 
-            Inst::XmmUninitializedValue { dst } => format!(
-                "{} {}",
-                ljustify("uninit".into()),
-                dst.show_rru(mb_rru),
-            ),
+            Inst::XmmUninitializedValue { dst } => {
+                format!("{} {}", ljustify("uninit".into()), dst.show_rru(mb_rru),)
+            }
 
             Inst::XmmLoadConst { src, dst, .. } => {
                 format!("load_const {:?}, {}", src, dst.show_rru(mb_rru),)
@@ -1691,23 +1700,25 @@ impl PrettyPrint for Inst {
 
             Inst::LockCmpxchg { ty, src, dst, .. } => {
                 let size = ty.bytes() as u8;
-                format!("lock cmpxchg{} {}, {}",
-                        suffix_bwlq(size), show_ireg_sized(*src, mb_rru, size), dst.show_rru(mb_rru))
+                format!(
+                    "lock cmpxchg{} {}, {}",
+                    suffix_bwlq(size),
+                    show_ireg_sized(*src, mb_rru, size),
+                    dst.show_rru(mb_rru)
+                )
             }
 
             Inst::AtomicRmwSeq { ty, op, .. } => {
                 format!(
                     "atomically {{ {}_bits_at_[%r9]) {:?}= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }}",
                     ty.bits(), op)
-            },
-
-            Inst::Fence { kind } => {
-                match kind {
-                    FenceKind::MFence => "mfence".to_string(),
-                    FenceKind::LFence => "lfence".to_string(),
-                    FenceKind::SFence => "sfence".to_string(),
-                }
             }
+
+            Inst::Fence { kind } => match kind {
+                FenceKind::MFence => "mfence".to_string(),
+                FenceKind::LFence => "lfence".to_string(),
+                FenceKind::SFence => "sfence".to_string(),
+            },
 
             Inst::VirtualSPOffsetAdj { offset } => format!("virtual_sp_offset_adjust {}", offset),
 
