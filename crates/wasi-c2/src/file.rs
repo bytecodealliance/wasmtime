@@ -2,7 +2,56 @@ use crate::Error;
 use std::ops::Deref;
 use system_interface::fs::FileIoExt;
 
-pub trait WasiFile: FileIoExt {}
+pub trait WasiFile: FileIoExt {
+    fn allocate(&self, _offset: u64, _len: u64) -> Result<(), Error> {
+        todo!("to implement fd_allocate, FileIoExt needs methods to get and set length of a file")
+    }
+    fn datasync(&self) -> Result<(), Error> {
+        todo!("FileIoExt has no facilities for sync");
+    }
+    fn filetype(&self) -> Filetype {
+        todo!("FileIoExt has no facilities for filetype");
+    }
+    fn oflags(&self) -> OFlags {
+        todo!("FileIoExt has no facilities for oflags");
+    }
+    fn set_oflags(&self, _flags: OFlags) -> Result<(), Error> {
+        todo!("FileIoExt has no facilities for oflags");
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum Filetype {
+    BlockDevice,
+    CharacterDevice,
+    RegularFile,
+    SocketDgram,
+    SocketStream,
+}
+
+pub struct OFlags {
+    flags: u32,
+}
+
+impl OFlags {
+    /// Checks if `other` is a subset of those capabilties:
+    pub fn contains(&self, other: &Self) -> bool {
+        self.flags & other.flags == other.flags
+    }
+
+    pub const ACCMODE: OFlags = OFlags { flags: 1 };
+    pub const APPEND: OFlags = OFlags { flags: 2 };
+    pub const CREATE: OFlags = OFlags { flags: 4 };
+    pub const SYNC: OFlags = OFlags { flags: 4 };
+    pub const NOFOLLOW: OFlags = OFlags { flags: 8 };
+    pub const NONBLOCK: OFlags = OFlags { flags: 16 };
+    pub const RDONLY: OFlags = OFlags { flags: 32 };
+    pub const WRONLY: OFlags = OFlags { flags: 64 };
+    pub const RDWR: OFlags = OFlags {
+        flags: Self::RDONLY.flags | Self::WRONLY.flags,
+    };
+    // etc
+}
 
 pub(crate) struct FileEntry {
     pub(crate) base_caps: FileCaps,
@@ -44,6 +93,10 @@ impl FileCaps {
     pub const WRITE: Self = FileCaps { flags: 64 };
     pub const ADVISE: Self = FileCaps { flags: 128 };
     pub const ALLOCATE: Self = FileCaps { flags: 256 };
+    // This isnt in wasi-common, but lets use a cap to check
+    // if its valid to close a file, rather than depend on
+    // preopen logic
+    pub const CLOSE: Self = FileCaps { flags: 512 };
 }
 
 impl std::fmt::Display for FileCaps {

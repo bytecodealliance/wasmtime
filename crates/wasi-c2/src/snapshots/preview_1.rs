@@ -1,7 +1,9 @@
 #![allow(unused_variables)]
-use crate::file::{FileCaps, FileEntry};
+use crate::file::{FileCaps, FileEntry, Filetype, OFlags};
 use crate::{Error, WasiCtx};
 use std::cell::RefMut;
+use std::convert::TryFrom;
+use std::ops::Deref;
 use tracing::debug;
 use wiggle::GuestPtr;
 
@@ -148,23 +150,44 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         offset: types::Filesize,
         len: types::Filesize,
     ) -> Result<(), Error> {
-        unimplemented!()
+        let table = self.table();
+        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
+        let f = file_entry.get_cap(FileCaps::ALLOCATE)?;
+        f.allocate(offset, len)?;
+        Ok(())
     }
 
     fn fd_close(&self, fd: types::Fd) -> Result<(), Error> {
-        unimplemented!()
+        let mut table = self.table();
+        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
+        let f = file_entry.get_cap(FileCaps::CLOSE)?;
+        drop(f);
+        drop(file_entry);
+        let _ = table.delete(u32::from(fd));
+        Ok(())
     }
 
     fn fd_datasync(&self, fd: types::Fd) -> Result<(), Error> {
-        unimplemented!()
+        let table = self.table();
+        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
+        let f = file_entry.get_cap(FileCaps::DATASYNC)?;
+        f.datasync()?;
+        Ok(())
     }
 
     fn fd_fdstat_get(&self, fd: types::Fd) -> Result<types::Fdstat, Error> {
-        unimplemented!()
+        let table = self.table();
+        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
+        Ok(types::Fdstat::from(file_entry.deref()))
     }
 
     fn fd_fdstat_set_flags(&self, fd: types::Fd, flags: types::Fdflags) -> Result<(), Error> {
-        unimplemented!()
+        let table = self.table();
+        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
+        let f = file_entry.get_cap(FileCaps::FDSTAT_SET_FLAGS)?;
+
+        f.set_oflags(OFlags::try_from(flags)?)?;
+        Ok(())
     }
 
     fn fd_fdstat_set_rights(
@@ -420,5 +443,46 @@ impl From<types::Advice> for system_interface::fs::Advice {
             types::Advice::Dontneed => system_interface::fs::Advice::DontNeed,
             types::Advice::Noreuse => system_interface::fs::Advice::NoReuse,
         }
+    }
+}
+
+impl From<&FileEntry> for types::Fdstat {
+    fn from(entry: &FileEntry) -> types::Fdstat {
+        types::Fdstat {
+            fs_filetype: types::Filetype::from(&entry.file.filetype()),
+            fs_rights_base: types::Rights::from(&entry.base_caps),
+            fs_rights_inheriting: types::Rights::from(&entry.base_caps),
+            fs_flags: types::Fdflags::from(&entry.file.oflags()),
+        }
+    }
+}
+
+impl From<&FileCaps> for types::Rights {
+    fn from(caps: &FileCaps) -> types::Rights {
+        todo!("translate FileCaps flags to Rights flags")
+    }
+}
+
+impl From<&Filetype> for types::Filetype {
+    fn from(ft: &Filetype) -> types::Filetype {
+        match ft {
+            Filetype::BlockDevice => types::Filetype::BlockDevice,
+            Filetype::CharacterDevice => types::Filetype::CharacterDevice,
+            Filetype::RegularFile => types::Filetype::RegularFile,
+            Filetype::SocketDgram => types::Filetype::SocketDgram,
+            Filetype::SocketStream => types::Filetype::SocketStream,
+        }
+    }
+}
+impl From<&OFlags> for types::Fdflags {
+    fn from(caps: &OFlags) -> types::Fdflags {
+        todo!("translate OFlags flags to Fdflags flags")
+    }
+}
+
+impl TryFrom<types::Fdflags> for OFlags {
+    type Error = Error;
+    fn try_from(fdflags: types::Fdflags) -> Result<OFlags, Self::Error> {
+        todo!()
     }
 }
