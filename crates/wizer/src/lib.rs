@@ -6,6 +6,7 @@
 
 use anyhow::Context;
 use std::convert::TryFrom;
+#[cfg(feature = "structopt")]
 use structopt::StructOpt;
 
 /// Wizer: the WebAssembly initializer!
@@ -34,8 +35,26 @@ use structopt::StructOpt;
 pub struct Wizer {
     /// The Wasm export name of the function that should be executed to
     /// initialize the Wasm module.
-    #[structopt(short = "f", long = "init-func", default_value = "wizer.initialize")]
+    #[cfg_attr(
+        feature = "structopt",
+        structopt(short = "f", long = "init-func", default_value = "wizer.initialize")
+    )]
     init_func: String,
+
+    /// Allow WASI imports to be called during initialization.
+    ///
+    /// This can introduce diverging semantics because the initialization can
+    /// observe nondeterminism that might have gone a different way at runtime
+    /// than it did at initialization time.
+    ///
+    /// If your Wasm module uses WASI's `get_random` to add randomness to
+    /// something as a security mitigation (e.g. something akin to ASLR or the
+    /// way Rust's hash maps incorporate a random nonce) then note that, if the
+    /// randomization is added during initialization time and you don't ever
+    /// re-randomize at runtime, then that randomization will become per-module
+    /// rather than per-instance.
+    #[cfg_attr(feature = "structopt", structopt(long = "allow-wasi"))]
+    allow_wasi: bool,
 }
 
 fn translate_val_type(ty: wasmparser::Type) -> wasm_encoder::ValType {
@@ -51,37 +70,6 @@ fn translate_val_type(ty: wasmparser::Type) -> wasm_encoder::ValType {
     }
 }
 
-fn translate_limits(limits: wasmparser::ResizableLimits) -> wasm_encoder::Limits {
-    wasm_encoder::Limits {
-        min: limits.initial,
-        max: limits.maximum,
-    }
-}
-
-fn translate_table_type(ty: wasmparser::TableType) -> anyhow::Result<wasm_encoder::TableType> {
-    anyhow::ensure!(
-        ty.element_type == wasmparser::Type::FuncRef,
-        "only funcref tables are supported"
-    );
-    Ok(wasm_encoder::TableType {
-        limits: translate_limits(ty.limits),
-    })
-}
-
-fn translate_memory_type(ty: wasmparser::MemoryType) -> anyhow::Result<wasm_encoder::MemoryType> {
-    match ty {
-        wasmparser::MemoryType::M32 { limits, shared } => {
-            anyhow::ensure!(!shared, "shared memories are not supported yet");
-            Ok(wasm_encoder::MemoryType {
-                limits: translate_limits(limits),
-            })
-        }
-        wasmparser::MemoryType::M64 { .. } => {
-            anyhow::bail!("64-bit memories not supported yet")
-        }
-    }
-}
-
 fn translate_global_type(ty: wasmparser::GlobalType) -> wasm_encoder::GlobalType {
     wasm_encoder::GlobalType {
         val_type: translate_val_type(ty.content_type),
@@ -89,35 +77,12 @@ fn translate_global_type(ty: wasmparser::GlobalType) -> wasm_encoder::GlobalType
     }
 }
 
-fn translate_init_expr(expr: wasmparser::InitExpr) -> anyhow::Result<wasm_encoder::Instruction> {
-    let mut ops = expr.get_operators_reader();
-    let init = match ops.read()? {
-        wasmparser::Operator::GlobalGet { global_index } => {
-            wasm_encoder::Instruction::GlobalGet(global_index)
-        }
-        wasmparser::Operator::I32Const { value } => wasm_encoder::Instruction::I32Const(value),
-        wasmparser::Operator::I64Const { value } => wasm_encoder::Instruction::I64Const(value),
-        wasmparser::Operator::F32Const { value } => {
-            wasm_encoder::Instruction::F32Const(f32::from_bits(value.bits()))
-        }
-        wasmparser::Operator::F64Const { value } => {
-            wasm_encoder::Instruction::F64Const(f64::from_bits(value.bits()))
-        }
-        _ => anyhow::bail!("unsupported init expr"),
-    };
-    anyhow::ensure!(
-        matches!(ops.read()?, wasmparser::Operator::End),
-        "expected `end` instruction"
-    );
-    ops.ensure_end()?;
-    Ok(init)
-}
-
 impl Wizer {
     /// Construct a new `Wizer` builder.
     pub fn new() -> Self {
         Wizer {
             init_func: "wizer.initialize".into(),
+            allow_wasi: false,
         }
     }
 
@@ -126,6 +91,25 @@ impl Wizer {
     /// Defaults to `"wizer.initialize"`.
     pub fn init_func(&mut self, init_func: impl Into<String>) -> &mut Self {
         self.init_func = init_func.into();
+        self
+    }
+
+    /// Allow WASI imports to be called during initialization?
+    ///
+    /// This can introduce diverging semantics because the initialization can
+    /// observe nondeterminism that might have gone a different way at runtime
+    /// than it did at initialization time.
+    ///
+    /// If your Wasm module uses WASI's `get_random` to add randomness to
+    /// something as a security mitigation (e.g. something akin to ASLR or the
+    /// way Rust's hash maps incorporate a random nonce) then note that, if the
+    /// randomization is added during initialization time and you don't ever
+    /// re-randomize at runtime, then that randomization will become per-module
+    /// rather than per-instance.
+    ///
+    /// Defaults to `false`.
+    pub fn allow_wasi(&mut self, allow: bool) -> &mut Self {
+        self.allow_wasi = allow;
         self
     }
 
@@ -144,10 +128,8 @@ impl Wizer {
         let store = wasmtime::Store::default();
         let module = wasmtime::Module::new(store.engine(), &wasm)?;
         self.validate_init_func(&module)?;
-        let imports = self.dummy_imports(&store, &module)?;
-        let instance = wasmtime::Instance::new(&store, &module, &imports)?;
 
-        self.initialize(&instance)?;
+        let instance = self.initialize(&store, &module)?;
         let diff = self.diff(&instance);
         let initialized_wasm = self.rewrite(&wasm, &diff);
 
@@ -373,12 +355,17 @@ impl Wizer {
         &self,
         store: &wasmtime::Store,
         module: &wasmtime::Module,
-    ) -> anyhow::Result<Vec<wasmtime::Extern>> {
+        linker: &mut wasmtime::Linker,
+    ) -> anyhow::Result<()> {
         log::debug!("Creating dummy imports");
 
-        let mut imports = Vec::with_capacity(module.imports().len());
         for imp in module.imports() {
-            imports.push(match imp.ty() {
+            if linker.get_one_by_name(imp.module(), imp.name()).is_ok() {
+                // Already defined, must be part of WASI.
+                continue;
+            }
+
+            match imp.ty() {
                 wasmtime::ExternType::Func(func_ty) => {
                     let trap = wasmtime::Trap::new(format!(
                         "cannot call imports within the initialization function; attempted \
@@ -386,10 +373,15 @@ impl Wizer {
                         imp.module(),
                         imp.name()
                     ));
-                    wasmtime::Func::new(store, func_ty, move |_caller, _params, _results| {
-                        Err(trap.clone())
-                    })
-                    .into()
+                    linker.define(
+                        imp.module(),
+                        imp.name(),
+                        wasmtime::Func::new(
+                            store,
+                            func_ty,
+                            move |_caller: wasmtime::Caller, _params, _results| Err(trap.clone()),
+                        ),
+                    )?;
                 }
                 wasmtime::ExternType::Global(_global_ty) => {
                     // The Wasm module could use `global.get` to read the
@@ -417,24 +409,37 @@ impl Wizer {
                     // imported memories.
                     anyhow::bail!("cannot initialize Wasm modules that import memories")
                 }
-                wasmtime::ExternType::Module(_) | wasmtime::ExternType::Instance(_) => {
-                    anyhow::bail!("module linking is not supported yet")
-                }
-            });
+            };
         }
-        Ok(imports)
+
+        Ok(())
     }
 
-    /// Call the initialization function.
-    fn initialize(&self, instance: &wasmtime::Instance) -> anyhow::Result<()> {
+    /// Instantiate the module and call its initialization function.
+    fn initialize(
+        &self,
+        store: &wasmtime::Store,
+        module: &wasmtime::Module,
+    ) -> anyhow::Result<wasmtime::Instance> {
         log::debug!("Calling the initialization function");
+
+        let mut linker = wasmtime::Linker::new(store);
+        if self.allow_wasi {
+            let ctx = wasmtime_wasi::WasiCtx::new(None::<String>)?;
+            let wasi = wasmtime_wasi::Wasi::new(store, ctx);
+            wasi.add_to_linker(&mut linker)?;
+        }
+        self.dummy_imports(&store, &module, &mut linker)?;
+        let instance = linker.instantiate(module)?;
+
         let init_func = instance
             .get_func(&self.init_func)
             .expect("checked by `validate_init_func`")
             .get0::<()>()
             .expect("checked by `validate_init_func`");
         init_func().with_context(|| format!("the `{}` function trapped", self.init_func))?;
-        Ok(())
+
+        Ok(instance)
     }
 
     /// Diff the given instance's globals, memories, and tables from the Wasm
@@ -464,6 +469,7 @@ impl Wizer {
         // with a dirty bit for each page, so we can just diff the pages that
         // actually got changed to non-zero values.
         log::debug!("Diffing memories");
+        let mut memory_mins = vec![];
         let mut data_segments = vec![];
         let mut memory_index = 0;
         loop {
@@ -471,6 +477,8 @@ impl Wizer {
             match instance.get_memory(&name) {
                 None => break,
                 Some(memory) => {
+                    memory_mins.push(memory.size());
+
                     let memory: &'a [u8] = unsafe {
                         // Safe because no one else has a (potentially mutable)
                         // view to this memory and we know the memory will live
@@ -521,6 +529,7 @@ impl Wizer {
 
         Diff {
             globals,
+            memory_mins,
             data_segments,
         }
     }
@@ -589,11 +598,25 @@ impl Wizer {
                         data: &full_wasm[tables.range().start..tables.range().end],
                     });
                 }
-                MemorySection(mems) => {
-                    module.section(&wasm_encoder::RawSection {
-                        id: wasm_encoder::SectionId::Memory as u8,
-                        data: &full_wasm[mems.range().start..mems.range().end],
-                    });
+                MemorySection(mut mems) => {
+                    // Set the minimum size of each memory to the diff's
+                    // initialized size for that memory.
+                    let mut memory_encoder = wasm_encoder::MemorySection::new();
+                    for i in 0..mems.get_count() {
+                        let memory = mems.read().unwrap();
+                        match memory {
+                            wasmparser::MemoryType::M32 { limits, shared: _ } => {
+                                memory_encoder.memory(wasm_encoder::MemoryType {
+                                    limits: wasm_encoder::Limits {
+                                        min: diff.memory_mins[i as usize],
+                                        max: limits.maximum,
+                                    },
+                                });
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                    module.section(&memory_encoder);
                 }
                 GlobalSection(mut globals) => {
                     // Encode the initialized values from the diff, rather than
@@ -712,6 +735,9 @@ impl Wizer {
 struct Diff<'a> {
     /// Maps global index to its initialized value.
     globals: Vec<wasmtime::Val>,
+
+    /// A new minimum size for each memory (in units of pages).
+    memory_mins: Vec<u32>,
 
     /// Segments of non-zero memory.
     ///

@@ -11,14 +11,20 @@ name = "wizer"
 required-features = ["env_logger", "structopt"]
 
 [dependencies]
-wasmtime = { path = "../wasmtime/crates/wasmtime" }
-wasm-encoder = { path = "../wasm-tools/crates/wasm-encoder" }
-structopt = { version = "0.3.20", optional = true }
 anyhow = "1.0.34"
-wasmparser = "0.68.0"
-log = "0.4.11"
 env_logger = { version = "0.8.1", optional = true }
+log = "0.4.11"
+structopt = { version = "0.3.20", optional = true }
+wasm-encoder = { path = "../wasm-tools/crates/wasm-encoder" }
+wasmparser = "0.68.0"
+wasmtime = "0.21.0"
+wasmtime-wasi = "0.21.0"
 
 [dev-dependencies]
 wat = "1.0.28"
 env_logger = "0.8.2"
+
+[workspace]
+members = [
+    "tests/regex-test"
+]
