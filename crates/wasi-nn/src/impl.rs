@@ -158,7 +158,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
             };
 
         // Copy the tensor data over to the `out_buffer`.
-        let mut out_slice = out_buffer.as_array(out_buffer_max_size).as_slice()?;
+        let mut out_slice = out_buffer.as_array(out_buffer_max_size).as_slice_mut()?;
         (&mut out_slice[..blob_size as usize]).copy_from_slice(blob.buffer()?);
 
         Ok(blob_size)

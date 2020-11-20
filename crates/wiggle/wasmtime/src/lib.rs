@@ -1,9 +1,7 @@
 pub use wasmtime_wiggle_macro::*;
 pub use wiggle::*;
 
-mod borrow;
-
-use borrow::BorrowChecker;
+use wiggle_borrow::BorrowChecker;
 
 /// Lightweight `wasmtime::Memory` wrapper so we can implement the
 /// `wiggle::GuestMemory` trait on it.
@@ -37,13 +35,22 @@ unsafe impl GuestMemory for WasmtimeGuestMemory {
     fn has_outstanding_borrows(&self) -> bool {
         self.bc.has_outstanding_borrows()
     }
-    fn is_borrowed(&self, r: Region) -> bool {
-        self.bc.is_borrowed(r)
+    fn is_shared_borrowed(&self, r: Region) -> bool {
+        self.bc.is_shared_borrowed(r)
     }
-    fn borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        self.bc.borrow(r)
+    fn is_mut_borrowed(&self, r: Region) -> bool {
+        self.bc.is_mut_borrowed(r)
     }
-    fn unborrow(&self, h: BorrowHandle) {
-        self.bc.unborrow(h)
+    fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        self.bc.shared_borrow(r)
+    }
+    fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
+        self.bc.mut_borrow(r)
+    }
+    fn shared_unborrow(&self, h: BorrowHandle) {
+        self.bc.shared_unborrow(h)
+    }
+    fn mut_unborrow(&self, h: BorrowHandle) {
+        self.bc.mut_unborrow(h)
     }
 }

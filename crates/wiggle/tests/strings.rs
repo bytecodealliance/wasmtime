@@ -34,8 +34,11 @@ impl<'a> strings::Strings for WasiCtx<'a> {
     }
 }
 
-fn test_string_strategy() -> impl Strategy<Value = String> {
+fn unicode_string_strategy() -> impl Strategy<Value = String> {
     "\\p{Greek}{1,256}"
+}
+fn ascii_string_strategy() -> impl Strategy<Value = String> {
+    "[a-zA-Z0..9]{1,256}"
 }
 
 #[derive(Debug)]
@@ -47,7 +50,7 @@ struct HelloStringExercise {
 
 impl HelloStringExercise {
     pub fn strat() -> BoxedStrategy<Self> {
-        (test_string_strategy(),)
+        (unicode_string_strategy(),)
             .prop_flat_map(|(test_word,)| {
                 (
                     Just(test_word.clone()),
@@ -115,9 +118,9 @@ struct MultiStringExercise {
 impl MultiStringExercise {
     pub fn strat() -> BoxedStrategy<Self> {
         (
-            test_string_strategy(),
-            test_string_strategy(),
-            test_string_strategy(),
+            unicode_string_strategy(),
+            unicode_string_strategy(),
+            unicode_string_strategy(),
             HostMemory::mem_area_strat(4),
         )
             .prop_flat_map(|(a, b, c, return_ptr_loc)| {
@@ -218,6 +221,88 @@ impl MultiStringExercise {
 proptest! {
     #[test]
     fn multi_string(e in MultiStringExercise::strat()) {
+        e.test()
+    }
+}
+
+#[derive(Debug)]
+struct OverlappingStringExercise {
+    a: String,
+    sa_ptr_loc: MemArea,
+    offset_b: u32,
+    offset_c: u32,
+    return_ptr_loc: MemArea,
+}
+
+impl OverlappingStringExercise {
+    pub fn strat() -> BoxedStrategy<Self> {
+        // using ascii so we can window into it without worrying about codepoints
+        (ascii_string_strategy(), HostMemory::mem_area_strat(4))
+            .prop_flat_map(|(a, return_ptr_loc)| {
+                (
+                    Just(a.clone()),
+                    HostMemory::mem_area_strat(a.len() as u32),
+                    0..(a.len() as u32),
+                    0..(a.len() as u32),
+                    Just(return_ptr_loc),
+                )
+            })
+            .prop_map(|(a, sa_ptr_loc, offset_b, offset_c, return_ptr_loc)| Self {
+                a,
+                sa_ptr_loc,
+                offset_b,
+                offset_c,
+                return_ptr_loc,
+            })
+            .prop_filter("non-overlapping pointers", |e| {
+                MemArea::non_overlapping_set(&[e.sa_ptr_loc, e.return_ptr_loc])
+            })
+            .boxed()
+    }
+
+    pub fn test(&self) {
+        let ctx = WasiCtx::new();
+        let host_memory = HostMemory::new();
+
+        let write_string = |val: &str, loc: MemArea| {
+            let ptr = host_memory.ptr::<str>((loc.ptr, val.len() as u32));
+            for (slot, byte) in ptr.as_bytes().iter().zip(val.bytes()) {
+                slot.expect("should be valid pointer")
+                    .write(byte)
+                    .expect("failed to write");
+            }
+        };
+
+        write_string(&self.a, self.sa_ptr_loc);
+
+        let a_len = self.a.as_bytes().len() as i32;
+        let res = strings::multi_string(
+            &ctx,
+            &host_memory,
+            self.sa_ptr_loc.ptr as i32,
+            a_len,
+            (self.sa_ptr_loc.ptr + self.offset_b) as i32,
+            a_len - self.offset_b as i32,
+            (self.sa_ptr_loc.ptr + self.offset_c) as i32,
+            a_len - self.offset_c as i32,
+            self.return_ptr_loc.ptr as i32,
+        );
+        assert_eq!(res, types::Errno::Ok.into(), "multi string errno");
+
+        let given = host_memory
+            .ptr::<u32>(self.return_ptr_loc.ptr)
+            .read()
+            .expect("deref ptr to return value");
+        assert_eq!(
+            ((3 * a_len) - (self.offset_b as i32 + self.offset_c as i32)) as u32,
+            given
+        );
+    }
+}
+
+proptest! {
+    #[test]
+    fn overlapping_string(e in OverlappingStringExercise::strat()) {
         e.test()
     }
 }
