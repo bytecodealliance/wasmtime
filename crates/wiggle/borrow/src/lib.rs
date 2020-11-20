@@ -118,11 +118,13 @@ impl InnerBorrowChecker {
     }
 
     fn shared_unborrow(&mut self, h: BorrowHandle) {
-        let _ = self.shared_borrows.remove(&h);
+        let removed = self.shared_borrows.remove(&h);
+        debug_assert!(removed.is_some(), "double-freed shared borrow");
     }
 
     fn mut_unborrow(&mut self, h: BorrowHandle) {
-        let _ = self.mut_borrows.remove(&h);
+        let removed = self.mut_borrows.remove(&h);
+        debug_assert!(removed.is_some(), "double-freed mut borrow");
     }
 }
 
