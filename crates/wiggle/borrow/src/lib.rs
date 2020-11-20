@@ -9,19 +9,23 @@ pub struct BorrowChecker {
 }
 
 impl BorrowChecker {
-    /// A `BorrowChecker` manages run-time validation of borrows from a `GuestMemory`. It keeps
-    /// track of regions of guest memory which are possible to alias with Rust references (via the
-    /// `GuestSlice` and `GuestStr` structs, which implement `std::ops::Deref` and
-    /// `std::ops::DerefMut`. It also enforces that `GuestPtr::read` and `GuestPtr::write` do not
-    /// access memory with an outstanding borrow.
+    /// A `BorrowChecker` manages run-time validation of borrows from a
+    /// `GuestMemory`. It keeps track of regions of guest memory which are
+    /// possible to alias with Rust references (via the `GuestSlice` and
+    /// `GuestStr` structs, which implement `std::ops::Deref` and
+    /// `std::ops::DerefMut`. It also enforces that `GuestPtr::read`
+    /// does not access memory with an outstanding mutable borrow, and
+    /// `GuestPtr::write` does not access memory with an outstanding
+    /// shared or mutable borrow.
     pub fn new() -> Self {
         BorrowChecker {
             bc: RefCell::new(InnerBorrowChecker::new()),
         }
     }
-    /// Indicates whether any outstanding borrows are known to the `BorrowChecker`. This function
-    /// must be `false` in order for it to be safe to recursively call into a WebAssembly module,
-    /// or to manipulate the WebAssembly memory by any other means.
+    /// Indicates whether any outstanding shared or mutable borrows are known
+    /// to the `BorrowChecker`. This function must be `false` in order for it
+    /// to be safe to recursively call into a WebAssembly module, or to
+    /// manipulate the WebAssembly memory by any other means.
     pub fn has_outstanding_borrows(&self) -> bool {
         self.bc.borrow().has_outstanding_borrows()
     }
@@ -207,13 +211,13 @@ mod test {
         let h2 = bs.mut_borrow(r2).expect("can borrow r2");
 
         assert!(bs.mut_borrow(r2).is_err(), "can't borrow r2 twice");
-        bs.unborrow(h2);
+        bs.mut_unborrow(h2);
         assert_eq!(
             bs.has_outstanding_borrows(),
             true,
             "h1 is still outstanding"
         );
-        bs.unborrow(h1);
+        bs.mut_unborrow(h1);
         assert_eq!(bs.has_outstanding_borrows(), false, "no remaining borrows");
 
         let _h3 = bs
@@ -232,14 +236,14 @@ mod test {
         let h2 = bs.shared_borrow(r2).expect("can borrow r2");
         let h3 = bs.shared_borrow(r2).expect("can shared borrow r2 twice");
 
-        bs.unborrow(h2);
+        bs.shared_unborrow(h2);
         assert_eq!(
             bs.has_outstanding_borrows(),
             true,
             "h1, h3 still outstanding"
         );
-        bs.unborrow(h1);
-        bs.unborrow(h3);
+        bs.shared_unborrow(h1);
+        bs.shared_unborrow(h3);
         assert_eq!(bs.has_outstanding_borrows(), false, "no remaining borrows");
     }
 }
