@@ -36,7 +36,7 @@ impl_errno!(types::Errno, types::GuestErrorConversion);
 /// When the `errors` mapping in witx is non-empty, we need to impl the
 /// types::UserErrorConversion trait that wiggle generates from that mapping.
 impl<'a> types::UserErrorConversion for WasiCtx<'a> {
-    fn errno_from_rich_error(&self, e: RichError) -> types::Errno {
+    fn errno_from_rich_error(&self, e: RichError) -> Result<types::Errno, String> {
         wiggle::tracing::debug!(
             rich_error = wiggle::tracing::field::debug(&e),
             "error conversion"
@@ -46,8 +46,8 @@ impl<'a> types::UserErrorConversion for WasiCtx<'a> {
         self.log.borrow_mut().push(e.to_string());
         // Then do the trivial mapping down to the flat enum.
         match e {
-            RichError::InvalidArg { .. } => types::Errno::InvalidArg,
-            RichError::PicketLine { .. } => types::Errno::PicketLine,
+            RichError::InvalidArg { .. } => Ok(types::Errno::InvalidArg),
+            RichError::PicketLine { .. } => Ok(types::Errno::PicketLine),
         }
     }
 }
@@ -90,7 +90,7 @@ fn main() {
     let r0 = one_error_conversion::foo(&ctx, &host_memory, 0, 0, 8);
     assert_eq!(
         r0,
-        i32::from(types::Errno::Ok),
+        Ok(i32::from(types::Errno::Ok)),
         "Expected return value for strike=0"
     );
     assert!(ctx.log.borrow().is_empty(), "No error log for strike=0");
@@ -99,7 +99,7 @@ fn main() {
     let r1 = one_error_conversion::foo(&ctx, &host_memory, 1, 0, 8);
     assert_eq!(
         r1,
-        i32::from(types::Errno::PicketLine),
+        Ok(i32::from(types::Errno::PicketLine)),
         "Expected return value for strike=1"
     );
     assert_eq!(
@@ -112,7 +112,7 @@ fn main() {
     let r2 = one_error_conversion::foo(&ctx, &host_memory, 2, 0, 8);
     assert_eq!(
         r2,
-        i32::from(types::Errno::InvalidArg),
+        Ok(i32::from(types::Errno::InvalidArg)),
         "Expected return value for strike=2"
     );
     assert_eq!(
