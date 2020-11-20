@@ -42,10 +42,10 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-simplejit",
     // wig/wiggle
     "wig",
-    "wiggle-borrow",
     "wiggle-generate",
     "wiggle-macro",
     "wiggle",
+    "wiggle-borrow",
     "wasmtime-wiggle-macro",
     // wasi-common bits
     "winx",
