@@ -2450,6 +2450,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmtime-bench-api"
+version = "0.19.0"
+dependencies = [
+ "anyhow",
+ "wasi-common",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wat",
+]
+
+[[package]]
 name = "wasmtime-c-api"
 version = "0.19.0"
 dependencies = [
