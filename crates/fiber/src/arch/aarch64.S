@@ -26,6 +26,10 @@ FUNCTION(wasmtime_fiber_switch):
     stp x24, x23, [sp, -16]!
     stp x26, x25, [sp, -16]!
     stp x28, x27, [sp, -16]!
+    stp d9, d8, [sp, -16]!
+    stp d11, d10, [sp, -16]!
+    stp d13, d12, [sp, -16]!
+    stp d15, d14, [sp, -16]!
 
     // Load our previously saved stack pointer to resume to, and save off our
     // current stack pointer on where to come back to eventually.
@@ -36,6 +40,10 @@ FUNCTION(wasmtime_fiber_switch):
     // Switch to the new stack and restore all our callee-saved registers after
     // the switch and return to our new stack.
     mov sp, x8
+    ldp d15, d14, [sp], 16
+    ldp d13, d12, [sp], 16
+    ldp d11, d10, [sp], 16
+    ldp d9, d8, [sp], 16
     ldp x28, x27, [sp], 16
     ldp x26, x25, [sp], 16
     ldp x24, x23, [sp], 16
@@ -58,9 +66,9 @@ FUNCTION(wasmtime_fiber_init):
     stp x0, x8, [x0, -0x28] // x0 => x19, x8 => lr
     stp x2, x1, [x0, -0x38] // x1 => x20, x2 => x21
 
-    // `wasmtime_fiber_switch` has an 0x60 byte stack, and we add 0x10 more for
+    // `wasmtime_fiber_switch` has an 0xa0 byte stack, and we add 0x10 more for
     // the original reserved 16 bytes.
-    add x8, x0, -0x70
+    add x8, x0, -0xb0
     str x8, [x0, -0x10]
     ret
 SIZE(wasmtime_fiber_init)
@@ -73,11 +81,11 @@ FUNCTION(wasmtime_fiber_start):
     // See the x86_64 file for more commentary on what these CFI directives are
     // doing. Like over there note that the relative offsets to registers here
     // match the frame layout in `wasmtime_fiber_switch`.
-    .cfi_escape 0x0f, /* DW_CFA_def_cfa_expression */ \
-	4,	      /* the byte length of this expression */ \
-	0x6f,         /* DW_OP_reg31(%sp) */ \
-	0x06,         /* DW_OP_deref */ \
-	0x23, 0x60    /* DW_OP_plus_uconst 0x60 */
+    .cfi_escape 0x0f,    /* DW_CFA_def_cfa_expression */ \
+        5,               /* the byte length of this expression */ \
+        0x6f,            /* DW_OP_reg31(%sp) */ \
+        0x06,            /* DW_OP_deref */ \
+        0x23, 0xa0, 0x1  /* DW_OP_plus_uconst 0xa0 */
 
     .cfi_rel_offset lr, -0x10
     .cfi_rel_offset x19, -0x18

@@ -103,6 +103,9 @@ impl Instance {
             !store.is_async(),
             "cannot instantiate synchronously within an asynchronous store"
         );
+
+        // NB: this is the same code as `Instance::new_async`. It's intentionally
+        // small but should be kept in sync (modulo the async bits).
         let mut i = Instantiator::new(store, module, imports)?;
         loop {
             if let Some((instance, items)) = i.step()? {
@@ -141,16 +144,16 @@ impl Instance {
             "cannot instantiate asynchronously within a synchronous store"
         );
 
-        assert!(
-            !store.is_async(),
-            "cannot instantiate synchronously within an asynchronous store"
-        );
+        // NB: this is the same code as `Instance::new`. It's intentionally
+        // small but should be kept in sync (modulo the async bits).
         let mut i = Instantiator::new(store, module, imports)?;
         loop {
             if let Some((instance, items)) = i.step()? {
-                store
-                    .on_fiber(|| Instantiator::start_raw(&instance))
-                    .await??;
+                if instance.handle.module().start_func.is_some() {
+                    store
+                        .on_fiber(|| Instantiator::start_raw(&instance))
+                        .await??;
+                }
                 if let Some(items) = items {
                     break Ok(Instance::from_wasmtime(&items, store));
                 }
@@ -176,33 +179,6 @@ impl Instance {
 
     pub(crate) fn wasmtime_export(&self) -> &RuntimeInstance {
         &self.items
-    }
-
-    fn start(&self) -> Result<(), Error> {
-        let start_func = match self.handle.module().start_func {
-            Some(func) => func,
-            None => return Ok(()),
-        };
-
-        let f = match self
-            .handle
-            .lookup_by_declaration(&EntityIndex::Function(start_func))
-        {
-            wasmtime_runtime::Export::Function(f) => f,
-            _ => unreachable!(), // valid modules shouldn't hit this
-        };
-        let vmctx_ptr = self.handle.vmctx_ptr();
-        unsafe {
-            super::func::invoke_wasm_and_catch_traps(vmctx_ptr, self.store(), || {
-                mem::transmute::<
-                    *const VMFunctionBody,
-                    unsafe extern "C" fn(*mut VMContext, *mut VMContext),
-                >(f.anyfunc.as_ref().func_ptr.as_ptr())(
-                    f.anyfunc.as_ref().vmctx, vmctx_ptr
-                )
-            })?;
-        }
-        Ok(())
     }
 
     /// Returns the associated [`Store`] that this `Instance` is compiled into.

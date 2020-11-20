@@ -134,10 +134,10 @@ FUNCTION(wasmtime_fiber_start):
     // the return address of the caller's `call` instruction. Hence we offset
     // another 0x38 bytes.
     .cfi_escape 0x0f, /* DW_CFA_def_cfa_expression */ \
-	5,            /* the byte length of this expression */ \
-	0x77, 0x18,   /* DW_OP_breg7 (%rsp) + 0x18 */ \
-	0x06,         /* DW_OP_deref */ \
-	0x23, 0x38    /* DW_OP_plus_uconst 0x38 */
+        5,            /* the byte length of this expression */ \
+        0x77, 0x18,   /* DW_OP_breg7 (%rsp) + 0x18 */ \
+        0x06,         /* DW_OP_deref */ \
+        0x23, 0x38    /* DW_OP_plus_uconst 0x38 */
 
     // And now after we've indicated where our CFA is for our parent function,
     // we can define that where all of the saved registers are located. This
