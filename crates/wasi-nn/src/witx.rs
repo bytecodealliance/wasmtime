@@ -22,7 +22,7 @@ impl types::GuestErrorConversion for WasiNnCtx {
 }
 
 impl<'a> types::UserErrorConversion for WasiNnCtx {
-    fn errno_from_wasi_nn_error(&self, e: WasiNnError) -> Errno {
+    fn errno_from_wasi_nn_error(&self, e: WasiNnError) -> Result<Errno, String> {
         eprintln!("Host error: {:?}", e);
         match e {
             WasiNnError::OpenvinoError(_) => unimplemented!(),
