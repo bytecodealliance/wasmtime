@@ -462,18 +462,16 @@ impl<'a> FunctionBuilder<'a> {
         #[cfg(debug_assertions)]
         {
             for (block, block_data) in self.func_ctx.blocks.iter() {
-                if !(block_data.pristine || self.func_ctx.ssa.is_sealed(block)) {
-                    panic!(
-                        "FunctionBuilder finalized, but block {} is not sealed",
-                        block
-                    );
-                }
-                if !(block_data.pristine || block_data.filled) {
-                    panic!(
-                        "FunctionBuilder finalized, but block {} is not filled",
-                        block
-                    );
-                }
+                assert!(
+                    block_data.pristine || self.func_ctx.ssa.is_sealed(block),
+                    "FunctionBuilder finalized, but block {} is not sealed",
+                    block,
+                );
+                assert!(
+                    block_data.pristine || block_data.filled,
+                    "FunctionBuilder finalized, but block {} is not filled",
+                    block,
+                );
             }
         }
 
