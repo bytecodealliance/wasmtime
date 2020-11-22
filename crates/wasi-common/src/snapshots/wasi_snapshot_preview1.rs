@@ -680,6 +680,69 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             subscriptions.push(sub);
         }
 
+        let events = self.poll_oneoff_impl(&subscriptions)?;
+        let nevents = events.len().try_into()?;
+
+        let out_events = out.as_array(nevents);
+        for (event, event_ptr) in events.into_iter().zip(out_events.iter()) {
+            let event_ptr = event_ptr?;
+            event_ptr.write(event)?;
+        }
+
+        trace!(nevents = nevents);
+
+        Ok(nevents)
+    }
+
+    fn proc_exit(&self, _rval: types::Exitcode) -> std::result::Result<(), ()> {
+        // proc_exit is special in that it's expected to unwind the stack, which
+        // typically requires runtime-specific logic.
+        unimplemented!("runtimes are expected to override this implementation")
+    }
+
+    fn proc_raise(&self, _sig: types::Signal) -> Result<()> {
+        unimplemented!("proc_raise")
+    }
+
+    fn sched_yield(&self) -> Result<()> {
+        std::thread::yield_now();
+        Ok(())
+    }
+
+    fn random_get(&self, buf: &GuestPtr<u8>, buf_len: types::Size) -> Result<()> {
+        let mut slice = buf.as_array(buf_len).as_slice_mut()?;
+        getrandom::getrandom(&mut *slice)?;
+        Ok(())
+    }
+
+    fn sock_recv(
+        &self,
+        _fd: types::Fd,
+        _ri_data: &types::IovecArray<'_>,
+        _ri_flags: types::Riflags,
+    ) -> Result<(types::Size, types::Roflags)> {
+        unimplemented!("sock_recv")
+    }
+
+    fn sock_send(
+        &self,
+        _fd: types::Fd,
+        _si_data: &types::CiovecArray<'_>,
+        _si_flags: types::Siflags,
+    ) -> Result<types::Size> {
+        unimplemented!("sock_send")
+    }
+
+    fn sock_shutdown(&self, _fd: types::Fd, _how: types::Sdflags) -> Result<()> {
+        unimplemented!("sock_shutdown")
+    }
+}
+
+impl WasiCtx {
+    pub(crate) fn poll_oneoff_impl(
+        &self,
+        subscriptions: &[types::Subscription],
+    ) -> Result<Vec<types::Event>> {
         let mut events = Vec::new();
         let mut timeout: Option<sched::ClockEventData> = None;
         let mut fd_events = Vec::new();
@@ -691,7 +754,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         }
 
         for subscription in subscriptions {
-            match subscription.u {
+            match &subscription.u {
                 types::SubscriptionU::Clock(clock) => {
                     let delay = clock::to_relative_ns_delay(&clock)?;
                     debug!(
@@ -771,59 +834,6 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         // if no events have been passed. Such situation may occur if all provided
         // events have been filtered out as errors in the code above.
         poll::oneoff(timeout, fd_events, &mut events)?;
-        let nevents = events.len().try_into()?;
-
-        let out_events = out.as_array(nevents);
-        for (event, event_ptr) in events.into_iter().zip(out_events.iter()) {
-            let event_ptr = event_ptr?;
-            event_ptr.write(event)?;
-        }
-
-        trace!(nevents = nevents);
-
-        Ok(nevents)
-    }
-
-    fn proc_exit(&self, _rval: types::Exitcode) -> std::result::Result<(), ()> {
-        // proc_exit is special in that it's expected to unwind the stack, which
-        // typically requires runtime-specific logic.
-        unimplemented!("runtimes are expected to override this implementation")
-    }
-
-    fn proc_raise(&self, _sig: types::Signal) -> Result<()> {
-        unimplemented!("proc_raise")
-    }
-
-    fn sched_yield(&self) -> Result<()> {
-        std::thread::yield_now();
-        Ok(())
-    }
-
-    fn random_get(&self, buf: &GuestPtr<u8>, buf_len: types::Size) -> Result<()> {
-        let mut slice = buf.as_array(buf_len).as_slice_mut()?;
-        getrandom::getrandom(&mut *slice)?;
-        Ok(())
-    }
-
-    fn sock_recv(
-        &self,
-        _fd: types::Fd,
-        _ri_data: &types::IovecArray<'_>,
-        _ri_flags: types::Riflags,
-    ) -> Result<(types::Size, types::Roflags)> {
-        unimplemented!("sock_recv")
-    }
-
-    fn sock_send(
-        &self,
-        _fd: types::Fd,
-        _si_data: &types::CiovecArray<'_>,
-        _si_flags: types::Siflags,
-    ) -> Result<types::Size> {
-        unimplemented!("sock_send")
-    }
-
-    fn sock_shutdown(&self, _fd: types::Fd, _how: types::Sdflags) -> Result<()> {
-        unimplemented!("sock_shutdown")
+        Ok(events)
     }
 }

@@ -14,6 +14,15 @@ pub(crate) trait Fd {
     fn from_raw(raw_fd: u32) -> Self;
 }
 
+impl Fd for u32 {
+    fn as_raw(&self) -> u32 {
+        *self
+    }
+    fn from_raw(raw_fd: u32) -> Self {
+        raw_fd
+    }
+}
+
 /// This container tracks and manages all file descriptors that
 /// were already allocated.
 /// Internally, we use `u32` to represent the file descriptors;

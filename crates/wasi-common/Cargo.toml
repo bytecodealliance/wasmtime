@@ -24,7 +24,6 @@ getrandom = { version = "0.2.0", features = ["std"] }
 cfg-if = "1.0"
 filetime = "0.2.7"
 lazy_static = "1.4.0"
-wig = { path = "wig", version = "0.21.0" }
 wiggle = { path = "../wiggle", default-features = false, version = "0.21.0" }
 tracing = "0.1.19"
 
