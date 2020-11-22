@@ -2776,7 +2776,46 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         dst,
                     ));
                 } else if op == Opcode::FcvtToUintSat {
-                    unimplemented!("f32x4.convert_i32x4_u");
+                    let tmp1 = ctx.alloc_tmp(RegClass::V128, types::I32X4);
+                    let tmp2 = ctx.alloc_tmp(RegClass::V128, types::I32X4);
+
+                    // Converting to unsigned int so if float src is negative or NaN
+                    // will first set to zero.
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp2), tmp2));
+                    ctx.emit(Inst::gen_move(dst, src, input_ty));
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Maxps, RegMem::from(tmp2), dst));
+
+                    // Set tmp2 to the maximum signed floating point value.
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Pcmpeqd, RegMem::from(tmp2), tmp2));
+                    ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrld, RegMemImm::imm(1), tmp2));
+                    ctx.emit(Inst::xmm_rm_r(
+                        SseOpcode::Cvtdq2ps,
+                        RegMem::from(tmp2),
+                        tmp2,
+                    ));
+
+                    ctx.emit(Inst::xmm_mov(SseOpcode::Movaps, RegMem::from(dst), tmp1));
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Subps, RegMem::from(tmp2), tmp1));
+                    let cond = FcmpImm::from(FloatCC::LessThanOrEqual);
+                    ctx.emit(Inst::xmm_rm_r_imm(
+                        SseOpcode::Cmpps,
+                        RegMem::from(tmp1),
+                        tmp2,
+                        cond.encode(),
+                        false,
+                    ));
+
+                    ctx.emit(Inst::xmm_rm_r(
+                        SseOpcode::Cvttps2dq,
+                        RegMem::from(tmp1),
+                        tmp1,
+                    ));
+
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp2), tmp1));
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp2), tmp2));
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmaxsd, RegMem::from(tmp2), tmp1));
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Cvttps2dq, RegMem::from(dst), dst));
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Paddd, RegMem::from(tmp1), dst));
                 } else {
                     // Since this branch is also guarded by a check for vector types
                     // neither Opcode::FcvtToUint nor Opcode::FcvtToSint can reach here
