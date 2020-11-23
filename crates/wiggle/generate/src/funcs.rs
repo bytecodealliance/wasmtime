@@ -58,16 +58,16 @@ pub fn define_func(
                 quote!(Ok(e))
             };
             quote! {
-                    let e = #conversion;
-                    #rt::tracing::event!(
-                        #rt::tracing::Level::TRACE,
-                        #name = #rt::tracing::field::debug(&e),
-                    );
-            match e {
-                Ok(e) => { return Ok(#abi_ret::from(e)); },
-                Err(e) => { return Err(e); },
-            }
+                let e = #conversion;
+                #rt::tracing::event!(
+                    #rt::tracing::Level::TRACE,
+                    #name = #rt::tracing::field::debug(&e),
+                );
+                match e {
+                    Ok(e) => Ok(#abi_ret::from(e)),
+                    Err(e) => Err(e),
                 }
+            }
         })
         .unwrap_or_else(|| quote!(()));
 
