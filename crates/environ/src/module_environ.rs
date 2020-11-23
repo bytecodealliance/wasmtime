@@ -1,4 +1,4 @@
-use crate::module::{MemoryPlan, Module, ModuleType, TableElements, TablePlan};
+use crate::module::{Instance, MemoryPlan, Module, ModuleType, TableElements, TablePlan};
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
@@ -6,8 +6,8 @@ use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
     self, translate_module, DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType,
-    FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, SignatureIndex, Table, TableIndex,
-    TargetEnvironment, TypeIndex, WasmError, WasmFuncType, WasmResult,
+    FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, ModuleIndex, SignatureIndex, Table,
+    TableIndex, TargetEnvironment, TypeIndex, WasmError, WasmFuncType, WasmResult,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -60,7 +60,7 @@ pub struct ModuleTranslation<'data> {
 
     /// Indexes into the returned list of translations that are submodules of
     /// this module.
-    pub submodules: Vec<usize>,
+    pub submodules: PrimaryMap<ModuleIndex, usize>,
 
     code_index: u32,
 }
@@ -648,6 +648,18 @@ and for re-adding support for interface types you can see this issue:
         let finished = mem::replace(&mut self.result, to_continue);
         self.result.submodules.push(self.results.len());
         self.results.push(finished);
+    }
+
+    fn reserve_instances(&mut self, amt: u32) {
+        self.result.module.instances.reserve(amt as usize);
+    }
+
+    fn declare_instance(&mut self, module: ModuleIndex, args: Vec<EntityIndex>) -> WasmResult<()> {
+        self.result
+            .module
+            .instances
+            .push(Instance::Instantiate { module, args });
+        Ok(())
     }
 }
 

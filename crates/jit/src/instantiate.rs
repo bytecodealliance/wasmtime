@@ -17,7 +17,7 @@ use thiserror::Error;
 use wasmtime_debug::create_gdbjit_image;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::isa::TargetIsa;
-use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
+use wasmtime_environ::wasm::{DefinedFuncIndex, ModuleIndex, SignatureIndex};
 use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, FunctionAddressMap, Module,
     ModuleEnvironment, ModuleTranslation, StackMapInformation, TrapInformation,
@@ -71,6 +71,10 @@ pub struct CompilationArtifacts {
 
     /// Debug info presence flags.
     debug_info: bool,
+
+    /// Where to find this module's submodule code in the top-level list of
+    /// modules.
+    submodules: PrimaryMap<ModuleIndex, usize>,
 }
 
 impl CompilationArtifacts {
@@ -98,6 +102,7 @@ impl CompilationArtifacts {
                 let ModuleTranslation {
                     module,
                     data_initializers,
+                    submodules,
                     ..
                 } = translation;
 
@@ -118,6 +123,7 @@ impl CompilationArtifacts {
                     obj: obj.into_boxed_slice(),
                     unwind_info: unwind_info.into_boxed_slice(),
                     data_initializers,
+                    submodules,
                     funcs: funcs
                         .into_iter()
                         .map(|(_, func)| FunctionInfo {
@@ -335,6 +341,12 @@ impl CompiledModule {
     /// Returns module's JIT code.
     pub fn code(&self) -> &Arc<ModuleCode> {
         &self.code
+    }
+
+    /// Returns where the specified submodule lives in this module's
+    /// array-of-modules (store at the top-level)
+    pub fn submodule_idx(&self, idx: ModuleIndex) -> usize {
+        self.artifacts.submodules[idx]
     }
 }
 

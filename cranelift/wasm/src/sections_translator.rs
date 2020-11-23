@@ -10,9 +10,9 @@
 use crate::environ::{ModuleEnvironment, WasmError, WasmResult};
 use crate::state::ModuleTranslationState;
 use crate::translation_utils::{
-    tabletype_to_type, type_to_type, DataIndex, ElemIndex, EntityType, Event, EventIndex,
-    FuncIndex, Global, GlobalIndex, GlobalInit, Memory, MemoryIndex, Table, TableElementType,
-    TableIndex, TypeIndex,
+    tabletype_to_type, type_to_type, DataIndex, ElemIndex, EntityIndex, EntityType, Event,
+    EventIndex, FuncIndex, Global, GlobalIndex, GlobalInit, InstanceIndex, Memory, MemoryIndex,
+    ModuleIndex, Table, TableElementType, TableIndex, TypeIndex,
 };
 use crate::wasm_unsupported;
 use core::convert::TryFrom;
@@ -472,6 +472,40 @@ pub fn parse_name_section<'data>(
                 }
             }
         }
+    }
+    Ok(())
+}
+
+/// Parses the Instance section of the wasm module.
+pub fn parse_instance_section<'data>(
+    section: wasmparser::InstanceSectionReader<'data>,
+    environ: &mut dyn ModuleEnvironment<'data>,
+) -> WasmResult<()> {
+    environ.reserve_types(section.get_count())?;
+
+    for instance in section {
+        let instance = instance?;
+        let module = ModuleIndex::from_u32(instance.module());
+        let args = instance
+            .args()?
+            .into_iter()
+            .map(|result| {
+                let (kind, idx) = result?;
+                Ok(match kind {
+                    ExternalKind::Function => EntityIndex::Function(FuncIndex::from_u32(idx)),
+                    ExternalKind::Table => EntityIndex::Table(TableIndex::from_u32(idx)),
+                    ExternalKind::Memory => EntityIndex::Memory(MemoryIndex::from_u32(idx)),
+                    ExternalKind::Global => EntityIndex::Global(GlobalIndex::from_u32(idx)),
+                    ExternalKind::Module => EntityIndex::Module(ModuleIndex::from_u32(idx)),
+                    ExternalKind::Instance => EntityIndex::Instance(InstanceIndex::from_u32(idx)),
+                    ExternalKind::Event => unimplemented!(),
+
+                    // this won't pass validation
+                    ExternalKind::Type => unreachable!(),
+                })
+            })
+            .collect::<WasmResult<Vec<_>>>()?;
+        environ.declare_instance(module, args)?;
     }
     Ok(())
 }
