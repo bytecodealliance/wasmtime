@@ -2845,10 +2845,26 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     },
                     Opcode::SwidenHigh => match (input_ty, output_ty) {
                         (types::I8X16, types::I16X8) => {
-                            unimplemented!("No lowering for {:?}", op);
+                            ctx.emit(Inst::gen_move(dst, src, output_ty));
+                            ctx.emit(Inst::xmm_rm_r_imm(
+                                SseOpcode::Palignr,
+                                RegMem::reg(src),
+                                dst,
+                                8,
+                                false,
+                            ));
+                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmovsxbw, RegMem::from(dst), dst));
                         }
                         (types::I16X8, types::I32X4) => {
-                            unimplemented!("No lowering for {:?}", op);
+                            ctx.emit(Inst::gen_move(dst, src, output_ty));
+                            ctx.emit(Inst::xmm_rm_r_imm(
+                                SseOpcode::Palignr,
+                                RegMem::reg(src),
+                                dst,
+                                8,
+                                false,
+                            ));
+                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmovsxwd, RegMem::from(dst), dst));
                         }
                         _ => unreachable!(),
                     },
@@ -2865,10 +2881,26 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     },
                     Opcode::UwidenHigh => match (input_ty, output_ty) {
                         (types::I8X16, types::I16X8) => {
-                            unimplemented!("No lowering for {:?}", op);
+                            ctx.emit(Inst::gen_move(dst, src, output_ty));
+                            ctx.emit(Inst::xmm_rm_r_imm(
+                                SseOpcode::Palignr,
+                                RegMem::reg(src),
+                                dst,
+                                8,
+                                false,
+                            ));
+                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmovzxbw, RegMem::from(dst), dst));
                         }
                         (types::I16X8, types::I32X4) => {
-                            unimplemented!("No lowering for {:?}", op);
+                            ctx.emit(Inst::gen_move(dst, src, output_ty));
+                            ctx.emit(Inst::xmm_rm_r_imm(
+                                SseOpcode::Palignr,
+                                RegMem::reg(src),
+                                dst,
+                                8,
+                                false,
+                            ));
+                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmovzxwd, RegMem::from(dst), dst));
                         }
                         _ => unreachable!(),
                     },
