@@ -2825,7 +2825,62 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
             }
         }
-
+        Opcode::UwidenHigh | Opcode::UwidenLow | Opcode::SwidenHigh | Opcode::SwidenLow => {
+            let input_ty = ctx.input_ty(insn, 0);
+            let output_ty = ctx.output_ty(insn, 0);
+            let src = put_input_in_reg(ctx, inputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
+            if output_ty.is_vector() {
+                match op {
+                    Opcode::SwidenLow => match (input_ty, output_ty) {
+                        (types::I8X16, types::I16X8) => {
+                            ctx.emit(Inst::gen_move(dst, src, output_ty));
+                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmovsxbw, RegMem::from(dst), dst));
+                        }
+                        (types::I16X8, types::I32X4) => {
+                            ctx.emit(Inst::gen_move(dst, src, output_ty));
+                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmovsxwd, RegMem::from(dst), dst));
+                        }
+                        _ => unreachable!(),
+                    },
+                    Opcode::SwidenHigh => match (input_ty, output_ty) {
+                        (types::I8X16, types::I16X8) => {
+                            unimplemented!("No lowering for {:?}", op);
+                        }
+                        (types::I16X8, types::I32X4) => {
+                            unimplemented!("No lowering for {:?}", op);
+                        }
+                        _ => unreachable!(),
+                    },
+                    Opcode::UwidenLow => match (input_ty, output_ty) {
+                        (types::I8X16, types::I16X8) => {
+                            ctx.emit(Inst::gen_move(dst, src, output_ty));
+                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmovzxbw, RegMem::from(dst), dst));
+                        }
+                        (types::I16X8, types::I32X4) => {
+                            ctx.emit(Inst::gen_move(dst, src, output_ty));
+                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmovzxwd, RegMem::from(dst), dst));
+                        }
+                        _ => unreachable!(),
+                    },
+                    Opcode::UwidenHigh => match (input_ty, output_ty) {
+                        (types::I8X16, types::I16X8) => {
+                            unimplemented!("No lowering for {:?}", op);
+                        }
+                        (types::I16X8, types::I32X4) => {
+                            unimplemented!("No lowering for {:?}", op);
+                        }
+                        _ => unreachable!(),
+                    },
+                    _ => unreachable!(),
+                }
+            } else {
+                panic!("Unsupported non-vector type for widen instruction {:?}", ty);
+            }
+        }
+        Opcode::Snarrow | Opcode::Unarrow => {
+            unimplemented!("No lowering for {:?}", op);
+        }
         Opcode::Bitcast => {
             let input_ty = ctx.input_ty(insn, 0);
             let output_ty = ctx.output_ty(insn, 0);
