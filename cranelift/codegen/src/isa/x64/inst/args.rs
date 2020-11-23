@@ -476,6 +476,7 @@ pub enum SseOpcode {
     Paddsw,
     Paddusb,
     Paddusw,
+    Palignr,
     Pand,
     Pandn,
     Pavgb,
@@ -688,7 +689,11 @@ impl SseOpcode {
             | SseOpcode::Ucomisd
             | SseOpcode::Xorpd => SSE2,
 
-            SseOpcode::Pabsb | SseOpcode::Pabsw | SseOpcode::Pabsd | SseOpcode::Pshufb => SSSE3,
+            SseOpcode::Pabsb
+            | SseOpcode::Pabsw
+            | SseOpcode::Pabsd
+            | SseOpcode::Palignr
+            | SseOpcode::Pshufb => SSSE3,
 
             SseOpcode::Insertps
             | SseOpcode::Pcmpeqq
@@ -805,6 +810,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Paddsw => "paddsw",
             SseOpcode::Paddusb => "paddusb",
             SseOpcode::Paddusw => "paddusw",
+            SseOpcode::Palignr => "palignr",
             SseOpcode::Pand => "pand",
             SseOpcode::Pandn => "pandn",
             SseOpcode::Pavgb => "pavgb",

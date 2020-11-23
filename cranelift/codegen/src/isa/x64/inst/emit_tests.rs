@@ -3481,6 +3481,11 @@ fn test_x64_emit() {
         "410FC2FF00",
         "cmpps   $0, %xmm15, %xmm7",
     ));
+    insns.push((
+        Inst::xmm_rm_r_imm(SseOpcode::Palignr, RegMem::reg(xmm1), w_xmm9, 3, false),
+        "66440F3A0FC903",
+        "palignr $3, %xmm1, %xmm9",
+    ));
 
     // ========================================================
     // Pertaining to atomics.
