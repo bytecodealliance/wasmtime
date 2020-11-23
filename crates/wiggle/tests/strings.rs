@@ -287,7 +287,7 @@ impl OverlappingStringExercise {
             a_len - self.offset_c as i32,
             self.return_ptr_loc.ptr as i32,
         );
-        assert_eq!(res, types::Errno::Ok.into(), "multi string errno");
+        assert_eq!(res, Ok(types::Errno::Ok.into()), "multi string errno");
 
         let given = host_memory
             .ptr::<u32>(self.return_ptr_loc.ptr)
