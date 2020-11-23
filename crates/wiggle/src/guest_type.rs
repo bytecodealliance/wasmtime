@@ -85,7 +85,7 @@ macro_rules! primitives {
                     start: offset,
                     len: size,
                 };
-                if ptr.mem().is_borrowed(region) {
+                if ptr.mem().is_mut_borrowed(region) {
                     return Err(GuestError::PtrBorrowed(region));
                 }
                 Ok(unsafe { <$i>::from_le_bytes(*host_ptr.cast::<[u8; mem::size_of::<Self>()]>()) })
@@ -104,7 +104,7 @@ macro_rules! primitives {
                     start: offset,
                     len: size,
                 };
-                if ptr.mem().is_borrowed(region) {
+                if ptr.mem().is_shared_borrowed(region) || ptr.mem().is_mut_borrowed(region) {
                     return Err(GuestError::PtrBorrowed(region));
                 }
                 unsafe {
