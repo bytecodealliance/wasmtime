@@ -2911,7 +2911,40 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
         Opcode::Snarrow | Opcode::Unarrow => {
-            unimplemented!("No lowering for {:?}", op);
+            let input_ty = ctx.input_ty(insn, 0);
+            let output_ty = ctx.output_ty(insn, 0);
+            let src1 = put_input_in_reg(ctx, inputs[0]);
+            let src2 = put_input_in_reg(ctx, inputs[1]);
+            let dst = get_output_reg(ctx, outputs[0]);
+            if output_ty.is_vector() {
+                match op {
+                    Opcode::Snarrow => match (input_ty, output_ty) {
+                        (types::I16X8, types::I8X16) => {
+                            ctx.emit(Inst::gen_move(dst, src1, input_ty));
+                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Packsswb, RegMem::reg(src2), dst));
+                        }
+                        (types::I32X4, types::I16X8) => {
+                            ctx.emit(Inst::gen_move(dst, src1, input_ty));
+                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Packssdw, RegMem::reg(src2), dst));
+                        }
+                        _ => unreachable!(),
+                    },
+                    Opcode::Unarrow => match (input_ty, output_ty) {
+                        (types::I16X8, types::I8X16) => {
+                            ctx.emit(Inst::gen_move(dst, src1, input_ty));
+                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Packuswb, RegMem::reg(src2), dst));
+                        }
+                        (types::I32X4, types::I16X8) => {
+                            ctx.emit(Inst::gen_move(dst, src1, input_ty));
+                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Packusdw, RegMem::reg(src2), dst));
+                        }
+                        _ => unreachable!(),
+                    },
+                    _ => unreachable!(),
+                }
+            } else {
+                panic!("Unsupported non-vector type for widen instruction {:?}", ty);
+            }
         }
         Opcode::Bitcast => {
             let input_ty = ctx.input_ty(insn, 0);
