@@ -220,8 +220,8 @@ pub fn define_struct(args: TokenStream) -> TokenStream {
                                 #(#hostcall_args),*
                             );
                             match result {
-                                Ok(r) => Ok(r #cvt_ret),
-                                Err(err) => Err(wasmtime::Trap::new(err)),
+                                Ok(r) => { return Ok(r #cvt_ret); },
+                                Err(err) => { return Err(wasmtime::Trap::new(err)); },
                             }
                         }
                     }
