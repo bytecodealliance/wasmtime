@@ -507,6 +507,18 @@ pub enum SseOpcode {
     Pminuw,
     Pminud,
     Pmovmskb,
+    Pmovsxbd,
+    Pmovsxbw,
+    Pmovsxbq,
+    Pmovsxwd,
+    Pmovsxwq,
+    Pmovsxdq,
+    Pmovzxbd,
+    Pmovzxbw,
+    Pmovzxbq,
+    Pmovzxwd,
+    Pmovzxwq,
+    Pmovzxdq,
     Pmulld,
     Pmullw,
     Pmuludq,
@@ -692,6 +704,18 @@ impl SseOpcode {
             | SseOpcode::Pminsd
             | SseOpcode::Pminuw
             | SseOpcode::Pminud
+            | SseOpcode::Pmovsxbd
+            | SseOpcode::Pmovsxbw
+            | SseOpcode::Pmovsxbq
+            | SseOpcode::Pmovsxwd
+            | SseOpcode::Pmovsxwq
+            | SseOpcode::Pmovsxdq
+            | SseOpcode::Pmovzxbd
+            | SseOpcode::Pmovzxbw
+            | SseOpcode::Pmovzxbq
+            | SseOpcode::Pmovzxwd
+            | SseOpcode::Pmovzxwq
+            | SseOpcode::Pmovzxdq
             | SseOpcode::Pmulld
             | SseOpcode::Ptest
             | SseOpcode::Roundss
@@ -812,6 +836,18 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pminuw => "pminuw",
             SseOpcode::Pminud => "pminud",
             SseOpcode::Pmovmskb => "pmovmskb",
+            SseOpcode::Pmovsxbd => "pmovsxbd",
+            SseOpcode::Pmovsxbw => "pmovsxbw",
+            SseOpcode::Pmovsxbq => "pmovsxbq",
+            SseOpcode::Pmovsxwd => "pmovsxwd",
+            SseOpcode::Pmovsxwq => "pmovsxwq",
+            SseOpcode::Pmovsxdq => "pmovsxdq",
+            SseOpcode::Pmovzxbd => "pmovzxbd",
+            SseOpcode::Pmovzxbw => "pmovzxbw",
+            SseOpcode::Pmovzxbq => "pmovzxbq",
+            SseOpcode::Pmovzxwd => "pmovzxwd",
+            SseOpcode::Pmovzxwq => "pmovzxwq",
+            SseOpcode::Pmovzxdq => "pmovzxdq",
             SseOpcode::Pmulld => "pmulld",
             SseOpcode::Pmullw => "pmullw",
             SseOpcode::Pmuludq => "pmuludq",
