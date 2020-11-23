@@ -467,7 +467,10 @@ pub enum SseOpcode {
     Pabsb,
     Pabsw,
     Pabsd,
+    Packssdw,
     Packsswb,
+    Packusdw,
+    Packuswb,
     Paddb,
     Paddd,
     Paddq,
@@ -633,7 +636,9 @@ impl SseOpcode {
             | SseOpcode::Mulpd
             | SseOpcode::Mulsd
             | SseOpcode::Orpd
+            | SseOpcode::Packssdw
             | SseOpcode::Packsswb
+            | SseOpcode::Packuswb
             | SseOpcode::Paddb
             | SseOpcode::Paddd
             | SseOpcode::Paddq
@@ -696,6 +701,7 @@ impl SseOpcode {
             | SseOpcode::Pshufb => SSSE3,
 
             SseOpcode::Insertps
+            | SseOpcode::Packusdw
             | SseOpcode::Pcmpeqq
             | SseOpcode::Pextrb
             | SseOpcode::Pextrd
@@ -801,7 +807,10 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pabsb => "pabsb",
             SseOpcode::Pabsw => "pabsw",
             SseOpcode::Pabsd => "pabsd",
+            SseOpcode::Packssdw => "packssdw",
             SseOpcode::Packsswb => "packsswb",
+            SseOpcode::Packusdw => "packusdw",
+            SseOpcode::Packuswb => "packuswb",
             SseOpcode::Paddb => "paddb",
             SseOpcode::Paddd => "paddd",
             SseOpcode::Paddq => "paddq",

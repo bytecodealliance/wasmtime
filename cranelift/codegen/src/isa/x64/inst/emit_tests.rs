@@ -3152,9 +3152,27 @@ fn test_x64_emit() {
     ));
 
     insns.push((
+        Inst::xmm_rm_r(SseOpcode::Packssdw, RegMem::reg(xmm11), w_xmm12),
+        "66450F6BE3",
+        "packssdw %xmm11, %xmm12",
+    ));
+
+    insns.push((
         Inst::xmm_rm_r(SseOpcode::Packsswb, RegMem::reg(xmm11), w_xmm2),
         "66410F63D3",
         "packsswb %xmm11, %xmm2",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Packusdw, RegMem::reg(xmm13), w_xmm6),
+        "66410F382BF5",
+        "packusdw %xmm13, %xmm6",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Packuswb, RegMem::reg(xmm9), w_xmm4),
+        "66410F67E1",
+        "packuswb %xmm9, %xmm4",
     ));
 
     insns.push((
