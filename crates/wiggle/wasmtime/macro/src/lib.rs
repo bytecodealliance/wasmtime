@@ -209,17 +209,17 @@ fn generate_func(
                             #handle_early_error
                         }
                     };
-            let mem = #runtime::WasmtimeGuestMemory::new(mem);
-            let result = #target_module::#name_ident(
-            &mut my_cx.borrow_mut(),
-            &mem,
-            #(#arg_names),*
-            );
-            match result {
-                Ok(r) => {return Ok(r.into());},
-                Err(err) => { return Err(wasmtime::Trap::new(err)); },
-            }
-        }
+                    let mem = #runtime::WasmtimeGuestMemory::new(mem);
+                    let result = #target_module::#name_ident(
+                        &mut my_cx.borrow_mut(),
+                        &mem,
+                        #(#arg_names),*
+                    );
+                    match result {
+                        Ok(r) => {return Ok(r.into());},
+                        Err(err) => { return Err(wasmtime::Trap::new(err)); },
+                    }
+                }
             }
         );
     }
