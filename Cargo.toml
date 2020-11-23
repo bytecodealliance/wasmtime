@@ -96,3 +96,6 @@ harness = false
 
 [profile.dev.package.backtrace]
 debug = false # FIXME(#1813)
+
+[profile.release]
+lto = "off"
