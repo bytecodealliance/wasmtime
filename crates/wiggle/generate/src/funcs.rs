@@ -80,16 +80,10 @@ pub fn define_func(
             let err_typename = names.type_ref(&tref, anon_lifetime());
             let err_method = names.guest_error_conversion_method(&tref);
             quote! {
-                    let e = #rt::GuestError::InFunc { funcname: #funcname, location: #location, err: Box::new(e.into()) };
-                    let err: #err_typename = GuestErrorConversion::#err_method(ctx, e);
-            // TODO 11/13/2020: Similar to how a
-            // UserErrorConversion returns a result of either abi
-            // error or String to agnostically support a
-            // WebAssembly runtime terminating an instance with a
-            // panic! or Trap from a hostcall, enhance
-            // GuestErrorConversion to do the same.
-                    return Ok(#abi_ret::from(err));
-                }
+                let e = #rt::GuestError::InFunc { funcname: #funcname, location: #location, err: Box::new(e.into()) };
+                let err: #err_typename = GuestErrorConversion::#err_method(ctx, e);
+                return Ok(#abi_ret::from(err));
+            }
         } else {
             quote! {
                 panic!("error: {:?}", e)
