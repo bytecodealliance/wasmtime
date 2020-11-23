@@ -64,8 +64,8 @@ pub fn define_func(
                     #name = #rt::tracing::field::debug(&e),
                 );
                 match e {
-                    Ok(e) => Ok(#abi_ret::from(e)),
-                    Err(e) => Err(e),
+                    Ok(e) => { return Ok(#abi_ret::from(e)); },
+                    Err(e) => { return Err(e); },
                 }
             }
         })
