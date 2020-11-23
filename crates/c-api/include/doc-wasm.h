@@ -960,7 +960,8 @@
  *
  * This function takes ownership of the `module`, `name`, and
  * #wasm_externtype_t arguments. The caller is responsible for deleting the
- * returned value.
+ * returned value. Note that `name` can be `NULL` where in the module linking
+ * proposal the import name can be omitted.
  *
  * \fn const wasm_name_t* wasm_importtype_module(const wasm_importtype_t *);
  * \brief Returns the module this import is importing from.
@@ -972,7 +973,9 @@
  * \brief Returns the name this import is importing from.
  *
  * The returned memory is owned by the #wasm_importtype_t argument, the caller
- * should not deallocate it.
+ * should not deallocate it. Note that `NULL` can be returned which means
+ * that the import name is not provided. This is for imports with the module
+ * linking proposal that only have the module specified.
  *
  * \fn const wasm_externtype_t* wasm_importtype_type(const wasm_importtype_t *);
  * \brief Returns the type of item this import is importing.

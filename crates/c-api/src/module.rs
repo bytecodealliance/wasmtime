@@ -51,7 +51,13 @@ pub extern "C" fn wasmtime_module_new(
     handle_result(Module::from_binary(&engine.engine, binary), |module| {
         let imports = module
             .imports()
-            .map(|i| wasm_importtype_t::new(i.module().to_owned(), i.name().to_owned(), i.ty()))
+            .map(|i| {
+                wasm_importtype_t::new(
+                    i.module().to_owned(),
+                    i.name().map(|s| s.to_owned()),
+                    i.ty(),
+                )
+            })
             .collect::<Vec<_>>();
         let exports = module
             .exports()
@@ -118,7 +124,13 @@ pub extern "C" fn wasm_module_obtain(
     }
     let imports = module
         .imports()
-        .map(|i| wasm_importtype_t::new(i.module().to_owned(), i.name().to_owned(), i.ty()))
+        .map(|i| {
+            wasm_importtype_t::new(
+                i.module().to_owned(),
+                i.name().map(|s| s.to_owned()),
+                i.ty(),
+            )
+        })
         .collect::<Vec<_>>();
     let exports = module
         .exports()
@@ -175,7 +187,13 @@ pub extern "C" fn wasmtime_module_deserialize(
         |module| {
             let imports = module
                 .imports()
-                .map(|i| wasm_importtype_t::new(i.module().to_owned(), i.name().to_owned(), i.ty()))
+                .map(|i| {
+                    wasm_importtype_t::new(
+                        i.module().to_owned(),
+                        i.name().map(|s| s.to_owned()),
+                        i.ty(),
+                    )
+                })
                 .collect::<Vec<_>>();
             let exports = module
                 .exports()

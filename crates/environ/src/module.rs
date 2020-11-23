@@ -163,7 +163,7 @@ pub struct Module {
     pub name: Option<String>,
 
     /// All import records, in the order they are declared in the module.
-    pub imports: Vec<(String, String, EntityIndex)>,
+    pub imports: Vec<(String, Option<String>, EntityIndex)>,
 
     /// Exported entities.
     pub exports: IndexMap<String, EntityIndex>,

@@ -328,7 +328,7 @@ pub extern "C" fn wasi_instance_bind_import<'a>(
     import: &wasm_importtype_t,
 ) -> Option<&'a wasm_extern_t> {
     let module = &import.module;
-    let name = str::from_utf8(import.name.as_bytes()).ok()?;
+    let name = str::from_utf8(import.name.as_ref()?.as_bytes()).ok()?;
 
     let export = match &instance.wasi {
         WasiInstance::Preview1(wasi) => {

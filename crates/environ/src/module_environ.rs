@@ -264,7 +264,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         &mut self,
         index: TypeIndex,
         module: &str,
-        field: &str,
+        field: Option<&str>,
     ) -> WasmResult<()> {
         debug_assert_eq!(
             self.result.module.functions.len(),
@@ -275,7 +275,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         let func_index = self.result.module.functions.push(sig_index);
         self.result.module.imports.push((
             module.to_owned(),
-            field.to_owned(),
+            field.map(|s| s.to_owned()),
             EntityIndex::Function(func_index),
         ));
         self.result.module.num_imported_funcs += 1;
@@ -283,7 +283,12 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         Ok(())
     }
 
-    fn declare_table_import(&mut self, table: Table, module: &str, field: &str) -> WasmResult<()> {
+    fn declare_table_import(
+        &mut self,
+        table: Table,
+        module: &str,
+        field: Option<&str>,
+    ) -> WasmResult<()> {
         debug_assert_eq!(
             self.result.module.table_plans.len(),
             self.result.module.num_imported_tables,
@@ -293,7 +298,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         let table_index = self.result.module.table_plans.push(plan);
         self.result.module.imports.push((
             module.to_owned(),
-            field.to_owned(),
+            field.map(|s| s.to_owned()),
             EntityIndex::Table(table_index),
         ));
         self.result.module.num_imported_tables += 1;
@@ -304,7 +309,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         &mut self,
         memory: Memory,
         module: &str,
-        field: &str,
+        field: Option<&str>,
     ) -> WasmResult<()> {
         debug_assert_eq!(
             self.result.module.memory_plans.len(),
@@ -318,7 +323,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         let memory_index = self.result.module.memory_plans.push(plan);
         self.result.module.imports.push((
             module.to_owned(),
-            field.to_owned(),
+            field.map(|s| s.to_owned()),
             EntityIndex::Memory(memory_index),
         ));
         self.result.module.num_imported_memories += 1;
@@ -329,7 +334,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         &mut self,
         global: Global,
         module: &str,
-        field: &str,
+        field: Option<&str>,
     ) -> WasmResult<()> {
         debug_assert_eq!(
             self.result.module.globals.len(),
@@ -339,7 +344,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         let global_index = self.result.module.globals.push(global);
         self.result.module.imports.push((
             module.to_owned(),
-            field.to_owned(),
+            field.map(|s| s.to_owned()),
             EntityIndex::Global(global_index),
         ));
         self.result.module.num_imported_globals += 1;

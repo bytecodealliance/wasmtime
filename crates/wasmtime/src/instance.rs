@@ -309,8 +309,9 @@ fn with_imports<R>(
     };
 
     for (expected, actual) in m.imports.iter().zip(externs) {
-        process(&expected.2, actual).with_context(|| {
-            format!("incompatible import type for {}/{}", expected.0, expected.1)
+        process(&expected.2, actual).with_context(|| match &expected.1 {
+            Some(name) => format!("incompatible import type for {}/{}", expected.0, name),
+            None => format!("incompatible import type for {}", expected.0),
         })?;
     }
 

@@ -265,7 +265,7 @@ impl RunCommand {
     }
 
     fn invoke_export(&self, linker: &Linker, name: &str) -> Result<()> {
-        let func = match linker.get_one_by_name("", name)?.into_func() {
+        let func = match linker.get_one_by_name("", Some(name))?.into_func() {
             Some(func) => func,
             None => bail!("export of `{}` wasn't a function", name),
         };
