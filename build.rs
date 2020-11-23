@@ -210,6 +210,7 @@ fn experimental_x64_should_panic(testsuite: &str, testname: &str, strategy: &str
         ("simd", "simd_load_splat") => return false,
         ("simd", "simd_splat") => return false,
         ("simd", "simd_store") => return false,
+        ("simd", "simd_conversions") => return false,
         ("simd", _) => return true,
         _ => {}
     }
