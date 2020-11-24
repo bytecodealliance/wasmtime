@@ -1,13 +1,17 @@
-use crate::module::{Instance, MemoryPlan, Module, ModuleType, TableElements, TablePlan};
+use crate::module::{
+    Initializer, InstanceSignature, MemoryPlan, Module, ModuleSignature, ModuleType, TableElements,
+    TablePlan, TypeTables,
+};
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
-    self, translate_module, DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType,
-    FuncIndex, Global, GlobalIndex, Memory, MemoryIndex, ModuleIndex, SignatureIndex, Table,
-    TableIndex, TargetEnvironment, TypeIndex, WasmError, WasmFuncType, WasmResult,
+    self, translate_module, Alias, DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType,
+    FuncIndex, Global, GlobalIndex, InstanceIndex, InstanceTypeIndex, Memory, MemoryIndex,
+    ModuleIndex, ModuleTypeIndex, SignatureIndex, Table, TableIndex, TargetEnvironment, TypeIndex,
+    WasmError, WasmFuncType, WasmResult,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -27,10 +31,11 @@ pub struct ModuleEnvironment<'data> {
     /// the module linking proposal.
     results: Vec<ModuleTranslation<'data>>,
 
-    /// Modules which are in-progress for being translated (our parents) and
-    /// we'll resume once we finish the current module. This is only applicable
-    /// with the module linking proposal.
-    in_progress: Vec<ModuleTranslation<'data>>,
+    /// Intern'd types for this entire translation, shared by all modules.
+    types: TypeTables,
+
+    /// Where our module will get pushed into `results` after it's finished.
+    cur: usize,
 
     // Various bits and pieces of configuration
     features: WasmFeatures,
@@ -46,9 +51,6 @@ pub struct ModuleTranslation<'data> {
     /// Module information.
     pub module: Module,
 
-    /// Map of native signatures
-    pub native_signatures: PrimaryMap<SignatureIndex, ir::Signature>,
-
     /// References to the function bodies.
     pub function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
 
@@ -58,15 +60,23 @@ pub struct ModuleTranslation<'data> {
     /// DWARF debug information, if enabled, parsed from the module.
     pub debuginfo: DebugInfoData<'data>,
 
-    /// Indexes into the returned list of translations that are submodules of
-    /// this module.
-    pub submodules: PrimaryMap<ModuleIndex, usize>,
-
     /// Set if debuginfo was found but it was not parsed due to `Tunables`
     /// configuration.
     pub has_unparsed_debuginfo: bool,
 
+    /// When we're parsing the code section this will be incremented so we know
+    /// which function is currently being defined.
     code_index: u32,
+
+    /// When local modules are declared an entry is pushed onto this list which
+    /// indicates that the initializer at the specified position needs to be
+    /// rewritten with the module's final index in the global list of compiled
+    /// modules.
+    module_initializer_indexes: Vec<usize>,
+
+    /// Used as a pointer into the above list as the module code section is
+    /// parsed.
+    num_modules_defined: usize,
 }
 
 /// Contains function data: byte code and its offset in the module.
@@ -128,7 +138,8 @@ impl<'data> ModuleEnvironment<'data> {
         Self {
             result: ModuleTranslation::default(),
             results: Vec::with_capacity(1),
-            in_progress: Vec::new(),
+            cur: 0,
+            types: Default::default(),
             target_config,
             tunables: tunables.clone(),
             features: *features,
@@ -139,12 +150,28 @@ impl<'data> ModuleEnvironment<'data> {
         self.target_config.pointer_type()
     }
 
-    /// Translate a wasm module using this environment. This consumes the
-    /// `ModuleEnvironment` and produces a `ModuleTranslation`.
-    pub fn translate(mut self, data: &'data [u8]) -> WasmResult<Vec<ModuleTranslation<'data>>> {
+    /// Translate a wasm module using this environment.
+    ///
+    /// This consumes the `ModuleEnvironment` and produces a list of
+    /// `ModuleTranslation`s as well as a `TypeTables`. The list of module
+    /// translations corresponds to all wasm modules found in the input `data`.
+    /// Note that for MVP modules this will always be a list with one element,
+    /// but with the module linking proposal this may have many elements.
+    ///
+    /// For the module linking proposal the top-level module is at index 0.
+    ///
+    /// The `TypeTables` structure returned contains intern'd versions of types
+    /// referenced from each module translation. This primarily serves as the
+    /// source of truth for module-linking use cases where modules can refer to
+    /// other module's types. All `SignatureIndex`, `ModuleTypeIndex`, and
+    /// `InstanceTypeIndex` values are resolved through the returned tables.
+    pub fn translate(
+        mut self,
+        data: &'data [u8],
+    ) -> WasmResult<(Vec<ModuleTranslation<'data>>, TypeTables)> {
         translate_module(data, &mut self)?;
         assert!(self.results.len() > 0);
-        Ok(self.results)
+        Ok((self.results, self.types))
     }
 
     fn declare_export(&mut self, export: EntityIndex, name: &str) -> WasmResult<()> {
@@ -209,16 +236,23 @@ impl<'data> TargetEnvironment for ModuleEnvironment<'data> {
 impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data> {
     fn reserve_types(&mut self, num: u32) -> WasmResult<()> {
         let num = usize::try_from(num).unwrap();
-        self.result.module.types.reserve_exact(num);
-        self.result.native_signatures.reserve_exact(num);
+        self.result.module.types.reserve(num);
+        self.types.native_signatures.reserve(num);
+        self.types.wasm_signatures.reserve(num);
         Ok(())
     }
 
     fn declare_type_func(&mut self, wasm: WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
         let sig = translate_signature(sig, self.pointer_type());
-        // TODO: Deduplicate signatures.
-        self.result.native_signatures.push(sig);
-        let sig_index = self.result.module.signatures.push(wasm);
+
+        // FIXME(#2469): Signatures should be deduplicated in these two tables
+        // since `SignatureIndex` is already a index space separate from the
+        // module's index space. Note that this may get more urgent with
+        // module-linking modules where types are more likely to get repeated
+        // (across modules).
+        let sig_index = self.types.native_signatures.push(sig);
+        let sig_index2 = self.types.wasm_signatures.push(wasm);
+        debug_assert_eq!(sig_index, sig_index2);
         self.result
             .module
             .types
@@ -239,10 +273,19 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             .iter()
             .map(|e| (e.0.to_string(), e.1.clone()))
             .collect();
-        self.result
-            .module
+
+        // FIXME(#2469): Like signatures above we should probably deduplicate
+        // the listings of module types since with module linking it's possible
+        // you'll need to write down the module type in multiple locations.
+        let exports = self
             .types
-            .push(ModuleType::Module { imports, exports });
+            .instance_signatures
+            .push(InstanceSignature { exports });
+        let idx = self
+            .types
+            .module_signatures
+            .push(ModuleSignature { imports, exports });
+        self.result.module.types.push(ModuleType::Module(idx));
         Ok(())
     }
 
@@ -251,19 +294,46 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             .iter()
             .map(|e| (e.0.to_string(), e.1.clone()))
             .collect();
-        self.result
-            .module
+
+        // FIXME(#2469): Like signatures above we should probably deduplicate
+        // the listings of instance types since with module linking it's
+        // possible you'll need to write down the module type in multiple
+        // locations.
+        let idx = self
             .types
-            .push(ModuleType::Instance { exports });
+            .instance_signatures
+            .push(InstanceSignature { exports });
+        self.result.module.types.push(ModuleType::Instance(idx));
         Ok(())
+    }
+
+    fn type_to_signature(&self, index: TypeIndex) -> WasmResult<SignatureIndex> {
+        match self.result.module.types[index] {
+            ModuleType::Function(sig) => Ok(sig),
+            _ => unreachable!(),
+        }
+    }
+
+    fn type_to_module_type(&self, index: TypeIndex) -> WasmResult<ModuleTypeIndex> {
+        match self.result.module.types[index] {
+            ModuleType::Module(sig) => Ok(sig),
+            _ => unreachable!(),
+        }
+    }
+
+    fn type_to_instance_type(&self, index: TypeIndex) -> WasmResult<InstanceTypeIndex> {
+        match self.result.module.types[index] {
+            ModuleType::Instance(sig) => Ok(sig),
+            _ => unreachable!(),
+        }
     }
 
     fn reserve_imports(&mut self, num: u32) -> WasmResult<()> {
         Ok(self
             .result
             .module
-            .imports
-            .reserve_exact(usize::try_from(num).unwrap()))
+            .initializers
+            .reserve(usize::try_from(num).unwrap()))
     }
 
     fn declare_func_import(
@@ -279,11 +349,11 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         );
         let sig_index = self.result.module.types[index].unwrap_function();
         let func_index = self.result.module.functions.push(sig_index);
-        self.result.module.imports.push((
-            module.to_owned(),
-            field.map(|s| s.to_owned()),
-            EntityIndex::Function(func_index),
-        ));
+        self.result.module.initializers.push(Initializer::Import {
+            module: module.to_owned(),
+            field: field.map(|s| s.to_owned()),
+            index: EntityIndex::Function(func_index),
+        });
         self.result.module.num_imported_funcs += 1;
         self.result.debuginfo.wasm_file.imported_func_count += 1;
         Ok(())
@@ -302,11 +372,11 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         );
         let plan = TablePlan::for_table(table, &self.tunables);
         let table_index = self.result.module.table_plans.push(plan);
-        self.result.module.imports.push((
-            module.to_owned(),
-            field.map(|s| s.to_owned()),
-            EntityIndex::Table(table_index),
-        ));
+        self.result.module.initializers.push(Initializer::Import {
+            module: module.to_owned(),
+            field: field.map(|s| s.to_owned()),
+            index: EntityIndex::Table(table_index),
+        });
         self.result.module.num_imported_tables += 1;
         Ok(())
     }
@@ -327,11 +397,11 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         }
         let plan = MemoryPlan::for_memory(memory, &self.tunables);
         let memory_index = self.result.module.memory_plans.push(plan);
-        self.result.module.imports.push((
-            module.to_owned(),
-            field.map(|s| s.to_owned()),
-            EntityIndex::Memory(memory_index),
-        ));
+        self.result.module.initializers.push(Initializer::Import {
+            module: module.to_owned(),
+            field: field.map(|s| s.to_owned()),
+            index: EntityIndex::Memory(memory_index),
+        });
         self.result.module.num_imported_memories += 1;
         Ok(())
     }
@@ -348,12 +418,44 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             "Imported globals must be declared first"
         );
         let global_index = self.result.module.globals.push(global);
-        self.result.module.imports.push((
-            module.to_owned(),
-            field.map(|s| s.to_owned()),
-            EntityIndex::Global(global_index),
-        ));
+        self.result.module.initializers.push(Initializer::Import {
+            module: module.to_owned(),
+            field: field.map(|s| s.to_owned()),
+            index: EntityIndex::Global(global_index),
+        });
         self.result.module.num_imported_globals += 1;
+        Ok(())
+    }
+
+    fn declare_module_import(
+        &mut self,
+        ty_index: TypeIndex,
+        module: &'data str,
+        field: Option<&'data str>,
+    ) -> WasmResult<()> {
+        let signature = self.type_to_module_type(ty_index)?;
+        let module_index = self.result.module.modules.push(signature);
+        self.result.module.initializers.push(Initializer::Import {
+            module: module.to_owned(),
+            field: field.map(|s| s.to_owned()),
+            index: EntityIndex::Module(module_index),
+        });
+        Ok(())
+    }
+
+    fn declare_instance_import(
+        &mut self,
+        ty_index: TypeIndex,
+        module: &'data str,
+        field: Option<&'data str>,
+    ) -> WasmResult<()> {
+        let signature = self.type_to_instance_type(ty_index)?;
+        let instance_index = self.result.module.instances.push(signature);
+        self.result.module.initializers.push(Initializer::Import {
+            module: module.to_owned(),
+            field: field.map(|s| s.to_owned()),
+            index: EntityIndex::Instance(instance_index),
+        });
         Ok(())
     }
 
@@ -442,6 +544,14 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         self.declare_export(EntityIndex::Global(global_index), name)
     }
 
+    fn declare_module_export(&mut self, index: ModuleIndex, name: &str) -> WasmResult<()> {
+        self.declare_export(EntityIndex::Module(index), name)
+    }
+
+    fn declare_instance_export(&mut self, index: InstanceIndex, name: &str) -> WasmResult<()> {
+        self.declare_export(EntityIndex::Instance(index), name)
+    }
+
     fn declare_start_func(&mut self, func_index: FuncIndex) -> WasmResult<()> {
         debug_assert!(self.result.module.start_func.is_none());
         self.result.module.start_func = Some(func_index);
@@ -503,7 +613,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             let func_index = self.result.code_index + self.result.module.num_imported_funcs as u32;
             let func_index = FuncIndex::from_u32(func_index);
             let sig_index = self.result.module.functions[func_index];
-            let sig = &self.result.module.signatures[sig_index];
+            let sig = &self.types.wasm_signatures[sig_index];
             let mut locals = Vec::new();
             for pair in body.get_locals_reader()? {
                 locals.push(pair?);
@@ -629,42 +739,159 @@ and for re-adding support for interface types you can see this issue:
     }
 
     fn reserve_modules(&mut self, amount: u32) {
+        // Go ahead and reserve space in the final `results` array for `amount`
+        // more modules.
         let extra = self.results.capacity() + (amount as usize) - self.results.len();
         self.results.reserve(extra);
-        self.result.submodules.reserve(amount as usize);
+
+        // Then also reserve space in our own local module's metadata fields
+        // we'll be adding to.
+        self.result.module.modules.reserve(amount as usize);
+        self.result.module.initializers.reserve(amount as usize);
+    }
+
+    fn declare_module(&mut self, ty: TypeIndex) -> WasmResult<()> {
+        // Record the type signature of this module ...
+        let signature = self.type_to_module_type(ty)?;
+        self.result.module.modules.push(signature);
+
+        // ... and then record that in the initialization steps of this module
+        // we're inserting this module into the module index space. At this
+        // point we don't know the final index of the module we're defining, so
+        // we leave a placeholder to get rewritten later.
+        let loc = self.result.module.initializers.len();
+        self.result
+            .module
+            .initializers
+            .push(Initializer::DefineModule(usize::max_value()));
+        self.result.module_initializer_indexes.push(loc);
+        Ok(())
     }
 
     fn module_start(&mut self, index: usize) {
-        // skip the first module since `self.result` is already empty and we'll
-        // be translating into that.
+        // Reset the contents of `self.result` for a new module that's getting
+        // translataed.
+        let mut prev = mem::replace(&mut self.result, ModuleTranslation::default());
+
+        // If this is a nested submodule then we record the final destination of
+        // the child in parent (we store `index` into `prev`) in the appropriate
+        // initialization slot as dicated by `num_modules_defined` (our index of
+        // iteration through the code section).
+        // Record that the `num_modules_defined`-th module is defined at index
+        // by updating the initializer entry.
         if index > 0 {
-            let in_progress = mem::replace(&mut self.result, ModuleTranslation::default());
-            self.in_progress.push(in_progress);
+            let initializer_idx = prev.module_initializer_indexes[prev.num_modules_defined];
+            prev.num_modules_defined += 1;
+            debug_assert!(match &prev.module.initializers[initializer_idx] {
+                Initializer::DefineModule(usize::MAX) => true,
+                _ => false,
+            });
+            prev.module.initializers[initializer_idx] = Initializer::DefineModule(index);
+            self.result.module.parent = Some(self.cur);
         }
+
+        // Update our current index counter and save our parent's translation
+        // where this current translation will end up, which we'll swap back as
+        // part of `module_end`.
+        self.cur = index;
+        assert_eq!(index, self.results.len());
+        self.results.push(prev);
     }
 
     fn module_end(&mut self, index: usize) {
-        let to_continue = match self.in_progress.pop() {
-            Some(m) => m,
-            None => {
-                assert_eq!(index, 0);
-                ModuleTranslation::default()
-            }
-        };
-        let finished = mem::replace(&mut self.result, to_continue);
-        self.result.submodules.push(self.results.len());
-        self.results.push(finished);
+        assert!(self.result.num_modules_defined == self.result.module_initializer_indexes.len());
+
+        // Move our finished module into its final location, swapping it with
+        // what was this module's parent.
+        self.cur = self.result.module.parent.unwrap_or(0);
+        mem::swap(&mut self.result, &mut self.results[index]);
     }
 
     fn reserve_instances(&mut self, amt: u32) {
         self.result.module.instances.reserve(amt as usize);
+        self.result.module.initializers.reserve(amt as usize);
     }
 
     fn declare_instance(&mut self, module: ModuleIndex, args: Vec<EntityIndex>) -> WasmResult<()> {
+        // Record the type of this instance with the type signature of the
+        // module we're instantiating and then also add an initializer which
+        // records that we'll be adding to the instance index space here.
+        let module_ty = self.result.module.modules[module];
+        let instance_ty = self.types.module_signatures[module_ty].exports;
+        self.result.module.instances.push(instance_ty);
         self.result
             .module
-            .instances
-            .push(Instance::Instantiate { module, args });
+            .initializers
+            .push(Initializer::Instantiate { module, args });
+        Ok(())
+    }
+
+    fn declare_alias(&mut self, alias: Alias) -> WasmResult<()> {
+        match alias {
+            // Types are easy, we statically know everything so we're just
+            // copying some pointers from our parent module to our own module.
+            //
+            // Note that we don't add an initializer for this alias because
+            // we statically know where all types point to.
+            Alias::ParentType(parent_idx) => {
+                let ty = self.results[self.cur].module.types[parent_idx];
+                self.result.module.types.push(ty);
+            }
+
+            // This is similar to types in that it's easy for us to record the
+            // type of the module that's being aliased, but we also need to add
+            // an initializer so during instantiation we can prepare the index
+            // space appropriately.
+            Alias::ParentModule(parent_idx) => {
+                let module_idx = self.results[self.cur].module.modules[parent_idx];
+                self.result.module.modules.push(module_idx);
+                self.result
+                    .module
+                    .initializers
+                    .push(Initializer::AliasParentModule(parent_idx));
+            }
+
+            // This case is slightly more involved, we'll be recording all the
+            // type information for each kind of entity, and then we also need
+            // to record an initialization step to get the export from the
+            // instance.
+            Alias::Child { instance, export } => {
+                let ty = self.result.module.instances[instance];
+                match &self.types.instance_signatures[ty].exports[export].1 {
+                    EntityType::Global(g) => {
+                        self.result.module.globals.push(g.clone());
+                        self.result.module.num_imported_globals += 1;
+                    }
+                    EntityType::Memory(mem) => {
+                        let plan = MemoryPlan::for_memory(*mem, &self.tunables);
+                        self.result.module.memory_plans.push(plan);
+                        self.result.module.num_imported_memories += 1;
+                    }
+                    EntityType::Table(t) => {
+                        let plan = TablePlan::for_table(*t, &self.tunables);
+                        self.result.module.table_plans.push(plan);
+                        self.result.module.num_imported_tables += 1;
+                    }
+                    EntityType::Function(sig) => {
+                        self.result.module.functions.push(*sig);
+                        self.result.module.num_imported_funcs += 1;
+                        self.result.debuginfo.wasm_file.imported_func_count += 1;
+                    }
+                    EntityType::Instance(sig) => {
+                        self.result.module.instances.push(*sig);
+                    }
+                    EntityType::Module(sig) => {
+                        self.result.module.modules.push(*sig);
+                    }
+                    EntityType::Event(_) => unimplemented!(),
+                }
+                self.result
+                    .module
+                    .initializers
+                    .push(Initializer::AliasInstanceExport { instance, export })
+            }
+        }
+
         Ok(())
     }
 }

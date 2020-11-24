@@ -226,20 +226,25 @@ impl WastContext {
 
         for directive in ast.directives {
             let sp = directive.span();
-            self.run_directive(directive).with_context(|| {
-                let (line, col) = sp.linecol_in(wast);
-                format!("failed directive on {}:{}:{}", filename, line + 1, col)
-            })?;
+            self.run_directive(directive, &adjust_wast)
+                .with_context(|| {
+                    let (line, col) = sp.linecol_in(wast);
+                    format!("failed directive on {}:{}:{}", filename, line + 1, col)
+                })?;
         }
         Ok(())
     }
 
-    fn run_directive(&mut self, directive: wast::WastDirective) -> Result<()> {
+    fn run_directive(
+        &mut self,
+        directive: wast::WastDirective,
+        adjust: impl Fn(wast::Error) -> wast::Error,
+    ) -> Result<()> {
         use wast::WastDirective::*;
 
         match directive {
             Module(mut module) => {
-                let binary = module.encode()?;
+                let binary = module.encode().map_err(adjust)?;
                 self.module(module.id.map(|s| s.name()), &binary)?;
             }
             QuoteModule { span: _, source } => {
@@ -249,7 +254,10 @@ impl WastContext {
                     module.push_str(" ");
                 }
                 let buf = ParseBuffer::new(&module)?;
-                let mut wat = parser::parse::<Wat>(&buf)?;
+                let mut wat = parser::parse::<Wat>(&buf).map_err(|mut e| {
+                    e.set_text(&module);
+                    e
+                })?;
                 let binary = wat.module.encode()?;
                 self.module(wat.module.id.map(|s| s.name()), &binary)?;
             }
@@ -317,7 +325,7 @@ impl WastContext {
                     // interested in.
                     wast::QuoteModule::Quote(_) => return Ok(()),
                 };
-                let bytes = module.encode()?;
+                let bytes = module.encode().map_err(adjust)?;
                 if let Ok(_) = self.module(None, &bytes) {
                     bail!("expected malformed module to fail to instantiate");
                 }
@@ -327,7 +335,7 @@ impl WastContext {
                 mut module,
                 message,
             } => {
-                let bytes = module.encode()?;
+                let bytes = module.encode().map_err(adjust)?;
                 let err = match self.module(None, &bytes) {
                     Ok(()) => bail!("expected module to fail to link"),
                     Err(e) => e,

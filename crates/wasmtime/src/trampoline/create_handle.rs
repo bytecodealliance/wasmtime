@@ -10,7 +10,7 @@ use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::Module;
 use wasmtime_runtime::{
     Imports, InstanceHandle, StackMapRegistry, VMExternRefActivationsTable, VMFunctionBody,
-    VMFunctionImport,
+    VMFunctionImport, VMSharedSignatureIndex,
 };
 
 pub(crate) fn create_handle(
@@ -19,11 +19,11 @@ pub(crate) fn create_handle(
     finished_functions: PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
     state: Box<dyn Any>,
     func_imports: &[VMFunctionImport],
+    shared_signature_id: Option<VMSharedSignatureIndex>,
 ) -> Result<StoreInstanceHandle> {
     let mut imports = Imports::default();
     imports.functions = func_imports;
     let module = Arc::new(module);
-    let module2 = module.clone();
 
     unsafe {
         let handle = InstanceHandle::new(
@@ -31,7 +31,7 @@ pub(crate) fn create_handle(
             &finished_functions,
             imports,
             store.memory_creator(),
-            &store.lookup_shared_signature(&module2),
+            &|_| shared_signature_id.unwrap(),
             state,
             store.interrupts(),
             store.externref_activations_table() as *const VMExternRefActivationsTable as *mut _,

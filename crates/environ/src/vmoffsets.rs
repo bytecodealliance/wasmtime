@@ -24,7 +24,7 @@ use crate::BuiltinFunctionIndex;
 use cranelift_codegen::ir;
 use cranelift_wasm::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalIndex, MemoryIndex,
-    SignatureIndex, TableIndex,
+    TableIndex, TypeIndex,
 };
 use more_asserts::assert_lt;
 use std::convert::TryFrom;
@@ -78,7 +78,7 @@ impl VMOffsets {
     pub fn new(pointer_size: u8, module: &Module) -> Self {
         Self {
             pointer_size,
-            num_signature_ids: cast_to_u32(module.signatures.len()),
+            num_signature_ids: cast_to_u32(module.types.len()),
             num_imported_functions: cast_to_u32(module.num_imported_funcs),
             num_imported_tables: cast_to_u32(module.num_imported_tables),
             num_imported_memories: cast_to_u32(module.num_imported_memories),
@@ -430,7 +430,7 @@ impl VMOffsets {
     }
 
     /// Return the offset to `VMSharedSignatureId` index `index`.
-    pub fn vmctx_vmshared_signature_id(&self, index: SignatureIndex) -> u32 {
+    pub fn vmctx_vmshared_signature_id(&self, index: TypeIndex) -> u32 {
         assert_lt!(index.as_u32(), self.num_signature_ids);
         self.vmctx_signature_ids_begin()
             .checked_add(

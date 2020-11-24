@@ -7,7 +7,7 @@ use std::ptr;
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::isa::TargetFrontendConfig;
 use wasmtime_environ::wasm::GlobalInit;
-use wasmtime_environ::{Module, TargetSharedSignatureIndex, VMOffsets};
+use wasmtime_environ::{Module, ModuleType, TargetSharedSignatureIndex, VMOffsets};
 
 pub struct TableRelocation {
     pub index: usize,
@@ -25,16 +25,19 @@ pub fn layout_vmcontext(
     // Assign unique indices to unique signatures.
     let mut signature_registry = HashMap::new();
     let mut signature_registry_len = signature_registry.len();
-    for (index, sig) in module.signatures.iter() {
+    for (index, sig) in module.types.iter() {
         let offset = ofs.vmctx_vmshared_signature_id(index) as usize;
-        let target_index = match signature_registry.entry(sig) {
-            Entry::Occupied(o) => *o.get(),
-            Entry::Vacant(v) => {
-                assert_le!(signature_registry_len, std::u32::MAX as usize);
-                let id = TargetSharedSignatureIndex::new(signature_registry_len as u32);
-                signature_registry_len += 1;
-                *v.insert(id)
-            }
+        let target_index = match sig {
+            ModuleType::Function(sig) => match signature_registry.entry(sig) {
+                Entry::Occupied(o) => *o.get(),
+                Entry::Vacant(v) => {
+                    assert_le!(signature_registry_len, std::u32::MAX as usize);
+                    let id = TargetSharedSignatureIndex::new(signature_registry_len as u32);
+                    signature_registry_len += 1;
+                    *v.insert(id)
+                }
+            },
+            _ => TargetSharedSignatureIndex::new(u32::max_value()),
         };
         unsafe {
             let to = out.as_mut_ptr().add(offset) as *mut TargetSharedSignatureIndex;

@@ -1,7 +1,7 @@
 //! A `Compilation` contains the compiled function bodies for a WebAssembly
 //! module.
 
-use crate::{FunctionAddressMap, FunctionBodyData, ModuleTranslation, Tunables};
+use crate::{FunctionAddressMap, FunctionBodyData, ModuleTranslation, Tunables, TypeTables};
 use cranelift_codegen::{binemit, ir, isa, isa::unwind::UnwindInfo};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError};
@@ -104,5 +104,6 @@ pub trait Compiler: Send + Sync {
         data: FunctionBodyData<'_>,
         isa: &dyn isa::TargetIsa,
         tunables: &Tunables,
+        types: &TypeTables,
     ) -> Result<CompiledFunction, CompileError>;
 }

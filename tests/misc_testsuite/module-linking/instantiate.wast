@@ -74,13 +74,48 @@
     (import "" (memory 1))
     (func
       i32.const 0
-      i32.const 4
+      i32.const 100
       i32.store)
     (start 0))
 
   (instance $a (instantiate 0 (memory $m)))
 )
-(assert_return (invoke $a "load") (i32.const 4))
+(assert_return (invoke $a "load") (i32.const 100))
+
+;; Imported instances work
+(module
+  (import "a" "inc" (func $set))
+
+  (module $m1
+    (import "" (instance (export "" (func))))
+    (alias (instance 0) (func 0))
+    (start 0))
+
+  (module $m2
+    (func (export "") (import "")))
+  (instance $i (instantiate $m2 (func $set)))
+  (instance (instantiate $m1 (instance $i)))
+)
+(assert_return (invoke $a "get") (i32.const 4))
+
+;; Imported modules work
+(module
+  (import "a" "inc" (func $set))
+
+  (module $m1
+    (import "" (module $m (export "" (func $f (result i32)))))
+    (instance $i (instantiate $m))
+    (func $get (export "") (result i32)
+      call $i.$f))
+
+  (module $m2
+    (func (export "") (result i32)
+      i32.const 5))
+  (instance $i (instantiate $m1 (module $m2)))
+  (func (export "get") (result i32)
+    call $i.$get)
+)
+(assert_return (invoke "get") (i32.const 5))
 
 ;; all at once
 (module
