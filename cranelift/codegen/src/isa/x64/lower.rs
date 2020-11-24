@@ -2722,6 +2722,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 if op == Opcode::FcvtToSintSat {
                     // Sets destination to zero if float is NaN
+                    assert_eq!(types::F32X4, ctx.input_ty(insn, 0));
                     let tmp = ctx.alloc_tmp(RegClass::V128, types::I32X4);
                     ctx.emit(Inst::xmm_unary_rm_r(
                         SseOpcode::Movapd,
@@ -2776,6 +2777,57 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         dst,
                     ));
                 } else if op == Opcode::FcvtToUintSat {
+                    // The algorithm for converting floats to unsigned ints is a little tricky. The
+                    // complication arises because we are converting from a signed 64-bit int with a positive
+                    // integer range from 1..INT_MAX (0x1..0x7FFFFFFF) to an unsigned integer with an extended
+                    // range from (INT_MAX+1)..UINT_MAX. It's this range from (INT_MAX+1)..UINT_MAX
+                    // (0x80000000..0xFFFFFFFF) that needs to be accounted for as a special case since our
+                    // conversion instruction (cvttps2dq) only converts as high as INT_MAX (0x7FFFFFFF), but
+                    // which conveniently setting underflows and overflows (smaller than MIN_INT or larger than
+                    // MAX_INT) to be INT_MAX+1 (0x80000000). Nothing that the range (INT_MAX+1)..UINT_MAX includes
+                    // precisely INT_MAX values we can correctly account for and convert every value in this range
+                    // if we simply subtract INT_MAX+1 before doing the cvttps2dq conversion. After the subtraction
+                    // every value originally (INT_MAX+1)..UINT_MAX is now the range (0..INT_MAX).
+                    // After the conversion we add INT_MAX+1 back to this converted value, noting again that
+                    // values we are trying to account for were already set to INT_MAX+1 during the original conversion.
+                    // We simply have to create a mask and make sure we are adding together only the lanes that need
+                    // to be accounted for. Digesting it all the steps then are:
+                    //
+                    // Step 1 - Account for NaN and negative floats by setting these src values to zero.
+                    // Step 2 - Make a copy (tmp1) of the src value since we need to convert twice for
+                    //          reasons described above.
+                    // Step 3 - Convert the original src values. This will convert properly all floats up to INT_MAX
+                    // Step 4 - Subtract INT_MAX from the copy set (tmp1). Note, all zero and negative values are those
+                    //          values that were originally in the range (0..INT_MAX). This will come in handy during
+                    //          step 7 when we zero negative lanes.
+                    // Step 5 - Create a bit mask for tmp1 that will correspond to all lanes originally less than
+                    //          UINT_MAX that are now less than INT_MAX thanks to the subtraction.
+                    // Step 6 - Convert the second set of values (tmp1)
+                    // Step 7 - Prep the converted second set by zeroing out negative lanes (these have already been
+                    //          converted correctly with the first set) and by setting overflow lanes to 0x7FFFFFFF
+                    //          as this will allow us to properly saturate overflow lanes when adding to 0x80000000
+                    // Step 8 - Add the orginal converted src and the converted tmp1 where float values originally less
+                    //          than and equal to INT_MAX will be unchanged, float values originally between INT_MAX+1 and
+                    //          UINT_MAX will add together (INT_MAX) + (SRC - INT_MAX), and float values originally
+                    //          greater than UINT_MAX will be saturated to UINT_MAX (0xFFFFFFFF) after adding (0x8000000 + 0x7FFFFFFF).
+                    //
+                    //
+                    // The table below illustrates the result after each step where it matters for the converted set.
+                    // Note the original value range (original src set) is the final dst in Step 8:
+                    //
+                    // Original src set:
+                    // | Original Value Range |    Step 1    |         Step 3         |          Step 8           |
+                    // |  -FLT_MIN..FLT_MAX   | 0.0..FLT_MAX | 0..INT_MAX(w/overflow) | 0..UINT_MAX(w/saturation) |
+                    //
+                    // Copied src set (tmp1):
+                    // |    Step 2    |                  Step 4                  |
+                    // | 0.0..FLT_MAX | (0.0-(INT_MAX+1))..(FLT_MAX-(INT_MAX+1)) |
+                    //
+                    // |                       Step 6                        |                 Step 7                 |
+                    // | (0-(INT_MAX+1))..(UINT_MAX-(INT_MAX+1))(w/overflow) | ((INT_MAX+1)-(INT_MAX+1))..(INT_MAX+1) |
+
+                    // Create temporaries
+                    assert_eq!(types::F32X4, ctx.input_ty(insn, 0));
                     let tmp1 = ctx.alloc_tmp(RegClass::V128, types::I32X4);
                     let tmp2 = ctx.alloc_tmp(RegClass::V128, types::I32X4);
 
@@ -2785,7 +2837,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     ctx.emit(Inst::gen_move(dst, src, input_ty));
                     ctx.emit(Inst::xmm_rm_r(SseOpcode::Maxps, RegMem::from(tmp2), dst));
 
-                    // Set tmp2 to the maximum signed floating point value.
+                    // Set tmp2 to INT_MAX+1. It is important to note here that after it looks
+                    // like we are only converting INT_MAX (0x7FFFFFFF) but in fact because
+                    // single precision IEEE-754 floats can only accurately represent contingous
+                    // integers up to 2^23 and outside of this range it rounds to the closest
+                    // integer that it can represent. In the case of INT_MAX, this value gets
+                    // represented as 0x4f000000 which is the integer value (INT_MAX+1).
+
                     ctx.emit(Inst::xmm_rm_r(SseOpcode::Pcmpeqd, RegMem::from(tmp2), tmp2));
                     ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrld, RegMemImm::imm(1), tmp2));
                     ctx.emit(Inst::xmm_rm_r(
@@ -2794,8 +2852,17 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         tmp2,
                     ));
 
+                    // Make a copy of these lanes and then do the first conversion.
+                    // Overflow lanes greater than the maximum allowed signed value will
+                    // set to 0x80000000. Negative and NaN lanes will be 0x0
                     ctx.emit(Inst::xmm_mov(SseOpcode::Movaps, RegMem::from(dst), tmp1));
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Cvttps2dq, RegMem::from(dst), dst));
+
+                    // Set lanes to src - max_signed_int
                     ctx.emit(Inst::xmm_rm_r(SseOpcode::Subps, RegMem::from(tmp2), tmp1));
+
+                    // Create mask for all positive lanes to saturate (i.e. greater than
+                    // or equal to the maxmimum allowable unsigned int).
                     let cond = FcmpImm::from(FloatCC::LessThanOrEqual);
                     ctx.emit(Inst::xmm_rm_r_imm(
                         SseOpcode::Cmpps,
@@ -2805,16 +2872,22 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         false,
                     ));
 
+                    // Convert those set of lanes that have the max_signed_int factored out.
                     ctx.emit(Inst::xmm_rm_r(
                         SseOpcode::Cvttps2dq,
                         RegMem::from(tmp1),
                         tmp1,
                     ));
 
+                    // Prepare converted lanes by zeroing negative lanes and prepping lanes
+                    // that have positive overflow (based on the mask) by setting these lanes
+                    // to 0x7FFFFFFF
                     ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp2), tmp1));
                     ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp2), tmp2));
                     ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmaxsd, RegMem::from(tmp2), tmp1));
-                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Cvttps2dq, RegMem::from(dst), dst));
+
+                    // Add this second set of converted lanes to the original to properly handle
+                    // values greater than max signed int.
                     ctx.emit(Inst::xmm_rm_r(SseOpcode::Paddd, RegMem::from(tmp1), dst));
                 } else {
                     // Since this branch is also guarded by a check for vector types
