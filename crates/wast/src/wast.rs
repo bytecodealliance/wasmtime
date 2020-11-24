@@ -74,7 +74,7 @@ impl WastContext {
 
     fn get_export(&self, module: Option<&str>, name: &str) -> Result<Extern> {
         match module {
-            Some(module) => self.linker.get_one_by_name(module, name),
+            Some(module) => self.linker.get_one_by_name(module, Some(name)),
             None => self
                 .current
                 .as_ref()

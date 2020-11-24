@@ -674,7 +674,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         &mut self,
         index: TypeIndex,
         module: &'data str,
-        field: &'data str,
+        field: Option<&'data str>,
     ) -> WasmResult<()>;
 
     /// Declares a table import to the environment.
@@ -682,7 +682,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         &mut self,
         table: Table,
         module: &'data str,
-        field: &'data str,
+        field: Option<&'data str>,
     ) -> WasmResult<()>;
 
     /// Declares a memory import to the environment.
@@ -690,7 +690,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         &mut self,
         memory: Memory,
         module: &'data str,
-        field: &'data str,
+        field: Option<&'data str>,
     ) -> WasmResult<()>;
 
     /// Declares an event import to the environment.
@@ -698,7 +698,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         &mut self,
         event: Event,
         module: &'data str,
-        field: &'data str,
+        field: Option<&'data str>,
     ) -> WasmResult<()> {
         drop((event, module, field));
         Err(WasmError::Unsupported("wasm events".to_string()))
@@ -709,7 +709,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         &mut self,
         global: Global,
         module: &'data str,
-        field: &'data str,
+        field: Option<&'data str>,
     ) -> WasmResult<()>;
 
     /// Declares a module import to the environment.
@@ -717,7 +717,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         &mut self,
         ty_index: TypeIndex,
         module: &'data str,
-        field: &'data str,
+        field: Option<&'data str>,
     ) -> WasmResult<()> {
         drop((ty_index, module, field));
         Err(WasmError::Unsupported("module linking".to_string()))
@@ -728,7 +728,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         &mut self,
         ty_index: TypeIndex,
         module: &'data str,
-        field: &'data str,
+        field: Option<&'data str>,
     ) -> WasmResult<()> {
         drop((ty_index, module, field));
         Err(WasmError::Unsupported("module linking".to_string()))

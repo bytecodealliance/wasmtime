@@ -581,7 +581,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         &mut self,
         index: TypeIndex,
         module: &'data str,
-        field: &'data str,
+        field: Option<&'data str>,
     ) -> WasmResult<()> {
         assert_eq!(
             self.info.functions.len(),
@@ -591,7 +591,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         self.info.functions.push(Exportable::new(index));
         self.info
             .imported_funcs
-            .push((String::from(module), String::from(field)));
+            .push((String::from(module), String::from(field.unwrap())));
         Ok(())
     }
 
@@ -609,12 +609,12 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         &mut self,
         global: Global,
         module: &'data str,
-        field: &'data str,
+        field: Option<&'data str>,
     ) -> WasmResult<()> {
         self.info.globals.push(Exportable::new(global));
         self.info
             .imported_globals
-            .push((String::from(module), String::from(field)));
+            .push((String::from(module), String::from(field.unwrap())));
         Ok(())
     }
 
@@ -627,12 +627,12 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         &mut self,
         table: Table,
         module: &'data str,
-        field: &'data str,
+        field: Option<&'data str>,
     ) -> WasmResult<()> {
         self.info.tables.push(Exportable::new(table));
         self.info
             .imported_tables
-            .push((String::from(module), String::from(field)));
+            .push((String::from(module), String::from(field.unwrap())));
         Ok(())
     }
 
@@ -672,12 +672,12 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         &mut self,
         memory: Memory,
         module: &'data str,
-        field: &'data str,
+        field: Option<&'data str>,
     ) -> WasmResult<()> {
         self.info.memories.push(Exportable::new(memory));
         self.info
             .imported_memories
-            .push((String::from(module), String::from(field)));
+            .push((String::from(module), String::from(field.unwrap())));
         Ok(())
     }
 

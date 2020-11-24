@@ -156,27 +156,25 @@ pub fn parse_import_section<'data>(
 
     for entry in imports {
         let import = entry?;
-        let module_name = import.module;
-        let field_name = import.field.unwrap(); // TODO Handle error when module linking is implemented.
         match entity_type(import.ty, environ)? {
             EntityType::Function(idx) => {
-                environ.declare_func_import(idx, module_name, field_name)?;
+                environ.declare_func_import(idx, import.module, import.field)?;
             }
             EntityType::Module(idx) => {
-                environ.declare_module_import(idx, module_name, field_name)?;
+                environ.declare_module_import(idx, import.module, import.field)?;
             }
             EntityType::Instance(idx) => {
-                environ.declare_instance_import(idx, module_name, field_name)?;
+                environ.declare_instance_import(idx, import.module, import.field)?;
             }
             EntityType::Memory(ty) => {
-                environ.declare_memory_import(ty, module_name, field_name)?;
+                environ.declare_memory_import(ty, import.module, import.field)?;
             }
-            EntityType::Event(e) => environ.declare_event_import(e, module_name, field_name)?,
+            EntityType::Event(e) => environ.declare_event_import(e, import.module, import.field)?,
             EntityType::Global(ty) => {
-                environ.declare_global_import(ty, module_name, field_name)?;
+                environ.declare_global_import(ty, import.module, import.field)?;
             }
             EntityType::Table(ty) => {
-                environ.declare_table_import(ty, module_name, field_name)?;
+                environ.declare_table_import(ty, import.module, import.field)?;
             }
         }
     }

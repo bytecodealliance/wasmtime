@@ -43,11 +43,9 @@ pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<StoreIn
                 let local_sig_index = module.signatures.push(wasm.clone());
                 let func_index = module.functions.push(local_sig_index);
                 module.num_imported_funcs = 1;
-                module.imports.push((
-                    "".into(),
-                    "".into(),
-                    wasm::EntityIndex::Function(func_index),
-                ));
+                module
+                    .imports
+                    .push(("".into(), None, wasm::EntityIndex::Function(func_index)));
 
                 let f = f.caller_checked_anyfunc();
                 let f = unsafe { f.as_ref() };

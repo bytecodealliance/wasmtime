@@ -483,13 +483,10 @@ impl ModuleType {
 
     /// Returns the list of imports associated with this module type.
     pub fn imports(&self) -> impl ExactSizeIterator<Item = ImportType<'_>> {
-        self.imports.iter().map(|(module, name, ty)| {
-            ImportType {
-                module,
-                // FIXME(#2094) should thread through the `Option`
-                name: name.as_ref().unwrap(),
-                ty: EntityOrExtern::Extern(ty),
-            }
+        self.imports.iter().map(|(module, name, ty)| ImportType {
+            module,
+            name: name.as_deref(),
+            ty: EntityOrExtern::Extern(ty),
         })
     }
 
@@ -676,7 +673,7 @@ pub struct ImportType<'module> {
     module: &'module str,
 
     /// The field of the import.
-    name: &'module str,
+    name: Option<&'module str>,
 
     /// The type of the import.
     ty: EntityOrExtern<'module>,
@@ -693,7 +690,7 @@ impl<'module> ImportType<'module> {
     /// is of type `ty`.
     pub(crate) fn new(
         module: &'module str,
-        name: &'module str,
+        name: Option<&'module str>,
         ty: EntityType<'module>,
     ) -> ImportType<'module> {
         ImportType {
@@ -710,7 +707,10 @@ impl<'module> ImportType<'module> {
 
     /// Returns the field name of the module that this import is expected to
     /// come from.
-    pub fn name(&self) -> &'module str {
+    ///
+    /// Note that the name can be `None` for the module linking proposal. If the
+    /// module linking proposal is not enabled it's safe to unwrap this.
+    pub fn name(&self) -> Option<&'module str> {
         self.name
     }
 
@@ -726,8 +726,8 @@ impl<'module> ImportType<'module> {
 impl<'module> fmt::Debug for ImportType<'module> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ImportType")
-            .field("module", &self.module().to_owned())
-            .field("name", &self.name().to_owned())
+            .field("module", &self.module())
+            .field("name", &self.name())
             .field("ty", &self.ty())
             .finish()
     }

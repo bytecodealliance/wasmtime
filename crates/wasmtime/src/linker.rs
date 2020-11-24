@@ -371,7 +371,7 @@ impl Linker {
     /// "#;
     /// let module = Module::new(store.engine(), wat)?;
     /// linker.module("", &module)?;
-    /// let count = linker.get_one_by_name("", "run")?.into_func().unwrap().get0::<i32>()?()?;
+    /// let count = linker.get_one_by_name("", Some("run"))?.into_func().unwrap().get0::<i32>()?()?;
     /// assert_eq!(count, 0, "a Command should get a fresh instance on each invocation");
     ///
     /// # Ok(())
@@ -592,28 +592,27 @@ impl Linker {
         let mut options = Vec::new();
         for i in self.map.keys() {
             if &*self.strings[i.module] != import.module()
-                || &*self.strings[i.name] != import.name()
+                || self.strings.get(i.name).map(|s| &**s) != import.name()
             {
                 continue;
             }
             options.push(format!("  * {:?}\n", i.kind));
         }
+        let desc = match import.name() {
+            Some(name) => format!("{}::{}", import.module(), name),
+            None => import.module().to_string(),
+        };
         if options.is_empty() {
-            return anyhow!(
-                "unknown import: `{}::{}` has not been defined",
-                import.module(),
-                import.name()
-            );
+            return anyhow!("unknown import: `{}` has not been defined", desc);
         }
 
         options.sort();
 
         anyhow!(
-            "incompatible import type for `{}::{}` specified\n\
-                 desired signature was: {:?}\n\
-                 signatures available:\n\n{}",
-            import.module(),
-            import.name(),
+            "incompatible import type for `{}` specified\n\
+             desired signature was: {:?}\n\
+             signatures available:\n\n{}",
+            desc,
             import.ty(),
             options.concat(),
         )
@@ -649,7 +648,10 @@ impl Linker {
     pub fn get(&self, import: &ImportType) -> Option<Extern> {
         let key = ImportKey {
             module: *self.string2idx.get(import.module())?,
-            name: *self.string2idx.get(import.name())?,
+            name: match import.name() {
+                Some(name) => *self.string2idx.get(name)?,
+                None => usize::max_value(),
+            },
             kind: self.import_kind(import.ty()),
         };
         self.map.get(&key).cloned()
@@ -662,12 +664,13 @@ impl Linker {
     pub fn get_by_name<'a: 'p, 'p>(
         &'a self,
         module: &'p str,
-        name: &'p str,
+        name: Option<&'p str>,
     ) -> impl Iterator<Item = &'a Extern> + 'p {
         self.map
             .iter()
             .filter(move |(key, _item)| {
-                &*self.strings[key.module] == module && &*self.strings[key.name] == name
+                &*self.strings[key.module] == module
+                    && self.strings.get(key.name).map(|s| &**s) == name
             })
             .map(|(_, item)| item)
     }
@@ -678,13 +681,17 @@ impl Linker {
     /// a single `Extern` item. If the `module` and `name` pair isn't defined
     /// in this linker then an error is returned. If more than one value exists
     /// for the `module` and `name` pairs, then an error is returned as well.
-    pub fn get_one_by_name(&self, module: &str, name: &str) -> Result<Extern> {
+    pub fn get_one_by_name(&self, module: &str, name: Option<&str>) -> Result<Extern> {
+        let err_msg = || match name {
+            Some(name) => format!("named `{}` in `{}`", name, module),
+            None => format!("named `{}`", module),
+        };
         let mut items = self.get_by_name(module, name);
         let ret = items
             .next()
-            .ok_or_else(|| anyhow!("no item named `{}` in `{}`", name, module))?;
+            .ok_or_else(|| anyhow!("no item {}", err_msg()))?;
         if items.next().is_some() {
-            bail!("too many items named `{}` in `{}`", name, module);
+            bail!("too many items {}", err_msg());
         }
         Ok(ret.clone())
     }
@@ -694,7 +701,7 @@ impl Linker {
     /// An export with an empty string is considered to be a "default export".
     /// "_start" is also recognized for compatibility.
     pub fn get_default(&self, module: &str) -> Result<Func> {
-        let mut items = self.get_by_name(module, "");
+        let mut items = self.get_by_name(module, Some(""));
         if let Some(external) = items.next() {
             if items.next().is_some() {
                 bail!("too many items named `` in `{}`", module);
@@ -706,7 +713,7 @@ impl Linker {
         }
 
         // For compatibility, also recognize "_start".
-        let mut items = self.get_by_name(module, "_start");
+        let mut items = self.get_by_name(module, Some("_start"));
         if let Some(external) = items.next() {
             if items.next().is_some() {
                 bail!("too many items named `_start` in `{}`", module);

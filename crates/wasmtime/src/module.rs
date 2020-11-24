@@ -406,7 +406,7 @@ impl Module {
     /// assert_eq!(module.imports().len(), 1);
     /// let import = module.imports().next().unwrap();
     /// assert_eq!(import.module(), "host");
-    /// assert_eq!(import.name(), "foo");
+    /// assert_eq!(import.name(), Some("foo"));
     /// match import.ty() {
     ///     ExternType::Func(_) => { /* ... */ }
     ///     _ => panic!("unexpected import type!"),
@@ -423,7 +423,7 @@ impl Module {
             .iter()
             .map(move |(module_name, name, entity_index)| {
                 let r#type = EntityType::new(entity_index, module);
-                ImportType::new(module_name, name, r#type)
+                ImportType::new(module_name, name.as_deref(), r#type)
             })
     }
 
