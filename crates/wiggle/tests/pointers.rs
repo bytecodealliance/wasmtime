@@ -157,7 +157,7 @@ impl PointersAndEnumsExercise {
             self.input3_loc.ptr as i32,
             self.input4_ptr_loc.ptr as i32,
         );
-        assert_eq!(e, types::Errno::Ok.into(), "errno");
+        assert_eq!(e, Ok(types::Errno::Ok.into()), "errno");
 
         // Implementation of pointers_and_enums writes input3 to the input2_loc:
         let written_to_input2_loc: i32 = host_memory

@@ -34,14 +34,14 @@ mod convert_just_errno {
     /// When the `errors` mapping in witx is non-empty, we need to impl the
     /// types::UserErrorConversion trait that wiggle generates from that mapping.
     impl<'a> types::UserErrorConversion for WasiCtx<'a> {
-        fn errno_from_rich_error(&self, e: RichError) -> types::Errno {
+        fn errno_from_rich_error(&self, e: RichError) -> Result<types::Errno, String> {
             // WasiCtx can collect a Vec<String> log so we can test this. We're
             // logging the Display impl that `thiserror::Error` provides us.
             self.log.borrow_mut().push(e.to_string());
             // Then do the trivial mapping down to the flat enum.
             match e {
-                RichError::InvalidArg { .. } => types::Errno::InvalidArg,
-                RichError::PicketLine { .. } => types::Errno::PicketLine,
+                RichError::InvalidArg { .. } => Ok(types::Errno::InvalidArg),
+                RichError::PicketLine { .. } => Ok(types::Errno::PicketLine),
             }
         }
     }
@@ -68,7 +68,7 @@ mod convert_just_errno {
         let r0 = one_error_conversion::foo(&ctx, &host_memory, 0);
         assert_eq!(
             r0,
-            i32::from(types::Errno::Ok),
+            Ok(i32::from(types::Errno::Ok)),
             "Expected return value for strike=0"
         );
         assert!(ctx.log.borrow().is_empty(), "No error log for strike=0");
@@ -77,7 +77,7 @@ mod convert_just_errno {
         let r1 = one_error_conversion::foo(&ctx, &host_memory, 1);
         assert_eq!(
             r1,
-            i32::from(types::Errno::PicketLine),
+            Ok(i32::from(types::Errno::PicketLine)),
             "Expected return value for strike=1"
         );
         assert_eq!(
@@ -90,7 +90,7 @@ mod convert_just_errno {
         let r2 = one_error_conversion::foo(&ctx, &host_memory, 2);
         assert_eq!(
             r2,
-            i32::from(types::Errno::InvalidArg),
+            Ok(i32::from(types::Errno::InvalidArg)),
             "Expected return value for strike=2"
         );
         assert_eq!(
@@ -159,10 +159,13 @@ mod convert_multiple_error_types {
     // each member of the `errors` mapping.
     // Bodies elided.
     impl<'a> types::UserErrorConversion for WasiCtx<'a> {
-        fn errno_from_rich_error(&self, _e: RichError) -> types::Errno {
+        fn errno_from_rich_error(&self, _e: RichError) -> Result<types::Errno, String> {
             unimplemented!()
         }
-        fn errno2_from_another_rich_error(&self, _e: AnotherRichError) -> types::Errno2 {
+        fn errno2_from_another_rich_error(
+            &self,
+            _e: AnotherRichError,
+        ) -> Result<types::Errno2, String> {
             unimplemented!()
         }
     }

@@ -168,7 +168,7 @@ pub fn define_struct(args: TokenStream) -> TokenStream {
 
             // The first result is returned bare right now...
             if let Some(ret) = results.next() {
-                handle_early_error = quote! { return e.into() };
+                handle_early_error = quote! { return Ok(e.into()) };
                 match &*ret.tref.type_() {
                     // Eventually we'll want to add support for more returned
                     // types, but for now let's just conform to what `*.witx`
@@ -200,7 +200,7 @@ pub fn define_struct(args: TokenStream) -> TokenStream {
                 let my_cx = cx.clone();
                 let #name_ident = wasmtime::Func::wrap(
                     store,
-                    move |caller: wasmtime::Caller<'_> #(,#shim_arg_decls)*| -> #ret_ty {
+                    move |caller: wasmtime::Caller<'_> #(,#shim_arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
                         tracing::trace!(
                             #format_str,
                             #(#format_args),*
@@ -214,11 +214,15 @@ pub fn define_struct(args: TokenStream) -> TokenStream {
                                     #handle_early_error
                                 }
                             };
-                            hostcalls::#name_ident(
+                            let result = hostcalls::#name_ident(
                                 &mut my_cx.borrow_mut(),
                                 memory.data_unchecked_mut(),
                                 #(#hostcall_args),*
-                            ) #cvt_ret
+                            );
+                            match result {
+                                Ok(r) => { return Ok(r #cvt_ret); },
+                                Err(err) => { return Err(wasmtime::Trap::new(err)); },
+                            }
                         }
                     }
                 );
