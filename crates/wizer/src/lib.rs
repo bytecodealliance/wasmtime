@@ -5,9 +5,12 @@
 #![deny(missing_docs)]
 
 use anyhow::Context;
-use std::convert::TryFrom;
+use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
 #[cfg(feature = "structopt")]
 use structopt::StructOpt;
+
+const WASM_PAGE_SIZE: u32 = 65_536;
+const NATIVE_PAGE_SIZE: u32 = 4_096;
 
 /// Wizer: the WebAssembly initializer!
 ///
@@ -479,6 +482,9 @@ impl Wizer {
                 Some(memory) => {
                     memory_mins.push(memory.size());
 
+                    let num_wasm_pages = memory.size();
+                    let num_native_pages = num_wasm_pages * (WASM_PAGE_SIZE / NATIVE_PAGE_SIZE);
+
                     let memory: &'a [u8] = unsafe {
                         // Safe because no one else has a (potentially mutable)
                         // view to this memory and we know the memory will live
@@ -486,46 +492,38 @@ impl Wizer {
                         std::slice::from_raw_parts(memory.data_ptr(), memory.data_size())
                     };
 
-                    let mut i = 0;
-                    loop {
-                        // Search for the start of a non-zero region of
-                        // memory. After the loop `i` will either be out of
-                        // bounds, or be the start of the non-zero region.
-                        while i < memory.len() && memory[i] == 0 {
-                            i += 1;
-                            continue;
-                        }
-
-                        if i >= memory.len() {
-                            break;
-                        }
-
-                        // We found the start of a non-zero region, now
-                        // search for its end. `j` will be the end of the
-                        // non-zero region.
-                        let mut j = i + 1;
-                        while j < memory.len() && memory[j] != 0 {
-                            j += 1;
-                        }
-
-                        // Remember this non-zero region as a data segment
-                        // for the pre-initialized module.
-                        debug_assert!(memory[i..j].iter().all(|b| *b != 0));
-                        data_segments.push((
-                            memory_index,
-                            u32::try_from(i).unwrap(),
-                            &memory[i..j],
-                        ));
-
-                        // Continue the search for the start of a non-zero
-                        // region from the end of this non-zero region.
-                        i = j + 1;
-                    }
+                    // Consider each "native" page of the memory. (Scare quotes
+                    // because we have no guarantee that anyone isn't using huge
+                    // page sizes or something). Process each page in
+                    // parallel. If any byte has changed, add the whole page as
+                    // a data segment. This means that the resulting Wasm module
+                    // should instantiate faster, since there are fewer segments
+                    // to bounds check on instantiation. Engines could even
+                    // theoretically recognize that each of these segments is
+                    // page sized and aligned, and use lazy copy-on-write
+                    // initialization of each instance's memory.
+                    data_segments.par_extend((0..num_native_pages).into_par_iter().filter_map(
+                        |i| {
+                            let start = i * NATIVE_PAGE_SIZE;
+                            let end = ((i + 1) * NATIVE_PAGE_SIZE) as usize;
+                            let page = &memory[start as usize..end];
+                            for byte in page {
+                                if *byte != 0 {
+                                    return Some((memory_index, start, page));
+                                }
+                            }
+                            None
+                        },
+                    ));
 
                     memory_index += 1;
                 }
             }
         }
+
+        // Sort data segments to enforce determinism in the face of the
+        // parallelism above.
+        data_segments.sort_by_key(|(m, i, _)| (*m, *i));
 
         Diff {
             globals,
