@@ -371,7 +371,7 @@ impl Linker {
     /// "#;
     /// let module = Module::new(store.engine(), wat)?;
     /// linker.module("", &module)?;
-    /// let count = linker.get_one_by_name("", "run")?.into_func().unwrap().get0::<i32>()?()?;
+    /// let count = linker.get_one_by_name("", Some("run"))?.into_func().unwrap().get0::<i32>()?()?;
     /// assert_eq!(count, 0, "a Command should get a fresh instance on each invocation");
     ///
     /// # Ok(())
