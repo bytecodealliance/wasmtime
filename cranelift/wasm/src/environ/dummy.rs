@@ -10,6 +10,7 @@ use crate::environ::{
     WasmFuncType, WasmResult,
 };
 use crate::func_translator::FuncTranslator;
+use crate::state::FuncTranslationState;
 use crate::translation_utils::{
     DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
     Table, TableIndex, TypeIndex,
@@ -25,7 +26,7 @@ use cranelift_frontend::FunctionBuilder;
 use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
-use wasmparser::{FuncValidator, FunctionBody, ValidatorResources, WasmFeatures};
+use wasmparser::{FuncValidator, FunctionBody, Operator, ValidatorResources, WasmFeatures};
 
 /// Compute a `ir::ExternalName` for a given wasm function index.
 fn get_func_name(func_index: FuncIndex) -> ir::ExternalName {
@@ -111,6 +112,31 @@ impl DummyModuleInfo {
     }
 }
 
+/// State for tracking and checking reachability at each operator. Used for unit testing with the
+/// `DummyEnvironment`.
+#[derive(Clone)]
+pub struct ExpectedReachability {
+    /// Before- and after-reachability
+    reachability: Vec<(bool, bool)>,
+    before_idx: usize,
+    after_idx: usize,
+}
+
+impl ExpectedReachability {
+    fn check_before(&mut self, reachable: bool) {
+        assert_eq!(reachable, self.reachability[self.before_idx].0);
+        self.before_idx += 1;
+    }
+    fn check_after(&mut self, reachable: bool) {
+        assert_eq!(reachable, self.reachability[self.after_idx].1);
+        self.after_idx += 1;
+    }
+    fn check_end(&self) {
+        assert_eq!(self.before_idx, self.reachability.len());
+        assert_eq!(self.after_idx, self.reachability.len());
+    }
+}
+
 /// This `ModuleEnvironment` implementation is a "naïve" one, doing essentially nothing and
 /// emitting placeholders when forced to. Don't try to execute code translated for this
 /// environment, essentially here for translation debug purposes.
@@ -135,6 +161,9 @@ pub struct DummyEnvironment {
 
     /// Function names.
     function_names: SecondaryMap<FuncIndex, String>,
+
+    /// Expected reachability data (before/after for each op) to assert. This is used for testing.
+    expected_reachability: Option<ExpectedReachability>,
 }
 
 impl DummyEnvironment {
@@ -148,13 +177,18 @@ impl DummyEnvironment {
             debug_info,
             module_name: None,
             function_names: SecondaryMap::new(),
+            expected_reachability: None,
         }
     }
 
     /// Return a `DummyFuncEnvironment` for translating functions within this
     /// `DummyEnvironment`.
     pub fn func_env(&self) -> DummyFuncEnvironment {
-        DummyFuncEnvironment::new(&self.info, self.return_mode)
+        DummyFuncEnvironment::new(
+            &self.info,
+            self.return_mode,
+            self.expected_reachability.clone(),
+        )
     }
 
     fn get_func_type(&self, func_index: FuncIndex) -> TypeIndex {
@@ -171,6 +205,17 @@ impl DummyEnvironment {
     pub fn get_func_name(&self, func_index: FuncIndex) -> Option<&str> {
         self.function_names.get(func_index).map(String::as_ref)
     }
+
+    /// Test reachability bits before and after every opcode during translation, as provided by the
+    /// `FuncTranslationState`. This is generally used only for unit tests. This is applied to
+    /// every function in the module (so is likely only useful for test modules with one function).
+    pub fn test_expected_reachability(&mut self, reachability: Vec<(bool, bool)>) {
+        self.expected_reachability = Some(ExpectedReachability {
+            reachability,
+            before_idx: 0,
+            after_idx: 0,
+        });
+    }
 }
 
 /// The `FuncEnvironment` implementation for use by the `DummyEnvironment`.
@@ -178,13 +223,21 @@ pub struct DummyFuncEnvironment<'dummy_environment> {
     pub mod_info: &'dummy_environment DummyModuleInfo,
 
     return_mode: ReturnMode,
+
+    /// Expected reachability data (before/after for each op) to assert. This is used for testing.
+    expected_reachability: Option<ExpectedReachability>,
 }
 
 impl<'dummy_environment> DummyFuncEnvironment<'dummy_environment> {
-    pub fn new(mod_info: &'dummy_environment DummyModuleInfo, return_mode: ReturnMode) -> Self {
+    pub fn new(
+        mod_info: &'dummy_environment DummyModuleInfo,
+        return_mode: ReturnMode,
+        expected_reachability: Option<ExpectedReachability>,
+    ) -> Self {
         Self {
             mod_info,
             return_mode,
+            expected_reachability,
         }
     }
 
@@ -305,6 +358,41 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             signature,
             colocated: false,
         }))
+    }
+
+    fn before_translate_operator(
+        &mut self,
+        _op: &Operator,
+        _builder: &mut FunctionBuilder,
+        state: &FuncTranslationState,
+    ) -> WasmResult<()> {
+        if let Some(ref mut r) = &mut self.expected_reachability {
+            r.check_before(state.reachable());
+        }
+        Ok(())
+    }
+
+    fn after_translate_operator(
+        &mut self,
+        _op: &Operator,
+        _builder: &mut FunctionBuilder,
+        state: &FuncTranslationState,
+    ) -> WasmResult<()> {
+        if let Some(ref mut r) = &mut self.expected_reachability {
+            r.check_after(state.reachable());
+        }
+        Ok(())
+    }
+
+    fn after_translate_function(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+        _state: &FuncTranslationState,
+    ) -> WasmResult<()> {
+        if let Some(ref mut r) = &mut self.expected_reachability {
+            r.check_end();
+        }
+        Ok(())
     }
 
     fn translate_call_indirect(
@@ -746,7 +834,11 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         self.func_bytecode_sizes
             .push(body.get_binary_reader().bytes_remaining());
         let func = {
-            let mut func_environ = DummyFuncEnvironment::new(&self.info, self.return_mode);
+            let mut func_environ = DummyFuncEnvironment::new(
+                &self.info,
+                self.return_mode,
+                self.expected_reachability.clone(),
+            );
             let func_index =
                 FuncIndex::new(self.get_num_func_imports() + self.info.function_bodies.len());
             let name = get_func_name(func_index);

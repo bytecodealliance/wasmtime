@@ -514,7 +514,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::Return => {
             let (return_count, br_destination) = {
                 let frame = &mut state.control_stack[0];
-                frame.set_branched_to_exit();
+                if environ.return_mode() == ReturnMode::FallthroughReturn {
+                    frame.set_branched_to_exit();
+                }
                 let return_count = frame.num_return_values();
                 (return_count, frame.br_destination())
             };
