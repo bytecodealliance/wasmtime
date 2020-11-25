@@ -641,12 +641,15 @@ impl Wizer {
                 }
                 ExportSection(mut exports) => {
                     // Remove the `__wizer_*` exports we added during the
-                    // preparation phase.
+                    // preparation phase, as well as the initialization
+                    // function's export. Removing the latter will enable
+                    // further Wasm optimizations (notably GC'ing unused
+                    // functions) via `wasm-opt` and similar tools.
                     let count = exports.get_count();
                     let mut exports_encoder = wasm_encoder::ExportSection::new();
                     for _ in 0..count {
                         let export = exports.read().unwrap();
-                        if export.field.starts_with("__wizer_") {
+                        if export.field.starts_with("__wizer_") || export.field == self.init_func {
                             continue;
                         }
                         exports_encoder.export(
