@@ -624,6 +624,26 @@ pub trait FuncEnvironment: TargetEnvironment {
     ) -> WasmResult<()> {
         Ok(())
     }
+
+    /// Optional callback for the `FunctionEnvironment` performing this translation to perform work
+    /// before the function body is translated.
+    fn before_translate_function(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+        _state: &FuncTranslationState,
+    ) -> WasmResult<()> {
+        Ok(())
+    }
+
+    /// Optional callback for the `FunctionEnvironment` performing this translation to perform work
+    /// after the function body is translated.
+    fn after_translate_function(
+        &mut self,
+        _builder: &mut FunctionBuilder,
+        _state: &FuncTranslationState,
+    ) -> WasmResult<()> {
+        Ok(())
+    }
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the

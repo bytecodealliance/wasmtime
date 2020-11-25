@@ -104,7 +104,7 @@ impl UnwindInfoGenerator<Inst> for AArch64UnwindInfo {
 
         // TODO epilogues
 
-        let prologue_size = if context.prologue.is_empty() {
+        let prologue_size = if context.prologue.len() == 0 {
             0
         } else {
             context.insts_layout[context.prologue.end as usize - 1]
