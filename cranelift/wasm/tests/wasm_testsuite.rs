@@ -94,3 +94,86 @@ fn handle_module(data: Vec<u8>, flags: &Flags, return_mode: ReturnMode) {
             .unwrap();
     }
 }
+
+#[test]
+fn reachability_is_correct() {
+    let tests = vec![
+        (
+            ReturnMode::NormalReturns,
+            r#"
+        (module (func (param i32)
+         (loop
+          (block
+           local.get 0
+           br_if 0
+           br 1))))"#,
+            vec![
+                (true, true),  // Loop
+                (true, true),  // Block
+                (true, true),  // LocalGet
+                (true, true),  // BrIf
+                (true, false), // Br
+                (false, true), // End
+                (true, true),  // End
+                (true, true),  // End
+            ],
+        ),
+        (
+            ReturnMode::NormalReturns,
+            r#"
+        (module (func (param i32)
+         (loop
+          (block
+           br 1
+           nop))))"#,
+            vec![
+                (true, true),   // Loop
+                (true, true),   // Block
+                (true, false),  // Br
+                (false, false), // Nop
+                (false, false), // Nop
+                (false, false), // Nop
+                (false, false), // End
+            ],
+        ),
+        (
+            ReturnMode::NormalReturns,
+            r#"
+        (module (func (param i32) (result i32)
+          i32.const 1
+          return
+          i32.const 42))"#,
+            vec![
+                (true, true),   // I32Const
+                (true, false),  // Return
+                (false, false), // I32Const
+                (false, false), // End
+            ],
+        ),
+        (
+            ReturnMode::FallthroughReturn,
+            r#"
+        (module (func (param i32) (result i32)
+         i32.const 1
+         return
+         i32.const 42))"#,
+            vec![
+                (true, true),   // I32Const
+                (true, false),  // Return
+                (false, false), // I32Const
+                (false, true),  // End
+            ],
+        ),
+    ];
+
+    for (return_mode, wat, expected_reachability) in tests {
+        println!("testing wat:\n{}", wat);
+        let flags = Flags::new(settings::builder());
+        let triple = triple!("riscv64");
+        let isa = isa::lookup(triple).unwrap().finish(flags.clone());
+        let mut env = DummyEnvironment::new(isa.frontend_config(), return_mode, false);
+        env.test_expected_reachability(expected_reachability);
+        let data = wat::parse_str(wat).unwrap();
+        translate_module(data.as_ref(), &mut env).unwrap();
+    }
+}
