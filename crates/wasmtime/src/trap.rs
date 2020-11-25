@@ -297,15 +297,46 @@ impl fmt::Display for Trap {
         writeln!(f, "\nwasm backtrace:")?;
         for (i, frame) in self.trace().iter().enumerate() {
             let name = frame.module_name().unwrap_or("<unknown>");
-            write!(f, "  {}: {:#6x} - {}!", i, frame.module_offset(), name)?;
-            match frame.func_name() {
-                Some(name) => match rustc_demangle::try_demangle(name) {
-                    Ok(name) => write!(f, "{}", name)?,
-                    Err(_) => write!(f, "{}", name)?,
-                },
-                None => write!(f, "<wasm function {}>", frame.func_index())?,
+            write!(f, "  {:>3}: {:#6x} - ", i, frame.module_offset())?;
+
+            let demangle =
+                |f: &mut fmt::Formatter<'_>, name: &str| match rustc_demangle::try_demangle(name) {
+                    Ok(name) => write!(f, "{}", name),
+                    Err(_) => write!(f, "{}", name),
+                };
+            let write_raw_func_name = |f: &mut fmt::Formatter<'_>| match frame.func_name() {
+                Some(name) => demangle(f, name),
+                None => write!(f, "<wasm function {}>", frame.func_index()),
+            };
+            if frame.symbols().is_empty() {
+                write!(f, "{}!", name)?;
+                write_raw_func_name(f)?;
+                writeln!(f, "")?;
+            } else {
+                for (i, symbol) in frame.symbols().iter().enumerate() {
+                    if i > 0 {
+                        write!(f, "              - ")?;
+                    } else {
+                        // ...
+                    }
+                    match symbol.name() {
+                        Some(name) => demangle(f, name)?,
+                        None if i == 0 => write_raw_func_name(f)?,
+                        None => write!(f, "<inlined function>")?,
+                    }
+                    writeln!(f, "")?;
+                    if let Some(file) = symbol.file() {
+                        write!(f, "                    at {}", file)?;
+                        if let Some(line) = symbol.line() {
+                            write!(f, ":{}", line)?;
+                            if let Some(col) = symbol.column() {
+                                write!(f, ":{}", col)?;
+                            }
+                        }
+                    }
+                    writeln!(f, "")?;
+                }
             }
-            writeln!(f, "")?;
         }
         Ok(())
     }

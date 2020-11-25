@@ -2522,6 +2522,7 @@ dependencies = [
 name = "wasmtime-jit"
 version = "0.21.0"
 dependencies = [
+ "addr2line",
  "anyhow",
  "cfg-if 1.0.0",
  "cranelift-codegen",

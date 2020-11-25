@@ -81,8 +81,8 @@ pub struct DebugInfoData<'a> {
     pub wasm_file: WasmFileInfo,
     debug_loc: gimli::DebugLoc<Reader<'a>>,
     debug_loclists: gimli::DebugLocLists<Reader<'a>>,
-    debug_ranges: gimli::DebugRanges<Reader<'a>>,
-    debug_rnglists: gimli::DebugRngLists<Reader<'a>>,
+    pub debug_ranges: gimli::DebugRanges<Reader<'a>>,
+    pub debug_rnglists: gimli::DebugRngLists<Reader<'a>>,
 }
 
 #[allow(missing_docs)]
@@ -152,9 +152,6 @@ impl<'data> ModuleEnvironment<'data> {
     }
 
     fn register_dwarf_section(&mut self, name: &str, data: &'data [u8]) {
-        if !self.tunables.debug_info {
-            return;
-        }
         if !name.starts_with(".debug_") {
             return;
         }
