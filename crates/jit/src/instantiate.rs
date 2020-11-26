@@ -11,7 +11,6 @@ use object::File as ObjectFile;
 #[cfg(feature = "parallel-compilation")]
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::any::Any;
 use std::ops::Range;
 use std::sync::Arc;
 use thiserror::Error;
@@ -22,16 +21,11 @@ use wasmtime_environ::wasm::{
     DefinedFuncIndex, InstanceTypeIndex, ModuleTypeIndex, SignatureIndex, WasmFuncType,
 };
 use wasmtime_environ::{
-    CompileError, DataInitializer, DataInitializerLocation, DebugInfoData, FunctionAddressMap,
-    InstanceSignature, Module, ModuleEnvironment, ModuleSignature, ModuleTranslation,
-    StackMapInformation, TrapInformation,
+    CompileError, DebugInfoData, FunctionAddressMap, InstanceSignature, Module, ModuleEnvironment,
+    ModuleSignature, ModuleTranslation, OwnedDataInitializer, StackMapInformation, TrapInformation,
 };
 use wasmtime_profiling::ProfilingAgent;
-use wasmtime_runtime::{
-    GdbJitImageRegistration, Imports, InstanceHandle, InstantiationError, RuntimeMemoryCreator,
-    StackMapRegistry, VMExternRefActivationsTable, VMFunctionBody, VMInterrupts,
-    VMSharedSignatureIndex, VMTrampoline,
-};
+use wasmtime_runtime::{GdbJitImageRegistration, InstantiationError, VMFunctionBody, VMTrampoline};
 
 /// An error condition while setting up a wasm instance, be it validation,
 /// compilation, or instantiation.
@@ -59,7 +53,8 @@ pub enum SetupError {
 #[derive(Serialize, Deserialize)]
 pub struct CompilationArtifacts {
     /// Module metadata.
-    module: Module,
+    #[serde(with = "arc_serde")]
+    module: Arc<Module>,
 
     /// ELF image with functions code.
     obj: Box<[u8]>,
@@ -68,7 +63,8 @@ pub struct CompilationArtifacts {
     unwind_info: Box<[ObjectUnwindInfo]>,
 
     /// Data initiailizers.
-    data_initializers: Box<[OwnedDataInitializer]>,
+    #[serde(with = "arc_slice_serde")]
+    data_initializers: Arc<[OwnedDataInitializer]>,
 
     /// Descriptions of compiled functions
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
@@ -134,7 +130,7 @@ impl CompilationArtifacts {
                     .into_iter()
                     .map(OwnedDataInitializer::new)
                     .collect::<Vec<_>>()
-                    .into_boxed_slice();
+                    .into();
 
                 let obj = obj.write().map_err(|_| {
                     SetupError::Instantiate(InstantiationError::Resource(
@@ -143,7 +139,7 @@ impl CompilationArtifacts {
                 })?;
 
                 Ok(CompilationArtifacts {
-                    module,
+                    module: Arc::new(module),
                     obj: obj.into_boxed_slice(),
                     unwind_info: unwind_info.into_boxed_slice(),
                     data_initializers,
@@ -208,7 +204,6 @@ pub struct ModuleCode {
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
     artifacts: CompilationArtifacts,
-    module: Arc<Module>,
     code: Arc<ModuleCode>,
     finished_functions: FinishedFunctions,
     trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
@@ -267,7 +262,6 @@ impl CompiledModule {
         let finished_functions = FinishedFunctions(finished_functions);
 
         Ok(Arc::new(Self {
-            module: Arc::new(artifacts.module.clone()),
             artifacts,
             code: Arc::new(ModuleCode {
                 code_memory,
@@ -278,62 +272,24 @@ impl CompiledModule {
         }))
     }
 
-    /// Crate an `Instance` from this `CompiledModule`.
-    ///
-    /// Note that if only one instance of this module is needed, it may be more
-    /// efficient to call the top-level `instantiate`, since that avoids copying
-    /// the data initializers.
-    ///
-    /// # Unsafety
-    ///
-    /// See `InstanceHandle::new`
-    pub unsafe fn instantiate(
-        &self,
-        imports: Imports<'_>,
-        lookup_shared_signature: &dyn Fn(SignatureIndex) -> VMSharedSignatureIndex,
-        mem_creator: Option<&dyn RuntimeMemoryCreator>,
-        interrupts: *const VMInterrupts,
-        host_state: Box<dyn Any>,
-        externref_activations_table: *mut VMExternRefActivationsTable,
-        stack_map_registry: *mut StackMapRegistry,
-    ) -> Result<InstanceHandle, InstantiationError> {
-        InstanceHandle::new(
-            self.module.clone(),
-            &self.finished_functions.0,
-            imports,
-            mem_creator,
-            lookup_shared_signature,
-            host_state,
-            interrupts,
-            externref_activations_table,
-            stack_map_registry,
-        )
-    }
     /// Extracts `CompilationArtifacts` from the compiled module.
     pub fn compilation_artifacts(&self) -> &CompilationArtifacts {
         &self.artifacts
     }
 
-    /// Returns data initializers to pass to `InstanceHandle::initialize`
-    pub fn data_initializers(&self) -> Vec<DataInitializer<'_>> {
-        self.artifacts
-            .data_initializers
-            .iter()
-            .map(|init| DataInitializer {
-                location: init.location.clone(),
-                data: &*init.data,
-            })
-            .collect()
+    /// Returns the data initializers from the compiled module.
+    pub fn data_initializers(&self) -> &Arc<[OwnedDataInitializer]> {
+        &self.artifacts.data_initializers
     }
 
     /// Return a reference-counting pointer to a module.
     pub fn module(&self) -> &Arc<Module> {
-        &self.module
+        &self.artifacts.module
     }
 
     /// Return a reference to a mutable module (if possible).
     pub fn module_mut(&mut self) -> Option<&mut Module> {
-        Arc::get_mut(&mut self.module)
+        Arc::get_mut(&mut self.artifacts.module)
     }
 
     /// Returns the map of all finished JIT functions compiled for this module
@@ -470,26 +426,6 @@ impl SymbolizeContext {
     }
 }
 
-/// Similar to `DataInitializer`, but owns its own copy of the data rather
-/// than holding a slice of the original module.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct OwnedDataInitializer {
-    /// The location where the initialization is to be performed.
-    location: DataInitializerLocation,
-
-    /// The initialization data.
-    data: Box<[u8]>,
-}
-
-impl OwnedDataInitializer {
-    fn new(borrowed: DataInitializer<'_>) -> Self {
-        Self {
-            location: borrowed.location.clone(),
-            data: borrowed.data.to_vec().into_boxed_slice(),
-        }
-    }
-}
-
 fn create_dbg_image(
     obj: Vec<u8>,
     code_range: (*const u8, usize),
@@ -584,5 +520,47 @@ impl From<DebugInfoData<'_>> for DebugInfo {
             debug_str_offsets,
             code_section_offset: raw.wasm_file.code_section_offset,
         }
+    }
+}
+
+mod arc_serde {
+    use super::Arc;
+    use serde::{de::Deserialize, ser::Serialize, Deserializer, Serializer};
+
+    pub(super) fn serialize<S, T>(arc: &Arc<T>, ser: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: Serialize,
+    {
+        (**arc).serialize(ser)
+    }
+
+    pub(super) fn deserialize<'de, D, T>(de: D) -> Result<Arc<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        Ok(Arc::new(T::deserialize(de)?))
+    }
+}
+
+mod arc_slice_serde {
+    use super::Arc;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub(super) fn serialize<S, T>(arc: &Arc<[T]>, ser: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: Serialize,
+    {
+        (**arc).serialize(ser)
+    }
+
+    pub(super) fn deserialize<'de, D, T>(de: D) -> Result<Arc<[T]>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        Ok(Vec::<T>::deserialize(de)?.into())
     }
 }

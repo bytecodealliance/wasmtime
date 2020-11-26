@@ -710,11 +710,13 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         elem_index: ElemIndex,
         segments: Box<[FuncIndex]>,
     ) -> WasmResult<()> {
+        let index = self.result.module.passive_elements.len();
+        self.result.module.passive_elements.push(segments);
         let old = self
             .result
             .module
-            .passive_elements
-            .insert(elem_index, segments);
+            .passive_elements_map
+            .insert(elem_index, index);
         debug_assert!(
             old.is_none(),
             "should never get duplicate element indices, that would be a bug in `cranelift_wasm`'s \
@@ -782,17 +784,21 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         Ok(())
     }
 
-    fn reserve_passive_data(&mut self, count: u32) -> WasmResult<()> {
-        self.result.module.passive_data.reserve(count as usize);
+    fn reserve_passive_data(&mut self, _count: u32) -> WasmResult<()> {
+        // Note: the count passed in here is the *total* segment count
+        // There is no way to reserve for just the passive segments as they are discovered when iterating the data section entries
+        // Given that the total segment count might be much larger than the passive count, do not reserve
         Ok(())
     }
 
     fn declare_passive_data(&mut self, data_index: DataIndex, data: &'data [u8]) -> WasmResult<()> {
+        let index = self.result.module.passive_data.len();
+        self.result.module.passive_data.push(Arc::from(data));
         let old = self
             .result
             .module
-            .passive_data
-            .insert(data_index, Arc::from(data));
+            .passive_data_map
+            .insert(data_index, index);
         debug_assert!(
             old.is_none(),
             "a module can't have duplicate indices, this would be a cranelift-wasm bug"
@@ -1087,4 +1093,25 @@ pub struct DataInitializer<'data> {
 
     /// The initialization data.
     pub data: &'data [u8],
+}
+
+/// Similar to `DataInitializer`, but owns its own copy of the data rather
+/// than holding a slice of the original module.
+#[derive(Serialize, Deserialize)]
+pub struct OwnedDataInitializer {
+    /// The location where the initialization is to be performed.
+    pub location: DataInitializerLocation,
+
+    /// The initialization data.
+    pub data: Box<[u8]>,
+}
+
+impl OwnedDataInitializer {
+    /// Creates a new owned data initializer from a borrowed data initializer.
+    pub fn new(borrowed: DataInitializer<'_>) -> Self {
+        Self {
+            location: borrowed.location.clone(),
+            data: borrowed.data.into(),
+        }
+    }
 }

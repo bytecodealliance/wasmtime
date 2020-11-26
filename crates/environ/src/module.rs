@@ -158,13 +158,19 @@ pub struct Module {
     pub table_elements: Vec<TableElements>,
 
     /// WebAssembly passive elements.
-    pub passive_elements: HashMap<ElemIndex, Box<[FuncIndex]>>,
+    pub passive_elements: Vec<Box<[FuncIndex]>>,
+
+    /// The map from passive element index (element segment index space) to index in `passive_elements`.
+    pub passive_elements_map: HashMap<ElemIndex, usize>,
 
     /// WebAssembly passive data segments.
     #[serde(with = "passive_data_serde")]
-    pub passive_data: HashMap<DataIndex, Arc<[u8]>>,
+    pub passive_data: Vec<Arc<[u8]>>,
 
-    /// WebAssembly table initializers.
+    /// The map from passive data index (data segment index space) to index in `passive_data`.
+    pub passive_data_map: HashMap<DataIndex, usize>,
+
+    /// WebAssembly function names.
     pub func_names: HashMap<FuncIndex, String>,
 
     /// Types declared in the wasm module.
@@ -272,7 +278,8 @@ impl Module {
 
     /// Get the given passive element, if it exists.
     pub fn get_passive_element(&self, index: ElemIndex) -> Option<&[FuncIndex]> {
-        self.passive_elements.get(&index).map(|es| &**es)
+        let index = *self.passive_elements_map.get(&index)?;
+        Some(self.passive_elements[index].as_ref())
     }
 
     /// Convert a `DefinedFuncIndex` into a `FuncIndex`.
@@ -419,47 +426,45 @@ pub struct InstanceSignature {
 }
 
 mod passive_data_serde {
-    use super::{Arc, DataIndex, HashMap};
-    use serde::{de::MapAccess, de::Visitor, ser::SerializeMap, Deserializer, Serializer};
+    use super::Arc;
+    use serde::{de::SeqAccess, de::Visitor, ser::SerializeSeq, Deserializer, Serializer};
     use std::fmt;
 
-    pub(super) fn serialize<S>(
-        data: &HashMap<DataIndex, Arc<[u8]>>,
-        ser: S,
-    ) -> Result<S::Ok, S::Error>
+    pub(super) fn serialize<S>(data: &Vec<Arc<[u8]>>, ser: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut map = ser.serialize_map(Some(data.len()))?;
-        for (k, v) in data {
-            map.serialize_entry(k, v.as_ref())?;
+        let mut seq = ser.serialize_seq(Some(data.len()))?;
+        for v in data {
+            seq.serialize_element(v.as_ref())?;
         }
-        map.end()
+        seq.end()
     }
 
     struct PassiveDataVisitor;
     impl<'de> Visitor<'de> for PassiveDataVisitor {
-        type Value = HashMap<DataIndex, Arc<[u8]>>;
+        type Value = Vec<Arc<[u8]>>;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("a passive_data map")
+            formatter.write_str("a passive data sequence")
         }
-        fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+
+        fn visit_seq<M>(self, mut access: M) -> Result<Self::Value, M::Error>
         where
-            M: MapAccess<'de>,
+            M: SeqAccess<'de>,
         {
-            let mut map = HashMap::with_capacity(access.size_hint().unwrap_or(0));
-            while let Some((key, value)) = access.next_entry::<_, Vec<u8>>()? {
-                map.insert(key, value.into());
+            let mut data = Vec::with_capacity(access.size_hint().unwrap_or(0));
+            while let Some(value) = access.next_element::<Vec<u8>>()? {
+                data.push(value.into());
             }
-            Ok(map)
+            Ok(data)
         }
     }
 
-    pub(super) fn deserialize<'de, D>(de: D) -> Result<HashMap<DataIndex, Arc<[u8]>>, D::Error>
+    pub(super) fn deserialize<'de, D>(de: D) -> Result<Vec<Arc<[u8]>>, D::Error>
     where
         D: Deserializer<'de>,
     {
-        de.deserialize_map(PassiveDataVisitor)
+        de.deserialize_seq(PassiveDataVisitor)
     }
 }
