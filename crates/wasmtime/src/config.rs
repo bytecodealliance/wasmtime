@@ -14,6 +14,25 @@ use wasmtime_environ::settings::{self, Configurable, SetError};
 use wasmtime_environ::{isa, isa::TargetIsa, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
+use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator};
+
+/// Represents the module instance allocation strategy to use.
+#[derive(Clone)]
+pub enum InstanceAllocationStrategy {
+    /// The on-demand instance allocation strategy.
+    ///
+    /// Resources related to a module instance are allocated at instantiation time and
+    /// immediately deallocated when the `Store` referencing the instance is dropped.
+    ///
+    /// This is the default allocation strategy for Wasmtime.
+    OnDemand,
+}
+
+impl Default for InstanceAllocationStrategy {
+    fn default() -> Self {
+        Self::OnDemand
+    }
+}
 
 /// Global configuration options used to create an [`Engine`](crate::Engine)
 /// and customize its behavior.
@@ -29,7 +48,10 @@ pub struct Config {
     #[cfg(feature = "cache")]
     pub(crate) cache_config: CacheConfig,
     pub(crate) profiler: Arc<dyn ProfilingAgent>,
-    pub(crate) memory_creator: Option<MemoryCreatorProxy>,
+    pub(crate) instance_allocator: Option<Arc<dyn InstanceAllocator>>,
+    // The default instance allocator is used for instantiating host objects
+    // and for module instatiation when `instance_allocator` is None
+    pub(crate) default_instance_allocator: OnDemandInstanceAllocator,
     pub(crate) max_wasm_stack: usize,
     pub(crate) features: WasmFeatures,
     pub(crate) wasm_backtrace_details_env_used: bool,
@@ -73,7 +95,8 @@ impl Config {
             #[cfg(feature = "cache")]
             cache_config: CacheConfig::new_cache_disabled(),
             profiler: Arc::new(NullProfilerAgent),
-            memory_creator: None,
+            instance_allocator: None,
+            default_instance_allocator: OnDemandInstanceAllocator::new(None),
             max_wasm_stack: 1 << 20,
             wasm_backtrace_details_env_used: false,
             features: WasmFeatures {
@@ -504,9 +527,24 @@ impl Config {
         Ok(self)
     }
 
-    /// Sets a custom memory creator
+    /// Sets a custom memory creator.
+    ///
+    /// Custom memory creators are used when creating host `Memory` objects or when
+    /// creating instance linear memories for the on-demand instance allocation strategy.
     pub fn with_host_memory(&mut self, mem_creator: Arc<dyn MemoryCreator>) -> &mut Self {
-        self.memory_creator = Some(MemoryCreatorProxy { mem_creator });
+        self.default_instance_allocator =
+            OnDemandInstanceAllocator::new(Some(Arc::new(MemoryCreatorProxy(mem_creator))));
+        self
+    }
+
+    /// Sets the instance allocation strategy to use.
+    pub fn with_instance_allocation_strategy(
+        &mut self,
+        strategy: InstanceAllocationStrategy,
+    ) -> &mut Self {
+        self.instance_allocator = match strategy {
+            InstanceAllocationStrategy::OnDemand => None,
+        };
         self
     }
 
@@ -727,6 +765,12 @@ impl Config {
     pub(crate) fn build_compiler(&self) -> Compiler {
         let isa = self.target_isa();
         Compiler::new(isa, self.strategy, self.tunables.clone(), self.features)
+    }
+
+    pub(crate) fn instance_allocator(&self) -> &dyn InstanceAllocator {
+        self.instance_allocator
+            .as_deref()
+            .unwrap_or(&self.default_instance_allocator)
     }
 }
 

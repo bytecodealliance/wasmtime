@@ -54,9 +54,7 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
 }
 
 #[derive(Clone)]
-pub(crate) struct MemoryCreatorProxy {
-    pub(crate) mem_creator: Arc<dyn MemoryCreator>,
-}
+pub(crate) struct MemoryCreatorProxy(pub Arc<dyn MemoryCreator>);
 
 impl RuntimeMemoryCreator for MemoryCreatorProxy {
     fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn RuntimeLinearMemory>, String> {
@@ -65,7 +63,7 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
             MemoryStyle::Static { bound } => Some(bound as u64 * WASM_PAGE_SIZE as u64),
             MemoryStyle::Dynamic => None,
         };
-        self.mem_creator
+        self.0
             .new_memory(ty, reserved_size_in_bytes, plan.offset_guard_size)
             .map(|mem| Box::new(LinearMemoryProxy { mem }) as Box<dyn RuntimeLinearMemory>)
     }

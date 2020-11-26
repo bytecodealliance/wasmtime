@@ -12,9 +12,9 @@ use wasmtime_environ::wasm::{
 };
 use wasmtime_environ::Initializer;
 use wasmtime_runtime::{
-    Imports, InstantiationError, RuntimeInstance, StackMapRegistry, VMContext,
-    VMExternRefActivationsTable, VMFunctionBody, VMFunctionImport, VMGlobalImport, VMMemoryImport,
-    VMTableImport,
+    Imports, InstanceAllocationRequest, InstantiationError, RuntimeInstance, StackMapRegistry,
+    VMContext, VMExternRefActivationsTable, VMFunctionBody, VMFunctionImport, VMGlobalImport,
+    VMMemoryImport, VMTableImport,
 };
 
 /// An instantiated WebAssembly module.
@@ -492,18 +492,26 @@ impl<'a> Instantiator<'a> {
         // compiled JIT code within the `Store`.
         self.store.register_module(&self.cur.module);
 
-        let config = self.store.engine().config();
         unsafe {
-            let instance = compiled_module.instantiate(
-                self.cur.build(),
-                &self.store.lookup_shared_signature(self.cur.module.types()),
-                config.memory_creator.as_ref().map(|a| a as _),
-                self.store.interrupts(),
-                Box::new(()),
-                self.store.externref_activations_table() as *const VMExternRefActivationsTable
+            let config = self.store.engine().config();
+
+            let allocator = config.instance_allocator();
+
+            let instance = allocator.allocate(InstanceAllocationRequest {
+                module: compiled_module.module().clone(),
+                finished_functions: compiled_module.finished_functions(),
+                imports: self.cur.build(),
+                lookup_shared_signature: &self
+                    .store
+                    .lookup_shared_signature(self.cur.module.types()),
+                host_state: Box::new(()),
+                interrupts: self.store.interrupts(),
+                externref_activations_table: self.store.externref_activations_table()
+                    as *const VMExternRefActivationsTable
                     as *mut _,
-                self.store.stack_map_registry() as *const StackMapRegistry as *mut _,
-            )?;
+                stack_map_registry: self.store.stack_map_registry() as *const StackMapRegistry
+                    as *mut _,
+            })?;
 
             // After we've created the `InstanceHandle` we still need to run
             // initialization to set up data/elements/etc. We do this after adding
@@ -513,8 +521,9 @@ impl<'a> Instantiator<'a> {
             // tables. This means that from this point on, regardless of whether
             // initialization is successful, we need to keep the instance alive.
             let instance = self.store.add_instance(instance);
-            instance
+            allocator
                 .initialize(
+                    &instance.handle,
                     config.features.bulk_memory,
                     &compiled_module.data_initializers(),
                 )

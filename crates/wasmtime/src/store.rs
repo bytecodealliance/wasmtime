@@ -18,8 +18,8 @@ use std::task::{Context, Poll};
 use wasmtime_environ::wasm;
 use wasmtime_jit::{CompiledModule, ModuleCode, TypeTables};
 use wasmtime_runtime::{
-    InstanceHandle, RuntimeMemoryCreator, SignalHandler, StackMapRegistry, TrapInfo, VMContext,
-    VMExternRef, VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
+    InstanceHandle, SignalHandler, StackMapRegistry, TrapInfo, VMContext, VMExternRef,
+    VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
 };
 
 /// A `Store` is a collection of WebAssembly instances and host-defined items.
@@ -252,15 +252,6 @@ impl Store {
     /// Returns the [`Engine`] that this store is associated with.
     pub fn engine(&self) -> &Engine {
         &self.inner.engine
-    }
-
-    /// Returns an optional reference to a ['RuntimeMemoryCreator']
-    pub(crate) fn memory_creator(&self) -> Option<&dyn RuntimeMemoryCreator> {
-        self.engine()
-            .config()
-            .memory_creator
-            .as_ref()
-            .map(|x| x as _)
     }
 
     pub(crate) fn signatures(&self) -> &RefCell<SignatureRegistry> {
@@ -969,9 +960,10 @@ impl fmt::Debug for Store {
 
 impl Drop for StoreInner {
     fn drop(&mut self) {
-        for instance in self.instances.get_mut().iter() {
+        let allocator = self.engine.config().instance_allocator();
+        for instance in self.instances.borrow().iter() {
             unsafe {
-                instance.dealloc();
+                allocator.deallocate(instance);
             }
         }
     }

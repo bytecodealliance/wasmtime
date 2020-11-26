@@ -101,6 +101,8 @@ pub fn translate_module<'data>(
 
             Payload::DataCountSection { count, range } => {
                 validator.data_count_section(count, &range)?;
+
+                // NOTE: the count here is the total segment count, not the passive segment count
                 environ.reserve_passive_data(count)?;
             }
 
