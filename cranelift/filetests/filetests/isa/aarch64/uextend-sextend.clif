@@ -9,7 +9,7 @@ block0(v0: i8):
 
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: uxtb x0, w0
+; nextln: uxtb w0, w0
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
@@ -87,7 +87,7 @@ block0(v0: i16):
 
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: uxth x0, w0
+; nextln: uxth w0, w0
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret

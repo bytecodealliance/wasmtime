@@ -281,7 +281,7 @@ block0(v0: i16):
 
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: uxth x0, w0
+; nextln: uxth w0, w0
 ; nextln: lsr w1, w0, #1
 ; nextln: and x1, x1, #6148914691236517205
 ; nextln: sub x1, x0, x1
@@ -307,7 +307,7 @@ block0(v0: i8):
 
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: uxtb x0, w0
+; nextln: uxtb w0, w0
 ; nextln: lsr w1, w0, #1
 ; nextln: and x1, x1, #6148914691236517205
 ; nextln: sub x1, x0, x1
@@ -321,6 +321,36 @@ block0(v0: i8):
 ; nextln: add x0, x0, x0, LSL 16
 ; nextln: add x0, x0, x0, LSL 32
 ; nextln: lsr x0, x0, #56
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %bextend_b8() -> b32 {
+block0:
+    v1 = bconst.b8 true
+    v2 = bextend.b32 v1
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x0, #255
+; nextln: sxtb w0, w0
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %bextend_b1() -> b32 {
+block0:
+    v1 = bconst.b1 true
+    v2 = bextend.b32 v1
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x0, #1
+; nextln: sbfx w0, w0, #0, #1
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
