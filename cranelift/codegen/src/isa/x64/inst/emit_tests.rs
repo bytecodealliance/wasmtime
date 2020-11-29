@@ -3505,6 +3505,27 @@ fn test_x64_emit() {
         "palignr $3, %xmm1, %xmm9",
     ));
 
+    insns.push((
+        Inst::xmm_rm_r_imm(SseOpcode::Roundps, RegMem::reg(xmm7), w_xmm8, 3, false),
+        "66440F3A08C703",
+        "roundps $3, %xmm7, %xmm8",
+    ));
+    insns.push((
+        Inst::xmm_rm_r_imm(SseOpcode::Roundpd, RegMem::reg(xmm10), w_xmm7, 2, false),
+        "66410F3A09FA02",
+        "roundpd $2, %xmm10, %xmm7",
+    ));
+    insns.push((
+        Inst::xmm_rm_r_imm(SseOpcode::Roundps, RegMem::reg(xmm4), w_xmm8, 1, false),
+        "66440F3A08C401",
+        "roundps $1, %xmm4, %xmm8",
+    ));
+    insns.push((
+        Inst::xmm_rm_r_imm(SseOpcode::Roundpd, RegMem::reg(xmm15), w_xmm15, 0, false),
+        "66450F3A09FF00",
+        "roundpd $0, %xmm15, %xmm15",
+    ));
+
     // ========================================================
     // Pertaining to atomics.
     let am1: SyntheticAmode = Amode::imm_reg_reg_shift(321, r10, rdx, 2).into();

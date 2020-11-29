@@ -1981,6 +1981,8 @@ pub(crate) fn emit(
                 SseOpcode::Pextrw => (LegacyPrefixes::_66, 0x0FC5, 2),
                 SseOpcode::Pextrd => (LegacyPrefixes::_66, 0x0F3A16, 3),
                 SseOpcode::Pshufd => (LegacyPrefixes::_66, 0x0F70, 2),
+                SseOpcode::Roundps => (LegacyPrefixes::_66, 0x0F3A08, 3),
+                SseOpcode::Roundpd => (LegacyPrefixes::_66, 0x0F3A09, 3),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
             let rex = if *is64 {
