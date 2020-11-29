@@ -550,6 +550,8 @@ pub enum SseOpcode {
     Punpcklbw,
     Pxor,
     Rcpss,
+    Roundps,
+    Roundpd,
     Roundss,
     Roundsd,
     Rsqrtss,
@@ -729,6 +731,8 @@ impl SseOpcode {
             | SseOpcode::Pmovzxdq
             | SseOpcode::Pmulld
             | SseOpcode::Ptest
+            | SseOpcode::Roundps
+            | SseOpcode::Roundpd
             | SseOpcode::Roundss
             | SseOpcode::Roundsd => SSE41,
 
@@ -890,6 +894,8 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Punpcklbw => "punpcklbw",
             SseOpcode::Pxor => "pxor",
             SseOpcode::Rcpss => "rcpss",
+            SseOpcode::Roundps => "roundps",
+            SseOpcode::Roundpd => "roundpd",
             SseOpcode::Roundss => "roundss",
             SseOpcode::Roundsd => "roundsd",
             SseOpcode::Rsqrtss => "rsqrtss",
@@ -1235,6 +1241,20 @@ impl From<FloatCC> for FcmpImm {
             FloatCC::Ordered => FcmpImm::Ordered,
             _ => panic!("unable to create comparison predicate for {}", cond),
         }
+    }
+}
+
+/// Encode the rounding modes used as part of the Rounding Control field.
+pub(crate) enum RoundImm {
+    RoundNearest = 0x00,
+    RoundDown = 0x01,
+    RoundUp = 0x02,
+    RoundZero = 0x03,
+}
+
+impl RoundImm {
+    pub(crate) fn encode(self) -> u8 {
+        self as u8
     }
 }
 

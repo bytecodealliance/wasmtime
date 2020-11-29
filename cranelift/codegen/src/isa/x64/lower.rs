@@ -3207,22 +3207,45 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             // Lower to VM calls when there's no access to SSE4.1.
             let ty = ty.unwrap();
-            let libcall = match (ty, op) {
-                (types::F32, Opcode::Ceil) => LibCall::CeilF32,
-                (types::F64, Opcode::Ceil) => LibCall::CeilF64,
-                (types::F32, Opcode::Floor) => LibCall::FloorF32,
-                (types::F64, Opcode::Floor) => LibCall::FloorF64,
-                (types::F32, Opcode::Nearest) => LibCall::NearestF32,
-                (types::F64, Opcode::Nearest) => LibCall::NearestF64,
-                (types::F32, Opcode::Trunc) => LibCall::TruncF32,
-                (types::F64, Opcode::Trunc) => LibCall::TruncF64,
-                _ => panic!(
-                    "unexpected type/opcode {:?}/{:?} in Ceil/Floor/Nearest/Trunc",
-                    ty, op
-                ),
-            };
-
-            emit_vm_call(ctx, flags, triple, libcall, insn, inputs, outputs)?;
+            if !ty.is_vector() {
+                let libcall = match (op, ty) {
+                    (Opcode::Ceil, types::F32) => LibCall::CeilF32,
+                    (Opcode::Ceil, types::F64) => LibCall::CeilF64,
+                    (Opcode::Floor, types::F32) => LibCall::FloorF32,
+                    (Opcode::Floor, types::F64) => LibCall::FloorF64,
+                    (Opcode::Nearest, types::F32) => LibCall::NearestF32,
+                    (Opcode::Nearest, types::F64) => LibCall::NearestF64,
+                    (Opcode::Trunc, types::F32) => LibCall::TruncF32,
+                    (Opcode::Trunc, types::F64) => LibCall::TruncF64,
+                    _ => panic!(
+                        "unexpected type/opcode {:?}/{:?} in Ceil/Floor/Nearest/Trunc",
+                        ty, op
+                    ),
+                };
+                emit_vm_call(ctx, flags, triple, libcall, insn, inputs, outputs)?;
+            } else {
+                let (op, mode) = match (op, ty) {
+                    (Opcode::Ceil, types::F32X4) => (SseOpcode::Roundps, RoundImm::RoundUp),
+                    (Opcode::Ceil, types::F64X2) => (SseOpcode::Roundpd, RoundImm::RoundUp),
+                    (Opcode::Floor, types::F32X4) => (SseOpcode::Roundps, RoundImm::RoundDown),
+                    (Opcode::Floor, types::F64X2) => (SseOpcode::Roundpd, RoundImm::RoundDown),
+                    (Opcode::Trunc, types::F32X4) => (SseOpcode::Roundps, RoundImm::RoundZero),
+                    (Opcode::Trunc, types::F64X2) => (SseOpcode::Roundpd, RoundImm::RoundZero),
+                    (Opcode::Nearest, types::F32X4) => (SseOpcode::Roundps, RoundImm::RoundNearest),
+                    (Opcode::Nearest, types::F64X2) => (SseOpcode::Roundpd, RoundImm::RoundNearest),
+                    _ => panic!("Unknown op/ty combination (vector){:?}", ty),
+                };
+                let src = put_input_in_reg(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]);
+                ctx.emit(Inst::gen_move(dst, src, ty));
+                ctx.emit(Inst::xmm_rm_r_imm(
+                    op,
+                    RegMem::reg(dst.to_reg()),
+                    dst,
+                    mode.encode(),
+                    false,
+                ));
+            }
         }
 
         Opcode::Load
