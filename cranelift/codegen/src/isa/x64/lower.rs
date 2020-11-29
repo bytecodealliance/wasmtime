@@ -3240,7 +3240,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::gen_move(dst, src, ty));
                 ctx.emit(Inst::xmm_rm_r_imm(
                     op,
-                    RegMem::reg(dst.to_reg()),
+                    RegMem::from(dst),
                     dst,
                     mode.encode(),
                     false,
