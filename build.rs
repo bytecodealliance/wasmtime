@@ -212,6 +212,8 @@ fn experimental_x64_should_panic(testsuite: &str, testname: &str, strategy: &str
         ("simd", "simd_splat") => return false,
         ("simd", "simd_store") => return false,
         ("simd", "simd_conversions") => return false,
+        ("simd", "simd_f32x4_rounding") => return false,
+        ("simd", "simd_f64x2_rounding") => return false,
         ("simd", _) => return true,
         _ => {}
     }
@@ -240,18 +242,13 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             // These are only implemented on aarch64 and x64.
             ("simd", "simd_boolean")
             | ("simd", "simd_f32x4_pmin_pmax")
-            | ("simd", "simd_f64x2_pmin_pmax") => {
+            | ("simd", "simd_f64x2_pmin_pmax")
+            | ("simd", "simd_f32x4_rounding")
+            | ("simd", "simd_f64x2_rounding") => {
                 return !(cfg!(feature = "experimental_x64")
                     || env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "aarch64")
             }
 
-            // These are only implemented on aarch64.
-            ("simd", "simd_f32x4_rounding") | ("simd", "simd_f64x2_rounding") => {
-                return env::var("CARGO_CFG_TARGET_ARCH").unwrap() != "aarch64";
-            }
-
-            // These tests have simd operators which aren't implemented yet.
-            // (currently none)
             _ => {}
         },
         _ => panic!("unrecognized strategy"),

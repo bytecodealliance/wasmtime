@@ -1245,6 +1245,11 @@ impl From<FloatCC> for FcmpImm {
 }
 
 /// Encode the rounding modes used as part of the Rounding Control field.
+/// Note, these rounding immediates only consider the rounding control field
+/// (i.e. the rounding mode) which only take up the first two bits when encoded.
+/// However the rounding immediate which this field helps make up, also includes
+/// bits 3 and 4 which define the rounding select and precision mask respectively.
+/// These two bits are not defined here and are implictly set to zero when encoded.
 pub(crate) enum RoundImm {
     RoundNearest = 0x00,
     RoundDown = 0x01,
