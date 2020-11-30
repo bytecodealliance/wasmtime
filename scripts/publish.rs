@@ -41,7 +41,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift",
     "cranelift-simplejit",
     // wig/wiggle
-    "wig",
     "wiggle-generate",
     "wiggle-macro",
     "wiggle",

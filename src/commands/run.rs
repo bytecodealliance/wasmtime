@@ -344,16 +344,18 @@ fn populate_with_wasi(
     argv: &[String],
     vars: &[(String, String)],
 ) -> Result<()> {
-    // Add the current snapshot to the linker.
-    let mut cx = WasiCtxBuilder::new();
-    cx.inherit_stdio().args(argv).envs(vars);
+    let mk_cx = || {
+        // Add the current snapshot to the linker.
+        let mut cx = WasiCtxBuilder::new();
+        cx.inherit_stdio().args(argv).envs(vars);
 
-    for (name, file) in preopen_dirs {
-        cx.preopened_dir(file.try_clone()?, name);
-    }
+        for (name, file) in preopen_dirs {
+            cx.preopened_dir(file.try_clone()?, name);
+        }
 
-    let cx = cx.build()?;
-    let wasi = Wasi::new(linker.store(), cx);
+        cx.build()
+    };
+    let wasi = Wasi::new(linker.store(), mk_cx()?);
     wasi.add_to_linker(linker)?;
 
     #[cfg(feature = "wasi-nn")]
@@ -362,16 +364,7 @@ fn populate_with_wasi(
         wasi_nn.add_to_linker(linker)?;
     }
 
-    // Repeat the above, but this time for snapshot 0.
-    let mut cx = wasi_common::old::snapshot_0::WasiCtxBuilder::new();
-    cx.inherit_stdio().args(argv).envs(vars);
-
-    for (name, file) in preopen_dirs {
-        cx.preopened_dir(file.try_clone()?, name);
-    }
-
-    let cx = cx.build()?;
-    let wasi = wasmtime_wasi::old::snapshot_0::Wasi::new(linker.store(), cx);
+    let wasi = wasmtime_wasi::old::snapshot_0::Wasi::new(linker.store(), mk_cx()?);
     wasi.add_to_linker(linker)?;
 
     Ok(())

@@ -2296,7 +2296,6 @@ dependencies = [
  "libc",
  "thiserror",
  "tracing",
- "wig",
  "wiggle",
  "winapi",
  "winx",
@@ -2639,7 +2638,6 @@ dependencies = [
  "wasmtime",
  "wasmtime-runtime",
  "wasmtime-wiggle",
- "wig",
  "wiggle",
 ]
 
@@ -2723,16 +2721,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d011071ae14a2f6671d0b74080ae0cd8ebf3a6f8c9589a2cd45f23126fe29724"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "wig"
-version = "0.21.0"
-dependencies = [
- "heck",
- "proc-macro2",
- "quote",
- "witx",
 ]
 
 [[package]]

@@ -17,7 +17,6 @@ tracing = "0.1.15"
 wasi-common = { path = "../wasi-common", version = "0.21.0" }
 wasmtime = { path = "../wasmtime", version = "0.21.0", default-features = false }
 wasmtime-runtime = { path = "../runtime", version = "0.21.0" }
-wig = { path = "../wasi-common/wig", version = "0.21.0" }
 wiggle = { path = "../wiggle", version = "0.21.0" }
 wasmtime-wiggle = { path = "../wiggle/wasmtime", version = "0.21.0" }
 
