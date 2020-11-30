@@ -857,7 +857,7 @@ and for re-adding support for interface types you can see this issue:
             // instance.
             Alias::Child { instance, export } => {
                 let ty = self.result.module.instances[instance];
-                match &self.types.instance_signatures[ty].exports[export].1 {
+                match &self.types.instance_signatures[ty].exports[export] {
                     EntityType::Global(g) => {
                         self.result.module.globals.push(g.clone());
                         self.result.module.num_imported_globals += 1;

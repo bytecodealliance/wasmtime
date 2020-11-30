@@ -110,7 +110,7 @@ pub struct InstanceTypeIndex(u32);
 entity_impl!(InstanceTypeIndex);
 
 /// An index of an entity.
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum EntityIndex {
     /// Function index.

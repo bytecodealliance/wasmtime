@@ -117,6 +117,24 @@
 )
 (assert_return (invoke "get") (i32.const 5))
 
+;; imported modules again
+(module
+  (module $m
+    (import "" (module $m (export "get" (func (result i32)))))
+    (instance $i (instantiate $m))
+    (alias $f (instance $i) (func 0))
+    (export "" (func $f))
+  )
+  (module $m2
+    (func (export "get") (result i32)
+      i32.const 6))
+  (instance $a (instantiate $m (module $m2)))
+
+  (func (export "get") (result i32)
+    call $a.$f)
+)
+(assert_return (invoke "get") (i32.const 6))
+
 ;; all at once
 (module
   (import "a" "inc" (func $f))
@@ -195,3 +213,23 @@
   (instance (instantiate 0 (func 0)))
 )
 (assert_return (invoke $a "get") (i32.const 1))
+
+;; module/instance top-level imports work
+(module $b
+  (module (export "m"))
+  (instance (export "i") (instantiate 0))
+)
+(module
+  (import "b" "m" (module))
+  (import "b" "i" (instance))
+)
+(assert_unlinkable
+  (module
+    (import "b" "m" (module (import "" (func))))
+  )
+  "module types incompatible")
+(assert_unlinkable
+  (module
+    (import "b" "i" (instance (export "" (func))))
+  )
+  "instance types incompatible")

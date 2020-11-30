@@ -1,7 +1,7 @@
 use crate::frame_info::StoreFrameInfo;
 use crate::sig_registry::SignatureRegistry;
 use crate::trampoline::StoreInstanceHandle;
-use crate::Engine;
+use crate::{Engine, Module};
 use anyhow::{bail, Result};
 use std::any::Any;
 use std::cell::RefCell;
@@ -147,7 +147,7 @@ impl Store {
         }
     }
 
-    pub(crate) fn register_module(&self, module: &CompiledModule, types: &TypeTables) {
+    pub(crate) fn register_module(&self, module: &Module) {
         // All modules register their JIT code in a store for two reasons
         // currently:
         //
@@ -158,18 +158,18 @@ impl Store {
         // * Second when generating a backtrace we'll use this mapping to
         //   only generate wasm frames for instruction pointers that fall
         //   within jit code.
-        self.register_jit_code(module);
+        self.register_jit_code(module.compiled_module());
 
         // We need to know about all the stack maps of all instantiated modules
         // so when performing a GC we know about all wasm frames that we find
         // on the stack.
-        self.register_stack_maps(module);
+        self.register_stack_maps(module.compiled_module());
 
         // Signatures are loaded into our `SignatureRegistry` here
         // once-per-module (and once-per-signature). This allows us to create
         // a `Func` wrapper for any function in the module, which requires that
         // we know about the signature and trampoline for all instances.
-        self.register_signatures(module, types);
+        self.register_signatures(module);
 
         // And finally with a module being instantiated into this `Store` we
         // need to preserve its jit-code. References to this module's code and
@@ -178,7 +178,7 @@ impl Store {
         self.inner
             .modules
             .borrow_mut()
-            .insert(ArcModuleCode(module.code().clone()));
+            .insert(ArcModuleCode(module.compiled_module().code().clone()));
     }
 
     fn register_jit_code(&self, module: &CompiledModule) {
@@ -205,10 +205,10 @@ impl Store {
             }));
     }
 
-    fn register_signatures(&self, module: &CompiledModule, types: &TypeTables) {
-        let trampolines = module.trampolines();
+    fn register_signatures(&self, module: &Module) {
+        let trampolines = module.compiled_module().trampolines();
         let mut signatures = self.signatures().borrow_mut();
-        for (index, wasm) in types.wasm_signatures.iter() {
+        for (index, wasm) in module.types().wasm_signatures.iter() {
             signatures.register(wasm, trampolines[index]);
         }
     }

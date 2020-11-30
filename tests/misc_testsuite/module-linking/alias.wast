@@ -54,7 +54,38 @@
 )
 (assert_return (invoke "get") (i32.const 4))
 
-;; TODO instances/modules -- needs import/export of modules/instances to work
+;; modules
+(module
+  (module $m
+    (module $sub (export "module")
+      (func $f (export "") (result i32)
+        i32.const 5))
+  )
+  (instance $a (instantiate $m))
+  (instance $b (instantiate $a.$sub))
+  (alias $b.$f (instance $b) (func 0))
+
+  (func (export "get") (result i32)
+    call $b.$f)
+)
+(assert_return (invoke "get") (i32.const 5))
+
+;; instances
+(module
+  (module $m
+    (module $sub
+      (func $f (export "") (result i32)
+        i32.const 6))
+    (instance $i (export "") (instantiate $sub))
+  )
+  (instance $a (instantiate $m))
+  (alias $a.$i (instance $a) (instance 0))
+  (alias $a.$i.$f (instance $a.$i) (func 0))
+
+  (func (export "get") (result i32)
+    call $a.$i.$f)
+)
+(assert_return (invoke "get") (i32.const 6))
 
 ;; alias parent -- type
 (module
