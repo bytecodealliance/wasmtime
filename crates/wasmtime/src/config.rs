@@ -85,7 +85,21 @@ impl Config {
     ///
     /// By default this option is `false`.
     pub fn debug_info(&mut self, enable: bool) -> &mut Self {
-        self.tunables.debug_info = enable;
+        self.tunables.generate_native_debuginfo = enable;
+        self
+    }
+
+    /// Configures whether DWARF debug information found in wasm binaries is
+    /// parsed for symbolicating wasm stack frames in trap traces.
+    ///
+    /// When enabled this will causes modules to retain DWARF debugging
+    /// information found in wasm binaries. This debug information will be used
+    /// when a trap happens to symbolicate each stack frame and attempt to print
+    /// a filename/line number for each wasm frame in the stack trace.
+    ///
+    /// By default this option is `true`.
+    pub fn parse_wasm_debuginfo(&mut self, enable: bool) -> &mut Self {
+        self.tunables.parse_wasm_debuginfo = enable;
         self
     }
 
@@ -640,7 +654,8 @@ impl Default for Config {
 impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Config")
-            .field("debug_info", &self.tunables.debug_info)
+            .field("debug_info", &self.tunables.generate_native_debuginfo)
+            .field("parse_wasm_debuginfo", &self.tunables.parse_wasm_debuginfo)
             .field("strategy", &self.strategy)
             .field("wasm_threads", &self.features.threads)
             .field("wasm_reference_types", &self.features.reference_types)

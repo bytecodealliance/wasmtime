@@ -153,8 +153,12 @@ impl CompilationArtifacts {
                             address_map: func.address_map,
                         })
                         .collect(),
-                    native_debug_info_present: compiler.tunables().debug_info,
-                    debug_info: Some(debuginfo.into()),
+                    native_debug_info_present: compiler.tunables().generate_native_debuginfo,
+                    debug_info: if compiler.tunables().parse_wasm_debuginfo {
+                        Some(debuginfo.into())
+                    } else {
+                        None
+                    },
                 })
             })
             .collect::<Result<Vec<_>, SetupError>>()
