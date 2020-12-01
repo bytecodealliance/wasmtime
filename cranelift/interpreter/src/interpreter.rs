@@ -2,7 +2,7 @@
 //!
 //! This module partially contains the logic for interpreting Cranelift IR.
 
-use crate::environment::FunctionStore;
+use crate::environment::{FuncIndex, FunctionStore};
 use crate::frame::Frame;
 use crate::instruction::DfgInstructionContext;
 use crate::state::{MemoryError, State};
@@ -34,22 +34,22 @@ impl<'a> Interpreter<'a> {
         func_name: &str,
         arguments: &[DataValue],
     ) -> Result<ControlFlow<'a, DataValue>, InterpreterError> {
-        let func_ref = self
+        let index = self
             .state
             .functions
             .index_of(func_name)
             .ok_or_else(|| InterpreterError::UnknownFunctionName(func_name.to_string()))?;
-        self.call_by_index(func_ref, arguments)
+        self.call_by_index(index, arguments)
     }
 
     /// Call a function by its index in the [FunctionStore]; this is a proxy for [Interpreter::call].
     pub fn call_by_index(
         &mut self,
-        func_ref: FuncRef,
+        index: FuncIndex,
         arguments: &[DataValue],
     ) -> Result<ControlFlow<'a, DataValue>, InterpreterError> {
-        match self.state.get_function(func_ref) {
-            None => Err(InterpreterError::UnknownFunctionReference(func_ref)),
+        match self.state.functions.get_by_index(index) {
+            None => Err(InterpreterError::UnknownFunctionIndex(index)),
             Some(func) => self.call(func, arguments),
         }
     }
@@ -98,8 +98,9 @@ impl<'a> Interpreter<'a> {
                         .set_all(function.dfg.block_params(block), block_arguments.to_vec());
                     maybe_inst = layout.first_inst(block)
                 }
-                ControlFlow::Call(function, arguments) => {
-                    let returned_arguments = self.call(function, &arguments)?.unwrap_return();
+                ControlFlow::Call(called_function, arguments) => {
+                    let returned_arguments =
+                        self.call(called_function, &arguments)?.unwrap_return();
                     self.state
                         .current_frame_mut()
                         .set_all(function.dfg.inst_results(inst), returned_arguments);
@@ -123,8 +124,8 @@ pub enum InterpreterError {
     StepError(#[from] StepError),
     #[error("reached an unreachable statement")]
     Unreachable,
-    #[error("unknown function reference (has it been added to the function store?): {0}")]
-    UnknownFunctionReference(FuncRef),
+    #[error("unknown function index (has it been added to the function store?): {0}")]
+    UnknownFunctionIndex(FuncIndex),
     #[error("unknown function with name (has it been added to the function store?): {0}")]
     UnknownFunctionName(String),
     #[error("value error")]
@@ -176,7 +177,8 @@ impl<'a> InterpreterState<'a> {
 
 impl<'a> State<'a, DataValue> for InterpreterState<'a> {
     fn get_function(&self, func_ref: FuncRef) -> Option<&'a Function> {
-        self.functions.get_by_func_ref(func_ref)
+        self.functions
+            .get_from_func_ref(func_ref, self.frame_stack.last().unwrap().function)
     }
     fn push_frame(&mut self, function: &'a Function) {
         self.frame_stack.push(Frame::new(function));
@@ -271,6 +273,40 @@ mod tests {
             .unwrap_return();
 
         assert_eq!(result, vec![DataValue::B(true)])
+    }
+
+    // This test verifies that functions can refer to each other using the function store. A double indirection is
+    // required, which is tricky to get right: a referenced function is a FuncRef when called but a FuncIndex inside the
+    // function store. This test would preferably be a CLIF filetest but the filetest infrastructure only looks at a
+    // single function at a time--we need more than one function in the store for this test.
+    #[test]
+    fn function_references() {
+        let code = "
+        function %child(i32) -> i32 {
+        block0(v0: i32):
+            v1 = iadd_imm v0, -1
+            return v1
+        }
+        
+        function %parent(i32) -> i32 {
+            fn42 = %child(i32) -> i32
+        block0(v0: i32):
+            v1 = iadd_imm v0, 1
+            v2 = call fn42(v1)
+            return v2
+        }";
+
+        let mut env = FunctionStore::default();
+        let funcs = parse_functions(code).unwrap().to_vec();
+        funcs.iter().for_each(|f| env.add(f.name.to_string(), f));
+
+        let state = InterpreterState::default().with_function_store(env);
+        let result = Interpreter::new(state)
+            .call_by_name("%parent", &[DataValue::I32(0)])
+            .unwrap()
+            .unwrap_return();
+
+        assert_eq!(result, vec![DataValue::I32(0)])
     }
 
     #[test]
