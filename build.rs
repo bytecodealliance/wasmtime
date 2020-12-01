@@ -31,6 +31,7 @@ fn main() -> anyhow::Result<()> {
             test_directory_module(out, "tests/misc_testsuite/bulk-memory-operations", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/reference-types", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/multi-memory", strategy)?;
+            test_directory_module(out, "tests/misc_testsuite/module-linking", strategy)?;
             Ok(())
         })?;
 

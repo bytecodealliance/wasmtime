@@ -81,7 +81,7 @@ use wasmtime_jit::{CompilationArtifacts, CompiledModule};
 #[derive(Clone)]
 pub struct Module {
     engine: Engine,
-    compiled: Arc<[CompiledModule]>,
+    pub(crate) compiled: Arc<[CompiledModule]>,
     index: usize,
 }
 

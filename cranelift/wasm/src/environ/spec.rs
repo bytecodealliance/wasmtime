@@ -8,8 +8,8 @@
 
 use crate::state::FuncTranslationState;
 use crate::translation_utils::{
-    DataIndex, ElemIndex, EntityType, Event, EventIndex, FuncIndex, Global, GlobalIndex, Memory,
-    MemoryIndex, Table, TableIndex, TypeIndex,
+    DataIndex, ElemIndex, EntityIndex, EntityType, Event, EventIndex, FuncIndex, Global,
+    GlobalIndex, Memory, MemoryIndex, ModuleIndex, Table, TableIndex, TypeIndex,
 };
 use core::convert::From;
 use core::convert::TryFrom;
@@ -22,6 +22,7 @@ use cranelift_frontend::FunctionBuilder;
 use serde::{Deserialize, Serialize};
 use std::boxed::Box;
 use std::string::ToString;
+use std::vec::Vec;
 use thiserror::Error;
 use wasmparser::ValidatorResources;
 use wasmparser::{BinaryReaderError, FuncValidator, FunctionBody, Operator, WasmFeatures};
@@ -968,5 +969,17 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
     /// Note that for nested modules this may be called multiple times.
     fn module_end(&mut self, index: usize) {
         drop(index);
+    }
+
+    /// Indicates that this module will have `amount` instances.
+    fn reserve_instances(&mut self, amount: u32) {
+        drop(amount);
+    }
+
+    /// Declares a new instance which this module will instantiate before it's
+    /// instantiated.
+    fn declare_instance(&mut self, module: ModuleIndex, args: Vec<EntityIndex>) -> WasmResult<()> {
+        drop((module, args));
+        Err(WasmError::Unsupported("wasm instance".to_string()))
     }
 }

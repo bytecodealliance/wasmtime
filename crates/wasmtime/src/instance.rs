@@ -1,21 +1,64 @@
 use crate::trampoline::StoreInstanceHandle;
 use crate::{Engine, Export, Extern, Func, Global, Memory, Module, Store, Table, Trap};
-use anyhow::{anyhow, bail, Context, Error, Result};
-use std::any::Any;
+use anyhow::{bail, Error, Result};
 use std::mem;
-use wasmtime_environ::wasm::EntityIndex;
+use wasmtime_environ::entity::PrimaryMap;
+use wasmtime_environ::wasm::{EntityIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex};
 use wasmtime_jit::CompiledModule;
 use wasmtime_runtime::{
     Imports, InstantiationError, StackMapRegistry, VMContext, VMExternRefActivationsTable,
-    VMFunctionBody,
+    VMFunctionBody, VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport,
 };
 
 fn instantiate(
     store: &Store,
     compiled_module: &CompiledModule,
-    imports: Imports<'_>,
-    host: Box<dyn Any>,
+    all_modules: &[CompiledModule],
+    imports: &mut ImportsBuilder<'_>,
 ) -> Result<StoreInstanceHandle, Error> {
+    let env_module = compiled_module.module();
+
+    // The first part of instantiating any module is to first follow any
+    // `instantiate` instructions it has as part of the module linking
+    // proposal. Here we iterate overall those instructions and create the
+    // instances as necessary.
+    for instance in env_module.instances.values() {
+        let (module_idx, args) = match instance {
+            wasmtime_environ::Instance::Instantiate { module, args } => (*module, args),
+            wasmtime_environ::Instance::Import(_) => continue,
+        };
+        // Translate the `module_idx` to a top-level module `usize` and then
+        // use that to extract the child `&CompiledModule` itself. Then we can
+        // iterate over each of the arguments provided to satisfy its imports.
+        //
+        // Note that we directly reach into `imports` below based on indexes
+        // and push raw value into how to instantiate our submodule. This should
+        // be safe due to wasm validation ensuring that all our indices are
+        // in-bounds and all the expected types and such line up.
+        let module_idx = compiled_module.submodule_idx(module_idx);
+        let compiled_module = &all_modules[module_idx];
+        let mut builder = ImportsBuilder::new(compiled_module.module(), store);
+        for arg in args {
+            match *arg {
+                EntityIndex::Global(i) => {
+                    builder.globals.push(imports.globals[i]);
+                }
+                EntityIndex::Table(i) => {
+                    builder.tables.push(imports.tables[i]);
+                }
+                EntityIndex::Function(i) => {
+                    builder.functions.push(imports.functions[i]);
+                }
+                EntityIndex::Memory(i) => {
+                    builder.memories.push(imports.memories[i]);
+                }
+                EntityIndex::Module(_) => unimplemented!(),
+                EntityIndex::Instance(_) => unimplemented!(),
+            }
+        }
+        instantiate(store, compiled_module, all_modules, &mut builder)?;
+    }
+
     // Register the module just before instantiation to ensure we have a
     // trampoline registered for every signature and to preserve the module's
     // compiled JIT code within the `Store`.
@@ -24,11 +67,11 @@ fn instantiate(
     let config = store.engine().config();
     let instance = unsafe {
         let instance = compiled_module.instantiate(
-            imports,
+            imports.imports(),
             &store.lookup_shared_signature(compiled_module.module()),
             config.memory_creator.as_ref().map(|a| a as _),
             store.interrupts(),
-            host,
+            Box::new(()),
             store.externref_activations_table() as *const VMExternRefActivationsTable as *mut _,
             store.stack_map_registry() as *const StackMapRegistry as *mut _,
         )?;
@@ -165,9 +208,27 @@ impl Instance {
             bail!("cross-`Engine` instantiation is not currently supported");
         }
 
-        let handle = with_imports(store, module.compiled_module(), imports, |imports| {
-            instantiate(store, module.compiled_module(), imports, Box::new(()))
-        })?;
+        let mut builder = ImportsBuilder::new(module.compiled_module().module(), store);
+        for import in imports {
+            // For now we have a restriction that the `Store` that we're working
+            // with is the same for everything involved here.
+            if !import.comes_from_same_store(store) {
+                bail!("cross-`Store` instantiation is not currently supported");
+            }
+            match import {
+                Extern::Global(e) => builder.global(e)?,
+                Extern::Func(e) => builder.func(e)?,
+                Extern::Table(e) => builder.table(e)?,
+                Extern::Memory(e) => builder.memory(e)?,
+            }
+        }
+        builder.validate_all_imports_provided()?;
+        let handle = instantiate(
+            store,
+            module.compiled_module(),
+            &module.compiled,
+            &mut builder,
+        )?;
 
         Ok(Instance {
             handle,
@@ -238,87 +299,126 @@ impl Instance {
     }
 }
 
-fn with_imports<R>(
-    store: &Store,
-    module: &CompiledModule,
-    externs: &[Extern],
-    f: impl FnOnce(Imports<'_>) -> Result<R>,
-) -> Result<R> {
-    let m = module.module();
-    if externs.len() != m.imports.len() {
-        bail!(
-            "wrong number of imports provided, {} != {}",
-            externs.len(),
-            m.imports.len()
-        );
+struct ImportsBuilder<'a> {
+    functions: PrimaryMap<FuncIndex, VMFunctionImport>,
+    tables: PrimaryMap<TableIndex, VMTableImport>,
+    memories: PrimaryMap<MemoryIndex, VMMemoryImport>,
+    globals: PrimaryMap<GlobalIndex, VMGlobalImport>,
+    module: &'a wasmtime_environ::Module,
+    imports: std::slice::Iter<'a, (String, Option<String>, EntityIndex)>,
+    store: &'a Store,
+}
+
+impl<'a> ImportsBuilder<'a> {
+    fn new(module: &'a wasmtime_environ::Module, store: &'a Store) -> ImportsBuilder<'a> {
+        ImportsBuilder {
+            imports: module.imports.iter(),
+            module,
+            store,
+            functions: PrimaryMap::with_capacity(module.num_imported_funcs),
+            tables: PrimaryMap::with_capacity(module.num_imported_tables),
+            memories: PrimaryMap::with_capacity(module.num_imported_memories),
+            globals: PrimaryMap::with_capacity(module.num_imported_globals),
+        }
     }
 
-    let mut tables = Vec::new();
-    let mut functions = Vec::new();
-    let mut globals = Vec::new();
-    let mut memories = Vec::new();
-
-    let mut process = |expected: &EntityIndex, actual: &Extern| {
-        // For now we have a restriction that the `Store` that we're working
-        // with is the same for everything involved here.
-        if !actual.comes_from_same_store(store) {
-            bail!("cross-`Store` instantiation is not currently supported");
-        }
-
-        match *expected {
-            EntityIndex::Table(i) => tables.push(match actual {
-                Extern::Table(e) if e.matches_expected(&m.table_plans[i]) => e.vmimport(),
-                Extern::Table(_) => bail!("table types incompatible"),
-                _ => bail!("expected table, but found {}", actual.desc()),
-            }),
-            EntityIndex::Memory(i) => memories.push(match actual {
-                Extern::Memory(e) if e.matches_expected(&m.memory_plans[i]) => e.vmimport(),
-                Extern::Memory(_) => bail!("memory types incompatible"),
-                _ => bail!("expected memory, but found {}", actual.desc()),
-            }),
-            EntityIndex::Global(i) => globals.push(match actual {
-                Extern::Global(e) if e.matches_expected(&m.globals[i]) => e.vmimport(),
-                Extern::Global(_) => bail!("global types incompatible"),
-                _ => bail!("expected global, but found {}", actual.desc()),
-            }),
-            EntityIndex::Function(i) => {
-                let func = match actual {
-                    Extern::Func(e) => e,
-                    _ => bail!("expected function, but found {}", actual.desc()),
+    fn next_import(
+        &mut self,
+        found: &str,
+        get: impl FnOnce(&wasmtime_environ::Module, &EntityIndex) -> Option<bool>,
+    ) -> Result<()> {
+        match self.imports.next() {
+            Some((module, field, idx)) => {
+                let error = match get(self.module, idx) {
+                    Some(true) => return Ok(()),
+                    Some(false) => {
+                        anyhow::anyhow!("{} types incompatible", found)
+                    }
+                    None => {
+                        let desc = match idx {
+                            EntityIndex::Table(_) => "table",
+                            EntityIndex::Function(_) => "func",
+                            EntityIndex::Memory(_) => "memory",
+                            EntityIndex::Global(_) => "global",
+                            EntityIndex::Instance(_) => "instance",
+                            EntityIndex::Module(_) => "module",
+                        };
+                        anyhow::anyhow!("expected {}, but found {}", desc, found)
+                    }
                 };
+                let import_name = match field {
+                    Some(name) => format!("{}/{}", module, name),
+                    None => module.to_string(),
+                };
+                Err(error.context(format!("incompatible import type for {}", import_name)))
+            }
+            None => bail!("too many imports provided"),
+        }
+    }
+
+    fn global(&mut self, global: &Global) -> Result<()> {
+        self.next_import("global", |m, e| match e {
+            EntityIndex::Global(i) => Some(global.matches_expected(&m.globals[*i])),
+            _ => None,
+        })?;
+        self.globals.push(global.vmimport());
+        Ok(())
+    }
+
+    fn memory(&mut self, mem: &Memory) -> Result<()> {
+        self.next_import("memory", |m, e| match e {
+            EntityIndex::Memory(i) => Some(mem.matches_expected(&m.memory_plans[*i])),
+            _ => None,
+        })?;
+        self.memories.push(mem.vmimport());
+        Ok(())
+    }
+
+    fn table(&mut self, table: &Table) -> Result<()> {
+        self.next_import("table", |m, e| match e {
+            EntityIndex::Table(i) => Some(table.matches_expected(&m.table_plans[*i])),
+            _ => None,
+        })?;
+        self.tables.push(table.vmimport());
+        Ok(())
+    }
+
+    fn func(&mut self, func: &Func) -> Result<()> {
+        let store = self.store;
+        self.next_import("func", |m, e| match e {
+            EntityIndex::Function(i) => Some(
                 // Look up the `i`th function's type from the module in our
                 // signature registry. If it's not present then we have no
                 // functions registered with that type, so `func` is guaranteed
                 // to not match.
-                let ty = store
+                match store
                     .signatures()
                     .borrow()
-                    .lookup(&m.signatures[m.functions[i]])
-                    .ok_or_else(|| anyhow!("function types incompatible"))?;
-                if !func.matches_expected(ty) {
-                    bail!("function types incompatible");
-                }
-                functions.push(func.vmimport());
-            }
-
-            // FIXME(#2094)
-            EntityIndex::Module(_i) => unimplemented!(),
-            EntityIndex::Instance(_i) => unimplemented!(),
-        }
-        Ok(())
-    };
-
-    for (expected, actual) in m.imports.iter().zip(externs) {
-        process(&expected.2, actual).with_context(|| match &expected.1 {
-            Some(name) => format!("incompatible import type for {}/{}", expected.0, name),
-            None => format!("incompatible import type for {}", expected.0),
+                    .lookup(&m.signatures[m.functions[*i]])
+                {
+                    Some(ty) => func.matches_expected(ty),
+                    None => false,
+                },
+            ),
+            _ => None,
         })?;
+        self.functions.push(func.vmimport());
+        Ok(())
     }
 
-    return f(Imports {
-        tables: &tables,
-        functions: &functions,
-        globals: &globals,
-        memories: &memories,
-    });
+    fn validate_all_imports_provided(&mut self) -> Result<()> {
+        if self.imports.next().is_some() {
+            bail!("not enough imports provided");
+        }
+        Ok(())
+    }
+
+    fn imports(&self) -> Imports<'_> {
+        Imports {
+            tables: self.tables.values().as_slice(),
+            globals: self.globals.values().as_slice(),
+            memories: self.memories.values().as_slice(),
+            functions: self.functions.values().as_slice(),
+        }
+    }
 }

@@ -3,8 +3,9 @@
 use crate::environ::{ModuleEnvironment, WasmResult};
 use crate::sections_translator::{
     parse_data_section, parse_element_section, parse_event_section, parse_export_section,
-    parse_function_section, parse_global_section, parse_import_section, parse_memory_section,
-    parse_name_section, parse_start_section, parse_table_section, parse_type_section,
+    parse_function_section, parse_global_section, parse_import_section, parse_instance_section,
+    parse_memory_section, parse_name_section, parse_start_section, parse_table_section,
+    parse_type_section,
 };
 use crate::state::ModuleTranslationState;
 use cranelift_codegen::timing;
@@ -116,7 +117,7 @@ pub fn translate_module<'data>(
             }
             Payload::InstanceSection(s) => {
                 validator.instance_section(&s)?;
-                unimplemented!("module linking not implemented yet")
+                parse_instance_section(s, environ)?;
             }
             Payload::AliasSection(s) => {
                 validator.alias_section(&s)?;
