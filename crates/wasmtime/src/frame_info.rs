@@ -26,6 +26,7 @@ struct ModuleFrameInfo {
     functions: BTreeMap<usize, FunctionInfo>,
     module: Arc<Module>,
     symbolize: Option<SymbolizeContext>,
+    has_unparsed_debuginfo: bool,
 }
 
 struct FunctionInfo {
@@ -39,8 +40,10 @@ impl StoreFrameInfo {
     /// Fetches frame information about a program counter in a backtrace.
     ///
     /// Returns an object if this `pc` is known to some previously registered
-    /// module, or returns `None` if no information can be found.
-    pub fn lookup_frame_info(&self, pc: usize) -> Option<FrameInfo> {
+    /// module, or returns `None` if no information can be found. The boolean
+    /// returned indicates whether the original module has unparsed debug
+    /// information due to the compiler's configuration.
+    pub fn lookup_frame_info(&self, pc: usize) -> Option<(FrameInfo, bool)> {
         let (module, func) = self.func(pc)?;
 
         // Use our relative position from the start of the function to find the
@@ -105,14 +108,17 @@ impl StoreFrameInfo {
             }
         }
 
-        Some(FrameInfo {
-            module_name: module.module.name.clone(),
-            func_index: func.index.index() as u32,
-            func_name: module.module.func_names.get(&func.index).cloned(),
-            instr,
-            func_start: func.instr_map.start_srcloc,
-            symbols,
-        })
+        Some((
+            FrameInfo {
+                module_name: module.module.name.clone(),
+                func_index: func.index.index() as u32,
+                func_name: module.module.func_names.get(&func.index).cloned(),
+                instr,
+                func_start: func.instr_map.start_srcloc,
+                symbols,
+            },
+            module.has_unparsed_debuginfo,
+        ))
     }
 
     /// Returns whether the `pc` specified is contaained within some module's
@@ -194,7 +200,8 @@ impl StoreFrameInfo {
                 start: min,
                 functions,
                 module: module.module().clone(),
-                symbolize: module.symbolize_context().ok(),
+                symbolize: module.symbolize_context().ok().and_then(|c| c),
+                has_unparsed_debuginfo: module.has_unparsed_debuginfo(),
             },
         );
         assert!(prev.is_none());

@@ -77,6 +77,10 @@ pub struct CompilationArtifacts {
     /// Whether or not native debug information is available in `obj`
     native_debug_info_present: bool,
 
+    /// Whether or not the original wasm module contained debug information that
+    /// we skipped and did not parse.
+    has_unparsed_debuginfo: bool,
+
     /// Debug information found in the wasm file, used for symbolicating
     /// backtraces.
     debug_info: Option<DebugInfo>,
@@ -124,6 +128,7 @@ impl CompilationArtifacts {
                     data_initializers,
                     submodules,
                     debuginfo,
+                    has_unparsed_debuginfo,
                     ..
                 } = translation;
 
@@ -159,6 +164,7 @@ impl CompilationArtifacts {
                     } else {
                         None
                     },
+                    has_unparsed_debuginfo,
                 })
             })
             .collect::<Result<Vec<_>, SetupError>>()
@@ -380,11 +386,11 @@ impl CompiledModule {
     ///
     /// Basically this makes a thing which parses debuginfo and can tell you
     /// what filename and line number a wasm pc comes from.
-    pub fn symbolize_context(&self) -> Result<SymbolizeContext, gimli::Error> {
+    pub fn symbolize_context(&self) -> Result<Option<SymbolizeContext>, gimli::Error> {
         use gimli::EndianSlice;
         let info = match &self.artifacts.debug_info {
             Some(info) => info,
-            None => return Err(gimli::Error::Io),
+            None => return Ok(None),
         };
         // For now we clone the data into the `SymbolizeContext`, but if this
         // becomes prohibitive we could always `Arc` it with our own allocation
@@ -403,7 +409,7 @@ impl CompiledModule {
             EndianSlice::new(&data[info.debug_str_offsets.clone()], endian).into(),
             EndianSlice::new(&[], endian),
         )?;
-        Ok(SymbolizeContext {
+        Ok(Some(SymbolizeContext {
             // See comments on `SymbolizeContext` for why we do this static
             // lifetime promotion.
             inner: unsafe {
@@ -411,7 +417,13 @@ impl CompiledModule {
             },
             code_section_offset: info.code_section_offset,
             _data: data,
-        })
+        }))
+    }
+
+    /// Returns whether the original wasm module had unparsed debug information
+    /// based on the tunables configuration.
+    pub fn has_unparsed_debuginfo(&self) -> bool {
+        self.artifacts.has_unparsed_debuginfo
     }
 }
 

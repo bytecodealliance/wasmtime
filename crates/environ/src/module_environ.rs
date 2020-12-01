@@ -62,6 +62,10 @@ pub struct ModuleTranslation<'data> {
     /// this module.
     pub submodules: PrimaryMap<ModuleIndex, usize>,
 
+    /// Set if debuginfo was found but it was not parsed due to `Tunables`
+    /// configuration.
+    pub has_unparsed_debuginfo: bool,
+
     code_index: u32,
 }
 
@@ -153,6 +157,7 @@ impl<'data> ModuleEnvironment<'data> {
 
     fn register_dwarf_section(&mut self, name: &str, data: &'data [u8]) {
         if !self.tunables.generate_native_debuginfo && !self.tunables.parse_wasm_debuginfo {
+            self.result.has_unparsed_debuginfo = true;
             return;
         }
 

@@ -524,8 +524,11 @@ fn parse_dwarf_info() -> Result<()> {
             }
         ",
     );
-    let store = Store::default();
-    let module = Module::new(store.engine(), &wasm)?;
+    let mut config = Config::new();
+    config.wasm_backtrace_details(WasmBacktraceDetails::Enable);
+    let engine = Engine::new(&config);
+    let store = Store::new(&engine);
+    let module = Module::new(&engine, &wasm)?;
     let mut linker = Linker::new(&store);
     wasmtime_wasi::Wasi::new(&store, wasmtime_wasi::WasiCtxBuilder::new().build()?)
         .add_to_linker(&mut linker)?;
@@ -546,5 +549,72 @@ fn parse_dwarf_info() -> Result<()> {
         }
     }
     assert!(found);
+    Ok(())
+}
+
+#[test]
+fn no_hint_even_with_dwarf_info() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_backtrace_details(WasmBacktraceDetails::Disable);
+    let engine = Engine::new(&config);
+    let store = Store::new(&engine);
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (@custom ".debug_info" (after last) "")
+                (func $start
+                    unreachable)
+                (start $start)
+            )
+        "#,
+    )?;
+    let trap = Instance::new(&store, &module, &[])
+        .err()
+        .unwrap()
+        .downcast::<Trap>()?;
+    assert_eq!(
+        trap.to_string(),
+        "\
+wasm trap: unreachable
+wasm backtrace:
+    0:   0x1a - <unknown>!start
+"
+    );
+    Ok(())
+}
+
+#[test]
+fn hint_with_dwarf_info() -> Result<()> {
+    // Skip this test if the env var is already configure, but in CI we're sure
+    // to run tests without this env var configured.
+    if std::env::var("WASM_BACKTRACE_DETAILS").is_ok() {
+        return Ok(());
+    }
+    let store = Store::default();
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (@custom ".debug_info" (after last) "")
+                (func $start
+                    unreachable)
+                (start $start)
+            )
+        "#,
+    )?;
+    let trap = Instance::new(&store, &module, &[])
+        .err()
+        .unwrap()
+        .downcast::<Trap>()?;
+    assert_eq!(
+        trap.to_string(),
+        "\
+wasm trap: unreachable
+wasm backtrace:
+    0:   0x1a - <unknown>!start
+note: run with `WASM_BACKTRACE_DETAILS=1` environment variable to display more information
+"
+    );
     Ok(())
 }
