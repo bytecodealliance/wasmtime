@@ -318,7 +318,10 @@ impl fmt::Display for Trap {
             let demangle =
                 |f: &mut fmt::Formatter<'_>, name: &str| match rustc_demangle::try_demangle(name) {
                     Ok(name) => write!(f, "{}", name),
-                    Err(_) => write!(f, "{}", name),
+                    Err(_) => match cpp_demangle::Symbol::new(name) {
+                        Ok(name) => write!(f, "{}", name),
+                        Err(_) => write!(f, "{}", name),
+                    },
                 };
             let write_raw_func_name = |f: &mut fmt::Formatter<'_>| match frame.func_name() {
                 Some(name) => demangle(f, name),
