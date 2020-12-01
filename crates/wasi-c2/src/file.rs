@@ -18,6 +18,19 @@ pub trait WasiFile: FileIoExt {
     fn set_oflags(&self, _flags: OFlags) -> Result<(), Error> {
         todo!("FileIoExt has no facilities for oflags");
     }
+    fn filestat_get(&self) -> Result<Filestat, Error> {
+        todo!()
+    }
+    fn filestat_set_times(
+        &self,
+        _atim: Option<FilestatSetTime>,
+        _mtim: Option<FilestatSetTime>,
+    ) -> Result<(), Error> {
+        todo!()
+    }
+    fn filestat_set_size(&self, _size: u64) -> Result<(), Error> {
+        todo!()
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -51,6 +64,24 @@ impl OFlags {
         flags: Self::RDONLY.flags | Self::WRONLY.flags,
     };
     // etc
+}
+
+#[derive(Debug, Clone)]
+pub struct Filestat {
+    device_id: u64,
+    inode: u64,
+    filetype: Filetype,
+    nlink: u64,
+    size: usize,
+    atim: std::time::SystemTime,
+    mtim: std::time::SystemTime,
+    ctim: std::time::SystemTime,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum FilestatSetTime {
+    Now,
+    Absolute(std::time::SystemTime),
 }
 
 pub(crate) struct FileEntry {
@@ -93,10 +124,13 @@ impl FileCaps {
     pub const WRITE: Self = FileCaps { flags: 64 };
     pub const ADVISE: Self = FileCaps { flags: 128 };
     pub const ALLOCATE: Self = FileCaps { flags: 256 };
+    pub const FILESTAT_GET: Self = FileCaps { flags: 512 };
+    pub const FILESTAT_SET_SIZE: Self = FileCaps { flags: 1024 };
+    pub const FILESTAT_SET_TIMES: Self = FileCaps { flags: 2048 };
     // This isnt in wasi-common, but lets use a cap to check
     // if its valid to close a file, rather than depend on
     // preopen logic
-    pub const CLOSE: Self = FileCaps { flags: 512 };
+    pub const CLOSE: Self = FileCaps { flags: 4096 };
 }
 
 impl std::fmt::Display for FileCaps {

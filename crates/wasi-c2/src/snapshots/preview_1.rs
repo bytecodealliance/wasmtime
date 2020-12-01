@@ -1,5 +1,5 @@
 #![allow(unused_variables)]
-use crate::file::{FileCaps, FileEntry, Filetype, OFlags};
+use crate::file::{FileCaps, FileEntry, Filestat, FilestatSetTime, Filetype, OFlags};
 use crate::{Error, WasiCtx};
 use std::cell::RefMut;
 use std::convert::TryFrom;
@@ -27,9 +27,9 @@ impl types::GuestErrorConversion for WasiCtx {
 }
 
 impl types::UserErrorConversion for WasiCtx {
-    fn errno_from_error(&self, e: Error) -> types::Errno {
+    fn errno_from_error(&self, e: Error) -> Result<types::Errno, String> {
         debug!("Error: {:?}", e);
-        e.into()
+        Ok(e.into())
     }
 }
 
@@ -69,6 +69,7 @@ impl From<Error> for types::Errno {
             Error::Perm => Errno::Perm,
             Error::Spipe => Errno::Spipe,
             Error::FileNotCapable { .. } => Errno::Notcapable,
+            Error::NotCapable => Errno::Notcapable,
         }
     }
 }
@@ -185,7 +186,6 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let table = self.table();
         let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
         let f = file_entry.get_cap(FileCaps::FDSTAT_SET_FLAGS)?;
-
         f.set_oflags(OFlags::try_from(flags)?)?;
         Ok(())
     }
@@ -196,15 +196,35 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         fs_rights_base: types::Rights,
         fs_rights_inheriting: types::Rights,
     ) -> Result<(), Error> {
-        unimplemented!()
+        let table = self.table();
+        let mut file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
+        let base_caps = FileCaps::try_from(&fs_rights_base)?;
+        let inheriting_caps = FileCaps::try_from(&fs_rights_inheriting)?;
+        if file_entry.base_caps.contains(&base_caps)
+            && file_entry.inheriting_caps.contains(&inheriting_caps)
+        {
+            file_entry.base_caps = base_caps;
+            file_entry.inheriting_caps = inheriting_caps;
+            Ok(())
+        } else {
+            Err(Error::NotCapable)
+        }
     }
 
     fn fd_filestat_get(&self, fd: types::Fd) -> Result<types::Filestat, Error> {
-        unimplemented!()
+        let table = self.table();
+        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
+        let f = file_entry.get_cap(FileCaps::FILESTAT_GET)?;
+        let filestat = f.filestat_get()?;
+        Ok(filestat.into())
     }
 
     fn fd_filestat_set_size(&self, fd: types::Fd, size: types::Filesize) -> Result<(), Error> {
-        unimplemented!()
+        let table = self.table();
+        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
+        let f = file_entry.get_cap(FileCaps::FILESTAT_SET_SIZE)?;
+        f.filestat_set_size(size)?;
+        Ok(())
     }
 
     fn fd_filestat_set_times(
@@ -214,7 +234,40 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         mtim: types::Timestamp,
         fst_flags: types::Fstflags,
     ) -> Result<(), Error> {
-        unimplemented!()
+        use std::time::{Duration, UNIX_EPOCH};
+        let table = self.table();
+        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
+        let f = file_entry.get_cap(FileCaps::FILESTAT_SET_TIMES)?;
+
+        // Validate flags, transform into well-structured arguments
+        let set_atim = fst_flags.contains(&types::Fstflags::ATIM);
+        let set_atim_now = fst_flags.contains(&types::Fstflags::ATIM_NOW);
+        let set_mtim = fst_flags.contains(&types::Fstflags::MTIM);
+        let set_mtim_now = fst_flags.contains(&types::Fstflags::MTIM_NOW);
+        if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
+            return Err(Error::Inval);
+        }
+        let atim = if set_atim {
+            Some(FilestatSetTime::Absolute(
+                UNIX_EPOCH + Duration::from_nanos(atim),
+            ))
+        } else if set_atim_now {
+            Some(FilestatSetTime::Now)
+        } else {
+            None
+        };
+        let mtim = if set_mtim {
+            Some(FilestatSetTime::Absolute(
+                UNIX_EPOCH + Duration::from_nanos(mtim),
+            ))
+        } else if set_mtim_now {
+            Some(FilestatSetTime::Now)
+        } else {
+            None
+        };
+
+        f.filestat_set_times(atim, mtim)?;
+        Ok(())
     }
 
     fn fd_read(&self, fd: types::Fd, iovs: &types::IovecArray<'_>) -> Result<types::Size, Error> {
@@ -457,9 +510,18 @@ impl From<&FileEntry> for types::Fdstat {
     }
 }
 
+// FileCaps can always be represented as wasi Rights
 impl From<&FileCaps> for types::Rights {
     fn from(caps: &FileCaps) -> types::Rights {
         todo!("translate FileCaps flags to Rights flags")
+    }
+}
+
+// FileCaps are a subset of wasi Rights - not all Rights have a valid representation as FileCaps
+impl TryFrom<&types::Rights> for FileCaps {
+    type Error = Error;
+    fn try_from(rights: &types::Rights) -> Result<FileCaps, Self::Error> {
+        todo!("translate Rights flags to FileCaps flags")
     }
 }
 
@@ -483,6 +545,12 @@ impl From<&OFlags> for types::Fdflags {
 impl TryFrom<types::Fdflags> for OFlags {
     type Error = Error;
     fn try_from(fdflags: types::Fdflags) -> Result<OFlags, Self::Error> {
+        todo!()
+    }
+}
+
+impl From<Filestat> for types::Filestat {
+    fn from(stat: Filestat) -> types::Filestat {
         todo!()
     }
 }

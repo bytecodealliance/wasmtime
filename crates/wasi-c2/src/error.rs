@@ -104,6 +104,10 @@ pub enum Error {
     /// Errno::Spipe: Invalid seek
     #[error("Spipe: Invalid seek")]
     Spipe,
+
+    /// Errno::NotCapable: Not capable
+    #[error("Not capable")]
+    NotCapable,
 }
 
 impl From<std::convert::Infallible> for Error {
