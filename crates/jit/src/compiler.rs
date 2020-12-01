@@ -139,7 +139,7 @@ impl Compiler {
             .into_iter()
             .collect::<CompiledFunctions>();
 
-        let dwarf_sections = if self.tunables.debug_info && !funcs.is_empty() {
+        let dwarf_sections = if self.tunables.generate_native_debuginfo && !funcs.is_empty() {
             transform_dwarf_data(
                 &*self.isa,
                 &translation.module,

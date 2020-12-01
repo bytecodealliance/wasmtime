@@ -355,7 +355,7 @@ impl Compiler for Cranelift {
         context.func.name = get_func_name(func_index);
         let sig_index = module.functions[func_index];
         context.func.signature = translation.native_signatures[sig_index].clone();
-        if tunables.debug_info {
+        if tunables.generate_native_debuginfo {
             context.func.collect_debug_info();
         }
 
@@ -434,7 +434,7 @@ impl Compiler for Cranelift {
         let address_transform =
             get_function_address_map(&context, &input, code_buf.len() as u32, isa);
 
-        let ranges = if tunables.debug_info {
+        let ranges = if tunables.generate_native_debuginfo {
             let ranges = context.build_value_labels_ranges(isa).map_err(|error| {
                 CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
             })?;

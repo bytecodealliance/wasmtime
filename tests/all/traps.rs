@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::panic::{self, AssertUnwindSafe};
+use std::process::Command;
 use wasmtime::*;
 
 #[test]
@@ -167,10 +168,10 @@ fn trap_display_pretty() -> Result<()> {
         "\
 wasm trap: unreachable
 wasm backtrace:
-  0:   0x23 - m!die
-  1:   0x27 - m!<wasm function 1>
-  2:   0x2c - m!foo
-  3:   0x31 - m!<wasm function 3>
+    0:   0x23 - m!die
+    1:   0x27 - m!<wasm function 1>
+    2:   0x2c - m!foo
+    3:   0x31 - m!<wasm function 3>
 "
     );
     Ok(())
@@ -211,12 +212,12 @@ fn trap_display_multi_module() -> Result<()> {
         "\
 wasm trap: unreachable
 wasm backtrace:
-  0:   0x23 - a!die
-  1:   0x27 - a!<wasm function 1>
-  2:   0x2c - a!foo
-  3:   0x31 - a!<wasm function 3>
-  4:   0x29 - b!middle
-  5:   0x2e - b!<wasm function 2>
+    0:   0x23 - a!die
+    1:   0x27 - a!<wasm function 1>
+    2:   0x2c - a!foo
+    3:   0x31 - a!<wasm function 3>
+    4:   0x29 - b!middle
+    5:   0x2e - b!<wasm function 2>
 "
     );
     Ok(())
@@ -422,10 +423,10 @@ fn start_trap_pretty() -> Result<()> {
         "\
 wasm trap: unreachable
 wasm backtrace:
-  0:   0x1d - m!die
-  1:   0x21 - m!<wasm function 1>
-  2:   0x26 - m!foo
-  3:   0x2b - m!start
+    0:   0x1d - m!die
+    1:   0x21 - m!<wasm function 1>
+    2:   0x26 - m!foo
+    3:   0x2b - m!start
 "
     );
     Ok(())
@@ -488,4 +489,132 @@ fn heap_out_of_bounds_trap() {
          "#,
         TrapCode::MemoryOutOfBounds,
     );
+}
+
+fn rustc(src: &str) -> Vec<u8> {
+    let td = tempfile::TempDir::new().unwrap();
+    let output = td.path().join("foo.wasm");
+    let input = td.path().join("input.rs");
+    std::fs::write(&input, src).unwrap();
+    let result = Command::new("rustc")
+        .arg(&input)
+        .arg("-o")
+        .arg(&output)
+        .arg("--target")
+        .arg("wasm32-wasi")
+        .arg("-g")
+        .output()
+        .unwrap();
+    if result.status.success() {
+        return std::fs::read(&output).unwrap();
+    }
+    panic!(
+        "rustc failed: {}\n{}",
+        result.status,
+        String::from_utf8_lossy(&result.stderr)
+    );
+}
+
+#[test]
+fn parse_dwarf_info() -> Result<()> {
+    let wasm = rustc(
+        "
+            fn main() {
+                panic!();
+            }
+        ",
+    );
+    let mut config = Config::new();
+    config.wasm_backtrace_details(WasmBacktraceDetails::Enable);
+    let engine = Engine::new(&config);
+    let store = Store::new(&engine);
+    let module = Module::new(&engine, &wasm)?;
+    let mut linker = Linker::new(&store);
+    wasmtime_wasi::Wasi::new(&store, wasmtime_wasi::WasiCtxBuilder::new().build()?)
+        .add_to_linker(&mut linker)?;
+    linker.module("", &module)?;
+    let run = linker.get_default("")?;
+    let trap = run.call(&[]).unwrap_err().downcast::<Trap>()?;
+
+    let mut found = false;
+    for frame in trap.trace() {
+        for symbol in frame.symbols() {
+            if let Some(file) = symbol.file() {
+                if file.ends_with("input.rs") {
+                    found = true;
+                    assert!(symbol.name().unwrap().contains("main"));
+                    assert_eq!(symbol.line(), Some(3));
+                }
+            }
+        }
+    }
+    assert!(found);
+    Ok(())
+}
+
+#[test]
+fn no_hint_even_with_dwarf_info() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_backtrace_details(WasmBacktraceDetails::Disable);
+    let engine = Engine::new(&config);
+    let store = Store::new(&engine);
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (@custom ".debug_info" (after last) "")
+                (func $start
+                    unreachable)
+                (start $start)
+            )
+        "#,
+    )?;
+    let trap = Instance::new(&store, &module, &[])
+        .err()
+        .unwrap()
+        .downcast::<Trap>()?;
+    assert_eq!(
+        trap.to_string(),
+        "\
+wasm trap: unreachable
+wasm backtrace:
+    0:   0x1a - <unknown>!start
+"
+    );
+    Ok(())
+}
+
+#[test]
+fn hint_with_dwarf_info() -> Result<()> {
+    // Skip this test if the env var is already configure, but in CI we're sure
+    // to run tests without this env var configured.
+    if std::env::var("WASMTIME_BACKTRACE_DETAILS").is_ok() {
+        return Ok(());
+    }
+    let store = Store::default();
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (@custom ".debug_info" (after last) "")
+                (func $start
+                    unreachable)
+                (start $start)
+            )
+        "#,
+    )?;
+    let trap = Instance::new(&store, &module, &[])
+        .err()
+        .unwrap()
+        .downcast::<Trap>()?;
+    assert_eq!(
+        trap.to_string(),
+        "\
+wasm trap: unreachable
+wasm backtrace:
+    0:   0x1a - <unknown>!start
+note: run with `WASMTIME_BACKTRACE_DETAILS=1` environment variable to display more information
+"
+    );
+    Ok(())
 }

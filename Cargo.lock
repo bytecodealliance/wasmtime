@@ -332,6 +332,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 
 [[package]]
+name = "cpp_demangle"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44919ecaf6f99e8e737bc239408931c9a01e9a6c74814fee8242dd2506b65390"
+dependencies = [
+ "cfg-if 1.0.0",
+ "glob",
+]
+
+[[package]]
 name = "cpu-time"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2342,6 +2352,7 @@ dependencies = [
  "backtrace",
  "bincode",
  "cfg-if 1.0.0",
+ "cpp_demangle",
  "libc",
  "log",
  "region",
@@ -2522,6 +2533,7 @@ dependencies = [
 name = "wasmtime-jit"
 version = "0.21.0"
 dependencies = [
+ "addr2line",
  "anyhow",
  "cfg-if 1.0.0",
  "cranelift-codegen",

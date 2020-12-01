@@ -29,7 +29,7 @@ impl Compiler for Lightbeam {
         isa: &dyn isa::TargetIsa,
         tunables: &Tunables,
     ) -> Result<CompiledFunction, CompileError> {
-        if tunables.debug_info {
+        if tunables.generate_native_debuginfo {
             return Err(CompileError::DebugInfoNotSupported);
         }
         let func_index = translation.module.func_index(i);

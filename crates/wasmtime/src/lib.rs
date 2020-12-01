@@ -253,7 +253,7 @@ mod values;
 pub use crate::config::*;
 pub use crate::engine::*;
 pub use crate::externals::*;
-pub use crate::frame_info::FrameInfo;
+pub use crate::frame_info::{FrameInfo, FrameSymbol};
 pub use crate::func::*;
 pub use crate::instance::Instance;
 pub use crate::linker::*;

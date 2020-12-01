@@ -62,6 +62,10 @@ pub struct ModuleTranslation<'data> {
     /// this module.
     pub submodules: PrimaryMap<ModuleIndex, usize>,
 
+    /// Set if debuginfo was found but it was not parsed due to `Tunables`
+    /// configuration.
+    pub has_unparsed_debuginfo: bool,
+
     code_index: u32,
 }
 
@@ -81,8 +85,8 @@ pub struct DebugInfoData<'a> {
     pub wasm_file: WasmFileInfo,
     debug_loc: gimli::DebugLoc<Reader<'a>>,
     debug_loclists: gimli::DebugLocLists<Reader<'a>>,
-    debug_ranges: gimli::DebugRanges<Reader<'a>>,
-    debug_rnglists: gimli::DebugRngLists<Reader<'a>>,
+    pub debug_ranges: gimli::DebugRanges<Reader<'a>>,
+    pub debug_rnglists: gimli::DebugRngLists<Reader<'a>>,
 }
 
 #[allow(missing_docs)]
@@ -152,9 +156,11 @@ impl<'data> ModuleEnvironment<'data> {
     }
 
     fn register_dwarf_section(&mut self, name: &str, data: &'data [u8]) {
-        if !self.tunables.debug_info {
+        if !self.tunables.generate_native_debuginfo && !self.tunables.parse_wasm_debuginfo {
+            self.result.has_unparsed_debuginfo = true;
             return;
         }
+
         if !name.starts_with(".debug_") {
             return;
         }
@@ -493,7 +499,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         validator: FuncValidator<ValidatorResources>,
         body: FunctionBody<'data>,
     ) -> WasmResult<()> {
-        if self.tunables.debug_info {
+        if self.tunables.generate_native_debuginfo {
             let func_index = self.result.code_index + self.result.module.num_imported_funcs as u32;
             let func_index = FuncIndex::from_u32(func_index);
             let sig_index = self.result.module.functions[func_index];
@@ -563,7 +569,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
 
     fn declare_module_name(&mut self, name: &'data str) {
         self.result.module.name = Some(name.to_string());
-        if self.tunables.debug_info {
+        if self.tunables.generate_native_debuginfo {
             self.result.debuginfo.name_section.module_name = Some(name);
         }
     }
@@ -573,7 +579,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             .module
             .func_names
             .insert(func_index, name.to_string());
-        if self.tunables.debug_info {
+        if self.tunables.generate_native_debuginfo {
             self.result
                 .debuginfo
                 .name_section
@@ -583,7 +589,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn declare_local_name(&mut self, func_index: FuncIndex, local: u32, name: &'data str) {
-        if self.tunables.debug_info {
+        if self.tunables.generate_native_debuginfo {
             self.result
                 .debuginfo
                 .name_section

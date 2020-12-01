@@ -5,7 +5,7 @@ use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::ir;
 use wasmtime_environ::wasm::FuncIndex;
 use wasmtime_environ::{FunctionAddressMap, Module, TrapInformation};
-use wasmtime_jit::CompiledModule;
+use wasmtime_jit::{CompiledModule, SymbolizeContext};
 
 #[derive(Default)]
 pub struct StoreFrameInfo {
@@ -25,6 +25,8 @@ struct ModuleFrameInfo {
     start: usize,
     functions: BTreeMap<usize, FunctionInfo>,
     module: Arc<Module>,
+    symbolize: Option<SymbolizeContext>,
+    has_unparsed_debuginfo: bool,
 }
 
 struct FunctionInfo {
@@ -38,8 +40,10 @@ impl StoreFrameInfo {
     /// Fetches frame information about a program counter in a backtrace.
     ///
     /// Returns an object if this `pc` is known to some previously registered
-    /// module, or returns `None` if no information can be found.
-    pub fn lookup_frame_info(&self, pc: usize) -> Option<FrameInfo> {
+    /// module, or returns `None` if no information can be found. The boolean
+    /// returned indicates whether the original module has unparsed debug
+    /// information due to the compiler's configuration.
+    pub fn lookup_frame_info(&self, pc: usize) -> Option<(FrameInfo, bool)> {
         let (module, func) = self.func(pc)?;
 
         // Use our relative position from the start of the function to find the
@@ -72,13 +76,49 @@ impl StoreFrameInfo {
             Some(pos) => func.instr_map.instructions[pos].srcloc,
             None => func.instr_map.start_srcloc,
         };
-        Some(FrameInfo {
-            module_name: module.module.name.clone(),
-            func_index: func.index.index() as u32,
-            func_name: module.module.func_names.get(&func.index).cloned(),
-            instr,
-            func_start: func.instr_map.start_srcloc,
-        })
+
+        // Use our wasm-relative pc to symbolize this frame. If there's a
+        // symbolication context (dwarf debug info) available then we can try to
+        // look this up there.
+        //
+        // Note that dwarf pcs are code-section-relative, hence the subtraction
+        // from the location of `instr`. Also note that all errors are ignored
+        // here for now since technically wasm modules can always have any
+        // custom section contents.
+        let mut symbols = Vec::new();
+        if let Some(s) = &module.symbolize {
+            let to_lookup = (instr.bits() as u64) - s.code_section_offset();
+            if let Ok(mut frames) = s.addr2line().find_frames(to_lookup) {
+                while let Ok(Some(frame)) = frames.next() {
+                    symbols.push(FrameSymbol {
+                        name: frame
+                            .function
+                            .as_ref()
+                            .and_then(|l| l.raw_name().ok())
+                            .map(|s| s.to_string()),
+                        file: frame
+                            .location
+                            .as_ref()
+                            .and_then(|l| l.file)
+                            .map(|s| s.to_string()),
+                        line: frame.location.as_ref().and_then(|l| l.line),
+                        column: frame.location.as_ref().and_then(|l| l.column),
+                    });
+                }
+            }
+        }
+
+        Some((
+            FrameInfo {
+                module_name: module.module.name.clone(),
+                func_index: func.index.index() as u32,
+                func_name: module.module.func_names.get(&func.index).cloned(),
+                instr,
+                func_start: func.instr_map.start_srcloc,
+                symbols,
+            },
+            module.has_unparsed_debuginfo,
+        ))
     }
 
     /// Returns whether the `pc` specified is contaained within some module's
@@ -160,6 +200,8 @@ impl StoreFrameInfo {
                 start: min,
                 functions,
                 module: module.module().clone(),
+                symbolize: module.symbolize_context().ok().and_then(|c| c),
+                has_unparsed_debuginfo: module.has_unparsed_debuginfo(),
             },
         );
         assert!(prev.is_none());
@@ -180,6 +222,20 @@ pub struct FrameInfo {
     func_name: Option<String>,
     func_start: ir::SourceLoc,
     instr: ir::SourceLoc,
+    symbols: Vec<FrameSymbol>,
+}
+
+/// Debug information for a symbol that is attached to a [`FrameInfo`].
+///
+/// When DWARF debug information is present in a wasm file then this structure
+/// can be found on a [`FrameInfo`] and can be used to learn about filenames,
+/// line numbers, etc, which are the origin of a function in a stack trace.
+#[derive(Debug)]
+pub struct FrameSymbol {
+    name: Option<String>,
+    file: Option<String>,
+    line: Option<u32>,
+    column: Option<u32>,
 }
 
 impl FrameInfo {
@@ -240,6 +296,55 @@ impl FrameInfo {
     pub fn func_offset(&self) -> usize {
         (self.instr.bits() - self.func_start.bits()) as usize
     }
+
+    /// Returns the debug symbols found, if any, for this function frame.
+    ///
+    /// When a wasm program is compiled with DWARF debug information then this
+    /// function may be populated to return symbols which contain extra debug
+    /// information about a frame including the filename and line number. If no
+    /// debug information was found or if it was malformed then this will return
+    /// an empty array.
+    pub fn symbols(&self) -> &[FrameSymbol] {
+        &self.symbols
+    }
+}
+
+impl FrameSymbol {
+    /// Returns the function name associated with this symbol.
+    ///
+    /// Note that this may not be present with malformed debug information, or
+    /// the debug information may not include it. Also note that the symbol is
+    /// frequently mangled, so you might need to run some form of demangling
+    /// over it.
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    /// Returns the source code filename this symbol was defined in.
+    ///
+    /// Note that this may not be present with malformed debug information, or
+    /// the debug information may not include it.
+    pub fn file(&self) -> Option<&str> {
+        self.file.as_deref()
+    }
+
+    /// Returns the 1-indexed source code line number this symbol was defined
+    /// on.
+    ///
+    /// Note that this may not be present with malformed debug information, or
+    /// the debug information may not include it.
+    pub fn line(&self) -> Option<u32> {
+        self.line
+    }
+
+    /// Returns the 1-indexed source code column number this symbol was defined
+    /// on.
+    ///
+    /// Note that this may not be present with malformed debug information, or
+    /// the debug information may not include it.
+    pub fn column(&self) -> Option<u32> {
+        self.column
+    }
 }
 
 #[test]
@@ -270,7 +375,7 @@ fn test_frame_info() -> Result<(), anyhow::Error> {
             (ptr as usize, ptr as usize + len)
         };
         for pc in start..end {
-            let frame = info.lookup_frame_info(pc).unwrap();
+            let (frame, _) = info.lookup_frame_info(pc).unwrap();
             assert!(frame.func_index() == i.as_u32());
         }
     }
