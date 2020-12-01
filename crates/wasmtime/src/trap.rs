@@ -358,7 +358,7 @@ impl fmt::Display for Trap {
             }
         }
         if self.inner.hint_wasm_backtrace_details_env {
-            writeln!(f, "note: run with `WASM_BACKTRACE_DETAILS=1` environment variable to display more information")?;
+            writeln!(f, "note: run with `WASMTIME_BACKTRACE_DETAILS=1` environment variable to display more information")?;
         }
         Ok(())
     }

@@ -588,7 +588,7 @@ wasm backtrace:
 fn hint_with_dwarf_info() -> Result<()> {
     // Skip this test if the env var is already configure, but in CI we're sure
     // to run tests without this env var configured.
-    if std::env::var("WASM_BACKTRACE_DETAILS").is_ok() {
+    if std::env::var("WASMTIME_BACKTRACE_DETAILS").is_ok() {
         return Ok(());
     }
     let store = Store::default();
@@ -613,7 +613,7 @@ fn hint_with_dwarf_info() -> Result<()> {
 wasm trap: unreachable
 wasm backtrace:
     0:   0x1a - <unknown>!start
-note: run with `WASM_BACKTRACE_DETAILS=1` environment variable to display more information
+note: run with `WASMTIME_BACKTRACE_DETAILS=1` environment variable to display more information
 "
     );
     Ok(())

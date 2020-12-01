@@ -102,7 +102,7 @@ impl Config {
     /// filename/line number for each wasm frame in the stack trace.
     ///
     /// By default this option is `WasmBacktraceDetails::Environment`, meaning
-    /// that wasm will read `WASM_BACKTRACE_DETAILS` to indicate whether details
+    /// that wasm will read `WASMTIME_BACKTRACE_DETAILS` to indicate whether details
     /// should be parsed.
     pub fn wasm_backtrace_details(&mut self, enable: WasmBacktraceDetails) -> &mut Self {
         self.wasm_backtrace_details_env_used = false;
@@ -111,7 +111,7 @@ impl Config {
             WasmBacktraceDetails::Disable => false,
             WasmBacktraceDetails::Environment => {
                 self.wasm_backtrace_details_env_used = true;
-                std::env::var("WASM_BACKTRACE_DETAILS")
+                std::env::var("WASMTIME_BACKTRACE_DETAILS")
                     .map(|s| s == "1")
                     .unwrap_or(false)
             }
@@ -756,6 +756,6 @@ pub enum WasmBacktraceDetails {
     Disable,
 
     /// Support for backtrace details is conditional on the
-    /// `WASM_BACKTRACE_DETAILS` environment variable.
+    /// `WASMTIME_BACKTRACE_DETAILS` environment variable.
     Environment,
 }

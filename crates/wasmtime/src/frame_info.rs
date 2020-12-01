@@ -375,7 +375,7 @@ fn test_frame_info() -> Result<(), anyhow::Error> {
             (ptr as usize, ptr as usize + len)
         };
         for pc in start..end {
-            let frame = info.lookup_frame_info(pc).unwrap();
+            let (frame, _) = info.lookup_frame_info(pc).unwrap();
             assert!(frame.func_index() == i.as_u32());
         }
     }
