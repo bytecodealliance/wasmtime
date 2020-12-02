@@ -127,10 +127,15 @@ impl FileCaps {
     pub const FILESTAT_GET: Self = FileCaps { flags: 512 };
     pub const FILESTAT_SET_SIZE: Self = FileCaps { flags: 1024 };
     pub const FILESTAT_SET_TIMES: Self = FileCaps { flags: 2048 };
-    // This isnt in wasi-common, but lets use a cap to check
-    // if its valid to close a file, rather than depend on
-    // preopen logic
-    pub const CLOSE: Self = FileCaps { flags: 4096 };
+}
+
+impl std::ops::BitOr for FileCaps {
+    type Output = FileCaps;
+    fn bitor(self, rhs: FileCaps) -> FileCaps {
+        FileCaps {
+            flags: self.flags | rhs.flags,
+        }
+    }
 }
 
 impl std::fmt::Display for FileCaps {

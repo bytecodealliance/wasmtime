@@ -16,11 +16,24 @@ impl Table {
         }
     }
 
-    pub fn insert(&mut self, a: impl Any + Sized) -> u32 {
-        let key = self.next_key;
-        self.next_key += 1;
+    pub fn insert_at(&mut self, key: u32, a: impl Any + Sized) {
         self.map.insert(key, RefCell::new(Box::new(a)));
-        key
+    }
+
+    pub fn push(&mut self, a: impl Any + Sized) -> u32 {
+        loop {
+            let key = self.next_key;
+            self.next_key += 1;
+            if self.map.contains_key(&key) {
+                continue;
+            }
+            self.map.insert(key, RefCell::new(Box::new(a)));
+            return key;
+        }
+    }
+
+    pub fn contains_key(&self, key: u32) -> bool {
+        self.map.contains_key(&key)
     }
 
     // Todo: we can refine these errors and translate them to Exist at abi

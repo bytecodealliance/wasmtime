@@ -3,6 +3,7 @@ use crate::file::{FileCaps, FileEntry, Filestat, FilestatSetTime, Filetype, OFla
 use crate::{Error, WasiCtx};
 use std::cell::RefMut;
 use std::convert::TryFrom;
+use std::io::{IoSlice, IoSliceMut};
 use std::ops::Deref;
 use tracing::debug;
 use wiggle::GuestPtr;
@@ -160,11 +161,16 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_close(&self, fd: types::Fd) -> Result<(), Error> {
         let mut table = self.table();
-        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
-        let f = file_entry.get_cap(FileCaps::CLOSE)?;
-        drop(f);
+        let fd = u32::from(fd);
+        // Can't close preopens:
+        if self.is_preopen(fd) {
+            return Err(Error::Notsup);
+        }
+        // Make sure file to close exists as a File:
+        let file_entry: RefMut<FileEntry> = table.get(fd)?;
         drop(file_entry);
-        let _ = table.delete(u32::from(fd));
+        // Delete from table, Drop will close it
+        let _ = table.delete(fd);
         Ok(())
     }
 
@@ -271,7 +277,26 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn fd_read(&self, fd: types::Fd, iovs: &types::IovecArray<'_>) -> Result<types::Size, Error> {
-        unimplemented!()
+        let table = self.table();
+        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
+        let f = file_entry.get_cap(FileCaps::READ)?;
+
+        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+            .iter()
+            .map(|iov_ptr| {
+                let iov_ptr = iov_ptr?;
+                let iov: types::Iovec = iov_ptr.read()?;
+                Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?)
+            })
+            .collect::<Result<_, Error>>()?;
+
+        let mut ioslices: Vec<IoSliceMut> = guest_slices
+            .iter_mut()
+            .map(|s| IoSliceMut::new(&mut *s))
+            .collect();
+
+        let bytes_read = f.read_vectored(&mut ioslices)?;
+        Ok(types::Size::try_from(bytes_read)?)
     }
 
     fn fd_pread(
@@ -280,7 +305,26 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         iovs: &types::IovecArray<'_>,
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
-        unimplemented!()
+        let table = self.table();
+        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
+        let f = file_entry.get_cap(FileCaps::READ | FileCaps::SEEK)?;
+
+        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+            .iter()
+            .map(|iov_ptr| {
+                let iov_ptr = iov_ptr?;
+                let iov: types::Iovec = iov_ptr.read()?;
+                Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?)
+            })
+            .collect::<Result<_, Error>>()?;
+
+        let mut ioslices: Vec<IoSliceMut> = guest_slices
+            .iter_mut()
+            .map(|s| IoSliceMut::new(&mut *s))
+            .collect();
+
+        let bytes_read = f.read_vectored_at(&mut ioslices, offset)?;
+        Ok(types::Size::try_from(bytes_read)?)
     }
 
     fn fd_write(
@@ -288,7 +332,26 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         fd: types::Fd,
         ciovs: &types::CiovecArray<'_>,
     ) -> Result<types::Size, Error> {
-        unimplemented!()
+        let table = self.table();
+        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
+        let f = file_entry.get_cap(FileCaps::WRITE)?;
+
+        let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
+            .iter()
+            .map(|iov_ptr| {
+                let iov_ptr = iov_ptr?;
+                let iov: types::Ciovec = iov_ptr.read()?;
+                Ok(iov.buf.as_array(iov.buf_len).as_slice()?)
+            })
+            .collect::<Result<_, Error>>()?;
+
+        let ioslices: Vec<IoSlice> = guest_slices
+            .iter()
+            .map(|s| IoSlice::new(s.deref()))
+            .collect();
+        let bytes_written = f.write_vectored(&ioslices)?;
+
+        Ok(types::Size::try_from(bytes_written)?)
     }
 
     fn fd_pwrite(
@@ -297,7 +360,26 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         ciovs: &types::CiovecArray<'_>,
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
-        unimplemented!()
+        let table = self.table();
+        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
+        let f = file_entry.get_cap(FileCaps::WRITE | FileCaps::SEEK)?;
+
+        let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
+            .iter()
+            .map(|iov_ptr| {
+                let iov_ptr = iov_ptr?;
+                let iov: types::Ciovec = iov_ptr.read()?;
+                Ok(iov.buf.as_array(iov.buf_len).as_slice()?)
+            })
+            .collect::<Result<_, Error>>()?;
+
+        let ioslices: Vec<IoSlice> = guest_slices
+            .iter()
+            .map(|s| IoSlice::new(s.deref()))
+            .collect();
+        let bytes_written = f.write_vectored_at(&ioslices, offset)?;
+
+        Ok(types::Size::try_from(bytes_written)?)
     }
 
     fn fd_prestat_get(&self, fd: types::Fd) -> Result<types::Prestat, Error> {
@@ -324,7 +406,23 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn fd_renumber(&self, from: types::Fd, to: types::Fd) -> Result<(), Error> {
-        unimplemented!()
+        let mut table = self.table();
+        let from = u32::from(from);
+        let to = u32::from(to);
+        if !table.contains_key(from) {
+            return Err(Error::Badf);
+        }
+        if self.is_preopen(from) {
+            return Err(Error::Notsup);
+        }
+        if self.is_preopen(to) {
+            return Err(Error::Notsup);
+        }
+        let from_entry = table
+            .delete(from)
+            .expect("we checked that table contains from");
+        table.insert_at(to, from_entry);
+        Ok(())
     }
 
     fn fd_seek(
