@@ -59,3 +59,6 @@ parallel-compilation = ["wasmtime-jit/parallel-compilation"]
 
 # Enables support for automatic cache configuration to be enabled in `Config`.
 cache = ["wasmtime-cache"]
+
+# Enables support for new x64 backend.
+experimental_x64 = ["wasmtime-jit/experimental_x64"]
