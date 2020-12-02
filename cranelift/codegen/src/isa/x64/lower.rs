@@ -95,15 +95,10 @@ fn generate_constant<C: LowerCtx<I = Inst>>(ctx: &mut C, ty: Type, c: u64) -> Re
     } else {
         c
     };
+    let masked = DataValue::U64(masked);
 
     let cst_copy = ctx.alloc_tmp(Inst::rc_for_type(ty).unwrap(), ty);
-    for inst in Inst::gen_constant(cst_copy, masked, ty, |reg_class, ty| {
-        ctx.alloc_tmp(reg_class, ty)
-    })
-    .into_iter()
-    {
-        ctx.emit(inst);
-    }
+    ctx.emit_constant(masked, cst_copy);
     cst_copy.to_reg()
 }
 
@@ -692,15 +687,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
     match op {
         Opcode::Iconst | Opcode::Bconst | Opcode::Null => {
-            let value = ctx
-                .get_constant(insn)
-                .expect("constant value for iconst et al");
+            let value = ctx.get_immediate(insn).expect("a constant immediate value");
             let dst = get_output_reg(ctx, outputs[0]);
-            for inst in Inst::gen_constant(dst, value, ty.unwrap(), |reg_class, ty| {
-                ctx.alloc_tmp(reg_class, ty)
-            }) {
-                ctx.emit(inst);
-            }
+            ctx.emit_constant(value, dst);
         }
 
         Opcode::Iadd
@@ -2210,26 +2199,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             };
         }
 
-        Opcode::F64const => {
-            // TODO use cmpeqpd for all 1s.
-            let value = ctx.get_constant(insn).unwrap();
+        Opcode::F32const | Opcode::F64const => {
+            let value = ctx.get_immediate(insn).expect("a constant immediate value");
             let dst = get_output_reg(ctx, outputs[0]);
-            for inst in Inst::gen_constant(dst, value, types::F64, |reg_class, ty| {
-                ctx.alloc_tmp(reg_class, ty)
-            }) {
-                ctx.emit(inst);
-            }
-        }
-
-        Opcode::F32const => {
-            // TODO use cmpeqps for all 1s.
-            let value = ctx.get_constant(insn).unwrap();
-            let dst = get_output_reg(ctx, outputs[0]);
-            for inst in Inst::gen_constant(dst, value, types::F32, |reg_class, ty| {
-                ctx.alloc_tmp(reg_class, ty)
-            }) {
-                ctx.emit(inst);
-            }
+            ctx.emit_constant(value, dst);
         }
 
         Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv => {
@@ -3092,12 +3065,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     _ => panic!("unexpected type {:?} for Fabs", output_ty),
                 };
 
-                for inst in Inst::gen_constant(dst, val, output_ty, |reg_class, ty| {
-                    ctx.alloc_tmp(reg_class, ty)
-                }) {
-                    ctx.emit(inst);
-                }
-
+                ctx.emit_constant(DataValue::U64(val), dst);
                 ctx.emit(Inst::xmm_rm_r(opcode, src, dst));
             } else {
                 // Eventually vector constants should be available in `gen_constant` and this block
@@ -3168,14 +3136,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             let (sign_bit_cst, mov_op, and_not_op, and_op, or_op) = match ty {
                 types::F32 => (
-                    0x8000_0000,
+                    DataValue::U64(0x8000_0000),
                     SseOpcode::Movaps,
                     SseOpcode::Andnps,
                     SseOpcode::Andps,
                     SseOpcode::Orps,
                 ),
                 types::F64 => (
-                    0x8000_0000_0000_0000,
+                    DataValue::U64(0x8000_0000_0000_0000),
                     SseOpcode::Movapd,
                     SseOpcode::Andnpd,
                     SseOpcode::Andpd,
@@ -3186,11 +3154,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
             };
 
-            for inst in Inst::gen_constant(tmp_xmm1, sign_bit_cst, ty, |reg_class, ty| {
-                ctx.alloc_tmp(reg_class, ty)
-            }) {
-                ctx.emit(inst);
-            }
+            ctx.emit_constant(sign_bit_cst, tmp_xmm1);
             ctx.emit(Inst::xmm_mov(mov_op, RegMem::reg(tmp_xmm1.to_reg()), dst));
             ctx.emit(Inst::xmm_rm_r(and_not_op, RegMem::reg(lhs), dst));
             ctx.emit(Inst::xmm_mov(mov_op, RegMem::reg(rhs), tmp_xmm2));
@@ -3841,7 +3805,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else {
                 unreachable!("vconst should always have unary_const format")
             };
-            // TODO use Inst::gen_constant() instead.
             let dst = get_output_reg(ctx, outputs[0]);
             let ty = ty.unwrap();
             ctx.emit(Inst::xmm_load_const(used_constant, dst, ty));
