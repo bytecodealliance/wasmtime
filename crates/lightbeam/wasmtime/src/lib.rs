@@ -9,12 +9,12 @@ use cranelift_codegen::isa;
 use lightbeam::{CodeGenSession, NullOffsetSink, Sinks};
 use wasmtime_environ::wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
-    GlobalIndex, MemoryIndex, SignatureIndex, TableIndex,
+    GlobalIndex, MemoryIndex, SignatureIndex, TableIndex, TypeIndex,
 };
 use wasmtime_environ::{
     entity::PrimaryMap, BuiltinFunctionIndex, CompileError, CompiledFunction, Compiler,
     FunctionBodyData, Module, ModuleTranslation, Relocation, RelocationTarget, TrapInformation,
-    Tunables, VMOffsets,
+    Tunables, TypeTables, VMOffsets,
 };
 
 /// A compiler that compiles a WebAssembly module with Lightbeam, directly translating the Wasm file.
@@ -28,13 +28,14 @@ impl Compiler for Lightbeam {
         function_body: FunctionBodyData<'_>,
         isa: &dyn isa::TargetIsa,
         tunables: &Tunables,
+        types: &TypeTables,
     ) -> Result<CompiledFunction, CompileError> {
         if tunables.generate_native_debuginfo {
             return Err(CompileError::DebugInfoNotSupported);
         }
         let func_index = translation.module.func_index(i);
 
-        let env = FuncEnvironment::new(isa.frontend_config().pointer_bytes(), translation);
+        let env = FuncEnvironment::new(isa.frontend_config().pointer_bytes(), translation, types);
         let mut codegen_session: CodeGenSession<_> = CodeGenSession::new(
             translation.function_body_inputs.len() as u32,
             &env,
@@ -180,11 +181,15 @@ struct FuncEnvironment<'module_environment> {
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
-    fn new(pointer_bytes: u8, translation: &'module_environment ModuleTranslation<'_>) -> Self {
+    fn new(
+        pointer_bytes: u8,
+        translation: &'module_environment ModuleTranslation<'_>,
+        types: &'module_environment TypeTables,
+    ) -> Self {
         Self {
             module: &translation.module,
             offsets: VMOffsets::new(pointer_bytes, &translation.module),
-            native_signatures: &translation.native_signatures,
+            native_signatures: &types.native_signatures,
         }
     }
 }
@@ -322,7 +327,7 @@ impl lightbeam::ModuleContext for FuncEnvironment<'_> {
     }
     fn vmctx_vmshared_signature_id(&self, signature_idx: u32) -> u32 {
         self.offsets
-            .vmctx_vmshared_signature_id(SignatureIndex::from_u32(signature_idx))
+            .vmctx_vmshared_signature_id(TypeIndex::from_u32(signature_idx))
     }
 
     // TODO: type of a global

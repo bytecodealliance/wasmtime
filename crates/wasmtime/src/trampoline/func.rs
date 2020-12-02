@@ -10,7 +10,8 @@ use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::isa::TargetIsa;
-use wasmtime_environ::{ir, wasm, CompiledFunction, Module};
+use wasmtime_environ::wasm::SignatureIndex;
+use wasmtime_environ::{ir, wasm, CompiledFunction, Module, ModuleType};
 use wasmtime_jit::trampoline::ir::{
     ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind,
 };
@@ -223,7 +224,8 @@ pub fn create_handle_with_function(
 
     // First up we manufacture a trampoline which has the ABI specified by `ft`
     // and calls into `stub_fn`...
-    let sig_id = module.signatures.push(wft.clone());
+    let sig_id = SignatureIndex::from_u32(u32::max_value() - 1);
+    module.types.push(ModuleType::Function(sig_id));
     let func_id = module.functions.push(sig_id);
     module
         .exports
@@ -241,7 +243,7 @@ pub fn create_handle_with_function(
         &sig,
         mem::size_of::<u128>(),
     )?;
-    store.signatures().borrow_mut().register(wft, trampoline);
+    let shared_signature_id = store.signatures().borrow_mut().register(wft, trampoline);
 
     // Next up we wrap everything up into an `InstanceHandle` by publishing our
     // code memory (makes it executable) and ensuring all our various bits of
@@ -254,6 +256,7 @@ pub fn create_handle_with_function(
         finished_functions,
         Box::new(trampoline_state),
         &[],
+        Some(shared_signature_id),
     )
     .map(|instance| (instance, trampoline))
 }
@@ -270,13 +273,21 @@ pub unsafe fn create_handle_with_raw_function(
     let mut module = Module::new();
     let mut finished_functions = PrimaryMap::new();
 
-    let sig_id = module.signatures.push(wft.clone());
+    let sig_id = SignatureIndex::from_u32(u32::max_value() - 1);
+    module.types.push(ModuleType::Function(sig_id));
     let func_id = module.functions.push(sig_id);
     module
         .exports
         .insert(String::new(), wasm::EntityIndex::Function(func_id));
     finished_functions.push(func);
-    store.signatures().borrow_mut().register(wft, trampoline);
+    let shared_signature_id = store.signatures().borrow_mut().register(wft, trampoline);
 
-    create_handle(module, store, finished_functions, state, &[])
+    create_handle(
+        module,
+        store,
+        finished_functions,
+        state,
+        &[],
+        Some(shared_signature_id),
+    )
 }

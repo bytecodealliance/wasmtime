@@ -31,7 +31,7 @@ use wasmtime_environ::wasm::{
     ElemIndex, EntityIndex, FuncIndex, GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex,
     TableElementType, TableIndex, WasmType,
 };
-use wasmtime_environ::{ir, DataInitializer, Module, TableElements, VMOffsets};
+use wasmtime_environ::{ir, DataInitializer, Module, ModuleType, TableElements, VMOffsets};
 
 /// A WebAssembly instance.
 ///
@@ -76,12 +76,6 @@ impl Instance {
         (self.vmctx_ptr() as *mut u8)
             .add(usize::try_from(offset).unwrap())
             .cast()
-    }
-
-    /// Return the indexed `VMSharedSignatureIndex`.
-    fn signature_id(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
-        let index = usize::try_from(index.as_u32()).unwrap();
-        unsafe { *self.signature_ids_ptr().add(index) }
     }
 
     pub(crate) fn module(&self) -> &Module {
@@ -868,8 +862,11 @@ impl InstanceHandle {
         let instance = handle.instance();
 
         let mut ptr = instance.signature_ids_ptr();
-        for (signature, _) in handle.module().signatures.iter() {
-            *ptr = lookup_shared_signature(signature);
+        for sig in handle.module().types.values() {
+            *ptr = match sig {
+                ModuleType::Function(sig) => lookup_shared_signature(*sig),
+                _ => VMSharedSignatureIndex::new(u32::max_value()),
+            };
             ptr = ptr.add(1);
         }
 
@@ -924,7 +921,7 @@ impl InstanceHandle {
         *instance.stack_map_registry() = stack_map_registry;
 
         for (index, sig) in instance.module.functions.iter() {
-            let type_index = instance.signature_id(*sig);
+            let type_index = lookup_shared_signature(*sig);
 
             let (func_ptr, vmctx) =
                 if let Some(def_index) = instance.module.defined_func_index(index) {

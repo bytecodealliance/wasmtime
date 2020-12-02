@@ -65,10 +65,10 @@ pub fn compile_to_obj(
     );
 
     let environ = ModuleEnvironment::new(compiler.isa().frontend_config(), &tunables, &features);
-    let mut translation = environ
+    let (mut translation, types) = environ
         .translate(wasm)
         .context("failed to translate module")?;
     assert_eq!(translation.len(), 1);
-    let compilation = compiler.compile(&mut translation[0])?;
+    let compilation = compiler.compile(&mut translation[0], &types)?;
     Ok(compilation.obj)
 }

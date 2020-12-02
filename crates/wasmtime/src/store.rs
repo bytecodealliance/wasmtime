@@ -11,7 +11,7 @@ use std::hash::{Hash, Hasher};
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use wasmtime_environ::wasm;
-use wasmtime_jit::{CompiledModule, ModuleCode};
+use wasmtime_jit::{CompiledModule, ModuleCode, TypeTables};
 use wasmtime_runtime::{
     InstanceHandle, RuntimeMemoryCreator, SignalHandler, StackMapRegistry, TrapInfo, VMExternRef,
     VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
@@ -137,17 +137,17 @@ impl Store {
 
     pub(crate) fn lookup_shared_signature<'a>(
         &'a self,
-        module: &'a wasmtime_environ::Module,
+        types: &'a TypeTables,
     ) -> impl Fn(wasm::SignatureIndex) -> VMSharedSignatureIndex + 'a {
         move |index| {
             self.signatures()
                 .borrow()
-                .lookup(&module.signatures[index])
+                .lookup(&types.wasm_signatures[index])
                 .expect("signature not previously registered")
         }
     }
 
-    pub(crate) fn register_module(&self, module: &CompiledModule) {
+    pub(crate) fn register_module(&self, module: &CompiledModule, types: &TypeTables) {
         // All modules register their JIT code in a store for two reasons
         // currently:
         //
@@ -169,7 +169,7 @@ impl Store {
         // once-per-module (and once-per-signature). This allows us to create
         // a `Func` wrapper for any function in the module, which requires that
         // we know about the signature and trampoline for all instances.
-        self.register_signatures(module);
+        self.register_signatures(module, types);
 
         // And finally with a module being instantiated into this `Store` we
         // need to preserve its jit-code. References to this module's code and
@@ -205,11 +205,10 @@ impl Store {
             }));
     }
 
-    fn register_signatures(&self, module: &CompiledModule) {
+    fn register_signatures(&self, module: &CompiledModule, types: &TypeTables) {
         let trampolines = module.trampolines();
-        let module = module.module();
         let mut signatures = self.signatures().borrow_mut();
-        for (index, wasm) in module.signatures.iter() {
+        for (index, wasm) in types.wasm_signatures.iter() {
             signatures.register(wasm, trampolines[index]);
         }
     }

@@ -47,7 +47,7 @@ pub mod trampoline;
 pub use crate::code_memory::CodeMemory;
 pub use crate::compiler::{Compilation, CompilationStrategy, Compiler};
 pub use crate::instantiate::{
-    CompilationArtifacts, CompiledModule, ModuleCode, SetupError, SymbolizeContext,
+    CompilationArtifacts, CompiledModule, ModuleCode, SetupError, SymbolizeContext, TypeTables,
 };
 pub use crate::link::link_module;
 

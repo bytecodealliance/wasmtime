@@ -115,6 +115,15 @@ impl Extern {
         };
         Store::same(my_store, store)
     }
+
+    pub(crate) fn desc(&self) -> &'static str {
+        match self {
+            Extern::Func(_) => "function",
+            Extern::Table(_) => "table",
+            Extern::Memory(_) => "memory",
+            Extern::Global(_) => "global",
+        }
+    }
 }
 
 impl From<Func> for Extern {

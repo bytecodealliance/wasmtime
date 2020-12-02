@@ -18,10 +18,13 @@ use thiserror::Error;
 use wasmtime_debug::create_gdbjit_image;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::isa::TargetIsa;
-use wasmtime_environ::wasm::{DefinedFuncIndex, ModuleIndex, SignatureIndex};
+use wasmtime_environ::wasm::{
+    DefinedFuncIndex, InstanceTypeIndex, ModuleTypeIndex, SignatureIndex, WasmFuncType,
+};
 use wasmtime_environ::{
     CompileError, DataInitializer, DataInitializerLocation, DebugInfoData, FunctionAddressMap,
-    Module, ModuleEnvironment, ModuleTranslation, StackMapInformation, TrapInformation,
+    InstanceSignature, Module, ModuleEnvironment, ModuleSignature, ModuleTranslation,
+    StackMapInformation, TrapInformation,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{
@@ -70,10 +73,6 @@ pub struct CompilationArtifacts {
     /// Descriptions of compiled functions
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
 
-    /// Where to find this module's submodule code in the top-level list of
-    /// modules.
-    submodules: PrimaryMap<ModuleIndex, usize>,
-
     /// Whether or not native debug information is available in `obj`
     native_debug_info_present: bool,
 
@@ -106,8 +105,8 @@ impl CompilationArtifacts {
     pub fn build(
         compiler: &Compiler,
         data: &[u8],
-    ) -> Result<Vec<CompilationArtifacts>, SetupError> {
-        let translations = ModuleEnvironment::new(
+    ) -> Result<(Vec<CompilationArtifacts>, TypeTables), SetupError> {
+        let (translations, types) = ModuleEnvironment::new(
             compiler.frontend_config(),
             compiler.tunables(),
             compiler.features(),
@@ -115,18 +114,17 @@ impl CompilationArtifacts {
         .translate(data)
         .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
 
-        maybe_parallel!(translations.(into_iter | into_par_iter))
+        let list = maybe_parallel!(translations.(into_iter | into_par_iter))
             .map(|mut translation| {
                 let Compilation {
                     obj,
                     unwind_info,
                     funcs,
-                } = compiler.compile(&mut translation)?;
+                } = compiler.compile(&mut translation, &types)?;
 
                 let ModuleTranslation {
                     module,
                     data_initializers,
-                    submodules,
                     debuginfo,
                     has_unparsed_debuginfo,
                     ..
@@ -149,7 +147,6 @@ impl CompilationArtifacts {
                     obj: obj.into_boxed_slice(),
                     unwind_info: unwind_info.into_boxed_slice(),
                     data_initializers,
-                    submodules,
                     funcs: funcs
                         .into_iter()
                         .map(|(_, func)| FunctionInfo {
@@ -167,11 +164,21 @@ impl CompilationArtifacts {
                     has_unparsed_debuginfo,
                 })
             })
-            .collect::<Result<Vec<_>, SetupError>>()
+            .collect::<Result<Vec<_>, SetupError>>()?;
+        Ok((
+            list,
+            TypeTables {
+                wasm_signatures: types.wasm_signatures,
+                module_signatures: types.module_signatures,
+                instance_signatures: types.instance_signatures,
+            },
+        ))
     }
 }
 
 struct FinishedFunctions(PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>);
+unsafe impl Send for FinishedFunctions {}
+unsafe impl Sync for FinishedFunctions {}
 
 #[derive(Serialize, Deserialize, Clone)]
 struct FunctionInfo {
@@ -180,8 +187,15 @@ struct FunctionInfo {
     stack_maps: Vec<StackMapInformation>,
 }
 
-unsafe impl Send for FinishedFunctions {}
-unsafe impl Sync for FinishedFunctions {}
+/// This is intended to mirror the type tables in `wasmtime_environ`, except that
+/// it doesn't store the native signatures which are no longer needed past compilation.
+#[derive(Serialize, Deserialize)]
+#[allow(missing_docs)]
+pub struct TypeTables {
+    pub wasm_signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
+    pub module_signatures: PrimaryMap<ModuleTypeIndex, ModuleSignature>,
+    pub instance_signatures: PrimaryMap<InstanceTypeIndex, InstanceSignature>,
+}
 
 /// Container for data needed for an Instance function to exist.
 pub struct ModuleCode {
@@ -373,12 +387,6 @@ impl CompiledModule {
     /// Returns module's JIT code.
     pub fn code(&self) -> &Arc<ModuleCode> {
         &self.code
-    }
-
-    /// Returns where the specified submodule lives in this module's
-    /// array-of-modules (store at the top-level)
-    pub fn submodule_idx(&self, idx: ModuleIndex) -> usize {
-        self.artifacts.submodules[idx]
     }
 
     /// Creates a new symbolication context which can be used to further

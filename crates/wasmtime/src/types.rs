@@ -1,3 +1,4 @@
+use crate::Module;
 use std::fmt;
 use wasmtime_environ::wasm::WasmFuncType;
 use wasmtime_environ::{ir, wasm};
@@ -195,33 +196,23 @@ impl ExternType {
         (Instance(InstanceType) instance unwrap_instance)
     }
 
-    fn from_wasmtime(
-        module: &wasmtime_environ::Module,
-        ty: &wasmtime_environ::wasm::EntityType,
-    ) -> ExternType {
+    fn from_wasmtime(module: &Module, ty: &wasmtime_environ::wasm::EntityType) -> ExternType {
         use wasmtime_environ::wasm::EntityType;
         match ty {
             EntityType::Function(idx) => {
-                let sig = module.types[*idx].unwrap_function();
-                let sig = &module.signatures[sig];
+                let sig = &module.types().wasm_signatures[*idx];
                 FuncType::from_wasm_func_type(sig).into()
             }
             EntityType::Global(ty) => GlobalType::from_wasmtime_global(ty).into(),
             EntityType::Memory(ty) => MemoryType::from_wasmtime_memory(ty).into(),
             EntityType::Table(ty) => TableType::from_wasmtime_table(ty).into(),
             EntityType::Module(ty) => {
-                let (imports, exports) = match &module.types[*ty] {
-                    wasmtime_environ::ModuleType::Module { imports, exports } => (imports, exports),
-                    _ => unreachable!("not possible in valid wasm modules"),
-                };
-                ModuleType::from_wasmtime(module, imports, exports).into()
+                let ty = &module.types().module_signatures[*ty];
+                ModuleType::from_wasmtime(module, ty).into()
             }
             EntityType::Instance(ty) => {
-                let exports = match &module.types[*ty] {
-                    wasmtime_environ::ModuleType::Instance { exports } => exports,
-                    _ => unreachable!("not possible in valid wasm modules"),
-                };
-                InstanceType::from_wasmtime(module, exports).into()
+                let ty = &module.types().instance_signatures[*ty];
+                InstanceType::from_wasmtime(module, ty).into()
             }
             EntityType::Event(_) => unimplemented!("wasm event support"),
         }
@@ -499,16 +490,17 @@ impl ModuleType {
     }
 
     pub(crate) fn from_wasmtime(
-        module: &wasmtime_environ::Module,
-        imports: &[(String, Option<String>, wasmtime_environ::wasm::EntityType)],
-        exports: &[(String, wasmtime_environ::wasm::EntityType)],
+        module: &Module,
+        ty: &wasmtime_environ::ModuleSignature,
     ) -> ModuleType {
+        let exports = &module.types().instance_signatures[ty.exports].exports;
         ModuleType {
             exports: exports
                 .iter()
                 .map(|(name, ty)| (name.to_string(), ExternType::from_wasmtime(module, ty)))
                 .collect(),
-            imports: imports
+            imports: ty
+                .imports
                 .iter()
                 .map(|(m, name, ty)| {
                     (
@@ -556,11 +548,12 @@ impl InstanceType {
     }
 
     pub(crate) fn from_wasmtime(
-        module: &wasmtime_environ::Module,
-        exports: &[(String, wasmtime_environ::wasm::EntityType)],
+        module: &Module,
+        ty: &wasmtime_environ::InstanceSignature,
     ) -> InstanceType {
         InstanceType {
-            exports: exports
+            exports: ty
+                .exports
                 .iter()
                 .map(|(name, ty)| (name.to_string(), ExternType::from_wasmtime(module, ty)))
                 .collect(),
@@ -577,13 +570,12 @@ pub(crate) enum EntityType<'module> {
     Memory(&'module wasm::Memory),
     Global(&'module wasm::Global),
     Module {
-        imports: &'module [(String, Option<String>, wasmtime_environ::wasm::EntityType)],
-        exports: &'module [(String, wasmtime_environ::wasm::EntityType)],
-        module: &'module wasmtime_environ::Module,
+        ty: &'module wasmtime_environ::ModuleSignature,
+        module: &'module Module,
     },
     Instance {
-        exports: &'module [(String, wasmtime_environ::wasm::EntityType)],
-        module: &'module wasmtime_environ::Module,
+        ty: &'module wasmtime_environ::InstanceSignature,
+        module: &'module Module,
     },
 }
 
@@ -591,51 +583,31 @@ impl<'module> EntityType<'module> {
     /// Translate from a `EntityIndex` into an `ExternType`.
     pub(crate) fn new(
         entity_index: &wasm::EntityIndex,
-        module: &'module wasmtime_environ::Module,
+        module: &'module Module,
     ) -> EntityType<'module> {
+        let env_module = module.compiled_module().module();
         match entity_index {
             wasm::EntityIndex::Function(func_index) => {
-                let sig = module.wasm_func_type(*func_index);
-                EntityType::Function(&sig)
+                let sig_index = env_module.functions[*func_index];
+                let sig = &module.types().wasm_signatures[sig_index];
+                EntityType::Function(sig)
             }
             wasm::EntityIndex::Table(table_index) => {
-                EntityType::Table(&module.table_plans[*table_index].table)
+                EntityType::Table(&env_module.table_plans[*table_index].table)
             }
             wasm::EntityIndex::Memory(memory_index) => {
-                EntityType::Memory(&module.memory_plans[*memory_index].memory)
+                EntityType::Memory(&env_module.memory_plans[*memory_index].memory)
             }
             wasm::EntityIndex::Global(global_index) => {
-                EntityType::Global(&module.globals[*global_index])
+                EntityType::Global(&env_module.globals[*global_index])
             }
             wasm::EntityIndex::Module(idx) => {
-                let (imports, exports) = match &module.types[module.modules[*idx]] {
-                    wasmtime_environ::ModuleType::Module { imports, exports } => (imports, exports),
-                    _ => unreachable!("valid modules should never hit this"),
-                };
-                EntityType::Module {
-                    imports,
-                    exports,
-                    module,
-                }
+                let ty = &module.types().module_signatures[env_module.modules[*idx]];
+                EntityType::Module { ty, module }
             }
             wasm::EntityIndex::Instance(idx) => {
-                // Get the type, either a pointer to an instance for an import
-                // or a module for an instantiation.
-                let ty = match module.instances[*idx] {
-                    wasmtime_environ::Instance::Import(ty) => ty,
-                    wasmtime_environ::Instance::Instantiate { module: idx, .. } => {
-                        module.modules[idx]
-                    }
-                };
-                // Get the exports of whatever our type specifies, ignoring
-                // imports in the module case since we're instantiating the
-                // module.
-                let exports = match &module.types[ty] {
-                    wasmtime_environ::ModuleType::Instance { exports } => exports,
-                    wasmtime_environ::ModuleType::Module { exports, .. } => exports,
-                    _ => unreachable!("valid modules should never hit this"),
-                };
-                EntityType::Instance { exports, module }
+                let ty = &module.types().instance_signatures[env_module.instances[*idx]];
+                EntityType::Instance { ty, module }
             }
         }
     }
@@ -647,14 +619,8 @@ impl<'module> EntityType<'module> {
             EntityType::Table(table) => TableType::from_wasmtime_table(table).into(),
             EntityType::Memory(memory) => MemoryType::from_wasmtime_memory(memory).into(),
             EntityType::Global(global) => GlobalType::from_wasmtime_global(global).into(),
-            EntityType::Instance { exports, module } => {
-                InstanceType::from_wasmtime(module, exports).into()
-            }
-            EntityType::Module {
-                imports,
-                exports,
-                module,
-            } => ModuleType::from_wasmtime(module, imports, exports).into(),
+            EntityType::Instance { module, ty } => InstanceType::from_wasmtime(module, ty).into(),
+            EntityType::Module { module, ty } => ModuleType::from_wasmtime(module, ty).into(),
         }
     }
 }
