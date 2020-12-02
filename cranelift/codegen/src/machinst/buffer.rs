@@ -674,6 +674,12 @@ impl<I: VCodeInst> MachBuffer<I> {
         //    (end of buffer)
         self.data.truncate(b.start as usize);
         self.fixup_records.truncate(b.fixup);
+        while let Some(last_srcloc) = self.srclocs.last() {
+            if last_srcloc.end <= b.start {
+                break;
+            }
+            self.srclocs.pop();
+        }
         // State:
         //    [PRE CODE]
         //  cur_off, Offset b.start, b.labels_at_this_branch:
@@ -1184,12 +1190,15 @@ impl<I: VCodeInst> MachBuffer<I> {
         // incorrect.
         assert!(self.fixup_records.is_empty());
 
+        let mut srclocs = self.srclocs;
+        srclocs.sort_by_key(|entry| entry.start);
+
         MachBufferFinalized {
             data: self.data,
             relocs: self.relocs,
             traps: self.traps,
             call_sites: self.call_sites,
-            srclocs: self.srclocs,
+            srclocs,
             stack_maps: self.stack_maps,
         }
     }
