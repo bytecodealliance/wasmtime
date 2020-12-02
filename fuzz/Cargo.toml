@@ -17,7 +17,10 @@ target-lexicon = "0.11"
 peepmatic-fuzzing = { path = "../cranelift/peepmatic/crates/fuzzing", optional = true }
 wasmtime = { path = "../crates/wasmtime" }
 wasmtime-fuzzing = { path = "../crates/fuzzing" }
-wasm-smith = "0.1.5"
+wasm-smith = "0.1.12"
+
+[features]
+experimental_x64 = ["wasmtime-fuzzing/experimental_x64"]
 
 [[bin]]
 name = "compile"
@@ -40,6 +43,12 @@ doc = false
 [[bin]]
 name = "differential"
 path = "fuzz_targets/differential.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "differential_wasmi"
+path = "fuzz_targets/differential_wasmi.rs"
 test = false
 doc = false
 
