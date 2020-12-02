@@ -16,7 +16,7 @@ anyhow = "1.0"
 cranelift-codegen = { path = "../../cranelift/codegen", version = "0.68.0", features = ["enable-serde"] }
 cranelift-entity = { path = "../../cranelift/entity", version = "0.68.0", features = ["enable-serde"] }
 cranelift-wasm = { path = "../../cranelift/wasm", version = "0.68.0", features = ["enable-serde"] }
-wasmparser = "0.68.0"
+wasmparser = "0.69.0"
 indexmap = { version = "1.0.2", features = ["serde-1"] }
 thiserror = "1.0.4"
 serde = { version = "1.0.94", features = ["derive"] }
