@@ -795,6 +795,9 @@
  *
  * \enum wasm_externkind_enum
  * \brief Kinds of external items for a wasm module.
+ *
+ * Note that this also includes `WASM_EXTERN_INSTANCE` as well as
+ * `WASM_EXTERN_MODULE`.
  */
 
 /**

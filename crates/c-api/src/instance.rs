@@ -1,20 +1,38 @@
 use crate::{wasm_extern_t, wasm_extern_vec_t, wasm_module_t, wasm_trap_t};
-use crate::{wasm_store_t, wasmtime_error_t};
+use crate::{wasm_instancetype_t, wasm_store_t, wasmtime_error_t};
 use anyhow::Result;
 use std::ptr;
-use wasmtime::{Instance, Trap};
+use wasmtime::{Extern, Instance, Trap};
 
-#[repr(C)]
 #[derive(Clone)]
+#[repr(transparent)]
 pub struct wasm_instance_t {
-    pub(crate) instance: Instance,
+    ext: wasm_extern_t,
 }
 
 wasmtime_c_api_macros::declare_ref!(wasm_instance_t);
 
 impl wasm_instance_t {
     pub(crate) fn new(instance: Instance) -> wasm_instance_t {
-        wasm_instance_t { instance: instance }
+        wasm_instance_t {
+            ext: wasm_extern_t {
+                which: instance.into(),
+            },
+        }
+    }
+
+    pub(crate) fn try_from(e: &wasm_extern_t) -> Option<&wasm_instance_t> {
+        match &e.which {
+            Extern::Instance(_) => Some(unsafe { &*(e as *const _ as *const _) }),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn instance(&self) -> &Instance {
+        match &self.ext.which {
+            Extern::Instance(i) => i,
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -31,7 +49,7 @@ pub unsafe extern "C" fn wasm_instance_new(
         store,
         wasm_module,
         imports,
-        wasm_module.imports.len(),
+        wasm_module.module().imports().len(),
         &mut instance,
         &mut trap,
     );
@@ -92,7 +110,7 @@ fn _wasmtime_instance_new(
         .map(|import| import.which.clone())
         .collect::<Vec<_>>();
     handle_instantiate(
-        Instance::new(store, &module.module, &imports),
+        Instance::new(store, module.module(), &imports),
         instance_ptr,
         trap_ptr,
     )
@@ -123,10 +141,15 @@ pub fn handle_instantiate(
 }
 
 #[no_mangle]
+pub extern "C" fn wasm_instance_as_extern(m: &wasm_instance_t) -> &wasm_extern_t {
+    &m.ext
+}
+
+#[no_mangle]
 pub extern "C" fn wasm_instance_exports(instance: &wasm_instance_t, out: &mut wasm_extern_vec_t) {
     out.set_buffer(
         instance
-            .instance
+            .instance()
             .exports()
             .map(|e| {
                 Some(Box::new(wasm_extern_t {
@@ -135,4 +158,9 @@ pub extern "C" fn wasm_instance_exports(instance: &wasm_instance_t, out: &mut wa
             })
             .collect(),
     );
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_instance_type(f: &wasm_instance_t) -> Box<wasm_instancetype_t> {
+    Box::new(wasm_instancetype_t::new(f.instance().ty()))
 }

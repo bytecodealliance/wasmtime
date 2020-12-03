@@ -68,7 +68,7 @@ pub extern "C" fn wasmtime_linker_define_instance(
         Ok(s) => s,
         Err(_) => return bad_utf8(),
     };
-    handle_result(linker.instance(name, &instance.instance), |_linker| ())
+    handle_result(linker.instance(name, instance.instance()), |_linker| ())
 }
 
 #[no_mangle]
@@ -78,7 +78,7 @@ pub extern "C" fn wasmtime_linker_instantiate(
     instance_ptr: &mut *mut wasm_instance_t,
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let result = linker.linker.instantiate(&module.module);
+    let result = linker.linker.instantiate(module.module());
     super::instance::handle_instantiate(result, instance_ptr, trap_ptr)
 }
 
@@ -93,7 +93,7 @@ pub extern "C" fn wasmtime_linker_module(
         Ok(s) => s,
         Err(_) => return bad_utf8(),
     };
-    handle_result(linker.module(name, &module.module), |_linker| ())
+    handle_result(linker.module(name, module.module()), |_linker| ())
 }
 
 #[no_mangle]
