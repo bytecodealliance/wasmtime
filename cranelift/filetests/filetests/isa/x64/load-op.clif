@@ -44,3 +44,18 @@ block0(v0: i64, v1: i8):
   ; nextln: addl    %esi, %r12d
   return v3
 }
+
+function %no_merge_if_lookback_use(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = load.i64 v0
+  v3 = iadd.i64 v2, v0
+  store.i64 v3, v1
+  v4 = load.i64 v3
+  return v4
+  ; check:  movq    0(%rdi), %r12
+  ; nextln: movq    %r12, %r13
+  ; nextln: addq    %rdi, %r13
+  ; nextln: movq    %r13, 0(%rsi)
+  ; nextln: movq    0(%r12,%rdi,1), %r12
+  ; nextln: movq    %r12, %rax
+}
