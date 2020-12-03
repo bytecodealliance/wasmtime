@@ -6,6 +6,7 @@
 
 use anyhow::Context;
 use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
+use std::convert::TryFrom;
 #[cfg(feature = "structopt")]
 use structopt::StructOpt;
 
@@ -465,7 +466,7 @@ impl Wizer {
             }
         }
 
-        // Find and record non-zero regions of memory.
+        // Find and record non-zero regions of memory (in parallel).
         //
         // TODO: This could be really slow for large memories. Instead, we
         // should bring our own memories, protect the pages, and keep a table
@@ -509,7 +510,11 @@ impl Wizer {
                             let page = &memory[start as usize..end];
                             for byte in page {
                                 if *byte != 0 {
-                                    return Some((memory_index, start, page));
+                                    return Some(DataSegment {
+                                        memory_index,
+                                        offset: start as u32,
+                                        data: page,
+                                    });
                                 }
                             }
                             None
@@ -523,7 +528,38 @@ impl Wizer {
 
         // Sort data segments to enforce determinism in the face of the
         // parallelism above.
-        data_segments.sort_by_key(|(m, i, _)| (*m, *i));
+        data_segments.sort_by_key(|s| (s.memory_index, s.offset));
+
+        // Merge any contiguous pages, so that the engine can initialize them
+        // all at once (ideally with a single copy-on-write `mmap`) rather than
+        // initializing each data segment individually.
+        for i in (1..data_segments.len()).rev() {
+            let a = &data_segments[i - 1];
+            let b = &data_segments[i];
+
+            // Only merge segments for the same memory.
+            if a.memory_index != b.memory_index {
+                continue;
+            }
+
+            // Only merge segments if they are contiguous.
+            if a.offset + u32::try_from(a.data.len()).unwrap() != b.offset {
+                continue;
+            }
+
+            // Okay, merge them together into `a` (so that the next iteration
+            // can merge it with its predecessor) and then remove `b`!
+            data_segments[i - 1].data = unsafe {
+                debug_assert_eq!(
+                    a.data
+                        .as_ptr()
+                        .offset(isize::try_from(a.data.len()).unwrap()),
+                    b.data.as_ptr()
+                );
+                std::slice::from_raw_parts(a.data.as_ptr(), a.data.len() + b.data.len())
+            };
+            data_segments.remove(i);
+        }
 
         Diff {
             globals,
@@ -547,10 +583,15 @@ impl Wizer {
                 return;
             }
             let mut data_section = wasm_encoder::DataSection::new();
-            for &(memory_index, offset, data) in &diff.data_segments {
+            for DataSegment {
+                memory_index,
+                offset,
+                data,
+            } in &diff.data_segments
+            {
                 data_section.active(
-                    memory_index,
-                    wasm_encoder::Instruction::I32Const(offset as i32),
+                    *memory_index,
+                    wasm_encoder::Instruction::I32Const(*offset as i32),
                     data.iter().copied(),
                 );
             }
@@ -741,7 +782,14 @@ struct Diff<'a> {
     memory_mins: Vec<u32>,
 
     /// Segments of non-zero memory.
-    ///
-    /// `(memory_index, offset, data)`.
-    data_segments: Vec<(u32, u32, &'a [u8])>,
+    data_segments: Vec<DataSegment<'a>>,
+}
+
+struct DataSegment<'a> {
+    /// The index of this data segment's memory.
+    memory_index: u32,
+    /// The offset within the memory that `data` should be copied to.
+    offset: u32,
+    /// This segment's (non-zero) data.
+    data: &'a [u8],
 }
