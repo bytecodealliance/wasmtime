@@ -668,36 +668,205 @@ impl MoveWideConst {
 }
 
 /// Advanced SIMD modified immediate as used by MOVI/MVNI.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ASIMDMovModImm {
     imm: u8,
     shift: u8,
+    is_64bit: bool,
     shift_ones: bool,
 }
 
 impl ASIMDMovModImm {
+    /// Construct an ASIMDMovModImm from an arbitrary 64-bit constant, if possible.
+    /// Note that the bits in `value` outside of the range specified by `size` are
+    /// ignored; for example, in the case of `ScalarSize::Size8` all bits above the
+    /// lowest 8 are ignored.
     pub fn maybe_from_u64(value: u64, size: ScalarSize) -> Option<ASIMDMovModImm> {
         match size {
             ScalarSize::Size8 => Some(ASIMDMovModImm {
                 imm: value as u8,
                 shift: 0,
+                is_64bit: false,
                 shift_ones: false,
             }),
+            ScalarSize::Size16 => {
+                let value = value as u16;
+
+                if value >> 8 == 0 {
+                    Some(ASIMDMovModImm {
+                        imm: value as u8,
+                        shift: 0,
+                        is_64bit: false,
+                        shift_ones: false,
+                    })
+                } else if value as u8 == 0 {
+                    Some(ASIMDMovModImm {
+                        imm: (value >> 8) as u8,
+                        shift: 8,
+                        is_64bit: false,
+                        shift_ones: false,
+                    })
+                } else {
+                    None
+                }
+            }
+            ScalarSize::Size32 => {
+                let value = value as u32;
+
+                // Value is of the form 0x00MMFFFF.
+                if value & 0xFF00FFFF == 0x0000FFFF {
+                    let imm = (value >> 16) as u8;
+
+                    Some(ASIMDMovModImm {
+                        imm,
+                        shift: 16,
+                        is_64bit: false,
+                        shift_ones: true,
+                    })
+                // Value is of the form 0x0000MMFF.
+                } else if value & 0xFFFF00FF == 0x000000FF {
+                    let imm = (value >> 8) as u8;
+
+                    Some(ASIMDMovModImm {
+                        imm,
+                        shift: 8,
+                        is_64bit: false,
+                        shift_ones: true,
+                    })
+                } else {
+                    // Of the 4 bytes, at most one is non-zero.
+                    for shift in (0..32).step_by(8) {
+                        if value & (0xFF << shift) == value {
+                            return Some(ASIMDMovModImm {
+                                imm: (value >> shift) as u8,
+                                shift,
+                                is_64bit: false,
+                                shift_ones: false,
+                            });
+                        }
+                    }
+
+                    None
+                }
+            }
+            ScalarSize::Size64 => {
+                let mut imm = 0u8;
+
+                // Check if all bytes are either 0 or 0xFF.
+                for i in 0..8 {
+                    let b = (value >> (i * 8)) as u8;
+
+                    if b == 0 || b == 0xFF {
+                        imm |= (b & 1) << i;
+                    } else {
+                        return None;
+                    }
+                }
+
+                Some(ASIMDMovModImm {
+                    imm,
+                    shift: 0,
+                    is_64bit: true,
+                    shift_ones: false,
+                })
+            }
             _ => None,
         }
     }
 
     /// Create a zero immediate of this format.
-    pub fn zero() -> Self {
+    pub fn zero(size: ScalarSize) -> Self {
         ASIMDMovModImm {
             imm: 0,
             shift: 0,
+            is_64bit: size == ScalarSize::Size64,
             shift_ones: false,
         }
     }
 
+    /// Returns the value that this immediate represents.
     pub fn value(&self) -> (u8, u32, bool) {
         (self.imm, self.shift as u32, self.shift_ones)
+    }
+}
+
+/// Advanced SIMD modified immediate as used by the vector variant of FMOV.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ASIMDFPModImm {
+    imm: u8,
+    is_64bit: bool,
+}
+
+impl ASIMDFPModImm {
+    /// Construct an ASIMDFPModImm from an arbitrary 64-bit constant, if possible.
+    pub fn maybe_from_u64(value: u64, size: ScalarSize) -> Option<ASIMDFPModImm> {
+        // In all cases immediates are encoded as an 8-bit number 0b_abcdefgh;
+        // let `D` be the inverse of the digit `d`.
+        match size {
+            ScalarSize::Size32 => {
+                // In this case the representable immediates are 32-bit numbers of the form
+                // 0b_aBbb_bbbc_defg_h000 shifted to the left by 16.
+                let value = value as u32;
+                let b0_5 = (value >> 19) & 0b111111;
+                let b6 = (value >> 19) & (1 << 6);
+                let b7 = (value >> 24) & (1 << 7);
+                let imm = (b0_5 | b6 | b7) as u8;
+
+                if value == Self::value32(imm) {
+                    Some(ASIMDFPModImm {
+                        imm,
+                        is_64bit: false,
+                    })
+                } else {
+                    None
+                }
+            }
+            ScalarSize::Size64 => {
+                // In this case the representable immediates are 64-bit numbers of the form
+                // 0b_aBbb_bbbb_bbcd_efgh shifted to the left by 48.
+                let b0_5 = (value >> 48) & 0b111111;
+                let b6 = (value >> 48) & (1 << 6);
+                let b7 = (value >> 56) & (1 << 7);
+                let imm = (b0_5 | b6 | b7) as u8;
+
+                if value == Self::value64(imm) {
+                    Some(ASIMDFPModImm {
+                        imm,
+                        is_64bit: true,
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Returns bits ready for encoding.
+    pub fn enc_bits(&self) -> u8 {
+        self.imm
+    }
+
+    /// Returns the 32-bit value that corresponds to an 8-bit encoding.
+    fn value32(imm: u8) -> u32 {
+        let imm = imm as u32;
+        let b0_5 = imm & 0b111111;
+        let b6 = (imm >> 6) & 1;
+        let b6_inv = b6 ^ 1;
+        let b7 = (imm >> 7) & 1;
+
+        b0_5 << 19 | (b6 * 0b11111) << 25 | b6_inv << 30 | b7 << 31
+    }
+
+    /// Returns the 64-bit value that corresponds to an 8-bit encoding.
+    fn value64(imm: u8) -> u64 {
+        let imm = imm as u64;
+        let b0_5 = imm & 0b111111;
+        let b6 = (imm >> 6) & 1;
+        let b6_inv = b6 ^ 1;
+        let b7 = (imm >> 7) & 1;
+
+        b0_5 << 48 | (b6 * 0b11111111) << 54 | b6_inv << 62 | b7 << 63
     }
 }
 
@@ -782,11 +951,34 @@ impl PrettyPrint for MoveWideConst {
 
 impl PrettyPrint for ASIMDMovModImm {
     fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
-        if self.shift == 0 {
+        if self.is_64bit {
+            debug_assert_eq!(self.shift, 0);
+
+            let enc_imm = self.imm as i8;
+            let mut imm = 0u64;
+
+            for i in 0..8 {
+                let b = (enc_imm >> i) & 1;
+
+                imm |= (-b as u8 as u64) << (i * 8);
+            }
+
+            format!("#{}", imm)
+        } else if self.shift == 0 {
             format!("#{}", self.imm)
         } else {
             let shift_type = if self.shift_ones { "MSL" } else { "LSL" };
             format!("#{}, {} #{}", self.imm, shift_type, self.shift)
+        }
+    }
+}
+
+impl PrettyPrint for ASIMDFPModImm {
+    fn show_rru(&self, _mb_rru: Option<&RealRegUniverse>) -> String {
+        if self.is_64bit {
+            format!("#{}", f64::from_bits(Self::value64(self.imm)))
+        } else {
+            format!("#{}", f32::from_bits(Self::value32(self.imm)))
         }
     }
 }
@@ -1021,5 +1213,45 @@ mod test {
             }
             unreachable!();
         }
+    }
+
+    #[test]
+    fn asimd_fp_mod_imm_test() {
+        assert_eq!(None, ASIMDFPModImm::maybe_from_u64(0, ScalarSize::Size32));
+        assert_eq!(
+            None,
+            ASIMDFPModImm::maybe_from_u64(0.013671875_f32.to_bits() as u64, ScalarSize::Size32)
+        );
+        assert_eq!(None, ASIMDFPModImm::maybe_from_u64(0, ScalarSize::Size64));
+        assert_eq!(
+            None,
+            ASIMDFPModImm::maybe_from_u64(10000_f64.to_bits(), ScalarSize::Size64)
+        );
+    }
+
+    #[test]
+    fn asimd_mov_mod_imm_test() {
+        assert_eq!(
+            None,
+            ASIMDMovModImm::maybe_from_u64(513, ScalarSize::Size16)
+        );
+        assert_eq!(
+            None,
+            ASIMDMovModImm::maybe_from_u64(4278190335, ScalarSize::Size32)
+        );
+        assert_eq!(
+            None,
+            ASIMDMovModImm::maybe_from_u64(8388608, ScalarSize::Size64)
+        );
+
+        assert_eq!(
+            Some(ASIMDMovModImm {
+                imm: 66,
+                shift: 16,
+                is_64bit: false,
+                shift_ones: true,
+            }),
+            ASIMDMovModImm::maybe_from_u64(4390911, ScalarSize::Size32)
+        );
     }
 }

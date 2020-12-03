@@ -2075,8 +2075,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // derivation of these sequences.  Alternative sequences are discussed in
             // https://github.com/bytecodealliance/wasmtime/issues/2296, although they are not
             // used here.
-            // Also .. FIXME: when https://github.com/bytecodealliance/wasmtime/pull/2310 is
-            // merged, use `lower_splat_constant` instead to generate the constants.
             let tmp_r0 = ctx.alloc_tmp(RegClass::I64, I64);
             let tmp_v0 = ctx.alloc_tmp(RegClass::V128, I8X16);
             let tmp_v1 = ctx.alloc_tmp(RegClass::V128, I8X16);
@@ -2100,12 +2098,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         size: VectorSize::Size8x16,
                         imm: 7,
                     });
-                    lower_constant_u64(ctx, tmp_r0, 0x8040201008040201u64);
-                    ctx.emit(Inst::VecDup {
-                        rd: tmp_v0,
-                        rn: tmp_r0.to_reg(),
-                        size: VectorSize::Size64x2,
-                    });
+                    lower_splat_const(ctx, tmp_v0, 0x8040201008040201u64, VectorSize::Size64x2);
                     ctx.emit(Inst::VecRRR {
                         alu_op: VecALUOp::And,
                         rd: tmp_v1,

@@ -853,7 +853,7 @@ pub(crate) fn lower_constant_f128<C: LowerCtx<I = Inst>>(
         // is potentially expensive.
         ctx.emit(Inst::VecDupImm {
             rd,
-            imm: ASIMDMovModImm::zero(),
+            imm: ASIMDMovModImm::zero(ScalarSize::Size8),
             invert: false,
             size: VectorSize::Size8x16,
         });
