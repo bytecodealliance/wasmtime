@@ -1,16 +1,23 @@
 use crate::trampoline::StoreInstanceHandle;
-use crate::{Engine, Export, Extern, Func, Global, Memory, Module, Store, Table, Trap};
+use crate::types::matching;
+use crate::{
+    Engine, Export, Extern, ExternType, Func, Global, InstanceType, Memory, Module, Store, Table,
+    Trap,
+};
 use anyhow::{bail, Context, Error, Result};
 use std::mem;
+use std::sync::Arc;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::{
-    EntityIndex, FuncIndex, GlobalIndex, InstanceIndex, MemoryIndex, ModuleIndex, TableIndex,
+    EntityIndex, EntityType, FuncIndex, GlobalIndex, InstanceIndex, MemoryIndex, ModuleIndex,
+    TableIndex,
 };
 use wasmtime_environ::Initializer;
-use wasmtime_jit::{CompiledModule, TypeTables};
+use wasmtime_jit::TypeTables;
 use wasmtime_runtime::{
-    Imports, InstantiationError, StackMapRegistry, VMContext, VMExternRefActivationsTable,
-    VMFunctionBody, VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport,
+    Imports, InstanceHandle, InstantiationError, StackMapRegistry, VMContext,
+    VMExternRefActivationsTable, VMFunctionBody, VMFunctionImport, VMGlobalImport, VMMemoryImport,
+    VMTableImport,
 };
 
 /// Performs all low-level steps necessary for instantiation.
@@ -35,17 +42,16 @@ use wasmtime_runtime::{
 ///   into the provided builder. The expected entity that it's defining is also
 ///   passed in for the top-level case where type-checking is performed. This is
 ///   fallible because type checks may fail.
-fn instantiate<'a>(
-    store: &'a Store,
-    compiled_module: &'a CompiledModule,
-    all_modules: &'a [CompiledModule],
-    types: &'a TypeTables,
-    parent_modules: &PrimaryMap<ModuleIndex, &'a CompiledModule>,
-    define_import: &mut dyn FnMut(&EntityIndex, &mut ImportsBuilder<'a>) -> Result<()>,
+fn instantiate(
+    store: &Store,
+    module: &Module,
+    parent_modules: &PrimaryMap<ModuleIndex, Module>,
+    define_import: &mut dyn FnMut(&EntityIndex, &mut ImportsBuilder<'_>) -> Result<()>,
 ) -> Result<StoreInstanceHandle, Error> {
+    let compiled_module = module.compiled_module();
     let env_module = compiled_module.module();
 
-    let mut imports = ImportsBuilder::new(env_module, types, store);
+    let mut imports = ImportsBuilder::new(store, module);
     for initializer in env_module.initializers.iter() {
         match initializer {
             // Definition of an import depends on how our parent is providing
@@ -67,24 +73,28 @@ fn instantiate<'a>(
             // This one's pretty easy, we're just picking up our parent's module
             // and putting it into our own index space.
             Initializer::AliasParentModule(idx) => {
-                imports.modules.push(parent_modules[*idx]);
+                imports.modules.push(parent_modules[*idx].clone());
             }
 
             // Turns out defining any kind of module is pretty easy, we're just
             // slinging around pointers.
             Initializer::DefineModule(idx) => {
-                imports.modules.push(&all_modules[*idx]);
+                imports.modules.push(module.submodule(*idx));
             }
 
             // Here we lookup our instance handle, ask it for the nth export,
             // and then push that item into our own index space. We eschew
             // type-checking since only valid modules reach this point.
+            //
+            // Note that the unsafety here is because we're asserting that the
+            // handle comes from our same store, but this should be true because
+            // we acquired the handle from an instance in the store.
             Initializer::AliasInstanceExport { instance, export } => {
                 let handle = &imports.instances[*instance];
                 let export_index = &handle.module().exports[*export];
                 let item = Extern::from_wasmtime_export(
                     handle.lookup_by_declaration(export_index),
-                    handle.clone(),
+                    unsafe { store.existing_instance_handle(handle.clone()) },
                 );
                 imports.push_extern(&item);
             }
@@ -100,14 +110,16 @@ fn instantiate<'a>(
             // to be a DAG. Additionally the recursion should also be bounded
             // due to validation. We may one day need to make this an iterative
             // loop, however.
+            //
+            // Also note that there's some unsafety here around cloning
+            // `InstanceHandle` because the handle may not live long enough, but
+            // we're doing all of this in the context of our `Store` argument
+            // above so we should be safe here.
             Initializer::Instantiate { module, args } => {
-                let module_to_instantiate = imports.modules[*module];
                 let mut args = args.iter();
                 let handle = instantiate(
                     store,
-                    module_to_instantiate,
-                    all_modules,
-                    types,
+                    &imports.modules[*module],
                     &imports.modules,
                     &mut |_, builder| {
                         match *args.next().unwrap() {
@@ -124,16 +136,18 @@ fn instantiate<'a>(
                                 builder.memories.push(imports.memories[i]);
                             }
                             EntityIndex::Module(i) => {
-                                builder.modules.push(imports.modules[i]);
+                                builder.modules.push(imports.modules[i].clone());
                             }
                             EntityIndex::Instance(i) => {
-                                builder.instances.push(imports.instances[i].clone());
+                                builder
+                                    .instances
+                                    .push(unsafe { imports.instances[i].clone() });
                             }
                         }
                         Ok(())
                     },
                 )?;
-                imports.instances.push(handle);
+                imports.instances.push(unsafe { (*handle).clone() });
             }
         }
     }
@@ -141,21 +155,21 @@ fn instantiate<'a>(
     // With the above initialization done we've now acquired the final set of
     // imports in all the right index spaces and everything. Time to carry on
     // with the creation of our own instance.
-    let imports = imports.imports();
+    let imports = imports.build();
 
     // Register the module just before instantiation to ensure we have a
     // trampoline registered for every signature and to preserve the module's
     // compiled JIT code within the `Store`.
-    store.register_module(compiled_module, types);
+    store.register_module(module);
 
     let config = store.engine().config();
     let instance = unsafe {
         let instance = compiled_module.instantiate(
             imports,
-            &store.lookup_shared_signature(types),
+            &store.lookup_shared_signature(module.types()),
             config.memory_creator.as_ref().map(|a| a as _),
             store.interrupts(),
-            Box::new(()),
+            Box::new(module.types().clone()),
             store.externref_activations_table() as *const VMExternRefActivationsTable as *mut _,
             store.stack_map_registry() as *const StackMapRegistry as *mut _,
         )?;
@@ -230,7 +244,6 @@ fn instantiate<'a>(
 #[derive(Clone)]
 pub struct Instance {
     pub(crate) handle: StoreInstanceHandle,
-    module: Module,
 }
 
 impl Instance {
@@ -294,16 +307,7 @@ impl Instance {
 
         // Perform some pre-flight checks before we get into the meat of
         // instantiation.
-        let expected = module
-            .compiled_module()
-            .module()
-            .initializers
-            .iter()
-            .filter(|e| match e {
-                Initializer::Import { .. } => true,
-                _ => false,
-            })
-            .count();
+        let expected = module.compiled_module().module().imports().count();
         if expected != imports.len() {
             bail!("expected {} imports, found {}", expected, imports.len());
         }
@@ -314,22 +318,34 @@ impl Instance {
         }
 
         let mut imports = imports.iter();
-        let handle = instantiate(
-            store,
-            module.compiled_module(),
-            module.all_compiled_modules(),
-            module.types(),
-            &PrimaryMap::new(),
-            &mut |idx, builder| {
-                let import = imports.next().expect("already checked the length");
-                builder.define_extern(idx, import)
-            },
-        )?;
+        let handle = instantiate(store, module, &PrimaryMap::new(), &mut |idx, builder| {
+            let import = imports.next().expect("already checked the length");
+            builder.define_extern(idx, import)
+        })?;
 
-        Ok(Instance {
-            handle,
-            module: module.clone(),
-        })
+        Ok(Instance { handle })
+    }
+
+    pub(crate) fn from_wasmtime(handle: StoreInstanceHandle) -> Instance {
+        Instance { handle }
+    }
+
+    /// Returns the type signature of this instance.
+    pub fn ty(&self) -> InstanceType {
+        let mut ty = InstanceType::new();
+        let module = self.handle.module();
+        let types = self
+            .handle
+            .host_state()
+            .downcast_ref::<Arc<TypeTables>>()
+            .unwrap();
+        for (name, index) in module.exports.iter() {
+            ty.add_named_export(
+                name,
+                ExternType::from_wasmtime(types, &module.type_of(*index)),
+            );
+        }
+        ty
     }
 
     /// Returns the associated [`Store`] that this `Instance` is compiled into.
@@ -400,24 +416,20 @@ struct ImportsBuilder<'a> {
     tables: PrimaryMap<TableIndex, VMTableImport>,
     memories: PrimaryMap<MemoryIndex, VMMemoryImport>,
     globals: PrimaryMap<GlobalIndex, VMGlobalImport>,
-    instances: PrimaryMap<InstanceIndex, StoreInstanceHandle>,
-    modules: PrimaryMap<ModuleIndex, &'a CompiledModule>,
+    instances: PrimaryMap<InstanceIndex, InstanceHandle>,
+    modules: PrimaryMap<ModuleIndex, Module>,
 
     module: &'a wasmtime_environ::Module,
-    store: &'a Store,
-    types: &'a TypeTables,
+    matcher: matching::MatchCx<'a>,
 }
 
 impl<'a> ImportsBuilder<'a> {
-    fn new(
-        module: &'a wasmtime_environ::Module,
-        types: &'a TypeTables,
-        store: &'a Store,
-    ) -> ImportsBuilder<'a> {
+    fn new(store: &'a Store, module: &'a Module) -> ImportsBuilder<'a> {
+        let types = module.types();
+        let module = module.compiled_module().module();
         ImportsBuilder {
             module,
-            store,
-            types,
+            matcher: matching::MatchCx { store, types },
             functions: PrimaryMap::with_capacity(module.num_imported_funcs),
             tables: PrimaryMap::with_capacity(module.num_imported_tables),
             memories: PrimaryMap::with_capacity(module.num_imported_memories),
@@ -428,59 +440,38 @@ impl<'a> ImportsBuilder<'a> {
     }
 
     fn define_extern(&mut self, expected: &EntityIndex, actual: &Extern) -> Result<()> {
-        match *expected {
-            EntityIndex::Table(i) => {
-                self.tables.push(match actual {
-                    Extern::Table(e) if e.matches_expected(&self.module.table_plans[i]) => {
-                        e.vmimport()
-                    }
-                    Extern::Table(_) => bail!("table types incompatible"),
-                    _ => bail!("expected table, but found {}", actual.desc()),
-                });
-            }
-            EntityIndex::Memory(i) => {
-                self.memories.push(match actual {
-                    Extern::Memory(e) if e.matches_expected(&self.module.memory_plans[i]) => {
-                        e.vmimport()
-                    }
-                    Extern::Memory(_) => bail!("memory types incompatible"),
-                    _ => bail!("expected memory, but found {}", actual.desc()),
-                });
-            }
-            EntityIndex::Global(i) => {
-                self.globals.push(match actual {
-                    Extern::Global(e) if e.matches_expected(&self.module.globals[i]) => {
-                        e.vmimport()
-                    }
-                    Extern::Global(_) => bail!("global types incompatible"),
-                    _ => bail!("expected global, but found {}", actual.desc()),
-                });
-            }
-            EntityIndex::Function(i) => {
-                let func = match actual {
-                    Extern::Func(e) => e,
-                    _ => bail!("expected function, but found {}", actual.desc()),
-                };
-                // Look up the `i`th function's type from the module in our
-                // signature registry. If it's not present then we have no
-                // functions registered with that type, so `func` is guaranteed
-                // to not match.
-                let ty = self
-                    .store
-                    .signatures()
-                    .borrow()
-                    .lookup(&self.types.wasm_signatures[self.module.functions[i]])
-                    .ok_or_else(|| anyhow::format_err!("function types incompatible"))?;
-                if !func.matches_expected(ty) {
-                    bail!("function types incompatible");
-                }
-                self.functions.push(func.vmimport());
-            }
-
-            // FIXME(#2094)
-            EntityIndex::Module(_i) => unimplemented!(),
-            EntityIndex::Instance(_i) => unimplemented!(),
+        let expected_ty = self.module.type_of(*expected);
+        let compatible = match &expected_ty {
+            EntityType::Table(i) => match actual {
+                Extern::Table(e) => self.matcher.table(i, e),
+                _ => bail!("expected table, but found {}", actual.desc()),
+            },
+            EntityType::Memory(i) => match actual {
+                Extern::Memory(e) => self.matcher.memory(i, e),
+                _ => bail!("expected memory, but found {}", actual.desc()),
+            },
+            EntityType::Global(i) => match actual {
+                Extern::Global(e) => self.matcher.global(i, e),
+                _ => bail!("expected global, but found {}", actual.desc()),
+            },
+            EntityType::Function(i) => match actual {
+                Extern::Func(e) => self.matcher.func(*i, e),
+                _ => bail!("expected func, but found {}", actual.desc()),
+            },
+            EntityType::Instance(i) => match actual {
+                Extern::Instance(e) => self.matcher.instance(*i, e),
+                _ => bail!("expected instance, but found {}", actual.desc()),
+            },
+            EntityType::Module(i) => match actual {
+                Extern::Module(e) => self.matcher.module(*i, e),
+                _ => bail!("expected module, but found {}", actual.desc()),
+            },
+            EntityType::Event(_) => unimplemented!(),
+        };
+        if !compatible {
+            bail!("{} types incompatible", actual.desc());
         }
+        self.push_extern(actual);
         Ok(())
     }
 
@@ -498,15 +489,27 @@ impl<'a> ImportsBuilder<'a> {
             Extern::Memory(i) => {
                 self.memories.push(i.vmimport());
             }
+            Extern::Instance(i) => {
+                debug_assert!(Store::same(i.store(), self.matcher.store));
+                self.instances.push(unsafe { (*i.handle).clone() });
+            }
+            Extern::Module(m) => {
+                self.modules.push(m.clone());
+            }
         }
     }
 
-    fn imports(&self) -> Imports<'_> {
+    fn build(&mut self) -> Imports<'_> {
         Imports {
             tables: self.tables.values().as_slice(),
             globals: self.globals.values().as_slice(),
             memories: self.memories.values().as_slice(),
             functions: self.functions.values().as_slice(),
+            instances: mem::take(&mut self.instances),
+            modules: mem::take(&mut self.modules)
+                .into_iter()
+                .map(|(_, m)| Box::new(m) as Box<_>)
+                .collect(),
         }
     }
 }

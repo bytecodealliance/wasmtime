@@ -28,8 +28,8 @@ use thiserror::Error;
 use wasmtime_environ::entity::{packed_option::ReservedValue, BoxedSlice, EntityRef, PrimaryMap};
 use wasmtime_environ::wasm::{
     DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
-    ElemIndex, EntityIndex, FuncIndex, GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex,
-    TableElementType, TableIndex, WasmType,
+    ElemIndex, EntityIndex, FuncIndex, GlobalIndex, GlobalInit, InstanceIndex, MemoryIndex,
+    ModuleIndex, SignatureIndex, TableElementType, TableIndex, WasmType,
 };
 use wasmtime_environ::{ir, DataInitializer, Module, ModuleType, TableElements, VMOffsets};
 
@@ -49,6 +49,15 @@ pub(crate) struct Instance {
 
     /// WebAssembly table data.
     tables: BoxedSlice<DefinedTableIndex, Table>,
+
+    /// Instances our module defined and their handles.
+    instances: PrimaryMap<InstanceIndex, InstanceHandle>,
+
+    /// Modules that are located in our index space.
+    ///
+    /// For now these are `Box<Any>` so the caller can define the type of what a
+    /// module looks like.
+    modules: PrimaryMap<ModuleIndex, Box<dyn Any>>,
 
     /// Passive elements in this instantiation. As `elem.drop`s happen, these
     /// entries get removed. A missing entry is considered equivalent to an
@@ -268,7 +277,7 @@ impl Instance {
     }
 
     /// Lookup an export with the given export declaration.
-    pub fn lookup_by_declaration(&self, export: &EntityIndex) -> Export {
+    pub fn lookup_by_declaration(&self, export: &EntityIndex) -> Export<'_> {
         match export {
             EntityIndex::Function(index) => {
                 let anyfunc = self.get_caller_checked_anyfunc(*index).unwrap();
@@ -317,9 +326,8 @@ impl Instance {
             }
             .into(),
 
-            // FIXME(#2094)
-            EntityIndex::Instance(_index) => unimplemented!(),
-            EntityIndex::Module(_index) => unimplemented!(),
+            EntityIndex::Instance(index) => Export::Instance(&self.instances[*index]),
+            EntityIndex::Module(index) => Export::Module(&*self.modules[*index]),
         }
     }
 
@@ -847,6 +855,8 @@ impl InstanceHandle {
                 passive_elements: Default::default(),
                 passive_data,
                 host_state,
+                instances: imports.instances,
+                modules: imports.modules,
                 vmctx: VMContext {},
             };
             let layout = instance.alloc_layout();

@@ -346,6 +346,31 @@ impl Module {
     pub fn is_imported_global(&self, index: GlobalIndex) -> bool {
         index.index() < self.num_imported_globals
     }
+
+    /// Returns an iterator of all the imports in this module, along with their
+    /// module name, field name, and type that's being imported.
+    pub fn imports(&self) -> impl Iterator<Item = (&str, Option<&str>, EntityType)> {
+        self.initializers.iter().filter_map(move |i| match i {
+            Initializer::Import {
+                module,
+                field,
+                index,
+            } => Some((module.as_str(), field.as_deref(), self.type_of(*index))),
+            _ => None,
+        })
+    }
+
+    /// Returns the type of an item based on its index
+    pub fn type_of(&self, index: EntityIndex) -> EntityType {
+        match index {
+            EntityIndex::Global(i) => EntityType::Global(self.globals[i]),
+            EntityIndex::Table(i) => EntityType::Table(self.table_plans[i].table),
+            EntityIndex::Memory(i) => EntityType::Memory(self.memory_plans[i].memory),
+            EntityIndex::Function(i) => EntityType::Function(self.functions[i]),
+            EntityIndex::Instance(i) => EntityType::Instance(self.instances[i]),
+            EntityIndex::Module(i) => EntityType::Module(self.modules[i]),
+        }
+    }
 }
 
 /// All types which are recorded for the entirety of a translation.
@@ -376,7 +401,7 @@ pub struct ModuleSignature {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstanceSignature {
     /// The name of what's being exported as well as its type signature.
-    pub exports: Vec<(String, EntityType)>,
+    pub exports: IndexMap<String, EntityType>,
 }
 
 mod passive_data_serde {

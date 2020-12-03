@@ -38,12 +38,12 @@ anyhow = "1.0.19"
 target-lexicon = { version = "0.11.0", default-features = false }
 pretty_env_logger = "0.4.0"
 file-per-thread-logger = "0.1.1"
-wat = "1.0.27"
+wat = "1.0.29"
 libc = "0.2.60"
 log = "0.4.8"
 rayon = "1.2.1"
 humantime = "2.0.0"
-wasmparser = "0.68"
+wasmparser = "0.69"
 
 [dev-dependencies]
 env_logger = "0.8.1"

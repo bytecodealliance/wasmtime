@@ -23,8 +23,8 @@ fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_simd(simd)
         .wasm_bulk_memory(bulk_mem)
-        .wasm_reference_types(reftypes)
-        .wasm_multi_memory(multi_memory)
+        .wasm_reference_types(reftypes || module_linking)
+        .wasm_multi_memory(multi_memory || module_linking)
         .wasm_module_linking(module_linking)
         .strategy(strategy)?
         .cranelift_debug_verifier(true);

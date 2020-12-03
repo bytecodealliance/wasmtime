@@ -58,6 +58,8 @@ enum ImportKind {
     Global(GlobalType),
     Memory,
     Table,
+    Module,
+    Instance,
 }
 
 impl Linker {
@@ -516,10 +518,8 @@ impl Linker {
             ExternType::Global(f) => ImportKind::Global(f),
             ExternType::Memory(_) => ImportKind::Memory,
             ExternType::Table(_) => ImportKind::Table,
-
-            // FIXME(#2094)
-            ExternType::Module(_) => unimplemented!(),
-            ExternType::Instance(_) => unimplemented!(),
+            ExternType::Module(_) => ImportKind::Module,
+            ExternType::Instance(_) => ImportKind::Instance,
         }
     }
 

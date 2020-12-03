@@ -1,7 +1,9 @@
-use crate::Module;
 use std::fmt;
-use wasmtime_environ::wasm::WasmFuncType;
+use wasmtime_environ::wasm::{EntityType, WasmFuncType};
 use wasmtime_environ::{ir, wasm};
+use wasmtime_jit::TypeTables;
+
+pub(crate) mod matching;
 
 // Type Representations
 
@@ -196,23 +198,25 @@ impl ExternType {
         (Instance(InstanceType) instance unwrap_instance)
     }
 
-    fn from_wasmtime(module: &Module, ty: &wasmtime_environ::wasm::EntityType) -> ExternType {
-        use wasmtime_environ::wasm::EntityType;
+    pub(crate) fn from_wasmtime(
+        types: &TypeTables,
+        ty: &wasmtime_environ::wasm::EntityType,
+    ) -> ExternType {
         match ty {
             EntityType::Function(idx) => {
-                let sig = &module.types().wasm_signatures[*idx];
+                let sig = &types.wasm_signatures[*idx];
                 FuncType::from_wasm_func_type(sig).into()
             }
             EntityType::Global(ty) => GlobalType::from_wasmtime_global(ty).into(),
             EntityType::Memory(ty) => MemoryType::from_wasmtime_memory(ty).into(),
             EntityType::Table(ty) => TableType::from_wasmtime_table(ty).into(),
             EntityType::Module(ty) => {
-                let ty = &module.types().module_signatures[*ty];
-                ModuleType::from_wasmtime(module, ty).into()
+                let ty = &types.module_signatures[*ty];
+                ModuleType::from_wasmtime(types, ty).into()
             }
             EntityType::Instance(ty) => {
-                let ty = &module.types().instance_signatures[*ty];
-                InstanceType::from_wasmtime(module, ty).into()
+                let ty = &types.instance_signatures[*ty];
+                InstanceType::from_wasmtime(types, ty).into()
             }
             EntityType::Event(_) => unimplemented!("wasm event support"),
         }
@@ -490,14 +494,14 @@ impl ModuleType {
     }
 
     pub(crate) fn from_wasmtime(
-        module: &Module,
+        types: &TypeTables,
         ty: &wasmtime_environ::ModuleSignature,
     ) -> ModuleType {
-        let exports = &module.types().instance_signatures[ty.exports].exports;
+        let exports = &types.instance_signatures[ty.exports].exports;
         ModuleType {
             exports: exports
                 .iter()
-                .map(|(name, ty)| (name.to_string(), ExternType::from_wasmtime(module, ty)))
+                .map(|(name, ty)| (name.to_string(), ExternType::from_wasmtime(types, ty)))
                 .collect(),
             imports: ty
                 .imports
@@ -506,7 +510,7 @@ impl ModuleType {
                     (
                         m.to_string(),
                         name.as_ref().map(|n| n.to_string()),
-                        ExternType::from_wasmtime(module, ty),
+                        ExternType::from_wasmtime(types, ty),
                     )
                 })
                 .collect(),
@@ -548,79 +552,15 @@ impl InstanceType {
     }
 
     pub(crate) fn from_wasmtime(
-        module: &Module,
+        types: &TypeTables,
         ty: &wasmtime_environ::InstanceSignature,
     ) -> InstanceType {
         InstanceType {
             exports: ty
                 .exports
                 .iter()
-                .map(|(name, ty)| (name.to_string(), ExternType::from_wasmtime(module, ty)))
+                .map(|(name, ty)| (name.to_string(), ExternType::from_wasmtime(types, ty)))
                 .collect(),
-        }
-    }
-}
-
-// Entity Types
-
-#[derive(Clone)]
-pub(crate) enum EntityType<'module> {
-    Function(&'module wasm::WasmFuncType),
-    Table(&'module wasm::Table),
-    Memory(&'module wasm::Memory),
-    Global(&'module wasm::Global),
-    Module {
-        ty: &'module wasmtime_environ::ModuleSignature,
-        module: &'module Module,
-    },
-    Instance {
-        ty: &'module wasmtime_environ::InstanceSignature,
-        module: &'module Module,
-    },
-}
-
-impl<'module> EntityType<'module> {
-    /// Translate from a `EntityIndex` into an `ExternType`.
-    pub(crate) fn new(
-        entity_index: &wasm::EntityIndex,
-        module: &'module Module,
-    ) -> EntityType<'module> {
-        let env_module = module.compiled_module().module();
-        match entity_index {
-            wasm::EntityIndex::Function(func_index) => {
-                let sig_index = env_module.functions[*func_index];
-                let sig = &module.types().wasm_signatures[sig_index];
-                EntityType::Function(sig)
-            }
-            wasm::EntityIndex::Table(table_index) => {
-                EntityType::Table(&env_module.table_plans[*table_index].table)
-            }
-            wasm::EntityIndex::Memory(memory_index) => {
-                EntityType::Memory(&env_module.memory_plans[*memory_index].memory)
-            }
-            wasm::EntityIndex::Global(global_index) => {
-                EntityType::Global(&env_module.globals[*global_index])
-            }
-            wasm::EntityIndex::Module(idx) => {
-                let ty = &module.types().module_signatures[env_module.modules[*idx]];
-                EntityType::Module { ty, module }
-            }
-            wasm::EntityIndex::Instance(idx) => {
-                let ty = &module.types().instance_signatures[env_module.instances[*idx]];
-                EntityType::Instance { ty, module }
-            }
-        }
-    }
-
-    /// Convert this `EntityType` to an `ExternType`.
-    pub(crate) fn extern_type(&self) -> ExternType {
-        match self {
-            EntityType::Function(sig) => FuncType::from_wasm_func_type(sig).into(),
-            EntityType::Table(table) => TableType::from_wasmtime_table(table).into(),
-            EntityType::Memory(memory) => MemoryType::from_wasmtime_memory(memory).into(),
-            EntityType::Global(global) => GlobalType::from_wasmtime_global(global).into(),
-            EntityType::Instance { module, ty } => InstanceType::from_wasmtime(module, ty).into(),
-            EntityType::Module { module, ty } => ModuleType::from_wasmtime(module, ty).into(),
         }
     }
 }
@@ -647,7 +587,7 @@ pub struct ImportType<'module> {
 
 #[derive(Clone)]
 enum EntityOrExtern<'a> {
-    Entity(EntityType<'a>),
+    Entity(EntityType, &'a TypeTables),
     Extern(&'a ExternType),
 }
 
@@ -657,12 +597,13 @@ impl<'module> ImportType<'module> {
     pub(crate) fn new(
         module: &'module str,
         name: Option<&'module str>,
-        ty: EntityType<'module>,
+        ty: EntityType,
+        types: &'module TypeTables,
     ) -> ImportType<'module> {
         ImportType {
             module,
             name,
-            ty: EntityOrExtern::Entity(ty),
+            ty: EntityOrExtern::Entity(ty, types),
         }
     }
 
@@ -683,7 +624,7 @@ impl<'module> ImportType<'module> {
     /// Returns the expected type of this import.
     pub fn ty(&self) -> ExternType {
         match &self.ty {
-            EntityOrExtern::Entity(e) => e.extern_type(),
+            EntityOrExtern::Entity(e, types) => ExternType::from_wasmtime(types, e),
             EntityOrExtern::Extern(e) => (*e).clone(),
         }
     }
@@ -719,10 +660,14 @@ pub struct ExportType<'module> {
 impl<'module> ExportType<'module> {
     /// Creates a new export which is exported with the given `name` and has the
     /// given `ty`.
-    pub(crate) fn new(name: &'module str, ty: EntityType<'module>) -> ExportType<'module> {
+    pub(crate) fn new(
+        name: &'module str,
+        ty: EntityType,
+        types: &'module TypeTables,
+    ) -> ExportType<'module> {
         ExportType {
             name,
-            ty: EntityOrExtern::Entity(ty),
+            ty: EntityOrExtern::Entity(ty, types),
         }
     }
 
@@ -734,7 +679,7 @@ impl<'module> ExportType<'module> {
     /// Returns the type of this export.
     pub fn ty(&self) -> ExternType {
         match &self.ty {
-            EntityOrExtern::Entity(e) => e.extern_type(),
+            EntityOrExtern::Entity(e, types) => ExternType::from_wasmtime(types, e),
             EntityOrExtern::Extern(e) => (*e).clone(),
         }
     }

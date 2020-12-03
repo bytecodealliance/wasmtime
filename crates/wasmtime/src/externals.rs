@@ -3,8 +3,8 @@ use crate::trampoline::{
 };
 use crate::values::{from_checked_anyfunc, into_checked_anyfunc, Val};
 use crate::{
-    ExternRef, ExternType, Func, GlobalType, MemoryType, Mutability, Store, TableType, Trap,
-    ValType,
+    ExternRef, ExternType, Func, GlobalType, Instance, MemoryType, Module, Mutability, Store,
+    TableType, Trap, ValType,
 };
 use anyhow::{anyhow, bail, Result};
 use std::mem;
@@ -33,6 +33,10 @@ pub enum Extern {
     Table(Table),
     /// A WebAssembly linear memory.
     Memory(Memory),
+    /// A WebAssembly instance.
+    Instance(Instance),
+    /// A WebAssembly module.
+    Module(Module),
 }
 
 impl Extern {
@@ -76,6 +80,26 @@ impl Extern {
         }
     }
 
+    /// Returns the underlying `Instance`, if this external is a instance.
+    ///
+    /// Returns `None` if this is not a instance.
+    pub fn into_instance(self) -> Option<Instance> {
+        match self {
+            Extern::Instance(instance) => Some(instance),
+            _ => None,
+        }
+    }
+
+    /// Returns the underlying `Module`, if this external is a module.
+    ///
+    /// Returns `None` if this is not a module.
+    pub fn into_module(self) -> Option<Module> {
+        match self {
+            Extern::Module(module) => Some(module),
+            _ => None,
+        }
+    }
+
     /// Returns the type associated with this `Extern`.
     pub fn ty(&self) -> ExternType {
         match self {
@@ -83,6 +107,8 @@ impl Extern {
             Extern::Memory(ft) => ExternType::Memory(ft.ty()),
             Extern::Table(tt) => ExternType::Table(tt.ty()),
             Extern::Global(gt) => ExternType::Global(gt.ty()),
+            Extern::Instance(i) => ExternType::Instance(i.ty()),
+            Extern::Module(m) => ExternType::Module(m.ty()),
         }
     }
 
@@ -103,6 +129,13 @@ impl Extern {
             wasmtime_runtime::Export::Table(t) => {
                 Extern::Table(Table::from_wasmtime_table(t, instance))
             }
+            wasmtime_runtime::Export::Instance(i) => {
+                let handle = unsafe { instance.store.existing_instance_handle(i.clone()) };
+                Extern::Instance(Instance::from_wasmtime(handle))
+            }
+            wasmtime_runtime::Export::Module(m) => {
+                Extern::Module(m.downcast_ref::<Module>().unwrap().clone())
+            }
         }
     }
 
@@ -112,6 +145,10 @@ impl Extern {
             Extern::Global(g) => &g.instance.store,
             Extern::Memory(m) => &m.instance.store,
             Extern::Table(t) => &t.instance.store,
+            Extern::Instance(i) => i.store(),
+            // Modules don't live in stores right now, so they're compatible
+            // with all stores.
+            Extern::Module(_) => return true,
         };
         Store::same(my_store, store)
     }
@@ -122,6 +159,8 @@ impl Extern {
             Extern::Table(_) => "table",
             Extern::Memory(_) => "memory",
             Extern::Global(_) => "global",
+            Extern::Instance(_) => "instance",
+            Extern::Module(_) => "module",
         }
     }
 }
@@ -147,6 +186,18 @@ impl From<Memory> for Extern {
 impl From<Table> for Extern {
     fn from(r: Table) -> Self {
         Extern::Table(r)
+    }
+}
+
+impl From<Instance> for Extern {
+    fn from(r: Instance) -> Self {
+        Extern::Instance(r)
+    }
+}
+
+impl From<Module> for Extern {
+    fn from(r: Module) -> Self {
+        Extern::Module(r)
     }
 }
 
@@ -294,11 +345,8 @@ impl Global {
         }
     }
 
-    pub(crate) fn matches_expected(&self, expected: &wasmtime_environ::wasm::Global) -> bool {
-        let actual = &self.wasmtime_export.global;
-        expected.ty == actual.ty
-            && expected.wasm_ty == actual.wasm_ty
-            && expected.mutability == actual.mutability
+    pub(crate) fn wasmtime_ty(&self) -> &wasmtime_environ::wasm::Global {
+        &self.wasmtime_export.global
     }
 
     pub(crate) fn vmimport(&self) -> wasmtime_runtime::VMGlobalImport {
@@ -538,19 +586,8 @@ impl Table {
         }
     }
 
-    pub(crate) fn matches_expected(&self, ty: &wasmtime_environ::TablePlan) -> bool {
-        let expected = &ty.table;
-        let actual = &self.wasmtime_export.table.table;
-        expected.wasm_ty == actual.wasm_ty
-            && expected.ty == actual.ty
-            && expected.minimum <= actual.minimum
-            && match expected.maximum {
-                Some(expected) => match actual.maximum {
-                    Some(actual) => expected >= actual,
-                    None => false,
-                },
-                None => true,
-            }
+    pub(crate) fn wasmtime_ty(&self) -> &wasmtime_environ::wasm::Table {
+        &self.wasmtime_export.table.table
     }
 
     pub(crate) fn vmimport(&self) -> wasmtime_runtime::VMTableImport {
@@ -960,18 +997,8 @@ impl Memory {
         }
     }
 
-    pub(crate) fn matches_expected(&self, ty: &wasmtime_environ::MemoryPlan) -> bool {
-        let expected = &ty.memory;
-        let actual = &self.wasmtime_export.memory.memory;
-        expected.shared == actual.shared
-            && expected.minimum <= actual.minimum
-            && match expected.maximum {
-                Some(expected) => match actual.maximum {
-                    Some(actual) => expected >= actual,
-                    None => false,
-                },
-                None => true,
-            }
+    pub(crate) fn wasmtime_ty(&self) -> &wasmtime_environ::wasm::Memory {
+        &self.wasmtime_export.memory.memory
     }
 
     pub(crate) fn vmimport(&self) -> wasmtime_runtime::VMMemoryImport {

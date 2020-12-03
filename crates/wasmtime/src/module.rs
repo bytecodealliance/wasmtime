@@ -1,5 +1,5 @@
-use crate::types::{EntityType, ExportType, ExternType, ImportType};
-use crate::Engine;
+use crate::types::{ExportType, ExternType, ImportType};
+use crate::{Engine, ModuleType};
 use anyhow::{bail, Context, Result};
 use bincode::Options;
 use std::hash::Hash;
@@ -86,7 +86,7 @@ pub struct Module {
 }
 
 pub(crate) struct ModuleData {
-    pub(crate) types: TypeTables,
+    pub(crate) types: Arc<TypeTables>,
     pub(crate) modules: Vec<CompiledModule>,
 }
 
@@ -258,6 +258,7 @@ impl Module {
             &*engine.config().profiler,
         )?;
 
+        let types = Arc::new(types);
         Ok(Module {
             engine: engine.clone(),
             index: 0,
@@ -291,6 +292,23 @@ impl Module {
         Ok(())
     }
 
+    /// Returns the type signature of this module.
+    pub fn ty(&self) -> ModuleType {
+        let mut sig = ModuleType::new();
+        let env_module = self.compiled_module().module();
+        let types = self.types();
+        for (module, field, ty) in env_module.imports() {
+            sig.add_named_import(module, field, ExternType::from_wasmtime(types, &ty));
+        }
+        for (name, index) in env_module.exports.iter() {
+            sig.add_named_export(
+                name,
+                ExternType::from_wasmtime(types, &env_module.type_of(*index)),
+            );
+        }
+        sig
+    }
+
     /// Serialize compilation artifacts to the buffer. See also `deseriaize`.
     pub fn serialize(&self) -> Result<Vec<u8>> {
         let artifacts = (
@@ -300,7 +318,7 @@ impl Module {
                 .iter()
                 .map(|i| i.compilation_artifacts())
                 .collect::<Vec<_>>(),
-            &self.data.types,
+            &*self.data.types,
             self.index,
         );
 
@@ -333,6 +351,7 @@ impl Module {
             &*engine.config().profiler,
         )?;
 
+        let types = Arc::new(types);
         Ok(Module {
             engine: engine.clone(),
             index,
@@ -344,11 +363,16 @@ impl Module {
         &self.data.modules[self.index]
     }
 
-    pub(crate) fn all_compiled_modules(&self) -> &[CompiledModule] {
-        &self.data.modules
+    pub(crate) fn submodule(&self, index: usize) -> Module {
+        assert!(index < self.data.modules.len());
+        Module {
+            engine: self.engine.clone(),
+            data: self.data.clone(),
+            index,
+        }
     }
 
-    pub(crate) fn types(&self) -> &TypeTables {
+    pub(crate) fn types(&self) -> &Arc<TypeTables> {
         &self.data.types
     }
 
@@ -433,20 +457,10 @@ impl Module {
         &'module self,
     ) -> impl ExactSizeIterator<Item = ImportType<'module>> + 'module {
         let module = self.compiled_module().module();
+        let types = self.types();
         module
-            .initializers
-            .iter()
-            .filter_map(move |initializer| match initializer {
-                wasmtime_environ::Initializer::Import {
-                    module,
-                    field,
-                    index,
-                } => {
-                    let ty = EntityType::new(index, self);
-                    Some(ImportType::new(module, field.as_deref(), ty))
-                }
-                _ => None,
-            })
+            .imports()
+            .map(move |(module, field, ty)| ImportType::new(module, field, ty, types))
             .collect::<Vec<_>>()
             .into_iter()
     }
@@ -509,9 +523,9 @@ impl Module {
         &'module self,
     ) -> impl ExactSizeIterator<Item = ExportType<'module>> + 'module {
         let module = self.compiled_module().module();
+        let types = self.types();
         module.exports.iter().map(move |(name, entity_index)| {
-            let ty = EntityType::new(entity_index, self);
-            ExportType::new(name, ty)
+            ExportType::new(name, module.type_of(*entity_index), types)
         })
     }
 
@@ -561,7 +575,10 @@ impl Module {
     pub fn get_export<'module>(&'module self, name: &'module str) -> Option<ExternType> {
         let module = self.compiled_module().module();
         let entity_index = module.exports.get(name)?;
-        Some(EntityType::new(entity_index, self).extern_type())
+        Some(ExternType::from_wasmtime(
+            self.types(),
+            &module.type_of(*entity_index),
+        ))
     }
 
     /// Returns the [`Engine`] that this [`Module`] was compiled by.

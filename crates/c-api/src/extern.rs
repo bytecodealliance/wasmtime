@@ -16,6 +16,10 @@ pub extern "C" fn wasm_extern_kind(e: &wasm_extern_t) -> wasm_externkind_t {
         Extern::Global(_) => crate::WASM_EXTERN_GLOBAL,
         Extern::Table(_) => crate::WASM_EXTERN_TABLE,
         Extern::Memory(_) => crate::WASM_EXTERN_MEMORY,
+
+        // FIXME(#2094)
+        Extern::Instance(_) => unimplemented!(),
+        Extern::Module(_) => unimplemented!(),
     }
 }
 

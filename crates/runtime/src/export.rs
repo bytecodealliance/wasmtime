@@ -1,13 +1,14 @@
 use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMGlobalDefinition, VMMemoryDefinition, VMTableDefinition,
 };
+use crate::InstanceHandle;
+use std::any::Any;
 use std::ptr::NonNull;
 use wasmtime_environ::wasm::Global;
 use wasmtime_environ::{MemoryPlan, TablePlan};
 
 /// The value of an export passed from one instance to another.
-#[derive(Debug, Clone)]
-pub enum Export {
+pub enum Export<'a> {
     /// A function export value.
     Function(ExportFunction),
 
@@ -19,6 +20,12 @@ pub enum Export {
 
     /// A global export value.
     Global(ExportGlobal),
+
+    /// An instance
+    Instance(&'a InstanceHandle),
+
+    /// A module
+    Module(&'a dyn Any),
 }
 
 /// A function export value.
@@ -31,8 +38,8 @@ pub struct ExportFunction {
     pub anyfunc: NonNull<VMCallerCheckedAnyfunc>,
 }
 
-impl From<ExportFunction> for Export {
-    fn from(func: ExportFunction) -> Export {
+impl<'a> From<ExportFunction> for Export<'a> {
+    fn from(func: ExportFunction) -> Export<'a> {
         Export::Function(func)
     }
 }
@@ -48,8 +55,8 @@ pub struct ExportTable {
     pub table: TablePlan,
 }
 
-impl From<ExportTable> for Export {
-    fn from(func: ExportTable) -> Export {
+impl<'a> From<ExportTable> for Export<'a> {
+    fn from(func: ExportTable) -> Export<'a> {
         Export::Table(func)
     }
 }
@@ -65,8 +72,8 @@ pub struct ExportMemory {
     pub memory: MemoryPlan,
 }
 
-impl From<ExportMemory> for Export {
-    fn from(func: ExportMemory) -> Export {
+impl<'a> From<ExportMemory> for Export<'a> {
+    fn from(func: ExportMemory) -> Export<'a> {
         Export::Memory(func)
     }
 }
@@ -82,8 +89,8 @@ pub struct ExportGlobal {
     pub global: Global,
 }
 
-impl From<ExportGlobal> for Export {
-    fn from(func: ExportGlobal) -> Export {
+impl<'a> From<ExportGlobal> for Export<'a> {
+    fn from(func: ExportGlobal) -> Export<'a> {
         Export::Global(func)
     }
 }
