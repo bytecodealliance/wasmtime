@@ -3264,7 +3264,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Uload16Complex
         | Opcode::Sload16Complex
         | Opcode::Uload32Complex
-        | Opcode::Sload32Complex => {
+        | Opcode::Sload32Complex
+        | Opcode::Sload8x8
+        | Opcode::Uload8x8
+        | Opcode::Sload16x4
+        | Opcode::Uload16x4
+        | Opcode::Sload32x2
+        | Opcode::Uload32x2 => {
             let offset = ctx.data(insn).load_store_offset().unwrap();
 
             let elem_ty = match op {
@@ -3279,6 +3285,18 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 | Opcode::Uload32
                 | Opcode::Sload32Complex
                 | Opcode::Uload32Complex => types::I32,
+                Opcode::Sload8x8
+                | Opcode::Uload8x8
+                | Opcode::Sload8x8Complex
+                | Opcode::Uload8x8Complex => types::I8X8,
+                Opcode::Sload16x4
+                | Opcode::Uload16x4
+                | Opcode::Sload16x4Complex
+                | Opcode::Uload16x4Complex => types::I16X4,
+                Opcode::Sload32x2
+                | Opcode::Uload32x2
+                | Opcode::Sload32x2Complex
+                | Opcode::Uload32x2Complex => types::I32X2,
                 Opcode::Load | Opcode::LoadComplex => ctx.output_ty(insn, 0),
                 _ => unimplemented!(),
             };
@@ -3291,7 +3309,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 | Opcode::Sload16
                 | Opcode::Sload16Complex
                 | Opcode::Sload32
-                | Opcode::Sload32Complex => true,
+                | Opcode::Sload32Complex
+                | Opcode::Sload8x8
+                | Opcode::Sload8x8Complex
+                | Opcode::Sload16x4
+                | Opcode::Sload16x4Complex
+                | Opcode::Sload32x2
+                | Opcode::Sload32x2Complex => true,
                 _ => false,
             };
 
@@ -3302,7 +3326,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 | Opcode::Uload16
                 | Opcode::Sload16
                 | Opcode::Uload32
-                | Opcode::Sload32 => {
+                | Opcode::Sload32
+                | Opcode::Sload8x8
+                | Opcode::Uload8x8
+                | Opcode::Sload16x4
+                | Opcode::Uload16x4
+                | Opcode::Sload32x2
+                | Opcode::Uload32x2 => {
                     assert_eq!(inputs.len(), 1, "only one input for load operands");
                     lower_to_amode(ctx, inputs[0], offset)
                 }
@@ -3313,7 +3343,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 | Opcode::Uload16Complex
                 | Opcode::Sload16Complex
                 | Opcode::Uload32Complex
-                | Opcode::Sload32Complex => {
+                | Opcode::Sload32Complex
+                | Opcode::Sload8x8Complex
+                | Opcode::Uload8x8Complex
+                | Opcode::Sload16x4Complex
+                | Opcode::Uload16x4Complex
+                | Opcode::Sload32x2Complex
+                | Opcode::Uload32x2Complex => {
                     assert_eq!(
                         inputs.len(),
                         2,
@@ -3325,12 +3361,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     let flags = ctx.memflags(insn).expect("load should have memflags");
                     Amode::imm_reg_reg_shift(offset as u32, base, index, shift).with_flags(flags)
                 }
-
                 _ => unreachable!(),
             };
 
             let dst = get_output_reg(ctx, outputs[0]);
             let is_xmm = elem_ty.is_float() || elem_ty.is_vector();
+
             match (sign_extend, is_xmm) {
                 (true, false) => {
                     // The load is sign-extended only when the output size is lower than 64 bits,
@@ -3350,15 +3386,40 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     ctx.emit(match elem_ty {
                         types::F32 => Inst::xmm_mov(SseOpcode::Movss, RegMem::mem(amode), dst),
                         types::F64 => Inst::xmm_mov(SseOpcode::Movsd, RegMem::mem(amode), dst),
+                        types::I8X8 => {
+                            if sign_extend == true {
+                                Inst::xmm_mov(SseOpcode::Pmovsxbw, RegMem::mem(amode), dst)
+                            } else {
+                                Inst::xmm_mov(SseOpcode::Pmovzxbw, RegMem::mem(amode), dst)
+                            }
+                        }
+                        types::I16X4 => {
+                            if sign_extend == true {
+                                Inst::xmm_mov(SseOpcode::Pmovsxwd, RegMem::mem(amode), dst)
+                            } else {
+                                Inst::xmm_mov(SseOpcode::Pmovzxwd, RegMem::mem(amode), dst)
+                            }
+                        }
+                        types::I32X2 => {
+                            if sign_extend == true {
+                                Inst::xmm_mov(SseOpcode::Pmovsxdq, RegMem::mem(amode), dst)
+                            } else {
+                                Inst::xmm_mov(SseOpcode::Pmovzxdq, RegMem::mem(amode), dst)
+                            }
+                        }
                         _ if elem_ty.is_vector() && elem_ty.bits() == 128 => {
                             Inst::xmm_mov(SseOpcode::Movups, RegMem::mem(amode), dst)
-                        } // TODO Specialize for different types: MOVUPD, MOVDQU
-                        _ => unreachable!("unexpected type for load: {:?}", elem_ty),
+                        }
+                        // TODO Specialize for different types: MOVUPD, MOVDQU
+                        _ => unreachable!(
+                            "unexpected type for load: {:?} - {:?}",
+                            elem_ty,
+                            elem_ty.bits()
+                        ),
                     });
                 }
             }
         }
-
         Opcode::Store
         | Opcode::Istore8
         | Opcode::Istore16
