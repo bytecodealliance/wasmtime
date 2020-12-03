@@ -306,7 +306,7 @@ impl Module {
                 ExternType::from_wasmtime(types, &env_module.type_of(*index)),
             );
         }
-        return sig;
+        sig
     }
 
     /// Serialize compilation artifacts to the buffer. See also `deseriaize`.

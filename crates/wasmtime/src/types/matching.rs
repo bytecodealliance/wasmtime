@@ -92,7 +92,7 @@ impl MatchCx<'_> {
             })
     }
 
-    /// Validaates that the `actual_imports` list of module imports matches the
+    /// Validates that the `actual_imports` list of module imports matches the
     /// `expected` module type signature.
     ///
     /// Types specified in `actual_imports` are relative to `actual_types`.

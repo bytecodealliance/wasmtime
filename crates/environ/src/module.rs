@@ -347,7 +347,8 @@ impl Module {
         index.index() < self.num_imported_globals
     }
 
-    /// Test whether the given global index is for an imported global.
+    /// Returns an iterator of all the imports in this module, along with their
+    /// module name, field name, and type that's being imported.
     pub fn imports(&self) -> impl Iterator<Item = (&str, Option<&str>, EntityType)> {
         self.initializers.iter().filter_map(move |i| match i {
             Initializer::Import {

@@ -394,7 +394,7 @@ dependencies = [
  "souper-ir",
  "target-lexicon",
  "thiserror",
- "wast 27.0.0",
+ "wast 28.0.0",
 ]
 
 [[package]]
@@ -596,7 +596,7 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.68.0",
+ "wasmparser 0.69.1",
  "wat",
 ]
 
@@ -1166,7 +1166,7 @@ dependencies = [
  "smallvec",
  "thiserror",
  "typemap",
- "wasmparser 0.68.0",
+ "wasmparser 0.69.1",
  "wat",
 ]
 
@@ -1410,7 +1410,7 @@ dependencies = [
  "peepmatic-test-operator",
  "peepmatic-traits",
  "serde",
- "wast 27.0.0",
+ "wast 28.0.0",
  "z3",
 ]
 
@@ -1438,7 +1438,7 @@ dependencies = [
  "peepmatic-traits",
  "rand",
  "serde",
- "wast 27.0.0",
+ "wast 28.0.0",
 ]
 
 [[package]]
@@ -1463,7 +1463,7 @@ dependencies = [
  "serde",
  "serde_test",
  "thiserror",
- "wast 27.0.0",
+ "wast 28.0.0",
 ]
 
 [[package]]
@@ -1475,7 +1475,7 @@ dependencies = [
  "peepmatic",
  "peepmatic-test-operator",
  "souper-ir",
- "wast 27.0.0",
+ "wast 28.0.0",
 ]
 
 [[package]]
@@ -1496,7 +1496,7 @@ version = "0.68.0"
 dependencies = [
  "peepmatic-traits",
  "serde",
- "wast 27.0.0",
+ "wast 28.0.0",
 ]
 
 [[package]]
@@ -2405,18 +2405,18 @@ checksum = "32fddd575d477c6e9702484139cf9f23dcd554b06d185ed0f56c857dd3a47aa6"
 
 [[package]]
 name = "wasmparser"
-version = "0.68.0"
+version = "0.69.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29a00e14eed9c2ecbbdbdd4fb284f49d21b6808965de24769a6379a13ec47d4c"
+checksum = "fd19c6066bcf391a9d6f81db9b809f31d31723da2652c8416cb81cd5aabed944"
 
 [[package]]
 name = "wasmprinter"
-version = "0.2.15"
+version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f39a73b5f09cfcb1b568b61968d39b19e4ddec9b49040cfc091adf3b0788bca6"
+checksum = "dba006f5c5bf41a2a5c3b45e861ea6eb067382acb022b6a35a00a0390f9547f6"
 dependencies = [
  "anyhow",
- "wasmparser 0.68.0",
+ "wasmparser 0.69.1",
 ]
 
 [[package]]
@@ -2428,6 +2428,7 @@ dependencies = [
  "bincode",
  "cfg-if 1.0.0",
  "cpp_demangle",
+ "indexmap",
  "libc",
  "log",
  "region",
@@ -2436,7 +2437,7 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "tempfile",
- "wasmparser 0.68.0",
+ "wasmparser 0.69.1",
  "wasmtime-cache",
  "wasmtime-environ",
  "wasmtime-jit",
@@ -2514,7 +2515,7 @@ dependencies = [
  "test-programs",
  "tracing-subscriber",
  "wasi-common",
- "wasmparser 0.68.0",
+ "wasmparser 0.69.1",
  "wasmtime",
  "wasmtime-cache",
  "wasmtime-debug",
@@ -2550,7 +2551,7 @@ dependencies = [
  "object",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.68.0",
+ "wasmparser 0.69.1",
  "wasmtime-environ",
 ]
 
@@ -2569,7 +2570,7 @@ dependencies = [
  "more-asserts",
  "serde",
  "thiserror",
- "wasmparser 0.68.0",
+ "wasmparser 0.69.1",
 ]
 
 [[package]]
@@ -2598,7 +2599,7 @@ dependencies = [
  "rayon",
  "wasm-smith",
  "wasmi",
- "wasmparser 0.68.0",
+ "wasmparser 0.69.1",
  "wasmprinter",
  "wasmtime",
  "wasmtime-wast",
@@ -2626,7 +2627,7 @@ dependencies = [
  "serde",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.68.0",
+ "wasmparser 0.69.1",
  "wasmtime-cranelift",
  "wasmtime-debug",
  "wasmtime-environ",
@@ -2643,7 +2644,7 @@ version = "0.21.0"
 dependencies = [
  "cranelift-codegen",
  "lightbeam",
- "wasmparser 0.68.0",
+ "wasmparser 0.69.1",
  "wasmtime-environ",
 ]
 
@@ -2750,7 +2751,7 @@ version = "0.21.0"
 dependencies = [
  "anyhow",
  "wasmtime",
- "wast 27.0.0",
+ "wast 28.0.0",
 ]
 
 [[package]]
@@ -2786,20 +2787,20 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "27.0.0"
+version = "28.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2c3ef5f6a72dffa44c24d5811123f704e18a1dbc83637d347b1852b41d3835c"
+checksum = "9c0586061bfacc035034672c8d760802b428ab4c80a92e2a392425c516df9be1"
 dependencies = [
  "leb128",
 ]
 
 [[package]]
 name = "wat"
-version = "1.0.28"
+version = "1.0.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "835cf59c907f67e2bbc20f50157e08f35006fe2a8444d8ec9f5683e22f937045"
+checksum = "c06d55b5ec4f9d9396fa99abaafa0688597395e57827dffd89731412ae90c9bf"
 dependencies = [
- "wast 27.0.0",
+ "wast 28.0.0",
 ]
 
 [[package]]

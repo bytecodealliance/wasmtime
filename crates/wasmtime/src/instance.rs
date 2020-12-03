@@ -88,7 +88,7 @@ fn instantiate(
             //
             // Note that the unsafety here is because we're asserting that the
             // handle comes from our same store, but this should be true because
-            // we acquired fthe handle from an instance in the store.
+            // we acquired the handle from an instance in the store.
             Initializer::AliasInstanceExport { instance, export } => {
                 let handle = &imports.instances[*instance];
                 let export_index = &handle.module().exports[*export];
@@ -155,7 +155,7 @@ fn instantiate(
     // With the above initialization done we've now acquired the final set of
     // imports in all the right index spaces and everything. Time to carry on
     // with the creation of our own instance.
-    let imports = imports.imports();
+    let imports = imports.build();
 
     // Register the module just before instantiation to ensure we have a
     // trampoline registered for every signature and to preserve the module's
@@ -345,7 +345,7 @@ impl Instance {
                 ExternType::from_wasmtime(types, &module.type_of(*index)),
             );
         }
-        return ty;
+        ty
     }
 
     /// Returns the associated [`Store`] that this `Instance` is compiled into.
@@ -499,7 +499,7 @@ impl<'a> ImportsBuilder<'a> {
         }
     }
 
-    fn imports(&mut self) -> Imports<'_> {
+    fn build(&mut self) -> Imports<'_> {
         Imports {
             tables: self.tables.values().as_slice(),
             globals: self.globals.values().as_slice(),
