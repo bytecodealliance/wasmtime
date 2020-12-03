@@ -82,7 +82,7 @@ fn instantiate(
                 imports.modules.push(module.submodule(*idx));
             }
 
-            // Here we lookup our instance handle, find the right export.
+            // Here we lookup our instance handle, find the right export,
             // and then push that item into our own index space. We eschew
             // type-checking since only valid modules reach this point.
             //
