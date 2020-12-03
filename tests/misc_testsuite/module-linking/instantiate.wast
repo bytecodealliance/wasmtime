@@ -233,3 +233,52 @@
     (import "b" "i" (instance (export "" (func))))
   )
   "instance types incompatible")
+
+;; ensure we ignore other exported items
+(module $b
+  (module $m
+    (func (export "f") (result i32)
+      i32.const 300)
+    (global (export "g") i32 (i32.const 0xfeed))
+  )
+
+  (instance (export "i") (instantiate 0))
+)
+(module
+  (import "b" "i" (instance $i
+    (export "g" (global $g i32))
+  ))
+
+  (func (export "get") (result i32)
+    global.get $i.$g)
+)
+(assert_return (invoke "get") (i32.const 0xfeed))
+
+;; ensure the right export is used even when subtyping comes into play
+(module $b
+  (module $m
+    (func (export "f") (result i32)
+      i32.const 300)
+    (func (export "g") (param i32) (result i32)
+      i32.const 100
+      local.get 0
+      i32.add)
+  )
+
+  (instance (export "i") (instantiate 0))
+)
+(module
+  (import "b" "i" (instance $i
+    ;; notice that this order is swapped
+    (export "g" (func $g (param i32) (result i32)))
+    (export "f" (func $f (result i32)))
+  ))
+
+  (func (export "f") (result i32)
+    call $i.$f)
+  (func (export "g") (param i32) (result i32)
+    local.get 0
+    call $i.$g)
+)
+(assert_return (invoke "f") (i32.const 300))
+(assert_return (invoke "g" (i32.const 3000)) (i32.const 3100))

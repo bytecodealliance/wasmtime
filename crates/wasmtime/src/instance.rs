@@ -82,18 +82,29 @@ fn instantiate(
                 imports.modules.push(module.submodule(*idx));
             }
 
-            // Here we lookup our instance handle, ask it for the nth export,
+            // Here we lookup our instance handle, find the right export,
             // and then push that item into our own index space. We eschew
             // type-checking since only valid modules reach this point.
+            //
+            // Note that export lookup here needs to happen by name. The
+            // `export` index is an index into our local type definition of the
+            // type of the instance to figure out what name it was assigned.
+            // This is where the subtyping happens!
             //
             // Note that the unsafety here is because we're asserting that the
             // handle comes from our same store, but this should be true because
             // we acquired the handle from an instance in the store.
             Initializer::AliasInstanceExport { instance, export } => {
+                let instance_ty = env_module.instances[*instance];
+                let export_name = module.types().instance_signatures[instance_ty]
+                    .exports
+                    .get_index(*export)
+                    .expect("validation bug - should be valid")
+                    .0;
                 let handle = &imports.instances[*instance];
-                let export_index = &handle.module().exports[*export];
+                let entity_index = &handle.module().exports[export_name];
                 let item = Extern::from_wasmtime_export(
-                    handle.lookup_by_declaration(export_index),
+                    handle.lookup_by_declaration(entity_index),
                     unsafe { store.existing_instance_handle(handle.clone()) },
                 );
                 imports.push_extern(&item);
