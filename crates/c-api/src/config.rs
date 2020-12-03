@@ -86,6 +86,11 @@ pub extern "C" fn wasmtime_config_wasm_multi_value_set(c: &mut wasm_config_t, en
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_config_wasm_module_linking_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.wasm_module_linking(enable);
+}
+
+#[no_mangle]
 pub extern "C" fn wasmtime_config_strategy_set(
     c: &mut wasm_config_t,
     strategy: wasmtime_strategy_t,

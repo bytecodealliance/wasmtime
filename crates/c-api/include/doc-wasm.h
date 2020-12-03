@@ -793,8 +793,15 @@
  * \typedef wasm_externkind_t
  * \brief Classifier for #wasm_externtype_t, defined by #wasm_externkind_enum
  *
+ * This is returned from #wasm_extern_kind and #wasm_externtype_kind to
+ * determine what kind of type is wrapped.
+ *
  * \enum wasm_externkind_enum
  * \brief Kinds of external items for a wasm module.
+ *
+ * Note that this also includes #WASM_EXTERN_INSTANCE as well as
+ * #WASM_EXTERN_MODULE and is intended to be used when #wasm_externkind_t is
+ * used.
  */
 
 /**
