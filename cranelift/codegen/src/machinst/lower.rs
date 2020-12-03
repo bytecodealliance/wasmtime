@@ -913,6 +913,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     // the code-motion.
                     if self.cur_scan_entry_color.is_some()
                         && self.value_uses[val] == 1
+                        && self.value_lowered_uses[val] == 0
                         && self.num_outputs(src_inst) == 1
                         && self
                             .side_effect_inst_entry_colors
