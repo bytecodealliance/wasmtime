@@ -1244,7 +1244,14 @@ WASM_API_EXTERN own wasm_instancetype_t* wasm_instance_type(const wasm_instance_
  */
 WASM_API_EXTERN own wasm_moduletype_t* wasm_module_type(const wasm_module_t*);
 
+/**
+ * \brief Value of #wasm_externkind_enum corresponding to a wasm module.
+ */
 #define WASM_EXTERN_MODULE 4
+
+/**
+ * \brief Value of #wasm_externkind_enum corresponding to a wasm instance.
+ */
 #define WASM_EXTERN_INSTANCE 5
 
 #undef own
