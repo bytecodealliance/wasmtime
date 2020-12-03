@@ -1,7 +1,8 @@
 use crate::spectest::link_spectest;
 use anyhow::{anyhow, bail, Context as _, Result};
-use std::path::Path;
+use core::fmt;
 use std::str;
+use std::{mem::size_of, path::Path};
 use wasmtime::*;
 use wast::Wat;
 use wast::{
@@ -185,7 +186,13 @@ impl WastContext {
             if val_matches(v, e)? {
                 continue;
             }
-            bail!("expected {:?}, got {:?}", e, v)
+            bail!(
+                "expected {:?} ({}), got {:?} ({})",
+                e,
+                e.as_hex_pattern(),
+                v,
+                v.as_hex_pattern()
+            )
         }
         Ok(())
     }
@@ -480,5 +487,181 @@ fn v128_matches(actual: u128, expected: &wast::V128Pattern) -> bool {
             let a = extract_lane_as_i64(actual, i) as u64;
             f64_matches(a, b)
         }),
+    }
+}
+
+/// When troubleshooting a failure in a spec test, it is valuable to understand the bit-by-bit
+/// difference. To do this, we print a hex-encoded version of Wasm values and assertion expressions
+/// using this helper.
+fn as_hex_pattern<T>(bits: T) -> String
+where
+    T: fmt::LowerHex,
+{
+    match size_of::<T>() {
+        1 => format!("{:#04x}", bits),
+        2 => format!("{:#06x}", bits),
+        4 => format!("{:#010x}", bits),
+        8 => format!("{:#018x}", bits),
+        16 => format!("{:#034x}", bits),
+        _ => unimplemented!(),
+    }
+}
+
+/// The [AsHexPattern] allows us to extend `as_hex_pattern` to various structures.
+trait AsHexPattern {
+    fn as_hex_pattern(&self) -> String;
+}
+
+impl AsHexPattern for wast::AssertExpression<'_> {
+    fn as_hex_pattern(&self) -> String {
+        match self {
+            wast::AssertExpression::I32(i) => as_hex_pattern(*i),
+            wast::AssertExpression::I64(i) => as_hex_pattern(*i),
+            wast::AssertExpression::F32(f) => f.as_hex_pattern(),
+            wast::AssertExpression::F64(f) => f.as_hex_pattern(),
+            wast::AssertExpression::V128(v) => v.as_hex_pattern(),
+            wast::AssertExpression::RefNull(_)
+            | wast::AssertExpression::RefExtern(_)
+            | wast::AssertExpression::RefFunc(_)
+            | wast::AssertExpression::LegacyArithmeticNaN
+            | wast::AssertExpression::LegacyCanonicalNaN => "no hex representation".to_string(),
+        }
+    }
+}
+
+impl AsHexPattern for wast::NanPattern<wast::Float32> {
+    fn as_hex_pattern(&self) -> String {
+        match self {
+            wast::NanPattern::CanonicalNan => "0x7fc00000".to_string(),
+            // Note that NaN patterns can have varying sign bits and payloads. Technically the first
+            // bit should be a `*` but it is impossible to show that in hex.
+            wast::NanPattern::ArithmeticNan => "0x7fc*****".to_string(),
+            wast::NanPattern::Value(wast::Float32 { bits }) => as_hex_pattern(*bits),
+        }
+    }
+}
+
+impl AsHexPattern for wast::NanPattern<wast::Float64> {
+    fn as_hex_pattern(&self) -> String {
+        match self {
+            wast::NanPattern::CanonicalNan => "0x7ff8000000000000".to_string(),
+            // Note that NaN patterns can have varying sign bits and payloads. Technically the first
+            // bit should be a `*` but it is impossible to show that in hex.
+            wast::NanPattern::ArithmeticNan => "0x7ff8************".to_string(),
+            wast::NanPattern::Value(wast::Float64 { bits }) => as_hex_pattern(*bits),
+        }
+    }
+}
+
+// This implementation reverses both the lanes and the lane bytes in order to match the Wasm SIMD
+// little-endian order. This implementation must include special behavior for this reversal; other
+// implementations do not because they deal with raw values (`u128`) or use big-endian order for
+// display (scalars).
+impl AsHexPattern for wast::V128Pattern {
+    fn as_hex_pattern(&self) -> String {
+        fn reverse_pattern(pattern: String) -> String {
+            let chars: Vec<char> = pattern[2..].chars().collect();
+            let reversed: Vec<&[char]> = chars.chunks(2).rev().collect();
+            reversed.concat().iter().collect()
+        }
+
+        fn as_hex_pattern(bits: &[u8]) -> String {
+            bits.iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<Vec<_>>()
+                .concat()
+        }
+
+        fn reverse_lanes<T, F>(
+            lanes: impl DoubleEndedIterator<Item = T>,
+            as_hex_pattern: F,
+        ) -> String
+        where
+            F: Fn(T) -> String,
+        {
+            lanes
+                .rev()
+                .map(|f| as_hex_pattern(f))
+                .collect::<Vec<_>>()
+                .concat()
+        }
+
+        let lanes_as_hex = match self {
+            wast::V128Pattern::I8x16(v) => {
+                reverse_lanes(v.iter(), |b| as_hex_pattern(&b.to_le_bytes()))
+            }
+            wast::V128Pattern::I16x8(v) => {
+                reverse_lanes(v.iter(), |b| as_hex_pattern(&b.to_le_bytes()))
+            }
+            wast::V128Pattern::I32x4(v) => {
+                reverse_lanes(v.iter(), |b| as_hex_pattern(&b.to_le_bytes()))
+            }
+            wast::V128Pattern::I64x2(v) => {
+                reverse_lanes(v.iter(), |b| as_hex_pattern(&b.to_le_bytes()))
+            }
+            wast::V128Pattern::F32x4(v) => {
+                reverse_lanes(v.iter(), |b| reverse_pattern(b.as_hex_pattern()))
+            }
+            wast::V128Pattern::F64x2(v) => {
+                reverse_lanes(v.iter(), |b| reverse_pattern(b.as_hex_pattern()))
+            }
+        };
+
+        String::from("0x") + &lanes_as_hex
+    }
+}
+
+impl AsHexPattern for Val {
+    fn as_hex_pattern(&self) -> String {
+        match self {
+            Val::I32(i) => as_hex_pattern(*i),
+            Val::I64(i) => as_hex_pattern(*i),
+            Val::F32(f) => as_hex_pattern(*f),
+            Val::F64(f) => as_hex_pattern(*f),
+            Val::V128(v) => as_hex_pattern(*v),
+            Val::ExternRef(_) | Val::FuncRef(_) => "no hex representation".to_string(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn val_to_hex() {
+        assert_eq!(Val::I32(0x42).as_hex_pattern(), "0x00000042");
+        assert_eq!(Val::F64(0x0).as_hex_pattern(), "0x0000000000000000");
+        assert_eq!(
+            Val::V128(u128::from_le_bytes([
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf
+            ]))
+            .as_hex_pattern(),
+            "0x0f0e0d0c0b0a09080706050403020100"
+        );
+    }
+
+    #[test]
+    fn assert_expression_to_hex() {
+        assert_eq!(
+            wast::AssertExpression::F32(wast::NanPattern::ArithmeticNan).as_hex_pattern(),
+            "0x7fc*****"
+        );
+        assert_eq!(
+            wast::AssertExpression::F64(wast::NanPattern::Value(wast::Float64 { bits: 0x42 }))
+                .as_hex_pattern(),
+            "0x0000000000000042"
+        );
+        assert_eq!(
+            wast::AssertExpression::V128(wast::V128Pattern::I32x4([0, 1, 2, 3])).as_hex_pattern(),
+            "0x03000000020000000100000000000000"
+        );
+        assert_eq!(
+            wast::AssertExpression::V128(wast::V128Pattern::F64x2([
+                wast::NanPattern::CanonicalNan,
+                wast::NanPattern::ArithmeticNan
+            ]))
+            .as_hex_pattern(),
+            "0x************f87f000000000000f87f"
+        );
     }
 }
