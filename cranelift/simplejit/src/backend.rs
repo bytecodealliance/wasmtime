@@ -36,6 +36,7 @@ pub struct SimpleJITBuilder {
     isa: Box<dyn TargetIsa>,
     symbols: HashMap<String, *const u8>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
+    hotswap_enabled: bool,
 }
 
 impl SimpleJITBuilder {
@@ -75,12 +76,12 @@ impl SimpleJITBuilder {
         isa: Box<dyn TargetIsa>,
         libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     ) -> Self {
-        assert!(isa.flags().is_pic(), "SimpleJIT requires PIC code");
         let symbols = HashMap::new();
         Self {
             isa,
             symbols,
             libcall_names,
+            hotswap_enabled: false,
         }
     }
 
@@ -119,6 +120,13 @@ impl SimpleJITBuilder {
         }
         self
     }
+
+    /// Enable or disable hotswap support. See [`SimpleJITModule::prepare_for_function_redefine`]
+    /// for more information.
+    pub fn hotswap(&mut self, enabled: bool) -> &mut Self {
+        self.hotswap_enabled = enabled;
+        self
+    }
 }
 
 /// A `SimpleJITModule` implements `Module` and emits code and data into memory where it can be
@@ -127,6 +135,7 @@ impl SimpleJITBuilder {
 /// See the `SimpleJITBuilder` for a convenient way to construct `SimpleJITModule` instances.
 pub struct SimpleJITModule {
     isa: Box<dyn TargetIsa>,
+    hotswap_enabled: bool,
     symbols: HashMap<String, *const u8>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     memory: MemoryHandle,
@@ -138,6 +147,7 @@ pub struct SimpleJITModule {
     libcall_plt_entries: HashMap<ir::LibCall, NonNull<[u8; 16]>>,
     compiled_functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
     compiled_data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
+    functions_to_finalize: Vec<FuncId>,
     data_objects_to_finalize: Vec<DataId>,
 }
 
@@ -189,7 +199,18 @@ impl SimpleJITModule {
         match *name {
             ir::ExternalName::User { .. } => {
                 let (name, linkage) = if ModuleDeclarations::is_function(name) {
-                    return self.get_plt_address(name);
+                    if self.hotswap_enabled {
+                        return self.get_plt_address(name);
+                    } else {
+                        let func_id = FuncId::from_name(name);
+                        match &self.compiled_functions[func_id] {
+                            Some(compiled) => return compiled.ptr,
+                            None => {
+                                let decl = self.declarations.get_function_decl(func_id);
+                                (&decl.name, decl.linkage)
+                            }
+                        }
+                    }
                 } else {
                     let data_id = DataId::from_name(name);
                     match &self.compiled_data_objects[data_id] {
@@ -270,6 +291,10 @@ impl SimpleJITModule {
     /// Returns the address of a finalized function.
     pub fn get_finalized_function(&self, func_id: FuncId) -> *const u8 {
         let info = &self.compiled_functions[func_id];
+        assert!(
+            !self.functions_to_finalize.iter().any(|x| *x == func_id),
+            "function not yet finalized"
+        );
         info.as_ref()
             .expect("function must be compiled before it can be finalized")
             .ptr
@@ -313,6 +338,19 @@ impl SimpleJITModule {
     /// Use `get_finalized_function` and `get_finalized_data` to obtain the final
     /// artifacts.
     pub fn finalize_definitions(&mut self) {
+        for func in std::mem::take(&mut self.functions_to_finalize) {
+            let decl = self.declarations.get_function_decl(func);
+            assert!(decl.linkage.is_definable());
+            let func = self.compiled_functions[func]
+                .as_ref()
+                .expect("function must be compiled before it can be finalized");
+            func.perform_relocations(
+                |name| self.get_address(name),
+                |name| self.get_got_address(name),
+                |name| self.get_plt_address(name),
+            );
+        }
+
         for data in std::mem::take(&mut self.data_objects_to_finalize) {
             let decl = self.declarations.get_data_decl(data);
             assert!(decl.linkage.is_definable());
@@ -333,6 +371,13 @@ impl SimpleJITModule {
 
     /// Create a new `SimpleJITModule`.
     pub fn new(builder: SimpleJITBuilder) -> Self {
+        if builder.hotswap_enabled {
+            assert!(
+                builder.isa.flags().is_pic(),
+                "Hotswapping requires PIC code"
+            );
+        }
+
         let mut memory = MemoryHandle {
             code: Memory::new(),
             readonly: Memory::new(),
@@ -342,8 +387,13 @@ impl SimpleJITModule {
         let mut libcall_got_entries = HashMap::new();
         let mut libcall_plt_entries = HashMap::new();
 
-        // Pre-create a GOT entry for each libcall.
-        for &libcall in ir::LibCall::all_libcalls() {
+        // Pre-create a GOT and PLT entry for each libcall.
+        let all_libcalls = if builder.isa.flags().is_pic() {
+            ir::LibCall::all_libcalls()
+        } else {
+            &[] // Not PIC, so no GOT and PLT entries necessary
+        };
+        for &libcall in all_libcalls {
             let got_entry = memory
                 .writable
                 .allocate(
@@ -380,6 +430,7 @@ impl SimpleJITModule {
 
         Self {
             isa: builder.isa,
+            hotswap_enabled: builder.hotswap_enabled,
             symbols: builder.symbols,
             libcall_names: builder.libcall_names,
             memory,
@@ -391,13 +442,17 @@ impl SimpleJITModule {
             libcall_plt_entries,
             compiled_functions: SecondaryMap::new(),
             compiled_data_objects: SecondaryMap::new(),
+            functions_to_finalize: Vec::new(),
             data_objects_to_finalize: Vec::new(),
         }
     }
 
     /// Allow a single future `define_function` on a previously defined function. This allows for
     /// hot code swapping and lazy compilation of functions.
+    ///
+    /// This requires hotswap support to be enabled first using [`SimpleJITBuilder::hotswap`].
     pub fn prepare_for_function_redefine(&mut self, func_id: FuncId) -> ModuleResult<()> {
+        assert!(self.hotswap_enabled, "Hotswap support is not enabled");
         let decl = self.declarations.get_function_decl(func_id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
@@ -436,7 +491,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         let (id, _decl) = self
             .declarations
             .declare_function(name, linkage, signature)?;
-        if self.function_got_entries[id].is_none() {
+        if self.function_got_entries[id].is_none() && self.isa.flags().is_pic() {
             let got_entry = self
                 .memory
                 .writable
@@ -482,7 +537,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         let (id, _decl) = self
             .declarations
             .declare_data(name, linkage, writable, tls)?;
-        if self.data_object_got_entries[id].is_none() {
+        if self.data_object_got_entries[id].is_none() && self.isa.flags().is_pic() {
             let got_entry = self
                 .memory
                 .writable
@@ -509,10 +564,11 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
     fn declare_func_in_func(&self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {
         let decl = self.declarations.get_function_decl(func);
         let signature = in_func.import_signature(decl.signature.clone());
+        let colocated = !self.hotswap_enabled && decl.linkage.is_final();
         in_func.import_function(ir::ExtFuncData {
             name: ir::ExternalName::user(0, func.as_u32()),
             signature,
-            colocated: false,
+            colocated,
         })
     }
 
@@ -521,10 +577,11 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
     /// TODO: Same as above.
     fn declare_data_in_func(&self, data: DataId, func: &mut ir::Function) -> ir::GlobalValue {
         let decl = self.declarations.get_data_decl(data);
+        let colocated = !self.hotswap_enabled && decl.linkage.is_final();
         func.create_global_value(ir::GlobalValueData::Symbol {
             name: ir::ExternalName::user(1, data.as_u32()),
             offset: ir::immediates::Imm64::new(0),
-            colocated: false,
+            colocated,
             tls: decl.tls,
         })
     }
@@ -588,28 +645,36 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             size,
             relocs: reloc_sink.relocs,
         });
-        unsafe {
-            std::ptr::write(self.function_got_entries[id].unwrap().as_ptr(), ptr);
+
+        if self.isa.flags().is_pic() {
+            unsafe {
+                std::ptr::write(self.function_got_entries[id].unwrap().as_ptr(), ptr);
+            }
         }
-        self.compiled_functions[id]
-            .as_ref()
-            .unwrap()
-            .perform_relocations(
-                |name| match *name {
-                    ir::ExternalName::User { .. } => {
-                        unreachable!("non GOT or PLT relocation in function {} to {}", id, name)
-                    }
-                    ir::ExternalName::LibCall(ref libcall) => self
-                        .libcall_plt_entries
-                        .get(libcall)
-                        .unwrap_or_else(|| panic!("can't resolve libcall {}", libcall))
-                        .as_ptr()
-                        .cast::<u8>(),
-                    _ => panic!("invalid ExternalName {}", name),
-                },
-                |name| self.get_got_address(name),
-                |name| self.get_plt_address(name),
-            );
+
+        if self.hotswap_enabled {
+            self.compiled_functions[id]
+                .as_ref()
+                .unwrap()
+                .perform_relocations(
+                    |name| match *name {
+                        ir::ExternalName::User { .. } => {
+                            unreachable!("non GOT or PLT relocation in function {} to {}", id, name)
+                        }
+                        ir::ExternalName::LibCall(ref libcall) => self
+                            .libcall_plt_entries
+                            .get(libcall)
+                            .unwrap_or_else(|| panic!("can't resolve libcall {}", libcall))
+                            .as_ptr()
+                            .cast::<u8>(),
+                        _ => panic!("invalid ExternalName {}", name),
+                    },
+                    |name| self.get_got_address(name),
+                    |name| self.get_plt_address(name),
+                );
+        } else {
+            self.functions_to_finalize.push(id);
+        }
 
         Ok(ModuleCompiledFunction { size: code_size })
     }
@@ -652,17 +717,25 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             size,
             relocs: relocs.to_vec(),
         });
-        unsafe {
-            std::ptr::write(self.function_got_entries[id].unwrap().as_ptr(), ptr);
+
+        if self.isa.flags().is_pic() {
+            unsafe {
+                std::ptr::write(self.function_got_entries[id].unwrap().as_ptr(), ptr);
+            }
         }
-        self.compiled_functions[id]
-            .as_ref()
-            .unwrap()
-            .perform_relocations(
-                |name| unreachable!("non GOT or PLT relocation in function {} to {}", id, name),
-                |name| self.get_got_address(name),
-                |name| self.get_plt_address(name),
-            );
+
+        if self.hotswap_enabled {
+            self.compiled_functions[id]
+                .as_ref()
+                .unwrap()
+                .perform_relocations(
+                    |name| unreachable!("non GOT or PLT relocation in function {} to {}", id, name),
+                    |name| self.get_got_address(name),
+                    |name| self.get_plt_address(name),
+                );
+        } else {
+            self.functions_to_finalize.push(id);
+        }
 
         Ok(ModuleCompiledFunction { size: total_size })
     }
@@ -727,8 +800,10 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
 
         self.compiled_data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
         self.data_objects_to_finalize.push(id);
-        unsafe {
-            std::ptr::write(self.data_object_got_entries[id].unwrap().as_ptr(), ptr);
+        if self.isa.flags().is_pic() {
+            unsafe {
+                std::ptr::write(self.data_object_got_entries[id].unwrap().as_ptr(), ptr);
+            }
         }
 
         Ok(())
