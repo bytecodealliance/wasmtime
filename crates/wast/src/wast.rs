@@ -2,7 +2,7 @@ use crate::spectest::link_spectest;
 use anyhow::{anyhow, bail, Context as _, Result};
 use core::fmt;
 use std::str;
-use std::{mem::size_of, path::Path};
+use std::{mem::size_of_val, path::Path};
 use wasmtime::*;
 use wast::Wat;
 use wast::{
@@ -397,22 +397,50 @@ fn extract_lane_as_i64(bytes: u128, lane: usize) -> i64 {
     (bytes >> (lane * 64)) as i64
 }
 
+/// Check if an f32 (as u32 bits to avoid possible quieting when moving values in registers, e.g.
+/// https://developer.arm.com/documentation/ddi0344/i/neon-and-vfp-programmers-model/modes-of-operation/default-nan-mode?lang=en)
+/// is a canonical NaN:
+///  - the sign bit is unspecified,
+///  - the 8-bit exponent is set to all 1s
+///  - the MSB of the payload is set to 1 (a quieted NaN) and all others to 0.
+/// See https://webassembly.github.io/spec/core/syntax/values.html#floating-point.
 fn is_canonical_f32_nan(bits: u32) -> bool {
     (bits & 0x7fff_ffff) == 0x7fc0_0000
 }
 
+/// Check if an f64 (as u64 bits to avoid possible quieting when moving values in registers, e.g.
+/// https://developer.arm.com/documentation/ddi0344/i/neon-and-vfp-programmers-model/modes-of-operation/default-nan-mode?lang=en)
+/// is a canonical NaN:
+///  - the sign bit is unspecified,
+///  - the 11-bit exponent is set to all 1s
+///  - the MSB of the payload is set to 1 (a quieted NaN) and all others to 0.
+/// See https://webassembly.github.io/spec/core/syntax/values.html#floating-point.
 fn is_canonical_f64_nan(bits: u64) -> bool {
     (bits & 0x7fff_ffff_ffff_ffff) == 0x7ff8_0000_0000_0000
 }
 
+/// Check if an f32 (as u32, see comments above) is an arithmetic NaN. This is the same as a
+/// canonical NaN including that the payload MSB is set to 1, but one or more of the remaining
+/// payload bits MAY BE set to 1 (a canonical NaN specifies all 0s). See
+/// https://webassembly.github.io/spec/core/syntax/values.html#floating-point.
 fn is_arithmetic_f32_nan(bits: u32) -> bool {
-    const AF32_NAN: u32 = 0x0040_0000;
-    (bits & AF32_NAN) == AF32_NAN
+    const AF32_NAN: u32 = 0x7f80_0000;
+    let is_nan = bits & AF32_NAN == AF32_NAN;
+    const AF32_PAYLOAD_MSB: u32 = 0x0040_0000;
+    let is_msb_set = bits & AF32_PAYLOAD_MSB == AF32_PAYLOAD_MSB;
+    is_nan && is_msb_set
 }
 
+/// Check if an f64 (as u64, see comments above) is an arithmetic NaN. This is the same as a
+/// canonical NaN including that the payload MSB is set to 1, but one or more of the remaining
+/// payload bits MAY BE set to 1 (a canonical NaN specifies all 0s). See
+/// https://webassembly.github.io/spec/core/syntax/values.html#floating-point.
 fn is_arithmetic_f64_nan(bits: u64) -> bool {
-    const AF64_NAN: u64 = 0x0008_0000_0000_0000;
-    (bits & AF64_NAN) == AF64_NAN
+    const AF64_NAN: u64 = 0x7ff0_0000_0000_0000;
+    let is_nan = bits & AF64_NAN == AF64_NAN;
+    const AF64_PAYLOAD_MSB: u64 = 0x0008_0000_0000_0000;
+    let is_msb_set = bits & AF64_PAYLOAD_MSB == AF64_PAYLOAD_MSB;
+    is_nan && is_msb_set
 }
 
 fn val_matches(actual: &Val, expected: &wast::AssertExpression) -> Result<bool> {
@@ -497,14 +525,7 @@ fn as_hex_pattern<T>(bits: T) -> String
 where
     T: fmt::LowerHex,
 {
-    match size_of::<T>() {
-        1 => format!("{:#04x}", bits),
-        2 => format!("{:#06x}", bits),
-        4 => format!("{:#010x}", bits),
-        8 => format!("{:#018x}", bits),
-        16 => format!("{:#034x}", bits),
-        _ => unimplemented!(),
-    }
+    format!("{1:#00$x}", size_of_val(&bits) * 2 + 2, bits)
 }
 
 /// The [AsHexPattern] allows us to extend `as_hex_pattern` to various structures.
