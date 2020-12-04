@@ -1,10 +1,10 @@
 [package]
-name = "cranelift-simplejit"
+name = "cranelift-jit"
 version = "0.68.0"
 authors = ["The Cranelift Project Developers"]
-description = "A simple JIT library backed by Cranelift"
+description = "A JIT library backed by Cranelift"
 repository = "https://github.com/bytecodealliance/wasmtime"
-documentation = "https://docs.rs/cranelift-simplejit"
+documentation = "https://docs.rs/cranelift-jit"
 license = "Apache-2.0 WITH LLVM-exception"
 readme = "README.md"
 edition = "2018"

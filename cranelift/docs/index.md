@@ -52,6 +52,6 @@
     emits native object files using the
     `object <https://github.com/gimli-rs/object>`_ library.
 
- - [cranelift-simplejit](https://docs.rs/cranelift-simplejit)
-    This crate provides a simple JIT backend for `cranelift-module`, which
+ - [cranelift-jit](https://docs.rs/cranelift-jit)
+    This crate provides a JIT backend for `cranelift-module`, which
     emits code and data into memory.

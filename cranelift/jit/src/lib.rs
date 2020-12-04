@@ -1,4 +1,4 @@
-//! Top-level lib.rs for `cranelift_simplejit`.
+//! Top-level lib.rs for `cranelift_jit`.
 
 #![deny(
     missing_docs,
@@ -27,7 +27,7 @@ mod backend;
 mod compiled_blob;
 mod memory;
 
-pub use crate::backend::{SimpleJITBuilder, SimpleJITModule};
+pub use crate::backend::{JITBuilder, JITModule};
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

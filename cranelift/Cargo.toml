@@ -26,7 +26,7 @@ cranelift-native = { path = "native", version = "0.68.0" }
 cranelift-filetests = { path = "filetests", version = "0.66.0" }
 cranelift-module = { path = "module", version = "0.68.0" }
 cranelift-object = { path = "object", version = "0.68.0" }
-cranelift-simplejit = { path = "simplejit", version = "0.68.0" }
+cranelift-jit = { path = "jit", version = "0.68.0" }
 cranelift-preopt = { path = "preopt", version = "0.68.0" }
 cranelift = { path = "umbrella", version = "0.68.0" }
 filecheck = "0.5.0"

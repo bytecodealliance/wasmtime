@@ -1,8 +1,8 @@
 use cranelift::prelude::*;
 use cranelift_codegen::binemit::NullTrapSink;
 use cranelift_codegen::settings::{self, Configurable};
+use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{default_libcall_names, Linkage, Module};
-use cranelift_simplejit::{SimpleJITBuilder, SimpleJITModule};
 use std::mem;
 
 fn main() {
@@ -14,8 +14,7 @@ fn main() {
         panic!("host machine is not supported: {}", msg);
     });
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-    let mut module: SimpleJITModule =
-        SimpleJITModule::new(SimpleJITBuilder::with_isa(isa, default_libcall_names()));
+    let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
 
     let mut ctx = module.make_context();
     let mut func_ctx = FunctionBuilderContext::new();

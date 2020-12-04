@@ -1,4 +1,4 @@
-//! Defines `SimpleJITModule`.
+//! Defines `JITModule`.
 
 use crate::{compiled_blob::CompiledBlob, memory::Memory};
 use cranelift_codegen::isa::TargetIsa;
@@ -31,16 +31,16 @@ const EXECUTABLE_DATA_ALIGNMENT: u64 = 0x10;
 const WRITABLE_DATA_ALIGNMENT: u64 = 0x8;
 const READONLY_DATA_ALIGNMENT: u64 = 0x1;
 
-/// A builder for `SimpleJITModule`.
-pub struct SimpleJITBuilder {
+/// A builder for `JITModule`.
+pub struct JITBuilder {
     isa: Box<dyn TargetIsa>,
     symbols: HashMap<String, *const u8>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     hotswap_enabled: bool,
 }
 
-impl SimpleJITBuilder {
-    /// Create a new `SimpleJITBuilder`.
+impl JITBuilder {
+    /// Create a new `JITBuilder`.
     ///
     /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
     /// enum to symbols. LibCalls are inserted in the IR as part of the legalization for certain
@@ -60,12 +60,10 @@ impl SimpleJITBuilder {
         Self::with_isa(isa, libcall_names)
     }
 
-    /// Create a new `SimpleJITBuilder` with an arbitrary target. This is mainly
+    /// Create a new `JITBuilder` with an arbitrary target. This is mainly
     /// useful for testing.
     ///
-    /// SimpleJIT requires a `TargetIsa` configured for non-PIC.
-    ///
-    /// To create a `SimpleJITBuilder` for native use, use the `new` constructor
+    /// To create a `JITBuilder` for native use, use the `new` constructor
     /// instead.
     ///
     /// The `libcall_names` function provides a way to translate `cranelift_codegen`'s `ir::LibCall`
@@ -121,19 +119,21 @@ impl SimpleJITBuilder {
         self
     }
 
-    /// Enable or disable hotswap support. See [`SimpleJITModule::prepare_for_function_redefine`]
+    /// Enable or disable hotswap support. See [`JITModule::prepare_for_function_redefine`]
     /// for more information.
+    ///
+    /// Enabling hotswap support requires PIC code.
     pub fn hotswap(&mut self, enabled: bool) -> &mut Self {
         self.hotswap_enabled = enabled;
         self
     }
 }
 
-/// A `SimpleJITModule` implements `Module` and emits code and data into memory where it can be
+/// A `JITModule` implements `Module` and emits code and data into memory where it can be
 /// directly called and accessed.
 ///
-/// See the `SimpleJITBuilder` for a convenient way to construct `SimpleJITModule` instances.
-pub struct SimpleJITModule {
+/// See the `JITBuilder` for a convenient way to construct `JITModule` instances.
+pub struct JITModule {
     isa: Box<dyn TargetIsa>,
     hotswap_enabled: bool,
     symbols: HashMap<String, *const u8>,
@@ -158,7 +158,7 @@ struct MemoryHandle {
     writable: Memory,
 }
 
-impl SimpleJITModule {
+impl JITModule {
     /// Free memory allocated for code and data segments of compiled functions.
     ///
     /// # Safety
@@ -369,8 +369,8 @@ impl SimpleJITModule {
         self.memory.code.set_readable_and_executable();
     }
 
-    /// Create a new `SimpleJITModule`.
-    pub fn new(builder: SimpleJITBuilder) -> Self {
+    /// Create a new `JITModule`.
+    pub fn new(builder: JITBuilder) -> Self {
         if builder.hotswap_enabled {
             assert!(
                 builder.isa.flags().is_pic(),
@@ -450,7 +450,7 @@ impl SimpleJITModule {
     /// Allow a single future `define_function` on a previously defined function. This allows for
     /// hot code swapping and lazy compilation of functions.
     ///
-    /// This requires hotswap support to be enabled first using [`SimpleJITBuilder::hotswap`].
+    /// This requires hotswap support to be enabled first using [`JITBuilder::hotswap`].
     pub fn prepare_for_function_redefine(&mut self, func_id: FuncId) -> ModuleResult<()> {
         assert!(self.hotswap_enabled, "Hotswap support is not enabled");
         let decl = self.declarations.get_function_decl(func_id);
@@ -473,7 +473,7 @@ impl SimpleJITModule {
     }
 }
 
-impl<'simple_jit_backend> Module for SimpleJITModule {
+impl Module for JITModule {
     fn isa(&self) -> &dyn TargetIsa {
         &*self.isa
     }
@@ -533,7 +533,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
         writable: bool,
         tls: bool,
     ) -> ModuleResult<DataId> {
-        assert!(!tls, "SimpleJIT doesn't yet support TLS");
+        assert!(!tls, "JIT doesn't yet support TLS");
         let (id, _decl) = self
             .declarations
             .declare_data(name, linkage, writable, tls)?;
@@ -627,7 +627,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        let mut reloc_sink = SimpleJITRelocSink::default();
+        let mut reloc_sink = JITRelocSink::default();
         let mut stack_map_sink = binemit::NullStackMapSink {};
         unsafe {
             ctx.emit_to_memory(
@@ -750,7 +750,7 @@ impl<'simple_jit_backend> Module for SimpleJITModule {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
 
-        assert!(!decl.tls, "SimpleJIT doesn't yet support TLS");
+        assert!(!decl.tls, "JIT doesn't yet support TLS");
 
         let &DataDescription {
             ref init,
@@ -850,11 +850,11 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
 }
 
 #[derive(Default)]
-struct SimpleJITRelocSink {
+struct JITRelocSink {
     relocs: Vec<RelocRecord>,
 }
 
-impl RelocSink for SimpleJITRelocSink {
+impl RelocSink for JITRelocSink {
     fn reloc_external(
         &mut self,
         offset: CodeOffset,
