@@ -1,4 +1,5 @@
 mod ctx;
+mod dir;
 mod error;
 mod file;
 pub mod snapshots;

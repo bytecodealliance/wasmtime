@@ -36,6 +36,17 @@ impl Table {
         self.map.contains_key(&key)
     }
 
+    pub fn is<T: Any + Sized>(&self, key: u32) -> bool {
+        if let Some(refcell) = self.map.get(&key) {
+            if let Ok(refmut) = refcell.try_borrow_mut() {
+                refmut.is::<T>()
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
     // Todo: we can refine these errors and translate them to Exist at abi
     pub fn get<T: Any + Sized>(&self, key: u32) -> Result<RefMut<T>, Error> {
         if let Some(refcell) = self.map.get(&key) {

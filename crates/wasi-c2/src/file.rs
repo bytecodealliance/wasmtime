@@ -31,6 +31,9 @@ pub trait WasiFile: FileIoExt {
     fn filestat_set_size(&self, _size: u64) -> Result<(), Error> {
         todo!()
     }
+    fn sync(&self) -> Result<(), Error> {
+        todo!("FileIoExt has no facilities for sync")
+    }
 }
 
 #[derive(Debug, Copy, Clone)]

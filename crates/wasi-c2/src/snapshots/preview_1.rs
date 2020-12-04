@@ -1,4 +1,5 @@
 #![allow(unused_variables)]
+use crate::dir::{DirEntry, TableDirExt};
 use crate::file::{FileCaps, FileEntry, Filestat, FilestatSetTime, Filetype, OFlags};
 use crate::{Error, WasiCtx};
 use std::cell::RefMut;
@@ -162,15 +163,20 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     fn fd_close(&self, fd: types::Fd) -> Result<(), Error> {
         let mut table = self.table();
         let fd = u32::from(fd);
-        // Can't close preopens:
-        if self.is_preopen(fd) {
-            return Err(Error::Notsup);
+
+        // fd_close must close either a File or a Dir handle
+        if table.is::<FileEntry>(fd) {
+            let _ = table.delete(fd);
+        } else if table.is::<DirEntry>(fd) {
+            // We cannot close preopened directories
+            let dir_entry: RefMut<DirEntry> = table.get(fd).unwrap();
+            if dir_entry.preopen_path.is_some() {
+                return Err(Error::Notsup);
+            }
+            drop(dir_entry);
+            let _ = table.delete(fd);
         }
-        // Make sure file to close exists as a File:
-        let file_entry: RefMut<FileEntry> = table.get(fd)?;
-        drop(file_entry);
-        // Delete from table, Drop will close it
-        let _ = table.delete(fd);
+
         Ok(())
     }
 
@@ -383,16 +389,38 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn fd_prestat_get(&self, fd: types::Fd) -> Result<types::Prestat, Error> {
-        unimplemented!()
+        let table = self.table();
+        let dir_entry: RefMut<DirEntry> = table.get(u32::from(fd)).map_err(|_| Error::Notdir)?;
+        if let Some(ref preopen) = dir_entry.preopen_path {
+            let path_str = preopen.to_str().ok_or(Error::Notsup)?;
+            let pr_name_len =
+                u32::try_from(path_str.as_bytes().len()).map_err(|_| Error::Overflow)?;
+            Ok(types::Prestat::Dir(types::PrestatDir { pr_name_len }))
+        } else {
+            Err(Error::Notsup)
+        }
     }
 
     fn fd_prestat_dir_name(
         &self,
         fd: types::Fd,
         path: &GuestPtr<u8>,
-        path_len: types::Size,
+        path_max_len: types::Size,
     ) -> Result<(), Error> {
-        unimplemented!()
+        let table = self.table();
+        let dir_entry: RefMut<DirEntry> = table.get(u32::from(fd)).map_err(|_| Error::Notdir)?;
+        if let Some(ref preopen) = dir_entry.preopen_path {
+            let path_bytes = preopen.to_str().ok_or(Error::Notsup)?.as_bytes();
+            let path_len = path_bytes.len();
+            if path_len < path_max_len as usize {
+                return Err(Error::Nametoolong);
+            }
+            let mut p_memory = path.as_array(path_len as u32).as_slice_mut()?;
+            p_memory.copy_from_slice(path_bytes);
+            Ok(())
+        } else {
+            Err(Error::Notsup)
+        }
     }
 
     fn fd_readdir(
@@ -402,7 +430,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         buf_len: types::Size,
         cookie: types::Dircookie,
     ) -> Result<types::Size, Error> {
-        unimplemented!()
+        todo!("fd_readdir is very complicated")
     }
 
     fn fd_renumber(&self, from: types::Fd, to: types::Fd) -> Result<(), Error> {
@@ -412,10 +440,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if !table.contains_key(from) {
             return Err(Error::Badf);
         }
-        if self.is_preopen(from) {
+        if table.is_preopen(from) {
             return Err(Error::Notsup);
         }
-        if self.is_preopen(to) {
+        if table.is_preopen(to) {
             return Err(Error::Notsup);
         }
         let from_entry = table
@@ -431,15 +459,39 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         offset: types::Filedelta,
         whence: types::Whence,
     ) -> Result<types::Filesize, Error> {
-        unimplemented!()
+        use std::io::SeekFrom;
+
+        let required_caps = if offset == 0 && whence == types::Whence::Cur {
+            FileCaps::TELL
+        } else {
+            FileCaps::TELL | FileCaps::SEEK
+        };
+
+        let table = self.table();
+        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
+        let f = file_entry.get_cap(required_caps)?;
+        let newoffset = f.seek(match whence {
+            types::Whence::Cur => SeekFrom::Current(offset),
+            types::Whence::End => SeekFrom::End(offset),
+            types::Whence::Set => SeekFrom::Start(offset as u64),
+        })?;
+        Ok(newoffset)
     }
 
     fn fd_sync(&self, fd: types::Fd) -> Result<(), Error> {
-        unimplemented!()
+        let table = self.table();
+        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
+        let f = file_entry.get_cap(FileCaps::SYNC)?;
+        f.sync()?;
+        Ok(())
     }
 
     fn fd_tell(&self, fd: types::Fd) -> Result<types::Filesize, Error> {
-        unimplemented!()
+        let table = self.table();
+        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
+        let f = file_entry.get_cap(FileCaps::TELL)?;
+        let offset = f.seek(std::io::SeekFrom::Current(0))?;
+        Ok(offset)
     }
 
     fn path_create_directory(
