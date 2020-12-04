@@ -2910,12 +2910,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 match op {
                     Opcode::SwidenLow => match (input_ty, output_ty) {
                         (types::I8X16, types::I16X8) => {
-                            ctx.emit(Inst::gen_move(dst, src, output_ty));
-                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmovsxbw, RegMem::from(dst), dst));
+                            ctx.emit(Inst::xmm_mov(SseOpcode::Pmovsxbw, RegMem::reg(src), dst));
                         }
                         (types::I16X8, types::I32X4) => {
-                            ctx.emit(Inst::gen_move(dst, src, output_ty));
-                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmovsxwd, RegMem::from(dst), dst));
+                            ctx.emit(Inst::xmm_mov(SseOpcode::Pmovsxwd, RegMem::reg(src), dst));
                         }
                         _ => unreachable!(),
                     },
@@ -2929,7 +2927,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                                 8,
                                 false,
                             ));
-                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmovsxbw, RegMem::from(dst), dst));
+                            ctx.emit(Inst::xmm_mov(SseOpcode::Pmovsxbw, RegMem::from(dst), dst));
                         }
                         (types::I16X8, types::I32X4) => {
                             ctx.emit(Inst::gen_move(dst, src, output_ty));
@@ -2940,18 +2938,16 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                                 8,
                                 false,
                             ));
-                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmovsxwd, RegMem::from(dst), dst));
+                            ctx.emit(Inst::xmm_mov(SseOpcode::Pmovsxwd, RegMem::from(dst), dst));
                         }
                         _ => unreachable!(),
                     },
                     Opcode::UwidenLow => match (input_ty, output_ty) {
                         (types::I8X16, types::I16X8) => {
-                            ctx.emit(Inst::gen_move(dst, src, output_ty));
-                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmovzxbw, RegMem::from(dst), dst));
+                            ctx.emit(Inst::xmm_mov(SseOpcode::Pmovzxbw, RegMem::reg(src), dst));
                         }
                         (types::I16X8, types::I32X4) => {
-                            ctx.emit(Inst::gen_move(dst, src, output_ty));
-                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmovzxwd, RegMem::from(dst), dst));
+                            ctx.emit(Inst::xmm_mov(SseOpcode::Pmovzxwd, RegMem::reg(src), dst));
                         }
                         _ => unreachable!(),
                     },
@@ -2965,7 +2961,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                                 8,
                                 false,
                             ));
-                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmovzxbw, RegMem::from(dst), dst));
+                            ctx.emit(Inst::xmm_mov(SseOpcode::Pmovzxbw, RegMem::from(dst), dst));
                         }
                         (types::I16X8, types::I32X4) => {
                             ctx.emit(Inst::gen_move(dst, src, output_ty));
@@ -2976,7 +2972,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                                 8,
                                 false,
                             ));
-                            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmovzxwd, RegMem::from(dst), dst));
+                            ctx.emit(Inst::xmm_mov(SseOpcode::Pmovzxwd, RegMem::from(dst), dst));
                         }
                         _ => unreachable!(),
                     },
