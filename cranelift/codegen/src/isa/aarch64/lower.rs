@@ -616,7 +616,7 @@ fn collect_address_addends<C: LowerCtx<I = Inst>>(
                         maybe_input_insn(ctx, extendee_input, Opcode::Iconst),
                         extendop,
                     ) {
-                        let value = ctx.get_constant(insn).unwrap() as i64;
+                        let value = (ctx.get_constant(insn).unwrap() & 0xFFFF_FFFF_u64) as i64;
                         offset += value;
                     } else {
                         let reg = put_input_in_reg(ctx, extendee_input, NarrowValueMode::None);
