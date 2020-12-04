@@ -371,9 +371,6 @@ impl WastContext {
 
 fn is_matching_assert_invalid_error_message(expected: &str, actual: &str) -> bool {
     actual.contains(expected)
-        // Waiting on https://github.com/WebAssembly/bulk-memory-operations/pull/137
-        // to propagate to WebAssembly/testsuite.
-        || (expected.contains("unknown table") && actual.contains("unknown elem"))
         // `elem.wast` and `proposals/bulk-memory-operations/elem.wast` disagree
         // on the expected error message for the same error.
         || (expected.contains("out of bounds") && actual.contains("does not fit"))
