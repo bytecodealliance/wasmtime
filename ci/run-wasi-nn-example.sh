@@ -7,7 +7,7 @@
 # executed with the Wasmtime CLI.
 set -e
 WASMTIME_DIR=$(dirname "$0" | xargs dirname)
-FIXTURE=https://gist.github.com/abrown/c7847bf3701f9efbb2070da1878542c1/raw/07a9f163994b0ff8f0d7c5a5c9645ec3d8b24024
+FIXTURE=https://github.com/intel/openvino-rs/raw/main/crates/openvino/tests/fixtures/alexnet
 if [ -z "${1+x}" ]; then
     # If no temporary directory is specified, create one.
     TMP_DIR=$(mktemp -d -t ci-XXXXXXXXXX)
@@ -26,9 +26,9 @@ source /opt/intel/openvino/bin/setupvars.sh
 OPENVINO_INSTALL_DIR=/opt/intel/openvino cargo build -p wasmtime-cli --features wasi-nn
 
 # Download all necessary test fixtures to the temporary directory.
-wget --no-clobber --directory-prefix=$TMP_DIR $FIXTURE/frozen_inference_graph.bin
-wget --no-clobber --directory-prefix=$TMP_DIR $FIXTURE/frozen_inference_graph.xml
-wget --no-clobber --directory-prefix=$TMP_DIR $FIXTURE/tensor-1x3x300x300-f32.bgr
+wget --no-clobber --directory-prefix=$TMP_DIR $FIXTURE/alexnet.bin
+wget --no-clobber --directory-prefix=$TMP_DIR $FIXTURE/alexnet.xml
+wget --no-clobber --directory-prefix=$TMP_DIR $FIXTURE/tensor-1x3x227x227-f32.bgr
 
 # Now build an example that uses the wasi-nn API.
 pushd $WASMTIME_DIR/crates/wasi-nn/examples/classification-example
