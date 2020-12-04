@@ -4144,6 +4144,20 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::WideningPairwiseDotProductS => {
+            let lhs = put_input_in_reg(ctx, inputs[0]);
+            let lhs_ty = ctx.input_ty(insn, 0);
+            let rhs = input_to_reg_mem(ctx, inputs[1]);
+            let dst = get_output_reg(ctx, outputs[0]);
+            let dst_ty = ty.unwrap();
+            assert!(
+                dst_ty == types::I32X4 && lhs_ty == types::I16X8,
+                "dot product only expands two I16x8 vectors into an I32x4 vector"
+            );
+            ctx.emit(Inst::gen_move(dst, lhs, lhs_ty));
+            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmaddwd, rhs, dst))
+        }
+
         Opcode::IaddImm
         | Opcode::ImulImm
         | Opcode::UdivImm

@@ -498,6 +498,7 @@ pub enum SseOpcode {
     Pinsrb,
     Pinsrw,
     Pinsrd,
+    Pmaddwd,
     Pmaxsb,
     Pmaxsw,
     Pmaxsd,
@@ -598,6 +599,7 @@ impl SseOpcode {
             | SseOpcode::Mulps
             | SseOpcode::Mulss
             | SseOpcode::Orps
+            | SseOpcode::Pmaddwd
             | SseOpcode::Rcpss
             | SseOpcode::Rsqrtss
             | SseOpcode::Sqrtps
@@ -842,6 +844,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pinsrb => "pinsrb",
             SseOpcode::Pinsrw => "pinsrw",
             SseOpcode::Pinsrd => "pinsrd",
+            SseOpcode::Pmaddwd => "pmaddwd",
             SseOpcode::Pmaxsb => "pmaxsb",
             SseOpcode::Pmaxsw => "pmaxsw",
             SseOpcode::Pmaxsd => "pmaxsd",
