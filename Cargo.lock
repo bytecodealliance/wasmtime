@@ -463,6 +463,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "cranelift-jit"
+version = "0.68.0"
+dependencies = [
+ "anyhow",
+ "cranelift",
+ "cranelift-codegen",
+ "cranelift-entity",
+ "cranelift-frontend",
+ "cranelift-module",
+ "cranelift-native",
+ "errno",
+ "libc",
+ "log",
+ "memmap",
+ "region",
+ "target-lexicon",
+ "winapi",
+]
+
+[[package]]
 name = "cranelift-module"
 version = "0.68.0"
 dependencies = [
@@ -528,26 +548,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cranelift-simplejit"
-version = "0.68.0"
-dependencies = [
- "anyhow",
- "cranelift",
- "cranelift-codegen",
- "cranelift-entity",
- "cranelift-frontend",
- "cranelift-module",
- "cranelift-native",
- "errno",
- "libc",
- "log",
- "memmap",
- "region",
- "target-lexicon",
- "winapi",
-]
-
-[[package]]
 name = "cranelift-tools"
 version = "0.66.0"
 dependencies = [
@@ -560,13 +560,13 @@ dependencies = [
  "cranelift-filetests",
  "cranelift-frontend",
  "cranelift-interpreter",
+ "cranelift-jit",
  "cranelift-module",
  "cranelift-native",
  "cranelift-object",
  "cranelift-preopt",
  "cranelift-reader",
  "cranelift-serde",
- "cranelift-simplejit",
  "cranelift-wasm",
  "file-per-thread-logger",
  "filecheck",

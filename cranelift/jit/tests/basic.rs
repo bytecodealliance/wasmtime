@@ -5,8 +5,8 @@ use cranelift_codegen::settings::{self, Configurable};
 use cranelift_codegen::{ir::types::I16, Context};
 use cranelift_entity::EntityRef;
 use cranelift_frontend::*;
+use cranelift_jit::*;
 use cranelift_module::*;
-use cranelift_simplejit::*;
 
 #[test]
 fn error_on_incompatible_sig_in_declare_function() {
@@ -18,8 +18,7 @@ fn error_on_incompatible_sig_in_declare_function() {
         panic!("host machine is not supported: {}", msg);
     });
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-    let mut module: SimpleJITModule =
-        SimpleJITModule::new(SimpleJITBuilder::with_isa(isa, default_libcall_names()));
+    let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
 
     let mut sig = Signature {
         params: vec![AbiParam::new(types::I64)],
@@ -36,7 +35,7 @@ fn error_on_incompatible_sig_in_declare_function() {
         .unwrap(); // Make sure this is an error
 }
 
-fn define_simple_function(module: &mut SimpleJITModule) -> FuncId {
+fn define_simple_function(module: &mut JITModule) -> FuncId {
     let sig = Signature {
         params: vec![],
         returns: vec![],
@@ -76,8 +75,7 @@ fn panic_on_define_after_finalize() {
         panic!("host machine is not supported: {}", msg);
     });
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-    let mut module: SimpleJITModule =
-        SimpleJITModule::new(SimpleJITBuilder::with_isa(isa, default_libcall_names()));
+    let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
 
     define_simple_function(&mut module);
     define_simple_function(&mut module);
@@ -166,8 +164,7 @@ fn libcall_function() {
         panic!("host machine is not supported: {}", msg);
     });
     let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-    let mut module: SimpleJITModule =
-        SimpleJITModule::new(SimpleJITBuilder::with_isa(isa, default_libcall_names()));
+    let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
 
     let sig = Signature {
         params: vec![],
