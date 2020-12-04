@@ -210,7 +210,8 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             | ("simd", "simd_f32x4_pmin_pmax")
             | ("simd", "simd_f64x2_pmin_pmax")
             | ("simd", "simd_f32x4_rounding")
-            | ("simd", "simd_f64x2_rounding") => {
+            | ("simd", "simd_f64x2_rounding")
+            | ("simd", "simd_i32x4_dot_i16x8") => {
                 return !(cfg!(feature = "experimental_x64")
                     || env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "aarch64")
             }
