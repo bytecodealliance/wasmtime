@@ -1,0 +1,104 @@
+test licm
+target aarch64
+
+function u0:0(i64 vmctx, i64) system_v {
+	gv0 = vmctx
+	gv1 = load.i64 notrap aligned readonly gv0
+	gv2 = load.i64 notrap aligned gv1
+	gv3 = vmctx
+	gv4 = load.i64 notrap aligned readonly gv3+28
+	heap0 = static gv4, min 0, bound 0, offset_guard 0x0001_0000, index_type i32
+	sig0 = (i64 vmctx, i32 uext) -> i32 uext system_v
+	jt0 = jump_table [block8, block4, block1]
+	stack_limit = gv2
+
+block0(v0: i64, v1: i64):
+    v3 -> v0
+    v7 -> v0
+    v11 -> v0
+    v12 -> v0
+    v16 -> v0
+    v20 -> v0
+    v22 -> v0
+    v26 -> v0
+    v30 -> v0
+    v32 -> v0
+    v36 -> v0
+    v2 = iconst.i32 0
+    v4 = load.i32 notrap aligned v3+48
+    v5 = icmp_imm eq v4, 0
+    v6 = bint.i32 v5
+    brnz v4, block2
+    jump block3
+
+block3:
+    trap unreachable
+
+block2:
+    v8 = load.i32 notrap aligned v7+48
+    v9 = iconst.i32 1
+    v10 = iadd_imm v8, -1
+    store notrap aligned v10, v11+48
+    jump block4
+
+block4:
+    v13 = load.i32 notrap aligned v12+48
+    v14 = icmp_imm eq v13, 0
+    v15 = bint.i32 v14
+    brnz v13, block6
+    jump block7
+
+block7:
+    trap unreachable
+
+block6:
+    v17 = load.i32 notrap aligned v16+48
+    v18 = iconst.i32 1
+    v19 = iadd_imm v17, -1
+    store notrap aligned v19, v20+48
+    jump block8
+
+block8:
+    v23 = load.i32 notrap aligned v22+48
+    v24 = icmp_imm eq v23, 0
+    v25 = bint.i32 v24
+    brnz v23, block10
+    jump block11
+
+block11:
+    trap unreachable
+
+block10:
+    v27 = load.i32 notrap aligned v26+48
+    v28 = iconst.i32 1
+    v29 = iadd_imm v27, -1
+    store notrap aligned v29, v30+48
+    v31 = iconst.i32 0
+    v33 = load.i64 notrap aligned readonly v32+104
+    v34 = call_indirect sig0, v33(v32, v31)
+    brnz v34, block8
+    jump block12
+
+block12:
+    v35 = iconst.i32 0
+    v37 = load.i64 notrap aligned readonly v36+104
+    v38 = call_indirect sig0, v37(v36, v35)
+    trap heap_oob
+
+block13:
+    v39 = iconst.i64 0
+    v40 = load.i32 v39
+    v41 = icmp_imm uge v40, 3
+    brnz v41, block4
+    jump block14
+
+block14:
+    v42 = uextend.i64 v40
+    v43 = jump_table_base.i64 jt0
+    v44 = jump_table_entry v42, v43, 4, jt0
+    v45 = iadd v43, v44
+    indirect_jump_table_br v45, jt0
+
+block1:
+    return
+}
