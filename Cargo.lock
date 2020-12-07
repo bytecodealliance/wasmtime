@@ -597,7 +597,7 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.69.1",
+ "wasmparser 0.69.2",
  "wat",
 ]
 
@@ -1167,7 +1167,7 @@ dependencies = [
  "smallvec",
  "thiserror",
  "typemap",
- "wasmparser 0.69.1",
+ "wasmparser 0.69.2",
  "wat",
 ]
 
@@ -2406,9 +2406,9 @@ checksum = "32fddd575d477c6e9702484139cf9f23dcd554b06d185ed0f56c857dd3a47aa6"
 
 [[package]]
 name = "wasmparser"
-version = "0.69.1"
+version = "0.69.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd19c6066bcf391a9d6f81db9b809f31d31723da2652c8416cb81cd5aabed944"
+checksum = "fd2dd6dadf3a723971297bcc0ec103e0aa8118bf68e23f49cb575e21621894a8"
 
 [[package]]
 name = "wasmprinter"
@@ -2417,7 +2417,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dba006f5c5bf41a2a5c3b45e861ea6eb067382acb022b6a35a00a0390f9547f6"
 dependencies = [
  "anyhow",
- "wasmparser 0.69.1",
+ "wasmparser 0.69.2",
 ]
 
 [[package]]
@@ -2438,7 +2438,7 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "tempfile",
- "wasmparser 0.69.1",
+ "wasmparser 0.69.2",
  "wasmtime-cache",
  "wasmtime-environ",
  "wasmtime-jit",
@@ -2516,7 +2516,7 @@ dependencies = [
  "test-programs",
  "tracing-subscriber",
  "wasi-common",
- "wasmparser 0.69.1",
+ "wasmparser 0.69.2",
  "wasmtime",
  "wasmtime-cache",
  "wasmtime-debug",
@@ -2552,7 +2552,7 @@ dependencies = [
  "object",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.69.1",
+ "wasmparser 0.69.2",
  "wasmtime-environ",
 ]
 
@@ -2571,7 +2571,7 @@ dependencies = [
  "more-asserts",
  "serde",
  "thiserror",
- "wasmparser 0.69.1",
+ "wasmparser 0.69.2",
 ]
 
 [[package]]
@@ -2600,7 +2600,7 @@ dependencies = [
  "rayon",
  "wasm-smith",
  "wasmi",
- "wasmparser 0.69.1",
+ "wasmparser 0.69.2",
  "wasmprinter",
  "wasmtime",
  "wasmtime-wast",
@@ -2628,7 +2628,7 @@ dependencies = [
  "serde",
  "target-lexicon",
  "thiserror",
- "wasmparser 0.69.1",
+ "wasmparser 0.69.2",
  "wasmtime-cranelift",
  "wasmtime-debug",
  "wasmtime-environ",
@@ -2645,7 +2645,7 @@ version = "0.21.0"
 dependencies = [
  "cranelift-codegen",
  "lightbeam",
- "wasmparser 0.69.1",
+ "wasmparser 0.69.2",
  "wasmtime-environ",
 ]
 
