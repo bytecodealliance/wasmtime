@@ -4079,8 +4079,8 @@ impl LowerBackend for X64Backend {
                         let ty = ctx.input_ty(ifcmp_sp, 0);
                         ctx.emit(Inst::cmp_rmi_r(
                             ty.bytes() as u8,
-                            RegMemImm::reg(operand),
-                            regs::rsp(),
+                            RegMemImm::reg(regs::rsp()),
+                            operand,
                         ));
                         let cond_code = ctx.data(branches[0]).cond_code().unwrap();
                         let cc = CC::from_intcc(cond_code);
