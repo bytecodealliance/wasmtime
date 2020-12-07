@@ -70,8 +70,8 @@ block0:
     return v1
 }
 ; check:  uninit  %xmm0
-; nextln: pinsrw  $$0, %r12, %xmm0
-; nextln: pinsrw  $$1, %r12, %xmm0
+; nextln: pinsrw  $$0, %rsi, %xmm0
+; nextln: pinsrw  $$1, %rsi, %xmm0
 ; nextln: pshufd  $$0, %xmm0, %xmm0
 
 function %splat_i32(i32) -> i32x4 {
