@@ -17,7 +17,7 @@ block0(v0: b32x4):
     return v1
 }
 ; check:  ptest   %xmm0, %xmm0
-; nextln: setnz   %r12b
+; nextln: setnz   %sil
 
 function %vall_true_i64x2(i64x2) -> b1 {
 block0(v0: i64x2):
@@ -27,4 +27,4 @@ block0(v0: i64x2):
 ; check:  pxor    %xmm1, %xmm1
 ; nextln: pcmpeqq %xmm0, %xmm1
 ; nextln: ptest   %xmm1, %xmm1
-; nextln: setz    %r12b
+; nextln: setz    %sil

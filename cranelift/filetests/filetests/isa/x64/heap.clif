@@ -11,11 +11,11 @@ function %f(i32, i64 vmctx) -> i64 {
 block0(v0: i32, v1: i64):
 
     v2 = heap_addr.i64 heap0, v0, 0x8000
-    ; check:  movl    8(%rsi), %r12d
-    ; nextln: movq    %rdi, %r13
-    ; nextln: addl    $$32768, %r13d
+    ; check:  movl    8(%rsi), %ecx
+    ; nextln: movq    %rdi, %rax
+    ; nextln: addl    $$32768, %eax
     ; nextln: jnb ; ud2 heap_oob ;
-    ; nextln: cmpl    %r12d, %r13d
+    ; nextln: cmpl    %ecx, %eax
     ; nextln: jbe     label1; j label2
     ; check:  Block 1:
  

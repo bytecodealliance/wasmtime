@@ -6,7 +6,7 @@ function %add_from_mem_u32_1(i64, i32) -> i32 {
 block0(v0: i64, v1: i32):
   v2 = load.i32 v0
   v3 = iadd.i32 v2, v1
-  ; check: addl    0(%rdi), %r12d
+  ; check: addl    0(%rdi), %esi
   return v3
 }
 
@@ -14,7 +14,7 @@ function %add_from_mem_u32_2(i64, i32) -> i32 {
 block0(v0: i64, v1: i32):
   v2 = load.i32 v0
   v3 = iadd.i32 v1, v2
-  ; check: addl    0(%rdi), %r12d
+  ; check: addl    0(%rdi), %esi
   return v3
 }
 
@@ -22,7 +22,7 @@ function %add_from_mem_u64_1(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = load.i64 v0
   v3 = iadd.i64 v2, v1
-  ; check: addq    0(%rdi), %r12
+  ; check: addq    0(%rdi), %rsi
   return v3
 }
 
@@ -30,7 +30,7 @@ function %add_from_mem_u64_2(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = load.i64 v0
   v3 = iadd.i64 v1, v2
-  ; check: addq    0(%rdi), %r12
+  ; check: addq    0(%rdi), %rsi
   return v3
 }
 
@@ -40,8 +40,8 @@ function %add_from_mem_not_narrow(i64, i8) -> i8 {
 block0(v0: i64, v1: i8):
   v2 = load.i8 v0
   v3 = iadd.i8 v2, v1
-  ; check: movzbq  0(%rdi), %r12
-  ; nextln: addl    %esi, %r12d
+  ; check: movzbq  0(%rdi), %rdi
+  ; nextln: addl    %esi, %edi
   return v3
 }
 
@@ -52,10 +52,10 @@ block0(v0: i64, v1: i64):
   store.i64 v3, v1
   v4 = load.i64 v3
   return v4
-  ; check:  movq    0(%rdi), %r12
-  ; nextln: movq    %r12, %r13
-  ; nextln: addq    %rdi, %r13
-  ; nextln: movq    %r13, 0(%rsi)
-  ; nextln: movq    0(%r12,%rdi,1), %r12
-  ; nextln: movq    %r12, %rax
+  ; check:  movq    0(%rdi), %rax
+  ; nextln: movq    %rax, %rcx
+  ; nextln: addq    %rdi, %rcx
+  ; nextln: movq    %rcx, 0(%rsi)
+  ; nextln: movq    0(%rax,%rdi,1), %rsi
+  ; nextln: movq    %rsi, %rax
 }
