@@ -1,3 +1,4 @@
+use crate::dir::DirCaps;
 use crate::file::FileCaps;
 use thiserror::Error;
 
@@ -18,6 +19,14 @@ pub enum Error {
     /// Errno::Notcapable: Extension: Capabilities insufficient
     #[error("File not capable: {0}")]
     FileNotCapable(FileCaps),
+
+    /// Errno::Notcapable: Extension: Capabilities insufficient
+    #[error("Directory not capable: {0}")]
+    DirNotCapable(DirCaps),
+
+    /// Idk what the deal with this guy is yet
+    #[error("Table overflow")]
+    TableOverflow,
 
     /// The host OS may return an io error that doesn't match one of the
     /// wasi errno variants we expect. We do not expose the details of this

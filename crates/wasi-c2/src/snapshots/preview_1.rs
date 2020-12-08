@@ -1,5 +1,5 @@
 #![allow(unused_variables)]
-use crate::dir::{DirEntry, TableDirExt};
+use crate::dir::{DirCaps, DirEntry, TableDirExt};
 use crate::file::{
     FdFlags, FdStat, FileCaps, FileEntry, Filestat, FilestatSetTime, Filetype, OFlags,
 };
@@ -73,7 +73,9 @@ impl From<Error> for types::Errno {
             Error::Perm => Errno::Perm,
             Error::Spipe => Errno::Spipe,
             Error::FileNotCapable { .. } => Errno::Notcapable,
+            Error::DirNotCapable { .. } => Errno::Notcapable,
             Error::NotCapable => Errno::Notcapable,
+            Error::TableOverflow => Errno::Overflow,
         }
     }
 }
@@ -201,7 +203,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let table = self.table();
         let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
         let f = file_entry.get_cap(FileCaps::FDSTAT_SET_FLAGS)?;
-        f.set_oflags(OFlags::try_from(flags)?)?;
+        f.set_oflags(OFlags::try_from(&flags)?)?;
         Ok(())
     }
 
@@ -547,7 +549,45 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         fs_rights_inheriting: types::Rights,
         fdflags: types::Fdflags,
     ) -> Result<types::Fd, Error> {
-        unimplemented!()
+        let mut table = self.table();
+        let dir_entry: RefMut<DirEntry> = table.get(u32::from(dirfd))?;
+        let dir = dir_entry.get_cap(DirCaps::OPEN)?;
+        let symlink_follow = dirflags.contains(&types::Lookupflags::SYMLINK_FOLLOW);
+        let path = path.as_str()?;
+        if oflags.contains(&types::Oflags::DIRECTORY) {
+            let create = oflags.contains(&types::Oflags::CREAT);
+            let child_dir = dir.open_dir(symlink_follow, path.deref(), create)?;
+
+            // XXX go back and check these caps conversions - probably need to validate them
+            // against ???
+            let base_caps = DirCaps::try_from(&fs_rights_base)?;
+            let inheriting_caps = DirCaps::try_from(&fs_rights_inheriting)?;
+            drop(dir);
+            drop(dir_entry);
+            let fd = table.push(DirEntry {
+                dir: child_dir,
+                base_caps,
+                inheriting_caps,
+                preopen_path: None,
+            })?;
+            Ok(types::Fd::from(fd))
+        } else {
+            let oflags = OFlags::try_from(&oflags)?;
+            let fdflags = FdFlags::try_from(&fdflags)?;
+            let file = dir.open_file(symlink_follow, path.deref(), oflags, fdflags)?;
+            // XXX go back and check these caps conversions - probably need to validate them
+            // against ???
+            let base_caps = FileCaps::try_from(&fs_rights_base)?;
+            let inheriting_caps = FileCaps::try_from(&fs_rights_inheriting)?;
+            drop(dir);
+            drop(dir_entry);
+            let fd = table.push(FileEntry {
+                file,
+                base_caps,
+                inheriting_caps,
+            })?;
+            Ok(types::Fd::from(fd))
+        }
     }
 
     fn path_readlink(
@@ -678,6 +718,14 @@ impl TryFrom<&types::Rights> for FileCaps {
     }
 }
 
+// DirCaps are a subset of wasi Rights - not all Rights have a valid representation as DirCaps
+impl TryFrom<&types::Rights> for DirCaps {
+    type Error = Error;
+    fn try_from(rights: &types::Rights) -> Result<DirCaps, Self::Error> {
+        todo!("translate Rights flags to DirCaps flags")
+    }
+}
+
 impl From<&Filetype> for types::Filetype {
     fn from(ft: &Filetype) -> types::Filetype {
         match ft {
@@ -695,9 +743,26 @@ impl From<&FdFlags> for types::Fdflags {
     }
 }
 
-impl TryFrom<types::Fdflags> for OFlags {
+impl TryFrom<&types::Oflags> for OFlags {
     type Error = Error;
-    fn try_from(fdflags: types::Fdflags) -> Result<OFlags, Self::Error> {
+    fn try_from(oflags: &types::Oflags) -> Result<OFlags, Self::Error> {
+        if oflags.contains(&types::Oflags::DIRECTORY) {
+            return Err(Error::Inval);
+        }
+        todo!("rest of oflags translation should be trivial - creat excl trunc")
+    }
+}
+
+impl TryFrom<&types::Fdflags> for FdFlags {
+    type Error = Error;
+    fn try_from(fdflags: &types::Fdflags) -> Result<FdFlags, Self::Error> {
+        todo!()
+    }
+}
+
+impl TryFrom<&types::Fdflags> for OFlags {
+    type Error = Error;
+    fn try_from(fdflags: &types::Fdflags) -> Result<OFlags, Self::Error> {
         todo!()
     }
 }

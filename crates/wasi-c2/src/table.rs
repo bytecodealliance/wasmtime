@@ -20,15 +20,17 @@ impl Table {
         self.map.insert(key, RefCell::new(Box::new(a)));
     }
 
-    pub fn push(&mut self, a: impl Any + Sized) -> u32 {
+    pub fn push(&mut self, a: impl Any + Sized) -> Result<u32, Error> {
         loop {
             let key = self.next_key;
-            self.next_key += 1;
+            // XXX this is not correct. The table may still have empty entries, but our
+            // linear search strategy is quite bad
+            self.next_key = self.next_key.checked_add(1).ok_or(Error::TableOverflow)?;
             if self.map.contains_key(&key) {
                 continue;
             }
             self.map.insert(key, RefCell::new(Box::new(a)));
-            return key;
+            return Ok(key);
         }
     }
 

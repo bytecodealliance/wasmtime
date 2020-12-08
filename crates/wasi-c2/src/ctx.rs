@@ -1,4 +1,4 @@
-use crate::dir::{DirEntry, WasiDir};
+use crate::dir::{DirCaps, DirEntry, WasiDir};
 use crate::file::{FileCaps, FileEntry, WasiFile};
 use crate::table::Table;
 use std::cell::{RefCell, RefMut};
@@ -31,9 +31,17 @@ impl WasiCtx {
         self.table().insert_at(fd, e);
     }
 
-    pub fn insert_dir(&self, fd: u32, dir: Box<dyn WasiDir>, flags: u32, path: PathBuf) {
+    pub fn insert_dir(
+        &self,
+        fd: u32,
+        dir: Box<dyn WasiDir>,
+        base_caps: DirCaps,
+        inheriting_caps: DirCaps,
+        path: PathBuf,
+    ) {
         let e = DirEntry {
-            flags,
+            base_caps,
+            inheriting_caps,
             preopen_path: Some(path),
             dir,
         };
