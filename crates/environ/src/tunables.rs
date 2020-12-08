@@ -27,6 +27,9 @@ pub struct Tunables {
     /// Whether or not fuel is enabled for generated code, meaning that fuel
     /// will be consumed every time a wasm instruction is executed.
     pub consume_fuel: bool,
+
+    /// Whether or not to treat the static memory bound as the maximum for unbounded heaps.
+    pub static_memory_bound_is_maximum: bool,
 }
 
 impl Default for Tunables {
@@ -62,6 +65,7 @@ impl Default for Tunables {
             parse_wasm_debuginfo: true,
             interruptable: false,
             consume_fuel: false,
+            static_memory_bound_is_maximum: false,
         }
     }
 }

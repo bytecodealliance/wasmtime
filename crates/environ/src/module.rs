@@ -42,8 +42,16 @@ impl MemoryStyle {
         // A heap with a maximum that doesn't exceed the static memory bound specified by the
         // tunables make it static.
         //
-        // If the module doesn't declare an explicit maximum treat it as 4GiB.
-        let maximum = memory.maximum.unwrap_or(WASM_MAX_PAGES);
+        // If the module doesn't declare an explicit maximum treat it as 4GiB when not
+        // requested to use the static memory bound itself as the maximum.
+        let maximum = memory
+            .maximum
+            .unwrap_or(if tunables.static_memory_bound_is_maximum {
+                tunables.static_memory_bound
+            } else {
+                WASM_MAX_PAGES
+            });
+
         if maximum <= tunables.static_memory_bound {
             assert_ge!(tunables.static_memory_bound, memory.minimum);
             return (

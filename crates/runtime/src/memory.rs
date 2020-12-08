@@ -52,10 +52,6 @@ pub struct MmapMemory {
     // Size in bytes of extra guard pages after the end to optimize loads and stores with
     // constant offsets.
     offset_guard_size: usize,
-
-    // Records whether we're using a bounds-checking strategy which requires
-    // handlers to catch trapping accesses.
-    pub(crate) needs_signal_handlers: bool,
 }
 
 #[derive(Debug)]
@@ -74,15 +70,6 @@ impl MmapMemory {
         assert!(plan.memory.maximum.is_none() || plan.memory.maximum.unwrap() <= WASM_MAX_PAGES);
 
         let offset_guard_bytes = plan.offset_guard_size as usize;
-
-        // If we have an offset guard, or if we're doing the static memory
-        // allocation strategy, we need signal handlers to catch out of bounds
-        // acceses.
-        let needs_signal_handlers = offset_guard_bytes > 0
-            || match plan.style {
-                MemoryStyle::Dynamic => false,
-                MemoryStyle::Static { .. } => true,
-            };
 
         let minimum_pages = match plan.style {
             MemoryStyle::Dynamic => plan.memory.minimum,
@@ -105,7 +92,6 @@ impl MmapMemory {
             mmap: mmap.into(),
             maximum: plan.memory.maximum,
             offset_guard_size: offset_guard_bytes,
-            needs_signal_handlers,
         })
     }
 }

@@ -307,15 +307,22 @@ impl Module {
     /// # }
     /// ```
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
+        // Check with the instance allocator to see if the given module is supported
+        let allocator = engine.config().instance_allocator();
+
         #[cfg(feature = "cache")]
-        let (main_module, artifacts, types) =
-            ModuleCacheEntry::new("wasmtime", engine.cache_config())
-                .get_data((engine.compiler(), binary), |(compiler, binary)| {
-                    CompilationArtifacts::build(compiler, binary)
-                })?;
+        let (main_module, artifacts, types) = ModuleCacheEntry::new(
+            "wasmtime",
+            engine.cache_config(),
+        )
+        .get_data((engine.compiler(), binary), |(compiler, binary)| {
+            CompilationArtifacts::build(compiler, binary, |m| allocator.validate_module(m))
+        })?;
         #[cfg(not(feature = "cache"))]
         let (main_module, artifacts, types) =
-            CompilationArtifacts::build(engine.compiler(), binary)?;
+            CompilationArtifacts::build(engine.compiler(), binary, |m| {
+                allocator.validate_module(m)
+            })?;
 
         let mut modules = CompiledModule::from_artifacts_list(
             artifacts,

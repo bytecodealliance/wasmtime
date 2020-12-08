@@ -43,7 +43,7 @@ impl<'config> ModuleCacheEntry<'config> {
     }
 
     /// Gets cached data if state matches, otherwise calls the `compute`.
-    pub fn get_data<T, U, E>(&self, state: T, compute: fn(T) -> Result<U, E>) -> Result<U, E>
+    pub fn get_data<T, U, E>(&self, state: T, compute: impl Fn(T) -> Result<U, E>) -> Result<U, E>
     where
         T: Hash,
         U: Serialize + for<'a> Deserialize<'a>,
