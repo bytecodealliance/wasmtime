@@ -17,9 +17,7 @@ use std::ptr::{self, NonNull};
 use std::slice;
 use std::sync::Arc;
 use thiserror::Error;
-use wasmtime_environ::entity::{
-    packed_option::ReservedValue, BoxedSlice, EntityRef, EntitySet, PrimaryMap,
-};
+use wasmtime_environ::entity::{packed_option::ReservedValue, EntityRef, EntitySet, PrimaryMap};
 use wasmtime_environ::wasm::{
     DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalInit, SignatureIndex,
     TableElementType, WasmType,
@@ -285,20 +283,20 @@ impl OnDemandInstanceAllocator {
         Self { mem_creator }
     }
 
-    fn create_tables(module: &Module) -> BoxedSlice<DefinedTableIndex, Table> {
+    fn create_tables(module: &Module) -> PrimaryMap<DefinedTableIndex, Table> {
         let num_imports = module.num_imported_tables;
         let mut tables: PrimaryMap<DefinedTableIndex, _> =
             PrimaryMap::with_capacity(module.table_plans.len() - num_imports);
         for table in &module.table_plans.values().as_slice()[num_imports..] {
             tables.push(Table::new_dynamic(table));
         }
-        tables.into_boxed_slice()
+        tables
     }
 
     fn create_memories(
         &self,
         module: &Module,
-    ) -> Result<BoxedSlice<DefinedMemoryIndex, Box<dyn RuntimeLinearMemory>>, InstantiationError>
+    ) -> Result<PrimaryMap<DefinedMemoryIndex, Box<dyn RuntimeLinearMemory>>, InstantiationError>
     {
         let creator = self
             .mem_creator
@@ -314,7 +312,7 @@ impl OnDemandInstanceAllocator {
                     .map_err(InstantiationError::Resource)?,
             );
         }
-        Ok(memories.into_boxed_slice())
+        Ok(memories)
     }
 
     fn check_table_init_bounds(instance: &Instance) -> Result<(), InstantiationError> {

@@ -24,7 +24,7 @@ use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::{mem, ptr, slice};
-use wasmtime_environ::entity::{packed_option::ReservedValue, BoxedSlice, EntityRef, EntitySet};
+use wasmtime_environ::entity::{packed_option::ReservedValue, EntityRef, EntitySet, PrimaryMap};
 use wasmtime_environ::wasm::{
     DataIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex, EntityIndex,
     FuncIndex, GlobalIndex, MemoryIndex, TableElementType, TableIndex,
@@ -51,10 +51,10 @@ pub(crate) struct Instance {
     offsets: VMOffsets,
 
     /// WebAssembly linear memory data.
-    memories: BoxedSlice<DefinedMemoryIndex, Box<dyn RuntimeLinearMemory>>,
+    memories: PrimaryMap<DefinedMemoryIndex, Box<dyn RuntimeLinearMemory>>,
 
     /// WebAssembly table data.
-    tables: BoxedSlice<DefinedTableIndex, Table>,
+    tables: PrimaryMap<DefinedTableIndex, Table>,
 
     /// Stores the dropped passive element segments in this instantiation by index.
     /// If the index is present in the set, the segment has been dropped.
