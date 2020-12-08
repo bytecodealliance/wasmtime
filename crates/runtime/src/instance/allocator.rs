@@ -290,7 +290,7 @@ impl OnDemandInstanceAllocator {
         let mut tables: PrimaryMap<DefinedTableIndex, _> =
             PrimaryMap::with_capacity(module.table_plans.len() - num_imports);
         for table in &module.table_plans.values().as_slice()[num_imports..] {
-            tables.push(Table::new(table));
+            tables.push(Table::new_dynamic(table));
         }
         tables.into_boxed_slice()
     }
