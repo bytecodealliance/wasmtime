@@ -314,6 +314,9 @@ pub trait ABIMachineSpec {
     /// Generate the usual frame-restore sequence for this architecture.
     fn gen_epilogue_frame_restore() -> SmallVec<[Self::I; 2]>;
 
+    /// Generate a probestack call.
+    fn gen_probestack(_frame_size: u32) -> SmallVec<[Self::I; 2]>;
+
     /// Generate a clobber-save sequence. This takes the list of *all* registers
     /// written/modified by the function body. The implementation here is
     /// responsible for determining which of these are callee-saved according to
@@ -481,6 +484,9 @@ pub struct ABICalleeImpl<M: ABIMachineSpec> {
     /// manually register-allocated and carefully only use caller-saved
     /// registers and keep nothing live after this sequence of instructions.
     stack_limit: Option<(Reg, Vec<M::I>)>,
+    /// Are we to invoke the probestack function in the prologue? If so,
+    /// what is the minimum size at which we must invoke it?
+    probestack_min_frame: Option<u32>,
 
     _mach: PhantomData<M>,
 }
@@ -536,6 +542,18 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
                 .map(|reg| (reg, Vec::new()))
                 .or_else(|| f.stack_limit.map(|gv| gen_stack_limit::<M>(f, &sig, gv)));
 
+        // Determine whether a probestack call is required for large enough
+        // frames (and the minimum frame size if so).
+        let probestack_min_frame = if flags.enable_probestack() {
+            assert!(
+                !flags.probestack_func_adjusts_sp(),
+                "SP-adjusting probestack not supported in new backends"
+            );
+            Some(1 << flags.probestack_size_log2())
+        } else {
+            None
+        };
+
         Ok(Self {
             sig,
             stackslots,
@@ -550,6 +568,7 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
             flags,
             is_leaf: f.is_leaf(),
             stack_limit,
+            probestack_min_frame,
             _mach: PhantomData,
         })
     }
@@ -977,6 +996,11 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                 if let Some((reg, stack_limit_load)) = &self.stack_limit {
                     insts.extend_from_slice(stack_limit_load);
                     self.insert_stack_check(*reg, total_stacksize, &mut insts);
+                }
+                if let Some(min_frame) = &self.probestack_min_frame {
+                    if total_stacksize >= *min_frame {
+                        insts.extend(M::gen_probestack(total_stacksize));
+                    }
                 }
             }
             if total_stacksize > 0 {

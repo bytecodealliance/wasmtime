@@ -182,6 +182,7 @@ impl LegacyPrefixes {
 fn emit_std_enc_mem(
     sink: &mut MachBuffer<Inst>,
     state: &EmitState,
+    info: &EmitInfo,
     prefixes: LegacyPrefixes,
     opcodes: u32,
     mut num_opcodes: usize,
@@ -194,7 +195,8 @@ fn emit_std_enc_mem(
     // expression.  But `enc_g` can be derived from a register of any class.
 
     let srcloc = state.cur_srcloc();
-    if srcloc != SourceLoc::default() && mem_e.can_trap() {
+    let can_trap = mem_e.can_trap();
+    if srcloc != SourceLoc::default() && can_trap {
         sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
     }
 
@@ -202,6 +204,12 @@ fn emit_std_enc_mem(
 
     match mem_e {
         Amode::ImmReg { simm32, base, .. } => {
+            // If this is an access based off of RSP, it may trap with a stack overflow if it's the
+            // first touch of a new stack page.
+            if *base == regs::rsp() && !can_trap && info.flags().enable_probestack() {
+                sink.add_trap(srcloc, TrapCode::StackOverflow);
+            }
+
             // First, the REX byte.
             let enc_e = int_reg_enc(*base);
             rex.emit_two_op(sink, enc_g, enc_e);
@@ -262,6 +270,12 @@ fn emit_std_enc_mem(
             shift,
             ..
         } => {
+            // If this is an access based off of RSP, it may trap with a stack overflow if it's the
+            // first touch of a new stack page.
+            if *reg_base == regs::rsp() && !can_trap && info.flags().enable_probestack() {
+                sink.add_trap(srcloc, TrapCode::StackOverflow);
+            }
+
             let enc_base = int_reg_enc(*reg_base);
             let enc_index = int_reg_enc(*reg_index);
 
@@ -350,6 +364,7 @@ fn emit_std_enc_enc(
 fn emit_std_reg_mem(
     sink: &mut MachBuffer<Inst>,
     state: &EmitState,
+    info: &EmitInfo,
     prefixes: LegacyPrefixes,
     opcodes: u32,
     num_opcodes: usize,
@@ -361,6 +376,7 @@ fn emit_std_reg_mem(
     emit_std_enc_mem(
         sink,
         state,
+        info,
         prefixes,
         opcodes,
         num_opcodes,
@@ -538,6 +554,7 @@ pub(crate) fn emit(
                         emit_std_reg_mem(
                             sink,
                             state,
+                            info,
                             LegacyPrefixes::None,
                             0x0FAF,
                             2,
@@ -597,6 +614,7 @@ pub(crate) fn emit(
                         emit_std_reg_mem(
                             sink,
                             state,
+                            info,
                             LegacyPrefixes::None,
                             opcode_m,
                             1,
@@ -654,6 +672,7 @@ pub(crate) fn emit(
                     emit_std_reg_mem(
                         sink,
                         state,
+                        info,
                         prefix,
                         opcode,
                         num_opcodes,
@@ -717,7 +736,9 @@ pub(crate) fn emit(
                 }
                 RegMem::Mem { addr: src } => {
                     let amode = src.finalize(state, sink);
-                    emit_std_enc_mem(sink, state, prefix, opcode, 1, subopcode, &amode, rex_flags);
+                    emit_std_enc_mem(
+                        sink, state, info, prefix, opcode, 1, subopcode, &amode, rex_flags,
+                    );
                 }
             }
         }
@@ -738,7 +759,9 @@ pub(crate) fn emit(
                 }
                 RegMem::Mem { addr: src } => {
                     let amode = src.finalize(state, sink);
-                    emit_std_enc_mem(sink, state, prefix, 0xF7, 1, subopcode, &amode, rex_flags);
+                    emit_std_enc_mem(
+                        sink, state, info, prefix, 0xF7, 1, subopcode, &amode, rex_flags,
+                    );
                 }
             }
         }
@@ -987,6 +1010,7 @@ pub(crate) fn emit(
                     emit_std_reg_mem(
                         sink,
                         state,
+                        info,
                         LegacyPrefixes::None,
                         opcodes,
                         num_opcodes,
@@ -1004,6 +1028,7 @@ pub(crate) fn emit(
             emit_std_reg_mem(
                 sink,
                 state,
+                info,
                 LegacyPrefixes::None,
                 0x8B,
                 1,
@@ -1019,6 +1044,7 @@ pub(crate) fn emit(
             emit_std_reg_mem(
                 sink,
                 state,
+                info,
                 LegacyPrefixes::None,
                 0x8D,
                 1,
@@ -1081,6 +1107,7 @@ pub(crate) fn emit(
                     emit_std_reg_mem(
                         sink,
                         state,
+                        info,
                         LegacyPrefixes::None,
                         opcodes,
                         num_opcodes,
@@ -1108,7 +1135,17 @@ pub(crate) fn emit(
                     };
 
                     // MOV r8, r/m8 is (REX.W==0) 88 /r
-                    emit_std_reg_mem(sink, state, LegacyPrefixes::None, 0x88, 1, *src, dst, rex)
+                    emit_std_reg_mem(
+                        sink,
+                        state,
+                        info,
+                        LegacyPrefixes::None,
+                        0x88,
+                        1,
+                        *src,
+                        dst,
+                        rex,
+                    )
                 }
 
                 2 => {
@@ -1116,6 +1153,7 @@ pub(crate) fn emit(
                     emit_std_reg_mem(
                         sink,
                         state,
+                        info,
                         LegacyPrefixes::_66,
                         0x89,
                         1,
@@ -1130,6 +1168,7 @@ pub(crate) fn emit(
                     emit_std_reg_mem(
                         sink,
                         state,
+                        info,
                         LegacyPrefixes::None,
                         0x89,
                         1,
@@ -1144,6 +1183,7 @@ pub(crate) fn emit(
                     emit_std_reg_mem(
                         sink,
                         state,
+                        info,
                         LegacyPrefixes::None,
                         0x89,
                         1,
@@ -1253,6 +1293,7 @@ pub(crate) fn emit(
                         emit_std_reg_mem(
                             sink,
                             state,
+                            info,
                             prefix,
                             opcode_bytes,
                             2,
@@ -1311,7 +1352,7 @@ pub(crate) fn emit(
                     let addr = &addr.finalize(state, sink);
                     // Whereas here we revert to the "normal" G-E ordering.
                     let opcode = if *size == 1 { 0x3A } else { 0x3B };
-                    emit_std_reg_mem(sink, state, prefix, opcode, 1, *reg_g, addr, rex);
+                    emit_std_reg_mem(sink, state, info, prefix, opcode, 1, *reg_g, addr, rex);
                 }
 
                 RegMemImm::Imm { simm32 } => {
@@ -1372,6 +1413,7 @@ pub(crate) fn emit(
                     emit_std_reg_mem(
                         sink,
                         state,
+                        info,
                         prefix,
                         opcode,
                         2,
@@ -1408,6 +1450,10 @@ pub(crate) fn emit(
         }
 
         Inst::Push64 { src } => {
+            if info.flags().enable_probestack() {
+                sink.add_trap(state.cur_srcloc(), TrapCode::StackOverflow);
+            }
+
             match src {
                 RegMemImm::Reg { reg } => {
                     let enc_reg = int_reg_enc(*reg);
@@ -1423,6 +1469,7 @@ pub(crate) fn emit(
                     emit_std_enc_mem(
                         sink,
                         state,
+                        info,
                         LegacyPrefixes::None,
                         0xFF,
                         1,
@@ -1454,6 +1501,9 @@ pub(crate) fn emit(
         }
 
         Inst::CallKnown { dest, opcode, .. } => {
+            if info.flags().enable_probestack() {
+                sink.add_trap(state.cur_srcloc(), TrapCode::StackOverflow);
+            }
             if let Some(s) = state.take_stack_map() {
                 sink.add_stack_map(StackMapExtent::UpcomingBytes(5), s);
             }
@@ -1469,6 +1519,9 @@ pub(crate) fn emit(
         }
 
         Inst::CallUnknown { dest, opcode, .. } => {
+            if info.flags().enable_probestack() {
+                sink.add_trap(state.cur_srcloc(), TrapCode::StackOverflow);
+            }
             let start_offset = sink.cur_offset();
             match dest {
                 RegMem::Reg { reg } => {
@@ -1489,6 +1542,7 @@ pub(crate) fn emit(
                     emit_std_enc_mem(
                         sink,
                         state,
+                        info,
                         LegacyPrefixes::None,
                         0xFF,
                         1,
@@ -1587,6 +1641,7 @@ pub(crate) fn emit(
                     emit_std_enc_mem(
                         sink,
                         state,
+                        info,
                         LegacyPrefixes::None,
                         0xFF,
                         1,
@@ -1733,6 +1788,7 @@ pub(crate) fn emit(
                     emit_std_reg_mem(
                         sink,
                         state,
+                        info,
                         prefix,
                         opcode,
                         num_opcodes,
@@ -1863,6 +1919,7 @@ pub(crate) fn emit(
                     emit_std_reg_mem(
                         sink,
                         state,
+                        info,
                         prefix,
                         opcode,
                         length,
@@ -2012,7 +2069,17 @@ pub(crate) fn emit(
                         !regs_swapped,
                         "No existing way to encode a mem argument in the ModRM r/m field."
                     );
-                    emit_std_reg_mem(sink, state, prefix, opcode, len, dst.to_reg(), addr, rex);
+                    emit_std_reg_mem(
+                        sink,
+                        state,
+                        info,
+                        prefix,
+                        opcode,
+                        len,
+                        dst.to_reg(),
+                        addr,
+                        rex,
+                    );
                 }
             }
             sink.put1(*imm);
@@ -2045,6 +2112,7 @@ pub(crate) fn emit(
             emit_std_reg_mem(
                 sink,
                 state,
+                info,
                 prefix,
                 opcode,
                 2,
@@ -2109,7 +2177,17 @@ pub(crate) fn emit(
                 }
                 RegMem::Mem { addr } => {
                     let addr = &addr.finalize(state, sink);
-                    emit_std_reg_mem(sink, state, prefix, opcode, 2, reg_g.to_reg(), addr, rex);
+                    emit_std_reg_mem(
+                        sink,
+                        state,
+                        info,
+                        prefix,
+                        opcode,
+                        2,
+                        reg_g.to_reg(),
+                        addr,
+                        rex,
+                    );
                 }
             }
         }
@@ -2129,7 +2207,7 @@ pub(crate) fn emit(
                 }
                 RegMem::Mem { addr } => {
                     let addr = &addr.finalize(state, sink);
-                    emit_std_reg_mem(sink, state, prefix, opcode, len, *dst, addr, rex);
+                    emit_std_reg_mem(sink, state, info, prefix, opcode, len, *dst, addr, rex);
                 }
             }
         }
@@ -2643,7 +2721,7 @@ pub(crate) fn emit(
                 _ => unreachable!(),
             };
             let amode = dst.finalize(state, sink);
-            emit_std_reg_mem(sink, state, prefix, opcodes, 2, *src, &amode, rex);
+            emit_std_reg_mem(sink, state, info, prefix, opcodes, 2, *src, &amode, rex);
         }
 
         Inst::AtomicRmwSeq { ty, op } => {

@@ -10,7 +10,7 @@ use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc::{RealReg, Reg, RegClass, Set, Writable};
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 
 /// Support for the ARM ABI from the callee side (within a function body).
 pub(crate) type Arm32ABICallee = ABICalleeImpl<Arm32MachineDeps>;
@@ -303,6 +303,12 @@ impl ABIMachineSpec for Arm32MachineDeps {
         let reg_list = vec![writable_fp_reg(), writable_lr_reg()];
         ret.push(Inst::Pop { reg_list });
         ret
+    }
+
+    fn gen_probestack(_: u32) -> SmallVec<[Self::I; 2]> {
+        // TODO: implement if we ever require stack probes on ARM32 (unlikely
+        // unless Lucet is ported)
+        smallvec![]
     }
 
     /// Returns stack bytes used as well as instructions. Does not adjust

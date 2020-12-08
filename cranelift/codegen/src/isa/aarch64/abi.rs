@@ -12,7 +12,7 @@ use crate::{CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc::{RealReg, Reg, RegClass, Set, Writable};
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 
 // We use a generic implementation that factors out AArch64 and x64 ABI commonalities, because
 // these ABIs are very similar.
@@ -506,6 +506,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
         });
 
         insts
+    }
+
+    fn gen_probestack(_: u32) -> SmallVec<[Self::I; 2]> {
+        // TODO: implement if we ever require stack probes on an AArch64 host
+        // (unlikely unless Lucet is ported)
+        smallvec![]
     }
 
     // Returns stack bytes used as well as instructions. Does not adjust
