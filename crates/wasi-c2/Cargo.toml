@@ -20,6 +20,7 @@ getrandom = { version = "0.2.0", features = ["std"] }
 wiggle = { path = "../wiggle", default-features = false, version = "0.21.0" }
 tracing = "0.1.19"
 system-interface = { path = "../../../system-interface" }
+cap-std = "*"
 
 [badges]
 maintenance = { status = "actively-developed" }

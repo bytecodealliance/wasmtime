@@ -22,7 +22,6 @@ impl WasiCtx {
         file: Box<dyn WasiFile>,
         base_caps: FileCaps,
         inheriting_caps: FileCaps,
-        path: Option<PathBuf>,
     ) {
         let e = FileEntry {
             base_caps,

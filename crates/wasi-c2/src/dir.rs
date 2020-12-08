@@ -1,3 +1,5 @@
+// this file is extremely wip
+#![allow(dead_code, unused_variables)]
 use std::path::PathBuf;
 
 pub trait WasiDir {}

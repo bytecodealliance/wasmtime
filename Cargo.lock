@@ -206,6 +206,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08c48aae112d48ed9f069b33538ea9e3e90aa263cfa3d1c24309612b1f7472de"
 
 [[package]]
+name = "cap-primitives"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9069ed88e23a3fff56577518a238e6975920620cd5d00be8ca73aa46a96d5f5"
+dependencies = [
+ "errno",
+ "fs-set-times",
+ "ipnet",
+ "libc",
+ "once_cell",
+ "posish",
+ "winapi",
+ "winx 0.20.0",
+]
+
+[[package]]
+name = "cap-std"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eacf34fea6948253011b8771b7ae6258a2ae15c7ba38e78b7dd60a785af354d2"
+dependencies = [
+ "cap-primitives",
+]
+
+[[package]]
 name = "capstone"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -898,6 +923,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
+name = "fs-set-times"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a37c11eb7933093dd2a56c9c4d934a754b56e672fb8c2b46d50997dd2b4392d"
+dependencies = [
+ "posish",
+ "winapi",
+]
+
+[[package]]
 name = "fst"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1041,6 +1076,12 @@ dependencies = [
  "number_prefix",
  "regex",
 ]
+
+[[package]]
+name = "ipnet"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47be2f14c678be2fdcab04ab1171db51b2762ce6f0a8ee87c8dd4a04ed216135"
 
 [[package]]
 name = "iter-enum"
@@ -2311,6 +2352,7 @@ name = "wasi-c2"
 version = "0.21.0"
 dependencies = [
  "anyhow",
+ "cap-std",
  "getrandom 0.2.0",
  "libc",
  "system-interface",

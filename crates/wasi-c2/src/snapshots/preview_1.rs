@@ -1,6 +1,8 @@
 #![allow(unused_variables)]
 use crate::dir::{DirEntry, TableDirExt};
-use crate::file::{FileCaps, FileEntry, Filestat, FilestatSetTime, Filetype, OFlags};
+use crate::file::{
+    FdFlags, FdStat, FileCaps, FileEntry, Filestat, FilestatSetTime, Filetype, OFlags,
+};
 use crate::{Error, WasiCtx};
 use std::cell::RefMut;
 use std::convert::TryFrom;
@@ -191,7 +193,8 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     fn fd_fdstat_get(&self, fd: types::Fd) -> Result<types::Fdstat, Error> {
         let table = self.table();
         let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
-        Ok(types::Fdstat::from(file_entry.deref()))
+        let fdstat = file_entry.get_fdstat()?;
+        Ok(types::Fdstat::from(&fdstat))
     }
 
     fn fd_fdstat_set_flags(&self, fd: types::Fd, flags: types::Fdflags) -> Result<(), Error> {
@@ -227,7 +230,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let table = self.table();
         let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
         let f = file_entry.get_cap(FileCaps::FILESTAT_GET)?;
-        let filestat = f.filestat_get()?;
+        let filestat = f.get_filestat()?;
         Ok(filestat.into())
     }
 
@@ -235,7 +238,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let table = self.table();
         let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
         let f = file_entry.get_cap(FileCaps::FILESTAT_SET_SIZE)?;
-        f.filestat_set_size(size)?;
+        f.set_filestat_size(size)?;
         Ok(())
     }
 
@@ -278,7 +281,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             None
         };
 
-        f.filestat_set_times(atim, mtim)?;
+        f.set_filestat_times(atim, mtim)?;
         Ok(())
     }
 
@@ -649,13 +652,13 @@ impl From<types::Advice> for system_interface::fs::Advice {
     }
 }
 
-impl From<&FileEntry> for types::Fdstat {
-    fn from(entry: &FileEntry) -> types::Fdstat {
+impl From<&FdStat> for types::Fdstat {
+    fn from(fdstat: &FdStat) -> types::Fdstat {
         types::Fdstat {
-            fs_filetype: types::Filetype::from(&entry.file.filetype()),
-            fs_rights_base: types::Rights::from(&entry.base_caps),
-            fs_rights_inheriting: types::Rights::from(&entry.base_caps),
-            fs_flags: types::Fdflags::from(&entry.file.oflags()),
+            fs_filetype: types::Filetype::from(&fdstat.filetype),
+            fs_rights_base: types::Rights::from(&fdstat.base_caps),
+            fs_rights_inheriting: types::Rights::from(&fdstat.inheriting_caps),
+            fs_flags: types::Fdflags::from(&fdstat.flags),
         }
     }
 }
@@ -686,9 +689,9 @@ impl From<&Filetype> for types::Filetype {
         }
     }
 }
-impl From<&OFlags> for types::Fdflags {
-    fn from(caps: &OFlags) -> types::Fdflags {
-        todo!("translate OFlags flags to Fdflags flags")
+impl From<&FdFlags> for types::Fdflags {
+    fn from(fdflags: &FdFlags) -> types::Fdflags {
+        todo!("translate internal to Fdflags")
     }
 }
 

@@ -3,37 +3,20 @@ use std::ops::Deref;
 use system_interface::fs::FileIoExt;
 
 pub trait WasiFile: FileIoExt {
-    fn allocate(&self, _offset: u64, _len: u64) -> Result<(), Error> {
-        todo!("to implement fd_allocate, FileIoExt needs methods to get and set length of a file")
-    }
-    fn datasync(&self) -> Result<(), Error> {
-        todo!("FileIoExt has no facilities for sync");
-    }
-    fn filetype(&self) -> Filetype {
-        todo!("FileIoExt has no facilities for filetype");
-    }
-    fn oflags(&self) -> OFlags {
-        todo!("FileIoExt has no facilities for oflags");
-    }
-    fn set_oflags(&self, _flags: OFlags) -> Result<(), Error> {
-        todo!("FileIoExt has no facilities for oflags");
-    }
-    fn filestat_get(&self) -> Result<Filestat, Error> {
-        todo!()
-    }
-    fn filestat_set_times(
+    fn datasync(&self) -> Result<(), Error>;
+    fn sync(&self) -> Result<(), Error>;
+    fn get_filetype(&self) -> Result<Filetype, Error>;
+    fn get_fdflags(&self) -> Result<FdFlags, Error>;
+    fn get_oflags(&self) -> Result<OFlags, Error>;
+    fn set_oflags(&self, _flags: OFlags) -> Result<(), Error>;
+    fn get_filestat(&self) -> Result<Filestat, Error>;
+    fn set_filestat_times(
         &self,
         _atim: Option<FilestatSetTime>,
         _mtim: Option<FilestatSetTime>,
-    ) -> Result<(), Error> {
-        todo!()
-    }
-    fn filestat_set_size(&self, _size: u64) -> Result<(), Error> {
-        todo!()
-    }
-    fn sync(&self) -> Result<(), Error> {
-        todo!("FileIoExt has no facilities for sync")
-    }
+    ) -> Result<(), Error>;
+    fn set_filestat_size(&self, _size: u64) -> Result<(), Error>;
+    fn allocate(&self, _offset: u64, _len: u64) -> Result<(), Error>;
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -43,6 +26,24 @@ pub enum Filetype {
     RegularFile,
     SocketDgram,
     SocketStream,
+}
+
+pub struct FdFlags {
+    flags: u32,
+}
+
+impl FdFlags {
+    /// Checks if `other` is a subset of those capabilties:
+    pub fn contains(&self, other: &Self) -> bool {
+        self.flags & other.flags == other.flags
+    }
+
+    pub const APPEND: FdFlags = FdFlags { flags: 1 };
+    pub const DSYNC: FdFlags = FdFlags { flags: 2 };
+    pub const NONBLOCK: FdFlags = FdFlags { flags: 4 };
+    pub const RSYNC: FdFlags = FdFlags { flags: 8 };
+    pub const SYNC: FdFlags = FdFlags { flags: 16 };
+    // etc
 }
 
 pub struct OFlags {
@@ -75,7 +76,7 @@ pub struct Filestat {
     inode: u64,
     filetype: Filetype,
     nlink: u64,
-    size: usize,
+    size: u64,
     atim: std::time::SystemTime,
     mtim: std::time::SystemTime,
     ctim: std::time::SystemTime,
@@ -100,6 +101,15 @@ impl FileEntry {
         } else {
             Err(Error::FileNotCapable(caps))
         }
+    }
+
+    pub fn get_fdstat(&self) -> Result<FdStat, Error> {
+        Ok(FdStat {
+            filetype: self.file.get_filetype()?,
+            base_caps: self.base_caps,
+            inheriting_caps: self.inheriting_caps,
+            flags: self.file.get_fdflags()?,
+        })
     }
 }
 
@@ -144,5 +154,93 @@ impl std::ops::BitOr for FileCaps {
 impl std::fmt::Display for FileCaps {
     fn fmt(&self, _f: &mut std::fmt::Formatter) -> std::fmt::Result {
         todo!()
+    }
+}
+
+pub struct FdStat {
+    pub filetype: Filetype,
+    pub base_caps: FileCaps,
+    pub inheriting_caps: FileCaps,
+    pub flags: FdFlags,
+}
+
+impl WasiFile for cap_std::fs::File {
+    fn datasync(&self) -> Result<(), Error> {
+        self.sync_data()?;
+        Ok(())
+    }
+    fn sync(&self) -> Result<(), Error> {
+        self.sync_all()?;
+        Ok(())
+    }
+    fn get_filetype(&self) -> Result<Filetype, Error> {
+        let meta = self.metadata()?;
+        // cap-std's Metadata/FileType only offers booleans indicating whether a file is a directory,
+        // symlink, or regular file.
+        // Directories should be excluded by the type system.
+        if meta.is_file() {
+            Ok(Filetype::RegularFile)
+        } else {
+            Err(Error::Badf) // XXX idk what to do here
+        }
+    }
+    fn get_fdflags(&self) -> Result<FdFlags, Error> {
+        // XXX cap-std doesnt expose append, dsync, nonblock, rsync, sync
+        todo!()
+    }
+    fn get_oflags(&self) -> Result<OFlags, Error> {
+        // XXX what if it was opened append, async, nonblock...
+        let perms = self.metadata()?.permissions();
+        if perms.readonly() {
+            Ok(OFlags::RDONLY)
+        } else {
+            Ok(OFlags::RDWR)
+        }
+    }
+    fn set_oflags(&self, _flags: OFlags) -> Result<(), Error> {
+        // XXX cap-std::fs::Permissions does not export a constructor to build this out of
+        #[allow(unreachable_code)]
+        self.set_permissions(todo!())?;
+        Ok(())
+    }
+    fn get_filestat(&self) -> Result<Filestat, Error> {
+        // XXX cap-std does not expose every part of filestat
+        #![allow(unreachable_code, unused_variables)]
+        let meta = self.metadata()?;
+        Ok(Filestat {
+            device_id: todo!(),
+            inode: todo!(),
+            filetype: self.get_filetype()?,
+            nlink: todo!(),
+            size: meta.len(),
+            atim: meta.accessed()?.into_std(),
+            mtim: meta.modified()?.into_std(),
+            ctim: meta.created()?.into_std(),
+        })
+    }
+    fn set_filestat_times(
+        &self,
+        _atim: Option<FilestatSetTime>,
+        _mtim: Option<FilestatSetTime>,
+    ) -> Result<(), Error> {
+        // XXX cap-std does not expose a way to set accessed time or modified time
+        todo!()
+    }
+    fn set_filestat_size(&self, size: u64) -> Result<(), Error> {
+        self.set_len(size)?;
+        Ok(())
+    }
+    fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
+        let metadata = self.metadata()?;
+        let current_size = metadata.len();
+        let wanted_size = offset.checked_add(len).ok_or(Error::TooBig)?;
+        // This check will be unnecessary when rust-lang/rust#63326 is fixed
+        if wanted_size > i64::max_value() as u64 {
+            return Err(Error::TooBig);
+        }
+        if wanted_size > current_size {
+            self.set_len(wanted_size)?;
+        }
+        Ok(())
     }
 }
