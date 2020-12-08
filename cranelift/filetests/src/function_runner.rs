@@ -335,7 +335,7 @@ fn make_trampoline(signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
             // Load the value.
             let loaded = builder.ins().load(
                 ty,
-                ir::MemFlags::trusted(),
+                ir::MemFlags::trusted(isa.endianness()),
                 values_vec_ptr_val,
                 (i * UnboxedValues::SLOT_SIZE) as i32,
             );
@@ -369,7 +369,7 @@ fn make_trampoline(signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
         };
         // Store the value.
         builder.ins().store(
-            ir::MemFlags::trusted(),
+            ir::MemFlags::trusted(isa.endianness()),
             value,
             values_vec_ptr_val,
             (i * UnboxedValues::SLOT_SIZE) as i32,
@@ -430,22 +430,28 @@ mod test {
 
         let compiler = SingleFunctionCompiler::with_default_host_isa();
         let trampoline = make_trampoline(&function.signature, compiler.isa.as_ref());
-        assert!(format!("{}", trampoline).ends_with(
+        let endianness = match compiler.isa.endianness() {
+            ir::Endianness::Little => "little",
+            ir::Endianness::Big => "big",
+        };
+        let expected = format!(
             "sig0 = (f32, i8, i64x2, b1) -> f32x4, b64 fast
 
 block0(v0: i64, v1: i64):
-    v2 = load.f32 notrap aligned v1
-    v3 = load.i8 notrap aligned v1+16
-    v4 = load.i64x2 notrap aligned v1+32
-    v5 = load.i8 notrap aligned v1+48
+    v2 = load.f32 {} notrap aligned v1
+    v3 = load.i8 {} notrap aligned v1+16
+    v4 = load.i64x2 {} notrap aligned v1+32
+    v5 = load.i8 {} notrap aligned v1+48
     v6 = icmp_imm ne v5, 0
     v7, v8 = call_indirect sig0, v0(v2, v3, v4, v6)
-    store notrap aligned v7, v1
+    store {} notrap aligned v7, v1
     v9 = bint.i64 v8
-    store notrap aligned v9, v1+16
+    store {} notrap aligned v9, v1+16
     return
-}
-"
-        ));
+}}
+",
+            endianness, endianness, endianness, endianness, endianness, endianness
+        );
+        assert!(format!("{}", trampoline).ends_with(&expected));
     }
 }

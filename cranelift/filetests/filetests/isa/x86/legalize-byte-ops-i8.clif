@@ -10,7 +10,7 @@ ss0 = explicit_slot 1 ; black box
 block0(v0: i8, v1: i8):
     v99 = stack_addr.i64 ss0
 
-    ; check: istore8 $(V), $(V)
+    ; check: istore8 little $(V), $(V)
 
     v2 = band v0, v1
     store v2, v99

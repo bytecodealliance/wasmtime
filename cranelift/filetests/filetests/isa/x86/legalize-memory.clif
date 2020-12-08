@@ -24,7 +24,7 @@ function %load(i64 vmctx) -> i64 {
 
 block1(v1: i64):
     v2 = global_value.i64 gv2
-    ; check: $(p1=$V) = load.i64 notrap aligned v1-16
+    ; check: $(p1=$V) = load.i64 little notrap aligned v1-16
     ; check: v2 = iadd_imm $p1, 32
     return v2
     ; check: return v2
@@ -59,9 +59,9 @@ block0(v0: i32, v999: i64):
     ; nextln: $(hbase=$V) = iadd_imm v999, 64
     ; nextln: v1 = iadd $hbase, $xoff
     v2 = load.f32 v1+16
-    ; nextln: v2 = load.f32 v1+16
+    ; nextln: v2 = load.f32 little v1+16
     v3 = load.f32 v1+20
-    ; nextln: v3 = load.f32 v1+20
+    ; nextln: v3 = load.f32 little v1+20
     v4 = fadd v2, v3
     return v4
 }
@@ -79,7 +79,7 @@ block0(v0: i32, v999: i64):
     ; nextln:     trap heap_oob
     ; check: block1:
     ; nextln:     v1 = iconst.i64 0
-    ; nextln:     v2 = load.f32 v1+16
+    ; nextln:     v2 = load.f32 little v1+16
     ; nextln:     return v2
     ; nextln: }
     v1 = heap_addr.i64 heap0, v0, 0x1000_0001
@@ -110,6 +110,6 @@ block0(v0: i32, v999: i64):
     ; nextln: $(hbase=$V) = iadd_imm.i64 v999, 64
     ; nextln: v1 = iadd $hbase, $xoff
     v2 = load.f32 v1+0x7fff_ffff
-    ; nextln: v2 = load.f32 v1+0x7fff_ffff
+    ; nextln: v2 = load.f32 little v1+0x7fff_ffff
     return v2
 }

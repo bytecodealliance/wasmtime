@@ -19,7 +19,7 @@ use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{self, InstBuilder};
+use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
@@ -294,7 +294,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             base: addr,
             offset: Offset32::new(0),
             global_type: self.pointer_type(),
-            readonly: true,
+            flags: MemFlags::trusted_readonly(self.endianness()),
         });
 
         Ok(func.create_heap(ir::HeapData {
@@ -315,13 +315,14 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             base: vmctx,
             offset: Offset32::new(0),
             global_type: self.pointer_type(),
-            readonly: true, // when tables in wasm become "growable", revisit whether this can be readonly or not.
+            // when tables in wasm become "growable", revisit whether this can be readonly or not.
+            flags: MemFlags::trusted_readonly(self.endianness()),
         });
         let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: vmctx,
             offset: Offset32::new(0),
             global_type: I32,
-            readonly: true,
+            flags: MemFlags::trusted_readonly(self.endianness()),
         });
 
         Ok(func.create_table(ir::TableData {
@@ -421,7 +422,7 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
             let ext = pos.ins().uextend(I64, callee);
             pos.ins().imul_imm(ext, 4)
         };
-        let mflags = ir::MemFlags::trusted();
+        let mflags = ir::MemFlags::trusted(self.endianness());
         let func_ptr = pos.ins().load(ptr, mflags, callee_offset, 0);
 
         // Build a value list for the indirect call instruction containing the callee, call_args,

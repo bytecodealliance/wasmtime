@@ -16,11 +16,11 @@ block0:
     v3 = iconst.i64 3
     return v0, v1, v2, v3
     ; check:  v6 = uextend.i32 v0
-    ; nextln: istore8 notrap aligned v6, v4
-    ; nextln: store notrap aligned v1, v4+4
+    ; nextln: istore8 little notrap aligned v6, v4
+    ; nextln: store little notrap aligned v1, v4+4
     ; nextln: v7 = uextend.i32 v2
-    ; nextln: istore8 notrap aligned v7, v4+8
-    ; nextln: store notrap aligned v3, v4+16
+    ; nextln: istore8 little notrap aligned v7, v4+8
+    ; nextln: store little notrap aligned v3, v4+16
     ; nextln: return v4
 }
 
@@ -36,15 +36,15 @@ block0:
     ; check:  v4 = stack_addr.i64 ss0
     ; nextln: v10 = func_addr.i64 fn0
     ; nextln: v5 = call_indirect sig0, v10(v4)
-    ; nextln: v11 = uload8.i32 notrap aligned v5
+    ; nextln: v11 = uload8.i32 little notrap aligned v5
     ; nextln: v6 = ireduce.i8 v11
     ; nextln: v0 -> v6
-    ; nextln: v7 = load.i32 notrap aligned v5+4
+    ; nextln: v7 = load.i32 little notrap aligned v5+4
     ; nextln: v1 -> v7
-    ; nextln: v12 = uload8.i32 notrap aligned v5+8
+    ; nextln: v12 = uload8.i32 little notrap aligned v5+8
     ; nextln: v8 = ireduce.i8 v12
     ; nextln: v2 -> v8
-    ; nextln: v9 = load.i64 notrap aligned v5+16
+    ; nextln: v9 = load.i64 little notrap aligned v5+16
     ; nextln: v3 -> v9
 
     return

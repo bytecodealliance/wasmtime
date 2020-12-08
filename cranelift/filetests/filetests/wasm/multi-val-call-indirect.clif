@@ -13,13 +13,13 @@ block0(v0: i64):
     v1, v2, v3, v4 = call_indirect sig0, v0()
     ; check:  v5 = stack_addr.i64 ss0
     ; nextln: v6 = call_indirect sig0, v0(v5)
-    ; nextln: v7 = load.i64 notrap aligned v6
+    ; nextln: v7 = load.i64 little notrap aligned v6
     ; nextln: v1 -> v7
-    ; nextln: v8 = load.i64 notrap aligned v6+8
+    ; nextln: v8 = load.i64 little notrap aligned v6+8
     ; nextln: v2 -> v8
-    ; nextln: v9 = load.i64 notrap aligned v6+16
+    ; nextln: v9 = load.i64 little notrap aligned v6+16
     ; nextln: v3 -> v9
-    ; nextln: v10 = load.i64 notrap aligned v6+24
+    ; nextln: v10 = load.i64 little notrap aligned v6+24
     ; nextln: v4 -> v10
 
     return

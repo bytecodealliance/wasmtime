@@ -30,16 +30,16 @@ block0(v0: i128):
 function u0:2(i64, i128) fast {
 ; check: block0(v0: i64 [%rdi], v2: i64 [%rsi], v3: i64 [%rdx], v6: i64 [%rbp]):
 block0(v0: i64, v1: i128):
-    ; check: store v2, v0+8
-    ; check: store v3, v0+16
+    ; check: store little v2, v0+8
+    ; check: store little v3, v0+16
     store v1, v0+8
     return
 }
 
 function u0:3(i64) -> i128 fast {
 block0(v0: i64):
-    ; check: v2 = load.i64 v0+8
-    ; check: v3 = load.i64 v0+16
+    ; check: v2 = load.i64 little v0+8
+    ; check: v3 = load.i64 little v0+16
     v1 = load.i128 v0+8
     ; check: return v2, v3, v5
     return v1

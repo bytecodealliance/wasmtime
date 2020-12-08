@@ -10,12 +10,12 @@ block0:
    v0 = stack_load.i64 ss0
 
 ; check: v1 = stack_addr.i64 ss0
-; check: v0 = load.i64 notrap aligned v1
+; check: v0 = load.i64 little notrap aligned v1
 
    stack_store.i64 v0, ss0
 
 ; check: v2 = stack_addr.i64 ss0
-; check: store notrap aligned v0, v2
+; check: store little notrap aligned v0, v2
 
    return
 }

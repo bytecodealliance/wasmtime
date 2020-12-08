@@ -17,13 +17,13 @@ block0(v0: i64, v1: i64):
 ; sameln: function %dual_loads
 ; nextln: block0(v0: i64, v1: i64):
 ; nextln:    v3 = iadd v0, v1
-; nextln:    v4 = load_complex.i64 v0+v1
-; nextln:    v5 = uload8_complex.i64 v0+v1
-; nextln:    v6 = sload8_complex.i64 v0+v1
-; nextln:    v7 = uload16_complex.i64 v0+v1
-; nextln:    v8 = sload16_complex.i64 v0+v1
-; nextln:    v9 = uload32_complex v0+v1
-; nextln:    v10 = sload32_complex v0+v1
+; nextln:    v4 = load_complex.i64 little v0+v1
+; nextln:    v5 = uload8_complex.i64 little v0+v1
+; nextln:    v6 = sload8_complex.i64 little v0+v1
+; nextln:    v7 = uload16_complex.i64 little v0+v1
+; nextln:    v8 = sload16_complex.i64 little v0+v1
+; nextln:    v9 = uload32_complex little v0+v1
+; nextln:    v10 = sload32_complex little v0+v1
 ; nextln:    return v10
 ; nextln: }
 
@@ -43,13 +43,13 @@ block0(v0: i64, v1: i64):
 ; sameln: function %dual_loads2
 ; nextln: block0(v0: i64, v1: i64):
 ; nextln:    v3 = iadd v0, v1
-; nextln:    v4 = load_complex.i64 v0+v1+1
-; nextln:    v5 = uload8_complex.i64 v0+v1+1
-; nextln:    v6 = sload8_complex.i64 v0+v1+1
-; nextln:    v7 = uload16_complex.i64 v0+v1+1
-; nextln:    v8 = sload16_complex.i64 v0+v1+1
-; nextln:    v9 = uload32_complex v0+v1+1
-; nextln:    v10 = sload32_complex v0+v1+1
+; nextln:    v4 = load_complex.i64 little v0+v1+1
+; nextln:    v5 = uload8_complex.i64 little v0+v1+1
+; nextln:    v6 = sload8_complex.i64 little v0+v1+1
+; nextln:    v7 = uload16_complex.i64 little v0+v1+1
+; nextln:    v8 = sload16_complex.i64 little v0+v1+1
+; nextln:    v9 = uload32_complex little v0+v1+1
+; nextln:    v10 = sload32_complex little v0+v1+1
 ; nextln:    return v10
 ; nextln: }
 
@@ -66,10 +66,10 @@ block0(v0: i64, v1: i64, v2: i64):
 ; sameln: function %dual_stores
 ; nextln: block0(v0: i64, v1: i64, v2: i64):
 ; nextln:    v3 = iadd v0, v1
-; nextln:    store_complex v2, v0+v1
-; nextln:    istore8_complex v2, v0+v1
-; nextln:    istore16_complex v2, v0+v1
-; nextln:    istore32_complex v2, v0+v1
+; nextln:    store_complex little v2, v0+v1
+; nextln:    istore8_complex little v2, v0+v1
+; nextln:    istore16_complex little v2, v0+v1
+; nextln:    istore32_complex little v2, v0+v1
 ; nextln:    return
 ; nextln: }
 
@@ -86,9 +86,9 @@ block0(v0: i64, v1: i64, v2: i64):
 ; sameln: function %dual_stores2
 ; nextln: block0(v0: i64, v1: i64, v2: i64):
 ; nextln:    v3 = iadd v0, v1
-; nextln:    store_complex v2, v0+v1+1
-; nextln:    istore8_complex v2, v0+v1+1
-; nextln:    istore16_complex v2, v0+v1+1
-; nextln:    istore32_complex v2, v0+v1+1
+; nextln:    store_complex little v2, v0+v1+1
+; nextln:    istore8_complex little v2, v0+v1+1
+; nextln:    istore16_complex little v2, v0+v1+1
+; nextln:    istore32_complex little v2, v0+v1+1
 ; nextln:    return
 ; nextln: }

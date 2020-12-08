@@ -634,7 +634,7 @@ impl From<StackAMode> for SyntheticAmode {
                 SyntheticAmode::Real(Amode::ImmReg {
                     simm32,
                     base: regs::rbp(),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlags::trusted(ir::Endianness::Little),
                 })
             }
             StackAMode::NominalSPOffset(off, _ty) => {
@@ -651,7 +651,7 @@ impl From<StackAMode> for SyntheticAmode {
                 SyntheticAmode::Real(Amode::ImmReg {
                     simm32,
                     base: regs::rsp(),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlags::trusted(ir::Endianness::Little),
                 })
             }
         }

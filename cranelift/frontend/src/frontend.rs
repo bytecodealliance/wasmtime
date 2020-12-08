@@ -676,7 +676,7 @@ impl<'a> FunctionBuilder<'a> {
             return;
         }
 
-        let mut flags = MemFlags::new();
+        let mut flags = MemFlags::new(config.endianness);
         flags.set_aligned();
 
         // Load all of the memory first. This is necessary in case `dest` overlaps.
@@ -763,7 +763,7 @@ impl<'a> FunctionBuilder<'a> {
             let size = self.ins().iconst(config.pointer_type(), size as i64);
             self.call_memset(config, buffer, ch, size);
         } else {
-            let mut flags = MemFlags::new();
+            let mut flags = MemFlags::new(config.endianness);
             flags.set_aligned();
 
             let ch = u64::from(ch);
@@ -1078,8 +1078,8 @@ block0:
     v1 -> v4
     v3 = iconst.i32 0
     v0 -> v3
-    v2 = load.i64 aligned v0
-    store aligned v2, v1
+    v2 = load.i64 little aligned v0
+    store little aligned v2, v1
     return v1
 }
 "
@@ -1193,7 +1193,7 @@ block0:
     v2 = iconst.i32 0
     v0 -> v2
     v1 = iconst.i64 0x0001_0001_0101
-    store aligned v1, v0
+    store little aligned v1, v0
     return v0
 }
 "

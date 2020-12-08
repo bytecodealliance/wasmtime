@@ -3,7 +3,7 @@
 use super::regs::{self, show_ireg_sized};
 use super::EmitState;
 use crate::ir::condcodes::{FloatCC, IntCC};
-use crate::ir::MemFlags;
+use crate::ir::{Endianness, MemFlags};
 use crate::isa::x64::inst::Inst;
 use crate::machinst::*;
 use regalloc::{
@@ -44,7 +44,7 @@ impl Amode {
         Self::ImmReg {
             simm32,
             base,
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         }
     }
 
@@ -57,7 +57,7 @@ impl Amode {
             base,
             index,
             shift,
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         }
     }
 
@@ -109,7 +109,7 @@ impl Amode {
         match self {
             Amode::ImmReg { flags, .. } => *flags,
             Amode::ImmRegRegShift { flags, .. } => *flags,
-            Amode::RipRelative { .. } => MemFlags::trusted(),
+            Amode::RipRelative { .. } => MemFlags::trusted(Endianness::Little),
         }
     }
 

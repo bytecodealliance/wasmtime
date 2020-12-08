@@ -852,7 +852,7 @@ fn insert_common_prologue(
             + (stack_size % types::F64X2.bytes() as i64);
 
         last_fpr_save = Some(pos.ins().store(
-            ir::MemFlags::trusted(),
+            ir::MemFlags::trusted(ir::Endianness::Little),
             csr_arg,
             sp.expect("FPR save requires SP param"),
             (stack_size - offset) as i32,
@@ -909,9 +909,12 @@ fn interpret_gv(
                         offset + i32::from(pos.isa.pointer_bytes() * (1 + vmctx_index as u8));
                     // The following access can be marked `trusted` because it is a load of an argument. We
                     // know it is safe because it was safe to write it in preparing this function call.
-                    let ret =
-                        pos.ins()
-                            .load(value_type, ir::MemFlags::trusted(), sp.unwrap(), offset);
+                    let ret = pos.ins().load(
+                        value_type,
+                        ir::MemFlags::trusted(ir::Endianness::Little),
+                        sp.unwrap(),
+                        offset,
+                    );
                     pos.func.locations[ret] = scratch;
                     return ret;
                 }
@@ -925,12 +928,10 @@ fn interpret_gv(
             base,
             offset,
             global_type,
-            readonly: _,
+            flags,
         } => {
             let base = interpret_gv(pos, base, sp, scratch);
-            let ret = pos
-                .ins()
-                .load(global_type, ir::MemFlags::trusted(), base, offset);
+            let ret = pos.ins().load(global_type, flags, base, offset);
             pos.func.locations[ret] = scratch;
             return ret;
         }
@@ -1054,7 +1055,7 @@ fn insert_common_epilogue(
 
             let value = pos.ins().load(
                 types::F64X2,
-                ir::MemFlags::trusted(),
+                ir::MemFlags::trusted(ir::Endianness::Little),
                 sp,
                 (stack_size - offset) as i32,
             );

@@ -20,6 +20,6 @@ block0(v0: i32, v1: i64):
 ; check: v2 = heap_addr.i64 heap0, v0, 1
 ; check: v3 -> v2
 ; check: v4 = iconst.i32 0
-; check: store notrap aligned v4, v2
-; check: store notrap aligned v4, v2
+; check: store little notrap aligned v4, v2
+; check: store little notrap aligned v4, v2
 ; check: return

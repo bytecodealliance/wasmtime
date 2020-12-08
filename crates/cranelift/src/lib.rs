@@ -89,7 +89,7 @@
 // assume no valid stack pointer will ever be `usize::max_value() - 32k`.
 
 use crate::func_environ::{get_func_name, FuncEnvironment};
-use cranelift_codegen::ir::{self, ExternalName};
+use cranelift_codegen::ir::{self, ExternalName, MemFlags};
 use cranelift_codegen::machinst::buffer::MachSrcLoc;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{binemit, isa, Context};
@@ -389,7 +389,7 @@ impl Compiler for Cranelift {
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),
-            readonly: true,
+            flags: MemFlags::trusted_readonly(isa.endianness()),
         });
         let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
             base: interrupts_ptr,
@@ -397,7 +397,7 @@ impl Compiler for Cranelift {
                 .unwrap()
                 .into(),
             global_type: isa.pointer_type(),
-            readonly: false,
+            flags: MemFlags::trusted(isa.endianness()),
         });
         context.func.stack_limit = Some(stack_limit);
         let mut func_translator = self.take_translator();

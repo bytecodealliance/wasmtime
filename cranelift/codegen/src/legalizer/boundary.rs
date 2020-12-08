@@ -53,7 +53,7 @@ pub fn legalize_signatures(func: &mut Function, isa: &dyn TargetIsa) {
     }
 
     if let Some(entry) = func.layout.entry_block() {
-        legalize_entry_params(func, entry);
+        legalize_entry_params(isa, func, entry);
         spill_entry_params(func, entry);
     }
 }
@@ -90,7 +90,7 @@ fn legalize_signature(
 ///
 /// The original entry block parameters are computed from the new ABI parameters by code inserted at
 /// the top of the entry block.
-fn legalize_entry_params(func: &mut Function, entry: Block) {
+fn legalize_entry_params(isa: &dyn TargetIsa, func: &mut Function, entry: Block) {
     let mut has_sret = false;
     let mut has_link = false;
     let mut has_vmctx = false;
@@ -177,7 +177,7 @@ fn legalize_entry_params(func: &mut Function, entry: Block) {
                     Err(abi_type)
                 }
             };
-            let converted = convert_from_abi(&mut pos, arg_type, Some(arg), &mut get_arg);
+            let converted = convert_from_abi(isa, &mut pos, arg_type, Some(arg), &mut get_arg);
             // The old `arg` is no longer an attached block argument, but there are probably still
             // uses of the value.
             debug_assert_eq!(pos.func.dfg.resolve_aliases(arg), converted);
@@ -235,7 +235,11 @@ fn legalize_entry_params(func: &mut Function, entry: Block) {
 /// This function is very similar to the `legalize_entry_params` function above.
 ///
 /// Returns the possibly new instruction representing the call.
-fn legalize_inst_results<ResType>(pos: &mut FuncCursor, mut get_abi_type: ResType) -> Inst
+fn legalize_inst_results<ResType>(
+    isa: &dyn TargetIsa,
+    pos: &mut FuncCursor,
+    mut get_abi_type: ResType,
+) -> Inst
 where
     ResType: FnMut(&Function, usize) -> AbiParam,
 {
@@ -280,7 +284,7 @@ where
                     Err(abi_type)
                 }
             };
-            let v = convert_from_abi(pos, res_type, Some(res), &mut get_res);
+            let v = convert_from_abi(isa, pos, res_type, Some(res), &mut get_res);
             debug_assert_eq!(pos.func.dfg.resolve_aliases(res), v);
         }
     }
@@ -422,9 +426,12 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
 
         offset = round_up_to_multiple_of_type_align(offset, legalized_ty);
 
-        let new_legalized_v =
-            pos.ins()
-                .load(legalized_ty, MemFlags::trusted(), sret, offset as i32);
+        let new_legalized_v = pos.ins().load(
+            legalized_ty,
+            MemFlags::trusted(isa.endianness()),
+            sret,
+            offset as i32,
+        );
 
         // "Illegalize" the loaded value from the legalized type back to its
         // original `ty`. This is basically the opposite of
@@ -458,6 +465,7 @@ fn legalize_sret_call(isa: &dyn TargetIsa, pos: &mut FuncCursor, sig_ref: SigRef
 ///
 /// If the `into_result` value is provided, the converted result will be written into that value.
 fn convert_from_abi<GetArg>(
+    isa: &dyn TargetIsa,
     pos: &mut FuncCursor,
     ty: Type,
     into_result: Option<Value>,
@@ -486,8 +494,8 @@ where
         // Construct a `ty` by concatenating two ABI integers.
         ValueConversion::IntSplit => {
             let abi_ty = ty.half_width().expect("Invalid type for conversion");
-            let lo = convert_from_abi(pos, abi_ty, None, get_arg);
-            let hi = convert_from_abi(pos, abi_ty, None, get_arg);
+            let lo = convert_from_abi(isa, pos, abi_ty, None, get_arg);
+            let hi = convert_from_abi(isa, pos, abi_ty, None, get_arg);
             debug!(
                 "intsplit {}: {}, {}: {}",
                 lo,
@@ -500,27 +508,27 @@ where
         // Construct a `ty` by concatenating two halves of a vector.
         ValueConversion::VectorSplit => {
             let abi_ty = ty.half_vector().expect("Invalid type for conversion");
-            let lo = convert_from_abi(pos, abi_ty, None, get_arg);
-            let hi = convert_from_abi(pos, abi_ty, None, get_arg);
+            let lo = convert_from_abi(isa, pos, abi_ty, None, get_arg);
+            let hi = convert_from_abi(isa, pos, abi_ty, None, get_arg);
             pos.ins().with_results([into_result]).vconcat(lo, hi)
         }
         // Construct a `ty` by bit-casting from an integer type.
         ValueConversion::IntBits => {
             debug_assert!(!ty.is_int());
             let abi_ty = Type::int(ty.bits()).expect("Invalid type for conversion");
-            let arg = convert_from_abi(pos, abi_ty, None, get_arg);
+            let arg = convert_from_abi(isa, pos, abi_ty, None, get_arg);
             pos.ins().with_results([into_result]).bitcast(ty, arg)
         }
         // ABI argument is a sign-extended version of the value we want.
         ValueConversion::Sext(abi_ty) => {
-            let arg = convert_from_abi(pos, abi_ty, None, get_arg);
+            let arg = convert_from_abi(isa, pos, abi_ty, None, get_arg);
             // TODO: Currently, we don't take advantage of the ABI argument being sign-extended.
             // We could insert an `assert_sreduce` which would fold with a following `sextend` of
             // this value.
             pos.ins().with_results([into_result]).ireduce(ty, arg)
         }
         ValueConversion::Uext(abi_ty) => {
-            let arg = convert_from_abi(pos, abi_ty, None, get_arg);
+            let arg = convert_from_abi(isa, pos, abi_ty, None, get_arg);
             // TODO: Currently, we don't take advantage of the ABI argument being sign-extended.
             // We could insert an `assert_ureduce` which would fold with a following `uextend` of
             // this value.
@@ -528,10 +536,10 @@ where
         }
         // ABI argument is a pointer to the value we want.
         ValueConversion::Pointer(abi_ty) => {
-            let arg = convert_from_abi(pos, abi_ty, None, get_arg);
+            let arg = convert_from_abi(isa, pos, abi_ty, None, get_arg);
             pos.ins()
                 .with_results([into_result])
-                .load(ty, MemFlags::new(), arg, 0)
+                .load(ty, MemFlags::new(isa.endianness()), arg, 0)
         }
     }
 }
@@ -548,6 +556,7 @@ where
 ///    return the `Err(AbiParam)` that is needed.
 ///
 fn convert_to_abi<PutArg>(
+    isa: &dyn TargetIsa,
     pos: &mut FuncCursor,
     cfg: &ControlFlowGraph,
     value: Value,
@@ -568,29 +577,29 @@ fn convert_to_abi<PutArg>(
             let curpos = pos.position();
             let srcloc = pos.srcloc();
             let (lo, hi) = isplit(&mut pos.func, cfg, curpos, srcloc, value);
-            convert_to_abi(pos, cfg, lo, put_arg);
-            convert_to_abi(pos, cfg, hi, put_arg);
+            convert_to_abi(isa, pos, cfg, lo, put_arg);
+            convert_to_abi(isa, pos, cfg, hi, put_arg);
         }
         ValueConversion::VectorSplit => {
             let curpos = pos.position();
             let srcloc = pos.srcloc();
             let (lo, hi) = vsplit(&mut pos.func, cfg, curpos, srcloc, value);
-            convert_to_abi(pos, cfg, lo, put_arg);
-            convert_to_abi(pos, cfg, hi, put_arg);
+            convert_to_abi(isa, pos, cfg, lo, put_arg);
+            convert_to_abi(isa, pos, cfg, hi, put_arg);
         }
         ValueConversion::IntBits => {
             debug_assert!(!ty.is_int());
             let abi_ty = Type::int(ty.bits()).expect("Invalid type for conversion");
             let arg = pos.ins().bitcast(abi_ty, value);
-            convert_to_abi(pos, cfg, arg, put_arg);
+            convert_to_abi(isa, pos, cfg, arg, put_arg);
         }
         ValueConversion::Sext(abi_ty) => {
             let arg = pos.ins().sextend(abi_ty, value);
-            convert_to_abi(pos, cfg, arg, put_arg);
+            convert_to_abi(isa, pos, cfg, arg, put_arg);
         }
         ValueConversion::Uext(abi_ty) => {
             let arg = pos.ins().uextend(abi_ty, value);
-            convert_to_abi(pos, cfg, arg, put_arg);
+            convert_to_abi(isa, pos, cfg, arg, put_arg);
         }
         ValueConversion::Pointer(abi_ty) => {
             // Note: This conversion can only happen for call arguments,
@@ -601,8 +610,9 @@ fn convert_to_abi<PutArg>(
                 offset: None,
             });
             let arg = pos.ins().stack_addr(abi_ty, stack_slot, 0);
-            pos.ins().store(MemFlags::new(), value, arg, 0);
-            convert_to_abi(pos, cfg, arg, put_arg);
+            pos.ins()
+                .store(MemFlags::new(isa.endianness()), value, arg, 0);
+            convert_to_abi(isa, pos, cfg, arg, put_arg);
         }
     }
 }
@@ -655,6 +665,7 @@ fn check_return_signature(dfg: &DataFlowGraph, inst: Inst, sig: &Signature) -> b
 ///   argument number in `0..abi_args`.
 ///
 fn legalize_inst_arguments<ArgType>(
+    isa: &dyn TargetIsa,
     pos: &mut FuncCursor,
     cfg: &ControlFlowGraph,
     abi_args: usize,
@@ -740,7 +751,7 @@ fn legalize_inst_arguments<ArgType>(
                 Err(abi_type)
             }
         };
-        convert_to_abi(pos, cfg, old_value, &mut put_arg);
+        convert_to_abi(isa, pos, cfg, old_value, &mut put_arg);
     }
 
     // Put the modified value list back.
@@ -809,7 +820,7 @@ pub fn handle_call_abi(
         legalize_sret_call(isa, pos, sig_ref, inst);
     } else {
         if !pos.func.dfg.signatures[sig_ref].returns.is_empty() {
-            inst = legalize_inst_results(pos, |func, abi_res| {
+            inst = legalize_inst_results(isa, pos, |func, abi_res| {
                 func.dfg.signatures[sig_ref].returns[abi_res]
             });
         }
@@ -818,7 +829,7 @@ pub fn handle_call_abi(
     // Go back and fix the call arguments to match the ABI signature.
     pos.goto_inst(inst);
     let abi_args = pos.func.dfg.signatures[sig_ref].params.len();
-    legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
+    legalize_inst_arguments(isa, pos, cfg, abi_args, |func, abi_arg| {
         func.dfg.signatures[sig_ref].params[abi_arg]
     });
 
@@ -841,7 +852,12 @@ pub fn handle_call_abi(
 /// Insert ABI conversion code before and after the return instruction at `inst`.
 ///
 /// Return `true` if any instructions were inserted.
-pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph) -> bool {
+pub fn handle_return_abi(
+    isa: &dyn TargetIsa,
+    inst: Inst,
+    func: &mut Function,
+    cfg: &ControlFlowGraph,
+) -> bool {
     // Check if the returned types already match the signature.
     if check_return_signature(&func.dfg, inst, &func.signature) {
         return false;
@@ -865,7 +881,7 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
     let pos = &mut FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
-    legalize_inst_arguments(pos, cfg, abi_args, |func, abi_arg| {
+    legalize_inst_arguments(isa, pos, cfg, abi_args, |func, abi_arg| {
         let arg = func.signature.returns[abi_arg];
         debug_assert!(
             !arg.legalized_to_pointer,
@@ -937,7 +953,8 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
                 let size = ty.bytes();
                 offset = round_up_to_multiple_of_type_align(offset, ty);
 
-                pos.ins().store(MemFlags::trusted(), v, sret, offset as i32);
+                pos.ins()
+                    .store(MemFlags::trusted(isa.endianness()), v, sret, offset as i32);
                 vlist.remove(0, &mut pos.func.dfg.value_lists);
 
                 offset += size;

@@ -199,6 +199,9 @@ pub struct TargetFrontendConfig {
 
     /// The pointer width of the target.
     pub pointer_width: PointerWidth,
+
+    /// The endianness of the target.
+    pub endianness: ir::Endianness,
 }
 
 impl TargetFrontendConfig {
@@ -235,6 +238,14 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         CallConv::triple_default(self.triple())
     }
 
+    /// Get the endianness of this ISA.
+    fn endianness(&self) -> ir::Endianness {
+        match self.triple().endianness().unwrap() {
+            target_lexicon::Endianness::Little => ir::Endianness::Little,
+            target_lexicon::Endianness::Big => ir::Endianness::Big,
+        }
+    }
+
     /// Get the pointer type of this ISA.
     fn pointer_type(&self) -> ir::Type {
         ir::Type::int(u16::from(self.pointer_bits())).unwrap()
@@ -260,6 +271,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         TargetFrontendConfig {
             default_call_conv: self.default_call_conv(),
             pointer_width: self.pointer_width(),
+            endianness: self.endianness(),
         }
     }
 

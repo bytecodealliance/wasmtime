@@ -13,7 +13,7 @@ block0:
     ; nextln: v6 = raw_bitcast.i8x16 v5
     ; nextln: v7 = const_addr.i64 const1
     ; nextln: v8 = ishl_imm v0, 4
-    ; nextln: v9 = load_complex.i8x16 v7+v8
+    ; nextln: v9 = load_complex.i8x16 little v7+v8
     ; nextln: v2 = band v6, v9
     return v2
 }
@@ -49,7 +49,7 @@ block0:
     ; nextln: v6 = raw_bitcast.i8x16 v5
     ; nextln: v7 = const_addr.i64 const1
     ; nextln: v8 = ishl_imm v0, 4
-    ; nextln: v9 = load_complex.i8x16 v7+v8
+    ; nextln: v9 = load_complex.i8x16 little v7+v8
     ; nextln: v2 = band v6, v9
     return v2
 }

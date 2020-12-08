@@ -109,32 +109,32 @@ block0(v0: i64, v1: i64):
 ; nextln:     x86_push v18
 ; nextln:     x86_push v19
 ; nextln:     x86_push v20
-; nextln:     v2 = load.i32 v0
-; nextln:     v3 = load.i32 v0+8
-; nextln:     v4 = load.i32 v0+16
-; nextln:     v5 = load.i32 v0+24
-; nextln:     v6 = load.i32 v0+32
-; nextln:     v7 = load.i32 v0+40
-; nextln:     v8 = load.i32 v0+48
-; nextln:     v9 = load.i32 v0+56
-; nextln:     v10 = load.i32 v0+64
-; nextln:     v11 = load.i32 v0+72
-; nextln:     v12 = load.i32 v0+80
-; nextln:     v13 = load.i32 v0+88
-; nextln:     v14 = load.i32 v0+96
-; nextln:     store v2, v1
-; nextln:     store v3, v1+8
-; nextln:     store v4, v1+16
-; nextln:     store v5, v1+24
-; nextln:     store v6, v1+32
-; nextln:     store v7, v1+40
-; nextln:     store v8, v1+48
-; nextln:     store v9, v1+56
-; nextln:     store v10, v1+64
-; nextln:     store v11, v1+72
-; nextln:     store v12, v1+80
-; nextln:     store v13, v1+88
-; nextln:     store v14, v1+96
+; nextln:     v2 = load.i32 little v0
+; nextln:     v3 = load.i32 little v0+8
+; nextln:     v4 = load.i32 little v0+16
+; nextln:     v5 = load.i32 little v0+24
+; nextln:     v6 = load.i32 little v0+32
+; nextln:     v7 = load.i32 little v0+40
+; nextln:     v8 = load.i32 little v0+48
+; nextln:     v9 = load.i32 little v0+56
+; nextln:     v10 = load.i32 little v0+64
+; nextln:     v11 = load.i32 little v0+72
+; nextln:     v12 = load.i32 little v0+80
+; nextln:     v13 = load.i32 little v0+88
+; nextln:     v14 = load.i32 little v0+96
+; nextln:     store little v2, v1
+; nextln:     store little v3, v1+8
+; nextln:     store little v4, v1+16
+; nextln:     store little v5, v1+24
+; nextln:     store little v6, v1+32
+; nextln:     store little v7, v1+40
+; nextln:     store little v8, v1+48
+; nextln:     store little v9, v1+56
+; nextln:     store little v10, v1+64
+; nextln:     store little v11, v1+72
+; nextln:     store little v12, v1+80
+; nextln:     store little v13, v1+88
+; nextln:     store little v14, v1+96
 ; nextln:     v26 = x86_pop.i64
 ; nextln:     v25 = x86_pop.i64
 ; nextln:     v24 = x86_pop.i64
@@ -295,13 +295,13 @@ block0(v0: i64):
 ; nextln:     ss0 = explicit_slot 20, offset -36
 ; nextln:     ss1 = incoming_arg 16, offset -16
 ; nextln:     gv0 = vmctx
-; nextln:     gv1 = load.i64 notrap aligned gv0
-; nextln:     gv2 = load.i64 notrap aligned gv1+4
+; nextln:     gv1 = load.i64 little notrap aligned gv0
+; nextln:     gv2 = load.i64 little notrap aligned gv1+4
 ; nextln:     stack_limit = gv2
 ; nextln: 
 ; nextln: block0(v0: i64 [%rdi], v5: i64 [%rbp]):
-; nextln:     v1 = load.i64 notrap aligned v0
-; nextln:     v2 = load.i64 notrap aligned v1+4
+; nextln:     v1 = load.i64 little notrap aligned v0
+; nextln:     v2 = load.i64 little notrap aligned v1+4
 ; nextln:     v3 = iadd_imm v2, 32
 ; nextln:     v4 = ifcmp_sp v3
 ; nextln:     trapif uge v4, stk_ovf

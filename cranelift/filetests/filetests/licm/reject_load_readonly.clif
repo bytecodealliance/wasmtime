@@ -32,7 +32,7 @@ block3(v9: i32):
 
 ; sameln: function %hoist_load(i32, i64 vmctx) -> i32 fast {
 ; nextln:    gv0 = vmctx
-; nextln:    gv1 = load.i64 notrap aligned readonly gv0
+; nextln:    gv1 = load.i64 little notrap aligned readonly gv0
 ; nextln:    heap0 = static gv1, min 0x0001_0000, bound 0x0001_0000_0000, offset_guard 0x8000_0000, index_type i32
 ; nextln: 
 ; nextln: block0(v0: i32, v1: i64):
@@ -41,7 +41,7 @@ block3(v9: i32):
 ; nextln:    jump block1(v0, v1)
 ; nextln: 
 ; nextln: block1(v2: i32, v3: i64):
-; nextln:    v6 = load.i32 aligned readonly v5
+; nextln:    v6 = load.i32 little aligned readonly v5
 ; nextln:    v7 = iadd v2, v6
 ; nextln:    brz v2, block3(v2)
 ; nextln:    jump block2

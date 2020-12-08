@@ -1695,9 +1695,12 @@ fn convert_ushr(
             let masks = pos.func.dfg.constants.insert(USHR_MASKS.as_ref().into());
             let mask_address = pos.ins().const_addr(isa.pointer_type(), masks);
             let mask_offset = pos.ins().ishl_imm(arg1, 4);
-            let mask =
-                pos.ins()
-                    .load_complex(arg0_type, MemFlags::new(), &[mask_address, mask_offset], 0);
+            let mask = pos.ins().load_complex(
+                arg0_type,
+                MemFlags::new(isa.endianness()),
+                &[mask_address, mask_offset],
+                0,
+            );
             pos.func.dfg.replace(inst).band(shifted, mask);
         } else if arg0_type.is_vector() {
             // x86 has encodings for these shifts.
@@ -1779,9 +1782,12 @@ fn convert_ishl(
             let masks = pos.func.dfg.constants.insert(SHL_MASKS.as_ref().into());
             let mask_address = pos.ins().const_addr(isa.pointer_type(), masks);
             let mask_offset = pos.ins().ishl_imm(arg1, 4);
-            let mask =
-                pos.ins()
-                    .load_complex(arg0_type, MemFlags::new(), &[mask_address, mask_offset], 0);
+            let mask = pos.ins().load_complex(
+                arg0_type,
+                MemFlags::new(isa.endianness()),
+                &[mask_address, mask_offset],
+                0,
+            );
             pos.func.dfg.replace(inst).band(shifted, mask);
         } else if arg0_type.is_vector() {
             // x86 has encodings for these shifts.

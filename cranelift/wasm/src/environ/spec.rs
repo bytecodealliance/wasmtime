@@ -232,6 +232,11 @@ pub trait TargetEnvironment {
     /// Get the information needed to produce Cranelift IR for the given target.
     fn target_config(&self) -> TargetFrontendConfig;
 
+    /// Get the target endianness.
+    fn endianness(&self) -> ir::Endianness {
+        self.target_config().endianness
+    }
+
     /// Get the Cranelift integer type to use for native pointers.
     ///
     /// This returns `I64` for 64-bit architectures and `I32` for 32-bit architectures.

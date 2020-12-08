@@ -17,7 +17,7 @@ block0(v0: i64):
 ; nextln:  [RexOp1copysp#8089]                 copy_special %rsp -> %rbp
 ; nextln:  [RexOp1spaddr_id#808d,%rax]         v2 = stack_addr.i64 ss0
 ; nextln:                                      v0 -> v2
-; nextln:  [RexOp2ld#4b6,%rax]                 v4 = uload8.i32 v2
+; nextln:  [RexOp2ld#4b6,%rax]                 v4 = uload8.i32 little v2
 ; nextln:  [null#00,%rax]                      v1 = ireduce.i8 v4
 ; nextln:  [RexOp1popq#58,%rbp]                v6 = x86_pop.i64
 ; nextln:  [Op1ret#c3]                         return v1, v6
@@ -38,7 +38,7 @@ block0(v0: i64, v1: i64):
 ; nextln: [RexOp1copysp#8089]                 copy_special %rsp -> %rbp
 ; nextln: [RexOp1spaddr_id#808d,%rax]         v3 = stack_addr.i64 ss0
 ; nextln:                                     v1 -> v3
-; nextln: [RexOp2ld#4b6,%rax]                 v5 = uload8.i32 v3
+; nextln: [RexOp2ld#4b6,%rax]                 v5 = uload8.i32 little v3
 ; nextln: [null#00,%rax]                      v2 = ireduce.i8 v5
 ; nextln: [RexOp1popq#58,%rbp]                v7 = x86_pop.i64
 ; nextln: [Op1ret#c3]                         return v2, v7

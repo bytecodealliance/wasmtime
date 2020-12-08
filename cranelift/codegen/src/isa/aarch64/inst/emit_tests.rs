@@ -1,4 +1,5 @@
 use crate::ir::types::*;
+use crate::ir::Endianness;
 use crate::isa::aarch64::inst::*;
 use crate::isa::test_utils;
 use crate::isa::CallConv;
@@ -1079,7 +1080,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad8 {
             rd: writable_xreg(1),
             mem: AMode::Unscaled(xreg(2), SImm9::zero()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41004038",
         "ldurb w1, [x2]",
@@ -1088,7 +1089,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad8 {
             rd: writable_xreg(1),
             mem: AMode::UnsignedOffset(xreg(2), UImm12Scaled::zero(I8)),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41004039",
         "ldrb w1, [x2]",
@@ -1097,7 +1098,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad8 {
             rd: writable_xreg(1),
             mem: AMode::RegReg(xreg(2), xreg(5)),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41686538",
         "ldrb w1, [x2, x5]",
@@ -1106,7 +1107,7 @@ fn test_aarch64_binemit() {
         Inst::SLoad8 {
             rd: writable_xreg(1),
             mem: AMode::Unscaled(xreg(2), SImm9::zero()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41008038",
         "ldursb x1, [x2]",
@@ -1115,7 +1116,7 @@ fn test_aarch64_binemit() {
         Inst::SLoad8 {
             rd: writable_xreg(1),
             mem: AMode::UnsignedOffset(xreg(2), UImm12Scaled::maybe_from_i64(63, I8).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41FC8039",
         "ldrsb x1, [x2, #63]",
@@ -1124,7 +1125,7 @@ fn test_aarch64_binemit() {
         Inst::SLoad8 {
             rd: writable_xreg(1),
             mem: AMode::RegReg(xreg(2), xreg(5)),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "4168A538",
         "ldrsb x1, [x2, x5]",
@@ -1133,7 +1134,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad16 {
             rd: writable_xreg(1),
             mem: AMode::Unscaled(xreg(2), SImm9::maybe_from_i64(5).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41504078",
         "ldurh w1, [x2, #5]",
@@ -1142,7 +1143,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad16 {
             rd: writable_xreg(1),
             mem: AMode::UnsignedOffset(xreg(2), UImm12Scaled::maybe_from_i64(8, I16).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41104079",
         "ldrh w1, [x2, #8]",
@@ -1151,7 +1152,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad16 {
             rd: writable_xreg(1),
             mem: AMode::RegScaled(xreg(2), xreg(3), I16),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41786378",
         "ldrh w1, [x2, x3, LSL #1]",
@@ -1160,7 +1161,7 @@ fn test_aarch64_binemit() {
         Inst::SLoad16 {
             rd: writable_xreg(1),
             mem: AMode::Unscaled(xreg(2), SImm9::zero()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41008078",
         "ldursh x1, [x2]",
@@ -1169,7 +1170,7 @@ fn test_aarch64_binemit() {
         Inst::SLoad16 {
             rd: writable_xreg(28),
             mem: AMode::UnsignedOffset(xreg(20), UImm12Scaled::maybe_from_i64(24, I16).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "9C328079",
         "ldrsh x28, [x20, #24]",
@@ -1178,7 +1179,7 @@ fn test_aarch64_binemit() {
         Inst::SLoad16 {
             rd: writable_xreg(28),
             mem: AMode::RegScaled(xreg(20), xreg(20), I16),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "9C7AB478",
         "ldrsh x28, [x20, x20, LSL #1]",
@@ -1187,7 +1188,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad32 {
             rd: writable_xreg(1),
             mem: AMode::Unscaled(xreg(2), SImm9::zero()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "410040B8",
         "ldur w1, [x2]",
@@ -1196,7 +1197,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad32 {
             rd: writable_xreg(12),
             mem: AMode::UnsignedOffset(xreg(0), UImm12Scaled::maybe_from_i64(204, I32).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "0CCC40B9",
         "ldr w12, [x0, #204]",
@@ -1205,7 +1206,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad32 {
             rd: writable_xreg(1),
             mem: AMode::RegScaled(xreg(2), xreg(12), I32),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41786CB8",
         "ldr w1, [x2, x12, LSL #2]",
@@ -1214,7 +1215,7 @@ fn test_aarch64_binemit() {
         Inst::SLoad32 {
             rd: writable_xreg(1),
             mem: AMode::Unscaled(xreg(2), SImm9::zero()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "410080B8",
         "ldursw x1, [x2]",
@@ -1223,7 +1224,7 @@ fn test_aarch64_binemit() {
         Inst::SLoad32 {
             rd: writable_xreg(12),
             mem: AMode::UnsignedOffset(xreg(1), UImm12Scaled::maybe_from_i64(16380, I32).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "2CFCBFB9",
         "ldrsw x12, [x1, #16380]",
@@ -1232,7 +1233,7 @@ fn test_aarch64_binemit() {
         Inst::SLoad32 {
             rd: writable_xreg(1),
             mem: AMode::RegScaled(xreg(5), xreg(1), I32),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "A178A1B8",
         "ldrsw x1, [x5, x1, LSL #2]",
@@ -1241,7 +1242,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::Unscaled(xreg(2), SImm9::zero()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "410040F8",
         "ldur x1, [x2]",
@@ -1250,7 +1251,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::Unscaled(xreg(2), SImm9::maybe_from_i64(-256).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "410050F8",
         "ldur x1, [x2, #-256]",
@@ -1259,7 +1260,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::Unscaled(xreg(2), SImm9::maybe_from_i64(255).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41F04FF8",
         "ldur x1, [x2, #255]",
@@ -1268,7 +1269,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::UnsignedOffset(xreg(2), UImm12Scaled::maybe_from_i64(32760, I64).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41FC7FF9",
         "ldr x1, [x2, #32760]",
@@ -1277,7 +1278,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::RegReg(xreg(2), xreg(3)),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "416863F8",
         "ldr x1, [x2, x3]",
@@ -1286,7 +1287,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::RegScaled(xreg(2), xreg(3), I64),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "417863F8",
         "ldr x1, [x2, x3, LSL #3]",
@@ -1295,7 +1296,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::RegScaledExtended(xreg(2), xreg(3), I64, ExtendOp::SXTW),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41D863F8",
         "ldr x1, [x2, w3, SXTW #3]",
@@ -1304,7 +1305,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::RegExtended(xreg(2), xreg(3), ExtendOp::SXTW),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41C863F8",
         "ldr x1, [x2, w3, SXTW]",
@@ -1313,7 +1314,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::Label(MemLabel::PCRel(64)),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "01020058",
         "ldr x1, pc+64",
@@ -1322,7 +1323,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::PreIndexed(writable_xreg(2), SImm9::maybe_from_i64(16).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "410C41F8",
         "ldr x1, [x2, #16]!",
@@ -1331,7 +1332,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::PostIndexed(writable_xreg(2), SImm9::maybe_from_i64(16).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "410441F8",
         "ldr x1, [x2], #16",
@@ -1340,7 +1341,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::FPOffset(32768, I8),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "100090D2B063308B010240F9",
         "movz x16, #32768 ; add x16, fp, x16, UXTX ; ldr x1, [x16]",
@@ -1349,7 +1350,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::FPOffset(-32768, I8),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "F0FF8F92B063308B010240F9",
         "movn x16, #32767 ; add x16, fp, x16, UXTX ; ldr x1, [x16]",
@@ -1358,7 +1359,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::FPOffset(1048576, I8), // 2^20
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "1002A0D2B063308B010240F9",
         "movz x16, #16, LSL #16 ; add x16, fp, x16, UXTX ; ldr x1, [x16]",
@@ -1367,7 +1368,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::FPOffset(1048576 + 1, I8), // 2^20 + 1
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "300080521002A072B063308B010240F9",
         "movz w16, #1 ; movk w16, #16, LSL #16 ; add x16, fp, x16, UXTX ; ldr x1, [x16]",
@@ -1377,7 +1378,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::RegOffset(xreg(7), 8, I64),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "E18040F8",
         "ldur x1, [x7, #8]",
@@ -1387,7 +1388,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::RegOffset(xreg(7), 1024, I64),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "E10042F9",
         "ldr x1, [x7, #1024]",
@@ -1397,7 +1398,7 @@ fn test_aarch64_binemit() {
         Inst::ULoad64 {
             rd: writable_xreg(1),
             mem: AMode::RegOffset(xreg(7), 1048576, I64),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "1002A0D2F060308B010240F9",
         "movz x16, #16, LSL #16 ; add x16, x7, x16, UXTX ; ldr x1, [x16]",
@@ -1407,7 +1408,7 @@ fn test_aarch64_binemit() {
         Inst::Store8 {
             rd: xreg(1),
             mem: AMode::Unscaled(xreg(2), SImm9::zero()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41000038",
         "sturb w1, [x2]",
@@ -1416,7 +1417,7 @@ fn test_aarch64_binemit() {
         Inst::Store8 {
             rd: xreg(1),
             mem: AMode::UnsignedOffset(xreg(2), UImm12Scaled::maybe_from_i64(4095, I8).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41FC3F39",
         "strb w1, [x2, #4095]",
@@ -1425,7 +1426,7 @@ fn test_aarch64_binemit() {
         Inst::Store16 {
             rd: xreg(1),
             mem: AMode::Unscaled(xreg(2), SImm9::zero()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41000078",
         "sturh w1, [x2]",
@@ -1434,7 +1435,7 @@ fn test_aarch64_binemit() {
         Inst::Store16 {
             rd: xreg(1),
             mem: AMode::UnsignedOffset(xreg(2), UImm12Scaled::maybe_from_i64(8190, I16).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41FC3F79",
         "strh w1, [x2, #8190]",
@@ -1443,7 +1444,7 @@ fn test_aarch64_binemit() {
         Inst::Store32 {
             rd: xreg(1),
             mem: AMode::Unscaled(xreg(2), SImm9::zero()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "410000B8",
         "stur w1, [x2]",
@@ -1452,7 +1453,7 @@ fn test_aarch64_binemit() {
         Inst::Store32 {
             rd: xreg(1),
             mem: AMode::UnsignedOffset(xreg(2), UImm12Scaled::maybe_from_i64(16380, I32).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41FC3FB9",
         "str w1, [x2, #16380]",
@@ -1461,7 +1462,7 @@ fn test_aarch64_binemit() {
         Inst::Store64 {
             rd: xreg(1),
             mem: AMode::Unscaled(xreg(2), SImm9::zero()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "410000F8",
         "stur x1, [x2]",
@@ -1470,7 +1471,7 @@ fn test_aarch64_binemit() {
         Inst::Store64 {
             rd: xreg(1),
             mem: AMode::UnsignedOffset(xreg(2), UImm12Scaled::maybe_from_i64(32760, I64).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "41FC3FF9",
         "str x1, [x2, #32760]",
@@ -1479,7 +1480,7 @@ fn test_aarch64_binemit() {
         Inst::Store64 {
             rd: xreg(1),
             mem: AMode::RegReg(xreg(2), xreg(3)),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "416823F8",
         "str x1, [x2, x3]",
@@ -1488,7 +1489,7 @@ fn test_aarch64_binemit() {
         Inst::Store64 {
             rd: xreg(1),
             mem: AMode::RegScaled(xreg(2), xreg(3), I64),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "417823F8",
         "str x1, [x2, x3, LSL #3]",
@@ -1497,7 +1498,7 @@ fn test_aarch64_binemit() {
         Inst::Store64 {
             rd: xreg(1),
             mem: AMode::RegScaledExtended(xreg(2), xreg(3), I64, ExtendOp::UXTW),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "415823F8",
         "str x1, [x2, w3, UXTW #3]",
@@ -1506,7 +1507,7 @@ fn test_aarch64_binemit() {
         Inst::Store64 {
             rd: xreg(1),
             mem: AMode::RegExtended(xreg(2), xreg(3), ExtendOp::UXTW),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "414823F8",
         "str x1, [x2, w3, UXTW]",
@@ -1515,7 +1516,7 @@ fn test_aarch64_binemit() {
         Inst::Store64 {
             rd: xreg(1),
             mem: AMode::PreIndexed(writable_xreg(2), SImm9::maybe_from_i64(16).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "410C01F8",
         "str x1, [x2, #16]!",
@@ -1524,7 +1525,7 @@ fn test_aarch64_binemit() {
         Inst::Store64 {
             rd: xreg(1),
             mem: AMode::PostIndexed(writable_xreg(2), SImm9::maybe_from_i64(16).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "410401F8",
         "str x1, [x2], #16",
@@ -1535,7 +1536,7 @@ fn test_aarch64_binemit() {
             rt: xreg(8),
             rt2: xreg(9),
             mem: PairAMode::SignedOffset(xreg(10), SImm7Scaled::zero(I64)),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "482500A9",
         "stp x8, x9, [x10]",
@@ -1545,7 +1546,7 @@ fn test_aarch64_binemit() {
             rt: xreg(8),
             rt2: xreg(9),
             mem: PairAMode::SignedOffset(xreg(10), SImm7Scaled::maybe_from_i64(504, I64).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "48A51FA9",
         "stp x8, x9, [x10, #504]",
@@ -1555,7 +1556,7 @@ fn test_aarch64_binemit() {
             rt: xreg(8),
             rt2: xreg(9),
             mem: PairAMode::SignedOffset(xreg(10), SImm7Scaled::maybe_from_i64(-64, I64).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "48253CA9",
         "stp x8, x9, [x10, #-64]",
@@ -1565,7 +1566,7 @@ fn test_aarch64_binemit() {
             rt: xreg(21),
             rt2: xreg(28),
             mem: PairAMode::SignedOffset(xreg(1), SImm7Scaled::maybe_from_i64(-512, I64).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "357020A9",
         "stp x21, x28, [x1, #-512]",
@@ -1578,7 +1579,7 @@ fn test_aarch64_binemit() {
                 writable_xreg(10),
                 SImm7Scaled::maybe_from_i64(-64, I64).unwrap(),
             ),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "4825BCA9",
         "stp x8, x9, [x10, #-64]!",
@@ -1591,7 +1592,7 @@ fn test_aarch64_binemit() {
                 writable_xreg(20),
                 SImm7Scaled::maybe_from_i64(504, I64).unwrap(),
             ),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "8FC29FA8",
         "stp x15, x16, [x20], #504",
@@ -1602,7 +1603,7 @@ fn test_aarch64_binemit() {
             rt: writable_xreg(8),
             rt2: writable_xreg(9),
             mem: PairAMode::SignedOffset(xreg(10), SImm7Scaled::zero(I64)),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "482540A9",
         "ldp x8, x9, [x10]",
@@ -1612,7 +1613,7 @@ fn test_aarch64_binemit() {
             rt: writable_xreg(8),
             rt2: writable_xreg(9),
             mem: PairAMode::SignedOffset(xreg(10), SImm7Scaled::maybe_from_i64(504, I64).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "48A55FA9",
         "ldp x8, x9, [x10, #504]",
@@ -1622,7 +1623,7 @@ fn test_aarch64_binemit() {
             rt: writable_xreg(8),
             rt2: writable_xreg(9),
             mem: PairAMode::SignedOffset(xreg(10), SImm7Scaled::maybe_from_i64(-64, I64).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "48257CA9",
         "ldp x8, x9, [x10, #-64]",
@@ -1632,7 +1633,7 @@ fn test_aarch64_binemit() {
             rt: writable_xreg(8),
             rt2: writable_xreg(9),
             mem: PairAMode::SignedOffset(xreg(10), SImm7Scaled::maybe_from_i64(-512, I64).unwrap()),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "482560A9",
         "ldp x8, x9, [x10, #-512]",
@@ -1645,7 +1646,7 @@ fn test_aarch64_binemit() {
                 writable_xreg(10),
                 SImm7Scaled::maybe_from_i64(-64, I64).unwrap(),
             ),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "4825FCA9",
         "ldp x8, x9, [x10, #-64]!",
@@ -1658,7 +1659,7 @@ fn test_aarch64_binemit() {
                 writable_xreg(12),
                 SImm7Scaled::maybe_from_i64(504, I64).unwrap(),
             ),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "88E5DFA8",
         "ldp x8, x25, [x12], #504",
@@ -4986,7 +4987,7 @@ fn test_aarch64_binemit() {
         Inst::FpuLoad32 {
             rd: writable_vreg(16),
             mem: AMode::RegScaled(xreg(8), xreg(9), F32),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "107969BC",
         "ldr s16, [x8, x9, LSL #2]",
@@ -4996,7 +4997,7 @@ fn test_aarch64_binemit() {
         Inst::FpuLoad64 {
             rd: writable_vreg(16),
             mem: AMode::RegScaled(xreg(8), xreg(9), F64),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "107969FC",
         "ldr d16, [x8, x9, LSL #3]",
@@ -5006,7 +5007,7 @@ fn test_aarch64_binemit() {
         Inst::FpuLoad128 {
             rd: writable_vreg(16),
             mem: AMode::RegScaled(xreg(8), xreg(9), I128),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "1079E93C",
         "ldr q16, [x8, x9, LSL #4]",
@@ -5016,7 +5017,7 @@ fn test_aarch64_binemit() {
         Inst::FpuLoad32 {
             rd: writable_vreg(16),
             mem: AMode::Label(MemLabel::PCRel(8)),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "5000001C",
         "ldr s16, pc+8",
@@ -5026,7 +5027,7 @@ fn test_aarch64_binemit() {
         Inst::FpuLoad64 {
             rd: writable_vreg(16),
             mem: AMode::Label(MemLabel::PCRel(8)),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "5000005C",
         "ldr d16, pc+8",
@@ -5036,7 +5037,7 @@ fn test_aarch64_binemit() {
         Inst::FpuLoad128 {
             rd: writable_vreg(16),
             mem: AMode::Label(MemLabel::PCRel(8)),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "5000009C",
         "ldr q16, pc+8",
@@ -5046,7 +5047,7 @@ fn test_aarch64_binemit() {
         Inst::FpuStore32 {
             rd: vreg(16),
             mem: AMode::RegScaled(xreg(8), xreg(9), F32),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "107929BC",
         "str s16, [x8, x9, LSL #2]",
@@ -5056,7 +5057,7 @@ fn test_aarch64_binemit() {
         Inst::FpuStore64 {
             rd: vreg(16),
             mem: AMode::RegScaled(xreg(8), xreg(9), F64),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "107929FC",
         "str d16, [x8, x9, LSL #3]",
@@ -5066,7 +5067,7 @@ fn test_aarch64_binemit() {
         Inst::FpuStore128 {
             rd: vreg(16),
             mem: AMode::RegScaled(xreg(8), xreg(9), I128),
-            flags: MemFlags::trusted(),
+            flags: MemFlags::trusted(Endianness::Little),
         },
         "1079A93C",
         "str q16, [x8, x9, LSL #4]",

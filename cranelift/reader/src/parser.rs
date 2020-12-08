@@ -1009,8 +1009,25 @@ impl<'a> Parser<'a> {
     }
 
     // Match and a consume a possibly empty sequence of memory operation flags.
-    fn optional_memflags(&mut self) -> MemFlags {
-        let mut flags = MemFlags::new();
+    fn optional_memflags(&mut self, unique_isa: Option<&dyn TargetIsa>) -> ParseResult<MemFlags> {
+        // First, see if there is an explicit endianness marker.
+        let mut flags = None;
+        if let Some(Token::Identifier(text)) = self.token() {
+            if let Some(memflags) = MemFlags::new_from_str(text) {
+                self.consume();
+                flags = Some(memflags);
+            }
+        }
+        // Otherwise, try to use determine native target endianness.
+        if flags.is_none() {
+            if let Some(unique_isa) = unique_isa {
+                flags = Some(MemFlags::new(unique_isa.endianness()));
+            } else {
+                return err!(self.loc, "Could not determine default endianness");
+            }
+        }
+        // Finally, parse optional memory operation flags.
+        let mut flags = flags.unwrap();
         while let Some(Token::Identifier(text)) = self.token() {
             if flags.set_by_name(text) {
                 self.consume();
@@ -1018,7 +1035,7 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-        flags
+        Ok(flags)
     }
 
     // Match and consume an identifier.
@@ -1538,7 +1555,7 @@ impl<'a> Parser<'a> {
                 }
                 Some(Token::GlobalValue(..)) => {
                     self.start_gathering_comments();
-                    self.parse_global_value_decl()
+                    self.parse_global_value_decl(ctx.unique_isa)
                         .and_then(|(gv, dat)| ctx.add_gv(gv, dat, self.loc))
                 }
                 Some(Token::Heap(..)) => {
@@ -1632,7 +1649,10 @@ impl<'a> Parser<'a> {
     //                   | "iadd_imm" "(" GlobalValue(base) ")" imm64
     //                   | "symbol" ["colocated"] name + imm64
     //
-    fn parse_global_value_decl(&mut self) -> ParseResult<(GlobalValue, GlobalValueData)> {
+    fn parse_global_value_decl(
+        &mut self,
+        unique_isa: Option<&dyn TargetIsa>,
+    ) -> ParseResult<(GlobalValue, GlobalValueData)> {
         let gv = self.match_gv("expected global value number: gv«n»")?;
 
         self.match_token(Token::Equal, "expected '=' in global value declaration")?;
@@ -1645,7 +1665,7 @@ impl<'a> Parser<'a> {
                     "expected '.' followed by type in load global value decl",
                 )?;
                 let global_type = self.match_type("expected load type")?;
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags(unique_isa)?;
                 let base = self.match_gv("expected global value: gv«n»")?;
                 let offset = self.optional_offset32()?;
 
@@ -1656,7 +1676,7 @@ impl<'a> Parser<'a> {
                     base,
                     offset,
                     global_type,
-                    readonly: flags.readonly(),
+                    flags,
                 }
             }
             "iadd_imm" => {
@@ -3094,7 +3114,7 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::Load => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags(ctx.unique_isa)?;
                 let addr = self.match_value("expected SSA value address")?;
                 let offset = self.optional_offset32()?;
                 InstructionData::Load {
@@ -3105,7 +3125,7 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::LoadComplex => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags(ctx.unique_isa)?;
                 let args = self.parse_value_sequence()?;
                 let offset = self.optional_offset32()?;
                 InstructionData::LoadComplex {
@@ -3116,7 +3136,7 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::Store => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags(ctx.unique_isa)?;
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let addr = self.match_value("expected SSA value address")?;
@@ -3130,7 +3150,7 @@ impl<'a> Parser<'a> {
             }
 
             InstructionFormat::StoreComplex => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags(ctx.unique_isa)?;
                 let src = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let args = self.parse_value_sequence()?;
@@ -3231,7 +3251,7 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::AtomicCas => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags(ctx.unique_isa)?;
                 let addr = self.match_value("expected SSA value address")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let expected = self.match_value("expected SSA value address")?;
@@ -3244,7 +3264,7 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::AtomicRmw => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags(ctx.unique_isa)?;
                 let op = self.match_enum("expected AtomicRmwOp")?;
                 let addr = self.match_value("expected SSA value address")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
@@ -3257,7 +3277,7 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::LoadNoOffset => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags(ctx.unique_isa)?;
                 let addr = self.match_value("expected SSA value address")?;
                 InstructionData::LoadNoOffset {
                     opcode,
@@ -3266,7 +3286,7 @@ impl<'a> Parser<'a> {
                 }
             }
             InstructionFormat::StoreNoOffset => {
-                let flags = self.optional_memflags();
+                let flags = self.optional_memflags(ctx.unique_isa)?;
                 let arg = self.match_value("expected SSA value operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let addr = self.match_value("expected SSA value address")?;

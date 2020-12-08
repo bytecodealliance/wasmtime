@@ -71,4 +71,4 @@ block0(v42: i64):
 
 ; check: ,%r15]
 ; sameln: $(heap_base=$V) = get_pinned_reg.i64
-; nextln: load_complex.i64 $heap_base+
+; nextln: load_complex.i64 little $heap_base+

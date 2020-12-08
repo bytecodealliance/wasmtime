@@ -3,7 +3,9 @@ use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
-use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature};
+use cranelift_codegen::ir::{
+    AbiParam, ArgumentPurpose, Function, InstBuilder, MemFlags, Signature,
+};
 use cranelift_codegen::isa::{self, TargetFrontendConfig};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
@@ -284,8 +286,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let vmctx = self.vmctx(&mut pos.func);
         let base = pos.ins().global_value(pointer_type, vmctx);
 
-        let mut mem_flags = ir::MemFlags::trusted();
-        mem_flags.set_readonly();
+        let mem_flags = ir::MemFlags::trusted_readonly(self.endianness());
 
         // Load the callee address.
         let body_offset =
@@ -314,13 +315,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
         let old_ref_count = builder.ins().load(
             pointer_type,
-            ir::MemFlags::trusted(),
+            ir::MemFlags::trusted(self.endianness()),
             externref,
             ref_count_offset,
         );
         let new_ref_count = builder.ins().iadd_imm(old_ref_count, delta);
         builder.ins().store(
-            ir::MemFlags::trusted(),
+            ir::MemFlags::trusted(self.endianness()),
             new_ref_count,
             externref,
             ref_count_offset,
@@ -345,7 +346,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 base: vmctx,
                 offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                 global_type: pointer_type,
-                readonly: true,
+                flags: MemFlags::trusted_readonly(self.endianness()),
             });
             (global, 0)
         }
@@ -389,7 +390,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     base: vmctx,
                     offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                     global_type: pointer_type,
-                    readonly: true,
+                    flags: MemFlags::trusted_readonly(self.endianness()),
                 });
                 let base_offset = i32::from(self.offsets.vmtable_definition_base());
                 let current_elements_offset =
@@ -402,13 +403,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             base: ptr,
             offset: Offset32::new(base_offset),
             global_type: pointer_type,
-            readonly: false,
+            flags: MemFlags::trusted(self.endianness()),
         });
         let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
             offset: Offset32::new(current_elements_offset),
             global_type: self.offsets.type_of_vmtable_definition_current_elements(),
-            readonly: false,
+            flags: MemFlags::trusted(self.endianness()),
         });
 
         let element_size = u64::from(
@@ -479,7 +480,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
                     Ok(builder.ins().load(
                         pointer_type,
-                        ir::MemFlags::trusted(),
+                        ir::MemFlags::trusted(self.endianness()),
                         table_entry_addr,
                         0,
                     ))
@@ -521,10 +522,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
                 // Load the table element.
                 let elem_addr = builder.ins().table_addr(pointer_type, table, index, 0);
-                let elem =
-                    builder
-                        .ins()
-                        .load(reference_type, ir::MemFlags::trusted(), elem_addr, 0);
+                let elem = builder.ins().load(
+                    reference_type,
+                    ir::MemFlags::trusted(self.endianness()),
+                    elem_addr,
+                    0,
+                );
 
                 let elem_is_null = builder.ins().is_null(elem);
                 builder.ins().brnz(elem_is_null, continue_block, &[]);
@@ -537,19 +540,19 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let vmctx = builder.ins().global_value(pointer_type, vmctx);
                 let activations_table = builder.ins().load(
                     pointer_type,
-                    ir::MemFlags::trusted(),
+                    ir::MemFlags::trusted(self.endianness()),
                     vmctx,
                     i32::try_from(self.offsets.vmctx_externref_activations_table()).unwrap(),
                 );
                 let next = builder.ins().load(
                     pointer_type,
-                    ir::MemFlags::trusted(),
+                    ir::MemFlags::trusted(self.endianness()),
                     activations_table,
                     i32::try_from(self.offsets.vm_extern_ref_activation_table_next()).unwrap(),
                 );
                 let end = builder.ins().load(
                     pointer_type,
-                    ir::MemFlags::trusted(),
+                    ir::MemFlags::trusted(self.endianness()),
                     activations_table,
                     i32::try_from(self.offsets.vm_extern_ref_activation_table_end()).unwrap(),
                 );
@@ -579,13 +582,15 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 // * and finally increment the `next` bump finger.
                 builder.switch_to_block(no_gc_block);
                 self.mutate_extenref_ref_count(builder, elem, 1);
-                builder.ins().store(ir::MemFlags::trusted(), elem, next, 0);
+                builder
+                    .ins()
+                    .store(ir::MemFlags::trusted(self.endianness()), elem, next, 0);
 
                 let new_next = builder
                     .ins()
                     .iadd_imm(next, i64::from(reference_type.bytes()));
                 builder.ins().store(
-                    ir::MemFlags::trusted(),
+                    ir::MemFlags::trusted(self.endianness()),
                     new_next,
                     activations_table,
                     i32::try_from(self.offsets.vm_extern_ref_activation_table_next()).unwrap(),
@@ -623,9 +628,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             WasmType::FuncRef => match plan.style {
                 TableStyle::CallerChecksSignature => {
                     let table_entry_addr = builder.ins().table_addr(pointer_type, table, index, 0);
-                    builder
-                        .ins()
-                        .store(ir::MemFlags::trusted(), value, table_entry_addr, 0);
+                    builder.ins().store(
+                        ir::MemFlags::trusted(self.endianness()),
+                        value,
+                        table_entry_addr,
+                        0,
+                    );
                     Ok(())
                 }
             },
@@ -705,13 +713,18 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 // saving a reference to a deallocated object, and then using it
                 // after its been freed).
                 builder.switch_to_block(check_current_elem_block);
-                let current_elem =
-                    builder
-                        .ins()
-                        .load(pointer_type, ir::MemFlags::trusted(), table_entry_addr, 0);
-                builder
-                    .ins()
-                    .store(ir::MemFlags::trusted(), value, table_entry_addr, 0);
+                let current_elem = builder.ins().load(
+                    pointer_type,
+                    ir::MemFlags::trusted(self.endianness()),
+                    table_entry_addr,
+                    0,
+                );
+                builder.ins().store(
+                    ir::MemFlags::trusted(self.endianness()),
+                    value,
+                    table_entry_addr,
+                    0,
+                );
 
                 // If the current element is non-null, decrement its reference
                 // count. And if its reference count has reached zero, then make
@@ -920,7 +933,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     base: vmctx,
                     offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                     global_type: pointer_type,
-                    readonly: true,
+                    flags: MemFlags::trusted_readonly(self.endianness()),
                 });
                 let base_offset = i32::from(self.offsets.vmmemory_definition_base());
                 let current_length_offset =
@@ -931,7 +944,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         // If we have a declared maximum, we can make this a "static" heap, which is
         // allocated up front and never moved.
-        let (offset_guard_size, heap_style, readonly_base) = match self.module.memory_plans[index] {
+        let (offset_guard_size, heap_style, flags_base) = match self.module.memory_plans[index] {
             MemoryPlan {
                 style: MemoryStyle::Dynamic,
                 offset_guard_size,
@@ -941,14 +954,14 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     base: ptr,
                     offset: Offset32::new(current_length_offset),
                     global_type: self.offsets.type_of_vmmemory_definition_current_length(),
-                    readonly: false,
+                    flags: MemFlags::trusted(self.endianness()),
                 });
                 (
                     Uimm64::new(offset_guard_size),
                     ir::HeapStyle::Dynamic {
                         bound_gv: heap_bound,
                     },
-                    false,
+                    MemFlags::trusted(self.endianness()),
                 )
             }
             MemoryPlan {
@@ -960,7 +973,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 ir::HeapStyle::Static {
                     bound: Uimm64::new(u64::from(bound) * u64::from(WASM_PAGE_SIZE)),
                 },
-                true,
+                MemFlags::trusted_readonly(self.endianness()),
             ),
         };
 
@@ -968,7 +981,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             base: ptr,
             offset: Offset32::new(base_offset),
             global_type: pointer_type,
-            readonly: readonly_base,
+            flags: flags_base,
         });
         Ok(func.create_heap(ir::HeapData {
             base: heap_base,
@@ -1045,16 +1058,19 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         // Dereference the table entry to get the pointer to the
         // `VMCallerCheckedAnyfunc`.
-        let anyfunc_ptr =
-            pos.ins()
-                .load(pointer_type, ir::MemFlags::trusted(), table_entry_addr, 0);
+        let anyfunc_ptr = pos.ins().load(
+            pointer_type,
+            ir::MemFlags::trusted(self.endianness()),
+            table_entry_addr,
+            0,
+        );
 
         // Check for whether the table element is null, and trap if so.
         pos.ins()
             .trapz(anyfunc_ptr, ir::TrapCode::IndirectCallToNull);
 
         // Dereference anyfunc pointer to get the function address.
-        let mem_flags = ir::MemFlags::trusted();
+        let mem_flags = ir::MemFlags::trusted(self.endianness());
         let func_addr = pos.ins().load(
             pointer_type,
             mem_flags,
@@ -1073,12 +1089,11 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     i32::try_from(self.offsets.vmctx_vmshared_signature_id(ty_index)).unwrap();
 
                 // Load the caller ID.
-                let mut mem_flags = ir::MemFlags::trusted();
-                mem_flags.set_readonly();
+                let mem_flags = ir::MemFlags::trusted_readonly(self.endianness());
                 let caller_sig_id = pos.ins().load(sig_id_type, mem_flags, base, offset);
 
                 // Load the callee ID.
-                let mem_flags = ir::MemFlags::trusted();
+                let mem_flags = ir::MemFlags::trusted(self.endianness());
                 let callee_sig_id = pos.ins().load(
                     sig_id_type,
                     mem_flags,
@@ -1143,7 +1158,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let vmctx = self.vmctx(&mut pos.func);
         let base = pos.ins().global_value(pointer_type, vmctx);
 
-        let mem_flags = ir::MemFlags::trusted();
+        let mem_flags = ir::MemFlags::trusted(self.endianness());
 
         // Load the callee address.
         let body_offset =
@@ -1407,12 +1422,15 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let pointer_type = self.pointer_type();
         let base = pos.ins().global_value(pointer_type, vmctx);
         let offset = i32::try_from(self.offsets.vmctx_interrupts()).unwrap();
-        let interrupt_ptr = pos
-            .ins()
-            .load(pointer_type, ir::MemFlags::trusted(), base, offset);
+        let interrupt_ptr = pos.ins().load(
+            pointer_type,
+            ir::MemFlags::trusted(self.endianness()),
+            base,
+            offset,
+        );
         let interrupt = pos.ins().load(
             pointer_type,
-            ir::MemFlags::trusted(),
+            ir::MemFlags::trusted(self.endianness()),
             interrupt_ptr,
             i32::from(self.offsets.vminterrupts_stack_limit()),
         );

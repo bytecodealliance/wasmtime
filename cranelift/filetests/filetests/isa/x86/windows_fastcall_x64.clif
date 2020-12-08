@@ -74,10 +74,10 @@ block0(v0: f64, v1: f64, v2: f64, v3: f64):
 ; nextln: x86_push v7
 ; nextln: copy_special %rsp -> %rbp
 ; nextln: adjust_sp_down_imm 32
-; nextln: store notrap aligned v8, v6+16
-; nextln: store notrap aligned v9, v6
-; nextln: v11 = load.f64x2 notrap aligned v6+16
-; nextln: v12 = load.f64x2 notrap aligned v6
+; nextln: store little notrap aligned v8, v6+16
+; nextln: store little notrap aligned v9, v6
+; nextln: v11 = load.f64x2 little notrap aligned v6+16
+; nextln: v12 = load.f64x2 little notrap aligned v6
 ; nextln: adjust_sp_up_imm 32
 ; nextln: v10 = x86_pop.i64
 ; nextln: return v10, v11, v12
@@ -183,31 +183,31 @@ block0(v0: i64):
 ; nextln: adjust_sp_down_imm 112
 ; nextln: v0 = spill v11
 ; nextln: v12 = copy_to_ssa.i64 %rcx
-; nextln: v13 = load.i64 v12
+; nextln: v13 = load.i64 little v12
 ; nextln: v1 = spill v13
 ; nextln: v14 = fill_nop v0
-; nextln: v15 = load.i64 v14+8
+; nextln: v15 = load.i64 little v14+8
 ; nextln: v2 = spill v15
 ; nextln: v16 = fill_nop v0
-; nextln: v17 = load.i64 v16+16
+; nextln: v17 = load.i64 little v16+16
 ; nextln: v3 = spill v17
 ; nextln: v18 = fill_nop v0
-; nextln: v19 = load.i64 v18+24
+; nextln: v19 = load.i64 little v18+24
 ; nextln: v4 = spill v19
 ; nextln: v20 = fill_nop v0
-; nextln: v21 = load.i64 v20+32
+; nextln: v21 = load.i64 little v20+32
 ; nextln: v5 = spill v21
 ; nextln: v22 = fill_nop v0
-; nextln: v23 = load.i64 v22+40
+; nextln: v23 = load.i64 little v22+40
 ; nextln: v6 = spill v23
 ; nextln: v24 = fill_nop v0
-; nextln: v25 = load.i64 v24+48
+; nextln: v25 = load.i64 little v24+48
 ; nextln: v7 = spill v25
 ; nextln: v26 = fill_nop v0
-; nextln: v27 = load.i64 v26+56
+; nextln: v27 = load.i64 little v26+56
 ; nextln: v8 = spill v27
 ; nextln: v28 = fill_nop v0
-; nextln: v29 = load.i64 v28+64
+; nextln: v29 = load.i64 little v28+64
 ; nextln: v9 = spill v29
 ; nextln: v30 = fill v1
 ; nextln: v31 = fill v2
@@ -220,31 +220,31 @@ block0(v0: i64):
 ; nextln: v10 = call fn0(v30, v31, v32, v33)
 ; nextln: v34 = fill v1
 ; nextln: v35 = fill v0
-; nextln: store v34, v35+8
+; nextln: store little v34, v35+8
 ; nextln: v36 = fill v2
 ; nextln: v37 = fill_nop v0
-; nextln: store v36, v37+16
+; nextln: store little v36, v37+16
 ; nextln: v38 = fill v3
 ; nextln: v39 = fill_nop v0
-; nextln: store v38, v39+24
+; nextln: store little v38, v39+24
 ; nextln: v40 = fill v4
 ; nextln: v41 = fill_nop v0
-; nextln: store v40, v41+32
+; nextln: store little v40, v41+32
 ; nextln: v42 = fill v5
 ; nextln: v43 = fill_nop v0
-; nextln: store v42, v43+40
+; nextln: store little v42, v43+40
 ; nextln: v44 = fill v6
 ; nextln: v45 = fill_nop v0
-; nextln: store v44, v45+48
+; nextln: store little v44, v45+48
 ; nextln: v46 = fill v7
 ; nextln: v47 = fill_nop v0
-; nextln: store v46, v47+56
+; nextln: store little v46, v47+56
 ; nextln: v48 = fill v8
 ; nextln: v49 = fill_nop v0
-; nextln: store v48, v49+64
+; nextln: store little v48, v49+64
 ; nextln: v50 = fill v9
 ; nextln: v51 = fill_nop v0
-; nextln: store v50, v51+72
+; nextln: store little v50, v51+72
 ; nextln: adjust_sp_up_imm 112
 ; nextln: v61 = x86_pop.i64 
 ; nextln: v60 = x86_pop.i64 

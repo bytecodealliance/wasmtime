@@ -126,7 +126,7 @@ fn make_trampoline(
         builder.seal_block(block0);
 
         let values_vec_ptr_val = builder.ins().stack_addr(pointer_type, ss, 0);
-        let mflags = MemFlags::trusted();
+        let mflags = MemFlags::trusted(isa.endianness());
         for i in 2..signature.params.len() {
             let val = builder.func.dfg.block_params(block0)[i];
             builder.ins().store(
@@ -152,7 +152,7 @@ fn make_trampoline(
             .ins()
             .call_indirect(new_sig, callee_value, &callee_args);
 
-        let mflags = MemFlags::trusted();
+        let mflags = MemFlags::trusted(isa.endianness());
         let mut results = Vec::new();
         for (i, r) in signature.returns.iter().enumerate() {
             let load = builder.ins().load(

@@ -3,35 +3,71 @@
 use core::fmt;
 
 enum FlagBit {
+    // Flags to introduce a limited form of undefined behavior.
     Notrap,
     Aligned,
     Readonly,
+    // Flags to specify endianness of the memory access.  If BigEndian is
+    // present, the access is big-endian; otherwise, it is little-endian.
+    // This flag should always come last in the enumeration.
+    BigEndian,
 }
 
+// Note: The NAMES array only hold the names of flags for forms of undefined behavior
+// Endianness is handled separately.
 const NAMES: [&str; 3] = ["notrap", "aligned", "readonly"];
+const LITTLEENDIAN: &str = "little";
+const BIGENDIAN: &str = "big";
+
+/// Endianness of a memory access.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub enum Endianness {
+    /// Little-endian
+    Little,
+    /// Big-endian
+    Big,
+}
 
 /// Flags for memory operations like load/store.
 ///
 /// Each of these flags introduce a limited form of undefined behavior. The flags each enable
 /// certain optimizations that need to make additional assumptions. Generally, the semantics of a
 /// program does not change when a flag is removed, but adding a flag will.
+///
+/// In addition, the flags determine the endianness of the memory access.  As opposed to the
+/// optimization flags defined above, modifying the endianness would always change program
+/// semantics, therefore the endianness must always be explicitly specified when constructing
+/// a MemFlags value, and cannot be changed later.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct MemFlags {
     bits: u8,
 }
 
 impl MemFlags {
-    /// Create a new empty set of flags.
-    pub fn new() -> Self {
-        Self { bits: 0 }
+    /// Create a new set of flags.  This is initially empty except for the endianness.
+    /// Each MemFlags value always determines the endianness of the memory access.
+    pub fn new(endianness: Endianness) -> Self {
+        Self {
+            bits: match endianness {
+                Endianness::Little => 0,
+                Endianness::Big => 1 << FlagBit::BigEndian as usize,
+            },
+        }
     }
 
     /// Create a set of flags representing an access from a "trusted" address, meaning it's
     /// known to be aligned and non-trapping.
-    pub fn trusted() -> Self {
-        let mut result = Self::new();
+    pub fn trusted(endianness: Endianness) -> Self {
+        let mut result = Self::new(endianness);
         result.set_notrap();
         result.set_aligned();
+        result
+    }
+
+    /// Create a set of flags representing a read-only access from a "trusted" address.
+    pub fn trusted_readonly(endianness: Endianness) -> Self {
+        let mut result = Self::trusted(endianness);
+        result.set_readonly();
         result
     }
 
@@ -48,6 +84,7 @@ impl MemFlags {
     /// Set a flag bit by name.
     ///
     /// Returns true if the flag was found and set, false for an unknown flag name.
+    /// This cannot be used to change the endianness of the memory access.
     pub fn set_by_name(&mut self, name: &str) -> bool {
         match NAMES.iter().position(|&s| s == name) {
             Some(bit) => {
@@ -55,6 +92,25 @@ impl MemFlags {
                 true
             }
             None => false,
+        }
+    }
+
+    /// Try to create a new set of flags, where the endianness is determined
+    /// from its textual representation.
+    pub fn new_from_str(endianness: &str) -> Option<Self> {
+        match endianness {
+            LITTLEENDIAN => Some(Self::new(Endianness::Little)),
+            BIGENDIAN => Some(Self::new(Endianness::Big)),
+            _ => None,
+        }
+    }
+
+    /// Return endianness of the memory access.
+    pub fn endianness(self) -> Endianness {
+        if self.read(FlagBit::BigEndian) {
+            Endianness::Big
+        } else {
+            Endianness::Little
         }
     }
 
@@ -107,6 +163,13 @@ impl MemFlags {
 
 impl fmt::Display for MemFlags {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Always output endianness first ...
+        let endianness = match self.endianness() {
+            Endianness::Little => LITTLEENDIAN,
+            Endianness::Big => BIGENDIAN,
+        };
+        write!(f, " {}", endianness)?;
+        // ... followed by the undefined behavior flags.
         for (i, n) in NAMES.iter().enumerate() {
             if self.bits & (1 << i) != 0 {
                 write!(f, " {}", n)?;

@@ -3,7 +3,7 @@
 use crate::binemit::{CodeOffset, Reloc, StackMap};
 use crate::ir::constant::ConstantData;
 use crate::ir::types::*;
-use crate::ir::{MemFlags, TrapCode};
+use crate::ir::{Endianness, MemFlags, TrapCode};
 use crate::isa::aarch64::inst::*;
 use crate::machinst::ty_bits;
 
@@ -1606,7 +1606,7 @@ impl MachInstEmit for Inst {
                 let inst = Inst::FpuLoad64 {
                     rd,
                     mem: AMode::Label(MemLabel::PCRel(8)),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlags::trusted(Endianness::Little),
                 };
                 inst.emit(sink, emit_info, state);
                 let inst = Inst::Jump {
@@ -1619,7 +1619,7 @@ impl MachInstEmit for Inst {
                 let inst = Inst::FpuLoad128 {
                     rd,
                     mem: AMode::Label(MemLabel::PCRel(8)),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlags::trusted(Endianness::Little),
                 };
                 inst.emit(sink, emit_info, state);
                 let inst = Inst::Jump {
@@ -2214,7 +2214,7 @@ impl MachInstEmit for Inst {
                         I32,
                         ExtendOp::UXTW,
                     ),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlags::trusted(Endianness::Little),
                 };
                 inst.emit(sink, emit_info, state);
                 // Add base of jump table to jump-table-sourced block offset
@@ -2261,7 +2261,7 @@ impl MachInstEmit for Inst {
                 let inst = Inst::ULoad64 {
                     rd,
                     mem: AMode::Label(MemLabel::PCRel(8)),
-                    flags: MemFlags::trusted(),
+                    flags: MemFlags::trusted(Endianness::Little),
                 };
                 inst.emit(sink, emit_info, state);
                 let inst = Inst::Jump {

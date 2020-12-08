@@ -5,7 +5,7 @@
 
 use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
-use crate::ir::{self, InstBuilder};
+use crate::ir::{self, InstBuilder, MemFlags};
 use crate::isa::TargetIsa;
 
 /// Expand a `global_value` instruction according to the definition of the global value.
@@ -38,8 +38,8 @@ pub fn expand_global_value(
             base,
             offset,
             global_type,
-            readonly,
-        } => load_addr(inst, func, base, offset, global_type, readonly, isa),
+            flags,
+        } => load_addr(inst, func, base, offset, global_type, flags, isa),
         ir::GlobalValueData::Symbol { tls, .. } => symbol(inst, func, gv, isa, tls),
     }
 }
@@ -89,7 +89,7 @@ fn load_addr(
     base: ir::GlobalValue,
     offset: ir::immediates::Offset32,
     global_type: ir::Type,
-    readonly: bool,
+    flags: MemFlags,
     isa: &dyn TargetIsa,
 ) {
     // We need to load a pointer from the `base` global value, so insert a new `global_value`
@@ -109,17 +109,11 @@ fn load_addr(
         pos.ins().global_value(ptr_ty, base)
     };
 
-    // Global-value loads are always notrap and aligned. They may be readonly.
-    let mut mflags = ir::MemFlags::trusted();
-    if readonly {
-        mflags.set_readonly();
-    }
-
     // Perform the load.
     pos.func
         .dfg
         .replace(inst)
-        .load(global_type, mflags, base_addr, offset);
+        .load(global_type, flags, base_addr, offset);
 }
 
 /// Expand a `global_value` instruction for a symbolic name global.

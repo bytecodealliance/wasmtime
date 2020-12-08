@@ -84,7 +84,7 @@ pub(crate) fn build_trampoline(
         };
 
         // Load the argument values out of `values_vec`.
-        let mflags = ir::MemFlags::trusted();
+        let mflags = ir::MemFlags::trusted(isa.endianness());
         let callee_args = signature
             .params
             .iter()
@@ -116,7 +116,7 @@ pub(crate) fn build_trampoline(
         let results = builder.func.dfg.inst_results(call).to_vec();
 
         // Store the return values into `values_vec`.
-        let mflags = ir::MemFlags::trusted();
+        let mflags = ir::MemFlags::trusted(isa.endianness());
         for (i, r) in results.iter().enumerate() {
             builder
                 .ins()

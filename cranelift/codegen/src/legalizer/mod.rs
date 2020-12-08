@@ -73,7 +73,7 @@ fn legalize_inst(
             return LegalizeInstResult::Legalized;
         }
     } else if opcode.is_return() {
-        if boundary::handle_return_abi(inst, pos.func, cfg) {
+        if boundary::handle_return_abi(isa, inst, pos.func, cfg) {
             return LegalizeInstResult::Legalized;
         }
     } else if opcode.is_branch() {
@@ -616,7 +616,8 @@ fn expand_stack_load(
     let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
 
     // Stack slots are required to be accessible and aligned.
-    let mflags = MemFlags::trusted();
+    // They always use native target endianness.
+    let mflags = MemFlags::trusted(isa.endianness());
     pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
 }
 
@@ -647,10 +648,9 @@ fn expand_stack_store(
 
     let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
 
-    let mut mflags = MemFlags::new();
     // Stack slots are required to be accessible and aligned.
-    mflags.set_notrap();
-    mflags.set_aligned();
+    // They always use native target endianness.
+    let mflags = MemFlags::trusted(isa.endianness());
     pos.func.dfg.replace(inst).store(mflags, val, addr, 0);
 }
 
@@ -684,6 +684,10 @@ fn narrow_load(
         ptr,
         offset.try_add_i64(8).expect("load offset overflow"),
     );
+    let (al, ah) = match flags.endianness() {
+        ir::Endianness::Little => (al, ah),
+        ir::Endianness::Big => (ah, al),
+    };
     pos.func.dfg.replace(inst).iconcat(al, ah);
 }
 
@@ -708,6 +712,10 @@ fn narrow_store(
     };
 
     let (al, ah) = pos.ins().isplit(val);
+    let (al, ah) = match flags.endianness() {
+        ir::Endianness::Little => (al, ah),
+        ir::Endianness::Big => (ah, al),
+    };
     pos.ins().store(flags, al, ptr, offset);
     pos.ins().store(
         flags,

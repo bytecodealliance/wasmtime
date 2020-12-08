@@ -12,10 +12,10 @@ block0(v0: i64):
 
 function %load_and_add_imm(i64 vmctx) -> i32 {
     gv2 = vmctx
-    gv3 = load.i32 notrap aligned gv2-72
+    gv3 = load.i32 little notrap aligned gv2-72
     gv4 = iadd_imm.i32 gv3, -32
     ; check: gv2 = vmctx
-    ; check: gv3 = load.i32 notrap aligned gv2-72
+    ; check: gv3 = load.i32 little notrap aligned gv2-72
     ; check: gv4 = iadd_imm.i32 gv3, -32
 block0(v0: i64):
     v1 = global_value.i32 gv4
@@ -27,8 +27,8 @@ block0(v0: i64):
 function %backref(i64 vmctx) -> i32 {
     gv0 = iadd_imm.i32 gv1, -32
     ; check: gv0 = iadd_imm.i32 gv1, -32
-    gv1 = load.i32 notrap aligned gv2
-    ; check: gv1 = load.i32 notrap aligned gv2
+    gv1 = load.i32 little notrap aligned gv2
+    ; check: gv1 = load.i32 little notrap aligned gv2
     gv2 = vmctx
     ; check: gv2 = vmctx
 block0(v0: i64):
