@@ -24,7 +24,9 @@ use wasmtime_environ::wasm::{
     DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalInit, SignatureIndex,
     TableElementType, WasmType,
 };
-use wasmtime_environ::{ir, Module, ModuleType, OwnedDataInitializer, TableElements, VMOffsets};
+use wasmtime_environ::{
+    ir, Module, ModuleTranslation, ModuleType, OwnedDataInitializer, TableElements, VMOffsets,
+};
 
 /// Represents a request for a new runtime instance.
 pub struct InstanceAllocationRequest<'a> {
@@ -80,6 +82,21 @@ pub enum InstantiationError {
 ///
 /// This trait is unsafe as it requires knowledge of Wasmtime's runtime internals to implement correctly.
 pub unsafe trait InstanceAllocator: Send + Sync {
+    /// Validates a module translation.
+    ///
+    /// This is used to ensure a module being compiled is supported by the instance allocator.
+    fn validate_module(&self, translation: &ModuleTranslation) -> Result<(), String> {
+        drop(translation);
+        Ok(())
+    }
+
+    /// Adjusts the tunables prior to creation of any JIT compiler.
+    ///
+    /// This method allows the instance allocator control over tunables passed to a `wasmtime_jit::Compiler`.
+    fn adjust_tunables(&self, tunables: &mut wasmtime_environ::Tunables) {
+        drop(tunables);
+    }
+
     /// Allocates an instance for the given allocation request.
     ///
     /// # Safety

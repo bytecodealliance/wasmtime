@@ -764,7 +764,9 @@ impl Config {
 
     pub(crate) fn build_compiler(&self) -> Compiler {
         let isa = self.target_isa();
-        Compiler::new(isa, self.strategy, self.tunables.clone(), self.features)
+        let mut tunables = self.tunables.clone();
+        self.instance_allocator().adjust_tunables(&mut tunables);
+        Compiler::new(isa, self.strategy, tunables, self.features)
     }
 
     pub(crate) fn instance_allocator(&self) -> &dyn InstanceAllocator {

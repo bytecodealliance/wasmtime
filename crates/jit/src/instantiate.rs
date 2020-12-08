@@ -101,6 +101,7 @@ impl CompilationArtifacts {
     pub fn build(
         compiler: &Compiler,
         data: &[u8],
+        validate: impl Fn(&ModuleTranslation) -> Result<(), String> + Sync,
     ) -> Result<(usize, Vec<CompilationArtifacts>, TypeTables), SetupError> {
         let (main_module, translations, types) = ModuleEnvironment::new(
             compiler.frontend_config(),
@@ -112,6 +113,8 @@ impl CompilationArtifacts {
 
         let list = maybe_parallel!(translations.(into_iter | into_par_iter))
             .map(|mut translation| {
+                validate(&translation).map_err(|e| SetupError::Validate(e))?;
+
                 let Compilation {
                     obj,
                     unwind_info,
