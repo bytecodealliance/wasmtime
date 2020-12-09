@@ -5,7 +5,8 @@
 use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
 use more_asserts::{assert_ge, assert_le};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::cmp::min;
 use std::convert::TryFrom;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
@@ -167,6 +168,118 @@ impl RuntimeLinearMemory for MmapMemory {
         VMMemoryDefinition {
             base: mmap.alloc.as_mut_ptr(),
             current_length: mmap.size as usize * WASM_PAGE_SIZE as usize,
+        }
+    }
+}
+
+enum MemoryStorage {
+    Static {
+        base: *mut u8,
+        size: Cell<u32>,
+        maximum: u32,
+        make_accessible: Option<fn(*mut u8, usize) -> bool>,
+    },
+    Dynamic(Box<dyn RuntimeLinearMemory>),
+}
+
+/// Represents an instantiation of a WebAssembly memory.
+pub struct Memory {
+    storage: MemoryStorage,
+}
+
+impl Memory {
+    /// Create a new dynamic (movable) memory instance for the specified plan.
+    pub fn new_dynamic(
+        plan: &MemoryPlan,
+        creator: &dyn RuntimeMemoryCreator,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            storage: MemoryStorage::Dynamic(creator.new_memory(plan)?),
+        })
+    }
+
+    /// Create a new static (immovable) memory instance for the specified plan.
+    pub fn new_static(
+        plan: &MemoryPlan,
+        base: *mut u8,
+        maximum: u32,
+        make_accessible: Option<fn(*mut u8, usize) -> bool>,
+    ) -> Result<Self, String> {
+        if plan.memory.minimum > 0 {
+            if let Some(make_accessible) = &make_accessible {
+                if !make_accessible(base, plan.memory.minimum as usize * WASM_PAGE_SIZE as usize) {
+                    return Err("memory cannot be made accessible".into());
+                }
+            }
+        }
+
+        Ok(Self {
+            storage: MemoryStorage::Static {
+                base,
+                size: Cell::new(plan.memory.minimum),
+                maximum: min(plan.memory.maximum.unwrap_or(maximum), maximum),
+                make_accessible,
+            },
+        })
+    }
+
+    /// Returns the number of allocated wasm pages.
+    pub fn size(&self) -> u32 {
+        match &self.storage {
+            MemoryStorage::Static { size, .. } => size.get(),
+            MemoryStorage::Dynamic(mem) => mem.size(),
+        }
+    }
+
+    /// Grow memory by the specified amount of wasm pages.
+    ///
+    /// Returns `None` if memory can't be grown by the specified amount
+    /// of wasm pages.
+    pub fn grow(&self, delta: u32) -> Option<u32> {
+        match &self.storage {
+            MemoryStorage::Static {
+                base,
+                size,
+                maximum,
+                make_accessible,
+                ..
+            } => {
+                let old_size = size.get();
+                if delta == 0 {
+                    return Some(old_size);
+                }
+
+                let new_size = old_size.checked_add(delta)?;
+
+                if new_size > *maximum || new_size >= WASM_MAX_PAGES {
+                    return None;
+                }
+
+                let start = usize::try_from(old_size).unwrap() * WASM_PAGE_SIZE as usize;
+                let len = usize::try_from(delta).unwrap() * WASM_PAGE_SIZE as usize;
+
+                if let Some(make_accessible) = make_accessible {
+                    if !make_accessible(unsafe { base.add(start) }, len) {
+                        return None;
+                    }
+                }
+
+                size.set(new_size);
+
+                Some(old_size)
+            }
+            MemoryStorage::Dynamic(mem) => mem.grow(delta),
+        }
+    }
+
+    /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
+    pub fn vmmemory(&self) -> VMMemoryDefinition {
+        match &self.storage {
+            MemoryStorage::Static { base, size, .. } => VMMemoryDefinition {
+                base: *base,
+                current_length: size.get() as usize * WASM_PAGE_SIZE as usize,
+            },
+            MemoryStorage::Dynamic(mem) => mem.vmmemory(),
         }
     }
 }
