@@ -4,7 +4,7 @@
 
 use crate::export::Export;
 use crate::externref::{StackMapRegistry, VMExternRefActivationsTable};
-use crate::memory::{RuntimeLinearMemory, RuntimeMemoryCreator};
+use crate::memory::{Memory, RuntimeMemoryCreator};
 use crate::table::{Table, TableElement};
 use crate::traphandlers::Trap;
 use crate::vmcontext::{
@@ -51,7 +51,7 @@ pub(crate) struct Instance {
     offsets: VMOffsets,
 
     /// WebAssembly linear memory data.
-    memories: PrimaryMap<DefinedMemoryIndex, Box<dyn RuntimeLinearMemory>>,
+    memories: PrimaryMap<DefinedMemoryIndex, Memory>,
 
     /// WebAssembly table data.
     tables: PrimaryMap<DefinedTableIndex, Table>,

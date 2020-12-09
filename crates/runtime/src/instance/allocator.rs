@@ -1,7 +1,7 @@
 use crate::externref::{StackMapRegistry, VMExternRefActivationsTable};
 use crate::imports::Imports;
 use crate::instance::{Instance, InstanceHandle, RuntimeMemoryCreator};
-use crate::memory::{DefaultMemoryCreator, RuntimeLinearMemory};
+use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::table::{Table, TableElement};
 use crate::traphandlers::Trap;
 use crate::vmcontext::{
@@ -296,8 +296,7 @@ impl OnDemandInstanceAllocator {
     fn create_memories(
         &self,
         module: &Module,
-    ) -> Result<PrimaryMap<DefinedMemoryIndex, Box<dyn RuntimeLinearMemory>>, InstantiationError>
-    {
+    ) -> Result<PrimaryMap<DefinedMemoryIndex, Memory>, InstantiationError> {
         let creator = self
             .mem_creator
             .as_deref()
@@ -306,11 +305,8 @@ impl OnDemandInstanceAllocator {
         let mut memories: PrimaryMap<DefinedMemoryIndex, _> =
             PrimaryMap::with_capacity(module.memory_plans.len() - num_imports);
         for plan in &module.memory_plans.values().as_slice()[num_imports..] {
-            memories.push(
-                creator
-                    .new_memory(plan)
-                    .map_err(InstantiationError::Resource)?,
-            );
+            memories
+                .push(Memory::new_dynamic(plan, creator).map_err(InstantiationError::Resource)?);
         }
         Ok(memories)
     }

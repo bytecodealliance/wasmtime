@@ -42,7 +42,7 @@ pub use crate::instance::{
     OnDemandInstanceAllocator, RuntimeInstance,
 };
 pub use crate::jit_int::GdbJitImageRegistration;
-pub use crate::memory::{RuntimeLinearMemory, RuntimeMemoryCreator};
+pub use crate::memory::{Memory, RuntimeLinearMemory, RuntimeMemoryCreator};
 pub use crate::mmap::Mmap;
 pub use crate::table::{Table, TableElement};
 pub use crate::traphandlers::{
