@@ -14,6 +14,10 @@ required-features = ["env_logger", "structopt"]
 name = "regex"
 harness = false
 
+[[bench]]
+name = "uap"
+harness = false
+
 [dependencies]
 anyhow = "1.0.34"
 env_logger = { version = "0.8.1", optional = true }
@@ -33,6 +37,7 @@ criterion = "0.3.3"
 [workspace]
 members = [
     "benches/regex-bench",
+    "benches/uap-bench",
     "tests/regex-test",
 ]
 

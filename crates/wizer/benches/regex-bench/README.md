@@ -1,11 +1,10 @@
 Source code used to create `/wizer/benches/regex_bench.{control,wizer}.wasm`.
 
-From within this directory, rebuild via:
+Compiles a simple regular expression in the initialization function and the main
+function checks whether the regex matches an input string.
+
+Rebuild via:
 
 ```
-$ cargo build --release --target wasm32-wasi
-$ cp ../../target/wasm32-wasi/release/regex_bench.wasm ../regex_bench.control.wasm
-$ cargo build --release --target wasm32-wasi --features wizer
-$ cd ../..
-$ cargo run --all-features -- --allow-wasi target/wasm32-wasi/release/regex_bench.wasm -o benches/regex_bench.wizer.wasm
+$ ./build.sh
 ```
