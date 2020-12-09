@@ -38,8 +38,9 @@ pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{
-    FiberStackError, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    InstantiationError, LinkError, OnDemandInstanceAllocator, RuntimeInstance,
+    FiberStackError, InstanceAllocationRequest, InstanceAllocator, InstanceHandle, InstanceLimits,
+    InstantiationError, LinkError, ModuleLimits, OnDemandInstanceAllocator,
+    PoolingAllocationStrategy, PoolingInstanceAllocator, RuntimeInstance,
 };
 pub use crate::jit_int::GdbJitImageRegistration;
 pub use crate::memory::{Memory, RuntimeLinearMemory, RuntimeMemoryCreator};

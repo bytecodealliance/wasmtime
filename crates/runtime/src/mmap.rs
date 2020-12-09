@@ -234,7 +234,7 @@ impl Mmap {
     }
 
     /// Return the allocated memory as a mutable pointer to u8.
-    pub fn as_mut_ptr(&mut self) -> *mut u8 {
+    pub fn as_mut_ptr(&self) -> *mut u8 {
         self.ptr as *mut u8
     }
 
@@ -246,6 +246,11 @@ impl Mmap {
     /// Return whether any memory has been allocated.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    #[allow(dead_code)]
+    pub(crate) unsafe fn from_raw(ptr: usize, len: usize) -> Self {
+        Self { ptr, len }
     }
 }
 

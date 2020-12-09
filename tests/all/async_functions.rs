@@ -364,3 +364,37 @@ fn fuel_eventually_finishes() {
     let instance = Instance::new_async(&store, &module, &[]);
     run(instance).unwrap();
 }
+
+#[test]
+fn async_with_pooling_stacks() {
+    let mut config = Config::new();
+    config
+        .with_allocation_strategy(InstanceAllocationStrategy::Pooling {
+            strategy: PoolingAllocationStrategy::NextAvailable,
+            module_limits: ModuleLimits {
+                memory_pages: 1,
+                table_elements: 0,
+                ..Default::default()
+            },
+            instance_limits: InstanceLimits {
+                count: 1,
+                address_space_size: 1,
+            },
+        })
+        .expect("pooling allocator created");
+
+    let engine = Engine::new(&config);
+    let store = Store::new_async(&engine);
+    let func = Func::new_async(
+        &store,
+        FuncType::new(None, None),
+        (),
+        move |_caller, _state, _params, _results| Box::new(async { Ok(()) }),
+    );
+    run(func.call_async(&[])).unwrap();
+    run(func.call_async(&[])).unwrap();
+    let future1 = func.call_async(&[]);
+    let future2 = func.call_async(&[]);
+    run(future2).unwrap();
+    run(future1).unwrap();
+}

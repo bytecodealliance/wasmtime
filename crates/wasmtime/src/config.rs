@@ -14,7 +14,10 @@ use wasmtime_environ::settings::{self, Configurable, SetError};
 use wasmtime_environ::{isa, isa::TargetIsa, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
-use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator};
+use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator, PoolingInstanceAllocator};
+
+// Re-export the limit structures for the pooling allocator
+pub use wasmtime_runtime::{InstanceLimits, ModuleLimits, PoolingAllocationStrategy};
 
 /// Represents the module instance allocation strategy to use.
 #[derive(Clone)]
@@ -26,6 +29,19 @@ pub enum InstanceAllocationStrategy {
     ///
     /// This is the default allocation strategy for Wasmtime.
     OnDemand,
+    /// The pooling instance allocation strategy.
+    ///
+    /// A pool of resources is created in advance and module instantiation reuses resources
+    /// from the pool. Resources are returned to the pool when the `Store` referencing the instance
+    /// is dropped.
+    Pooling {
+        /// The allocation strategy to use.
+        strategy: PoolingAllocationStrategy,
+        /// The module limits to use.
+        module_limits: ModuleLimits,
+        /// The instance limits to use.
+        instance_limits: InstanceLimits,
+    },
 }
 
 impl Default for InstanceAllocationStrategy {
@@ -205,6 +221,9 @@ impl Config {
     /// on stack overflow, a host function that overflows the stack will
     /// abort the process.
     ///
+    /// `max_wasm_stack` must be set prior to setting an instance allocation
+    /// strategy.
+    ///
     /// By default this option is 1 MiB.
     pub fn max_wasm_stack(&mut self, size: usize) -> Result<&mut Self> {
         #[cfg(feature = "async")]
@@ -214,6 +233,12 @@ impl Config {
 
         if size == 0 {
             bail!("wasm stack size cannot be zero");
+        }
+
+        if self.instance_allocator.is_some() {
+            bail!(
+                "wasm stack size cannot be modified after setting an instance allocation strategy"
+            );
         }
 
         self.max_wasm_stack = size;
@@ -230,11 +255,19 @@ impl Config {
     /// close to one another; doing so may cause host functions to overflow the
     /// stack and abort the process.
     ///
+    /// `async_stack_size` must be set prior to setting an instance allocation
+    /// strategy.
+    ///
     /// By default this option is 2 MiB.
     #[cfg(feature = "async")]
     pub fn async_stack_size(&mut self, size: usize) -> Result<&mut Self> {
         if size < self.max_wasm_stack {
             bail!("async stack size cannot be less than the maximum wasm stack size");
+        }
+        if self.instance_allocator.is_some() {
+            bail!(
+                "async stack size cannot be modified after setting an instance allocation strategy"
+            );
         }
         self.async_stack_size = size;
         Ok(self)
@@ -577,14 +610,35 @@ impl Config {
     }
 
     /// Sets the instance allocation strategy to use.
-    pub fn with_instance_allocation_strategy(
+    pub fn with_allocation_strategy(
         &mut self,
         strategy: InstanceAllocationStrategy,
-    ) -> &mut Self {
+    ) -> Result<&mut Self> {
         self.instance_allocator = match strategy {
             InstanceAllocationStrategy::OnDemand => None,
+            InstanceAllocationStrategy::Pooling {
+                strategy,
+                module_limits,
+                instance_limits,
+            } => {
+                #[cfg(feature = "async")]
+                let stack_size = self.async_stack_size;
+
+                #[cfg(not(feature = "async"))]
+                let stack_size = 0;
+
+                Some(Arc::new(
+                    PoolingInstanceAllocator::new(
+                        strategy,
+                        module_limits,
+                        instance_limits,
+                        stack_size,
+                    )
+                    .map_err(|e| anyhow::anyhow!(e))?,
+                ))
+            }
         };
-        self
+        Ok(self)
     }
 
     /// Configures the maximum size, in bytes, where a linear memory is

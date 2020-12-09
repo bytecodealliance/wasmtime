@@ -26,6 +26,12 @@ use wasmtime_environ::{
     ir, Module, ModuleTranslation, ModuleType, OwnedDataInitializer, TableElements, VMOffsets,
 };
 
+mod pooling;
+
+pub use self::pooling::{
+    InstanceLimits, ModuleLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
+};
+
 /// Represents a request for a new runtime instance.
 pub struct InstanceAllocationRequest<'a> {
     /// The module being instantiated.
@@ -72,11 +78,18 @@ pub enum InstantiationError {
     /// A trap ocurred during instantiation, after linking.
     #[error("Trap occurred during instantiation")]
     Trap(Trap),
+
+    /// A limit on how many instances are supported has been reached.
+    #[error("Limit of {0} concurrent instances has been reached")]
+    Limit(u32),
 }
 
 /// An error while creating a fiber stack.
 #[derive(Error, Debug)]
 pub enum FiberStackError {
+    /// Insufficient resources available for the request.
+    #[error("Insufficient resources: {0}")]
+    Resource(String),
     /// An error for when the allocator doesn't support custom fiber stacks.
     #[error("Custom fiber stacks are not supported by the allocator")]
     NotSupported,
@@ -218,7 +231,7 @@ unsafe fn initialize_vmcontext(
         globals.len(),
     );
 
-    // Initialize the defined functions
+    // Initialize the functions
     for (index, sig) in instance.module.functions.iter() {
         let type_index = lookup_shared_signature(*sig);
 

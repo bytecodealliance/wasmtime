@@ -164,7 +164,7 @@ impl RuntimeLinearMemory for MmapMemory {
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
     fn vmmemory(&self) -> VMMemoryDefinition {
-        let mut mmap = self.mmap.borrow_mut();
+        let mmap = self.mmap.borrow();
         VMMemoryDefinition {
             base: mmap.alloc.as_mut_ptr(),
             current_length: mmap.size as usize * WASM_PAGE_SIZE as usize,
@@ -177,7 +177,7 @@ enum MemoryStorage {
         base: *mut u8,
         size: Cell<u32>,
         maximum: u32,
-        make_accessible: Option<fn(*mut u8, usize) -> bool>,
+        make_accessible: unsafe fn(*mut u8, usize) -> bool,
     },
     Dynamic(Box<dyn RuntimeLinearMemory>),
 }
@@ -203,13 +203,13 @@ impl Memory {
         plan: &MemoryPlan,
         base: *mut u8,
         maximum: u32,
-        make_accessible: Option<fn(*mut u8, usize) -> bool>,
+        make_accessible: unsafe fn(*mut u8, usize) -> bool,
     ) -> Result<Self, String> {
         if plan.memory.minimum > 0 {
-            if let Some(make_accessible) = &make_accessible {
-                if !make_accessible(base, plan.memory.minimum as usize * WASM_PAGE_SIZE as usize) {
-                    return Err("memory cannot be made accessible".into());
-                }
+            if unsafe {
+                !make_accessible(base, plan.memory.minimum as usize * WASM_PAGE_SIZE as usize)
+            } {
+                return Err("memory cannot be made accessible".into());
             }
         }
 
@@ -258,10 +258,8 @@ impl Memory {
                 let start = usize::try_from(old_size).unwrap() * WASM_PAGE_SIZE as usize;
                 let len = usize::try_from(delta).unwrap() * WASM_PAGE_SIZE as usize;
 
-                if let Some(make_accessible) = make_accessible {
-                    if !make_accessible(unsafe { base.add(start) }, len) {
-                        return None;
-                    }
+                if unsafe { !make_accessible(base.add(start), len) } {
+                    return None;
                 }
 
                 size.set(new_size);

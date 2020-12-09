@@ -66,6 +66,20 @@ enum TableElements {
     ExternRefs(Vec<Option<VMExternRef>>),
 }
 
+// Ideally this should be static assertion that table elements are pointer-sized
+#[inline(always)]
+pub(crate) fn max_table_element_size() -> usize {
+    debug_assert_eq!(
+        std::mem::size_of::<*mut VMCallerCheckedAnyfunc>(),
+        std::mem::size_of::<*const ()>()
+    );
+    debug_assert_eq!(
+        std::mem::size_of::<Option<VMExternRef>>(),
+        std::mem::size_of::<*const ()>()
+    );
+    std::mem::size_of::<*const ()>()
+}
+
 #[derive(Debug)]
 enum TableStorage {
     Static {
