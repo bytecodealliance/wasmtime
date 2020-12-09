@@ -51,15 +51,6 @@ initialization with Wizer, depending on the workload:
 [regex-bench]: https://github.com/bytecodealliance/wizer/tree/main/benches/regex-bench
 [uap-bench]: https://github.com/bytecodealliance/wizer/tree/main/benches/uap-bench
 
-The `regex` benchmark compiles a simple regular expression and tests whether it
-matches an input string. When Wizer is used, the regular expression is
-pre-compiled inside the initialization function.
-
-The UAP benchmark creates a `RegexSet` from [the user agent parsing regexes from
-the BrowserScope project](https://github.com/ua-parser/uap-core) and then tests
-whether the input string is a known user agent. When Wizer is used, the
-`RegexSet` is pre-compiled inside the initialization function.
-
 Not every program will see an improvement to instantiation and start up
 latency. For example, Wizer will often increase the size of the Wasm module's
 `Data` section, which could negatively impact network transfer times on the
