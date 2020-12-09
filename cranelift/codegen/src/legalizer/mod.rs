@@ -659,7 +659,7 @@ fn narrow_load(
     inst: ir::Inst,
     func: &mut ir::Function,
     _cfg: &mut ControlFlowGraph,
-    _isa: &dyn TargetIsa,
+    isa: &dyn TargetIsa,
 ) {
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
@@ -684,6 +684,10 @@ fn narrow_load(
         ptr,
         offset.try_add_i64(8).expect("load offset overflow"),
     );
+    let (al, ah) = match flags.endianness(isa.endianness()) {
+        ir::Endianness::Little => (al, ah),
+        ir::Endianness::Big => (ah, al),
+    };
     pos.func.dfg.replace(inst).iconcat(al, ah);
 }
 
@@ -692,7 +696,7 @@ fn narrow_store(
     inst: ir::Inst,
     func: &mut ir::Function,
     _cfg: &mut ControlFlowGraph,
-    _isa: &dyn TargetIsa,
+    isa: &dyn TargetIsa,
 ) {
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
@@ -708,6 +712,10 @@ fn narrow_store(
     };
 
     let (al, ah) = pos.ins().isplit(val);
+    let (al, ah) = match flags.endianness(isa.endianness()) {
+        ir::Endianness::Little => (al, ah),
+        ir::Endianness::Big => (ah, al),
+    };
     pos.ins().store(flags, al, ptr, offset);
     pos.ins().store(
         flags,
