@@ -1530,7 +1530,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let src = if let Some(ext_spec) = ext_spec {
                 RegMem::reg(extend_input_to_reg(ctx, inputs[0], ext_spec))
             } else {
-                input_to_reg_mem(ctx, inputs[0])
+                // N.B.: explicitly put input in a reg here because the width of the instruction
+                // into which this RM op goes may not match the width of the input type (in fact,
+                // it won't for i32.popcnt), and we don't want a larger than necessary load.
+                RegMem::reg(put_input_in_reg(ctx, inputs[0]))
             };
             let dst = get_output_reg(ctx, outputs[0]);
 
