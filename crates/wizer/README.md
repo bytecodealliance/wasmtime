@@ -128,7 +128,7 @@ Add a dependency in your `Cargo.toml`:
 # Cargo.toml
 
 [dependencies]
-wizer = "<latest version>"
+wizer = "1"
 ```
 
 And then use the `wizer::Wizer` builder to configure and run Wizer:
