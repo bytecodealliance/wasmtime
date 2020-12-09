@@ -18,7 +18,8 @@ use log::debug;
 use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
-use std::time::Duration;
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
 use wasmtime::*;
 use wasmtime_wast::WastContext;
 
@@ -73,12 +74,20 @@ pub fn instantiate_with_config(wasm: &[u8], mut config: Config, timeout: Option<
     let engine = Engine::new(&config);
     let store = Store::new(&engine);
 
+    // If a timeout is requested then we spawn a helper thread to wait for the
+    // requested time and then send us a signal to get interrupted. We also
+    // arrange for the thread's sleep to get interrupted if we return early (or
+    // the wasm returns within the time limit), which allows the thread to get
+    // torn down.
+    //
+    // This prevents us from creating a huge number of sleeping threads if this
+    // function is executed in a loop, like it does on nightly fuzzing
+    // infrastructure.
+
+    let mut timeout_state = SignalOnDrop::default();
     if let Some(timeout) = timeout {
         let handle = store.interrupt_handle().unwrap();
-        std::thread::spawn(move || {
-            std::thread::sleep(timeout);
-            handle.interrupt();
-        });
+        timeout_state.spawn_timeout(timeout, move || handle.interrupt());
     }
 
     log_wasm(wasm);
@@ -644,4 +653,58 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
     }
 
     Some(())
+}
+
+#[derive(Default)]
+struct SignalOnDrop {
+    state: Arc<(Mutex<bool>, Condvar)>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl SignalOnDrop {
+    fn spawn_timeout(&mut self, dur: Duration, closure: impl FnOnce() + Send + 'static) {
+        let state = self.state.clone();
+        let start = Instant::now();
+        self.thread = Some(std::thread::spawn(move || {
+            // Using our mutex/condvar we wait here for the first of `dur` to
+            // pass or the `SignalOnDrop` instance to get dropped.
+            let (lock, cvar) = &*state;
+            let mut signaled = lock.lock().unwrap();
+            while !*signaled {
+                // Adjust our requested `dur` based on how much time has passed.
+                let dur = match dur.checked_sub(start.elapsed()) {
+                    Some(dur) => dur,
+                    None => break,
+                };
+                let (lock, result) = cvar.wait_timeout(signaled, dur).unwrap();
+                signaled = lock;
+                // If we timed out for sure then there's no need to continue
+                // since we'll just abort on the next `checked_sub` anyway.
+                if result.timed_out() {
+                    break;
+                }
+            }
+            drop(signaled);
+
+            closure();
+        }));
+    }
+}
+
+impl Drop for SignalOnDrop {
+    fn drop(&mut self) {
+        if let Some(thread) = self.thread.take() {
+            let (lock, cvar) = &*self.state;
+            // Signal our thread that we've been dropped and wake it up if it's
+            // blocked.
+            let mut g = lock.lock().unwrap();
+            *g = true;
+            cvar.notify_one();
+            drop(g);
+
+            // ... and then wait for the thread to exit to ensure we clean up
+            // after ourselves.
+            thread.join().unwrap();
+        }
+    }
 }
