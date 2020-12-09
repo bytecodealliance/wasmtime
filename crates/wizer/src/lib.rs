@@ -1,4 +1,4 @@
-//! Wizer: the WebAssembly initializer!
+//! Wizer: the WebAssembly pre-initializer!
 //!
 //! See the [`Wizer`] struct for details.
 
@@ -13,7 +13,7 @@ use structopt::StructOpt;
 const WASM_PAGE_SIZE: u32 = 65_536;
 const NATIVE_PAGE_SIZE: u32 = 4_096;
 
-/// Wizer: the WebAssembly initializer!
+/// Wizer: the WebAssembly pre-initializer!
 ///
 /// Don't wait for your Wasm module to initialize itself, pre-initialize it!
 /// Wizer instantiates your WebAssembly module, executes its initialization
