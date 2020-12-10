@@ -195,18 +195,20 @@ impl WasiFile for cap_std::fs::File {
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
         let meta = self.metadata()?;
-        let (device_id, inode, nlink) = cfg_if! {
-            if #[cfg(unix)] {
-                use std::os::unix::fs::MetadataExt;
-                (meta.dev(), meta.ino(), meta.nlink())
-            } else if #[cfg(windows)] && #[cfg_attr(feature = "nightly")] {
-                use std::os::windows::fs::MetadataExt;
-                ( meta.volume_serial_number().unwrap_or(-1),
-                  meta.file_index().unwrap_or(-1),
-                  meta.number_of_links().unwrap_or(0),
-                )
-            } else {
-                (-1, -1, 0)
+        let (device_id, inode, nlink) = {
+            cfg_if! {
+                if #[cfg(unix)] {
+                    use std::os::unix::fs::MetadataExt;
+                    (meta.dev(), meta.ino(), meta.nlink())
+                } else if #[cfg(all(windows, feature = "nightly"))] {
+                    use std::os::windows::fs::MetadataExt;
+                    ( meta.volume_serial_number().unwrap_or(-1),
+                      meta.file_index().unwrap_or(-1),
+                      meta.number_of_links().unwrap_or(0),
+                    )
+                } else {
+                    (-1, -1, 0)
+                }
             }
         };
         Ok(Filestat {

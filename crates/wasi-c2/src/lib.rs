@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "nightly", feature(windows_by_handle))]
+
 mod ctx;
 mod dir;
 mod error;
