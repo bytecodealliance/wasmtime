@@ -4,10 +4,10 @@ use crate::sys::{clock, poll};
 use crate::wasi::types;
 use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
 use crate::{path, sched, Error, Result, WasiCtx};
+use std::cmp::min;
 use std::convert::TryInto;
 use std::io::{self, SeekFrom};
 use std::ops::Deref;
-use std::cmp::min;
 use tracing::{debug, trace};
 use wiggle::{GuestPtr, GuestSliceMut};
 
@@ -308,7 +308,8 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
             // Copy as many bytes of the dirent as we can, up to the end of the buffer.
             let dirent_copy_len = min(dirent_len, buf_len - bufused);
-            buf.as_array(dirent_copy_len).copy_from_slice(&dirent_raw[..dirent_copy_len as usize])?;
+            buf.as_array(dirent_copy_len)
+                .copy_from_slice(&dirent_raw[..dirent_copy_len as usize])?;
 
             // If the dirent struct wasn't copied entirely, return that we
             // filled the buffer, which tells libc that we're not at EOF.
@@ -320,7 +321,8 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
             // Copy as many bytes of the name as we can, up to the end of the buffer.
             let name_copy_len = min(name_len, buf_len - bufused);
-            buf.as_array(name_copy_len).copy_from_slice(&name_raw[..name_copy_len as usize])?;
+            buf.as_array(name_copy_len)
+                .copy_from_slice(&name_raw[..name_copy_len as usize])?;
 
             // If the dirent struct wasn't copied entirely, return that we
             // filled the buffer, which tells libc that we're not at EOF.
