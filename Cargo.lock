@@ -2061,7 +2061,9 @@ dependencies = [
 
 [[package]]
 name = "system-interface"
-version = "0.1.1-alpha.0"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95457b1e5a9657ffd02a43048aeb083f20848d82176c0e1313facc1a23ba74da"
 dependencies = [
  "atty",
  "posish 0.5.2",
