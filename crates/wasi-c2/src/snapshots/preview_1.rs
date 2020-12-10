@@ -75,6 +75,7 @@ impl From<Error> for types::Errno {
             Error::DirNotCapable { .. } => Errno::Notcapable,
             Error::NotCapable => Errno::Notcapable,
             Error::TableOverflow => Errno::Overflow,
+            Error::Unsupported { .. } => Errno::Notcapable, // XXX is this reasonable?
         }
     }
 }

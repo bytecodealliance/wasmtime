@@ -24,6 +24,7 @@ pub enum Filetype {
     SocketStream,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct FdFlags {
     flags: u32,
 }
@@ -42,6 +43,7 @@ impl FdFlags {
     // etc
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct OFlags {
     flags: u32,
 }
@@ -187,10 +189,19 @@ impl WasiFile for cap_std::fs::File {
             Ok(OFlags::RDWR)
         }
     }
-    fn set_oflags(&self, _flags: OFlags) -> Result<(), Error> {
-        // XXX cap-std::fs::Permissions does not export a constructor to build this out of
-        #[allow(unreachable_code)]
-        self.set_permissions(todo!())?;
+    fn set_oflags(&self, flags: OFlags) -> Result<(), Error> {
+        #![allow(unreachable_code, unused_variables)]
+        cfg_if! {
+            if #[cfg(unix)] {
+                use std::os::unix::fs::PermissionsExt;
+                use cap_std::fs::Permissions;
+                use std::fs::Permissions as StdPermissions;
+                let flags = todo!("normalize to unix flags {:?}", flags);
+                self.set_permissions(Permissions::from_std(StdPermissions::from_mode(flags)))?;
+            } else {
+                Err(Error::Unsupported("set oflags on non-unix host system".to_owned()))
+            }
+        }
         Ok(())
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
