@@ -149,8 +149,6 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
 }
 
 unsafe fn test_fd_readdir_lots(dir_fd: wasi::Fd) {
-    let stat = wasi::fd_filestat_get(dir_fd).expect("failed filestat");
-
     // Add a file and check the behavior
     for count in 0..1000 {
         let file_fd = wasi::path_open(
