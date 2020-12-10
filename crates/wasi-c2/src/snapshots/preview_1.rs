@@ -1,9 +1,8 @@
 #![allow(unused_variables)]
 use crate::dir::{DirCaps, DirEntry, TableDirExt};
-use crate::file::{
-    FdFlags, FdStat, FileCaps, FileEntry, Filestat, FilestatSetTime, Filetype, OFlags,
-};
+use crate::file::{FdFlags, FdStat, FileCaps, FileEntry, Filestat, Filetype, OFlags};
 use crate::{Error, WasiCtx};
+use fs_set_times::SystemTimeSpec;
 use std::cell::RefMut;
 use std::convert::TryFrom;
 use std::io::{IoSlice, IoSliceMut};
@@ -265,25 +264,25 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             return Err(Error::Inval);
         }
         let atim = if set_atim {
-            Some(FilestatSetTime::Absolute(
+            Some(SystemTimeSpec::Absolute(
                 UNIX_EPOCH + Duration::from_nanos(atim),
             ))
         } else if set_atim_now {
-            Some(FilestatSetTime::Now)
+            Some(SystemTimeSpec::SymbolicNow)
         } else {
             None
         };
         let mtim = if set_mtim {
-            Some(FilestatSetTime::Absolute(
+            Some(SystemTimeSpec::Absolute(
                 UNIX_EPOCH + Duration::from_nanos(mtim),
             ))
         } else if set_mtim_now {
-            Some(FilestatSetTime::Now)
+            Some(SystemTimeSpec::SymbolicNow)
         } else {
             None
         };
 
-        f.set_filestat_times(atim, mtim)?;
+        f.set_times(atim, mtim)?;
         Ok(())
     }
 

@@ -1,8 +1,9 @@
 use crate::Error;
+use fs_set_times::SetTimes;
 use std::ops::Deref;
 use system_interface::fs::FileIoExt;
 
-pub trait WasiFile: FileIoExt {
+pub trait WasiFile: FileIoExt + SetTimes {
     fn datasync(&self) -> Result<(), Error>;
     fn sync(&self) -> Result<(), Error>;
     fn get_filetype(&self) -> Result<Filetype, Error>;
@@ -10,13 +11,7 @@ pub trait WasiFile: FileIoExt {
     fn get_oflags(&self) -> Result<OFlags, Error>;
     fn set_oflags(&self, _flags: OFlags) -> Result<(), Error>;
     fn get_filestat(&self) -> Result<Filestat, Error>;
-    fn set_filestat_times(
-        &self,
-        _atim: Option<FilestatSetTime>,
-        _mtim: Option<FilestatSetTime>,
-    ) -> Result<(), Error>;
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error>;
-    fn allocate(&self, _offset: u64, _len: u64) -> Result<(), Error>;
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -80,12 +75,6 @@ pub struct Filestat {
     atim: std::time::SystemTime,
     mtim: std::time::SystemTime,
     ctim: std::time::SystemTime,
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum FilestatSetTime {
-    Now,
-    Absolute(std::time::SystemTime),
 }
 
 pub(crate) struct FileEntry {
@@ -218,29 +207,8 @@ impl WasiFile for cap_std::fs::File {
             ctim: meta.created()?.into_std(),
         })
     }
-    fn set_filestat_times(
-        &self,
-        _atim: Option<FilestatSetTime>,
-        _mtim: Option<FilestatSetTime>,
-    ) -> Result<(), Error> {
-        // XXX cap-std does not expose a way to set accessed time or modified time
-        todo!()
-    }
     fn set_filestat_size(&self, size: u64) -> Result<(), Error> {
         self.set_len(size)?;
-        Ok(())
-    }
-    fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
-        let metadata = self.metadata()?;
-        let current_size = metadata.len();
-        let wanted_size = offset.checked_add(len).ok_or(Error::TooBig)?;
-        // This check will be unnecessary when rust-lang/rust#63326 is fixed
-        if wanted_size > i64::max_value() as u64 {
-            return Err(Error::TooBig);
-        }
-        if wanted_size > current_size {
-            self.set_len(wanted_size)?;
-        }
         Ok(())
     }
 }
