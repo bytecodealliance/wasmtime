@@ -11,6 +11,7 @@ readme = "README.md"
 edition = "2018"
 include = ["src/**/*", "LICENSE", "build.rs"]
 build = "build.rs"
+publish = false
 
 [dependencies]
 anyhow = "1.0"
@@ -22,6 +23,10 @@ tracing = "0.1.19"
 system-interface = "0.2"
 cap-std = "0.6"
 fs-set-times = "0.2.1"
+cfg-if = "1"
+
+[build-dependencies]
+rustc_version = "0.2"
 
 [badges]
 maintenance = { status = "actively-developed" }

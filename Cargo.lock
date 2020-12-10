@@ -2368,9 +2368,11 @@ version = "0.21.0"
 dependencies = [
  "anyhow",
  "cap-std",
+ "cfg-if 1.0.0",
  "fs-set-times",
  "getrandom 0.2.0",
  "libc",
+ "rustc_version",
  "system-interface",
  "thiserror",
  "tracing",

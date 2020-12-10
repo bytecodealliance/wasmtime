@@ -1,4 +1,5 @@
 use crate::Error;
+use cfg_if::cfg_if;
 use fs_set_times::SetTimes;
 use std::ops::Deref;
 use system_interface::fs::FileIoExt;
@@ -193,14 +194,26 @@ impl WasiFile for cap_std::fs::File {
         Ok(())
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
-        // XXX cap-std does not expose every part of filestat
-        #![allow(unreachable_code, unused_variables)]
         let meta = self.metadata()?;
+        let (device_id, inode, nlink) = cfg_if! {
+            if #[cfg(unix)] {
+                use std::os::unix::fs::MetadataExt;
+                (meta.dev(), meta.ino(), meta.nlink())
+            } else if #[cfg(windows)] && #[cfg_attr(feature = "nightly")] {
+                use std::os::windows::fs::MetadataExt;
+                ( meta.volume_serial_number().unwrap_or(-1),
+                  meta.file_index().unwrap_or(-1),
+                  meta.number_of_links().unwrap_or(0),
+                )
+            } else {
+                (-1, -1, 0)
+            }
+        };
         Ok(Filestat {
-            device_id: todo!(),
-            inode: todo!(),
+            device_id,
+            inode,
             filetype: self.get_filetype()?,
-            nlink: todo!(),
+            nlink,
             size: meta.len(),
             atim: meta.accessed()?.into_std(),
             mtim: meta.modified()?.into_std(),
