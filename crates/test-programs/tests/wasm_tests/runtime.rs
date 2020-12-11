@@ -2,7 +2,7 @@ use anyhow::Context;
 use std::convert::TryFrom;
 use std::fs::File;
 use std::path::Path;
-use wasi_common::{OsOther, VirtualDirEntry};
+use wasi_c2::WasiCtx;
 use wasmtime::{Linker, Module, Store};
 
 #[derive(Clone, Copy, Debug)]
@@ -23,34 +23,37 @@ pub fn instantiate(
 
     // Create our wasi context with pretty standard arguments/inheritance/etc.
     // Additionally register any preopened directories if we have them.
-    let mut builder = wasi_common::WasiCtxBuilder::new();
+    let mut builder = wasi_c2::WasiCtx::builder();
 
     builder.arg(bin_name).arg(".").inherit_stdio();
 
-    if let Some(workspace) = workspace {
-        match preopen_type {
-            PreopenType::OS => {
-                let preopen_dir = wasi_common::preopen_dir(workspace)
-                    .context(format!("error while preopening {:?}", workspace))?;
-                builder.preopened_dir(preopen_dir, ".");
-            }
-            PreopenType::Virtual => {
-                // we can ignore the workspace path for virtual preopens because virtual preopens
-                // don't exist in the filesystem anyway - no name conflict concerns.
-                builder.preopened_virt(VirtualDirEntry::empty_directory(), ".");
+    /*
+        if let Some(workspace) = workspace {
+            match preopen_type {
+                PreopenType::OS => {
+                    let preopen_dir = wasi_common::preopen_dir(workspace)
+                        .context(format!("error while preopening {:?}", workspace))?;
+                    builder.preopened_dir(preopen_dir, ".");
+                }
+                PreopenType::Virtual => {
+                    // we can ignore the workspace path for virtual preopens because virtual preopens
+                    // don't exist in the filesystem anyway - no name conflict concerns.
+                    builder.preopened_virt(VirtualDirEntry::empty_directory(), ".");
+                }
             }
         }
-    }
-
-    // The nonstandard thing we do with `WasiCtxBuilder` is to ensure that
-    // `stdin` is always an unreadable pipe. This is expected in the test suite
-    // where `stdin` is never ready to be read. In some CI systems, however,
-    // stdin is closed which causes tests to fail.
-    let (reader, _writer) = os_pipe::pipe()?;
-    let file = reader_to_file(reader);
-    let handle = OsOther::try_from(file).context("failed to create OsOther from PipeReader")?;
-    builder.stdin(handle);
-    let snapshot1 = wasmtime_wasi::Wasi::new(&store, builder.build()?);
+    */
+    /*
+        // The nonstandard thing we do with `WasiCtxBuilder` is to ensure that
+        // `stdin` is always an unreadable pipe. This is expected in the test suite
+        // where `stdin` is never ready to be read. In some CI systems, however,
+        // stdin is closed which causes tests to fail.
+        let (reader, _writer) = os_pipe::pipe()?;
+        let file = reader_to_file(reader);
+        let handle = OsOther::try_from(file).context("failed to create OsOther from PipeReader")?;
+        builder.stdin(handle);
+    */
+    let snapshot1 = wasi_c2_wasmtime::Wasi::new(&store, builder.build()?);
 
     let mut linker = Linker::new(&store);
 

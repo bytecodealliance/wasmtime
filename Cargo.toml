@@ -71,6 +71,7 @@ members = [
   "crates/wiggle",
   "crates/wiggle/wasmtime",
   "crates/wasi-c2",
+  "crates/wasi-c2/wasmtime",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
   "examples/wasi-fs/wasm",

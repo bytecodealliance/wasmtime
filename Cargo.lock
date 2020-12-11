@@ -2140,9 +2140,9 @@ dependencies = [
  "pretty_env_logger",
  "target-lexicon",
  "tempfile",
- "wasi-common",
+ "wasi-c2",
+ "wasi-c2-wasmtime",
  "wasmtime",
- "wasmtime-wasi",
  "wat",
 ]
 
@@ -2386,6 +2386,18 @@ dependencies = [
  "system-interface",
  "thiserror",
  "tracing",
+ "wiggle",
+]
+
+[[package]]
+name = "wasi-c2-wasmtime"
+version = "0.21.0"
+dependencies = [
+ "anyhow",
+ "cap-std",
+ "wasi-c2",
+ "wasmtime",
+ "wasmtime-wiggle",
  "wiggle",
 ]
 
