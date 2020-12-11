@@ -1,5 +1,5 @@
 #![allow(unused_variables)]
-use crate::dir::{DirCaps, DirEntry, TableDirExt};
+use crate::dir::{DirCaps, DirEntry, ReaddirCursor, TableDirExt};
 use crate::file::{FdFlags, FdStat, FileCaps, FileEntry, Filestat, Filetype, OFlags};
 use crate::{Error, WasiCtx};
 use fs_set_times::SystemTimeSpec;
@@ -427,17 +427,6 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             Err(Error::Notsup)
         }
     }
-
-    fn fd_readdir(
-        &self,
-        fd: types::Fd,
-        buf: &GuestPtr<u8>,
-        buf_len: types::Size,
-        cookie: types::Dircookie,
-    ) -> Result<types::Size, Error> {
-        todo!("fd_readdir is very complicated")
-    }
-
     fn fd_renumber(&self, from: types::Fd, to: types::Fd) -> Result<(), Error> {
         let mut table = self.table();
         let from = u32::from(from);
@@ -497,6 +486,23 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let f = file_entry.get_cap(FileCaps::TELL)?;
         let offset = f.seek(std::io::SeekFrom::Current(0))?;
         Ok(offset)
+    }
+
+    fn fd_readdir(
+        &self,
+        dirfd: types::Fd,
+        buf: &GuestPtr<u8>,
+        buf_len: types::Size,
+        cookie: types::Dircookie,
+    ) -> Result<types::Size, Error> {
+        let table = self.table();
+        let dir_entry: RefMut<DirEntry> = table.get(u32::from(dirfd))?;
+        let d = dir_entry.get_cap(DirCaps::READDIR)?;
+        for pair in d.readdir(ReaddirCursor::from(cookie))? {
+            let (entity, name) = pair?;
+            todo!()
+        }
+        todo!()
     }
 
     fn path_create_directory(

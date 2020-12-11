@@ -15,6 +15,10 @@ pub trait WasiFile: FileIoExt + SetTimes {
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error>;
 }
 
+// XXX missing:
+// Unknown
+// Directory
+// SymbolicLink
 #[derive(Debug, Copy, Clone)]
 pub enum Filetype {
     BlockDevice,

@@ -20,6 +20,11 @@ pub trait WasiDir {
         path: &str,
         create: bool,
     ) -> Result<Box<dyn WasiDir>, Error>;
+
+    fn readdir(
+        &self,
+        cursor: ReaddirCursor,
+    ) -> Result<Box<dyn Iterator<Item = Result<(ReaddirEntity, String), Error>>>, Error>;
 }
 
 pub(crate) struct DirEntry {
@@ -82,5 +87,91 @@ impl TableDirExt for crate::table::Table {
         } else {
             false
         }
+    }
+}
+
+pub enum DirEntityType {
+    File(crate::file::Filetype),
+    Directory,
+    SymbolicLink,
+    Unknown,
+}
+
+pub struct ReaddirEntity {
+    next: ReaddirCursor,
+    inode: u64,
+    namelen: u64,
+    direnttype: DirEntityType,
+}
+
+pub struct ReaddirCursor(u64);
+impl From<u64> for ReaddirCursor {
+    fn from(c: u64) -> ReaddirCursor {
+        ReaddirCursor(c)
+    }
+}
+impl From<ReaddirCursor> for u64 {
+    fn from(c: ReaddirCursor) -> u64 {
+        c.0
+    }
+}
+
+impl WasiDir for cap_std::fs::Dir {
+    fn open_file(
+        &self,
+        symlink_follow: bool,
+        path: &str,
+        oflags: file::OFlags,
+        fdflags: file::FdFlags,
+    ) -> Result<Box<dyn WasiFile>, Error> {
+        todo!()
+    }
+
+    fn open_dir(
+        &self,
+        symlink_follow: bool,
+        path: &str,
+        create: bool,
+    ) -> Result<Box<dyn WasiDir>, Error> {
+        todo!()
+    }
+
+    fn readdir(
+        &self,
+        cursor: ReaddirCursor,
+    ) -> Result<Box<dyn Iterator<Item = Result<(ReaddirEntity, String), Error>>>, Error> {
+        let rd = self
+            .read_dir(PathBuf::new())?
+            .enumerate()
+            .skip(u64::from(cursor) as usize);
+        Ok(Box::new(rd.map(|(ix, entry)| {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            let direnttype = if file_type.is_dir() {
+                DirEntityType::Directory
+            } else if file_type.is_file() {
+                DirEntityType::File(crate::file::Filetype::RegularFile) // XXX unify this with conversion in `impl WasiFile for cap_std::fs::File { get_filetype }`
+            } else if file_type.is_symlink() {
+                DirEntityType::SymbolicLink
+            } else {
+                DirEntityType::Unknown
+            };
+            let name = entry.file_name().into_string().map_err(|_| {
+                Error::Utf8(todo!(
+                    // XXX
+                    "idk how to make utf8 error out of osstring conversion"
+                ))
+            })?;
+            let namelen = name.as_bytes().len() as u64;
+            // XXX need the metadata casing to be reusable here
+            let inode = todo!();
+            let entity = ReaddirEntity {
+                next: ReaddirCursor::from(ix as u64 + 1),
+                direnttype,
+                inode,
+                namelen,
+            };
+            Ok((entity, name))
+        })))
     }
 }
