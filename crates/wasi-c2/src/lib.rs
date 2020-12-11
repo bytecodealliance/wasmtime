@@ -5,7 +5,10 @@ mod dir;
 mod error;
 mod file;
 pub mod snapshots;
+pub mod stdio;
 pub mod table;
 
 pub use ctx::WasiCtx;
+pub use dir::{DirCaps, WasiDir};
 pub use error::Error;
+pub use file::{FileCaps, WasiFile};

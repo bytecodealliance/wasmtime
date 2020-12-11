@@ -1,0 +1,23 @@
+[package]
+name = "wasi-c2-wasmtime"
+version = "0.21.0"
+authors = ["The Wasmtime Project Developers"]
+description = "WASI implementation in Rust"
+license = "Apache-2.0 WITH LLVM-exception"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm"]
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+edition = "2018"
+include = ["src/**/*", "LICENSE", "build.rs"]
+build = "build.rs"
+publish = false
+
+[dependencies]
+wasi-c2 = { path = "../" }
+wiggle = { path = "../../wiggle", default-features = false, version = "0.21.0" }
+wasmtime-wiggle = { path = "../../wiggle/wasmtime", default-features = false, version = "0.21.0" }
+cap-std = "0.7"
+anyhow = "*"
+wasmtime = { path = "../../wasmtime" }
+
