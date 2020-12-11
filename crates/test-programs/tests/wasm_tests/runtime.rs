@@ -25,7 +25,7 @@ pub fn instantiate(
     // Additionally register any preopened directories if we have them.
     let mut builder = wasi_c2::WasiCtx::builder();
 
-    builder.arg(bin_name).arg(".").inherit_stdio();
+    builder.arg(bin_name)?.arg(".")?.inherit_stdio();
 
     /*
         if let Some(workspace) = workspace {

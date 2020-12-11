@@ -6,9 +6,11 @@ mod error;
 mod file;
 pub mod snapshots;
 pub mod stdio;
+mod string_array;
 pub mod table;
 
 pub use ctx::WasiCtx;
 pub use dir::{DirCaps, WasiDir};
 pub use error::Error;
 pub use file::{FileCaps, WasiFile};
+pub use string_array::StringArrayError;

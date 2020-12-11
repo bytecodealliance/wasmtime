@@ -1,5 +1,6 @@
 use crate::dir::{DirCaps, DirEntry, WasiDir};
 use crate::file::{FileCaps, FileEntry, WasiFile};
+use crate::string_array::{StringArray, StringArrayError};
 use crate::table::Table;
 use crate::Error;
 use std::cell::{RefCell, RefMut};
@@ -7,6 +8,8 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 pub struct WasiCtx {
+    pub(crate) args: StringArray,
+    pub(crate) env: StringArray,
     table: Rc<RefCell<Table>>,
 }
 
@@ -17,6 +20,8 @@ impl WasiCtx {
 
     pub fn new() -> Self {
         WasiCtx {
+            args: StringArray::new(),
+            env: StringArray::new(),
             table: Rc::new(RefCell::new(Table::new())),
         }
     }
@@ -64,9 +69,9 @@ impl WasiCtxBuilder {
     pub fn build(self) -> Result<WasiCtx, Error> {
         Ok(self.0)
     }
-    pub fn arg(&mut self, _arg: &str) -> &mut Self {
-        // Intentionally left blank. We do not handle arguments yet.
-        self
+    pub fn arg(&mut self, arg: &str) -> Result<&mut Self, StringArrayError> {
+        self.0.args.push(arg.to_owned())?;
+        Ok(self)
     }
     pub fn inherit_stdio(&mut self) -> &mut Self {
         self.0.insert_file(
