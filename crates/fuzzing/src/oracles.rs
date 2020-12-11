@@ -91,26 +91,15 @@ pub fn instantiate_with_config(wasm: &[u8], mut config: Config, timeout: Option<
     }
 
     log_wasm(wasm);
-    let module = match Module::new(&engine, wasm) {
-        Ok(module) => module,
-        Err(_) => return,
-    };
+    let module = Module::new(&engine, wasm).unwrap();
+    let imports = dummy_imports(&store, module.imports());
 
-    let imports = match dummy_imports(&store, module.imports()) {
-        Ok(imps) => imps,
-        Err(_) => {
-            // There are some value types that we can't synthesize a
-            // dummy value for (e.g. externrefs) and for modules that
-            // import things of these types we skip instantiation.
-            return;
-        }
-    };
-
-    // Don't unwrap this: there can be instantiation-/link-time errors that
-    // aren't caught during validation or compilation. For example, an imported
-    // table might not have room for an element segment that we want to
-    // initialize into it.
-    let _result = Instance::new(&store, &module, &imports);
+    match Instance::new(&store, &module, &imports) {
+        Ok(_) => {}
+        // Allow traps which can happen normally with `unreachable`
+        Err(e) if e.downcast_ref::<Trap>().is_some() => {}
+        Err(e) => panic!("failed to instantiate {}", e),
+    }
 }
 
 /// Compile the Wasm buffer, and implicitly fail if we have an unexpected
@@ -162,31 +151,14 @@ pub fn differential_execution(
         let engine = Engine::new(config);
         let store = Store::new(&engine);
 
-        let module = match Module::new(&engine, &wasm) {
-            Ok(module) => module,
-            // The module might rely on some feature that our config didn't
-            // enable or something like that.
-            Err(e) => {
-                eprintln!("Warning: failed to compile `wasm-opt -ttf` module: {}", e);
-                continue;
-            }
-        };
+        let module = Module::new(&engine, &wasm).unwrap();
 
         // TODO: we should implement tracing versions of these dummy imports
         // that record a trace of the order that imported functions were called
         // in and with what values. Like the results of exported functions,
         // calls to imports should also yield the same values for each
         // configuration, and we should assert that.
-        let imports = match dummy_imports(&store, module.imports()) {
-            Ok(imps) => imps,
-            Err(e) => {
-                // There are some value types that we can't synthesize a
-                // dummy value for (e.g. externrefs) and for modules that
-                // import things of these types we skip instantiation.
-                eprintln!("Warning: failed to synthesize dummy imports: {}", e);
-                continue;
-            }
-        };
+        let imports = dummy_imports(&store, module.imports());
 
         // Don't unwrap this: there can be instantiation-/link-time errors that
         // aren't caught during validation or compilation. For example, an imported
@@ -212,10 +184,7 @@ pub fn differential_execution(
             init_hang_limit(&instance);
 
             let ty = f.ty();
-            let params = match dummy::dummy_values(ty.params()) {
-                Ok(p) => p,
-                Err(_) => continue,
-            };
+            let params = dummy::dummy_values(ty.params());
             let this_result = f.call(&params).map_err(|e| e.downcast::<Trap>().unwrap());
 
             let existing_result = export_func_results
@@ -353,16 +322,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 };
 
                 let store = store.as_ref().unwrap();
-
-                let imports = match dummy_imports(store, module.imports()) {
-                    Ok(imps) => imps,
-                    Err(_) => {
-                        // There are some value types that we can't synthesize a
-                        // dummy value for (e.g. externrefs) and for modules that
-                        // import things of these types we skip instantiation.
-                        continue;
-                    }
-                };
+                let imports = dummy_imports(store, module.imports());
 
                 // Don't unwrap this: there can be instantiation-/link-time errors that
                 // aren't caught during validation or compilation. For example, an imported
@@ -408,10 +368,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 let nth = nth % funcs.len();
                 let f = &funcs[nth];
                 let ty = f.ty();
-                let params = match dummy::dummy_values(ty.params()) {
-                    Ok(p) => p,
-                    Err(_) => continue,
-                };
+                let params = dummy::dummy_values(ty.params());
                 let _ = f.call(&params);
             }
         }
@@ -509,7 +466,7 @@ impl wasm_smith::Config for DifferentialWasmiModuleConfig {
         1
     }
 
-    fn max_memories(&self) -> u32 {
+    fn max_memories(&self) -> usize {
         1
     }
 

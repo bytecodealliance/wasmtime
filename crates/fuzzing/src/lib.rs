@@ -38,6 +38,7 @@ pub fn fuzz_default_config(strategy: wasmtime::Strategy) -> anyhow::Result<wasmt
         .cranelift_nan_canonicalization(true)
         .wasm_bulk_memory(true)
         .wasm_reference_types(true)
+        .wasm_module_linking(true)
         .strategy(strategy)?;
     Ok(config)
 }

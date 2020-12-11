@@ -538,10 +538,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         /********************************** Exception handing **********************************/
         Operator::Try { .. }
-        | Operator::Catch
-        | Operator::BrOnExn { .. }
+        | Operator::Catch { .. }
         | Operator::Throw { .. }
-        | Operator::Rethrow => {
+        | Operator::Unwind
+        | Operator::Rethrow { .. } => {
             return Err(wasm_unsupported!(
                 "proposed exception handling operator {:?}",
                 op

@@ -12,11 +12,11 @@ arbitrary = { version = "0.4.1", features = ["derive"] }
 env_logger = "0.8.1"
 log = "0.4.8"
 rayon = "1.2.1"
-wasmparser = "0.69.2"
-wasmprinter = "0.2.16"
+wasmparser = "0.70"
+wasmprinter = "0.2.17"
 wasmtime = { path = "../wasmtime" }
 wasmtime-wast = { path = "../wast" }
-wasm-smith = "0.1.12"
+wasm-smith = "0.2.0"
 wasmi = "0.7.0"
 
 [dev-dependencies]
