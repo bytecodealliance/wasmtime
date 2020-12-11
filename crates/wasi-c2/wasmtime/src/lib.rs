@@ -1,4 +1,5 @@
 pub use wasi_c2::WasiCtx;
+use wasmtime::Trap;
 
 // Defines a `struct Wasi` with member fields and appropriate APIs for dealing
 // with all the various WASI exports.
@@ -32,6 +33,13 @@ resolution.",
     missing_memory: { wasi_c2::snapshots::preview_1::types::Errno::Inval },
 });
 
-fn wasi_proc_exit(code: i32) {
-    panic!("stubbed out: wasi proc exit with code {}", code)
+fn wasi_proc_exit(status: i32) -> Result<(), Trap> {
+    if status >= 0 && status < 126 {
+        Err(Trap::i32_exit(status))
+    } else {
+        Err(Trap::new(format!(
+            "exit with invalid exit status outside of [0..126): {}",
+            status,
+        )))
+    }
 }
