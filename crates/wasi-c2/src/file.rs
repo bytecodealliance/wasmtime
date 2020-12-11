@@ -177,14 +177,16 @@ impl WasiFile for cap_std::fs::File {
         if meta.is_file() {
             Ok(Filetype::RegularFile)
         } else {
-            Err(Error::Badf) // XXX idk what to do here
+            todo!("get_filetype doesnt know how to handle case when not a file");
         }
     }
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
         // XXX cap-std doesnt expose append, dsync, nonblock, rsync, sync
-        todo!()
+        todo!("get_fdflags is not implemented")
     }
     fn get_oflags(&self) -> Result<OFlags, Error> {
+        #![allow(unreachable_code, unused_variables)]
+        todo!("get_oflags implementation is incomplete");
         // XXX what if it was opened append, async, nonblock...
         let perms = self.metadata()?.permissions();
         if perms.readonly() {
@@ -210,27 +212,12 @@ impl WasiFile for cap_std::fs::File {
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
         let meta = self.metadata()?;
-        let (device_id, inode, nlink) = {
-            cfg_if! {
-                if #[cfg(unix)] {
-                    use std::os::unix::fs::MetadataExt;
-                    (meta.dev(), meta.ino(), meta.nlink())
-                } else if #[cfg(all(windows, feature = "nightly"))] {
-                    use std::os::windows::fs::MetadataExt;
-                    ( meta.volume_serial_number().unwrap_or(-1),
-                      meta.file_index().unwrap_or(-1),
-                      meta.number_of_links().unwrap_or(0),
-                    )
-                } else {
-                    (-1, -1, 0)
-                }
-            }
-        };
+        use cap_fs_ext::MetadataExt;
         Ok(Filestat {
-            device_id,
-            inode,
+            device_id: meta.dev(),
+            inode: meta.ino(),
             filetype: self.get_filetype()?,
-            nlink,
+            nlink: meta.nlink(),
             size: meta.len(),
             atim: meta.accessed()?.into_std(),
             mtim: meta.modified()?.into_std(),

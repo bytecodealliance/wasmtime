@@ -206,26 +206,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08c48aae112d48ed9f069b33538ea9e3e90aa263cfa3d1c24309612b1f7472de"
 
 [[package]]
-name = "cap-primitives"
-version = "0.6.0"
+name = "cap-fs-ext"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9069ed88e23a3fff56577518a238e6975920620cd5d00be8ca73aa46a96d5f5"
+checksum = "724c2735539ad3ab51f04a0d84bca8c23398e558e810254a6996867fd6c7db81"
+dependencies = [
+ "cap-primitives",
+ "cap-std",
+]
+
+[[package]]
+name = "cap-primitives"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b599a2508a28113d658c2f94f3d294d8023c3b34adb89204d7744ddbeb22a59"
 dependencies = [
  "errno",
  "fs-set-times",
  "ipnet",
  "libc",
  "once_cell",
- "posish 0.4.1",
+ "posish 0.5.2",
  "winapi",
- "winx 0.20.0",
+ "winx 0.21.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "cap-std"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eacf34fea6948253011b8771b7ae6258a2ae15c7ba38e78b7dd60a785af354d2"
+checksum = "0760daa4e6270daa9c5c6ad133108fb77edfe023a019c392d98dd769defa42d5"
 dependencies = [
  "cap-primitives",
 ]
@@ -2367,12 +2377,12 @@ name = "wasi-c2"
 version = "0.21.0"
 dependencies = [
  "anyhow",
+ "cap-fs-ext",
  "cap-std",
  "cfg-if 1.0.0",
  "fs-set-times",
  "getrandom 0.2.0",
  "libc",
- "rustc_version",
  "system-interface",
  "thiserror",
  "tracing",
@@ -2905,17 +2915,6 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
-
-[[package]]
-name = "winx"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b25e4ae373f2f2f7f5f187974ed315719ce74160859027c80deb1f68b3c0c966"
-dependencies = [
- "bitflags",
- "cvt",
- "winapi",
-]
 
 [[package]]
 name = "winx"
