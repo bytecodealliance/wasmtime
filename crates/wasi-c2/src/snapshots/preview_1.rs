@@ -395,7 +395,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_prestat_get(&self, fd: types::Fd) -> Result<types::Prestat, Error> {
         let table = self.table();
-        let dir_entry: RefMut<DirEntry> = table.get(u32::from(fd)).map_err(|_| Error::Notdir)?;
+        let dir_entry: RefMut<DirEntry> = table.get(u32::from(fd)).map_err(|_| Error::Badf)?;
         if let Some(ref preopen) = dir_entry.preopen_path {
             let path_str = preopen.to_str().ok_or(Error::Notsup)?;
             let pr_name_len =

@@ -5,20 +5,7 @@ use std::path::Path;
 use wasi_c2::WasiCtx;
 use wasmtime::{Linker, Module, Store};
 
-#[derive(Clone, Copy, Debug)]
-pub enum PreopenType {
-    /// Preopens should be satisfied with real OS files.
-    OS,
-    /// Preopens should be satisfied with virtual files.
-    Virtual,
-}
-
-pub fn instantiate(
-    data: &[u8],
-    bin_name: &str,
-    workspace: Option<&Path>,
-    preopen_type: PreopenType,
-) -> anyhow::Result<()> {
+pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
     let store = Store::default();
 
     // Create our wasi context with pretty standard arguments/inheritance/etc.

@@ -16,14 +16,6 @@ mod wasi_tests {
     use std::path::{Path, PathBuf};
     use std::process::{Command, Stdio};
 
-    #[derive(Clone, Copy, Debug)]
-    enum PreopenType {
-        /// Preopens should be satisfied with real OS files.
-        OS,
-        /// Preopens should be satisfied with virtual files.
-        Virtual,
-    }
-
     pub(super) fn build_and_generate_tests() {
         // Validate if any of test sources are present and if they changed
         // This should always work since there is no submodule to init anymore
@@ -111,7 +103,6 @@ mod wasi_tests {
                 .replace("-", "_")
         )?;
         writeln!(out, "    use super::{{runtime, utils, setup_log}};")?;
-        writeln!(out, "    use runtime::PreopenType;")?;
         for dir_entry in dir_entries {
             let test_path = dir_entry.path();
             let stemstr = test_path
@@ -120,23 +111,13 @@ mod wasi_tests {
                 .to_str()
                 .expect("to_str");
 
-            if no_preopens(testsuite, stemstr) {
-                write_testsuite_tests(out, &test_path, testsuite, PreopenType::OS)?;
-            } else {
-                write_testsuite_tests(out, &test_path, testsuite, PreopenType::OS)?;
-                write_testsuite_tests(out, &test_path, testsuite, PreopenType::Virtual)?;
-            }
+            write_testsuite_tests(out, &test_path, testsuite)?;
         }
         writeln!(out, "}}")?;
         Ok(())
     }
 
-    fn write_testsuite_tests(
-        out: &mut File,
-        path: &Path,
-        testsuite: &str,
-        preopen_type: PreopenType,
-    ) -> io::Result<()> {
+    fn write_testsuite_tests(out: &mut File, path: &Path, testsuite: &str) -> io::Result<()> {
         let stemstr = path
             .file_stem()
             .expect("file_stem")
@@ -144,15 +125,7 @@ mod wasi_tests {
             .expect("to_str");
 
         writeln!(out, "    #[test]")?;
-        let test_fn_name = format!(
-            "{}{}",
-            &stemstr.replace("-", "_"),
-            if let PreopenType::Virtual = preopen_type {
-                "_virtualfs"
-            } else {
-                ""
-            }
-        );
+        let test_fn_name = stemstr.replace("-", "_");
         if ignore(testsuite, &test_fn_name) {
             writeln!(out, "    #[ignore]")?;
         }
@@ -171,25 +144,12 @@ mod wasi_tests {
         let workspace = if no_preopens(testsuite, stemstr) {
             "None"
         } else {
-            match preopen_type {
-                PreopenType::OS => {
-                    writeln!(
-                        out,
-                        "        let workspace = utils::prepare_workspace(&bin_name)?;"
-                    )?;
-                    "Some(workspace.path())"
-                }
-                PreopenType::Virtual => "Some(std::path::Path::new(&bin_name))",
-            }
+            "Some(std::path::Path::new(&bin_name))"
         };
         writeln!(
             out,
-            "        runtime::instantiate(&data, &bin_name, {}, {})",
+            "        runtime::instantiate(&data, &bin_name, {})",
             workspace,
-            match preopen_type {
-                PreopenType::OS => "PreopenType::OS",
-                PreopenType::Virtual => "PreopenType::Virtual",
-            }
         )?;
         writeln!(out, "    }}")?;
         writeln!(out)?;
@@ -201,27 +161,7 @@ mod wasi_tests {
             /// Ignore tests that aren't supported yet.
             fn ignore(testsuite: &str, name: &str) -> bool {
                 if testsuite == "wasi-tests" {
-                    match name {
-                        // TODO: virtfs files cannot be poll_oneoff'd yet
-                        "poll_oneoff_virtualfs" => true,
-                        // TODO: virtfs does not support filetimes yet.
-                        "path_filestat_virtualfs" |
-                        "fd_filestat_set_virtualfs" => true,
-                        // TODO: virtfs does not support symlinks yet.
-                        "nofollow_errors_virtualfs" |
-                        "path_link_virtualfs" |
-                        "readlink_virtualfs" |
-                        "readlink_no_buffer_virtualfs" |
-                        "dangling_symlink_virtualfs" |
-                        "symlink_loop_virtualfs" |
-                        "path_symlink_trailing_slashes_virtualfs" => true,
-                        // TODO: virtfs does not support rename yet.
-                        "path_rename_trailing_slashes_virtualfs" |
-                        "path_rename_virtualfs" => true,
-                        // TODO: virtfs does not support truncation yet.
-                        "file_truncation_virtualfs" => true,
-                        _ => false,
-                    }
+                    false
                 } else {
                     unreachable!()
                 }
@@ -236,24 +176,6 @@ mod wasi_tests {
                         "symlink_loop" => true,
                         "truncation_rights" => true,
                         "dangling_fd" => true,
-                        // TODO: virtfs files cannot be poll_oneoff'd yet
-                        "poll_oneoff_virtualfs" => true,
-                        // TODO: virtfs does not support filetimes yet.
-                        "path_filestat_virtualfs" |
-                        "fd_filestat_set_virtualfs" => true,
-                        // TODO: virtfs does not support symlinks yet.
-                        "nofollow_errors_virtualfs" |
-                        "path_link_virtualfs" |
-                        "readlink_virtualfs" |
-                        "readlink_no_buffer_virtualfs" |
-                        "dangling_symlink_virtualfs" |
-                        "symlink_loop_virtualfs" |
-                        "path_symlink_trailing_slashes_virtualfs" => true,
-                        // TODO: virtfs does not support rename yet.
-                        "path_rename_trailing_slashes_virtualfs" |
-                        "path_rename_virtualfs" => true,
-                        // TODO: virtfs does not support truncation yet.
-                        "file_truncation_virtualfs" => true,
                         _ => false,
                     }
                 } else {
