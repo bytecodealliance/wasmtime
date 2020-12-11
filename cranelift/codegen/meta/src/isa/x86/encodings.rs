@@ -549,10 +549,13 @@ fn define_moves(e: &mut PerCpuModeEncodings, shared_defs: &SharedDefinitions, r:
     }
     e.enc64(bconst.bind(B64), rec_pu_id_bool.opcodes(&MOV_IMM).rex());
 
+    // You may expect that i8 encodings would use 0x30 (XORB) to indicate that encodings should be
+    // on 8-bit operands (f.ex "xor %al, %al"). Cranelift currently does not know when it can
+    // safely drop the 0x66 prefix, so we explicitly select a wider but permissible opcode.
     let is_zero_int = InstructionPredicate::new_is_zero_int(&formats.unary_imm, "imm");
     e.enc_both_instp(
         iconst.bind(I8),
-        rec_u_id_z.opcodes(&XORB),
+        rec_u_id_z.opcodes(&XOR),
         is_zero_int.clone(),
     );
 
