@@ -8,6 +8,7 @@ pub mod snapshots;
 pub mod stdio;
 mod string_array;
 pub mod table;
+pub mod virt;
 
 pub use ctx::WasiCtx;
 pub use dir::{DirCaps, WasiDir};
