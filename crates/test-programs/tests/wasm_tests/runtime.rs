@@ -14,22 +14,13 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
 
     builder.arg(bin_name)?.arg(".")?.inherit_stdio();
 
-    /*
-        if let Some(workspace) = workspace {
-            match preopen_type {
-                PreopenType::OS => {
-                    let preopen_dir = wasi_common::preopen_dir(workspace)
-                        .context(format!("error while preopening {:?}", workspace))?;
-                    builder.preopened_dir(preopen_dir, ".");
-                }
-                PreopenType::Virtual => {
-                    // we can ignore the workspace path for virtual preopens because virtual preopens
-                    // don't exist in the filesystem anyway - no name conflict concerns.
-                    builder.preopened_virt(VirtualDirEntry::empty_directory(), ".");
-                }
-            }
-        }
-    */
+    if let Some(workspace) = workspace {
+        let dirfd =
+            File::open(workspace).context(format!("error while preopening {:?}", workspace))?;
+        let preopen_dir = unsafe { cap_std::fs::Dir::from_std_file(dirfd) };
+        builder.preopened_dir(Box::new(preopen_dir), ".")?;
+    }
+
     /*
         // The nonstandard thing we do with `WasiCtxBuilder` is to ensure that
         // `stdin` is always an unreadable pipe. This is expected in the test suite

@@ -19,6 +19,7 @@ tempfile = "3.1.0"
 os_pipe = "0.9"
 anyhow = "1.0.19"
 wat = "1.0.23"
+cap-std = "0.8"
 
 [features]
 test_programs = []

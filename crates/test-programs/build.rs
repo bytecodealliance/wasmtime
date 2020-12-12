@@ -144,7 +144,11 @@ mod wasi_tests {
         let workspace = if no_preopens(testsuite, stemstr) {
             "None"
         } else {
-            "Some(std::path::Path::new(&bin_name))"
+            writeln!(
+                out,
+                "        let workspace = utils::prepare_workspace(&bin_name)?;"
+            )?;
+            "Some(workspace.path())"
         };
         writeln!(
             out,
