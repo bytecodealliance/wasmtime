@@ -9,7 +9,8 @@ pub(crate) mod poll;
 pub(crate) mod stdio;
 
 cfg_if::cfg_if! {
-    if #[cfg(target_os = "linux")] {
+    if #[cfg(any(target_os = "linux",
+                 target_os = "android"))] {
         mod linux;
         use linux as sys_impl;
     } else if #[cfg(target_os = "emscripten")] {
