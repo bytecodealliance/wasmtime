@@ -69,31 +69,48 @@ impl WasiCtxBuilder {
     pub fn build(self) -> Result<WasiCtx, Error> {
         Ok(self.0)
     }
+
     pub fn arg(&mut self, arg: &str) -> Result<&mut Self, StringArrayError> {
         self.0.args.push(arg.to_owned())?;
         Ok(self)
     }
-    pub fn inherit_stdio(&mut self) -> &mut Self {
+
+    pub fn stdin(&mut self, f: Box<dyn WasiFile>) -> &mut Self {
         self.0.insert_file(
             0,
-            Box::new(crate::stdio::stdin()),
-            FileCaps::READ,
+            f,
+            FileCaps::READ, // XXX probably more rights are ok
             FileCaps::READ,
         );
+        self
+    }
+
+    pub fn stdout(&mut self, f: Box<dyn WasiFile>) -> &mut Self {
         self.0.insert_file(
             1,
-            Box::new(crate::stdio::stdout()),
-            FileCaps::WRITE,
-            FileCaps::WRITE,
-        );
-        self.0.insert_file(
-            2,
-            Box::new(crate::stdio::stderr()),
-            FileCaps::WRITE,
+            f,
+            FileCaps::WRITE, // XXX probably more rights are ok
             FileCaps::WRITE,
         );
         self
     }
+
+    pub fn stderr(&mut self, f: Box<dyn WasiFile>) -> &mut Self {
+        self.0.insert_file(
+            2,
+            f,
+            FileCaps::WRITE, // XXX probably more rights are ok
+            FileCaps::WRITE,
+        );
+        self
+    }
+
+    pub fn inherit_stdio(&mut self) -> &mut Self {
+        self.stdin(Box::new(crate::stdio::stdin()))
+            .stdout(Box::new(crate::stdio::stdout()))
+            .stderr(Box::new(crate::stdio::stderr()))
+    }
+
     pub fn preopened_dir(
         &mut self,
         dir: Box<dyn WasiDir>,
