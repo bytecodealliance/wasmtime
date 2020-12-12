@@ -3,6 +3,10 @@
 use arbitrary::Arbitrary;
 use std::fmt::Write;
 use std::ops::Range;
+use wasm_encoder::{
+    CodeSection, Export, ExportSection, Function, FunctionSection, ImportSection, ImportType,
+    Instruction, Limits, Module, TableSection, TableType, ValType,
+};
 
 /// A description of a Wasm module that makes a series of `externref` table
 /// operations.
@@ -32,7 +36,7 @@ impl TableOps {
         table_size
     }
 
-    /// Convert this into a WAT string.
+    /// Convert this into a wat string via producing a wasm_encoder binary.
     ///
     /// The module requires a single import: `(import "" "gc" (func))`. This
     /// should be a function to trigger GC.
@@ -44,31 +48,50 @@ impl TableOps {
     /// calls), but is not guaranteed to avoid traps (might access out-of-bounds
     /// of the table).
     pub fn to_wat_string(&self) -> String {
-        let mut wat = "(module\n".to_string();
+        let mut module = Module::new();
 
         // Import the GC function.
-        wat.push_str("  (import \"\" \"gc\" (func))\n");
+        let mut imports = ImportSection::new();
+        imports.import("", "gc", ImportType::Function(0));
 
         // Define our table.
-        wat.push_str("  (table $table ");
-        write!(&mut wat, "{}", self.table_size()).unwrap();
-        wat.push_str(" externref)\n");
+        let mut tables = TableSection::new();
+        tables.table(TableType {
+            element_type: ValType::ExternRef,
+            limits: Limits {
+                min: self.table_size(),
+                max: None,
+            },
+        });
 
         // Define the "run" function export.
-        wat.push_str(r#"  (func (export "run") (param"#);
-        for _ in 0..self.num_params() {
-            wat.push_str(" externref");
-        }
-        wat.push_str(")\n");
-        for op in self.ops.iter().take(MAX_OPS) {
-            wat.push_str("    ");
-            op.to_wat_string(&mut wat);
-            wat.push('\n');
-        }
-        wat.push_str("  )\n");
+        let mut functions = FunctionSection::new();
+        functions.function(0);
 
-        wat.push_str(")\n");
-        wat
+        let mut exports = ExportSection::new();
+        exports.export("run", Export::Function(0));
+
+        let mut params: Vec<(u32, ValType)> = Vec::with_capacity(self.num_params() as usize);
+        for i in 0..self.num_params() {
+            params.push((0, ValType::ExternRef));
+        }
+        let mut func = Function::new(params);
+
+        for op in self.ops.iter().take(MAX_OPS) {
+            func.instruction(op.to_instruction());
+        }
+
+        let mut code = CodeSection::new();
+        code.function(&func);
+
+        module
+            .section(&imports)
+            .section(&functions)
+            .section(&tables)
+            .section(&exports)
+            .section(&code);
+
+        String::from_utf8(module.finish()).unwrap() // TODO: Doesn't actually turn into wat string
     }
 }
 
@@ -85,29 +108,20 @@ pub(crate) enum TableOp {
 }
 
 impl TableOp {
-    fn to_wat_string(&self, wat: &mut String) {
+    fn to_instruction(&self) -> Instruction {
         match self {
-            Self::Gc => {
-                wat.push_str("(call 0)");
-            }
+            Self::Gc => Instruction::Call(0),
             Self::Get(x) => {
-                wat.push_str("(drop (table.get $table (i32.const ");
-                write!(wat, "{}", x).unwrap();
-                wat.push_str(")))");
+                Instruction::Drop; // TODO: Need to group somehow
+                Instruction::TableGet { table: *x }
             }
             Self::SetFromParam(x, y) => {
-                wat.push_str("(table.set $table (i32.const ");
-                write!(wat, "{}", x).unwrap();
-                wat.push_str(") (local.get ");
-                write!(wat, "{}", y).unwrap();
-                wat.push_str("))");
+                Instruction::TableSet { table: *x }; // TODO: Need to group somehow
+                Instruction::LocalGet((*y).into())
             }
             Self::SetFromGet(x, y) => {
-                wat.push_str("(table.set $table (i32.const ");
-                write!(wat, "{}", x).unwrap();
-                wat.push_str(") (table.get $table (i32.const ");
-                write!(wat, "{}", y).unwrap();
-                wat.push_str(")))");
+                Instruction::TableSet { table: *x }; // TODO: Need to group somehow
+                Instruction::TableGet { table: *y }
             }
         }
     }
