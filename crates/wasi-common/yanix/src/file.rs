@@ -90,11 +90,26 @@ bitflags! {
         const WRONLY = libc::O_WRONLY;
         const RDWR = libc::O_RDWR;
         #[cfg(any(target_os = "linux",
+                  target_os = "android",
                   target_os = "netbsd",
                   target_os = "openbsd",
                   target_os = "wasi",
                   target_os = "emscripten"))]
-        const RSYNC = libc::O_RSYNC;
+        const RSYNC = {
+            // Have to use cfg_if: https://github.com/bitflags/bitflags/issues/137
+            cfg_if! {
+                if #[cfg(any(target_os = "linux",
+                             target_os = "netbsd",
+                             target_os = "openbsd",
+                             target_os = "wasi",
+                             target_os = "emscripten"))] {
+                    libc::O_RSYNC
+                } else if #[cfg(target_os = "android")] {
+                    // Android defines O_RSYNC as O_SYNC
+                    libc::O_SYNC
+                }
+            }
+        };
         const SYNC = libc::O_SYNC;
         const TRUNC = libc::O_TRUNC;
         #[cfg(any(target_os = "linux",
