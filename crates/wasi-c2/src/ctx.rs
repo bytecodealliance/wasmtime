@@ -4,7 +4,7 @@ use crate::string_array::{StringArray, StringArrayError};
 use crate::table::Table;
 use crate::Error;
 use std::cell::{RefCell, RefMut};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 pub struct WasiCtx {
@@ -93,5 +93,20 @@ impl WasiCtxBuilder {
             FileCaps::WRITE,
         );
         self
+    }
+    pub fn preopened_dir(
+        &mut self,
+        dir: Box<dyn WasiDir>,
+        path: impl AsRef<Path>,
+    ) -> Result<&mut Self, Error> {
+        let base_caps = DirCaps::OPEN;
+        let inheriting_caps = DirCaps::OPEN;
+        self.0.table().push(DirEntry {
+            base_caps,
+            inheriting_caps,
+            preopen_path: Some(path.as_ref().to_owned()),
+            dir,
+        })?;
+        Ok(self)
     }
 }

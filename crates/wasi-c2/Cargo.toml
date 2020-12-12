@@ -26,8 +26,8 @@ getrandom = { version = "0.2.0", features = ["std"] }
 wiggle = { path = "../wiggle", default-features = false, version = "0.21.0" }
 tracing = "0.1.19"
 system-interface = "0.2"
-cap-std = "0.7"
-cap-fs-ext = "0.7"
+cap-std = "0.8"
+cap-fs-ext = "0.8"
 fs-set-times = "0.2.1"
 cfg-if = "1"
 
