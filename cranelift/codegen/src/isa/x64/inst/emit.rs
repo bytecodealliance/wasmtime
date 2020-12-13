@@ -527,7 +527,7 @@ pub(crate) fn emit(
             src,
             dst: reg_g,
         } => {
-            let rex = if *is_64 {
+            let mut rex = if *is_64 {
                 RexFlags::set_w()
             } else {
                 RexFlags::clear_w()
@@ -581,17 +581,26 @@ pub(crate) fn emit(
                     }
                 }
             } else {
-                let (opcode_r, opcode_m, subopcode_i) = match op {
-                    AluRmiROpcode::Add => (0x01, 0x03, 0),
-                    AluRmiROpcode::Sub => (0x29, 0x2B, 5),
-                    AluRmiROpcode::And => (0x21, 0x23, 4),
-                    AluRmiROpcode::Or => (0x09, 0x0B, 1),
-                    AluRmiROpcode::Xor => (0x31, 0x33, 6),
+                let (opcode_r, opcode_m, subopcode_i, is_8bit) = match op {
+                    AluRmiROpcode::Add => (0x01, 0x03, 0, false),
+                    AluRmiROpcode::Adc => (0x11, 0x03, 0, false),
+                    AluRmiROpcode::Sub => (0x29, 0x2B, 5, false),
+                    AluRmiROpcode::Sbb => (0x19, 0x2B, 5, false),
+                    AluRmiROpcode::And => (0x21, 0x23, 4, false),
+                    AluRmiROpcode::Or => (0x09, 0x0B, 1, false),
+                    AluRmiROpcode::Xor => (0x31, 0x33, 6, false),
+                    AluRmiROpcode::And8 => (0x20, 0x22, 4, true),
+                    AluRmiROpcode::Or8 => (0x08, 0x0A, 1, true),
                     AluRmiROpcode::Mul => panic!("unreachable"),
                 };
+                assert!(!(is_8bit && *is_64));
 
                 match src {
                     RegMemImm::Reg { reg: reg_e } => {
+                        if is_8bit {
+                            rex.always_emit_if_8bit_needed(int_reg_enc(*reg_e));
+                            rex.always_emit_if_8bit_needed(int_reg_enc(reg_g.to_reg()));
+                        }
                         // GCC/llvm use the swapped operand encoding (viz., the R/RM vs RM/R
                         // duality). Do this too, so as to be able to compare generated machine
                         // code easily.
@@ -604,11 +613,12 @@ pub(crate) fn emit(
                             reg_g.to_reg(),
                             rex,
                         );
-                        // NB: if this is ever extended to handle byte size ops, be sure to retain
-                        // redundant REX prefixes.
                     }
 
                     RegMemImm::Mem { addr } => {
+                        if is_8bit {
+                            rex.always_emit_if_8bit_needed(int_reg_enc(reg_g.to_reg()));
+                        }
                         // Here we revert to the "normal" G-E ordering.
                         let amode = addr.finalize(state, sink);
                         emit_std_reg_mem(
@@ -625,6 +635,7 @@ pub(crate) fn emit(
                     }
 
                     RegMemImm::Imm { simm32 } => {
+                        assert!(!is_8bit);
                         let use_imm8 = low8_will_sign_extend_to_32(*simm32);
                         let opcode = if use_imm8 { 0x83 } else { 0x81 };
                         // And also here we use the "normal" G-E ordering.
