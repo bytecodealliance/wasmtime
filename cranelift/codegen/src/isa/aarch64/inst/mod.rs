@@ -5,9 +5,7 @@
 
 use crate::binemit::CodeOffset;
 use crate::ir::types::{
-    B1, B16, B16X4, B16X8, B32, B32X2, B32X4, B64, B64X2, B8, B8X16, B8X8, F32, F32X2, F32X4, F64,
-    F64X2, FFLAGS, I16, I16X4, I16X8, I32, I32X2, I32X4, I64, I64X2, I8, I8X16, I8X8, IFLAGS, R32,
-    R64,
+    B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS, R32, R64,
 };
 use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, TrapCode, Type};
 use crate::isa::CallConv;
@@ -2863,11 +2861,15 @@ impl MachInst for Inst {
     }
 
     fn gen_constant<F: FnMut(RegClass, Type) -> Writable<Reg>>(
-        to_reg: Writable<Reg>,
-        value: u64,
+        to_regs: ValueRegs<Writable<Reg>>,
+        value: u128,
         ty: Type,
         alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
+        let to_reg = to_regs
+            .only_reg()
+            .expect("multi-reg values not supported yet");
+        let value = value as u64;
         if ty == F64 {
             Inst::load_fp_constant64(to_reg, value, alloc_tmp)
         } else if ty == F32 {
@@ -2905,14 +2907,28 @@ impl MachInst for Inst {
         None
     }
 
-    fn rc_for_type(ty: Type) -> CodegenResult<RegClass> {
+    fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
         match ty {
-            I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 | R32 | R64 => Ok(RegClass::I64),
-            F32 | F64 => Ok(RegClass::V128),
-            IFLAGS | FFLAGS => Ok(RegClass::I64),
-            B8X8 | B8X16 | B16X4 | B16X8 | B32X2 | B32X4 | B64X2 => Ok(RegClass::V128),
-            F32X2 | I8X8 | I16X4 | I32X2 => Ok(RegClass::V128),
-            F32X4 | F64X2 | I8X16 | I16X8 | I32X4 | I64X2 => Ok(RegClass::V128),
+            I8 => Ok((&[RegClass::I64], &[I8])),
+            I16 => Ok((&[RegClass::I64], &[I16])),
+            I32 => Ok((&[RegClass::I64], &[I32])),
+            I64 => Ok((&[RegClass::I64], &[I64])),
+            B1 => Ok((&[RegClass::I64], &[B1])),
+            B8 => Ok((&[RegClass::I64], &[B8])),
+            B16 => Ok((&[RegClass::I64], &[B16])),
+            B32 => Ok((&[RegClass::I64], &[B32])),
+            B64 => Ok((&[RegClass::I64], &[B64])),
+            R32 => Ok((&[RegClass::I64], &[R32])),
+            R64 => Ok((&[RegClass::I64], &[R64])),
+            F32 => Ok((&[RegClass::V128], &[F32])),
+            F64 => Ok((&[RegClass::V128], &[F64])),
+            I128 => Ok((&[RegClass::I64, RegClass::I64], &[I64, I64])),
+            B128 => Ok((&[RegClass::I64, RegClass::I64], &[B64, B64])),
+            _ if ty.is_vector() => {
+                assert!(ty.bits() <= 128);
+                Ok((&[RegClass::V128], &[I8X16]))
+            }
+            IFLAGS | FFLAGS => Ok((&[RegClass::I64], &[I64])),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty

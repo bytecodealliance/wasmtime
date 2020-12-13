@@ -32,7 +32,7 @@ fn try_fill_baldrdash_reg(call_conv: CallConv, param: &ir::AbiParam) -> Option<A
             &ir::ArgumentPurpose::VMContext => {
                 // This is SpiderMonkey's `WasmTlsReg`.
                 Some(ABIArg::Reg(
-                    regs::r14().to_real_reg(),
+                    ValueRegs::one(regs::r14().to_real_reg()),
                     types::I64,
                     param.extension,
                     param.purpose,
@@ -41,7 +41,7 @@ fn try_fill_baldrdash_reg(call_conv: CallConv, param: &ir::AbiParam) -> Option<A
             &ir::ArgumentPurpose::SignatureId => {
                 // This is SpiderMonkey's `WasmTableCallSigReg`.
                 Some(ABIArg::Reg(
-                    regs::r10().to_real_reg(),
+                    ValueRegs::one(regs::r10().to_real_reg()),
                     types::I64,
                     param.extension,
                     param.purpose,
@@ -168,7 +168,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 ret.push(param);
             } else if let Some(reg) = candidate {
                 ret.push(ABIArg::Reg(
-                    reg.to_real_reg(),
+                    ValueRegs::one(reg.to_real_reg()),
                     param.value_type,
                     param.extension,
                     param.purpose,
@@ -200,7 +200,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
             if let Some(reg) = get_intreg_for_arg_systemv(&call_conv, next_gpr) {
                 ret.push(ABIArg::Reg(
-                    reg.to_real_reg(),
+                    ValueRegs::one(reg.to_real_reg()),
                     types::I64,
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,

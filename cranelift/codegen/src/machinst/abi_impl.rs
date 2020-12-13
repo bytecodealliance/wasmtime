@@ -126,9 +126,9 @@ use std::mem;
 /// A location for an argument or return value.
 #[derive(Clone, Copy, Debug)]
 pub enum ABIArg {
-    /// In a real register.
+    /// In a real register (or set of registers).
     Reg(
-        RealReg,
+        ValueRegs<RealReg>,
         ir::Type,
         ir::ArgumentExtension,
         ir::ArgumentPurpose,
@@ -181,6 +181,17 @@ pub enum StackAMode {
     /// Offset from the real stack pointer, possibly making use of a specific
     /// type for a scaled indexing operation.
     SPOffset(i64, ir::Type),
+}
+
+impl StackAMode {
+    /// Offset by an addend.
+    pub fn offset(self, addend: i64) -> Self {
+        match self {
+            StackAMode::FPOffset(off, ty) => StackAMode::FPOffset(off + addend, ty),
+            StackAMode::NominalSPOffset(off, ty) => StackAMode::NominalSPOffset(off + addend, ty),
+            StackAMode::SPOffset(off, ty) => StackAMode::SPOffset(off + addend, ty),
+        }
+    }
 }
 
 /// Trait implemented by machine-specific backend to provide information about
@@ -498,7 +509,7 @@ fn get_special_purpose_param_register(
 ) -> Option<Reg> {
     let idx = f.signature.special_param_index(purpose)?;
     match abi.args[idx] {
-        ABIArg::Reg(reg, ..) => Some(reg.to_reg()),
+        ABIArg::Reg(regs, ..) => Some(regs.only_reg().unwrap().to_reg()),
         ABIArg::Stack(..) => None,
     }
 }
@@ -709,11 +720,76 @@ fn ty_from_ty_hint_or_reg_class<M: ABIMachineSpec>(r: Reg, ty: Option<Type>) -> 
     }
 }
 
+fn gen_move_multi<M: ABIMachineSpec>(
+    dst: ValueRegs<Writable<Reg>>,
+    src: ValueRegs<Reg>,
+    ty: Type,
+) -> Vec<M::I> {
+    let mut ret = vec![];
+    let (_, tys) = M::I::rc_for_type(ty).unwrap();
+    for ((&dst, &src), &ty) in dst.regs().iter().zip(src.regs().iter()).zip(tys.iter()) {
+        ret.push(M::gen_move(dst, src, ty));
+    }
+    ret
+}
+
+fn gen_load_stack_multi<M: ABIMachineSpec>(
+    from: StackAMode,
+    dst: ValueRegs<Writable<Reg>>,
+    ty: Type,
+) -> Vec<M::I> {
+    let mut ret = vec![];
+    let (_, tys) = M::I::rc_for_type(ty).unwrap();
+    let mut offset = 0;
+    // N.B.: registers are given in the `ValueRegs` in target endian order.
+    for (&dst, &ty) in dst.regs().iter().zip(tys.iter()) {
+        ret.push(M::gen_load_stack(from.offset(offset), dst, ty));
+        offset += ty.bytes() as i64;
+    }
+    ret
+}
+
+fn gen_store_stack_multi<M: ABIMachineSpec>(
+    from: StackAMode,
+    src: ValueRegs<Reg>,
+    ty: Type,
+) -> Vec<M::I> {
+    let mut ret = vec![];
+    let (_, tys) = M::I::rc_for_type(ty).unwrap();
+    let mut offset = 0;
+    // N.B.: registers are given in the `ValueRegs` in target endian order.
+    for (&src, &ty) in src.regs().iter().zip(tys.iter()) {
+        ret.push(M::gen_store_stack(from.offset(offset), src, ty));
+        offset += ty.bytes() as i64;
+    }
+    ret
+}
+
+fn gen_store_base_offset_multi<M: ABIMachineSpec>(
+    base: Reg,
+    mut offset: i32,
+    src: ValueRegs<Reg>,
+    ty: Type,
+) -> Vec<M::I> {
+    let mut ret = vec![];
+    let (_, tys) = M::I::rc_for_type(ty).unwrap();
+    // N.B.: registers are given in the `ValueRegs` in target endian order.
+    for (&src, &ty) in src.regs().iter().zip(tys.iter()) {
+        ret.push(M::gen_store_base_offset(base, offset, src, ty));
+        offset += ty.bytes() as i32;
+    }
+    ret
+}
+
 impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     type I = M::I;
 
-    fn temp_needed(&self) -> bool {
-        self.sig.stack_ret_arg.is_some()
+    fn temp_needed(&self) -> Option<Type> {
+        if self.sig.stack_ret_arg.is_some() {
+            Some(M::word_type())
+        } else {
+            None
+        }
     }
 
     fn init(&mut self, maybe_tmp: Option<Writable<Reg>>) {
@@ -740,8 +816,10 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     fn liveins(&self) -> Set<RealReg> {
         let mut set: Set<RealReg> = Set::empty();
         for &arg in &self.sig.args {
-            if let ABIArg::Reg(r, ..) = arg {
-                set.insert(r);
+            if let ABIArg::Reg(regs, ..) = arg {
+                for &r in regs.regs() {
+                    set.insert(r);
+                }
             }
         }
         set
@@ -750,8 +828,10 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     fn liveouts(&self) -> Set<RealReg> {
         let mut set: Set<RealReg> = Set::empty();
         for &ret in &self.sig.rets {
-            if let ABIArg::Reg(r, ..) = ret {
-                set.insert(r);
+            if let ABIArg::Reg(regs, ..) = ret {
+                for &r in regs.regs() {
+                    set.insert(r);
+                }
             }
         }
         set
@@ -769,12 +849,14 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         self.stackslots.len()
     }
 
-    fn gen_copy_arg_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Self::I {
+    fn gen_copy_arg_to_regs(&self, idx: usize, into_reg: ValueRegs<Writable<Reg>>) -> Vec<Self::I> {
         match &self.sig.args[idx] {
             // Extension mode doesn't matter (we're copying out, not in; we
             // ignore high bits by convention).
-            &ABIArg::Reg(r, ty, ..) => M::gen_move(into_reg, r.to_reg(), ty),
-            &ABIArg::Stack(off, ty, ..) => M::gen_load_stack(
+            &ABIArg::Reg(regs, ty, ..) => {
+                gen_move_multi::<M>(into_reg, regs.map(|r| r.to_reg()), ty)
+            }
+            &ABIArg::Stack(off, ty, ..) => gen_load_stack_multi::<M>(
                 StackAMode::FPOffset(M::fp_to_arg_offset(self.call_conv, &self.flags) + off, ty),
                 into_reg,
                 ty,
@@ -792,19 +874,29 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         }
     }
 
-    fn gen_copy_reg_to_retval(&self, idx: usize, from_reg: Writable<Reg>) -> Vec<Self::I> {
+    fn gen_copy_regs_to_retval(
+        &self,
+        idx: usize,
+        from_regs: ValueRegs<Writable<Reg>>,
+    ) -> Vec<Self::I> {
         let mut ret = Vec::new();
         let word_bits = M::word_bits() as u8;
         match &self.sig.rets[idx] {
-            &ABIArg::Reg(r, ty, ext, ..) => {
+            &ABIArg::Reg(regs, ty, ext, ..) => {
                 let from_bits = ty_bits(ty) as u8;
-                let dest_reg = Writable::from_reg(r.to_reg());
+                let dest_regs = writable_value_regs(regs.map(|r| r.to_reg()));
                 let ext = M::get_ext_mode(self.sig.call_conv, ext);
                 match (ext, from_bits) {
                     (ArgumentExtension::Uext, n) | (ArgumentExtension::Sext, n)
                         if n < word_bits =>
                     {
                         let signed = ext == ArgumentExtension::Sext;
+                        let dest_reg = dest_regs
+                            .only_reg()
+                            .expect("extension only possible from one-reg value");
+                        let from_reg = from_regs
+                            .only_reg()
+                            .expect("extension only possible from one-reg value");
                         ret.push(M::gen_extend(
                             dest_reg,
                             from_reg.to_reg(),
@@ -813,7 +905,10 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                             /* to_bits = */ word_bits,
                         ));
                     }
-                    _ => ret.push(M::gen_move(dest_reg, from_reg.to_reg(), ty)),
+                    _ => ret.extend(
+                        gen_move_multi::<M>(dest_regs, non_writable_value_regs(from_regs), ty)
+                            .into_iter(),
+                    ),
                 };
             }
             &ABIArg::Stack(off, mut ty, ext, ..) => {
@@ -829,6 +924,9 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                     (ArgumentExtension::Uext, n) | (ArgumentExtension::Sext, n)
                         if n < word_bits =>
                     {
+                        let from_reg = from_regs
+                            .only_reg()
+                            .expect("extension only possible from one-reg value");
                         assert_eq!(M::word_reg_class(), from_reg.to_reg().get_class());
                         let signed = ext == ArgumentExtension::Sext;
                         ret.push(M::gen_extend(
@@ -843,12 +941,15 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                     }
                     _ => {}
                 };
-                ret.push(M::gen_store_base_offset(
-                    self.ret_area_ptr.unwrap().to_reg(),
-                    off,
-                    from_reg.to_reg(),
-                    ty,
-                ));
+                ret.extend(
+                    gen_store_base_offset_multi::<M>(
+                        self.ret_area_ptr.unwrap().to_reg(),
+                        off,
+                        non_writable_value_regs(from_regs),
+                        ty,
+                    )
+                    .into_iter(),
+                );
             }
         }
         ret
@@ -856,7 +957,8 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
 
     fn gen_retval_area_setup(&self) -> Option<Self::I> {
         if let Some(i) = self.sig.stack_ret_arg {
-            let inst = self.gen_copy_arg_to_reg(i, self.ret_area_ptr.unwrap());
+            let insts = self.gen_copy_arg_to_regs(i, ValueRegs::one(self.ret_area_ptr.unwrap()));
+            let inst = insts.into_iter().next().unwrap();
             trace!(
                 "gen_retval_area_setup: inst {:?}; ptr reg is {:?}",
                 inst,
@@ -891,24 +993,30 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         slot: StackSlot,
         offset: u32,
         ty: Type,
-        into_reg: Writable<Reg>,
-    ) -> Self::I {
+        into_regs: ValueRegs<Writable<Reg>>,
+    ) -> Vec<Self::I> {
         // Offset from beginning of stackslot area, which is at nominal SP (see
         // [MemArg::NominalSPOffset] for more details on nominal SP tracking).
         let stack_off = self.stackslots[slot.as_u32() as usize] as i64;
         let sp_off: i64 = stack_off + (offset as i64);
         trace!("load_stackslot: slot {} -> sp_off {}", slot, sp_off);
-        M::gen_load_stack(StackAMode::NominalSPOffset(sp_off, ty), into_reg, ty)
+        gen_load_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), into_regs, ty)
     }
 
     /// Store to a stackslot.
-    fn store_stackslot(&self, slot: StackSlot, offset: u32, ty: Type, from_reg: Reg) -> Self::I {
+    fn store_stackslot(
+        &self,
+        slot: StackSlot,
+        offset: u32,
+        ty: Type,
+        from_regs: ValueRegs<Reg>,
+    ) -> Vec<Self::I> {
         // Offset from beginning of stackslot area, which is at nominal SP (see
         // [MemArg::NominalSPOffset] for more details on nominal SP tracking).
         let stack_off = self.stackslots[slot.as_u32() as usize] as i64;
         let sp_off: i64 = stack_off + (offset as i64);
         trace!("store_stackslot: slot {} -> sp_off {}", slot, sp_off);
-        M::gen_store_stack(StackAMode::NominalSPOffset(sp_off, ty), from_reg, ty)
+        gen_store_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), from_regs, ty)
     }
 
     /// Produce an instruction that computes a stackslot address.
@@ -921,23 +1029,33 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     }
 
     /// Load from a spillslot.
-    fn load_spillslot(&self, slot: SpillSlot, ty: Type, into_reg: Writable<Reg>) -> Self::I {
+    fn load_spillslot(
+        &self,
+        slot: SpillSlot,
+        ty: Type,
+        into_regs: ValueRegs<Writable<Reg>>,
+    ) -> Vec<Self::I> {
         // Offset from beginning of spillslot area, which is at nominal SP + stackslots_size.
         let islot = slot.get() as i64;
         let spill_off = islot * M::word_bytes() as i64;
         let sp_off = self.stackslots_size as i64 + spill_off;
         trace!("load_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
-        M::gen_load_stack(StackAMode::NominalSPOffset(sp_off, ty), into_reg, ty)
+        gen_load_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), into_regs, ty)
     }
 
     /// Store to a spillslot.
-    fn store_spillslot(&self, slot: SpillSlot, ty: Type, from_reg: Reg) -> Self::I {
+    fn store_spillslot(
+        &self,
+        slot: SpillSlot,
+        ty: Type,
+        from_regs: ValueRegs<Reg>,
+    ) -> Vec<Self::I> {
         // Offset from beginning of spillslot area, which is at nominal SP + stackslots_size.
         let islot = slot.get() as i64;
         let spill_off = islot * M::word_bytes() as i64;
         let sp_off = self.stackslots_size as i64 + spill_off;
         trace!("store_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
-        M::gen_store_stack(StackAMode::NominalSPOffset(sp_off, ty), from_reg, ty)
+        gen_store_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), from_regs, ty)
     }
 
     fn spillslots_to_stack_map(
@@ -1079,7 +1197,10 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
 
     fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg, ty: Option<Type>) -> Self::I {
         let ty = ty_from_ty_hint_or_reg_class::<M>(from_reg.to_reg(), ty);
-        self.store_spillslot(to_slot, ty, from_reg.to_reg())
+        self.store_spillslot(to_slot, ty, ValueRegs::one(from_reg.to_reg()))
+            .into_iter()
+            .next()
+            .unwrap()
     }
 
     fn gen_reload(
@@ -1089,7 +1210,14 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         ty: Option<Type>,
     ) -> Self::I {
         let ty = ty_from_ty_hint_or_reg_class::<M>(to_reg.to_reg().to_reg(), ty);
-        self.load_spillslot(from_slot, ty, to_reg.map(|r| r.to_reg()))
+        self.load_spillslot(
+            from_slot,
+            ty,
+            writable_value_regs(ValueRegs::one(to_reg.to_reg().to_reg())),
+        )
+        .into_iter()
+        .next()
+        .unwrap()
     }
 
     fn unwind_info_kind(&self) -> UnwindInfoKind {
@@ -1110,7 +1238,7 @@ fn abisig_to_uses_and_defs<M: ABIMachineSpec>(sig: &ABISig) -> (Vec<Reg>, Vec<Wr
     let mut uses = Vec::new();
     for arg in &sig.args {
         match arg {
-            &ABIArg::Reg(reg, ..) => uses.push(reg.to_reg()),
+            &ABIArg::Reg(regs, ..) => uses.extend(regs.regs().iter().map(|r| r.to_reg())),
             _ => {}
         }
     }
@@ -1119,7 +1247,9 @@ fn abisig_to_uses_and_defs<M: ABIMachineSpec>(sig: &ABISig) -> (Vec<Reg>, Vec<Wr
     let mut defs = M::get_regs_clobbered_by_call(sig.call_conv);
     for ret in &sig.rets {
         match ret {
-            &ABIArg::Reg(reg, ..) => defs.push(Writable::from_reg(reg.to_reg())),
+            &ABIArg::Reg(regs, ..) => {
+                defs.extend(regs.regs().iter().map(|r| Writable::from_reg(r.to_reg())))
+            }
             _ => {}
         }
     }
@@ -1238,18 +1368,19 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         adjust_stack_and_nominal_sp::<M, C>(ctx, off as i32, /* is_sub = */ false)
     }
 
-    fn emit_copy_reg_to_arg<C: LowerCtx<I = Self::I>>(
+    fn emit_copy_regs_to_arg<C: LowerCtx<I = Self::I>>(
         &self,
         ctx: &mut C,
         idx: usize,
-        from_reg: Reg,
+        from_regs: ValueRegs<Reg>,
     ) {
         let word_rc = M::word_reg_class();
         let word_bits = M::word_bits() as usize;
         match &self.sig.args[idx] {
-            &ABIArg::Reg(reg, ty, ext, _) => {
+            &ABIArg::Reg(regs, ty, ext, _) => {
                 let ext = M::get_ext_mode(self.sig.call_conv, ext);
                 if ext != ir::ArgumentExtension::None && ty_bits(ty) < word_bits {
+                    let reg = regs.only_reg().unwrap();
                     assert_eq!(word_rc, reg.get_class());
                     let signed = match ext {
                         ir::ArgumentExtension::Uext => false,
@@ -1258,18 +1389,27 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
                     };
                     ctx.emit(M::gen_extend(
                         Writable::from_reg(reg.to_reg()),
-                        from_reg,
+                        from_regs.only_reg().unwrap(),
                         signed,
                         ty_bits(ty) as u8,
                         word_bits as u8,
                     ));
                 } else {
-                    ctx.emit(M::gen_move(Writable::from_reg(reg.to_reg()), from_reg, ty));
+                    for insn in gen_move_multi::<M>(
+                        writable_value_regs(regs.map(|r| r.to_reg())),
+                        from_regs,
+                        ty,
+                    ) {
+                        ctx.emit(insn);
+                    }
                 }
             }
             &ABIArg::Stack(off, mut ty, ext, _) => {
                 let ext = M::get_ext_mode(self.sig.call_conv, ext);
                 if ext != ir::ArgumentExtension::None && ty_bits(ty) < word_bits {
+                    let from_reg = from_regs
+                        .only_reg()
+                        .expect("only one reg for sub-word value width");
                     assert_eq!(word_rc, from_reg.get_class());
                     let signed = match ext {
                         ir::ArgumentExtension::Uext => false,
@@ -1289,32 +1429,37 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
                     // Store the extended version.
                     ty = M::word_type();
                 }
-                ctx.emit(M::gen_store_stack(
-                    StackAMode::SPOffset(off, ty),
-                    from_reg,
-                    ty,
-                ));
+                for insn in gen_store_stack_multi::<M>(StackAMode::SPOffset(off, ty), from_regs, ty)
+                {
+                    ctx.emit(insn);
+                }
             }
         }
     }
 
-    fn emit_copy_retval_to_reg<C: LowerCtx<I = Self::I>>(
+    fn emit_copy_retval_to_regs<C: LowerCtx<I = Self::I>>(
         &self,
         ctx: &mut C,
         idx: usize,
-        into_reg: Writable<Reg>,
+        into_regs: ValueRegs<Writable<Reg>>,
     ) {
         match &self.sig.rets[idx] {
             // Extension mode doesn't matter because we're copying out, not in,
             // and we ignore high bits in our own registers by convention.
-            &ABIArg::Reg(reg, ty, _, _) => ctx.emit(M::gen_move(into_reg, reg.to_reg(), ty)),
+            &ABIArg::Reg(regs, ty, _, _) => {
+                for insn in gen_move_multi::<M>(into_regs, regs.map(|r| r.to_reg()), ty) {
+                    ctx.emit(insn);
+                }
+            }
             &ABIArg::Stack(off, ty, _, _) => {
                 let ret_area_base = self.sig.stack_arg_space;
-                ctx.emit(M::gen_load_stack(
+                for insn in gen_load_stack_multi::<M>(
                     StackAMode::SPOffset(off + ret_area_base, ty),
-                    into_reg,
+                    into_regs,
                     ty,
-                ));
+                ) {
+                    ctx.emit(insn);
+                }
             }
         }
     }
@@ -1324,19 +1469,18 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
             mem::replace(&mut self.uses, Default::default()),
             mem::replace(&mut self.defs, Default::default()),
         );
-        let word_rc = M::word_reg_class();
         let word_type = M::word_type();
         if let Some(i) = self.sig.stack_ret_arg {
-            let rd = ctx.alloc_tmp(word_rc, word_type);
+            let rd = ctx.alloc_tmp(word_type).only_reg().unwrap();
             let ret_area_base = self.sig.stack_arg_space;
             ctx.emit(M::gen_get_stack_addr(
                 StackAMode::SPOffset(ret_area_base, I8),
                 rd,
                 I8,
             ));
-            self.emit_copy_reg_to_arg(ctx, i, rd.to_reg());
+            self.emit_copy_regs_to_arg(ctx, i, ValueRegs::one(rd.to_reg()));
         }
-        let tmp = ctx.alloc_tmp(word_rc, word_type);
+        let tmp = ctx.alloc_tmp(word_type).only_reg().unwrap();
         for (is_safepoint, inst) in M::gen_call(
             &self.dest,
             uses,

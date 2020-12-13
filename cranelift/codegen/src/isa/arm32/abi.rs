@@ -82,7 +82,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
                 let reg = rreg(next_rreg);
 
                 ret.push(ABIArg::Reg(
-                    reg.to_real_reg(),
+                    ValueRegs::one(reg.to_real_reg()),
                     param.value_type,
                     param.extension,
                     param.purpose,
@@ -102,7 +102,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
             if next_rreg < max_reg_val {
                 ret.push(ABIArg::Reg(
-                    rreg(next_rreg).to_real_reg(),
+                    ValueRegs::one(rreg(next_rreg).to_real_reg()),
                     I32,
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,

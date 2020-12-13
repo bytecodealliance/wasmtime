@@ -2472,22 +2472,28 @@ impl MachInst for Inst {
         None
     }
 
-    fn rc_for_type(ty: Type) -> CodegenResult<RegClass> {
+    fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
         match ty {
-            types::I8
-            | types::I16
-            | types::I32
-            | types::I64
-            | types::B1
-            | types::B8
-            | types::B16
-            | types::B32
-            | types::B64
-            | types::R32
-            | types::R64 => Ok(RegClass::I64),
-            types::F32 | types::F64 => Ok(RegClass::V128),
-            _ if ty.bits() == 128 => Ok(RegClass::V128),
-            types::IFLAGS | types::FFLAGS => Ok(RegClass::I64),
+            types::I8 => Ok((&[RegClass::I64], &[types::I8])),
+            types::I16 => Ok((&[RegClass::I64], &[types::I16])),
+            types::I32 => Ok((&[RegClass::I64], &[types::I32])),
+            types::I64 => Ok((&[RegClass::I64], &[types::I64])),
+            types::B1 => Ok((&[RegClass::I64], &[types::B1])),
+            types::B8 => Ok((&[RegClass::I64], &[types::B8])),
+            types::B16 => Ok((&[RegClass::I64], &[types::B16])),
+            types::B32 => Ok((&[RegClass::I64], &[types::B32])),
+            types::B64 => Ok((&[RegClass::I64], &[types::B64])),
+            types::R32 => Ok((&[RegClass::I64], &[types::R32])),
+            types::R64 => Ok((&[RegClass::I64], &[types::R64])),
+            types::F32 => Ok((&[RegClass::V128], &[types::F32])),
+            types::F64 => Ok((&[RegClass::V128], &[types::F64])),
+            types::I128 => Ok((&[RegClass::I64, RegClass::I64], &[types::I64, types::I64])),
+            types::B128 => Ok((&[RegClass::I64, RegClass::I64], &[types::B64, types::B64])),
+            _ if ty.is_vector() => {
+                assert!(ty.bits() <= 128);
+                Ok((&[RegClass::V128], &[types::I8X16]))
+            }
+            types::IFLAGS | types::FFLAGS => Ok((&[RegClass::I64], &[types::I64])),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty
@@ -2500,12 +2506,15 @@ impl MachInst for Inst {
     }
 
     fn gen_constant<F: FnMut(RegClass, Type) -> Writable<Reg>>(
-        to_reg: Writable<Reg>,
-        value: u64,
+        to_regs: ValueRegs<Writable<Reg>>,
+        value: u128,
         ty: Type,
         mut alloc_tmp: F,
     ) -> SmallVec<[Self; 4]> {
         let mut ret = SmallVec::new();
+        let to_reg = to_regs
+            .only_reg()
+            .expect("multi-reg values not supported on x64");
         if ty == types::F32 {
             if value == 0 {
                 ret.push(Inst::xmm_rm_r(
@@ -2515,7 +2524,7 @@ impl MachInst for Inst {
                 ));
             } else {
                 let tmp = alloc_tmp(RegClass::I64, types::I32);
-                ret.push(Inst::imm(OperandSize::Size32, value, tmp));
+                ret.push(Inst::imm(OperandSize::Size32, value as u64, tmp));
 
                 ret.push(Inst::gpr_to_xmm(
                     SseOpcode::Movd,
@@ -2533,7 +2542,7 @@ impl MachInst for Inst {
                 ));
             } else {
                 let tmp = alloc_tmp(RegClass::I64, types::I64);
-                ret.push(Inst::imm(OperandSize::Size64, value, tmp));
+                ret.push(Inst::imm(OperandSize::Size64, value as u64, tmp));
 
                 ret.push(Inst::gpr_to_xmm(
                     SseOpcode::Movq,
@@ -2565,6 +2574,7 @@ impl MachInst for Inst {
                     to_reg,
                 ));
             } else {
+                let value = value as u64;
                 ret.push(Inst::imm(
                     OperandSize::from_bytes(ty.bytes()),
                     value.into(),

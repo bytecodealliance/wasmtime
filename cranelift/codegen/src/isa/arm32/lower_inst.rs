@@ -10,7 +10,6 @@ use crate::CodegenResult;
 use crate::isa::arm32::abi::*;
 use crate::isa::arm32::inst::*;
 
-use regalloc::RegClass;
 use smallvec::SmallVec;
 
 use super::lower::*;
@@ -143,7 +142,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rd = output_to_reg(ctx, outputs[0]);
             let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
             let rm = input_to_reg(ctx, inputs[1], NarrowValueMode::None);
-            let tmp = ctx.alloc_tmp(RegClass::I32, I32);
+            let tmp = ctx.alloc_tmp(I32).only_reg().unwrap();
 
             // ror rd, rn, 32 - (rm & 31)
             ctx.emit(Inst::AluRRImm8 {
@@ -171,7 +170,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             match ty {
                 I32 => {
                     let rd_hi = output_to_reg(ctx, outputs[0]);
-                    let rd_lo = ctx.alloc_tmp(RegClass::I32, ty);
+                    let rd_lo = ctx.alloc_tmp(ty).only_reg().unwrap();
                     let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
                     let rm = input_to_reg(ctx, inputs[1], NarrowValueMode::None);
 
@@ -487,7 +486,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::FallthroughReturn | Opcode::Return => {
             for (i, input) in inputs.iter().enumerate() {
                 let reg = input_to_reg(ctx, *input, NarrowValueMode::None);
-                let retval_reg = ctx.retval(i);
+                let retval_reg = ctx.retval(i).only_reg().unwrap();
                 let ty = ctx.input_ty(insn, i);
 
                 ctx.emit(Inst::gen_move(retval_reg, reg, ty));
@@ -522,12 +521,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             assert_eq!(inputs.len(), abi.num_args());
             for (i, input) in inputs.iter().enumerate().filter(|(i, _)| *i <= 3) {
                 let arg_reg = input_to_reg(ctx, *input, NarrowValueMode::None);
-                abi.emit_copy_reg_to_arg(ctx, i, arg_reg);
+                abi.emit_copy_regs_to_arg(ctx, i, ValueRegs::one(arg_reg));
             }
             abi.emit_call(ctx);
             for (i, output) in outputs.iter().enumerate() {
                 let retval_reg = output_to_reg(ctx, *output);
-                abi.emit_copy_retval_to_reg(ctx, i, retval_reg);
+                abi.emit_copy_retval_to_regs(ctx, i, ValueRegs::one(retval_reg));
             }
         }
         _ => panic!("lowering {} unimplemented!", op),

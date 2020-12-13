@@ -77,7 +77,7 @@ fn try_fill_baldrdash_reg(call_conv: isa::CallConv, param: &ir::AbiParam) -> Opt
             &ir::ArgumentPurpose::VMContext => {
                 // This is SpiderMonkey's `WasmTlsReg`.
                 Some(ABIArg::Reg(
-                    xreg(BALDRDASH_TLS_REG).to_real_reg(),
+                    ValueRegs::one(xreg(BALDRDASH_TLS_REG).to_real_reg()),
                     ir::types::I64,
                     param.extension,
                     param.purpose,
@@ -86,7 +86,7 @@ fn try_fill_baldrdash_reg(call_conv: isa::CallConv, param: &ir::AbiParam) -> Opt
             &ir::ArgumentPurpose::SignatureId => {
                 // This is SpiderMonkey's `WasmTableCallSigReg`.
                 Some(ABIArg::Reg(
-                    xreg(BALDRDASH_SIG_REG).to_real_reg(),
+                    ValueRegs::one(xreg(BALDRDASH_SIG_REG).to_real_reg()),
                     ir::types::I64,
                     param.extension,
                     param.purpose,
@@ -220,7 +220,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 "Invalid type for AArch64: {:?}",
                 param.value_type
             );
-            let rc = Inst::rc_for_type(param.value_type).unwrap();
+            let (rcs, _) = Inst::rc_for_type(param.value_type).unwrap();
+            assert!(rcs.len() == 1, "Multi-reg values not supported yet");
+            let rc = rcs[0];
 
             let next_reg = match rc {
                 RegClass::I64 => &mut next_xreg,
@@ -238,7 +240,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     _ => unreachable!(),
                 };
                 ret.push(ABIArg::Reg(
-                    reg.to_real_reg(),
+                    ValueRegs::one(reg.to_real_reg()),
                     param.value_type,
                     param.extension,
                     param.purpose,
@@ -271,7 +273,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
             if next_xreg < max_per_class_reg_vals && remaining_reg_vals > 0 {
                 ret.push(ABIArg::Reg(
-                    xreg(next_xreg).to_real_reg(),
+                    ValueRegs::one(xreg(next_xreg).to_real_reg()),
                     I64,
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
