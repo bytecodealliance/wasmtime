@@ -5,29 +5,27 @@
 // TODO: separate the IR-query core of `LowerCtx` from the lowering logic built
 // on top of it, e.g. the side-effect/coloring analysis and the scan support.
 
+use crate::data_value::DataValue;
 use crate::entity::SecondaryMap;
 use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::instructions::BranchInfo;
-use crate::ir::types::I64;
 use crate::ir::{
     ArgumentPurpose, Block, Constant, ConstantData, ExternalName, Function, GlobalValueData, Inst,
     InstructionData, MemFlags, Opcode, Signature, SourceLoc, Type, Value, ValueDef,
 };
 use crate::machinst::{
-    ABICallee, BlockIndex, BlockLoweringOrder, LoweredBlock, MachLabel, VCode, VCodeBuilder,
-    VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst,
+    writable_value_regs, ABICallee, BlockIndex, BlockLoweringOrder, LoweredBlock, MachLabel, VCode,
+    VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst, ValueRegs,
 };
 use crate::CodegenResult;
-
-use regalloc::{Reg, RegClass, StackmapRequestInfo, VirtualReg, Writable};
-
-use crate::data_value::DataValue;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::convert::TryInto;
 use log::debug;
+use regalloc::{Reg, StackmapRequestInfo, Writable};
 use smallvec::SmallVec;
+use std::fmt::Debug;
 
 /// An "instruction color" partitions CLIF instructions by side-effecting ops.
 /// All instructions with the same "color" are guaranteed not to be separated by
@@ -71,7 +69,7 @@ pub trait LowerCtx {
     /// instruction should lower into a sequence that fills this register. (Why
     /// not allow the backend to specify its own result register for the return?
     /// Because there may be multiple return points.)
-    fn retval(&self, idx: usize) -> Writable<Reg>;
+    fn retval(&self, idx: usize) -> ValueRegs<Writable<Reg>>;
     /// Returns the vreg containing the VmContext parameter, if there's one.
     fn get_vm_context(&self) -> Option<Reg>;
 
@@ -118,7 +116,7 @@ pub trait LowerCtx {
     ///
     /// The instruction input may be available in either of these forms.  It may
     /// be available in neither form, if the conditions are not met; if so, use
-    /// `put_input_in_reg()` instead to get it in a register.
+    /// `put_input_in_regs()` instead to get it in a register.
     ///
     /// If the backend merges the effect of a side-effecting instruction, it
     /// must call `sink_inst()`. When this is called, it indicates that the
@@ -126,29 +124,29 @@ pub trait LowerCtx {
     /// instruction's result(s) must have *no* uses remaining, because it will
     /// not be codegen'd (it has been integrated into the current instruction).
     fn get_input_as_source_or_const(&self, ir_inst: Inst, idx: usize) -> NonRegInput;
-    /// Put the `idx`th input into a register and return the assigned register.
-    fn put_input_in_reg(&mut self, ir_inst: Inst, idx: usize) -> Reg;
-    /// Get the `idx`th output register of the given IR instruction. When
+    /// Put the `idx`th input into register(s) and return the assigned register.
+    fn put_input_in_regs(&mut self, ir_inst: Inst, idx: usize) -> ValueRegs<Reg>;
+    /// Get the `idx`th output register(s) of the given IR instruction. When
     /// `backend.lower_inst_to_regs(ctx, inst)` is called, it is expected that
     /// the backend will write results to these output register(s).  This
     /// register will always be "fresh"; it is guaranteed not to overlap with
     /// any of the inputs, and can be freely used as a scratch register within
     /// the lowered instruction sequence, as long as its final value is the
     /// result of the computation.
-    fn get_output(&self, ir_inst: Inst, idx: usize) -> Writable<Reg>;
+    fn get_output(&self, ir_inst: Inst, idx: usize) -> ValueRegs<Writable<Reg>>;
 
     // Codegen primitives: allocate temps, emit instructions, set result registers,
     // ask for an input to be gen'd into a register.
 
     /// Get a new temp.
-    fn alloc_tmp(&mut self, rc: RegClass, ty: Type) -> Writable<Reg>;
+    fn alloc_tmp(&mut self, ty: Type) -> ValueRegs<Writable<Reg>>;
     /// Emit a machine instruction.
     fn emit(&mut self, mach_inst: Self::I);
     /// Emit a machine instruction that is a safepoint.
     fn emit_safepoint(&mut self, mach_inst: Self::I);
     /// Indicate that the side-effect of an instruction has been sunk to the
     /// current scan location. This should only be done with the instruction's
-    /// original results are not used (i.e., `put_input_in_reg` is not invoked
+    /// original results are not used (i.e., `put_input_in_regs` is not invoked
     /// for the input produced by the sunk instruction), otherwise the
     /// side-effect will occur twice.
     fn sink_inst(&mut self, ir_inst: Inst);
@@ -234,10 +232,10 @@ pub struct Lower<'func, I: VCodeInst> {
     vcode: VCodeBuilder<I>,
 
     /// Mapping from `Value` (SSA value in IR) to virtual register.
-    value_regs: SecondaryMap<Value, Reg>,
+    value_regs: SecondaryMap<Value, ValueRegs<Reg>>,
 
     /// Return-value vregs.
-    retval_regs: Vec<Reg>,
+    retval_regs: Vec<ValueRegs<Reg>>,
 
     /// Instruction colors at block exits. From this map, we can recover all
     /// instruction colors by scanning backward from the block end and
@@ -306,20 +304,30 @@ pub enum RelocDistance {
     Far,
 }
 
-fn alloc_vreg(
-    value_regs: &mut SecondaryMap<Value, Reg>,
-    regclass: RegClass,
-    value: Value,
+fn alloc_vregs<I: VCodeInst>(
+    ty: Type,
     next_vreg: &mut u32,
-) -> VirtualReg {
-    if value_regs[value].is_invalid() {
-        // default value in map.
-        let v = *next_vreg;
-        *next_vreg += 1;
-        value_regs[value] = Reg::new_virtual(regclass, v);
-        debug!("value {} gets vreg {:?}", value, v);
+    vcode: &mut VCodeBuilder<I>,
+) -> CodegenResult<ValueRegs<Reg>> {
+    let v = *next_vreg;
+    let (regclasses, tys) = I::rc_for_type(ty)?;
+    *next_vreg += regclasses.len() as u32;
+    let regs = match regclasses {
+        &[rc0] => ValueRegs::one(Reg::new_virtual(rc0, v)),
+        &[rc0, rc1] => ValueRegs::two(Reg::new_virtual(rc0, v), Reg::new_virtual(rc1, v + 1)),
+        #[cfg(feature = "arm32")]
+        &[rc0, rc1, rc2, rc3] => ValueRegs::four(
+            Reg::new_virtual(rc0, v),
+            Reg::new_virtual(rc1, v + 1),
+            Reg::new_virtual(rc2, v + 2),
+            Reg::new_virtual(rc3, v + 3),
+        ),
+        _ => panic!("Value must reside in 1, 2 or 4 registers"),
+    };
+    for (&reg_ty, &reg) in tys.iter().zip(regs.regs().iter()) {
+        vcode.set_vreg_type(reg.to_virtual_reg(), reg_ty);
     }
-    value_regs[value].as_virtual_reg().unwrap()
+    Ok(regs)
 }
 
 enum GenerateReturn {
@@ -340,26 +348,29 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         let mut next_vreg: u32 = 0;
 
-        let mut value_regs = SecondaryMap::with_default(Reg::invalid());
+        let mut value_regs = SecondaryMap::with_default(ValueRegs::invalid());
 
         // Assign a vreg to each block param and each inst result.
         for bb in f.layout.blocks() {
             for &param in f.dfg.block_params(bb) {
                 let ty = f.dfg.value_type(param);
-                let vreg = alloc_vreg(&mut value_regs, I::rc_for_type(ty)?, param, &mut next_vreg);
-                vcode.set_vreg_type(vreg, ty);
-                debug!("bb {} param {}: vreg {:?}", bb, param, vreg);
+                if value_regs[param].is_invalid() {
+                    let regs = alloc_vregs(ty, &mut next_vreg, &mut vcode)?;
+                    value_regs[param] = regs;
+                    debug!("bb {} param {}: regs {:?}", bb, param, regs);
+                }
             }
             for inst in f.layout.block_insts(bb) {
                 for &result in f.dfg.inst_results(inst) {
                     let ty = f.dfg.value_type(result);
-                    let vreg =
-                        alloc_vreg(&mut value_regs, I::rc_for_type(ty)?, result, &mut next_vreg);
-                    vcode.set_vreg_type(vreg, ty);
-                    debug!(
-                        "bb {} inst {} ({:?}): result vreg {:?}",
-                        bb, inst, f.dfg[inst], vreg
-                    );
+                    if value_regs[result].is_invalid() {
+                        let regs = alloc_vregs(ty, &mut next_vreg, &mut vcode)?;
+                        value_regs[result] = regs;
+                        debug!(
+                            "bb {} inst {} ({:?}): result regs {:?}",
+                            bb, inst, f.dfg[inst], regs,
+                        );
+                    }
                 }
             }
         }
@@ -370,18 +381,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             .map(|vm_context_index| {
                 let entry_block = f.layout.entry_block().unwrap();
                 let param = f.dfg.block_params(entry_block)[vm_context_index];
-                value_regs[param]
+                value_regs[param].only_reg().unwrap()
             });
 
-        // Assign a vreg to each return value.
+        // Assign vreg(s) to each return value.
         let mut retval_regs = vec![];
         for ret in &f.signature.returns {
-            let v = next_vreg;
-            next_vreg += 1;
-            let regclass = I::rc_for_type(ret.value_type)?;
-            let vreg = Reg::new_virtual(regclass, v);
-            retval_regs.push(vreg);
-            vcode.set_vreg_type(vreg.as_virtual_reg().unwrap(), ret.value_type);
+            let regs = alloc_vregs(ret.value_type, &mut next_vreg, &mut vcode)?;
+            retval_regs.push(regs);
+            debug!("retval gets regs {:?}", regs);
         }
 
         // Compute instruction colors, find constant instructions, and find instructions with
@@ -453,9 +461,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 if !self.vcode.abi().arg_is_needed_in_body(i) {
                     continue;
                 }
-                let reg = Writable::from_reg(self.value_regs[*param]);
-                let insn = self.vcode.abi().gen_copy_arg_to_reg(i, reg);
-                self.emit(insn);
+                let regs = writable_value_regs(self.value_regs[*param]);
+                for insn in self.vcode.abi().gen_copy_arg_to_regs(i, regs).into_iter() {
+                    self.emit(insn);
+                }
             }
             if let Some(insn) = self.vcode.abi().gen_retval_area_setup() {
                 self.emit(insn);
@@ -465,10 +474,14 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
     fn gen_retval_setup(&mut self, gen_ret_inst: GenerateReturn) {
         let retval_regs = self.retval_regs.clone();
-        for (i, reg) in retval_regs.into_iter().enumerate() {
-            let reg = Writable::from_reg(reg);
-            let insns = self.vcode.abi().gen_copy_reg_to_retval(i, reg);
-            for insn in insns {
+        for (i, regs) in retval_regs.into_iter().enumerate() {
+            let regs = writable_value_regs(regs);
+            for insn in self
+                .vcode
+                .abi()
+                .gen_copy_regs_to_retval(i, regs)
+                .into_iter()
+            {
                 self.emit(insn);
             }
         }
@@ -499,8 +512,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         //
         // * one for dsts whose sources are non-constants.
 
-        let mut const_bundles = SmallVec::<[(Type, Writable<Reg>, u64); 16]>::new();
-        let mut var_bundles = SmallVec::<[(Type, Writable<Reg>, Reg); 16]>::new();
+        let mut const_bundles: SmallVec<[_; 16]> = SmallVec::new();
+        let mut var_bundles: SmallVec<[_; 16]> = SmallVec::new();
 
         let mut i = 0;
         for (dst_val, src_val) in self
@@ -514,7 +527,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             let ty = self.f.dfg.value_type(src_val);
 
             debug_assert!(ty == self.f.dfg.value_type(*dst_val));
-            let dst_reg = self.value_regs[*dst_val];
+            let dst_regs = self.value_regs[*dst_val];
 
             let input = self.get_value_as_source_or_const(src_val);
             debug!("jump arg {} is {}", i, src_val);
@@ -522,15 +535,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             if let Some(c) = input.constant {
                 debug!(" -> constant {}", c);
-                const_bundles.push((ty, Writable::from_reg(dst_reg), c));
+                const_bundles.push((ty, writable_value_regs(dst_regs), c));
             } else {
-                let src_reg = self.put_value_in_reg(src_val);
-                debug!(" -> reg {:?}", src_reg);
+                let src_regs = self.put_value_in_regs(src_val);
+                debug!(" -> reg {:?}", src_regs);
                 // Skip self-assignments.  Not only are they pointless, they falsely trigger the
                 // overlap-check below and hence can cause a lot of unnecessary copying through
                 // temporaries.
-                if dst_reg != src_reg {
-                    var_bundles.push((ty, Writable::from_reg(dst_reg), src_reg));
+                if dst_regs != src_regs {
+                    var_bundles.push((ty, writable_value_regs(dst_regs), src_regs));
                 }
             }
         }
@@ -541,41 +554,69 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // for cases of up to circa 16 args.  Currently not possible because regalloc.rs
         // does not export it.
         let mut src_reg_set = FxHashSet::<Reg>::default();
-        for (_, _, src_reg) in &var_bundles {
-            src_reg_set.insert(*src_reg);
+        for (_, _, src_regs) in &var_bundles {
+            for &reg in src_regs.regs() {
+                src_reg_set.insert(reg);
+            }
         }
         let mut overlaps = false;
-        for (_, dst_reg, _) in &var_bundles {
-            if src_reg_set.contains(&dst_reg.to_reg()) {
-                overlaps = true;
-                break;
+        'outer: for (_, dst_regs, _) in &var_bundles {
+            for &reg in dst_regs.regs() {
+                if src_reg_set.contains(&reg.to_reg()) {
+                    overlaps = true;
+                    break 'outer;
+                }
             }
         }
 
         // If, as is mostly the case, the source and destination register sets are non
         // overlapping, then we can copy directly, so as to save the register allocator work.
         if !overlaps {
-            for (ty, dst_reg, src_reg) in &var_bundles {
-                self.emit(I::gen_move(*dst_reg, *src_reg, *ty));
+            for (ty, dst_regs, src_regs) in &var_bundles {
+                let (_, reg_tys) = I::rc_for_type(*ty)?;
+                for ((dst, src), reg_ty) in dst_regs
+                    .regs()
+                    .iter()
+                    .zip(src_regs.regs().iter())
+                    .zip(reg_tys.iter())
+                {
+                    self.emit(I::gen_move(*dst, *src, *reg_ty));
+                }
             }
         } else {
             // There's some overlap, so play safe and copy via temps.
-            let mut tmp_regs = SmallVec::<[Writable<Reg>; 16]>::new();
+            let mut tmp_regs = SmallVec::<[ValueRegs<Writable<Reg>>; 16]>::new();
             for (ty, _, _) in &var_bundles {
-                tmp_regs.push(self.alloc_tmp(I::rc_for_type(*ty)?, *ty));
+                tmp_regs.push(self.alloc_tmp(*ty));
             }
             for ((ty, _, src_reg), tmp_reg) in var_bundles.iter().zip(tmp_regs.iter()) {
-                self.emit(I::gen_move(*tmp_reg, *src_reg, *ty));
+                let (_, reg_tys) = I::rc_for_type(*ty)?;
+                for ((tmp, src), reg_ty) in tmp_reg
+                    .regs()
+                    .iter()
+                    .zip(src_reg.regs().iter())
+                    .zip(reg_tys.iter())
+                {
+                    self.emit(I::gen_move(*tmp, *src, *reg_ty));
+                }
             }
             for ((ty, dst_reg, _), tmp_reg) in var_bundles.iter().zip(tmp_regs.iter()) {
-                self.emit(I::gen_move(*dst_reg, (*tmp_reg).to_reg(), *ty));
+                let (_, reg_tys) = I::rc_for_type(*ty)?;
+                for ((dst, tmp), reg_ty) in dst_reg
+                    .regs()
+                    .iter()
+                    .zip(tmp_reg.regs().iter())
+                    .zip(reg_tys.iter())
+                {
+                    self.emit(I::gen_move(*dst, tmp.to_reg(), *reg_ty));
+                }
             }
         }
 
         // Now, finally, deal with the moves whose sources are constants.
-        for (ty, dst_reg, const_u64) in &const_bundles {
-            for inst in I::gen_constant(*dst_reg, *const_u64, *ty, |reg_class, ty| {
-                self.alloc_tmp(reg_class, ty)
+        for (ty, dst_reg, const_val) in &const_bundles {
+            for inst in I::gen_constant(*dst_reg, *const_val as u128, *ty, |ty| {
+                self.alloc_tmp(ty).only_reg().unwrap()
             })
             .into_iter()
             {
@@ -766,8 +807,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         debug!("about to lower function: {:?}", self.f);
 
         // Initialize the ABI object, giving it a temp if requested.
-        let maybe_tmp = if self.vcode.abi().temp_needed() {
-            Some(self.alloc_tmp(RegClass::I64, I64))
+        let maybe_tmp = if let Some(temp_ty) = self.vcode.abi().temp_needed() {
+            Some(self.alloc_tmp(temp_ty).only_reg().unwrap())
         } else {
             None
         };
@@ -848,11 +889,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         Ok((vcode, stack_map_info))
     }
 
-    fn put_value_in_reg(&mut self, val: Value) -> Reg {
-        debug!("put_value_in_reg: val {}", val,);
-        let mut reg = self.value_regs[val];
-        debug!(" -> reg {:?}", reg);
-        assert!(reg.is_valid());
+    fn put_value_in_regs(&mut self, val: Value) -> ValueRegs<Reg> {
+        debug!("put_value_in_reg: val {}", val);
+        let mut regs = self.value_regs[val];
+        debug!(" -> regs {:?}", regs);
+        assert!(regs.is_valid());
 
         self.value_lowered_uses[val] += 1;
 
@@ -864,12 +905,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         if let ValueDef::Result(i, 0) = self.f.dfg.value_def(val) {
             if self.f.dfg[i].opcode() == Opcode::GetPinnedReg {
                 if let Some(pr) = self.pinned_reg {
-                    reg = pr;
+                    regs = ValueRegs::one(pr);
                 }
             }
         }
 
-        reg
+        regs
     }
 
     /// Get the actual inputs for a value. This is the implementation for
@@ -944,8 +985,8 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         self.vcode.abi()
     }
 
-    fn retval(&self, idx: usize) -> Writable<Reg> {
-        Writable::from_reg(self.retval_regs[idx])
+    fn retval(&self, idx: usize) -> ValueRegs<Writable<Reg>> {
+        writable_value_regs(self.retval_regs[idx])
     }
 
     fn get_vm_context(&self) -> Option<Reg> {
@@ -1050,23 +1091,19 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         self.get_value_as_source_or_const(val)
     }
 
-    fn put_input_in_reg(&mut self, ir_inst: Inst, idx: usize) -> Reg {
+    fn put_input_in_regs(&mut self, ir_inst: Inst, idx: usize) -> ValueRegs<Reg> {
         let val = self.f.dfg.inst_args(ir_inst)[idx];
         let val = self.f.dfg.resolve_aliases(val);
-        self.put_value_in_reg(val)
+        self.put_value_in_regs(val)
     }
 
-    fn get_output(&self, ir_inst: Inst, idx: usize) -> Writable<Reg> {
+    fn get_output(&self, ir_inst: Inst, idx: usize) -> ValueRegs<Writable<Reg>> {
         let val = self.f.dfg.inst_results(ir_inst)[idx];
-        Writable::from_reg(self.value_regs[val])
+        writable_value_regs(self.value_regs[val])
     }
 
-    fn alloc_tmp(&mut self, rc: RegClass, ty: Type) -> Writable<Reg> {
-        let v = self.next_vreg;
-        self.next_vreg += 1;
-        let vreg = Reg::new_virtual(rc, v);
-        self.vcode.set_vreg_type(vreg.as_virtual_reg().unwrap(), ty);
-        Writable::from_reg(vreg)
+    fn alloc_tmp(&mut self, ty: Type) -> ValueRegs<Writable<Reg>> {
+        writable_value_regs(alloc_vregs(ty, &mut self.next_vreg, &mut self.vcode).unwrap())
     }
 
     fn emit(&mut self, mach_inst: I) {
@@ -1131,8 +1168,7 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         if reg.is_virtual() {
             reg
         } else {
-            let rc = reg.get_class();
-            let new_reg = self.alloc_tmp(rc, ty);
+            let new_reg = self.alloc_tmp(ty).only_reg().unwrap();
             self.emit(I::gen_move(new_reg, reg, ty));
             new_reg.to_reg()
         }

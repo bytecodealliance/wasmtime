@@ -32,7 +32,7 @@ fn try_fill_baldrdash_reg(call_conv: CallConv, param: &ir::AbiParam) -> Option<A
             &ir::ArgumentPurpose::VMContext => {
                 // This is SpiderMonkey's `WasmTlsReg`.
                 Some(ABIArg::Reg(
-                    regs::r14().to_real_reg(),
+                    ValueRegs::one(regs::r14().to_real_reg()),
                     types::I64,
                     param.extension,
                     param.purpose,
@@ -41,7 +41,7 @@ fn try_fill_baldrdash_reg(call_conv: CallConv, param: &ir::AbiParam) -> Option<A
             &ir::ArgumentPurpose::SignatureId => {
                 // This is SpiderMonkey's `WasmTableCallSigReg`.
                 Some(ABIArg::Reg(
-                    regs::r10().to_real_reg(),
+                    ValueRegs::one(regs::r10().to_real_reg()),
                     types::I64,
                     param.extension,
                     param.purpose,
@@ -168,7 +168,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 ret.push(param);
             } else if let Some(reg) = candidate {
                 ret.push(ABIArg::Reg(
-                    reg.to_real_reg(),
+                    ValueRegs::one(reg.to_real_reg()),
                     param.value_type,
                     param.extension,
                     param.purpose,
@@ -200,7 +200,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
             if let Some(reg) = get_intreg_for_arg_systemv(&call_conv, next_gpr) {
                 ret.push(ABIArg::Reg(
-                    reg.to_real_reg(),
+                    ValueRegs::one(reg.to_real_reg()),
                     types::I64,
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
@@ -288,7 +288,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         Inst::epilogue_placeholder()
     }
 
-    fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallVec<[Self::I; 4]> {
+    fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Self::I> {
         let mut ret = SmallVec::new();
         if from_reg != into_reg.to_reg() {
             ret.push(Inst::gen_move(into_reg, from_reg, I64));
@@ -302,7 +302,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         ret
     }
 
-    fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallVec<[Self::I; 2]> {
+    fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallInstVec<Self::I> {
         smallvec![
             Inst::cmp_rmi_r(/* bytes = */ 8, RegMemImm::reg(regs::rsp()), limit_reg),
             Inst::TrapIf {
@@ -343,7 +343,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         Inst::store(ty, from_reg, mem)
     }
 
-    fn gen_sp_reg_adjust(amount: i32) -> SmallVec<[Self::I; 2]> {
+    fn gen_sp_reg_adjust(amount: i32) -> SmallInstVec<Self::I> {
         let (alu_op, amount) = if amount >= 0 {
             (AluRmiROpcode::Add, amount)
         } else {
@@ -366,7 +366,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
     }
 
-    fn gen_prologue_frame_setup() -> SmallVec<[Self::I; 2]> {
+    fn gen_prologue_frame_setup() -> SmallInstVec<Self::I> {
         let r_rsp = regs::rsp();
         let r_rbp = regs::rbp();
         let w_rbp = Writable::from_reg(r_rbp);
@@ -378,7 +378,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
-    fn gen_epilogue_frame_restore() -> SmallVec<[Self::I; 2]> {
+    fn gen_epilogue_frame_restore() -> SmallInstVec<Self::I> {
         let mut insts = SmallVec::new();
         insts.push(Inst::mov_r_r(
             true,
@@ -389,7 +389,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
-    fn gen_probestack(frame_size: u32) -> SmallVec<[Self::I; 2]> {
+    fn gen_probestack(frame_size: u32) -> SmallInstVec<Self::I> {
         let mut insts = SmallVec::new();
         insts.push(Inst::imm(
             OperandSize::Size32,

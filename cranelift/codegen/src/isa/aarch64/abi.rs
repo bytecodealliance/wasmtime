@@ -77,7 +77,7 @@ fn try_fill_baldrdash_reg(call_conv: isa::CallConv, param: &ir::AbiParam) -> Opt
             &ir::ArgumentPurpose::VMContext => {
                 // This is SpiderMonkey's `WasmTlsReg`.
                 Some(ABIArg::Reg(
-                    xreg(BALDRDASH_TLS_REG).to_real_reg(),
+                    ValueRegs::one(xreg(BALDRDASH_TLS_REG).to_real_reg()),
                     ir::types::I64,
                     param.extension,
                     param.purpose,
@@ -86,7 +86,7 @@ fn try_fill_baldrdash_reg(call_conv: isa::CallConv, param: &ir::AbiParam) -> Opt
             &ir::ArgumentPurpose::SignatureId => {
                 // This is SpiderMonkey's `WasmTableCallSigReg`.
                 Some(ABIArg::Reg(
-                    xreg(BALDRDASH_SIG_REG).to_real_reg(),
+                    ValueRegs::one(xreg(BALDRDASH_SIG_REG).to_real_reg()),
                     ir::types::I64,
                     param.extension,
                     param.purpose,
@@ -220,7 +220,9 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 "Invalid type for AArch64: {:?}",
                 param.value_type
             );
-            let rc = Inst::rc_for_type(param.value_type).unwrap();
+            let (rcs, _) = Inst::rc_for_type(param.value_type).unwrap();
+            assert!(rcs.len() == 1, "Multi-reg values not supported yet");
+            let rc = rcs[0];
 
             let next_reg = match rc {
                 RegClass::I64 => &mut next_xreg,
@@ -238,7 +240,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     _ => unreachable!(),
                 };
                 ret.push(ABIArg::Reg(
-                    reg.to_real_reg(),
+                    ValueRegs::one(reg.to_real_reg()),
                     param.value_type,
                     param.extension,
                     param.purpose,
@@ -271,7 +273,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
             if next_xreg < max_per_class_reg_vals && remaining_reg_vals > 0 {
                 ret.push(ABIArg::Reg(
-                    xreg(next_xreg).to_real_reg(),
+                    ValueRegs::one(xreg(next_xreg).to_real_reg()),
                     I64,
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
@@ -345,7 +347,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         Inst::Ret
     }
 
-    fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallVec<[Inst; 4]> {
+    fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Inst> {
         let imm = imm as u64;
         let mut insts = SmallVec::new();
         if let Some(imm12) = Imm12::maybe_from_u64(imm) {
@@ -370,7 +372,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallVec<[Inst; 2]> {
+    fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
         insts.push(Inst::AluRRRExtend {
             alu_op: ALUOp::SubS64,
@@ -411,7 +413,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         Inst::gen_store(mem, from_reg, ty, MemFlags::trusted())
     }
 
-    fn gen_sp_reg_adjust(amount: i32) -> SmallVec<[Inst; 2]> {
+    fn gen_sp_reg_adjust(amount: i32) -> SmallInstVec<Inst> {
         if amount == 0 {
             return SmallVec::new();
         }
@@ -455,7 +457,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
     }
 
-    fn gen_prologue_frame_setup() -> SmallVec<[Inst; 2]> {
+    fn gen_prologue_frame_setup() -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
         // stp fp (x29), lr (x30), [sp, #-16]!
         insts.push(Inst::StoreP64 {
@@ -481,7 +483,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_epilogue_frame_restore() -> SmallVec<[Inst; 2]> {
+    fn gen_epilogue_frame_restore() -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
 
         // MOV (alias of ORR) interprets x31 as XZR, so use an ADD here.
@@ -508,7 +510,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_probestack(_: u32) -> SmallVec<[Self::I; 2]> {
+    fn gen_probestack(_: u32) -> SmallInstVec<Self::I> {
         // TODO: implement if we ever require stack probes on an AArch64 host
         // (unlikely unless Lucet is ported)
         smallvec![]

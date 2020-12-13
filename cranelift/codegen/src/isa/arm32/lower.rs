@@ -13,7 +13,7 @@ use crate::isa::arm32::Arm32Backend;
 
 use super::lower_inst;
 
-use regalloc::{Reg, RegClass, Writable};
+use regalloc::{Reg, Writable};
 
 //============================================================================
 // Lowering: convert instruction outputs to result types.
@@ -55,7 +55,7 @@ pub(crate) enum NarrowValueMode {
 
 /// Lower an instruction output to a reg.
 pub(crate) fn output_to_reg<C: LowerCtx<I = Inst>>(ctx: &mut C, out: InsnOutput) -> Writable<Reg> {
-    ctx.get_output(out.insn, out.output)
+    ctx.get_output(out.insn, out.output).only_reg().unwrap()
 }
 
 /// Lower an instruction input to a reg.
@@ -70,21 +70,25 @@ pub(crate) fn input_to_reg<C: LowerCtx<I = Inst>>(
     let from_bits = ty.bits() as u8;
     let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
     let in_reg = if let Some(c) = inputs.constant {
-        let to_reg = ctx.alloc_tmp(Inst::rc_for_type(ty).unwrap(), ty);
-        for inst in Inst::gen_constant(to_reg, c, ty, |reg_class, ty| ctx.alloc_tmp(reg_class, ty))
-            .into_iter()
+        let to_reg = ctx.alloc_tmp(ty).only_reg().unwrap();
+        for inst in Inst::gen_constant(ValueRegs::one(to_reg), c as u128, ty, |ty| {
+            ctx.alloc_tmp(ty).only_reg().unwrap()
+        })
+        .into_iter()
         {
             ctx.emit(inst);
         }
         to_reg.to_reg()
     } else {
-        ctx.put_input_in_reg(input.insn, input.input)
+        ctx.put_input_in_regs(input.insn, input.input)
+            .only_reg()
+            .unwrap()
     };
 
     match (narrow_mode, from_bits) {
         (NarrowValueMode::None, _) => in_reg,
         (NarrowValueMode::ZeroExtend, 1) => {
-            let tmp = ctx.alloc_tmp(RegClass::I32, I32);
+            let tmp = ctx.alloc_tmp(I32).only_reg().unwrap();
             ctx.emit(Inst::AluRRImm8 {
                 alu_op: ALUOp::And,
                 rd: tmp,
@@ -94,7 +98,7 @@ pub(crate) fn input_to_reg<C: LowerCtx<I = Inst>>(
             tmp.to_reg()
         }
         (NarrowValueMode::ZeroExtend, n) if n < 32 => {
-            let tmp = ctx.alloc_tmp(RegClass::I32, I32);
+            let tmp = ctx.alloc_tmp(I32).only_reg().unwrap();
             ctx.emit(Inst::Extend {
                 rd: tmp,
                 rm: in_reg,
@@ -104,7 +108,7 @@ pub(crate) fn input_to_reg<C: LowerCtx<I = Inst>>(
             tmp.to_reg()
         }
         (NarrowValueMode::SignExtend, n) if n < 32 => {
-            let tmp = ctx.alloc_tmp(RegClass::I32, I32);
+            let tmp = ctx.alloc_tmp(I32).only_reg().unwrap();
             ctx.emit(Inst::Extend {
                 rd: tmp,
                 rm: in_reg,

@@ -3,7 +3,7 @@
 // Some variants are never constructed, but we still want them as options in the future.
 #![allow(dead_code)]
 
-use crate::ir::types::{F32X2, F32X4, F64X2, I16X4, I16X8, I32X2, I32X4, I64X2, I8X16, I8X8};
+use crate::ir::types::*;
 use crate::ir::Type;
 use crate::isa::aarch64::inst::*;
 use crate::machinst::{ty_bits, MachLabel};

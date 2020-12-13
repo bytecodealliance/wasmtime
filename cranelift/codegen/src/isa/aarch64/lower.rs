@@ -22,7 +22,7 @@ use super::lower_inst;
 
 use crate::data_value::DataValue;
 use log::{debug, trace};
-use regalloc::{Reg, RegClass, Writable};
+use regalloc::{Reg, Writable};
 use smallvec::SmallVec;
 
 //============================================================================
@@ -179,9 +179,9 @@ pub(crate) fn put_input_in_reg<C: LowerCtx<I = Inst>>(
         } else {
             c
         };
-        let to_reg = ctx.alloc_tmp(Inst::rc_for_type(ty).unwrap(), ty);
-        for inst in Inst::gen_constant(to_reg, masked, ty, |reg_class, ty| {
-            ctx.alloc_tmp(reg_class, ty)
+        let to_reg = ctx.alloc_tmp(ty).only_reg().unwrap();
+        for inst in Inst::gen_constant(ValueRegs::one(to_reg), masked as u128, ty, |ty| {
+            ctx.alloc_tmp(ty).only_reg().unwrap()
         })
         .into_iter()
         {
@@ -189,13 +189,15 @@ pub(crate) fn put_input_in_reg<C: LowerCtx<I = Inst>>(
         }
         to_reg.to_reg()
     } else {
-        ctx.put_input_in_reg(input.insn, input.input)
+        ctx.put_input_in_regs(input.insn, input.input)
+            .only_reg()
+            .unwrap()
     };
 
     match (narrow_mode, from_bits) {
         (NarrowValueMode::None, _) => in_reg,
         (NarrowValueMode::ZeroExtend32, n) if n < 32 => {
-            let tmp = ctx.alloc_tmp(RegClass::I64, I32);
+            let tmp = ctx.alloc_tmp(I32).only_reg().unwrap();
             ctx.emit(Inst::Extend {
                 rd: tmp,
                 rn: in_reg,
@@ -206,7 +208,7 @@ pub(crate) fn put_input_in_reg<C: LowerCtx<I = Inst>>(
             tmp.to_reg()
         }
         (NarrowValueMode::SignExtend32, n) if n < 32 => {
-            let tmp = ctx.alloc_tmp(RegClass::I64, I32);
+            let tmp = ctx.alloc_tmp(I32).only_reg().unwrap();
             ctx.emit(Inst::Extend {
                 rd: tmp,
                 rn: in_reg,
@@ -223,7 +225,7 @@ pub(crate) fn put_input_in_reg<C: LowerCtx<I = Inst>>(
                 // Constants are zero-extended to full 64-bit width on load already.
                 in_reg
             } else {
-                let tmp = ctx.alloc_tmp(RegClass::I64, I32);
+                let tmp = ctx.alloc_tmp(I32).only_reg().unwrap();
                 ctx.emit(Inst::Extend {
                     rd: tmp,
                     rn: in_reg,
@@ -235,7 +237,7 @@ pub(crate) fn put_input_in_reg<C: LowerCtx<I = Inst>>(
             }
         }
         (NarrowValueMode::SignExtend64, n) if n < 64 => {
-            let tmp = ctx.alloc_tmp(RegClass::I64, I32);
+            let tmp = ctx.alloc_tmp(I32).only_reg().unwrap();
             ctx.emit(Inst::Extend {
                 rd: tmp,
                 rn: in_reg,
@@ -696,7 +698,7 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
     /* addends64.len() == 0 */
     {
         if addends32.len() > 0 {
-            let tmp = ctx.alloc_tmp(RegClass::I64, I64);
+            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
             let (reg1, extendop) = addends32.pop().unwrap();
             let signed = match extendop {
                 ExtendOp::SXTW => true,
@@ -718,7 +720,7 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
         } else
         /* addends32.len() == 0 */
         {
-            let off_reg = ctx.alloc_tmp(RegClass::I64, I64);
+            let off_reg = ctx.alloc_tmp(I64).only_reg().unwrap();
             lower_constant_u64(ctx, off_reg, offset as u64);
             offset = 0;
             AMode::reg(off_reg.to_reg())
@@ -734,7 +736,7 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
     }
 
     // Allocate the temp and shoehorn it into the AMode.
-    let addr = ctx.alloc_tmp(RegClass::I64, I64);
+    let addr = ctx.alloc_tmp(I64).only_reg().unwrap();
     let (reg, memarg) = match memarg {
         AMode::RegExtended(r1, r2, extendop) => {
             (r1, AMode::RegExtended(addr.to_reg(), r2, extendop))
@@ -782,7 +784,7 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
         // If the register is the stack reg, we must move it to another reg
         // before adding it.
         let reg = if reg == stack_reg() {
-            let tmp = ctx.alloc_tmp(RegClass::I64, I64);
+            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
             ctx.emit(Inst::gen_move(tmp, stack_reg(), I64));
             tmp.to_reg()
         } else {
@@ -824,7 +826,7 @@ pub(crate) fn lower_constant_f32<C: LowerCtx<I = Inst>>(
     rd: Writable<Reg>,
     value: f32,
 ) {
-    let alloc_tmp = |class, ty| ctx.alloc_tmp(class, ty);
+    let alloc_tmp = |ty| ctx.alloc_tmp(ty).only_reg().unwrap();
 
     for inst in Inst::load_fp_constant32(rd, value.to_bits(), alloc_tmp) {
         ctx.emit(inst);
@@ -836,7 +838,7 @@ pub(crate) fn lower_constant_f64<C: LowerCtx<I = Inst>>(
     rd: Writable<Reg>,
     value: f64,
 ) {
-    let alloc_tmp = |class, ty| ctx.alloc_tmp(class, ty);
+    let alloc_tmp = |ty| ctx.alloc_tmp(ty).only_reg().unwrap();
 
     for inst in Inst::load_fp_constant64(rd, value.to_bits(), alloc_tmp) {
         ctx.emit(inst);
@@ -858,7 +860,7 @@ pub(crate) fn lower_constant_f128<C: LowerCtx<I = Inst>>(
             size: VectorSize::Size8x16,
         });
     } else {
-        let alloc_tmp = |class, ty| ctx.alloc_tmp(class, ty);
+        let alloc_tmp = |ty| ctx.alloc_tmp(ty).only_reg().unwrap();
         for inst in Inst::load_fp_constant128(rd, value, alloc_tmp) {
             ctx.emit(inst);
         }
@@ -885,7 +887,7 @@ pub(crate) fn lower_splat_const<C: LowerCtx<I = Inst>>(
         ),
         None => (value, size),
     };
-    let alloc_tmp = |class, ty| ctx.alloc_tmp(class, ty);
+    let alloc_tmp = |ty| ctx.alloc_tmp(ty).only_reg().unwrap();
 
     for inst in Inst::load_replicated_vector_pattern(rd, value, size, alloc_tmp) {
         ctx.emit(inst);
@@ -1217,7 +1219,7 @@ pub(crate) fn lower_load<C: LowerCtx<I = Inst>, F: FnMut(&mut C, Writable<Reg>, 
 
     let off = ctx.data(ir_inst).load_store_offset().unwrap();
     let mem = lower_address(ctx, elem_ty, &inputs[..], off);
-    let rd = get_output_reg(ctx, output);
+    let rd = get_output_reg(ctx, output).only_reg().unwrap();
 
     f(ctx, rd, elem_ty, mem);
 }
