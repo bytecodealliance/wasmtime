@@ -138,42 +138,62 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 ),
             }
 
-            let intreg = in_int_reg(param.value_type);
-            let vecreg = in_vec_reg(param.value_type);
-            debug_assert!(intreg || vecreg);
-            debug_assert!(!(intreg && vecreg));
-
-            let (next_reg, candidate) = if intreg {
-                let candidate = match args_or_rets {
-                    ArgsOrRets::Args => get_intreg_for_arg_systemv(&call_conv, next_gpr),
-                    ArgsOrRets::Rets => get_intreg_for_retval_systemv(&call_conv, next_gpr, i),
-                };
-                debug_assert!(candidate
-                    .map(|r| r.get_class() == RegClass::I64)
-                    .unwrap_or(true));
-                (&mut next_gpr, candidate)
-            } else {
-                let candidate = match args_or_rets {
-                    ArgsOrRets::Args => get_fltreg_for_arg_systemv(&call_conv, next_vreg),
-                    ArgsOrRets::Rets => get_fltreg_for_retval_systemv(&call_conv, next_vreg, i),
-                };
-                debug_assert!(candidate
-                    .map(|r| r.get_class() == RegClass::V128)
-                    .unwrap_or(true));
-                (&mut next_vreg, candidate)
-            };
-
             if let Some(param) = try_fill_baldrdash_reg(call_conv, param) {
-                assert!(intreg);
                 ret.push(param);
-            } else if let Some(reg) = candidate {
+                continue;
+            }
+
+            // Find regclass(es) of the register(s) used to store a value of this type.
+            let (rcs, _) = Inst::rc_for_type(param.value_type)?;
+            let intreg = rcs[0] == RegClass::I64;
+            let num_regs = rcs.len();
+            assert!(num_regs <= 2);
+            if num_regs == 2 {
+                assert_eq!(rcs[0], rcs[1]);
+            }
+
+            let mut regs: SmallVec<[RealReg; 2]> = smallvec![];
+            for j in 0..num_regs {
+                let nextreg = if intreg {
+                    match args_or_rets {
+                        ArgsOrRets::Args => get_intreg_for_arg_systemv(&call_conv, next_gpr + j),
+                        ArgsOrRets::Rets => {
+                            get_intreg_for_retval_systemv(&call_conv, next_gpr + j, i + j)
+                        }
+                    }
+                } else {
+                    match args_or_rets {
+                        ArgsOrRets::Args => get_fltreg_for_arg_systemv(&call_conv, next_vreg + j),
+                        ArgsOrRets::Rets => {
+                            get_fltreg_for_retval_systemv(&call_conv, next_vreg + j, i + j)
+                        }
+                    }
+                };
+                if let Some(reg) = nextreg {
+                    regs.push(reg.to_real_reg());
+                } else {
+                    regs.clear();
+                    break;
+                }
+            }
+
+            if regs.len() > 0 {
+                let regs = match num_regs {
+                    1 => ValueRegs::one(regs[0]),
+                    2 => ValueRegs::two(regs[0], regs[1]),
+                    _ => panic!("More than two registers unexpected"),
+                };
                 ret.push(ABIArg::Reg(
-                    ValueRegs::one(reg.to_real_reg()),
+                    regs,
                     param.value_type,
                     param.extension,
                     param.purpose,
                 ));
-                *next_reg += 1;
+                if intreg {
+                    next_gpr += num_regs;
+                } else {
+                    next_vreg += num_regs;
+                }
             } else {
                 // Compute size. Every arg takes a minimum slot of 8 bytes. (16-byte
                 // stack alignment happens separately after all args.)
@@ -655,31 +675,6 @@ impl From<StackAMode> for SyntheticAmode {
                 })
             }
         }
-    }
-}
-
-fn in_int_reg(ty: types::Type) -> bool {
-    match ty {
-        types::I8
-        | types::I16
-        | types::I32
-        | types::I64
-        | types::B1
-        | types::B8
-        | types::B16
-        | types::B32
-        | types::B64
-        | types::R64 => true,
-        types::R32 => panic!("unexpected 32-bits refs on x64!"),
-        _ => false,
-    }
-}
-
-fn in_vec_reg(ty: types::Type) -> bool {
-    match ty {
-        types::F32 | types::F64 => true,
-        _ if ty.is_vector() => true,
-        _ => false,
     }
 }
 

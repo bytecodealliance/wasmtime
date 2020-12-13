@@ -1,0 +1,29 @@
+test compile
+target x86_64
+feature "experimental_x64"
+
+function %f0(i32, i128, i128) -> i128 {
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+
+block0(v0: i32, v1: i128, v2: i128):
+
+    v3 = iconst.i32 42
+    v4 = icmp.i32 eq v0, v3
+; nextln: movl    $$42, %eax
+; nextln: cmpl    %eax, %edi
+
+    v5 = select.i128 v4, v1, v2
+; nextln: cmovzq  %rsi, %rcx
+; nextln: cmovzq  %rdx, %r8
+
+    return v5
+; nextln: movq    %rcx, %rax
+; nextln: movq    %r8, %rdx
+
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+ 
+}
+

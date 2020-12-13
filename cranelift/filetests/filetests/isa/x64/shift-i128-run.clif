@@ -1,0 +1,106 @@
+test run
+target x86_64
+feature "experimental_x64"
+
+function %ishl1() -> b1 {
+block0:
+    v0 = iconst.i64 0x01010101_01010101
+    v1 = iconcat v0, v0
+    v2 = iconst.i32 2
+    v3 = ishl.i128 v1, v2
+    v4 = iconst.i64 0x04040404_04040404
+    v5 = iconcat v4, v4
+    v6 = icmp eq v3, v5
+    return v6
+}
+; run
+
+function %ishl2() -> b1 {
+block0:
+    v0 = iconst.i64 0x01010101_01010101
+    v1 = iconst.i64 0x01010101_01010101
+    v2 = iconcat v0, v1
+    v3 = iconst.i32 9
+    v4 = ishl.i128 v2, v3
+    v5 = iconst.i64 0x02020202_02020200
+    v6 = iconst.i64 0x02020202_02020202
+    v7 = iconcat v5, v6
+    v8 = icmp eq v4, v7
+    return v8
+}
+; run
+
+function %ishl3() -> b1 {
+block0:
+    v0 = iconst.i64 0x01010101_01010101
+    v1 = iconst.i64 0xffffffff_ffffffff
+    v2 = iconcat v0, v1
+    v3 = iconst.i32 66
+    v4 = ishl.i128 v2, v3
+    v5 = iconst.i64 0x00000000_00000000
+    v6 = iconst.i64 0x04040404_04040404
+    v7 = iconcat v5, v6
+    v8 = icmp eq v4, v7
+    return v8
+}
+; run
+
+function %ushr1() -> b1 {
+block0:
+    v0 = iconst.i64 0x01010101_01010101
+    v1 = iconst.i64 0x01010101_01010101
+    v2 = iconcat v0, v1
+    v3 = iconst.i32 2
+    v4 = ushr.i128 v2, v3
+    v5 = iconst.i64 0x40404040_40404040
+    v6 = iconst.i64 0x00404040_40404040
+    v7 = iconcat v5, v6
+    v8 = icmp eq v4, v7
+    return v8
+}
+; run
+
+function %ushr2() -> b1 {
+block0:
+    v0 = iconst.i64 0x01010101_01010101
+    v1 = iconst.i64 0x01010101_01010101
+    v2 = iconcat v0, v1
+    v3 = iconst.i32 66
+    v4 = ushr.i128 v2, v3
+    v5 = iconst.i64 0x00404040_40404040
+    v6 = iconst.i64 0x00000000_00000000
+    v7 = iconcat v5, v6
+    v8 = icmp eq v4, v7
+    return v8
+}
+; run
+
+function %sshr1() -> b1 {
+block0:
+    v0 = iconst.i64 0x01010101_01010101
+    v1 = iconst.i64 0x81010101_01010101
+    v2 = iconcat v0, v1
+    v3 = iconst.i32 2
+    v4 = sshr.i128 v2, v3
+    v5 = iconst.i64 0x40404040_40404040
+    v6 = iconst.i64 0xe0404040_40404040
+    v7 = iconcat v5, v6
+    v8 = icmp eq v4, v7
+    return v8
+}
+; run
+
+function %sshr2() -> b1 {
+block0:
+    v0 = iconst.i64 0x12345678_9abcdef0
+    v1 = iconst.i64 0x80101010_10101010
+    v2 = iconcat v0, v1
+    v3 = iconst.i32 66
+    v4 = sshr.i128 v2, v3
+    v5 = iconst.i64 0xe0040404_04040404
+    v6 = iconst.i64 0xffffffff_ffffffff
+    v7 = iconcat v5, v6
+    v8 = icmp eq v4, v7
+    return v8
+}
+; run
