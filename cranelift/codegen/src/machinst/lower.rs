@@ -375,8 +375,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
         }
 
-        let vm_context = f
-            .signature
+        let vm_context = vcode
+            .abi()
+            .signature()
             .special_param_index(ArgumentPurpose::VMContext)
             .map(|vm_context_index| {
                 let entry_block = f.layout.entry_block().unwrap();
@@ -386,7 +387,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         // Assign vreg(s) to each return value.
         let mut retval_regs = vec![];
-        for ret in &f.signature.returns {
+        for ret in &vcode.abi().signature().returns.clone() {
             let regs = alloc_vregs(ret.value_type, &mut next_vreg, &mut vcode)?;
             retval_regs.push(regs);
             debug!("retval gets regs {:?}", regs);
@@ -464,6 +465,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 let regs = writable_value_regs(self.value_regs[*param]);
                 for insn in self.vcode.abi().gen_copy_arg_to_regs(i, regs).into_iter() {
                     self.emit(insn);
+                }
+                if self.abi().signature().params[i].purpose == ArgumentPurpose::StructReturn {
+                    assert!(regs.len() == 1);
+                    let ty = self.abi().signature().params[i].value_type;
+                    self.emit(I::gen_move(
+                        Writable::from_reg(self.retval_regs[0].regs()[0]),
+                        regs.regs()[0].to_reg(),
+                        ty,
+                    ));
                 }
             }
             if let Some(insn) = self.vcode.abi().gen_retval_area_setup() {
