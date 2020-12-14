@@ -1,11 +1,10 @@
 //! Generating series of `table.get` and `table.set` operations.
 
 use arbitrary::Arbitrary;
-use std::fmt::Write;
 use std::ops::Range;
 use wasm_encoder::{
     CodeSection, Export, ExportSection, Function, FunctionSection, ImportSection, ImportType,
-    Instruction, Limits, Module, TableSection, TableType, ValType,
+    Instruction, Limits, Module, TableSection, TableType, TypeSection, ValType,
 };
 
 /// A description of a Wasm module that makes a series of `externref` table
@@ -36,7 +35,7 @@ impl TableOps {
         table_size
     }
 
-    /// Convert this into a wat string via producing a wasm_encoder binary.
+    /// Convert into a a wasm_encoded binary.
     ///
     /// The module requires a single import: `(import "" "gc" (func))`. This
     /// should be a function to trigger GC.
@@ -47,7 +46,7 @@ impl TableOps {
     /// The "run" function is guaranteed to terminate (no loops or recursive
     /// calls), but is not guaranteed to avoid traps (might access out-of-bounds
     /// of the table).
-    pub fn to_wat_string(&self) -> String {
+    pub fn to_wasm_binary(&self) -> Vec<u8> {
         let mut module = Module::new();
 
         // Import the GC function.
@@ -64,6 +63,15 @@ impl TableOps {
             },
         });
 
+        // Encode the type section for the "run" function.
+        let mut types = TypeSection::new();
+        let mut params: Vec<ValType> = Vec::with_capacity(self.num_params() as usize);
+        for _i in 0..self.num_params() {
+            params.push(ValType::ExternRef);
+        }
+        let results = vec![];
+        types.function(params, results);
+
         // Define the "run" function export.
         let mut functions = FunctionSection::new();
         functions.function(0);
@@ -78,20 +86,21 @@ impl TableOps {
         let mut func = Function::new(params);
 
         for op in self.ops.iter().take(MAX_OPS) {
-            func.instruction(op.to_instruction());
+            op.insert(&mut func);
         }
 
         let mut code = CodeSection::new();
         code.function(&func);
 
         module
+            .section(&types)
             .section(&imports)
             .section(&functions)
             .section(&tables)
             .section(&exports)
             .section(&code);
 
-        String::from_utf8(module.finish()).unwrap() // TODO: Doesn't actually turn into wat string
+        module.finish()
     }
 }
 
@@ -108,20 +117,22 @@ pub(crate) enum TableOp {
 }
 
 impl TableOp {
-    fn to_instruction(&self) -> Instruction {
+    fn insert(&self, func: &mut Function) {
         match self {
-            Self::Gc => Instruction::Call(0),
+            Self::Gc => {
+                func.instruction(Instruction::Call(0));
+            }
             Self::Get(x) => {
-                Instruction::Drop; // TODO: Need to group somehow
-                Instruction::TableGet { table: *x }
+                func.instruction(Instruction::Drop);
+                func.instruction(Instruction::TableGet { table: *x });
             }
             Self::SetFromParam(x, y) => {
-                Instruction::TableSet { table: *x }; // TODO: Need to group somehow
-                Instruction::LocalGet((*y).into())
+                func.instruction(Instruction::TableSet { table: *x });
+                func.instruction(Instruction::LocalGet((*y).into()));
             }
             Self::SetFromGet(x, y) => {
-                Instruction::TableSet { table: *x }; // TODO: Need to group somehow
-                Instruction::TableGet { table: *y }
+                func.instruction(Instruction::TableSet { table: *x });
+                func.instruction(Instruction::TableGet { table: *y });
             }
         }
     }
@@ -146,17 +157,21 @@ mod tests {
 
         let expected = r#"
 (module
-  (import "" "gc" (func))
-  (table $table 10 externref)
-  (func (export "run") (param externref externref)
-    (call 0)
-    (drop (table.get $table (i32.const 0)))
-    (table.set $table (i32.const 1) (local.get 2))
-    (table.set $table (i32.const 3) (table.get $table (i32.const 4)))
-  )
-)
+  (type (;0;) (func (param externref externref)))
+  (import "" "gc" (func (;0;) (type 0)))
+  (func (;1;) (type 0) (param externref externref)
+    call 0
+    drop
+    table.get 0
+    table.set 1
+    local.get 2
+    table.set 3
+    table.get 4)
+  (table (;0;) 10 externref)
+  (export "run" (func 0)))
 "#;
-        let actual = ops.to_wat_string();
+        let actual = ops.to_wasm_binary();
+        let actual = wasmprinter::print_bytes(&actual).unwrap();
         assert_eq!(actual.trim(), expected.trim());
     }
 }

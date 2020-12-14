@@ -404,7 +404,8 @@ pub fn table_ops(config: crate::generators::Config, ops: crate::generators::tabl
         let engine = Engine::new(&config);
         let store = Store::new(&engine);
 
-        let wat = ops.to_wat_string();
+        let wat = ops.to_wasm_binary();
+        let wat = wasmprinter::print_bytes(&wat).unwrap();
         log_wat(&wat);
         let module = match Module::new(&engine, &wat) {
             Ok(m) => m,
