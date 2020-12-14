@@ -1856,12 +1856,13 @@ fn convert_i64x2_imul(
     }
 }
 
+/// Expand a `tls_value` instruction.
 fn expand_tls_value(
     inst: ir::Inst,
     func: &mut ir::Function,
     _cfg: &mut ControlFlowGraph,
     isa: &dyn TargetIsa,
-) {
+) -> bool {
     use crate::settings::TlsModel;
 
     assert!(
@@ -1882,13 +1883,15 @@ fn expand_tls_value(
             TlsModel::None => panic!("tls_model flag is not set."),
             TlsModel::ElfGd => {
                 func.dfg.replace(inst).x86_elf_tls_get_addr(global_value);
+                true
             }
             TlsModel::Macho => {
                 func.dfg.replace(inst).x86_macho_tls_get_addr(global_value);
+                true
             }
             model => unimplemented!("tls_value for tls model {:?}", model),
         }
     } else {
-        unreachable!();
+        false
     }
 }

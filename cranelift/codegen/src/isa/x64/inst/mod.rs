@@ -470,6 +470,12 @@ pub enum Inst {
     /// reports its own `def`s/`use`s/`mod`s; this adds complexity (the instruction list is no
     /// longer flat) and requires knowledge about semantics and initial-value independence anyway.
     XmmUninitializedValue { dst: Writable<Reg> },
+
+    /// A call to the `ElfTlsGetAddr` libcall. Returns address
+    /// of TLS symbol in rax.
+    ElfTlsGetAddr {
+        symbol: ExternalName,
+    },
 }
 
 pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
@@ -528,7 +534,8 @@ impl Inst {
             | Inst::XmmCmpRmR { .. }
             | Inst::XmmLoadConst { .. }
             | Inst::XmmMinMaxSeq { .. }
-            | Inst::XmmUninitializedValue { .. } => None,
+            | Inst::XmmUninitializedValue { .. } 
+            | Inst::ElfTlsGetAddr { .. } => None,
 
             // These use dynamic SSE opcodes.
             Inst::GprToXmm { op, .. }
@@ -1743,6 +1750,10 @@ impl PrettyPrint for Inst {
             Inst::Hlt => "hlt".into(),
 
             Inst::Ud2 { trap_code } => format!("ud2 {}", trap_code),
+
+            Inst::ElfTlsGetAddr { ref symbol } => {
+                format!("elf_tls_get_addr {:?}", symbol)
+            }
         }
     }
 }
@@ -2001,6 +2012,36 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         | Inst::Ud2 { .. }
         | Inst::Fence { .. } => {
             // No registers are used.
+        }
+
+        Inst::ElfTlsGetAddr { .. } => {
+            // All caller-saves are clobbered.
+            collector.add_def(Writable::from_reg(regs::rsi()));
+            collector.add_def(Writable::from_reg(regs::rdi()));
+            collector.add_def(Writable::from_reg(regs::rax()));
+            collector.add_def(Writable::from_reg(regs::rcx()));
+            collector.add_def(Writable::from_reg(regs::rdx()));
+            collector.add_def(Writable::from_reg(regs::r8()));
+            collector.add_def(Writable::from_reg(regs::r9()));
+            collector.add_def(Writable::from_reg(regs::r10()));
+            collector.add_def(Writable::from_reg(regs::r11()));
+
+            collector.add_def(Writable::from_reg(regs::xmm0()));
+            collector.add_def(Writable::from_reg(regs::xmm1()));
+            collector.add_def(Writable::from_reg(regs::xmm2()));
+            collector.add_def(Writable::from_reg(regs::xmm3()));
+            collector.add_def(Writable::from_reg(regs::xmm4()));
+            collector.add_def(Writable::from_reg(regs::xmm5()));
+            collector.add_def(Writable::from_reg(regs::xmm6()));
+            collector.add_def(Writable::from_reg(regs::xmm7()));
+            collector.add_def(Writable::from_reg(regs::xmm8()));
+            collector.add_def(Writable::from_reg(regs::xmm9()));
+            collector.add_def(Writable::from_reg(regs::xmm10()));
+            collector.add_def(Writable::from_reg(regs::xmm11()));
+            collector.add_def(Writable::from_reg(regs::xmm12()));
+            collector.add_def(Writable::from_reg(regs::xmm13()));
+            collector.add_def(Writable::from_reg(regs::xmm14()));
+            collector.add_def(Writable::from_reg(regs::xmm15()));
         }
     }
 }
@@ -2388,10 +2429,12 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         | Inst::Ud2 { .. }
         | Inst::Hlt
         | Inst::AtomicRmwSeq { .. }
+        | Inst::ElfTlsGetAddr { .. } 
         | Inst::Fence { .. } => {
             // Instruction doesn't explicitly mention any regs, so it can't have any virtual
             // regs that we'd need to remap.  Hence no action required.
         }
+
     }
 }
 

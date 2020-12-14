@@ -5234,6 +5234,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::gen_move(dst_hi, src.regs()[1], types::I64));
         }
 
+        Opcode::TlsValue => {
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let (name, _, _) = ctx.symbol_value(insn).unwrap();
+            let symbol = name.clone();
+            ctx.emit(Inst::ElfTlsGetAddr { symbol });
+            ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
+        }
+
         Opcode::IaddImm
         | Opcode::ImulImm
         | Opcode::UdivImm
