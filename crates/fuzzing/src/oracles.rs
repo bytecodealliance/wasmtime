@@ -460,7 +460,7 @@ pub fn table_ops(config: crate::generators::Config, ops: crate::generators::tabl
 
 /// Configuration options for wasm-smith such that generated modules always
 /// conform to certain specifications.
-#[derive(Default, Debug, Arbitrary)]
+#[derive(Default, Debug, Arbitrary, Clone)]
 pub struct DifferentialWasmiModuleConfig;
 
 impl wasm_smith::Config for DifferentialWasmiModuleConfig {
