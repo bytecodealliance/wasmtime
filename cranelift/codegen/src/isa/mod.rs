@@ -235,6 +235,14 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         CallConv::triple_default(self.triple())
     }
 
+    /// Get the endianness of this ISA.
+    fn endianness(&self) -> ir::Endianness {
+        match self.triple().endianness().unwrap() {
+            target_lexicon::Endianness::Little => ir::Endianness::Little,
+            target_lexicon::Endianness::Big => ir::Endianness::Big,
+        }
+    }
+
     /// Get the pointer type of this ISA.
     fn pointer_type(&self) -> ir::Type {
         ir::Type::int(u16::from(self.pointer_bits())).unwrap()

@@ -6,15 +6,31 @@ enum FlagBit {
     Notrap,
     Aligned,
     Readonly,
+    LittleEndian,
+    BigEndian,
 }
 
-const NAMES: [&str; 3] = ["notrap", "aligned", "readonly"];
+const NAMES: [&str; 5] = ["notrap", "aligned", "readonly", "little", "big"];
+
+/// Endianness of a memory access.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub enum Endianness {
+    /// Little-endian
+    Little,
+    /// Big-endian
+    Big,
+}
 
 /// Flags for memory operations like load/store.
 ///
 /// Each of these flags introduce a limited form of undefined behavior. The flags each enable
 /// certain optimizations that need to make additional assumptions. Generally, the semantics of a
 /// program does not change when a flag is removed, but adding a flag will.
+///
+/// In addition, the flags determine the endianness of the memory access.  By default,
+/// any memory access uses the native endianness determined by the target ISA.  This can
+/// be overridden for individual accesses by explicitly specifying little- or big-endian
+/// semantics via the flags.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct MemFlags {
     bits: u8,
@@ -48,14 +64,46 @@ impl MemFlags {
     /// Set a flag bit by name.
     ///
     /// Returns true if the flag was found and set, false for an unknown flag name.
+    /// Will also return false when trying to set inconsistent endianness flags.
     pub fn set_by_name(&mut self, name: &str) -> bool {
         match NAMES.iter().position(|&s| s == name) {
             Some(bit) => {
-                self.bits |= 1 << bit;
-                true
+                let bits = self.bits | 1 << bit;
+                if (bits & (1 << FlagBit::LittleEndian as usize)) != 0
+                    && (bits & (1 << FlagBit::BigEndian as usize)) != 0
+                {
+                    false
+                } else {
+                    self.bits = bits;
+                    true
+                }
             }
             None => false,
         }
+    }
+
+    /// Return endianness of the memory access.  This will return the endianness
+    /// explicitly specified by the flags if any, and will default to the native
+    /// endianness otherwise.  The native endianness has to be provided by the
+    /// caller since it is not explicitly encoded in CLIF IR -- this allows a
+    /// front end to create IR without having to know the target endianness.
+    pub fn endianness(self, native_endianness: Endianness) -> Endianness {
+        if self.read(FlagBit::LittleEndian) {
+            Endianness::Little
+        } else if self.read(FlagBit::BigEndian) {
+            Endianness::Big
+        } else {
+            native_endianness
+        }
+    }
+
+    /// Set endianness of the memory access.
+    pub fn set_endianness(&mut self, endianness: Endianness) {
+        match endianness {
+            Endianness::Little => self.set(FlagBit::LittleEndian),
+            Endianness::Big => self.set(FlagBit::BigEndian),
+        };
+        assert!(!(self.read(FlagBit::LittleEndian) && self.read(FlagBit::BigEndian)));
     }
 
     /// Test if the `notrap` flag is set.
