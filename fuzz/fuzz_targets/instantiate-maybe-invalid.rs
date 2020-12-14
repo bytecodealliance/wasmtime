@@ -9,6 +9,7 @@ use wasmtime_fuzzing::oracles;
 fuzz_target!(|module: MaybeInvalidModule| {
     oracles::instantiate_with_config(
         &module.to_bytes(),
+        false,
         wasmtime_fuzzing::fuzz_default_config(Strategy::Auto).unwrap(),
         Some(Duration::from_secs(20)),
     );

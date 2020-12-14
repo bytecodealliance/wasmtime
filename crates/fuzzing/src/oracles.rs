@@ -57,8 +57,13 @@ fn log_wat(wat: &str) {
 /// Performs initial validation, and returns early if the Wasm is invalid.
 ///
 /// You can control which compiler is used via passing a `Strategy`.
-pub fn instantiate(wasm: &[u8], strategy: Strategy) {
-    instantiate_with_config(wasm, crate::fuzz_default_config(strategy).unwrap(), None);
+pub fn instantiate(wasm: &[u8], known_valid: bool, strategy: Strategy) {
+    instantiate_with_config(
+        wasm,
+        known_valid,
+        crate::fuzz_default_config(strategy).unwrap(),
+        None,
+    );
 }
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
@@ -67,7 +72,12 @@ pub fn instantiate(wasm: &[u8], strategy: Strategy) {
 /// The engine will be configured using provided config.
 ///
 /// See also `instantiate` functions.
-pub fn instantiate_with_config(wasm: &[u8], mut config: Config, timeout: Option<Duration>) {
+pub fn instantiate_with_config(
+    wasm: &[u8],
+    known_valid: bool,
+    mut config: Config,
+    timeout: Option<Duration>,
+) {
     crate::init_fuzzing();
 
     config.interruptable(timeout.is_some());
@@ -91,7 +101,11 @@ pub fn instantiate_with_config(wasm: &[u8], mut config: Config, timeout: Option<
     }
 
     log_wasm(wasm);
-    let module = Module::new(&engine, wasm).unwrap();
+    let module = match Module::new(&engine, wasm) {
+        Ok(module) => module,
+        Err(_) if !known_valid => return,
+        Err(e) => panic!("failed to compile module: {:?}", e),
+    };
     let imports = dummy_imports(&store, module.imports());
 
     match Instance::new(&store, &module, &imports) {
