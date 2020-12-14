@@ -1083,7 +1083,7 @@ fn emit_vm_call<C: LowerCtx<I = Inst>>(
     let sig = make_libcall_sig(ctx, insn, call_conv, types::I64);
     let caller_conv = ctx.abi().call_conv();
 
-    let mut abi = X64ABICaller::from_func(&sig, &extname, dist, caller_conv)?;
+    let mut abi = X64ABICaller::from_func(&sig, &extname, dist, caller_conv, flags)?;
 
     abi.emit_stack_pre_adjust(ctx);
 
@@ -3091,7 +3091,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert_eq!(inputs.len(), sig.params.len());
                     assert_eq!(outputs.len(), sig.returns.len());
                     (
-                        X64ABICaller::from_func(sig, &extname, dist, caller_conv)?,
+                        X64ABICaller::from_func(sig, &extname, dist, caller_conv, flags)?,
                         &inputs[..],
                     )
                 }
@@ -3102,7 +3102,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert_eq!(inputs.len() - 1, sig.params.len());
                     assert_eq!(outputs.len(), sig.returns.len());
                     (
-                        X64ABICaller::from_ptr(sig, ptr, op, caller_conv)?,
+                        X64ABICaller::from_ptr(sig, ptr, op, caller_conv, flags)?,
                         &inputs[1..],
                     )
                 }
@@ -3112,8 +3112,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             abi.emit_stack_pre_adjust(ctx);
             assert_eq!(inputs.len(), abi.num_args());
-            for (i, input) in inputs.iter().enumerate() {
-                let arg_regs = put_input_in_regs(ctx, *input);
+            for i in abi.get_copy_to_arg_order() {
+                let input = inputs[i];
+                let arg_regs = put_input_in_regs(ctx, input);
                 abi.emit_copy_regs_to_arg(ctx, i, arg_regs);
             }
             abi.emit_call(ctx);

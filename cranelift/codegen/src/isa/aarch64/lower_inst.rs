@@ -7,6 +7,7 @@ use crate::ir::Inst as IRInst;
 use crate::ir::{InstructionData, Opcode, TrapCode};
 use crate::machinst::lower::*;
 use crate::machinst::*;
+use crate::settings::Flags;
 use crate::{CodegenError, CodegenResult};
 
 use crate::isa::aarch64::abi::*;
@@ -24,6 +25,7 @@ use super::lower::*;
 pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     insn: IRInst,
+    flags: &Flags,
 ) -> CodegenResult<()> {
     let op = ctx.data(insn).opcode();
     let inputs = insn_inputs(ctx, insn);
@@ -1803,7 +1805,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert!(inputs.len() == sig.params.len());
                     assert!(outputs.len() == sig.returns.len());
                     (
-                        AArch64ABICaller::from_func(sig, &extname, dist, caller_conv)?,
+                        AArch64ABICaller::from_func(sig, &extname, dist, caller_conv, flags)?,
                         &inputs[..],
                     )
                 }
@@ -1813,7 +1815,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert!(inputs.len() - 1 == sig.params.len());
                     assert!(outputs.len() == sig.returns.len());
                     (
-                        AArch64ABICaller::from_ptr(sig, ptr, op, caller_conv)?,
+                        AArch64ABICaller::from_ptr(sig, ptr, op, caller_conv, flags)?,
                         &inputs[1..],
                     )
                 }
@@ -1822,8 +1824,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             abi.emit_stack_pre_adjust(ctx);
             assert!(inputs.len() == abi.num_args());
-            for (i, input) in inputs.iter().enumerate() {
-                let arg_reg = put_input_in_reg(ctx, *input, NarrowValueMode::None);
+            for i in abi.get_copy_to_arg_order() {
+                let input = inputs[i];
+                let arg_reg = put_input_in_reg(ctx, input, NarrowValueMode::None);
                 abi.emit_copy_regs_to_arg(ctx, i, ValueRegs::one(arg_reg));
             }
             abi.emit_call(ctx);

@@ -81,12 +81,12 @@ impl ABIMachineSpec for Arm32MachineDeps {
             if next_rreg < max_reg_val {
                 let reg = rreg(next_rreg);
 
-                ret.push(ABIArg::Reg(
-                    ValueRegs::one(reg.to_real_reg()),
-                    param.value_type,
-                    param.extension,
-                    param.purpose,
-                ));
+                ret.push(ABIArg::Reg {
+                    regs: ValueRegs::one(reg.to_real_reg()),
+                    ty: param.value_type,
+                    extension: param.extension,
+                    purpose: param.purpose,
+                });
                 next_rreg += 1;
             } else {
                 // Arguments are stored on stack in reversed order.
@@ -101,12 +101,12 @@ impl ABIMachineSpec for Arm32MachineDeps {
         let extra_arg = if add_ret_area_ptr {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
             if next_rreg < max_reg_val {
-                ret.push(ABIArg::Reg(
-                    ValueRegs::one(rreg(next_rreg).to_real_reg()),
-                    I32,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                ));
+                ret.push(ABIArg::Reg {
+                    regs: ValueRegs::one(rreg(next_rreg).to_real_reg()),
+                    ty: I32,
+                    extension: ir::ArgumentExtension::None,
+                    purpose: ir::ArgumentPurpose::Normal,
+                });
             } else {
                 stack_args.push((
                     I32,
@@ -124,12 +124,12 @@ impl ABIMachineSpec for Arm32MachineDeps {
         let max_stack = next_stack;
         for (ty, ext, purpose) in stack_args.into_iter().rev() {
             next_stack -= 4;
-            ret.push(ABIArg::Stack(
-                (max_stack - next_stack) as i64,
+            ret.push(ABIArg::Stack {
+                offset: (max_stack - next_stack) as i64,
                 ty,
-                ext,
+                extension: ext,
                 purpose,
-            ));
+            });
         }
         assert_eq!(next_stack, 0);
 
@@ -424,6 +424,15 @@ impl ABIMachineSpec for Arm32MachineDeps {
         }
 
         insts
+    }
+
+    fn gen_memcpy(
+        _call_conv: isa::CallConv,
+        _dst: Reg,
+        _src: Reg,
+        _size: usize,
+    ) -> SmallVec<[Self::I; 8]> {
+        unimplemented!("StructArgs not implemented for ARM32 yet");
     }
 
     fn get_number_of_spillslots_for_value(rc: RegClass, _ty: Type) -> u32 {

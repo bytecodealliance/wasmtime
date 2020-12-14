@@ -1,0 +1,147 @@
+test compile
+target x86_64
+feature "experimental_x64"
+
+function u0:0(i64 sarg(64)) -> i8 system_v {
+block0(v0: i64):
+    v1 = load.i8 v0
+    return v1
+}
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: lea     16(%rbp), %rsi
+; nextln: movzbq  0(%rsi), %rsi
+; nextln: movq    %rsi, %rax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+
+function u0:1(i64 sarg(64), i64) -> i8 system_v {
+block0(v0: i64, v1: i64):
+    v2 = load.i8 v1
+	v3 = load.i8 v0
+	v4 = iadd.i8 v2, v3
+    return v4
+}
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: lea     16(%rbp), %rsi
+; nextln: movzbq  0(%rdi), %rdi
+; nextln: movzbq  0(%rsi), %rsi
+; nextln: addl    %esi, %edi
+; nextln: movq    %rdi, %rax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+
+function u0:2(i64) -> i8 system_v {
+fn1 = colocated u0:0(i64 sarg(64)) -> i8 system_v
+
+block0(v0: i64):
+    v1 = call fn1(v0)
+    return v1
+}
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: movq    %rdi, %rsi
+; nextln: subq    $$64, %rsp
+; nextln: virtual_sp_offset_adjust 64
+; nextln: lea     0(%rsp), %rdi
+; nextln: movl    $$64, %edx
+; nextln: load_ext_name %Memcpy+0, %rcx
+; nextln: call    *%rcx
+; nextln: call    User { namespace: 0, index: 0 }
+; nextln: addq    $$64, %rsp
+; nextln: virtual_sp_offset_adjust -64
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+
+function u0:3(i64, i64) -> i8 system_v {
+fn1 = colocated u0:0(i64, i64 sarg(64)) -> i8 system_v
+
+block0(v0: i64, v1: i64):
+    v2 = call fn1(v0, v1)
+    return v2
+}
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: subq    $$16, %rsp
+; nextln: movq    %r12, 0(%rsp)
+; nextln: virtual_sp_offset_adjust 16
+; nextln: movq    %rdi, %r12
+; nextln: subq    $$64, %rsp
+; nextln: virtual_sp_offset_adjust 64
+; nextln: lea     0(%rsp), %rdi
+; nextln: movl    $$64, %edx
+; nextln: load_ext_name %Memcpy+0, %rcx
+; nextln: call    *%rcx
+; nextln: movq    %r12, %rdi
+; nextln: call    User { namespace: 0, index: 0 }
+; nextln: addq    $$64, %rsp
+; nextln: virtual_sp_offset_adjust -64
+; nextln: movq    0(%rsp), %r12
+; nextln: addq    $$16, %rsp
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+
+function u0:4(i64 sarg(128), i64 sarg(64)) -> i8 system_v {
+block0(v0: i64, v1: i64):
+    v2 = load.i8 v0
+    v3 = load.i8 v1
+    v4 = iadd.i8 v2, v3
+    return v4
+}
+
+; check:  movq    %rsp, %rbp
+; nextln: lea     16(%rbp), %rsi
+; nextln: lea     144(%rbp), %rdi
+; nextln: movzbq  0(%rsi), %rsi
+; nextln: movzbq  0(%rdi), %rdi
+; nextln: addl    %edi, %esi
+; nextln: movq    %rsi, %rax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+
+function u0:5(i64, i64, i64) -> i8 system_v {
+fn1 = colocated u0:0(i64, i64 sarg(128), i64 sarg(64)) -> i8 system_v
+
+block0(v0: i64, v1: i64, v2: i64):
+    v3 = call fn1(v0, v1, v2)
+    return v3
+}
+
+; check:  movq    %rsp, %rbp
+; nextln: subq    $$16, %rsp
+; nextln: movq    %r12, 0(%rsp)
+; nextln: movq    %r13, 8(%rsp)
+; nextln: virtual_sp_offset_adjust 16
+; nextln: movq    %rdi, %r12
+; nextln: movq    %rdx, %r13
+; nextln: subq    $$192, %rsp
+; nextln: virtual_sp_offset_adjust 192
+; nextln: lea     0(%rsp), %rdi
+; nextln: movl    $$128, %edx
+; nextln: load_ext_name %Memcpy+0, %rcx
+; nextln: call    *%rcx
+; nextln: lea     128(%rsp), %rdi
+; nextln: movq    %r13, %rsi
+; nextln: movl    $$64, %edx
+; nextln: load_ext_name %Memcpy+0, %rcx
+; nextln: call    *%rcx
+; nextln: movq    %r12, %rdi
+; nextln: call    User { namespace: 0, index: 0 }
+; nextln: addq    $$192, %rsp
+; nextln: virtual_sp_offset_adjust -192
+; nextln: movq    0(%rsp), %r12
+; nextln: movq    8(%rsp), %r13
+; nextln: addq    $$16, %rsp
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret

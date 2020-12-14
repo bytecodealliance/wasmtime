@@ -31,41 +31,41 @@ fn try_fill_baldrdash_reg(call_conv: CallConv, param: &ir::AbiParam) -> Option<A
         match &param.purpose {
             &ir::ArgumentPurpose::VMContext => {
                 // This is SpiderMonkey's `WasmTlsReg`.
-                Some(ABIArg::Reg(
-                    ValueRegs::one(regs::r14().to_real_reg()),
-                    types::I64,
-                    param.extension,
-                    param.purpose,
-                ))
+                Some(ABIArg::Reg {
+                    regs: ValueRegs::one(regs::r14().to_real_reg()),
+                    ty: types::I64,
+                    extension: param.extension,
+                    purpose: param.purpose,
+                })
             }
             &ir::ArgumentPurpose::SignatureId => {
                 // This is SpiderMonkey's `WasmTableCallSigReg`.
-                Some(ABIArg::Reg(
-                    ValueRegs::one(regs::r10().to_real_reg()),
-                    types::I64,
-                    param.extension,
-                    param.purpose,
-                ))
+                Some(ABIArg::Reg {
+                    regs: ValueRegs::one(regs::r10().to_real_reg()),
+                    ty: types::I64,
+                    extension: param.extension,
+                    purpose: param.purpose,
+                })
             }
             &ir::ArgumentPurpose::CalleeTLS => {
                 // This is SpiderMonkey's callee TLS slot in the extended frame of Wasm's ABI-2020.
                 assert!(call_conv == isa::CallConv::Baldrdash2020);
-                Some(ABIArg::Stack(
-                    BALDRDASH_CALLEE_TLS_OFFSET,
-                    ir::types::I64,
-                    ir::ArgumentExtension::None,
-                    param.purpose,
-                ))
+                Some(ABIArg::Stack {
+                    offset: BALDRDASH_CALLEE_TLS_OFFSET,
+                    ty: ir::types::I64,
+                    extension: ir::ArgumentExtension::None,
+                    purpose: param.purpose,
+                })
             }
             &ir::ArgumentPurpose::CallerTLS => {
                 // This is SpiderMonkey's caller TLS slot in the extended frame of Wasm's ABI-2020.
                 assert!(call_conv == isa::CallConv::Baldrdash2020);
-                Some(ABIArg::Stack(
-                    BALDRDASH_CALLER_TLS_OFFSET,
-                    ir::types::I64,
-                    ir::ArgumentExtension::None,
-                    param.purpose,
-                ))
+                Some(ABIArg::Stack {
+                    offset: BALDRDASH_CALLER_TLS_OFFSET,
+                    ty: ir::types::I64,
+                    extension: ir::ArgumentExtension::None,
+                    purpose: param.purpose,
+                })
             }
             _ => None,
         }
@@ -131,7 +131,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 | &ir::ArgumentPurpose::StackLimit
                 | &ir::ArgumentPurpose::SignatureId
                 | &ir::ArgumentPurpose::CalleeTLS
-                | &ir::ArgumentPurpose::CallerTLS => {}
+                | &ir::ArgumentPurpose::CallerTLS
+                | &ir::ArgumentPurpose::StructReturn
+                | &ir::ArgumentPurpose::StructArgument(_) => {}
                 _ => panic!(
                     "Unsupported argument purpose {:?} in signature: {:?}",
                     param.purpose, params
@@ -140,6 +142,19 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
             if let Some(param) = try_fill_baldrdash_reg(call_conv, param) {
                 ret.push(param);
+                continue;
+            }
+
+            if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
+                let offset = next_stack as i64;
+                let size = size as u64;
+                assert!(size % 8 == 0, "StructArgument size is not properly aligned");
+                next_stack += size;
+                ret.push(ABIArg::StructArg {
+                    offset,
+                    size,
+                    purpose: param.purpose,
+                });
                 continue;
             }
 
@@ -183,12 +198,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                     2 => ValueRegs::two(regs[0], regs[1]),
                     _ => panic!("More than two registers unexpected"),
                 };
-                ret.push(ABIArg::Reg(
+                ret.push(ABIArg::Reg {
                     regs,
-                    param.value_type,
-                    param.extension,
-                    param.purpose,
-                ));
+                    ty: param.value_type,
+                    extension: param.extension,
+                    purpose: param.purpose,
+                });
                 if intreg {
                     next_gpr += num_regs;
                 } else {
@@ -202,12 +217,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 // Align.
                 debug_assert!(size.is_power_of_two());
                 next_stack = (next_stack + size - 1) & !(size - 1);
-                ret.push(ABIArg::Stack(
-                    next_stack as i64,
-                    param.value_type,
-                    param.extension,
-                    param.purpose,
-                ));
+                ret.push(ABIArg::Stack {
+                    offset: next_stack as i64,
+                    ty: param.value_type,
+                    extension: param.extension,
+                    purpose: param.purpose,
+                });
                 next_stack += size;
             }
         }
@@ -219,19 +234,19 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let extra_arg = if add_ret_area_ptr {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
             if let Some(reg) = get_intreg_for_arg_systemv(&call_conv, next_gpr) {
-                ret.push(ABIArg::Reg(
-                    ValueRegs::one(reg.to_real_reg()),
-                    types::I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                ));
+                ret.push(ABIArg::Reg {
+                    regs: ValueRegs::one(reg.to_real_reg()),
+                    ty: types::I64,
+                    extension: ir::ArgumentExtension::None,
+                    purpose: ir::ArgumentPurpose::Normal,
+                });
             } else {
-                ret.push(ABIArg::Stack(
-                    next_stack as i64,
-                    types::I64,
-                    ir::ArgumentExtension::None,
-                    ir::ArgumentPurpose::Normal,
-                ));
+                ret.push(ABIArg::Stack {
+                    offset: next_stack as i64,
+                    ty: types::I64,
+                    extension: ir::ArgumentExtension::None,
+                    purpose: ir::ArgumentPurpose::Normal,
+                });
                 next_stack += 8;
             }
             Some(ret.len() - 1)
@@ -441,6 +456,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let stack_size = clobbered_size + fixed_frame_storage_size;
         // Align to 16 bytes.
         let stack_size = (stack_size + 15) & !15;
+        let clobbered_size = stack_size - fixed_frame_storage_size;
         // Adjust the stack pointer downward with one `sub rsp, IMM`
         // instruction.
         if stack_size > 0 {
@@ -564,6 +580,51 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 ));
             }
         }
+        insts
+    }
+
+    fn gen_memcpy(
+        call_conv: isa::CallConv,
+        dst: Reg,
+        src: Reg,
+        size: usize,
+    ) -> SmallVec<[Self::I; 8]> {
+        // Baldrdash should not use struct args.
+        assert!(!call_conv.extends_baldrdash());
+        let mut insts = SmallVec::new();
+        let arg0 = get_intreg_for_arg_systemv(&call_conv, 0).unwrap();
+        let arg1 = get_intreg_for_arg_systemv(&call_conv, 1).unwrap();
+        let arg2 = get_intreg_for_arg_systemv(&call_conv, 2).unwrap();
+        // We need a register to load the address of `memcpy()` below and we
+        // don't have a lowering context to allocate a temp here; so just use a
+        // register we know we are free to mutate as part of this sequence
+        // (because it is clobbered by the call as per the ABI anyway).
+        let memcpy_addr = get_intreg_for_arg_systemv(&call_conv, 3).unwrap();
+        insts.push(Inst::gen_move(Writable::from_reg(arg0), dst, I64));
+        insts.push(Inst::gen_move(Writable::from_reg(arg1), src, I64));
+        insts.extend(
+            Inst::gen_constant(
+                ValueRegs::one(Writable::from_reg(arg2)),
+                size as u128,
+                I64,
+                |_| panic!("tmp should not be needed"),
+            )
+            .into_iter(),
+        );
+        // We use an indirect call and a full LoadExtName because we do not have
+        // information about the libcall `RelocDistance` here, so we
+        // conservatively use the more flexible calling sequence.
+        insts.push(Inst::LoadExtName {
+            dst: Writable::from_reg(memcpy_addr),
+            name: Box::new(ExternalName::LibCall(LibCall::Memcpy)),
+            offset: 0,
+        });
+        insts.push(Inst::call_unknown(
+            RegMem::reg(memcpy_addr),
+            /* uses = */ vec![arg0, arg1, arg2],
+            /* defs = */ Self::get_regs_clobbered_by_call(call_conv),
+            Opcode::Call,
+        ));
         insts
     }
 
