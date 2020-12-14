@@ -80,7 +80,7 @@ impl TableOps {
         exports.export("run", Export::Function(0));
 
         let mut params: Vec<(u32, ValType)> = Vec::with_capacity(self.num_params() as usize);
-        for i in 0..self.num_params() {
+        for _i in 0..self.num_params() {
             params.push((0, ValType::ExternRef));
         }
         let mut func = Function::new(params);
