@@ -1,5 +1,6 @@
 use crate::binemit::{Addend, Reloc};
 use crate::ir::immediates::{Ieee32, Ieee64};
+use crate::ir::LibCall;
 use crate::ir::TrapCode;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
@@ -2987,6 +2988,33 @@ pub(crate) fn emit(
 
         Inst::EpiloguePlaceholder => {
             // Generate no code.
+        }
+
+        Inst::ElfTlsGetAddr { ref symbol } => {
+            // N.B.: Must be exactly this byte sequence; the linker requires it,
+            // because it must know how to rewrite the bytes.
+
+            // data16 lea gv@tlsgd(%rip),%rdi
+            sink.put1(0x66); // data16
+            sink.put1(0b01001000); // REX.W
+            sink.put1(0x8d); // LEA
+            sink.put1(0x3d); // ModRM byte
+            emit_reloc(sink, state, Reloc::ElfX86_64TlsGd, symbol, -4);
+            sink.put4(0); // offset
+
+            // data16 data16 callq __tls_get_addr-4
+            sink.put1(0x66); // data16
+            sink.put1(0x66); // data16
+            sink.put1(0b01001000); // REX.W
+            sink.put1(0xe8); // CALL
+            emit_reloc(
+                sink,
+                state,
+                Reloc::X86CallPLTRel4,
+                &ExternalName::LibCall(LibCall::ElfTlsGetAddr),
+                -4,
+            );
+            sink.put4(0); // offset
         }
     }
 

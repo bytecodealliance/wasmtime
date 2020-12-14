@@ -3904,6 +3904,17 @@ fn test_x64_emit() {
     let trap_code = TrapCode::UnreachableCodeReached;
     insns.push((Inst::Ud2 { trap_code }, "0F0B", "ud2 unreachable"));
 
+    insns.push((
+        Inst::ElfTlsGetAddr {
+            symbol: ExternalName::User {
+                namespace: 0,
+                index: 0,
+            },
+        },
+        "66488D3D00000000666648E800000000",
+        "elf_tls_get_addr User { namespace: 0, index: 0 }",
+    ));
+
     // ========================================================
     // Actually run the tests!
     let mut flag_builder = settings::builder();

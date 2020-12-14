@@ -12,7 +12,7 @@ use crate::isa::{x64::X64Backend, CallConv};
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
-use crate::settings::Flags;
+use crate::settings::{Flags, TlsModel};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use cranelift_codegen_shared::condcodes::CondCode;
@@ -5323,6 +5323,22 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::gen_move(dst_lo, src.regs()[0], types::I64));
             ctx.emit(Inst::gen_move(dst_hi, src.regs()[1], types::I64));
         }
+
+        Opcode::TlsValue => match flags.tls_model() {
+            TlsModel::ElfGd => {
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                let (name, _, _) = ctx.symbol_value(insn).unwrap();
+                let symbol = name.clone();
+                ctx.emit(Inst::ElfTlsGetAddr { symbol });
+                ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
+            }
+            _ => {
+                todo!(
+                    "Unimplemented TLS model in x64 backend: {:?}",
+                    flags.tls_model()
+                );
+            }
+        },
 
         Opcode::IaddImm
         | Opcode::ImulImm
