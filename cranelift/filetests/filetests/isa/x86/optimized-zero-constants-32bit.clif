@@ -44,9 +44,9 @@ block0:
 
 function %zero_byte() -> i8 fast {
 block0:
-  ; asm: xor %al, %al
-  [-,%rax]     v0 = iconst.i8 0     ; bin: 30 c0
-  ; asm: xor %dh, %dh
-  [-,%rdi]     v1 = iconst.i8 0     ; bin: 30 ff
+  ; asm: xor %eax, %eax
+  [-,%rax]     v0 = iconst.i8 0     ; bin: 31 c0
+  ; asm: xor %edi, %edi
+  [-,%rdi]     v1 = iconst.i8 0     ; bin: 31 ff
   return v0
 }

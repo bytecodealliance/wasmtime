@@ -31,6 +31,10 @@ pub struct ModuleEnvironment<'data> {
     /// the module linking proposal.
     results: Vec<ModuleTranslation<'data>>,
 
+    /// How many modules that have not yet made their way into `results` which
+    /// are coming at some point.
+    modules_to_be: usize,
+
     /// Intern'd types for this entire translation, shared by all modules.
     types: TypeTables,
 
@@ -138,6 +142,7 @@ impl<'data> ModuleEnvironment<'data> {
         Self {
             result: ModuleTranslation::default(),
             results: Vec::with_capacity(1),
+            modules_to_be: 1,
             cur: 0,
             types: Default::default(),
             target_config,
@@ -741,8 +746,8 @@ and for re-adding support for interface types you can see this issue:
     fn reserve_modules(&mut self, amount: u32) {
         // Go ahead and reserve space in the final `results` array for `amount`
         // more modules.
-        let extra = self.results.capacity() + (amount as usize) - self.results.len();
-        self.results.reserve(extra);
+        self.modules_to_be += amount as usize;
+        self.results.reserve(self.modules_to_be);
 
         // Then also reserve space in our own local module's metadata fields
         // we'll be adding to.
@@ -796,6 +801,7 @@ and for re-adding support for interface types you can see this issue:
         self.cur = index;
         assert_eq!(index, self.results.len());
         self.results.push(prev);
+        self.modules_to_be -= 1;
     }
 
     fn module_end(&mut self, index: usize) {

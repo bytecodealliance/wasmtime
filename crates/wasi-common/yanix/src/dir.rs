@@ -36,9 +36,15 @@ impl Dir {
     }
 
     /// Set the position of the directory stream, see `seekdir(3)`.
-    #[cfg(not(target_os = "android"))]
     pub fn seek(&mut self, loc: SeekLoc) {
-        unsafe { libc::seekdir(self.0.as_ptr(), loc.0) }
+        // https://github.com/rust-lang/libc/pull/1996
+        #[cfg(not(target_os = "android"))]
+        use libc::seekdir;
+        #[cfg(target_os = "android")]
+        extern "C" {
+            fn seekdir(dirp: *mut libc::DIR, loc: libc::c_long);
+        }
+        unsafe { seekdir(self.0.as_ptr(), loc.0) }
     }
 
     /// Reset directory stream, see `rewinddir(3)`.
@@ -50,10 +56,16 @@ impl Dir {
     ///
     /// If this location is given to `Dir::seek`, the entries up to the previously returned
     /// will be omitted and the iteration will start from the currently pending directory entry.
-    #[cfg(not(target_os = "android"))]
     #[allow(dead_code)]
     pub fn tell(&self) -> SeekLoc {
-        let loc = unsafe { libc::telldir(self.0.as_ptr()) };
+        #[cfg(not(target_os = "android"))]
+        use libc::telldir;
+        #[cfg(target_os = "android")]
+        extern "C" {
+            fn telldir(dirp: *mut libc::DIR) -> libc::c_long;
+        }
+        // https://github.com/rust-lang/libc/pull/1996
+        let loc = unsafe { telldir(self.0.as_ptr()) };
         SeekLoc(loc)
     }
 
@@ -93,11 +105,9 @@ impl Entry {
     }
 }
 
-#[cfg(not(target_os = "android"))]
 #[derive(Clone, Copy, Debug)]
 pub struct SeekLoc(pub(crate) libc::c_long);
 
-#[cfg(not(target_os = "android"))]
 impl SeekLoc {
     pub fn to_raw(&self) -> i64 {
         self.0.into()

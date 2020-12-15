@@ -9,5 +9,5 @@ fuzz_target!(|module: Module| {
     let mut module = module;
     module.ensure_termination(1000);
     let wasm_bytes = module.to_bytes();
-    oracles::instantiate(&wasm_bytes, Strategy::Auto);
+    oracles::instantiate(&wasm_bytes, true, Strategy::Auto);
 });

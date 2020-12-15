@@ -711,9 +711,6 @@ pub static XOR_IMM8_SIGN_EXTEND: [u8; 1] = [0x83];
 /// r/m{16,32,64} XOR register of the same size.
 pub static XOR: [u8; 1] = [0x31];
 
-/// r/m8 XOR r8.
-pub static XORB: [u8; 1] = [0x30];
-
 /// Bitwise logical XOR of packed double-precision floating-point values.
 pub static XORPD: [u8; 3] = [0x66, 0x0f, 0x57];
 

@@ -50,7 +50,7 @@ pub use crate::ir::instructions::{
 pub use crate::ir::jumptable::JumpTableData;
 pub use crate::ir::layout::Layout;
 pub use crate::ir::libcall::{get_probestack_funcref, LibCall};
-pub use crate::ir::memflags::MemFlags;
+pub use crate::ir::memflags::{Endianness, MemFlags};
 pub use crate::ir::progpoint::{ExpandedProgramPoint, ProgramOrder, ProgramPoint};
 pub use crate::ir::sourceloc::SourceLoc;
 pub use crate::ir::stackslot::{StackLayoutInfo, StackSlotData, StackSlotKind, StackSlots};

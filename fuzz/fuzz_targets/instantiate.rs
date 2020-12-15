@@ -5,5 +5,5 @@ use wasmtime::Strategy;
 use wasmtime_fuzzing::oracles;
 
 fuzz_target!(|data: &[u8]| {
-    oracles::instantiate(data, Strategy::Auto);
+    oracles::instantiate(data, false, Strategy::Auto);
 });

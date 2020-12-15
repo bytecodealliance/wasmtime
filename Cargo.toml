@@ -64,6 +64,7 @@ opt-level = 0
 [workspace]
 members = [
   "cranelift",
+  "crates/bench-api",
   "crates/c-api",
   "crates/fuzzing",
   "crates/misc/run-examples",
