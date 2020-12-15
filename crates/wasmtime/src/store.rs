@@ -18,9 +18,18 @@ use std::task::{Context, Poll};
 use wasmtime_environ::wasm;
 use wasmtime_jit::{CompiledModule, ModuleCode, TypeTables};
 use wasmtime_runtime::{
-    InstanceHandle, SignalHandler, StackMapRegistry, TrapInfo, VMContext, VMExternRef,
-    VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
+    InstanceAllocator, InstanceHandle, SignalHandler, StackMapRegistry, TrapInfo, VMContext,
+    VMExternRef, VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
 };
+
+/// Used to associate instances with the store.
+///
+/// This is needed to track if the instance was allocated expliclty with the default
+/// instance allocator.
+struct StoreInstance {
+    handle: InstanceHandle,
+    use_default_allocator: bool,
+}
 
 /// A `Store` is a collection of WebAssembly instances and host-defined items.
 ///
@@ -63,7 +72,7 @@ pub(crate) struct StoreInner {
     engine: Engine,
     interrupts: Arc<VMInterrupts>,
     signatures: RefCell<SignatureRegistry>,
-    instances: RefCell<Vec<InstanceHandle>>,
+    instances: RefCell<Vec<StoreInstance>>,
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
     externref_activations_table: VMExternRefActivationsTable,
     stack_map_registry: StackMapRegistry,
@@ -374,8 +383,15 @@ impl Store {
         Ok(())
     }
 
-    pub(crate) unsafe fn add_instance(&self, handle: InstanceHandle) -> StoreInstanceHandle {
-        self.inner.instances.borrow_mut().push(handle.clone());
+    pub(crate) unsafe fn add_instance(
+        &self,
+        handle: InstanceHandle,
+        use_default_allocator: bool,
+    ) -> StoreInstanceHandle {
+        self.inner.instances.borrow_mut().push(StoreInstance {
+            handle: handle.clone(),
+            use_default_allocator,
+        });
         StoreInstanceHandle {
             store: self.clone(),
             handle,
@@ -388,7 +404,7 @@ impl Store {
             .instances
             .borrow()
             .iter()
-            .any(|i| i.vmctx_ptr() == handle.vmctx_ptr()));
+            .any(|i| i.handle.vmctx_ptr() == handle.vmctx_ptr()));
         StoreInstanceHandle {
             store: self.clone(),
             handle,
@@ -963,7 +979,14 @@ impl Drop for StoreInner {
         let allocator = self.engine.config().instance_allocator();
         for instance in self.instances.borrow().iter() {
             unsafe {
-                allocator.deallocate(instance);
+                if instance.use_default_allocator {
+                    self.engine
+                        .config()
+                        .default_instance_allocator
+                        .deallocate(&instance.handle);
+                } else {
+                    allocator.deallocate(&instance.handle);
+                }
             }
         }
     }

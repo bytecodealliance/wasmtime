@@ -44,6 +44,6 @@ pub(crate) fn create_handle(
                 stack_map_registry: store.stack_map_registry() as *const StackMapRegistry as *mut _,
             })?;
 
-        Ok(store.add_instance(handle))
+        Ok(store.add_instance(handle, true))
     }
 }
