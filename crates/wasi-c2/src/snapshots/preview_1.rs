@@ -1,5 +1,5 @@
 #![allow(unused_variables)]
-use crate::dir::{DirCaps, DirEntry, ReaddirCursor, TableDirExt};
+use crate::dir::{DirCaps, DirEntry, DirStat, ReaddirCursor, TableDirExt};
 use crate::file::{FdFlags, FdStat, FileCaps, FileEntry, Filestat, Filetype, OFlags};
 use crate::{Error, WasiCtx};
 use fs_set_times::SystemTimeSpec;
@@ -168,6 +168,9 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let mut table = self.table();
         let fd = u32::from(fd);
 
+        if !table.contains_key(fd) {
+            return Err(Error::Badf);
+        }
         // fd_close must close either a File or a Dir handle
         if table.is::<FileEntry>(fd) {
             let _ = table.delete(fd);
@@ -179,6 +182,9 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             }
             drop(dir_entry);
             let _ = table.delete(fd);
+        } else {
+            // XXX do we just table delete anyway?
+            return Err(Error::Badf);
         }
 
         Ok(())
@@ -194,16 +200,25 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_fdstat_get(&self, fd: types::Fd) -> Result<types::Fdstat, Error> {
         let table = self.table();
-        let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
-        let fdstat = file_entry.get_fdstat()?;
-        Ok(types::Fdstat::from(&fdstat))
+        let fd = u32::from(fd);
+        if table.is::<FileEntry>(fd) {
+            let file_entry: RefMut<FileEntry> = table.get(fd)?;
+            let fdstat = file_entry.get_fdstat()?;
+            Ok(types::Fdstat::from(&fdstat))
+        } else if table.is::<DirEntry>(fd) {
+            let dir_entry: RefMut<DirEntry> = table.get(fd)?;
+            let dirstat = dir_entry.get_dirstat();
+            Ok(types::Fdstat::from(&dirstat))
+        } else {
+            Err(Error::Badf)
+        }
     }
 
     fn fd_fdstat_set_flags(&self, fd: types::Fd, flags: types::Fdflags) -> Result<(), Error> {
         let table = self.table();
         let file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
         let f = file_entry.get_cap(FileCaps::FDSTAT_SET_FLAGS)?;
-        f.set_oflags(OFlags::try_from(&flags)?)?;
+        f.set_fdflags(FdFlags::from(&flags))?;
         Ok(())
     }
 
@@ -559,39 +574,40 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let dir_entry: RefMut<DirEntry> = table.get(u32::from(dirfd))?;
         let dir = dir_entry.get_cap(DirCaps::OPEN)?;
         let symlink_follow = dirflags.contains(&types::Lookupflags::SYMLINK_FOLLOW);
+        let oflags = OFlags::from(&oflags);
+        let fdflags = FdFlags::from(&fdflags);
         let path = path.as_str()?;
-        if oflags.contains(&types::Oflags::DIRECTORY) {
-            let create = oflags.contains(&types::Oflags::CREAT);
+        if oflags.contains(&OFlags::DIRECTORY) {
+            let create = oflags.contains(&OFlags::CREATE);
             let child_dir = dir.open_dir(symlink_follow, path.deref(), create)?;
 
             // XXX go back and check these caps conversions - probably need to validate them
             // against ???
-            let base_caps = DirCaps::try_from(&fs_rights_base)?;
-            let inheriting_caps = DirCaps::try_from(&fs_rights_inheriting)?;
+            let base_caps = DirCaps::from(&fs_rights_base);
+            let inheriting_caps = DirCaps::from(&fs_rights_inheriting);
             drop(dir);
             drop(dir_entry);
-            let fd = table.push(DirEntry {
+            let fd = table.push(Box::new(DirEntry {
                 dir: child_dir,
                 base_caps,
                 inheriting_caps,
                 preopen_path: None,
-            })?;
+            }))?;
             Ok(types::Fd::from(fd))
         } else {
-            let oflags = OFlags::try_from(&oflags)?;
-            let fdflags = FdFlags::try_from(&fdflags)?;
-            let file = dir.open_file(symlink_follow, path.deref(), oflags, fdflags)?;
             // XXX go back and check these caps conversions - probably need to validate them
             // against ???
-            let base_caps = FileCaps::try_from(&fs_rights_base)?;
-            let inheriting_caps = FileCaps::try_from(&fs_rights_inheriting)?;
+            let base_caps = FileCaps::from(&fs_rights_base);
+            let inheriting_caps = FileCaps::from(&fs_rights_inheriting);
+
+            let file = dir.open_file(symlink_follow, path.deref(), oflags, base_caps)?;
             drop(dir);
             drop(dir_entry);
-            let fd = table.push(FileEntry {
+            let fd = table.push(Box::new(FileEntry {
                 file,
                 base_caps,
                 inheriting_caps,
-            })?;
+            }))?;
             Ok(types::Fd::from(fd))
         }
     }
@@ -709,26 +725,187 @@ impl From<&FdStat> for types::Fdstat {
     }
 }
 
+impl From<&DirStat> for types::Fdstat {
+    fn from(dirstat: &DirStat) -> types::Fdstat {
+        types::Fdstat {
+            fs_filetype: types::Filetype::Directory,
+            fs_rights_base: types::Rights::from(&dirstat.base_caps),
+            fs_rights_inheriting: types::Rights::from(&dirstat.inheriting_caps),
+            fs_flags: types::Fdflags::empty(),
+        }
+    }
+}
+
 // FileCaps can always be represented as wasi Rights
 impl From<&FileCaps> for types::Rights {
     fn from(caps: &FileCaps) -> types::Rights {
-        todo!("translate FileCaps flags to Rights flags")
+        let mut rights = types::Rights::empty();
+        if caps.contains(&FileCaps::DATASYNC) {
+            rights = rights | types::Rights::FD_DATASYNC;
+        }
+        if caps.contains(&FileCaps::READ) {
+            rights = rights | types::Rights::FD_READ;
+        }
+        if caps.contains(&FileCaps::SEEK) {
+            rights = rights | types::Rights::FD_SEEK;
+        }
+        if caps.contains(&FileCaps::FDSTAT_SET_FLAGS) {
+            rights = rights | types::Rights::FD_FDSTAT_SET_FLAGS;
+        }
+        if caps.contains(&FileCaps::SYNC) {
+            rights = rights | types::Rights::FD_SYNC;
+        }
+        if caps.contains(&FileCaps::TELL) {
+            rights = rights | types::Rights::FD_TELL;
+        }
+        if caps.contains(&FileCaps::WRITE) {
+            rights = rights | types::Rights::FD_WRITE;
+        }
+        if caps.contains(&FileCaps::ADVISE) {
+            rights = rights | types::Rights::FD_ADVISE;
+        }
+        if caps.contains(&FileCaps::ALLOCATE) {
+            rights = rights | types::Rights::FD_ALLOCATE;
+        }
+        if caps.contains(&FileCaps::FILESTAT_GET) {
+            rights = rights | types::Rights::PATH_FILESTAT_GET;
+        }
+        if caps.contains(&FileCaps::FILESTAT_SET_SIZE) {
+            rights = rights | types::Rights::PATH_FILESTAT_SET_SIZE;
+        }
+        if caps.contains(&FileCaps::FILESTAT_SET_TIMES) {
+            rights = rights | types::Rights::PATH_FILESTAT_SET_TIMES;
+        }
+        rights
     }
 }
 
 // FileCaps are a subset of wasi Rights - not all Rights have a valid representation as FileCaps
-impl TryFrom<&types::Rights> for FileCaps {
-    type Error = Error;
-    fn try_from(rights: &types::Rights) -> Result<FileCaps, Self::Error> {
-        todo!("translate Rights flags to FileCaps flags")
+impl From<&types::Rights> for FileCaps {
+    fn from(rights: &types::Rights) -> FileCaps {
+        let mut caps = FileCaps::empty();
+        if rights.contains(&types::Rights::FD_DATASYNC) {
+            caps = caps | FileCaps::DATASYNC;
+        }
+        if rights.contains(&types::Rights::FD_READ) {
+            caps = caps | FileCaps::READ;
+        }
+        if rights.contains(&types::Rights::FD_SEEK) {
+            caps = caps | FileCaps::SEEK;
+        }
+        if rights.contains(&types::Rights::FD_FDSTAT_SET_FLAGS) {
+            caps = caps | FileCaps::FDSTAT_SET_FLAGS;
+        }
+        if rights.contains(&types::Rights::FD_SYNC) {
+            caps = caps | FileCaps::SYNC;
+        }
+        if rights.contains(&types::Rights::FD_TELL) {
+            caps = caps | FileCaps::TELL;
+        }
+        if rights.contains(&types::Rights::FD_WRITE) {
+            caps = caps | FileCaps::WRITE;
+        }
+        if rights.contains(&types::Rights::FD_ALLOCATE) {
+            caps = caps | FileCaps::ALLOCATE;
+        }
+        if rights.contains(&types::Rights::PATH_FILESTAT_GET) {
+            caps = caps | FileCaps::FILESTAT_GET;
+        }
+        if rights.contains(&types::Rights::PATH_FILESTAT_SET_SIZE) {
+            caps = caps | FileCaps::FILESTAT_SET_SIZE;
+        }
+        if rights.contains(&types::Rights::PATH_FILESTAT_SET_TIMES) {
+            caps = caps | FileCaps::FILESTAT_SET_TIMES;
+        }
+        caps
+    }
+}
+
+// DirCaps can always be represented as wasi Rights
+impl From<&DirCaps> for types::Rights {
+    fn from(caps: &DirCaps) -> types::Rights {
+        let mut rights = types::Rights::empty();
+        if caps.contains(&DirCaps::CREATE_DIRECTORY) {
+            rights = rights | types::Rights::PATH_CREATE_DIRECTORY;
+        }
+        if caps.contains(&DirCaps::CREATE_FILE) {
+            rights = rights | types::Rights::PATH_CREATE_FILE;
+        }
+        if caps.contains(&DirCaps::LINK_SOURCE) {
+            rights = rights | types::Rights::PATH_LINK_SOURCE;
+        }
+        if caps.contains(&DirCaps::LINK_TARGET) {
+            rights = rights | types::Rights::PATH_LINK_TARGET;
+        }
+        if caps.contains(&DirCaps::OPEN) {
+            rights = rights | types::Rights::PATH_OPEN;
+        }
+        if caps.contains(&DirCaps::READDIR) {
+            rights = rights | types::Rights::FD_READDIR;
+        }
+        if caps.contains(&DirCaps::READLINK) {
+            rights = rights | types::Rights::PATH_READLINK;
+        }
+        if caps.contains(&DirCaps::RENAME_SOURCE) {
+            rights = rights | types::Rights::PATH_RENAME_SOURCE;
+        }
+        if caps.contains(&DirCaps::RENAME_TARGET) {
+            rights = rights | types::Rights::PATH_RENAME_TARGET;
+        }
+        if caps.contains(&DirCaps::SYMLINK) {
+            rights = rights | types::Rights::PATH_SYMLINK;
+        }
+        if caps.contains(&DirCaps::REMOVE_DIRECTORY) {
+            rights = rights | types::Rights::PATH_REMOVE_DIRECTORY;
+        }
+        if caps.contains(&DirCaps::UNLINK_FILE) {
+            rights = rights | types::Rights::PATH_UNLINK_FILE;
+        }
+        rights
     }
 }
 
 // DirCaps are a subset of wasi Rights - not all Rights have a valid representation as DirCaps
-impl TryFrom<&types::Rights> for DirCaps {
-    type Error = Error;
-    fn try_from(rights: &types::Rights) -> Result<DirCaps, Self::Error> {
-        todo!("translate Rights flags to DirCaps flags")
+impl From<&types::Rights> for DirCaps {
+    fn from(rights: &types::Rights) -> DirCaps {
+        let mut caps = DirCaps::empty();
+        if rights.contains(&types::Rights::PATH_CREATE_DIRECTORY) {
+            caps = caps | DirCaps::CREATE_DIRECTORY;
+        }
+        if rights.contains(&types::Rights::PATH_CREATE_FILE) {
+            caps = caps | DirCaps::CREATE_FILE;
+        }
+        if rights.contains(&types::Rights::PATH_LINK_SOURCE) {
+            caps = caps | DirCaps::LINK_SOURCE;
+        }
+        if rights.contains(&types::Rights::PATH_LINK_TARGET) {
+            caps = caps | DirCaps::LINK_TARGET;
+        }
+        if rights.contains(&types::Rights::PATH_OPEN) {
+            caps = caps | DirCaps::OPEN;
+        }
+        if rights.contains(&types::Rights::FD_READDIR) {
+            caps = caps | DirCaps::READDIR;
+        }
+        if rights.contains(&types::Rights::PATH_READLINK) {
+            caps = caps | DirCaps::READLINK;
+        }
+        if rights.contains(&types::Rights::PATH_RENAME_SOURCE) {
+            caps = caps | DirCaps::RENAME_SOURCE;
+        }
+        if rights.contains(&types::Rights::PATH_RENAME_TARGET) {
+            caps = caps | DirCaps::RENAME_TARGET;
+        }
+        if rights.contains(&types::Rights::PATH_SYMLINK) {
+            caps = caps | DirCaps::SYMLINK;
+        }
+        if rights.contains(&types::Rights::PATH_REMOVE_DIRECTORY) {
+            caps = caps | DirCaps::REMOVE_DIRECTORY;
+        }
+        if rights.contains(&types::Rights::PATH_UNLINK_FILE) {
+            caps = caps | DirCaps::UNLINK_FILE;
+        }
+        caps
     }
 }
 
@@ -745,34 +922,85 @@ impl From<&Filetype> for types::Filetype {
 }
 impl From<&FdFlags> for types::Fdflags {
     fn from(fdflags: &FdFlags) -> types::Fdflags {
-        todo!("translate internal to Fdflags")
-    }
-}
-
-impl TryFrom<&types::Oflags> for OFlags {
-    type Error = Error;
-    fn try_from(oflags: &types::Oflags) -> Result<OFlags, Self::Error> {
-        if oflags.contains(&types::Oflags::DIRECTORY) {
-            return Err(Error::Inval);
+        let mut out = types::Fdflags::empty();
+        if fdflags.contains(&FdFlags::APPEND) {
+            out = out | types::Fdflags::APPEND;
         }
-        todo!("rest of oflags translation should be trivial - creat excl trunc")
+        if fdflags.contains(&FdFlags::DSYNC) {
+            out = out | types::Fdflags::DSYNC;
+        }
+        if fdflags.contains(&FdFlags::NONBLOCK) {
+            out = out | types::Fdflags::NONBLOCK;
+        }
+        if fdflags.contains(&FdFlags::RSYNC) {
+            out = out | types::Fdflags::RSYNC;
+        }
+        if fdflags.contains(&FdFlags::SYNC) {
+            out = out | types::Fdflags::SYNC;
+        }
+        out
     }
 }
 
-impl TryFrom<&types::Fdflags> for FdFlags {
-    type Error = Error;
-    fn try_from(fdflags: &types::Fdflags) -> Result<FdFlags, Self::Error> {
-        todo!()
+impl From<&types::Fdflags> for FdFlags {
+    fn from(fdflags: &types::Fdflags) -> FdFlags {
+        let mut out = FdFlags::empty();
+        if fdflags.contains(&types::Fdflags::APPEND) {
+            out = out | FdFlags::APPEND;
+        }
+        if fdflags.contains(&types::Fdflags::DSYNC) {
+            out = out | FdFlags::DSYNC;
+        }
+        if fdflags.contains(&types::Fdflags::NONBLOCK) {
+            out = out | FdFlags::NONBLOCK;
+        }
+        if fdflags.contains(&types::Fdflags::RSYNC) {
+            out = out | FdFlags::RSYNC;
+        }
+        if fdflags.contains(&types::Fdflags::SYNC) {
+            out = out | FdFlags::SYNC;
+        }
+        out
     }
 }
 
-impl TryFrom<&types::Fdflags> for OFlags {
-    type Error = Error;
-    fn try_from(fdflags: &types::Fdflags) -> Result<OFlags, Self::Error> {
-        todo!()
+impl From<&types::Oflags> for OFlags {
+    fn from(oflags: &types::Oflags) -> OFlags {
+        let mut out = OFlags::empty();
+        if oflags.contains(&types::Oflags::CREAT) {
+            out = out | OFlags::CREATE;
+        }
+        if oflags.contains(&types::Oflags::DIRECTORY) {
+            out = out | OFlags::DIRECTORY;
+        }
+        if oflags.contains(&types::Oflags::EXCL) {
+            out = out | OFlags::EXCLUSIVE;
+        }
+        if oflags.contains(&types::Oflags::TRUNC) {
+            out = out | OFlags::TRUNCATE;
+        }
+        out
     }
 }
 
+impl From<&OFlags> for types::Oflags {
+    fn from(oflags: &OFlags) -> types::Oflags {
+        let mut out = types::Oflags::empty();
+        if oflags.contains(&OFlags::CREATE) {
+            out = out | types::Oflags::CREAT;
+        }
+        if oflags.contains(&OFlags::DIRECTORY) {
+            out = out | types::Oflags::DIRECTORY;
+        }
+        if oflags.contains(&OFlags::EXCLUSIVE) {
+            out = out | types::Oflags::EXCL;
+        }
+        if oflags.contains(&OFlags::TRUNCATE) {
+            out = out | types::Oflags::TRUNC;
+        }
+        out
+    }
+}
 impl From<Filestat> for types::Filestat {
     fn from(stat: Filestat) -> types::Filestat {
         todo!()

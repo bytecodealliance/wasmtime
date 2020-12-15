@@ -38,7 +38,7 @@ impl WasiCtx {
             inheriting_caps,
             file,
         };
-        self.table().insert_at(fd, e);
+        self.table().insert_at(fd, Box::new(e));
     }
 
     pub fn insert_dir(
@@ -55,7 +55,7 @@ impl WasiCtx {
             preopen_path: Some(path),
             dir,
         };
-        self.table().insert_at(fd, e);
+        self.table().insert_at(fd, Box::new(e));
     }
 
     pub fn table(&self) -> RefMut<Table> {
@@ -118,12 +118,12 @@ impl WasiCtxBuilder {
     ) -> Result<&mut Self, Error> {
         let base_caps = DirCaps::OPEN;
         let inheriting_caps = DirCaps::OPEN;
-        self.0.table().push(DirEntry {
+        self.0.table().push(Box::new(DirEntry {
             base_caps,
             inheriting_caps,
             preopen_path: Some(path.as_ref().to_owned()),
             dir,
-        })?;
+        }))?;
         Ok(self)
     }
 }

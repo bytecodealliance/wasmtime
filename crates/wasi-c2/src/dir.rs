@@ -1,17 +1,18 @@
 // this file is extremely wip
 #![allow(dead_code, unused_variables)]
 use crate::error::Error;
-use crate::file::{self, WasiFile};
+use crate::file::{FileCaps, OFlags, WasiFile};
 use std::ops::Deref;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use tracing::debug;
 
 pub trait WasiDir {
     fn open_file(
         &self,
         symlink_follow: bool,
         path: &str,
-        oflags: file::OFlags,
-        fdflags: file::FdFlags,
+        oflags: OFlags,
+        caps: FileCaps,
     ) -> Result<Box<dyn WasiFile>, Error>;
 
     fn open_dir(
@@ -42,6 +43,13 @@ impl DirEntry {
             Err(Error::DirNotCapable(caps))
         }
     }
+
+    pub fn get_dirstat(&self) -> DirStat {
+        DirStat {
+            base_caps: self.base_caps,
+            inheriting_caps: self.inheriting_caps,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -59,14 +67,32 @@ impl DirCaps {
         self.flags & other.flags == other.flags
     }
 
-    pub const OPEN: Self = DirCaps { flags: 1 };
-    pub const READDIR: Self = DirCaps { flags: 2 };
-    pub const READLINK: Self = DirCaps { flags: 4 };
-    pub const RENAME_SOURCE: Self = DirCaps { flags: 8 };
-    pub const RENAME_TARGET: Self = DirCaps { flags: 16 };
-    pub const SYMLINK: Self = DirCaps { flags: 32 };
-    pub const REMOVE_DIRECTORY: Self = DirCaps { flags: 64 };
-    pub const UNLINK_FILE: Self = DirCaps { flags: 128 };
+    pub const CREATE_DIRECTORY: Self = DirCaps { flags: 1 };
+    pub const CREATE_FILE: Self = DirCaps { flags: 2 };
+    pub const LINK_SOURCE: Self = DirCaps { flags: 4 };
+    pub const LINK_TARGET: Self = DirCaps { flags: 8 };
+    pub const OPEN: Self = DirCaps { flags: 16 };
+    pub const READDIR: Self = DirCaps { flags: 32 };
+    pub const READLINK: Self = DirCaps { flags: 64 };
+    pub const RENAME_SOURCE: Self = DirCaps { flags: 128 };
+    pub const RENAME_TARGET: Self = DirCaps { flags: 256 };
+    pub const SYMLINK: Self = DirCaps { flags: 512 };
+    pub const REMOVE_DIRECTORY: Self = DirCaps { flags: 1024 };
+    pub const UNLINK_FILE: Self = DirCaps { flags: 2048 };
+}
+
+impl std::ops::BitOr for DirCaps {
+    type Output = DirCaps;
+    fn bitor(self, rhs: DirCaps) -> DirCaps {
+        DirCaps {
+            flags: self.flags | rhs.flags,
+        }
+    }
+}
+
+pub struct DirStat {
+    pub base_caps: DirCaps,
+    pub inheriting_caps: DirCaps,
 }
 
 impl std::fmt::Display for DirCaps {
@@ -121,10 +147,31 @@ impl WasiDir for cap_std::fs::Dir {
         &self,
         symlink_follow: bool,
         path: &str,
-        oflags: file::OFlags,
-        fdflags: file::FdFlags,
+        oflags: OFlags,
+        caps: FileCaps,
     ) -> Result<Box<dyn WasiFile>, Error> {
-        todo!()
+        // XXX obey symlink_follow
+        // XXX how to handle fdflags like append? OFlags dont contain read|write?
+        let mut opts = cap_std::fs::OpenOptions::new();
+        if oflags.contains(&(OFlags::CREATE | OFlags::EXCLUSIVE)) {
+            opts.create_new(true);
+        } else if oflags.contains(&OFlags::CREATE) {
+            opts.create(true);
+        }
+        if oflags.contains(&OFlags::TRUNCATE) {
+            opts.truncate(true);
+        }
+        if caps.contains(&FileCaps::READ) {
+            opts.read(true);
+        }
+        if caps.contains(&FileCaps::WRITE) {
+            opts.write(true);
+        }
+
+        debug!("Dir::open_file({:?}, {:?})", path, opts);
+        let f = self.open_with(Path::new(path), &opts)?;
+        debug!("succeeded");
+        Ok(Box::new(f))
     }
 
     fn open_dir(
@@ -133,7 +180,9 @@ impl WasiDir for cap_std::fs::Dir {
         path: &str,
         create: bool,
     ) -> Result<Box<dyn WasiDir>, Error> {
-        todo!()
+        // XXX obey symlink_follow, create
+        let d = self.open_dir(Path::new(path))?;
+        Ok(Box::new(d))
     }
 
     fn readdir(

@@ -16,11 +16,11 @@ impl Table {
         }
     }
 
-    pub fn insert_at(&mut self, key: u32, a: impl Any + Sized) {
-        self.map.insert(key, RefCell::new(Box::new(a)));
+    pub fn insert_at(&mut self, key: u32, a: Box<dyn Any>) {
+        self.map.insert(key, RefCell::new(a));
     }
 
-    pub fn push(&mut self, a: impl Any + Sized) -> Result<u32, Error> {
+    pub fn push(&mut self, a: Box<dyn Any>) -> Result<u32, Error> {
         loop {
             let key = self.next_key;
             // XXX this is not correct. The table may still have empty entries, but our
@@ -29,7 +29,7 @@ impl Table {
             if self.map.contains_key(&key) {
                 continue;
             }
-            self.map.insert(key, RefCell::new(Box::new(a)));
+            self.map.insert(key, RefCell::new(a));
             return Ok(key);
         }
     }

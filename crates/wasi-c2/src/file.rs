@@ -1,5 +1,4 @@
 use crate::Error;
-use cfg_if::cfg_if;
 use fs_set_times::SetTimes;
 use std::ops::Deref;
 use system_interface::fs::FileIoExt;
@@ -9,6 +8,7 @@ pub trait WasiFile: FileIoExt + SetTimes {
     fn sync(&self) -> Result<(), Error>;
     fn get_filetype(&self) -> Result<Filetype, Error>;
     fn get_fdflags(&self) -> Result<FdFlags, Error>;
+    fn set_fdflags(&self, _flags: FdFlags) -> Result<(), Error>;
     fn get_oflags(&self) -> Result<OFlags, Error>;
     fn set_oflags(&self, _flags: OFlags) -> Result<(), Error>;
     fn get_filestat(&self) -> Result<Filestat, Error>;
@@ -38,13 +38,24 @@ impl FdFlags {
     pub fn contains(&self, other: &Self) -> bool {
         self.flags & other.flags == other.flags
     }
-
+    pub fn empty() -> FdFlags {
+        FdFlags { flags: 0 }
+    }
     pub const APPEND: FdFlags = FdFlags { flags: 1 };
     pub const DSYNC: FdFlags = FdFlags { flags: 2 };
     pub const NONBLOCK: FdFlags = FdFlags { flags: 4 };
     pub const RSYNC: FdFlags = FdFlags { flags: 8 };
     pub const SYNC: FdFlags = FdFlags { flags: 16 };
     // etc
+}
+
+impl std::ops::BitOr for FdFlags {
+    type Output = FdFlags;
+    fn bitor(self, rhs: FdFlags) -> FdFlags {
+        FdFlags {
+            flags: self.flags | rhs.flags,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -57,19 +68,21 @@ impl OFlags {
     pub fn contains(&self, other: &Self) -> bool {
         self.flags & other.flags == other.flags
     }
-
-    pub const ACCMODE: OFlags = OFlags { flags: 1 };
-    pub const APPEND: OFlags = OFlags { flags: 2 };
-    pub const CREATE: OFlags = OFlags { flags: 4 };
-    pub const SYNC: OFlags = OFlags { flags: 4 };
-    pub const NOFOLLOW: OFlags = OFlags { flags: 8 };
-    pub const NONBLOCK: OFlags = OFlags { flags: 16 };
-    pub const RDONLY: OFlags = OFlags { flags: 32 };
-    pub const WRONLY: OFlags = OFlags { flags: 64 };
-    pub const RDWR: OFlags = OFlags {
-        flags: Self::RDONLY.flags | Self::WRONLY.flags,
-    };
-    // etc
+    pub fn empty() -> Self {
+        OFlags { flags: 0 }
+    }
+    pub const CREATE: OFlags = OFlags { flags: 1 };
+    pub const DIRECTORY: OFlags = OFlags { flags: 2 };
+    pub const EXCLUSIVE: OFlags = OFlags { flags: 4 };
+    pub const TRUNCATE: OFlags = OFlags { flags: 8 };
+}
+impl std::ops::BitOr for OFlags {
+    type Output = OFlags;
+    fn bitor(self, rhs: OFlags) -> OFlags {
+        OFlags {
+            flags: self.flags | rhs.flags,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -181,34 +194,17 @@ impl WasiFile for cap_std::fs::File {
         }
     }
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
-        // XXX cap-std doesnt expose append, dsync, nonblock, rsync, sync
-        todo!("get_fdflags is not implemented")
+        // XXX get_fdflags is not implemented but lets lie rather than panic:
+        Ok(FdFlags::empty())
+    }
+    fn set_fdflags(&self, _fdflags: FdFlags) -> Result<(), Error> {
+        todo!("set_fdflags is not implemented")
     }
     fn get_oflags(&self) -> Result<OFlags, Error> {
-        #![allow(unreachable_code, unused_variables)]
-        todo!("get_oflags implementation is incomplete");
-        // XXX what if it was opened append, async, nonblock...
-        let perms = self.metadata()?.permissions();
-        if perms.readonly() {
-            Ok(OFlags::RDONLY)
-        } else {
-            Ok(OFlags::RDWR)
-        }
+        todo!("get_oflags is not implemented");
     }
     fn set_oflags(&self, flags: OFlags) -> Result<(), Error> {
-        #![allow(unreachable_code, unused_variables)]
-        cfg_if! {
-            if #[cfg(unix)] {
-                use std::os::unix::fs::PermissionsExt;
-                use cap_std::fs::Permissions;
-                use std::fs::Permissions as StdPermissions;
-                let flags = todo!("normalize to unix flags {:?}", flags);
-                self.set_permissions(Permissions::from_std(StdPermissions::from_mode(flags)))?;
-            } else {
-                Err(Error::Unsupported("set oflags on non-unix host system".to_owned()))
-            }
-        }
-        Ok(())
+        todo!("set_oflags is not implemented");
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
         let meta = self.metadata()?;

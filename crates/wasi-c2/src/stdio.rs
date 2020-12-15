@@ -29,6 +29,9 @@ impl WasiFile for Stdin {
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
         todo!()
     }
+    fn set_fdflags(&self, _fdflags: FdFlags) -> Result<(), Error> {
+        todo!()
+    }
     fn get_oflags(&self) -> Result<OFlags, Error> {
         todo!()
     }
@@ -69,6 +72,9 @@ impl WasiFile for Stdout {
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
         todo!()
     }
+    fn set_fdflags(&self, _fdflags: FdFlags) -> Result<(), Error> {
+        todo!()
+    }
     fn get_oflags(&self) -> Result<OFlags, Error> {
         todo!()
     }
@@ -107,6 +113,9 @@ impl WasiFile for Stderr {
         Ok(Filetype::CharacterDevice)
     }
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
+        todo!()
+    }
+    fn set_fdflags(&self, _fdflags: FdFlags) -> Result<(), Error> {
         todo!()
     }
     fn get_oflags(&self) -> Result<OFlags, Error> {

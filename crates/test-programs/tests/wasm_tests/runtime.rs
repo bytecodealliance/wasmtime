@@ -1,12 +1,8 @@
 use anyhow::Context;
-use std::convert::TryFrom;
 use std::fs::File;
 use std::path::Path;
-use wasi_c2::{
-    virt::pipe::{ReadPipe, WritePipe},
-    WasiCtx,
-};
-use wasmtime::{Config, Engine, Linker, Module, Store};
+use wasi_c2::virt::pipe::{ReadPipe, WritePipe};
+use wasmtime::{Linker, Module, Store};
 
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
     let stdout = WritePipe::new_in_memory();
@@ -27,6 +23,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
             .stderr(Box::new(stderr.clone()));
 
         if let Some(workspace) = workspace {
+            println!("preopen: {:?}", workspace);
             let dirfd =
                 File::open(workspace).context(format!("error while preopening {:?}", workspace))?;
             let preopen_dir = unsafe { cap_std::fs::Dir::from_std_file(dirfd) };
@@ -66,16 +63,4 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
             Err(trap.context(format!("error while testing Wasm module '{}'", bin_name,)))
         }
     }
-}
-
-#[cfg(unix)]
-fn reader_to_file(reader: os_pipe::PipeReader) -> File {
-    use std::os::unix::prelude::*;
-    unsafe { File::from_raw_fd(reader.into_raw_fd()) }
-}
-
-#[cfg(windows)]
-fn reader_to_file(reader: os_pipe::PipeReader) -> File {
-    use std::os::windows::prelude::*;
-    unsafe { File::from_raw_handle(reader.into_raw_handle()) }
 }

@@ -180,6 +180,9 @@ impl<R: Read> WasiFile for ReadPipe<R> {
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
         todo!() // do later
     }
+    fn set_fdflags(&self, _fdflags: FdFlags) -> Result<(), Error> {
+        todo!()
+    }
     fn get_oflags(&self) -> Result<OFlags, Error> {
         todo!() // do later
     }
@@ -332,6 +335,9 @@ impl<W: Write> WasiFile for WritePipe<W> {
         Ok(Filetype::CharacterDevice) // XXX
     }
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
+        todo!()
+    }
+    fn set_fdflags(&self, _fdflags: FdFlags) -> Result<(), Error> {
         todo!()
     }
     fn get_oflags(&self) -> Result<OFlags, Error> {

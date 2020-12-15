@@ -105,14 +105,7 @@ mod wasi_tests {
         )?;
         writeln!(out, "    use super::{{runtime, utils, setup_log}};")?;
         for dir_entry in dir_entries {
-            let test_path = dir_entry.path();
-            let stemstr = test_path
-                .file_stem()
-                .expect("file_stem")
-                .to_str()
-                .expect("to_str");
-
-            write_testsuite_tests(out, &test_path, testsuite)?;
+            write_testsuite_tests(out, &dir_entry.path(), testsuite)?;
         }
         writeln!(out, "}}")?;
         Ok(())
