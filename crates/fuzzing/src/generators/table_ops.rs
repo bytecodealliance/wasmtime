@@ -3,7 +3,7 @@
 use arbitrary::Arbitrary;
 use std::ops::Range;
 use wasm_encoder::{
-    CodeSection, Export, ExportSection, Function, FunctionSection, ImportSection, ImportType,
+    CodeSection, EntityType, Export, ExportSection, Function, FunctionSection, ImportSection,
     Instruction, Limits, Module, TableSection, TableType, TypeSection, ValType,
 };
 
@@ -51,7 +51,7 @@ impl TableOps {
 
         // Import the GC function.
         let mut imports = ImportSection::new();
-        imports.import("", "gc", ImportType::Function(0));
+        imports.import("", Some("gc"), EntityType::Function(0));
 
         // Define our table.
         let mut tables = TableSection::new();
@@ -63,21 +63,22 @@ impl TableOps {
             },
         });
 
-        // Encode the type section for the "run" function.
+        // Encode the types for all functions that we are using.
         let mut types = TypeSection::new();
+        types.function(vec![], vec![]); // 0: "gc"
         let mut params: Vec<ValType> = Vec::with_capacity(self.num_params() as usize);
         for _i in 0..self.num_params() {
             params.push(ValType::ExternRef);
         }
         let results = vec![];
-        types.function(params, results);
+        types.function(params, results); // 1: "run"
 
         // Define the "run" function export.
         let mut functions = FunctionSection::new();
-        functions.function(0);
+        functions.function(1);
 
         let mut exports = ExportSection::new();
-        exports.export("run", Export::Function(0));
+        exports.export("run", Export::Function(1));
 
         let mut params: Vec<(u32, ValType)> = Vec::with_capacity(self.num_params() as usize);
         for _i in 0..self.num_params() {
@@ -109,11 +110,11 @@ pub(crate) enum TableOp {
     // `(call 0)`
     Gc,
     // `(drop (table.get x))`
-    Get(u32),
+    Get(i32),
     // `(table.set x (local.get y))`
-    SetFromParam(u32, u8),
+    SetFromParam(i32, u32),
     // `(table.set x (table.get y))`
-    SetFromGet(u32, u32),
+    SetFromGet(i32, i32),
 }
 
 impl TableOp {
@@ -123,16 +124,20 @@ impl TableOp {
                 func.instruction(Instruction::Call(0));
             }
             Self::Get(x) => {
+                func.instruction(Instruction::I32Const(*x));
+                func.instruction(Instruction::TableGet { table: 0 });
                 func.instruction(Instruction::Drop);
-                func.instruction(Instruction::TableGet { table: *x });
             }
             Self::SetFromParam(x, y) => {
-                func.instruction(Instruction::TableSet { table: *x });
-                func.instruction(Instruction::LocalGet((*y).into()));
+                func.instruction(Instruction::I32Const(*x));
+                func.instruction(Instruction::LocalGet(*y));
+                func.instruction(Instruction::TableSet { table: 0 });
             }
             Self::SetFromGet(x, y) => {
-                func.instruction(Instruction::TableSet { table: *x });
-                func.instruction(Instruction::TableGet { table: *y });
+                func.instruction(Instruction::I32Const(*x));
+                func.instruction(Instruction::I32Const(*y));
+                func.instruction(Instruction::TableGet { table: 0 });
+                func.instruction(Instruction::TableSet { table: 0 });
             }
         }
     }
@@ -157,18 +162,23 @@ mod tests {
 
         let expected = r#"
 (module
-  (type (;0;) (func (param externref externref)))
+  (type (;0;) (func))
+  (type (;1;) (func (param externref externref)))
   (import "" "gc" (func (;0;) (type 0)))
-  (func (;1;) (type 0) (param externref externref)
+  (func (;1;) (type 1) (param externref externref)
     call 0
-    drop
+    i32.const 0
     table.get 0
-    table.set 1
+    drop
+    i32.const 1
     local.get 2
-    table.set 3
-    table.get 4)
+    table.set 0
+    i32.const 3
+    i32.const 4
+    table.get 0
+    table.set 0)
   (table (;0;) 10 externref)
-  (export "run" (func 0)))
+  (export "run" (func 1)))
 "#;
         let actual = ops.to_wasm_binary();
         let actual = wasmprinter::print_bytes(&actual).unwrap();
