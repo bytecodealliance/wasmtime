@@ -520,7 +520,7 @@ impl<'a> Instantiator<'a> {
             // initializers may have run which placed elements into other instance's
             // tables. This means that from this point on, regardless of whether
             // initialization is successful, we need to keep the instance alive.
-            let instance = self.store.add_instance(instance);
+            let instance = self.store.add_instance(instance, false);
             allocator
                 .initialize(
                     &instance.handle,
