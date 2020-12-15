@@ -344,3 +344,69 @@ block0(v0: i64, v1: i32):
 ; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
+
+function %f18(i64, i64, i64) -> i32 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = iconst.i32 -4098
+  v6 = uextend.i64 v3
+  v5 = sload16.i32 v6+0
+  return v5
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movn w0, #4097
+; nextln: ldrsh x0, [x0]
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f19(i64, i64, i64) -> i32 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = iconst.i32 4098
+  v6 = uextend.i64 v3
+  v5 = sload16.i32 v6+0
+  return v5
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x0, #4098
+; nextln: ldrsh x0, [x0]
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f20(i64, i64, i64) -> i32 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = iconst.i32 -4098
+  v6 = sextend.i64 v3
+  v5 = sload16.i32 v6+0
+  return v5
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movn w0, #4097
+; nextln: sxtw x0, w0
+; nextln: ldrsh x0, [x0]
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f21(i64, i64, i64) -> i32 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = iconst.i32 4098
+  v6 = sextend.i64 v3
+  v5 = sload16.i32 v6+0
+  return v5
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x0, #4098
+; nextln: sxtw x0, w0
+; nextln: ldrsh x0, [x0]
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret

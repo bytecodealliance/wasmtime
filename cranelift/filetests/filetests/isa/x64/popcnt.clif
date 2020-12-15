@@ -1,0 +1,113 @@
+test compile
+target x86_64
+feature "experimental_x64"
+
+; TODO: test with popcnt feature available too, once new backend supports that.
+
+function %popcnt64(i64) -> i64 {
+block0(v0: i64):
+    v1 = popcnt v0
+; check:  movq    %rdi, %rsi
+; nextln: shrq    $$1, %rsi
+; nextln: movabsq $$8608480567731124087, %rax
+; nextln: andq    %rax, %rsi
+; nextln: subq    %rsi, %rdi
+; nextln: shrq    $$1, %rsi
+; nextln: andq    %rax, %rsi
+; nextln: subq    %rsi, %rdi
+; nextln: shrq    $$1, %rsi
+; nextln: andq    %rax, %rsi
+; nextln: subq    %rsi, %rdi
+; nextln: movq    %rdi, %rsi
+; nextln: shrq    $$4, %rsi
+; nextln: addq    %rdi, %rsi
+; nextln: movabsq $$1085102592571150095, %rdi
+; nextln: andq    %rdi, %rsi
+; nextln: movabsq $$72340172838076673, %rdi
+; nextln: imulq   %rdi, %rsi
+; nextln: shrq    $$56, %rsi
+; nextln: movq    %rsi, %rax
+    return v1
+}
+
+function %popcnt64load(i64) -> i64 {
+block0(v0: i64):
+    v1 = load.i64 v0
+    v2 = popcnt v1
+    return v2
+; check:  movq    0(%rdi), %rdi
+; nextln: movq    %rdi, %rsi
+; nextln: shrq    $$1, %rsi
+; nextln: movabsq $$8608480567731124087, %rax
+; nextln: andq    %rax, %rsi
+; nextln: subq    %rsi, %rdi
+; nextln: shrq    $$1, %rsi
+; nextln: andq    %rax, %rsi
+; nextln: subq    %rsi, %rdi
+; nextln: shrq    $$1, %rsi
+; nextln: andq    %rax, %rsi
+; nextln: subq    %rsi, %rdi
+; nextln: movq    %rdi, %rsi
+; nextln: shrq    $$4, %rsi
+; nextln: addq    %rdi, %rsi
+; nextln: movabsq $$1085102592571150095, %rdi
+; nextln: andq    %rdi, %rsi
+; nextln: movabsq $$72340172838076673, %rdi
+; nextln: imulq   %rdi, %rsi
+; nextln: shrq    $$56, %rsi
+; nextln: movq    %rsi, %rax
+}
+
+function %popcnt32(i32) -> i32 {
+block0(v0: i32):
+    v1 = popcnt v0
+    return v1
+; check:  movq    %rdi, %rsi
+; nextln: shrl    $$1, %esi
+; nextln: andl    $$2004318071, %esi
+; nextln: subl    %esi, %edi
+; nextln: shrl    $$1, %esi
+; nextln: andl    $$2004318071, %esi
+; nextln: subl    %esi, %edi
+; nextln: shrl    $$1, %esi
+; nextln: andl    $$2004318071, %esi
+; nextln: subl    %esi, %edi
+; nextln: movq    %rdi, %rsi
+; nextln: shrl    $$4, %esi
+; nextln: addl    %edi, %esi
+; nextln: andl    $$252645135, %esi
+; nextln: imull   $$16843009, %esi
+; nextln: shrl    $$24, %esi
+; nextln: movq    %rsi, %rax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+}
+
+function %popcnt32load(i64) -> i32 {
+block0(v0: i64):
+    v1 = load.i32 v0
+    v2 = popcnt v1
+    return v2
+; check:  movl    0(%rdi), %edi
+; nextln: movq    %rdi, %rsi
+; nextln: shrl    $$1, %esi
+; nextln: andl    $$2004318071, %esi
+; nextln: subl    %esi, %edi
+; nextln: shrl    $$1, %esi
+; nextln: andl    $$2004318071, %esi
+; nextln: subl    %esi, %edi
+; nextln: shrl    $$1, %esi
+; nextln: andl    $$2004318071, %esi
+; nextln: subl    %esi, %edi
+; nextln: movq    %rdi, %rsi
+; nextln: shrl    $$4, %esi
+; nextln: addl    %edi, %esi
+; nextln: andl    $$252645135, %esi
+; nextln: imull   $$16843009, %esi
+; nextln: shrl    $$24, %esi
+; nextln: movq    %rsi, %rax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+}

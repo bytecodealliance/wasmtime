@@ -1,0 +1,19 @@
+test compile
+set opt_level=speed_and_size
+target x86_64
+
+function %br_table_opt() {
+    jt0 = jump_table [block1, block2]
+
+    block0:
+        v0 = iconst.i32 1
+        br_table v0, block2, jt0
+
+    block1: 
+        return
+
+    block2:
+        v1 = iconst.i32 1
+        jump block2
+
+}

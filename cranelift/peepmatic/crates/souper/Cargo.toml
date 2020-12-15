@@ -10,10 +10,10 @@ description = "Converting Souper optimizations into Peepmatic DSL"
 
 [dependencies]
 anyhow = "1"
-souper-ir = { version = "1", features = ["parse"] }
+souper-ir = { version = "2.1.0", features = ["parse"] }
 log = "0.4.8"
 
 [dev-dependencies]
 peepmatic = { path = "../..", version = "0.68.0" }
 peepmatic-test-operator = { version = "0.68.0", path = "../test-operator" }
-wast = "27.0.0"
+wast = "29.0.0"

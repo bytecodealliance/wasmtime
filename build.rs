@@ -31,6 +31,7 @@ fn main() -> anyhow::Result<()> {
             test_directory_module(out, "tests/misc_testsuite/bulk-memory-operations", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/reference-types", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/multi-memory", strategy)?;
+            test_directory_module(out, "tests/misc_testsuite/module-linking", strategy)?;
             Ok(())
         })?;
 
@@ -174,46 +175,10 @@ fn write_testsuite_tests(
 
 /// For experimental_x64 backend features that are not supported yet, mark tests as panicking, so
 /// they stop "passing" once the features are properly implemented.
-fn experimental_x64_should_panic(testsuite: &str, testname: &str, strategy: &str) -> bool {
-    if !cfg!(feature = "experimental_x64") || strategy != "Cranelift" {
-        return false;
-    }
-
-    match (testsuite, testname) {
-        ("simd", "simd_address") => return false,
-        ("simd", "simd_bitwise") => return false,
-        ("simd", "simd_bit_shift") => return false,
-        ("simd", "simd_boolean") => return false,
-        ("simd", "simd_const") => return false,
-        ("simd", "simd_i8x16_arith") => return false,
-        ("simd", "simd_i8x16_arith2") => return false,
-        ("simd", "simd_i8x16_cmp") => return false,
-        ("simd", "simd_i8x16_sat_arith") => return false,
-        ("simd", "simd_i16x8_arith") => return false,
-        ("simd", "simd_i16x8_arith2") => return false,
-        ("simd", "simd_i16x8_cmp") => return false,
-        ("simd", "simd_i16x8_sat_arith") => return false,
-        ("simd", "simd_i32x4_arith") => return false,
-        ("simd", "simd_i32x4_arith2") => return false,
-        ("simd", "simd_i32x4_cmp") => return false,
-        ("simd", "simd_i64x2_arith") => return false,
-        ("simd", "simd_f32x4") => return false,
-        ("simd", "simd_f32x4_arith") => return false,
-        ("simd", "simd_f32x4_cmp") => return false,
-        ("simd", "simd_f32x4_pmin_pmax") => return false,
-        ("simd", "simd_f64x2") => return false,
-        ("simd", "simd_f64x2_arith") => return false,
-        ("simd", "simd_f64x2_cmp") => return false,
-        ("simd", "simd_f64x2_pmin_pmax") => return false,
-        ("simd", "simd_lane") => return false,
-        ("simd", "simd_load") => return false,
-        ("simd", "simd_load_splat") => return false,
-        ("simd", "simd_splat") => return false,
-        ("simd", "simd_store") => return false,
-        ("simd", _) => return true,
-        _ => {}
-    }
-
+///
+/// TODO(#2470): removed all tests from this set as we are disabling x64 SIMD tests unconditionally
+/// instead until we resolve a nondeterminism bug. Restore when fixed.
+fn experimental_x64_should_panic(_testsuite: &str, _testname: &str, _strategy: &str) -> bool {
     false
 }
 
@@ -235,21 +200,22 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 return env::var("CARGO_CFG_TARGET_ARCH").unwrap() != "x86_64";
             }
 
+            // Ignore all x64 SIMD tests for now (#2470).
+            ("simd", _) if cfg!(feature = "experimental_x64") => {
+                return env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "x86_64";
+            }
+
             // These are only implemented on aarch64 and x64.
             ("simd", "simd_boolean")
             | ("simd", "simd_f32x4_pmin_pmax")
-            | ("simd", "simd_f64x2_pmin_pmax") => {
+            | ("simd", "simd_f64x2_pmin_pmax")
+            | ("simd", "simd_f32x4_rounding")
+            | ("simd", "simd_f64x2_rounding")
+            | ("simd", "simd_i32x4_dot_i16x8") => {
                 return !(cfg!(feature = "experimental_x64")
                     || env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "aarch64")
             }
 
-            // These are only implemented on aarch64.
-            ("simd", "simd_f32x4_rounding") | ("simd", "simd_f64x2_rounding") => {
-                return env::var("CARGO_CFG_TARGET_ARCH").unwrap() != "aarch64";
-            }
-
-            // These tests have simd operators which aren't implemented yet.
-            // (currently none)
             _ => {}
         },
         _ => panic!("unrecognized strategy"),

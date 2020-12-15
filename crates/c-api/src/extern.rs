@@ -1,5 +1,7 @@
-use crate::wasm_externkind_t;
-use crate::{wasm_externtype_t, wasm_func_t, wasm_global_t, wasm_memory_t, wasm_table_t};
+use crate::{
+    wasm_externkind_t, wasm_externtype_t, wasm_func_t, wasm_global_t, wasm_instance_t,
+    wasm_memory_t, wasm_module_t, wasm_table_t,
+};
 use wasmtime::Extern;
 
 #[derive(Clone)]
@@ -16,6 +18,8 @@ pub extern "C" fn wasm_extern_kind(e: &wasm_extern_t) -> wasm_externkind_t {
         Extern::Global(_) => crate::WASM_EXTERN_GLOBAL,
         Extern::Table(_) => crate::WASM_EXTERN_TABLE,
         Extern::Memory(_) => crate::WASM_EXTERN_MEMORY,
+        Extern::Instance(_) => crate::WASM_EXTERN_INSTANCE,
+        Extern::Module(_) => crate::WASM_EXTERN_MODULE,
     }
 }
 
@@ -62,4 +66,24 @@ pub extern "C" fn wasm_extern_as_memory(e: &wasm_extern_t) -> Option<&wasm_memor
 #[no_mangle]
 pub extern "C" fn wasm_extern_as_memory_const(e: &wasm_extern_t) -> Option<&wasm_memory_t> {
     wasm_extern_as_memory(e)
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_extern_as_module(e: &wasm_extern_t) -> Option<&wasm_module_t> {
+    wasm_module_t::try_from(e)
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_extern_as_module_const(e: &wasm_extern_t) -> Option<&wasm_module_t> {
+    wasm_extern_as_module(e)
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_extern_as_instance(e: &wasm_extern_t) -> Option<&wasm_instance_t> {
+    wasm_instance_t::try_from(e)
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_extern_as_instance_const(e: &wasm_extern_t) -> Option<&wasm_instance_t> {
+    wasm_extern_as_instance(e)
 }

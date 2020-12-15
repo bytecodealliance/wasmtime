@@ -1,7 +1,8 @@
-use crate::wasm_valtype_t;
-use crate::{wasm_exporttype_t, wasm_extern_t, wasm_frame_t, wasm_val_t};
-use crate::{wasm_externtype_t, wasm_importtype_t, wasm_memorytype_t};
-use crate::{wasm_functype_t, wasm_globaltype_t, wasm_tabletype_t};
+use crate::{
+    wasm_exporttype_t, wasm_extern_t, wasm_externtype_t, wasm_frame_t, wasm_functype_t,
+    wasm_globaltype_t, wasm_importtype_t, wasm_instancetype_t, wasm_memorytype_t,
+    wasm_moduletype_t, wasm_tabletype_t, wasm_val_t, wasm_valtype_t,
+};
 use std::mem;
 use std::ptr;
 use std::slice;
@@ -171,6 +172,24 @@ declare_vecs! {
         uninit: wasm_memorytype_vec_new_uninitialized,
         copy: wasm_memorytype_vec_copy,
         delete: wasm_memorytype_vec_delete,
+    )
+    (
+        name: wasm_instancetype_vec_t,
+        ty: Option<Box<wasm_instancetype_t>>,
+        new: wasm_instancetype_vec_new,
+        empty: wasm_instancetype_vec_new_empty,
+        uninit: wasm_instancetype_vec_new_uninitialized,
+        copy: wasm_instancetype_vec_copy,
+        delete: wasm_instancetype_vec_delete,
+    )
+    (
+        name: wasm_moduletype_vec_t,
+        ty: Option<Box<wasm_moduletype_t>>,
+        new: wasm_moduletype_vec_new,
+        empty: wasm_moduletype_vec_new_empty,
+        uninit: wasm_moduletype_vec_new_uninitialized,
+        copy: wasm_moduletype_vec_copy,
+        delete: wasm_moduletype_vec_delete,
     )
     (
         name: wasm_externtype_vec_t,

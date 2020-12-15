@@ -2,9 +2,10 @@
 //! to deal with each part of it.
 use crate::environ::{ModuleEnvironment, WasmResult};
 use crate::sections_translator::{
-    parse_data_section, parse_element_section, parse_event_section, parse_export_section,
-    parse_function_section, parse_global_section, parse_import_section, parse_memory_section,
-    parse_name_section, parse_start_section, parse_table_section, parse_type_section,
+    parse_alias_section, parse_data_section, parse_element_section, parse_event_section,
+    parse_export_section, parse_function_section, parse_global_section, parse_import_section,
+    parse_instance_section, parse_memory_section, parse_module_section, parse_name_section,
+    parse_start_section, parse_table_section, parse_type_section,
 };
 use crate::state::ModuleTranslationState;
 use cranelift_codegen::timing;
@@ -112,15 +113,15 @@ pub fn translate_module<'data>(
 
             Payload::ModuleSection(s) => {
                 validator.module_section(&s)?;
-                environ.reserve_modules(s.get_count());
+                parse_module_section(s, environ)?;
             }
             Payload::InstanceSection(s) => {
                 validator.instance_section(&s)?;
-                unimplemented!("module linking not implemented yet")
+                parse_instance_section(s, environ)?;
             }
             Payload::AliasSection(s) => {
                 validator.alias_section(&s)?;
-                unimplemented!("module linking not implemented yet")
+                parse_alias_section(s, environ)?;
             }
             Payload::ModuleCodeSectionStart {
                 count,

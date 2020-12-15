@@ -209,6 +209,14 @@ WASMTIME_CONFIG_PROP(void, wasm_bulk_memory, bool)
 WASMTIME_CONFIG_PROP(void, wasm_multi_value, bool)
 
 /**
+ * \brief Configures whether the WebAssembly module linking proposal is
+ * enabled.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_module_linking, bool)
+
+/**
  * \brief Configures how JIT code will be compiled.
  *
  * This setting is #WASMTIME_STRATEGY_AUTO by default.
@@ -960,6 +968,291 @@ WASM_API_EXTERN own wasmtime_error_t *wasmtime_module_deserialize(
     const wasm_byte_vec_t *serialized,
     own wasm_module_t **ret
 );
+
+/**
+ * \struct wasm_instancetype_t
+ * \brief An opaque object representing the type of a function.
+ *
+ * \typedef wasm_instancetype_t
+ * \brief Convenience alias for #wasm_instancetype_t
+ *
+ * \struct wasm_instancetype_vec_t
+ * \brief A list of #wasm_instancetype_t values.
+ *
+ * \var wasm_instancetype_vec_t::size
+ * \brief Length of this vector.
+ *
+ * \var wasm_instancetype_vec_t::data
+ * \brief Pointer to the base of this vector
+ *
+ * \typedef wasm_instancetype_vec_t
+ * \brief Convenience alias for #wasm_instancetype_vec_t
+ *
+ * \fn void wasm_instancetype_delete(own wasm_instancetype_t *);
+ * \brief Deletes a type.
+ *
+ * \fn void wasm_instancetype_vec_new_empty(own wasm_instancetype_vec_t *out);
+ * \brief Creates an empty vector.
+ *
+ * See #wasm_byte_vec_new_empty for more information.
+ *
+ * \fn void wasm_instancetype_vec_new_uninitialized(own wasm_instancetype_vec_t *out, size_t);
+ * \brief Creates a vector with the given capacity.
+ *
+ * See #wasm_byte_vec_new_uninitialized for more information.
+ *
+ * \fn void wasm_instancetype_vec_new(own wasm_instancetype_vec_t *out, size_t, own wasm_instancetype_t *const[]);
+ * \brief Creates a vector with the provided contents.
+ *
+ * See #wasm_byte_vec_new for more information.
+ *
+ * \fn void wasm_instancetype_vec_copy(own wasm_instancetype_vec_t *out, const wasm_instancetype_vec_t *)
+ * \brief Copies one vector to another
+ *
+ * See #wasm_byte_vec_copy for more information.
+ *
+ * \fn void wasm_instancetype_vec_delete(own wasm_instancetype_vec_t *out)
+ * \brief Deallocates memory for a vector.
+ *
+ * See #wasm_byte_vec_delete for more information.
+ *
+ * \fn own wasm_instancetype_t* wasm_instancetype_copy(wasm_instancetype_t *)
+ * \brief Creates a new value which matches the provided one.
+ *
+ * The caller is responsible for deleting the returned value.
+ */
+WASM_DECLARE_TYPE(instancetype)
+
+/**
+ * \brief Returns the list of exports that this instance type provides.
+ *
+ * This function does not take ownership of the provided instance type but
+ * ownership of `out` is passed to the caller. Note that `out` is treated as
+ * uninitialized when passed to this function.
+ */
+WASM_API_EXTERN void wasm_instancetype_exports(const wasm_instancetype_t*, own wasm_exporttype_vec_t* out);
+
+/**
+ * \brief Converts a #wasm_instancetype_t to a #wasm_externtype_t
+ *
+ * The returned value is owned by the #wasm_instancetype_t argument and should not
+ * be deleted.
+ */
+WASM_API_EXTERN wasm_externtype_t* wasm_instancetype_as_externtype(wasm_instancetype_t*);
+
+/**
+ * \brief Attempts to convert a #wasm_externtype_t to a #wasm_instancetype_t
+ *
+ * The returned value is owned by the #wasm_instancetype_t argument and should not
+ * be deleted. Returns `NULL` if the provided argument is not a
+ * #wasm_instancetype_t.
+ */
+WASM_API_EXTERN wasm_instancetype_t* wasm_externtype_as_instancetype(wasm_externtype_t*);
+
+/**
+ * \brief Converts a #wasm_instancetype_t to a #wasm_externtype_t
+ *
+ * The returned value is owned by the #wasm_instancetype_t argument and should not
+ * be deleted.
+ */
+WASM_API_EXTERN const wasm_externtype_t* wasm_instancetype_as_externtype_const(const wasm_instancetype_t*);
+
+/**
+ * \brief Attempts to convert a #wasm_externtype_t to a #wasm_instancetype_t
+ *
+ * The returned value is owned by the #wasm_instancetype_t argument and should not
+ * be deleted. Returns `NULL` if the provided argument is not a
+ * #wasm_instancetype_t.
+ */
+WASM_API_EXTERN const wasm_instancetype_t* wasm_externtype_as_instancetype_const(const wasm_externtype_t*);
+
+/**
+ * \struct wasm_moduletype_t
+ * \brief An opaque object representing the type of a function.
+ *
+ * \typedef wasm_moduletype_t
+ * \brief Convenience alias for #wasm_moduletype_t
+ *
+ * \struct wasm_moduletype_vec_t
+ * \brief A list of #wasm_moduletype_t values.
+ *
+ * \var wasm_moduletype_vec_t::size
+ * \brief Length of this vector.
+ *
+ * \var wasm_moduletype_vec_t::data
+ * \brief Pointer to the base of this vector
+ *
+ * \typedef wasm_moduletype_vec_t
+ * \brief Convenience alias for #wasm_moduletype_vec_t
+ *
+ * \fn void wasm_moduletype_delete(own wasm_moduletype_t *);
+ * \brief Deletes a type.
+ *
+ * \fn void wasm_moduletype_vec_new_empty(own wasm_moduletype_vec_t *out);
+ * \brief Creates an empty vector.
+ *
+ * See #wasm_byte_vec_new_empty for more information.
+ *
+ * \fn void wasm_moduletype_vec_new_uninitialized(own wasm_moduletype_vec_t *out, size_t);
+ * \brief Creates a vector with the given capacity.
+ *
+ * See #wasm_byte_vec_new_uninitialized for more information.
+ *
+ * \fn void wasm_moduletype_vec_new(own wasm_moduletype_vec_t *out, size_t, own wasm_moduletype_t *const[]);
+ * \brief Creates a vector with the provided contents.
+ *
+ * See #wasm_byte_vec_new for more information.
+ *
+ * \fn void wasm_moduletype_vec_copy(own wasm_moduletype_vec_t *out, const wasm_moduletype_vec_t *)
+ * \brief Copies one vector to another
+ *
+ * See #wasm_byte_vec_copy for more information.
+ *
+ * \fn void wasm_moduletype_vec_delete(own wasm_moduletype_vec_t *out)
+ * \brief Deallocates memory for a vector.
+ *
+ * See #wasm_byte_vec_delete for more information.
+ *
+ * \fn own wasm_moduletype_t* wasm_moduletype_copy(wasm_moduletype_t *)
+ * \brief Creates a new value which matches the provided one.
+ *
+ * The caller is responsible for deleting the returned value.
+ */
+WASM_DECLARE_TYPE(moduletype)
+
+/**
+ * \brief Returns the list of imports that this module type requires.
+ *
+ * This function does not take ownership of the provided module type but
+ * ownership of `out` is passed to the caller. Note that `out` is treated as
+ * uninitialized when passed to this function.
+ */
+WASM_API_EXTERN void wasm_moduletype_imports(const wasm_moduletype_t*, own wasm_importtype_vec_t* out);
+
+/**
+ * \brief Returns the list of exports that this module type provides.
+ *
+ * This function does not take ownership of the provided module type but
+ * ownership of `out` is passed to the caller. Note that `out` is treated as
+ * uninitialized when passed to this function.
+ */
+WASM_API_EXTERN void wasm_moduletype_exports(const wasm_moduletype_t*, own wasm_exporttype_vec_t* out);
+
+/**
+ * \brief Converts a #wasm_moduletype_t to a #wasm_externtype_t
+ *
+ * The returned value is owned by the #wasm_moduletype_t argument and should not
+ * be deleted.
+ */
+WASM_API_EXTERN wasm_externtype_t* wasm_moduletype_as_externtype(wasm_moduletype_t*);
+
+/**
+ * \brief Attempts to convert a #wasm_externtype_t to a #wasm_moduletype_t
+ *
+ * The returned value is owned by the #wasm_moduletype_t argument and should not
+ * be deleted. Returns `NULL` if the provided argument is not a
+ * #wasm_moduletype_t.
+ */
+WASM_API_EXTERN wasm_moduletype_t* wasm_externtype_as_moduletype(wasm_externtype_t*);
+
+/**
+ * \brief Converts a #wasm_moduletype_t to a #wasm_externtype_t
+ *
+ * The returned value is owned by the #wasm_moduletype_t argument and should not
+ * be deleted.
+ */
+WASM_API_EXTERN const wasm_externtype_t* wasm_moduletype_as_externtype_const(const wasm_moduletype_t*);
+
+/**
+ * \brief Attempts to convert a #wasm_externtype_t to a #wasm_moduletype_t
+ *
+ * The returned value is owned by the #wasm_moduletype_t argument and should not
+ * be deleted. Returns `NULL` if the provided argument is not a
+ * #wasm_moduletype_t.
+ */
+WASM_API_EXTERN const wasm_moduletype_t* wasm_externtype_as_moduletype_const(const wasm_externtype_t*);
+
+/**
+ * \brief Converts a #wasm_module_t to #wasm_extern_t.
+ *
+ * The returned #wasm_extern_t is owned by the #wasm_module_t argument. Callers
+ * should not delete the returned value, and it only lives as long as the
+ * #wasm_module_t argument.
+ */
+WASM_API_EXTERN wasm_extern_t* wasm_module_as_extern(wasm_module_t*);
+
+/**
+ * \brief Converts a #wasm_extern_t to #wasm_module_t.
+ *
+ * The returned #wasm_module_t is owned by the #wasm_extern_t argument. Callers
+ * should not delete the returned value, and it only lives as long as the
+ * #wasm_extern_t argument.
+ *
+ * If the #wasm_extern_t argument isn't a #wasm_module_t then `NULL` is returned.
+ */
+WASM_API_EXTERN wasm_module_t* wasm_extern_as_module(wasm_extern_t*);
+
+/**
+ * \brief Converts a #wasm_extern_t to #wasm_instance_t.
+ *
+ * The returned #wasm_instance_t is owned by the #wasm_extern_t argument. Callers
+ * should not delete the returned value, and it only lives as long as the
+ * #wasm_extern_t argument.
+ */
+WASM_API_EXTERN const wasm_module_t* wasm_extern_as_module_const(const wasm_extern_t*);
+
+/**
+ * \brief Converts a #wasm_instance_t to #wasm_extern_t.
+ *
+ * The returned #wasm_extern_t is owned by the #wasm_instance_t argument. Callers
+ * should not delete the returned value, and it only lives as long as the
+ * #wasm_instance_t argument.
+ */
+WASM_API_EXTERN wasm_extern_t* wasm_instance_as_extern(wasm_instance_t*);
+
+/**
+ * \brief Converts a #wasm_extern_t to #wasm_instance_t.
+ *
+ * The returned #wasm_instance_t is owned by the #wasm_extern_t argument. Callers
+ * should not delete the returned value, and it only lives as long as the
+ * #wasm_extern_t argument.
+ *
+ * If the #wasm_extern_t argument isn't a #wasm_instance_t then `NULL` is returned.
+ */
+WASM_API_EXTERN wasm_instance_t* wasm_extern_as_instance(wasm_extern_t*);
+
+/**
+ * \brief Converts a #wasm_extern_t to #wasm_instance_t.
+ *
+ * The returned #wasm_instance_t is owned by the #wasm_extern_t argument. Callers
+ * should not delete the returned value, and it only lives as long as the
+ * #wasm_extern_t argument.
+ */
+WASM_API_EXTERN const wasm_instance_t* wasm_extern_as_instance_const(const wasm_extern_t*);
+
+/**
+ * \brief Returns the type of this instance.
+ *
+ * The returned #wasm_instancetype_t is expected to be deallocated by the caller.
+ */
+WASM_API_EXTERN own wasm_instancetype_t* wasm_instance_type(const wasm_instance_t*);
+
+/**
+ * \brief Returns the type of this module.
+ *
+ * The returned #wasm_moduletype_t is expected to be deallocated by the caller.
+ */
+WASM_API_EXTERN own wasm_moduletype_t* wasm_module_type(const wasm_module_t*);
+
+/**
+ * \brief Value of #wasm_externkind_enum corresponding to a wasm module.
+ */
+#define WASM_EXTERN_MODULE 4
+
+/**
+ * \brief Value of #wasm_externkind_enum corresponding to a wasm instance.
+ */
+#define WASM_EXTERN_INSTANCE 5
 
 #undef own
 

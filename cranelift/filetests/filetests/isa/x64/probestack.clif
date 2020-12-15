@@ -1,0 +1,17 @@
+test compile
+set enable_probestack=true
+target x86_64
+feature "experimental_x64"
+
+function %f1() -> i64 {
+ss0 = explicit_slot 100000
+
+block0:
+  v1 = stack_addr.i64 ss0
+  return v1
+}
+
+; check:  pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+; nextln:  movl    $$100000, %eax
+; nextln:  call    LibCall(Probestack)

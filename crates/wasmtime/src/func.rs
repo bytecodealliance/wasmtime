@@ -798,10 +798,6 @@ impl Func {
         &self.instance.store
     }
 
-    pub(crate) fn matches_expected(&self, expected: VMSharedSignatureIndex) -> bool {
-        self.sig_index() == expected
-    }
-
     pub(crate) fn vmimport(&self) -> wasmtime_runtime::VMFunctionImport {
         unsafe {
             let f = self.caller_checked_anyfunc();
@@ -1503,7 +1499,6 @@ impl Caller<'_> {
                 return None;
             }
             let instance = InstanceHandle::from_vmctx(self.caller_vmctx);
-            let export = instance.lookup(name)?;
             // Our `Weak` pointer is used only to break a cycle where `Store`
             // stores instance handles which have this weak pointer as their
             // custom host data. This function should only be invoke-able while
@@ -1511,6 +1506,7 @@ impl Caller<'_> {
             debug_assert!(self.store.upgrade().is_some());
             let handle =
                 Store::from_inner(self.store.upgrade()?).existing_instance_handle(instance);
+            let export = handle.lookup(name)?;
             match export {
                 Export::Memory(m) => Some(Extern::Memory(Memory::from_wasmtime_memory(m, handle))),
                 Export::Function(f) => Some(Extern::Func(Func::from_wasmtime_function(f, handle))),

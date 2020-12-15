@@ -1,12 +1,21 @@
 use cranelift::prelude::*;
 use cranelift_codegen::binemit::NullTrapSink;
+use cranelift_codegen::settings::{self, Configurable};
+use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{default_libcall_names, Linkage, Module};
-use cranelift_simplejit::{SimpleJITBuilder, SimpleJITModule};
 use std::mem;
 
 fn main() {
-    let mut module: SimpleJITModule =
-        SimpleJITModule::new(SimpleJITBuilder::new(default_libcall_names()));
+    let mut flag_builder = settings::builder();
+    flag_builder.set("use_colocated_libcalls", "false").unwrap();
+    // FIXME set back to true once the x64 backend supports it.
+    flag_builder.set("is_pic", "false").unwrap();
+    let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
+        panic!("host machine is not supported: {}", msg);
+    });
+    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
+
     let mut ctx = module.make_context();
     let mut func_ctx = FunctionBuilderContext::new();
 

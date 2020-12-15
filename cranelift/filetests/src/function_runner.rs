@@ -21,7 +21,7 @@ use thiserror::Error;
 /// `CompiledFunction`s and subsequently calling them through the use of a `Trampoline`. As its
 /// name indicates, this compiler is limited: any functionality that requires knowledge of things
 /// outside the [Function] will likely not work (e.g. global values, calls). For an example of this
-/// "outside-of-function" functionality, see `cranelift_simplejit::backend::SimpleJITBackend`.
+/// "outside-of-function" functionality, see `cranelift_jit::backend::JITBackend`.
 ///
 /// ```
 /// use cranelift_filetests::SingleFunctionCompiler;

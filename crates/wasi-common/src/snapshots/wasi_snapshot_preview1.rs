@@ -4,6 +4,7 @@ use crate::sys::{clock, poll};
 use crate::wasi::types;
 use crate::wasi::wasi_snapshot_preview1::WasiSnapshotPreview1;
 use crate::{path, sched, Error, Result, WasiCtx};
+use std::cmp::min;
 use std::convert::TryInto;
 use std::io::{self, SeekFrom};
 use std::ops::Deref;
@@ -304,15 +305,34 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             let name_raw = name.as_bytes();
             let name_len = name_raw.len().try_into()?;
             let offset = dirent_len.checked_add(name_len).ok_or(Error::Overflow)?;
-            if (buf_len - bufused) < offset {
-                break;
-            } else {
-                buf.as_array(dirent_len).copy_from_slice(&dirent_raw)?;
-                buf = buf.add(dirent_len)?;
-                buf.as_array(name_len).copy_from_slice(name_raw)?;
-                buf = buf.add(name_len)?;
-                bufused += offset;
+
+            // Copy as many bytes of the dirent as we can, up to the end of the buffer.
+            let dirent_copy_len = min(dirent_len, buf_len - bufused);
+            buf.as_array(dirent_copy_len)
+                .copy_from_slice(&dirent_raw[..dirent_copy_len as usize])?;
+
+            // If the dirent struct wasn't copied entirely, return that we
+            // filled the buffer, which tells libc that we're not at EOF.
+            if dirent_copy_len < dirent_len {
+                return Ok(buf_len);
             }
+
+            buf = buf.add(dirent_copy_len)?;
+
+            // Copy as many bytes of the name as we can, up to the end of the buffer.
+            let name_copy_len = min(name_len, buf_len - bufused);
+            buf.as_array(name_copy_len)
+                .copy_from_slice(&name_raw[..name_copy_len as usize])?;
+
+            // If the dirent struct wasn't copied entirely, return that we
+            // filled the buffer, which tells libc that we're not at EOF.
+            if name_copy_len < name_len {
+                return Ok(buf_len);
+            }
+
+            buf = buf.add(name_copy_len)?;
+
+            bufused += offset;
         }
 
         Ok(bufused)

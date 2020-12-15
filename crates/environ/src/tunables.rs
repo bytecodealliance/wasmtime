@@ -10,8 +10,11 @@ pub struct Tunables {
     /// The size in bytes of the offset guard for dynamic heaps.
     pub dynamic_memory_offset_guard_size: u64,
 
-    /// Whether or not to generate DWARF debug information.
-    pub debug_info: bool,
+    /// Whether or not to generate native DWARF debug information.
+    pub generate_native_debuginfo: bool,
+
+    /// Whether or not to retain DWARF sections in compiled modules.
+    pub parse_wasm_debuginfo: bool,
 
     /// Whether or not to enable the ability to interrupt wasm code dynamically.
     ///
@@ -51,7 +54,8 @@ impl Default for Tunables {
             /// wasting too much memory.
             dynamic_memory_offset_guard_size: 0x1_0000,
 
-            debug_info: false,
+            generate_native_debuginfo: false,
+            parse_wasm_debuginfo: true,
             interruptable: false,
         }
     }

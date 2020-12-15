@@ -122,6 +122,7 @@ struct TrapInner {
     reason: TrapReason,
     wasm_trace: Vec<FrameInfo>,
     native_trace: Backtrace,
+    hint_wasm_backtrace_details_env: bool,
 }
 
 fn _assert_trap_is_sync_and_send(t: &Trap) -> (&dyn Sync, &dyn Send) {
@@ -214,6 +215,7 @@ impl Trap {
         native_trace: Backtrace,
     ) -> Self {
         let mut wasm_trace = Vec::new();
+        let mut hint_wasm_backtrace_details_env = false;
         wasmtime_runtime::with_last_info(|last| {
             // If the `store` passed in is `None` then we look at the `last`
             // store configured to call wasm, and if that's a `Store` we use
@@ -236,9 +238,22 @@ impl Trap {
                     // want to lookup information for the previous instruction
                     // (the call instruction) so we subtract one as the lookup.
                     let pc_to_lookup = if Some(pc) == trap_pc { pc } else { pc - 1 };
-                    if let Some(info) = store.frame_info().borrow().lookup_frame_info(pc_to_lookup)
+                    if let Some((info, has_unparsed_debuginfo)) =
+                        store.frame_info().borrow().lookup_frame_info(pc_to_lookup)
                     {
                         wasm_trace.push(info);
+
+                        // If this frame has unparsed debug information and the
+                        // store's configuration indicates that we were
+                        // respecting the environment variable of whether to
+                        // do this then we will print out a helpful note in
+                        // `Display` to indicate that more detailed information
+                        // in a trap may be available.
+                        if has_unparsed_debuginfo
+                            && store.engine().config().wasm_backtrace_details_env_used
+                        {
+                            hint_wasm_backtrace_details_env = true;
+                        }
                     }
                 }
             }
@@ -248,6 +263,7 @@ impl Trap {
                 reason,
                 wasm_trace,
                 native_trace,
+                hint_wasm_backtrace_details_env,
             }),
         }
     }
@@ -297,15 +313,52 @@ impl fmt::Display for Trap {
         writeln!(f, "\nwasm backtrace:")?;
         for (i, frame) in self.trace().iter().enumerate() {
             let name = frame.module_name().unwrap_or("<unknown>");
-            write!(f, "  {}: {:#6x} - {}!", i, frame.module_offset(), name)?;
-            match frame.func_name() {
-                Some(name) => match rustc_demangle::try_demangle(name) {
-                    Ok(name) => write!(f, "{}", name)?,
-                    Err(_) => write!(f, "{}", name)?,
-                },
-                None => write!(f, "<wasm function {}>", frame.func_index())?,
+            write!(f, "  {:>3}: {:#6x} - ", i, frame.module_offset())?;
+
+            let demangle =
+                |f: &mut fmt::Formatter<'_>, name: &str| match rustc_demangle::try_demangle(name) {
+                    Ok(name) => write!(f, "{}", name),
+                    Err(_) => match cpp_demangle::Symbol::new(name) {
+                        Ok(name) => write!(f, "{}", name),
+                        Err(_) => write!(f, "{}", name),
+                    },
+                };
+            let write_raw_func_name = |f: &mut fmt::Formatter<'_>| match frame.func_name() {
+                Some(name) => demangle(f, name),
+                None => write!(f, "<wasm function {}>", frame.func_index()),
+            };
+            if frame.symbols().is_empty() {
+                write!(f, "{}!", name)?;
+                write_raw_func_name(f)?;
+                writeln!(f, "")?;
+            } else {
+                for (i, symbol) in frame.symbols().iter().enumerate() {
+                    if i > 0 {
+                        write!(f, "              - ")?;
+                    } else {
+                        // ...
+                    }
+                    match symbol.name() {
+                        Some(name) => demangle(f, name)?,
+                        None if i == 0 => write_raw_func_name(f)?,
+                        None => write!(f, "<inlined function>")?,
+                    }
+                    writeln!(f, "")?;
+                    if let Some(file) = symbol.file() {
+                        write!(f, "                    at {}", file)?;
+                        if let Some(line) = symbol.line() {
+                            write!(f, ":{}", line)?;
+                            if let Some(col) = symbol.column() {
+                                write!(f, ":{}", col)?;
+                            }
+                        }
+                    }
+                    writeln!(f, "")?;
+                }
             }
-            writeln!(f, "")?;
+        }
+        if self.inner.hint_wasm_backtrace_details_env {
+            writeln!(f, "note: run with `WASMTIME_BACKTRACE_DETAILS=1` environment variable to display more information")?;
         }
         Ok(())
     }

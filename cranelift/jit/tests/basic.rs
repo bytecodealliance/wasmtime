@@ -1,16 +1,25 @@
 use cranelift_codegen::binemit::NullTrapSink;
 use cranelift_codegen::ir::*;
 use cranelift_codegen::isa::CallConv;
+use cranelift_codegen::settings::{self, Configurable};
 use cranelift_codegen::{ir::types::I16, Context};
 use cranelift_entity::EntityRef;
 use cranelift_frontend::*;
+use cranelift_jit::*;
 use cranelift_module::*;
-use cranelift_simplejit::*;
 
 #[test]
 fn error_on_incompatible_sig_in_declare_function() {
-    let mut module: SimpleJITModule =
-        SimpleJITModule::new(SimpleJITBuilder::new(default_libcall_names()));
+    let mut flag_builder = settings::builder();
+    flag_builder.set("use_colocated_libcalls", "false").unwrap();
+    // FIXME set back to true once the x64 backend supports it.
+    flag_builder.set("is_pic", "false").unwrap();
+    let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
+        panic!("host machine is not supported: {}", msg);
+    });
+    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
+
     let mut sig = Signature {
         params: vec![AbiParam::new(types::I64)],
         returns: vec![],
@@ -26,7 +35,7 @@ fn error_on_incompatible_sig_in_declare_function() {
         .unwrap(); // Make sure this is an error
 }
 
-fn define_simple_function(module: &mut SimpleJITModule) -> FuncId {
+fn define_simple_function(module: &mut JITModule) -> FuncId {
     let sig = Signature {
         params: vec![],
         returns: vec![],
@@ -58,8 +67,15 @@ fn define_simple_function(module: &mut SimpleJITModule) -> FuncId {
 #[test]
 #[should_panic(expected = "Result::unwrap()` on an `Err` value: DuplicateDefinition(\"abc\")")]
 fn panic_on_define_after_finalize() {
-    let mut module: SimpleJITModule =
-        SimpleJITModule::new(SimpleJITBuilder::new(default_libcall_names()));
+    let mut flag_builder = settings::builder();
+    flag_builder.set("use_colocated_libcalls", "false").unwrap();
+    // FIXME set back to true once the x64 backend supports it.
+    flag_builder.set("is_pic", "false").unwrap();
+    let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
+        panic!("host machine is not supported: {}", msg);
+    });
+    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
 
     define_simple_function(&mut module);
     define_simple_function(&mut module);
@@ -140,8 +156,15 @@ fn switch_error() {
 
 #[test]
 fn libcall_function() {
-    let mut module: SimpleJITModule =
-        SimpleJITModule::new(SimpleJITBuilder::new(default_libcall_names()));
+    let mut flag_builder = settings::builder();
+    flag_builder.set("use_colocated_libcalls", "false").unwrap();
+    // FIXME set back to true once the x64 backend supports it.
+    flag_builder.set("is_pic", "false").unwrap();
+    let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
+        panic!("host machine is not supported: {}", msg);
+    });
+    let isa = isa_builder.finish(settings::Flags::new(flag_builder));
+    let mut module = JITModule::new(JITBuilder::with_isa(isa, default_libcall_names()));
 
     let sig = Signature {
         params: vec![],

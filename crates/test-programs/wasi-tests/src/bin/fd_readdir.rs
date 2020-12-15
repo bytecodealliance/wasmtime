@@ -26,15 +26,20 @@ impl<'a> Iterator for ReadDir<'a> {
 
     fn next(&mut self) -> Option<DirEntry> {
         unsafe {
-            if self.buf.is_empty() {
+            if self.buf.len() < mem::size_of::<wasi::Dirent>() {
                 return None;
             }
 
             // Read the data
             let dirent_ptr = self.buf.as_ptr() as *const wasi::Dirent;
             let dirent = dirent_ptr.read_unaligned();
+
+            if self.buf.len() < mem::size_of::<wasi::Dirent>() + dirent.d_namlen as usize {
+                return None;
+            }
+
             let name_ptr = dirent_ptr.offset(1) as *const u8;
-            // NOTE Linux syscall returns a NULL-terminated name, but WASI doesn't
+            // NOTE Linux syscall returns a NUL-terminated name, but WASI doesn't
             let namelen = dirent.d_namlen as usize;
             let slice = slice::from_raw_parts(name_ptr, namelen);
             let name = str::from_utf8(slice).expect("invalid utf8").to_owned();
@@ -48,21 +53,24 @@ impl<'a> Iterator for ReadDir<'a> {
     }
 }
 
-unsafe fn exec_fd_readdir(fd: wasi::Fd, cookie: wasi::Dircookie) -> Vec<DirEntry> {
+/// Return the entries plus a bool indicating EOF.
+unsafe fn exec_fd_readdir(fd: wasi::Fd, cookie: wasi::Dircookie) -> (Vec<DirEntry>, bool) {
     let mut buf: [u8; BUF_LEN] = [0; BUF_LEN];
     let bufused =
         wasi::fd_readdir(fd, buf.as_mut_ptr(), BUF_LEN, cookie).expect("failed fd_readdir");
 
     let sl = slice::from_raw_parts(buf.as_ptr(), min(BUF_LEN, bufused));
     let dirs: Vec<_> = ReadDir::from_slice(sl).collect();
-    dirs
+    let eof = bufused < BUF_LEN;
+    (dirs, eof)
 }
 
 unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
     let stat = wasi::fd_filestat_get(dir_fd).expect("failed filestat");
 
     // Check the behavior in an empty directory
-    let mut dirs = exec_fd_readdir(dir_fd, 0);
+    let (mut dirs, eof) = exec_fd_readdir(dir_fd, 0);
+    assert!(eof, "expected to read the entire directory");
     dirs.sort_by_key(|d| d.name.clone());
     assert_eq!(dirs.len(), 2, "expected two entries in an empty directory");
     let mut dirs = dirs.into_iter();
@@ -105,9 +113,11 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
     );
 
     let stat = wasi::fd_filestat_get(file_fd).expect("failed filestat");
+    wasi::fd_close(file_fd).expect("closing a file");
 
     // Execute another readdir
-    let mut dirs = exec_fd_readdir(dir_fd, 0);
+    let (mut dirs, eof) = exec_fd_readdir(dir_fd, 0);
+    assert!(eof, "expected to read the entire directory");
     assert_eq!(dirs.len(), 3, "expected three entries");
     // Save the data about the last entry. We need to do it before sorting.
     let lastfile_cookie = dirs[1].dirent.d_next;
@@ -130,9 +140,54 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
     assert_eq!(dir.dirent.d_ino, stat.ino);
 
     // check if cookie works as expected
-    let dirs = exec_fd_readdir(dir_fd, lastfile_cookie);
+    let (dirs, eof) = exec_fd_readdir(dir_fd, lastfile_cookie);
+    assert!(eof, "expected to read the entire directory");
     assert_eq!(dirs.len(), 1, "expected one entry");
     assert_eq!(dirs[0].name, lastfile_name, "name of the only entry");
+
+    wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
+}
+
+unsafe fn test_fd_readdir_lots(dir_fd: wasi::Fd) {
+    // Add a file and check the behavior
+    for count in 0..1000 {
+        let file_fd = wasi::path_open(
+            dir_fd,
+            0,
+            &format!("file.{}", count),
+            wasi::OFLAGS_CREAT,
+            wasi::RIGHTS_FD_READ
+                | wasi::RIGHTS_FD_WRITE
+                | wasi::RIGHTS_FD_READDIR
+                | wasi::RIGHTS_FD_FILESTAT_GET,
+            0,
+            0,
+        )
+        .expect("failed to create file");
+        assert_gt!(
+            file_fd,
+            libc::STDERR_FILENO as wasi::Fd,
+            "file descriptor range check",
+        );
+        wasi::fd_close(file_fd).expect("closing a file");
+    }
+
+    // Count the entries to ensure that we see the correct number.
+    let mut total = 0;
+    let mut cookie = 0;
+    loop {
+        let (dirs, eof) = exec_fd_readdir(dir_fd, cookie);
+        total += dirs.len();
+        if eof {
+            break;
+        }
+        cookie = dirs[dirs.len()-1].dirent.d_next;
+    }
+    assert_eq!(total, 1002, "expected 1000 entries plus . and ..");
+
+    for count in 0..1000 {
+        wasi::path_unlink_file(dir_fd, &format!("file.{}", count)).expect("removing a file");
+    }
 }
 
 fn main() {
@@ -156,4 +211,5 @@ fn main() {
 
     // Run the tests.
     unsafe { test_fd_readdir(dir_fd) }
+    unsafe { test_fd_readdir_lots(dir_fd) }
 }

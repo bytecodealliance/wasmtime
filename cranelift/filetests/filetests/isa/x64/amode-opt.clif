@@ -7,7 +7,7 @@ block0(v0: i64, v1: i64):
     v2 = iadd v0, v1
     v3 = load.i64 v2
     return v3
-    ; check: movq    0(%rdi,%rsi,1), %r12
+    ; check: movq    0(%rdi,%rsi,1), %rsi
 }
 
 function %amode_add_imm(i64) -> i64 {
@@ -16,7 +16,7 @@ block0(v0: i64):
     v2 = iadd v0, v1
     v3 = load.i64 v2
     return v3
-    ; check: movq    42(%rdi), %r12
+    ; check: movq    42(%rdi), %rsi
 }
 
 ;; Same as above, but add operands have been reversed.
@@ -26,7 +26,7 @@ block0(v0: i64):
     v2 = iadd v1, v0
     v3 = load.i64 v2
     return v3
-    ; check: movq    42(%rdi), %r12
+    ; check: movq    42(%rdi), %rsi
 }
 
 ;; Make sure that uextend(cst) are ignored when the cst will naturally sign-extend.
@@ -37,5 +37,5 @@ block0(v0: i64):
     v3 = iadd v2, v0
     v4 = load.i64 v3
     return v4
-    ; check: movq    42(%rdi), %r12
+    ; check: movq    42(%rdi), %rsi
 }

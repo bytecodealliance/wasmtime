@@ -1,7 +1,8 @@
 use crate::spectest::link_spectest;
 use anyhow::{anyhow, bail, Context as _, Result};
-use std::path::Path;
+use core::fmt;
 use std::str;
+use std::{mem::size_of_val, path::Path};
 use wasmtime::*;
 use wast::Wat;
 use wast::{
@@ -185,7 +186,13 @@ impl WastContext {
             if val_matches(v, e)? {
                 continue;
             }
-            bail!("expected {:?}, got {:?}", e, v)
+            bail!(
+                "expected {:?} ({}), got {:?} ({})",
+                e,
+                e.as_hex_pattern(),
+                v,
+                v.as_hex_pattern()
+            )
         }
         Ok(())
     }
@@ -226,20 +233,25 @@ impl WastContext {
 
         for directive in ast.directives {
             let sp = directive.span();
-            self.run_directive(directive).with_context(|| {
-                let (line, col) = sp.linecol_in(wast);
-                format!("failed directive on {}:{}:{}", filename, line + 1, col)
-            })?;
+            self.run_directive(directive, &adjust_wast)
+                .with_context(|| {
+                    let (line, col) = sp.linecol_in(wast);
+                    format!("failed directive on {}:{}:{}", filename, line + 1, col)
+                })?;
         }
         Ok(())
     }
 
-    fn run_directive(&mut self, directive: wast::WastDirective) -> Result<()> {
+    fn run_directive(
+        &mut self,
+        directive: wast::WastDirective,
+        adjust: impl Fn(wast::Error) -> wast::Error,
+    ) -> Result<()> {
         use wast::WastDirective::*;
 
         match directive {
             Module(mut module) => {
-                let binary = module.encode()?;
+                let binary = module.encode().map_err(adjust)?;
                 self.module(module.id.map(|s| s.name()), &binary)?;
             }
             QuoteModule { span: _, source } => {
@@ -249,7 +261,10 @@ impl WastContext {
                     module.push_str(" ");
                 }
                 let buf = ParseBuffer::new(&module)?;
-                let mut wat = parser::parse::<Wat>(&buf)?;
+                let mut wat = parser::parse::<Wat>(&buf).map_err(|mut e| {
+                    e.set_text(&module);
+                    e
+                })?;
                 let binary = wat.module.encode()?;
                 self.module(wat.module.id.map(|s| s.name()), &binary)?;
             }
@@ -317,7 +332,7 @@ impl WastContext {
                     // interested in.
                     wast::QuoteModule::Quote(_) => return Ok(()),
                 };
-                let bytes = module.encode()?;
+                let bytes = module.encode().map_err(adjust)?;
                 if let Ok(_) = self.module(None, &bytes) {
                     bail!("expected malformed module to fail to instantiate");
                 }
@@ -327,7 +342,7 @@ impl WastContext {
                 mut module,
                 message,
             } => {
-                let bytes = module.encode()?;
+                let bytes = module.encode().map_err(adjust)?;
                 let err = match self.module(None, &bytes) {
                     Ok(()) => bail!("expected module to fail to link"),
                     Err(e) => e,
@@ -356,9 +371,6 @@ impl WastContext {
 
 fn is_matching_assert_invalid_error_message(expected: &str, actual: &str) -> bool {
     actual.contains(expected)
-        // Waiting on https://github.com/WebAssembly/bulk-memory-operations/pull/137
-        // to propagate to WebAssembly/testsuite.
-        || (expected.contains("unknown table") && actual.contains("unknown elem"))
         // `elem.wast` and `proposals/bulk-memory-operations/elem.wast` disagree
         // on the expected error message for the same error.
         || (expected.contains("out of bounds") && actual.contains("does not fit"))
@@ -382,22 +394,50 @@ fn extract_lane_as_i64(bytes: u128, lane: usize) -> i64 {
     (bytes >> (lane * 64)) as i64
 }
 
+/// Check if an f32 (as u32 bits to avoid possible quieting when moving values in registers, e.g.
+/// https://developer.arm.com/documentation/ddi0344/i/neon-and-vfp-programmers-model/modes-of-operation/default-nan-mode?lang=en)
+/// is a canonical NaN:
+///  - the sign bit is unspecified,
+///  - the 8-bit exponent is set to all 1s
+///  - the MSB of the payload is set to 1 (a quieted NaN) and all others to 0.
+/// See https://webassembly.github.io/spec/core/syntax/values.html#floating-point.
 fn is_canonical_f32_nan(bits: u32) -> bool {
     (bits & 0x7fff_ffff) == 0x7fc0_0000
 }
 
+/// Check if an f64 (as u64 bits to avoid possible quieting when moving values in registers, e.g.
+/// https://developer.arm.com/documentation/ddi0344/i/neon-and-vfp-programmers-model/modes-of-operation/default-nan-mode?lang=en)
+/// is a canonical NaN:
+///  - the sign bit is unspecified,
+///  - the 11-bit exponent is set to all 1s
+///  - the MSB of the payload is set to 1 (a quieted NaN) and all others to 0.
+/// See https://webassembly.github.io/spec/core/syntax/values.html#floating-point.
 fn is_canonical_f64_nan(bits: u64) -> bool {
     (bits & 0x7fff_ffff_ffff_ffff) == 0x7ff8_0000_0000_0000
 }
 
+/// Check if an f32 (as u32, see comments above) is an arithmetic NaN. This is the same as a
+/// canonical NaN including that the payload MSB is set to 1, but one or more of the remaining
+/// payload bits MAY BE set to 1 (a canonical NaN specifies all 0s). See
+/// https://webassembly.github.io/spec/core/syntax/values.html#floating-point.
 fn is_arithmetic_f32_nan(bits: u32) -> bool {
-    const AF32_NAN: u32 = 0x0040_0000;
-    (bits & AF32_NAN) == AF32_NAN
+    const AF32_NAN: u32 = 0x7f80_0000;
+    let is_nan = bits & AF32_NAN == AF32_NAN;
+    const AF32_PAYLOAD_MSB: u32 = 0x0040_0000;
+    let is_msb_set = bits & AF32_PAYLOAD_MSB == AF32_PAYLOAD_MSB;
+    is_nan && is_msb_set
 }
 
+/// Check if an f64 (as u64, see comments above) is an arithmetic NaN. This is the same as a
+/// canonical NaN including that the payload MSB is set to 1, but one or more of the remaining
+/// payload bits MAY BE set to 1 (a canonical NaN specifies all 0s). See
+/// https://webassembly.github.io/spec/core/syntax/values.html#floating-point.
 fn is_arithmetic_f64_nan(bits: u64) -> bool {
-    const AF64_NAN: u64 = 0x0008_0000_0000_0000;
-    (bits & AF64_NAN) == AF64_NAN
+    const AF64_NAN: u64 = 0x7ff0_0000_0000_0000;
+    let is_nan = bits & AF64_NAN == AF64_NAN;
+    const AF64_PAYLOAD_MSB: u64 = 0x0008_0000_0000_0000;
+    let is_msb_set = bits & AF64_PAYLOAD_MSB == AF64_PAYLOAD_MSB;
+    is_nan && is_msb_set
 }
 
 fn val_matches(actual: &Val, expected: &wast::AssertExpression) -> Result<bool> {
@@ -472,5 +512,174 @@ fn v128_matches(actual: u128, expected: &wast::V128Pattern) -> bool {
             let a = extract_lane_as_i64(actual, i) as u64;
             f64_matches(a, b)
         }),
+    }
+}
+
+/// When troubleshooting a failure in a spec test, it is valuable to understand the bit-by-bit
+/// difference. To do this, we print a hex-encoded version of Wasm values and assertion expressions
+/// using this helper.
+fn as_hex_pattern<T>(bits: T) -> String
+where
+    T: fmt::LowerHex,
+{
+    format!("{1:#00$x}", size_of_val(&bits) * 2 + 2, bits)
+}
+
+/// The [AsHexPattern] allows us to extend `as_hex_pattern` to various structures.
+trait AsHexPattern {
+    fn as_hex_pattern(&self) -> String;
+}
+
+impl AsHexPattern for wast::AssertExpression<'_> {
+    fn as_hex_pattern(&self) -> String {
+        match self {
+            wast::AssertExpression::I32(i) => as_hex_pattern(*i),
+            wast::AssertExpression::I64(i) => as_hex_pattern(*i),
+            wast::AssertExpression::F32(f) => f.as_hex_pattern(),
+            wast::AssertExpression::F64(f) => f.as_hex_pattern(),
+            wast::AssertExpression::V128(v) => v.as_hex_pattern(),
+            wast::AssertExpression::RefNull(_)
+            | wast::AssertExpression::RefExtern(_)
+            | wast::AssertExpression::RefFunc(_)
+            | wast::AssertExpression::LegacyArithmeticNaN
+            | wast::AssertExpression::LegacyCanonicalNaN => "no hex representation".to_string(),
+        }
+    }
+}
+
+impl AsHexPattern for wast::NanPattern<wast::Float32> {
+    fn as_hex_pattern(&self) -> String {
+        match self {
+            wast::NanPattern::CanonicalNan => "0x7fc00000".to_string(),
+            // Note that NaN patterns can have varying sign bits and payloads. Technically the first
+            // bit should be a `*` but it is impossible to show that in hex.
+            wast::NanPattern::ArithmeticNan => "0x7fc*****".to_string(),
+            wast::NanPattern::Value(wast::Float32 { bits }) => as_hex_pattern(*bits),
+        }
+    }
+}
+
+impl AsHexPattern for wast::NanPattern<wast::Float64> {
+    fn as_hex_pattern(&self) -> String {
+        match self {
+            wast::NanPattern::CanonicalNan => "0x7ff8000000000000".to_string(),
+            // Note that NaN patterns can have varying sign bits and payloads. Technically the first
+            // bit should be a `*` but it is impossible to show that in hex.
+            wast::NanPattern::ArithmeticNan => "0x7ff8************".to_string(),
+            wast::NanPattern::Value(wast::Float64 { bits }) => as_hex_pattern(*bits),
+        }
+    }
+}
+
+// This implementation reverses both the lanes and the lane bytes in order to match the Wasm SIMD
+// little-endian order. This implementation must include special behavior for this reversal; other
+// implementations do not because they deal with raw values (`u128`) or use big-endian order for
+// display (scalars).
+impl AsHexPattern for wast::V128Pattern {
+    fn as_hex_pattern(&self) -> String {
+        fn reverse_pattern(pattern: String) -> String {
+            let chars: Vec<char> = pattern[2..].chars().collect();
+            let reversed: Vec<&[char]> = chars.chunks(2).rev().collect();
+            reversed.concat().iter().collect()
+        }
+
+        fn as_hex_pattern(bits: &[u8]) -> String {
+            bits.iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<Vec<_>>()
+                .concat()
+        }
+
+        fn reverse_lanes<T, F>(
+            lanes: impl DoubleEndedIterator<Item = T>,
+            as_hex_pattern: F,
+        ) -> String
+        where
+            F: Fn(T) -> String,
+        {
+            lanes
+                .rev()
+                .map(|f| as_hex_pattern(f))
+                .collect::<Vec<_>>()
+                .concat()
+        }
+
+        let lanes_as_hex = match self {
+            wast::V128Pattern::I8x16(v) => {
+                reverse_lanes(v.iter(), |b| as_hex_pattern(&b.to_le_bytes()))
+            }
+            wast::V128Pattern::I16x8(v) => {
+                reverse_lanes(v.iter(), |b| as_hex_pattern(&b.to_le_bytes()))
+            }
+            wast::V128Pattern::I32x4(v) => {
+                reverse_lanes(v.iter(), |b| as_hex_pattern(&b.to_le_bytes()))
+            }
+            wast::V128Pattern::I64x2(v) => {
+                reverse_lanes(v.iter(), |b| as_hex_pattern(&b.to_le_bytes()))
+            }
+            wast::V128Pattern::F32x4(v) => {
+                reverse_lanes(v.iter(), |b| reverse_pattern(b.as_hex_pattern()))
+            }
+            wast::V128Pattern::F64x2(v) => {
+                reverse_lanes(v.iter(), |b| reverse_pattern(b.as_hex_pattern()))
+            }
+        };
+
+        String::from("0x") + &lanes_as_hex
+    }
+}
+
+impl AsHexPattern for Val {
+    fn as_hex_pattern(&self) -> String {
+        match self {
+            Val::I32(i) => as_hex_pattern(*i),
+            Val::I64(i) => as_hex_pattern(*i),
+            Val::F32(f) => as_hex_pattern(*f),
+            Val::F64(f) => as_hex_pattern(*f),
+            Val::V128(v) => as_hex_pattern(*v),
+            Val::ExternRef(_) | Val::FuncRef(_) => "no hex representation".to_string(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn val_to_hex() {
+        assert_eq!(Val::I32(0x42).as_hex_pattern(), "0x00000042");
+        assert_eq!(Val::F64(0x0).as_hex_pattern(), "0x0000000000000000");
+        assert_eq!(
+            Val::V128(u128::from_le_bytes([
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf
+            ]))
+            .as_hex_pattern(),
+            "0x0f0e0d0c0b0a09080706050403020100"
+        );
+    }
+
+    #[test]
+    fn assert_expression_to_hex() {
+        assert_eq!(
+            wast::AssertExpression::F32(wast::NanPattern::ArithmeticNan).as_hex_pattern(),
+            "0x7fc*****"
+        );
+        assert_eq!(
+            wast::AssertExpression::F64(wast::NanPattern::Value(wast::Float64 { bits: 0x42 }))
+                .as_hex_pattern(),
+            "0x0000000000000042"
+        );
+        assert_eq!(
+            wast::AssertExpression::V128(wast::V128Pattern::I32x4([0, 1, 2, 3])).as_hex_pattern(),
+            "0x03000000020000000100000000000000"
+        );
+        assert_eq!(
+            wast::AssertExpression::V128(wast::V128Pattern::F64x2([
+                wast::NanPattern::CanonicalNan,
+                wast::NanPattern::ArithmeticNan
+            ]))
+            .as_hex_pattern(),
+            "0x************f87f000000000000f87f"
+        );
     }
 }

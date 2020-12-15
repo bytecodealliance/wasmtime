@@ -1312,6 +1312,13 @@ impl MachInstEmit for Inst {
                         | machreg_to_vec(rd.to_reg()),
                 );
             }
+            &Inst::FpuExtend { rd, rn, size } => {
+                sink.put4(enc_fpurr(
+                    0b000_11110_00_1_000000_10000 | (size.ftype() << 13),
+                    rd,
+                    rn,
+                ));
+            }
             &Inst::FpuRR { fpu_op, rd, rn } => {
                 let top22 = match fpu_op {
                     FPUOp1::Abs32 => 0b000_11110_00_1_000001_10000,
@@ -1745,6 +1752,17 @@ impl MachInstEmit for Inst {
                         | (machreg_to_vec(rn) << 5)
                         | machreg_to_vec(rd.to_reg()),
                 );
+            }
+            &Inst::VecDupFPImm { rd, imm, size } => {
+                let imm = imm.enc_bits();
+                let op = match size.lane_size() {
+                    ScalarSize::Size32 => 0,
+                    ScalarSize::Size64 => 1,
+                    _ => unimplemented!(),
+                };
+                let q_op = op | ((size.is_128bits() as u32) << 1);
+
+                sink.put4(enc_asimd_mod_imm(rd, q_op, 0b1111, imm));
             }
             &Inst::VecDupImm {
                 rd,

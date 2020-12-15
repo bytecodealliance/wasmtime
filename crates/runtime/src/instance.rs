@@ -28,10 +28,10 @@ use thiserror::Error;
 use wasmtime_environ::entity::{packed_option::ReservedValue, BoxedSlice, EntityRef, PrimaryMap};
 use wasmtime_environ::wasm::{
     DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
-    ElemIndex, EntityIndex, FuncIndex, GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex,
-    TableElementType, TableIndex, WasmType,
+    ElemIndex, EntityIndex, FuncIndex, GlobalIndex, GlobalInit, InstanceIndex, MemoryIndex,
+    ModuleIndex, SignatureIndex, TableElementType, TableIndex, WasmType,
 };
-use wasmtime_environ::{ir, DataInitializer, Module, TableElements, VMOffsets};
+use wasmtime_environ::{ir, DataInitializer, Module, ModuleType, TableElements, VMOffsets};
 
 /// A WebAssembly instance.
 ///
@@ -49,6 +49,15 @@ pub(crate) struct Instance {
 
     /// WebAssembly table data.
     tables: BoxedSlice<DefinedTableIndex, Table>,
+
+    /// Instances our module defined and their handles.
+    instances: PrimaryMap<InstanceIndex, InstanceHandle>,
+
+    /// Modules that are located in our index space.
+    ///
+    /// For now these are `Box<Any>` so the caller can define the type of what a
+    /// module looks like.
+    modules: PrimaryMap<ModuleIndex, Box<dyn Any>>,
 
     /// Passive elements in this instantiation. As `elem.drop`s happen, these
     /// entries get removed. A missing entry is considered equivalent to an
@@ -76,12 +85,6 @@ impl Instance {
         (self.vmctx_ptr() as *mut u8)
             .add(usize::try_from(offset).unwrap())
             .cast()
-    }
-
-    /// Return the indexed `VMSharedSignatureIndex`.
-    fn signature_id(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
-        let index = usize::try_from(index.as_u32()).unwrap();
-        unsafe { *self.signature_ids_ptr().add(index) }
     }
 
     pub(crate) fn module(&self) -> &Module {
@@ -274,7 +277,7 @@ impl Instance {
     }
 
     /// Lookup an export with the given export declaration.
-    pub fn lookup_by_declaration(&self, export: &EntityIndex) -> Export {
+    pub fn lookup_by_declaration(&self, export: &EntityIndex) -> Export<'_> {
         match export {
             EntityIndex::Function(index) => {
                 let anyfunc = self.get_caller_checked_anyfunc(*index).unwrap();
@@ -323,9 +326,8 @@ impl Instance {
             }
             .into(),
 
-            // FIXME(#2094)
-            EntityIndex::Instance(_index) => unimplemented!(),
-            EntityIndex::Module(_index) => unimplemented!(),
+            EntityIndex::Instance(index) => Export::Instance(&self.instances[*index]),
+            EntityIndex::Module(index) => Export::Module(&*self.modules[*index]),
         }
     }
 
@@ -853,6 +855,8 @@ impl InstanceHandle {
                 passive_elements: Default::default(),
                 passive_data,
                 host_state,
+                instances: imports.instances,
+                modules: imports.modules,
                 vmctx: VMContext {},
             };
             let layout = instance.alloc_layout();
@@ -868,8 +872,11 @@ impl InstanceHandle {
         let instance = handle.instance();
 
         let mut ptr = instance.signature_ids_ptr();
-        for (signature, _) in handle.module().signatures.iter() {
-            *ptr = lookup_shared_signature(signature);
+        for sig in handle.module().types.values() {
+            *ptr = match sig {
+                ModuleType::Function(sig) => lookup_shared_signature(*sig),
+                _ => VMSharedSignatureIndex::new(u32::max_value()),
+            };
             ptr = ptr.add(1);
         }
 
@@ -924,7 +931,7 @@ impl InstanceHandle {
         *instance.stack_map_registry() = stack_map_registry;
 
         for (index, sig) in instance.module.functions.iter() {
-            let type_index = instance.signature_id(*sig);
+            let type_index = lookup_shared_signature(*sig);
 
             let (func_ptr, vmctx) =
                 if let Some(def_index) = instance.module.defined_func_index(index) {

@@ -14,7 +14,7 @@ use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
 use wasmtime_environ::wasm::{DefinedMemoryIndex, MemoryIndex};
 use wasmtime_environ::{
     CompiledFunctions, Compiler as EnvCompiler, DebugInfoData, Module, ModuleMemoryOffset,
-    ModuleTranslation, Tunables, VMOffsets,
+    ModuleTranslation, Tunables, TypeTables, VMOffsets,
 };
 
 /// Select which kind of compilation to use.
@@ -127,19 +127,26 @@ impl Compiler {
     pub fn compile<'data>(
         &self,
         translation: &mut ModuleTranslation,
+        types: &TypeTables,
     ) -> Result<Compilation, SetupError> {
         let functions = mem::take(&mut translation.function_body_inputs);
         let functions = functions.into_iter().collect::<Vec<_>>();
         let funcs = maybe_parallel!(functions.(into_iter | into_par_iter))
             .map(|(index, func)| {
-                self.compiler
-                    .compile_function(translation, index, func, &*self.isa, &self.tunables)
+                self.compiler.compile_function(
+                    translation,
+                    index,
+                    func,
+                    &*self.isa,
+                    &self.tunables,
+                    types,
+                )
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .collect::<CompiledFunctions>();
 
-        let dwarf_sections = if self.tunables.debug_info && !funcs.is_empty() {
+        let dwarf_sections = if self.tunables.generate_native_debuginfo && !funcs.is_empty() {
             transform_dwarf_data(
                 &*self.isa,
                 &translation.module,
@@ -150,7 +157,8 @@ impl Compiler {
             vec![]
         };
 
-        let (obj, unwind_info) = build_object(&*self.isa, &translation, &funcs, dwarf_sections)?;
+        let (obj, unwind_info) =
+            build_object(&*self.isa, &translation, types, &funcs, dwarf_sections)?;
 
         Ok(Compilation {
             obj,

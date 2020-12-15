@@ -32,6 +32,7 @@ pub struct Config {
     pub(crate) memory_creator: Option<MemoryCreatorProxy>,
     pub(crate) max_wasm_stack: usize,
     pub(crate) features: WasmFeatures,
+    pub(crate) wasm_backtrace_details_env_used: bool,
 }
 
 impl Config {
@@ -61,7 +62,7 @@ impl Config {
             .set("enable_probestack", "false")
             .expect("should be valid flag");
 
-        Config {
+        let mut ret = Config {
             tunables: Tunables::default(),
             flags,
             isa_flags: native::builder(),
@@ -71,13 +72,16 @@ impl Config {
             profiler: Arc::new(NullProfilerAgent),
             memory_creator: None,
             max_wasm_stack: 1 << 20,
+            wasm_backtrace_details_env_used: false,
             features: WasmFeatures {
                 reference_types: true,
                 bulk_memory: true,
                 multi_value: true,
                 ..WasmFeatures::default()
             },
-        }
+        };
+        ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
+        return ret;
     }
 
     /// Configures whether DWARF debug information will be emitted during
@@ -85,7 +89,33 @@ impl Config {
     ///
     /// By default this option is `false`.
     pub fn debug_info(&mut self, enable: bool) -> &mut Self {
-        self.tunables.debug_info = enable;
+        self.tunables.generate_native_debuginfo = enable;
+        self
+    }
+
+    /// Configures backtraces in `Trap` will parse debuginfo in the wasm file to
+    /// have filename/line number information.
+    ///
+    /// When enabled this will causes modules to retain debugging information
+    /// found in wasm binaries. This debug information will be used when a trap
+    /// happens to symbolicate each stack frame and attempt to print a
+    /// filename/line number for each wasm frame in the stack trace.
+    ///
+    /// By default this option is `WasmBacktraceDetails::Environment`, meaning
+    /// that wasm will read `WASMTIME_BACKTRACE_DETAILS` to indicate whether details
+    /// should be parsed.
+    pub fn wasm_backtrace_details(&mut self, enable: WasmBacktraceDetails) -> &mut Self {
+        self.wasm_backtrace_details_env_used = false;
+        self.tunables.parse_wasm_debuginfo = match enable {
+            WasmBacktraceDetails::Enable => true,
+            WasmBacktraceDetails::Disable => false,
+            WasmBacktraceDetails::Environment => {
+                self.wasm_backtrace_details_env_used = true;
+                std::env::var("WASMTIME_BACKTRACE_DETAILS")
+                    .map(|s| s == "1")
+                    .unwrap_or(false)
+            }
+        };
         self
     }
 
@@ -640,7 +670,8 @@ impl Default for Config {
 impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Config")
-            .field("debug_info", &self.tunables.debug_info)
+            .field("debug_info", &self.tunables.generate_native_debuginfo)
+            .field("parse_wasm_debuginfo", &self.tunables.parse_wasm_debuginfo)
             .field("strategy", &self.strategy)
             .field("wasm_threads", &self.features.threads)
             .field("wasm_reference_types", &self.features.reference_types)
@@ -711,4 +742,20 @@ pub enum ProfilingStrategy {
 
     /// Collect profiling info using the "ittapi", used with `VTune` on Linux.
     VTune,
+}
+
+/// Select how wasm backtrace detailed information is handled.
+#[derive(Debug, Clone, Copy)]
+pub enum WasmBacktraceDetails {
+    /// Support is unconditionally enabled and wasmtime will parse and read
+    /// debug information.
+    Enable,
+
+    /// Support is disabled, and wasmtime will not parse debug information for
+    /// backtrace details.
+    Disable,
+
+    /// Support for backtrace details is conditional on the
+    /// `WASMTIME_BACKTRACE_DETAILS` environment variable.
+    Environment,
 }

@@ -99,7 +99,7 @@ use std::sync::Mutex;
 use wasmtime_environ::{
     CompileError, CompiledFunction, Compiler, FunctionAddressMap, FunctionBodyData,
     InstructionAddressMap, ModuleTranslation, Relocation, RelocationTarget, StackMapInformation,
-    TrapInformation, Tunables,
+    TrapInformation, Tunables, TypeTables,
 };
 
 mod func_environ;
@@ -348,21 +348,22 @@ impl Compiler for Cranelift {
         mut input: FunctionBodyData<'_>,
         isa: &dyn isa::TargetIsa,
         tunables: &Tunables,
+        types: &TypeTables,
     ) -> Result<CompiledFunction, CompileError> {
         let module = &translation.module;
         let func_index = module.func_index(func_index);
         let mut context = Context::new();
         context.func.name = get_func_name(func_index);
         let sig_index = module.functions[func_index];
-        context.func.signature = translation.native_signatures[sig_index].clone();
-        if tunables.debug_info {
+        context.func.signature = types.native_signatures[sig_index].clone();
+        if tunables.generate_native_debuginfo {
             context.func.collect_debug_info();
         }
 
         let mut func_env = FuncEnvironment::new(
             isa.frontend_config(),
             module,
-            &translation.native_signatures,
+            &types.native_signatures,
             tunables,
         );
 
@@ -434,7 +435,7 @@ impl Compiler for Cranelift {
         let address_transform =
             get_function_address_map(&context, &input, code_buf.len() as u32, isa);
 
-        let ranges = if tunables.debug_info {
+        let ranges = if tunables.generate_native_debuginfo {
             let ranges = context.build_value_labels_ranges(isa).map_err(|error| {
                 CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
             })?;

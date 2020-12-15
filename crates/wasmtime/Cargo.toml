@@ -16,18 +16,20 @@ wasmtime-jit = { path = "../jit", version = "0.21.0" }
 wasmtime-cache = { path = "../cache", version = "0.21.0", optional = true }
 wasmtime-profiling = { path = "../profiling", version = "0.21.0" }
 target-lexicon = { version = "0.11.0", default-features = false }
-wasmparser = "0.68.0"
+wasmparser = "0.70"
 anyhow = "1.0.19"
 region = "2.2.0"
 libc = "0.2"
 cfg-if = "1.0"
 backtrace = "0.3.42"
 rustc-demangle = "0.1.16"
+cpp_demangle = "0.3.2"
 log = "0.4.8"
 wat = { version = "1.0.18", optional = true }
 smallvec = "1.4.0"
 serde = { version = "1.0.94", features = ["derive"] }
 bincode = "1.2.1"
+indexmap = "1.6"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = "0.3.7"
@@ -58,3 +60,6 @@ parallel-compilation = ["wasmtime-jit/parallel-compilation"]
 
 # Enables support for automatic cache configuration to be enabled in `Config`.
 cache = ["wasmtime-cache"]
+
+# Enables support for new x64 backend.
+experimental_x64 = ["wasmtime-jit/experimental_x64"]

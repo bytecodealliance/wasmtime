@@ -1,7 +1,7 @@
 use crate::frame_info::StoreFrameInfo;
 use crate::sig_registry::SignatureRegistry;
 use crate::trampoline::StoreInstanceHandle;
-use crate::Engine;
+use crate::{Engine, Module};
 use anyhow::{bail, Result};
 use std::any::Any;
 use std::cell::RefCell;
@@ -11,7 +11,7 @@ use std::hash::{Hash, Hasher};
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use wasmtime_environ::wasm;
-use wasmtime_jit::{CompiledModule, ModuleCode};
+use wasmtime_jit::{CompiledModule, ModuleCode, TypeTables};
 use wasmtime_runtime::{
     InstanceHandle, RuntimeMemoryCreator, SignalHandler, StackMapRegistry, TrapInfo, VMExternRef,
     VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
@@ -137,17 +137,17 @@ impl Store {
 
     pub(crate) fn lookup_shared_signature<'a>(
         &'a self,
-        module: &'a wasmtime_environ::Module,
+        types: &'a TypeTables,
     ) -> impl Fn(wasm::SignatureIndex) -> VMSharedSignatureIndex + 'a {
         move |index| {
             self.signatures()
                 .borrow()
-                .lookup(&module.signatures[index])
+                .lookup(&types.wasm_signatures[index])
                 .expect("signature not previously registered")
         }
     }
 
-    pub(crate) fn register_module(&self, module: &CompiledModule) {
+    pub(crate) fn register_module(&self, module: &Module) {
         // All modules register their JIT code in a store for two reasons
         // currently:
         //
@@ -158,12 +158,12 @@ impl Store {
         // * Second when generating a backtrace we'll use this mapping to
         //   only generate wasm frames for instruction pointers that fall
         //   within jit code.
-        self.register_jit_code(module);
+        self.register_jit_code(module.compiled_module());
 
         // We need to know about all the stack maps of all instantiated modules
         // so when performing a GC we know about all wasm frames that we find
         // on the stack.
-        self.register_stack_maps(module);
+        self.register_stack_maps(module.compiled_module());
 
         // Signatures are loaded into our `SignatureRegistry` here
         // once-per-module (and once-per-signature). This allows us to create
@@ -178,7 +178,7 @@ impl Store {
         self.inner
             .modules
             .borrow_mut()
-            .insert(ArcModuleCode(module.code().clone()));
+            .insert(ArcModuleCode(module.compiled_module().code().clone()));
     }
 
     fn register_jit_code(&self, module: &CompiledModule) {
@@ -205,11 +205,10 @@ impl Store {
             }));
     }
 
-    fn register_signatures(&self, module: &CompiledModule) {
-        let trampolines = module.trampolines();
-        let module = module.module();
+    fn register_signatures(&self, module: &Module) {
+        let trampolines = module.compiled_module().trampolines();
         let mut signatures = self.signatures().borrow_mut();
-        for (index, wasm) in module.signatures.iter() {
+        for (index, wasm) in module.types().wasm_signatures.iter() {
             signatures.register(wasm, trampolines[index]);
         }
     }

@@ -41,7 +41,6 @@ if (process.env.CENTOS !== undefined) {
 let path = process.env.PATH;
 path = `${path}:/rust/bin`;
 path = `/opt/rh/devtoolset-8/root/usr/bin:${path}`;
-path = `/opt/rh/rh-python36/root/usr/bin:${path}`;
 
 // Spawn a container daemonized in the background which we'll connect to via
 // `docker exec`. This'll have access to the current directory.
@@ -52,7 +51,7 @@ child_process.execFileSync('docker', [
   '-v', `${process.cwd()}:${process.cwd()}`,
   '-v', `${child_process.execSync('rustc --print sysroot').toString().trim()}:/rust:ro`,
   '--env', `PATH=${path}`,
-  'centos:6',
+  'centos:7',
 ], stdio);
 
 // Use ourselves to run future commands
@@ -63,7 +62,7 @@ const exec = s => {
   child_process.execSync(`docker exec centos ${s}`, stdio);
 };
 exec('yum install -y centos-release-scl cmake xz epel-release');
-exec('yum install -y rh-python36 patchelf unzip');
+exec('yum install -y python3 patchelf unzip');
 exec('yum install -y devtoolset-8-gcc devtoolset-8-binutils devtoolset-8-gcc-c++');
 exec('yum install -y git');
 

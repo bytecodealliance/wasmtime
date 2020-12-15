@@ -27,8 +27,8 @@ pub const WASM_EXTERN_FUNC: wasm_externkind_t = 0;
 pub const WASM_EXTERN_GLOBAL: wasm_externkind_t = 1;
 pub const WASM_EXTERN_TABLE: wasm_externkind_t = 2;
 pub const WASM_EXTERN_MEMORY: wasm_externkind_t = 3;
-pub const WASMTIME_EXTERN_MODULE: wasm_externkind_t = 4;
-pub const WASMTIME_EXTERN_INSTANCE: wasm_externkind_t = 5;
+pub const WASM_EXTERN_MODULE: wasm_externkind_t = 4;
+pub const WASM_EXTERN_INSTANCE: wasm_externkind_t = 5;
 
 impl wasm_externtype_t {
     pub(crate) fn new(ty: ExternType) -> wasm_externtype_t {
@@ -63,8 +63,8 @@ pub extern "C" fn wasm_externtype_kind(et: &wasm_externtype_t) -> wasm_externkin
         CExternType::Table(_) => WASM_EXTERN_TABLE,
         CExternType::Global(_) => WASM_EXTERN_GLOBAL,
         CExternType::Memory(_) => WASM_EXTERN_MEMORY,
-        CExternType::Instance(_) => WASMTIME_EXTERN_INSTANCE,
-        CExternType::Module(_) => WASMTIME_EXTERN_MODULE,
+        CExternType::Instance(_) => WASM_EXTERN_INSTANCE,
+        CExternType::Module(_) => WASM_EXTERN_MODULE,
     }
 }
 

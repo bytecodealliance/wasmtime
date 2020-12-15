@@ -538,10 +538,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         /********************************** Exception handing **********************************/
         Operator::Try { .. }
-        | Operator::Catch
-        | Operator::BrOnExn { .. }
+        | Operator::Catch { .. }
         | Operator::Throw { .. }
-        | Operator::Rethrow => {
+        | Operator::Unwind
+        | Operator::Rethrow { .. } => {
             return Err(wasm_unsupported!(
                 "proposed exception handling operator {:?}",
                 op
@@ -2056,7 +2056,9 @@ fn prepare_load<FE: FuncEnvironment + ?Sized>(
     // Note that we don't set `is_aligned` here, even if the load instruction's
     // alignment immediate says it's aligned, because WebAssembly's immediate
     // field is just a hint, while Cranelift's aligned flag needs a guarantee.
-    let flags = MemFlags::new();
+    // WebAssembly memory accesses are always little-endian.
+    let mut flags = MemFlags::new();
+    flags.set_endianness(ir::Endianness::Little);
 
     Ok((flags, base, offset.into()))
 }
@@ -2103,7 +2105,8 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
         builder,
     );
     // See the comments in `prepare_load` about the flags.
-    let flags = MemFlags::new();
+    let mut flags = MemFlags::new();
+    flags.set_endianness(ir::Endianness::Little);
     builder
         .ins()
         .Store(opcode, val_ty, flags, offset.into(), val, base);
@@ -2207,7 +2210,8 @@ fn translate_atomic_rmw<FE: FuncEnvironment + ?Sized>(
         finalise_atomic_mem_addr(linear_mem_addr, memarg, access_ty, builder, state, environ)?;
 
     // See the comments in `prepare_load` about the flags.
-    let flags = MemFlags::new();
+    let mut flags = MemFlags::new();
+    flags.set_endianness(ir::Endianness::Little);
     let mut res = builder
         .ins()
         .atomic_rmw(access_ty, flags, op, final_effective_address, arg2);
@@ -2260,7 +2264,8 @@ fn translate_atomic_cas<FE: FuncEnvironment + ?Sized>(
         finalise_atomic_mem_addr(linear_mem_addr, memarg, access_ty, builder, state, environ)?;
 
     // See the comments in `prepare_load` about the flags.
-    let flags = MemFlags::new();
+    let mut flags = MemFlags::new();
+    flags.set_endianness(ir::Endianness::Little);
     let mut res = builder
         .ins()
         .atomic_cas(flags, final_effective_address, expected, replacement);
@@ -2302,7 +2307,8 @@ fn translate_atomic_load<FE: FuncEnvironment + ?Sized>(
         finalise_atomic_mem_addr(linear_mem_addr, memarg, access_ty, builder, state, environ)?;
 
     // See the comments in `prepare_load` about the flags.
-    let flags = MemFlags::new();
+    let mut flags = MemFlags::new();
+    flags.set_endianness(ir::Endianness::Little);
     let mut res = builder
         .ins()
         .atomic_load(access_ty, flags, final_effective_address);
@@ -2348,7 +2354,8 @@ fn translate_atomic_store<FE: FuncEnvironment + ?Sized>(
         finalise_atomic_mem_addr(linear_mem_addr, memarg, access_ty, builder, state, environ)?;
 
     // See the comments in `prepare_load` about the flags.
-    let flags = MemFlags::new();
+    let mut flags = MemFlags::new();
+    flags.set_endianness(ir::Endianness::Little);
     builder
         .ins()
         .atomic_store(flags, data, final_effective_address);

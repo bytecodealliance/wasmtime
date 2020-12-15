@@ -8,8 +8,9 @@
 
 use crate::state::FuncTranslationState;
 use crate::translation_utils::{
-    DataIndex, ElemIndex, EntityType, Event, EventIndex, FuncIndex, Global, GlobalIndex, Memory,
-    MemoryIndex, Table, TableIndex, TypeIndex,
+    DataIndex, ElemIndex, EntityIndex, EntityType, Event, EventIndex, FuncIndex, Global,
+    GlobalIndex, InstanceIndex, InstanceTypeIndex, Memory, MemoryIndex, ModuleIndex,
+    ModuleTypeIndex, SignatureIndex, Table, TableIndex, TypeIndex,
 };
 use core::convert::From;
 use core::convert::TryFrom;
@@ -22,6 +23,7 @@ use cranelift_frontend::FunctionBuilder;
 use serde::{Deserialize, Serialize};
 use std::boxed::Box;
 use std::string::ToString;
+use std::vec::Vec;
 use thiserror::Error;
 use wasmparser::ValidatorResources;
 use wasmparser::{BinaryReaderError, FuncValidator, FunctionBody, Operator, WasmFeatures};
@@ -199,6 +201,30 @@ pub enum ReturnMode {
     NormalReturns,
     /// Use a single fallthrough return at the end of the function.
     FallthroughReturn,
+}
+
+/// An entry in the alias section of a wasm module (from the module linking
+/// proposal)
+pub enum Alias {
+    /// A parent's module is being aliased into our own index space.
+    ///
+    /// Note that the index here is in the parent's index space, not our own.
+    ParentModule(ModuleIndex),
+
+    /// A parent's type is being aliased into our own index space
+    ///
+    /// Note that the index here is in the parent's index space, not our own.
+    ParentType(TypeIndex),
+
+    /// A previously created instance is having one of its exports aliased into
+    /// our index space.
+    Child {
+        /// The index we're aliasing.
+        instance: InstanceIndex,
+        /// The nth export that we're inserting into our own index space
+        /// locally.
+        export: usize,
+    },
 }
 
 /// Environment affecting the translation of a WebAssembly.
@@ -683,6 +709,27 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         Err(WasmError::Unsupported("module linking".to_string()))
     }
 
+    /// Translates a type index to its signature index, only called for type
+    /// indices which point to functions.
+    fn type_to_signature(&self, index: TypeIndex) -> WasmResult<SignatureIndex> {
+        drop(index);
+        Err(WasmError::Unsupported("module linking".to_string()))
+    }
+
+    /// Translates a type index to its module type index, only called for type
+    /// indices which point to modules.
+    fn type_to_module_type(&self, index: TypeIndex) -> WasmResult<ModuleTypeIndex> {
+        drop(index);
+        Err(WasmError::Unsupported("module linking".to_string()))
+    }
+
+    /// Translates a type index to its instance type index, only called for type
+    /// indices which point to instances.
+    fn type_to_instance_type(&self, index: TypeIndex) -> WasmResult<InstanceTypeIndex> {
+        drop(index);
+        Err(WasmError::Unsupported("module linking".to_string()))
+    }
+
     /// Provides the number of imports up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
     fn reserve_imports(&mut self, _num: u32) -> WasmResult<()> {
@@ -844,6 +891,22 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         name: &'data str,
     ) -> WasmResult<()>;
 
+    /// Declares an instance export to the environment.
+    fn declare_instance_export(
+        &mut self,
+        index: InstanceIndex,
+        name: &'data str,
+    ) -> WasmResult<()> {
+        drop((index, name));
+        Err(WasmError::Unsupported("module linking".to_string()))
+    }
+
+    /// Declares an instance export to the environment.
+    fn declare_module_export(&mut self, index: ModuleIndex, name: &'data str) -> WasmResult<()> {
+        drop((index, name));
+        Err(WasmError::Unsupported("module linking".to_string()))
+    }
+
     /// Notifies the implementation that all exports have been declared.
     fn finish_exports(&mut self) -> WasmResult<()> {
         Ok(())
@@ -951,6 +1014,12 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         drop(amount);
     }
 
+    /// Declares that a module will come later with the type signature provided.
+    fn declare_module(&mut self, ty: TypeIndex) -> WasmResult<()> {
+        drop(ty);
+        Err(WasmError::Unsupported("module linking".to_string()))
+    }
+
     /// Called at the beginning of translating a module.
     ///
     /// The `index` argument is a monotonically increasing index which
@@ -968,5 +1037,27 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
     /// Note that for nested modules this may be called multiple times.
     fn module_end(&mut self, index: usize) {
         drop(index);
+    }
+
+    /// Indicates that this module will have `amount` instances.
+    fn reserve_instances(&mut self, amount: u32) {
+        drop(amount);
+    }
+
+    /// Declares a new instance which this module will instantiate before it's
+    /// instantiated.
+    fn declare_instance(&mut self, module: ModuleIndex, args: Vec<EntityIndex>) -> WasmResult<()> {
+        drop((module, args));
+        Err(WasmError::Unsupported("wasm instance".to_string()))
+    }
+
+    /// Declares a new alias being added to this module.
+    ///
+    /// The alias comes from the `instance` specified (or the parent if `None`
+    /// is supplied) and the index is either in the module's own index spaces
+    /// for the parent or an index into the exports for nested instances.
+    fn declare_alias(&mut self, alias: Alias) -> WasmResult<()> {
+        drop(alias);
+        Err(WasmError::Unsupported("wasm alias".to_string()))
     }
 }

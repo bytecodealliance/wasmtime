@@ -1,7 +1,7 @@
 //! Implementation of the standard x64 ABI.
 
 use crate::ir::types::*;
-use crate::ir::{self, types, MemFlags, TrapCode, Type};
+use crate::ir::{self, types, ExternalName, LibCall, MemFlags, Opcode, TrapCode, Type};
 use crate::isa;
 use crate::isa::{x64::inst::*, CallConv};
 use crate::machinst::abi_impl::*;
@@ -386,6 +386,22 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             Writable::from_reg(regs::rsp()),
         ));
         insts.push(Inst::pop64(Writable::from_reg(regs::rbp())));
+        insts
+    }
+
+    fn gen_probestack(frame_size: u32) -> SmallVec<[Self::I; 2]> {
+        let mut insts = SmallVec::new();
+        insts.push(Inst::imm(
+            OperandSize::Size32,
+            frame_size as u64,
+            Writable::from_reg(regs::rax()),
+        ));
+        insts.push(Inst::CallKnown {
+            dest: ExternalName::LibCall(LibCall::Probestack),
+            uses: vec![regs::rax()],
+            defs: vec![],
+            opcode: Opcode::Call,
+        });
         insts
     }
 

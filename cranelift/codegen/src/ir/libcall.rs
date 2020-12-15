@@ -63,6 +63,7 @@ pub enum LibCall {
 
     /// Elf __tls_get_addr
     ElfTlsGetAddr,
+    // When adding a new variant make sure to add it to `all_libcalls` too.
 }
 
 impl fmt::Display for LibCall {
@@ -135,6 +136,33 @@ impl LibCall {
             },
             _ => return None,
         })
+    }
+
+    /// Get a list of all known `LibCall`'s.
+    pub fn all_libcalls() -> &'static [LibCall] {
+        use LibCall::*;
+        &[
+            Probestack,
+            UdivI64,
+            SdivI64,
+            UremI64,
+            SremI64,
+            IshlI64,
+            UshrI64,
+            SshrI64,
+            CeilF32,
+            CeilF64,
+            FloorF32,
+            FloorF64,
+            TruncF32,
+            TruncF64,
+            NearestF32,
+            NearestF64,
+            Memcpy,
+            Memset,
+            Memmove,
+            ElfTlsGetAddr,
+        ]
     }
 }
 

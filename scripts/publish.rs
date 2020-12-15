@@ -39,7 +39,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-object",
     "cranelift-interpreter",
     "cranelift",
-    "cranelift-simplejit",
+    "cranelift-jit",
     // wig/wiggle
     "wiggle-generate",
     "wiggle-macro",
@@ -293,7 +293,10 @@ fn verify(crates: &[Crate]) {
 
     // Vendor witx which wasn't vendored because it's a path dependency, but
     // it'll need to be in our directory registry for crates that depend on it.
-    let witx = crates.iter().find(|c| c.name == "witx").unwrap();
+    let witx = crates
+        .iter()
+        .find(|c| c.name == "witx" && c.manifest.iter().any(|p| p == "wasi-common"))
+        .unwrap();
     verify_and_vendor(&witx);
 
     for krate in crates {

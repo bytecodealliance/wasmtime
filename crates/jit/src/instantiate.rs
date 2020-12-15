@@ -12,15 +12,19 @@ use object::File as ObjectFile;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
+use std::ops::Range;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_debug::create_gdbjit_image;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::isa::TargetIsa;
-use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
+use wasmtime_environ::wasm::{
+    DefinedFuncIndex, InstanceTypeIndex, ModuleTypeIndex, SignatureIndex, WasmFuncType,
+};
 use wasmtime_environ::{
-    CompileError, DataInitializer, DataInitializerLocation, FunctionAddressMap, Module,
-    ModuleEnvironment, ModuleTranslation, StackMapInformation, TrapInformation,
+    CompileError, DataInitializer, DataInitializerLocation, DebugInfoData, FunctionAddressMap,
+    InstanceSignature, Module, ModuleEnvironment, ModuleSignature, ModuleTranslation,
+    StackMapInformation, TrapInformation,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{
@@ -69,8 +73,31 @@ pub struct CompilationArtifacts {
     /// Descriptions of compiled functions
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
 
-    /// Debug info presence flags.
-    debug_info: bool,
+    /// Whether or not native debug information is available in `obj`
+    native_debug_info_present: bool,
+
+    /// Whether or not the original wasm module contained debug information that
+    /// we skipped and did not parse.
+    has_unparsed_debuginfo: bool,
+
+    /// Debug information found in the wasm file, used for symbolicating
+    /// backtraces.
+    debug_info: Option<DebugInfo>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct DebugInfo {
+    data: Box<[u8]>,
+    code_section_offset: u64,
+    debug_abbrev: Range<usize>,
+    debug_addr: Range<usize>,
+    debug_info: Range<usize>,
+    debug_line: Range<usize>,
+    debug_line_str: Range<usize>,
+    debug_ranges: Range<usize>,
+    debug_rnglists: Range<usize>,
+    debug_str: Range<usize>,
+    debug_str_offsets: Range<usize>,
 }
 
 impl CompilationArtifacts {
@@ -78,8 +105,8 @@ impl CompilationArtifacts {
     pub fn build(
         compiler: &Compiler,
         data: &[u8],
-    ) -> Result<Vec<CompilationArtifacts>, SetupError> {
-        let translations = ModuleEnvironment::new(
+    ) -> Result<(Vec<CompilationArtifacts>, TypeTables), SetupError> {
+        let (translations, types) = ModuleEnvironment::new(
             compiler.frontend_config(),
             compiler.tunables(),
             compiler.features(),
@@ -87,17 +114,19 @@ impl CompilationArtifacts {
         .translate(data)
         .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
 
-        maybe_parallel!(translations.(into_iter | into_par_iter))
+        let list = maybe_parallel!(translations.(into_iter | into_par_iter))
             .map(|mut translation| {
                 let Compilation {
                     obj,
                     unwind_info,
                     funcs,
-                } = compiler.compile(&mut translation)?;
+                } = compiler.compile(&mut translation, &types)?;
 
                 let ModuleTranslation {
                     module,
                     data_initializers,
+                    debuginfo,
+                    has_unparsed_debuginfo,
                     ..
                 } = translation;
 
@@ -126,14 +155,30 @@ impl CompilationArtifacts {
                             address_map: func.address_map,
                         })
                         .collect(),
-                    debug_info: compiler.tunables().debug_info,
+                    native_debug_info_present: compiler.tunables().generate_native_debuginfo,
+                    debug_info: if compiler.tunables().parse_wasm_debuginfo {
+                        Some(debuginfo.into())
+                    } else {
+                        None
+                    },
+                    has_unparsed_debuginfo,
                 })
             })
-            .collect::<Result<Vec<_>, SetupError>>()
+            .collect::<Result<Vec<_>, SetupError>>()?;
+        Ok((
+            list,
+            TypeTables {
+                wasm_signatures: types.wasm_signatures,
+                module_signatures: types.module_signatures,
+                instance_signatures: types.instance_signatures,
+            },
+        ))
     }
 }
 
 struct FinishedFunctions(PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>);
+unsafe impl Send for FinishedFunctions {}
+unsafe impl Sync for FinishedFunctions {}
 
 #[derive(Serialize, Deserialize, Clone)]
 struct FunctionInfo {
@@ -142,8 +187,15 @@ struct FunctionInfo {
     stack_maps: Vec<StackMapInformation>,
 }
 
-unsafe impl Send for FinishedFunctions {}
-unsafe impl Sync for FinishedFunctions {}
+/// This is intended to mirror the type tables in `wasmtime_environ`, except that
+/// it doesn't store the native signatures which are no longer needed past compilation.
+#[derive(Serialize, Deserialize)]
+#[allow(missing_docs)]
+pub struct TypeTables {
+    pub wasm_signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
+    pub module_signatures: PrimaryMap<ModuleTypeIndex, ModuleSignature>,
+    pub instance_signatures: PrimaryMap<InstanceTypeIndex, InstanceSignature>,
+}
 
 /// Container for data needed for an Instance function to exist.
 pub struct ModuleCode {
@@ -196,7 +248,7 @@ impl CompiledModule {
         })?;
 
         // Register GDB JIT images; initialize profiler and load the wasm module.
-        let dbg_jit_registration = if artifacts.debug_info {
+        let dbg_jit_registration = if artifacts.native_debug_info_present {
             let bytes = create_dbg_image(
                 artifacts.obj.to_vec(),
                 code_range,
@@ -336,6 +388,85 @@ impl CompiledModule {
     pub fn code(&self) -> &Arc<ModuleCode> {
         &self.code
     }
+
+    /// Creates a new symbolication context which can be used to further
+    /// symbolicate stack traces.
+    ///
+    /// Basically this makes a thing which parses debuginfo and can tell you
+    /// what filename and line number a wasm pc comes from.
+    pub fn symbolize_context(&self) -> Result<Option<SymbolizeContext>, gimli::Error> {
+        use gimli::EndianSlice;
+        let info = match &self.artifacts.debug_info {
+            Some(info) => info,
+            None => return Ok(None),
+        };
+        // For now we clone the data into the `SymbolizeContext`, but if this
+        // becomes prohibitive we could always `Arc` it with our own allocation
+        // here.
+        let data = info.data.clone();
+        let endian = gimli::LittleEndian;
+        let cx = addr2line::Context::from_sections(
+            EndianSlice::new(&data[info.debug_abbrev.clone()], endian).into(),
+            EndianSlice::new(&data[info.debug_addr.clone()], endian).into(),
+            EndianSlice::new(&data[info.debug_info.clone()], endian).into(),
+            EndianSlice::new(&data[info.debug_line.clone()], endian).into(),
+            EndianSlice::new(&data[info.debug_line_str.clone()], endian).into(),
+            EndianSlice::new(&data[info.debug_ranges.clone()], endian).into(),
+            EndianSlice::new(&data[info.debug_rnglists.clone()], endian).into(),
+            EndianSlice::new(&data[info.debug_str.clone()], endian).into(),
+            EndianSlice::new(&data[info.debug_str_offsets.clone()], endian).into(),
+            EndianSlice::new(&[], endian),
+        )?;
+        Ok(Some(SymbolizeContext {
+            // See comments on `SymbolizeContext` for why we do this static
+            // lifetime promotion.
+            inner: unsafe {
+                std::mem::transmute::<Addr2LineContext<'_>, Addr2LineContext<'static>>(cx)
+            },
+            code_section_offset: info.code_section_offset,
+            _data: data,
+        }))
+    }
+
+    /// Returns whether the original wasm module had unparsed debug information
+    /// based on the tunables configuration.
+    pub fn has_unparsed_debuginfo(&self) -> bool {
+        self.artifacts.has_unparsed_debuginfo
+    }
+}
+
+type Addr2LineContext<'a> = addr2line::Context<gimli::EndianSlice<'a, gimli::LittleEndian>>;
+
+/// A context which contains dwarf debug information to translate program
+/// counters back to filenames and line numbers.
+pub struct SymbolizeContext {
+    // Note the `'static` lifetime on `inner`. That's actually a bunch of slices
+    // which point back into the `_data` field. We currently unsafely manage
+    // this by saying that when inside the struct it's `'static` (since we own
+    // the referenced data just next to it) and we only loan out borrowed
+    // references.
+    _data: Box<[u8]>,
+    inner: Addr2LineContext<'static>,
+    code_section_offset: u64,
+}
+
+impl SymbolizeContext {
+    /// Returns access to the [`addr2line::Context`] which can be used to query
+    /// frame information with.
+    pub fn addr2line(&self) -> &Addr2LineContext<'_> {
+        // Here we demote our synthetic `'static` lifetime which doesn't
+        // actually exist back to a lifetime that's tied to `&self`, which
+        // should be safe.
+        unsafe {
+            std::mem::transmute::<&Addr2LineContext<'static>, &Addr2LineContext<'_>>(&self.inner)
+        }
+    }
+
+    /// Returns the offset of the code section in the original wasm file, used
+    /// to calculate lookup values into the DWARF.
+    pub fn code_section_offset(&self) -> u64 {
+        self.code_section_offset
+    }
 }
 
 /// Similar to `DataInitializer`, but owns its own copy of the data rather
@@ -419,4 +550,38 @@ fn build_code_memory(
     code_memory.publish(isa);
 
     Ok((code_memory, code_range, finished_functions, trampolines))
+}
+
+impl From<DebugInfoData<'_>> for DebugInfo {
+    fn from(raw: DebugInfoData<'_>) -> DebugInfo {
+        use gimli::Section;
+
+        let mut data = Vec::new();
+        let mut push = |section: &[u8]| {
+            data.extend_from_slice(section);
+            data.len() - section.len()..data.len()
+        };
+        let debug_abbrev = push(raw.dwarf.debug_abbrev.reader().slice());
+        let debug_addr = push(raw.dwarf.debug_addr.reader().slice());
+        let debug_info = push(raw.dwarf.debug_info.reader().slice());
+        let debug_line = push(raw.dwarf.debug_line.reader().slice());
+        let debug_line_str = push(raw.dwarf.debug_line_str.reader().slice());
+        let debug_ranges = push(raw.debug_ranges.reader().slice());
+        let debug_rnglists = push(raw.debug_rnglists.reader().slice());
+        let debug_str = push(raw.dwarf.debug_str.reader().slice());
+        let debug_str_offsets = push(raw.dwarf.debug_str_offsets.reader().slice());
+        DebugInfo {
+            data: data.into(),
+            debug_abbrev,
+            debug_addr,
+            debug_info,
+            debug_line,
+            debug_line_str,
+            debug_ranges,
+            debug_rnglists,
+            debug_str,
+            debug_str_offsets,
+            code_section_offset: raw.wasm_file.code_section_offset,
+        }
+    }
 }

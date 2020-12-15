@@ -277,7 +277,7 @@ impl InstructionData {
                 ref mut destination,
                 ..
             } => Some(destination),
-            Self::BranchTable { .. } => None,
+            Self::BranchTable { .. } | Self::IndirectJump { .. } => None,
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 None

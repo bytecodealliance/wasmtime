@@ -2,20 +2,14 @@
 
 use crate::tunables::Tunables;
 use crate::WASM_MAX_PAGES;
+use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
-use cranelift_wasm::{
-    DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
-    ElemIndex, EntityIndex, EntityType, FuncIndex, Global, GlobalIndex, InstanceIndex, Memory,
-    MemoryIndex, ModuleIndex, SignatureIndex, Table, TableIndex, TypeIndex, WasmFuncType,
-};
+use cranelift_wasm::*;
 use indexmap::IndexMap;
 use more_asserts::assert_ge;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{
-    atomic::{AtomicUsize, Ordering::SeqCst},
-    Arc,
-};
+use std::sync::Arc;
 
 /// A WebAssembly table initializer.
 #[derive(Clone, Debug, Hash, Serialize, Deserialize)]
@@ -121,23 +115,16 @@ impl TablePlan {
     }
 }
 
-/// Different types that can appear in a module
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Different types that can appear in a module.
+///
+/// Note that each of these variants are intended to index further into a
+/// separate table.
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
 pub enum ModuleType {
-    /// A function type, indexed further into the `signatures` table.
     Function(SignatureIndex),
-    /// A module type
-    Module {
-        /// The module's imports
-        imports: Vec<(String, Option<String>, EntityType)>,
-        /// The module's exports
-        exports: Vec<(String, EntityType)>,
-    },
-    /// An instance type
-    Instance {
-        /// the instance's exports
-        exports: Vec<(String, EntityType)>,
-    },
+    Module(ModuleTypeIndex),
+    Instance(InstanceTypeIndex),
 }
 
 impl ModuleType {
@@ -153,17 +140,19 @@ impl ModuleType {
 
 /// A translated WebAssembly module, excluding the function bodies and
 /// memory initializers.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Module {
-    /// A unique identifier (within this process) for this module.
-    #[serde(skip_serializing, skip_deserializing, default = "Module::next_id")]
-    pub id: usize,
+    /// The parent index of this module, used for the module linking proposal.
+    ///
+    /// This index is into the list of modules returned from compilation of a
+    /// single wasm file with nested modules.
+    pub parent: Option<usize>,
 
     /// The name of this wasm module, often found in the wasm file.
     pub name: Option<String>,
 
     /// All import records, in the order they are declared in the module.
-    pub imports: Vec<(String, Option<String>, EntityIndex)>,
+    pub initializers: Vec<Initializer>,
 
     /// Exported entities.
     pub exports: IndexMap<String, EntityIndex>,
@@ -184,22 +173,19 @@ pub struct Module {
     /// WebAssembly table initializers.
     pub func_names: HashMap<FuncIndex, String>,
 
-    /// Unprocessed signatures exactly as provided by `declare_signature()`.
-    pub signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
-
     /// Types declared in the wasm module.
     pub types: PrimaryMap<TypeIndex, ModuleType>,
 
-    /// Number of imported functions in the module.
+    /// Number of imported or aliased functions in the module.
     pub num_imported_funcs: usize,
 
-    /// Number of imported tables in the module.
+    /// Number of imported or aliased tables in the module.
     pub num_imported_tables: usize,
 
-    /// Number of imported memories in the module.
+    /// Number of imported or aliased memories in the module.
     pub num_imported_memories: usize,
 
-    /// Number of imported globals in the module.
+    /// Number of imported or aliased globals in the module.
     pub num_imported_globals: usize,
 
     /// Types of functions, imported and local.
@@ -214,64 +200,63 @@ pub struct Module {
     /// WebAssembly global variables.
     pub globals: PrimaryMap<GlobalIndex, Global>,
 
-    /// WebAssembly instances.
-    pub instances: PrimaryMap<InstanceIndex, Instance>,
+    /// The type of each wasm instance this module defines.
+    pub instances: PrimaryMap<InstanceIndex, InstanceTypeIndex>,
 
-    /// WebAssembly modules.
-    pub modules: PrimaryMap<ModuleIndex, TypeIndex>,
+    /// The type of each nested wasm module this module contains.
+    pub modules: PrimaryMap<ModuleIndex, ModuleTypeIndex>,
 }
 
-/// Different forms an instance can take in a wasm module
+/// Initialization routines for creating an instance, encompassing imports,
+/// modules, instances, aliases, etc.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum Instance {
-    /// This is an imported instance with the specified type
-    Import(TypeIndex),
-    /// This is a locally created instance which instantiates the specified
-    /// module with the given list of entities.
+pub enum Initializer {
+    /// An imported item is required to be provided.
+    Import {
+        /// Module name of this import
+        module: String,
+        /// Optional field name of this import
+        field: Option<String>,
+        /// Where this import will be placed, which also has type information
+        /// about the import.
+        index: EntityIndex,
+    },
+
+    /// A module from the parent's declared modules is inserted into our own
+    /// index space.
+    AliasParentModule(ModuleIndex),
+
+    /// A module from the parent's declared modules is inserted into our own
+    /// index space.
+    #[allow(missing_docs)]
+    AliasInstanceExport {
+        instance: InstanceIndex,
+        export: usize,
+    },
+
+    /// A module is being instantiated with previously configured intializers
+    /// as arguments.
     Instantiate {
         /// The module that this instance is instantiating.
         module: ModuleIndex,
         /// The arguments provided to instantiation.
         args: Vec<EntityIndex>,
     },
+
+    /// A module is defined into the module index space, and which module is
+    /// being defined is specified by the index payload.
+    DefineModule(usize),
 }
 
 impl Module {
     /// Allocates the module data structures.
     pub fn new() -> Self {
-        Self {
-            id: Self::next_id(),
-            name: None,
-            imports: Vec::new(),
-            exports: IndexMap::new(),
-            start_func: None,
-            table_elements: Vec::new(),
-            passive_elements: HashMap::new(),
-            passive_data: HashMap::new(),
-            func_names: HashMap::new(),
-            num_imported_funcs: 0,
-            num_imported_tables: 0,
-            num_imported_memories: 0,
-            num_imported_globals: 0,
-            signatures: PrimaryMap::new(),
-            functions: PrimaryMap::new(),
-            table_plans: PrimaryMap::new(),
-            memory_plans: PrimaryMap::new(),
-            globals: PrimaryMap::new(),
-            instances: PrimaryMap::new(),
-            modules: PrimaryMap::new(),
-            types: PrimaryMap::new(),
-        }
+        Module::default()
     }
 
     /// Get the given passive element, if it exists.
     pub fn get_passive_element(&self, index: ElemIndex) -> Option<&[FuncIndex]> {
         self.passive_elements.get(&index).map(|es| &**es)
-    }
-
-    fn next_id() -> usize {
-        static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
-        NEXT_ID.fetch_add(1, SeqCst)
     }
 
     /// Convert a `DefinedFuncIndex` into a `FuncIndex`.
@@ -362,17 +347,61 @@ impl Module {
         index.index() < self.num_imported_globals
     }
 
-    /// Convenience method for looking up the original Wasm signature of a
-    /// function.
-    pub fn wasm_func_type(&self, func_index: FuncIndex) -> &WasmFuncType {
-        &self.signatures[self.functions[func_index]]
+    /// Returns an iterator of all the imports in this module, along with their
+    /// module name, field name, and type that's being imported.
+    pub fn imports(&self) -> impl Iterator<Item = (&str, Option<&str>, EntityType)> {
+        self.initializers.iter().filter_map(move |i| match i {
+            Initializer::Import {
+                module,
+                field,
+                index,
+            } => Some((module.as_str(), field.as_deref(), self.type_of(*index))),
+            _ => None,
+        })
+    }
+
+    /// Returns the type of an item based on its index
+    pub fn type_of(&self, index: EntityIndex) -> EntityType {
+        match index {
+            EntityIndex::Global(i) => EntityType::Global(self.globals[i]),
+            EntityIndex::Table(i) => EntityType::Table(self.table_plans[i].table),
+            EntityIndex::Memory(i) => EntityType::Memory(self.memory_plans[i].memory),
+            EntityIndex::Function(i) => EntityType::Function(self.functions[i]),
+            EntityIndex::Instance(i) => EntityType::Instance(self.instances[i]),
+            EntityIndex::Module(i) => EntityType::Module(self.modules[i]),
+        }
     }
 }
 
-impl Default for Module {
-    fn default() -> Module {
-        Module::new()
-    }
+/// All types which are recorded for the entirety of a translation.
+///
+/// Note that this is shared amongst all modules coming out of a translation
+/// in the case of nested modules and the module linking proposal.
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[allow(missing_docs)]
+pub struct TypeTables {
+    pub wasm_signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
+    pub native_signatures: PrimaryMap<SignatureIndex, ir::Signature>,
+    pub module_signatures: PrimaryMap<ModuleTypeIndex, ModuleSignature>,
+    pub instance_signatures: PrimaryMap<InstanceTypeIndex, InstanceSignature>,
+}
+
+/// The type signature of known modules.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModuleSignature {
+    /// All imports in this module, listed in order with their module/name and
+    /// what type they're importing.
+    pub imports: Vec<(String, Option<String>, EntityType)>,
+    /// Exports are what an instance type conveys, so we go through an
+    /// indirection over there.
+    pub exports: InstanceTypeIndex,
+}
+
+/// The type signature of known instances.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstanceSignature {
+    /// The name of what's being exported as well as its type signature.
+    pub exports: IndexMap<String, EntityType>,
 }
 
 mod passive_data_serde {

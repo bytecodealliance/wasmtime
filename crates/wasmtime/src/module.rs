@@ -1,5 +1,5 @@
-use crate::types::{EntityType, ExportType, ExternType, ImportType};
-use crate::Engine;
+use crate::types::{ExportType, ExternType, ImportType};
+use crate::{Engine, ModuleType};
 use anyhow::{bail, Context, Result};
 use bincode::Options;
 use std::hash::Hash;
@@ -8,7 +8,7 @@ use std::sync::Arc;
 use wasmparser::Validator;
 #[cfg(feature = "cache")]
 use wasmtime_cache::ModuleCacheEntry;
-use wasmtime_jit::{CompilationArtifacts, CompiledModule};
+use wasmtime_jit::{CompilationArtifacts, CompiledModule, TypeTables};
 
 /// A compiled WebAssembly module, ready to be instantiated.
 ///
@@ -81,8 +81,13 @@ use wasmtime_jit::{CompilationArtifacts, CompiledModule};
 #[derive(Clone)]
 pub struct Module {
     engine: Engine,
-    compiled: Arc<[CompiledModule]>,
+    data: Arc<ModuleData>,
     index: usize,
+}
+
+pub(crate) struct ModuleData {
+    pub(crate) types: Arc<TypeTables>,
+    pub(crate) modules: Vec<CompiledModule>,
 }
 
 impl Module {
@@ -164,7 +169,7 @@ impl Module {
     /// See [`Module::new`] for other details.
     pub fn new_with_name(engine: &Engine, bytes: impl AsRef<[u8]>, name: &str) -> Result<Module> {
         let mut module = Module::new(engine, bytes.as_ref())?;
-        Arc::get_mut(&mut module.compiled).unwrap()[module.index]
+        Arc::get_mut(&mut module.data).unwrap().modules[module.index]
             .module_mut()
             .expect("mutable module")
             .name = Some(name.to_string());
@@ -240,23 +245,24 @@ impl Module {
     /// ```
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
         #[cfg(feature = "cache")]
-        let artifacts = ModuleCacheEntry::new("wasmtime", engine.cache_config())
+        let (artifacts, types) = ModuleCacheEntry::new("wasmtime", engine.cache_config())
             .get_data((engine.compiler(), binary), |(compiler, binary)| {
                 CompilationArtifacts::build(compiler, binary)
             })?;
         #[cfg(not(feature = "cache"))]
-        let artifacts = CompilationArtifacts::build(engine.compiler(), binary)?;
+        let (artifacts, types) = CompilationArtifacts::build(engine.compiler(), binary)?;
 
-        let compiled = CompiledModule::from_artifacts_list(
+        let modules = CompiledModule::from_artifacts_list(
             artifacts,
             engine.compiler().isa(),
             &*engine.config().profiler,
         )?;
 
+        let types = Arc::new(types);
         Ok(Module {
             engine: engine.clone(),
-            index: compiled.len() - 1,
-            compiled: compiled.into(),
+            index: 0,
+            data: Arc::new(ModuleData { types, modules }),
         })
     }
 
@@ -286,14 +292,33 @@ impl Module {
         Ok(())
     }
 
+    /// Returns the type signature of this module.
+    pub fn ty(&self) -> ModuleType {
+        let mut sig = ModuleType::new();
+        let env_module = self.compiled_module().module();
+        let types = self.types();
+        for (module, field, ty) in env_module.imports() {
+            sig.add_named_import(module, field, ExternType::from_wasmtime(types, &ty));
+        }
+        for (name, index) in env_module.exports.iter() {
+            sig.add_named_export(
+                name,
+                ExternType::from_wasmtime(types, &env_module.type_of(*index)),
+            );
+        }
+        sig
+    }
+
     /// Serialize compilation artifacts to the buffer. See also `deseriaize`.
     pub fn serialize(&self) -> Result<Vec<u8>> {
         let artifacts = (
             compiler_fingerprint(&self.engine),
-            self.compiled
+            self.data
+                .modules
                 .iter()
                 .map(|i| i.compilation_artifacts())
                 .collect::<Vec<_>>(),
+            &*self.data.types,
             self.index,
         );
 
@@ -313,28 +338,42 @@ impl Module {
     pub fn deserialize(engine: &Engine, serialized: &[u8]) -> Result<Module> {
         let expected_fingerprint = compiler_fingerprint(engine);
 
-        let (fingerprint, artifacts, index) = bincode_options()
-            .deserialize::<(u64, _, _)>(serialized)
+        let (fingerprint, artifacts, types, index) = bincode_options()
+            .deserialize::<(u64, _, _, _)>(serialized)
             .context("Deserialize compilation artifacts")?;
         if fingerprint != expected_fingerprint {
             bail!("Incompatible compilation artifact");
         }
 
-        let compiled = CompiledModule::from_artifacts_list(
+        let modules = CompiledModule::from_artifacts_list(
             artifacts,
             engine.compiler().isa(),
             &*engine.config().profiler,
         )?;
 
+        let types = Arc::new(types);
         Ok(Module {
             engine: engine.clone(),
             index,
-            compiled: compiled.into(),
+            data: Arc::new(ModuleData { modules, types }),
         })
     }
 
     pub(crate) fn compiled_module(&self) -> &CompiledModule {
-        &self.compiled[self.index]
+        &self.data.modules[self.index]
+    }
+
+    pub(crate) fn submodule(&self, index: usize) -> Module {
+        assert!(index < self.data.modules.len());
+        Module {
+            engine: self.engine.clone(),
+            data: self.data.clone(),
+            index,
+        }
+    }
+
+    pub(crate) fn types(&self) -> &Arc<TypeTables> {
+        &self.data.types
     }
 
     /// Returns identifier/name that this [`Module`] has. This name
@@ -418,13 +457,12 @@ impl Module {
         &'module self,
     ) -> impl ExactSizeIterator<Item = ImportType<'module>> + 'module {
         let module = self.compiled_module().module();
+        let types = self.types();
         module
-            .imports
-            .iter()
-            .map(move |(module_name, name, entity_index)| {
-                let r#type = EntityType::new(entity_index, module);
-                ImportType::new(module_name, name.as_deref(), r#type)
-            })
+            .imports()
+            .map(move |(module, field, ty)| ImportType::new(module, field, ty, types))
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 
     /// Returns the list of exports that this [`Module`] has and will be
@@ -485,9 +523,9 @@ impl Module {
         &'module self,
     ) -> impl ExactSizeIterator<Item = ExportType<'module>> + 'module {
         let module = self.compiled_module().module();
+        let types = self.types();
         module.exports.iter().map(move |(name, entity_index)| {
-            let r#type = EntityType::new(entity_index, module);
-            ExportType::new(name, r#type)
+            ExportType::new(name, module.type_of(*entity_index), types)
         })
     }
 
@@ -537,7 +575,10 @@ impl Module {
     pub fn get_export<'module>(&'module self, name: &'module str) -> Option<ExternType> {
         let module = self.compiled_module().module();
         let entity_index = module.exports.get(name)?;
-        Some(EntityType::new(entity_index, module).extern_type())
+        Some(ExternType::from_wasmtime(
+            self.types(),
+            &module.type_of(*entity_index),
+        ))
     }
 
     /// Returns the [`Engine`] that this [`Module`] was compiled by.

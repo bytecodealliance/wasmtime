@@ -12,11 +12,14 @@
 
 pub mod dummy;
 
+use arbitrary::Arbitrary;
 use dummy::dummy_imports;
+use log::debug;
 use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
-use std::time::Duration;
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
 use wasmtime::*;
 use wasmtime_wast::WastContext;
 
@@ -54,8 +57,13 @@ fn log_wat(wat: &str) {
 /// Performs initial validation, and returns early if the Wasm is invalid.
 ///
 /// You can control which compiler is used via passing a `Strategy`.
-pub fn instantiate(wasm: &[u8], strategy: Strategy) {
-    instantiate_with_config(wasm, crate::fuzz_default_config(strategy).unwrap(), None);
+pub fn instantiate(wasm: &[u8], known_valid: bool, strategy: Strategy) {
+    instantiate_with_config(
+        wasm,
+        known_valid,
+        crate::fuzz_default_config(strategy).unwrap(),
+        None,
+    );
 }
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
@@ -64,42 +72,48 @@ pub fn instantiate(wasm: &[u8], strategy: Strategy) {
 /// The engine will be configured using provided config.
 ///
 /// See also `instantiate` functions.
-pub fn instantiate_with_config(wasm: &[u8], mut config: Config, timeout: Option<Duration>) {
+pub fn instantiate_with_config(
+    wasm: &[u8],
+    known_valid: bool,
+    mut config: Config,
+    timeout: Option<Duration>,
+) {
     crate::init_fuzzing();
 
     config.interruptable(timeout.is_some());
     let engine = Engine::new(&config);
     let store = Store::new(&engine);
 
+    // If a timeout is requested then we spawn a helper thread to wait for the
+    // requested time and then send us a signal to get interrupted. We also
+    // arrange for the thread's sleep to get interrupted if we return early (or
+    // the wasm returns within the time limit), which allows the thread to get
+    // torn down.
+    //
+    // This prevents us from creating a huge number of sleeping threads if this
+    // function is executed in a loop, like it does on nightly fuzzing
+    // infrastructure.
+
+    let mut timeout_state = SignalOnDrop::default();
     if let Some(timeout) = timeout {
         let handle = store.interrupt_handle().unwrap();
-        std::thread::spawn(move || {
-            std::thread::sleep(timeout);
-            handle.interrupt();
-        });
+        timeout_state.spawn_timeout(timeout, move || handle.interrupt());
     }
 
     log_wasm(wasm);
     let module = match Module::new(&engine, wasm) {
         Ok(module) => module,
-        Err(_) => return,
+        Err(_) if !known_valid => return,
+        Err(e) => panic!("failed to compile module: {:?}", e),
     };
+    let imports = dummy_imports(&store, module.imports());
 
-    let imports = match dummy_imports(&store, module.imports()) {
-        Ok(imps) => imps,
-        Err(_) => {
-            // There are some value types that we can't synthesize a
-            // dummy value for (e.g. externrefs) and for modules that
-            // import things of these types we skip instantiation.
-            return;
-        }
-    };
-
-    // Don't unwrap this: there can be instantiation-/link-time errors that
-    // aren't caught during validation or compilation. For example, an imported
-    // table might not have room for an element segment that we want to
-    // initialize into it.
-    let _result = Instance::new(&store, &module, &imports);
+    match Instance::new(&store, &module, &imports) {
+        Ok(_) => {}
+        // Allow traps which can happen normally with `unreachable`
+        Err(e) if e.downcast_ref::<Trap>().is_some() => {}
+        Err(e) => panic!("failed to instantiate {}", e),
+    }
 }
 
 /// Compile the Wasm buffer, and implicitly fail if we have an unexpected
@@ -151,31 +165,14 @@ pub fn differential_execution(
         let engine = Engine::new(config);
         let store = Store::new(&engine);
 
-        let module = match Module::new(&engine, &wasm) {
-            Ok(module) => module,
-            // The module might rely on some feature that our config didn't
-            // enable or something like that.
-            Err(e) => {
-                eprintln!("Warning: failed to compile `wasm-opt -ttf` module: {}", e);
-                continue;
-            }
-        };
+        let module = Module::new(&engine, &wasm).unwrap();
 
         // TODO: we should implement tracing versions of these dummy imports
         // that record a trace of the order that imported functions were called
         // in and with what values. Like the results of exported functions,
         // calls to imports should also yield the same values for each
         // configuration, and we should assert that.
-        let imports = match dummy_imports(&store, module.imports()) {
-            Ok(imps) => imps,
-            Err(e) => {
-                // There are some value types that we can't synthesize a
-                // dummy value for (e.g. externrefs) and for modules that
-                // import things of these types we skip instantiation.
-                eprintln!("Warning: failed to synthesize dummy imports: {}", e);
-                continue;
-            }
-        };
+        let imports = dummy_imports(&store, module.imports());
 
         // Don't unwrap this: there can be instantiation-/link-time errors that
         // aren't caught during validation or compilation. For example, an imported
@@ -201,10 +198,7 @@ pub fn differential_execution(
             init_hang_limit(&instance);
 
             let ty = f.ty();
-            let params = match dummy::dummy_values(ty.params()) {
-                Ok(p) => p,
-                Err(_) => continue,
-            };
+            let params = dummy::dummy_values(ty.params());
             let this_result = f.call(&params).map_err(|e| e.downcast::<Trap>().unwrap());
 
             let existing_result = export_func_results
@@ -249,24 +243,8 @@ pub fn differential_execution(
                         (Val::I32(lhs), Val::I32(rhs)) if lhs == rhs => continue,
                         (Val::I64(lhs), Val::I64(rhs)) if lhs == rhs => continue,
                         (Val::V128(lhs), Val::V128(rhs)) if lhs == rhs => continue,
-                        (Val::F32(lhs), Val::F32(rhs)) => {
-                            let lhs = f32::from_bits(*lhs);
-                            let rhs = f32::from_bits(*rhs);
-                            if lhs == rhs || (lhs.is_nan() && rhs.is_nan()) {
-                                continue;
-                            } else {
-                                fail()
-                            }
-                        }
-                        (Val::F64(lhs), Val::F64(rhs)) => {
-                            let lhs = f64::from_bits(*lhs);
-                            let rhs = f64::from_bits(*rhs);
-                            if lhs == rhs || (lhs.is_nan() && rhs.is_nan()) {
-                                continue;
-                            } else {
-                                fail()
-                            }
-                        }
+                        (Val::F32(lhs), Val::F32(rhs)) if f32_equal(*lhs, *rhs) => continue,
+                        (Val::F64(lhs), Val::F64(rhs)) if f64_equal(*lhs, *rhs) => continue,
                         (Val::ExternRef(_), Val::ExternRef(_))
                         | (Val::FuncRef(_), Val::FuncRef(_)) => continue,
                         _ => fail(),
@@ -276,6 +254,18 @@ pub fn differential_execution(
             _ => fail(),
         }
     }
+}
+
+fn f32_equal(a: u32, b: u32) -> bool {
+    let a = f32::from_bits(a);
+    let b = f32::from_bits(b);
+    a == b || (a.is_nan() && b.is_nan())
+}
+
+fn f64_equal(a: u64, b: u64) -> bool {
+    let a = f64::from_bits(a);
+    let b = f64::from_bits(b);
+    a == b || (a.is_nan() && b.is_nan())
 }
 
 /// Invoke the given API calls.
@@ -346,16 +336,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 };
 
                 let store = store.as_ref().unwrap();
-
-                let imports = match dummy_imports(store, module.imports()) {
-                    Ok(imps) => imps,
-                    Err(_) => {
-                        // There are some value types that we can't synthesize a
-                        // dummy value for (e.g. externrefs) and for modules that
-                        // import things of these types we skip instantiation.
-                        continue;
-                    }
-                };
+                let imports = dummy_imports(store, module.imports());
 
                 // Don't unwrap this: there can be instantiation-/link-time errors that
                 // aren't caught during validation or compilation. For example, an imported
@@ -401,10 +382,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 let nth = nth % funcs.len();
                 let f = &funcs[nth];
                 let ty = f.ty();
-                let params = match dummy::dummy_values(ty.params()) {
-                    Ok(p) => p,
-                    Err(_) => continue,
-                };
+                let params = dummy::dummy_values(ty.params());
                 let _ = f.call(&params);
             }
         }
@@ -476,6 +454,228 @@ pub fn table_ops(config: crate::generators::Config, ops: crate::generators::tabl
     impl Drop for CountDrops {
         fn drop(&mut self) {
             self.0.set(self.0.get().checked_add(1).unwrap());
+        }
+    }
+}
+
+/// Configuration options for wasm-smith such that generated modules always
+/// conform to certain specifications.
+#[derive(Default, Debug, Arbitrary, Clone)]
+pub struct DifferentialWasmiModuleConfig;
+
+impl wasm_smith::Config for DifferentialWasmiModuleConfig {
+    fn allow_start_export(&self) -> bool {
+        false
+    }
+
+    fn min_funcs(&self) -> usize {
+        1
+    }
+
+    fn max_funcs(&self) -> usize {
+        1
+    }
+
+    fn min_memories(&self) -> u32 {
+        1
+    }
+
+    fn max_memories(&self) -> usize {
+        1
+    }
+
+    fn max_imports(&self) -> usize {
+        0
+    }
+
+    fn min_exports(&self) -> usize {
+        2
+    }
+
+    fn max_memory_pages(&self) -> u32 {
+        1
+    }
+
+    fn memory_max_size_required(&self) -> bool {
+        true
+    }
+}
+
+/// Perform differential execution between Cranelift and wasmi, diffing the
+/// resulting memory image when execution terminates. This relies on the
+/// module-under-test to be instrumented to bound the execution time. Invoke
+/// with a module generated by `wasm-smith` using the
+/// `DiferentialWasmiModuleConfig` configuration type for best results.
+///
+/// May return `None` if we early-out due to a rejected fuzz config; these
+/// should be rare if modules are generated appropriately.
+pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Config) -> Option<()> {
+    crate::init_fuzzing();
+
+    // Instantiate wasmi module and instance.
+    let wasmi_module = wasmi::Module::from_buffer(&wasm[..]).ok()?;
+    let wasmi_instance =
+        wasmi::ModuleInstance::new(&wasmi_module, &wasmi::ImportsBuilder::default()).ok()?;
+    let wasmi_instance = wasmi_instance.assert_no_start();
+
+    // TODO(paritytech/wasmi#19): wasmi does not currently canonicalize NaNs. To avoid spurious
+    // fuzz failures, for now let's fuzz only integer Wasm programs.
+    if wasmi_module.deny_floating_point().is_err() {
+        return None;
+    }
+
+    // Instantiate wasmtime module and instance.
+    let mut wasmtime_config = config.to_wasmtime();
+    wasmtime_config.cranelift_nan_canonicalization(true);
+    let wasmtime_engine = Engine::new(&wasmtime_config);
+    let wasmtime_store = Store::new(&wasmtime_engine);
+    let wasmtime_module =
+        Module::new(&wasmtime_engine, &wasm).expect("Wasmtime can compile module");
+    let wasmtime_instance = Instance::new(&wasmtime_store, &wasmtime_module, &[])
+        .expect("Wasmtime can instantiate module");
+
+    // Introspect wasmtime module to find name of an exported function and of an
+    // exported memory. Stop when we have one of each. (According to the config
+    // above, there should be at most one of each.)
+    let (func_name, memory_name) = {
+        let mut func_name = None;
+        let mut memory_name = None;
+        for e in wasmtime_module.exports() {
+            match e.ty() {
+                wasmtime::ExternType::Func(..) => func_name = Some(e.name().to_string()),
+                wasmtime::ExternType::Memory(..) => memory_name = Some(e.name().to_string()),
+                _ => {}
+            }
+            if func_name.is_some() && memory_name.is_some() {
+                break;
+            }
+        }
+        (func_name?, memory_name?)
+    };
+
+    let wasmi_mem_export = wasmi_instance.export_by_name(&memory_name[..]).unwrap();
+    let wasmi_mem = wasmi_mem_export.as_memory().unwrap();
+    let wasmi_main_export = wasmi_instance.export_by_name(&func_name[..]).unwrap();
+    let wasmi_main = wasmi_main_export.as_func().unwrap();
+    let wasmi_val = wasmi::FuncInstance::invoke(&wasmi_main, &[], &mut wasmi::NopExternals);
+
+    let wasmtime_mem = wasmtime_instance
+        .get_memory(&memory_name[..])
+        .expect("memory export is present");
+    let wasmtime_main = wasmtime_instance
+        .get_func(&func_name[..])
+        .expect("function export is present");
+    let wasmtime_vals = wasmtime_main.call(&[]);
+    let wasmtime_val = wasmtime_vals.map(|v| v.iter().next().cloned());
+
+    debug!(
+        "Successful execution: wasmi returned {:?}, wasmtime returned {:?}",
+        wasmi_val, wasmtime_val
+    );
+
+    let show_wat = || {
+        if let Ok(s) = wasmprinter::print_bytes(&wasm[..]) {
+            eprintln!("wat:\n{}\n", s);
+        }
+    };
+
+    match (&wasmi_val, &wasmtime_val) {
+        (&Ok(Some(wasmi::RuntimeValue::I32(a))), &Ok(Some(Val::I32(b)))) if a == b => {}
+        (&Ok(Some(wasmi::RuntimeValue::F32(a))), &Ok(Some(Val::F32(b))))
+            if f32_equal(a.to_bits(), b) => {}
+        (&Ok(Some(wasmi::RuntimeValue::I64(a))), &Ok(Some(Val::I64(b)))) if a == b => {}
+        (&Ok(Some(wasmi::RuntimeValue::F64(a))), &Ok(Some(Val::F64(b))))
+            if f64_equal(a.to_bits(), b) => {}
+        (&Ok(None), &Ok(None)) => {}
+        (&Err(_), &Err(_)) => {}
+        _ => {
+            show_wat();
+            panic!(
+                "Values do not match: wasmi returned {:?}; wasmtime returned {:?}",
+                wasmi_val, wasmtime_val
+            );
+        }
+    }
+
+    if wasmi_mem.current_size().0 != wasmtime_mem.size() as usize {
+        show_wat();
+        panic!("resulting memories are not the same size");
+    }
+
+    // Wasmi memory may be stored non-contiguously; copy it out to a contiguous chunk.
+    let mut wasmi_buf: Vec<u8> = vec![0; wasmtime_mem.data_size()];
+    wasmi_mem
+        .get_into(0, &mut wasmi_buf[..])
+        .expect("can access wasmi memory");
+
+    let wasmtime_slice = unsafe { wasmtime_mem.data_unchecked() };
+
+    if wasmi_buf.len() >= 64 {
+        debug!("-> First 64 bytes of wasmi heap: {:?}", &wasmi_buf[0..64]);
+        debug!(
+            "-> First 64 bytes of Wasmtime heap: {:?}",
+            &wasmtime_slice[0..64]
+        );
+    }
+
+    if &wasmi_buf[..] != &wasmtime_slice[..] {
+        show_wat();
+        panic!("memory contents are not equal");
+    }
+
+    Some(())
+}
+
+#[derive(Default)]
+struct SignalOnDrop {
+    state: Arc<(Mutex<bool>, Condvar)>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl SignalOnDrop {
+    fn spawn_timeout(&mut self, dur: Duration, closure: impl FnOnce() + Send + 'static) {
+        let state = self.state.clone();
+        let start = Instant::now();
+        self.thread = Some(std::thread::spawn(move || {
+            // Using our mutex/condvar we wait here for the first of `dur` to
+            // pass or the `SignalOnDrop` instance to get dropped.
+            let (lock, cvar) = &*state;
+            let mut signaled = lock.lock().unwrap();
+            while !*signaled {
+                // Adjust our requested `dur` based on how much time has passed.
+                let dur = match dur.checked_sub(start.elapsed()) {
+                    Some(dur) => dur,
+                    None => break,
+                };
+                let (lock, result) = cvar.wait_timeout(signaled, dur).unwrap();
+                signaled = lock;
+                // If we timed out for sure then there's no need to continue
+                // since we'll just abort on the next `checked_sub` anyway.
+                if result.timed_out() {
+                    break;
+                }
+            }
+            drop(signaled);
+
+            closure();
+        }));
+    }
+}
+
+impl Drop for SignalOnDrop {
+    fn drop(&mut self) {
+        if let Some(thread) = self.thread.take() {
+            let (lock, cvar) = &*self.state;
+            // Signal our thread that we've been dropped and wake it up if it's
+            // blocked.
+            let mut g = lock.lock().unwrap();
+            *g = true;
+            cvar.notify_one();
+            drop(g);
+
+            // ... and then wait for the thread to exit to ensure we clean up
+            // after ourselves.
+            thread.join().unwrap();
         }
     }
 }

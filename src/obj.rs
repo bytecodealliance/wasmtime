@@ -46,7 +46,8 @@ pub fn compile_to_obj(
 
     // TODO: Expose the tunables as command-line flags.
     let mut tunables = Tunables::default();
-    tunables.debug_info = debug_info;
+    tunables.generate_native_debuginfo = debug_info;
+    tunables.parse_wasm_debuginfo = debug_info;
 
     let compiler = Compiler::new(
         isa,
@@ -64,10 +65,10 @@ pub fn compile_to_obj(
     );
 
     let environ = ModuleEnvironment::new(compiler.isa().frontend_config(), &tunables, &features);
-    let mut translation = environ
+    let (mut translation, types) = environ
         .translate(wasm)
         .context("failed to translate module")?;
     assert_eq!(translation.len(), 1);
-    let compilation = compiler.compile(&mut translation[0])?;
+    let compilation = compiler.compile(&mut translation[0], &types)?;
     Ok(compilation.obj)
 }

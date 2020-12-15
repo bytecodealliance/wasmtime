@@ -1039,7 +1039,6 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         callee: ir::Value,
         call_args: &[ir::Value],
     ) -> WasmResult<ir::Inst> {
-        let sig_index = self.module.types[ty_index].unwrap_function();
         let pointer_type = self.pointer_type();
 
         let table_entry_addr = pos.ins().table_addr(pointer_type, table, callee, 0);
@@ -1071,7 +1070,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let vmctx = self.vmctx(pos.func);
                 let base = pos.ins().global_value(pointer_type, vmctx);
                 let offset =
-                    i32::try_from(self.offsets.vmctx_vmshared_signature_id(sig_index)).unwrap();
+                    i32::try_from(self.offsets.vmctx_vmshared_signature_id(ty_index)).unwrap();
 
                 // Load the caller ID.
                 let mut mem_flags = ir::MemFlags::trusted();

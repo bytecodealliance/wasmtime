@@ -7,8 +7,9 @@ use crate::binemit::CodeOffset;
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir;
 use crate::ir::{
-    Block, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap, HeapData, Inst, JumpTable,
-    JumpTableData, Opcode, SigRef, StackSlot, StackSlotData, Table, TableData,
+    instructions::BranchInfo, Block, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap,
+    HeapData, Inst, InstructionData, JumpTable, JumpTableData, Opcode, SigRef, StackSlot,
+    StackSlotData, Table, TableData,
 };
 use crate::ir::{BlockOffsets, InstEncodings, SourceLocs, StackSlots, ValueLocations};
 use crate::ir::{DataFlowGraph, ExternalName, Layout, Signature};
@@ -270,10 +271,49 @@ impl Function {
 
     /// Changes the destination of a jump or branch instruction.
     /// Does nothing if called with a non-jump or non-branch instruction.
+    ///
+    /// Note that this method ignores multi-destination branches like `br_table`.
     pub fn change_branch_destination(&mut self, inst: Inst, new_dest: Block) {
         match self.dfg[inst].branch_destination_mut() {
             None => (),
             Some(inst_dest) => *inst_dest = new_dest,
+        }
+    }
+
+    /// Rewrite the branch destination to `new_dest` if the destination matches `old_dest`.
+    /// Does nothing if called with a non-jump or non-branch instruction.
+    ///
+    /// Unlike [change_branch_destination](Function::change_branch_destination), this method rewrite the destinations of
+    /// multi-destination branches like `br_table`.
+    pub fn rewrite_branch_destination(&mut self, inst: Inst, old_dest: Block, new_dest: Block) {
+        match self.dfg.analyze_branch(inst) {
+            BranchInfo::SingleDest(dest, ..) => {
+                if dest == old_dest {
+                    self.change_branch_destination(inst, new_dest);
+                }
+            }
+
+            BranchInfo::Table(table, default_dest) => {
+                self.jump_tables[table].iter_mut().for_each(|entry| {
+                    if *entry == old_dest {
+                        *entry = new_dest;
+                    }
+                });
+
+                if default_dest == Some(old_dest) {
+                    match &mut self.dfg[inst] {
+                        InstructionData::BranchTable { destination, .. } => {
+                            *destination = new_dest;
+                        }
+                        _ => panic!(
+                            "Unexpected instruction {} having default destination",
+                            self.dfg.display_inst(inst, None)
+                        ),
+                    }
+                }
+            }
+
+            BranchInfo::NotABranch => {}
         }
     }
 
