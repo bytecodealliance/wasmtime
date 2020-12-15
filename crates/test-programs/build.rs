@@ -44,6 +44,7 @@ mod wasi_tests {
 
     fn build_tests(testsuite: &str, out_dir: &Path) -> io::Result<()> {
         let mut cmd = Command::new("cargo");
+        cmd.env("CARGO_PROFILE_RELEASE_DEBUG", "1");
         cmd.args(&[
             "build",
             "--release",

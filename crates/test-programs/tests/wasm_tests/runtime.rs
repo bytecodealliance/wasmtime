@@ -6,7 +6,7 @@ use wasi_c2::{
     virt::pipe::{ReadPipe, WritePipe},
     WasiCtx,
 };
-use wasmtime::{Linker, Module, Store};
+use wasmtime::{Config, Engine, Linker, Module, Store};
 
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
     let stdout = WritePipe::new_in_memory();
@@ -40,13 +40,12 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         snapshot1.add_to_linker(&mut linker)?;
 
         let module = Module::new(store.engine(), &data).context("failed to create wasm module")?;
-
-        linker
-            .module("", &module)
-            .and_then(|m| m.get_default(""))
-            .and_then(|f| f.get0::<()>())
-            .and_then(|f| f().map_err(Into::into))
+        let instance = linker.instantiate(&module)?;
+        let start = instance.get_func("_start").unwrap();
+        let with_type = start.get0::<()>()?;
+        with_type().map_err(anyhow::Error::from)
     };
+
     match r {
         Ok(()) => Ok(()),
         Err(trap) => {
