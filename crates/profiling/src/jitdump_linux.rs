@@ -249,11 +249,7 @@ impl State {
         let header = FileHeader {
             timestamp: self.get_time_stamp(),
             e_machine: self.get_e_machine(),
-            magic: if cfg!(target_endian = "little") {
-                0x4A695444
-            } else {
-                0x4454694a
-            },
+            magic: 0x4A695444,
             version: 1,
             size: mem::size_of::<FileHeader>() as u32,
             pad1: 0,
