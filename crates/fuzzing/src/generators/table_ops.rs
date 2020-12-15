@@ -35,7 +35,7 @@ impl TableOps {
         table_size
     }
 
-    /// Convert into a a wasm_encoded binary.
+    /// Serialize this module into a Wasm binary.
     ///
     /// The module requires a single import: `(import "" "gc" (func))`. This
     /// should be a function to trigger GC.
