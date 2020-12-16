@@ -210,8 +210,10 @@ impl WasiDir for cap_std::fs::Dir {
 
         if oflags.contains(&(OFlags::CREATE | OFlags::EXCLUSIVE)) {
             opts.create_new(true);
+            opts.write(true);
         } else if oflags.contains(&OFlags::CREATE) {
             opts.create(true);
+            opts.write(true);
         }
         if oflags.contains(&OFlags::TRUNCATE) {
             opts.truncate(true);
@@ -223,8 +225,15 @@ impl WasiDir for cap_std::fs::Dir {
         {
             opts.write(true);
         } else {
+            // If not opened write, open read. This way the OS lets us open the file.
+            // If FileCaps::READ is not set, read calls will be rejected at the
+            // get_cap check.
             opts.read(true);
         }
+        if caps.contains(&FileCaps::READ) {
+            opts.read(true);
+        }
+
         if symlink_follow {
             opts.follow(FollowSymlinks::Yes);
         }
