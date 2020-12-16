@@ -46,7 +46,7 @@ mod tests {
     use crate::ir::{ExternalName, InstBuilder, Signature, StackSlotData, StackSlotKind};
     use crate::isa::unwind::winx64::UnwindCode;
     use crate::isa::x86::registers::RU;
-    use crate::isa::{lookup, CallConv};
+    use crate::isa::{lookup_variant, BackendVariant, CallConv};
     use crate::settings::{builder, Flags};
     use crate::Context;
     use std::str::FromStr;
@@ -54,7 +54,7 @@ mod tests {
 
     #[test]
     fn test_wrong_calling_convention() {
-        let isa = lookup(triple!("x86_64"))
+        let isa = lookup_variant(triple!("x86_64"), BackendVariant::Legacy)
             .expect("expect x86 ISA")
             .finish(Flags::new(builder()));
 
@@ -70,7 +70,7 @@ mod tests {
 
     #[test]
     fn test_small_alloc() {
-        let isa = lookup(triple!("x86_64"))
+        let isa = lookup_variant(triple!("x86_64"), BackendVariant::Legacy)
             .expect("expect x86 ISA")
             .finish(Flags::new(builder()));
 
@@ -127,7 +127,7 @@ mod tests {
 
     #[test]
     fn test_medium_alloc() {
-        let isa = lookup(triple!("x86_64"))
+        let isa = lookup_variant(triple!("x86_64"), BackendVariant::Legacy)
             .expect("expect x86 ISA")
             .finish(Flags::new(builder()));
 
@@ -188,7 +188,7 @@ mod tests {
 
     #[test]
     fn test_large_alloc() {
-        let isa = lookup(triple!("x86_64"))
+        let isa = lookup_variant(triple!("x86_64"), BackendVariant::Legacy)
             .expect("expect x86 ISA")
             .finish(Flags::new(builder()));
 
