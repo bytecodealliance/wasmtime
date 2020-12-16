@@ -170,6 +170,21 @@ impl FileCaps {
     pub const FILESTAT_GET: Self = FileCaps { flags: 512 };
     pub const FILESTAT_SET_SIZE: Self = FileCaps { flags: 1024 };
     pub const FILESTAT_SET_TIMES: Self = FileCaps { flags: 2048 };
+
+    pub fn all() -> FileCaps {
+        Self::DATASYNC
+            | Self::READ
+            | Self::SEEK
+            | Self::FDSTAT_SET_FLAGS
+            | Self::SYNC
+            | Self::TELL
+            | Self::WRITE
+            | Self::ADVISE
+            | Self::ALLOCATE
+            | Self::FILESTAT_GET
+            | Self::FILESTAT_SET_SIZE
+            | Self::FILESTAT_SET_TIMES
+    }
 }
 
 impl std::ops::BitOr for FileCaps {
@@ -178,12 +193,6 @@ impl std::ops::BitOr for FileCaps {
         FileCaps {
             flags: self.flags | rhs.flags,
         }
-    }
-}
-
-impl std::fmt::Display for FileCaps {
-    fn fmt(&self, _f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        todo!()
     }
 }
 

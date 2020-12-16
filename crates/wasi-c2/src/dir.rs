@@ -16,10 +16,16 @@ pub trait WasiDir {
 
     fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error>;
 
+    fn create_dir(&self, path: &str) -> Result<(), Error>;
+
     fn readdir(
         &self,
         cursor: ReaddirCursor,
     ) -> Result<Box<dyn Iterator<Item = Result<(ReaddirEntity, String), Error>>>, Error>;
+
+    fn remove_dir(&self, path: &str) -> Result<(), Error>;
+
+    fn unlink_file(&self, path: &str) -> Result<(), Error>;
 }
 
 pub(crate) struct DirEntry {
@@ -112,6 +118,31 @@ impl DirCaps {
     pub const SYMLINK: Self = DirCaps { flags: 512 };
     pub const REMOVE_DIRECTORY: Self = DirCaps { flags: 1024 };
     pub const UNLINK_FILE: Self = DirCaps { flags: 2048 };
+
+    // Missing that are in wasi-common directory_base:
+    // FD_FDSTAT_SET_FLAGS
+    // FD_SYNC
+    // FD_ADVISE
+    // PATH_FILESTAT_GET
+    // PATH_FILESTAT_SET_SIZE
+    // PATH_FILESTAT_SET_TIMES
+    // FD_FILESTAT_GET
+    // FD_FILESTAT_SET_TIMES
+
+    pub fn all() -> DirCaps {
+        Self::CREATE_DIRECTORY
+            | Self::CREATE_FILE
+            | Self::LINK_SOURCE
+            | Self::LINK_TARGET
+            | Self::OPEN
+            | Self::READDIR
+            | Self::READLINK
+            | Self::RENAME_SOURCE
+            | Self::RENAME_TARGET
+            | Self::SYMLINK
+            | Self::REMOVE_DIRECTORY
+            | Self::UNLINK_FILE
+    }
 }
 
 impl std::ops::BitOr for DirCaps {
@@ -126,12 +157,6 @@ impl std::ops::BitOr for DirCaps {
 pub struct DirStat {
     pub file_caps: FileCaps,
     pub dir_caps: DirCaps,
-}
-
-impl std::fmt::Display for DirCaps {
-    fn fmt(&self, _f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        todo!()
-    }
 }
 
 pub trait TableDirExt {
@@ -219,6 +244,10 @@ impl WasiDir for cap_std::fs::Dir {
         Ok(Box::new(d))
     }
 
+    fn create_dir(&self, path: &str) -> Result<(), Error> {
+        self.create_dir(Path::new(path))?;
+        Ok(())
+    }
     fn readdir(
         &self,
         cursor: ReaddirCursor,
@@ -256,5 +285,15 @@ impl WasiDir for cap_std::fs::Dir {
             };
             Ok((entity, name))
         })))
+    }
+
+    fn remove_dir(&self, path: &str) -> Result<(), Error> {
+        self.remove_dir(Path::new(path))?;
+        Ok(())
+    }
+
+    fn unlink_file(&self, path: &str) -> Result<(), Error> {
+        self.remove_file(Path::new(path))?;
+        Ok(())
     }
 }

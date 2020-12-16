@@ -100,7 +100,7 @@ impl WasiCtxBuilder {
         dir: Box<dyn WasiDir>,
         path: impl AsRef<Path>,
     ) -> Result<&mut Self, Error> {
-        let caps = DirCaps::OPEN | DirCaps::CREATE_FILE; // XXX more base caps
+        let caps = DirCaps::all();
         let file_caps = FileCaps::READ | FileCaps::WRITE; // XXX more base caps
         self.0.table().push(Box::new(DirEntry::new(
             caps,

@@ -92,8 +92,8 @@ impl From<wiggle::GuestError> for types::Errno {
             PtrBorrowed { .. } => Self::Fault,
             InvalidUtf8 { .. } => Self::Ilseq,
             TryFromIntError { .. } => Self::Overflow,
-            InFunc { .. } => Self::Inval,
-            InDataField { .. } => Self::Inval,
+            InFunc { err, .. } => types::Errno::from(*err),
+            InDataField { err, .. } => types::Errno::from(*err),
             SliceLengthsDiffer { .. } => Self::Fault,
             BorrowCheckerOutOfHandles { .. } => Self::Fault,
         }
@@ -527,7 +527,11 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         dirfd: types::Fd,
         path: &GuestPtr<'_, str>,
     ) -> Result<(), Error> {
-        unimplemented!()
+        let table = self.table();
+        let dir_entry: RefMut<DirEntry> = table.get(u32::from(dirfd))?;
+        let dir = dir_entry.get_cap(DirCaps::CREATE_DIRECTORY)?;
+        let path = path.as_str()?;
+        dir.create_dir(path.deref())
     }
 
     fn path_filestat_get(
@@ -628,7 +632,11 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         dirfd: types::Fd,
         path: &GuestPtr<'_, str>,
     ) -> Result<(), Error> {
-        unimplemented!()
+        let table = self.table();
+        let dir_entry: RefMut<DirEntry> = table.get(u32::from(dirfd))?;
+        let dir = dir_entry.get_cap(DirCaps::REMOVE_DIRECTORY)?;
+        let path = path.as_str()?;
+        dir.remove_dir(path.deref())
     }
 
     fn path_rename(
@@ -651,7 +659,11 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn path_unlink_file(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<(), Error> {
-        unimplemented!()
+        let table = self.table();
+        let dir_entry: RefMut<DirEntry> = table.get(u32::from(dirfd))?;
+        let dir = dir_entry.get_cap(DirCaps::UNLINK_FILE)?;
+        let path = path.as_str()?;
+        dir.unlink_file(path.deref())
     }
 
     fn poll_oneoff(
