@@ -6,7 +6,6 @@ use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::*;
 use indexmap::IndexMap;
-use more_asserts::assert_ge;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -44,16 +43,18 @@ impl MemoryStyle {
         //
         // If the module doesn't declare an explicit maximum treat it as 4GiB when not
         // requested to use the static memory bound itself as the maximum.
-        let maximum = memory
-            .maximum
-            .unwrap_or(if tunables.static_memory_bound_is_maximum {
+        let maximum = std::cmp::min(
+            memory.maximum.unwrap_or(WASM_MAX_PAGES),
+            if tunables.static_memory_bound_is_maximum {
                 tunables.static_memory_bound
             } else {
                 WASM_MAX_PAGES
-            });
+            },
+        );
 
-        if maximum <= tunables.static_memory_bound {
-            assert_ge!(tunables.static_memory_bound, memory.minimum);
+        // Ensure the minimum is less than the maximum; the minimum might exceed the maximum
+        // when the memory is artificially bounded via `static_memory_bound_is_maximum` above
+        if memory.minimum <= maximum && maximum <= tunables.static_memory_bound {
             return (
                 Self::Static {
                     bound: tunables.static_memory_bound,
