@@ -17,7 +17,7 @@
 // TODO it might worth re-investigating the suitability of this type on Windows.
 
 use super::{fd, AsFile};
-use crate::handle::{Fdflags, Filetype, Handle, HandleRights, Rights, RightsExt, Size};
+use crate::handle::{Fdflags, Filestat, Filetype, Handle, HandleRights, Rights, RightsExt, Size};
 use crate::sandboxed_tty_writer::SandboxedTTYWriter;
 use crate::{Error, Result};
 use std::any::Any;
@@ -65,6 +65,9 @@ impl Handle for Stdin {
         }
         Ok(())
     }
+    fn filestat_get(&self) -> Result<Filestat> {
+        fd::filestat_get(&*self.as_file()?)
+    }
     fn read_vectored(&self, iovs: &mut [io::IoSliceMut]) -> Result<usize> {
         let nread = io::stdin().read_vectored(iovs)?;
         Ok(nread)
@@ -110,6 +113,9 @@ impl Handle for Stdout {
             panic!("Tried updating Fdflags on Stdio handle by re-opening as file!");
         }
         Ok(())
+    }
+    fn filestat_get(&self) -> Result<Filestat> {
+        fd::filestat_get(&*self.as_file()?)
     }
     fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
         // lock for the duration of the scope
@@ -164,6 +170,9 @@ impl Handle for Stderr {
             panic!("Tried updating Fdflags on Stdio handle by re-opening as file!");
         }
         Ok(())
+    }
+    fn filestat_get(&self) -> Result<Filestat> {
+        fd::filestat_get(&*self.as_file()?)
     }
     fn write_vectored(&self, iovs: &[io::IoSlice]) -> Result<usize> {
         // Always sanitize stderr, even if it's not directly connected to a tty,
