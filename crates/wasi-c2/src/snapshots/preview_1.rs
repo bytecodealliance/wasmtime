@@ -168,6 +168,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let mut table = self.table();
         let fd = u32::from(fd);
 
+        // Fail fast: If not present in table, Badf
         if !table.contains_key(fd) {
             return Err(Error::Badf);
         }
@@ -183,7 +184,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             drop(dir_entry);
             let _ = table.delete(fd);
         } else {
-            // XXX do we just table delete anyway?
+            // XXX do we just table delete other entry types anyway?
             return Err(Error::Badf);
         }
 
@@ -573,16 +574,21 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let mut table = self.table();
         let dir_entry: RefMut<DirEntry> = table.get(u32::from(dirfd))?;
         let dir = dir_entry.get_cap(DirCaps::OPEN)?;
+
         let symlink_follow = dirflags.contains(&types::Lookupflags::SYMLINK_FOLLOW);
+
         let oflags = OFlags::from(&oflags);
         let fdflags = FdFlags::from(&fdflags);
         let path = path.as_str()?;
         if oflags.contains(&OFlags::DIRECTORY) {
-            let create = oflags.contains(&OFlags::CREATE);
-            let child_dir = dir.open_dir(symlink_follow, path.deref(), create)?;
+            if oflags.contains(&OFlags::CREATE)
+                || oflags.contains(&OFlags::EXCLUSIVE)
+                || oflags.contains(&OFlags::TRUNCATE)
+            {
+                return Err(Error::Inval);
+            }
+            let child_dir = dir.open_dir(symlink_follow, path.deref())?;
 
-            // XXX go back and check these caps conversions - probably need to validate them
-            // against ???
             let base_caps = DirCaps::from(&fs_rights_base);
             let inheriting_caps = DirCaps::from(&fs_rights_inheriting);
             drop(dir);

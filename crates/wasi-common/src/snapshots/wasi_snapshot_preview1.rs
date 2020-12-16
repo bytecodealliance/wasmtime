@@ -82,7 +82,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                 return Err(Error::Notsup);
             }
         }
-        self.remove_entry(fd)?;
+        let _ = self.remove_entry(fd)?;
         Ok(())
     }
 

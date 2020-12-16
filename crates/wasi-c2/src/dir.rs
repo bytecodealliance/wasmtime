@@ -15,12 +15,7 @@ pub trait WasiDir {
         caps: FileCaps,
     ) -> Result<Box<dyn WasiFile>, Error>;
 
-    fn open_dir(
-        &self,
-        symlink_follow: bool,
-        path: &str,
-        create: bool,
-    ) -> Result<Box<dyn WasiDir>, Error>;
+    fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error>;
 
     fn readdir(
         &self,
@@ -150,9 +145,10 @@ impl WasiDir for cap_std::fs::Dir {
         oflags: OFlags,
         caps: FileCaps,
     ) -> Result<Box<dyn WasiFile>, Error> {
-        // XXX obey symlink_follow
-        // XXX how to handle fdflags like append? OFlags dont contain read|write?
+        use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt};
+
         let mut opts = cap_std::fs::OpenOptions::new();
+
         if oflags.contains(&(OFlags::CREATE | OFlags::EXCLUSIVE)) {
             opts.create_new(true);
         } else if oflags.contains(&OFlags::CREATE) {
@@ -164,23 +160,23 @@ impl WasiDir for cap_std::fs::Dir {
         if caps.contains(&FileCaps::READ) {
             opts.read(true);
         }
-        if caps.contains(&FileCaps::WRITE) {
+        if caps.contains(&FileCaps::WRITE)
+            || caps.contains(&FileCaps::DATASYNC)
+            || caps.contains(&FileCaps::ALLOCATE)
+            || caps.contains(&FileCaps::FILESTAT_SET_SIZE)
+        {
             opts.write(true);
         }
+        if symlink_follow {
+            opts.follow(FollowSymlinks::Yes);
+        }
 
-        debug!("Dir::open_file({:?}, {:?})", path, opts);
         let f = self.open_with(Path::new(path), &opts)?;
-        debug!("succeeded");
         Ok(Box::new(f))
     }
 
-    fn open_dir(
-        &self,
-        symlink_follow: bool,
-        path: &str,
-        create: bool,
-    ) -> Result<Box<dyn WasiDir>, Error> {
-        // XXX obey symlink_follow, create
+    fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error> {
+        // XXX obey symlink_follow
         let d = self.open_dir(Path::new(path))?;
         Ok(Box::new(d))
     }
