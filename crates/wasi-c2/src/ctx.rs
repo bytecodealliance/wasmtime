@@ -26,36 +26,23 @@ impl WasiCtx {
         }
     }
 
-    pub fn insert_file(
-        &self,
-        fd: u32,
-        file: Box<dyn WasiFile>,
-        base_caps: FileCaps,
-        inheriting_caps: FileCaps,
-    ) {
-        let e = FileEntry {
-            base_caps,
-            inheriting_caps,
-            file,
-        };
-        self.table().insert_at(fd, Box::new(e));
+    pub fn insert_file(&self, fd: u32, file: Box<dyn WasiFile>, caps: FileCaps) {
+        self.table()
+            .insert_at(fd, Box::new(FileEntry::new(caps, file)));
     }
 
     pub fn insert_dir(
         &self,
         fd: u32,
         dir: Box<dyn WasiDir>,
-        base_caps: DirCaps,
-        inheriting_caps: DirCaps,
+        caps: DirCaps,
+        file_caps: FileCaps,
         path: PathBuf,
     ) {
-        let e = DirEntry {
-            base_caps,
-            inheriting_caps,
-            preopen_path: Some(path),
-            dir,
-        };
-        self.table().insert_at(fd, Box::new(e));
+        self.table().insert_at(
+            fd,
+            Box::new(DirEntry::new(caps, file_caps, Some(path), dir)),
+        );
     }
 
     pub fn table(&self) -> RefMut<Table> {
@@ -79,8 +66,7 @@ impl WasiCtxBuilder {
         self.0.insert_file(
             0,
             f,
-            FileCaps::READ, // XXX probably more rights are ok
-            FileCaps::READ,
+            FileCaps::READ, // XXX fixme: more rights are ok, but this is read-only
         );
         self
     }
@@ -89,8 +75,7 @@ impl WasiCtxBuilder {
         self.0.insert_file(
             1,
             f,
-            FileCaps::WRITE, // XXX probably more rights are ok
-            FileCaps::WRITE,
+            FileCaps::WRITE, // XXX fixme: more rights are ok, but this is append only
         );
         self
     }
@@ -99,8 +84,7 @@ impl WasiCtxBuilder {
         self.0.insert_file(
             2,
             f,
-            FileCaps::WRITE, // XXX probably more rights are ok
-            FileCaps::WRITE,
+            FileCaps::WRITE, // XXX fixme: more rights are ok, but this is append only
         );
         self
     }
@@ -116,14 +100,14 @@ impl WasiCtxBuilder {
         dir: Box<dyn WasiDir>,
         path: impl AsRef<Path>,
     ) -> Result<&mut Self, Error> {
-        let base_caps = DirCaps::OPEN;
-        let inheriting_caps = DirCaps::OPEN;
-        self.0.table().push(Box::new(DirEntry {
-            base_caps,
-            inheriting_caps,
-            preopen_path: Some(path.as_ref().to_owned()),
+        let caps = DirCaps::OPEN | DirCaps::CREATE_FILE; // XXX more base caps
+        let file_caps = FileCaps::READ | FileCaps::WRITE; // XXX more base caps
+        self.0.table().push(Box::new(DirEntry::new(
+            caps,
+            file_caps,
+            Some(path.as_ref().to_owned()),
             dir,
-        }))?;
+        )))?;
         Ok(self)
     }
 }

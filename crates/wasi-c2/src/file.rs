@@ -98,25 +98,39 @@ pub struct Filestat {
 }
 
 pub(crate) struct FileEntry {
-    pub(crate) base_caps: FileCaps,
-    pub(crate) inheriting_caps: FileCaps,
-    pub(crate) file: Box<dyn WasiFile>,
+    caps: FileCaps,
+    file: Box<dyn WasiFile>,
 }
 
 impl FileEntry {
+    pub fn new(caps: FileCaps, file: Box<dyn WasiFile>) -> Self {
+        FileEntry { caps, file }
+    }
+
     pub fn get_cap(&self, caps: FileCaps) -> Result<&dyn WasiFile, Error> {
-        if self.base_caps.contains(&caps) && self.inheriting_caps.contains(&caps) {
+        if self.caps.contains(&caps) {
             Ok(self.file.deref())
         } else {
-            Err(Error::FileNotCapable(caps))
+            Err(Error::FileNotCapable {
+                desired: caps,
+                has: self.caps,
+            })
+        }
+    }
+
+    pub fn drop_caps_to(&mut self, caps: FileCaps) -> Result<(), Error> {
+        if self.caps.contains(&caps) {
+            self.caps = caps;
+            Ok(())
+        } else {
+            Err(Error::NotCapable)
         }
     }
 
     pub fn get_fdstat(&self) -> Result<FdStat, Error> {
         Ok(FdStat {
             filetype: self.file.get_filetype()?,
-            base_caps: self.base_caps,
-            inheriting_caps: self.inheriting_caps,
+            caps: self.caps,
             flags: self.file.get_fdflags()?,
         })
     }
@@ -135,6 +149,13 @@ impl FileCaps {
     /// Checks if `other` is a subset of those capabilties:
     pub fn contains(&self, other: &Self) -> bool {
         self.flags & other.flags == other.flags
+    }
+
+    /// Intersection of two sets of flags (bitwise and)
+    pub fn intersection(&self, rhs: &Self) -> Self {
+        FileCaps {
+            flags: self.flags & rhs.flags,
+        }
     }
 
     pub const DATASYNC: Self = FileCaps { flags: 1 };
@@ -168,8 +189,7 @@ impl std::fmt::Display for FileCaps {
 
 pub struct FdStat {
     pub filetype: Filetype,
-    pub base_caps: FileCaps,
-    pub inheriting_caps: FileCaps,
+    pub caps: FileCaps,
     pub flags: FdFlags,
 }
 

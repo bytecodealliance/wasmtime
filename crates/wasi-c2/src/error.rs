@@ -17,12 +17,12 @@ pub enum Error {
     GetRandom(#[from] getrandom::Error),
 
     /// Errno::Notcapable: Extension: Capabilities insufficient
-    #[error("File not capable: {0}")]
-    FileNotCapable(FileCaps),
+    #[error("File not capable: desired {desired}, has {has}")]
+    FileNotCapable { desired: FileCaps, has: FileCaps },
 
     /// Errno::Notcapable: Extension: Capabilities insufficient
-    #[error("Directory not capable: {0}")]
-    DirNotCapable(DirCaps),
+    #[error("Directory not capable: desired {desired}, has {has}")]
+    DirNotCapable { desired: DirCaps, has: DirCaps },
 
     /// Idk what the deal with this guy is yet
     #[error("Table overflow")]

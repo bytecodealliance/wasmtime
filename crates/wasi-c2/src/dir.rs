@@ -4,7 +4,6 @@ use crate::error::Error;
 use crate::file::{FileCaps, OFlags, WasiFile};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use tracing::debug;
 
 pub trait WasiDir {
     fn open_file(
@@ -24,26 +23,59 @@ pub trait WasiDir {
 }
 
 pub(crate) struct DirEntry {
-    pub(crate) base_caps: DirCaps,
-    pub(crate) inheriting_caps: DirCaps,
-    pub(crate) preopen_path: Option<PathBuf>, // precondition: PathBuf is valid unicode
-    pub(crate) dir: Box<dyn WasiDir>,
+    caps: DirCaps,
+    file_caps: FileCaps,
+    preopen_path: Option<PathBuf>, // precondition: PathBuf is valid unicode
+    dir: Box<dyn WasiDir>,
 }
 
 impl DirEntry {
-    pub fn get_cap(&self, caps: DirCaps) -> Result<&dyn WasiDir, Error> {
-        if self.base_caps.contains(&caps) && self.inheriting_caps.contains(&caps) {
-            Ok(self.dir.deref())
-        } else {
-            Err(Error::DirNotCapable(caps))
+    pub fn new(
+        caps: DirCaps,
+        file_caps: FileCaps,
+        preopen_path: Option<PathBuf>,
+        dir: Box<dyn WasiDir>,
+    ) -> Self {
+        DirEntry {
+            caps,
+            file_caps,
+            preopen_path,
+            dir,
         }
     }
-
+    pub fn get_cap(&self, caps: DirCaps) -> Result<&dyn WasiDir, Error> {
+        if self.caps.contains(&caps) {
+            Ok(self.dir.deref())
+        } else {
+            Err(Error::DirNotCapable {
+                desired: caps,
+                has: self.caps,
+            })
+        }
+    }
+    pub fn drop_caps_to(&mut self, caps: DirCaps, file_caps: FileCaps) -> Result<(), Error> {
+        if self.caps.contains(&caps) && self.file_caps.contains(&file_caps) {
+            self.caps = caps;
+            self.file_caps = file_caps;
+            Ok(())
+        } else {
+            Err(Error::NotCapable)
+        }
+    }
+    pub fn child_dir_caps(&self, desired_caps: DirCaps) -> DirCaps {
+        self.caps.intersection(&desired_caps)
+    }
+    pub fn child_file_caps(&self, desired_caps: FileCaps) -> FileCaps {
+        self.file_caps.intersection(&desired_caps)
+    }
     pub fn get_dirstat(&self) -> DirStat {
         DirStat {
-            base_caps: self.base_caps,
-            inheriting_caps: self.inheriting_caps,
+            dir_caps: self.caps,
+            file_caps: self.file_caps,
         }
+    }
+    pub fn preopen_path(&self) -> &Option<PathBuf> {
+        &self.preopen_path
     }
 }
 
@@ -62,6 +94,12 @@ impl DirCaps {
         self.flags & other.flags == other.flags
     }
 
+    /// Intersection of two sets of flags (bitwise and)
+    pub fn intersection(&self, rhs: &Self) -> Self {
+        DirCaps {
+            flags: self.flags & rhs.flags,
+        }
+    }
     pub const CREATE_DIRECTORY: Self = DirCaps { flags: 1 };
     pub const CREATE_FILE: Self = DirCaps { flags: 2 };
     pub const LINK_SOURCE: Self = DirCaps { flags: 4 };
@@ -86,8 +124,8 @@ impl std::ops::BitOr for DirCaps {
 }
 
 pub struct DirStat {
-    pub base_caps: DirCaps,
-    pub inheriting_caps: DirCaps,
+    pub file_caps: FileCaps,
+    pub dir_caps: DirCaps,
 }
 
 impl std::fmt::Display for DirCaps {

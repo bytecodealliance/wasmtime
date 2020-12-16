@@ -178,7 +178,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         } else if table.is::<DirEntry>(fd) {
             // We cannot close preopened directories
             let dir_entry: RefMut<DirEntry> = table.get(fd).unwrap();
-            if dir_entry.preopen_path.is_some() {
+            if dir_entry.preopen_path().is_some() {
                 return Err(Error::Notsup);
             }
             drop(dir_entry);
@@ -230,17 +230,18 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         fs_rights_inheriting: types::Rights,
     ) -> Result<(), Error> {
         let table = self.table();
-        let mut file_entry: RefMut<FileEntry> = table.get(u32::from(fd))?;
-        let base_caps = FileCaps::try_from(&fs_rights_base)?;
-        let inheriting_caps = FileCaps::try_from(&fs_rights_inheriting)?;
-        if file_entry.base_caps.contains(&base_caps)
-            && file_entry.inheriting_caps.contains(&inheriting_caps)
-        {
-            file_entry.base_caps = base_caps;
-            file_entry.inheriting_caps = inheriting_caps;
-            Ok(())
+        let fd = u32::from(fd);
+        if table.is::<FileEntry>(fd) {
+            let mut file_entry: RefMut<FileEntry> = table.get(fd)?;
+            let file_caps = FileCaps::from(&fs_rights_base);
+            file_entry.drop_caps_to(file_caps)
+        } else if table.is::<DirEntry>(fd) {
+            let mut dir_entry: RefMut<DirEntry> = table.get(fd)?;
+            let dir_caps = DirCaps::from(&fs_rights_base);
+            let file_caps = FileCaps::from(&fs_rights_inheriting);
+            dir_entry.drop_caps_to(dir_caps, file_caps)
         } else {
-            Err(Error::NotCapable)
+            Err(Error::Badf)
         }
     }
 
@@ -412,7 +413,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     fn fd_prestat_get(&self, fd: types::Fd) -> Result<types::Prestat, Error> {
         let table = self.table();
         let dir_entry: RefMut<DirEntry> = table.get(u32::from(fd)).map_err(|_| Error::Badf)?;
-        if let Some(ref preopen) = dir_entry.preopen_path {
+        if let Some(ref preopen) = dir_entry.preopen_path() {
             let path_str = preopen.to_str().ok_or(Error::Notsup)?;
             let pr_name_len =
                 u32::try_from(path_str.as_bytes().len()).map_err(|_| Error::Overflow)?;
@@ -430,7 +431,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<(), Error> {
         let table = self.table();
         let dir_entry: RefMut<DirEntry> = table.get(u32::from(fd)).map_err(|_| Error::Notdir)?;
-        if let Some(ref preopen) = dir_entry.preopen_path {
+        if let Some(ref preopen) = dir_entry.preopen_path() {
             let path_bytes = preopen.to_str().ok_or(Error::Notsup)?.as_bytes();
             let path_len = path_bytes.len();
             if path_len < path_max_len as usize {
@@ -573,7 +574,6 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<types::Fd, Error> {
         let mut table = self.table();
         let dir_entry: RefMut<DirEntry> = table.get(u32::from(dirfd))?;
-        let dir = dir_entry.get_cap(DirCaps::OPEN)?;
 
         let symlink_follow = dirflags.contains(&types::Lookupflags::SYMLINK_FOLLOW);
 
@@ -587,33 +587,28 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             {
                 return Err(Error::Inval);
             }
+            let dir = dir_entry.get_cap(DirCaps::OPEN)?;
             let child_dir = dir.open_dir(symlink_follow, path.deref())?;
-
-            let base_caps = DirCaps::from(&fs_rights_base);
-            let inheriting_caps = DirCaps::from(&fs_rights_inheriting);
+            let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_base));
+            let dir_caps = dir_entry.child_dir_caps(DirCaps::from(&fs_rights_inheriting));
             drop(dir);
             drop(dir_entry);
-            let fd = table.push(Box::new(DirEntry {
-                dir: child_dir,
-                base_caps,
-                inheriting_caps,
-                preopen_path: None,
-            }))?;
+            let fd = table.push(Box::new(DirEntry::new(
+                dir_caps, file_caps, None, child_dir,
+            )))?;
             Ok(types::Fd::from(fd))
         } else {
-            // XXX go back and check these caps conversions - probably need to validate them
-            // against ???
-            let base_caps = FileCaps::from(&fs_rights_base);
-            let inheriting_caps = FileCaps::from(&fs_rights_inheriting);
+            let mut required_caps = DirCaps::OPEN;
+            if oflags.contains(&OFlags::CREATE) {
+                required_caps = required_caps | DirCaps::CREATE_FILE;
+            }
 
-            let file = dir.open_file(symlink_follow, path.deref(), oflags, base_caps)?;
+            let dir = dir_entry.get_cap(required_caps)?;
+            let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_base));
+            let file = dir.open_file(symlink_follow, path.deref(), oflags, file_caps)?;
             drop(dir);
             drop(dir_entry);
-            let fd = table.push(Box::new(FileEntry {
-                file,
-                base_caps,
-                inheriting_caps,
-            }))?;
+            let fd = table.push(Box::new(FileEntry::new(file_caps, file)))?;
             Ok(types::Fd::from(fd))
         }
     }
@@ -724,8 +719,8 @@ impl From<&FdStat> for types::Fdstat {
     fn from(fdstat: &FdStat) -> types::Fdstat {
         types::Fdstat {
             fs_filetype: types::Filetype::from(&fdstat.filetype),
-            fs_rights_base: types::Rights::from(&fdstat.base_caps),
-            fs_rights_inheriting: types::Rights::from(&fdstat.inheriting_caps),
+            fs_rights_base: types::Rights::from(&fdstat.caps),
+            fs_rights_inheriting: types::Rights::empty(),
             fs_flags: types::Fdflags::from(&fdstat.flags),
         }
     }
@@ -735,8 +730,8 @@ impl From<&DirStat> for types::Fdstat {
     fn from(dirstat: &DirStat) -> types::Fdstat {
         types::Fdstat {
             fs_filetype: types::Filetype::Directory,
-            fs_rights_base: types::Rights::from(&dirstat.base_caps),
-            fs_rights_inheriting: types::Rights::from(&dirstat.inheriting_caps),
+            fs_rights_base: types::Rights::from(&dirstat.file_caps),
+            fs_rights_inheriting: types::Rights::from(&dirstat.dir_caps),
             fs_flags: types::Fdflags::empty(),
         }
     }
