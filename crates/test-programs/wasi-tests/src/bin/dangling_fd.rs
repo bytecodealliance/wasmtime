@@ -5,16 +5,35 @@ use wasi_tests::open_scratch_directory;
 unsafe fn test_dangling_fd(dir_fd: wasi::Fd) {
     // Create a file, open it, delete it without closing the handle,
     // and then try creating it again
-    let fd = wasi::path_open(dir_fd, 0, "file", wasi::OFLAGS_CREAT, 0, 0, 0).unwrap();
+    let fd = wasi::path_open(
+        dir_fd,
+        0,
+        "file",
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_WRITE,
+        0,
+        0,
+    )
+    .unwrap();
     wasi::fd_close(fd).unwrap();
-    let file_fd = wasi::path_open(dir_fd, 0, "file", 0, 0, 0, 0).expect("failed to open");
+    let file_fd =
+        wasi::path_open(dir_fd, 0, "file", 0, wasi::RIGHTS_FD_READ, 0, 0).expect("failed to open");
     assert_gt!(
         file_fd,
         libc::STDERR_FILENO as wasi::Fd,
         "file descriptor range check",
     );
     wasi::path_unlink_file(dir_fd, "file").expect("failed to unlink");
-    let fd = wasi::path_open(dir_fd, 0, "file", wasi::OFLAGS_CREAT, 0, 0, 0).unwrap();
+    let fd = wasi::path_open(
+        dir_fd,
+        0,
+        "file",
+        wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_WRITE,
+        0,
+        0,
+    )
+    .unwrap();
     wasi::fd_close(fd).unwrap();
 
     // Now, repeat the same process but for a directory
