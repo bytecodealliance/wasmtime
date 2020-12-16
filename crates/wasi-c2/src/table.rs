@@ -1,6 +1,6 @@
 use crate::Error;
 use std::any::Any;
-use std::cell::{RefCell, RefMut};
+use std::cell::{Ref, RefCell, RefMut};
 use std::collections::HashMap;
 
 pub struct Table {
@@ -49,12 +49,28 @@ impl Table {
             false
         }
     }
-    // Todo: we can refine these errors and translate them to Exist at abi
-    pub fn get<T: Any + Sized>(&self, key: u32) -> Result<RefMut<T>, Error> {
+
+    pub fn get<T: Any + Sized>(&self, key: u32) -> Result<Ref<T>, Error> {
         if let Some(refcell) = self.map.get(&key) {
-            if let Ok(refmut) = refcell.try_borrow_mut() {
-                if refmut.is::<T>() {
-                    Ok(RefMut::map(refmut, |r| r.downcast_mut::<T>().unwrap()))
+            if let Ok(r) = refcell.try_borrow() {
+                if r.is::<T>() {
+                    Ok(Ref::map(r, |r| r.downcast_ref::<T>().unwrap()))
+                } else {
+                    Err(Error::Exist) // Exists at another type
+                }
+            } else {
+                Err(Error::Exist) // Does exist, but borrowed
+            }
+        } else {
+            Err(Error::Exist) // Does not exist
+        }
+    }
+
+    pub fn get_mut<T: Any + Sized>(&self, key: u32) -> Result<RefMut<T>, Error> {
+        if let Some(refcell) = self.map.get(&key) {
+            if let Ok(r) = refcell.try_borrow_mut() {
+                if r.is::<T>() {
+                    Ok(RefMut::map(r, |r| r.downcast_mut::<T>().unwrap()))
                 } else {
                     Err(Error::Exist) // Exists at another type
                 }

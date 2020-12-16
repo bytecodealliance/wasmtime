@@ -13,18 +13,14 @@ pub trait WasiDir {
         oflags: OFlags,
         caps: FileCaps,
     ) -> Result<Box<dyn WasiFile>, Error>;
-
     fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error>;
-
     fn create_dir(&self, path: &str) -> Result<(), Error>;
-
     fn readdir(
         &self,
         cursor: ReaddirCursor,
     ) -> Result<Box<dyn Iterator<Item = Result<(ReaddirEntity, String), Error>>>, Error>;
-
+    fn symlink(&self, old_path: &str, new_path: &str) -> Result<(), Error>;
     fn remove_dir(&self, path: &str) -> Result<(), Error>;
-
     fn unlink_file(&self, path: &str) -> Result<(), Error>;
 }
 
@@ -166,7 +162,7 @@ pub trait TableDirExt {
 impl TableDirExt for crate::table::Table {
     fn is_preopen(&self, fd: u32) -> bool {
         if self.is::<DirEntry>(fd) {
-            let dir_entry: std::cell::RefMut<DirEntry> = self.get(fd).unwrap();
+            let dir_entry: std::cell::Ref<DirEntry> = self.get(fd).unwrap();
             dir_entry.preopen_path.is_some()
         } else {
             false
@@ -220,15 +216,14 @@ impl WasiDir for cap_std::fs::Dir {
         if oflags.contains(&OFlags::TRUNCATE) {
             opts.truncate(true);
         }
-        if caps.contains(&FileCaps::READ) {
-            opts.read(true);
-        }
         if caps.contains(&FileCaps::WRITE)
             || caps.contains(&FileCaps::DATASYNC)
             || caps.contains(&FileCaps::ALLOCATE)
             || caps.contains(&FileCaps::FILESTAT_SET_SIZE)
         {
             opts.write(true);
+        } else {
+            opts.read(true);
         }
         if symlink_follow {
             opts.follow(FollowSymlinks::Yes);
@@ -287,6 +282,10 @@ impl WasiDir for cap_std::fs::Dir {
         })))
     }
 
+    fn symlink(&self, src_path: &str, dest_path: &str) -> Result<(), Error> {
+        self.symlink(Path::new(src_path), Path::new(dest_path))?;
+        Ok(())
+    }
     fn remove_dir(&self, path: &str) -> Result<(), Error> {
         self.remove_dir(Path::new(path))?;
         Ok(())
