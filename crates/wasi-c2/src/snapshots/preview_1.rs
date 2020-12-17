@@ -1024,6 +1024,27 @@ impl From<&OFlags> for types::Oflags {
 }
 impl From<Filestat> for types::Filestat {
     fn from(stat: Filestat) -> types::Filestat {
-        todo!()
+        types::Filestat {
+            dev: stat.device_id,
+            ino: stat.inode,
+            filetype: types::Filetype::from(&stat.filetype),
+            nlink: stat.nlink,
+            size: stat.size,
+            atim: stat
+                .atim
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos() as u64,
+            mtim: stat
+                .mtim
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos() as u64,
+            ctim: stat
+                .ctim
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos() as u64,
+        }
     }
 }

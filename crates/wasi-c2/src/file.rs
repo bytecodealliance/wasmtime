@@ -87,14 +87,14 @@ impl std::ops::BitOr for OFlags {
 
 #[derive(Debug, Clone)]
 pub struct Filestat {
-    device_id: u64,
-    inode: u64,
-    filetype: Filetype,
-    nlink: u64,
-    size: u64,
-    atim: std::time::SystemTime,
-    mtim: std::time::SystemTime,
-    ctim: std::time::SystemTime,
+    pub device_id: u64,
+    pub inode: u64,
+    pub filetype: Filetype,
+    pub nlink: u64,
+    pub size: u64,
+    pub atim: std::time::SystemTime,
+    pub mtim: std::time::SystemTime,
+    pub ctim: std::time::SystemTime,
 }
 
 pub(crate) struct FileEntry {
@@ -232,7 +232,7 @@ impl WasiFile for cap_std::fs::File {
     fn get_oflags(&self) -> Result<OFlags, Error> {
         todo!("get_oflags is not implemented");
     }
-    fn set_oflags(&self, flags: OFlags) -> Result<(), Error> {
+    fn set_oflags(&self, _flags: OFlags) -> Result<(), Error> {
         todo!("set_oflags is not implemented");
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
@@ -244,9 +244,19 @@ impl WasiFile for cap_std::fs::File {
             filetype: self.get_filetype()?,
             nlink: meta.nlink(),
             size: meta.len(),
-            atim: meta.accessed()?.into_std(),
-            mtim: meta.modified()?.into_std(),
-            ctim: meta.created()?.into_std(),
+            // XXX handle these features not being available better:
+            atim: meta
+                .accessed()
+                .map(|t| t.into_std())
+                .unwrap_or_else(|_| std::time::SystemTime::UNIX_EPOCH),
+            mtim: meta
+                .modified()
+                .map(|t| t.into_std())
+                .unwrap_or_else(|_| std::time::SystemTime::UNIX_EPOCH),
+            ctim: meta
+                .created()
+                .map(|t| t.into_std())
+                .unwrap_or_else(|_| std::time::SystemTime::UNIX_EPOCH),
         })
     }
     fn set_filestat_size(&self, size: u64) -> Result<(), Error> {
