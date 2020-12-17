@@ -22,6 +22,19 @@ jobs:
     - run: rustup component add rustfmt
     - run: cargo fmt --all -- --check
 
+  # Lint dependency graph for security advisories, duplicate versions, and
+  # incompatible licences
+  cargo_deny:
+    name: Cargo deny
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - run: cargo install cargo-deny
+    - run: cargo deny check
+
   # Build `mdBook` documentation for `wasmtime`, and upload it as a temporary
   # build artifact
   doc_book:
