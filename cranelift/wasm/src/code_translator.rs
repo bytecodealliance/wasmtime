@@ -1810,7 +1810,20 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, I16X8, builder);
             state.push1(builder.ins().widening_pairwise_dot_product_s(a, b));
         }
-
+        Operator::I16x8ExtMulLowI8x16S
+        | Operator::I16x8ExtMulHighI8x16S
+        | Operator::I16x8ExtMulLowI8x16U
+        | Operator::I16x8ExtMulHighI8x16U
+        | Operator::I32x4ExtMulLowI16x8S
+        | Operator::I32x4ExtMulHighI16x8S
+        | Operator::I32x4ExtMulLowI16x8U
+        | Operator::I32x4ExtMulHighI16x8U
+        | Operator::I64x2ExtMulLowI32x4S
+        | Operator::I64x2ExtMulHighI32x4S
+        | Operator::I64x2ExtMulLowI32x4U
+        | Operator::I64x2ExtMulHighI32x4U => {
+            return Err(wasm_unsupported!("proposed simd operator {:?}", op));
+        }
         Operator::ReturnCall { .. } | Operator::ReturnCallIndirect { .. } => {
             return Err(wasm_unsupported!("proposed tail-call operator {:?}", op));
         }

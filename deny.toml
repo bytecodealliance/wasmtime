@@ -37,12 +37,10 @@ deny = []
 
 # Skip some multiple-versions checks, until they can be fixed.
 skip = [
-    { name = "ansi_term" },
-    { name = "cfg-if" },
-    { name = "env_logger" },
-    { name = "getrandom" },
-    { name = "humantime" },
-    { name = "memoffset" },
-    { name = "wasmparser" },
-    { name = "wast" },
+    { name = "ansi_term" }, # transitive dependencies only
+    { name = "cfg-if" }, # transitive dependencies use 0.1
+    { name = "env_logger" }, # pretty_env_logger and file-per-thread-logger depend on 0.7
+    { name = "humantime" }, # caused by env_logger
+    { name = "getrandom" }, # rand not updates to 0.2 yet
+    { name = "wast" }, # old one pulled in by witx
 ]
