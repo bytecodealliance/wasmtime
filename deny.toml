@@ -42,6 +42,5 @@ skip = [
     { name = "env_logger" }, # pretty_env_logger and file-per-thread-logger depend on 0.7
     { name = "humantime" }, # caused by env_logger
     { name = "getrandom" }, # rand not updates to 0.2 yet
-    { name = "wasmparser" }, # rapid development, some 0.70 and 0.71
     { name = "wast" }, # old one pulled in by witx
 ]
