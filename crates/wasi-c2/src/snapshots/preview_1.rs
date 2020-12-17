@@ -786,13 +786,13 @@ impl From<&FileCaps> for types::Rights {
             rights = rights | types::Rights::FD_ALLOCATE;
         }
         if caps.contains(&FileCaps::FILESTAT_GET) {
-            rights = rights | types::Rights::PATH_FILESTAT_GET;
+            rights = rights | types::Rights::FD_FILESTAT_GET;
         }
         if caps.contains(&FileCaps::FILESTAT_SET_SIZE) {
-            rights = rights | types::Rights::PATH_FILESTAT_SET_SIZE;
+            rights = rights | types::Rights::FD_FILESTAT_SET_SIZE;
         }
         if caps.contains(&FileCaps::FILESTAT_SET_TIMES) {
-            rights = rights | types::Rights::PATH_FILESTAT_SET_TIMES;
+            rights = rights | types::Rights::FD_FILESTAT_SET_TIMES;
         }
         rights
     }
@@ -823,16 +823,19 @@ impl From<&types::Rights> for FileCaps {
         if rights.contains(&types::Rights::FD_WRITE) {
             caps = caps | FileCaps::WRITE;
         }
+        if rights.contains(&types::Rights::FD_ADVISE) {
+            caps = caps | FileCaps::ADVISE;
+        }
         if rights.contains(&types::Rights::FD_ALLOCATE) {
             caps = caps | FileCaps::ALLOCATE;
         }
-        if rights.contains(&types::Rights::PATH_FILESTAT_GET) {
+        if rights.contains(&types::Rights::FD_FILESTAT_GET) {
             caps = caps | FileCaps::FILESTAT_GET;
         }
-        if rights.contains(&types::Rights::PATH_FILESTAT_SET_SIZE) {
+        if rights.contains(&types::Rights::FD_FILESTAT_SET_SIZE) {
             caps = caps | FileCaps::FILESTAT_SET_SIZE;
         }
-        if rights.contains(&types::Rights::PATH_FILESTAT_SET_TIMES) {
+        if rights.contains(&types::Rights::FD_FILESTAT_SET_TIMES) {
             caps = caps | FileCaps::FILESTAT_SET_TIMES;
         }
         caps

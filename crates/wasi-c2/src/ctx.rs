@@ -101,7 +101,7 @@ impl WasiCtxBuilder {
         path: impl AsRef<Path>,
     ) -> Result<&mut Self, Error> {
         let caps = DirCaps::all();
-        let file_caps = FileCaps::READ | FileCaps::WRITE; // XXX more base caps
+        let file_caps = FileCaps::all();
         self.0.table().push(Box::new(DirEntry::new(
             caps,
             file_caps,
