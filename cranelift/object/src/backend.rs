@@ -145,6 +145,18 @@ impl ObjectModule {
     }
 }
 
+fn validate_symbol(name: &str) -> ModuleResult<()> {
+    // null bytes are not allowed in symbol names and will cause the `object`
+    // crate to panic. Let's return a clean error instead.
+    if name.contains("\0") {
+        return Err(ModuleError::Backend(anyhow::anyhow!(
+            "Symbol {:?} has a null byte, which is disallowed",
+            name
+        )));
+    }
+    Ok(())
+}
+
 impl Module for ObjectModule {
     fn isa(&self) -> &dyn TargetIsa {
         &*self.isa
@@ -160,6 +172,8 @@ impl Module for ObjectModule {
         linkage: Linkage,
         signature: &ir::Signature,
     ) -> ModuleResult<FuncId> {
+        validate_symbol(name)?;
+
         let (id, decl) = self
             .declarations
             .declare_function(name, linkage, signature)?;
@@ -194,6 +208,8 @@ impl Module for ObjectModule {
         writable: bool,
         tls: bool,
     ) -> ModuleResult<DataId> {
+        validate_symbol(name)?;
+
         let (id, decl) = self
             .declarations
             .declare_data(name, linkage, writable, tls)?;
