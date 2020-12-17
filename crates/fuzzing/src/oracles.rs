@@ -40,17 +40,6 @@ fn log_wasm(wasm: &[u8]) {
     }
 }
 
-fn log_wat(wat: &str) {
-    if !log::log_enabled!(log::Level::Debug) {
-        return;
-    }
-
-    let i = CNT.fetch_add(1, SeqCst);
-    let name = format!("testcase{}.wat", i);
-    log::debug!("wrote wat file to `{}`", name);
-    std::fs::write(&name, wat).expect("failed to write wat file");
-}
-
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
 /// panic or segfault or anything else that can be detected "passively".
 ///
@@ -418,9 +407,9 @@ pub fn table_ops(config: crate::generators::Config, ops: crate::generators::tabl
         let engine = Engine::new(&config);
         let store = Store::new(&engine);
 
-        let wat = ops.to_wat_string();
-        log_wat(&wat);
-        let module = match Module::new(&engine, &wat) {
+        let wasm = ops.to_wasm_binary();
+        log_wasm(&wasm);
+        let module = match Module::new(&engine, &wasm) {
             Ok(m) => m,
             Err(_) => return,
         };

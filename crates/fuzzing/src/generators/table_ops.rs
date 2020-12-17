@@ -1,8 +1,11 @@
 //! Generating series of `table.get` and `table.set` operations.
 
 use arbitrary::Arbitrary;
-use std::fmt::Write;
 use std::ops::Range;
+use wasm_encoder::{
+    CodeSection, EntityType, Export, ExportSection, Function, FunctionSection, ImportSection,
+    Instruction, Limits, Module, TableSection, TableType, TypeSection, ValType,
+};
 
 /// A description of a Wasm module that makes a series of `externref` table
 /// operations.
@@ -32,7 +35,7 @@ impl TableOps {
         table_size
     }
 
-    /// Convert this into a WAT string.
+    /// Serialize this module into a Wasm binary.
     ///
     /// The module requires a single import: `(import "" "gc" (func))`. This
     /// should be a function to trigger GC.
@@ -43,32 +46,62 @@ impl TableOps {
     /// The "run" function is guaranteed to terminate (no loops or recursive
     /// calls), but is not guaranteed to avoid traps (might access out-of-bounds
     /// of the table).
-    pub fn to_wat_string(&self) -> String {
-        let mut wat = "(module\n".to_string();
+    pub fn to_wasm_binary(&self) -> Vec<u8> {
+        let mut module = Module::new();
 
         // Import the GC function.
-        wat.push_str("  (import \"\" \"gc\" (func))\n");
+        let mut imports = ImportSection::new();
+        imports.import("", Some("gc"), EntityType::Function(0));
 
         // Define our table.
-        wat.push_str("  (table $table ");
-        write!(&mut wat, "{}", self.table_size()).unwrap();
-        wat.push_str(" externref)\n");
+        let mut tables = TableSection::new();
+        tables.table(TableType {
+            element_type: ValType::ExternRef,
+            limits: Limits {
+                min: self.table_size(),
+                max: None,
+            },
+        });
+
+        // Encode the types for all functions that we are using.
+        let mut types = TypeSection::new();
+        types.function(vec![], vec![]); // 0: "gc"
+        let mut params: Vec<ValType> = Vec::with_capacity(self.num_params() as usize);
+        for _i in 0..self.num_params() {
+            params.push(ValType::ExternRef);
+        }
+        let results = vec![];
+        types.function(params, results); // 1: "run"
 
         // Define the "run" function export.
-        wat.push_str(r#"  (func (export "run") (param"#);
-        for _ in 0..self.num_params() {
-            wat.push_str(" externref");
-        }
-        wat.push_str(")\n");
-        for op in self.ops.iter().take(MAX_OPS) {
-            wat.push_str("    ");
-            op.to_wat_string(&mut wat);
-            wat.push('\n');
-        }
-        wat.push_str("  )\n");
+        let mut functions = FunctionSection::new();
+        functions.function(1);
 
-        wat.push_str(")\n");
-        wat
+        let mut exports = ExportSection::new();
+        exports.export("run", Export::Function(1));
+
+        let mut params: Vec<(u32, ValType)> = Vec::with_capacity(self.num_params() as usize);
+        for _i in 0..self.num_params() {
+            params.push((0, ValType::ExternRef));
+        }
+        let mut func = Function::new(params);
+
+        for op in self.ops.iter().take(MAX_OPS) {
+            op.insert(&mut func);
+        }
+
+        let mut code = CodeSection::new();
+        code.function(&func);
+
+        module
+            .section(&types)
+            .section(&imports)
+            .section(&functions)
+            .section(&tables)
+            .section(&exports)
+            .section(&code);
+
+        module.finish()
     }
 }
 
@@ -77,37 +110,34 @@ pub(crate) enum TableOp {
     // `(call 0)`
     Gc,
     // `(drop (table.get x))`
-    Get(u32),
+    Get(i32),
     // `(table.set x (local.get y))`
-    SetFromParam(u32, u8),
+    SetFromParam(i32, u32),
     // `(table.set x (table.get y))`
-    SetFromGet(u32, u32),
+    SetFromGet(i32, i32),
 }
 
 impl TableOp {
-    fn to_wat_string(&self, wat: &mut String) {
+    fn insert(&self, func: &mut Function) {
         match self {
             Self::Gc => {
-                wat.push_str("(call 0)");
+                func.instruction(Instruction::Call(0));
             }
             Self::Get(x) => {
-                wat.push_str("(drop (table.get $table (i32.const ");
-                write!(wat, "{}", x).unwrap();
-                wat.push_str(")))");
+                func.instruction(Instruction::I32Const(*x));
+                func.instruction(Instruction::TableGet { table: 0 });
+                func.instruction(Instruction::Drop);
             }
             Self::SetFromParam(x, y) => {
-                wat.push_str("(table.set $table (i32.const ");
-                write!(wat, "{}", x).unwrap();
-                wat.push_str(") (local.get ");
-                write!(wat, "{}", y).unwrap();
-                wat.push_str("))");
+                func.instruction(Instruction::I32Const(*x));
+                func.instruction(Instruction::LocalGet(*y));
+                func.instruction(Instruction::TableSet { table: 0 });
             }
             Self::SetFromGet(x, y) => {
-                wat.push_str("(table.set $table (i32.const ");
-                write!(wat, "{}", x).unwrap();
-                wat.push_str(") (table.get $table (i32.const ");
-                write!(wat, "{}", y).unwrap();
-                wat.push_str(")))");
+                func.instruction(Instruction::I32Const(*x));
+                func.instruction(Instruction::I32Const(*y));
+                func.instruction(Instruction::TableGet { table: 0 });
+                func.instruction(Instruction::TableSet { table: 0 });
             }
         }
     }
@@ -132,17 +162,26 @@ mod tests {
 
         let expected = r#"
 (module
-  (import "" "gc" (func))
-  (table $table 10 externref)
-  (func (export "run") (param externref externref)
-    (call 0)
-    (drop (table.get $table (i32.const 0)))
-    (table.set $table (i32.const 1) (local.get 2))
-    (table.set $table (i32.const 3) (table.get $table (i32.const 4)))
-  )
-)
+  (type (;0;) (func))
+  (type (;1;) (func (param externref externref)))
+  (import "" "gc" (func (;0;) (type 0)))
+  (func (;1;) (type 1) (param externref externref)
+    call 0
+    i32.const 0
+    table.get 0
+    drop
+    i32.const 1
+    local.get 2
+    table.set 0
+    i32.const 3
+    i32.const 4
+    table.get 0
+    table.set 0)
+  (table (;0;) 10 externref)
+  (export "run" (func 1)))
 "#;
-        let actual = ops.to_wat_string();
+        let actual = ops.to_wasm_binary();
+        let actual = wasmprinter::print_bytes(&actual).unwrap();
         assert_eq!(actual.trim(), expected.trim());
     }
 }

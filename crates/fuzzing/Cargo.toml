@@ -17,6 +17,7 @@ wasmparser = "0.70"
 wasmprinter = "0.2.17"
 wasmtime = { path = "../wasmtime" }
 wasmtime-wast = { path = "../wast" }
+wasm-encoder = "0.2"
 wasm-smith = "0.3.0"
 wasmi = "0.7.0"
 

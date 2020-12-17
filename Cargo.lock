@@ -2609,6 +2609,7 @@ dependencies = [
  "env_logger 0.8.1",
  "log",
  "rayon",
+ "wasm-encoder",
  "wasm-smith",
  "wasmi",
  "wasmparser 0.70.0",
