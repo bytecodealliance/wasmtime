@@ -286,7 +286,7 @@ jobs:
 
     # Test debug (DWARF) related functionality.
     - run: |
-        sudo apt-get install -y gdb
+        sudo apt-get update && sudo apt-get install -y gdb
         cargo test test_debug_dwarf -- --ignored --test-threads 1
       if: matrix.os == 'ubuntu-latest'
       env:
