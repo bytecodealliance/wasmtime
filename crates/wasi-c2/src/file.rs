@@ -92,9 +92,9 @@ pub struct Filestat {
     pub filetype: Filetype,
     pub nlink: u64,
     pub size: u64,
-    pub atim: std::time::SystemTime,
-    pub mtim: std::time::SystemTime,
-    pub ctim: std::time::SystemTime,
+    pub atim: Option<std::time::SystemTime>,
+    pub mtim: Option<std::time::SystemTime>,
+    pub ctim: Option<std::time::SystemTime>,
 }
 
 pub(crate) struct FileEntry {
@@ -244,19 +244,9 @@ impl WasiFile for cap_std::fs::File {
             filetype: self.get_filetype()?,
             nlink: meta.nlink(),
             size: meta.len(),
-            // XXX handle these features not being available better:
-            atim: meta
-                .accessed()
-                .map(|t| t.into_std())
-                .unwrap_or_else(|_| std::time::SystemTime::UNIX_EPOCH),
-            mtim: meta
-                .modified()
-                .map(|t| t.into_std())
-                .unwrap_or_else(|_| std::time::SystemTime::UNIX_EPOCH),
-            ctim: meta
-                .created()
-                .map(|t| t.into_std())
-                .unwrap_or_else(|_| std::time::SystemTime::UNIX_EPOCH),
+            atim: meta.accessed().map(|t| Some(t.into_std())).unwrap_or(None),
+            mtim: meta.modified().map(|t| Some(t.into_std())).unwrap_or(None),
+            ctim: meta.created().map(|t| Some(t.into_std())).unwrap_or(None),
         })
     }
     fn set_filestat_size(&self, size: u64) -> Result<(), Error> {

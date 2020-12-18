@@ -1034,19 +1034,16 @@ impl From<Filestat> for types::Filestat {
             size: stat.size,
             atim: stat
                 .atim
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos() as u64,
+                .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64)
+                .unwrap_or(0),
             mtim: stat
                 .mtim
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos() as u64,
+                .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64)
+                .unwrap_or(0),
             ctim: stat
                 .ctim
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos() as u64,
+                .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64)
+                .unwrap_or(0),
         }
     }
 }
