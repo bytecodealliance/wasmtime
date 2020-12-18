@@ -54,7 +54,7 @@ or `cargo run --bin wasmtime foo.wasm`.
 
 The polyfill is online [here](https://wasi.dev/polyfill/).
 
-The source is [here](https://github.com/bytecodealliance/wasmtime/tree/main/crates/wasi-c/js-polyfill).
+The source is [here](#FIXME).
 
 ## Where can I learn more?
 
