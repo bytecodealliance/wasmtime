@@ -593,8 +593,8 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             }
             let dir = dir_entry.get_cap(DirCaps::OPEN)?;
             let child_dir = dir.open_dir(symlink_follow, path.deref())?;
-            let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_base));
-            let dir_caps = dir_entry.child_dir_caps(DirCaps::from(&fs_rights_inheriting));
+            let dir_caps = dir_entry.child_dir_caps(DirCaps::from(&fs_rights_base));
+            let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_inheriting));
             drop(dir);
             drop(dir_entry);
             let fd = table.push(Box::new(DirEntry::new(
@@ -745,10 +745,12 @@ impl From<&FdStat> for types::Fdstat {
 
 impl From<&DirStat> for types::Fdstat {
     fn from(dirstat: &DirStat) -> types::Fdstat {
+        let fs_rights_base = types::Rights::from(&dirstat.dir_caps);
+        let fs_rights_inheriting = types::Rights::from(&dirstat.file_caps);
         types::Fdstat {
             fs_filetype: types::Filetype::Directory,
-            fs_rights_base: types::Rights::from(&dirstat.file_caps),
-            fs_rights_inheriting: types::Rights::from(&dirstat.dir_caps),
+            fs_rights_base,
+            fs_rights_inheriting,
             fs_flags: types::Fdflags::empty(),
         }
     }
