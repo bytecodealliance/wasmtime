@@ -644,7 +644,23 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         buf: &GuestPtr<u8>,
         buf_len: types::Size,
     ) -> Result<types::Size, Error> {
-        unimplemented!()
+        let table = self.table();
+        let dir_entry: Ref<DirEntry> = table.get(u32::from(dirfd))?;
+        let dir = dir_entry.get_cap(DirCaps::READLINK)?;
+        let path = path.as_str()?;
+        let link = dir
+            .read_link(path.deref())?
+            .into_os_string()
+            .into_string()
+            .map_err(|_| Error::Utf8(todo!()))?;
+        let link_bytes = link.as_bytes();
+        let link_len = link_bytes.len();
+        if link_len > buf_len as usize {
+            return Err(Error::Nametoolong);
+        }
+        let mut buf = buf.as_array(link_len as u32).as_slice_mut()?;
+        buf.copy_from_slice(link_bytes);
+        Ok(link_len as types::Size)
     }
 
     fn path_remove_directory(
@@ -666,6 +682,8 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         new_fd: types::Fd,
         new_path: &GuestPtr<'_, str>,
     ) -> Result<(), Error> {
+        // XXX: Dir::rename requires (to_dir: &Self), but in the table we just have a dyn WasiDir.
+        // The downcast isn't possible.
         unimplemented!()
     }
 

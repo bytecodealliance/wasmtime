@@ -22,6 +22,7 @@ pub trait WasiDir {
     fn symlink(&self, old_path: &str, new_path: &str) -> Result<(), Error>;
     fn remove_dir(&self, path: &str) -> Result<(), Error>;
     fn unlink_file(&self, path: &str) -> Result<(), Error>;
+    fn read_link(&self, path: &str) -> Result<PathBuf, Error>;
 }
 
 pub(crate) struct DirEntry {
@@ -303,5 +304,9 @@ impl WasiDir for cap_std::fs::Dir {
     fn unlink_file(&self, path: &str) -> Result<(), Error> {
         self.remove_file(Path::new(path))?;
         Ok(())
+    }
+    fn read_link(&self, path: &str) -> Result<PathBuf, Error> {
+        let link = self.read_link(Path::new(path))?;
+        Ok(link)
     }
 }
