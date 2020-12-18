@@ -38,12 +38,33 @@ impl types::UserErrorConversion for WasiCtx {
 
 impl From<Error> for types::Errno {
     fn from(e: Error) -> types::Errno {
+        use std::io::ErrorKind;
         use types::Errno;
         match e {
             Error::Guest(e) => e.into(),
             Error::TryFromInt(_) => Errno::Overflow,
             Error::Utf8(_) => Errno::Ilseq,
-            Error::UnexpectedIo(_) => Errno::Io,
+            Error::UnexpectedIo(e) => match e.kind() {
+                ErrorKind::NotFound => Errno::Noent,
+                ErrorKind::PermissionDenied => Errno::Perm,
+                ErrorKind::AlreadyExists => Errno::Exist,
+                ErrorKind::InvalidInput => Errno::Ilseq,
+                ErrorKind::ConnectionRefused
+                | ErrorKind::ConnectionReset
+                | ErrorKind::ConnectionAborted
+                | ErrorKind::NotConnected
+                | ErrorKind::AddrInUse
+                | ErrorKind::AddrNotAvailable
+                | ErrorKind::BrokenPipe
+                | ErrorKind::WouldBlock
+                | ErrorKind::InvalidData
+                | ErrorKind::TimedOut
+                | ErrorKind::WriteZero
+                | ErrorKind::Interrupted
+                | ErrorKind::Other
+                | ErrorKind::UnexpectedEof
+                | _ => Errno::Io,
+            },
             Error::GetRandom(_) => Errno::Io,
             Error::TooBig => Errno::TooBig,
             Error::Acces => Errno::Acces,
@@ -75,7 +96,6 @@ impl From<Error> for types::Errno {
             Error::DirNotCapable { .. } => Errno::Notcapable,
             Error::NotCapable => Errno::Notcapable,
             Error::TableOverflow => Errno::Overflow,
-            Error::Unsupported { .. } => Errno::Notcapable, // XXX is this reasonable?
         }
     }
 }

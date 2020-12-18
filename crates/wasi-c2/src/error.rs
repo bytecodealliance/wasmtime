@@ -34,9 +34,6 @@ pub enum Error {
     #[error("Unexpected IoError: {0}")]
     UnexpectedIo(#[source] std::io::Error),
 
-    #[error("Unsupported operation: {0}")]
-    Unsupported(String),
-
     // Below this, all variants are from the `$errno` type:
     /// Errno::TooBig: Argument list too long
     #[error("TooBig: Argument list too long")]
