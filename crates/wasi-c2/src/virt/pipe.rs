@@ -97,10 +97,10 @@ impl From<&str> for ReadPipe<io::Cursor<String>> {
 
 impl<R: Read> FileIoExt for ReadPipe<R> {
     fn advise(&self, offset: u64, len: u64, advice: Advice) -> io::Result<()> {
-        todo!() // advice cant be taken. do we ignore or throw error?
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn allocate(&self, offset: u64, len: u64) -> io::Result<()> {
-        todo!() // error: requires write, seek
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn read(&self, buf: &mut [u8]) -> io::Result<usize> {
         self.borrow().read(buf)
@@ -109,10 +109,10 @@ impl<R: Read> FileIoExt for ReadPipe<R> {
         self.borrow().read_exact(buf)
     }
     fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
-        todo!() // error: requires seek
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn read_exact_at(&self, buf: &mut [u8], offset: u64) -> io::Result<()> {
-        todo!() // error: requires seek
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn read_vectored(&self, bufs: &mut [io::IoSliceMut]) -> io::Result<usize> {
         self.borrow().read_vectored(bufs)
@@ -124,37 +124,37 @@ impl<R: Read> FileIoExt for ReadPipe<R> {
         self.borrow().read_to_string(buf)
     }
     fn bytes(self) -> io::Bytes<std::fs::File> {
-        todo!() // impossible to construct this concrete iterator, fix in system-interface
+        panic!("impossible to implement, removing from trait")
     }
     fn take(self, limit: u64) -> io::Take<std::fs::File> {
-        todo!() // impossible to construct this concrete iterator, fix in system-interface
+        panic!("impossible to implement, removing from trait")
     }
     fn write(&self, buf: &[u8]) -> io::Result<usize> {
-        todo!() // error: requires write
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn write_all(&self, buf: &[u8]) -> io::Result<()> {
-        todo!() // error: requires write
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize> {
-        todo!() // error: requires write, seek
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn write_all_at(&self, buf: &[u8], offset: u64) -> io::Result<()> {
-        todo!() // error: requires write, seek
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn write_vectored(&self, bufs: &[io::IoSlice]) -> io::Result<usize> {
-        todo!() // error: requires write
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn write_fmt(&mut self, fmt: std::fmt::Arguments) -> io::Result<()> {
-        todo!() // error: requires write
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn flush(&self) -> io::Result<()> {
-        todo!() // error: requires write
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
-    fn seek(&self, pos: std::io::SeekFrom) -> io::Result<u64> {
-        todo!() // error: requires seek
+    fn seek(&self, _pos: std::io::SeekFrom) -> io::Result<u64> {
+        Err(std::io::Error::from_raw_os_error(libc::ESPIPE))
     }
     fn stream_position(&self) -> io::Result<u64> {
-        todo!() // error: requires seek
+        Err(std::io::Error::from_raw_os_error(libc::ESPIPE))
     }
 }
 
@@ -178,22 +178,31 @@ impl<R: Read> WasiFile for ReadPipe<R> {
         Ok(Filetype::CharacterDevice) // XXX wrong
     }
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
-        todo!() // do later
+        Ok(FdFlags::empty())
     }
     fn set_fdflags(&self, _fdflags: FdFlags) -> Result<(), Error> {
-        todo!()
+        Err(Error::Perm)
     }
     fn get_oflags(&self) -> Result<OFlags, Error> {
-        todo!() // do later
+        Ok(OFlags::empty())
     }
     fn set_oflags(&self, _flags: OFlags) -> Result<(), Error> {
-        todo!() // impossible?
+        Err(Error::Perm)
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
-        todo!() // do later
+        Ok(Filestat {
+            device_id: 0,
+            inode: 0,
+            filetype: self.get_filetype()?,
+            nlink: 0,
+            size: 0, // XXX no way to get a size out of a Read :(
+            atim: None,
+            mtim: None,
+            ctim: None,
+        })
     }
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
-        todo!() // impossible?
+        Err(Error::Perm)
     }
 }
 
@@ -253,37 +262,37 @@ impl WritePipe<io::Cursor<Vec<u8>>> {
 
 impl<W: Write> FileIoExt for WritePipe<W> {
     fn advise(&self, offset: u64, len: u64, advice: Advice) -> io::Result<()> {
-        todo!()
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn allocate(&self, offset: u64, len: u64) -> io::Result<()> {
-        todo!() // error: requires seek
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn read(&self, buf: &mut [u8]) -> io::Result<usize> {
-        todo!() // error: requires read
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn read_exact(&self, buf: &mut [u8]) -> io::Result<()> {
-        todo!() // error: requires read
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
-        todo!() // error: requires read, seek
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn read_exact_at(&self, buf: &mut [u8], offset: u64) -> io::Result<()> {
-        todo!() // error: requires read, seek
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn read_vectored(&self, bufs: &mut [io::IoSliceMut]) -> io::Result<usize> {
-        todo!() // error: requires read
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn read_to_end(&self, buf: &mut Vec<u8>) -> io::Result<usize> {
-        todo!() // error: requires read
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn read_to_string(&self, buf: &mut String) -> io::Result<usize> {
-        todo!() // error: requires read
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn bytes(self) -> io::Bytes<std::fs::File> {
-        todo!() // error: requires read
+        todo!() // removing from trait
     }
     fn take(self, limit: u64) -> io::Take<std::fs::File> {
-        todo!() // error::requires read
+        todo!() // removing from trait
     }
     fn write(&self, buf: &[u8]) -> io::Result<usize> {
         self.borrow().write(buf)
@@ -292,10 +301,10 @@ impl<W: Write> FileIoExt for WritePipe<W> {
         self.borrow().write_all(buf)
     }
     fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize> {
-        todo!() // error: requires seek
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn write_all_at(&self, buf: &[u8], offset: u64) -> io::Result<()> {
-        todo!() // error: requires seek
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn write_vectored(&self, bufs: &[io::IoSlice]) -> io::Result<usize> {
         self.borrow().write_vectored(bufs)
@@ -307,10 +316,10 @@ impl<W: Write> FileIoExt for WritePipe<W> {
         self.borrow().flush()
     }
     fn seek(&self, pos: std::io::SeekFrom) -> io::Result<u64> {
-        todo!() // error: requires seek
+        Err(std::io::Error::from_raw_os_error(libc::ESPIPE))
     }
     fn stream_position(&self) -> io::Result<u64> {
-        todo!() // error: requires seek
+        Err(std::io::Error::from_raw_os_error(libc::ESPIPE))
     }
 }
 
@@ -335,21 +344,30 @@ impl<W: Write> WasiFile for WritePipe<W> {
         Ok(Filetype::CharacterDevice) // XXX
     }
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
-        todo!()
+        Ok(FdFlags::APPEND)
     }
     fn set_fdflags(&self, _fdflags: FdFlags) -> Result<(), Error> {
-        todo!()
+        Err(Error::Perm)
     }
     fn get_oflags(&self) -> Result<OFlags, Error> {
-        todo!()
+        Ok(OFlags::empty())
     }
     fn set_oflags(&self, _flags: OFlags) -> Result<(), Error> {
-        todo!()
+        Err(Error::Perm)
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
-        todo!()
+        Ok(Filestat {
+            device_id: 0,
+            inode: 0,
+            filetype: self.get_filetype()?,
+            nlink: 0,
+            size: 0, // XXX no way to get a size out of a Write :(
+            atim: None,
+            mtim: None,
+            ctim: None,
+        })
     }
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
-        todo!()
+        Err(Error::Perm)
     }
 }
