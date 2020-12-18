@@ -6,7 +6,7 @@ use system_interface::fs::FileIoExt;
 pub trait WasiFile: FileIoExt + SetTimes {
     fn datasync(&self) -> Result<(), Error>;
     fn sync(&self) -> Result<(), Error>;
-    fn get_filetype(&self) -> Result<Filetype, Error>;
+    fn get_filetype(&self) -> Result<FileType, Error>;
     fn get_fdflags(&self) -> Result<FdFlags, Error>;
     fn set_fdflags(&self, _flags: FdFlags) -> Result<(), Error>;
     fn get_oflags(&self) -> Result<OFlags, Error>;
@@ -15,17 +15,41 @@ pub trait WasiFile: FileIoExt + SetTimes {
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error>;
 }
 
-// XXX missing:
-// Unknown
-// Directory
-// SymbolicLink
 #[derive(Debug, Copy, Clone)]
-pub enum Filetype {
+pub enum FileType {
+    Directory,
     BlockDevice,
     CharacterDevice,
     RegularFile,
     SocketDgram,
     SocketStream,
+    SymbolicLink,
+    Unknown,
+}
+
+impl From<&cap_std::fs::FileType> for FileType {
+    fn from(ft: &cap_std::fs::FileType) -> FileType {
+        use cap_fs_ext::FileTypeExt;
+        if ft.is_dir() {
+            FileType::Directory
+        } else if ft.is_symlink() {
+            FileType::SymbolicLink
+        } else if ft.is_socket() {
+            if ft.is_block_device() {
+                FileType::SocketDgram
+            } else {
+                FileType::SocketStream
+            }
+        } else if ft.is_block_device() {
+            FileType::BlockDevice
+        } else if ft.is_char_device() {
+            FileType::CharacterDevice
+        } else if ft.is_file() {
+            FileType::RegularFile
+        } else {
+            FileType::Unknown
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -89,7 +113,7 @@ impl std::ops::BitOr for OFlags {
 pub struct Filestat {
     pub device_id: u64,
     pub inode: u64,
-    pub filetype: Filetype,
+    pub filetype: FileType,
     pub nlink: u64,
     pub size: u64,
     pub atim: Option<std::time::SystemTime>,
@@ -197,7 +221,7 @@ impl std::ops::BitOr for FileCaps {
 }
 
 pub struct FdStat {
-    pub filetype: Filetype,
+    pub filetype: FileType,
     pub caps: FileCaps,
     pub flags: FdFlags,
 }
@@ -211,16 +235,9 @@ impl WasiFile for cap_std::fs::File {
         self.sync_all()?;
         Ok(())
     }
-    fn get_filetype(&self) -> Result<Filetype, Error> {
+    fn get_filetype(&self) -> Result<FileType, Error> {
         let meta = self.metadata()?;
-        // cap-std's Metadata/FileType only offers booleans indicating whether a file is a directory,
-        // symlink, or regular file.
-        // Directories should be excluded by the type system.
-        if meta.is_file() {
-            Ok(Filetype::RegularFile)
-        } else {
-            todo!("get_filetype doesnt know how to handle case when not a file");
-        }
+        Ok(FileType::from(&meta.file_type()))
     }
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
         // XXX get_fdflags is not implemented but lets lie rather than panic:
@@ -241,7 +258,7 @@ impl WasiFile for cap_std::fs::File {
         Ok(Filestat {
             device_id: meta.dev(),
             inode: meta.ino(),
-            filetype: self.get_filetype()?,
+            filetype: FileType::from(&meta.file_type()),
             nlink: meta.nlink(),
             size: meta.len(),
             atim: meta.accessed().map(|t| Some(t.into_std())).unwrap_or(None),

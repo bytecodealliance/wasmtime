@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 use crate::dir::{DirCaps, DirEntry, DirStat, ReaddirCursor, TableDirExt};
-use crate::file::{FdFlags, FdStat, FileCaps, FileEntry, Filestat, Filetype, OFlags};
+use crate::file::{FdFlags, FdStat, FileCaps, FileEntry, FileType, Filestat, OFlags};
 use crate::{Error, WasiCtx};
 use fs_set_times::SystemTimeSpec;
 use std::cell::{Ref, RefMut};
@@ -970,14 +970,17 @@ impl From<&types::Rights> for DirCaps {
     }
 }
 
-impl From<&Filetype> for types::Filetype {
-    fn from(ft: &Filetype) -> types::Filetype {
+impl From<&FileType> for types::Filetype {
+    fn from(ft: &FileType) -> types::Filetype {
         match ft {
-            Filetype::BlockDevice => types::Filetype::BlockDevice,
-            Filetype::CharacterDevice => types::Filetype::CharacterDevice,
-            Filetype::RegularFile => types::Filetype::RegularFile,
-            Filetype::SocketDgram => types::Filetype::SocketDgram,
-            Filetype::SocketStream => types::Filetype::SocketStream,
+            FileType::Directory => types::Filetype::Directory,
+            FileType::BlockDevice => types::Filetype::BlockDevice,
+            FileType::CharacterDevice => types::Filetype::CharacterDevice,
+            FileType::RegularFile => types::Filetype::RegularFile,
+            FileType::SocketDgram => types::Filetype::SocketDgram,
+            FileType::SocketStream => types::Filetype::SocketStream,
+            FileType::SymbolicLink => types::Filetype::SymbolicLink,
+            FileType::Unknown => types::Filetype::Unknown,
         }
     }
 }

@@ -1,7 +1,5 @@
-// this file is extremely wip
-#![allow(dead_code, unused_variables)]
 use crate::error::Error;
-use crate::file::{FileCaps, OFlags, WasiFile};
+use crate::file::{FileCaps, FileType, OFlags, WasiFile};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
@@ -171,18 +169,11 @@ impl TableDirExt for crate::table::Table {
     }
 }
 
-pub enum DirEntityType {
-    File(crate::file::Filetype),
-    Directory,
-    SymbolicLink,
-    Unknown,
-}
-
 pub struct ReaddirEntity {
-    next: ReaddirCursor,
-    inode: u64,
-    namelen: u64,
-    direnttype: DirEntityType,
+    pub next: ReaddirCursor,
+    pub inode: u64,
+    pub namelen: u64,
+    pub filetype: FileType,
 }
 
 pub struct ReaddirCursor(u64);
@@ -262,29 +253,19 @@ impl WasiDir for cap_std::fs::Dir {
             .enumerate()
             .skip(u64::from(cursor) as usize);
         Ok(Box::new(rd.map(|(ix, entry)| {
+            use cap_fs_ext::MetadataExt;
             let entry = entry?;
-            let file_type = entry.file_type()?;
-            let direnttype = if file_type.is_dir() {
-                DirEntityType::Directory
-            } else if file_type.is_file() {
-                DirEntityType::File(crate::file::Filetype::RegularFile) // XXX unify this with conversion in `impl WasiFile for cap_std::fs::File { get_filetype }`
-            } else if file_type.is_symlink() {
-                DirEntityType::SymbolicLink
-            } else {
-                DirEntityType::Unknown
-            };
-            let name = entry.file_name().into_string().map_err(|_| {
-                Error::Utf8(todo!(
-                    // XXX
-                    "idk how to make utf8 error out of osstring conversion"
-                ))
-            })?;
+            let meta = entry.metadata()?;
+            let inode = meta.ino();
+            let filetype = FileType::from(&meta.file_type());
+            let name = entry
+                .file_name()
+                .into_string()
+                .map_err(|_| Error::Utf8(todo!()))?;
             let namelen = name.as_bytes().len() as u64;
-            // XXX need the metadata casing to be reusable here
-            let inode = todo!();
             let entity = ReaddirEntity {
                 next: ReaddirCursor::from(ix as u64 + 1),
-                direnttype,
+                filetype,
                 inode,
                 namelen,
             };

@@ -1,4 +1,4 @@
-use crate::file::{FdFlags, Filestat, Filetype, OFlags, WasiFile};
+use crate::file::{FdFlags, FileType, Filestat, OFlags, WasiFile};
 use crate::Error;
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, RawFd};
@@ -23,8 +23,8 @@ impl WasiFile for Stdin {
     fn sync(&self) -> Result<(), Error> {
         Ok(())
     }
-    fn get_filetype(&self) -> Result<Filetype, Error> {
-        Ok(Filetype::CharacterDevice)
+    fn get_filetype(&self) -> Result<FileType, Error> {
+        Ok(FileType::CharacterDevice)
     }
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
         todo!()
@@ -66,8 +66,8 @@ impl WasiFile for Stdout {
     fn sync(&self) -> Result<(), Error> {
         Ok(())
     }
-    fn get_filetype(&self) -> Result<Filetype, Error> {
-        Ok(Filetype::CharacterDevice)
+    fn get_filetype(&self) -> Result<FileType, Error> {
+        Ok(FileType::CharacterDevice)
     }
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
         todo!()
@@ -109,8 +109,8 @@ impl WasiFile for Stderr {
     fn sync(&self) -> Result<(), Error> {
         Ok(())
     }
-    fn get_filetype(&self) -> Result<Filetype, Error> {
-        Ok(Filetype::CharacterDevice)
+    fn get_filetype(&self) -> Result<FileType, Error> {
+        Ok(FileType::CharacterDevice)
     }
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
         todo!()
