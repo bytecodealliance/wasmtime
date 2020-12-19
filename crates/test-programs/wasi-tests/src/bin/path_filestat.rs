@@ -9,11 +9,6 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         0,
         "the scratch directory should have RIGHT_PATH_FILESTAT_GET as base right",
     );
-    assert_ne!(
-        fdstat.fs_rights_inheriting & wasi::RIGHTS_PATH_FILESTAT_GET,
-        0,
-        "the scratch directory should have RIGHT_PATH_FILESTAT_GET as base right",
-    );
 
     // Create a file in the scratch directory.
     let file_fd = wasi::path_open(
