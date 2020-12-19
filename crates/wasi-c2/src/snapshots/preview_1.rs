@@ -545,19 +545,60 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_readdir(
         &self,
-        dirfd: types::Fd,
+        fd: types::Fd,
         buf: &GuestPtr<u8>,
         buf_len: types::Size,
         cookie: types::Dircookie,
     ) -> Result<types::Size, Error> {
         let table = self.table();
-        let dir_entry: Ref<DirEntry> = table.get(u32::from(dirfd))?;
+        let fd = u32::from(fd);
+        debug!(
+            "fd_readdir {} is a DirEntry: {}",
+            fd,
+            table.is::<DirEntry>(fd)
+        );
+        let dir_entry: Ref<DirEntry> = table.get(fd)?;
         let d = dir_entry.get_cap(DirCaps::READDIR)?;
+
+        let mut bufused = 0;
+        let mut buf = buf.clone();
         for pair in d.readdir(ReaddirCursor::from(cookie))? {
             let (entity, name) = pair?;
-            todo!()
+            let dirent_raw = dirent_bytes(types::Dirent::from(&entity));
+            let dirent_len: types::Size = dirent_raw.len().try_into()?;
+            let name_raw = name.as_bytes();
+            let name_len: types::Size = name_raw.len().try_into()?;
+            let offset = dirent_len.checked_add(name_len).ok_or(Error::Overflow)?;
+
+            // Copy as many bytes of the dirent as we can, up to the end of the buffer
+            let dirent_copy_len = std::cmp::min(dirent_len, buf_len - bufused);
+            buf.as_array(dirent_copy_len)
+                .copy_from_slice(&dirent_raw[..dirent_copy_len as usize])?;
+
+            // If the dirent struct wasnt compied entirely, return that we filled the buffer, which
+            // tells libc that we're not at EOF.
+            if dirent_copy_len < dirent_len {
+                return Ok(buf_len);
+            }
+
+            buf = buf.add(dirent_copy_len)?;
+
+            // Copy as many bytes of the name as we can, up to the end of the buffer
+            let name_copy_len = std::cmp::min(name_len, buf_len - bufused);
+            buf.as_array(name_copy_len)
+                .copy_from_slice(&name_raw[..name_copy_len as usize])?;
+
+            // If the dirent struct wasn't copied entirely, return that we filled the buffer, which
+            // tells libc that we're not at EOF
+
+            if name_copy_len < name_len {
+                return Ok(buf_len);
+            }
+
+            buf = buf.add(name_copy_len)?;
+            bufused += offset;
         }
-        todo!()
+        Ok(bufused)
     }
 
     fn path_create_directory(
@@ -1135,4 +1176,32 @@ impl From<Filestat> for types::Filestat {
                 .unwrap_or(0),
         }
     }
+}
+
+impl From<&ReaddirEntity> for types::Dirent {
+    fn from(e: &ReaddirEntity) -> types::Dirent {
+        types::Dirent {
+            d_ino: e.inode,
+            d_namlen: e.namelen,
+            d_type: types::Filetype::from(&e.filetype),
+            d_next: e.next.into(),
+        }
+    }
+}
+
+fn dirent_bytes(dirent: types::Dirent) -> Vec<u8> {
+    use wiggle::GuestType;
+    assert_eq!(
+        types::Dirent::guest_size(),
+        std::mem::size_of::<types::Dirent>() as _,
+        "Dirent guest repr and host repr should match"
+    );
+    let size = types::Dirent::guest_size()
+        .try_into()
+        .expect("Dirent is smaller than 2^32");
+    let mut bytes = Vec::with_capacity(size);
+    bytes.resize(size, 0);
+    let ptr = bytes.as_mut_ptr() as *mut types::Dirent;
+    unsafe { ptr.write_unaligned(dirent) };
+    bytes
 }

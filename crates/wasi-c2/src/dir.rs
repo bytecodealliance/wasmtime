@@ -177,10 +177,11 @@ impl TableDirExt for crate::table::Table {
 pub struct ReaddirEntity {
     pub next: ReaddirCursor,
     pub inode: u64,
-    pub namelen: u64,
+    pub namelen: u32,
     pub filetype: FileType,
 }
 
+#[derive(Debug, Copy, Clone)]
 pub struct ReaddirCursor(u64);
 impl From<u64> for ReaddirCursor {
     fn from(c: u64) -> ReaddirCursor {
@@ -254,7 +255,8 @@ impl WasiDir for cap_std::fs::Dir {
         cursor: ReaddirCursor,
     ) -> Result<Box<dyn Iterator<Item = Result<(ReaddirEntity, String), Error>>>, Error> {
         let rd = self
-            .read_dir(PathBuf::new())?
+            .read_dir(Path::new("."))
+            .expect("always possible to readdir an open Dir") // XXX is this true?
             .enumerate()
             .skip(u64::from(cursor) as usize);
         Ok(Box::new(rd.map(|(ix, entry)| {
@@ -267,7 +269,7 @@ impl WasiDir for cap_std::fs::Dir {
                 .file_name()
                 .into_string()
                 .map_err(|_| Error::Utf8(todo!()))?;
-            let namelen = name.as_bytes().len() as u64;
+            let namelen = name.as_bytes().len().try_into()?;
             let entity = ReaddirEntity {
                 next: ReaddirCursor::from(ix as u64 + 1),
                 filetype,
