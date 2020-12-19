@@ -1,0 +1,38 @@
+
+wasi_tests::big_random_buf
+    - no randomness yet
+wasi_tests::clock_time_get
+    - no clocks yet
+wasi_tests::dangling_symlink
+    - Dir::open_dir nofollow not yet implemented
+wasi_tests::directory_seek
+    - something weird about directory open rights / fdstat. need debug
+      impl of Caps to see about this
+wasi_tests::fd_flags_set
+    - set_fdflags is not implemented. test wanted to clear O_APPEND mode
+wasi_tests::fd_readdir
+    - test expects `..` and `.`, Dir::readdir doesnt provide them
+wasi_tests::nofollow_errors
+    - nofollow not implemented for dirs
+wasi_tests::path_filestat
+    - fdstat.fs_flags is not populated correctly
+wasi_tests::path_link
+    - path_link is not implemented
+wasi_tests::path_rename
+    - path_rename is not implemented. we need to be able to downcast a dyn
+      WasiDir to a concrete Dir for this to be possible - need to reintroduce Any to hierarchy
+wasi_tests::path_rename_trailing_slashes
+    - path_rename is not implemented
+wasi_tests::path_symlink_trailing_slashes
+    - unclear, path_symlink is giving a ENOTDIR when it expects an EEXIST...
+wasi_tests::poll_oneoff
+    - no sched yet
+wasi_tests::readlink
+    - insists on small buffer semantics for readlink that don't seem right
+wasi_tests::readlink_no_buffer
+    - insists on small buffer semantics for readlink that don't seem right
+wasi_tests::remove_directory_trailing_slashes
+    - apparently cap-std gives EINVAL when trying to remove dir with
+      trailing slash?
+wasi_tests::sched_yield
+    - no sched yet
