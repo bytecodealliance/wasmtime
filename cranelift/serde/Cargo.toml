@@ -18,7 +18,7 @@ clap = "2.32.0"
 serde = "1.0.8"
 serde_derive = "1.0.75"
 serde_json = "1.0.26"
-cranelift-codegen = { path = "../codegen", version = "0.70.0" }
+cranelift-codegen = { path = "../codegen", version = "0.70.0", features = ["enable-serde"] }
 cranelift-reader = { path = "../reader", version = "0.70.0" }
 
 [badges]
