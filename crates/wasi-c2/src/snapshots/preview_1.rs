@@ -643,11 +643,11 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     fn path_link(
         &self,
-        old_fd: types::Fd,
-        old_flags: types::Lookupflags,
-        old_path: &GuestPtr<'_, str>,
-        new_fd: types::Fd,
-        new_path: &GuestPtr<'_, str>,
+        src_fd: types::Fd,
+        src_flags: types::Lookupflags,
+        src_path: &GuestPtr<'_, str>,
+        dest_fd: types::Fd,
+        dest_path: &GuestPtr<'_, str>,
     ) -> Result<(), Error> {
         unimplemented!()
     }
