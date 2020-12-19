@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::file::{FileCaps, FileType, Filestat, OFlags, WasiFile};
+use crate::file::{FdFlags, FileCaps, FileType, Filestat, OFlags, WasiFile};
 use std::convert::TryInto;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -11,6 +11,7 @@ pub trait WasiDir {
         path: &str,
         oflags: OFlags,
         caps: FileCaps,
+        fdflags: FdFlags,
     ) -> Result<Box<dyn WasiFile>, Error>;
     fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error>;
     fn create_dir(&self, path: &str) -> Result<(), Error>;
@@ -201,6 +202,7 @@ impl WasiDir for cap_std::fs::Dir {
         path: &str,
         oflags: OFlags,
         caps: FileCaps,
+        fdflags: FdFlags,
     ) -> Result<Box<dyn WasiFile>, Error> {
         use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt};
 
@@ -231,6 +233,12 @@ impl WasiDir for cap_std::fs::Dir {
         if caps.contains(&FileCaps::READ) {
             opts.read(true);
         }
+        if fdflags.contains(&FdFlags::APPEND) {
+            opts.append(true);
+        }
+        // XXX what about rest of fdflags - dsync, sync become oflags.
+        // what do we do with nonblock?
+        // what do we do with rsync?
 
         if symlink_follow {
             opts.follow(FollowSymlinks::Yes);

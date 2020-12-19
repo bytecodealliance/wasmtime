@@ -519,11 +519,12 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let table = self.table();
         let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
         let f = file_entry.get_cap(required_caps)?;
-        let newoffset = f.seek(match whence {
+        let whence = match whence {
             types::Whence::Cur => SeekFrom::Current(offset),
             types::Whence::End => SeekFrom::End(offset),
             types::Whence::Set => SeekFrom::Start(offset as u64),
-        })?;
+        };
+        let newoffset = f.seek(whence)?;
         Ok(newoffset)
     }
 
@@ -694,7 +695,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
             let dir = dir_entry.get_cap(required_caps)?;
             let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_base));
-            let file = dir.open_file(symlink_follow, path.deref(), oflags, file_caps)?;
+            let file = dir.open_file(symlink_follow, path.deref(), oflags, file_caps, fdflags)?;
             drop(dir);
             drop(dir_entry);
             let fd = table.push(Box::new(FileEntry::new(file_caps, file)))?;
