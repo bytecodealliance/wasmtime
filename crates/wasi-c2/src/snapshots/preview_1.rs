@@ -1,10 +1,10 @@
 #![allow(unused_variables)]
-use crate::dir::{DirCaps, DirEntry, DirStat, ReaddirCursor, TableDirExt};
+use crate::dir::{DirCaps, DirEntry, DirFdStat, ReaddirCursor, ReaddirEntity, TableDirExt};
 use crate::file::{FdFlags, FdStat, FileCaps, FileEntry, FileType, Filestat, OFlags};
 use crate::{Error, WasiCtx};
 use fs_set_times::SystemTimeSpec;
 use std::cell::{Ref, RefMut};
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
 use std::ops::Deref;
 use tracing::debug;
@@ -228,8 +228,8 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             Ok(types::Fdstat::from(&fdstat))
         } else if table.is::<DirEntry>(fd) {
             let dir_entry: Ref<DirEntry> = table.get(fd)?;
-            let dirstat = dir_entry.get_dirstat();
-            Ok(types::Fdstat::from(&dirstat))
+            let dir_fdstat = dir_entry.get_dir_fdstat();
+            Ok(types::Fdstat::from(&dir_fdstat))
         } else {
             Err(Error::Badf)
         }
@@ -267,10 +267,20 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_filestat_get(&self, fd: types::Fd) -> Result<types::Filestat, Error> {
         let table = self.table();
-        let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
-        let f = file_entry.get_cap(FileCaps::FILESTAT_GET)?;
-        let filestat = f.get_filestat()?;
-        Ok(filestat.into())
+        let fd = u32::from(fd);
+        if table.is::<FileEntry>(fd) {
+            let file_entry: Ref<FileEntry> = table.get(fd)?;
+            let f = file_entry.get_cap(FileCaps::FILESTAT_GET)?;
+            let filestat = f.get_filestat()?;
+            Ok(filestat.into())
+        } else if table.is::<DirEntry>(fd) {
+            let dir_entry: Ref<DirEntry> = table.get(fd)?;
+            let d = dir_entry.get_cap(DirCaps::FILESTAT_GET)?;
+            let filestat = d.get_filestat()?;
+            Ok(filestat.into())
+        } else {
+            Err(Error::Badf)
+        }
     }
 
     fn fd_filestat_set_size(&self, fd: types::Fd, size: types::Filesize) -> Result<(), Error> {
@@ -289,10 +299,6 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         fst_flags: types::Fstflags,
     ) -> Result<(), Error> {
         use std::time::{Duration, UNIX_EPOCH};
-        let table = self.table();
-        let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
-        let f = file_entry.get_cap(FileCaps::FILESTAT_SET_TIMES)?;
-
         // Validate flags, transform into well-structured arguments
         let set_atim = fst_flags.contains(&types::Fstflags::ATIM);
         let set_atim_now = fst_flags.contains(&types::Fstflags::ATIM_NOW);
@@ -320,8 +326,20 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             None
         };
 
-        f.set_times(atim, mtim)?;
-        Ok(())
+        let fd = u32::from(fd);
+        let table = self.table();
+        if table.is::<FileEntry>(fd) {
+            let file_entry: Ref<FileEntry> = table.get(fd).unwrap();
+            let f = file_entry.get_cap(FileCaps::FILESTAT_SET_TIMES)?;
+            f.set_times(atim, mtim)?;
+            Ok(())
+        } else if table.is::<DirEntry>(fd) {
+            let dir_entry: Ref<DirEntry> = table.get(fd).unwrap();
+            let d = dir_entry.get_cap(DirCaps::FILESTAT_SET_TIMES)?;
+            todo!("d.set_times(atim, mtim)?;")
+        } else {
+            Err(Error::Badf)
+        }
     }
 
     fn fd_read(&self, fd: types::Fd, iovs: &types::IovecArray<'_>) -> Result<types::Size, Error> {
@@ -560,7 +578,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         flags: types::Lookupflags,
         path: &GuestPtr<'_, str>,
     ) -> Result<types::Filestat, Error> {
-        unimplemented!()
+        let table = self.table();
+        let dir_entry: Ref<DirEntry> = table.get(u32::from(dirfd))?;
+        let dir = dir_entry.get_cap(DirCaps::PATH_FILESTAT_GET)?;
+        todo!()
     }
 
     fn path_filestat_set_times(
@@ -572,7 +593,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         mtim: types::Timestamp,
         fst_flags: types::Fstflags,
     ) -> Result<(), Error> {
-        unimplemented!()
+        let table = self.table();
+        let dir_entry: Ref<DirEntry> = table.get(u32::from(dirfd))?;
+        let dir = dir_entry.get_cap(DirCaps::PATH_FILESTAT_SET_TIMES)?;
+        todo!()
     }
 
     fn path_link(
@@ -781,8 +805,8 @@ impl From<&FdStat> for types::Fdstat {
     }
 }
 
-impl From<&DirStat> for types::Fdstat {
-    fn from(dirstat: &DirStat) -> types::Fdstat {
+impl From<&DirFdStat> for types::Fdstat {
+    fn from(dirstat: &DirFdStat) -> types::Fdstat {
         let fs_rights_base = types::Rights::from(&dirstat.dir_caps);
         let fs_rights_inheriting = types::Rights::from(&dirstat.file_caps);
         types::Fdstat {
@@ -922,6 +946,18 @@ impl From<&DirCaps> for types::Rights {
         if caps.contains(&DirCaps::UNLINK_FILE) {
             rights = rights | types::Rights::PATH_UNLINK_FILE;
         }
+        if caps.contains(&DirCaps::PATH_FILESTAT_GET) {
+            rights = rights | types::Rights::PATH_FILESTAT_GET;
+        }
+        if caps.contains(&DirCaps::PATH_FILESTAT_SET_TIMES) {
+            rights = rights | types::Rights::PATH_FILESTAT_SET_TIMES;
+        }
+        if caps.contains(&DirCaps::FILESTAT_GET) {
+            rights = rights | types::Rights::FD_FILESTAT_GET;
+        }
+        if caps.contains(&DirCaps::FILESTAT_SET_TIMES) {
+            rights = rights | types::Rights::FD_FILESTAT_SET_TIMES;
+        }
         rights
     }
 }
@@ -965,6 +1001,18 @@ impl From<&types::Rights> for DirCaps {
         }
         if rights.contains(&types::Rights::PATH_UNLINK_FILE) {
             caps = caps | DirCaps::UNLINK_FILE;
+        }
+        if rights.contains(&types::Rights::PATH_FILESTAT_GET) {
+            caps = caps | DirCaps::PATH_FILESTAT_GET;
+        }
+        if rights.contains(&types::Rights::PATH_FILESTAT_SET_TIMES) {
+            caps = caps | DirCaps::PATH_FILESTAT_SET_TIMES;
+        }
+        if rights.contains(&types::Rights::FD_FILESTAT_GET) {
+            caps = caps | DirCaps::FILESTAT_GET;
+        }
+        if rights.contains(&types::Rights::FD_FILESTAT_SET_TIMES) {
+            caps = caps | DirCaps::FILESTAT_SET_TIMES;
         }
         caps
     }

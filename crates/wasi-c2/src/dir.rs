@@ -1,5 +1,6 @@
 use crate::error::Error;
-use crate::file::{FileCaps, FileType, OFlags, WasiFile};
+use crate::file::{FileCaps, FileType, Filestat, OFlags, WasiFile};
+use std::convert::TryInto;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
@@ -21,6 +22,7 @@ pub trait WasiDir {
     fn remove_dir(&self, path: &str) -> Result<(), Error>;
     fn unlink_file(&self, path: &str) -> Result<(), Error>;
     fn read_link(&self, path: &str) -> Result<PathBuf, Error>;
+    fn get_filestat(&self) -> Result<Filestat, Error>;
 }
 
 pub(crate) struct DirEntry {
@@ -69,8 +71,8 @@ impl DirEntry {
     pub fn child_file_caps(&self, desired_caps: FileCaps) -> FileCaps {
         self.file_caps.intersection(&desired_caps)
     }
-    pub fn get_dirstat(&self) -> DirStat {
-        DirStat {
+    pub fn get_dir_fdstat(&self) -> DirFdStat {
+        DirFdStat {
             dir_caps: self.caps,
             file_caps: self.file_caps,
         }
@@ -113,16 +115,15 @@ impl DirCaps {
     pub const SYMLINK: Self = DirCaps { flags: 512 };
     pub const REMOVE_DIRECTORY: Self = DirCaps { flags: 1024 };
     pub const UNLINK_FILE: Self = DirCaps { flags: 2048 };
+    pub const PATH_FILESTAT_GET: Self = DirCaps { flags: 4096 };
+    pub const PATH_FILESTAT_SET_TIMES: Self = DirCaps { flags: 8192 };
+    pub const FILESTAT_GET: Self = DirCaps { flags: 16384 };
+    pub const FILESTAT_SET_TIMES: Self = DirCaps { flags: 32768 };
 
     // Missing that are in wasi-common directory_base:
     // FD_FDSTAT_SET_FLAGS
     // FD_SYNC
     // FD_ADVISE
-    // PATH_FILESTAT_GET
-    // PATH_FILESTAT_SET_SIZE
-    // PATH_FILESTAT_SET_TIMES
-    // FD_FILESTAT_GET
-    // FD_FILESTAT_SET_TIMES
 
     pub fn all() -> DirCaps {
         Self::CREATE_DIRECTORY
@@ -137,6 +138,10 @@ impl DirCaps {
             | Self::SYMLINK
             | Self::REMOVE_DIRECTORY
             | Self::UNLINK_FILE
+            | Self::PATH_FILESTAT_GET
+            | Self::PATH_FILESTAT_SET_TIMES
+            | Self::FILESTAT_GET
+            | Self::FILESTAT_SET_TIMES
     }
 }
 
@@ -149,7 +154,7 @@ impl std::ops::BitOr for DirCaps {
     }
 }
 
-pub struct DirStat {
+pub struct DirFdStat {
     pub file_caps: FileCaps,
     pub dir_caps: DirCaps,
 }
@@ -289,5 +294,19 @@ impl WasiDir for cap_std::fs::Dir {
     fn read_link(&self, path: &str) -> Result<PathBuf, Error> {
         let link = self.read_link(Path::new(path))?;
         Ok(link)
+    }
+    fn get_filestat(&self) -> Result<Filestat, Error> {
+        let meta = self.metadata(".")?;
+        use cap_fs_ext::MetadataExt;
+        Ok(Filestat {
+            device_id: meta.dev(),
+            inode: meta.ino(),
+            filetype: FileType::from(&meta.file_type()),
+            nlink: meta.nlink(),
+            size: meta.len(),
+            atim: meta.accessed().map(|t| Some(t.into_std())).unwrap_or(None),
+            mtim: meta.modified().map(|t| Some(t.into_std())).unwrap_or(None),
+            ctim: meta.created().map(|t| Some(t.into_std())).unwrap_or(None),
+        })
     }
 }
