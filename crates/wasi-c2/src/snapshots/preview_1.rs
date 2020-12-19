@@ -663,7 +663,11 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         fdflags: types::Fdflags,
     ) -> Result<types::Fd, Error> {
         let mut table = self.table();
-        let dir_entry: Ref<DirEntry> = table.get(u32::from(dirfd))?;
+        let dirfd = u32::from(dirfd);
+        if table.is::<FileEntry>(dirfd) {
+            return Err(Error::Notdir);
+        }
+        let dir_entry: Ref<DirEntry> = table.get(dirfd)?;
 
         let symlink_follow = dirflags.contains(&types::Lookupflags::SYMLINK_FOLLOW);
 
