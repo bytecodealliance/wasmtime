@@ -14,6 +14,9 @@ use core::mem;
 use core::slice;
 use core::u32;
 
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
 /// Trait for extracting keys from values stored in a `SparseMap`.
 ///
 /// All values stored in a `SparseMap` must keep track of their own key in the map and implement
@@ -53,6 +56,7 @@ pub trait SparseMapValue<K> {
 ///   is).
 /// - `SparseMap` requires the values to implement `SparseMapValue<K>` which means that they must
 ///   contain their own key.
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct SparseMap<K, V>
 where
     K: EntityRef,

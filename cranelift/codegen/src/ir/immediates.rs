@@ -48,6 +48,7 @@ impl IntoBytes for Vec<u8> {
 /// An `Imm64` operand can also be used to represent immediate values of smaller integer types by
 /// sign-extending to `i64`.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Imm64(i64);
 
 impl Imm64 {
@@ -148,6 +149,7 @@ impl FromStr for Imm64 {
 /// A `Uimm64` operand can also be used to represent immediate values of smaller integer types by
 /// zero-extending to `i64`.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Uimm64(u64);
 
 impl Uimm64 {
@@ -279,6 +281,7 @@ pub type Uimm8 = u8;
 ///
 /// This is used to represent sizes of memory objects.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Uimm32(u32);
 
 impl Into<u32> for Uimm32 {
@@ -362,6 +365,7 @@ impl From<&[u8]> for V128Imm {
 /// This is used to encode an immediate offset for load/store instructions. All supported ISAs have
 /// a maximum load/store offset that fits in an `i32`.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Offset32(i32);
 
 impl Offset32 {
@@ -451,6 +455,7 @@ impl FromStr for Offset32 {
 ///
 /// All bit patterns are allowed.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 #[repr(C)]
 pub struct Ieee32(u32);
 
@@ -459,6 +464,7 @@ pub struct Ieee32(u32);
 ///
 /// All bit patterns are allowed.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 #[repr(C)]
 pub struct Ieee64(u64);
 

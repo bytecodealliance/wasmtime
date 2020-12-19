@@ -21,11 +21,15 @@ use crate::write::write_function;
 use alloc::vec::Vec;
 use core::fmt;
 
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
 /// A function.
 ///
 /// Functions can be cloned, but it is not a very fast operation.
 /// The clone will have all the same entity numbers as the original.
 #[derive(Clone)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Function {
     /// Name of this function. Mostly used by `.clif` files.
     pub name: ExternalName,

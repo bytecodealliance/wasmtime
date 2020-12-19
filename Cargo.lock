@@ -550,6 +550,9 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-shared"
 version = "0.70.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "cranelift-entity"

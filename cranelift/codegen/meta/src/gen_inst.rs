@@ -68,6 +68,7 @@ fn gen_formats(formats: &[&InstructionFormat], fmt: &mut Formatter) {
 /// `ValueList` to store the additional information out of line.
 fn gen_instruction_data(formats: &[&InstructionFormat], fmt: &mut Formatter) {
     fmt.line("#[derive(Clone, Debug)]");
+    fmt.line(r#"#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]"#);
     fmt.line("#[allow(missing_docs)]");
     fmt.line("pub enum InstructionData {");
     fmt.indent(|fmt| {
@@ -410,7 +411,10 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
     fmt.line("#[repr(u16)]");
     fmt.line("#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]");
     fmt.line(
-        r#"#[cfg_attr(feature = "enable-peepmatic", derive(serde::Serialize, serde::Deserialize))]"#
+        r#"#[cfg_attr(
+            any(feature = "enable-peepmatic", feature = "enable-serde"),
+            derive(serde::Serialize, serde::Deserialize)
+        )]"#,
     );
 
     // We explicitly set the discriminant of the first variant to 1, which allows us to take

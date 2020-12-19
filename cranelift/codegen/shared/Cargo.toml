@@ -8,4 +8,10 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
 
-# Since this is a shared dependency of several packages, please strive to keep this dependency-free.
+[dependencies]
+# Since this is a shared dependency of several packages, please strive to keep this dependency-free
+# when no features are enabled.
+serde = { version = "1.0.94", features = ["derive"], optional = true }
+
+[features]
+enable-serde = ["serde"]
