@@ -1691,6 +1691,7 @@ fn define_simd(
     let usub_sat = shared.by_name("usub_sat");
     let vconst = shared.by_name("vconst");
     let vselect = shared.by_name("vselect");
+    let widening_pairwise_dot_product_s = shared.by_name("widening_pairwise_dot_product_s");
     let x86_cvtt2si = x86.by_name("x86_cvtt2si");
     let x86_insertps = x86.by_name("x86_insertps");
     let x86_fmax = x86.by_name("x86_fmax");
@@ -2212,6 +2213,9 @@ fn define_simd(
 
     // SIMD multiplication with lane expansion.
     e.enc_both_inferred(x86_pmuludq, rec_fa.opcodes(&PMULUDQ));
+
+    // SIMD multiplication and add adjacent pairs, from SSE2.
+    e.enc_both_inferred(widening_pairwise_dot_product_s, rec_fa.opcodes(&PMADDWD));
 
     // SIMD integer multiplication for I64x2 using a AVX512.
     {

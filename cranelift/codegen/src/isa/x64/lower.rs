@@ -2235,6 +2235,24 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::WideningPairwiseDotProductS => {
+            let lhs = put_input_in_reg(ctx, inputs[0]);
+            let rhs = input_to_reg_mem(ctx, inputs[1]);
+            let dst = get_output_reg(ctx, outputs[0]);
+            let ty = ty.unwrap();
+
+            ctx.emit(Inst::gen_move(dst, lhs, ty));
+
+            if ty == types::I32X4 {
+                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmaddwd, rhs, dst));
+            } else {
+                panic!(
+                    "Opcode::WideningPairwiseDotProductS: unsupported laneage: {:?}",
+                    ty
+                );
+            }
+        }
+
         Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv => {
             let lhs = put_input_in_reg(ctx, inputs[0]);
             let rhs = input_to_reg_mem(ctx, inputs[1]);

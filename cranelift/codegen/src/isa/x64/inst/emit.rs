@@ -1873,6 +1873,7 @@ pub(crate) fn emit(
                 SseOpcode::Pcmpgtw => (LegacyPrefixes::_66, 0x0F65, 2),
                 SseOpcode::Pcmpgtd => (LegacyPrefixes::_66, 0x0F66, 2),
                 SseOpcode::Pcmpgtq => (LegacyPrefixes::_66, 0x0F3837, 3),
+                SseOpcode::Pmaddwd => (LegacyPrefixes::_66, 0x0FF5, 2),
                 SseOpcode::Pmaxsb => (LegacyPrefixes::_66, 0x0F383C, 3),
                 SseOpcode::Pmaxsw => (LegacyPrefixes::_66, 0x0FEE, 2),
                 SseOpcode::Pmaxsd => (LegacyPrefixes::_66, 0x0F383D, 3),

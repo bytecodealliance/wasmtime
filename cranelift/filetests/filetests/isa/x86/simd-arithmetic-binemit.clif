@@ -108,3 +108,9 @@ block0(v0: i64x2 [%xmm3], v1: i64x2 [%xmm5]):
 [-, %xmm3]    v2 = x86_pmuludq v0, v1      ; bin: 66 0f f4 dd
     return v2
 }
+
+function %pmaddwd(i16x8, i16x8) -> i32x4 {
+block0(v0: i16x8 [%xmm8], v1: i16x8 [%xmm9]):
+[-, %xmm8]    v2 = widening_pairwise_dot_product_s v0, v1      ; bin: 66 45 0f f5 c1
+    return v2
+}
