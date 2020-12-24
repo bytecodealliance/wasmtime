@@ -3068,6 +3068,12 @@ fn test_x64_emit() {
     ));
 
     insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pmaddwd, RegMem::reg(xmm8), w_xmm1),
+        "66410FF5C8",
+        "pmaddwd %xmm8, %xmm1",
+    ));
+
+    insns.push((
         Inst::xmm_rm_r(SseOpcode::Pmaxsb, RegMem::reg(xmm15), w_xmm6),
         "66410F383CF7",
         "pmaxsb  %xmm15, %xmm6",
