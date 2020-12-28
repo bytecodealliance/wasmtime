@@ -3223,7 +3223,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv => {
             let lhs = put_input_in_reg(ctx, inputs[0]);
-            let rhs = input_to_reg_mem(ctx, inputs[1]);
+            // We can't guarantee the RHS (if a load) is 128-bit aligned, so we
+            // must avoid merging a load here.
+            let rhs = RegMem::reg(put_input_in_reg(ctx, inputs[1]));
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
 
@@ -3480,7 +3482,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FminPseudo | Opcode::FmaxPseudo => {
-            let lhs = input_to_reg_mem(ctx, inputs[0]);
+            // We can't guarantee the RHS (if a load) is 128-bit aligned, so we
+            // must avoid merging a load here.
+            let lhs = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
             let rhs = put_input_in_reg(ctx, inputs[1]);
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
@@ -3496,7 +3500,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Sqrt => {
-            let src = input_to_reg_mem(ctx, inputs[0]);
+            // We can't guarantee the RHS (if a load) is 128-bit aligned, so we
+            // must avoid merging a load here.
+            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
 
@@ -3515,13 +3521,17 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fpromote => {
-            let src = input_to_reg_mem(ctx, inputs[0]);
+            // We can't guarantee the RHS (if a load) is 128-bit aligned, so we
+            // must avoid merging a load here.
+            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             ctx.emit(Inst::xmm_unary_rm_r(SseOpcode::Cvtss2sd, src, dst));
         }
 
         Opcode::Fdemote => {
-            let src = input_to_reg_mem(ctx, inputs[0]);
+            // We can't guarantee the RHS (if a load) is 128-bit aligned, so we
+            // must avoid merging a load here.
+            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             ctx.emit(Inst::xmm_unary_rm_r(SseOpcode::Cvtsd2ss, src, dst));
         }
@@ -3538,7 +3548,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 let src = match ext_spec {
                     Some(ext_spec) => RegMem::reg(extend_input_to_reg(ctx, inputs[0], ext_spec)),
-                    None => input_to_reg_mem(ctx, inputs[0]),
+                    None => RegMem::reg(put_input_in_reg(ctx, inputs[0])),
                 };
 
                 let opcode = if output_ty == types::F32 {
@@ -4053,7 +4063,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fabs | Opcode::Fneg => {
-            let src = input_to_reg_mem(ctx, inputs[0]);
+            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
             // In both cases, generate a constant and apply a single binary instruction:
