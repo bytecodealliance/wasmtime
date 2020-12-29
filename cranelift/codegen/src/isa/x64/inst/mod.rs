@@ -473,9 +473,7 @@ pub enum Inst {
 
     /// A call to the `ElfTlsGetAddr` libcall. Returns address
     /// of TLS symbol in rax.
-    ElfTlsGetAddr {
-        symbol: ExternalName,
-    },
+    ElfTlsGetAddr { symbol: ExternalName },
 }
 
 pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
@@ -534,7 +532,7 @@ impl Inst {
             | Inst::XmmCmpRmR { .. }
             | Inst::XmmLoadConst { .. }
             | Inst::XmmMinMaxSeq { .. }
-            | Inst::XmmUninitializedValue { .. } 
+            | Inst::XmmUninitializedValue { .. }
             | Inst::ElfTlsGetAddr { .. } => None,
 
             // These use dynamic SSE opcodes.
@@ -2429,12 +2427,11 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         | Inst::Ud2 { .. }
         | Inst::Hlt
         | Inst::AtomicRmwSeq { .. }
-        | Inst::ElfTlsGetAddr { .. } 
+        | Inst::ElfTlsGetAddr { .. }
         | Inst::Fence { .. } => {
             // Instruction doesn't explicitly mention any regs, so it can't have any virtual
             // regs that we'd need to remap.  Hence no action required.
         }
-
     }
 }
 

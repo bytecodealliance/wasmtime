@@ -28,6 +28,7 @@ use target_lexicon::Triple;
 fn is_int_or_ref_ty(ty: Type) -> bool {
     match ty {
         types::I8 | types::I16 | types::I32 | types::I64 | types::R64 => true,
+        types::B1 | types::B8 | types::B16 | types::B32 | types::B64 => true,
         types::R32 => panic!("shouldn't have 32-bits refs on x64"),
         _ => false,
     }
@@ -4668,7 +4669,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 match fcmp_results {
                     FcmpCondResult::Condition(cc) => {
-                        if is_int_or_ref_ty(ty) || ty == types::I128 {
+                        if is_int_or_ref_ty(ty) || ty == types::I128 || ty == types::B128 {
                             let size = ty.bytes() as u8;
                             emit_cmoves(ctx, size, cc, lhs, dst);
                         } else {
@@ -4857,8 +4858,19 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // The quotient is in rax.
                 ctx.emit(Inst::gen_move(dst, regs::rax(), input_ty));
             } else {
-                // The remainder is in rdx.
-                ctx.emit(Inst::gen_move(dst, regs::rdx(), input_ty));
+                if size == 1 {
+                    // The remainder is in AH. Right-shift by 8 bits then move from rax.
+                    ctx.emit(Inst::shift_r(
+                        8,
+                        ShiftKind::ShiftRightLogical,
+                        Some(8),
+                        Writable::from_reg(regs::rax()),
+                    ));
+                    ctx.emit(Inst::gen_move(dst, regs::rax(), input_ty));
+                } else {
+                    // The remainder is in rdx.
+                    ctx.emit(Inst::gen_move(dst, regs::rdx(), input_ty));
+                }
             }
         }
 
