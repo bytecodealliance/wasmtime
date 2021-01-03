@@ -10,7 +10,8 @@
 //! This module provides build meta support for lookups in these tables, as well as the shared hash
 //! function used for probing.
 
-use std::iter;
+use alloc::{vec, vec::Vec};
+use core::iter;
 
 /// A primitive hash function for matching opcodes.
 pub fn simple_hash(s: &str) -> usize {
@@ -57,6 +58,7 @@ pub fn generate_table<'cont, T, I: iter::Iterator<Item = &'cont T>, H: Fn(&T) ->
 #[cfg(test)]
 mod tests {
     use super::{generate_table, simple_hash};
+    use alloc::{string::ToString, vec};
 
     #[test]
     fn basic() {

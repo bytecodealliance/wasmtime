@@ -18,6 +18,9 @@
         clippy::use_self
     )
 )]
+#![no_std]
+
+extern crate alloc;
 
 pub mod condcodes;
 pub mod constant_hash;

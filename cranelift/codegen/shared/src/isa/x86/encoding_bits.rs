@@ -1,6 +1,6 @@
 //! Provides a named interface to the `u16` Encoding bits.
 
-use std::ops::RangeInclusive;
+use core::ops::RangeInclusive;
 
 /// Named interface to the `u16` Encoding bits, representing an opcode.
 ///

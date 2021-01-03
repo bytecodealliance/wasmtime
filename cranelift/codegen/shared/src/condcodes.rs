@@ -313,7 +313,7 @@ impl FromStr for FloatCC {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::string::ToString;
+    use alloc::string::ToString;
 
     static INT_ALL: [IntCC; 12] = [
         IntCC::Equal,
