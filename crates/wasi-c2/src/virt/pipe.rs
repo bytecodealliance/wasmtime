@@ -20,11 +20,11 @@ use system_interface::fs::{Advice, FileIoExt};
 /// A variety of `From` impls are provided so that common pipe types are easy to create. For example:
 ///
 /// ```
-/// # use wasi_c2::WasiCtxBuilder;
+/// # use wasi_c2::WasiCtx;
 /// # use wasi_c2::virt::pipe::ReadPipe;
 /// let mut ctx = WasiCtx::builder();
 /// let stdin = ReadPipe::from("hello from stdin!");
-/// ctx.stdin(stdin);
+/// ctx.stdin(Box::new(stdin));
 /// ```
 #[derive(Debug)]
 pub struct ReadPipe<R: Read> {
@@ -207,6 +207,18 @@ impl<R: Read> WasiFile for ReadPipe<R> {
 }
 
 /// A virtual pipe write end.
+///
+/// ```
+/// # use wasi_c2::WasiCtx;
+/// # use wasi_c2::virt::pipe::WritePipe;
+/// let mut ctx = WasiCtx::builder();
+/// let stdout = WritePipe::new_in_memory();
+/// ctx.stdout(Box::new(stdout.clone()));
+/// // use ctx in an instance, then make sure it is dropped:
+/// drop(ctx);
+/// let contents: Vec<u8> = stdout.try_into_inner().expect("sole remaining reference to WritePipe").into_inner();
+/// println!("contents of stdout: {:?}", contents);
+/// ```
 #[derive(Debug)]
 pub struct WritePipe<W: Write> {
     writer: Arc<RwLock<W>>,
