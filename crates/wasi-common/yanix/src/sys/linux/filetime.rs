@@ -53,5 +53,8 @@ pub fn utimensat(
         return Err(err);
     }
 
-    super::utimesat::utimesat(dirfd, path, atime, mtime, symlink_nofollow)
+    #[cfg(not(target_os = "android"))]
+    return super::utimesat::utimesat(dirfd, path, atime, mtime, symlink_nofollow);
+    #[cfg(target_os = "android")]
+    unreachable!();
 }
