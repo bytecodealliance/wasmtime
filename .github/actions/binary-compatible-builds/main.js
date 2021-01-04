@@ -51,6 +51,8 @@ child_process.execFileSync('docker', [
   '-v', `${process.cwd()}:${process.cwd()}`,
   '-v', `${child_process.execSync('rustc --print sysroot').toString().trim()}:/rust:ro`,
   '--env', `PATH=${path}`,
+  // FIXME(rust-lang/rust#80703) this shouldn't be necessary
+  '--env', `LD_LIBRARY_PATH=/rust/lib`,
   'centos:7',
 ], stdio);
 
