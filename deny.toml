@@ -14,7 +14,6 @@ vulnerability = "deny"
 unmaintained = "deny"
 yanked = "deny"
 ignore = [
-    "RUSTSEC-2020-0053", # dirs is unmaintained
 ]
 
 # https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html
