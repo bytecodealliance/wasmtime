@@ -4,6 +4,7 @@ mod ctx;
 mod dir;
 mod error;
 mod file;
+pub mod random;
 pub mod snapshots;
 pub mod stdio;
 mod string_array;

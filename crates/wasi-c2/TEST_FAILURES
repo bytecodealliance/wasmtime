@@ -1,6 +1,4 @@
 
-wasi_tests::big_random_buf
-    - no randomness yet
 wasi_tests::clock_time_get
     - no clocks yet
 wasi_tests::dangling_symlink

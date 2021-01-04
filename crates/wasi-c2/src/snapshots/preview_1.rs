@@ -6,7 +6,7 @@ use fs_set_times::SystemTimeSpec;
 use std::cell::{Ref, RefMut};
 use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use tracing::debug;
 use wiggle::GuestPtr;
 
@@ -801,7 +801,9 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn random_get(&self, buf: &GuestPtr<u8>, buf_len: types::Size) -> Result<(), Error> {
-        unimplemented!()
+        let mut buf = buf.as_array(buf_len).as_slice_mut()?;
+        self.random.get(buf.deref_mut())?;
+        Ok(())
     }
 
     fn sock_recv(
