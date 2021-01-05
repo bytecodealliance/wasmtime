@@ -1,6 +1,4 @@
 
-wasi_tests::clock_time_get
-    - no clocks yet
 wasi_tests::dangling_symlink
     - Dir::open_dir nofollow not yet implemented
 wasi_tests::directory_seek
