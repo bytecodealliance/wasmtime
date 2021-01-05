@@ -397,6 +397,14 @@ impl fmt::Display for UnaryRmROpcode {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum CmpOpcode {
+    /// CMP instruction: compute `a - b` and set flags from result.
+    Cmp,
+    /// TEST instruction: compute `a & b` and set flags from result.
+    Test,
+}
+
 pub(crate) enum InstructionSet {
     SSE,
     SSE2,

@@ -1311,7 +1311,13 @@ pub(crate) fn emit(
             size,
             src: src_e,
             dst: reg_g,
+            opcode,
         } => {
+            let is_cmp = match opcode {
+                CmpOpcode::Cmp => true,
+                CmpOpcode::Test => false,
+            };
+
             let mut prefix = LegacyPrefixes::None;
             if *size == 2 {
                 prefix = LegacyPrefixes::_66;
@@ -1342,16 +1348,26 @@ pub(crate) fn emit(
                         }
                     }
 
-                    // Use the swapped operands encoding, to stay consistent with the output of
+                    // Use the swapped operands encoding for CMP, to stay consistent with the output of
                     // gcc/llvm.
-                    let opcode = if *size == 1 { 0x38 } else { 0x39 };
+                    let opcode = match (*size, is_cmp) {
+                        (1, true) => 0x38,
+                        (_, true) => 0x39,
+                        (1, false) => 0x84,
+                        (_, false) => 0x85,
+                    };
                     emit_std_reg_reg(sink, prefix, opcode, 1, *reg_e, *reg_g, rex);
                 }
 
                 RegMemImm::Mem { addr } => {
                     let addr = &addr.finalize(state, sink);
-                    // Whereas here we revert to the "normal" G-E ordering.
-                    let opcode = if *size == 1 { 0x3A } else { 0x3B };
+                    // Whereas here we revert to the "normal" G-E ordering for CMP.
+                    let opcode = match (*size, is_cmp) {
+                        (1, true) => 0x3A,
+                        (_, true) => 0x3B,
+                        (1, false) => 0x84,
+                        (_, false) => 0x85,
+                    };
                     emit_std_reg_mem(sink, state, info, prefix, opcode, 1, *reg_g, addr, rex);
                 }
 
@@ -1361,16 +1377,25 @@ pub(crate) fn emit(
                     let use_imm8 = low8_will_sign_extend_to_32(*simm32);
 
                     // And also here we use the "normal" G-E ordering.
-                    let opcode = if *size == 1 {
-                        0x80
-                    } else if use_imm8 {
-                        0x83
+                    let opcode = if is_cmp {
+                        if *size == 1 {
+                            0x80
+                        } else if use_imm8 {
+                            0x83
+                        } else {
+                            0x81
+                        }
                     } else {
-                        0x81
+                        if *size == 1 {
+                            0xF6
+                        } else {
+                            0xF7
+                        }
                     };
+                    let subopcode = if is_cmp { 7 } else { 0 };
 
                     let enc_g = int_reg_enc(*reg_g);
-                    emit_std_enc_enc(sink, prefix, opcode, 1, 7 /*subopcode*/, enc_g, rex);
+                    emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, enc_g, rex);
                     emit_simm(sink, if use_imm8 { 1 } else { *size }, *simm32);
                 }
             }
