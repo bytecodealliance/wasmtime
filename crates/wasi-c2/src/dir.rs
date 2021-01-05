@@ -267,7 +267,8 @@ impl WasiDir for cap_std::fs::Dir {
         // cap_std's read_dir does not include . and .., we should prepend these.
         // Why closures? failure of any individual entry doesn't mean the whole method should
         // fail.
-        // Why the tuple? We can't construct a cap_std::fs::DirEntry.
+        // Why is the Ok case a tuple? We can't construct a cap_std::fs::DirEntry, and we don't
+        // have enough info to make a ReaddirEntity yet.
         let rd = vec![
             (|| {
                 let meta = self.dir_metadata()?;
