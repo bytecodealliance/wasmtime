@@ -771,14 +771,21 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     fn path_rename(
         &self,
-        old_fd: types::Fd,
-        old_path: &GuestPtr<'_, str>,
-        new_fd: types::Fd,
-        new_path: &GuestPtr<'_, str>,
+        src_fd: types::Fd,
+        src_path: &GuestPtr<'_, str>,
+        dest_fd: types::Fd,
+        dest_path: &GuestPtr<'_, str>,
     ) -> Result<(), Error> {
-        // XXX: Dir::rename requires (to_dir: &Self), but in the table we just have a dyn WasiDir.
-        // The downcast isn't possible.
-        unimplemented!()
+        let table = self.table();
+        let src_entry: Ref<DirEntry> = table.get(u32::from(src_fd))?;
+        let src_dir = src_entry.get_cap(DirCaps::RENAME_SOURCE)?;
+        let dest_entry: Ref<DirEntry> = table.get(u32::from(dest_fd))?;
+        let dest_dir = dest_entry.get_cap(DirCaps::RENAME_TARGET)?;
+        src_dir.rename(
+            src_path.as_str()?.deref(),
+            dest_dir.deref(),
+            dest_path.as_str()?.deref(),
+        )
     }
 
     fn path_symlink(

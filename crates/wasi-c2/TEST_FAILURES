@@ -12,11 +12,8 @@ wasi_tests::path_filestat
     - fdstat.fs_flags is not populated correctly
 wasi_tests::path_link
     - path_link is not implemented
-wasi_tests::path_rename
-    - path_rename is not implemented. we need to be able to downcast a dyn
-      WasiDir to a concrete Dir for this to be possible - need to reintroduce Any to hierarchy
 wasi_tests::path_rename_trailing_slashes
-    - path_rename is not implemented
+    - unclear, trailing slash behavior is wrong
 wasi_tests::path_symlink_trailing_slashes
     - unclear, path_symlink is giving a ENOTDIR when it expects an EEXIST...
 wasi_tests::poll_oneoff

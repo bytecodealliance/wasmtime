@@ -1,10 +1,12 @@
 use crate::error::Error;
 use crate::file::{FdFlags, FileCaps, FileType, Filestat, OFlags, WasiFile};
+use std::any::Any;
 use std::convert::TryInto;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
 pub trait WasiDir {
+    fn as_any(&self) -> &dyn Any;
     fn open_file(
         &self,
         symlink_follow: bool,
@@ -24,6 +26,7 @@ pub trait WasiDir {
     fn unlink_file(&self, path: &str) -> Result<(), Error>;
     fn read_link(&self, path: &str) -> Result<PathBuf, Error>;
     fn get_filestat(&self) -> Result<Filestat, Error>;
+    fn rename(&self, path: &str, dest_dir: &dyn WasiDir, dest_path: &str) -> Result<(), Error>;
 }
 
 pub(crate) struct DirEntry {
@@ -196,6 +199,9 @@ impl From<ReaddirCursor> for u64 {
 }
 
 impl WasiDir for cap_std::fs::Dir {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn open_file(
         &self,
         symlink_follow: bool,
@@ -348,5 +354,13 @@ impl WasiDir for cap_std::fs::Dir {
             mtim: meta.modified().map(|t| Some(t.into_std())).unwrap_or(None),
             ctim: meta.created().map(|t| Some(t.into_std())).unwrap_or(None),
         })
+    }
+    fn rename(&self, src_path: &str, dest_dir: &dyn WasiDir, dest_path: &str) -> Result<(), Error> {
+        let dest_dir = dest_dir
+            .as_any()
+            .downcast_ref::<Self>()
+            .ok_or(Error::NotCapable)?;
+        self.rename(Path::new(src_path), dest_dir, Path::new(dest_path))?;
+        Ok(())
     }
 }
