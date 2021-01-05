@@ -1,4 +1,13 @@
 
+TODOs:
+* symlink following behavior, trailing slash behavior (closely related to
+  symlinks) in cap-std isnt ready yet.
+* path_filestat_set_times, fd_filestat_set_times: no way to set times of a
+  path or for a Dir
+* File::set_fdflags is unimplemented, File::get_fdflags is lying - these are
+  fcntl on unix, reopenfile / ?? on windows. Not implemented in system-interface yet.
+* async scheduling!
+
 wasi_tests::dangling_symlink
     - symlink following behavior not yet implemented
 wasi_tests::directory_seek
@@ -9,7 +18,8 @@ wasi_tests::fd_flags_set
 wasi_tests::nofollow_errors
     - symlink following behavior not yet implemented
 wasi_tests::path_filestat
-    - fdstat.fs_flags is not populated correctly
+    - fdstat.fs_flags is not populated correctly - APPEND | SYNC aren't
+      present because File::get_fdflags isnt implemented correctly
 wasi_tests::path_link
     - symlink following behavior not yet implemented
 wasi_tests::path_rename_trailing_slashes
