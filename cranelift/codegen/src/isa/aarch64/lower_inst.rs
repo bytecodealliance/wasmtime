@@ -215,9 +215,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let ty = ty.unwrap();
             if !ty.is_vector() {
                 let rn = zero_reg();
-                let rm = put_input_in_rse_imm12(ctx, inputs[0], NarrowValueMode::None);
+                let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
                 let alu_op = choose_32_64(ty, ALUOp::Sub32, ALUOp::Sub64);
-                ctx.emit(alu_inst_imm12(alu_op, rd, rn, rm));
+                ctx.emit(Inst::AluRRR { alu_op, rd, rn, rm });
             } else {
                 let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
                 ctx.emit(Inst::VecMisc {
@@ -693,9 +693,14 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let rm = if is_right_shift {
                     // Right shifts are implemented with a negative left shift.
                     let tmp = ctx.alloc_tmp(RegClass::I64, I32);
-                    let rm = put_input_in_rse_imm12(ctx, inputs[1], NarrowValueMode::None);
+                    let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
                     let rn = zero_reg();
-                    ctx.emit(alu_inst_imm12(ALUOp::Sub32, tmp, rn, rm));
+                    ctx.emit(Inst::AluRRR {
+                        alu_op: ALUOp::Sub32,
+                        rd: tmp,
+                        rn,
+                        rm,
+                    });
                     tmp.to_reg()
                 } else {
                     put_input_in_reg(ctx, inputs[1], NarrowValueMode::None)
