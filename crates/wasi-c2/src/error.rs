@@ -13,8 +13,8 @@ pub enum Error {
     TryFromInt(#[from] std::num::TryFromIntError),
     #[error("Utf8Error: {0}")]
     Utf8(#[from] std::str::Utf8Error),
-    #[error("GetRandom: {0}")]
-    GetRandom(#[from] getrandom::Error),
+    #[error("cap_rand Error: {0}")]
+    CapRand(#[from] cap_rand::Error),
 
     /// Errno::Notcapable: Extension: Capabilities insufficient
     #[error("File not capable: desired {desired:?}, has {has:?}")]

@@ -242,6 +242,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap-rand"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8289d98c0c748a22f1815bc68159255ca059cb4170371c8ab16b11b26886698c"
+dependencies = [
+ "rand",
+]
+
+[[package]]
 name = "cap-std"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2437,11 +2446,11 @@ version = "0.21.0"
 dependencies = [
  "anyhow",
  "cap-fs-ext",
+ "cap-rand",
  "cap-std 0.8.0",
  "cap-time-ext",
  "cfg-if 1.0.0",
  "fs-set-times",
- "getrandom 0.2.0",
  "libc",
  "system-interface",
  "thiserror",

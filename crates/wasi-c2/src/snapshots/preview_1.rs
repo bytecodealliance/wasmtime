@@ -65,7 +65,7 @@ impl From<Error> for types::Errno {
                 | ErrorKind::UnexpectedEof
                 | _ => Errno::Io,
             },
-            Error::GetRandom(_) => Errno::Io,
+            Error::CapRand(_) => Errno::Io,
             Error::TooBig => Errno::TooBig,
             Error::Acces => Errno::Acces,
             Error::Badf => Errno::Badf,
@@ -824,7 +824,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     fn random_get(&self, buf: &GuestPtr<u8>, buf_len: types::Size) -> Result<(), Error> {
         let mut buf = buf.as_array(buf_len).as_slice_mut()?;
-        self.random.get(buf.deref_mut())?;
+        self.random.borrow_mut().try_fill_bytes(buf.deref_mut())?;
         Ok(())
     }
 

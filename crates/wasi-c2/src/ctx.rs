@@ -1,10 +1,10 @@
 use crate::clocks::{WasiMonotonicClock, WasiSystemClock};
 use crate::dir::{DirCaps, DirEntry, WasiDir};
 use crate::file::{FileCaps, FileEntry, WasiFile};
-use crate::random::WasiRandom;
 use crate::string_array::{StringArray, StringArrayError};
 use crate::table::Table;
 use crate::Error;
+use cap_rand::RngCore;
 use std::cell::{RefCell, RefMut};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -12,7 +12,7 @@ use std::rc::Rc;
 pub struct WasiCtx {
     pub(crate) args: StringArray,
     pub(crate) env: StringArray,
-    pub(crate) random: Box<dyn WasiRandom>,
+    pub(crate) random: RefCell<Box<dyn RngCore>>,
     pub(crate) clocks: WasiCtxClocks,
     table: Rc<RefCell<Table>>,
 }
@@ -26,7 +26,7 @@ impl WasiCtx {
         WasiCtx {
             args: StringArray::new(),
             env: StringArray::new(),
-            random: Box::new(crate::random::GetRandom),
+            random: RefCell::new(Box::new(unsafe { cap_rand::rngs::OsRng::default() })),
             clocks: WasiCtxClocks::default(),
             table: Rc::new(RefCell::new(Table::new())),
         }
@@ -117,8 +117,8 @@ impl WasiCtxBuilder {
         Ok(self)
     }
 
-    pub fn random(&mut self, random: Box<dyn WasiRandom>) -> &mut Self {
-        self.0.random = random;
+    pub fn random(&mut self, random: Box<dyn RngCore>) -> &mut Self {
+        self.0.random.replace(random);
         self
     }
 }
