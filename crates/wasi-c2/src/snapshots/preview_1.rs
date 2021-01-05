@@ -670,10 +670,22 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         src_fd: types::Fd,
         src_flags: types::Lookupflags,
         src_path: &GuestPtr<'_, str>,
-        dest_fd: types::Fd,
-        dest_path: &GuestPtr<'_, str>,
+        target_fd: types::Fd,
+        target_path: &GuestPtr<'_, str>,
     ) -> Result<(), Error> {
-        unimplemented!()
+        let table = self.table();
+        let src_entry: Ref<DirEntry> = table.get(u32::from(src_fd))?;
+        let src_dir = src_entry.get_cap(DirCaps::LINK_SOURCE)?;
+        let target_entry: Ref<DirEntry> = table.get(u32::from(target_fd))?;
+        let target_dir = target_entry.get_cap(DirCaps::LINK_TARGET)?;
+        let symlink_follow = src_flags.contains(&types::Lookupflags::SYMLINK_FOLLOW);
+
+        src_dir.hard_link(
+            src_path.as_str()?.deref(),
+            symlink_follow,
+            target_dir.deref(),
+            target_path.as_str()?.deref(),
+        )
     }
 
     fn path_open(

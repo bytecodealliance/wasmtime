@@ -27,6 +27,13 @@ pub trait WasiDir {
     fn read_link(&self, path: &str) -> Result<PathBuf, Error>;
     fn get_filestat(&self) -> Result<Filestat, Error>;
     fn rename(&self, path: &str, dest_dir: &dyn WasiDir, dest_path: &str) -> Result<(), Error>;
+    fn hard_link(
+        &self,
+        path: &str,
+        symlink_follow: bool,
+        target_dir: &dyn WasiDir,
+        target_path: &str,
+    ) -> Result<(), Error>;
 }
 
 pub(crate) struct DirEntry {
@@ -361,6 +368,20 @@ impl WasiDir for cap_std::fs::Dir {
             .downcast_ref::<Self>()
             .ok_or(Error::NotCapable)?;
         self.rename(Path::new(src_path), dest_dir, Path::new(dest_path))?;
+        Ok(())
+    }
+    fn hard_link(
+        &self,
+        src_path: &str,
+        symlink_follow: bool,
+        target_dir: &dyn WasiDir,
+        target_path: &str,
+    ) -> Result<(), Error> {
+        let target_dir = target_dir
+            .as_any()
+            .downcast_ref::<Self>()
+            .ok_or(Error::NotCapable)?;
+        self.hard_link(Path::new(src_path), target_dir, Path::new(target_path))?;
         Ok(())
     }
 }

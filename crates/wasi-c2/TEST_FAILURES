@@ -1,17 +1,17 @@
 
 wasi_tests::dangling_symlink
-    - Dir::open_dir nofollow not yet implemented
+    - symlink following behavior not yet implemented
 wasi_tests::directory_seek
     - something weird about directory open rights / fdstat. need debug
       impl of Caps to see about this
 wasi_tests::fd_flags_set
     - set_fdflags is not implemented. test wanted to clear O_APPEND mode
 wasi_tests::nofollow_errors
-    - nofollow not implemented for dirs
+    - symlink following behavior not yet implemented
 wasi_tests::path_filestat
     - fdstat.fs_flags is not populated correctly
 wasi_tests::path_link
-    - path_link is not implemented
+    - symlink following behavior not yet implemented
 wasi_tests::path_rename_trailing_slashes
     - unclear, trailing slash behavior is wrong
 wasi_tests::path_symlink_trailing_slashes
