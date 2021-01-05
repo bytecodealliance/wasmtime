@@ -126,12 +126,19 @@ impl WasiCtxBuilder {
 pub struct WasiCtxClocks {
     pub(crate) system: Box<dyn WasiSystemClock>,
     pub(crate) monotonic: Box<dyn WasiMonotonicClock>,
+    pub(crate) creation_time: cap_std::time::Instant,
 }
 
 impl Default for WasiCtxClocks {
     fn default() -> WasiCtxClocks {
         let system = Box::new(unsafe { cap_std::time::SystemClock::new() });
-        let monotonic = Box::new(unsafe { cap_std::time::MonotonicClock::new() });
-        WasiCtxClocks { system, monotonic }
+        let monotonic = unsafe { cap_std::time::MonotonicClock::new() };
+        let creation_time = monotonic.now();
+        let monotonic = Box::new(monotonic);
+        WasiCtxClocks {
+            system,
+            monotonic,
+            creation_time,
+        }
     }
 }

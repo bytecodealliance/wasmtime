@@ -173,7 +173,8 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             }
             types::Clockid::Monotonic => {
                 let now = self.clocks.monotonic.now(precision);
-                todo!()
+                let d = now.duration_since(self.clocks.creation_time);
+                Ok(d.as_nanos().try_into()?)
             }
             types::Clockid::ProcessCputimeId | types::Clockid::ThreadCputimeId => Err(Error::Badf),
         }
