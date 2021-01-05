@@ -260,6 +260,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap-time-ext"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e022f6b679d942c100450e32c142c988c79370374d3f7d4776da815c582aff68"
+dependencies = [
+ "cap-primitives 0.8.0",
+ "once_cell",
+ "posish",
+ "winx 0.21.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "capstone"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2426,6 +2438,7 @@ dependencies = [
  "anyhow",
  "cap-fs-ext",
  "cap-std 0.8.0",
+ "cap-time-ext",
  "cfg-if 1.0.0",
  "fs-set-times",
  "getrandom 0.2.0",

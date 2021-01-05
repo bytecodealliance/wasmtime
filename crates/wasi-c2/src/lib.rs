@@ -1,5 +1,6 @@
 #![cfg_attr(feature = "nightly", feature(windows_by_handle))]
 
+pub mod clocks;
 mod ctx;
 mod dir;
 mod error;

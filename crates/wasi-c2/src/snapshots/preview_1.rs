@@ -146,15 +146,37 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn clock_res_get(&self, id: types::Clockid) -> Result<types::Timestamp, Error> {
-        unimplemented!()
+        let resolution = match id {
+            types::Clockid::Realtime => Ok(self.clocks.system.resolution()),
+            types::Clockid::Monotonic => Ok(self.clocks.monotonic.resolution()),
+            types::Clockid::ProcessCputimeId | types::Clockid::ThreadCputimeId => {
+                Err(Error::NotCapable)
+            }
+        }?;
+        Ok(resolution.as_nanos().try_into()?)
     }
 
     fn clock_time_get(
         &self,
         id: types::Clockid,
-        _precision: types::Timestamp,
+        precision: types::Timestamp,
     ) -> Result<types::Timestamp, Error> {
-        unimplemented!()
+        use cap_std::time::Duration;
+        let precision = Duration::from_nanos(precision);
+        match id {
+            types::Clockid::Realtime => {
+                let now = self.clocks.system.now(precision).into_std();
+                let d = now
+                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                    .map_err(|_| Error::NotCapable)?; // XXX wrong
+                Ok(d.as_nanos().try_into()?)
+            }
+            types::Clockid::Monotonic => {
+                let now = self.clocks.monotonic.now(precision);
+                todo!()
+            }
+            types::Clockid::ProcessCputimeId | types::Clockid::ThreadCputimeId => Err(Error::Badf),
+        }
     }
 
     fn fd_advise(

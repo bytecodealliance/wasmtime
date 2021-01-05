@@ -1,3 +1,4 @@
+use crate::clocks::{WasiMonotonicClock, WasiSystemClock};
 use crate::dir::{DirCaps, DirEntry, WasiDir};
 use crate::file::{FileCaps, FileEntry, WasiFile};
 use crate::random::WasiRandom;
@@ -12,6 +13,7 @@ pub struct WasiCtx {
     pub(crate) args: StringArray,
     pub(crate) env: StringArray,
     pub(crate) random: Box<dyn WasiRandom>,
+    pub(crate) clocks: WasiCtxClocks,
     table: Rc<RefCell<Table>>,
 }
 
@@ -25,6 +27,7 @@ impl WasiCtx {
             args: StringArray::new(),
             env: StringArray::new(),
             random: Box::new(crate::random::GetRandom),
+            clocks: WasiCtxClocks::default(),
             table: Rc::new(RefCell::new(Table::new())),
         }
     }
@@ -117,5 +120,18 @@ impl WasiCtxBuilder {
     pub fn random(&mut self, random: Box<dyn WasiRandom>) -> &mut Self {
         self.0.random = random;
         self
+    }
+}
+
+pub struct WasiCtxClocks {
+    pub(crate) system: Box<dyn WasiSystemClock>,
+    pub(crate) monotonic: Box<dyn WasiMonotonicClock>,
+}
+
+impl Default for WasiCtxClocks {
+    fn default() -> WasiCtxClocks {
+        let system = Box::new(unsafe { cap_std::time::SystemClock::new() });
+        let monotonic = Box::new(unsafe { cap_std::time::MonotonicClock::new() });
+        WasiCtxClocks { system, monotonic }
     }
 }
