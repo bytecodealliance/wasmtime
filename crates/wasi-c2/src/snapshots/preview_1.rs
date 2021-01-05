@@ -647,7 +647,8 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let table = self.table();
         let dir_entry: Ref<DirEntry> = table.get(u32::from(dirfd))?;
         let dir = dir_entry.get_cap(DirCaps::PATH_FILESTAT_GET)?;
-        todo!()
+        let filestat = dir.get_path_filestat(path.as_str()?.deref())?;
+        Ok(types::Filestat::from(filestat))
     }
 
     fn path_filestat_set_times(

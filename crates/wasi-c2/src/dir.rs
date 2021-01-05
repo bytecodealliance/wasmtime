@@ -26,6 +26,7 @@ pub trait WasiDir {
     fn unlink_file(&self, path: &str) -> Result<(), Error>;
     fn read_link(&self, path: &str) -> Result<PathBuf, Error>;
     fn get_filestat(&self) -> Result<Filestat, Error>;
+    fn get_path_filestat(&self, path: &str) -> Result<Filestat, Error>;
     fn rename(&self, path: &str, dest_dir: &dyn WasiDir, dest_path: &str) -> Result<(), Error>;
     fn hard_link(
         &self,
@@ -349,7 +350,21 @@ impl WasiDir for cap_std::fs::Dir {
         Ok(link)
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
-        let meta = self.metadata(".")?;
+        let meta = self.dir_metadata()?;
+        use cap_fs_ext::MetadataExt;
+        Ok(Filestat {
+            device_id: meta.dev(),
+            inode: meta.ino(),
+            filetype: FileType::from(&meta.file_type()),
+            nlink: meta.nlink(),
+            size: meta.len(),
+            atim: meta.accessed().map(|t| Some(t.into_std())).unwrap_or(None),
+            mtim: meta.modified().map(|t| Some(t.into_std())).unwrap_or(None),
+            ctim: meta.created().map(|t| Some(t.into_std())).unwrap_or(None),
+        })
+    }
+    fn get_path_filestat(&self, path: &str) -> Result<Filestat, Error> {
+        let meta = self.metadata(Path::new(path))?;
         use cap_fs_ext::MetadataExt;
         Ok(Filestat {
             device_id: meta.dev(),
