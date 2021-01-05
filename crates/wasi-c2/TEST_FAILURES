@@ -2,8 +2,8 @@
 TODOs:
 * symlink following behavior, trailing slash behavior (closely related to
   symlinks) in cap-std isnt ready yet.
-* path_filestat_set_times, fd_filestat_set_times: no way to set times of a
-  path or for a Dir
+* path_filestat_set_times, fd_filestat_set_times: different types used to set
+  times for a Dir vs a File, this is a fs_set_times vs cap_fs_ext divergence
 * File::set_fdflags is unimplemented, File::get_fdflags is lying - these are
   fcntl on unix, reopenfile / ?? on windows. Not implemented in system-interface yet.
 * async scheduling!

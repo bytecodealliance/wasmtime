@@ -685,7 +685,38 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let table = self.table();
         let dir_entry: Ref<DirEntry> = table.get(u32::from(dirfd))?;
         let dir = dir_entry.get_cap(DirCaps::PATH_FILESTAT_SET_TIMES)?;
-        todo!()
+        let path = path.as_str()?;
+
+        // XXX DRY these are in fd_filestat_set_times twice!
+        let set_atim = fst_flags.contains(&types::Fstflags::ATIM);
+        let set_atim_now = fst_flags.contains(&types::Fstflags::ATIM_NOW);
+        let set_mtim = fst_flags.contains(&types::Fstflags::MTIM);
+        let set_mtim_now = fst_flags.contains(&types::Fstflags::MTIM_NOW);
+        if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
+            return Err(Error::Inval);
+        }
+        use cap_fs_ext::SystemTimeSpec;
+        use cap_std::time::{Duration, SystemClock};
+        let atim = if set_atim {
+            Some(SystemTimeSpec::Absolute(
+                SystemClock::UNIX_EPOCH + Duration::from_nanos(atim),
+            ))
+        } else if set_atim_now {
+            Some(SystemTimeSpec::SymbolicNow)
+        } else {
+            None
+        };
+        let mtim = if set_mtim {
+            Some(SystemTimeSpec::Absolute(
+                SystemClock::UNIX_EPOCH + Duration::from_nanos(mtim),
+            ))
+        } else if set_mtim_now {
+            Some(SystemTimeSpec::SymbolicNow)
+        } else {
+            None
+        };
+
+        dir.set_times(path.deref(), atim, mtim)
     }
 
     fn path_link(
