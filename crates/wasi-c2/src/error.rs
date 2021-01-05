@@ -110,6 +110,9 @@ pub enum Error {
     /// Errno::Perm: Operation not permitted
     #[error("Perm: Operation not permitted")]
     Perm,
+    /// Errno::Range: Result too large
+    #[error("Range: Result too large")]
+    Range,
     /// Errno::Spipe: Invalid seek
     #[error("Spipe: Invalid seek")]
     Spipe,

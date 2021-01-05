@@ -91,6 +91,7 @@ impl From<Error> for types::Errno {
             Error::Overflow => Errno::Overflow,
             Error::Pipe => Errno::Pipe,
             Error::Perm => Errno::Perm,
+            Error::Range => Errno::Range,
             Error::Spipe => Errno::Spipe,
             Error::FileNotCapable { .. } => Errno::Notcapable,
             Error::DirNotCapable { .. } => Errno::Notcapable,
@@ -749,7 +750,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let link_bytes = link.as_bytes();
         let link_len = link_bytes.len();
         if link_len > buf_len as usize {
-            return Err(Error::Nametoolong);
+            return Err(Error::Range);
         }
         let mut buf = buf.as_array(link_len as u32).as_slice_mut()?;
         buf.copy_from_slice(link_bytes);

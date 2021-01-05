@@ -23,10 +23,6 @@ wasi_tests::path_symlink_trailing_slashes
     - unclear, path_symlink is giving a ENOTDIR when it expects an EEXIST...
 wasi_tests::poll_oneoff
     - no sched yet
-wasi_tests::readlink
-    - insists on small buffer semantics for readlink that don't seem right
-wasi_tests::readlink_no_buffer
-    - insists on small buffer semantics for readlink that don't seem right
 wasi_tests::remove_directory_trailing_slashes
     - apparently cap-std gives EINVAL when trying to remove dir with
       trailing slash?
