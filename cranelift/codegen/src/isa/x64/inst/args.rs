@@ -145,7 +145,7 @@ impl PrettyPrint for Amode {
 /// A Memory Address. These denote a 64-bit value only.
 /// Used for usual addressing modes as well as addressing modes used during compilation, when the
 /// moving SP offset is not known.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum SyntheticAmode {
     /// A real amode.
     Real(Amode),
@@ -286,7 +286,7 @@ impl PrettyPrintSized for RegMemImm {
 
 /// An operand which is either an integer Register or a value in Memory.  This can denote an 8, 16,
 /// 32, 64, or 128 bit value.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum RegMem {
     Reg { reg: Reg },
     Mem { addr: SyntheticAmode },
