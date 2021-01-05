@@ -1,5 +1,6 @@
 use crate::error::Error;
 use crate::file::{FdFlags, FileCaps, FileType, Filestat, OFlags, WasiFile};
+use cap_fs_ext::SystemTimeSpec;
 use std::any::Any;
 use std::convert::TryInto;
 use std::ops::Deref;
@@ -34,6 +35,12 @@ pub trait WasiDir {
         symlink_follow: bool,
         target_dir: &dyn WasiDir,
         target_path: &str,
+    ) -> Result<(), Error>;
+    fn set_times(
+        &self,
+        path: &str,
+        atime: Option<SystemTimeSpec>,
+        mtime: Option<SystemTimeSpec>,
     ) -> Result<(), Error>;
 }
 
@@ -397,6 +404,15 @@ impl WasiDir for cap_std::fs::Dir {
             .downcast_ref::<Self>()
             .ok_or(Error::NotCapable)?;
         self.hard_link(Path::new(src_path), target_dir, Path::new(target_path))?;
+        Ok(())
+    }
+    fn set_times(
+        &self,
+        path: &str,
+        atime: Option<SystemTimeSpec>,
+        mtime: Option<SystemTimeSpec>,
+    ) -> Result<(), Error> {
+        cap_fs_ext::DirExt::set_times(self, Path::new(path), atime, mtime)?;
         Ok(())
     }
 }

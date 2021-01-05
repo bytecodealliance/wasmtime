@@ -322,8 +322,9 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         mtim: types::Timestamp,
         fst_flags: types::Fstflags,
     ) -> Result<(), Error> {
-        use std::time::{Duration, UNIX_EPOCH};
-        // Validate flags, transform into well-structured arguments
+        let fd = u32::from(fd);
+        let table = self.table();
+        // Validate flags
         let set_atim = fst_flags.contains(&types::Fstflags::ATIM);
         let set_atim_now = fst_flags.contains(&types::Fstflags::ATIM_NOW);
         let set_mtim = fst_flags.contains(&types::Fstflags::MTIM);
@@ -331,36 +332,57 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
             return Err(Error::Inval);
         }
-        let atim = if set_atim {
-            Some(SystemTimeSpec::Absolute(
-                UNIX_EPOCH + Duration::from_nanos(atim),
-            ))
-        } else if set_atim_now {
-            Some(SystemTimeSpec::SymbolicNow)
-        } else {
-            None
-        };
-        let mtim = if set_mtim {
-            Some(SystemTimeSpec::Absolute(
-                UNIX_EPOCH + Duration::from_nanos(mtim),
-            ))
-        } else if set_mtim_now {
-            Some(SystemTimeSpec::SymbolicNow)
-        } else {
-            None
-        };
-
-        let fd = u32::from(fd);
-        let table = self.table();
         if table.is::<FileEntry>(fd) {
+            use std::time::{Duration, UNIX_EPOCH};
+            let atim = if set_atim {
+                Some(SystemTimeSpec::Absolute(
+                    UNIX_EPOCH + Duration::from_nanos(atim),
+                ))
+            } else if set_atim_now {
+                Some(SystemTimeSpec::SymbolicNow)
+            } else {
+                None
+            };
+            let mtim = if set_mtim {
+                Some(SystemTimeSpec::Absolute(
+                    UNIX_EPOCH + Duration::from_nanos(mtim),
+                ))
+            } else if set_mtim_now {
+                Some(SystemTimeSpec::SymbolicNow)
+            } else {
+                None
+            };
+
             let file_entry: Ref<FileEntry> = table.get(fd).unwrap();
             let f = file_entry.get_cap(FileCaps::FILESTAT_SET_TIMES)?;
             f.set_times(atim, mtim)?;
             Ok(())
         } else if table.is::<DirEntry>(fd) {
+            use cap_std::time::{Duration, SystemClock};
             let dir_entry: Ref<DirEntry> = table.get(fd).unwrap();
             let d = dir_entry.get_cap(DirCaps::FILESTAT_SET_TIMES)?;
-            todo!("d.set_times(atim, mtim)?;")
+
+            use cap_fs_ext::SystemTimeSpec;
+            let atim = if set_atim {
+                Some(SystemTimeSpec::Absolute(
+                    SystemClock::UNIX_EPOCH + Duration::from_nanos(atim),
+                ))
+            } else if set_atim_now {
+                Some(SystemTimeSpec::SymbolicNow)
+            } else {
+                None
+            };
+            let mtim = if set_mtim {
+                Some(SystemTimeSpec::Absolute(
+                    SystemClock::UNIX_EPOCH + Duration::from_nanos(mtim),
+                ))
+            } else if set_mtim_now {
+                Some(SystemTimeSpec::SymbolicNow)
+            } else {
+                None
+            };
+
+            d.set_times(".", atim, mtim)
         } else {
             Err(Error::Badf)
         }

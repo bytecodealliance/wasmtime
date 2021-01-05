@@ -29,7 +29,7 @@ cap-std = "0.8"
 cap-fs-ext = "0.8"
 cap-time-ext = "0.8"
 cap-rand = "0.8"
-fs-set-times = "0.2.1"
+fs-set-times = "0.2.2"
 cfg-if = "1"
 
 [badges]
