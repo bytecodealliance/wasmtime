@@ -9,8 +9,6 @@ pub trait WasiFile: FileIoExt + SetTimes {
     fn get_filetype(&self) -> Result<FileType, Error>;
     fn get_fdflags(&self) -> Result<FdFlags, Error>;
     fn set_fdflags(&self, _flags: FdFlags) -> Result<(), Error>;
-    fn get_oflags(&self) -> Result<OFlags, Error>;
-    fn set_oflags(&self, _flags: OFlags) -> Result<(), Error>;
     fn get_filestat(&self) -> Result<Filestat, Error>;
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error>;
 }
@@ -245,12 +243,6 @@ impl WasiFile for cap_std::fs::File {
     }
     fn set_fdflags(&self, _fdflags: FdFlags) -> Result<(), Error> {
         todo!("set_fdflags is not implemented")
-    }
-    fn get_oflags(&self) -> Result<OFlags, Error> {
-        todo!("get_oflags is not implemented");
-    }
-    fn set_oflags(&self, _flags: OFlags) -> Result<(), Error> {
-        todo!("set_oflags is not implemented");
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
         let meta = self.metadata()?;

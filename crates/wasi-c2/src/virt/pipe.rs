@@ -9,7 +9,7 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use crate::file::{FdFlags, FileType, Filestat, OFlags, WasiFile};
+use crate::file::{FdFlags, FileType, Filestat, WasiFile};
 use crate::Error;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, RwLock};
@@ -183,12 +183,6 @@ impl<R: Read> WasiFile for ReadPipe<R> {
     fn set_fdflags(&self, _fdflags: FdFlags) -> Result<(), Error> {
         Err(Error::Perm)
     }
-    fn get_oflags(&self) -> Result<OFlags, Error> {
-        Ok(OFlags::empty())
-    }
-    fn set_oflags(&self, _flags: OFlags) -> Result<(), Error> {
-        Err(Error::Perm)
-    }
     fn get_filestat(&self) -> Result<Filestat, Error> {
         Ok(Filestat {
             device_id: 0,
@@ -359,12 +353,6 @@ impl<W: Write> WasiFile for WritePipe<W> {
         Ok(FdFlags::APPEND)
     }
     fn set_fdflags(&self, _fdflags: FdFlags) -> Result<(), Error> {
-        Err(Error::Perm)
-    }
-    fn get_oflags(&self) -> Result<OFlags, Error> {
-        Ok(OFlags::empty())
-    }
-    fn set_oflags(&self, _flags: OFlags) -> Result<(), Error> {
         Err(Error::Perm)
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
