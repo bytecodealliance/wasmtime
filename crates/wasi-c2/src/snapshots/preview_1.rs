@@ -744,7 +744,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .read_link(path.deref())?
             .into_os_string()
             .into_string()
-            .map_err(|_| Error::Utf8(todo!()))?;
+            .map_err(|_| Error::Ilseq)?;
         let link_bytes = link.as_bytes();
         let link_len = link_bytes.len();
         if link_len > buf_len as usize {

@@ -273,10 +273,7 @@ impl WasiDir for cap_std::fs::Dir {
             let meta = entry.metadata()?;
             let inode = meta.ino();
             let filetype = FileType::from(&meta.file_type());
-            let name = entry
-                .file_name()
-                .into_string()
-                .map_err(|_| Error::Utf8(todo!()))?;
+            let name = entry.file_name().into_string().map_err(|_| Error::Ilseq)?;
             let namelen = name.as_bytes().len().try_into()?;
             let entity = ReaddirEntity {
                 next: ReaddirCursor::from(ix as u64 + 1),
