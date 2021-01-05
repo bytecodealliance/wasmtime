@@ -286,39 +286,35 @@ impl WasiDir for cap_std::fs::Dir {
         use cap_fs_ext::MetadataExt;
 
         // cap_std's read_dir does not include . and .., we should prepend these.
-        // Why closures? failure of any individual entry doesn't mean the whole method should
-        // fail.
-        // Why is the Ok case a tuple? We can't construct a cap_std::fs::DirEntry, and we don't
+        // Why does the Ok contain a tuple? We can't construct a cap_std::fs::DirEntry, and we don't
         // have enough info to make a ReaddirEntity yet.
+        let dir_meta = self.dir_metadata()?;
         let rd = vec![
-            (|| {
-                let meta = self.dir_metadata()?;
+            {
                 let name = ".".to_owned();
-                let namelen = name.as_bytes().len().try_into()?;
-                Ok((FileType::Directory, meta.ino(), namelen, name))
-            })(),
-            (|| {
+                let namelen = name.as_bytes().len().try_into().expect("1 wont overflow");
+                Ok((FileType::Directory, dir_meta.ino(), namelen, name))
+            },
+            {
                 // XXX if parent dir is mounted it *might* be possible to give its inode, but we
                 // don't know that in this context.
                 let name = "..".to_owned();
-                let namelen = name.as_bytes().len().try_into()?;
-                Ok((FileType::Directory, 0, namelen, name))
-            })(),
+                let namelen = name.as_bytes().len().try_into().expect("2 wont overflow");
+                Ok((FileType::Directory, dir_meta.ino(), namelen, name))
+            },
         ]
         .into_iter()
         .chain(
             // Now process the `DirEntry`s:
-            self.read_dir(Path::new("."))
-                .expect("always possible to readdir an open Dir") // XXX is this true?
-                .map(|entry| {
-                    let entry = entry?;
-                    let meta = entry.metadata()?;
-                    let inode = meta.ino();
-                    let filetype = FileType::from(&meta.file_type());
-                    let name = entry.file_name().into_string().map_err(|_| Error::Ilseq)?;
-                    let namelen = name.as_bytes().len().try_into()?;
-                    Ok((filetype, inode, namelen, name))
-                }),
+            self.entries()?.map(|entry| {
+                let entry = entry?;
+                let meta = entry.metadata()?;
+                let inode = meta.ino();
+                let filetype = FileType::from(&meta.file_type());
+                let name = entry.file_name().into_string().map_err(|_| Error::Ilseq)?;
+                let namelen = name.as_bytes().len().try_into()?;
+                Ok((filetype, inode, namelen, name))
+            }),
         )
         // Enumeration of the iterator makes it possible to define the ReaddirCursor
         .enumerate()
