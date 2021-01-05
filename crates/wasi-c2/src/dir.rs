@@ -262,27 +262,59 @@ impl WasiDir for cap_std::fs::Dir {
         &self,
         cursor: ReaddirCursor,
     ) -> Result<Box<dyn Iterator<Item = Result<(ReaddirEntity, String), Error>>>, Error> {
-        let rd = self
-            .read_dir(Path::new("."))
-            .expect("always possible to readdir an open Dir") // XXX is this true?
-            .enumerate()
-            .skip(u64::from(cursor) as usize);
-        Ok(Box::new(rd.map(|(ix, entry)| {
-            use cap_fs_ext::MetadataExt;
-            let entry = entry?;
-            let meta = entry.metadata()?;
-            let inode = meta.ino();
-            let filetype = FileType::from(&meta.file_type());
-            let name = entry.file_name().into_string().map_err(|_| Error::Ilseq)?;
-            let namelen = name.as_bytes().len().try_into()?;
-            let entity = ReaddirEntity {
-                next: ReaddirCursor::from(ix as u64 + 1),
-                filetype,
-                inode,
-                namelen,
-            };
-            Ok((entity, name))
-        })))
+        use cap_fs_ext::MetadataExt;
+
+        // cap_std's read_dir does not include . and .., we should prepend these.
+        // Why closures? failure of any individual entry doesn't mean the whole method should
+        // fail.
+        // Why the tuple? We can't construct a cap_std::fs::DirEntry.
+        let rd = vec![
+            (|| {
+                let meta = self.dir_metadata()?;
+                let name = ".".to_owned();
+                let namelen = name.as_bytes().len().try_into()?;
+                Ok((FileType::Directory, meta.ino(), namelen, name))
+            })(),
+            (|| {
+                // XXX if parent dir is mounted it *might* be possible to give its inode, but we
+                // don't know that in this context.
+                let name = "..".to_owned();
+                let namelen = name.as_bytes().len().try_into()?;
+                Ok((FileType::Directory, 0, namelen, name))
+            })(),
+        ]
+        .into_iter()
+        .chain(
+            // Now process the `DirEntry`s:
+            self.read_dir(Path::new("."))
+                .expect("always possible to readdir an open Dir") // XXX is this true?
+                .map(|entry| {
+                    let entry = entry?;
+                    let meta = entry.metadata()?;
+                    let inode = meta.ino();
+                    let filetype = FileType::from(&meta.file_type());
+                    let name = entry.file_name().into_string().map_err(|_| Error::Ilseq)?;
+                    let namelen = name.as_bytes().len().try_into()?;
+                    Ok((filetype, inode, namelen, name))
+                }),
+        )
+        // Enumeration of the iterator makes it possible to define the ReaddirCursor
+        .enumerate()
+        .map(|(ix, r)| match r {
+            Ok((filetype, inode, namelen, name)) => Ok((
+                ReaddirEntity {
+                    next: ReaddirCursor::from(ix as u64 + 1),
+                    filetype,
+                    inode,
+                    namelen,
+                },
+                name,
+            )),
+            Err(e) => Err(e),
+        })
+        .skip(u64::from(cursor) as usize);
+
+        Ok(Box::new(rd))
     }
 
     fn symlink(&self, src_path: &str, dest_path: &str) -> Result<(), Error> {

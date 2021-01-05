@@ -6,8 +6,6 @@ wasi_tests::directory_seek
       impl of Caps to see about this
 wasi_tests::fd_flags_set
     - set_fdflags is not implemented. test wanted to clear O_APPEND mode
-wasi_tests::fd_readdir
-    - test expects `..` and `.`, Dir::readdir doesnt provide them
 wasi_tests::nofollow_errors
     - nofollow not implemented for dirs
 wasi_tests::path_filestat
