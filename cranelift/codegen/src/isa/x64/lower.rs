@@ -248,12 +248,6 @@ fn non_reg_input_to_sext_imm(input: NonRegInput, input_ty: Type) -> Option<u32> 
     })
 }
 
-fn input_to_sext_imm<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Option<u32> {
-    let input = ctx.get_input_as_source_or_const(spec.insn, spec.input);
-    let input_ty = ctx.input_ty(spec.insn, spec.input);
-    non_reg_input_to_sext_imm(input, input_ty)
-}
-
 fn input_to_imm<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Option<u64> {
     ctx.get_input_as_source_or_const(spec.insn, spec.input)
         .constant
@@ -3731,10 +3725,25 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     let cond_code = ctx.data(icmp).cond_code().unwrap();
                     CC::from_intcc(cond_code)
                 } else {
-                    // The input is a boolean value, compare it against zero.
+                    let sel_ty = ctx.input_ty(insn, 0);
                     let size = ctx.input_ty(insn, 0).bytes() as u8;
                     let test = put_input_in_reg(ctx, flag_input);
-                    ctx.emit(Inst::cmp_rmi_r(size, RegMemImm::imm(0), test));
+                    let test_input = if sel_ty == types::B1 {
+                        // The input is a boolean value; test the LSB for nonzero with:
+                        //     test reg, 1
+                        RegMemImm::imm(1)
+                    } else {
+                        // The input is an integer; test the whole value for
+                        // nonzero with:
+                        //     test reg, reg
+                        //
+                        // (It doesn't make sense to have a boolean wider than
+                        // one bit here -- which bit would cause us to select an
+                        // input?)
+                        assert!(!is_bool_ty(sel_ty));
+                        RegMemImm::reg(test)
+                    };
+                    ctx.emit(Inst::test_rmi_r(size, test_input, test));
                     CC::NZ
                 };
 
@@ -4355,7 +4364,18 @@ impl LowerBackend for X64Backend {
                             _ => unreachable!(),
                         };
                         let size_bytes = src_ty.bytes() as u8;
-                        ctx.emit(Inst::cmp_rmi_r(size_bytes, RegMemImm::imm(0), src));
+                        // See case for `Opcode::Select` above re: testing the
+                        // boolean input.
+                        let test_input = if src_ty == types::B1 {
+                            // test src, 1
+                            RegMemImm::imm(1)
+                        } else {
+                            assert!(!is_bool_ty(src_ty));
+                            // test src, src
+                            RegMemImm::reg(src)
+                        };
+
+                        ctx.emit(Inst::test_rmi_r(size_bytes, test_input, src));
                         ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
                     } else {
                         unimplemented!("brz/brnz with non-int type {:?}", src_ty);

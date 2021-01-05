@@ -168,9 +168,10 @@ pub enum Inst {
         dst: Writable<Reg>,
     },
 
-    /// Integer comparisons/tests: cmp (b w l q) (reg addr imm) reg.
+    /// Integer comparisons/tests: cmp or test (b w l q) (reg addr imm) reg.
     CmpRmiR {
         size: u8, // 1, 2, 4 or 8
+        opcode: CmpOpcode,
         src: RegMemImm,
         dst: Reg,
     },
@@ -913,8 +914,30 @@ impl Inst {
     ) -> Inst {
         src.assert_regclass_is(RegClass::I64);
         debug_assert!(size == 8 || size == 4 || size == 2 || size == 1);
-        debug_assert!(dst.get_class() == RegClass::I64);
-        Inst::CmpRmiR { size, src, dst }
+        debug_assert_eq!(dst.get_class(), RegClass::I64);
+        Inst::CmpRmiR {
+            size,
+            src,
+            dst,
+            opcode: CmpOpcode::Cmp,
+        }
+    }
+
+    /// Does a comparison of dst & src for operands of size `size`.
+    pub(crate) fn test_rmi_r(
+        size: u8, // 1, 2, 4 or 8
+        src: RegMemImm,
+        dst: Reg,
+    ) -> Inst {
+        src.assert_regclass_is(RegClass::I64);
+        debug_assert!(size == 8 || size == 4 || size == 2 || size == 1);
+        debug_assert_eq!(dst.get_class(), RegClass::I64);
+        Inst::CmpRmiR {
+            size,
+            src,
+            dst,
+            opcode: CmpOpcode::Test,
+        }
     }
 
     pub(crate) fn trap(trap_code: TrapCode) -> Inst {
@@ -1597,12 +1620,23 @@ impl PrettyPrint for Inst {
                 dst.to_reg().show_rru(mb_rru)
             ),
 
-            Inst::CmpRmiR { size, src, dst } => format!(
-                "{} {}, {}",
-                ljustify2("cmp".to_string(), suffix_bwlq(*size)),
-                src.show_rru_sized(mb_rru, *size),
-                show_ireg_sized(*dst, mb_rru, *size)
-            ),
+            Inst::CmpRmiR {
+                size,
+                src,
+                dst,
+                opcode,
+            } => {
+                let op = match opcode {
+                    CmpOpcode::Cmp => "cmp",
+                    CmpOpcode::Test => "test",
+                };
+                format!(
+                    "{} {}, {}",
+                    ljustify2(op.to_string(), suffix_bwlq(*size)),
+                    src.show_rru_sized(mb_rru, *size),
+                    show_ireg_sized(*dst, mb_rru, *size)
+                )
+            }
 
             Inst::Setcc { cc, dst } => format!(
                 "{} {}",

@@ -2649,6 +2649,88 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
+    // TestRmiR
+    insns.push((
+        Inst::test_rmi_r(8, RegMemImm::reg(r15), rdx),
+        "4C85FA",
+        "testq   %r15, %rdx",
+    ));
+    insns.push((
+        Inst::test_rmi_r(8, RegMemImm::mem(Amode::imm_reg(99, rdi)), rdx),
+        "48855763",
+        "testq   99(%rdi), %rdx",
+    ));
+    insns.push((
+        Inst::test_rmi_r(8, RegMemImm::imm(76543210), rdx),
+        "48F7C2EAF48F04",
+        "testq   $76543210, %rdx",
+    ));
+    //
+    insns.push((
+        Inst::test_rmi_r(4, RegMemImm::reg(r15), rdx),
+        "4485FA",
+        "testl   %r15d, %edx",
+    ));
+    insns.push((
+        Inst::test_rmi_r(4, RegMemImm::mem(Amode::imm_reg(99, rdi)), rdx),
+        "855763",
+        "testl   99(%rdi), %edx",
+    ));
+    insns.push((
+        Inst::test_rmi_r(4, RegMemImm::imm(76543210), rdx),
+        "F7C2EAF48F04",
+        "testl   $76543210, %edx",
+    ));
+    //
+    insns.push((
+        Inst::test_rmi_r(2, RegMemImm::reg(r15), rdx),
+        "664485FA",
+        "testw   %r15w, %dx",
+    ));
+    insns.push((
+        Inst::test_rmi_r(2, RegMemImm::mem(Amode::imm_reg(99, rdi)), rdx),
+        "66855763",
+        "testw   99(%rdi), %dx",
+    ));
+    insns.push((
+        Inst::test_rmi_r(2, RegMemImm::imm(23210), rdx),
+        "66F7C2AA5A",
+        "testw   $23210, %dx",
+    ));
+    //
+    insns.push((
+        Inst::test_rmi_r(1, RegMemImm::reg(r15), rdx),
+        "4484FA",
+        "testb   %r15b, %dl",
+    ));
+    insns.push((
+        Inst::test_rmi_r(1, RegMemImm::mem(Amode::imm_reg(99, rdi)), rdx),
+        "845763",
+        "testb   99(%rdi), %dl",
+    ));
+    insns.push((
+        Inst::test_rmi_r(1, RegMemImm::imm(70), rdx),
+        "F6C246",
+        "testb   $70, %dl",
+    ));
+    // Extra byte-cases (paranoia!) for test_rmi_r for first operand = R
+    insns.push((
+        Inst::test_rmi_r(1, RegMemImm::reg(rax), rbx),
+        "84C3",
+        "testb   %al, %bl",
+    ));
+    insns.push((
+        Inst::test_rmi_r(1, RegMemImm::reg(rcx), rsi),
+        "4084CE",
+        "testb   %cl, %sil",
+    ));
+    insns.push((
+        Inst::test_rmi_r(1, RegMemImm::reg(rcx), r10),
+        "4184CA",
+        "testb   %cl, %r10b",
+    ));
+
+    // ========================================================
     // SetCC
     insns.push((Inst::setcc(CC::O, w_rsi), "400F90C6", "seto    %sil"));
     insns.push((Inst::setcc(CC::NLE, w_rsi), "400F9FC6", "setnle  %sil"));
