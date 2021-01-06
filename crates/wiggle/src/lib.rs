@@ -928,3 +928,9 @@ impl Pointee for str {
         <[u8]>::debug(pointer, f)
     }
 }
+
+#[derive(Debug, Clone)]
+pub enum Trap {
+    I32(i32),
+    String(String),
+}

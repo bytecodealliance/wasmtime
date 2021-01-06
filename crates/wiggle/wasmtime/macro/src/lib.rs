@@ -199,8 +199,9 @@ fn generate_func(
                         #(#arg_names),*
                     );
                     match result {
-                        Ok(r) => {return Ok(r.into());},
-                        Err(err) => { return Err(wasmtime::Trap::new(err)); },
+                        Ok(r) => Ok(r.into()),
+                        Err(wasmtime_wiggle::Trap::String(err)) => Err(wasmtime::Trap::new(err)),
+                        Err(wasmtime_wiggle::Trap::I32(err)) => Err(wasmtime::Trap::i32_exit(err)),
                     }
                 }
             }
