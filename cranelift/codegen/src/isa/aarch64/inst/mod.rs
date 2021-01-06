@@ -5,9 +5,7 @@
 
 use crate::binemit::CodeOffset;
 use crate::ir::types::{
-    B1, B16, B16X4, B16X8, B32, B32X2, B32X4, B64, B64X2, B8, B8X16, B8X8, F32, F32X2, F32X4, F64,
-    F64X2, FFLAGS, I16, I16X4, I16X8, I32, I32X2, I32X4, I64, I64X2, I8, I8X16, I8X8, IFLAGS, R32,
-    R64,
+    B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS, R32, R64,
 };
 use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, TrapCode, Type};
 use crate::isa::CallConv;
@@ -1304,7 +1302,7 @@ impl Inst {
     }
 
     /// Create instructions that load a 32-bit floating-point constant.
-    pub fn load_fp_constant32<F: FnMut(RegClass, Type) -> Writable<Reg>>(
+    pub fn load_fp_constant32<F: FnMut(Type) -> Writable<Reg>>(
         rd: Writable<Reg>,
         value: u32,
         mut alloc_tmp: F,
@@ -1322,7 +1320,7 @@ impl Inst {
         } else {
             // TODO: use FMOV immediate form when `value` has sufficiently few mantissa/exponent
             // bits.
-            let tmp = alloc_tmp(RegClass::I64, I32);
+            let tmp = alloc_tmp(I32);
             let mut insts = Inst::load_constant(tmp, value as u64);
 
             insts.push(Inst::MovToFpu {
@@ -1336,7 +1334,7 @@ impl Inst {
     }
 
     /// Create instructions that load a 64-bit floating-point constant.
-    pub fn load_fp_constant64<F: FnMut(RegClass, Type) -> Writable<Reg>>(
+    pub fn load_fp_constant64<F: FnMut(Type) -> Writable<Reg>>(
         rd: Writable<Reg>,
         const_data: u64,
         mut alloc_tmp: F,
@@ -1350,7 +1348,7 @@ impl Inst {
         // bits.  Also, treat it as half of a 128-bit vector and consider replicated
         // patterns. Scalar MOVI might also be an option.
         } else if const_data & (u32::MAX as u64) == 0 {
-            let tmp = alloc_tmp(RegClass::I64, I64);
+            let tmp = alloc_tmp(I64);
             let mut insts = Inst::load_constant(tmp, const_data);
 
             insts.push(Inst::MovToFpu {
@@ -1366,7 +1364,7 @@ impl Inst {
     }
 
     /// Create instructions that load a 128-bit vector constant.
-    pub fn load_fp_constant128<F: FnMut(RegClass, Type) -> Writable<Reg>>(
+    pub fn load_fp_constant128<F: FnMut(Type) -> Writable<Reg>>(
         rd: Writable<Reg>,
         const_data: u128,
         alloc_tmp: F,
@@ -1416,7 +1414,7 @@ impl Inst {
 
     /// Create instructions that load a vector constant consisting of elements with
     /// the same value.
-    pub fn load_replicated_vector_pattern<F: FnMut(RegClass, Type) -> Writable<Reg>>(
+    pub fn load_replicated_vector_pattern<F: FnMut(Type) -> Writable<Reg>>(
         rd: Writable<Reg>,
         pattern: u64,
         size: VectorSize,
@@ -1472,7 +1470,7 @@ impl Inst {
         } else if let Some(imm) = ASIMDFPModImm::maybe_from_u64(pattern, lane_size) {
             smallvec![Inst::VecDupFPImm { rd, imm, size }]
         } else {
-            let tmp = alloc_tmp(RegClass::I64, I64);
+            let tmp = alloc_tmp(I64);
             let mut insts = SmallVec::from(&Inst::load_constant(tmp, pattern)[..]);
 
             insts.push(Inst::VecDup {
@@ -2862,12 +2860,16 @@ impl MachInst for Inst {
         }
     }
 
-    fn gen_constant<F: FnMut(RegClass, Type) -> Writable<Reg>>(
-        to_reg: Writable<Reg>,
-        value: u64,
+    fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
+        to_regs: ValueRegs<Writable<Reg>>,
+        value: u128,
         ty: Type,
         alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
+        let to_reg = to_regs
+            .only_reg()
+            .expect("multi-reg values not supported yet");
+        let value = value as u64;
         if ty == F64 {
             Inst::load_fp_constant64(to_reg, value, alloc_tmp)
         } else if ty == F32 {
@@ -2905,14 +2907,28 @@ impl MachInst for Inst {
         None
     }
 
-    fn rc_for_type(ty: Type) -> CodegenResult<RegClass> {
+    fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
         match ty {
-            I8 | I16 | I32 | I64 | B1 | B8 | B16 | B32 | B64 | R32 | R64 => Ok(RegClass::I64),
-            F32 | F64 => Ok(RegClass::V128),
-            IFLAGS | FFLAGS => Ok(RegClass::I64),
-            B8X8 | B8X16 | B16X4 | B16X8 | B32X2 | B32X4 | B64X2 => Ok(RegClass::V128),
-            F32X2 | I8X8 | I16X4 | I32X2 => Ok(RegClass::V128),
-            F32X4 | F64X2 | I8X16 | I16X8 | I32X4 | I64X2 => Ok(RegClass::V128),
+            I8 => Ok((&[RegClass::I64], &[I8])),
+            I16 => Ok((&[RegClass::I64], &[I16])),
+            I32 => Ok((&[RegClass::I64], &[I32])),
+            I64 => Ok((&[RegClass::I64], &[I64])),
+            B1 => Ok((&[RegClass::I64], &[B1])),
+            B8 => Ok((&[RegClass::I64], &[B8])),
+            B16 => Ok((&[RegClass::I64], &[B16])),
+            B32 => Ok((&[RegClass::I64], &[B32])),
+            B64 => Ok((&[RegClass::I64], &[B64])),
+            R32 => panic!("32-bit reftype pointer should never be seen on AArch64"),
+            R64 => Ok((&[RegClass::I64], &[R64])),
+            F32 => Ok((&[RegClass::V128], &[F32])),
+            F64 => Ok((&[RegClass::V128], &[F64])),
+            I128 => Ok((&[RegClass::I64, RegClass::I64], &[I64, I64])),
+            B128 => Ok((&[RegClass::I64, RegClass::I64], &[B64, B64])),
+            _ if ty.is_vector() => {
+                assert!(ty.bits() <= 128);
+                Ok((&[RegClass::V128], &[I8X16]))
+            }
+            IFLAGS | FFLAGS => Ok((&[RegClass::I64], &[I64])),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty

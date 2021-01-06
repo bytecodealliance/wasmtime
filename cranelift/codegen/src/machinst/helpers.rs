@@ -1,6 +1,6 @@
 //! Miscellaneous helpers for machine backends.
 
-use super::{InsnOutput, LowerCtx, VCodeInst};
+use super::{InsnOutput, LowerCtx, VCodeInst, ValueRegs};
 use crate::ir::Type;
 use regalloc::{Reg, Writable};
 
@@ -23,6 +23,6 @@ pub(crate) fn ty_has_float_or_vec_representation(ty: Type) -> bool {
 pub(crate) fn get_output_reg<I: VCodeInst, C: LowerCtx<I = I>>(
     ctx: &mut C,
     spec: InsnOutput,
-) -> Writable<Reg> {
+) -> ValueRegs<Writable<Reg>> {
     ctx.get_output(spec.insn, spec.output)
 }

@@ -82,7 +82,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
                 let reg = rreg(next_rreg);
 
                 ret.push(ABIArg::Reg(
-                    reg.to_real_reg(),
+                    ValueRegs::one(reg.to_real_reg()),
                     param.value_type,
                     param.extension,
                     param.purpose,
@@ -102,7 +102,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
             if next_rreg < max_reg_val {
                 ret.push(ABIArg::Reg(
-                    rreg(next_rreg).to_real_reg(),
+                    ValueRegs::one(rreg(next_rreg).to_real_reg()),
                     I32,
                     ir::ArgumentExtension::None,
                     ir::ArgumentPurpose::Normal,
@@ -185,7 +185,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
         Inst::EpiloguePlaceholder
     }
 
-    fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallVec<[Inst; 4]> {
+    fn gen_add_imm(into_reg: Writable<Reg>, from_reg: Reg, imm: u32) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
 
         if let Some(imm12) = UImm12::maybe_from_i64(imm as i64) {
@@ -209,7 +209,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
         insts
     }
 
-    fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallVec<[Inst; 2]> {
+    fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
         insts.push(Inst::Cmp {
             rn: sp_reg(),
@@ -243,7 +243,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
         Inst::gen_store(from_reg, mem, ty)
     }
 
-    fn gen_sp_reg_adjust(amount: i32) -> SmallVec<[Inst; 2]> {
+    fn gen_sp_reg_adjust(amount: i32) -> SmallInstVec<Inst> {
         let mut ret = SmallVec::new();
 
         if amount == 0 {
@@ -283,7 +283,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
         Inst::VirtualSPOffsetAdj { offset }
     }
 
-    fn gen_prologue_frame_setup() -> SmallVec<[Inst; 2]> {
+    fn gen_prologue_frame_setup() -> SmallInstVec<Inst> {
         let mut ret = SmallVec::new();
         let reg_list = vec![fp_reg(), lr_reg()];
         ret.push(Inst::Push { reg_list });
@@ -294,7 +294,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
         ret
     }
 
-    fn gen_epilogue_frame_restore() -> SmallVec<[Inst; 2]> {
+    fn gen_epilogue_frame_restore() -> SmallInstVec<Inst> {
         let mut ret = SmallVec::new();
         ret.push(Inst::Mov {
             rd: writable_sp_reg(),
@@ -305,7 +305,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
         ret
     }
 
-    fn gen_probestack(_: u32) -> SmallVec<[Self::I; 2]> {
+    fn gen_probestack(_: u32) -> SmallInstVec<Self::I> {
         // TODO: implement if we ever require stack probes on ARM32 (unlikely
         // unless Lucet is ported)
         smallvec![]

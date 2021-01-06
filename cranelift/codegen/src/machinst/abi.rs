@@ -5,8 +5,12 @@ use crate::ir::StackSlot;
 use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::settings;
-
 use regalloc::{Reg, Set, SpillSlot, Writable};
+use smallvec::SmallVec;
+
+/// A small vector of instructions (with some reasonable size); appropriate for
+/// a small fixed sequence implementing one operation.
+pub type SmallInstVec<I> = SmallVec<[I; 4]>;
 
 /// Trait implemented by an object that tracks ABI-related state (e.g., stack
 /// layout) and can generate code while emitting the *body* of a function.
@@ -14,9 +18,9 @@ pub trait ABICallee {
     /// The instruction type for the ISA associated with this ABI.
     type I: VCodeInst;
 
-    /// Does the ABI-body code need a temp reg? One will be provided to `init()`
-    /// as the `maybe_tmp` arg if so.
-    fn temp_needed(&self) -> bool;
+    /// Does the ABI-body code need a temp reg (and if so, of what type)? One
+    /// will be provided to `init()` as the `maybe_tmp` arg if so.
+    fn temp_needed(&self) -> Option<Type>;
 
     /// Initialize. This is called after the ABICallee is constructed because it
     /// may be provided with a temp vreg, which can only be allocated once the
@@ -52,7 +56,11 @@ pub trait ABICallee {
 
     /// Generate an instruction which copies an argument to a destination
     /// register.
-    fn gen_copy_arg_to_reg(&self, idx: usize, into_reg: Writable<Reg>) -> Self::I;
+    fn gen_copy_arg_to_regs(
+        &self,
+        idx: usize,
+        into_reg: ValueRegs<Writable<Reg>>,
+    ) -> SmallInstVec<Self::I>;
 
     /// Is the given argument needed in the body (as opposed to, e.g., serving
     /// only as a special ABI-specific placeholder)? This controls whether
@@ -67,7 +75,11 @@ pub trait ABICallee {
     fn gen_retval_area_setup(&self) -> Option<Self::I>;
 
     /// Generate an instruction which copies a source register to a return value slot.
-    fn gen_copy_reg_to_retval(&self, idx: usize, from_reg: Writable<Reg>) -> Vec<Self::I>;
+    fn gen_copy_regs_to_retval(
+        &self,
+        idx: usize,
+        from_reg: ValueRegs<Writable<Reg>>,
+    ) -> SmallInstVec<Self::I>;
 
     /// Generate a return instruction.
     fn gen_ret(&self) -> Self::I;
@@ -99,17 +111,33 @@ pub trait ABICallee {
         slot: StackSlot,
         offset: u32,
         ty: Type,
-        into_reg: Writable<Reg>,
-    ) -> Self::I;
+        into_reg: ValueRegs<Writable<Reg>>,
+    ) -> SmallInstVec<Self::I>;
 
     /// Store to a stackslot.
-    fn store_stackslot(&self, slot: StackSlot, offset: u32, ty: Type, from_reg: Reg) -> Self::I;
+    fn store_stackslot(
+        &self,
+        slot: StackSlot,
+        offset: u32,
+        ty: Type,
+        from_reg: ValueRegs<Reg>,
+    ) -> SmallInstVec<Self::I>;
 
     /// Load from a spillslot.
-    fn load_spillslot(&self, slot: SpillSlot, ty: Type, into_reg: Writable<Reg>) -> Self::I;
+    fn load_spillslot(
+        &self,
+        slot: SpillSlot,
+        ty: Type,
+        into_reg: ValueRegs<Writable<Reg>>,
+    ) -> SmallInstVec<Self::I>;
 
     /// Store to a spillslot.
-    fn store_spillslot(&self, slot: SpillSlot, ty: Type, from_reg: Reg) -> Self::I;
+    fn store_spillslot(
+        &self,
+        slot: SpillSlot,
+        ty: Type,
+        from_reg: ValueRegs<Reg>,
+    ) -> SmallInstVec<Self::I>;
 
     /// Generate a stack map, given a list of spillslots and the emission state
     /// at a given program point (prior to emission fo the safepointing
@@ -125,13 +153,13 @@ pub trait ABICallee {
     /// `store_retval`, and spillslot accesses.)  `self` is mutable so that we
     /// can store information in it which will be useful when creating the
     /// epilogue.
-    fn gen_prologue(&mut self) -> Vec<Self::I>;
+    fn gen_prologue(&mut self) -> SmallInstVec<Self::I>;
 
     /// Generate an epilogue, post-regalloc. Note that this must generate the
     /// actual return instruction (rather than emitting this in the lowering
     /// logic), because the epilogue code comes before the return and the two are
     /// likely closely related.
-    fn gen_epilogue(&self) -> Vec<Self::I>;
+    fn gen_epilogue(&self) -> SmallInstVec<Self::I>;
 
     /// Returns the full frame size for the given function, after prologue
     /// emission has run. This comprises the spill slots and stack-storage slots
@@ -188,19 +216,19 @@ pub trait ABICaller {
     fn num_args(&self) -> usize;
 
     /// Emit a copy of an argument value from a source register, prior to the call.
-    fn emit_copy_reg_to_arg<C: LowerCtx<I = Self::I>>(
+    fn emit_copy_regs_to_arg<C: LowerCtx<I = Self::I>>(
         &self,
         ctx: &mut C,
         idx: usize,
-        from_reg: Reg,
+        from_reg: ValueRegs<Reg>,
     );
 
     /// Emit a copy a return value into a destination register, after the call returns.
-    fn emit_copy_retval_to_reg<C: LowerCtx<I = Self::I>>(
+    fn emit_copy_retval_to_regs<C: LowerCtx<I = Self::I>>(
         &self,
         ctx: &mut C,
         idx: usize,
-        into_reg: Writable<Reg>,
+        into_reg: ValueRegs<Writable<Reg>>,
     );
 
     /// Emit code to pre-adjust the stack, prior to argument copies and call.
