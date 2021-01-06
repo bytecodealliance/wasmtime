@@ -25,5 +25,8 @@ wiggle = { path = "../wiggle", version = "0.21.0" }
 openvino = "0.1.5"
 thiserror = "1.0"
 
+[build-dependencies]
+walkdir = "2.3"
+
 [badges]
 maintenance = { status = "experimental" }
