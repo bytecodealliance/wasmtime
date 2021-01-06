@@ -1,5 +1,5 @@
 use {
-    proc_macro2::{Span, TokenStream},
+    proc_macro2::Span,
     std::collections::HashMap,
     syn::{
         braced,
@@ -16,7 +16,6 @@ pub struct Config {
     pub witx: WitxConf,
     pub ctx: CtxConf,
     pub modules: ModulesConf,
-    pub missing_memory: MissingMemoryConf,
 }
 
 #[derive(Debug, Clone)]
@@ -25,7 +24,6 @@ pub enum ConfigField {
     Witx(WitxConf),
     Ctx(CtxConf),
     Modules(ModulesConf),
-    MissingMemory(MissingMemoryConf),
 }
 
 mod kw {
@@ -36,7 +34,6 @@ mod kw {
     syn::custom_keyword!(modules);
     syn::custom_keyword!(name);
     syn::custom_keyword!(docs);
-    syn::custom_keyword!(missing_memory);
     syn::custom_keyword!(function_override);
 }
 
@@ -63,10 +60,6 @@ impl Parse for ConfigField {
             input.parse::<kw::modules>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Modules(input.parse()?))
-        } else if lookahead.peek(kw::missing_memory) {
-            input.parse::<kw::missing_memory>()?;
-            input.parse::<Token![:]>()?;
-            Ok(ConfigField::MissingMemory(input.parse()?))
         } else {
             Err(lookahead.error())
         }
@@ -79,7 +72,6 @@ impl Config {
         let mut witx = None;
         let mut ctx = None;
         let mut modules = None;
-        let mut missing_memory = None;
         for f in fields {
             match f {
                 ConfigField::Target(c) => {
@@ -106,12 +98,6 @@ impl Config {
                     }
                     modules = Some(c);
                 }
-                ConfigField::MissingMemory(c) => {
-                    if missing_memory.is_some() {
-                        return Err(Error::new(err_loc, "duplicate `missing_memory` field"));
-                    }
-                    missing_memory = Some(c);
-                }
             }
         }
         Ok(Config {
@@ -119,8 +105,6 @@ impl Config {
             witx: witx.ok_or_else(|| Error::new(err_loc, "`witx` field required"))?,
             ctx: ctx.ok_or_else(|| Error::new(err_loc, "`ctx` field required"))?,
             modules: modules.ok_or_else(|| Error::new(err_loc, "`modules` field required"))?,
-            missing_memory: missing_memory
-                .ok_or_else(|| Error::new(err_loc, "`missing_memory` field required"))?,
         })
     }
 
@@ -261,20 +245,6 @@ impl Parse for ModulesConf {
             })?;
         Ok(ModulesConf {
             mods: fields.into_iter().collect(),
-        })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct MissingMemoryConf {
-    pub err: TokenStream,
-}
-impl Parse for MissingMemoryConf {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let contents;
-        let _lbrace = braced!(contents in input);
-        Ok(MissingMemoryConf {
-            err: contents.parse()?,
         })
     }
 }
