@@ -1,4 +1,4 @@
-use crate::file::{FdFlags, FileType, Filestat, OFlags, WasiFile};
+use crate::file::{FdFlags, FileType, Filestat, WasiFile};
 use crate::Error;
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, RawFd};
