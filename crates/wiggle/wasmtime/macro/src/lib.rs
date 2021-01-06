@@ -6,7 +6,7 @@ use wiggle_generate::Names;
 
 mod config;
 
-use config::{MissingMemoryConf, ModuleConf, TargetConf};
+use config::{ModuleConf, TargetConf};
 
 /// Define the structs required to integrate a Wiggle implementation with Wasmtime.
 ///
@@ -41,9 +41,6 @@ use config::{MissingMemoryConf, ModuleConf, TargetConf};
 ///    Example:
 ///    `modules: { some_module => { name: SomeTypeName, docs: "Doc string for definition of
 ///     SomeTypeName here", function_override: { foo => my_own_foo } }`.
-/// * `missing_memory`: Describes the error value to return in case the calling module does not
-///   export a Memory as `"memory"`. This value is given in braces, e.g. `missing_memory: {
-///   wasi_common::wasi::Errno::Inval }`.
 ///
 #[proc_macro]
 pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
@@ -55,13 +52,7 @@ pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
         let module = doc
             .module(&witx::Id::new(name))
             .unwrap_or_else(|| panic!("witx document did not contain module named '{}'", name));
-        generate_module(
-            &module,
-            &module_conf,
-            &names,
-            &config.target,
-            &config.missing_memory,
-        )
+        generate_module(&module, &module_conf, &names, &config.target)
     });
     quote!( #(#modules)* ).into()
 }
@@ -71,7 +62,6 @@ fn generate_module(
     module_conf: &ModuleConf,
     names: &Names,
     target_conf: &TargetConf,
-    missing_mem_conf: &MissingMemoryConf,
 ) -> TokenStream2 {
     let fields = module.funcs().map(|f| {
         let name_ident = names.func(&f.name);
@@ -103,7 +93,7 @@ fn generate_module(
             let name_ident = names.func(&f.name);
             quote! { let #name_ident = wasmtime::Func::wrap(store, #func_override); }
         } else {
-            generate_func(&f, names, missing_mem_conf, &target_module)
+            generate_func(&f, names, &target_module)
         }
     });
 
@@ -165,10 +155,8 @@ contained in the `cx` parameter.",
 fn generate_func(
     func: &witx::InterfaceFunc,
     names: &Names,
-    missing_mem_conf: &MissingMemoryConf,
     target_module: &TokenStream2,
 ) -> TokenStream2 {
-    let missing_mem_err = &missing_mem_conf.err;
     let name_ident = names.func(&func.name);
 
     let coretype = func.core_type();
@@ -180,17 +168,14 @@ fn generate_func(
     });
     let arg_names = coretype.args.iter().map(|arg| names.func_core_arg(arg));
 
-    let (ret_ty, handle_early_error) = if let Some(ret) = &coretype.ret {
+    let ret_ty = if let Some(ret) = &coretype.ret {
         let ret_ty = match ret.signifies {
             witx::CoreParamSignifies::Value(atom) => names.atom_type(atom),
             _ => unreachable!("coretype ret should always be passed by value"),
         };
-        (quote! { #ret_ty }, quote! { return Ok(e.into()); })
+        quote! { #ret_ty }
     } else {
-        (
-            quote! {()},
-            quote! { panic!("unrecoverable error in {}: {}", stringify!(#name_ident), e) },
-        )
+        quote! {()}
     };
 
     let runtime = names.runtime_mod();
@@ -204,9 +189,7 @@ fn generate_func(
                     let mem = match caller.get_export("memory") {
                         Some(wasmtime::Extern::Memory(m)) => m,
                         _ => {
-                            wasmtime_wiggle::tracing::warn!("callee does not export a memory as \"memory\"");
-                            let e = { #missing_mem_err };
-                            #handle_early_error
+                            return Err(wasmtime::Trap::new("missing required memory export"));
                         }
                     };
                     let mem = #runtime::WasmtimeGuestMemory::new(mem);
