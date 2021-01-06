@@ -717,7 +717,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn proc_exit(&self, status: types::Exitcode) -> wiggle::Trap {
         // Check that the status is within WASI's range.
         if status < 126 {
-            wiggle::Trap::I32(status as i32)
+            wiggle::Trap::I32Exit(status as i32)
         } else {
             wiggle::Trap::String("exit with invalid exit status outside of [0..126)".to_owned())
         }
