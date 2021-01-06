@@ -23,7 +23,7 @@ impl types::GuestErrorConversion for WasiCtx {
 }
 
 impl types::UserErrorConversion for WasiCtx {
-    fn errno_from_error(&self, e: Error) -> Result<Errno, String> {
+    fn errno_from_error(&self, e: Error) -> Result<Errno, wiggle::Trap> {
         tracing::debug!("Error: {:?}", e);
         Ok(e.into())
     }
@@ -346,7 +346,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         Ok(nevents)
     }
 
-    fn proc_exit(&self, rval: Exitcode) -> Result<(), ()> {
+    fn proc_exit(&self, rval: Exitcode) -> wiggle::Trap {
         WasiSnapshotPreview1::proc_exit(self, rval)
     }
 

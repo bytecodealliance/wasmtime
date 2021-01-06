@@ -714,10 +714,13 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(nevents)
     }
 
-    fn proc_exit(&self, _rval: types::Exitcode) -> std::result::Result<(), ()> {
-        // proc_exit is special in that it's expected to unwind the stack, which
-        // typically requires runtime-specific logic.
-        unimplemented!("runtimes are expected to override this implementation")
+    fn proc_exit(&self, status: types::Exitcode) -> wiggle::Trap {
+        // Check that the status is within WASI's range.
+        if status < 126 {
+            wiggle::Trap::I32(status as i32)
+        } else {
+            wiggle::Trap::String("exit with invalid exit status outside of [0..126)".to_owned())
+        }
     }
 
     fn proc_raise(&self, _sig: types::Signal) -> Result<()> {

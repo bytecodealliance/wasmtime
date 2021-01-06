@@ -23,7 +23,7 @@ impl types::GuestErrorConversion for WasiCtx {
 }
 
 impl types::UserErrorConversion for WasiCtx {
-    fn errno_from_error(&self, e: Error) -> Result<Errno, String> {
+    fn errno_from_error(&self, e: Error) -> Result<Errno, wiggle::Trap> {
         debug!("Error: {:?}", e);
         Ok(e.into())
     }
