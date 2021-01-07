@@ -2880,6 +2880,7 @@ dependencies = [
  "log",
  "openvino",
  "thiserror",
+ "walkdir",
  "wasmtime",
  "wasmtime-runtime",
  "wasmtime-wasi",

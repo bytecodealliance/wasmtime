@@ -135,6 +135,8 @@ pub mod helpers;
 pub use helpers::*;
 pub mod inst_common;
 pub use inst_common::*;
+pub mod valueregs;
+pub use valueregs::*;
 
 /// A machine instruction.
 pub trait MachInst: Clone + Debug {
@@ -165,9 +167,9 @@ pub trait MachInst: Clone + Debug {
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self;
 
     /// Generate a constant into a reg.
-    fn gen_constant<F: FnMut(RegClass, Type) -> Writable<Reg>>(
-        to_reg: Writable<Reg>,
-        value: u64,
+    fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
+        to_regs: ValueRegs<Writable<Reg>>,
+        value: u128,
         ty: Type,
         alloc_tmp: F,
     ) -> SmallVec<[Self; 4]>;
@@ -180,9 +182,19 @@ pub trait MachInst: Clone + Debug {
     /// (e.g., add directly from or directly to memory), like x86.
     fn maybe_direct_reload(&self, reg: VirtualReg, slot: SpillSlot) -> Option<Self>;
 
-    /// Determine a register class to store the given Cranelift type.
-    /// May return an error if the type isn't supported by this backend.
-    fn rc_for_type(ty: Type) -> CodegenResult<RegClass>;
+    /// Determine register class(es) to store the given Cranelift type, and the
+    /// Cranelift type actually stored in the underlying register(s).  May return
+    /// an error if the type isn't supported by this backend.
+    ///
+    /// If the type requires multiple registers, then the list of registers is
+    /// returned in little-endian order.
+    ///
+    /// Note that the type actually stored in the register(s) may differ in the
+    /// case that a value is split across registers: for example, on a 32-bit
+    /// target, an I64 may be stored in two registers, each of which holds an
+    /// I32. The actually-stored types are used only to inform the backend when
+    /// generating spills and reloads for individual registers.
+    fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])>;
 
     /// Generate a jump to another target. Used during lowering of
     /// control flow.
