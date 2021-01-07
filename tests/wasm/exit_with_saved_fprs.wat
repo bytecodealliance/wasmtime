@@ -3,6 +3,7 @@
     (type (func (param i32)))
     
     (import "wasi_snapshot_preview1" "proc_exit" (func (type 0)))
+    (memory (export "memory") 0)
     
     (func $exit (param i32)
         local.get 0

@@ -928,3 +928,16 @@ impl Pointee for str {
         <[u8]>::debug(pointer, f)
     }
 }
+
+/// A runtime-independent way for Wiggle to terminate WebAssembly execution.
+/// Functions that are marked `(@witx noreturn)` will always return a Trap.
+/// Other functions that want to Trap can do so via their `UserErrorConversion`
+/// trait, which transforms the user's own error type into a `Result<abierror, Trap>`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Trap {
+    /// A Trap which indicates an i32 (posix-style) exit code. Runtimes may have a
+    /// special way of dealing with this for WASI embeddings and otherwise.
+    I32Exit(i32),
+    /// Any other Trap is just an unstructured String, for reporting and debugging.
+    String(String),
+}

@@ -36,12 +36,6 @@ pub fn define_func(
             witx::CoreParamSignifies::Value(atom) => names.atom_type(atom),
             _ => unreachable!("ret should always be passed by value"),
         }
-    } else if func.noreturn {
-        // Ideally we would return `quote!(!)` here, but, we'd have to change
-        // the error handling logic in all the marshalling code to never return,
-        // and instead provide some other way to bail to the context...
-        // noreturn func
-        unimplemented!("noreturn funcs not supported yet!")
     } else {
         quote!(())
     };
@@ -174,25 +168,42 @@ pub fn define_func(
     let mod_name = &module.name.as_str();
     let func_name = &func.name.as_str();
 
-    quote!(pub fn #ident(#abi_args) -> Result<#abi_ret, String> {
-        let _span = #rt::tracing::span!(
-            #rt::tracing::Level::TRACE,
-            "wiggle abi",
-            module = #mod_name,
-            function = #func_name
-        );
-        let _enter = _span.enter();
+    if func.noreturn {
+        quote!(pub fn #ident(#abi_args) -> Result<#abi_ret, wiggle::Trap> {
+            let _span = #rt::tracing::span!(
+                #rt::tracing::Level::TRACE,
+                "wiggle abi",
+                module = #mod_name,
+                function = #func_name
+            );
+            let _enter = _span.enter();
 
-        #(#marshal_args)*
-        #(#marshal_rets_pre)*
-        #log_marshalled_args
-        let #trait_bindings  = match #trait_name::#ident(ctx, #(#trait_args),*) {
-            Ok(#trait_bindings) => { #trait_rets },
-            Err(e) => { #ret_err },
-        };
-        #(#marshal_rets_post)*
-        #success
-    })
+            #(#marshal_args)*
+            #log_marshalled_args
+            let trap = #trait_name::#ident(ctx, #(#trait_args),*);
+            Err(trap)
+        })
+    } else {
+        quote!(pub fn #ident(#abi_args) -> Result<#abi_ret, wiggle::Trap> {
+            let _span = #rt::tracing::span!(
+                #rt::tracing::Level::TRACE,
+                "wiggle abi",
+                module = #mod_name,
+                function = #func_name
+            );
+            let _enter = _span.enter();
+
+            #(#marshal_args)*
+            #(#marshal_rets_pre)*
+            #log_marshalled_args
+            let #trait_bindings  = match #trait_name::#ident(ctx, #(#trait_args),*) {
+                Ok(#trait_bindings) => { #trait_rets },
+                Err(e) => { #ret_err },
+            };
+            #(#marshal_rets_post)*
+            #success
+        })
+    }
 }
 
 fn marshal_arg(

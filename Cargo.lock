@@ -3073,7 +3073,7 @@ dependencies = [
 
 [[package]]
 name = "witx"
-version = "0.8.7"
+version = "0.8.8"
 dependencies = [
  "anyhow",
  "diff",
