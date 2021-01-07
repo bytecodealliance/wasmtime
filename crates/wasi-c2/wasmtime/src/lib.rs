@@ -1,5 +1,4 @@
 pub use wasi_c2::WasiCtx;
-use wasmtime::Trap;
 
 // Defines a `struct Wasi` with member fields and appropriate APIs for dealing
 // with all the various WASI exports.
@@ -22,24 +21,6 @@ modules. This structure exports all that various fields of the wasi instance
 as fields which can be used to implement your own instantiation logic, if
 necessary. Additionally [`Wasi::get_export`] can be used to do name-based
 resolution.",
-        // Don't use the wiggle generated code to implement proc_exit, we need
-        // to hook directly into the runtime there:
-          function_override: {
-            proc_exit => wasi_proc_exit
-          }
         },
     },
-    // Error to return when caller module is missing memory export:
-    missing_memory: { wasi_c2::snapshots::preview_1::types::Errno::Inval },
 });
-
-fn wasi_proc_exit(status: i32) -> Result<(), Trap> {
-    if status >= 0 && status < 126 {
-        Err(Trap::i32_exit(status))
-    } else {
-        Err(Trap::new(format!(
-            "exit with invalid exit status outside of [0..126): {}",
-            status,
-        )))
-    }
-}

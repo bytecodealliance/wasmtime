@@ -30,7 +30,7 @@ impl types::GuestErrorConversion for WasiCtx {
 }
 
 impl types::UserErrorConversion for WasiCtx {
-    fn errno_from_error(&self, e: Error) -> Result<types::Errno, String> {
+    fn errno_from_error(&self, e: Error) -> Result<types::Errno, wiggle::Trap> {
         debug!("Error: {:?}", e);
         Ok(e.into())
     }
@@ -885,7 +885,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         unimplemented!()
     }
 
-    fn proc_exit(&self, _rval: types::Exitcode) -> Result<(), ()> {
+    fn proc_exit(&self, _rval: types::Exitcode) -> wiggle::Trap {
         unimplemented!()
     }
 
