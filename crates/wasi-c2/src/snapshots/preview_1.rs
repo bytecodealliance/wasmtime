@@ -32,23 +32,27 @@ impl types::GuestErrorConversion for WasiCtx {
 impl types::UserErrorConversion for WasiCtx {
     fn errno_from_error(&self, e: Error) -> Result<types::Errno, wiggle::Trap> {
         debug!("Error: {:?}", e);
-        Ok(e.into())
+        e.try_into()
     }
 }
 
-impl From<Error> for types::Errno {
-    fn from(e: Error) -> types::Errno {
+impl TryFrom<Error> for types::Errno {
+    type Error = wiggle::Trap;
+    fn try_from(e: Error) -> Result<types::Errno, wiggle::Trap> {
         use std::io::ErrorKind;
         use types::Errno;
         match e {
-            Error::Guest(e) => e.into(),
-            Error::TryFromInt(_) => Errno::Overflow,
-            Error::Utf8(_) => Errno::Ilseq,
+            Error::Unsupported(feat) => {
+                Err(wiggle::Trap::String(format!("Unsupported: {0}", feat)))
+            }
+            Error::Guest(e) => Ok(e.into()),
+            Error::TryFromInt(_) => Ok(Errno::Overflow),
+            Error::Utf8(_) => Ok(Errno::Ilseq),
             Error::UnexpectedIo(e) => match e.kind() {
-                ErrorKind::NotFound => Errno::Noent,
-                ErrorKind::PermissionDenied => Errno::Perm,
-                ErrorKind::AlreadyExists => Errno::Exist,
-                ErrorKind::InvalidInput => Errno::Ilseq,
+                ErrorKind::NotFound => Ok(Errno::Noent),
+                ErrorKind::PermissionDenied => Ok(Errno::Perm),
+                ErrorKind::AlreadyExists => Ok(Errno::Exist),
+                ErrorKind::InvalidInput => Ok(Errno::Ilseq),
                 ErrorKind::ConnectionRefused
                 | ErrorKind::ConnectionReset
                 | ErrorKind::ConnectionAborted
@@ -63,40 +67,40 @@ impl From<Error> for types::Errno {
                 | ErrorKind::Interrupted
                 | ErrorKind::Other
                 | ErrorKind::UnexpectedEof
-                | _ => Errno::Io,
+                | _ => Ok(Errno::Io),
             },
-            Error::CapRand(_) => Errno::Io,
-            Error::TooBig => Errno::TooBig,
-            Error::Acces => Errno::Acces,
-            Error::Badf => Errno::Badf,
-            Error::Busy => Errno::Busy,
-            Error::Exist => Errno::Exist,
-            Error::Fault => Errno::Fault,
-            Error::Fbig => Errno::Fbig,
-            Error::Ilseq => Errno::Ilseq,
-            Error::Inval => Errno::Inval,
-            Error::Io => Errno::Io,
-            Error::Isdir => Errno::Isdir,
-            Error::Loop => Errno::Loop,
-            Error::Mfile => Errno::Mfile,
-            Error::Mlink => Errno::Mlink,
-            Error::Nametoolong => Errno::Nametoolong,
-            Error::Nfile => Errno::Nfile,
-            Error::Noent => Errno::Noent,
-            Error::Nomem => Errno::Nomem,
-            Error::Nospc => Errno::Nospc,
-            Error::Notdir => Errno::Notdir,
-            Error::Notempty => Errno::Notempty,
-            Error::Notsup => Errno::Notsup,
-            Error::Overflow => Errno::Overflow,
-            Error::Pipe => Errno::Pipe,
-            Error::Perm => Errno::Perm,
-            Error::Range => Errno::Range,
-            Error::Spipe => Errno::Spipe,
-            Error::FileNotCapable { .. } => Errno::Notcapable,
-            Error::DirNotCapable { .. } => Errno::Notcapable,
-            Error::NotCapable => Errno::Notcapable,
-            Error::TableOverflow => Errno::Overflow,
+            Error::CapRand(_) => Ok(Errno::Io),
+            Error::TooBig => Ok(Errno::TooBig),
+            Error::Acces => Ok(Errno::Acces),
+            Error::Badf => Ok(Errno::Badf),
+            Error::Busy => Ok(Errno::Busy),
+            Error::Exist => Ok(Errno::Exist),
+            Error::Fault => Ok(Errno::Fault),
+            Error::Fbig => Ok(Errno::Fbig),
+            Error::Ilseq => Ok(Errno::Ilseq),
+            Error::Inval => Ok(Errno::Inval),
+            Error::Io => Ok(Errno::Io),
+            Error::Isdir => Ok(Errno::Isdir),
+            Error::Loop => Ok(Errno::Loop),
+            Error::Mfile => Ok(Errno::Mfile),
+            Error::Mlink => Ok(Errno::Mlink),
+            Error::Nametoolong => Ok(Errno::Nametoolong),
+            Error::Nfile => Ok(Errno::Nfile),
+            Error::Noent => Ok(Errno::Noent),
+            Error::Nomem => Ok(Errno::Nomem),
+            Error::Nospc => Ok(Errno::Nospc),
+            Error::Notdir => Ok(Errno::Notdir),
+            Error::Notempty => Ok(Errno::Notempty),
+            Error::Notsup => Ok(Errno::Notsup),
+            Error::Overflow => Ok(Errno::Overflow),
+            Error::Pipe => Ok(Errno::Pipe),
+            Error::Perm => Ok(Errno::Perm),
+            Error::Range => Ok(Errno::Range),
+            Error::Spipe => Ok(Errno::Spipe),
+            Error::FileNotCapable { .. } => Ok(Errno::Notcapable),
+            Error::DirNotCapable { .. } => Ok(Errno::Notcapable),
+            Error::NotCapable => Ok(Errno::Notcapable),
+            Error::TableOverflow => Ok(Errno::Overflow),
         }
     }
 }
@@ -885,12 +889,17 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         unimplemented!()
     }
 
-    fn proc_exit(&self, _rval: types::Exitcode) -> wiggle::Trap {
-        unimplemented!()
+    fn proc_exit(&self, status: types::Exitcode) -> wiggle::Trap {
+        // Check that the status is within WASI's range.
+        if status < 126 {
+            wiggle::Trap::I32Exit(status as i32)
+        } else {
+            wiggle::Trap::String("exit with invalid exit status outside of [0..126)".to_owned())
+        }
     }
 
     fn proc_raise(&self, _sig: types::Signal) -> Result<(), Error> {
-        unimplemented!()
+        Err(Error::Unsupported("proc_raise"))
     }
 
     fn sched_yield(&self) -> Result<(), Error> {
@@ -909,7 +918,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         _ri_data: &types::IovecArray<'_>,
         _ri_flags: types::Riflags,
     ) -> Result<(types::Size, types::Roflags), Error> {
-        unimplemented!()
+        Err(Error::Unsupported("sock_recv"))
     }
 
     fn sock_send(
@@ -918,11 +927,11 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         _si_data: &types::CiovecArray<'_>,
         _si_flags: types::Siflags,
     ) -> Result<types::Size, Error> {
-        unimplemented!()
+        Err(Error::Unsupported("sock_send"))
     }
 
     fn sock_shutdown(&self, _fd: types::Fd, _how: types::Sdflags) -> Result<(), Error> {
-        unimplemented!()
+        Err(Error::Unsupported("sock_shutdown"))
     }
 }
 
