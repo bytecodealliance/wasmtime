@@ -2,6 +2,51 @@
 
 --------------------------------------------------------------------------------
 
+## 0.22.0
+
+Released 2021-01-07.
+
+### Added
+
+* Experimental support for [the module-linking
+  proposal](https://github.com/WebAssembly/module-linking) was
+  added. [#2094](https://github.com/bytecodealliance/wasmtime/pull/2094)
+
+* Added support for [the reference types
+  proposal](https://webassembly.github.io/reference-types) on the aarch64
+  architecture. [#2410](https://github.com/bytecodealliance/wasmtime/pull/2410)
+
+* Experimental support for [wasi-nn](https://github.com/WebAssembly/wasi-nn) was
+  added. [#2208](https://github.com/bytecodealliance/wasmtime/pull/2208)
+
+### Changed
+
+### Fixed
+
+* Fixed an issue where the `select` instruction didn't accept `v128` SIMD
+  operands. [#2391](https://github.com/bytecodealliance/wasmtime/pull/2391)
+
+* Fixed an issue where Wasmtime could potentially use the wrong stack map during
+  GCs, leading to a
+  panic. [#2396](https://github.com/bytecodealliance/wasmtime/pull/2396)
+
+* Fixed an issue where if a host-defined function erroneously returned a value
+  from a different store, that value would be
+  leaked. [#2424](https://github.com/bytecodealliance/wasmtime/pull/2424)
+
+* Fixed a bug where in certain cases if a module's instantiation failed, it
+  could leave trampolines in the store that referenced the no-longer-valid
+  instance. These trampolines could be reused in future instantiations, leading
+  to use after free bugs.
+  [#2408](https://github.com/bytecodealliance/wasmtime/pull/2408)
+
+* Fixed a miscompilation on aarch64 where certain instructions would read `SP`
+  instead of the zero register. This could only affect you if you explicitly
+  enabled the Wasm SIMD
+  proposal. [#2548](https://github.com/bytecodealliance/wasmtime/pull/2548)
+
+--------------------------------------------------------------------------------
+
 ## 0.21.0
 
 Released 2020-11-05.
