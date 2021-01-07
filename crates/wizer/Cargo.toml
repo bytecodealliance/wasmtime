@@ -30,7 +30,7 @@ anyhow = "1.0.34"
 env_logger = { version = "0.8.1", optional = true }
 log = "0.4.11"
 structopt = { version = "0.3.20", optional = true }
-wasm-encoder = "0.1.0"
+wasm-encoder = "0.3.1"
 wasmparser = "0.68.0"
 wasmtime = "0.21.0"
 wasmtime-wasi = "0.21.0"
