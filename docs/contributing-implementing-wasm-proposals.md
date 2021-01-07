@@ -20,6 +20,14 @@ multiple pull requests.
   [`wasmprinter`](https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasmprinter)
   crate.
 
+* <input type="checkbox"/> Add support to the
+  [`wasm-encoder`](https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasm-encoder)
+  crate.
+
+* <input type="checkbox"/> Add support to the
+  [`wasm-smith`](https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasm-smith)
+  crate.
+
 * <input type="checkbox"/> Add a `wasmtime::Config::enable_foo_bar` method to
   the `wasmtime` crate.
 
