@@ -117,7 +117,7 @@ fn handle_fd_event(
         let output_event = if revents.contains(PollFlags::POLLNVAL) {
             Event {
                 userdata: fd_event.userdata,
-                error: Error::Badf.into(),
+                error: Error::Badf.try_into().unwrap(),
                 type_: fd_event.r#type,
                 fd_readwrite: EventFdReadwrite {
                     nbytes: 0,
@@ -127,7 +127,7 @@ fn handle_fd_event(
         } else if revents.contains(PollFlags::POLLERR) {
             Event {
                 userdata: fd_event.userdata,
-                error: Error::Io.into(),
+                error: Error::Io.try_into().unwrap(),
                 type_: fd_event.r#type,
                 fd_readwrite: EventFdReadwrite {
                     nbytes: 0,

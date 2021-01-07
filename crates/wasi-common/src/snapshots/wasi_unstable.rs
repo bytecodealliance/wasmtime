@@ -25,13 +25,14 @@ impl types::GuestErrorConversion for WasiCtx {
 impl types::UserErrorConversion for WasiCtx {
     fn errno_from_error(&self, e: Error) -> Result<Errno, wiggle::Trap> {
         tracing::debug!("Error: {:?}", e);
-        Ok(e.into())
+        e.try_into()
     }
 }
 
-impl From<Error> for Errno {
-    fn from(e: Error) -> Errno {
-        types_new::Errno::from(e).into()
+impl TryFrom<Error> for Errno {
+    type Error = wiggle::Trap;
+    fn try_from(e: Error) -> Result<Errno, wiggle::Trap> {
+        Ok(types_new::Errno::try_from(e)?.into())
     }
 }
 
