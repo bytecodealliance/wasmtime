@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-lightbeam"
-version = "0.21.0"
+version = "0.22.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Integration between Lightbeam and Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -12,7 +12,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-lightbeam = { path = "..", version = "0.21.0" }
+lightbeam = { path = "..", version = "0.22.0" }
 wasmparser = "0.71"
-cranelift-codegen = { path = "../../../cranelift/codegen", version = "0.68.0" }
-wasmtime-environ = { path = "../../environ", version = "0.21.0" }
+cranelift-codegen = { path = "../../../cranelift/codegen", version = "0.69.0" }
+wasmtime-environ = { path = "../../environ", version = "0.22.0" }
