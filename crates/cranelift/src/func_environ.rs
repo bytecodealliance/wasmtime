@@ -81,6 +81,10 @@ macro_rules! declare_function_signatures {
                 AbiParam::new(I32).uext()
             }
 
+            fn i64(&self) -> AbiParam {
+                AbiParam::new(I64)
+            }
+
             $(
                 fn $name(&mut self, func: &mut Function) -> ir::SigRef {
                     let sig = self.$name.unwrap_or_else(|| {
@@ -255,6 +259,70 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 memory_index.index(),
                 BuiltinFunctionIndex::imported_memory_fill(),
             )
+        }
+    }
+
+    fn get_memory_atomic_notify(
+        &mut self,
+        func: &mut Function,
+        memory_index: MemoryIndex,
+    ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
+        if let Some(defined_memory_index) = self.module.defined_memory_index(memory_index) {
+            (
+                self.builtin_function_signatures.memory_atomic_notify(func),
+                defined_memory_index.index(),
+                BuiltinFunctionIndex::memory_atomic_notify(),
+            )
+        } else {
+            (
+                self.builtin_function_signatures
+                    .imported_memory_atomic_notify(func),
+                memory_index.index(),
+                BuiltinFunctionIndex::imported_memory_atomic_notify(),
+            )
+        }
+    }
+
+    fn get_memory_atomic_wait(
+        &mut self,
+        func: &mut Function,
+        memory_index: MemoryIndex,
+        ty: ir::Type,
+    ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
+        match ty {
+            I32 => {
+                if let Some(defined_memory_index) = self.module.defined_memory_index(memory_index) {
+                    (
+                        self.builtin_function_signatures.memory_atomic_wait32(func),
+                        defined_memory_index.index(),
+                        BuiltinFunctionIndex::memory_atomic_wait32(),
+                    )
+                } else {
+                    (
+                        self.builtin_function_signatures
+                            .imported_memory_atomic_wait32(func),
+                        memory_index.index(),
+                        BuiltinFunctionIndex::imported_memory_atomic_wait32(),
+                    )
+                }
+            }
+            I64 => {
+                if let Some(defined_memory_index) = self.module.defined_memory_index(memory_index) {
+                    (
+                        self.builtin_function_signatures.memory_atomic_wait64(func),
+                        defined_memory_index.index(),
+                        BuiltinFunctionIndex::memory_atomic_wait64(),
+                    )
+                } else {
+                    (
+                        self.builtin_function_signatures
+                            .imported_memory_atomic_wait64(func),
+                        memory_index.index(),
+                        BuiltinFunctionIndex::imported_memory_atomic_wait64(),
+                    )
+                }
+            }
+            x => panic!("get_memory_atomic_wait unsupported type: {:?}", x),
         }
     }
 
@@ -1368,29 +1436,50 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
     fn translate_atomic_wait(
         &mut self,
-        _pos: FuncCursor,
-        _index: MemoryIndex,
+        mut pos: FuncCursor,
+        memory_index: MemoryIndex,
         _heap: ir::Heap,
-        _addr: ir::Value,
-        _expected: ir::Value,
-        _timeout: ir::Value,
+        addr: ir::Value,
+        expected: ir::Value,
+        timeout: ir::Value,
     ) -> WasmResult<ir::Value> {
-        Err(WasmError::Unsupported(
-            "wasm atomics (fn translate_atomic_wait)".to_string(),
-        ))
+        let implied_ty = pos.func.dfg.value_type(expected);
+        let (func_sig, memory_index, func_idx) =
+            self.get_memory_atomic_wait(&mut pos.func, memory_index, implied_ty);
+
+        let memory_index_arg = pos.ins().iconst(I32, memory_index as i64);
+
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        let call_inst = pos.ins().call_indirect(
+            func_sig,
+            func_addr,
+            &[vmctx, memory_index_arg, addr, expected, timeout],
+        );
+
+        Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 
     fn translate_atomic_notify(
         &mut self,
-        _pos: FuncCursor,
-        _index: MemoryIndex,
+        mut pos: FuncCursor,
+        memory_index: MemoryIndex,
         _heap: ir::Heap,
-        _addr: ir::Value,
-        _count: ir::Value,
+        addr: ir::Value,
+        count: ir::Value,
     ) -> WasmResult<ir::Value> {
-        Err(WasmError::Unsupported(
-            "wasm atomics (fn translate_atomic_notify)".to_string(),
-        ))
+        let (func_sig, memory_index, func_idx) =
+            self.get_memory_atomic_notify(&mut pos.func, memory_index);
+
+        let memory_index_arg = pos.ins().iconst(I32, memory_index as i64);
+
+        let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        let call_inst =
+            pos.ins()
+                .call_indirect(func_sig, func_addr, &[vmctx, memory_index_arg, addr, count]);
+
+        Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 
     fn translate_loop_header(&mut self, mut pos: FuncCursor) -> WasmResult<()> {

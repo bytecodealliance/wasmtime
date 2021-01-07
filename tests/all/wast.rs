@@ -14,6 +14,7 @@ fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
 
     let multi_memory = wast.iter().any(|s| s == "multi-memory");
     let module_linking = wast.iter().any(|s| s == "module-linking");
+    let threads = wast.iter().any(|s| s == "threads");
     let bulk_mem = multi_memory || wast.iter().any(|s| s == "bulk-memory-operations");
 
     // Some simd tests assume support for multiple tables, which are introduced
@@ -26,6 +27,7 @@ fn run_wast(wast: &str, strategy: Strategy) -> anyhow::Result<()> {
         .wasm_reference_types(reftypes || module_linking)
         .wasm_multi_memory(multi_memory || module_linking)
         .wasm_module_linking(module_linking)
+        .wasm_threads(threads)
         .strategy(strategy)?
         .cranelift_debug_verifier(true);
 
