@@ -1,6 +1,6 @@
 [package]
 name = "wasi-common"
-version = "0.21.0"
+version = "0.22.0"
 authors = ["The Wasmtime Project Developers"]
 description = "WASI implementation in Rust"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -24,14 +24,14 @@ getrandom = { version = "0.2.0", features = ["std"] }
 cfg-if = "1.0"
 filetime = "0.2.7"
 lazy_static = "1.4.0"
-wiggle = { path = "../wiggle", default-features = false, version = "0.21.0" }
+wiggle = { path = "../wiggle", default-features = false, version = "0.22.0" }
 tracing = "0.1.19"
 
 [target.'cfg(unix)'.dependencies]
-yanix = { path = "yanix", version = "0.21.0" }
+yanix = { path = "yanix", version = "0.22.0" }
 
 [target.'cfg(windows)'.dependencies]
-winx = { path = "winx", version = "0.21.0" }
+winx = { path = "winx", version = "0.22.0" }
 winapi = "0.3"
 cpu-time = "1.0"
 

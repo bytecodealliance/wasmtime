@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-jit"
-version = "0.68.0"
+version = "0.69.0"
 authors = ["The Cranelift Project Developers"]
 description = "A JIT library backed by Cranelift"
 repository = "https://github.com/bytecodealliance/wasmtime"
@@ -10,10 +10,10 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-module = { path = "../module", version = "0.68.0" }
-cranelift-native = { path = "../native", version = "0.68.0" }
-cranelift-codegen = { path = "../codegen", version = "0.68.0", default-features = false, features = ["std"] }
-cranelift-entity = { path = "../entity", version = "0.68.0" }
+cranelift-module = { path = "../module", version = "0.69.0" }
+cranelift-native = { path = "../native", version = "0.69.0" }
+cranelift-codegen = { path = "../codegen", version = "0.69.0", default-features = false, features = ["std"] }
+cranelift-entity = { path = "../entity", version = "0.69.0" }
 anyhow = "1.0"
 region = "2.2.0"
 libc = { version = "0.2.42" }
@@ -30,9 +30,9 @@ selinux-fix = ['memmap']
 default = []
 
 [dev-dependencies]
-cranelift = { path = "../umbrella", version = "0.68.0" }
-cranelift-frontend = { path = "../frontend", version = "0.68.0" }
-cranelift-entity = { path = "../entity", version = "0.68.0" }
+cranelift = { path = "../umbrella", version = "0.69.0" }
+cranelift-frontend = { path = "../frontend", version = "0.69.0" }
+cranelift-entity = { path = "../entity", version = "0.69.0" }
 
 [badges]
 maintenance = { status = "experimental" }
