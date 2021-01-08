@@ -45,6 +45,18 @@ macro_rules! foreach_builtin_function {
             externref_global_get(vmctx, i32) -> (reference);
             /// Returns an index for Wasm's `global.get` instruction for `externref`s.
             externref_global_set(vmctx, i32, reference) -> ();
+            /// Returns an index for wasm's `memory.atomic.notify` for locally defined memories.
+            memory_atomic_notify(vmctx, i32, i32, i32) -> (i32);
+            /// Returns an index for wasm's `memory.atomic.notify` for imported memories.
+            imported_memory_atomic_notify(vmctx, i32, i32, i32) -> (i32);
+            /// Returns an index for wasm's `memory.atomic.wait32` for locally defined memories.
+            memory_atomic_wait32(vmctx, i32, i32, i32, i64) -> (i32);
+            /// Returns an index for wasm's `memory.atomic.wait32` for imported memories.
+            imported_memory_atomic_wait32(vmctx, i32, i32, i32, i64) -> (i32);
+            /// Returns an index for wasm's `memory.atomic.wait64` for locally defined memories.
+            memory_atomic_wait64(vmctx, i32, i32, i64, i64) -> (i32);
+            /// Returns an index for wasm's `memory.atomic.wait64` for imported memories.
+            imported_memory_atomic_wait64(vmctx, i32, i32, i64, i64) -> (i32);
         }
     };
 }

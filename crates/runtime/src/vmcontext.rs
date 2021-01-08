@@ -600,6 +600,18 @@ impl VMBuiltinFunctionsArray {
             wasmtime_table_fill as usize;
         ptrs[BuiltinFunctionIndex::table_fill_funcref().index() as usize] =
             wasmtime_table_fill as usize;
+        ptrs[BuiltinFunctionIndex::memory_atomic_notify().index() as usize] =
+            wasmtime_memory_atomic_notify as usize;
+        ptrs[BuiltinFunctionIndex::imported_memory_atomic_notify().index() as usize] =
+            wasmtime_imported_memory_atomic_notify as usize;
+        ptrs[BuiltinFunctionIndex::memory_atomic_wait32().index() as usize] =
+            wasmtime_memory_atomic_wait32 as usize;
+        ptrs[BuiltinFunctionIndex::imported_memory_atomic_wait32().index() as usize] =
+            wasmtime_imported_memory_atomic_wait32 as usize;
+        ptrs[BuiltinFunctionIndex::memory_atomic_wait64().index() as usize] =
+            wasmtime_memory_atomic_wait64 as usize;
+        ptrs[BuiltinFunctionIndex::imported_memory_atomic_wait64().index() as usize] =
+            wasmtime_imported_memory_atomic_wait64 as usize;
 
         if cfg!(debug_assertions) {
             for i in 0..ptrs.len() {
