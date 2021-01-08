@@ -17,7 +17,5 @@ publish = false
 wasi-c2 = { path = "../" }
 wiggle = { path = "../../wiggle", default-features = false, version = "0.22.0" }
 wasmtime-wiggle = { path = "../../wiggle/wasmtime", default-features = false, version = "0.22.0" }
-cap-std = "0.7"
-anyhow = "*"
 wasmtime = { path = "../../wasmtime" }
-
+anyhow = "1.0"
