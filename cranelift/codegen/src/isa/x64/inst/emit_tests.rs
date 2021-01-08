@@ -2779,6 +2779,46 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
+    // LoadExtName
+    // N.B.: test harness below sets is_pic.
+    insns.push((
+        Inst::LoadExtName {
+            dst: Writable::from_reg(r11),
+            name: Box::new(ExternalName::User {
+                namespace: 0,
+                index: 0,
+            }),
+            offset: 0,
+        },
+        "4C8B1D00000000",
+        "load_ext_name u0:0+0, %r11",
+    ));
+    insns.push((
+        Inst::LoadExtName {
+            dst: Writable::from_reg(r11),
+            name: Box::new(ExternalName::User {
+                namespace: 0,
+                index: 0,
+            }),
+            offset: 0x12345678,
+        },
+        "4C8B1D000000004981C378563412",
+        "load_ext_name u0:0+305419896, %r11",
+    ));
+    insns.push((
+        Inst::LoadExtName {
+            dst: Writable::from_reg(r11),
+            name: Box::new(ExternalName::User {
+                namespace: 0,
+                index: 0,
+            }),
+            offset: -0x12345678,
+        },
+        "4C8B1D000000004981EB78563412",
+        "load_ext_name u0:0+-305419896, %r11",
+    ));
+
+    // ========================================================
     // Ret
     insns.push((Inst::ret(), "C3", "ret"));
 
@@ -3693,7 +3733,9 @@ fn test_x64_emit() {
 
     // ========================================================
     // Actually run the tests!
-    let flags = settings::Flags::new(settings::builder());
+    let mut flag_builder = settings::builder();
+    flag_builder.enable("is_pic").unwrap();
+    let flags = settings::Flags::new(flag_builder);
 
     use crate::settings::Configurable;
     let mut isa_flag_builder = x64::settings::builder();
