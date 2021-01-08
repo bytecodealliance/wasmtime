@@ -17,6 +17,10 @@ pub enum Error {
     #[error("GetRandom: {0}")]
     GetRandom(#[from] getrandom::Error),
 
+    /// Some corners of the WASI standard are unsupported.
+    #[error("Unsupported: {0}")]
+    Unsupported(&'static str),
+
     /// The host OS may return an io error that doesn't match one of the
     /// wasi errno variants we expect. We do not expose the details of this
     /// error to the user.

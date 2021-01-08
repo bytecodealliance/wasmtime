@@ -1,8 +1,6 @@
 pub use wasi_common::virtfs;
 pub use wasi_common::{WasiCtx, WasiCtxBuilder};
 
-use crate::wasi_proc_exit;
-
 // Defines a `struct Wasi` with member fields and appropriate APIs for dealing
 // with all the various WASI exports.
 wasmtime_wiggle::wasmtime_integration!({
@@ -25,12 +23,7 @@ modules. This structure exports all that various fields of the wasi instance
 as fields which can be used to implement your own instantiation logic, if
 necessary. Additionally [`Wasi::get_export`] can be used to do name-based
 resolution.",
-        // Don't use the wiggle generated code to implement proc_exit, we need
-        // to hook directly into the runtime there:
-          function_override: {
-            proc_exit => wasi_proc_exit
-          }
-        },
+        }
     },
 });
 

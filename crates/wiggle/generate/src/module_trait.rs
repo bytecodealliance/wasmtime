@@ -48,28 +48,34 @@ pub fn define_module_trait(names: &Names, m: &Module, errxform: &ErrorTransform)
             };
             quote!(#arg_name: #arg_type)
         });
-        let rets = f
-            .results
-            .iter()
-            .skip(1)
-            .map(|ret| names.type_ref(&ret.tref, lifetime.clone()));
-        let err = f
-            .results
-            .get(0)
-            .map(|err_result| {
-                if let Some(custom_err) = errxform.for_abi_error(&err_result.tref) {
-                    let tn = custom_err.typename();
-                    quote!(super::#tn)
-                } else {
-                    names.type_ref(&err_result.tref, lifetime.clone())
-                }
-            })
-            .unwrap_or(quote!(()));
+
+        let result = if !f.noreturn {
+            let rets = f
+                .results
+                .iter()
+                .skip(1)
+                .map(|ret| names.type_ref(&ret.tref, lifetime.clone()));
+            let err = f
+                .results
+                .get(0)
+                .map(|err_result| {
+                    if let Some(custom_err) = errxform.for_abi_error(&err_result.tref) {
+                        let tn = custom_err.typename();
+                        quote!(super::#tn)
+                    } else {
+                        names.type_ref(&err_result.tref, lifetime.clone())
+                    }
+                })
+                .unwrap_or(quote!(()));
+            quote!( Result<(#(#rets),*), #err> )
+        } else {
+            quote!(wiggle::Trap)
+        };
 
         if is_anonymous {
-            quote!(fn #funcname(&self, #(#args),*) -> Result<(#(#rets),*), #err>;)
+            quote!(fn #funcname(&self, #(#args),*) -> #result; )
         } else {
-            quote!(fn #funcname<#lifetime>(&self, #(#args),*) -> Result<(#(#rets),*), #err>;)
+            quote!(fn #funcname<#lifetime>(&self, #(#args),*) -> #result;)
         }
     });
     quote! {

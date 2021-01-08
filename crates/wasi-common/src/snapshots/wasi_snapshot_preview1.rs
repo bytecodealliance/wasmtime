@@ -714,14 +714,17 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         Ok(nevents)
     }
 
-    fn proc_exit(&self, _rval: types::Exitcode) -> std::result::Result<(), ()> {
-        // proc_exit is special in that it's expected to unwind the stack, which
-        // typically requires runtime-specific logic.
-        unimplemented!("runtimes are expected to override this implementation")
+    fn proc_exit(&self, status: types::Exitcode) -> wiggle::Trap {
+        // Check that the status is within WASI's range.
+        if status < 126 {
+            wiggle::Trap::I32Exit(status as i32)
+        } else {
+            wiggle::Trap::String("exit with invalid exit status outside of [0..126)".to_owned())
+        }
     }
 
     fn proc_raise(&self, _sig: types::Signal) -> Result<()> {
-        unimplemented!("proc_raise")
+        Err(Error::Unsupported("proc_raise"))
     }
 
     fn sched_yield(&self) -> Result<()> {
@@ -741,7 +744,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         _ri_data: &types::IovecArray<'_>,
         _ri_flags: types::Riflags,
     ) -> Result<(types::Size, types::Roflags)> {
-        unimplemented!("sock_recv")
+        Err(Error::Unsupported("sock_recv"))
     }
 
     fn sock_send(
@@ -750,11 +753,11 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         _si_data: &types::CiovecArray<'_>,
         _si_flags: types::Siflags,
     ) -> Result<types::Size> {
-        unimplemented!("sock_send")
+        Err(Error::Unsupported("sock_send"))
     }
 
     fn sock_shutdown(&self, _fd: types::Fd, _how: types::Sdflags) -> Result<()> {
-        unimplemented!("sock_shutdown")
+        Err(Error::Unsupported("sock_shutdown"))
     }
 }
 
@@ -801,7 +804,7 @@ impl WasiCtx {
                         Err(error) => {
                             events.push(types::Event {
                                 userdata: subscription.userdata,
-                                error: error.into(),
+                                error: error.try_into().expect("non-trapping error"),
                                 type_: types::Eventtype::FdRead,
                                 fd_readwrite: types::EventFdReadwrite {
                                     nbytes: 0,
@@ -827,7 +830,7 @@ impl WasiCtx {
                         Err(error) => {
                             events.push(types::Event {
                                 userdata: subscription.userdata,
-                                error: error.into(),
+                                error: error.try_into().expect("non-trapping error"),
                                 type_: types::Eventtype::FdWrite,
                                 fd_readwrite: types::EventFdReadwrite {
                                     nbytes: 0,

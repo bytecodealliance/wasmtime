@@ -9,7 +9,7 @@ use crate::sys::stdio::{Stderr, Stdin, Stdout};
 use crate::sys::AsFile;
 use crate::{Error, Result};
 use lazy_static::lazy_static;
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::Mutex;
 use std::thread;
@@ -81,7 +81,9 @@ impl StdinPoll {
             // Linux returns `POLLIN` in both cases, and we imitate this behavior.
             let resp = match std::io::stdin().lock().fill_buf() {
                 Ok(_) => PollState::Ready,
-                Err(e) => PollState::Error(Errno::from(Error::from(e))),
+                Err(e) => {
+                    PollState::Error(Errno::try_from(Error::from(e)).expect("non-trapping error"))
+                }
             };
 
             // Notify the requestor about data in stdin. They may have already timed out,
@@ -158,7 +160,9 @@ fn handle_rw_event(event: FdEventData, out_events: &mut Vec<Event>) {
                 .as_file()
                 .and_then(|f| f.metadata())
                 .map(|m| m.len())
-                .map_err(|ioerror| Errno::from(Error::from(ioerror)))
+                .map_err(|ioerror| {
+                    Errno::try_from(Error::from(ioerror)).expect("non-trapping error")
+                })
         } else {
             // The spec is unclear what nbytes should actually be for __WASI_EVENTTYPE_FD_WRITE and
             // the implementation on Unix just returns 0 here, so it's probably fine
