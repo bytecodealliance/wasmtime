@@ -201,14 +201,26 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.pop1();
         }
         Operator::Select => {
-            let (arg1, arg2, cond) = state.pop3();
+            let (mut arg1, mut arg2, cond) = state.pop3();
+            if builder.func.dfg.value_type(arg1).is_vector() {
+                arg1 = optionally_bitcast_vector(arg1, I8X16, builder);
+            }
+            if builder.func.dfg.value_type(arg2).is_vector() {
+                arg2 = optionally_bitcast_vector(arg2, I8X16, builder);
+            }
             state.push1(builder.ins().select(cond, arg1, arg2));
         }
         Operator::TypedSelect { ty: _ } => {
             // We ignore the explicit type parameter as it is only needed for
             // validation, which we require to have been performed before
             // translation.
-            let (arg1, arg2, cond) = state.pop3();
+            let (mut arg1, mut arg2, cond) = state.pop3();
+            if builder.func.dfg.value_type(arg1).is_vector() {
+                arg1 = optionally_bitcast_vector(arg1, I8X16, builder);
+            }
+            if builder.func.dfg.value_type(arg2).is_vector() {
+                arg2 = optionally_bitcast_vector(arg2, I8X16, builder);
+            }
             state.push1(builder.ins().select(cond, arg1, arg2));
         }
         Operator::Nop => {
