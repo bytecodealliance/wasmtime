@@ -2716,16 +2716,41 @@ pub(crate) fn emit(
         }
 
         Inst::LoadExtName { dst, name, offset } => {
-            // The full address can be encoded in the register, with a relocation.
-            // Generates: movabsq $name, %dst
-            let enc_dst = int_reg_enc(dst.to_reg());
-            sink.put1(0x48 | ((enc_dst >> 3) & 1));
-            sink.put1(0xB8 | (enc_dst & 7));
-            emit_reloc(sink, state, Reloc::Abs8, name, *offset);
-            if info.flags().emit_all_ones_funcaddrs() {
-                sink.put8(u64::max_value());
+            if info.flags().is_pic() {
+                // Generates: movq symbol@GOTPCREL(%rip), %dst
+                let enc_dst = int_reg_enc(dst.to_reg());
+                sink.put1(0x48 | ((enc_dst >> 3) & 1) << 2);
+                sink.put1(0x8B);
+                sink.put1(0x05 | ((enc_dst & 7) << 3));
+                emit_reloc(sink, state, Reloc::X86GOTPCRel4, name, -4);
+                sink.put4(0);
+                // Offset in the relocation above applies to the address of the *GOT entry*, not
+                // the loaded address; so we emit a separate add or sub instruction if needed.
+                if *offset < 0 {
+                    assert!(*offset >= -i32::MAX as i64);
+                    sink.put1(0x48 | ((enc_dst >> 3) & 1));
+                    sink.put1(0x81);
+                    sink.put1(0xe8 | (enc_dst & 7));
+                    sink.put4((-*offset) as u32);
+                } else if *offset > 0 {
+                    assert!(*offset <= i32::MAX as i64);
+                    sink.put1(0x48 | ((enc_dst >> 3) & 1));
+                    sink.put1(0x81);
+                    sink.put1(0xc0 | (enc_dst & 7));
+                    sink.put4(*offset as u32);
+                }
             } else {
-                sink.put8(0);
+                // The full address can be encoded in the register, with a relocation.
+                // Generates: movabsq $name, %dst
+                let enc_dst = int_reg_enc(dst.to_reg());
+                sink.put1(0x48 | ((enc_dst >> 3) & 1));
+                sink.put1(0xB8 | (enc_dst & 7));
+                emit_reloc(sink, state, Reloc::Abs8, name, *offset);
+                if info.flags().emit_all_ones_funcaddrs() {
+                    sink.put8(u64::max_value());
+                } else {
+                    sink.put8(0);
+                }
             }
         }
 
