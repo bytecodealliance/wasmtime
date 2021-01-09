@@ -11,7 +11,7 @@ edition = "2018"
 
 [dependencies]
 cranelift-codegen = { path = "../codegen", version = "0.69.0" }
-smallvec = "1.0.0"
+smallvec = "1.6.1"
 target-lexicon = "0.11"
 thiserror = "1.0.15"
 
