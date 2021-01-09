@@ -4107,7 +4107,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             //     unused load.
             let src = input_to_reg_mem(ctx, inputs[0]);
             let src_ty = ctx.input_ty(insn, 0);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let dst_ty = ty.unwrap();
             assert!(src_ty == dst_ty.lane_type() && dst_ty.bits() == 128);
             match src {

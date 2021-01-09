@@ -26,7 +26,7 @@ rustc-demangle = "0.1.16"
 cpp_demangle = "0.3.2"
 log = "0.4.8"
 wat = { version = "1.0.18", optional = true }
-smallvec = "1.4.0"
+smallvec = "1.6.1"
 serde = { version = "1.0.94", features = ["derive"] }
 bincode = "1.2.1"
 indexmap = "1.6"

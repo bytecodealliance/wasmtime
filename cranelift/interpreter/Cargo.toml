@@ -15,7 +15,7 @@ cranelift-codegen = { path = "../codegen", version = "0.69.0", features = ["all-
 cranelift-entity = { path = "../entity", version = "0.69.0" }
 cranelift-reader = { path = "../reader", version = "0.69.0" }
 log = { version = "0.4.8", default-features = false }
-smallvec = "1.4.2"
+smallvec = "1.6.1"
 thiserror = "1.0.15"
 
 [dev-dependencies]
