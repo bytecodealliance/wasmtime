@@ -3029,6 +3029,10 @@ pub(crate) fn emit(
             sink.put1(0xff);
             sink.put1(0x17);
         }
+
+        Inst::ValueLabelMarker { .. } => {
+            // Nothing; this is only used to compute debug info.
+        }
     }
 
     state.clear_post_insn();

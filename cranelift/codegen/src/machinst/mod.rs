@@ -52,45 +52,9 @@
 //!         |                        - all symbolic stack references to
 //!         |                          stackslots and spillslots are resolved
 //!         |                          to concrete FP-offset mem addresses.)
-//!         | [block/insn ordering]
 //!         |
-//!     VCode<arch_backend::Inst>   (machine instructions:
-//!         |                        - vcode.final_block_order is filled in.
-//!         |                        - new insn sequence from regalloc is
-//!         |                          placed back into vcode and block
-//!         |                          boundaries are updated.)
-//!         | [redundant branch/block
-//!         |  removal]
-//!         |
-//!     VCode<arch_backend::Inst>   (machine instructions:
-//!         |                        - all blocks that were just an
-//!         |                          unconditional branch are removed.)
-//!         |
-//!         | [branch finalization
-//!         |  (fallthroughs)]
-//!         |
-//!     VCode<arch_backend::Inst>   (machine instructions:
-//!         |                        - all branches are in lowered one-
-//!         |                          target form, but targets are still
-//!         |                          block indices.)
-//!         |
-//!         | [branch finalization
-//!         |  (offsets)]
-//!         |
-//!     VCode<arch_backend::Inst>   (machine instructions:
-//!         |                        - all branch offsets from start of
-//!         |                          function are known, and all branches
-//!         |                          have resolved-offset targets.)
-//!         |
-//!         | [MemArg finalization]
-//!         |
-//!     VCode<arch_backend::Inst>   (machine instructions:
-//!         |                        - all MemArg references to the constant
-//!         |                          pool are replaced with offsets.
-//!         |                        - all constant-pool data is collected
-//!         |                          in the VCode.)
-//!         |
-//!         | [binary emission]
+//!         | [binary emission via MachBuffer
+//!         |  with streaming branch resolution/simplification]
 //!         |
 //!     Vec<u8>                     (machine code!)
 //!
@@ -98,11 +62,11 @@
 
 use crate::binemit::{CodeInfo, CodeOffset, StackMap};
 use crate::ir::condcodes::IntCC;
-use crate::ir::{Function, SourceLoc, Type};
+use crate::ir::{Function, SourceLoc, Type, ValueLabel};
 use crate::isa::unwind::input as unwind_input;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
-
+use crate::value_label::ValueLabelsRanges;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt::Debug;
@@ -111,9 +75,12 @@ use regalloc::RegUsageCollector;
 use regalloc::{
     RealReg, RealRegUniverse, Reg, RegClass, RegUsageMapper, SpillSlot, VirtualReg, Writable,
 };
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use std::string::String;
 use target_lexicon::Triple;
+
+#[cfg(feature = "unwind")]
+use crate::isa::unwind::systemv::RegisterMappingError;
 
 pub mod lower;
 pub use lower::*;
@@ -137,6 +104,7 @@ pub mod inst_common;
 pub use inst_common::*;
 pub mod valueregs;
 pub use valueregs::*;
+pub mod debug;
 
 /// A machine instruction.
 pub trait MachInst: Clone + Debug {
@@ -161,6 +129,11 @@ pub trait MachInst: Clone + Debug {
     /// Should this instruction be included in the clobber-set?
     fn is_included_in_clobbers(&self) -> bool {
         true
+    }
+
+    /// If this is a load or store to the stack, return that info.
+    fn stack_op_info(&self) -> Option<MachInstStackOpInfo> {
+        None
     }
 
     /// Generate a move.
@@ -222,6 +195,17 @@ pub trait MachInst: Clone + Debug {
     /// What is the register class used for reference types (GC-observable pointers)? Can
     /// be dependent on compilation flags.
     fn ref_type_regclass(_flags: &Flags) -> RegClass;
+
+    /// Does this instruction define a ValueLabel? Returns the `Reg` whose value
+    /// becomes the new value of the `ValueLabel` after this instruction.
+    fn defines_value_label(&self) -> Option<(ValueLabel, Reg)> {
+        None
+    }
+
+    /// Create a marker instruction that defines a value label.
+    fn gen_value_label_marker(_label: ValueLabel, _reg: Reg) -> Self {
+        Self::gen_nop(0)
+    }
 
     /// A label-use kind: a type that describes the types of label references that
     /// can occur in an instruction.
@@ -285,6 +269,35 @@ pub enum MachTerminator<'a> {
     Indirect(&'a [MachLabel]),
 }
 
+impl<'a> MachTerminator<'a> {
+    /// Get the successor labels named in a `MachTerminator`.
+    pub fn get_succs(&self) -> SmallVec<[MachLabel; 2]> {
+        let mut ret = smallvec![];
+        match self {
+            &MachTerminator::Uncond(l) => {
+                ret.push(l);
+            }
+            &MachTerminator::Cond(l1, l2) => {
+                ret.push(l1);
+                ret.push(l2);
+            }
+            &MachTerminator::Indirect(ls) => {
+                ret.extend(ls.iter().cloned());
+            }
+            _ => {}
+        }
+        ret
+    }
+
+    /// Is this a terminator?
+    pub fn is_term(&self) -> bool {
+        match self {
+            MachTerminator::None => false,
+            _ => true,
+        }
+    }
+}
+
 /// A trait describing the ability to encode a MachInst into binary machine code.
 pub trait MachInstEmit: MachInst {
     /// Persistent state carried across `emit` invocations.
@@ -330,6 +343,8 @@ pub struct MachCompileResult {
     pub disasm: Option<String>,
     /// Unwind info.
     pub unwind_info: Option<unwind_input::UnwindInfo<Reg>>,
+    /// Debug info: value labels to registers/stackslots at code offsets.
+    pub value_labels_ranges: Option<ValueLabelsRanges>,
 }
 
 impl MachCompileResult {
@@ -386,12 +401,16 @@ pub trait MachBackend {
         Ok(None)
     }
 
-    /// Machine-specific condcode info needed by TargetIsa.
     /// Creates a new System V Common Information Entry for the ISA.
     #[cfg(feature = "unwind")]
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         // By default, an ISA cannot create a System V CIE
         None
+    }
+    /// Maps a regalloc::Reg to a DWARF register number.
+    #[cfg(feature = "unwind")]
+    fn map_reg_to_dwarf(&self, _: Reg) -> Result<u16, RegisterMappingError> {
+        Err(RegisterMappingError::UnsupportedArchitecture)
     }
 }
 
@@ -430,4 +449,16 @@ pub trait UnwindInfoGenerator<I: MachInstEmit> {
     fn create_unwind_info(
         context: UnwindInfoContext<I>,
     ) -> CodegenResult<Option<unwind_input::UnwindInfo<Reg>>>;
+}
+
+/// Info about an operation that loads or stores from/to the stack.
+#[derive(Clone, Copy, Debug)]
+pub enum MachInstStackOpInfo {
+    /// Load from an offset from the nominal stack pointer into the given reg.
+    LoadNomSPOff(Reg, i64),
+    /// Store to an offset from the nominal stack pointer from the given reg.
+    StoreNomSPOff(Reg, i64),
+    /// Adjustment of nominal-SP up or down. This value is added to subsequent
+    /// offsets in loads/stores above to produce real-SP offsets.
+    NomSPAdj(i64),
 }

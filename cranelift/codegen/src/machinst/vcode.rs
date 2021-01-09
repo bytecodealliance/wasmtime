@@ -21,7 +21,6 @@ use crate::ir::{self, types, Constant, ConstantData, SourceLoc};
 use crate::machinst::*;
 use crate::settings;
 use crate::timing;
-
 use regalloc::Function as RegallocFunction;
 use regalloc::Set as RegallocSet;
 use regalloc::{
@@ -110,8 +109,12 @@ pub struct VCode<I: VCodeInst> {
     /// Ranges for prologue and epilogue instructions.
     prologue_epilogue_ranges: Option<(InsnRange, Box<[InsnRange]>)>,
 
-    /// Instruction end offsets
-    insts_layout: RefCell<(Vec<u32>, u32)>,
+    /// Do we generate debug info?
+    generate_debug_info: bool,
+
+    /// Instruction end offsets, instruction indices at each label, and total
+    /// buffer size.  Only present if `generate_debug_info` is set.
+    insts_layout: RefCell<(Vec<u32>, Vec<u32>, u32)>,
 
     /// Constants.
     constants: VCodeConstants,
@@ -157,7 +160,13 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         constants: VCodeConstants,
     ) -> VCodeBuilder<I> {
         let reftype_class = I::ref_type_regclass(abi.flags());
-        let vcode = VCode::new(abi, emit_info, block_order, constants);
+        let vcode = VCode::new(
+            abi,
+            emit_info,
+            block_order,
+            constants,
+            /* generate_debug_info = */ true,
+        );
         let stack_map_info = StackmapRequestInfo {
             reftype_class,
             reftyped_vregs: vec![],
@@ -296,6 +305,7 @@ impl<I: VCodeInst> VCode<I> {
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,
+        generate_debug_info: bool,
     ) -> VCode<I> {
         VCode {
             liveins: abi.liveins(),
@@ -314,7 +324,8 @@ impl<I: VCodeInst> VCode<I> {
             safepoint_insns: vec![],
             safepoint_slots: vec![],
             prologue_epilogue_ranges: None,
-            insts_layout: RefCell::new((vec![], 0)),
+            generate_debug_info,
+            insts_layout: RefCell::new((vec![], vec![], 0)),
             constants,
         }
     }
@@ -484,7 +495,8 @@ impl<I: VCodeInst> VCode<I> {
         buffer.reserve_labels_for_blocks(self.num_blocks() as BlockIndex);
         buffer.reserve_labels_for_constants(&self.constants);
 
-        let mut insts_layout = vec![0; self.insts.len()];
+        let mut inst_ends = vec![0; self.insts.len()];
+        let mut label_insn_iix = vec![0; self.num_blocks()];
 
         let mut safepoint_idx = 0;
         let mut cur_srcloc = None;
@@ -500,6 +512,7 @@ impl<I: VCodeInst> VCode<I> {
 
             let (start, end) = self.block_ranges[block as usize];
             buffer.bind_label(MachLabel::from_block(block));
+            label_insn_iix[block as usize] = start;
             for iix in start..end {
                 let srcloc = self.srclocs[iix as usize];
                 if cur_srcloc != Some(srcloc) {
@@ -526,7 +539,19 @@ impl<I: VCodeInst> VCode<I> {
 
                 self.insts[iix as usize].emit(&mut buffer, &self.emit_info, &mut state);
 
-                insts_layout[iix as usize] = buffer.cur_offset();
+                if self.generate_debug_info {
+                    // Buffer truncation may have happened since last inst append; trim inst-end
+                    // layout info as appropriate.
+                    let l = &mut inst_ends[0..iix as usize];
+                    for end in l.iter_mut().rev() {
+                        if *end > buffer.cur_offset() {
+                            *end = buffer.cur_offset();
+                        } else {
+                            break;
+                        }
+                    }
+                    inst_ends[iix as usize] = buffer.cur_offset();
+                }
             }
 
             if cur_srcloc.is_some() {
@@ -553,7 +578,16 @@ impl<I: VCodeInst> VCode<I> {
             buffer.defer_constant(label, data.alignment(), data.as_slice(), u32::max_value());
         }
 
-        *self.insts_layout.borrow_mut() = (insts_layout, buffer.cur_offset());
+        if self.generate_debug_info {
+            for end in inst_ends.iter_mut().rev() {
+                if *end > buffer.cur_offset() {
+                    *end = buffer.cur_offset();
+                } else {
+                    break;
+                }
+            }
+            *self.insts_layout.borrow_mut() = (inst_ends, label_insn_iix, buffer.cur_offset());
+        }
 
         buffer
     }
@@ -567,11 +601,21 @@ impl<I: VCodeInst> VCode<I> {
         let context = UnwindInfoContext {
             insts: &self.insts,
             insts_layout: &layout.0,
-            len: layout.1,
+            len: layout.2,
             prologue: prologue.clone(),
             epilogues,
         };
         I::UnwindInfo::create_unwind_info(context)
+    }
+
+    /// Generates value-label ranges.
+    pub fn value_labels_ranges(&self) -> crate::result::CodegenResult<Option<ValueLabelsRanges>> {
+        let layout = &self.insts_layout.borrow();
+        Ok(Some(debug::compute(
+            &self.insts,
+            &layout.0[..],
+            &layout.1[..],
+        )))
     }
 
     /// Get the IR block for a BlockIndex, if one exists.

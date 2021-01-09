@@ -2371,6 +2371,9 @@ impl MachInstEmit for Inst {
                     sink.bind_label(jump_around_label);
                 }
             }
+            &Inst::ValueLabelMarker { .. } => {
+                // Nothing; this is only used to compute debug info.
+            }
         }
 
         let end_off = sink.cur_offset();
