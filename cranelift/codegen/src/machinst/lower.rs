@@ -683,10 +683,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 has_side_effect,
                 value_needed,
             );
-            // Skip lowering branches; these are handled separately.
-            if self.f.dfg[inst].opcode().is_branch() {
-                continue;
-            }
 
             // Update scan state to color prior to this inst (as we are scanning
             // backward).
@@ -697,6 +693,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     .get(&inst)
                     .expect("every side-effecting inst should have a color-map entry");
                 self.cur_scan_entry_color = Some(entry_color);
+            }
+
+            // Skip lowering branches; these are handled separately
+            // (see `lower_clif_branches()` below).
+            if self.f.dfg[inst].opcode().is_branch() {
+                continue;
             }
 
             // Normal instruction: codegen if the instruction is side-effecting
