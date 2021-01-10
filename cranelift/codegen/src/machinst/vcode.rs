@@ -118,6 +118,10 @@ pub struct VCode<I: VCodeInst> {
 
     /// Constants.
     constants: VCodeConstants,
+
+    /// Are any debug value-labels present? If not, we can skip the
+    /// post-emission analysis.
+    has_value_labels: bool,
 }
 
 /// A builder for a VCode function body. This builder is designed for the
@@ -251,6 +255,9 @@ impl<I: VCodeInst> VCodeBuilder<I> {
                 }
             }
         }
+        if insn.defines_value_label().is_some() {
+            self.vcode.has_value_labels = true;
+        }
         self.vcode.insts.push(insn);
         self.vcode.srclocs.push(self.cur_srcloc);
         if is_safepoint {
@@ -327,6 +334,7 @@ impl<I: VCodeInst> VCode<I> {
             generate_debug_info,
             insts_layout: RefCell::new((vec![], vec![], 0)),
             constants,
+            has_value_labels: false,
         }
     }
 
@@ -610,6 +618,10 @@ impl<I: VCodeInst> VCode<I> {
 
     /// Generates value-label ranges.
     pub fn value_labels_ranges(&self) -> crate::result::CodegenResult<Option<ValueLabelsRanges>> {
+        if !self.has_value_labels {
+            return Ok(None);
+        }
+
         let layout = &self.insts_layout.borrow();
         Ok(Some(debug::compute(
             &self.insts,

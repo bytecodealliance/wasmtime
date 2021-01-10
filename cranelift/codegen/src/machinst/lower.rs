@@ -804,6 +804,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     fn emit_value_label_markers_for_inst(&mut self, inst: Inst) {
+        if self.f.dfg.values_labels.is_none() {
+            return;
+        }
+
         debug!(
             "value labeling: srcloc {}: inst {}",
             self.srcloc(inst),
@@ -815,6 +819,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     fn emit_value_label_markers_for_block_args(&mut self, block: Block) {
+        if self.f.dfg.values_labels.is_none() {
+            return;
+        }
+
         debug!("value labeling: block {}", block);
         for &arg in self.f.dfg.block_params(block) {
             self.emit_value_label_marks_for_value(arg);
