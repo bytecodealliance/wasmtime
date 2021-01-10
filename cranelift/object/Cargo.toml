@@ -23,3 +23,9 @@ cranelift-entity = { path = "../entity", version = "0.69.0" }
 
 [badges]
 maintenance = { status = "experimental" }
+
+[features]
+default = []
+# cranelift-object re-exports object (`pub use object` at top level). Use this
+# feature to enable that re-export to contain object's read features as well.
+object_read = ["object/read"]
