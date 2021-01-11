@@ -1,5 +1,7 @@
 [package]
 name = "peepmatic-test-operator"
+description = "Operator for usage in peepmatic tests"
+license = "Apache-2.0 WITH LLVM-exception"
 version = "0.69.0"
 authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 edition = "2018"
