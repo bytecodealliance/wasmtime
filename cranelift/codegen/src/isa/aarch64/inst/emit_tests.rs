@@ -3793,6 +3793,28 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Cnt,
+            rd: writable_vreg(23),
+            rn: vreg(5),
+            size: VectorSize::Size8x8,
+        },
+        "B758200E",
+        "cnt v23.8b, v5.8b",
+    ));
+
+    insns.push((
+        Inst::VecLanes {
+            op: VecLanesOp::Uminv,
+            rd: writable_vreg(0),
+            rn: vreg(31),
+            size: VectorSize::Size8x8,
+        },
+        "E0AB312E",
+        "uminv b0, v31.8b",
+    ));
+
+    insns.push((
         Inst::VecLanes {
             op: VecLanesOp::Uminv,
             rd: writable_vreg(2),
@@ -3834,6 +3856,17 @@ fn test_aarch64_binemit() {
         },
         "A2BB314E",
         "addv b2, v29.16b",
+    ));
+
+    insns.push((
+        Inst::VecLanes {
+            op: VecLanesOp::Addv,
+            rd: writable_vreg(15),
+            rn: vreg(7),
+            size: VectorSize::Size16x4,
+        },
+        "EFB8710E",
+        "addv h15, v7.4h",
     ));
 
     insns.push((
