@@ -11,12 +11,12 @@ unsafe fn test_nofollow_errors(dir_fd: wasi::Fd) {
     wasi::path_symlink("target", dir_fd, "symlink").expect("creating a symlink");
 
     // Try to open it as a directory with O_NOFOLLOW again.
-    assert_eq!(
-        wasi::path_open(dir_fd, 0, "symlink", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
-            .expect_err("opening a directory symlink as a directory should fail")
-            .raw_error(),
-        wasi::ERRNO_LOOP,
-        "errno should be ERRNO_LOOP",
+    let dir_open_errno = wasi::path_open(dir_fd, 0, "symlink", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
+        .expect_err("opening a directory symlink as a directory should fail")
+        .raw_error();
+    assert!(
+        dir_open_errno == wasi::ERRNO_LOOP || dir_open_errno == wasi::ERRNO_NOTDIR,
+        "errno should be ERRNO_LOOP or ERRNO_NOTDIR",
     );
 
     // Try to open it with just O_NOFOLLOW.
@@ -57,12 +57,12 @@ unsafe fn test_nofollow_errors(dir_fd: wasi::Fd) {
     wasi::path_symlink("target", dir_fd, "symlink").expect("creating a symlink");
 
     // Try to open it as a directory with O_NOFOLLOW again.
-    assert_eq!(
-        wasi::path_open(dir_fd, 0, "symlink", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
-            .expect_err("opening a directory symlink as a directory should fail")
-            .raw_error(),
-        wasi::ERRNO_LOOP,
-        "errno should be ERRNO_LOOP",
+    let dir_open_errno = wasi::path_open(dir_fd, 0, "symlink", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
+        .expect_err("opening a directory symlink as a directory should fail")
+        .raw_error();
+    assert!(
+        dir_open_errno == wasi::ERRNO_LOOP || dir_open_errno == wasi::ERRNO_NOTDIR,
+        "errno should be ERRNO_LOOP or ERRNO_NOTDIR",
     );
 
     // Try to open it with just O_NOFOLLOW.

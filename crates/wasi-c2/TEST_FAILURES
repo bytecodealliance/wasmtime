@@ -1,22 +1,16 @@
 
 TODOs:
-* symlink following behavior, trailing slash behavior (closely related to
-  symlinks) in cap-std isnt ready yet.
 * path_filestat_set_times, fd_filestat_set_times: different types used to set
   times for a Dir vs a File, this is a fs_set_times vs cap_fs_ext divergence
 * File::set_fdflags is unimplemented, File::get_fdflags is lying - these are
   fcntl on unix, reopenfile / ?? on windows. Not implemented in system-interface yet.
 * async scheduling!
 
-wasi_tests::dangling_symlink
-    - symlink following behavior not yet implemented
 wasi_tests::directory_seek
     - something weird about directory open rights / fdstat. need debug
       impl of Caps to see about this
 wasi_tests::fd_flags_set
     - set_fdflags is not implemented. test wanted to clear O_APPEND mode
-wasi_tests::nofollow_errors
-    - symlink following behavior not yet implemented
 wasi_tests::path_filestat
     - fdstat.fs_flags is not populated correctly - APPEND | SYNC aren't
       present because File::get_fdflags isnt implemented correctly
