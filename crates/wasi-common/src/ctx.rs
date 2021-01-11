@@ -268,6 +268,22 @@ impl WasiCtxBuilder {
         self
     }
 
+    /// Add a preopened handle.
+    ///
+    /// This is the most generic function for adding a directory, but also the less easy to use.
+    pub fn preopened_handle<P: AsRef<Path>, T: 'static + Handle>(
+        &mut self,
+        dir: T,
+        guest_path: P,
+    ) -> &mut Self {
+        let preopen = PendingPreopen::new(move || Ok(Box::new(dir)));
+        self.preopens
+            .as_mut()
+            .unwrap()
+            .push((guest_path.as_ref().to_owned(), preopen));
+        self
+    }
+
     /// Build a `WasiCtx`, consuming this `WasiCtxBuilder`.
     ///
     /// If any of the arguments or environment variables in this builder cannot be converted into
