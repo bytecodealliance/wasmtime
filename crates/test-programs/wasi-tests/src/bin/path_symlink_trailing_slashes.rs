@@ -40,12 +40,12 @@ unsafe fn test_path_symlink_trailing_slashes(dir_fd: wasi::Fd) {
     // Link destination already exists, target has trailing slash.
     create_file(dir_fd, "target");
 
-    assert_eq!(
-        wasi::path_symlink("source", dir_fd, "target/")
-            .expect_err("link destination already exists")
-            .raw_error(),
-        wasi::ERRNO_EXIST,
-        "errno should be ERRNO_EXIST"
+    let dir_symlink_errno = wasi::path_symlink("source", dir_fd, "target/")
+        .expect_err("link destination already exists")
+        .raw_error();
+    assert!(
+        dir_symlink_errno == wasi::ERRNO_EXIST || dir_symlink_errno == wasi::ERRNO_NOTDIR,
+        "errno should be ERRNO_EXIST or ERRNO_NOTDIR"
     );
     wasi::path_unlink_file(dir_fd, "target").expect("removing a file");
 
