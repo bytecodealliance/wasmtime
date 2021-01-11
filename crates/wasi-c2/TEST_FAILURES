@@ -15,7 +15,8 @@ wasi_tests::path_filestat
     - fdstat.fs_flags is not populated correctly - APPEND | SYNC aren't
       present because File::get_fdflags isnt implemented correctly
 wasi_tests::path_link
-    - symlink following behavior not yet implemented
+    - need DirExt::hard_link_nofollow
+
 wasi_tests::path_rename_trailing_slashes
     - unclear, trailing slash behavior is wrong
 wasi_tests::path_symlink_trailing_slashes

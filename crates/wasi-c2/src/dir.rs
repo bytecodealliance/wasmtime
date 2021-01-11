@@ -405,7 +405,17 @@ impl WasiDir for cap_std::fs::Dir {
             .as_any()
             .downcast_ref::<Self>()
             .ok_or(Error::NotCapable)?;
-        self.hard_link(Path::new(src_path), target_dir, Path::new(target_path))?;
+        let src_path = Path::new(src_path);
+        let target_path = Path::new(target_path);
+        if symlink_follow {
+            self.hard_link(src_path, target_dir, target_path)?;
+        } else {
+            todo!()
+            /*
+            use cap_fs_ext::DirExt;
+            self.hard_link_nofollow(src_path, target_dir, target_path)?;
+            */
+        }
         Ok(())
     }
     fn set_times(
