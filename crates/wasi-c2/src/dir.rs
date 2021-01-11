@@ -263,6 +263,8 @@ impl WasiDir for cap_std::fs::Dir {
 
         if symlink_follow {
             opts.follow(FollowSymlinks::Yes);
+        } else {
+            opts.follow(FollowSymlinks::No);
         }
 
         let f = self.open_with(Path::new(path), &opts)?;
@@ -270,8 +272,12 @@ impl WasiDir for cap_std::fs::Dir {
     }
 
     fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error> {
-        // XXX obey symlink_follow
-        let d = self.open_dir(Path::new(path))?;
+        let d = if symlink_follow {
+            self.open_dir(Path::new(path))?
+        } else {
+            use cap_fs_ext::DirExt;
+            self.open_dir_nofollow(Path::new(path))?
+        };
         Ok(Box::new(d))
     }
 
