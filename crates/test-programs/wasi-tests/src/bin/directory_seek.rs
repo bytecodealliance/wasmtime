@@ -33,7 +33,7 @@ unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
     );
     assert_eq!(
         (fdstat.fs_rights_base & wasi::RIGHTS_FD_SEEK),
-        0,
+        wasi::RIGHTS_FD_SEEK,
         "directory has the seek right",
     );
 

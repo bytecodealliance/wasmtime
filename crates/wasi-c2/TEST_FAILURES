@@ -16,9 +16,6 @@ wasi_tests::remove_directory_trailing_slashes
     - cap-std Dir::remove_dir gives EINVAL when trying to remove dir with
       trailing slash. otherwise, everything passes.
 
-wasi_tests::directory_seek
-    - something weird about directory open rights / fdstat. need debug
-      impl of Caps to see about this
 wasi_tests::fd_flags_set
     - set_fdflags is not implemented. test wanted to clear O_APPEND mode
 wasi_tests::path_filestat
