@@ -12,10 +12,10 @@ pub(crate) fn filestat_set_times(
     st_mtim: Timestamp,
     fst_flags: Fstflags,
 ) -> Result<()> {
-    let set_atim = fst_flags.contains(&Fstflags::ATIM);
-    let set_atim_now = fst_flags.contains(&Fstflags::ATIM_NOW);
-    let set_mtim = fst_flags.contains(&Fstflags::MTIM);
-    let set_mtim_now = fst_flags.contains(&Fstflags::MTIM_NOW);
+    let set_atim = fst_flags.contains(Fstflags::ATIM);
+    let set_atim_now = fst_flags.contains(Fstflags::ATIM_NOW);
+    let set_mtim = fst_flags.contains(Fstflags::MTIM);
+    let set_mtim_now = fst_flags.contains(Fstflags::MTIM_NOW);
 
     if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
         return Err(Error::Inval);

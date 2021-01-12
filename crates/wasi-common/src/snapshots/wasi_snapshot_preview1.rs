@@ -60,7 +60,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let required_rights = HandleRights::from_base(types::Rights::FD_ADVISE);
         let entry = self.get_entry(fd)?;
         entry
-            .as_handle(&required_rights)?
+            .as_handle(required_rights)?
             .advise(advice, offset, len)
     }
 
@@ -72,7 +72,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<()> {
         let required_rights = HandleRights::from_base(types::Rights::FD_ALLOCATE);
         let entry = self.get_entry(fd)?;
-        entry.as_handle(&required_rights)?.allocate(offset, len)
+        entry.as_handle(required_rights)?.allocate(offset, len)
     }
 
     fn fd_close(&self, fd: types::Fd) -> Result<()> {
@@ -89,12 +89,12 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_datasync(&self, fd: types::Fd) -> Result<()> {
         let required_rights = HandleRights::from_base(types::Rights::FD_DATASYNC);
         let entry = self.get_entry(fd)?;
-        entry.as_handle(&required_rights)?.datasync()
+        entry.as_handle(required_rights)?.datasync()
     }
 
     fn fd_fdstat_get(&self, fd: types::Fd) -> Result<types::Fdstat> {
         let entry = self.get_entry(fd)?;
-        let file = entry.as_handle(&HandleRights::empty())?;
+        let file = entry.as_handle(HandleRights::empty())?;
         let fs_flags = file.fdstat_get()?;
         let rights = entry.get_rights();
         let fdstat = types::Fdstat {
@@ -109,7 +109,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_fdstat_set_flags(&self, fd: types::Fd, flags: types::Fdflags) -> Result<()> {
         let required_rights = HandleRights::from_base(types::Rights::FD_FDSTAT_SET_FLAGS);
         let entry = self.get_entry(fd)?;
-        entry.as_handle(&required_rights)?.fdstat_set_flags(flags)
+        entry.as_handle(required_rights)?.fdstat_set_flags(flags)
     }
 
     fn fd_fdstat_set_rights(
@@ -120,7 +120,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<()> {
         let rights = HandleRights::new(fs_rights_base, fs_rights_inheriting);
         let entry = self.get_entry(fd)?;
-        if !entry.get_rights().contains(&rights) {
+        if !entry.get_rights().contains(rights) {
             return Err(Error::Notcapable);
         }
         entry.set_rights(rights);
@@ -130,14 +130,14 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
     fn fd_filestat_get(&self, fd: types::Fd) -> Result<types::Filestat> {
         let required_rights = HandleRights::from_base(types::Rights::FD_FILESTAT_GET);
         let entry = self.get_entry(fd)?;
-        let host_filestat = entry.as_handle(&required_rights)?.filestat_get()?;
+        let host_filestat = entry.as_handle(required_rights)?.filestat_get()?;
         Ok(host_filestat)
     }
 
     fn fd_filestat_set_size(&self, fd: types::Fd, size: types::Filesize) -> Result<()> {
         let required_rights = HandleRights::from_base(types::Rights::FD_FILESTAT_SET_SIZE);
         let entry = self.get_entry(fd)?;
-        entry.as_handle(&required_rights)?.filestat_set_size(size)
+        entry.as_handle(required_rights)?.filestat_set_size(size)
     }
 
     fn fd_filestat_set_times(
@@ -150,7 +150,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let required_rights = HandleRights::from_base(types::Rights::FD_FILESTAT_SET_TIMES);
         let entry = self.get_entry(fd)?;
         entry
-            .as_handle(&required_rights)?
+            .as_handle(required_rights)?
             .filestat_set_times(atim, mtim, fst_flags)
     }
 
@@ -180,7 +180,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                 .map(|s| io::IoSliceMut::new(&mut *s))
                 .collect::<Vec<io::IoSliceMut<'_>>>();
             entry
-                .as_handle(&required_rights)?
+                .as_handle(required_rights)?
                 .preadv(&mut buf, offset)?
                 .try_into()?
         };
@@ -255,7 +255,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             let buf: Vec<io::IoSlice> =
                 guest_slices.iter().map(|s| io::IoSlice::new(&*s)).collect();
             entry
-                .as_handle(&required_rights)?
+                .as_handle(required_rights)?
                 .pwritev(&buf, offset)?
                 .try_into()?
         };
@@ -278,7 +278,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
                 .map(|s| io::IoSliceMut::new(&mut *s))
                 .collect();
             entry
-                .as_handle(&required_rights)?
+                .as_handle(required_rights)?
                 .read_vectored(&mut slices)?
                 .try_into()?
         };
@@ -298,7 +298,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
 
         let mut bufused = 0;
         let mut buf = buf.clone();
-        for pair in entry.as_handle(&required_rights)?.readdir(cookie)? {
+        for pair in entry.as_handle(required_rights)?.readdir(cookie)? {
             let (dirent, name) = pair?;
             let dirent_raw = dirent.as_bytes()?;
             let dirent_len: types::Size = dirent_raw.len().try_into()?;
@@ -379,21 +379,21 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             types::Whence::End => SeekFrom::End(offset),
             types::Whence::Set => SeekFrom::Start(offset as u64),
         };
-        let host_newoffset = entry.as_handle(&required_rights)?.seek(pos)?;
+        let host_newoffset = entry.as_handle(required_rights)?.seek(pos)?;
         Ok(host_newoffset)
     }
 
     fn fd_sync(&self, fd: types::Fd) -> Result<()> {
         let required_rights = HandleRights::from_base(types::Rights::FD_SYNC);
         let entry = self.get_entry(fd)?;
-        entry.as_handle(&required_rights)?.sync()
+        entry.as_handle(required_rights)?.sync()
     }
 
     fn fd_tell(&self, fd: types::Fd) -> Result<types::Filesize> {
         let required_rights = HandleRights::from_base(types::Rights::FD_TELL);
         let entry = self.get_entry(fd)?;
         let host_offset = entry
-            .as_handle(&required_rights)?
+            .as_handle(required_rights)?
             .seek(SeekFrom::Current(0))?;
         Ok(host_offset)
     }
@@ -411,7 +411,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             let slices: Vec<io::IoSlice> =
                 guest_slices.iter().map(|s| io::IoSlice::new(&*s)).collect();
             entry
-                .as_handle(&required_rights)?
+                .as_handle(required_rights)?
                 .write_vectored(&slices)?
                 .try_into()?
         };
@@ -426,7 +426,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let path = path.as_str()?;
         let (dirfd, path) = path::get(
             &entry,
-            &required_rights,
+            required_rights,
             types::Lookupflags::empty(),
             path.deref(),
             false,
@@ -443,9 +443,9 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let required_rights = HandleRights::from_base(types::Rights::PATH_FILESTAT_GET);
         let entry = self.get_entry(dirfd)?;
         let path = path.as_str()?;
-        let (dirfd, path) = path::get(&entry, &required_rights, flags, path.deref(), false)?;
+        let (dirfd, path) = path::get(&entry, required_rights, flags, path.deref(), false)?;
         let host_filestat =
-            dirfd.filestat_get_at(&path, flags.contains(&types::Lookupflags::SYMLINK_FOLLOW))?;
+            dirfd.filestat_get_at(&path, flags.contains(types::Lookupflags::SYMLINK_FOLLOW))?;
         Ok(host_filestat)
     }
 
@@ -461,13 +461,13 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
         let required_rights = HandleRights::from_base(types::Rights::PATH_FILESTAT_SET_TIMES);
         let entry = self.get_entry(dirfd)?;
         let path = path.as_str()?;
-        let (dirfd, path) = path::get(&entry, &required_rights, flags, path.deref(), false)?;
+        let (dirfd, path) = path::get(&entry, required_rights, flags, path.deref(), false)?;
         dirfd.filestat_set_times_at(
             &path,
             atim,
             mtim,
             fst_flags,
-            flags.contains(&types::Lookupflags::SYMLINK_FOLLOW),
+            flags.contains(types::Lookupflags::SYMLINK_FOLLOW),
         )?;
         Ok(())
     }
@@ -487,7 +487,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             let old_path = old_path.as_str()?;
             path::get(
                 &old_entry,
-                &required_rights,
+                required_rights,
                 types::Lookupflags::empty(),
                 old_path.deref(),
                 false,
@@ -500,7 +500,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             let new_path = new_path.as_str()?;
             path::get(
                 &new_entry,
-                &required_rights,
+                required_rights,
                 types::Lookupflags::empty(),
                 new_path.deref(),
                 false,
@@ -510,7 +510,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             &old_path,
             new_dirfd,
             &new_path,
-            old_flags.contains(&types::Lookupflags::SYMLINK_FOLLOW),
+            old_flags.contains(types::Lookupflags::SYMLINK_FOLLOW),
         )
     }
 
@@ -535,7 +535,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             let path = path.as_str()?;
             path::get(
                 &entry,
-                &needed_rights,
+                needed_rights,
                 dirflags,
                 path.deref(),
                 oflags & types::Oflags::CREAT != types::Oflags::empty(),
@@ -581,7 +581,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             let path = path.as_str()?;
             path::get(
                 &entry,
-                &required_rights,
+                required_rights,
                 types::Lookupflags::empty(),
                 path.deref(),
                 false,
@@ -599,7 +599,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             let path = path.as_str()?;
             path::get(
                 &entry,
-                &required_rights,
+                required_rights,
                 types::Lookupflags::empty(),
                 path.deref(),
                 true,
@@ -621,7 +621,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             let old_path = old_path.as_str()?;
             path::get(
                 &entry,
-                &required_rights,
+                required_rights,
                 types::Lookupflags::empty(),
                 old_path.deref(),
                 true,
@@ -633,7 +633,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             let new_path = new_path.as_str()?;
             path::get(
                 &entry,
-                &required_rights,
+                required_rights,
                 types::Lookupflags::empty(),
                 new_path.deref(),
                 true,
@@ -654,7 +654,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             let new_path = new_path.as_str()?;
             path::get(
                 &entry,
-                &required_rights,
+                required_rights,
                 types::Lookupflags::empty(),
                 new_path.deref(),
                 true,
@@ -672,7 +672,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             let path = path.as_str()?;
             path::get(
                 &entry,
-                &required_rights,
+                required_rights,
                 types::Lookupflags::empty(),
                 path.deref(),
                 false,
@@ -815,7 +815,7 @@ impl WasiCtx {
                         }
                     };
                     fd_events.push(sched::FdEventData {
-                        handle: entry.as_handle(&required_rights)?,
+                        handle: entry.as_handle(required_rights)?,
                         r#type: types::Eventtype::FdRead,
                         userdata: subscription.userdata,
                     });
@@ -841,7 +841,7 @@ impl WasiCtx {
                         }
                     };
                     fd_events.push(sched::FdEventData {
-                        handle: entry.as_handle(&required_rights)?,
+                        handle: entry.as_handle(required_rights)?,
                         r#type: types::Eventtype::FdWrite,
                         userdata: subscription.userdata,
                     });
