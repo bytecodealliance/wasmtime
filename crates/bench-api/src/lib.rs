@@ -83,6 +83,14 @@ pub type ExitCode = c_int;
 pub const OK: ExitCode = 0;
 pub const ERR: ExitCode = -1;
 
+// Randomize the location of heap objects to avoid accidental locality being an
+// uncontrolled variable that obscures performance evaluation in our
+// experiments.
+#[cfg(feature = "shuffling-allocator")]
+#[global_allocator]
+static ALLOC: shuffling_allocator::ShufflingAllocator<std::alloc::System> =
+    shuffling_allocator::wrap!(&std::alloc::System);
+
 /// Exposes a C-compatible way of creating the engine from the bytes of a single
 /// Wasm module.
 ///
