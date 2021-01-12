@@ -380,11 +380,18 @@ fn emit_cmp<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
 
     // TODO Try to commute the operands (and invert the condition) if one is an immediate.
     let lhs = put_input_in_reg(ctx, inputs[0]);
-    let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
+    // We force the RHS into a register, and disallow load-op fusion, because we
+    // do not have a transitive guarantee that this cmp-site will be the sole
+    // user of the value. Consider: the icmp might be the only user of a load,
+    // but there may be multiple users of the icmp (e.g.  select or bint
+    // instructions) that each invoke `emit_cmp()`. If we were to allow a load
+    // to sink to the *latest* one, but other sites did not permit sinking, then
+    // we would be missing the load for other cmp-sites.
+    let rhs = put_input_in_reg(ctx, inputs[1]);
 
     // Cranelift's icmp semantics want to compare lhs - rhs, while Intel gives
     // us dst - src at the machine instruction level, so invert operands.
-    ctx.emit(Inst::cmp_rmi_r(ty.bytes() as u8, rhs, lhs));
+    ctx.emit(Inst::cmp_rmi_r(ty.bytes() as u8, RegMemImm::reg(rhs), lhs));
 }
 
 /// A specification for a fcmp emission.
@@ -465,8 +472,10 @@ fn emit_fcmp<C: LowerCtx<I = Inst>>(
         (inputs[0], inputs[1])
     };
     let lhs = put_input_in_reg(ctx, lhs_input);
-    let rhs = input_to_reg_mem(ctx, rhs_input);
-    ctx.emit(Inst::xmm_cmp_rm_r(op, rhs, lhs));
+    // See above in `emit_cmp()`. We must only use the reg/reg form of the
+    // comparison in order to avoid issues with merged loads.
+    let rhs = put_input_in_reg(ctx, rhs_input);
+    ctx.emit(Inst::xmm_cmp_rm_r(op, RegMem::reg(rhs), lhs));
 
     let cond_result = match cond_code {
         FloatCC::Equal => FcmpCondResult::AndConditions(CC::NP, CC::Z),
