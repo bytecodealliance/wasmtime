@@ -78,7 +78,7 @@ impl Entry {
     /// `HandleRights` structure is a subset of rights attached to this `Entry`. The check is
     /// performed using `Entry::validate_rights` method. If the check fails, `Error::Notcapable`
     /// is returned.
-    pub(crate) fn as_handle(&self, rights: &HandleRights) -> Result<EntryHandle> {
+    pub(crate) fn as_handle(&self, rights: HandleRights) -> Result<EntryHandle> {
         self.validate_rights(rights)?;
         Ok(self.handle.get())
     }
@@ -87,7 +87,7 @@ impl Entry {
     /// rights attached to this `Entry` object are a superset.
     ///
     /// Upon unsuccessful check, `Error::Notcapable` is returned.
-    pub(crate) fn validate_rights(&self, rights: &HandleRights) -> Result<()> {
+    pub(crate) fn validate_rights(&self, rights: HandleRights) -> Result<()> {
         let this_rights = self.handle.get_rights();
         if this_rights.contains(rights) {
             Ok(())
