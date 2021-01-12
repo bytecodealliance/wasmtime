@@ -69,7 +69,8 @@ pub fn define_module_trait(names: &Names, m: &Module, errxform: &ErrorTransform)
                 .unwrap_or(quote!(()));
             quote!( Result<(#(#rets),*), #err> )
         } else {
-            quote!(wiggle::Trap)
+            let rt = names.runtime_mod();
+            quote!(#rt::Trap)
         };
 
         if is_anonymous {
