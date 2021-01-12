@@ -105,8 +105,13 @@ fn imports_exports() -> Result<()> {
     assert_eq!(i.len(), 1);
     let import = i.next().unwrap();
     assert_eq!(import.module(), "");
-    assert_eq!(import.name(), Some("a"));
-    let module_ty = match import.ty() {
+    assert_eq!(import.name(), None);
+    let instance_ty = match import.ty() {
+        ExternType::Instance(t) => t,
+        _ => panic!("unexpected type"),
+    };
+    assert_eq!(instance_ty.exports().len(), 1);
+    let module_ty = match instance_ty.exports().next().unwrap().ty() {
         ExternType::Module(m) => m,
         _ => panic!("unexpected type"),
     };
@@ -148,8 +153,13 @@ fn imports_exports() -> Result<()> {
     assert_eq!(i.len(), 1);
     let import = i.next().unwrap();
     assert_eq!(import.module(), "");
-    assert_eq!(import.name(), Some("b"));
+    assert_eq!(import.name(), None);
     let instance_ty = match import.ty() {
+        ExternType::Instance(t) => t,
+        _ => panic!("unexpected type"),
+    };
+    assert_eq!(instance_ty.exports().len(), 1);
+    let instance_ty = match instance_ty.exports().next().unwrap().ty() {
         ExternType::Instance(m) => m,
         _ => panic!("unexpected type"),
     };

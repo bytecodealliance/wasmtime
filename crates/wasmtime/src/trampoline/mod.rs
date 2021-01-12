@@ -16,6 +16,7 @@ use crate::{FuncType, GlobalType, MemoryType, Store, TableType, Trap, Val};
 use anyhow::Result;
 use std::any::Any;
 use std::ops::Deref;
+use wasmtime_environ::wasm;
 use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody, VMTrampoline};
 
 /// A wrapper around `wasmtime_runtime::InstanceHandle` which pairs it with the
@@ -55,7 +56,8 @@ pub fn generate_func_export(
     VMTrampoline,
 )> {
     let (instance, trampoline) = create_handle_with_function(ft, func, store)?;
-    match instance.lookup("").expect("trampoline export") {
+    let idx = wasm::EntityIndex::Function(wasm::FuncIndex::from_u32(0));
+    match instance.lookup_by_declaration(&idx) {
         wasmtime_runtime::Export::Function(f) => Ok((instance, f, trampoline)),
         _ => unreachable!(),
     }
@@ -72,7 +74,8 @@ pub unsafe fn generate_raw_func_export(
     state: Box<dyn Any>,
 ) -> Result<(StoreInstanceHandle, wasmtime_runtime::ExportFunction)> {
     let instance = func::create_handle_with_raw_function(ft, func, trampoline, store, state)?;
-    match instance.lookup("").expect("trampoline export") {
+    let idx = wasm::EntityIndex::Function(wasm::FuncIndex::from_u32(0));
+    match instance.lookup_by_declaration(&idx) {
         wasmtime_runtime::Export::Function(f) => Ok((instance, f)),
         _ => unreachable!(),
     }
@@ -84,7 +87,8 @@ pub fn generate_global_export(
     val: Val,
 ) -> Result<(StoreInstanceHandle, wasmtime_runtime::ExportGlobal)> {
     let instance = create_global(store, gt, val)?;
-    match instance.lookup("").expect("global export") {
+    let idx = wasm::EntityIndex::Global(wasm::GlobalIndex::from_u32(0));
+    match instance.lookup_by_declaration(&idx) {
         wasmtime_runtime::Export::Global(g) => Ok((instance, g)),
         _ => unreachable!(),
     }
@@ -95,7 +99,8 @@ pub fn generate_memory_export(
     m: &MemoryType,
 ) -> Result<(StoreInstanceHandle, wasmtime_runtime::ExportMemory)> {
     let instance = create_handle_with_memory(store, m)?;
-    match instance.lookup("").expect("memory export") {
+    let idx = wasm::EntityIndex::Memory(wasm::MemoryIndex::from_u32(0));
+    match instance.lookup_by_declaration(&idx) {
         wasmtime_runtime::Export::Memory(m) => Ok((instance, m)),
         _ => unreachable!(),
     }
@@ -106,7 +111,8 @@ pub fn generate_table_export(
     t: &TableType,
 ) -> Result<(StoreInstanceHandle, wasmtime_runtime::ExportTable)> {
     let instance = create_handle_with_table(store, t)?;
-    match instance.lookup("").expect("table export") {
+    let idx = wasm::EntityIndex::Table(wasm::TableIndex::from_u32(0));
+    match instance.lookup_by_declaration(&idx) {
         wasmtime_runtime::Export::Table(t) => Ok((instance, t)),
         _ => unreachable!(),
     }

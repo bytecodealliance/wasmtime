@@ -1,6 +1,6 @@
 use crate::store::StoreInner;
 use crate::trampoline::StoreInstanceHandle;
-use crate::{Extern, ExternRef, FuncType, Memory, Store, Trap, Val, ValType};
+use crate::{Extern, ExternRef, FuncType, Store, Trap, Val, ValType};
 use anyhow::{bail, ensure, Context as _, Result};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::max;
@@ -9,8 +9,9 @@ use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr::{self, NonNull};
 use std::rc::Weak;
+use wasmtime_environ::wasm::EntityIndex;
 use wasmtime_runtime::{
-    raise_user_trap, Export, InstanceHandle, VMContext, VMFunctionBody, VMSharedSignatureIndex,
+    raise_user_trap, InstanceHandle, VMContext, VMFunctionBody, VMSharedSignatureIndex,
     VMTrampoline,
 };
 
@@ -331,11 +332,8 @@ impl Func {
         debug_assert!(
             anyfunc.as_ref().type_index != wasmtime_runtime::VMSharedSignatureIndex::default()
         );
-
-        let instance_handle = wasmtime_runtime::InstanceHandle::from_vmctx(anyfunc.as_ref().vmctx);
         let export = wasmtime_runtime::ExportFunction { anyfunc };
-        let instance = store.existing_instance_handle(instance_handle);
-        let f = Func::from_wasmtime_function(export, instance);
+        let f = Func::from_wasmtime_function(&export, store);
         Some(f)
     }
 
@@ -649,24 +647,24 @@ impl Func {
         self.export.anyfunc
     }
 
-    pub(crate) fn from_wasmtime_function(
-        export: wasmtime_runtime::ExportFunction,
-        instance: StoreInstanceHandle,
+    pub(crate) unsafe fn from_wasmtime_function(
+        export: &wasmtime_runtime::ExportFunction,
+        store: &Store,
     ) -> Self {
         // Each function signature in a module should have a trampoline stored
         // on that module as well, so unwrap the result here since otherwise
         // it's a bug in wasmtime.
-        let trampoline = instance
-            .store
+        let anyfunc = export.anyfunc.as_ref();
+        let trampoline = store
             .signatures()
             .borrow()
-            .lookup_shared(unsafe { export.anyfunc.as_ref().type_index })
+            .lookup_shared(anyfunc.type_index)
             .expect("failed to retrieve trampoline from module")
             .1;
 
         Func {
-            instance,
-            export,
+            instance: store.existing_vmctx(anyfunc.vmctx),
+            export: export.clone(),
             trampoline,
         }
     }
@@ -806,6 +804,10 @@ impl Func {
                 vmctx: f.as_ref().vmctx,
             }
         }
+    }
+
+    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::ExportFunction {
+        &self.export
     }
 }
 
@@ -1506,10 +1508,16 @@ impl Caller<'_> {
             debug_assert!(self.store.upgrade().is_some());
             let handle =
                 Store::from_inner(self.store.upgrade()?).existing_instance_handle(instance);
-            let export = handle.lookup(name)?;
-            match export {
-                Export::Memory(m) => Some(Extern::Memory(Memory::from_wasmtime_memory(m, handle))),
-                Export::Function(f) => Some(Extern::Func(Func::from_wasmtime_function(f, handle))),
+            let index = handle.module().exports.get(name)?;
+            match index {
+                // Only allow memory/functions for now to emulate what interface
+                // types will once provide
+                EntityIndex::Memory(_) | EntityIndex::Function(_) => {
+                    Some(Extern::from_wasmtime_export(
+                        &handle.lookup_by_declaration(&index),
+                        &handle.store,
+                    ))
+                }
                 _ => None,
             }
         }

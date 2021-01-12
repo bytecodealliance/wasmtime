@@ -7,7 +7,7 @@
   (instance $a (instantiate $m))
 
   (func (export "get") (result i32)
-    call $a.$foo)
+    call (func $a "foo"))
 )
 (assert_return (invoke "get") (i32.const 1))
 
@@ -19,7 +19,7 @@
   (instance $a (instantiate $m))
 
   (func (export "get") (result i32)
-    global.get $a.$g)
+    global.get (global $a "g"))
 )
 (assert_return (invoke "get") (i32.const 2))
 
@@ -30,7 +30,7 @@
     (data (i32.const 0) "\03\00\00\00")
   )
   (instance $a (instantiate $m))
-  (alias (instance $a) (memory $m))
+  (alias $m (memory $a "m"))
 
   (func (export "get") (result i32)
     i32.const 0
@@ -50,7 +50,7 @@
 
   (func (export "get") (result i32)
     i32.const 0
-    call_indirect $a.$t (result i32))
+    call_indirect (table $a "t") (result i32))
 )
 (assert_return (invoke "get") (i32.const 4))
 
@@ -62,11 +62,10 @@
         i32.const 5))
   )
   (instance $a (instantiate $m))
-  (instance $b (instantiate $a.$sub))
-  (alias $b.$f (instance $b) (func 0))
+  (instance $b (instantiate (module $a "module")))
 
   (func (export "get") (result i32)
-    call $b.$f)
+    call (func $b ""))
 )
 (assert_return (invoke "get") (i32.const 5))
 
@@ -79,11 +78,9 @@
     (instance $i (export "") (instantiate $sub))
   )
   (instance $a (instantiate $m))
-  (alias $a.$i (instance $a) (instance 0))
-  (alias $a.$i.$f (instance $a.$i) (func 0))
 
   (func (export "get") (result i32)
-    call $a.$i.$f)
+    call (func $a "" ""))
 )
 (assert_return (invoke "get") (i32.const 6))
 
@@ -91,48 +88,51 @@
 (module
   (type $t (func))
   (module $m
-    (func $f (type $t))
+    (func $f (type outer 0 $t))
   )
   (instance $a (instantiate $m))
 )
 
 ;; alias parent -- module
+(; TODO
 (module
   (module $a)
   (module $m
-    (instance (instantiate $a))
+    (instance (instantiate (module outer 0 $a)))
   )
   (instance (instantiate $m))
 )
+;)
 
 ;; The alias, import, type, module, and instance sections can all be interleaved
-(module
+(module $ROOT
   (module $a)
   (type $t (func))
   (module $m
     ;; alias
-    (alias $thunk parent (type $t))
+    (alias $thunk (type outer 0 $t))
     ;; import
     (import "" "" (func (type $thunk)))
     ;; module (referencing parent type)
     (module
-      (func (type $thunk))
+      (func (type outer $m $thunk))
+      (func (type outer $ROOT $t))
     )
     ;; type
     (type $thunk2 (func))
     ;; module (referencing previous alias)
     (module $m2
-      (func (export "") (type $thunk2))
+      (func (export "") (type outer $m $thunk2))
     )
     ;; instance
     (instance $i (instantiate $m2))
     ;; alias that instance
-    (alias $my_f (instance $i) (func 0))
+    (alias $my_f (func $i ""))
     ;; module
     (module $m3
       (import "" (func)))
     ;; use our aliased function to create the module
-    (instance $i2 (instantiate $m3 (func $my_f)))
+    (instance $i2 (instantiate $m3 "" (func $my_f)))
     ;; module
     (module $m4
       (import "" (func)))
@@ -141,5 +141,5 @@
   ;; instantiate the above module
   (module $smol (func $f (export "")))
   (instance $smol (instantiate $smol))
-  (instance (instantiate $m (func $smol.$f)))
+  (instance (instantiate $m "" (instance $smol)))
 )

@@ -1,21 +1,17 @@
-use crate::trampoline::StoreInstanceHandle;
 use crate::types::matching;
 use crate::{
-    Engine, Export, Extern, ExternType, Func, Global, InstanceType, Memory, Module, Store, Table,
-    Trap,
+    Engine, Export, Extern, Func, Global, InstanceType, Memory, Module, Store, Table, Trap,
 };
 use anyhow::{bail, Context, Error, Result};
 use std::mem;
-use std::sync::Arc;
+use std::rc::Rc;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::{
-    EntityIndex, EntityType, FuncIndex, GlobalIndex, InstanceIndex, MemoryIndex, ModuleIndex,
-    TableIndex,
+    EntityIndex, FuncIndex, GlobalIndex, InstanceIndex, MemoryIndex, ModuleIndex, TableIndex,
 };
 use wasmtime_environ::Initializer;
-use wasmtime_jit::TypeTables;
 use wasmtime_runtime::{
-    Imports, InstanceHandle, InstantiationError, StackMapRegistry, VMContext,
+    Imports, InstantiationError, RuntimeInstance, StackMapRegistry, VMContext,
     VMExternRefActivationsTable, VMFunctionBody, VMFunctionImport, VMGlobalImport, VMMemoryImport,
     VMTableImport,
 };
@@ -36,8 +32,6 @@ use wasmtime_runtime::{
 ///   itself.
 /// * `type` - the type tables produced during compilation which
 ///   `compiled_module`'s metadata references.
-/// * `parent_modules` - this is the list of compiled modules the parent has.
-///   This is only applicable on recursive instantiations.
 /// * `define_import` - this function, like the name implies, defines an import
 ///   into the provided builder. The expected entity that it's defining is also
 ///   passed in for the top-level case where type-checking is performed. This is
@@ -45,9 +39,13 @@ use wasmtime_runtime::{
 fn instantiate(
     store: &Store,
     module: &Module,
-    parent_modules: &PrimaryMap<ModuleIndex, Module>,
-    define_import: &mut dyn FnMut(&EntityIndex, &mut ImportsBuilder<'_>) -> Result<()>,
-) -> Result<StoreInstanceHandle, Error> {
+    define_import: &mut dyn FnMut(
+        &str,
+        Option<&str>,
+        &EntityIndex,
+        &mut ImportsBuilder<'_>,
+    ) -> Result<()>,
+) -> Result<RuntimeInstance, Error> {
     let compiled_module = module.compiled_module();
     let env_module = compiled_module.module();
 
@@ -59,21 +57,9 @@ fn instantiate(
             // to fetching from the import list for the top-level module and
             // otherwise fetching from each nested instance's argument list for
             // submodules.
-            Initializer::Import {
-                index,
-                module,
-                field,
-            } => {
-                define_import(index, &mut imports).with_context(|| match field {
-                    Some(name) => format!("incompatible import type for `{}::{}`", module, name),
-                    None => format!("incompatible import type for `{}`", module),
-                })?;
-            }
-
-            // This one's pretty easy, we're just picking up our parent's module
-            // and putting it into our own index space.
-            Initializer::AliasParentModule(idx) => {
-                imports.modules.push(parent_modules[*idx].clone());
+            Initializer::Import { index, name, field } => {
+                define_import(name, field.as_deref(), index, &mut imports)
+                    .with_context(|| format!("incompatible import type for `{}`", name))?;
             }
 
             // Turns out defining any kind of module is pretty easy, we're just
@@ -95,18 +81,8 @@ fn instantiate(
             // handle comes from our same store, but this should be true because
             // we acquired the handle from an instance in the store.
             Initializer::AliasInstanceExport { instance, export } => {
-                let instance_ty = env_module.instances[*instance];
-                let export_name = module.types().instance_signatures[instance_ty]
-                    .exports
-                    .get_index(*export)
-                    .expect("validation bug - should be valid")
-                    .0;
-                let handle = &imports.instances[*instance];
-                let entity_index = &handle.module().exports[export_name];
-                let item = Extern::from_wasmtime_export(
-                    handle.lookup_by_declaration(entity_index),
-                    unsafe { store.existing_instance_handle(handle.clone()) },
-                );
+                let export = &imports.instances[*instance][export];
+                let item = unsafe { Extern::from_wasmtime_export(export, store) };
                 imports.push_extern(&item);
             }
 
@@ -127,13 +103,13 @@ fn instantiate(
             // we're doing all of this in the context of our `Store` argument
             // above so we should be safe here.
             Initializer::Instantiate { module, args } => {
-                let mut args = args.iter();
                 let handle = instantiate(
                     store,
                     &imports.modules[*module],
-                    &imports.modules,
-                    &mut |_, builder| {
-                        match *args.next().unwrap() {
+                    &mut |name, field, _, builder| {
+                        debug_assert!(field.is_none());
+                        let index = args.get(name).expect("should be present after validation");
+                        match *index {
                             EntityIndex::Global(i) => {
                                 builder.globals.push(imports.globals[i]);
                             }
@@ -150,23 +126,16 @@ fn instantiate(
                                 builder.modules.push(imports.modules[i].clone());
                             }
                             EntityIndex::Instance(i) => {
-                                builder
-                                    .instances
-                                    .push(unsafe { imports.instances[i].clone() });
+                                builder.instances.push(imports.instances[i].clone());
                             }
                         }
                         Ok(())
                     },
                 )?;
-                imports.instances.push(unsafe { (*handle).clone() });
+                imports.instances.push(handle);
             }
         }
     }
-
-    // With the above initialization done we've now acquired the final set of
-    // imports in all the right index spaces and everything. Time to carry on
-    // with the creation of our own instance.
-    let imports = imports.build();
 
     // Register the module just before instantiation to ensure we have a
     // trampoline registered for every signature and to preserve the module's
@@ -176,11 +145,11 @@ fn instantiate(
     let config = store.engine().config();
     let instance = unsafe {
         let instance = compiled_module.instantiate(
-            imports,
+            imports.build(),
             &store.lookup_shared_signature(module.types()),
             config.memory_creator.as_ref().map(|a| a as _),
             store.interrupts(),
-            Box::new(module.types().clone()),
+            Box::new(()),
             store.externref_activations_table() as *const VMExternRefActivationsTable as *mut _,
             store.stack_map_registry() as *const StackMapRegistry as *mut _,
         )?;
@@ -233,7 +202,29 @@ fn instantiate(
         }
     }
 
-    Ok(instance)
+    let exports = instance
+        .handle
+        .module()
+        .exports
+        .iter()
+        .map(|(name, index)| {
+            // Note that instances and modules are not handled by
+            // `wasmtime_runtime`, they're handled by us in this crate. That
+            // means we need to handle that here, otherwise we defer to the
+            // instance to load the values.
+            let item = match index {
+                EntityIndex::Instance(i) => {
+                    wasmtime_runtime::Export::Instance(imports.instances[*i].clone())
+                }
+                EntityIndex::Module(i) => {
+                    wasmtime_runtime::Export::Module(Box::new(imports.modules[*i].clone()))
+                }
+                index => instance.handle.lookup_by_declaration(index),
+            };
+            (name.clone(), item)
+        })
+        .collect();
+    Ok(Rc::new(exports))
 }
 
 /// An instantiated WebAssembly module.
@@ -254,7 +245,8 @@ fn instantiate(
 /// call any code or execute anything!
 #[derive(Clone)]
 pub struct Instance {
-    pub(crate) handle: StoreInstanceHandle,
+    pub(crate) store: Store,
+    pub(crate) items: RuntimeInstance,
 }
 
 impl Instance {
@@ -316,7 +308,7 @@ impl Instance {
             bail!("cross-`Engine` instantiation is not currently supported");
         }
 
-        // Perform some pre-flight checks before we get into the meat of
+        // Perform some pre-flight checks before we geet into the meat of
         // instantiation.
         let expected = module.compiled_module().module().imports().count();
         if expected != imports.len() {
@@ -329,32 +321,26 @@ impl Instance {
         }
 
         let mut imports = imports.iter();
-        let handle = instantiate(store, module, &PrimaryMap::new(), &mut |idx, builder| {
+        let items = instantiate(store, module, &mut |_name, _field, idx, builder| {
             let import = imports.next().expect("already checked the length");
-            builder.define_extern(idx, import)
+            builder.define_extern(idx, &import)
         })?;
 
-        Ok(Instance { handle })
+        Ok(Instance::from_wasmtime(&items, store))
     }
 
-    pub(crate) fn from_wasmtime(handle: StoreInstanceHandle) -> Instance {
-        Instance { handle }
+    pub(crate) fn from_wasmtime(handle: &RuntimeInstance, store: &Store) -> Instance {
+        Instance {
+            items: handle.clone(),
+            store: store.clone(),
+        }
     }
 
     /// Returns the type signature of this instance.
     pub fn ty(&self) -> InstanceType {
         let mut ty = InstanceType::new();
-        let module = self.handle.module();
-        let types = self
-            .handle
-            .host_state()
-            .downcast_ref::<Arc<TypeTables>>()
-            .unwrap();
-        for (name, index) in module.exports.iter() {
-            ty.add_named_export(
-                name,
-                ExternType::from_wasmtime(types, &module.type_of(*index)),
-            );
+        for export in self.exports() {
+            ty.add_named_export(export.name(), export.ty());
         }
         ty
     }
@@ -364,16 +350,15 @@ impl Instance {
     /// This is the [`Store`] that generally serves as a sort of global cache
     /// for various instance-related things.
     pub fn store(&self) -> &Store {
-        &self.handle.store
+        &self.store
     }
 
     /// Returns the list of exported items from this [`Instance`].
     pub fn exports<'instance>(
         &'instance self,
     ) -> impl ExactSizeIterator<Item = Export<'instance>> + 'instance {
-        self.handle.exports().map(move |(name, entity_index)| {
-            let export = self.handle.lookup_by_declaration(entity_index);
-            let extern_ = Extern::from_wasmtime_export(export, self.handle.clone());
+        self.items.iter().map(move |(name, item)| {
+            let extern_ = unsafe { Extern::from_wasmtime_export(item, &self.store) };
             Export::new(name, extern_)
         })
     }
@@ -385,8 +370,8 @@ impl Instance {
     ///
     /// Returns `None` if there was no export named `name`.
     pub fn get_export(&self, name: &str) -> Option<Extern> {
-        let export = self.handle.lookup(&name)?;
-        Some(Extern::from_wasmtime_export(export, self.handle.clone()))
+        let export = self.items.get(name)?;
+        Some(unsafe { Extern::from_wasmtime_export(export, &self.store) })
     }
 
     /// Looks up an exported [`Func`] value by name.
@@ -427,7 +412,7 @@ struct ImportsBuilder<'a> {
     tables: PrimaryMap<TableIndex, VMTableImport>,
     memories: PrimaryMap<MemoryIndex, VMMemoryImport>,
     globals: PrimaryMap<GlobalIndex, VMGlobalImport>,
-    instances: PrimaryMap<InstanceIndex, InstanceHandle>,
+    instances: PrimaryMap<InstanceIndex, RuntimeInstance>,
     modules: PrimaryMap<ModuleIndex, Module>,
 
     module: &'a wasmtime_environ::Module,
@@ -452,36 +437,7 @@ impl<'a> ImportsBuilder<'a> {
 
     fn define_extern(&mut self, expected: &EntityIndex, actual: &Extern) -> Result<()> {
         let expected_ty = self.module.type_of(*expected);
-        let compatible = match &expected_ty {
-            EntityType::Table(i) => match actual {
-                Extern::Table(e) => self.matcher.table(i, e),
-                _ => bail!("expected table, but found {}", actual.desc()),
-            },
-            EntityType::Memory(i) => match actual {
-                Extern::Memory(e) => self.matcher.memory(i, e),
-                _ => bail!("expected memory, but found {}", actual.desc()),
-            },
-            EntityType::Global(i) => match actual {
-                Extern::Global(e) => self.matcher.global(i, e),
-                _ => bail!("expected global, but found {}", actual.desc()),
-            },
-            EntityType::Function(i) => match actual {
-                Extern::Func(e) => self.matcher.func(*i, e),
-                _ => bail!("expected func, but found {}", actual.desc()),
-            },
-            EntityType::Instance(i) => match actual {
-                Extern::Instance(e) => self.matcher.instance(*i, e),
-                _ => bail!("expected instance, but found {}", actual.desc()),
-            },
-            EntityType::Module(i) => match actual {
-                Extern::Module(e) => self.matcher.module(*i, e),
-                _ => bail!("expected module, but found {}", actual.desc()),
-            },
-            EntityType::Event(_) => unimplemented!(),
-        };
-        if !compatible {
-            bail!("{} types incompatible", actual.desc());
-        }
+        self.matcher.extern_(&expected_ty, actual)?;
         self.push_extern(actual);
         Ok(())
     }
@@ -502,7 +458,7 @@ impl<'a> ImportsBuilder<'a> {
             }
             Extern::Instance(i) => {
                 debug_assert!(Store::same(i.store(), self.matcher.store));
-                self.instances.push(unsafe { (*i.handle).clone() });
+                self.instances.push(i.items.clone());
             }
             Extern::Module(m) => {
                 self.modules.push(m.clone());
@@ -516,11 +472,40 @@ impl<'a> ImportsBuilder<'a> {
             globals: self.globals.values().as_slice(),
             memories: self.memories.values().as_slice(),
             functions: self.functions.values().as_slice(),
-            instances: mem::take(&mut self.instances),
-            modules: mem::take(&mut self.modules)
-                .into_iter()
-                .map(|(_, m)| Box::new(m) as Box<_>)
-                .collect(),
+        }
+    }
+}
+
+/// An internal structure to this crate to build an `Instance` from a list of
+/// items with names. This is intended to stay private for now, it'll need an
+/// audit of APIs if publicly exported.
+#[derive(Default)]
+pub(crate) struct InstanceBuilder {
+    items: RuntimeInstance,
+}
+
+impl InstanceBuilder {
+    pub(crate) fn new() -> InstanceBuilder {
+        InstanceBuilder::default()
+    }
+
+    pub(crate) fn insert(&mut self, name: &str, item: impl Into<Extern>) {
+        let items = Rc::get_mut(&mut self.items).unwrap();
+        let export = match item.into() {
+            Extern::Func(i) => wasmtime_runtime::Export::Function(i.wasmtime_export().clone()),
+            Extern::Memory(i) => wasmtime_runtime::Export::Memory(i.wasmtime_export().clone()),
+            Extern::Table(i) => wasmtime_runtime::Export::Table(i.wasmtime_export().clone()),
+            Extern::Global(i) => wasmtime_runtime::Export::Global(i.wasmtime_export().clone()),
+            Extern::Instance(i) => wasmtime_runtime::Export::Instance(i.items.clone()),
+            Extern::Module(i) => wasmtime_runtime::Export::Module(Box::new(i.clone())),
+        };
+        items.insert(name.to_string(), export);
+    }
+
+    pub(crate) fn finish(self, store: &Store) -> Instance {
+        Instance {
+            store: store.clone(),
+            items: self.items,
         }
     }
 }

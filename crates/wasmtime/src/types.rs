@@ -466,21 +466,21 @@ impl ModuleType {
     }
 
     /// Adds a new export to this `ModuleType`.
-    pub fn add_named_export(&mut self, name: &str, ty: ExternType) {
+    pub(crate) fn add_named_export(&mut self, name: &str, ty: ExternType) {
         self.exports.push((name.to_string(), ty));
     }
 
     /// Adds a new import to this `ModuleType`.
-    pub fn add_named_import(&mut self, module: &str, field: Option<&str>, ty: ExternType) {
+    pub(crate) fn add_named_import(&mut self, module: &str, field: Option<&str>, ty: ExternType) {
         self.imports
             .push((module.to_string(), field.map(|f| f.to_string()), ty));
     }
 
     /// Returns the list of imports associated with this module type.
     pub fn imports(&self) -> impl ExactSizeIterator<Item = ImportType<'_>> {
-        self.imports.iter().map(|(module, name, ty)| ImportType {
-            module,
-            name: name.as_deref(),
+        self.imports.iter().map(|(name, field, ty)| ImportType {
+            module: name,
+            name: field.as_deref(),
             ty: EntityOrExtern::Extern(ty),
         })
     }
@@ -506,13 +506,7 @@ impl ModuleType {
             imports: ty
                 .imports
                 .iter()
-                .map(|(m, name, ty)| {
-                    (
-                        m.to_string(),
-                        name.as_ref().map(|n| n.to_string()),
-                        ExternType::from_wasmtime(types, ty),
-                    )
-                })
+                .map(|(m, ty)| (m.to_string(), None, ExternType::from_wasmtime(types, ty)))
                 .collect(),
         }
     }
@@ -615,8 +609,9 @@ impl<'module> ImportType<'module> {
     /// Returns the field name of the module that this import is expected to
     /// come from.
     ///
-    /// Note that the name can be `None` for the module linking proposal. If the
-    /// module linking proposal is not enabled it's safe to unwrap this.
+    /// Note that this is optional due to the module linking proposal. If the
+    /// module linking proposal is enabled this is always `None`, otherwise this
+    /// is always `Some`.
     pub fn name(&self) -> Option<&'module str> {
         self.name
     }
@@ -681,6 +676,17 @@ impl<'module> ExportType<'module> {
         match &self.ty {
             EntityOrExtern::Entity(e, types) => ExternType::from_wasmtime(types, e),
             EntityOrExtern::Extern(e) => (*e).clone(),
+        }
+    }
+
+    pub(crate) fn as_import<'a>(&self, module: &'a str) -> ImportType<'a>
+    where
+        'module: 'a,
+    {
+        ImportType {
+            module,
+            name: Some(self.name),
+            ty: self.ty.clone(),
         }
     }
 }

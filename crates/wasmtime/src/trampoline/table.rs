@@ -23,6 +23,7 @@ pub fn create_handle_with_table(store: &Store, table: &TableType) -> Result<Stor
 
     let table_plan = wasmtime_environ::TablePlan::for_table(table, &tunable);
     let table_id = module.table_plans.push(table_plan);
+    // TODO: can this `exports.insert` get removed?
     module
         .exports
         .insert(String::new(), wasm::EntityIndex::Table(table_id));

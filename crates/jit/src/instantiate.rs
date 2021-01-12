@@ -105,8 +105,8 @@ impl CompilationArtifacts {
     pub fn build(
         compiler: &Compiler,
         data: &[u8],
-    ) -> Result<(Vec<CompilationArtifacts>, TypeTables), SetupError> {
-        let (translations, types) = ModuleEnvironment::new(
+    ) -> Result<(usize, Vec<CompilationArtifacts>, TypeTables), SetupError> {
+        let (main_module, translations, types) = ModuleEnvironment::new(
             compiler.frontend_config(),
             compiler.tunables(),
             compiler.features(),
@@ -166,6 +166,7 @@ impl CompilationArtifacts {
             })
             .collect::<Result<Vec<_>, SetupError>>()?;
         Ok((
+            main_module,
             list,
             TypeTables {
                 wasm_signatures: types.wasm_signatures,

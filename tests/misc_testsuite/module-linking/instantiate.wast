@@ -34,7 +34,7 @@
   (module
     (import "" (func))
     (start 0))
-  (instance $a (instantiate 0 (func $set)))
+  (instance $a (instantiate 0 "" (func $set)))
 )
 
 (assert_return (invoke $a "get") (i32.const 1))
@@ -49,7 +49,7 @@
       global.set 0)
     (start 0))
 
-  (instance $a (instantiate 0 (global $g)))
+  (instance $a (instantiate 0 "" (global $g)))
 )
 (assert_return (invoke $a "get") (i32.const 2))
 
@@ -63,7 +63,7 @@
       call_indirect)
     (start 0))
 
-  (instance $a (instantiate 0 (table $t)))
+  (instance $a (instantiate 0 "" (table $t)))
 )
 (assert_return (invoke $a "get") (i32.const 3))
 
@@ -78,7 +78,7 @@
       i32.store)
     (start 0))
 
-  (instance $a (instantiate 0 (memory $m)))
+  (instance $a (instantiate 0 "" (memory $m)))
 )
 (assert_return (invoke $a "load") (i32.const 100))
 
@@ -88,13 +88,13 @@
 
   (module $m1
     (import "" (instance (export "" (func))))
-    (alias (instance 0) (func 0))
+    (alias (func 0 ""))
     (start 0))
 
   (module $m2
     (func (export "") (import "")))
-  (instance $i (instantiate $m2 (func $set)))
-  (instance (instantiate $m1 (instance $i)))
+  (instance $i (instantiate $m2 "" (func $set)))
+  (instance (instantiate $m1 "" (instance $i)))
 )
 (assert_return (invoke $a "get") (i32.const 4))
 
@@ -106,14 +106,14 @@
     (import "" (module $m (export "" (func $f (result i32)))))
     (instance $i (instantiate $m))
     (func $get (export "") (result i32)
-      call $i.$f))
+      call (func $i "")))
 
   (module $m2
     (func (export "") (result i32)
       i32.const 5))
-  (instance $i (instantiate $m1 (module $m2)))
+  (instance $i (instantiate $m1 "" (module $m2)))
   (func (export "get") (result i32)
-    call $i.$get)
+    call (func $i ""))
 )
 (assert_return (invoke "get") (i32.const 5))
 
@@ -122,16 +122,16 @@
   (module $m
     (import "" (module $m (export "get" (func (result i32)))))
     (instance $i (instantiate $m))
-    (alias $f (instance $i) (func 0))
+    (alias $f (func $i "get"))
     (export "" (func $f))
   )
   (module $m2
     (func (export "get") (result i32)
       i32.const 6))
-  (instance $a (instantiate $m (module $m2)))
+  (instance $a (instantiate $m "" (module $m2)))
 
   (func (export "get") (result i32)
-    call $a.$f)
+    call (func $a ""))
 )
 (assert_return (invoke "get") (i32.const 6))
 
@@ -143,10 +143,10 @@
   (import "a" "memory" (memory $m 1))
 
   (module
-    (import "" (memory 1))
-    (import "" (global (mut i32)))
-    (import "" (table 1 funcref))
-    (import "" (func))
+    (import "m" (memory 1))
+    (import "g" (global (mut i32)))
+    (import "t" (table 1 funcref))
+    (import "f" (func))
     (func $start
       call 0
 
@@ -163,10 +163,10 @@
 
   (instance $a
     (instantiate 0
-      (memory $m)
-      (global $g)
-      (table $t)
-      (func $f)
+      "m" (memory $m)
+      "g" (global $g)
+      "t" (table $t)
+      "f" (func $f)
     )
   )
 )
@@ -183,10 +183,10 @@
   (module $mt (import "" (table 1 funcref)))
   (module $mg (import "" (global (mut i32))))
 
-  (instance (instantiate $mm (memory $m)))
-  (instance (instantiate $mf (func $f)))
-  (instance (instantiate $mt (table $t)))
-  (instance (instantiate $mg (global $g)))
+  (instance (instantiate $mm "" (memory $m)))
+  (instance (instantiate $mf "" (func $f)))
+  (instance (instantiate $mt "" (table $t)))
+  (instance (instantiate $mg "" (global $g)))
 )
 
 ;; instantiate nested
@@ -204,13 +204,13 @@
           (import "" (func))
           (start 0)
         )
-        (instance (instantiate 0 (func 0)))
+        (instance (instantiate 0 "" (func 0)))
       )
-      (instance (instantiate 0 (func 0)))
+      (instance (instantiate 0 "" (func 0)))
     )
-    (instance (instantiate 0 (func 0)))
+    (instance (instantiate 0 "" (func 0)))
   )
-  (instance (instantiate 0 (func 0)))
+  (instance (instantiate 0 "" (func 0)))
 )
 (assert_return (invoke $a "get") (i32.const 1))
 
@@ -219,20 +219,14 @@
   (module (export "m"))
   (instance (export "i") (instantiate 0))
 )
-(module
-  (import "b" "m" (module))
-  (import "b" "i" (instance))
-)
-(assert_unlinkable
-  (module
-    (import "b" "m" (module (import "" (func))))
-  )
-  "module types incompatible")
+(module (import "b" "m" (module)))
+(module (import "b" "m" (module (import "" (func)))))
+(module (import "b" "i" (instance)))
 (assert_unlinkable
   (module
     (import "b" "i" (instance (export "" (func))))
   )
-  "instance types incompatible")
+  "incompatible import type")
 
 ;; ensure we ignore other exported items
 (module $b
@@ -250,7 +244,7 @@
   ))
 
   (func (export "get") (result i32)
-    global.get $i.$g)
+    global.get (global $i "g"))
 )
 (assert_return (invoke "get") (i32.const 0xfeed))
 
@@ -270,15 +264,45 @@
 (module
   (import "b" "i" (instance $i
     ;; notice that this order is swapped
-    (export "g" (func $g (param i32) (result i32)))
-    (export "f" (func $f (result i32)))
+    (export "g" (func (param i32) (result i32)))
+    (export "f" (func (result i32)))
   ))
 
   (func (export "f") (result i32)
-    call $i.$f)
+    call (func $i "f"))
   (func (export "g") (param i32) (result i32)
     local.get 0
-    call $i.$g)
+    call (func $i "g"))
 )
 (assert_return (invoke "f") (i32.const 300))
 (assert_return (invoke "g" (i32.const 3000)) (i32.const 3100))
+
+(module $a
+  (func (export "f")))
+
+(module
+  (import "a" "f" (func))
+
+  (module $m1
+    (import "a" "f" (func)))
+  (instance (instantiate $m1 "a" (instance 0)))
+)
+
+(module
+  (import "a" "f" (func))
+
+  ;; this module provides nothing
+  (module $m1)
+
+  ;; this module imports a module which it says imports something
+  (module $m2
+    (module $a
+      (func (export "")))
+    (instance $i (instantiate $a))
+    (import "m" (module $b (import "" (func))))
+    (instance $b (instantiate $b "" (func $i ""))))
+
+  ;; we should be able to instantiate m2 with m1 because m1 doesn't actually
+  ;; import anything (always safe to remove imports!)
+  (instance (instantiate $m2 "m" (module $m1)))
+)
