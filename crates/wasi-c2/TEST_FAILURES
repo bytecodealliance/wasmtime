@@ -25,5 +25,3 @@ wasi_tests::path_filestat
 
 wasi_tests::poll_oneoff
     - no sched yet
-wasi_tests::sched_yield
-    - no sched yet

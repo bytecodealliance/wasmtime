@@ -6,6 +6,7 @@ mod dir;
 mod error;
 mod file;
 pub mod random;
+pub mod sched;
 pub mod snapshots;
 pub mod stdio;
 mod string_array;

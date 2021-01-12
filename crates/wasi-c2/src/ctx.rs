@@ -1,6 +1,7 @@
 use crate::clocks::{WasiMonotonicClock, WasiSystemClock};
 use crate::dir::{DirCaps, DirEntry, WasiDir};
 use crate::file::{FileCaps, FileEntry, WasiFile};
+use crate::sched::{SyncSched, WasiSched};
 use crate::string_array::{StringArray, StringArrayError};
 use crate::table::Table;
 use crate::Error;
@@ -14,6 +15,7 @@ pub struct WasiCtx {
     pub(crate) env: StringArray,
     pub(crate) random: RefCell<Box<dyn RngCore>>,
     pub(crate) clocks: WasiCtxClocks,
+    pub(crate) sched: Box<dyn WasiSched>,
     table: Rc<RefCell<Table>>,
 }
 
@@ -28,6 +30,7 @@ impl WasiCtx {
             env: StringArray::new(),
             random: RefCell::new(Box::new(unsafe { cap_rand::rngs::OsRng::default() })),
             clocks: WasiCtxClocks::default(),
+            sched: Box::new(SyncSched::default()),
             table: Rc::new(RefCell::new(Table::new())),
         }
     }

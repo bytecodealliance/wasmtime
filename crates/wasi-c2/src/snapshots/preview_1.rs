@@ -886,7 +886,8 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         events: &GuestPtr<types::Event>,
         nsubscriptions: types::Size,
     ) -> Result<types::Size, Error> {
-        unimplemented!()
+        self.sched.poll_oneoff()?;
+        Ok(0)
     }
 
     fn proc_exit(&self, status: types::Exitcode) -> wiggle::Trap {
@@ -903,7 +904,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn sched_yield(&self) -> Result<(), Error> {
-        unimplemented!()
+        self.sched.sched_yield()
     }
 
     fn random_get(&self, buf: &GuestPtr<u8>, buf_len: types::Size) -> Result<(), Error> {
