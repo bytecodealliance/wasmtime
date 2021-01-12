@@ -123,6 +123,7 @@ bitflags! {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct DirFdStat {
     pub file_caps: FileCaps,
     pub dir_caps: DirCaps,

@@ -138,6 +138,7 @@ bitflags! {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct FdStat {
     pub filetype: FileType,
     pub caps: FileCaps,
