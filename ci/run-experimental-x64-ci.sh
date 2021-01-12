@@ -14,6 +14,7 @@ cargo $CARGO_VERSION \
             --all \
             --exclude wasmtime-lightbeam \
             --exclude wasmtime-wasi-nn \
+            --exclude wasmtime-wasi-crypto \
             --exclude peepmatic \
             --exclude peepmatic-automata \
             --exclude peepmatic-fuzzing \

@@ -50,6 +50,8 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "winx",
     "yanix",
     "wasi-common",
+    // wasi-crypto bits
+    "wasi-crypto",
     // wasmtime
     "lightbeam",
     "wasmtime-environ",
@@ -65,6 +67,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wiggle",
     "wasmtime-wasi",
     "wasmtime-wasi-nn",
+    "wasmtime-wasi-crypto",
     "wasmtime-rust-macro",
     "wasmtime-rust",
     "wasmtime-wast",

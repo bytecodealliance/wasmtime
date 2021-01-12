@@ -1,0 +1,40 @@
+[package]
+name = "wasi-crypto"
+version = "0.22.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Example implementation of the wasi-crypto API"
+documentation = "https://docs.rs/wasmtime-wasi-crypto"
+license = "Apache-2.0 WITH LLVM-exception"
+keywords = ["webassembly", "wasm", "crypto"]
+repository = "https://github.com/bytecodealliance/wasmtime"
+edition = "2018"
+
+[dependencies]
+aes-gcm = "0.8"
+anyhow = "1.0"
+bincode = "1.3"
+byteorder = "1.4"
+chacha20poly1305 = "0.7"
+curve25519-dalek = "3"
+derivative = "2.1"
+ed25519-dalek = "1.0"
+getrandom = "0.2"
+hkdf = "0.10"
+hmac = "0.10"
+k256 = { version = "0.7", features = ["ecdsa", "std", "zeroize", "pkcs8", "pem"] }
+p256 = { version = "0.7", features = ["ecdsa", "std", "zeroize", "pkcs8", "pem"] }
+parking_lot = "0.11"
+pqcrypto = { version = "0.12", default-features = false, features = ["pqcrypto-kyber"], optional = true }
+rand_core = "0.5"
+rsa = "0.3"
+rsa-export = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+sha2 = "0.9"
+subtle = "2.4"
+thiserror = "1.0"
+wiggle = { path = "../wiggle", version = "0.22.0" }
+xoodyak = "0.7"
+zeroize = "1.2"
+
+[features]
+default = ["pqcrypto"]
