@@ -886,7 +886,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         events: &GuestPtr<types::Event>,
         nsubscriptions: types::Size,
     ) -> Result<types::Size, Error> {
-        self.sched.poll_oneoff()?;
+        self.sched.poll_oneoff(todo!())?;
         Ok(0)
     }
 
