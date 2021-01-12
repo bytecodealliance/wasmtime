@@ -31,6 +31,7 @@ cap-time-ext = "0.9"
 cap-rand = "0.9"
 fs-set-times = "0.2.2"
 cfg-if = "1"
+bitflags = "1.2"
 
 [badges]
 maintenance = { status = "actively-developed" }

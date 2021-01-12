@@ -1,5 +1,6 @@
 use crate::error::Error;
 use crate::file::{FdFlags, FileCaps, FileType, Filestat, OFlags, WasiFile};
+use bitflags::bitflags;
 use cap_fs_ext::SystemTimeSpec;
 use std::any::Any;
 use std::convert::TryInto;
@@ -66,7 +67,7 @@ impl DirEntry {
         }
     }
     pub fn get_cap(&self, caps: DirCaps) -> Result<&dyn WasiDir, Error> {
-        if self.caps.contains(&caps) {
+        if self.caps.contains(caps) {
             Ok(self.dir.deref())
         } else {
             Err(Error::DirNotCapable {
@@ -76,7 +77,7 @@ impl DirEntry {
         }
     }
     pub fn drop_caps_to(&mut self, caps: DirCaps, file_caps: FileCaps) -> Result<(), Error> {
-        if self.caps.contains(&caps) && self.file_caps.contains(&file_caps) {
+        if self.caps.contains(caps) && self.file_caps.contains(file_caps) {
             self.caps = caps;
             self.file_caps = file_caps;
             Ok(())
@@ -85,10 +86,10 @@ impl DirEntry {
         }
     }
     pub fn child_dir_caps(&self, desired_caps: DirCaps) -> DirCaps {
-        self.caps.intersection(&desired_caps)
+        self.caps & desired_caps
     }
     pub fn child_file_caps(&self, desired_caps: FileCaps) -> FileCaps {
-        self.file_caps.intersection(&desired_caps)
+        self.file_caps & desired_caps
     }
     pub fn get_dir_fdstat(&self) -> DirFdStat {
         DirFdStat {
@@ -101,75 +102,24 @@ impl DirEntry {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct DirCaps {
-    flags: u32,
-}
-
-impl DirCaps {
-    pub fn empty() -> Self {
-        DirCaps { flags: 0 }
-    }
-
-    /// Checks if `other` is a subset of those capabilties:
-    pub fn contains(&self, other: &Self) -> bool {
-        self.flags & other.flags == other.flags
-    }
-
-    /// Intersection of two sets of flags (bitwise and)
-    pub fn intersection(&self, rhs: &Self) -> Self {
-        DirCaps {
-            flags: self.flags & rhs.flags,
-        }
-    }
-    pub const CREATE_DIRECTORY: Self = DirCaps { flags: 1 };
-    pub const CREATE_FILE: Self = DirCaps { flags: 2 };
-    pub const LINK_SOURCE: Self = DirCaps { flags: 4 };
-    pub const LINK_TARGET: Self = DirCaps { flags: 8 };
-    pub const OPEN: Self = DirCaps { flags: 16 };
-    pub const READDIR: Self = DirCaps { flags: 32 };
-    pub const READLINK: Self = DirCaps { flags: 64 };
-    pub const RENAME_SOURCE: Self = DirCaps { flags: 128 };
-    pub const RENAME_TARGET: Self = DirCaps { flags: 256 };
-    pub const SYMLINK: Self = DirCaps { flags: 512 };
-    pub const REMOVE_DIRECTORY: Self = DirCaps { flags: 1024 };
-    pub const UNLINK_FILE: Self = DirCaps { flags: 2048 };
-    pub const PATH_FILESTAT_GET: Self = DirCaps { flags: 4096 };
-    pub const PATH_FILESTAT_SET_TIMES: Self = DirCaps { flags: 8192 };
-    pub const FILESTAT_GET: Self = DirCaps { flags: 16384 };
-    pub const FILESTAT_SET_TIMES: Self = DirCaps { flags: 32768 };
-
-    // Missing that are in wasi-common directory_base:
-    // FD_FDSTAT_SET_FLAGS
-    // FD_SYNC
-    // FD_ADVISE
-
-    pub fn all() -> DirCaps {
-        Self::CREATE_DIRECTORY
-            | Self::CREATE_FILE
-            | Self::LINK_SOURCE
-            | Self::LINK_TARGET
-            | Self::OPEN
-            | Self::READDIR
-            | Self::READLINK
-            | Self::RENAME_SOURCE
-            | Self::RENAME_TARGET
-            | Self::SYMLINK
-            | Self::REMOVE_DIRECTORY
-            | Self::UNLINK_FILE
-            | Self::PATH_FILESTAT_GET
-            | Self::PATH_FILESTAT_SET_TIMES
-            | Self::FILESTAT_GET
-            | Self::FILESTAT_SET_TIMES
-    }
-}
-
-impl std::ops::BitOr for DirCaps {
-    type Output = DirCaps;
-    fn bitor(self, rhs: DirCaps) -> DirCaps {
-        DirCaps {
-            flags: self.flags | rhs.flags,
-        }
+bitflags! {
+    pub struct DirCaps: u32 {
+        const CREATE_DIRECTORY        = 0b1;
+        const CREATE_FILE             = 0b10;
+        const LINK_SOURCE             = 0b100;
+        const LINK_TARGET             = 0b1000;
+        const OPEN                    = 0b10000;
+        const READDIR                 = 0b100000;
+        const READLINK                = 0b1000000;
+        const RENAME_SOURCE           = 0b10000000;
+        const RENAME_TARGET           = 0b100000000;
+        const SYMLINK                 = 0b1000000000;
+        const REMOVE_DIRECTORY        = 0b10000000000;
+        const UNLINK_FILE             = 0b100000000000;
+        const PATH_FILESTAT_GET       = 0b1000000000000;
+        const PATH_FILESTAT_SET_TIMES = 0b10000000000000;
+        const FILESTAT_GET            = 0b100000000000000;
+        const FILESTAT_SET_TIMES      = 0b1000000000000000;
     }
 }
 
@@ -229,20 +179,20 @@ impl WasiDir for cap_std::fs::Dir {
 
         let mut opts = cap_std::fs::OpenOptions::new();
 
-        if oflags.contains(&(OFlags::CREATE | OFlags::EXCLUSIVE)) {
+        if oflags.contains(OFlags::CREATE | OFlags::EXCLUSIVE) {
             opts.create_new(true);
             opts.write(true);
-        } else if oflags.contains(&OFlags::CREATE) {
+        } else if oflags.contains(OFlags::CREATE) {
             opts.create(true);
             opts.write(true);
         }
-        if oflags.contains(&OFlags::TRUNCATE) {
+        if oflags.contains(OFlags::TRUNCATE) {
             opts.truncate(true);
         }
-        if caps.contains(&FileCaps::WRITE)
-            || caps.contains(&FileCaps::DATASYNC)
-            || caps.contains(&FileCaps::ALLOCATE)
-            || caps.contains(&FileCaps::FILESTAT_SET_SIZE)
+        if caps.contains(FileCaps::WRITE)
+            || caps.contains(FileCaps::DATASYNC)
+            || caps.contains(FileCaps::ALLOCATE)
+            || caps.contains(FileCaps::FILESTAT_SET_SIZE)
         {
             opts.write(true);
         } else {
@@ -251,10 +201,10 @@ impl WasiDir for cap_std::fs::Dir {
             // get_cap check.
             opts.read(true);
         }
-        if caps.contains(&FileCaps::READ) {
+        if caps.contains(FileCaps::READ) {
             opts.read(true);
         }
-        if fdflags.contains(&FdFlags::APPEND) {
+        if fdflags.contains(FdFlags::APPEND) {
             opts.append(true);
         }
         // XXX what about rest of fdflags - dsync, sync become oflags.

@@ -768,10 +768,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let oflags = OFlags::from(&oflags);
         let fdflags = FdFlags::from(&fdflags);
         let path = path.as_str()?;
-        if oflags.contains(&OFlags::DIRECTORY) {
-            if oflags.contains(&OFlags::CREATE)
-                || oflags.contains(&OFlags::EXCLUSIVE)
-                || oflags.contains(&OFlags::TRUNCATE)
+        if oflags.contains(OFlags::DIRECTORY) {
+            if oflags.contains(OFlags::CREATE)
+                || oflags.contains(OFlags::EXCLUSIVE)
+                || oflags.contains(OFlags::TRUNCATE)
             {
                 return Err(Error::Inval);
             }
@@ -787,7 +787,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             Ok(types::Fd::from(fd))
         } else {
             let mut required_caps = DirCaps::OPEN;
-            if oflags.contains(&OFlags::CREATE) {
+            if oflags.contains(OFlags::CREATE) {
                 required_caps = required_caps | DirCaps::CREATE_FILE;
             }
 
@@ -976,40 +976,40 @@ impl From<&DirFdStat> for types::Fdstat {
 impl From<&FileCaps> for types::Rights {
     fn from(caps: &FileCaps) -> types::Rights {
         let mut rights = types::Rights::empty();
-        if caps.contains(&FileCaps::DATASYNC) {
+        if caps.contains(FileCaps::DATASYNC) {
             rights = rights | types::Rights::FD_DATASYNC;
         }
-        if caps.contains(&FileCaps::READ) {
+        if caps.contains(FileCaps::READ) {
             rights = rights | types::Rights::FD_READ;
         }
-        if caps.contains(&FileCaps::SEEK) {
+        if caps.contains(FileCaps::SEEK) {
             rights = rights | types::Rights::FD_SEEK;
         }
-        if caps.contains(&FileCaps::FDSTAT_SET_FLAGS) {
+        if caps.contains(FileCaps::FDSTAT_SET_FLAGS) {
             rights = rights | types::Rights::FD_FDSTAT_SET_FLAGS;
         }
-        if caps.contains(&FileCaps::SYNC) {
+        if caps.contains(FileCaps::SYNC) {
             rights = rights | types::Rights::FD_SYNC;
         }
-        if caps.contains(&FileCaps::TELL) {
+        if caps.contains(FileCaps::TELL) {
             rights = rights | types::Rights::FD_TELL;
         }
-        if caps.contains(&FileCaps::WRITE) {
+        if caps.contains(FileCaps::WRITE) {
             rights = rights | types::Rights::FD_WRITE;
         }
-        if caps.contains(&FileCaps::ADVISE) {
+        if caps.contains(FileCaps::ADVISE) {
             rights = rights | types::Rights::FD_ADVISE;
         }
-        if caps.contains(&FileCaps::ALLOCATE) {
+        if caps.contains(FileCaps::ALLOCATE) {
             rights = rights | types::Rights::FD_ALLOCATE;
         }
-        if caps.contains(&FileCaps::FILESTAT_GET) {
+        if caps.contains(FileCaps::FILESTAT_GET) {
             rights = rights | types::Rights::FD_FILESTAT_GET;
         }
-        if caps.contains(&FileCaps::FILESTAT_SET_SIZE) {
+        if caps.contains(FileCaps::FILESTAT_SET_SIZE) {
             rights = rights | types::Rights::FD_FILESTAT_SET_SIZE;
         }
-        if caps.contains(&FileCaps::FILESTAT_SET_TIMES) {
+        if caps.contains(FileCaps::FILESTAT_SET_TIMES) {
             rights = rights | types::Rights::FD_FILESTAT_SET_TIMES;
         }
         rights
@@ -1064,52 +1064,52 @@ impl From<&types::Rights> for FileCaps {
 impl From<&DirCaps> for types::Rights {
     fn from(caps: &DirCaps) -> types::Rights {
         let mut rights = types::Rights::empty();
-        if caps.contains(&DirCaps::CREATE_DIRECTORY) {
+        if caps.contains(DirCaps::CREATE_DIRECTORY) {
             rights = rights | types::Rights::PATH_CREATE_DIRECTORY;
         }
-        if caps.contains(&DirCaps::CREATE_FILE) {
+        if caps.contains(DirCaps::CREATE_FILE) {
             rights = rights | types::Rights::PATH_CREATE_FILE;
         }
-        if caps.contains(&DirCaps::LINK_SOURCE) {
+        if caps.contains(DirCaps::LINK_SOURCE) {
             rights = rights | types::Rights::PATH_LINK_SOURCE;
         }
-        if caps.contains(&DirCaps::LINK_TARGET) {
+        if caps.contains(DirCaps::LINK_TARGET) {
             rights = rights | types::Rights::PATH_LINK_TARGET;
         }
-        if caps.contains(&DirCaps::OPEN) {
+        if caps.contains(DirCaps::OPEN) {
             rights = rights | types::Rights::PATH_OPEN;
         }
-        if caps.contains(&DirCaps::READDIR) {
+        if caps.contains(DirCaps::READDIR) {
             rights = rights | types::Rights::FD_READDIR;
         }
-        if caps.contains(&DirCaps::READLINK) {
+        if caps.contains(DirCaps::READLINK) {
             rights = rights | types::Rights::PATH_READLINK;
         }
-        if caps.contains(&DirCaps::RENAME_SOURCE) {
+        if caps.contains(DirCaps::RENAME_SOURCE) {
             rights = rights | types::Rights::PATH_RENAME_SOURCE;
         }
-        if caps.contains(&DirCaps::RENAME_TARGET) {
+        if caps.contains(DirCaps::RENAME_TARGET) {
             rights = rights | types::Rights::PATH_RENAME_TARGET;
         }
-        if caps.contains(&DirCaps::SYMLINK) {
+        if caps.contains(DirCaps::SYMLINK) {
             rights = rights | types::Rights::PATH_SYMLINK;
         }
-        if caps.contains(&DirCaps::REMOVE_DIRECTORY) {
+        if caps.contains(DirCaps::REMOVE_DIRECTORY) {
             rights = rights | types::Rights::PATH_REMOVE_DIRECTORY;
         }
-        if caps.contains(&DirCaps::UNLINK_FILE) {
+        if caps.contains(DirCaps::UNLINK_FILE) {
             rights = rights | types::Rights::PATH_UNLINK_FILE;
         }
-        if caps.contains(&DirCaps::PATH_FILESTAT_GET) {
+        if caps.contains(DirCaps::PATH_FILESTAT_GET) {
             rights = rights | types::Rights::PATH_FILESTAT_GET;
         }
-        if caps.contains(&DirCaps::PATH_FILESTAT_SET_TIMES) {
+        if caps.contains(DirCaps::PATH_FILESTAT_SET_TIMES) {
             rights = rights | types::Rights::PATH_FILESTAT_SET_TIMES;
         }
-        if caps.contains(&DirCaps::FILESTAT_GET) {
+        if caps.contains(DirCaps::FILESTAT_GET) {
             rights = rights | types::Rights::FD_FILESTAT_GET;
         }
-        if caps.contains(&DirCaps::FILESTAT_SET_TIMES) {
+        if caps.contains(DirCaps::FILESTAT_SET_TIMES) {
             rights = rights | types::Rights::FD_FILESTAT_SET_TIMES;
         }
         rights
@@ -1189,19 +1189,19 @@ impl From<&FileType> for types::Filetype {
 impl From<&FdFlags> for types::Fdflags {
     fn from(fdflags: &FdFlags) -> types::Fdflags {
         let mut out = types::Fdflags::empty();
-        if fdflags.contains(&FdFlags::APPEND) {
+        if fdflags.contains(FdFlags::APPEND) {
             out = out | types::Fdflags::APPEND;
         }
-        if fdflags.contains(&FdFlags::DSYNC) {
+        if fdflags.contains(FdFlags::DSYNC) {
             out = out | types::Fdflags::DSYNC;
         }
-        if fdflags.contains(&FdFlags::NONBLOCK) {
+        if fdflags.contains(FdFlags::NONBLOCK) {
             out = out | types::Fdflags::NONBLOCK;
         }
-        if fdflags.contains(&FdFlags::RSYNC) {
+        if fdflags.contains(FdFlags::RSYNC) {
             out = out | types::Fdflags::RSYNC;
         }
-        if fdflags.contains(&FdFlags::SYNC) {
+        if fdflags.contains(FdFlags::SYNC) {
             out = out | types::Fdflags::SYNC;
         }
         out
@@ -1252,16 +1252,16 @@ impl From<&types::Oflags> for OFlags {
 impl From<&OFlags> for types::Oflags {
     fn from(oflags: &OFlags) -> types::Oflags {
         let mut out = types::Oflags::empty();
-        if oflags.contains(&OFlags::CREATE) {
+        if oflags.contains(OFlags::CREATE) {
             out = out | types::Oflags::CREAT;
         }
-        if oflags.contains(&OFlags::DIRECTORY) {
+        if oflags.contains(OFlags::DIRECTORY) {
             out = out | types::Oflags::DIRECTORY;
         }
-        if oflags.contains(&OFlags::EXCLUSIVE) {
+        if oflags.contains(OFlags::EXCLUSIVE) {
             out = out | types::Oflags::EXCL;
         }
-        if oflags.contains(&OFlags::TRUNCATE) {
+        if oflags.contains(OFlags::TRUNCATE) {
             out = out | types::Oflags::TRUNC;
         }
         out

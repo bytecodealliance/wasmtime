@@ -1,4 +1,5 @@
 use crate::Error;
+use bitflags::bitflags;
 use fs_set_times::SetTimes;
 use std::ops::Deref;
 use system_interface::fs::FileIoExt;
@@ -50,60 +51,22 @@ impl From<&cap_std::fs::FileType> for FileType {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct FdFlags {
-    flags: u32,
-}
-
-impl FdFlags {
-    /// Checks if `other` is a subset of those capabilties:
-    pub fn contains(&self, other: &Self) -> bool {
-        self.flags & other.flags == other.flags
-    }
-    pub fn empty() -> FdFlags {
-        FdFlags { flags: 0 }
-    }
-    pub const APPEND: FdFlags = FdFlags { flags: 1 };
-    pub const DSYNC: FdFlags = FdFlags { flags: 2 };
-    pub const NONBLOCK: FdFlags = FdFlags { flags: 4 };
-    pub const RSYNC: FdFlags = FdFlags { flags: 8 };
-    pub const SYNC: FdFlags = FdFlags { flags: 16 };
-    // etc
-}
-
-impl std::ops::BitOr for FdFlags {
-    type Output = FdFlags;
-    fn bitor(self, rhs: FdFlags) -> FdFlags {
-        FdFlags {
-            flags: self.flags | rhs.flags,
-        }
+bitflags! {
+    pub struct FdFlags: u32 {
+        const APPEND   = 0b1;
+        const DSYNC    = 0b10;
+        const NONBLOCK = 0b100;
+        const RSYNC    = 0b1000;
+        const SYNC     = 0b10000;
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct OFlags {
-    flags: u32,
-}
-
-impl OFlags {
-    /// Checks if `other` is a subset of those capabilties:
-    pub fn contains(&self, other: &Self) -> bool {
-        self.flags & other.flags == other.flags
-    }
-    pub fn empty() -> Self {
-        OFlags { flags: 0 }
-    }
-    pub const CREATE: OFlags = OFlags { flags: 1 };
-    pub const DIRECTORY: OFlags = OFlags { flags: 2 };
-    pub const EXCLUSIVE: OFlags = OFlags { flags: 4 };
-    pub const TRUNCATE: OFlags = OFlags { flags: 8 };
-}
-impl std::ops::BitOr for OFlags {
-    type Output = OFlags;
-    fn bitor(self, rhs: OFlags) -> OFlags {
-        OFlags {
-            flags: self.flags | rhs.flags,
-        }
+bitflags! {
+    pub struct OFlags: u32 {
+        const CREATE    = 0b1;
+        const DIRECTORY = 0b10;
+        const EXCLUSIVE = 0b100;
+        const TRUNCATE  = 0b1000;
     }
 }
 
@@ -130,7 +93,7 @@ impl FileEntry {
     }
 
     pub fn get_cap(&self, caps: FileCaps) -> Result<&dyn WasiFile, Error> {
-        if self.caps.contains(&caps) {
+        if self.caps.contains(caps) {
             Ok(self.file.deref())
         } else {
             Err(Error::FileNotCapable {
@@ -141,7 +104,7 @@ impl FileEntry {
     }
 
     pub fn drop_caps_to(&mut self, caps: FileCaps) -> Result<(), Error> {
-        if self.caps.contains(&caps) {
+        if self.caps.contains(caps) {
             self.caps = caps;
             Ok(())
         } else {
@@ -158,63 +121,20 @@ impl FileEntry {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct FileCaps {
-    flags: u32,
-}
-
-impl FileCaps {
-    pub fn empty() -> Self {
-        FileCaps { flags: 0 }
-    }
-
-    /// Checks if `other` is a subset of those capabilties:
-    pub fn contains(&self, other: &Self) -> bool {
-        self.flags & other.flags == other.flags
-    }
-
-    /// Intersection of two sets of flags (bitwise and)
-    pub fn intersection(&self, rhs: &Self) -> Self {
-        FileCaps {
-            flags: self.flags & rhs.flags,
-        }
-    }
-
-    pub const DATASYNC: Self = FileCaps { flags: 1 };
-    pub const READ: Self = FileCaps { flags: 2 };
-    pub const SEEK: Self = FileCaps { flags: 4 };
-    pub const FDSTAT_SET_FLAGS: Self = FileCaps { flags: 8 };
-    pub const SYNC: Self = FileCaps { flags: 16 };
-    pub const TELL: Self = FileCaps { flags: 32 };
-    pub const WRITE: Self = FileCaps { flags: 64 };
-    pub const ADVISE: Self = FileCaps { flags: 128 };
-    pub const ALLOCATE: Self = FileCaps { flags: 256 };
-    pub const FILESTAT_GET: Self = FileCaps { flags: 512 };
-    pub const FILESTAT_SET_SIZE: Self = FileCaps { flags: 1024 };
-    pub const FILESTAT_SET_TIMES: Self = FileCaps { flags: 2048 };
-
-    pub fn all() -> FileCaps {
-        Self::DATASYNC
-            | Self::READ
-            | Self::SEEK
-            | Self::FDSTAT_SET_FLAGS
-            | Self::SYNC
-            | Self::TELL
-            | Self::WRITE
-            | Self::ADVISE
-            | Self::ALLOCATE
-            | Self::FILESTAT_GET
-            | Self::FILESTAT_SET_SIZE
-            | Self::FILESTAT_SET_TIMES
-    }
-}
-
-impl std::ops::BitOr for FileCaps {
-    type Output = FileCaps;
-    fn bitor(self, rhs: FileCaps) -> FileCaps {
-        FileCaps {
-            flags: self.flags | rhs.flags,
-        }
+bitflags! {
+    pub struct FileCaps : u32 {
+        const DATASYNC           = 0b1;
+        const READ               = 0b10;
+        const SEEK               = 0b100;
+        const FDSTAT_SET_FLAGS   = 0b1000;
+        const SYNC               = 0b10000;
+        const TELL               = 0b100000;
+        const WRITE              = 0b1000000;
+        const ADVISE             = 0b10000000;
+        const ALLOCATE           = 0b100000000;
+        const FILESTAT_GET       = 0b1000000000;
+        const FILESTAT_SET_SIZE  = 0b10000000000;
+        const FILESTAT_SET_TIMES = 0b100000000000;
     }
 }
 
