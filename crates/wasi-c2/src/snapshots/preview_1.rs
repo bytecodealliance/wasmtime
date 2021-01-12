@@ -329,10 +329,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let fd = u32::from(fd);
         let table = self.table();
         // Validate flags
-        let set_atim = fst_flags.contains(&types::Fstflags::ATIM);
-        let set_atim_now = fst_flags.contains(&types::Fstflags::ATIM_NOW);
-        let set_mtim = fst_flags.contains(&types::Fstflags::MTIM);
-        let set_mtim_now = fst_flags.contains(&types::Fstflags::MTIM_NOW);
+        let set_atim = fst_flags.contains(types::Fstflags::ATIM);
+        let set_atim_now = fst_flags.contains(types::Fstflags::ATIM_NOW);
+        let set_mtim = fst_flags.contains(types::Fstflags::MTIM);
+        let set_mtim_now = fst_flags.contains(types::Fstflags::MTIM_NOW);
         if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
             return Err(Error::Inval);
         }
@@ -692,10 +692,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let path = path.as_str()?;
 
         // XXX DRY these are in fd_filestat_set_times twice!
-        let set_atim = fst_flags.contains(&types::Fstflags::ATIM);
-        let set_atim_now = fst_flags.contains(&types::Fstflags::ATIM_NOW);
-        let set_mtim = fst_flags.contains(&types::Fstflags::MTIM);
-        let set_mtim_now = fst_flags.contains(&types::Fstflags::MTIM_NOW);
+        let set_atim = fst_flags.contains(types::Fstflags::ATIM);
+        let set_atim_now = fst_flags.contains(types::Fstflags::ATIM_NOW);
+        let set_mtim = fst_flags.contains(types::Fstflags::MTIM);
+        let set_mtim_now = fst_flags.contains(types::Fstflags::MTIM_NOW);
         if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
             return Err(Error::Inval);
         }
@@ -736,7 +736,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let src_dir = src_entry.get_cap(DirCaps::LINK_SOURCE)?;
         let target_entry: Ref<DirEntry> = table.get(u32::from(target_fd))?;
         let target_dir = target_entry.get_cap(DirCaps::LINK_TARGET)?;
-        let symlink_follow = src_flags.contains(&types::Lookupflags::SYMLINK_FOLLOW);
+        let symlink_follow = src_flags.contains(types::Lookupflags::SYMLINK_FOLLOW);
 
         src_dir.hard_link(
             src_path.as_str()?.deref(),
@@ -763,7 +763,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         }
         let dir_entry: Ref<DirEntry> = table.get(dirfd)?;
 
-        let symlink_follow = dirflags.contains(&types::Lookupflags::SYMLINK_FOLLOW);
+        let symlink_follow = dirflags.contains(types::Lookupflags::SYMLINK_FOLLOW);
 
         let oflags = OFlags::from(&oflags);
         let fdflags = FdFlags::from(&fdflags);
@@ -1020,40 +1020,40 @@ impl From<&FileCaps> for types::Rights {
 impl From<&types::Rights> for FileCaps {
     fn from(rights: &types::Rights) -> FileCaps {
         let mut caps = FileCaps::empty();
-        if rights.contains(&types::Rights::FD_DATASYNC) {
+        if rights.contains(types::Rights::FD_DATASYNC) {
             caps = caps | FileCaps::DATASYNC;
         }
-        if rights.contains(&types::Rights::FD_READ) {
+        if rights.contains(types::Rights::FD_READ) {
             caps = caps | FileCaps::READ;
         }
-        if rights.contains(&types::Rights::FD_SEEK) {
+        if rights.contains(types::Rights::FD_SEEK) {
             caps = caps | FileCaps::SEEK;
         }
-        if rights.contains(&types::Rights::FD_FDSTAT_SET_FLAGS) {
+        if rights.contains(types::Rights::FD_FDSTAT_SET_FLAGS) {
             caps = caps | FileCaps::FDSTAT_SET_FLAGS;
         }
-        if rights.contains(&types::Rights::FD_SYNC) {
+        if rights.contains(types::Rights::FD_SYNC) {
             caps = caps | FileCaps::SYNC;
         }
-        if rights.contains(&types::Rights::FD_TELL) {
+        if rights.contains(types::Rights::FD_TELL) {
             caps = caps | FileCaps::TELL;
         }
-        if rights.contains(&types::Rights::FD_WRITE) {
+        if rights.contains(types::Rights::FD_WRITE) {
             caps = caps | FileCaps::WRITE;
         }
-        if rights.contains(&types::Rights::FD_ADVISE) {
+        if rights.contains(types::Rights::FD_ADVISE) {
             caps = caps | FileCaps::ADVISE;
         }
-        if rights.contains(&types::Rights::FD_ALLOCATE) {
+        if rights.contains(types::Rights::FD_ALLOCATE) {
             caps = caps | FileCaps::ALLOCATE;
         }
-        if rights.contains(&types::Rights::FD_FILESTAT_GET) {
+        if rights.contains(types::Rights::FD_FILESTAT_GET) {
             caps = caps | FileCaps::FILESTAT_GET;
         }
-        if rights.contains(&types::Rights::FD_FILESTAT_SET_SIZE) {
+        if rights.contains(types::Rights::FD_FILESTAT_SET_SIZE) {
             caps = caps | FileCaps::FILESTAT_SET_SIZE;
         }
-        if rights.contains(&types::Rights::FD_FILESTAT_SET_TIMES) {
+        if rights.contains(types::Rights::FD_FILESTAT_SET_TIMES) {
             caps = caps | FileCaps::FILESTAT_SET_TIMES;
         }
         caps
@@ -1120,52 +1120,52 @@ impl From<&DirCaps> for types::Rights {
 impl From<&types::Rights> for DirCaps {
     fn from(rights: &types::Rights) -> DirCaps {
         let mut caps = DirCaps::empty();
-        if rights.contains(&types::Rights::PATH_CREATE_DIRECTORY) {
+        if rights.contains(types::Rights::PATH_CREATE_DIRECTORY) {
             caps = caps | DirCaps::CREATE_DIRECTORY;
         }
-        if rights.contains(&types::Rights::PATH_CREATE_FILE) {
+        if rights.contains(types::Rights::PATH_CREATE_FILE) {
             caps = caps | DirCaps::CREATE_FILE;
         }
-        if rights.contains(&types::Rights::PATH_LINK_SOURCE) {
+        if rights.contains(types::Rights::PATH_LINK_SOURCE) {
             caps = caps | DirCaps::LINK_SOURCE;
         }
-        if rights.contains(&types::Rights::PATH_LINK_TARGET) {
+        if rights.contains(types::Rights::PATH_LINK_TARGET) {
             caps = caps | DirCaps::LINK_TARGET;
         }
-        if rights.contains(&types::Rights::PATH_OPEN) {
+        if rights.contains(types::Rights::PATH_OPEN) {
             caps = caps | DirCaps::OPEN;
         }
-        if rights.contains(&types::Rights::FD_READDIR) {
+        if rights.contains(types::Rights::FD_READDIR) {
             caps = caps | DirCaps::READDIR;
         }
-        if rights.contains(&types::Rights::PATH_READLINK) {
+        if rights.contains(types::Rights::PATH_READLINK) {
             caps = caps | DirCaps::READLINK;
         }
-        if rights.contains(&types::Rights::PATH_RENAME_SOURCE) {
+        if rights.contains(types::Rights::PATH_RENAME_SOURCE) {
             caps = caps | DirCaps::RENAME_SOURCE;
         }
-        if rights.contains(&types::Rights::PATH_RENAME_TARGET) {
+        if rights.contains(types::Rights::PATH_RENAME_TARGET) {
             caps = caps | DirCaps::RENAME_TARGET;
         }
-        if rights.contains(&types::Rights::PATH_SYMLINK) {
+        if rights.contains(types::Rights::PATH_SYMLINK) {
             caps = caps | DirCaps::SYMLINK;
         }
-        if rights.contains(&types::Rights::PATH_REMOVE_DIRECTORY) {
+        if rights.contains(types::Rights::PATH_REMOVE_DIRECTORY) {
             caps = caps | DirCaps::REMOVE_DIRECTORY;
         }
-        if rights.contains(&types::Rights::PATH_UNLINK_FILE) {
+        if rights.contains(types::Rights::PATH_UNLINK_FILE) {
             caps = caps | DirCaps::UNLINK_FILE;
         }
-        if rights.contains(&types::Rights::PATH_FILESTAT_GET) {
+        if rights.contains(types::Rights::PATH_FILESTAT_GET) {
             caps = caps | DirCaps::PATH_FILESTAT_GET;
         }
-        if rights.contains(&types::Rights::PATH_FILESTAT_SET_TIMES) {
+        if rights.contains(types::Rights::PATH_FILESTAT_SET_TIMES) {
             caps = caps | DirCaps::PATH_FILESTAT_SET_TIMES;
         }
-        if rights.contains(&types::Rights::FD_FILESTAT_GET) {
+        if rights.contains(types::Rights::FD_FILESTAT_GET) {
             caps = caps | DirCaps::FILESTAT_GET;
         }
-        if rights.contains(&types::Rights::FD_FILESTAT_SET_TIMES) {
+        if rights.contains(types::Rights::FD_FILESTAT_SET_TIMES) {
             caps = caps | DirCaps::FILESTAT_SET_TIMES;
         }
         caps
@@ -1211,19 +1211,19 @@ impl From<&FdFlags> for types::Fdflags {
 impl From<&types::Fdflags> for FdFlags {
     fn from(fdflags: &types::Fdflags) -> FdFlags {
         let mut out = FdFlags::empty();
-        if fdflags.contains(&types::Fdflags::APPEND) {
+        if fdflags.contains(types::Fdflags::APPEND) {
             out = out | FdFlags::APPEND;
         }
-        if fdflags.contains(&types::Fdflags::DSYNC) {
+        if fdflags.contains(types::Fdflags::DSYNC) {
             out = out | FdFlags::DSYNC;
         }
-        if fdflags.contains(&types::Fdflags::NONBLOCK) {
+        if fdflags.contains(types::Fdflags::NONBLOCK) {
             out = out | FdFlags::NONBLOCK;
         }
-        if fdflags.contains(&types::Fdflags::RSYNC) {
+        if fdflags.contains(types::Fdflags::RSYNC) {
             out = out | FdFlags::RSYNC;
         }
-        if fdflags.contains(&types::Fdflags::SYNC) {
+        if fdflags.contains(types::Fdflags::SYNC) {
             out = out | FdFlags::SYNC;
         }
         out
@@ -1233,16 +1233,16 @@ impl From<&types::Fdflags> for FdFlags {
 impl From<&types::Oflags> for OFlags {
     fn from(oflags: &types::Oflags) -> OFlags {
         let mut out = OFlags::empty();
-        if oflags.contains(&types::Oflags::CREAT) {
+        if oflags.contains(types::Oflags::CREAT) {
             out = out | OFlags::CREATE;
         }
-        if oflags.contains(&types::Oflags::DIRECTORY) {
+        if oflags.contains(types::Oflags::DIRECTORY) {
             out = out | OFlags::DIRECTORY;
         }
-        if oflags.contains(&types::Oflags::EXCL) {
+        if oflags.contains(types::Oflags::EXCL) {
             out = out | OFlags::EXCLUSIVE;
         }
-        if oflags.contains(&types::Oflags::TRUNC) {
+        if oflags.contains(types::Oflags::TRUNC) {
             out = out | OFlags::TRUNCATE;
         }
         out
