@@ -65,6 +65,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wiggle",
     "wasmtime-wasi",
     "wasmtime-wasi-nn",
+    "wasmtime-wasi-crypto",
     "wasmtime-rust-macro",
     "wasmtime-rust",
     "wasmtime-wast",
@@ -176,7 +177,7 @@ fn read_crate(manifest: &Path) -> Crate {
     } else {
         version.clone()
     };
-    if name == "witx" {
+    if ["witx", "wasi-crypto"].contains(&&name[..]) {
         publish = false;
     }
     Crate {
