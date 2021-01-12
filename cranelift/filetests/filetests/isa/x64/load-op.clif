@@ -59,3 +59,14 @@ block0(v0: i64, v1: i64):
   ; nextln: movq    0(%rax,%rdi,1), %rsi
   ; nextln: movq    %rsi, %rax
 }
+
+function %merge_scalar_to_vector(i64) -> i32x4 {
+block0(v0: i64):
+  v1 = load.i32 v0
+  v2 = scalar_to_vector.i32x4 v1
+  ; check: movss   0(%rdi), %xmm0
+
+  jump block1
+block1:
+  return v2
+}

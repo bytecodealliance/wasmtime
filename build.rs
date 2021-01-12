@@ -32,6 +32,7 @@ fn main() -> anyhow::Result<()> {
             test_directory_module(out, "tests/misc_testsuite/reference-types", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/multi-memory", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/module-linking", strategy)?;
+            test_directory_module(out, "tests/misc_testsuite/threads", strategy)?;
             Ok(())
         })?;
 

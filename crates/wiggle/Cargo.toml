@@ -15,6 +15,7 @@ thiserror = "1"
 witx = { path = "../wasi-common/WASI/tools/witx", version = "0.8.7", optional = true }
 wiggle-macro = { path = "macro", version = "0.22.0" }
 tracing = "0.1.15"
+bitflags = "1.2"
 
 [badges]
 maintenance = { status = "actively-developed" }

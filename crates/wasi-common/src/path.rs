@@ -11,7 +11,7 @@ pub(crate) use crate::sys::path::{from_host, open_rights};
 /// This is a workaround for not having Capsicum support in the OS.
 pub(crate) fn get(
     entry: &Entry,
-    required_rights: &HandleRights,
+    required_rights: HandleRights,
     dirflags: Lookupflags,
     path: &str,
     needs_final_component: bool,
@@ -140,7 +140,7 @@ pub(crate) fn get(
                             }
 
                             continue;
-                        } else if ends_with_slash || dirflags.contains(&Lookupflags::SYMLINK_FOLLOW)
+                        } else if ends_with_slash || dirflags.contains(Lookupflags::SYMLINK_FOLLOW)
                         {
                             // if there's a trailing slash, or if `LOOKUP_SYMLINK_FOLLOW` is set, attempt
                             // symlink expansion

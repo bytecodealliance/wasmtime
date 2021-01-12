@@ -169,7 +169,7 @@ pub fn define_func(
     let func_name = &func.name.as_str();
 
     if func.noreturn {
-        quote!(pub fn #ident(#abi_args) -> Result<#abi_ret, wiggle::Trap> {
+        quote!(pub fn #ident(#abi_args) -> Result<#abi_ret, #rt::Trap> {
             let _span = #rt::tracing::span!(
                 #rt::tracing::Level::TRACE,
                 "wiggle abi",
@@ -184,7 +184,7 @@ pub fn define_func(
             Err(trap)
         })
     } else {
-        quote!(pub fn #ident(#abi_args) -> Result<#abi_ret, wiggle::Trap> {
+        quote!(pub fn #ident(#abi_args) -> Result<#abi_ret, #rt::Trap> {
             let _span = #rt::tracing::span!(
                 #rt::tracing::Level::TRACE,
                 "wiggle abi",

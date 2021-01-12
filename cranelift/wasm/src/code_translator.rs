@@ -201,14 +201,26 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.pop1();
         }
         Operator::Select => {
-            let (arg1, arg2, cond) = state.pop3();
+            let (mut arg1, mut arg2, cond) = state.pop3();
+            if builder.func.dfg.value_type(arg1).is_vector() {
+                arg1 = optionally_bitcast_vector(arg1, I8X16, builder);
+            }
+            if builder.func.dfg.value_type(arg2).is_vector() {
+                arg2 = optionally_bitcast_vector(arg2, I8X16, builder);
+            }
             state.push1(builder.ins().select(cond, arg1, arg2));
         }
         Operator::TypedSelect { ty: _ } => {
             // We ignore the explicit type parameter as it is only needed for
             // validation, which we require to have been performed before
             // translation.
-            let (arg1, arg2, cond) = state.pop3();
+            let (mut arg1, mut arg2, cond) = state.pop3();
+            if builder.func.dfg.value_type(arg1).is_vector() {
+                arg1 = optionally_bitcast_vector(arg1, I8X16, builder);
+            }
+            if builder.func.dfg.value_type(arg2).is_vector() {
+                arg2 = optionally_bitcast_vector(arg2, I8X16, builder);
+            }
             state.push1(builder.ins().select(cond, arg1, arg2));
         }
         Operator::Nop => {
@@ -1052,6 +1064,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let timeout = state.pop1(); // 64 (fixed)
             let expected = state.pop1(); // 32 or 64 (per the `Ixx` in `IxxAtomicWait`)
             let addr = state.pop1(); // 32 (fixed)
+            let addr = fold_atomic_mem_addr(addr, memarg, implied_ty, builder);
             assert!(builder.func.dfg.value_type(expected) == implied_ty);
             // `fn translate_atomic_wait` can inspect the type of `expected` to figure out what
             // code it needs to generate, if it wants.
@@ -1070,6 +1083,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let heap = state.get_heap(builder.func, memarg.memory, environ)?;
             let count = state.pop1(); // 32 (fixed)
             let addr = state.pop1(); // 32 (fixed)
+            let addr = fold_atomic_mem_addr(addr, memarg, I32, builder);
             let res =
                 environ.translate_atomic_notify(builder.cursor(), heap_index, heap, addr, count)?;
             state.push1(res);
@@ -2140,6 +2154,42 @@ fn translate_icmp(cc: IntCC, builder: &mut FunctionBuilder, state: &mut FuncTran
     let (arg0, arg1) = state.pop2();
     let val = builder.ins().icmp(cc, arg0, arg1);
     state.push1(builder.ins().bint(I32, val));
+}
+
+fn fold_atomic_mem_addr(
+    linear_mem_addr: Value,
+    memarg: &MemoryImmediate,
+    access_ty: Type,
+    builder: &mut FunctionBuilder,
+) -> Value {
+    let access_ty_bytes = access_ty.bytes();
+    let final_lma = if memarg.offset > 0 {
+        assert!(builder.func.dfg.value_type(linear_mem_addr) == I32);
+        let linear_mem_addr = builder.ins().uextend(I64, linear_mem_addr);
+        let a = builder
+            .ins()
+            .iadd_imm(linear_mem_addr, i64::from(memarg.offset));
+        let cflags = builder.ins().ifcmp_imm(a, 0x1_0000_0000i64);
+        builder.ins().trapif(
+            IntCC::UnsignedGreaterThanOrEqual,
+            cflags,
+            ir::TrapCode::HeapOutOfBounds,
+        );
+        builder.ins().ireduce(I32, a)
+    } else {
+        linear_mem_addr
+    };
+    assert!(access_ty_bytes == 4 || access_ty_bytes == 8);
+    let final_lma_misalignment = builder
+        .ins()
+        .band_imm(final_lma, i64::from(access_ty_bytes - 1));
+    let f = builder
+        .ins()
+        .ifcmp_imm(final_lma_misalignment, i64::from(0));
+    builder
+        .ins()
+        .trapif(IntCC::NotEqual, f, ir::TrapCode::HeapMisaligned);
+    final_lma
 }
 
 // For an atomic memory operation, emit an alignment check for the linear memory address,

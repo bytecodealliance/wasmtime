@@ -4095,6 +4095,53 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             emit_extract_lane(ctx, src, dst, lane, ty);
         }
 
+        Opcode::ScalarToVector => {
+            // When moving a scalar value to a vector register, we must be handle several
+            // situations:
+            //  1. a scalar float is already in an XMM register, so we simply move it
+            //  2. a scalar of any other type resides in a GPR register: MOVD moves the bits to an
+            //     XMM register and zeroes the upper bits
+            //  3. a scalar (float or otherwise) that has previously been loaded from memory (e.g.
+            //     the default lowering of Wasm's `load[32|64]_zero`) can be lowered to a single
+            //     MOVSS/MOVSD instruction; to do this, we rely on `input_to_reg_mem` to sink the
+            //     unused load.
+            let src = input_to_reg_mem(ctx, inputs[0]);
+            let src_ty = ctx.input_ty(insn, 0);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let dst_ty = ty.unwrap();
+            assert!(src_ty == dst_ty.lane_type() && dst_ty.bits() == 128);
+            match src {
+                RegMem::Reg { reg } => {
+                    if src_ty.is_float() {
+                        // Case 1: when moving a scalar float, we simply move from one XMM register
+                        // to another, expecting the register allocator to elide this. Here we
+                        // assume that the upper bits of a scalar float have not been munged with
+                        // (the same assumption the old backend makes).
+                        ctx.emit(Inst::gen_move(dst, reg, dst_ty));
+                    } else {
+                        // Case 2: when moving a scalar value of any other type, use MOVD to zero
+                        // the upper lanes.
+                        let src_size = match src_ty.bits() {
+                            32 => OperandSize::Size32,
+                            64 => OperandSize::Size64,
+                            _ => unimplemented!("invalid source size for type: {}", src_ty),
+                        };
+                        ctx.emit(Inst::gpr_to_xmm(SseOpcode::Movd, src, src_size, dst));
+                    }
+                }
+                RegMem::Mem { .. } => {
+                    // Case 3: when presented with `load + scalar_to_vector`, coalesce into a single
+                    // MOVSS/MOVSD instruction.
+                    let opcode = match src_ty.bits() {
+                        32 => SseOpcode::Movss,
+                        64 => SseOpcode::Movsd,
+                        _ => unimplemented!("unable to move scalar to vector for type: {}", src_ty),
+                    };
+                    ctx.emit(Inst::xmm_mov(opcode, src, dst));
+                }
+            }
+        }
+
         Opcode::Splat => {
             let ty = ty.unwrap();
             assert_eq!(ty.bits(), 128);

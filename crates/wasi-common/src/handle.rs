@@ -39,8 +39,8 @@ impl HandleRights {
     }
 
     /// Checks if `other` is a subset of those rights.
-    pub fn contains(&self, other: &Self) -> bool {
-        self.base.contains(&other.base) && self.inheriting.contains(&other.inheriting)
+    pub fn contains(&self, other: Self) -> bool {
+        self.base.contains(other.base) && self.inheriting.contains(other.inheriting)
     }
 
     /// Returns base rights.
@@ -100,7 +100,7 @@ pub trait Handle {
         let file_type = self.get_file_type();
         let rights = self.get_rights();
         let required_rights = HandleRights::from_base(Rights::FD_SEEK | Rights::FD_TELL);
-        file_type == Filetype::CharacterDevice && rights.contains(&required_rights)
+        file_type == Filetype::CharacterDevice && rights.contains(required_rights)
     }
     // TODO perhaps should be a separate trait?
     // FdOps

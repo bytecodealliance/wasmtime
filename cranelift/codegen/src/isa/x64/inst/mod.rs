@@ -397,7 +397,10 @@ pub enum Inst {
     /// An instruction that will always trigger the illegal instruction exception.
     Ud2 { trap_code: TrapCode },
 
-    /// Loads an external symbol in a register, with a relocation: movabsq $name, dst
+    /// Loads an external symbol in a register, with a relocation:
+    ///
+    /// movq $name@GOTPCREL(%rip), dst    if PIC is enabled, or
+    /// movabsq $name, dst                otherwise.
     LoadExtName {
         dst: Writable<Reg>,
         name: Box<ExternalName>,
@@ -1726,7 +1729,7 @@ impl PrettyPrint for Inst {
                 dst, name, offset, ..
             } => format!(
                 "{} {}+{}, {}",
-                ljustify("movaps".into()),
+                ljustify("load_ext_name".into()),
                 name,
                 offset,
                 show_ireg_sized(dst.to_reg(), mb_rru, 8),

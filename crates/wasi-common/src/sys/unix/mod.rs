@@ -147,19 +147,19 @@ impl From<Clockid> for ClockId {
 impl From<Fdflags> for OFlags {
     fn from(fdflags: Fdflags) -> Self {
         let mut nix_flags = Self::empty();
-        if fdflags.contains(&Fdflags::APPEND) {
+        if fdflags.contains(Fdflags::APPEND) {
             nix_flags.insert(Self::APPEND);
         }
-        if fdflags.contains(&Fdflags::DSYNC) {
+        if fdflags.contains(Fdflags::DSYNC) {
             nix_flags.insert(Self::DSYNC);
         }
-        if fdflags.contains(&Fdflags::NONBLOCK) {
+        if fdflags.contains(Fdflags::NONBLOCK) {
             nix_flags.insert(Self::NONBLOCK);
         }
-        if fdflags.contains(&Fdflags::RSYNC) {
+        if fdflags.contains(Fdflags::RSYNC) {
             nix_flags.insert(O_RSYNC);
         }
-        if fdflags.contains(&Fdflags::SYNC) {
+        if fdflags.contains(Fdflags::SYNC) {
             nix_flags.insert(Self::SYNC);
         }
         nix_flags
@@ -191,16 +191,16 @@ impl From<OFlags> for Fdflags {
 impl From<Oflags> for OFlags {
     fn from(oflags: Oflags) -> Self {
         let mut nix_flags = Self::empty();
-        if oflags.contains(&Oflags::CREAT) {
+        if oflags.contains(Oflags::CREAT) {
             nix_flags.insert(Self::CREAT);
         }
-        if oflags.contains(&Oflags::DIRECTORY) {
+        if oflags.contains(Oflags::DIRECTORY) {
             nix_flags.insert(Self::DIRECTORY);
         }
-        if oflags.contains(&Oflags::EXCL) {
+        if oflags.contains(Oflags::EXCL) {
             nix_flags.insert(Self::EXCL);
         }
-        if oflags.contains(&Oflags::TRUNC) {
+        if oflags.contains(Oflags::TRUNC) {
             nix_flags.insert(Self::TRUNC);
         }
         nix_flags
