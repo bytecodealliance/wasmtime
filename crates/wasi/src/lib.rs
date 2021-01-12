@@ -10,7 +10,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 pub use wasi_common::{Error, WasiCtx, WasiCtxBuilder, WasiDir, WasiFile};
-use wasmtime::{Linker, Store};
+use wasmtime::{Config, Linker, Store};
 
 /// An instantiated instance of all available wasi exports. Presently includes
 /// both the "preview1" snapshot and the "unstable" (preview0) snapshot.
@@ -33,6 +33,15 @@ impl Wasi {
         self.preview_1.add_to_linker(linker)?;
         self.preview_0.add_to_linker(linker)?;
         Ok(())
+    }
+    pub fn add_to_config(config: &mut Config) {
+        snapshots::preview_1::Wasi::add_to_config(config);
+        snapshots::preview_0::Wasi::add_to_config(config);
+    }
+    pub fn set_context(store: &Store, context: WasiCtx) -> Result<(), WasiCtx> {
+        // It doesn't matter which underlying `Wasi` type this gets called on as the
+        // implementations are identical
+        snapshots::preview_1::Wasi::set_context(store, context)
     }
 }
 

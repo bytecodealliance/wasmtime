@@ -275,11 +275,13 @@
 #![cfg_attr(nightlydoc, feature(doc_cfg))]
 #![cfg_attr(not(feature = "default"), allow(dead_code, unused_imports))]
 
+#[macro_use]
+mod func;
+
 mod config;
 mod engine;
 mod externals;
 mod frame_info;
-mod func;
 mod instance;
 mod linker;
 mod memory;

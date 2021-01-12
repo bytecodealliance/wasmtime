@@ -551,7 +551,7 @@ impl<'a> Instantiator<'a> {
             };
             let vmctx_ptr = instance.handle.vmctx_ptr();
             unsafe {
-                super::func::invoke_wasm_and_catch_traps(vmctx_ptr, &instance.store, || {
+                super::func::invoke_wasm_and_catch_traps(&instance.store, || {
                     mem::transmute::<
                         *const VMFunctionBody,
                         unsafe extern "C" fn(*mut VMContext, *mut VMContext),

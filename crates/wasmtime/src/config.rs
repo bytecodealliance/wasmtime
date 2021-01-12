@@ -1,11 +1,15 @@
 use crate::memory::MemoryCreator;
 use crate::trampoline::MemoryCreatorProxy;
+use crate::{func::HostFunc, Caller, FuncType, IntoFunc, Trap, Val, WasmRet, WasmTy};
 use anyhow::{bail, Result};
 use std::cmp;
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
+use std::future::Future;
 #[cfg(feature = "cache")]
 use std::path::Path;
+use std::pin::Pin;
 use std::sync::Arc;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
@@ -266,6 +270,88 @@ impl Default for InstanceAllocationStrategy {
     }
 }
 
+/// This type is used for storing host functions in a `Config`.
+///
+/// The module and function names are interned for more compact storage.
+#[derive(Clone)]
+struct HostFuncMap {
+    index_map: HashMap<Arc<str>, usize>,
+    strings: Vec<Arc<str>>,
+    funcs: HashMap<(usize, usize), Arc<HostFunc>>,
+}
+
+impl HostFuncMap {
+    fn new() -> Self {
+        Self {
+            index_map: HashMap::new(),
+            strings: Vec::new(),
+            funcs: HashMap::new(),
+        }
+    }
+
+    fn insert(&mut self, module: &str, name: &str, func: HostFunc) {
+        let key = (self.intern_str(module), self.intern_str(name));
+        self.funcs.insert(key, Arc::new(func));
+    }
+
+    fn get(&self, module: &str, name: &str) -> Option<&HostFunc> {
+        let key = (
+            self.index_map.get(module).cloned()?,
+            self.index_map.get(name).cloned()?,
+        );
+        self.funcs.get(&key).map(AsRef::as_ref)
+    }
+
+    fn intern_str(&mut self, string: &str) -> usize {
+        if let Some(idx) = self.index_map.get(string) {
+            return *idx;
+        }
+        let string: Arc<str> = string.into();
+        let idx = self.strings.len();
+        self.strings.push(string.clone());
+        self.index_map.insert(string, idx);
+        idx
+    }
+}
+
+macro_rules! generate_wrap_async_host_func {
+    ($num:tt $($args:ident)*) => (paste::paste!{
+        /// Same as [`Config::wrap_host_func`], except the closure asynchronously produces
+        /// its result. For more information see the [`Func`](crate::Func) documentation.
+        ///
+        /// # Panics
+        ///
+        /// A panic will occur if the store associated with the instance that calls this host
+        /// function is not asynchronous (see [`Store::new_async`](crate::Store::new_async)).
+        #[allow(non_snake_case)]
+        #[cfg(feature = "async")]
+        #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+        pub fn [<wrap_host_func $num _async>]<$($args,)* R>(
+            &mut self,
+            module: &str,
+            name: &str,
+            func: impl for <'a> Fn(Caller<'a>, $($args),*) -> Box<dyn Future<Output = R> + 'a> + Send + Sync + 'static,
+        )
+        where
+            $($args: WasmTy,)*
+            R: WasmRet,
+        {
+            self.host_funcs.insert(
+                module,
+                name,
+                HostFunc::wrap(&self.default_instance_allocator, move |caller: Caller<'_>, $($args: $args),*| {
+                    let store = caller.store().clone();
+                    let mut future = Pin::from(func(caller, $($args),*));
+                    match store.block_on(future.as_mut()) {
+                        Ok(ret) => ret.into_result(),
+                        Err(e) => Err(e),
+                    }
+                })
+            );
+        }
+    })
+}
+
 /// Global configuration options used to create an [`Engine`](crate::Engine)
 /// and customize its behavior.
 ///
@@ -292,6 +378,7 @@ pub struct Config {
     pub(crate) max_memories: usize,
     #[cfg(feature = "async")]
     pub(crate) async_stack_size: usize,
+    host_funcs: HostFuncMap,
 }
 
 impl Config {
@@ -344,6 +431,7 @@ impl Config {
             max_memories: 10_000,
             #[cfg(feature = "async")]
             async_stack_size: 2 << 20,
+            host_funcs: HostFuncMap::new(),
         };
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
         return ret;
@@ -1060,6 +1148,59 @@ impl Config {
     pub fn max_memories(&mut self, memories: usize) -> &mut Self {
         self.max_memories = memories;
         self
+    }
+
+    /// Defines a host function for the [`Config`] for the given callback.
+    ///
+    /// Use [`Store::get_host_func`](crate::Store::get_host_func) to get a [`Func`](crate::Func) representing the function.
+    ///
+    /// Note that the implementation of `func` must adhere to the `ty`
+    /// signature given, error or traps may occur if it does not respect the
+    /// `ty` signature.
+    ///
+    /// Additionally note that this is quite a dynamic function since signatures
+    /// are not statically known. For performance reasons, it's recommended
+    /// to use [`Config::wrap_host_func`] if you can because with statically known
+    /// signatures the engine can optimize the implementation much more.
+    ///
+    /// The callback must be `Send` and `Sync` as it is shared between all engines created
+    /// from the `Config`.  For more relaxed bounds, use [`Func::new`](crate::Func::new) to define the function.
+    pub fn define_host_func(
+        &mut self,
+        module: &str,
+        name: &str,
+        ty: FuncType,
+        func: impl Fn(Caller<'_>, &[Val], &mut [Val]) -> Result<(), Trap> + Send + Sync + 'static,
+    ) {
+        self.host_funcs
+            .insert(module, name, HostFunc::new(self, ty, func));
+    }
+
+    /// Defines a host function for the [`Config`] from the given Rust closure.
+    ///
+    /// Use [`Store::get_host_func`](crate::Store::get_host_func) to get a [`Func`](crate::Func) representing the function.
+    ///
+    /// See [`Func::wrap`](crate::Func::wrap) for information about accepted parameter and result types for the closure.
+    ///
+    /// The closure must be `Send` and `Sync` as it is shared between all engines created
+    /// from the `Config`.  For more relaxed bounds, use [`Func::wrap`](crate::Func::wrap) to wrap the closure.
+    pub fn wrap_host_func<Params, Results>(
+        &mut self,
+        module: &str,
+        name: &str,
+        func: impl IntoFunc<Params, Results> + Send + Sync,
+    ) {
+        self.host_funcs.insert(
+            module,
+            name,
+            HostFunc::wrap(&self.default_instance_allocator, func),
+        );
+    }
+
+    for_each_function_signature!(generate_wrap_async_host_func);
+
+    pub(crate) fn get_host_func(&self, module: &str, name: &str) -> Option<&HostFunc> {
+        self.host_funcs.get(module, name)
     }
 
     pub(crate) fn target_isa(&self) -> Box<dyn TargetIsa> {

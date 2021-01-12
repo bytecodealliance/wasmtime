@@ -581,9 +581,6 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         &self,
         mut req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
-        debug_assert!(!req.externref_activations_table.is_null());
-        debug_assert!(!req.stack_map_registry.is_null());
-
         let memories = self.create_memories(&req.module)?;
         let tables = Self::create_tables(&req.module);
 

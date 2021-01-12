@@ -7,6 +7,7 @@ mod fuel;
 mod func;
 mod fuzzing;
 mod globals;
+mod host_funcs;
 mod iloop;
 mod import_calling_export;
 mod import_indexes;

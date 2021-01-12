@@ -42,16 +42,8 @@ impl atoms::Atoms for Ctx {
     }
 }
 
-#[test]
-fn test_sync_host_func() {
-    let store = async_store();
-
-    let ctx = Rc::new(RefCell::new(Ctx));
-    let atoms = Atoms::new(&store, ctx.clone());
-
-    let shim_mod = shim_module(&store);
-    let mut linker = wasmtime::Linker::new(&store);
-    atoms.add_to_linker(&mut linker).unwrap();
+fn run_sync_func(linker: &wasmtime::Linker) {
+    let shim_mod = shim_module(linker.store());
     let shim_inst = run(linker.instantiate_async(&shim_mod)).unwrap();
 
     let results = run(shim_inst
@@ -68,16 +60,8 @@ fn test_sync_host_func() {
     );
 }
 
-#[test]
-fn test_async_host_func() {
-    let store = async_store();
-
-    let ctx = Rc::new(RefCell::new(Ctx));
-    let atoms = Atoms::new(&store, ctx.clone());
-
-    let shim_mod = shim_module(&store);
-    let mut linker = wasmtime::Linker::new(&store);
-    atoms.add_to_linker(&mut linker).unwrap();
+fn run_async_func(linker: &wasmtime::Linker) {
+    let shim_mod = shim_module(linker.store());
     let shim_inst = run(linker.instantiate_async(&shim_mod)).unwrap();
 
     let input: i32 = 123;
@@ -103,6 +87,60 @@ fn test_async_host_func() {
         .unwrap();
     let result = f32::from_le_bytes(result_bytes);
     assert_eq!((input * 2) as f32, result);
+}
+
+#[test]
+fn test_sync_host_func() {
+    let store = async_store();
+
+    let ctx = Rc::new(RefCell::new(Ctx));
+    let atoms = Atoms::new(&store, ctx.clone());
+
+    let mut linker = wasmtime::Linker::new(&store);
+    atoms.add_to_linker(&mut linker).unwrap();
+
+    run_sync_func(&linker);
+}
+
+#[test]
+fn test_async_host_func() {
+    let store = async_store();
+
+    let ctx = Rc::new(RefCell::new(Ctx));
+    let atoms = Atoms::new(&store, ctx.clone());
+
+    let mut linker = wasmtime::Linker::new(&store);
+    atoms.add_to_linker(&mut linker).unwrap();
+
+    run_async_func(&linker);
+}
+
+#[test]
+fn test_sync_config_host_func() {
+    let mut config = wasmtime::Config::new();
+    Atoms::add_to_config(&mut config);
+
+    let engine = wasmtime::Engine::new(&config);
+    let store = wasmtime::Store::new_async(&engine);
+
+    assert!(Atoms::set_context(&store, Ctx).is_ok());
+
+    let linker = wasmtime::Linker::new(&store);
+    run_sync_func(&linker);
+}
+
+#[test]
+fn test_async_config_host_func() {
+    let mut config = wasmtime::Config::new();
+    Atoms::add_to_config(&mut config);
+
+    let engine = wasmtime::Engine::new(&config);
+    let store = wasmtime::Store::new_async(&engine);
+
+    assert!(Atoms::set_context(&store, Ctx).is_ok());
+
+    let linker = wasmtime::Linker::new(&store);
+    run_async_func(&linker);
 }
 
 fn run<F: Future>(future: F) -> F::Output {
@@ -138,6 +176,7 @@ fn dummy_waker() -> Waker {
         assert_eq!(ptr as usize, 5);
     }
 }
+
 fn async_store() -> wasmtime::Store {
     let engine = wasmtime::Engine::default();
     wasmtime::Store::new_async(&engine)

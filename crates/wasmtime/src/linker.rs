@@ -518,6 +518,19 @@ impl Linker {
                 o.insert(item);
             }
             Entry::Vacant(v) => {
+                // If shadowing is not allowed, check for an existing host function
+                if !self.allow_shadowing {
+                    if let Extern::Func(_) = &item {
+                        if self.store.get_host_func(module, name).is_some() {
+                            bail!(
+                                "import of `{}::{}` with kind {:?} defined twice",
+                                module,
+                                name,
+                                v.key().kind,
+                            )
+                        }
+                    }
+                }
                 v.insert(item);
             }
         }
@@ -676,45 +689,45 @@ impl Linker {
     ///
     /// Returns `None` if no match was found.
     pub fn get(&self, import: &ImportType) -> Option<Extern> {
-        let key = ImportKey {
-            module: *self.string2idx.get(import.module())?,
-            name: match import.name() {
-                Some(name) => *self.string2idx.get(name)?,
-                None => usize::max_value(),
-            },
-            kind: self.import_kind(import.ty()),
-        };
-        if let Some(result) = self.map.get(&key).cloned() {
-            return Some(result);
+        if let Some(ext) = self.get_extern(import) {
+            return Some(ext);
         }
 
-        // This is a key location where the module linking proposal is
-        // implemented. This logic allows single-level imports of an instance to
-        // get satisfied by multiple definitions of items within this `Linker`.
-        //
-        // The instance being import is iterated over to load the names from
-        // this `Linker` (recursively calling `get`). If anything isn't defined
-        // we return `None` since the entire value isn't defined. Otherwise when
-        // all values are loaded it's assembled into an `Instance` and
-        // returned`.
-        //
-        // Note that this isn't exactly the speediest implementation in the
-        // world. Ideally we would pre-create the `Instance` instead of creating
-        // it each time a module is instantiated. For now though while the
-        // module linking proposal is under development this should hopefully
-        // suffice.
-        if let ExternType::Instance(t) = import.ty() {
-            if import.name().is_none() {
-                let mut builder = InstanceBuilder::new();
-                for export in t.exports() {
-                    let item = self.get(&export.as_import(import.module()))?;
-                    builder.insert(export.name(), item);
+        match import.ty() {
+            // For function imports, check with the store for a host func
+            ExternType::Func(_) => self
+                .store
+                .get_host_func(import.module(), import.name()?)
+                .map(Into::into),
+            ExternType::Instance(t) => {
+                // This is a key location where the module linking proposal is
+                // implemented. This logic allows single-level imports of an instance to
+                // get satisfied by multiple definitions of items within this `Linker`.
+                //
+                // The instance being import is iterated over to load the names from
+                // this `Linker` (recursively calling `get`). If anything isn't defined
+                // we return `None` since the entire value isn't defined. Otherwise when
+                // all values are loaded it's assembled into an `Instance` and
+                // returned`.
+                //
+                // Note that this isn't exactly the speediest implementation in the
+                // world. Ideally we would pre-create the `Instance` instead of creating
+                // it each time a module is instantiated. For now though while the
+                // module linking proposal is under development this should hopefully
+                // suffice.
+                if import.name().is_none() {
+                    let mut builder = InstanceBuilder::new();
+                    for export in t.exports() {
+                        let item = self.get(&export.as_import(import.module()))?;
+                        builder.insert(export.name(), item);
+                    }
+                    Some(builder.finish(&self.store).into())
+                } else {
+                    None
                 }
-                return Some(builder.finish(&self.store).into());
             }
+            _ => None,
         }
-
-        None
     }
 
     /// Returns all items defined for the `module` and `name` pair.
@@ -790,6 +803,18 @@ impl Linker {
             FuncType::new(None, None),
             move |_, _, _| Ok(()),
         ))
+    }
+
+    fn get_extern(&self, import: &ImportType) -> Option<Extern> {
+        let key = ImportKey {
+            module: *self.string2idx.get(import.module())?,
+            name: match import.name() {
+                Some(name) => *self.string2idx.get(name)?,
+                None => usize::max_value(),
+            },
+            kind: self.import_kind(import.ty()),
+        };
+        self.map.get(&key).cloned()
     }
 }
 

@@ -1,25 +1,26 @@
 use crate::frame_info::StoreFrameInfo;
 use crate::sig_registry::SignatureRegistry;
 use crate::trampoline::StoreInstanceHandle;
-use crate::{Engine, Module, Trap};
+use crate::{Engine, Func, FuncType, Module, Trap};
 use anyhow::{bail, Result};
-use std::any::Any;
+use std::any::{Any, TypeId};
 use std::cell::{Cell, RefCell};
-use std::collections::HashSet;
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fmt;
 use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::pin::Pin;
 use std::ptr;
-use std::rc::{Rc, Weak};
+use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_environ::wasm;
 use wasmtime_jit::{CompiledModule, ModuleCode, TypeTables};
 use wasmtime_runtime::{
-    InstanceAllocator, InstanceHandle, SignalHandler, StackMapRegistry, TrapInfo, VMContext,
-    VMExternRef, VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
+    Export, InstanceAllocator, InstanceHandle, SignalHandler, StackMapRegistry, TrapInfo,
+    VMCallerCheckedAnyfunc, VMContext, VMExternRef, VMExternRefActivationsTable, VMInterrupts,
+    VMSharedSignatureIndex, VMTrampoline,
 };
 
 /// Used to associate instances with the store.
@@ -70,6 +71,8 @@ pub struct Store {
 pub(crate) struct StoreInner {
     is_async: bool,
     engine: Engine,
+    /// The map of all host functions registered with this store's signature registry
+    host_funcs: RefCell<HashMap<InstanceHandle, Box<VMCallerCheckedAnyfunc>>>,
     interrupts: Arc<VMInterrupts>,
     signatures: RefCell<SignatureRegistry>,
     instances: RefCell<Vec<StoreInstance>>,
@@ -82,21 +85,19 @@ pub(crate) struct StoreInner {
     /// Set of all compiled modules that we're holding a strong reference to
     /// the module's code for. This includes JIT functions, trampolines, etc.
     modules: RefCell<HashSet<ArcModuleCode>>,
-
     // Numbers of resources instantiated in this store.
     instance_count: Cell<usize>,
     memory_count: Cell<usize>,
     table_count: Cell<usize>,
-
     /// An adjustment to add to the fuel consumed value in `interrupts` above
     /// to get the true amount of fuel consumed.
     fuel_adj: Cell<i64>,
-
     #[cfg(feature = "async")]
     current_suspend: Cell<*const wasmtime_fiber::Suspend<Result<(), Trap>, (), Result<(), Trap>>>,
     #[cfg(feature = "async")]
     current_poll_cx: Cell<*mut Context<'static>>,
     out_of_gas_behavior: Cell<OutOfGas>,
+    context_values: RefCell<HashMap<TypeId, Box<dyn Any>>>,
 }
 
 #[derive(Copy, Clone)]
@@ -233,6 +234,7 @@ impl Store {
             inner: Rc::new(StoreInner {
                 is_async,
                 engine: engine.clone(),
+                host_funcs: RefCell::new(HashMap::new()),
                 interrupts: Arc::new(Default::default()),
                 signatures: RefCell::new(Default::default()),
                 instances: RefCell::new(Vec::new()),
@@ -250,17 +252,86 @@ impl Store {
                 #[cfg(feature = "async")]
                 current_poll_cx: Cell::new(ptr::null_mut()),
                 out_of_gas_behavior: Cell::new(OutOfGas::Trap),
+                context_values: RefCell::new(HashMap::new()),
             }),
         }
     }
 
-    pub(crate) fn from_inner(inner: Rc<StoreInner>) -> Store {
-        Store { inner }
+    /// Gets a host function from the [`Config`](crate::Config) associated with this [`Store`].
+    ///
+    /// Returns `None` if the given host function is not defined.
+    pub fn get_host_func(&self, module: &str, name: &str) -> Option<Func> {
+        self.inner
+            .engine
+            .config()
+            .get_host_func(module, name)
+            .map(|f| {
+                // This call is safe because we know the funciton is coming from the
+                // config associated with this store
+                unsafe { f.to_func(self) }
+            })
+    }
+
+    pub(crate) fn get_host_anyfunc(
+        &self,
+        instance: &InstanceHandle,
+        ty: &FuncType,
+        trampoline: VMTrampoline,
+    ) -> *mut VMCallerCheckedAnyfunc {
+        let mut funcs = self.inner.host_funcs.borrow_mut();
+
+        let anyfunc = funcs.entry(unsafe { instance.clone() }).or_insert_with(|| {
+            let mut anyfunc = match instance
+                .lookup_by_declaration(&wasm::EntityIndex::Function(wasm::FuncIndex::from_u32(0)))
+            {
+                Export::Function(f) => unsafe { f.anyfunc.as_ref() }.clone(),
+                _ => unreachable!(),
+            };
+
+            // Register the function with this store's signature registry
+            anyfunc.type_index = self
+                .inner
+                .signatures
+                .borrow_mut()
+                .register(ty.as_wasm_func_type(), trampoline);
+
+            Box::new(anyfunc)
+        });
+
+        &mut **anyfunc
     }
 
     /// Returns the [`Engine`] that this store is associated with.
     pub fn engine(&self) -> &Engine {
         &self.inner.engine
+    }
+
+    /// Gets a context value from the store.
+    ///
+    /// Returns a reference to the context value if present.
+    pub fn get<T: Any>(&self) -> Option<&T> {
+        let values = self.inner.context_values.borrow();
+
+        // Safety: a context value cannot be removed once added and therefore the addres is
+        // stable for the life of the store
+        values
+            .get(&TypeId::of::<T>())
+            .map(|v| unsafe { &*(v.downcast_ref::<T>().unwrap() as *const T) })
+    }
+
+    /// Sets a context value into the store.
+    ///
+    /// Returns the given value as an error if an existing value is already set.
+    pub fn set<T: Any>(&self, value: T) -> Result<(), T> {
+        let mut values = self.inner.context_values.borrow_mut();
+
+        match values.entry(value.type_id()) {
+            Entry::Occupied(_) => Err(value),
+            Entry::Vacant(v) => {
+                v.insert(Box::new(value));
+                Ok(())
+            }
+        }
     }
 
     pub(crate) fn signatures(&self) -> &RefCell<SignatureRegistry> {
@@ -399,12 +470,14 @@ impl Store {
     }
 
     pub(crate) fn existing_instance_handle(&self, handle: InstanceHandle) -> StoreInstanceHandle {
-        debug_assert!(self
-            .inner
-            .instances
-            .borrow()
-            .iter()
-            .any(|i| i.handle.vmctx_ptr() == handle.vmctx_ptr()));
+        debug_assert!(
+            self.inner
+                .instances
+                .borrow()
+                .iter()
+                .any(|i| i.handle.vmctx_ptr() == handle.vmctx_ptr())
+                || self.inner.host_funcs.borrow().get(&handle).is_some()
+        );
         StoreInstanceHandle {
             store: self.clone(),
             handle,
@@ -413,15 +486,6 @@ impl Store {
 
     pub(crate) unsafe fn existing_vmctx(&self, cx: *mut VMContext) -> StoreInstanceHandle {
         self.existing_instance_handle(InstanceHandle::from_vmctx(cx))
-    }
-
-    pub(crate) fn weak(&self) -> Weak<StoreInner> {
-        Rc::downgrade(&self.inner)
-    }
-
-    pub(crate) fn upgrade(weak: &Weak<StoreInner>) -> Option<Self> {
-        let inner = weak.upgrade()?;
-        Some(Self { inner })
     }
 
     pub(crate) fn set_signal_handler(&self, handler: Option<Box<SignalHandler<'static>>>) {
@@ -1001,6 +1065,10 @@ unsafe impl TrapInfo for Store {
             #[cfg(not(feature = "async"))]
             OutOfGas::InjectFuel { .. } => unreachable!(),
         }
+    }
+
+    fn interrupts(&self) -> &VMInterrupts {
+        &self.inner.interrupts
     }
 }
 
