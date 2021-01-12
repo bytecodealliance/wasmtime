@@ -6,6 +6,16 @@ TODOs:
   fcntl on unix, reopenfile / ?? on windows. Not implemented in system-interface yet.
 * async scheduling!
 
+
+wasi_tests::path_link
+    - need DirExt::hard_link that follows symlinks.
+wasi_tests::path_rename_trailing_slashes
+    - trailing slash behavior of files is wrong: trailing slashes are ignored,
+      should cause an error.
+wasi_tests::remove_directory_trailing_slashes
+    - cap-std Dir::remove_dir gives EINVAL when trying to remove dir with
+      trailing slash. otherwise, everything passes.
+
 wasi_tests::directory_seek
     - something weird about directory open rights / fdstat. need debug
       impl of Caps to see about this
@@ -14,17 +24,9 @@ wasi_tests::fd_flags_set
 wasi_tests::path_filestat
     - fdstat.fs_flags is not populated correctly - APPEND | SYNC aren't
       present because File::get_fdflags isnt implemented correctly
-wasi_tests::path_link
-    - need DirExt::hard_link_nofollow
 
-wasi_tests::path_rename_trailing_slashes
-    - unclear, trailing slash behavior is wrong
-wasi_tests::path_symlink_trailing_slashes
-    - unclear, path_symlink is giving a ENOTDIR when it expects an EEXIST...
+
 wasi_tests::poll_oneoff
     - no sched yet
-wasi_tests::remove_directory_trailing_slashes
-    - apparently cap-std gives EINVAL when trying to remove dir with
-      trailing slash?
 wasi_tests::sched_yield
     - no sched yet
