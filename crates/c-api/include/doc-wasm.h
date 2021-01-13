@@ -316,6 +316,12 @@
  *
  * \fn wasm_name_new_new_uninitialized
  * \brief Convenience alias
+ * 
+ * \fn wasm_name_new_from_string
+ * \brief Create a new name from a C string.
+ * 
+ * \fn wasm_name_new_from_string_nt
+ * \brief Create a new name from a C string with null terminator.
  *
  * \fn wasm_name_copy
  * \brief Convenience alias
@@ -1520,8 +1526,6 @@
  * and types of results as the original type signature. It is undefined behavior
  * to return other types or different numbers of values.
  *
- * This function takes ownership of all of the parameters given. It's expected
- * that the caller will invoke `wasm_val_delete` for each one provided.
  * Ownership of the results and the trap returned, if any, is passed to the
  * caller of this function.
  *
@@ -1608,7 +1612,7 @@
  * \fn size_t wasm_func_result_arity(const wasm_func_t *);
  * \brief Returns the number of results returned by this function.
  *
- * \fn own wasm_trap_t *wasm_func_call(const wasm_func_t *, const wasm_val_t args[], const wasm_val_t results[]);
+* \fn own wasm_trap_t *wasm_func_call(const wasm_func_t *, const wasm_val_vec_t *args, wasm_val_vec_t *results);
  * \brief Calls the provided function with the arguments given.
  *
  * This function is used to call WebAssembly from the host. The parameter array
@@ -2164,7 +2168,7 @@
  * \fn wasm_ref_as_instance_const(const wasm_ref_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn own wasm_instance_t *wasm_instance_new(wasm_store_t *, const wasm_module_t *, const wasm_extern_t *const[], wasm_trap_t **);
+ * \fn own wasm_instance_t *wasm_instance_new(wasm_store_t *, const wasm_module_t *, const wasm_extern_vec_t *, wasm_trap_t **);
  * \brief Instantiates a module with the provided imports.
  *
  * This function will instantiate the provided #wasm_module_t into the provided

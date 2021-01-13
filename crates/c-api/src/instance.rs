@@ -40,16 +40,15 @@ impl wasm_instance_t {
 pub unsafe extern "C" fn wasm_instance_new(
     store: &wasm_store_t,
     wasm_module: &wasm_module_t,
-    imports: *const Box<wasm_extern_t>,
+    imports: *const wasm_extern_vec_t,
     result: Option<&mut *mut wasm_trap_t>,
 ) -> Option<Box<wasm_instance_t>> {
     let mut instance = ptr::null_mut();
     let mut trap = ptr::null_mut();
-    let err = wasmtime_instance_new(
+    let err = _wasmtime_instance_new(
         store,
         wasm_module,
-        imports,
-        wasm_module.module().imports().len(),
+        (*imports).as_slice(),
         &mut instance,
         &mut trap,
     );
@@ -83,31 +82,27 @@ pub unsafe extern "C" fn wasm_instance_new(
 pub unsafe extern "C" fn wasmtime_instance_new(
     store: &wasm_store_t,
     module: &wasm_module_t,
-    imports: *const Box<wasm_extern_t>,
-    num_imports: usize,
+    imports: *const wasm_extern_vec_t,
     instance_ptr: &mut *mut wasm_instance_t,
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    _wasmtime_instance_new(
-        store,
-        module,
-        std::slice::from_raw_parts(imports, num_imports),
-        instance_ptr,
-        trap_ptr,
-    )
+    _wasmtime_instance_new(store, module, (*imports).as_slice(), instance_ptr, trap_ptr)
 }
 
 fn _wasmtime_instance_new(
     store: &wasm_store_t,
     module: &wasm_module_t,
-    imports: &[Box<wasm_extern_t>],
+    imports: &[Option<Box<wasm_extern_t>>],
     instance_ptr: &mut *mut wasm_instance_t,
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
     let store = &store.store;
     let imports = imports
         .iter()
-        .map(|import| import.which.clone())
+        .filter_map(|import| match import {
+            Some(i) => Some(i.which.clone()),
+            None => None,
+        })
         .collect::<Vec<_>>();
     handle_instantiate(
         Instance::new(store, module.module(), &imports),

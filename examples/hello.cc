@@ -26,7 +26,7 @@ to tweak the `-lpthread` and such annotations as well as the name of the
 
 static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
 
-static wasm_trap_t* hello_callback(const wasm_val_t args[], wasm_val_t results[]) {
+static wasm_trap_t* hello_callback(const wasm_val_vec_t* args, wasm_val_vec_t* results) {
   printf("Calling back...\n");
   printf("> Hello World!\n");
   return NULL;
@@ -86,8 +86,9 @@ int main() {
   printf("Instantiating module...\n");
   wasm_trap_t *trap = NULL;
   wasm_instance_t *instance = NULL;
-  const wasm_extern_t *imports[] = { wasm_func_as_extern(hello) };
-  error = wasmtime_instance_new(store, module, imports, 1, &instance, &trap);
+  wasm_extern_t* imports[] = { wasm_func_as_extern(hello) };
+  wasm_extern_vec_t imports_vec = WASM_ARRAY_VEC(imports);
+  error = wasmtime_instance_new(store, module, &imports_vec, &instance, &trap);
   if (instance == NULL)
     exit_with_error("failed to instantiate", error, trap);
 
@@ -101,7 +102,9 @@ int main() {
 
   // And call it!
   printf("Calling export...\n");
-  error = wasmtime_func_call(run, NULL, 0, NULL, 0, &trap);
+  wasm_val_vec_t args_vec = WASM_EMPTY_VEC;
+  wasm_val_vec_t results_vec = WASM_EMPTY_VEC;
+  error = wasmtime_func_call(run, &args_vec, &results_vec, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call function", error, trap);
 
