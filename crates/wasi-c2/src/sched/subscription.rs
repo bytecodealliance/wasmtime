@@ -34,15 +34,17 @@ impl<'a> RwSubscription<'a> {
     }
 }
 
-pub struct TimerSubscription {
+pub struct SystemTimerSubscription<'a> {
+    pub clock: &'a dyn WasiSystemClock,
     pub deadline: SystemTime,
+    pub precision: Duration,
 }
 
-impl TimerSubscription {
-    pub fn result(&self, clock: &dyn WasiSystemClock) -> Option<Result<(), Error>> {
+impl<'a> SystemTimerSubscription<'a> {
+    pub fn result(&self) -> Option<Result<(), Error>> {
         if self
             .deadline
-            .duration_since(clock.now(Duration::from_secs(0)))
+            .duration_since(self.clock.now(self.precision))
             .is_ok()
         {
             Some(Ok(()))
@@ -55,46 +57,21 @@ impl TimerSubscription {
 pub enum Subscription<'a> {
     Read(RwSubscription<'a>),
     Write(RwSubscription<'a>),
-    Timer(TimerSubscription),
-}
-
-pub struct SubscriptionSet<'a> {
-    pub subs: Vec<&'a Subscription<'a>>,
-}
-
-impl<'a> SubscriptionSet<'a> {
-    pub fn earliest_deadline(&self) -> Option<SystemTime> {
-        self.subs
-            .iter()
-            .filter_map(|s| match s {
-                Subscription::Timer(ts) => Some(ts.deadline),
-                _ => None,
-            })
-            .fold(None, |early, ts| {
-                if let Some(early) = early {
-                    Some(early.min(ts))
-                } else {
-                    Some(ts)
-                }
-            })
-    }
+    SystemTimer(SystemTimerSubscription<'a>),
 }
 
 pub enum SubscriptionResult {
     Read(Result<(u64, RwEventFlags), Error>),
     Write(Result<(u64, RwEventFlags), Error>),
-    Timer(Result<(), Error>),
+    SystemTimer(Result<(), Error>),
 }
 
 impl SubscriptionResult {
-    pub fn from_subscription(
-        s: Subscription,
-        clock: &dyn WasiSystemClock,
-    ) -> Option<SubscriptionResult> {
+    pub fn from_subscription(s: Subscription) -> Option<SubscriptionResult> {
         match s {
             Subscription::Read(s) => s.result().map(SubscriptionResult::Read),
             Subscription::Write(s) => s.result().map(SubscriptionResult::Write),
-            Subscription::Timer(s) => s.result(clock).map(SubscriptionResult::Timer),
+            Subscription::SystemTimer(s) => s.result().map(SubscriptionResult::SystemTimer),
         }
     }
 }

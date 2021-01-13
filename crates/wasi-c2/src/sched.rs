@@ -1,13 +1,11 @@
 use crate::clocks::WasiSystemClock;
 use crate::file::WasiFile;
 use crate::Error;
-use cap_std::time::SystemTime;
+use cap_std::time::{Duration, SystemTime};
 use std::cell::Ref;
 pub mod subscription;
 
-use subscription::{
-    RwSubscription, Subscription, SubscriptionResult, SubscriptionSet, TimerSubscription,
-};
+use subscription::{RwSubscription, Subscription, SubscriptionResult, SystemTimerSubscription};
 
 pub trait WasiSched {
     fn poll_oneoff<'a>(&self, poll: &mut Poll<'a>) -> Result<(), Error>;
@@ -47,9 +45,21 @@ impl<'a> Poll<'a> {
     pub fn new() -> Self {
         Self { subs: Vec::new() }
     }
-    pub fn subscribe_timer(&mut self, deadline: SystemTime, ud: Userdata) {
-        self.subs
-            .push((Subscription::Timer(TimerSubscription { deadline }), ud));
+    pub fn subscribe_system_timer(
+        &mut self,
+        clock: &'a dyn WasiSystemClock,
+        deadline: SystemTime,
+        precision: Duration,
+        ud: Userdata,
+    ) {
+        self.subs.push((
+            Subscription::SystemTimer(SystemTimerSubscription {
+                clock,
+                deadline,
+                precision,
+            }),
+            ud,
+        ));
     }
     pub fn subscribe_read(&mut self, file: Ref<'a, dyn WasiFile>, ud: Userdata) {
         self.subs
@@ -59,15 +69,13 @@ impl<'a> Poll<'a> {
         self.subs
             .push((Subscription::Read(RwSubscription::new(file)), ud));
     }
-    pub fn results(self, clock: &dyn WasiSystemClock) -> Vec<(SubscriptionResult, Userdata)> {
+    pub fn results(self) -> Vec<(SubscriptionResult, Userdata)> {
         self.subs
             .into_iter()
-            .filter_map(|(s, ud)| SubscriptionResult::from_subscription(s, clock).map(|r| (r, ud)))
+            .filter_map(|(s, ud)| SubscriptionResult::from_subscription(s).map(|r| (r, ud)))
             .collect()
     }
-    pub(crate) fn subscriptions(&'a mut self) -> SubscriptionSet<'a> {
-        SubscriptionSet {
-            subs: self.subs.iter().map(|(s, _ud)| s).collect(),
-        }
+    pub fn subscriptions(&'a mut self) -> impl Iterator<Item = &Subscription<'a>> {
+        self.subs.iter().map(|(s, _ud)| s)
     }
 }

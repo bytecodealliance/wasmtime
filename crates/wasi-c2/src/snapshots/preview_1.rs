@@ -909,7 +909,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
         self.sched.poll_oneoff(&mut poll)?;
 
-        let results = poll.results(self.clocks.system.deref());
+        let results = poll.results();
         let num_results = results.len();
         assert!(
             num_results <= nsubscriptions as usize,
@@ -964,7 +964,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                         },
                     }
                 }
-                SubscriptionResult::Timer(r) => {
+                SubscriptionResult::SystemTimer(r) => {
                     let type_ = types::Eventtype::Clock;
                     types::Event {
                         userdata,

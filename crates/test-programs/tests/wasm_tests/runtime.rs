@@ -15,7 +15,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         // Additionally register any preopened directories if we have them.
         let mut builder = wasi_c2::WasiCtx::builder();
 
-        builder
+        builder = builder
             .arg(bin_name)?
             .arg(".")?
             .stdin(Box::new(ReadPipe::from(Vec::new())))
@@ -27,7 +27,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
             let dirfd =
                 File::open(workspace).context(format!("error while preopening {:?}", workspace))?;
             let preopen_dir = unsafe { cap_std::fs::Dir::from_std_file(dirfd) };
-            builder.preopened_dir(Box::new(preopen_dir), ".")?;
+            builder = builder.preopened_dir(Box::new(preopen_dir), ".")?;
         }
 
         let snapshot1 = wasi_c2_wasmtime::Wasi::new(&store, builder.build()?);

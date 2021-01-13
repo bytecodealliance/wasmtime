@@ -71,7 +71,7 @@ impl WasiCtxBuilder {
         Ok(self)
     }
 
-    pub fn stdin(mut self, f: Box<dyn WasiFile>) -> Self {
+    pub fn stdin(self, f: Box<dyn WasiFile>) -> Self {
         self.0.insert_file(
             0,
             f,
@@ -80,7 +80,7 @@ impl WasiCtxBuilder {
         self
     }
 
-    pub fn stdout(mut self, f: Box<dyn WasiFile>) -> Self {
+    pub fn stdout(self, f: Box<dyn WasiFile>) -> Self {
         self.0.insert_file(
             1,
             f,
@@ -89,7 +89,7 @@ impl WasiCtxBuilder {
         self
     }
 
-    pub fn stderr(mut self, f: Box<dyn WasiFile>) -> Self {
+    pub fn stderr(self, f: Box<dyn WasiFile>) -> Self {
         self.0.insert_file(
             2,
             f,
@@ -105,7 +105,7 @@ impl WasiCtxBuilder {
     }
 
     pub fn preopened_dir(
-        mut self,
+        self,
         dir: Box<dyn WasiDir>,
         path: impl AsRef<Path>,
     ) -> Result<Self, Error> {
@@ -120,7 +120,7 @@ impl WasiCtxBuilder {
         Ok(self)
     }
 
-    pub fn random(mut self, random: Box<dyn RngCore>) -> Self {
+    pub fn random(self, random: Box<dyn RngCore>) -> Self {
         self.0.random.replace(random);
         self
     }
