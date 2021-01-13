@@ -1,6 +1,7 @@
 use crate::Error;
 use bitflags::bitflags;
 use fs_set_times::SetTimes;
+use std::cell::Ref;
 use std::ops::Deref;
 use system_interface::fs::FileIoExt;
 
@@ -92,9 +93,9 @@ impl FileEntry {
         FileEntry { caps, file }
     }
 
-    pub fn get_cap(&self, caps: FileCaps) -> Result<&dyn WasiFile, Error> {
+    pub fn capable_of(&self, caps: FileCaps) -> Result<(), Error> {
         if self.caps.contains(caps) {
-            Ok(self.file.deref())
+            Ok(())
         } else {
             Err(Error::FileNotCapable {
                 desired: caps,
@@ -104,12 +105,9 @@ impl FileEntry {
     }
 
     pub fn drop_caps_to(&mut self, caps: FileCaps) -> Result<(), Error> {
-        if self.caps.contains(caps) {
-            self.caps = caps;
-            Ok(())
-        } else {
-            Err(Error::NotCapable)
-        }
+        self.capable_of(caps)?;
+        self.caps = caps;
+        Ok(())
     }
 
     pub fn get_fdstat(&self) -> Result<FdStat, Error> {
@@ -118,6 +116,17 @@ impl FileEntry {
             caps: self.caps,
             flags: self.file.get_fdflags()?,
         })
+    }
+}
+
+pub trait FileEntryExt<'a> {
+    fn get_cap(self, caps: FileCaps) -> Result<Ref<'a, dyn WasiFile>, Error>;
+}
+
+impl<'a> FileEntryExt<'a> for Ref<'a, FileEntry> {
+    fn get_cap(self, caps: FileCaps) -> Result<Ref<'a, dyn WasiFile>, Error> {
+        self.capable_of(caps)?;
+        Ok(Ref::map(self, |r| r.file.deref()))
     }
 }
 

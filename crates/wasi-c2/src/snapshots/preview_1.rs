@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 use crate::dir::{DirCaps, DirEntry, DirFdStat, ReaddirCursor, ReaddirEntity, TableDirExt};
-use crate::file::{FdFlags, FdStat, FileCaps, FileEntry, FileType, Filestat, OFlags};
+use crate::file::{FdFlags, FdStat, FileCaps, FileEntry, FileEntryExt, FileType, Filestat, OFlags};
 use crate::sched::subscription::{RwEventFlags, SubscriptionResult};
 use crate::sched::Poll;
 use crate::{Error, WasiCtx};
