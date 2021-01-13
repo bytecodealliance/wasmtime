@@ -1965,6 +1965,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fdf1b9db47230893d76faad238fd6097fd6d6a9245cd7a4d90dbd639536bbd2"
 
 [[package]]
+name = "shuffling-allocator"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "848c0a454373d16ebfaa740c99d4faebe25ea752a35e0c6e341168fe67f987f8"
+dependencies = [
+ "cfg-if 1.0.0",
+ "libc",
+ "rand",
+ "winapi",
+]
+
+[[package]]
 name = "smallvec"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2430,6 +2442,7 @@ name = "wasmtime-bench-api"
 version = "0.19.0"
 dependencies = [
  "anyhow",
+ "shuffling-allocator",
  "wasi-common",
  "wasmtime",
  "wasmtime-wasi",
