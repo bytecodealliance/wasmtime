@@ -1,4 +1,4 @@
-pub use wasi_c2::{WasiCtx, WasiCtxBuilder};
+pub use wasi_c2::{WasiCtx, WasiCtxBuilder, WasiDir};
 
 // Defines a `struct Wasi` with member fields and appropriate APIs for dealing
 // with all the various WASI exports.
