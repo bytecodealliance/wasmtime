@@ -135,6 +135,7 @@ bitflags! {
         const FILESTAT_GET       = 0b1000000000;
         const FILESTAT_SET_SIZE  = 0b10000000000;
         const FILESTAT_SET_TIMES = 0b100000000000;
+        const POLL_READWRITE     = 0b1000000000000;
     }
 }
 

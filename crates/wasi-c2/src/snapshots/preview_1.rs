@@ -888,6 +888,8 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         events: &GuestPtr<types::Event>,
         nsubscriptions: types::Size,
     ) -> Result<types::Size, Error> {
+        use cap_std::time::{Duration, SystemClock};
+        let table = self.table();
         let mut poll = Poll::new();
 
         let subs = subs.as_array(nsubscriptions);
@@ -895,13 +897,35 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             let sub_ptr = sub_elem?;
             let sub = sub_ptr.read()?;
             match sub.u {
-                types::SubscriptionU::Clock(clock) => {
-                    todo!()
+                types::SubscriptionU::Clock(clocksub) => match clocksub.id {
+                    types::Clockid::Realtime => {
+                        let clock = self.clocks.system.deref();
+                        let precision = Duration::from_micros(clocksub.precision);
+                        let duration = Duration::from_micros(clocksub.timeout);
+                        let deadline = if clocksub
+                            .flags
+                            .contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME)
+                        {
+                            SystemClock::UNIX_EPOCH
+                                .checked_add(duration)
+                                .ok_or(Error::Overflow)?
+                        } else {
+                            clock
+                                .now(precision)
+                                .checked_add(duration)
+                                .ok_or(Error::Overflow)?
+                        };
+                        poll.subscribe_system_timer(clock, deadline, precision, sub.userdata.into())
+                    }
+                    _ => Err(Error::Inval)?,
+                },
+                types::SubscriptionU::FdRead(readsub) => {
+                    let fd = readsub.file_descriptor;
+                    let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
+                    let f = file_entry.get_cap(FileCaps::POLL_READWRITE)?;
+                    poll.subscribe_read(f, sub.userdata.into());
                 }
-                types::SubscriptionU::FdRead(read) => {
-                    todo!()
-                }
-                types::SubscriptionU::FdWrite(write) => {
+                types::SubscriptionU::FdWrite(writesub) => {
                     todo!()
                 }
             }
@@ -1105,6 +1129,9 @@ impl From<&FileCaps> for types::Rights {
         if caps.contains(FileCaps::FILESTAT_SET_TIMES) {
             rights = rights | types::Rights::FD_FILESTAT_SET_TIMES;
         }
+        if caps.contains(FileCaps::POLL_READWRITE) {
+            rights = rights | types::Rights::POLL_FD_READWRITE;
+        }
         rights
     }
 }
@@ -1148,6 +1175,9 @@ impl From<&types::Rights> for FileCaps {
         }
         if rights.contains(types::Rights::FD_FILESTAT_SET_TIMES) {
             caps = caps | FileCaps::FILESTAT_SET_TIMES;
+        }
+        if rights.contains(types::Rights::POLL_FD_READWRITE) {
+            caps = caps | FileCaps::POLL_READWRITE;
         }
         caps
     }
