@@ -1,4 +1,7 @@
-pub use wasi_c2::WasiCtx;
+pub use wasi_c2::{
+    Error, FdFlags, FileCaps, Filestat, OFlags, ReaddirCursor, ReaddirEntity, SystemTimeSpec,
+    WasiCtx, WasiCtxBuilder, WasiDir, WasiFile,
+};
 
 // Defines a `struct Wasi` with member fields and appropriate APIs for dealing
 // with all the various WASI exports.

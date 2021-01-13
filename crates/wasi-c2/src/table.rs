@@ -12,7 +12,7 @@ impl Table {
     pub fn new() -> Self {
         Table {
             map: HashMap::new(),
-            next_key: 0,
+            next_key: 3, // 0, 1 and 2 are reserved for stdio
         }
     }
 

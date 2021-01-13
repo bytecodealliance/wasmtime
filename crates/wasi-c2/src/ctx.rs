@@ -66,12 +66,12 @@ impl WasiCtxBuilder {
         Ok(self.0)
     }
 
-    pub fn arg(&mut self, arg: &str) -> Result<&mut Self, StringArrayError> {
+    pub fn arg(mut self, arg: &str) -> Result<Self, StringArrayError> {
         self.0.args.push(arg.to_owned())?;
         Ok(self)
     }
 
-    pub fn stdin(&mut self, f: Box<dyn WasiFile>) -> &mut Self {
+    pub fn stdin(mut self, f: Box<dyn WasiFile>) -> Self {
         self.0.insert_file(
             0,
             f,
@@ -80,7 +80,7 @@ impl WasiCtxBuilder {
         self
     }
 
-    pub fn stdout(&mut self, f: Box<dyn WasiFile>) -> &mut Self {
+    pub fn stdout(mut self, f: Box<dyn WasiFile>) -> Self {
         self.0.insert_file(
             1,
             f,
@@ -89,7 +89,7 @@ impl WasiCtxBuilder {
         self
     }
 
-    pub fn stderr(&mut self, f: Box<dyn WasiFile>) -> &mut Self {
+    pub fn stderr(mut self, f: Box<dyn WasiFile>) -> Self {
         self.0.insert_file(
             2,
             f,
@@ -98,17 +98,17 @@ impl WasiCtxBuilder {
         self
     }
 
-    pub fn inherit_stdio(&mut self) -> &mut Self {
+    pub fn inherit_stdio(self) -> Self {
         self.stdin(Box::new(crate::stdio::stdin()))
             .stdout(Box::new(crate::stdio::stdout()))
             .stderr(Box::new(crate::stdio::stderr()))
     }
 
     pub fn preopened_dir(
-        &mut self,
+        mut self,
         dir: Box<dyn WasiDir>,
         path: impl AsRef<Path>,
-    ) -> Result<&mut Self, Error> {
+    ) -> Result<Self, Error> {
         let caps = DirCaps::all();
         let file_caps = FileCaps::all();
         self.0.table().push(Box::new(DirEntry::new(
@@ -120,7 +120,7 @@ impl WasiCtxBuilder {
         Ok(self)
     }
 
-    pub fn random(&mut self, random: Box<dyn RngCore>) -> &mut Self {
+    pub fn random(mut self, random: Box<dyn RngCore>) -> Self {
         self.0.random.replace(random);
         self
     }

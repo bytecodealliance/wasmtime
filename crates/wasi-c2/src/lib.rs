@@ -13,8 +13,9 @@ mod string_array;
 pub mod table;
 pub mod virt;
 
-pub use ctx::WasiCtx;
-pub use dir::{DirCaps, WasiDir};
+pub use cap_fs_ext::SystemTimeSpec;
+pub use ctx::{WasiCtx, WasiCtxBuilder};
+pub use dir::{DirCaps, ReaddirCursor, ReaddirEntity, WasiDir};
 pub use error::Error;
-pub use file::{FileCaps, WasiFile};
+pub use file::{FdFlags, FileCaps, Filestat, OFlags, WasiFile};
 pub use string_array::StringArrayError;
