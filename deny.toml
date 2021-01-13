@@ -42,4 +42,7 @@ skip = [
     { name = "humantime" }, # caused by env_logger
     { name = "getrandom" }, # rand not updates to 0.2 yet
     { name = "wast" }, # old one pulled in by witx
+    { name = "rand" }, # old one pulled in by wasi-crypto dependencies
+    { name = "rand_core" }, # old one pulled in by wasi-crypto dependencies
+    { name = "rand_chacha" }, # old one pulled in by wasi-crypto dependencies
 ]
