@@ -413,7 +413,7 @@
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_valtype_t* wasm_valtype_copy(wasm_valtype_t *)
+ * \fn own wasm_valtype_t* wasm_valtype_copy(const wasm_valtype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
@@ -483,7 +483,7 @@
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_functype_t* wasm_functype_copy(wasm_functype_t *)
+ * \fn own wasm_functype_t* wasm_functype_copy(const wasm_functype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
@@ -554,7 +554,7 @@
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_globaltype_t* wasm_globaltype_copy(wasm_globaltype_t *)
+ * \fn own wasm_globaltype_t* wasm_globaltype_copy(const wasm_globaltype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
@@ -631,7 +631,7 @@
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_tabletype_t* wasm_tabletype_copy(wasm_tabletype_t *)
+ * \fn own wasm_tabletype_t* wasm_tabletype_copy(const wasm_tabletype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
@@ -717,7 +717,7 @@
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_memorytype_t* wasm_memorytype_copy(wasm_memorytype_t *)
+ * \fn own wasm_memorytype_t* wasm_memorytype_copy(const wasm_memorytype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
@@ -786,7 +786,7 @@
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_externtype_t* wasm_externtype_copy(wasm_externtype_t *)
+ * \fn own wasm_externtype_t* wasm_externtype_copy(const wasm_externtype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
@@ -963,7 +963,7 @@
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_importtype_t* wasm_importtype_copy(wasm_importtype_t *)
+ * \fn own wasm_importtype_t* wasm_importtype_copy(const wasm_importtype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
@@ -1044,7 +1044,7 @@
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_exporttype_t* wasm_exporttype_copy(wasm_exporttype_t *)
+ * \fn own wasm_exporttype_t* wasm_exporttype_copy(const wasm_exporttype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
@@ -2197,4 +2197,30 @@
  * the caller, which are exported from the instance. The `out` list will have
  * the same length as #wasm_module_exports called on the original module. Each
  * element is 1:1 matched with the elements in the list of #wasm_module_exports.
+ */
+
+/**
+ * \def WASM_EMPTY_VEC
+ * \brief Used to initialize an empty vector type.
+ *
+ * \def WASM_ARRAY_VEC
+ * \brief Used to initialize a vector type from a C array.
+ *
+ * \def WASM_I32_VAL
+ * \brief Used to initialize a 32-bit integer wasm_val_t value.
+ *
+ * \def WASM_I64_VAL
+ * \brief Used to initialize a 64-bit integer wasm_val_t value.
+ *
+ * \def WASM_F32_VAL
+ * \brief Used to initialize a 32-bit floating point wasm_val_t value.
+ *
+ * \def WASM_F64_VAL
+ * \brief Used to initialize a 64-bit floating point wasm_val_t value.
+ *
+ * \def WASM_REF_VAL
+ * \brief Used to initialize an externref wasm_val_t value.
+ *
+ * \def WASM_INIT_VAL
+ * \brief Used to initialize a null externref wasm_val_t value.
  */

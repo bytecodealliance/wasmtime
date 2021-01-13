@@ -1011,7 +1011,7 @@ WASM_API_EXTERN own wasmtime_error_t *wasmtime_module_deserialize(
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_instancetype_t* wasm_instancetype_copy(wasm_instancetype_t *)
+ * \fn own wasm_instancetype_t* wasm_instancetype_copy(const wasm_instancetype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
@@ -1108,7 +1108,7 @@ WASM_API_EXTERN const wasm_instancetype_t* wasm_externtype_as_instancetype_const
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_moduletype_t* wasm_moduletype_copy(wasm_moduletype_t *)
+ * \fn own wasm_moduletype_t* wasm_moduletype_copy(const wasm_moduletype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
