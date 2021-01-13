@@ -13,7 +13,7 @@ mod string_array;
 pub mod table;
 pub mod virt;
 
-pub use ctx::WasiCtx;
+pub use ctx::{WasiCtx, WasiCtxBuilder};
 pub use dir::{DirCaps, WasiDir};
 pub use error::Error;
 pub use file::{FileCaps, WasiFile};
