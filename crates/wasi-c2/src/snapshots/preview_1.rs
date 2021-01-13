@@ -1,6 +1,8 @@
 #![allow(unused_variables)]
 use crate::dir::{DirCaps, DirEntry, DirFdStat, ReaddirCursor, ReaddirEntity, TableDirExt};
 use crate::file::{FdFlags, FdStat, FileCaps, FileEntry, FileType, Filestat, OFlags};
+use crate::sched::subscription::{RwEventFlags, SubscriptionResult};
+use crate::sched::Poll;
 use crate::{Error, WasiCtx};
 use fs_set_times::SystemTimeSpec;
 use std::cell::{Ref, RefMut};
@@ -886,8 +888,98 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         events: &GuestPtr<types::Event>,
         nsubscriptions: types::Size,
     ) -> Result<types::Size, Error> {
-        self.sched.poll_oneoff(todo!())?;
-        Ok(0)
+        let mut poll = Poll::new();
+
+        let subs = subs.as_array(nsubscriptions);
+        for sub_elem in subs.iter() {
+            let sub_ptr = sub_elem?;
+            let sub = sub_ptr.read()?;
+            match sub.u {
+                types::SubscriptionU::Clock(clock) => {
+                    todo!()
+                }
+                types::SubscriptionU::FdRead(read) => {
+                    todo!()
+                }
+                types::SubscriptionU::FdWrite(write) => {
+                    todo!()
+                }
+            }
+        }
+
+        self.sched.poll_oneoff(&mut poll)?;
+
+        let results = poll.results(self.clocks.system.deref());
+        let num_results = results.len();
+        assert!(
+            num_results <= nsubscriptions as usize,
+            "results exceeds subscriptions"
+        );
+        let events = events.as_array(
+            num_results
+                .try_into()
+                .expect("not greater than nsubscriptions"),
+        );
+        for ((result, userdata), event_elem) in results.into_iter().zip(events.iter()) {
+            let event_ptr = event_elem?;
+            let userdata: types::Userdata = userdata.into();
+            event_ptr.write(match result {
+                SubscriptionResult::Read(r) => {
+                    let type_ = types::Eventtype::FdRead;
+                    match r {
+                        Ok((nbytes, flags)) => types::Event {
+                            userdata,
+                            error: types::Errno::Success,
+                            type_,
+                            fd_readwrite: types::EventFdReadwrite {
+                                nbytes,
+                                flags: types::Eventrwflags::from(&flags),
+                            },
+                        },
+                        Err(e) => types::Event {
+                            userdata,
+                            error: e.try_into().expect("non-trapping"),
+                            type_,
+                            fd_readwrite: fd_readwrite_empty(),
+                        },
+                    }
+                }
+                SubscriptionResult::Write(r) => {
+                    let type_ = types::Eventtype::FdWrite;
+                    match r {
+                        Ok((nbytes, flags)) => types::Event {
+                            userdata,
+                            error: types::Errno::Success,
+                            type_,
+                            fd_readwrite: types::EventFdReadwrite {
+                                nbytes,
+                                flags: types::Eventrwflags::from(&flags),
+                            },
+                        },
+                        Err(e) => types::Event {
+                            userdata,
+                            error: e.try_into().expect("non-trapping"),
+                            type_,
+                            fd_readwrite: fd_readwrite_empty(),
+                        },
+                    }
+                }
+                SubscriptionResult::Timer(r) => {
+                    let type_ = types::Eventtype::Clock;
+                    types::Event {
+                        userdata,
+                        error: match r {
+                            Ok(()) => types::Errno::Success,
+                            Err(e) => e.try_into().expect("non-trapping"),
+                        },
+                        type_,
+                        fd_readwrite: fd_readwrite_empty(),
+                    }
+                }
+            })?;
+        }
+
+        Ok(num_results.try_into().expect("results fit into memory"))
     }
 
     fn proc_exit(&self, status: types::Exitcode) -> wiggle::Trap {
@@ -1318,4 +1410,21 @@ fn dirent_bytes(dirent: types::Dirent) -> Vec<u8> {
     let ptr = bytes.as_mut_ptr() as *mut types::Dirent;
     unsafe { ptr.write_unaligned(dirent) };
     bytes
+}
+
+impl From<&RwEventFlags> for types::Eventrwflags {
+    fn from(flags: &RwEventFlags) -> types::Eventrwflags {
+        let mut out = types::Eventrwflags::empty();
+        if flags.contains(RwEventFlags::HANGUP) {
+            out = out | types::Eventrwflags::FD_READWRITE_HANGUP;
+        }
+        out
+    }
+}
+
+fn fd_readwrite_empty() -> types::EventFdReadwrite {
+    types::EventFdReadwrite {
+        nbytes: 0,
+        flags: types::Eventrwflags::empty(),
+    }
 }

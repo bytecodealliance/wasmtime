@@ -1,6 +1,7 @@
+use crate::clocks::WasiSystemClock;
 use crate::file::WasiFile;
 use crate::Error;
-use cap_std::time::{SystemClock, SystemTime};
+use cap_std::time::SystemTime;
 use std::cell::Ref;
 pub mod subscription;
 
@@ -9,7 +10,7 @@ use subscription::{
 };
 
 pub trait WasiSched {
-    fn poll_oneoff(&self, subs: SubscriptionSet) -> Result<(), Error>;
+    fn poll_oneoff<'a>(&self, poll: &mut Poll<'a>) -> Result<(), Error>;
     fn sched_yield(&self) -> Result<(), Error>;
 }
 
@@ -17,7 +18,7 @@ pub trait WasiSched {
 pub struct SyncSched {}
 
 impl WasiSched for SyncSched {
-    fn poll_oneoff(&self, subs: SubscriptionSet) -> Result<(), Error> {
+    fn poll_oneoff<'a>(&self, poll: &mut Poll<'a>) -> Result<(), Error> {
         todo!()
     }
     fn sched_yield(&self) -> Result<(), Error> {
@@ -58,7 +59,7 @@ impl<'a> Poll<'a> {
         self.subs
             .push((Subscription::Read(RwSubscription::new(file)), ud));
     }
-    pub fn results(self, clock: &SystemClock) -> Vec<(SubscriptionResult, Userdata)> {
+    pub fn results(self, clock: &dyn WasiSystemClock) -> Vec<(SubscriptionResult, Userdata)> {
         self.subs
             .into_iter()
             .filter_map(|(s, ud)| SubscriptionResult::from_subscription(s, clock).map(|r| (r, ud)))

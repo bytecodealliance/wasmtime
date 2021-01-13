@@ -1,7 +1,8 @@
+use crate::clocks::WasiSystemClock;
 use crate::file::WasiFile;
 use crate::Error;
 use bitflags::bitflags;
-use cap_std::time::{SystemClock, SystemTime};
+use cap_std::time::{Duration, SystemTime};
 use std::cell::{Cell, Ref};
 
 bitflags! {
@@ -38,8 +39,12 @@ pub struct TimerSubscription {
 }
 
 impl TimerSubscription {
-    pub fn result(&self, clock: &SystemClock) -> Option<Result<(), Error>> {
-        if self.deadline.duration_since(clock.now()).is_ok() {
+    pub fn result(&self, clock: &dyn WasiSystemClock) -> Option<Result<(), Error>> {
+        if self
+            .deadline
+            .duration_since(clock.now(Duration::from_secs(0)))
+            .is_ok()
+        {
             Some(Ok(()))
         } else {
             None
@@ -82,7 +87,10 @@ pub enum SubscriptionResult {
 }
 
 impl SubscriptionResult {
-    pub fn from_subscription(s: Subscription, clock: &SystemClock) -> Option<SubscriptionResult> {
+    pub fn from_subscription(
+        s: Subscription,
+        clock: &dyn WasiSystemClock,
+    ) -> Option<SubscriptionResult> {
         match s {
             Subscription::Read(s) => s.result().map(SubscriptionResult::Read),
             Subscription::Write(s) => s.result().map(SubscriptionResult::Write),
