@@ -1,6 +1,10 @@
 #![allow(unused_variables)]
-use crate::dir::{DirCaps, DirEntry, DirFdStat, ReaddirCursor, ReaddirEntity, TableDirExt};
-use crate::file::{FdFlags, FdStat, FileCaps, FileEntry, FileEntryExt, FileType, Filestat, OFlags};
+use crate::dir::{
+    DirCaps, DirEntry, DirEntryExt, DirFdStat, ReaddirCursor, ReaddirEntity, TableDirExt,
+};
+use crate::file::{
+    FdFlags, FdStat, FileCaps, FileEntry, FileEntryExt, FileType, Filestat, OFlags, TableFileExt,
+};
 use crate::sched::subscription::{RwEventFlags, SubscriptionResult};
 use crate::sched::Poll;
 use crate::{Error, WasiCtx};
@@ -194,10 +198,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         len: types::Filesize,
         advice: types::Advice,
     ) -> Result<(), Error> {
-        let table = self.table();
-        let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
-        let f = file_entry.get_cap(FileCaps::ADVISE)?;
-        f.advise(offset, len, advice.into())?;
+        self.table()
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::ADVISE)?
+            .advise(offset, len, advice.into())?;
         Ok(())
     }
 
@@ -207,10 +211,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         offset: types::Filesize,
         len: types::Filesize,
     ) -> Result<(), Error> {
-        let table = self.table();
-        let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
-        let f = file_entry.get_cap(FileCaps::ALLOCATE)?;
-        f.allocate(offset, len)?;
+        self.table()
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::ALLOCATE)?
+            .allocate(offset, len)?;
         Ok(())
     }
 
@@ -242,10 +246,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn fd_datasync(&self, fd: types::Fd) -> Result<(), Error> {
-        let table = self.table();
-        let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
-        let f = file_entry.get_cap(FileCaps::DATASYNC)?;
-        f.datasync()?;
+        self.table()
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::DATASYNC)?
+            .datasync()?;
         Ok(())
     }
 
@@ -266,10 +270,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn fd_fdstat_set_flags(&self, fd: types::Fd, flags: types::Fdflags) -> Result<(), Error> {
-        let table = self.table();
-        let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
-        let f = file_entry.get_cap(FileCaps::FDSTAT_SET_FLAGS)?;
-        f.set_fdflags(FdFlags::from(&flags))?;
+        self.table()
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::FDSTAT_SET_FLAGS)?
+            .set_fdflags(FdFlags::from(&flags))?;
         Ok(())
     }
 
@@ -299,14 +303,16 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let table = self.table();
         let fd = u32::from(fd);
         if table.is::<FileEntry>(fd) {
-            let file_entry: Ref<FileEntry> = table.get(fd)?;
-            let f = file_entry.get_cap(FileCaps::FILESTAT_GET)?;
-            let filestat = f.get_filestat()?;
+            let filestat = table
+                .get_file(fd)?
+                .get_cap(FileCaps::FILESTAT_GET)?
+                .get_filestat()?;
             Ok(filestat.into())
         } else if table.is::<DirEntry>(fd) {
-            let dir_entry: Ref<DirEntry> = table.get(fd)?;
-            let d = dir_entry.get_cap(DirCaps::FILESTAT_GET)?;
-            let filestat = d.get_filestat()?;
+            let filestat = table
+                .get_dir(fd)?
+                .get_cap(DirCaps::FILESTAT_GET)?
+                .get_filestat()?;
             Ok(filestat.into())
         } else {
             Err(Error::Badf)
@@ -314,10 +320,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn fd_filestat_set_size(&self, fd: types::Fd, size: types::Filesize) -> Result<(), Error> {
-        let table = self.table();
-        let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
-        let f = file_entry.get_cap(FileCaps::FILESTAT_SET_SIZE)?;
-        f.set_filestat_size(size)?;
+        self.table()
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::FILESTAT_SET_SIZE)?
+            .set_filestat_size(size)?;
         Ok(())
     }
 
@@ -359,14 +365,14 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 None
             };
 
-            let file_entry: Ref<FileEntry> = table.get(fd).unwrap();
-            let f = file_entry.get_cap(FileCaps::FILESTAT_SET_TIMES)?;
-            f.set_times(atim, mtim)?;
+            table
+                .get_file(fd)
+                .expect("checked that entry is file")
+                .get_cap(FileCaps::FILESTAT_SET_TIMES)?
+                .set_times(atim, mtim)?;
             Ok(())
         } else if table.is::<DirEntry>(fd) {
             use cap_std::time::{Duration, SystemClock};
-            let dir_entry: Ref<DirEntry> = table.get(fd).unwrap();
-            let d = dir_entry.get_cap(DirCaps::FILESTAT_SET_TIMES)?;
 
             use cap_fs_ext::SystemTimeSpec;
             let atim = if set_atim {
@@ -388,7 +394,12 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 None
             };
 
-            d.set_times(".", atim, mtim)
+            table
+                .get_dir(fd)
+                .expect("checked that entry is dir")
+                .get_cap(DirCaps::FILESTAT_SET_TIMES)?
+                .set_times(".", atim, mtim)?;
+            Ok(())
         } else {
             Err(Error::Badf)
         }
@@ -396,8 +407,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_read(&self, fd: types::Fd, iovs: &types::IovecArray<'_>) -> Result<types::Size, Error> {
         let table = self.table();
-        let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
-        let f = file_entry.get_cap(FileCaps::READ)?;
+        let f = table.get_file(u32::from(fd))?.get_cap(FileCaps::READ)?;
 
         let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
             .iter()
@@ -424,8 +434,9 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
         let table = self.table();
-        let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
-        let f = file_entry.get_cap(FileCaps::READ | FileCaps::SEEK)?;
+        let f = table
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::READ | FileCaps::SEEK)?;
 
         let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
             .iter()
@@ -451,8 +462,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         ciovs: &types::CiovecArray<'_>,
     ) -> Result<types::Size, Error> {
         let table = self.table();
-        let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
-        let f = file_entry.get_cap(FileCaps::WRITE)?;
+        let f = table.get_file(u32::from(fd))?.get_cap(FileCaps::WRITE)?;
 
         let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
             .iter()
@@ -479,8 +489,9 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
         let table = self.table();
-        let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
-        let f = file_entry.get_cap(FileCaps::WRITE | FileCaps::SEEK)?;
+        let f = table
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::WRITE | FileCaps::SEEK)?;
 
         let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
             .iter()
@@ -568,31 +579,33 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             FileCaps::TELL | FileCaps::SEEK
         };
 
-        let table = self.table();
-        let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
-        let f = file_entry.get_cap(required_caps)?;
         let whence = match whence {
             types::Whence::Cur => SeekFrom::Current(offset),
             types::Whence::End => SeekFrom::End(offset),
             types::Whence::Set => SeekFrom::Start(offset as u64),
         };
-        let newoffset = f.seek(whence)?;
+        let newoffset = self
+            .table()
+            .get_file(u32::from(fd))?
+            .get_cap(required_caps)?
+            .seek(whence)?;
         Ok(newoffset)
     }
 
     fn fd_sync(&self, fd: types::Fd) -> Result<(), Error> {
-        let table = self.table();
-        let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
-        let f = file_entry.get_cap(FileCaps::SYNC)?;
-        f.sync()?;
+        self.table()
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::SYNC)?
+            .sync()?;
         Ok(())
     }
 
     fn fd_tell(&self, fd: types::Fd) -> Result<types::Filesize, Error> {
-        let table = self.table();
-        let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
-        let f = file_entry.get_cap(FileCaps::TELL)?;
-        let offset = f.seek(std::io::SeekFrom::Current(0))?;
+        let offset = self
+            .table()
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::TELL)?
+            .seek(std::io::SeekFrom::Current(0))?;
         Ok(offset)
     }
 
@@ -603,19 +616,14 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         buf_len: types::Size,
         cookie: types::Dircookie,
     ) -> Result<types::Size, Error> {
-        let table = self.table();
-        let fd = u32::from(fd);
-        debug!(
-            "fd_readdir {} is a DirEntry: {}",
-            fd,
-            table.is::<DirEntry>(fd)
-        );
-        let dir_entry: Ref<DirEntry> = table.get(fd)?;
-        let d = dir_entry.get_cap(DirCaps::READDIR)?;
-
         let mut bufused = 0;
         let mut buf = buf.clone();
-        for pair in d.readdir(ReaddirCursor::from(cookie))? {
+        for pair in self
+            .table()
+            .get_dir(u32::from(fd))?
+            .get_cap(DirCaps::READDIR)?
+            .readdir(ReaddirCursor::from(cookie))?
+        {
             let (entity, name) = pair?;
             let dirent_raw = dirent_bytes(types::Dirent::from(&entity));
             let dirent_len: types::Size = dirent_raw.len().try_into()?;
@@ -659,11 +667,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         dirfd: types::Fd,
         path: &GuestPtr<'_, str>,
     ) -> Result<(), Error> {
-        let table = self.table();
-        let dir_entry: Ref<DirEntry> = table.get(u32::from(dirfd))?;
-        let dir = dir_entry.get_cap(DirCaps::CREATE_DIRECTORY)?;
-        let path = path.as_str()?;
-        dir.create_dir(path.deref())
+        self.table()
+            .get_dir(u32::from(dirfd))?
+            .get_cap(DirCaps::CREATE_DIRECTORY)?
+            .create_dir(path.as_str()?.deref())
     }
 
     fn path_filestat_get(
@@ -672,10 +679,11 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         flags: types::Lookupflags,
         path: &GuestPtr<'_, str>,
     ) -> Result<types::Filestat, Error> {
-        let table = self.table();
-        let dir_entry: Ref<DirEntry> = table.get(u32::from(dirfd))?;
-        let dir = dir_entry.get_cap(DirCaps::PATH_FILESTAT_GET)?;
-        let filestat = dir.get_path_filestat(path.as_str()?.deref())?;
+        let filestat = self
+            .table()
+            .get_dir(u32::from(dirfd))?
+            .get_cap(DirCaps::PATH_FILESTAT_GET)?
+            .get_path_filestat(path.as_str()?.deref())?;
         Ok(types::Filestat::from(filestat))
     }
 
@@ -688,11 +696,6 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         mtim: types::Timestamp,
         fst_flags: types::Fstflags,
     ) -> Result<(), Error> {
-        let table = self.table();
-        let dir_entry: Ref<DirEntry> = table.get(u32::from(dirfd))?;
-        let dir = dir_entry.get_cap(DirCaps::PATH_FILESTAT_SET_TIMES)?;
-        let path = path.as_str()?;
-
         // XXX DRY these are in fd_filestat_set_times twice!
         let set_atim = fst_flags.contains(types::Fstflags::ATIM);
         let set_atim_now = fst_flags.contains(types::Fstflags::ATIM_NOW);
@@ -722,7 +725,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             None
         };
 
-        dir.set_times(path.deref(), atim, mtim)
+        self.table()
+            .get_dir(u32::from(dirfd))?
+            .get_cap(DirCaps::PATH_FILESTAT_SET_TIMES)?
+            .set_times(path.as_str()?.deref(), atim, mtim)
     }
 
     fn path_link(
@@ -734,10 +740,12 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         target_path: &GuestPtr<'_, str>,
     ) -> Result<(), Error> {
         let table = self.table();
-        let src_entry: Ref<DirEntry> = table.get(u32::from(src_fd))?;
-        let src_dir = src_entry.get_cap(DirCaps::LINK_SOURCE)?;
-        let target_entry: Ref<DirEntry> = table.get(u32::from(target_fd))?;
-        let target_dir = target_entry.get_cap(DirCaps::LINK_TARGET)?;
+        let src_dir = table
+            .get_dir(u32::from(src_fd))?
+            .get_cap(DirCaps::LINK_SOURCE)?;
+        let target_dir = table
+            .get_dir(u32::from(target_fd))?
+            .get_cap(DirCaps::LINK_TARGET)?;
         let symlink_follow = src_flags.contains(types::Lookupflags::SYMLINK_FOLLOW);
 
         src_dir.hard_link(
@@ -763,7 +771,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if table.is::<FileEntry>(dirfd) {
             return Err(Error::Notdir);
         }
-        let dir_entry: Ref<DirEntry> = table.get(dirfd)?;
+        let dir_entry = table.get_dir(dirfd)?;
 
         let symlink_follow = dirflags.contains(types::Lookupflags::SYMLINK_FOLLOW);
 
@@ -777,12 +785,11 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             {
                 return Err(Error::Inval);
             }
-            let dir = dir_entry.get_cap(DirCaps::OPEN)?;
-            let child_dir = dir.open_dir(symlink_follow, path.deref())?;
             let dir_caps = dir_entry.child_dir_caps(DirCaps::from(&fs_rights_base));
             let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_inheriting));
+            let dir = dir_entry.get_cap(DirCaps::OPEN)?;
+            let child_dir = dir.open_dir(symlink_follow, path.deref())?;
             drop(dir);
-            drop(dir_entry);
             let fd = table.push(Box::new(DirEntry::new(
                 dir_caps, file_caps, None, child_dir,
             )))?;
@@ -793,11 +800,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 required_caps = required_caps | DirCaps::CREATE_FILE;
             }
 
-            let dir = dir_entry.get_cap(required_caps)?;
             let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_base));
+            let dir = dir_entry.get_cap(required_caps)?;
             let file = dir.open_file(symlink_follow, path.deref(), oflags, file_caps, fdflags)?;
             drop(dir);
-            drop(dir_entry);
             let fd = table.push(Box::new(FileEntry::new(file_caps, file)))?;
             Ok(types::Fd::from(fd))
         }
@@ -810,12 +816,11 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         buf: &GuestPtr<u8>,
         buf_len: types::Size,
     ) -> Result<types::Size, Error> {
-        let table = self.table();
-        let dir_entry: Ref<DirEntry> = table.get(u32::from(dirfd))?;
-        let dir = dir_entry.get_cap(DirCaps::READLINK)?;
-        let path = path.as_str()?;
-        let link = dir
-            .read_link(path.deref())?
+        let link = self
+            .table()
+            .get_dir(u32::from(dirfd))?
+            .get_cap(DirCaps::READLINK)?
+            .read_link(path.as_str()?.deref())?
             .into_os_string()
             .into_string()
             .map_err(|_| Error::Ilseq)?;
@@ -834,11 +839,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         dirfd: types::Fd,
         path: &GuestPtr<'_, str>,
     ) -> Result<(), Error> {
-        let table = self.table();
-        let dir_entry: Ref<DirEntry> = table.get(u32::from(dirfd))?;
-        let dir = dir_entry.get_cap(DirCaps::REMOVE_DIRECTORY)?;
-        let path = path.as_str()?;
-        dir.remove_dir(path.deref())
+        self.table()
+            .get_dir(u32::from(dirfd))?
+            .get_cap(DirCaps::REMOVE_DIRECTORY)?
+            .remove_dir(path.as_str()?.deref())
     }
 
     fn path_rename(
@@ -849,10 +853,12 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         dest_path: &GuestPtr<'_, str>,
     ) -> Result<(), Error> {
         let table = self.table();
-        let src_entry: Ref<DirEntry> = table.get(u32::from(src_fd))?;
-        let src_dir = src_entry.get_cap(DirCaps::RENAME_SOURCE)?;
-        let dest_entry: Ref<DirEntry> = table.get(u32::from(dest_fd))?;
-        let dest_dir = dest_entry.get_cap(DirCaps::RENAME_TARGET)?;
+        let src_dir = table
+            .get_dir(u32::from(src_fd))?
+            .get_cap(DirCaps::RENAME_SOURCE)?;
+        let dest_dir = table
+            .get_dir(u32::from(dest_fd))?
+            .get_cap(DirCaps::RENAME_TARGET)?;
         src_dir.rename(
             src_path.as_str()?.deref(),
             dest_dir.deref(),
@@ -866,20 +872,17 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         dirfd: types::Fd,
         dest_path: &GuestPtr<'_, str>,
     ) -> Result<(), Error> {
-        let table = self.table();
-        let dir_entry: Ref<DirEntry> = table.get(u32::from(dirfd))?;
-        let dir = dir_entry.get_cap(DirCaps::SYMLINK)?;
-        let src_path = src_path.as_str()?;
-        let dest_path = dest_path.as_str()?;
-        dir.symlink(src_path.deref(), dest_path.deref())
+        self.table()
+            .get_dir(u32::from(dirfd))?
+            .get_cap(DirCaps::SYMLINK)?
+            .symlink(src_path.as_str()?.deref(), dest_path.as_str()?.deref())
     }
 
     fn path_unlink_file(&self, dirfd: types::Fd, path: &GuestPtr<'_, str>) -> Result<(), Error> {
-        let table = self.table();
-        let dir_entry: Ref<DirEntry> = table.get(u32::from(dirfd))?;
-        let dir = dir_entry.get_cap(DirCaps::UNLINK_FILE)?;
-        let path = path.as_str()?;
-        dir.unlink_file(path.deref())
+        self.table()
+            .get_dir(u32::from(dirfd))?
+            .get_cap(DirCaps::UNLINK_FILE)?
+            .unlink_file(path.as_str()?.deref())
     }
 
     fn poll_oneoff(
@@ -921,12 +924,17 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 },
                 types::SubscriptionU::FdRead(readsub) => {
                     let fd = readsub.file_descriptor;
-                    let file_entry: Ref<FileEntry> = table.get(u32::from(fd))?;
-                    let f = file_entry.get_cap(FileCaps::POLL_READWRITE)?;
-                    poll.subscribe_read(f, sub.userdata.into());
+                    let file = table
+                        .get_file(u32::from(fd))?
+                        .get_cap(FileCaps::POLL_READWRITE)?;
+                    poll.subscribe_read(file, sub.userdata.into());
                 }
                 types::SubscriptionU::FdWrite(writesub) => {
-                    todo!()
+                    let fd = writesub.file_descriptor;
+                    let file = table
+                        .get_file(u32::from(fd))?
+                        .get_cap(FileCaps::POLL_READWRITE)?;
+                    poll.subscribe_write(file, sub.userdata.into());
                 }
             }
         }

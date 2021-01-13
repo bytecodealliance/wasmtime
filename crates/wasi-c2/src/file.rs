@@ -83,6 +83,15 @@ pub struct Filestat {
     pub ctim: Option<std::time::SystemTime>,
 }
 
+pub(crate) trait TableFileExt {
+    fn get_file(&self, fd: u32) -> Result<Ref<FileEntry>, Error>;
+}
+impl TableFileExt for crate::table::Table {
+    fn get_file(&self, fd: u32) -> Result<Ref<FileEntry>, Error> {
+        self.get(fd)
+    }
+}
+
 pub(crate) struct FileEntry {
     caps: FileCaps,
     file: Box<dyn WasiFile>,

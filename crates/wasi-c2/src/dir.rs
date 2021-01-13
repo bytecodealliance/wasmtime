@@ -3,6 +3,7 @@ use crate::file::{FdFlags, FileCaps, FileType, Filestat, OFlags, WasiFile};
 use bitflags::bitflags;
 use cap_fs_ext::SystemTimeSpec;
 use std::any::Any;
+use std::cell::Ref;
 use std::convert::TryInto;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -66,9 +67,9 @@ impl DirEntry {
             dir,
         }
     }
-    pub fn get_cap(&self, caps: DirCaps) -> Result<&dyn WasiDir, Error> {
+    pub fn capable_of_dir(&self, caps: DirCaps) -> Result<(), Error> {
         if self.caps.contains(caps) {
-            Ok(self.dir.deref())
+            Ok(())
         } else {
             Err(Error::DirNotCapable {
                 desired: caps,
@@ -76,14 +77,22 @@ impl DirEntry {
             })
         }
     }
-    pub fn drop_caps_to(&mut self, caps: DirCaps, file_caps: FileCaps) -> Result<(), Error> {
-        if self.caps.contains(caps) && self.file_caps.contains(file_caps) {
-            self.caps = caps;
-            self.file_caps = file_caps;
+    pub fn capable_of_file(&self, caps: FileCaps) -> Result<(), Error> {
+        if self.file_caps.contains(caps) {
             Ok(())
         } else {
-            Err(Error::NotCapable)
+            Err(Error::FileNotCapable {
+                desired: caps,
+                has: self.file_caps,
+            })
         }
+    }
+    pub fn drop_caps_to(&mut self, caps: DirCaps, file_caps: FileCaps) -> Result<(), Error> {
+        self.capable_of_dir(caps)?;
+        self.capable_of_file(file_caps)?;
+        self.caps = caps;
+        self.file_caps = file_caps;
+        Ok(())
     }
     pub fn child_dir_caps(&self, desired_caps: DirCaps) -> DirCaps {
         self.caps & desired_caps
@@ -99,6 +108,17 @@ impl DirEntry {
     }
     pub fn preopen_path(&self) -> &Option<PathBuf> {
         &self.preopen_path
+    }
+}
+
+pub trait DirEntryExt<'a> {
+    fn get_cap(self, caps: DirCaps) -> Result<Ref<'a, dyn WasiDir>, Error>;
+}
+
+impl<'a> DirEntryExt<'a> for Ref<'a, DirEntry> {
+    fn get_cap(self, caps: DirCaps) -> Result<Ref<'a, dyn WasiDir>, Error> {
+        self.capable_of_dir(caps)?;
+        Ok(Ref::map(self, |r| r.dir.deref()))
     }
 }
 
@@ -129,11 +149,15 @@ pub struct DirFdStat {
     pub dir_caps: DirCaps,
 }
 
-pub trait TableDirExt {
+pub(crate) trait TableDirExt {
+    fn get_dir(&self, fd: u32) -> Result<Ref<DirEntry>, Error>;
     fn is_preopen(&self, fd: u32) -> bool;
 }
 
 impl TableDirExt for crate::table::Table {
+    fn get_dir(&self, fd: u32) -> Result<Ref<DirEntry>, Error> {
+        self.get(fd)
+    }
     fn is_preopen(&self, fd: u32) -> bool {
         if self.is::<DirEntry>(fd) {
             let dir_entry: std::cell::Ref<DirEntry> = self.get(fd).unwrap();
