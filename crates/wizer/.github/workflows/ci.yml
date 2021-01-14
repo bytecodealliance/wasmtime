@@ -18,3 +18,12 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - run: rustup update stable --no-self-update
+    - run: rustup default stable
+    - run: rustup component add rustfmt
+    - run: cargo fmt --all -- --check
