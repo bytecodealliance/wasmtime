@@ -1243,8 +1243,26 @@ impl PrettyPrint for Inst {
             (if is_64 { "q" } else { "l" }).to_string()
         }
 
+        fn suffix_lqb(is_64: bool, is_8: bool) -> String {
+            match (is_64, is_8) {
+                (_, true) => "b".to_string(),
+                (true, false) => "q".to_string(),
+                (false, false) => "l".to_string(),
+            }
+        }
+
         fn size_lq(is_64: bool) -> u8 {
             if is_64 {
+                8
+            } else {
+                4
+            }
+        }
+
+        fn size_lqb(is_64: bool, is_8: bool) -> u8 {
+            if is_8 {
+                1
+            } else if is_64 {
                 8
             } else {
                 4
@@ -1271,9 +1289,9 @@ impl PrettyPrint for Inst {
                 dst,
             } => format!(
                 "{} {}, {}",
-                ljustify2(op.to_string(), suffix_lq(*is_64)),
-                src.show_rru_sized(mb_rru, size_lq(*is_64)),
-                show_ireg_sized(dst.to_reg(), mb_rru, size_lq(*is_64)),
+                ljustify2(op.to_string(), suffix_lqb(*is_64, op.is_8bit())),
+                src.show_rru_sized(mb_rru, size_lqb(*is_64, op.is_8bit())),
+                show_ireg_sized(dst.to_reg(), mb_rru, size_lqb(*is_64, op.is_8bit())),
             ),
 
             Inst::UnaryRmR { src, dst, op, size } => format!(
@@ -2065,6 +2083,17 @@ impl Amode {
             }
         }
     }
+
+    /// Offset the amode by a fixed offset.
+    pub(crate) fn offset(&self, offset: u32) -> Self {
+        let mut ret = self.clone();
+        match &mut ret {
+            &mut Amode::ImmReg { ref mut simm32, .. } => *simm32 += offset,
+            &mut Amode::ImmRegRegShift { ref mut simm32, .. } => *simm32 += offset,
+            _ => panic!("Cannot offset amode: {:?}", self),
+        }
+        ret
+    }
 }
 
 impl RegMemImm {
@@ -2548,77 +2577,88 @@ impl MachInst for Inst {
         ty: Type,
         mut alloc_tmp: F,
     ) -> SmallVec<[Self; 4]> {
-        // We don't support 128-bit constants.
-        assert!(value <= u64::MAX as u128);
         let mut ret = SmallVec::new();
-        let to_reg = to_regs
-            .only_reg()
-            .expect("multi-reg values not supported on x64");
-        if ty == types::F32 {
-            if value == 0 {
-                ret.push(Inst::xmm_rm_r(
-                    SseOpcode::Xorps,
-                    RegMem::reg(to_reg.to_reg()),
-                    to_reg,
-                ));
-            } else {
-                let tmp = alloc_tmp(types::I32);
-                ret.push(Inst::imm(OperandSize::Size32, value as u64, tmp));
-
-                ret.push(Inst::gpr_to_xmm(
-                    SseOpcode::Movd,
-                    RegMem::reg(tmp.to_reg()),
-                    OperandSize::Size32,
-                    to_reg,
-                ));
-            }
-        } else if ty == types::F64 {
-            if value == 0 {
-                ret.push(Inst::xmm_rm_r(
-                    SseOpcode::Xorpd,
-                    RegMem::reg(to_reg.to_reg()),
-                    to_reg,
-                ));
-            } else {
-                let tmp = alloc_tmp(types::I64);
-                ret.push(Inst::imm(OperandSize::Size64, value as u64, tmp));
-
-                ret.push(Inst::gpr_to_xmm(
-                    SseOpcode::Movq,
-                    RegMem::reg(tmp.to_reg()),
-                    OperandSize::Size64,
-                    to_reg,
-                ));
-            }
+        if ty == types::I128 {
+            ret.push(Inst::imm(
+                OperandSize::Size64,
+                value as u64,
+                to_regs.regs()[0],
+            ));
+            ret.push(Inst::imm(
+                OperandSize::Size64,
+                (value >> 64) as u64,
+                to_regs.regs()[1],
+            ));
         } else {
-            // Must be an integer type.
-            debug_assert!(
-                ty == types::B1
-                    || ty == types::I8
-                    || ty == types::B8
-                    || ty == types::I16
-                    || ty == types::B16
-                    || ty == types::I32
-                    || ty == types::B32
-                    || ty == types::I64
-                    || ty == types::B64
-                    || ty == types::R32
-                    || ty == types::R64
-            );
-            if value == 0 {
-                ret.push(Inst::alu_rmi_r(
-                    ty == types::I64,
-                    AluRmiROpcode::Xor,
-                    RegMemImm::reg(to_reg.to_reg()),
-                    to_reg,
-                ));
+            let to_reg = to_regs
+                .only_reg()
+                .expect("multi-reg values not supported on x64");
+            if ty == types::F32 {
+                if value == 0 {
+                    ret.push(Inst::xmm_rm_r(
+                        SseOpcode::Xorps,
+                        RegMem::reg(to_reg.to_reg()),
+                        to_reg,
+                    ));
+                } else {
+                    let tmp = alloc_tmp(types::I32);
+                    ret.push(Inst::imm(OperandSize::Size32, value as u64, tmp));
+
+                    ret.push(Inst::gpr_to_xmm(
+                        SseOpcode::Movd,
+                        RegMem::reg(tmp.to_reg()),
+                        OperandSize::Size32,
+                        to_reg,
+                    ));
+                }
+            } else if ty == types::F64 {
+                if value == 0 {
+                    ret.push(Inst::xmm_rm_r(
+                        SseOpcode::Xorpd,
+                        RegMem::reg(to_reg.to_reg()),
+                        to_reg,
+                    ));
+                } else {
+                    let tmp = alloc_tmp(types::I64);
+                    ret.push(Inst::imm(OperandSize::Size64, value as u64, tmp));
+
+                    ret.push(Inst::gpr_to_xmm(
+                        SseOpcode::Movq,
+                        RegMem::reg(tmp.to_reg()),
+                        OperandSize::Size64,
+                        to_reg,
+                    ));
+                }
             } else {
-                let value = value as u64;
-                ret.push(Inst::imm(
-                    OperandSize::from_bytes(ty.bytes()),
-                    value.into(),
-                    to_reg,
-                ));
+                // Must be an integer type.
+                debug_assert!(
+                    ty == types::B1
+                        || ty == types::I8
+                        || ty == types::B8
+                        || ty == types::I16
+                        || ty == types::B16
+                        || ty == types::I32
+                        || ty == types::B32
+                        || ty == types::I64
+                        || ty == types::B64
+                        || ty == types::R32
+                        || ty == types::R64
+                );
+                if value == 0 {
+                    ret.push(Inst::alu_rmi_r(
+                        ty == types::I64,
+                        AluRmiROpcode::Xor,
+                        RegMemImm::reg(to_reg.to_reg()),
+                        to_reg,
+                    ));
+                } else {
+                    let value = value as u64;
+                    ret.push(Inst::imm(
+                        OperandSize::from_bytes(ty.bytes()),
+                        value.into(),
+                        to_reg,
+                    ));
+                }
             }
         }
         ret

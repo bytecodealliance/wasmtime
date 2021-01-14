@@ -1026,6 +1026,56 @@ fn test_x64_emit() {
         "orq     %r15, %rdx",
     ));
     insns.push((
+        Inst::alu_rmi_r(false, AluRmiROpcode::And8, RegMemImm::reg(r15), w_rdx),
+        "4420FA",
+        "andb    %r15b, %dl",
+    ));
+    insns.push((
+        Inst::alu_rmi_r(false, AluRmiROpcode::And8, RegMemImm::reg(rax), w_rsi),
+        "4020C6",
+        "andb    %al, %sil",
+    ));
+    insns.push((
+        Inst::alu_rmi_r(false, AluRmiROpcode::And8, RegMemImm::reg(rax), w_rbx),
+        "20C3",
+        "andb    %al, %bl",
+    ));
+    insns.push((
+        Inst::alu_rmi_r(
+            false,
+            AluRmiROpcode::And8,
+            RegMemImm::mem(Amode::imm_reg(0, rax)),
+            w_rbx,
+        ),
+        "2218",
+        "andb    0(%rax), %bl",
+    ));
+    insns.push((
+        Inst::alu_rmi_r(false, AluRmiROpcode::Or8, RegMemImm::reg(r15), w_rdx),
+        "4408FA",
+        "orb     %r15b, %dl",
+    ));
+    insns.push((
+        Inst::alu_rmi_r(false, AluRmiROpcode::Or8, RegMemImm::reg(rax), w_rsi),
+        "4008C6",
+        "orb     %al, %sil",
+    ));
+    insns.push((
+        Inst::alu_rmi_r(false, AluRmiROpcode::Or8, RegMemImm::reg(rax), w_rbx),
+        "08C3",
+        "orb     %al, %bl",
+    ));
+    insns.push((
+        Inst::alu_rmi_r(
+            false,
+            AluRmiROpcode::Or8,
+            RegMemImm::mem(Amode::imm_reg(0, rax)),
+            w_rbx,
+        ),
+        "0A18",
+        "orb     0(%rax), %bl",
+    ));
+    insns.push((
         Inst::alu_rmi_r(true, AluRmiROpcode::Xor, RegMemImm::reg(r15), w_rdx),
         "4C31FA",
         "xorq    %r15, %rdx",
@@ -1193,6 +1243,16 @@ fn test_x64_emit() {
         "66F7D7",
         "notw    %di",
     ));
+    insns.push((
+        Inst::not(1, Writable::from_reg(regs::rdi())),
+        "40F6D7",
+        "notb    %dil",
+    ));
+    insns.push((
+        Inst::not(1, Writable::from_reg(regs::rax())),
+        "F6D0",
+        "notb    %al",
+    ));
 
     // ========================================================
     // Neg
@@ -1216,6 +1276,16 @@ fn test_x64_emit() {
         "66F7DF",
         "negw    %di",
     ));
+    insns.push((
+        Inst::neg(1, Writable::from_reg(regs::rdi())),
+        "40F6DF",
+        "negb    %dil",
+    ));
+    insns.push((
+        Inst::neg(1, Writable::from_reg(regs::rax())),
+        "F6D8",
+        "negb    %al",
+    ));
 
     // ========================================================
     // Div
@@ -1238,6 +1308,16 @@ fn test_x64_emit() {
         Inst::div(8, false /*signed*/, RegMem::reg(regs::rdi())),
         "48F7F7",
         "div     %rdi",
+    ));
+    insns.push((
+        Inst::div(1, false, RegMem::reg(regs::rax())),
+        "F6F0",
+        "div     %al",
+    ));
+    insns.push((
+        Inst::div(1, false, RegMem::reg(regs::rsi())),
+        "40F6F6",
+        "div     %sil",
     ));
 
     // ========================================================
@@ -2352,8 +2432,13 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::shift_r(1, ShiftKind::RotateRight, None, w_rsi),
-        "D2CE",
+        "40D2CE",
         "rorb    %cl, %sil",
+    ));
+    insns.push((
+        Inst::shift_r(1, ShiftKind::RotateRight, None, w_rax),
+        "D2C8",
+        "rorb    %cl, %al",
     ));
     insns.push((
         Inst::shift_r(1, ShiftKind::RotateRight, Some(5), w_r15),
