@@ -371,8 +371,8 @@ impl Func {
     ///
     /// Finally you can also optionally take [`Caller`] as the first argument of
     /// your closure. If inserted then you're able to inspect the caller's
-    /// state, for example the [`Memory`] it has exported so you can read what
-    /// pointers point to.
+    /// state, for example the [`Memory`](crate::Memory) it has exported so you
+    /// can read what pointers point to.
     ///
     /// Note that when using this API, the intention is to create as thin of a
     /// layer as possible for when WebAssembly calls the function provided. With
