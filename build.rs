@@ -176,10 +176,52 @@ fn write_testsuite_tests(
 
 /// For experimental_x64 backend features that are not supported yet, mark tests as panicking, so
 /// they stop "passing" once the features are properly implemented.
-///
-/// TODO(#2470): removed all tests from this set as we are disabling x64 SIMD tests unconditionally
-/// instead until we resolve a nondeterminism bug. Restore when fixed.
-fn experimental_x64_should_panic(_testsuite: &str, _testname: &str, _strategy: &str) -> bool {
+fn experimental_x64_should_panic(testsuite: &str, testname: &str, strategy: &str) -> bool {
+    if !cfg!(feature = "experimental_x64") || strategy != "Cranelift" {
+        return false;
+    }
+
+    match (testsuite, testname) {
+        ("simd", "simd_address") => return false,
+        ("simd", "simd_align") => return false,
+        ("simd", "simd_bitwise") => return false,
+        ("simd", "simd_bit_shift") => return false,
+        ("simd", "simd_boolean") => return false,
+        ("simd", "simd_const") => return false,
+        ("simd", "simd_i8x16_arith") => return false,
+        ("simd", "simd_i8x16_arith2") => return false,
+        ("simd", "simd_i8x16_cmp") => return false,
+        ("simd", "simd_i8x16_sat_arith") => return false,
+        ("simd", "simd_i16x8_arith") => return false,
+        ("simd", "simd_i16x8_arith2") => return false,
+        ("simd", "simd_i16x8_cmp") => return false,
+        ("simd", "simd_i16x8_sat_arith") => return false,
+        ("simd", "simd_i32x4_arith") => return false,
+        ("simd", "simd_i32x4_arith2") => return false,
+        ("simd", "simd_i32x4_cmp") => return false,
+        ("simd", "simd_i32x4_dot_i16x8") => return false,
+        ("simd", "simd_i64x2_arith") => return false,
+        ("simd", "simd_f32x4") => return false,
+        ("simd", "simd_f32x4_arith") => return false,
+        ("simd", "simd_f32x4_cmp") => return false,
+        ("simd", "simd_f32x4_pmin_pmax") => return false,
+        ("simd", "simd_f64x2") => return false,
+        ("simd", "simd_f64x2_arith") => return false,
+        ("simd", "simd_f64x2_cmp") => return false,
+        ("simd", "simd_f64x2_pmin_pmax") => return false,
+        ("simd", "simd_lane") => return false,
+        ("simd", "simd_load") => return false,
+        ("simd", "simd_load_extend") => return false,
+        ("simd", "simd_load_splat") => return false,
+        ("simd", "simd_load_zero") => return false,
+        ("simd", "simd_splat") => return false,
+        ("simd", "simd_store") => return false,
+        ("simd", "simd_conversions") => return false,
+        ("simd", "simd_f32x4_rounding") => return false,
+        ("simd", "simd_f64x2_rounding") => return false,
+        ("simd", _) => return true,
+        _ => {}
+    }
     false
 }
 
@@ -199,11 +241,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             // because Cranelift only supports reference types on x64.
             ("reference_types", _) => {
                 return env::var("CARGO_CFG_TARGET_ARCH").unwrap() != "x86_64";
-            }
-
-            // Ignore all x64 SIMD tests for now (#2470).
-            ("simd", _) if cfg!(feature = "experimental_x64") => {
-                return env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "x86_64";
             }
 
             // These are only implemented on aarch64 and x64.
