@@ -671,7 +671,6 @@ WASM_API_EXTERN const wasm_name_t *wasmtime_frame_module_name(const wasm_frame_t
  *
  * This function is similar to #wasm_func_call, but with a few tweaks:
  *
- * * `args` and `results` have a size parameter saying how big the arrays are
  * * An error *and* a trap can be returned
  * * Errors are returned if `args` have the wrong types, if the args/results
  *   arrays have the wrong lengths, or if values come from the wrong store.
@@ -697,10 +696,8 @@ WASM_API_EXTERN const wasm_name_t *wasmtime_frame_module_name(const wasm_frame_t
  */
 WASM_API_EXTERN own wasmtime_error_t *wasmtime_func_call(
     wasm_func_t *func,
-    const wasm_val_t *args,
-    size_t num_args,
-    wasm_val_t *results,
-    size_t num_results,
+    const wasm_val_vec_t *args,
+    wasm_val_vec_t *results,
     own wasm_trap_t **trap
 );
 
@@ -741,7 +738,6 @@ WASM_API_EXTERN own wasmtime_error_t *wasmtime_global_set(
  * This function is similar to #wasm_instance_new, but with a few tweaks:
  *
  * * An error message can be returned from this function.
- * * The number of imports specified is passed as an argument
  * * The `trap` pointer is required to not be NULL.
  *
  * The states of return values from this function are similar to
@@ -759,8 +755,7 @@ WASM_API_EXTERN own wasmtime_error_t *wasmtime_global_set(
 WASM_API_EXTERN own wasmtime_error_t *wasmtime_instance_new(
     wasm_store_t *store,
     const wasm_module_t *module,
-    const wasm_extern_t* const imports[],
-    size_t num_imports,
+    const wasm_extern_vec_t* imports,
     own wasm_instance_t **instance,
     own wasm_trap_t **trap
 );
@@ -1016,7 +1011,7 @@ WASM_API_EXTERN own wasmtime_error_t *wasmtime_module_deserialize(
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_instancetype_t* wasm_instancetype_copy(wasm_instancetype_t *)
+ * \fn own wasm_instancetype_t* wasm_instancetype_copy(const wasm_instancetype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
@@ -1113,7 +1108,7 @@ WASM_API_EXTERN const wasm_instancetype_t* wasm_externtype_as_instancetype_const
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_moduletype_t* wasm_moduletype_copy(wasm_moduletype_t *)
+ * \fn own wasm_moduletype_t* wasm_moduletype_copy(const wasm_moduletype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.

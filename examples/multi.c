@@ -32,14 +32,14 @@ static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_t
 
 // A function to be called from Wasm code.
 wasm_trap_t* callback(
-  const wasm_val_t args[], wasm_val_t results[]
+  const wasm_val_vec_t* args, wasm_val_vec_t* results
 ) {
   printf("Calling back...\n");
-  printf("> %"PRIu32" %"PRIu64"\n", args[0].of.i32, args[1].of.i64);
+  printf("> %"PRIu32" %"PRIu64"\n", args->data[0].of.i32, args->data[1].of.i64);
   printf("\n");
 
-  wasm_val_copy(&results[0], &args[1]);
-  wasm_val_copy(&results[1], &args[0]);
+  wasm_val_copy(&results->data[0], &args->data[1]);
+  wasm_val_copy(&results->data[1], &args->data[0]);
   return NULL;
 }
 
@@ -112,10 +112,11 @@ int main(int argc, const char* argv[]) {
 
   // Instantiate.
   printf("Instantiating module...\n");
-  const wasm_extern_t* imports[] = {wasm_func_as_extern(callback_func)};
+  wasm_extern_t* imports[] = {wasm_func_as_extern(callback_func)};
+  wasm_extern_vec_t imports_vec = WASM_ARRAY_VEC(imports);
   wasm_instance_t* instance = NULL;
   wasm_trap_t* trap = NULL;
-  error = wasmtime_instance_new(store, module, imports, 1, &instance, &trap);
+  error = wasmtime_instance_new(store, module, &imports_vec, &instance, &trap);
   if (!instance)
     exit_with_error("failed to instantiate", error, trap);
 
@@ -140,13 +141,11 @@ int main(int argc, const char* argv[]) {
 
   // Call.
   printf("Calling export...\n");
-  wasm_val_t args[2];
-  args[0].kind = WASM_I32;
-  args[0].of.i32 = 1;
-  args[1].kind = WASM_I64;
-  args[1].of.i64 = 2;
+  wasm_val_t args[2] = { WASM_I32_VAL(1), WASM_I64_VAL(2) };
   wasm_val_t results[2];
-  error = wasmtime_func_call(run_func, args, 2, results, 2, &trap);
+  wasm_val_vec_t args_vec = WASM_ARRAY_VEC(args);
+  wasm_val_vec_t results_vec = WASM_ARRAY_VEC(results);
+  error = wasmtime_func_call(run_func, &args_vec, &results_vec, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call run", error, trap);
 

@@ -75,7 +75,8 @@ int main() {
   printf("Instantiating module...\n");
   wasm_trap_t *trap = NULL;
   wasm_instance_t *instance = NULL;
-  error = wasmtime_instance_new(store, module, NULL, 0, &instance, &trap);
+  wasm_extern_vec_t imports = WASM_EMPTY_VEC;
+  error = wasmtime_instance_new(store, module, &imports, &instance, &trap);
   if (instance == NULL)
     exit_with_error("failed to instantiate", error, trap);
 
@@ -139,10 +140,11 @@ int main() {
   assert(func != NULL);
 
   // And call it!
-  wasm_val_t args[1];
-  wasm_val_copy(&args[0], &externref);
+  wasm_val_t args[1] = { externref };
   wasm_val_t results[1];
-  error = wasmtime_func_call(func, args, 1, results, 1, &trap);
+  wasm_val_vec_t args_vec = WASM_ARRAY_VEC(args);
+  wasm_val_vec_t results_vec = WASM_ARRAY_VEC(results);
+  error = wasmtime_func_call(func, &args_vec, &results_vec, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call function", error, trap);
 
@@ -161,7 +163,6 @@ int main() {
   ret = 0;
 
   wasm_val_delete(&results[0]);
-  wasm_val_delete(&args[0]);
   wasm_val_delete(&global_val);
   wasm_val_delete(&elem);
   wasm_extern_vec_delete(&externs);

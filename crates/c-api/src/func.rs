@@ -1,4 +1,4 @@
-use crate::{wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t};
+use crate::{wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t, wasm_val_vec_t};
 use crate::{wasm_name_t, wasm_trap_t, wasmtime_error_t};
 use anyhow::anyhow;
 use std::ffi::c_void;
@@ -21,26 +21,28 @@ pub struct wasmtime_caller_t<'a> {
     caller: Caller<'a>,
 }
 
-pub type wasm_func_callback_t =
-    extern "C" fn(args: *const wasm_val_t, results: *mut wasm_val_t) -> Option<Box<wasm_trap_t>>;
+pub type wasm_func_callback_t = extern "C" fn(
+    args: *const wasm_val_vec_t,
+    results: *mut wasm_val_vec_t,
+) -> Option<Box<wasm_trap_t>>;
 
 pub type wasm_func_callback_with_env_t = extern "C" fn(
     env: *mut std::ffi::c_void,
-    args: *const wasm_val_t,
-    results: *mut wasm_val_t,
+    args: *const wasm_val_vec_t,
+    results: *mut wasm_val_vec_t,
 ) -> Option<Box<wasm_trap_t>>;
 
 pub type wasmtime_func_callback_t = extern "C" fn(
     caller: *const wasmtime_caller_t,
-    args: *const wasm_val_t,
-    results: *mut wasm_val_t,
+    args: *const wasm_val_vec_t,
+    results: *mut wasm_val_vec_t,
 ) -> Option<Box<wasm_trap_t>>;
 
 pub type wasmtime_func_callback_with_env_t = extern "C" fn(
     caller: *const wasmtime_caller_t,
     env: *mut std::ffi::c_void,
-    args: *const wasm_val_t,
-    results: *mut wasm_val_t,
+    args: *const wasm_val_vec_t,
+    results: *mut wasm_val_vec_t,
 ) -> Option<Box<wasm_trap_t>>;
 
 struct Finalizer {
@@ -83,21 +85,25 @@ impl From<Func> for wasm_func_t {
 fn create_function(
     store: &wasm_store_t,
     ty: &wasm_functype_t,
-    func: impl Fn(Caller<'_>, *const wasm_val_t, *mut wasm_val_t) -> Option<Box<wasm_trap_t>> + 'static,
+    func: impl Fn(Caller<'_>, *const wasm_val_vec_t, *mut wasm_val_vec_t) -> Option<Box<wasm_trap_t>>
+        + 'static,
 ) -> Box<wasm_func_t> {
     let store = &store.store;
     let ty = ty.ty().ty.clone();
     let func = Func::new(store, ty, move |caller, params, results| {
-        let params = params
+        let params: wasm_val_vec_t = params
             .iter()
             .cloned()
             .map(|p| wasm_val_t::from_val(p))
-            .collect::<Vec<_>>();
-        let mut out_results = vec![wasm_val_t::default(); results.len()];
-        let out = func(caller, params.as_ptr(), out_results.as_mut_ptr());
+            .collect::<Vec<_>>()
+            .into();
+        let mut out_results: wasm_val_vec_t = vec![wasm_val_t::default(); results.len()].into();
+        let out = func(caller, &params, &mut out_results);
         if let Some(trap) = out {
             return Err(trap.trap.clone());
         }
+
+        let out_results = out_results.as_slice();
         for i in 0..results.len() {
             results[i] = out_results[i].val();
         }
@@ -164,17 +170,14 @@ pub extern "C" fn wasmtime_func_new_with_env(
 #[no_mangle]
 pub unsafe extern "C" fn wasm_func_call(
     wasm_func: &wasm_func_t,
-    args: *const wasm_val_t,
-    results: *mut MaybeUninit<wasm_val_t>,
+    args: *const wasm_val_vec_t,
+    results: *mut wasm_val_vec_t,
 ) -> *mut wasm_trap_t {
-    let func = wasm_func.func();
     let mut trap = ptr::null_mut();
-    let error = wasmtime_func_call(
+    let error = _wasmtime_func_call(
         wasm_func,
-        args,
-        func.param_arity(),
-        results,
-        func.result_arity(),
+        (*args).as_slice(),
+        (*results).as_uninit_slice(),
         &mut trap,
     );
     match error {
@@ -186,16 +189,14 @@ pub unsafe extern "C" fn wasm_func_call(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_func_call(
     func: &wasm_func_t,
-    args: *const wasm_val_t,
-    num_args: usize,
-    results: *mut MaybeUninit<wasm_val_t>,
-    num_results: usize,
+    args: *const wasm_val_vec_t,
+    results: *mut wasm_val_vec_t,
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
     _wasmtime_func_call(
         func,
-        std::slice::from_raw_parts(args, num_args),
-        std::slice::from_raw_parts_mut(results, num_results),
+        (*args).as_slice(),
+        (*results).as_uninit_slice(),
         trap_ptr,
     )
 }
