@@ -308,7 +308,7 @@ impl Instance {
             bail!("cross-`Engine` instantiation is not currently supported");
         }
 
-        // Perform some pre-flight checks before we geet into the meat of
+        // Perform some pre-flight checks before we get into the meat of
         // instantiation.
         let expected = module.compiled_module().module().imports().count();
         if expected != imports.len() {
