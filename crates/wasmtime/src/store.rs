@@ -13,8 +13,8 @@ use std::sync::Arc;
 use wasmtime_environ::wasm;
 use wasmtime_jit::{CompiledModule, ModuleCode, TypeTables};
 use wasmtime_runtime::{
-    InstanceHandle, RuntimeMemoryCreator, SignalHandler, StackMapRegistry, TrapInfo, VMExternRef,
-    VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
+    InstanceHandle, RuntimeMemoryCreator, SignalHandler, StackMapRegistry, TrapInfo, VMContext,
+    VMExternRef, VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
 };
 
 /// A `Store` is a collection of WebAssembly instances and host-defined items.
@@ -232,6 +232,10 @@ impl Store {
             store: self.clone(),
             handle,
         }
+    }
+
+    pub(crate) unsafe fn existing_vmctx(&self, cx: *mut VMContext) -> StoreInstanceHandle {
+        self.existing_instance_handle(InstanceHandle::from_vmctx(cx))
     }
 
     pub(crate) fn weak(&self) -> Weak<StoreInner> {

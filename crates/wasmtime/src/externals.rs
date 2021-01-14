@@ -112,26 +112,25 @@ impl Extern {
         }
     }
 
-    pub(crate) fn from_wasmtime_export(
-        wasmtime_export: wasmtime_runtime::Export,
-        instance: StoreInstanceHandle,
+    pub(crate) unsafe fn from_wasmtime_export(
+        wasmtime_export: &wasmtime_runtime::Export,
+        store: &Store,
     ) -> Extern {
         match wasmtime_export {
             wasmtime_runtime::Export::Function(f) => {
-                Extern::Func(Func::from_wasmtime_function(f, instance))
+                Extern::Func(Func::from_wasmtime_function(f, store))
             }
             wasmtime_runtime::Export::Memory(m) => {
-                Extern::Memory(Memory::from_wasmtime_memory(m, instance))
+                Extern::Memory(Memory::from_wasmtime_memory(m, store))
             }
             wasmtime_runtime::Export::Global(g) => {
-                Extern::Global(Global::from_wasmtime_global(g, instance))
+                Extern::Global(Global::from_wasmtime_global(g, store))
             }
             wasmtime_runtime::Export::Table(t) => {
-                Extern::Table(Table::from_wasmtime_table(t, instance))
+                Extern::Table(Table::from_wasmtime_table(t, store))
             }
             wasmtime_runtime::Export::Instance(i) => {
-                let handle = unsafe { instance.store.existing_instance_handle(i.clone()) };
-                Extern::Instance(Instance::from_wasmtime(handle))
+                Extern::Instance(Instance::from_wasmtime(i, store))
             }
             wasmtime_runtime::Export::Module(m) => {
                 Extern::Module(m.downcast_ref::<Module>().unwrap().clone())
@@ -335,13 +334,13 @@ impl Global {
         Ok(())
     }
 
-    pub(crate) fn from_wasmtime_global(
-        wasmtime_export: wasmtime_runtime::ExportGlobal,
-        instance: StoreInstanceHandle,
+    pub(crate) unsafe fn from_wasmtime_global(
+        wasmtime_export: &wasmtime_runtime::ExportGlobal,
+        store: &Store,
     ) -> Global {
         Global {
-            instance,
-            wasmtime_export,
+            instance: store.existing_vmctx(wasmtime_export.vmctx),
+            wasmtime_export: wasmtime_export.clone(),
         }
     }
 
@@ -353,6 +352,10 @@ impl Global {
         wasmtime_runtime::VMGlobalImport {
             from: self.wasmtime_export.definition,
         }
+    }
+
+    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::ExportGlobal {
+        &self.wasmtime_export
     }
 }
 
@@ -576,13 +579,13 @@ impl Table {
         Ok(())
     }
 
-    pub(crate) fn from_wasmtime_table(
-        wasmtime_export: wasmtime_runtime::ExportTable,
-        instance: StoreInstanceHandle,
+    pub(crate) unsafe fn from_wasmtime_table(
+        wasmtime_export: &wasmtime_runtime::ExportTable,
+        store: &Store,
     ) -> Table {
         Table {
-            instance,
-            wasmtime_export,
+            instance: store.existing_vmctx(wasmtime_export.vmctx),
+            wasmtime_export: wasmtime_export.clone(),
         }
     }
 
@@ -595,6 +598,10 @@ impl Table {
             from: self.wasmtime_export.definition,
             vmctx: self.wasmtime_export.vmctx,
         }
+    }
+
+    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::ExportTable {
+        &self.wasmtime_export
     }
 }
 
@@ -987,13 +994,13 @@ impl Memory {
             .ok_or_else(|| anyhow!("failed to grow memory"))
     }
 
-    pub(crate) fn from_wasmtime_memory(
-        wasmtime_export: wasmtime_runtime::ExportMemory,
-        instance: StoreInstanceHandle,
+    pub(crate) unsafe fn from_wasmtime_memory(
+        wasmtime_export: &wasmtime_runtime::ExportMemory,
+        store: &Store,
     ) -> Memory {
         Memory {
-            instance,
-            wasmtime_export,
+            instance: store.existing_vmctx(wasmtime_export.vmctx),
+            wasmtime_export: wasmtime_export.clone(),
         }
     }
 
@@ -1006,6 +1013,10 @@ impl Memory {
             from: self.wasmtime_export.definition,
             vmctx: self.wasmtime_export.vmctx,
         }
+    }
+
+    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::ExportMemory {
+        &self.wasmtime_export
     }
 }
 

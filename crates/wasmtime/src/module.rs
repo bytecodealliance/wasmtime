@@ -245,12 +245,14 @@ impl Module {
     /// ```
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
         #[cfg(feature = "cache")]
-        let (artifacts, types) = ModuleCacheEntry::new("wasmtime", engine.cache_config())
-            .get_data((engine.compiler(), binary), |(compiler, binary)| {
-                CompilationArtifacts::build(compiler, binary)
-            })?;
+        let (main_module, artifacts, types) =
+            ModuleCacheEntry::new("wasmtime", engine.cache_config())
+                .get_data((engine.compiler(), binary), |(compiler, binary)| {
+                    CompilationArtifacts::build(compiler, binary)
+                })?;
         #[cfg(not(feature = "cache"))]
-        let (artifacts, types) = CompilationArtifacts::build(engine.compiler(), binary)?;
+        let (main_module, artifacts, types) =
+            CompilationArtifacts::build(engine.compiler(), binary)?;
 
         let modules = CompiledModule::from_artifacts_list(
             artifacts,
@@ -261,7 +263,7 @@ impl Module {
         let types = Arc::new(types);
         Ok(Module {
             engine: engine.clone(),
-            index: 0,
+            index: main_module,
             data: Arc::new(ModuleData { types, modules }),
         })
     }

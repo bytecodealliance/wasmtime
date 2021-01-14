@@ -504,19 +504,6 @@ pub fn parse_name_section<'data>(
     Ok(())
 }
 
-/// Parses the Module section of the wasm module.
-pub fn parse_module_section<'data>(
-    section: wasmparser::ModuleSectionReader<'data>,
-    environ: &mut dyn ModuleEnvironment<'data>,
-) -> WasmResult<()> {
-    environ.reserve_modules(section.get_count());
-
-    for module_ty in section {
-        environ.declare_module(TypeIndex::from_u32(module_ty?))?;
-    }
-    Ok(())
-}
-
 /// Parses the Instance section of the wasm module.
 pub fn parse_instance_section<'data>(
     section: wasmparser::InstanceSectionReader<'data>,
@@ -530,20 +517,23 @@ pub fn parse_instance_section<'data>(
         let args = instance
             .args()?
             .into_iter()
-            .map(|result| {
-                let (kind, idx) = result?;
-                Ok(match kind {
-                    ExternalKind::Function => EntityIndex::Function(FuncIndex::from_u32(idx)),
-                    ExternalKind::Table => EntityIndex::Table(TableIndex::from_u32(idx)),
-                    ExternalKind::Memory => EntityIndex::Memory(MemoryIndex::from_u32(idx)),
-                    ExternalKind::Global => EntityIndex::Global(GlobalIndex::from_u32(idx)),
-                    ExternalKind::Module => EntityIndex::Module(ModuleIndex::from_u32(idx)),
-                    ExternalKind::Instance => EntityIndex::Instance(InstanceIndex::from_u32(idx)),
+            .map(|arg| {
+                let arg = arg?;
+                let index = match arg.kind {
+                    ExternalKind::Function => EntityIndex::Function(FuncIndex::from_u32(arg.index)),
+                    ExternalKind::Table => EntityIndex::Table(TableIndex::from_u32(arg.index)),
+                    ExternalKind::Memory => EntityIndex::Memory(MemoryIndex::from_u32(arg.index)),
+                    ExternalKind::Global => EntityIndex::Global(GlobalIndex::from_u32(arg.index)),
+                    ExternalKind::Module => EntityIndex::Module(ModuleIndex::from_u32(arg.index)),
+                    ExternalKind::Instance => {
+                        EntityIndex::Instance(InstanceIndex::from_u32(arg.index))
+                    }
                     ExternalKind::Event => unimplemented!(),
 
                     // this won't pass validation
                     ExternalKind::Type => unreachable!(),
-                })
+                };
+                Ok((arg.name, index))
             })
             .collect::<WasmResult<Vec<_>>>()?;
         environ.declare_instance(module, args)?;
@@ -557,19 +547,28 @@ pub fn parse_alias_section<'data>(
     environ: &mut dyn ModuleEnvironment<'data>,
 ) -> WasmResult<()> {
     for alias in section {
-        let alias = alias?;
-        let alias = match alias.instance {
-            wasmparser::AliasedInstance::Parent => {
-                match alias.kind {
-                    ExternalKind::Module => Alias::ParentModule(ModuleIndex::from_u32(alias.index)),
-                    ExternalKind::Type => Alias::ParentType(TypeIndex::from_u32(alias.index)),
-                    // shouldn't get past validation
-                    _ => unreachable!(),
-                }
-            }
-            wasmparser::AliasedInstance::Child(i) => Alias::Child {
-                instance: InstanceIndex::from_u32(i),
-                export: alias.index as usize,
+        let alias = match alias? {
+            wasmparser::Alias::OuterType {
+                relative_depth,
+                index,
+            } => Alias::OuterType {
+                relative_depth,
+                index: TypeIndex::from_u32(index),
+            },
+            wasmparser::Alias::OuterModule {
+                relative_depth,
+                index,
+            } => Alias::OuterModule {
+                relative_depth,
+                index: ModuleIndex::from_u32(index),
+            },
+            wasmparser::Alias::InstanceExport {
+                instance,
+                export,
+                kind: _,
+            } => Alias::InstanceExport {
+                instance: InstanceIndex::from_u32(instance),
+                export,
             },
         };
         environ.declare_alias(alias)?;

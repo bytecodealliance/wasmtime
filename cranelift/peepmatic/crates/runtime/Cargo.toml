@@ -16,7 +16,7 @@ peepmatic-automata = { version = "0.69.0", path = "../automata", features = ["se
 peepmatic-traits = { version = "0.69.0", path = "../traits" }
 serde = { version = "1.0.105", features = ["derive"] }
 thiserror = "1.0.15"
-wast = { version = "29.0.0", optional = true }
+wast = { version = "31.0.0", optional = true }
 
 [dev-dependencies]
 peepmatic-test-operator = { version = "0.69.0", path = "../test-operator" }
