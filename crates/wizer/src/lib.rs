@@ -375,11 +375,11 @@ impl Wizer {
                         "cannot call imports within the initialization function; attempted \
                          to call `'{}' '{}'`",
                         imp.module(),
-                        imp.name()
+                        imp.name().unwrap()
                     ));
                     linker.define(
                         imp.module(),
-                        imp.name(),
+                        imp.name().unwrap(),
                         wasmtime::Func::new(
                             store,
                             func_ty,
@@ -413,6 +413,7 @@ impl Wizer {
                     // imported memories.
                     anyhow::bail!("cannot initialize Wasm modules that import memories")
                 }
+                _ => anyhow::bail!("module linking is not supported yet"),
             };
         }
 
@@ -622,9 +623,7 @@ impl Wizer {
                         data: &full_wasm[imports.range().start..imports.range().end],
                     });
                 }
-                AliasSection(_) | InstanceSection(_) | ModuleSection(_) => {
-                    unreachable!()
-                }
+                AliasSection(_) | InstanceSection(_) | ModuleSection(_) => unreachable!(),
                 FunctionSection(funcs) => {
                     module.section(&wasm_encoder::RawSection {
                         id: wasm_encoder::SectionId::Function as u8,
@@ -711,9 +710,7 @@ impl Wizer {
                                 wasmparser::ExternalKind::Type
                                 | wasmparser::ExternalKind::Module
                                 | wasmparser::ExternalKind::Instance
-                                | wasmparser::ExternalKind::Event => {
-                                    unreachable!()
-                                }
+                                | wasmparser::ExternalKind::Event => unreachable!(),
                             },
                         );
                     }
