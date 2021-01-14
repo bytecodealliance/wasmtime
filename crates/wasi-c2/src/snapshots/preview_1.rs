@@ -939,7 +939,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             }
         }
 
-        self.sched.poll_oneoff(&mut poll)?;
+        self.sched.poll_oneoff(&poll)?;
 
         let results = poll.results();
         let num_results = results.len();

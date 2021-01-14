@@ -1,5 +1,6 @@
 use crate::file::{FdFlags, FileType, Filestat, WasiFile};
 use crate::Error;
+use std::any::Any;
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, RawFd};
 
@@ -17,6 +18,9 @@ impl AsRawFd for Stdin {
 }
 
 impl WasiFile for Stdin {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn datasync(&self) -> Result<(), Error> {
         Ok(())
     }
@@ -54,6 +58,9 @@ impl AsRawFd for Stdout {
 }
 
 impl WasiFile for Stdout {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn datasync(&self) -> Result<(), Error> {
         Ok(())
     }
@@ -91,6 +98,9 @@ impl AsRawFd for Stderr {
 }
 
 impl WasiFile for Stderr {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn datasync(&self) -> Result<(), Error> {
         Ok(())
     }

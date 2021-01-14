@@ -1,11 +1,13 @@
 use crate::Error;
 use bitflags::bitflags;
 use fs_set_times::SetTimes;
+use std::any::Any;
 use std::cell::Ref;
 use std::ops::Deref;
 use system_interface::fs::FileIoExt;
 
 pub trait WasiFile: FileIoExt + SetTimes {
+    fn as_any(&self) -> &dyn Any;
     fn datasync(&self) -> Result<(), Error>;
     fn sync(&self) -> Result<(), Error>;
     fn get_filetype(&self) -> Result<FileType, Error>;
@@ -165,6 +167,9 @@ pub struct FdStat {
 }
 
 impl WasiFile for cap_std::fs::File {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn datasync(&self) -> Result<(), Error> {
         self.sync_data()?;
         Ok(())

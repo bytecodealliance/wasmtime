@@ -5,24 +5,14 @@ use cap_std::time::{Duration, SystemTime};
 use std::cell::Ref;
 pub mod subscription;
 
+mod sync;
+pub use sync::SyncSched;
+
 use subscription::{RwSubscription, Subscription, SubscriptionResult, SystemTimerSubscription};
 
 pub trait WasiSched {
-    fn poll_oneoff<'a>(&self, poll: &mut Poll<'a>) -> Result<(), Error>;
+    fn poll_oneoff(&self, poll: &Poll) -> Result<(), Error>;
     fn sched_yield(&self) -> Result<(), Error>;
-}
-
-#[derive(Default)]
-pub struct SyncSched {}
-
-impl WasiSched for SyncSched {
-    fn poll_oneoff<'a>(&self, poll: &mut Poll<'a>) -> Result<(), Error> {
-        todo!()
-    }
-    fn sched_yield(&self) -> Result<(), Error> {
-        std::thread::yield_now();
-        Ok(())
-    }
 }
 
 pub struct Userdata(u64);
@@ -31,6 +21,7 @@ impl From<u64> for Userdata {
         Userdata(u)
     }
 }
+
 impl From<Userdata> for u64 {
     fn from(u: Userdata) -> u64 {
         u.0
@@ -75,7 +66,7 @@ impl<'a> Poll<'a> {
             .filter_map(|(s, ud)| SubscriptionResult::from_subscription(s).map(|r| (r, ud)))
             .collect()
     }
-    pub fn subscriptions(&'a mut self) -> impl Iterator<Item = &Subscription<'a>> {
+    pub fn subscriptions(&'a self) -> impl Iterator<Item = &Subscription<'a>> {
         self.subs.iter().map(|(s, _ud)| s)
     }
 }

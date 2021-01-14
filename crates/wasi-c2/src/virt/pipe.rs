@@ -11,6 +11,7 @@
 //!
 use crate::file::{FdFlags, FileType, Filestat, WasiFile};
 use crate::Error;
+use std::any::Any;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, RwLock};
 use system_interface::fs::{Advice, FileIoExt};
@@ -167,7 +168,10 @@ impl<R: Read> fs_set_times::SetTimes for ReadPipe<R> {
         todo!()
     }
 }
-impl<R: Read> WasiFile for ReadPipe<R> {
+impl<R: Read + Any> WasiFile for ReadPipe<R> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn datasync(&self) -> Result<(), Error> {
         Ok(()) // trivial: no implementation needed
     }
@@ -339,7 +343,10 @@ impl<W: Write> fs_set_times::SetTimes for WritePipe<W> {
     }
 }
 
-impl<W: Write> WasiFile for WritePipe<W> {
+impl<W: Write + Any> WasiFile for WritePipe<W> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn datasync(&self) -> Result<(), Error> {
         Ok(())
     }

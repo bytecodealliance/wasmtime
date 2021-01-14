@@ -12,7 +12,7 @@ bitflags! {
 }
 
 pub struct RwSubscription<'a> {
-    file: Ref<'a, dyn WasiFile>,
+    pub file: Ref<'a, dyn WasiFile>,
     status: Cell<Option<Result<(u64, RwEventFlags), Error>>>,
 }
 
