@@ -23,9 +23,8 @@ use system_interface::fs::{Advice, FileIoExt};
 /// ```
 /// # use wasi_c2::WasiCtx;
 /// # use wasi_c2::virt::pipe::ReadPipe;
-/// let mut ctx = WasiCtx::builder();
 /// let stdin = ReadPipe::from("hello from stdin!");
-/// ctx.stdin(Box::new(stdin));
+/// let ctx = WasiCtx::builder().stdin(Box::new(stdin)).build();
 /// ```
 #[derive(Debug)]
 pub struct ReadPipe<R: Read> {
@@ -209,9 +208,8 @@ impl<R: Read + Any> WasiFile for ReadPipe<R> {
 /// ```
 /// # use wasi_c2::WasiCtx;
 /// # use wasi_c2::virt::pipe::WritePipe;
-/// let mut ctx = WasiCtx::builder();
 /// let stdout = WritePipe::new_in_memory();
-/// ctx.stdout(Box::new(stdout.clone()));
+/// let ctx = WasiCtx::builder().stdout(Box::new(stdout.clone())).build();
 /// // use ctx in an instance, then make sure it is dropped:
 /// drop(ctx);
 /// let contents: Vec<u8> = stdout.try_into_inner().expect("sole remaining reference to WritePipe").into_inner();
