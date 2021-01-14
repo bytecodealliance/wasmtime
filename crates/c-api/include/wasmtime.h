@@ -527,7 +527,7 @@ typedef struct wasmtime_caller_t wasmtime_caller_t;
  * argument is a #wasmtime_caller_t which allows learning information about the
  * caller.
  */
-typedef own wasm_trap_t* (*wasmtime_func_callback_t)(const wasmtime_caller_t* caller, const wasm_val_t args[], wasm_val_t results[]);
+typedef own wasm_trap_t* (*wasmtime_func_callback_t)(const wasmtime_caller_t* caller, const wasm_val_vec_t *args, wasm_val_vec_t *results);
 
 /**
  * \brief Callback signature for #wasmtime_func_new_with_env.
@@ -536,7 +536,7 @@ typedef own wasm_trap_t* (*wasmtime_func_callback_t)(const wasmtime_caller_t* ca
  * first argument is a #wasmtime_caller_t which allows learning information
  * about the caller.
  */
-typedef own wasm_trap_t* (*wasmtime_func_callback_with_env_t)(const wasmtime_caller_t* caller, void* env, const wasm_val_t args[], wasm_val_t results[]);
+typedef own wasm_trap_t* (*wasmtime_func_callback_with_env_t)(const wasmtime_caller_t* caller, void* env, const wasm_val_vec_t *args, wasm_val_vec_t *results);
 
 /**
  * \brief Creates a new host-defined function.
