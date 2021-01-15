@@ -5,8 +5,10 @@ use wasi_c2::virt::pipe::{ReadPipe, WritePipe};
 use wasmtime::{Linker, Module, Store};
 
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
+    /*
     let stdout = WritePipe::new_in_memory();
     let stderr = WritePipe::new_in_memory();
+    */
 
     let r = {
         let store = Store::default();
@@ -15,12 +17,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         // Additionally register any preopened directories if we have them.
         let mut builder = wasi_c2::WasiCtx::builder();
 
-        builder = builder
-            .arg(bin_name)?
-            .arg(".")?
-            .stdin(Box::new(ReadPipe::from(Vec::new())))
-            .stdout(Box::new(stdout.clone()))
-            .stderr(Box::new(stderr.clone()));
+        builder = builder.arg(bin_name)?.arg(".")?.inherit_stdio();
 
         if let Some(workspace) = workspace {
             println!("preopen: {:?}", workspace);
@@ -46,6 +43,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
     match r {
         Ok(()) => Ok(()),
         Err(trap) => {
+            /*
             let stdout = stdout
                 .try_into_inner()
                 .expect("sole ref to stdout")
@@ -60,6 +58,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
             if !stderr.is_empty() {
                 println!("guest stderr:\n{}\n===", String::from_utf8_lossy(&stderr));
             }
+            */
             Err(trap.context(format!("error while testing Wasm module '{}'", bin_name,)))
         }
     }
