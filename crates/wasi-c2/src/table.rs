@@ -62,7 +62,7 @@ impl Table {
                 Err(Error::Exist) // Does exist, but borrowed
             }
         } else {
-            Err(Error::Exist) // Does not exist
+            Err(Error::Badf) // Does not exist
         }
     }
 

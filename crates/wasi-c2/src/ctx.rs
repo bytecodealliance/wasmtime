@@ -75,7 +75,7 @@ impl WasiCtxBuilder {
         self.0.insert_file(
             0,
             f,
-            FileCaps::READ, // XXX fixme: more rights are ok, but this is read-only
+            FileCaps::READ | FileCaps::POLL_READWRITE, // XXX fixme: more rights are ok, but this is read-only
         );
         self
     }
@@ -84,7 +84,7 @@ impl WasiCtxBuilder {
         self.0.insert_file(
             1,
             f,
-            FileCaps::WRITE, // XXX fixme: more rights are ok, but this is append only
+            FileCaps::WRITE | FileCaps::POLL_READWRITE, // XXX fixme: more rights are ok, but this is append only
         );
         self
     }
@@ -93,7 +93,7 @@ impl WasiCtxBuilder {
         self.0.insert_file(
             2,
             f,
-            FileCaps::WRITE, // XXX fixme: more rights are ok, but this is append only
+            FileCaps::WRITE | FileCaps::POLL_READWRITE, // XXX fixme: more rights are ok, but this is append only
         );
         self
     }

@@ -891,6 +891,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         events: &GuestPtr<types::Event>,
         nsubscriptions: types::Size,
     ) -> Result<types::Size, Error> {
+        if nsubscriptions == 0 {
+            return Err(Error::Inval);
+        }
+
         use cap_std::time::{Duration, SystemClock};
         let table = self.table();
         let mut poll = Poll::new();

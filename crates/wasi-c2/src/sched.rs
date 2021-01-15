@@ -58,7 +58,7 @@ impl<'a> Poll<'a> {
     }
     pub fn subscribe_write(&mut self, file: Ref<'a, dyn WasiFile>, ud: Userdata) {
         self.subs
-            .push((Subscription::Read(RwSubscription::new(file)), ud));
+            .push((Subscription::Write(RwSubscription::new(file)), ud));
     }
     pub fn results(self) -> Vec<(SubscriptionResult, Userdata)> {
         self.subs
@@ -66,7 +66,25 @@ impl<'a> Poll<'a> {
             .filter_map(|(s, ud)| SubscriptionResult::from_subscription(s).map(|r| (r, ud)))
             .collect()
     }
-    pub fn subscriptions(&'a self) -> impl Iterator<Item = &Subscription<'a>> {
-        self.subs.iter().map(|(s, _ud)| s)
+    pub fn is_empty(&self) -> bool {
+        self.subs.is_empty()
+    }
+    pub fn earliest_system_timer(&'a self) -> Option<&SystemTimerSubscription<'a>> {
+        let mut subs = self
+            .subs
+            .iter()
+            .filter_map(|(s, _ud)| match s {
+                Subscription::SystemTimer(t) => Some(t),
+                _ => None,
+            })
+            .collect::<Vec<&SystemTimerSubscription<'a>>>();
+        subs.sort_by(|a, b| a.deadline.cmp(&b.deadline));
+        subs.into_iter().next() // First element is earliest
+    }
+    pub fn rw_subscriptions(&'a self) -> impl Iterator<Item = &Subscription<'a>> {
+        self.subs.iter().filter_map(|(s, _ud)| match s {
+            Subscription::Read { .. } | Subscription::Write { .. } => Some(s),
+            _ => None,
+        })
     }
 }

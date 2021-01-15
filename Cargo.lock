@@ -2472,6 +2472,7 @@ dependencies = [
  "thiserror",
  "tracing",
  "wiggle",
+ "yanix 0.22.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2501,7 +2502,7 @@ dependencies = [
  "wiggle",
  "winapi",
  "winx 0.22.0",
- "yanix",
+ "yanix 0.22.0",
 ]
 
 [[package]]
@@ -3103,6 +3104,19 @@ dependencies = [
 [[package]]
 name = "yanix"
 version = "0.22.0"
+dependencies = [
+ "bitflags",
+ "cfg-if 1.0.0",
+ "filetime",
+ "libc",
+ "tracing",
+]
+
+[[package]]
+name = "yanix"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0504d76a87b9e77f1057d419a51acb4344b9e14eaf37dde22cf1fd0ec28901db"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",

@@ -32,6 +32,7 @@ cap-rand = "0.9"
 fs-set-times = "0.2.2"
 cfg-if = "1"
 bitflags = "1.2"
+yanix = "0.22"
 
 [badges]
 maintenance = { status = "actively-developed" }

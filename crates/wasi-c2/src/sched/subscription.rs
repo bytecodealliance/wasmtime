@@ -41,12 +41,11 @@ pub struct SystemTimerSubscription<'a> {
 }
 
 impl<'a> SystemTimerSubscription<'a> {
+    pub fn now(&self) -> SystemTime {
+        self.clock.now(self.precision)
+    }
     pub fn result(&self) -> Option<Result<(), Error>> {
-        if self
-            .deadline
-            .duration_since(self.clock.now(self.precision))
-            .is_ok()
-        {
+        if self.now().duration_since(self.deadline).is_ok() {
             Some(Ok(()))
         } else {
             None
