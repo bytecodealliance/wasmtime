@@ -247,7 +247,31 @@ unsafe fn test_fd_readwrite_valid_fd(dir_fd: wasi::Fd) {
 }
 
 unsafe fn test_fd_readwrite_invalid_fd() {
-    test_fd_readwrite(wasi::Fd::max_value(), wasi::ERRNO_BADF)
+    let fd_readwrite = wasi::SubscriptionFdReadwrite {
+        file_descriptor: wasi::Fd::max_value(),
+    };
+    let r#in = [
+        wasi::Subscription {
+            userdata: 1,
+            u: wasi::SubscriptionU {
+                tag: wasi::EVENTTYPE_FD_READ,
+                u: wasi::SubscriptionUU {
+                    fd_read: fd_readwrite,
+                },
+            },
+        },
+        wasi::Subscription {
+            userdata: 2,
+            u: wasi::SubscriptionU {
+                tag: wasi::EVENTTYPE_FD_WRITE,
+                u: wasi::SubscriptionUU {
+                    fd_write: fd_readwrite,
+                },
+            },
+        },
+    ];
+    let err = poll_oneoff_impl(&r#in).unwrap_err();
+    assert_eq!(err.raw_error(), wasi::ERRNO_BADF)
 }
 
 unsafe fn test_poll_oneoff(dir_fd: wasi::Fd) {
