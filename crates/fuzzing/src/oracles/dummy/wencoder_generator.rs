@@ -127,7 +127,7 @@ impl WencoderGenerator {
                     0,
                     ty.exports()
                         .into_iter()
-                        .map(|it| (it.name(),None,extern_to_export(&it.ty(), |et| self.next(et)))).collect::<Vec<_>>(),
+                        .map(|it| (it.name(),extern_to_export(&it.ty(), |et| self.next(et)))).collect::<Vec<_>>(),
                 );
                 self.module.section(&instances);
             }
