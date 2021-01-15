@@ -28,7 +28,7 @@ unsafe fn test_empty_poll() {
 
 unsafe fn test_timeout() {
     let clock = wasi::SubscriptionClock {
-        id: wasi::CLOCKID_MONOTONIC,
+        id: wasi::CLOCKID_REALTIME,
         timeout: 5_000_000u64, // 5 milliseconds
         precision: 0,
         flags: 0,
@@ -61,7 +61,7 @@ unsafe fn test_timeout() {
 
 unsafe fn test_stdin_read() {
     let clock = wasi::SubscriptionClock {
-        id: wasi::CLOCKID_MONOTONIC,
+        id: wasi::CLOCKID_REALTIME,
         timeout: 5_000_000u64, // 5 milliseconds
         precision: 0,
         flags: 0,
