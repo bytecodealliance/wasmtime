@@ -1,6 +1,7 @@
 use wasm_encoder::{
     CodeSection, Export, ExportSection, Function, FunctionSection, GlobalSection, ImportSection,
-    InstanceSection, Instruction, Limits, MemorySection, Module, ModuleSection, TableSection, TypeSection,
+    InstanceSection, Instruction, Limits, MemorySection, Module, ModuleSection, TableSection,
+    TypeSection,
 };
 use wasmtime::*;
 pub struct WencoderGenerator {
@@ -10,21 +11,21 @@ pub struct WencoderGenerator {
 impl WencoderGenerator {
     pub fn new() -> WencoderGenerator {
         WencoderGenerator {
-            next: [0,0,0,0,0,0],
+            next: [0, 0, 0, 0, 0, 0],
             module: Module::new(),
         }
     }
     fn next(&mut self, ty: &ExternType) -> u32 {
-       let index =  match ty {
+        let index = match ty {
             ExternType::Memory(_) => 0,
-           ExternType::Table(_) => 1,
-           ExternType::Global(_) => 2,
+            ExternType::Table(_) => 1,
+            ExternType::Global(_) => 2,
             ExternType::Func(_) => 3,
-           ExternType::Instance(_) => 4,
-           ExternType::Module(_) => 5
-       };
-       self.next[index] +=1;
-       self.next[index]
+            ExternType::Instance(_) => 4,
+            ExternType::Module(_) => 5,
+        };
+        self.next[index] += 1;
+        self.next[index]
     }
     pub fn finish(self) -> Vec<u8> {
         self.module.finish()
@@ -40,7 +41,7 @@ impl WencoderGenerator {
         let mut exports = ExportSection::new();
         let item_ty = ty.ty();
         self.item(&item_ty);
-        let export = extern_to_export(&item_ty, |_| nth );
+        let export = extern_to_export(&item_ty, |_| nth);
         exports.export(&section_name, export);
         self.module.section(&exports);
     }
@@ -113,13 +114,8 @@ impl WencoderGenerator {
                 modules.module(&Module::new());
                 modules.module(&Module::new());
 
-//                let mut module = Module::new()
-//                let mut module_code = ModuleSection::new();
-//                module_code.module(&Module::new());
-
                 self.module.section(&types);
                 self.module.section(&modules);
-//              self.module.section(&module_code);
             }
             ExternType::Instance(ty) => {
                 let mut instances = InstanceSection::new();
@@ -127,7 +123,8 @@ impl WencoderGenerator {
                     0,
                     ty.exports()
                         .into_iter()
-                        .map(|it| (it.name(),extern_to_export(&it.ty(), |et| self.next(et)))).collect::<Vec<_>>(),
+                        .map(|it| (it.name(), extern_to_export(&it.ty(), |et| self.next(et))))
+                        .collect::<Vec<_>>(),
                 );
                 self.module.section(&instances);
             }
@@ -140,7 +137,7 @@ fn value_to_instruction(ty: &ValType) -> Instruction {
         ValType::I64 => Instruction::I64Const(0),
         ValType::F32 => Instruction::F32Const(0.0),
         ValType::F64 => Instruction::F64Const(0.0),
-        ValType::V128 => Instruction::V128Const(0i128), 
+        ValType::V128 => Instruction::V128Const(0i128),
         ValType::ExternRef => Instruction::RefNull(wasm_encoder::ValType::ExternRef),
         ValType::FuncRef => Instruction::RefNull(wasm_encoder::ValType::FuncRef),
     }
@@ -181,13 +178,14 @@ fn value_to_value(from: &ValType) -> wasm_encoder::ValType {
         ValType::I64 => wasm_encoder::ValType::I64,
         ValType::F32 => wasm_encoder::ValType::F32,
         ValType::F64 => wasm_encoder::ValType::F64,
-        ValType::V128 => wasm_encoder::ValType::V128, 
+        ValType::V128 => wasm_encoder::ValType::V128,
         ValType::ExternRef => wasm_encoder::ValType::ExternRef,
         ValType::FuncRef => wasm_encoder::ValType::FuncRef,
     }
 }
 fn extern_to_export<F>(val: &wasmtime::ExternType, mut fn_next: F) -> wasm_encoder::Export
-          where F: FnMut(&wasmtime::ExternType) -> u32  
+where
+    F: FnMut(&wasmtime::ExternType) -> u32,
 {
     match val {
         wasmtime::ExternType::Func(_) => Export::Function(fn_next(val)),
