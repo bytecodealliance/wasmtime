@@ -4,19 +4,14 @@ use wasi_tests::{open_scratch_directory, STDERR_FD, STDIN_FD, STDOUT_FD};
 
 const CLOCK_ID: wasi::Userdata = 0x0123_45678;
 
-unsafe fn poll_oneoff_impl(r#in: &[wasi::Subscription], nexpected: usize) -> Vec<wasi::Event> {
+unsafe fn poll_oneoff_impl(r#in: &[wasi::Subscription]) -> Result<Vec<wasi::Event>, wasi::Error> {
     let mut out: Vec<wasi::Event> = Vec::new();
     out.resize_with(r#in.len(), || {
         MaybeUninit::<wasi::Event>::zeroed().assume_init()
     });
-    let size = wasi::poll_oneoff(r#in.as_ptr(), out.as_mut_ptr(), r#in.len())
-        .expect("poll_oneoff should succeed");
-    assert_eq!(
-        size, nexpected,
-        "poll_oneoff should return {} events",
-        nexpected
-    );
-    out
+    let size = wasi::poll_oneoff(r#in.as_ptr(), out.as_mut_ptr(), r#in.len())?;
+    out.truncate(size);
+    Ok(out)
 }
 
 unsafe fn test_empty_poll() {
@@ -45,7 +40,8 @@ unsafe fn test_timeout() {
             u: wasi::SubscriptionUU { clock },
         },
     }];
-    let out = poll_oneoff_impl(&r#in, 1);
+    let out = poll_oneoff_impl(&r#in).unwrap();
+    assert_eq!(out.len(), 1, "should return 1 event");
     let event = &out[0];
     assert_eq!(
         event.error,
@@ -92,7 +88,8 @@ unsafe fn test_stdin_read() {
             },
         },
     ];
-    let out = poll_oneoff_impl(&r#in, 1);
+    let out = poll_oneoff_impl(&r#in).unwrap();
+    assert_eq!(out.len(), 1, "should return 1 event");
     let event = &out[0];
     assert_eq!(
         event.error,
@@ -137,7 +134,8 @@ unsafe fn test_stdout_stderr_write() {
             },
         },
     ];
-    let out = poll_oneoff_impl(&r#in, 2);
+    let out = poll_oneoff_impl(&r#in).unwrap();
+    assert_eq!(out.len(), 2, "should return 2 events");
     assert_eq!(
         out[0].userdata, 1,
         "the event.userdata should contain fd userdata specified by the user"
@@ -192,7 +190,8 @@ unsafe fn test_fd_readwrite(fd: wasi::Fd, error_code: wasi::Errno) {
             },
         },
     ];
-    let out = poll_oneoff_impl(&r#in, 2);
+    let out = poll_oneoff_impl(&r#in).unwrap();
+    assert_eq!(out.len(), 2, "should return 2 events");
     assert_eq!(
         out[0].userdata, 1,
         "the event.userdata should contain fd userdata specified by the user"
