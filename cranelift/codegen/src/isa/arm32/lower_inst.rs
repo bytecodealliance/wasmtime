@@ -5,6 +5,7 @@ use crate::ir::Inst as IRInst;
 use crate::ir::Opcode;
 use crate::machinst::lower::*;
 use crate::machinst::*;
+use crate::settings::Flags;
 use crate::CodegenResult;
 
 use crate::isa::arm32::abi::*;
@@ -18,6 +19,7 @@ use super::lower::*;
 pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     insn: IRInst,
+    flags: &Flags,
 ) -> CodegenResult<()> {
     let op = ctx.data(insn).opcode();
     let inputs: SmallVec<[InsnInput; 4]> = (0..ctx.num_inputs(insn))
@@ -502,7 +504,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert_eq!(inputs.len(), sig.params.len());
                     assert_eq!(outputs.len(), sig.returns.len());
                     (
-                        Arm32ABICaller::from_func(sig, &extname, dist, caller_conv)?,
+                        Arm32ABICaller::from_func(sig, &extname, dist, caller_conv, flags)?,
                         &inputs[..],
                     )
                 }
@@ -512,7 +514,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert_eq!(inputs.len() - 1, sig.params.len());
                     assert_eq!(outputs.len(), sig.returns.len());
                     (
-                        Arm32ABICaller::from_ptr(sig, ptr, op, caller_conv)?,
+                        Arm32ABICaller::from_ptr(sig, ptr, op, caller_conv, flags)?,
                         &inputs[1..],
                     )
                 }

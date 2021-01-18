@@ -1,7 +1,7 @@
 //! ABI definitions.
 
 use crate::binemit::StackMap;
-use crate::ir::StackSlot;
+use crate::ir::{Signature, StackSlot};
 use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::settings;
@@ -26,6 +26,9 @@ pub trait ABICallee {
     /// may be provided with a temp vreg, which can only be allocated once the
     /// lowering context exists.
     fn init(&mut self, maybe_tmp: Option<Writable<Reg>>);
+
+    /// Access the (possibly legalized) signature.
+    fn signature(&self) -> &Signature;
 
     /// Accumulate outgoing arguments.  This ensures that at least SIZE bytes
     /// are allocated in the prologue to be available for use in function calls
@@ -215,6 +218,9 @@ pub trait ABICaller {
     /// Get the number of arguments expected.
     fn num_args(&self) -> usize;
 
+    /// Access the (possibly legalized) signature.
+    fn signature(&self) -> &Signature;
+
     /// Emit a copy of an argument value from a source register, prior to the call.
     fn emit_copy_regs_to_arg<C: LowerCtx<I = Self::I>>(
         &self,
@@ -222,6 +228,11 @@ pub trait ABICaller {
         idx: usize,
         from_reg: ValueRegs<Reg>,
     );
+
+    /// Specific order for copying into arguments at callsites. We must be
+    /// careful to copy into StructArgs first, because we need to be able
+    /// to invoke memcpy() before we've loaded other arg regs (see above).
+    fn get_copy_to_arg_order(&self) -> SmallVec<[usize; 8]>;
 
     /// Emit a copy a return value into a destination register, after the call returns.
     fn emit_copy_retval_to_regs<C: LowerCtx<I = Self::I>>(
