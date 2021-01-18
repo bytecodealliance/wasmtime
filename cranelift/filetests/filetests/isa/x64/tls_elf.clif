@@ -1,0 +1,19 @@
+test compile
+set tls_model=elf_gd
+target x86_64
+feature "experimental_x64"
+
+function u0:0(i32) -> i64 {
+gv0 = symbol colocated tls u1:0
+
+block0(v0: i32):
+    v1 = global_value.i64 gv0
+    return v1
+}
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: elf_tls_get_addr User { namespace: 1, index: 0 }
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
