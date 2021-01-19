@@ -331,6 +331,8 @@ pub enum VecMisc2 {
     Frintm,
     /// Floating point round to integral, rounding towards plus infinity
     Frintp,
+    /// Population count per byte
+    Cnt,
 }
 
 /// A Vector narrowing operation with two registers.
@@ -3752,6 +3754,7 @@ impl Inst {
                     VecMisc2::Frintz => ("frintz", size),
                     VecMisc2::Frintm => ("frintm", size),
                     VecMisc2::Frintp => ("frintp", size),
+                    VecMisc2::Cnt => ("cnt", size),
                 };
 
                 let rd_size = if is_shll { size.widen() } else { size };
