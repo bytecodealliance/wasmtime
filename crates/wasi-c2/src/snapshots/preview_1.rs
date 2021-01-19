@@ -895,7 +895,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             return Err(Error::Inval);
         }
 
-        use cap_std::time::{Duration, SystemClock};
+        use cap_std::time::Duration;
         let table = self.table();
         let mut poll = Poll::new();
 
@@ -905,15 +905,16 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             let sub = sub_ptr.read()?;
             match sub.u {
                 types::SubscriptionU::Clock(clocksub) => match clocksub.id {
-                    types::Clockid::Realtime => {
-                        let clock = self.clocks.system.deref();
+                    types::Clockid::Monotonic => {
+                        let clock = self.clocks.monotonic.deref();
                         let precision = Duration::from_micros(clocksub.precision);
                         let duration = Duration::from_micros(clocksub.timeout);
                         let deadline = if clocksub
                             .flags
                             .contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME)
                         {
-                            SystemClock::UNIX_EPOCH
+                            self.clocks
+                                .creation_time
                                 .checked_add(duration)
                                 .ok_or(Error::Overflow)?
                         } else {
@@ -922,7 +923,12 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                                 .checked_add(duration)
                                 .ok_or(Error::Overflow)?
                         };
-                        poll.subscribe_system_timer(clock, deadline, precision, sub.userdata.into())
+                        poll.subscribe_monotonic_clock(
+                            clock,
+                            deadline,
+                            precision,
+                            sub.userdata.into(),
+                        )
                     }
                     _ => Err(Error::Inval)?,
                 },
@@ -1000,7 +1006,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                         },
                     }
                 }
-                SubscriptionResult::SystemTimer(r) => {
+                SubscriptionResult::MonotonicClock(r) => {
                     let type_ = types::Eventtype::Clock;
                     types::Event {
                         userdata,

@@ -1,8 +1,8 @@
-use crate::clocks::WasiSystemClock;
+use crate::clocks::WasiMonotonicClock;
 use crate::file::WasiFile;
 use crate::Error;
 use bitflags::bitflags;
-use cap_std::time::{Duration, SystemTime};
+use cap_std::time::{Duration, Instant};
 use std::cell::{Cell, Ref};
 
 bitflags! {
@@ -34,18 +34,18 @@ impl<'a> RwSubscription<'a> {
     }
 }
 
-pub struct SystemTimerSubscription<'a> {
-    pub clock: &'a dyn WasiSystemClock,
-    pub deadline: SystemTime,
+pub struct MonotonicClockSubscription<'a> {
+    pub clock: &'a dyn WasiMonotonicClock,
+    pub deadline: Instant,
     pub precision: Duration,
 }
 
-impl<'a> SystemTimerSubscription<'a> {
-    pub fn now(&self) -> SystemTime {
+impl<'a> MonotonicClockSubscription<'a> {
+    pub fn now(&self) -> Instant {
         self.clock.now(self.precision)
     }
     pub fn result(&self) -> Option<Result<(), Error>> {
-        if self.now().duration_since(self.deadline).is_ok() {
+        if self.now().checked_duration_since(self.deadline).is_some() {
             Some(Ok(()))
         } else {
             None
@@ -56,13 +56,13 @@ impl<'a> SystemTimerSubscription<'a> {
 pub enum Subscription<'a> {
     Read(RwSubscription<'a>),
     Write(RwSubscription<'a>),
-    SystemTimer(SystemTimerSubscription<'a>),
+    MonotonicClock(MonotonicClockSubscription<'a>),
 }
 
 pub enum SubscriptionResult {
     Read(Result<(u64, RwEventFlags), Error>),
     Write(Result<(u64, RwEventFlags), Error>),
-    SystemTimer(Result<(), Error>),
+    MonotonicClock(Result<(), Error>),
 }
 
 impl SubscriptionResult {
@@ -70,7 +70,7 @@ impl SubscriptionResult {
         match s {
             Subscription::Read(s) => s.result().map(SubscriptionResult::Read),
             Subscription::Write(s) => s.result().map(SubscriptionResult::Write),
-            Subscription::SystemTimer(s) => s.result().map(SubscriptionResult::SystemTimer),
+            Subscription::MonotonicClock(s) => s.result().map(SubscriptionResult::MonotonicClock),
         }
     }
 }

@@ -22,7 +22,7 @@ mod unix {
                 return Ok(());
             }
             let mut pollfds = Vec::new();
-            let timeout = poll.earliest_system_timer();
+            let timeout = poll.earliest_clock_deadline();
             for s in poll.rw_subscriptions() {
                 match s {
                     Subscription::Read(f) => {
@@ -34,7 +34,7 @@ mod unix {
                         let raw_fd = wasi_file_raw_fd(f.file.deref()).ok_or(Error::Inval)?;
                         pollfds.push(unsafe { PollFd::new(raw_fd, PollFlags::POLLOUT) });
                     }
-                    Subscription::SystemTimer { .. } => unreachable!(),
+                    Subscription::MonotonicClock { .. } => unreachable!(),
                 }
             }
 
@@ -42,7 +42,7 @@ mod unix {
                 let poll_timeout = if let Some(t) = timeout {
                     let duration = t
                         .deadline
-                        .duration_since(t.clock.now(t.precision))
+                        .checked_duration_since(t.clock.now(t.precision))
                         .unwrap_or(Duration::from_secs(0));
                     (duration.as_millis() + 1) // XXX try always rounding up?
                         .try_into()

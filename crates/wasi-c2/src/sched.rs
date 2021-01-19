@@ -1,14 +1,14 @@
-use crate::clocks::WasiSystemClock;
+use crate::clocks::WasiMonotonicClock;
 use crate::file::WasiFile;
 use crate::Error;
-use cap_std::time::{Duration, SystemTime};
+use cap_std::time::{Duration, Instant};
 use std::cell::Ref;
 pub mod subscription;
 
 mod sync;
 pub use sync::SyncSched;
 
-use subscription::{RwSubscription, Subscription, SubscriptionResult, SystemTimerSubscription};
+use subscription::{MonotonicClockSubscription, RwSubscription, Subscription, SubscriptionResult};
 
 pub trait WasiSched {
     fn poll_oneoff(&self, poll: &Poll) -> Result<(), Error>;
@@ -36,15 +36,15 @@ impl<'a> Poll<'a> {
     pub fn new() -> Self {
         Self { subs: Vec::new() }
     }
-    pub fn subscribe_system_timer(
+    pub fn subscribe_monotonic_clock(
         &mut self,
-        clock: &'a dyn WasiSystemClock,
-        deadline: SystemTime,
+        clock: &'a dyn WasiMonotonicClock,
+        deadline: Instant,
         precision: Duration,
         ud: Userdata,
     ) {
         self.subs.push((
-            Subscription::SystemTimer(SystemTimerSubscription {
+            Subscription::MonotonicClock(MonotonicClockSubscription {
                 clock,
                 deadline,
                 precision,
@@ -69,15 +69,15 @@ impl<'a> Poll<'a> {
     pub fn is_empty(&self) -> bool {
         self.subs.is_empty()
     }
-    pub fn earliest_system_timer(&'a self) -> Option<&SystemTimerSubscription<'a>> {
+    pub fn earliest_clock_deadline(&'a self) -> Option<&MonotonicClockSubscription<'a>> {
         let mut subs = self
             .subs
             .iter()
             .filter_map(|(s, _ud)| match s {
-                Subscription::SystemTimer(t) => Some(t),
+                Subscription::MonotonicClock(t) => Some(t),
                 _ => None,
             })
-            .collect::<Vec<&SystemTimerSubscription<'a>>>();
+            .collect::<Vec<&MonotonicClockSubscription<'a>>>();
         subs.sort_by(|a, b| a.deadline.cmp(&b.deadline));
         subs.into_iter().next() // First element is earliest
     }
