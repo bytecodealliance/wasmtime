@@ -3,6 +3,7 @@ use crate::Error;
 use std::any::Any;
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, RawFd};
+use system_interface::io::ReadReady;
 
 pub struct Stdin(std::io::Stdin);
 
@@ -14,6 +15,12 @@ pub fn stdin() -> Stdin {
 impl AsRawFd for Stdin {
     fn as_raw_fd(&self) -> RawFd {
         self.0.as_raw_fd()
+    }
+}
+
+impl ReadReady for Stdin {
+    fn num_ready_bytes(&self) -> Result<u64, std::io::Error> {
+        self.0.num_ready_bytes()
     }
 }
 
@@ -57,6 +64,12 @@ impl AsRawFd for Stdout {
     }
 }
 
+impl ReadReady for Stdout {
+    fn num_ready_bytes(&self) -> Result<u64, std::io::Error> {
+        Ok(0)
+    }
+}
+
 impl WasiFile for Stdout {
     fn as_any(&self) -> &dyn Any {
         self
@@ -94,6 +107,12 @@ pub fn stderr() -> Stderr {
 impl AsRawFd for Stderr {
     fn as_raw_fd(&self) -> RawFd {
         self.0.as_raw_fd()
+    }
+}
+
+impl ReadReady for Stderr {
+    fn num_ready_bytes(&self) -> Result<u64, std::io::Error> {
+        Ok(0)
     }
 }
 

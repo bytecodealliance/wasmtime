@@ -24,7 +24,7 @@ thiserror = "1.0"
 libc = "0.2"
 wiggle = { path = "../wiggle", default-features = false, version = "0.22.0" }
 tracing = "0.1.19"
-system-interface = "0.2"
+system-interface = { version = "0.5", features = ["cap_std_impls"] }
 cap-std = "0.9"
 cap-fs-ext = "0.9"
 cap-time-ext = "0.9"

@@ -15,6 +15,7 @@ use std::any::Any;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, RwLock};
 use system_interface::fs::{Advice, FileIoExt};
+use system_interface::io::ReadReady;
 
 /// A virtual pipe read end.
 ///
@@ -123,12 +124,6 @@ impl<R: Read> FileIoExt for ReadPipe<R> {
     fn read_to_string(&self, buf: &mut String) -> io::Result<usize> {
         self.borrow().read_to_string(buf)
     }
-    fn bytes(self) -> io::Bytes<std::fs::File> {
-        panic!("impossible to implement, removing from trait")
-    }
-    fn take(self, limit: u64) -> io::Take<std::fs::File> {
-        panic!("impossible to implement, removing from trait")
-    }
     fn write(&self, buf: &[u8]) -> io::Result<usize> {
         Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
@@ -144,7 +139,7 @@ impl<R: Read> FileIoExt for ReadPipe<R> {
     fn write_vectored(&self, bufs: &[io::IoSlice]) -> io::Result<usize> {
         Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
-    fn write_fmt(&mut self, fmt: std::fmt::Arguments) -> io::Result<()> {
+    fn write_fmt(&self, fmt: std::fmt::Arguments) -> io::Result<()> {
         Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
     fn flush(&self) -> io::Result<()> {
@@ -155,6 +150,9 @@ impl<R: Read> FileIoExt for ReadPipe<R> {
     }
     fn stream_position(&self) -> io::Result<u64> {
         Err(std::io::Error::from_raw_os_error(libc::ESPIPE))
+    }
+    fn peek(&self, _buf: &mut [u8]) -> io::Result<usize> {
+        Err(std::io::Error::from_raw_os_error(libc::EBADF)) // XXX is this right? or do we have to implement this faithfully, and add a buffer of peeked values to handle during reads?
     }
 }
 
@@ -167,6 +165,13 @@ impl<R: Read> fs_set_times::SetTimes for ReadPipe<R> {
         todo!()
     }
 }
+
+impl<R: Read + Any> ReadReady for ReadPipe<R> {
+    fn num_ready_bytes(&self) -> Result<u64, std::io::Error> {
+        todo!()
+    }
+}
+
 impl<R: Read + Any> WasiFile for ReadPipe<R> {
     fn as_any(&self) -> &dyn Any {
         self
@@ -296,12 +301,6 @@ impl<W: Write> FileIoExt for WritePipe<W> {
     fn read_to_string(&self, buf: &mut String) -> io::Result<usize> {
         Err(std::io::Error::from_raw_os_error(libc::EBADF))
     }
-    fn bytes(self) -> io::Bytes<std::fs::File> {
-        todo!() // removing from trait
-    }
-    fn take(self, limit: u64) -> io::Take<std::fs::File> {
-        todo!() // removing from trait
-    }
     fn write(&self, buf: &[u8]) -> io::Result<usize> {
         self.borrow().write(buf)
     }
@@ -317,7 +316,7 @@ impl<W: Write> FileIoExt for WritePipe<W> {
     fn write_vectored(&self, bufs: &[io::IoSlice]) -> io::Result<usize> {
         self.borrow().write_vectored(bufs)
     }
-    fn write_fmt(&mut self, fmt: std::fmt::Arguments) -> io::Result<()> {
+    fn write_fmt(&self, fmt: std::fmt::Arguments) -> io::Result<()> {
         self.borrow().write_fmt(fmt)
     }
     fn flush(&self) -> io::Result<()> {
@@ -329,6 +328,9 @@ impl<W: Write> FileIoExt for WritePipe<W> {
     fn stream_position(&self) -> io::Result<u64> {
         Err(std::io::Error::from_raw_os_error(libc::ESPIPE))
     }
+    fn peek(&self, _buf: &mut [u8]) -> io::Result<usize> {
+        Err(std::io::Error::from_raw_os_error(libc::EBADF))
+    }
 }
 
 impl<W: Write> fs_set_times::SetTimes for WritePipe<W> {
@@ -338,6 +340,12 @@ impl<W: Write> fs_set_times::SetTimes for WritePipe<W> {
         _: Option<fs_set_times::SystemTimeSpec>,
     ) -> io::Result<()> {
         todo!() //
+    }
+}
+
+impl<W: Write + Any> ReadReady for WritePipe<W> {
+    fn num_ready_bytes(&self) -> Result<u64, std::io::Error> {
+        Ok(0)
     }
 }
 

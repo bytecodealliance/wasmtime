@@ -5,8 +5,9 @@ use std::any::Any;
 use std::cell::Ref;
 use std::ops::Deref;
 use system_interface::fs::FileIoExt;
+use system_interface::io::ReadReady;
 
-pub trait WasiFile: FileIoExt + SetTimes {
+pub trait WasiFile: FileIoExt + SetTimes + ReadReady {
     fn as_any(&self) -> &dyn Any;
     fn datasync(&self) -> Result<(), Error>;
     fn sync(&self) -> Result<(), Error>;

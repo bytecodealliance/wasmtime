@@ -72,10 +72,8 @@ mod unix {
                     if let Some(revents) = pollfd.revents() {
                         let (nbytes, rwsub) = match rwsub {
                             Subscription::Read(sub) => {
-                                (1, sub)
-                                // XXX FIXME: query_nbytes in wasi-common/src/sys/poll.rs
-                                // uses metadata.len - tell to calculate for regular files,
-                                // ioctl(fd, FIONREAD) for large files
+                                let ready = sub.file.num_ready_bytes()?;
+                                (std::cmp::max(ready, 1), sub)
                             }
                             Subscription::Write(sub) => (0, sub),
                             _ => unreachable!(),
