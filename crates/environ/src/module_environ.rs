@@ -1,6 +1,6 @@
 use crate::module::{
-    Initializer, InstanceSignature, MemoryPlan, Module, ModuleSignature, ModuleType, TableElements,
-    TablePlan, TypeTables,
+    Initializer, InstanceSignature, MemoryPlan, Module, ModuleSignature, ModuleType, ModuleUpvar,
+    TableElements, TablePlan, TypeTables,
 };
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
@@ -75,6 +75,14 @@ pub struct ModuleTranslation<'data> {
     code_index: u32,
 
     implicit_instances: HashMap<&'data str, InstanceIndex>,
+
+    /// The artifacts which are needed from the parent module when this module
+    /// is created. This is used to insert into `Initializer::CreateModule` when
+    /// this module is defined in the parent.
+    creation_artifacts: Vec<usize>,
+
+    /// Same as `creation_artifacts`, but for modules instead of artifacts.
+    creation_modules: Vec<ModuleUpvar>,
 }
 
 /// Contains function data: byte code and its offset in the module.
@@ -326,8 +334,7 @@ impl<'data> ModuleEnvironment<'data> {
         }
     }
 
-    fn gen_type_of_module(&mut self, module: usize) -> ModuleTypeIndex {
-        let module = &self.results[module].module;
+    fn gen_type_of_module(&mut self, module: &Module) -> ModuleTypeIndex {
         let imports = module
             .imports()
             .map(|(s, field, ty)| {
@@ -880,20 +887,43 @@ and for re-adding support for interface types you can see this issue:
     }
 
     fn module_end(&mut self) {
-        let (record_initializer, done) = match self.in_progress.pop() {
+        self.result.creation_artifacts.shrink_to_fit();
+        self.result.creation_modules.shrink_to_fit();
+
+        let (record_initializer, mut done) = match self.in_progress.pop() {
             Some(m) => (true, mem::replace(&mut self.result, m)),
             None => (false, mem::take(&mut self.result)),
         };
-        self.results.push(done);
+
         if record_initializer {
-            let index = self.results.len() - 1;
+            // Record the type of the module we just finished in our own
+            // module's list of modules.
+            let sig = self.gen_type_of_module(&done.module);
+            self.result.module.modules.push(sig);
+
+            // The root module will store the artifacts for this finished
+            // module at `artifact_index`. This then needs to be inherited by
+            // all later modules coming down to our now-current `self.result`...
+            let mut artifact_index = self.results.len();
+            for result in self.in_progress.iter_mut().chain(Some(&mut self.result)) {
+                result.creation_artifacts.push(artifact_index);
+                artifact_index = result.creation_artifacts.len() - 1;
+            }
+            // ... and then `self.result` needs to create a new module with
+            // whatever was record to save off as its own artifacts/modules.
             self.result
                 .module
                 .initializers
-                .push(Initializer::DefineModule(index));
-            let sig = self.gen_type_of_module(index);
-            self.result.module.modules.push(sig);
+                .push(Initializer::CreateModule {
+                    artifact_index,
+                    artifacts: mem::take(&mut done.creation_artifacts),
+                    modules: mem::take(&mut done.creation_modules),
+                });
         }
+
+        // And the final step is to insert the module into the list of finished
+        // modules to get returned at the end.
+        self.results.push(done);
     }
 
     fn reserve_instances(&mut self, amt: u32) {
@@ -936,16 +966,44 @@ and for re-adding support for interface types you can see this issue:
                 self.result.module.types.push(ty);
             }
 
-            // FIXME(WebAssembly/module-linking#28) unsure how to implement this
-            // at this time, if we can alias imported modules it's a lot harder,
-            // otherwise we'll need to figure out how to translate `index` to a
-            // `usize` for a defined module (creating Initializer::DefineModule)
+            // Modules are a bit trickier since we need to record how to track
+            // the state from the original module down to our own.
             Alias::OuterModule {
                 relative_depth,
                 index,
             } => {
-                drop((relative_depth, index));
-                unimplemented!()
+                // First we can copy the type from the parent module into our
+                // own module to record what type our module definition will
+                // have.
+                let module_idx = self.in_progress.len() - 1 - (relative_depth as usize);
+                let module_ty = self.in_progress[module_idx].module.modules[index];
+                self.result.module.modules.push(module_ty);
+
+                // Next we'll be injecting a module value that is closed over,
+                // and that will be used to define the module into the index
+                // space. Record an initializer about where our module is
+                // sourced from (which will be stored within each module value
+                // itself).
+                let module_index = self.result.creation_modules.len();
+                self.result
+                    .module
+                    .initializers
+                    .push(Initializer::DefineModule(module_index));
+
+                // And finally we need to record a breadcrumb trail of how to
+                // get the module value into `module_index`. The module just
+                // after our destination module will use a `ModuleIndex` to
+                // fetch the module value, and everything else inbetween will
+                // inherit that module's closed-over value.
+                let mut upvar = ModuleUpvar::Local(index);
+                for outer in self.in_progress[module_idx + 1..].iter_mut() {
+                    let upvar = mem::replace(
+                        &mut upvar,
+                        ModuleUpvar::Inherit(outer.creation_modules.len()),
+                    );
+                    outer.creation_modules.push(upvar);
+                }
+                self.result.creation_modules.push(upvar);
             }
 
             // This case is slightly more involved, we'll be recording all the

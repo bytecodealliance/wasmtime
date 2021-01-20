@@ -93,8 +93,7 @@
   (instance $a (instantiate $m))
 )
 
-;; alias parent -- module
-(; TODO
+;; alias outer -- module
 (module
   (module $a)
   (module $m
@@ -102,7 +101,6 @@
   )
   (instance (instantiate $m))
 )
-;)
 
 ;; The alias, import, type, module, and instance sections can all be interleaved
 (module $ROOT
