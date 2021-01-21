@@ -3,18 +3,17 @@ pub use unix::*;
 
 #[cfg(unix)]
 mod unix {
-    use crate::file::WasiFile;
-    use crate::sched::subscription::{RwEventFlags, Subscription};
-    use crate::sched::{Poll, WasiSched};
-    use crate::Error;
     use cap_std::time::Duration;
     use std::convert::TryInto;
     use std::ops::Deref;
     use std::os::unix::io::{AsRawFd, RawFd};
+    use wasi_c2::file::WasiFile;
+    use wasi_c2::sched::subscription::{RwEventFlags, Subscription};
+    use wasi_c2::sched::{Poll, WasiSched};
+    use wasi_c2::Error;
     use yanix::poll::{PollFd, PollFlags};
 
-    #[derive(Default)]
-    pub struct SyncSched {}
+    pub struct SyncSched;
 
     impl WasiSched for SyncSched {
         fn poll_oneoff<'a>(&self, poll: &'a Poll<'a>) -> Result<(), Error> {
@@ -106,22 +105,25 @@ mod unix {
 
     fn wasi_file_raw_fd(f: &dyn WasiFile) -> Option<RawFd> {
         let a = f.as_any();
-        if a.is::<cap_std::fs::File>() {
-            Some(a.downcast_ref::<cap_std::fs::File>().unwrap().as_raw_fd())
-        } else if a.is::<crate::stdio::Stdin>() {
-            Some(a.downcast_ref::<crate::stdio::Stdin>().unwrap().as_raw_fd())
-        } else if a.is::<crate::stdio::Stdout>() {
-            Some(
-                a.downcast_ref::<crate::stdio::Stdout>()
-                    .unwrap()
-                    .as_raw_fd(),
-            )
-        } else if a.is::<crate::stdio::Stderr>() {
-            Some(
-                a.downcast_ref::<crate::stdio::Stderr>()
-                    .unwrap()
-                    .as_raw_fd(),
-            )
+        if a.is::<crate::file::File>() {
+            /* DISABLED UNTIL AsRawFd can be implemented properly
+                Some(a.downcast_ref::<crate::file::File>().unwrap().as_raw_fd())
+            } else if a.is::<crate::stdio::Stdin>() {
+                Some(a.downcast_ref::<crate::stdio::Stdin>().unwrap().as_raw_fd())
+            } else if a.is::<crate::stdio::Stdout>() {
+                Some(
+                    a.downcast_ref::<crate::stdio::Stdout>()
+                        .unwrap()
+                        .as_raw_fd(),
+                )
+            } else if a.is::<crate::stdio::Stderr>() {
+                Some(
+                    a.downcast_ref::<crate::stdio::Stderr>()
+                        .unwrap()
+                        .as_raw_fd(),
+                )
+                */
+            None
         } else {
             None
         }

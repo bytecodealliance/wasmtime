@@ -1,30 +1,34 @@
 use anyhow::Context;
 use std::fs::File;
 use std::path::Path;
-use wasi_c2::virt::pipe::{ReadPipe, WritePipe};
+use wasi_c2::pipe::{ReadPipe, WritePipe};
+use wasi_c2_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{Linker, Module, Store};
 
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
-    /*
     let stdout = WritePipe::new_in_memory();
     let stderr = WritePipe::new_in_memory();
-    */
 
     let r = {
         let store = Store::default();
 
         // Create our wasi context.
         // Additionally register any preopened directories if we have them.
-        let mut builder = wasi_c2::WasiCtx::builder();
+        let mut builder = WasiCtxBuilder::new();
 
-        builder = builder.arg(bin_name)?.arg(".")?.inherit_stdio();
+        builder = builder
+            .arg(bin_name)?
+            .arg(".")?
+            .stdin(Box::new(ReadPipe::from(Vec::new())))
+            .stdout(Box::new(stdout.clone()))
+            .stderr(Box::new(stderr.clone()));
 
         if let Some(workspace) = workspace {
             println!("preopen: {:?}", workspace);
             let dirfd =
                 File::open(workspace).context(format!("error while preopening {:?}", workspace))?;
             let preopen_dir = unsafe { cap_std::fs::Dir::from_std_file(dirfd) };
-            builder = builder.preopened_dir(Box::new(preopen_dir), ".")?;
+            builder = builder.preopened_dir(preopen_dir, ".")?;
         }
 
         let snapshot1 = wasi_c2_wasmtime::Wasi::new(&store, builder.build()?);
@@ -43,7 +47,6 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
     match r {
         Ok(()) => Ok(()),
         Err(trap) => {
-            /*
             let stdout = stdout
                 .try_into_inner()
                 .expect("sole ref to stdout")
@@ -58,7 +61,6 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
             if !stderr.is_empty() {
                 println!("guest stderr:\n{}\n===", String::from_utf8_lossy(&stderr));
             }
-            */
             Err(trap.context(format!("error while testing Wasm module '{}'", bin_name,)))
         }
     }

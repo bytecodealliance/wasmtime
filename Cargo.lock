@@ -2263,6 +2263,7 @@ dependencies = [
  "target-lexicon",
  "tempfile",
  "wasi-c2",
+ "wasi-c2-cap-std-sync",
  "wasi-c2-wasmtime",
  "wasmtime",
  "wat",
@@ -2526,6 +2527,22 @@ dependencies = [
  "thiserror",
  "tracing",
  "wiggle",
+ "yanix 0.22.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "wasi-c2-cap-std-sync"
+version = "0.22.0"
+dependencies = [
+ "cap-fs-ext",
+ "cap-rand",
+ "cap-std",
+ "cap-time-ext",
+ "fs-set-times",
+ "libc",
+ "system-interface",
+ "tracing",
+ "wasi-c2",
  "yanix 0.22.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

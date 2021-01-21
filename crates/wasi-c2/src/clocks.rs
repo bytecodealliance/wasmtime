@@ -28,3 +28,9 @@ impl WasiMonotonicClock for MonotonicClock {
         self.now_with(precision)
     }
 }
+
+pub struct WasiClocks {
+    pub system: Box<dyn WasiSystemClock>,
+    pub monotonic: Box<dyn WasiMonotonicClock>,
+    pub creation_time: cap_std::time::Instant,
+}

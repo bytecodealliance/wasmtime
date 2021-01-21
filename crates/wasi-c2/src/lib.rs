@@ -2,16 +2,15 @@
 
 pub mod clocks;
 mod ctx;
-mod dir;
+pub mod dir;
 mod error;
-mod file;
+pub mod file;
+pub mod pipe;
 pub mod random;
 pub mod sched;
 pub mod snapshots;
-pub mod stdio;
 mod string_array;
 pub mod table;
-pub mod virt;
 
 pub use cap_fs_ext::SystemTimeSpec;
 pub use ctx::{WasiCtx, WasiCtxBuilder};

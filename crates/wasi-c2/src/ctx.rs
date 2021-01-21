@@ -1,7 +1,7 @@
-use crate::clocks::{WasiMonotonicClock, WasiSystemClock};
+use crate::clocks::WasiClocks;
 use crate::dir::{DirCaps, DirEntry, WasiDir};
 use crate::file::{FileCaps, FileEntry, WasiFile};
-use crate::sched::{SyncSched, WasiSched};
+use crate::sched::WasiSched;
 use crate::string_array::{StringArray, StringArrayError};
 use crate::table::Table;
 use crate::Error;
@@ -11,28 +11,29 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 pub struct WasiCtx {
-    pub(crate) args: StringArray,
-    pub(crate) env: StringArray,
-    pub(crate) random: RefCell<Box<dyn RngCore>>,
-    pub(crate) clocks: WasiCtxClocks,
-    pub(crate) sched: Box<dyn WasiSched>,
-    table: Rc<RefCell<Table>>,
+    pub args: StringArray,
+    pub env: StringArray,
+    pub random: RefCell<Box<dyn RngCore>>,
+    pub clocks: WasiClocks,
+    pub sched: Box<dyn WasiSched>,
+    pub table: Rc<RefCell<Table>>,
 }
 
 impl WasiCtx {
-    pub fn builder() -> WasiCtxBuilder {
-        WasiCtxBuilder(WasiCtx::new())
-    }
-
-    pub fn new() -> Self {
-        WasiCtx {
+    pub fn builder(
+        random: RefCell<Box<dyn RngCore>>,
+        clocks: WasiClocks,
+        sched: Box<dyn WasiSched>,
+        table: Rc<RefCell<Table>>,
+    ) -> WasiCtxBuilder {
+        WasiCtxBuilder(WasiCtx {
             args: StringArray::new(),
             env: StringArray::new(),
-            random: RefCell::new(Box::new(unsafe { cap_rand::rngs::OsRng::default() })),
-            clocks: WasiCtxClocks::default(),
-            sched: Box::new(SyncSched::default()),
-            table: Rc::new(RefCell::new(Table::new())),
-        }
+            random,
+            clocks,
+            sched,
+            table,
+        })
     }
 
     pub fn insert_file(&self, fd: u32, file: Box<dyn WasiFile>, caps: FileCaps) {
@@ -98,12 +99,6 @@ impl WasiCtxBuilder {
         self
     }
 
-    pub fn inherit_stdio(self) -> Self {
-        self.stdin(Box::new(crate::stdio::stdin()))
-            .stdout(Box::new(crate::stdio::stdout()))
-            .stderr(Box::new(crate::stdio::stderr()))
-    }
-
     pub fn preopened_dir(
         self,
         dir: Box<dyn WasiDir>,
@@ -118,30 +113,5 @@ impl WasiCtxBuilder {
             dir,
         )))?;
         Ok(self)
-    }
-
-    pub fn random(self, random: Box<dyn RngCore>) -> Self {
-        self.0.random.replace(random);
-        self
-    }
-}
-
-pub struct WasiCtxClocks {
-    pub(crate) system: Box<dyn WasiSystemClock>,
-    pub(crate) monotonic: Box<dyn WasiMonotonicClock>,
-    pub(crate) creation_time: cap_std::time::Instant,
-}
-
-impl Default for WasiCtxClocks {
-    fn default() -> WasiCtxClocks {
-        let system = Box::new(unsafe { cap_std::time::SystemClock::new() });
-        let monotonic = unsafe { cap_std::time::MonotonicClock::new() };
-        let creation_time = monotonic.now();
-        let monotonic = Box::new(monotonic);
-        WasiCtxClocks {
-            system,
-            monotonic,
-            creation_time,
-        }
     }
 }

@@ -5,9 +5,6 @@ use cap_std::time::{Duration, Instant};
 use std::cell::Ref;
 pub mod subscription;
 
-mod sync;
-pub use sync::SyncSched;
-
 use subscription::{MonotonicClockSubscription, RwSubscription, Subscription, SubscriptionResult};
 
 pub trait WasiSched {
