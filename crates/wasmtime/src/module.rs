@@ -527,6 +527,10 @@ impl Module {
         &self.inner.module
     }
 
+    pub(crate) fn env_module(&self) -> &wasmtime_environ::Module {
+        self.compiled_module().module()
+    }
+
     pub(crate) fn types(&self) -> &Arc<TypeTables> {
         &self.inner.types
     }
