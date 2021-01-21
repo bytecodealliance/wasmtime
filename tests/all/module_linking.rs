@@ -185,3 +185,39 @@ fn imports_exports() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn limit_instances() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_module_linking(true);
+    config.max_instances(10);
+    let engine = Engine::new(&config);
+    let module = Module::new(
+        &engine,
+        r#"
+            (module $PARENT
+              (module $m0)
+              (module $m1
+                (instance (instantiate (module outer $PARENT $m0)))
+                (instance (instantiate (module outer $PARENT $m0))))
+              (module $m2
+                (instance (instantiate (module outer $PARENT $m1)))
+                (instance (instantiate (module outer $PARENT $m1))))
+              (module $m3
+                (instance (instantiate (module outer $PARENT $m2)))
+                (instance (instantiate (module outer $PARENT $m2))))
+              (module $m4
+                (instance (instantiate (module outer $PARENT $m3)))
+                (instance (instantiate (module outer $PARENT $m3))))
+              (module $m5
+                (instance (instantiate (module outer $PARENT $m4)))
+                (instance (instantiate (module outer $PARENT $m4))))
+              (instance (instantiate $m5))
+            )
+        "#,
+    )?;
+    let store = Store::new(&engine);
+    let err = Instance::new(&store, &module, &[]).err().unwrap();
+    assert!(err.to_string().contains("instance limit of 10 exceeded"));
+    Ok(())
+}

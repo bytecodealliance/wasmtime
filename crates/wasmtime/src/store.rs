@@ -4,7 +4,7 @@ use crate::trampoline::StoreInstanceHandle;
 use crate::{Engine, Module};
 use anyhow::{bail, Result};
 use std::any::Any;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -67,6 +67,8 @@ pub(crate) struct StoreInner {
     /// Set of all compiled modules that we're holding a strong reference to
     /// the module's code for. This includes JIT functions, trampolines, etc.
     modules: RefCell<HashSet<ArcModuleCode>>,
+    /// The number of instantiated instances in this store.
+    instance_count: Cell<usize>,
 }
 
 struct HostInfoKey(VMExternRef);
@@ -109,6 +111,7 @@ impl Store {
                 stack_map_registry: StackMapRegistry::default(),
                 frame_info: Default::default(),
                 modules: Default::default(),
+                instance_count: Default::default(),
             }),
         }
     }
@@ -211,6 +214,15 @@ impl Store {
         for (index, wasm) in module.types().wasm_signatures.iter() {
             signatures.register(wasm, trampolines[index]);
         }
+    }
+
+    pub(crate) fn bump_instance_count(&self) -> Result<()> {
+        let n = self.inner.instance_count.get();
+        self.inner.instance_count.set(n + 1);
+        if n >= self.engine().config().max_instances {
+            bail!("instance limit of {} exceeded", n);
+        }
+        Ok(())
     }
 
     pub(crate) unsafe fn add_instance(&self, handle: InstanceHandle) -> StoreInstanceHandle {

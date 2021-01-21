@@ -33,6 +33,7 @@ pub struct Config {
     pub(crate) max_wasm_stack: usize,
     pub(crate) features: WasmFeatures,
     pub(crate) wasm_backtrace_details_env_used: bool,
+    pub(crate) max_instances: usize,
 }
 
 impl Config {
@@ -79,6 +80,7 @@ impl Config {
                 multi_value: true,
                 ..WasmFeatures::default()
             },
+            max_instances: 10_000,
         };
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
         return ret;
@@ -632,6 +634,15 @@ impl Config {
         self.tunables.dynamic_memory_offset_guard_size = guard_size;
         self.tunables.static_memory_offset_guard_size =
             cmp::max(guard_size, self.tunables.static_memory_offset_guard_size);
+        self
+    }
+
+    /// Configures the maximum number of instances which can be created within
+    /// this `Store`.
+    ///
+    /// Instantiation will fail with an error if this limit is exceeded.
+    pub fn max_instances(&mut self, instances: usize) -> &mut Self {
+        self.max_instances = instances;
         self
     }
 

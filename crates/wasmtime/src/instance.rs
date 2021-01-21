@@ -46,6 +46,8 @@ fn instantiate(
         &mut ImportsBuilder<'_>,
     ) -> Result<()>,
 ) -> Result<RuntimeInstance, Error> {
+    store.bump_instance_count()?;
+
     let compiled_module = module.compiled_module();
     let env_module = compiled_module.module();
 
