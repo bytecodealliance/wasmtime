@@ -3016,6 +3016,19 @@ pub(crate) fn emit(
             );
             sink.put4(0); // offset
         }
+
+        Inst::MachOTlsGetAddr { ref symbol } => {
+            // movq gv@tlv(%rip), %rdi
+            sink.put1(0x48); // REX.w
+            sink.put1(0x8b); // MOV
+            sink.put1(0x3d); // ModRM byte
+            emit_reloc(sink, state, Reloc::MachOX86_64Tlv, symbol, -4);
+            sink.put4(0); // offset
+
+            // callq *(%rdi)
+            sink.put1(0xff);
+            sink.put1(0x17);
+        }
     }
 
     state.clear_post_insn();

@@ -480,6 +480,10 @@ pub enum Inst {
     /// A call to the `ElfTlsGetAddr` libcall. Returns address
     /// of TLS symbol in rax.
     ElfTlsGetAddr { symbol: ExternalName },
+
+    /// A Mach-O TLS symbol access. Returns address of the TLS
+    /// symbol in rax.
+    MachOTlsGetAddr { symbol: ExternalName },
 }
 
 pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
@@ -539,7 +543,8 @@ impl Inst {
             | Inst::XmmLoadConst { .. }
             | Inst::XmmMinMaxSeq { .. }
             | Inst::XmmUninitializedValue { .. }
-            | Inst::ElfTlsGetAddr { .. } => None,
+            | Inst::ElfTlsGetAddr { .. }
+            | Inst::MachOTlsGetAddr { .. } => None,
 
             // These use dynamic SSE opcodes.
             Inst::GprToXmm { op, .. }
@@ -1791,6 +1796,10 @@ impl PrettyPrint for Inst {
             Inst::ElfTlsGetAddr { ref symbol } => {
                 format!("elf_tls_get_addr {:?}", symbol)
             }
+
+            Inst::MachOTlsGetAddr { ref symbol } => {
+                format!("macho_tls_get_addr {:?}", symbol)
+            }
         }
     }
 }
@@ -2051,7 +2060,7 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             // No registers are used.
         }
 
-        Inst::ElfTlsGetAddr { .. } => {
+        Inst::ElfTlsGetAddr { .. } | Inst::MachOTlsGetAddr { .. } => {
             // All caller-saves are clobbered.
             //
             // We use the SysV calling convention here because the
@@ -2449,6 +2458,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         | Inst::Hlt
         | Inst::AtomicRmwSeq { .. }
         | Inst::ElfTlsGetAddr { .. }
+        | Inst::MachOTlsGetAddr { .. }
         | Inst::Fence { .. } => {
             // Instruction doesn't explicitly mention any regs, so it can't have any virtual
             // regs that we'd need to remap.  Hence no action required.
