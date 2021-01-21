@@ -1,13 +1,11 @@
 use crate::Error;
 use bitflags::bitflags;
-use fs_set_times::SetTimes;
+use fs_set_times::SystemTimeSpec;
 use std::any::Any;
 use std::cell::Ref;
 use std::ops::Deref;
-use system_interface::fs::FileIoExt;
-use system_interface::io::ReadReady;
 
-pub trait WasiFile: FileIoExt + SetTimes + ReadReady {
+pub trait WasiFile {
     fn as_any(&self) -> &dyn Any;
     fn datasync(&self) -> Result<(), Error>;
     fn sync(&self) -> Result<(), Error>;
@@ -16,6 +14,27 @@ pub trait WasiFile: FileIoExt + SetTimes + ReadReady {
     fn set_fdflags(&self, _flags: FdFlags) -> Result<(), Error>;
     fn get_filestat(&self) -> Result<Filestat, Error>;
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error>;
+    fn advise(
+        &self,
+        offset: u64,
+        len: u64,
+        advice: system_interface::fs::Advice,
+    ) -> Result<(), Error>;
+    fn allocate(&self, offset: u64, len: u64) -> Result<(), Error>;
+    fn set_times(
+        &self,
+        atime: Option<SystemTimeSpec>,
+        mtime: Option<SystemTimeSpec>,
+    ) -> Result<(), Error>;
+    fn read_vectored(&self, bufs: &mut [std::io::IoSliceMut]) -> Result<u64, Error>;
+    fn read_vectored_at(&self, bufs: &mut [std::io::IoSliceMut], offset: u64)
+        -> Result<u64, Error>;
+    fn write_vectored(&self, bufs: &[std::io::IoSlice]) -> Result<u64, Error>;
+    fn write_vectored_at(&self, bufs: &[std::io::IoSlice], offset: u64) -> Result<u64, Error>;
+    fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error>;
+    fn stream_position(&self) -> Result<u64, Error>;
+    fn peek(&self, buf: &mut [u8]) -> Result<u64, Error>;
+    fn num_ready_bytes(&self) -> Result<u64, Error>;
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -28,31 +47,6 @@ pub enum FileType {
     SocketStream,
     SymbolicLink,
     Unknown,
-}
-
-impl From<&cap_std::fs::FileType> for FileType {
-    fn from(ft: &cap_std::fs::FileType) -> FileType {
-        use cap_fs_ext::FileTypeExt;
-        if ft.is_dir() {
-            FileType::Directory
-        } else if ft.is_symlink() {
-            FileType::SymbolicLink
-        } else if ft.is_socket() {
-            if ft.is_block_device() {
-                FileType::SocketDgram
-            } else {
-                FileType::SocketStream
-            }
-        } else if ft.is_block_device() {
-            FileType::BlockDevice
-        } else if ft.is_char_device() {
-            FileType::CharacterDevice
-        } else if ft.is_file() {
-            FileType::RegularFile
-        } else {
-            FileType::Unknown
-        }
-    }
 }
 
 bitflags! {

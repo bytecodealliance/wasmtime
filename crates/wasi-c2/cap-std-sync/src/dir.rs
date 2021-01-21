@@ -1,4 +1,4 @@
-use crate::file::File;
+use crate::file::{filetype_from, File};
 use cap_fs_ext::{DirExt, MetadataExt, SystemTimeSpec};
 use std::any::Any;
 use std::convert::TryInto;
@@ -117,7 +117,7 @@ impl WasiDir for Dir {
                 let entry = entry?;
                 let meta = entry.metadata()?;
                 let inode = meta.ino();
-                let filetype = FileType::from(&meta.file_type());
+                let filetype = filetype_from(&meta.file_type());
                 let name = entry.file_name().into_string().map_err(|_| Error::Ilseq)?;
                 let namelen = name.as_bytes().len().try_into()?;
                 Ok((filetype, inode, namelen, name))
@@ -164,7 +164,7 @@ impl WasiDir for Dir {
         Ok(Filestat {
             device_id: meta.dev(),
             inode: meta.ino(),
-            filetype: FileType::from(&meta.file_type()),
+            filetype: filetype_from(&meta.file_type()),
             nlink: meta.nlink(),
             size: meta.len(),
             atim: meta.accessed().map(|t| Some(t.into_std())).unwrap_or(None),
@@ -177,7 +177,7 @@ impl WasiDir for Dir {
         Ok(Filestat {
             device_id: meta.dev(),
             inode: meta.ino(),
-            filetype: FileType::from(&meta.file_type()),
+            filetype: filetype_from(&meta.file_type()),
             nlink: meta.nlink(),
             size: meta.len(),
             atim: meta.accessed().map(|t| Some(t.into_std())).unwrap_or(None),

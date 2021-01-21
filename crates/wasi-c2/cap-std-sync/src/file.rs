@@ -1,6 +1,7 @@
 use cap_fs_ext::MetadataExt;
-use fs_set_times::SetTimes;
+use fs_set_times::{SetTimes, SystemTimeSpec};
 use std::any::Any;
+use std::convert::TryInto;
 use std::io;
 use system_interface::fs::{Advice, FileIoExt};
 use system_interface::io::ReadReady;
@@ -31,7 +32,7 @@ impl WasiFile for File {
     }
     fn get_filetype(&self) -> Result<FileType, Error> {
         let meta = self.0.metadata()?;
-        Ok(FileType::from(&meta.file_type()))
+        Ok(filetype_from(&meta.file_type()))
     }
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
         // XXX get_fdflags is not implemented but lets lie rather than panic:
@@ -45,7 +46,7 @@ impl WasiFile for File {
         Ok(Filestat {
             device_id: meta.dev(),
             inode: meta.ino(),
-            filetype: FileType::from(&meta.file_type()),
+            filetype: filetype_from(&meta.file_type()),
             nlink: meta.nlink(),
             size: meta.len(),
             atim: meta.accessed().map(|t| Some(t.into_std())).unwrap_or(None),
@@ -57,80 +58,90 @@ impl WasiFile for File {
         self.0.set_len(size)?;
         Ok(())
     }
-}
-
-impl FileIoExt for File {
-    fn advise(&self, offset: u64, len: u64, advice: Advice) -> io::Result<()> {
-        self.0.advise(offset, len, advice)
+    fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
+        self.0.advise(offset, len, advice)?;
+        Ok(())
     }
-    fn allocate(&self, offset: u64, len: u64) -> io::Result<()> {
-        self.0.allocate(offset, len)
+    fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
+        self.0.allocate(offset, len)?;
+        Ok(())
     }
-    fn read(&self, buf: &mut [u8]) -> io::Result<usize> {
-        self.0.read(buf)
-    }
-    fn read_exact(&self, buf: &mut [u8]) -> io::Result<()> {
-        self.0.read_exact(buf)
-    }
-    fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
-        self.0.read_at(buf, offset)
-    }
-    fn read_exact_at(&self, buf: &mut [u8], offset: u64) -> io::Result<()> {
-        self.0.read_exact_at(buf, offset)
-    }
-    fn read_vectored(&self, bufs: &mut [io::IoSliceMut]) -> io::Result<usize> {
-        self.0.read_vectored(bufs)
-    }
-    fn read_to_end(&self, buf: &mut Vec<u8>) -> io::Result<usize> {
-        self.0.read_to_end(buf)
-    }
-    fn read_to_string(&self, buf: &mut String) -> io::Result<usize> {
-        self.0.read_to_string(buf)
-    }
-    fn write(&self, buf: &[u8]) -> io::Result<usize> {
-        self.0.write(buf)
-    }
-    fn write_all(&self, buf: &[u8]) -> io::Result<()> {
-        self.0.write_all(buf)
-    }
-    fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize> {
-        self.0.write_at(buf, offset)
-    }
-    fn write_all_at(&self, buf: &[u8], offset: u64) -> io::Result<()> {
-        self.0.write_all_at(buf, offset)
-    }
-    fn write_vectored(&self, bufs: &[io::IoSlice]) -> io::Result<usize> {
-        self.0.write_vectored(bufs)
-    }
-    fn write_fmt(&self, fmt: std::fmt::Arguments) -> io::Result<()> {
-        self.0.write_fmt(fmt)
-    }
-    fn flush(&self) -> io::Result<()> {
-        self.0.flush()
-    }
-    fn seek(&self, pos: std::io::SeekFrom) -> io::Result<u64> {
-        self.0.seek(pos)
-    }
-    fn stream_position(&self) -> io::Result<u64> {
-        self.0.stream_position()
-    }
-    fn peek(&self, buf: &mut [u8]) -> io::Result<usize> {
-        self.0.peek(buf)
-    }
-}
-
-impl SetTimes for File {
     fn set_times(
         &self,
-        atime: Option<fs_set_times::SystemTimeSpec>,
-        mtime: Option<fs_set_times::SystemTimeSpec>,
-    ) -> io::Result<()> {
-        self.0.set_times(atime, mtime)
+        atime: Option<SystemTimeSpec>,
+        mtime: Option<SystemTimeSpec>,
+    ) -> Result<(), Error> {
+        self.0.set_times(atime, mtime)?;
+        Ok(())
+    }
+    fn read_vectored(&self, bufs: &mut [io::IoSliceMut]) -> Result<u64, Error> {
+        let n = self.0.read_vectored(bufs)?;
+        Ok(n.try_into().map_err(|_| Error::Overflow)?)
+    }
+    fn read_vectored_at(&self, bufs: &mut [io::IoSliceMut], offset: u64) -> Result<u64, Error> {
+        let n = self.0.read_vectored_at(bufs, offset)?;
+        Ok(n.try_into().map_err(|_| Error::Overflow)?)
+    }
+    fn write_vectored(&self, bufs: &[io::IoSlice]) -> Result<u64, Error> {
+        let n = self.0.write_vectored(bufs)?;
+        Ok(n.try_into().map_err(|_| Error::Overflow)?)
+    }
+    fn write_vectored_at(&self, bufs: &[io::IoSlice], offset: u64) -> Result<u64, Error> {
+        let n = self.0.write_vectored_at(bufs, offset)?;
+        Ok(n.try_into().map_err(|_| Error::Overflow)?)
+    }
+    fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
+        Ok(self.0.seek(pos)?)
+    }
+    fn stream_position(&self) -> Result<u64, Error> {
+        Ok(self.0.stream_position()?)
+    }
+    fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
+        let n = self.0.peek(buf)?;
+        Ok(n.try_into().map_err(|_| Error::Overflow)?)
+    }
+    fn num_ready_bytes(&self) -> Result<u64, Error> {
+        Ok(self.0.num_ready_bytes()?)
     }
 }
 
-impl ReadReady for File {
-    fn num_ready_bytes(&self) -> io::Result<u64> {
-        self.0.num_ready_bytes()
+pub fn filetype_from(ft: &cap_std::fs::FileType) -> FileType {
+    use cap_fs_ext::FileTypeExt;
+    if ft.is_dir() {
+        FileType::Directory
+    } else if ft.is_symlink() {
+        FileType::SymbolicLink
+    } else if ft.is_socket() {
+        if ft.is_block_device() {
+            FileType::SocketDgram
+        } else {
+            FileType::SocketStream
+        }
+    } else if ft.is_block_device() {
+        FileType::BlockDevice
+    } else if ft.is_char_device() {
+        FileType::CharacterDevice
+    } else if ft.is_file() {
+        FileType::RegularFile
+    } else {
+        FileType::Unknown
+    }
+}
+
+#[cfg(windows)]
+use std::os::windows::io::{AsRawHandle, RawHandle};
+#[cfg(windows)]
+impl AsRawHandle for File {
+    fn as_raw_handle(&self) -> RawHandle {
+        self.0.as_raw_handle()
+    }
+}
+
+#[cfg(unix)]
+use std::os::unix::io::{AsRawFd, RawFd};
+#[cfg(unix)]
+impl AsRawFd for File {
+    fn as_raw_fd(&self) -> RawFd {
+        self.0.as_raw_fd()
     }
 }

@@ -12,10 +12,10 @@
 use crate::file::{FdFlags, FileType, Filestat, WasiFile};
 use crate::Error;
 use std::any::Any;
+use std::convert::TryInto;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, RwLock};
-use system_interface::fs::{Advice, FileIoExt};
-use system_interface::io::ReadReady;
+use system_interface::fs::Advice;
 
 /// A virtual pipe read end.
 ///
@@ -96,82 +96,6 @@ impl From<&str> for ReadPipe<io::Cursor<String>> {
     }
 }
 
-impl<R: Read> FileIoExt for ReadPipe<R> {
-    fn advise(&self, offset: u64, len: u64, advice: Advice) -> io::Result<()> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn allocate(&self, offset: u64, len: u64) -> io::Result<()> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn read(&self, buf: &mut [u8]) -> io::Result<usize> {
-        self.borrow().read(buf)
-    }
-    fn read_exact(&self, buf: &mut [u8]) -> io::Result<()> {
-        self.borrow().read_exact(buf)
-    }
-    fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn read_exact_at(&self, buf: &mut [u8], offset: u64) -> io::Result<()> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn read_vectored(&self, bufs: &mut [io::IoSliceMut]) -> io::Result<usize> {
-        self.borrow().read_vectored(bufs)
-    }
-    fn read_to_end(&self, buf: &mut Vec<u8>) -> io::Result<usize> {
-        self.borrow().read_to_end(buf)
-    }
-    fn read_to_string(&self, buf: &mut String) -> io::Result<usize> {
-        self.borrow().read_to_string(buf)
-    }
-    fn write(&self, buf: &[u8]) -> io::Result<usize> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn write_all(&self, buf: &[u8]) -> io::Result<()> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn write_all_at(&self, buf: &[u8], offset: u64) -> io::Result<()> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn write_vectored(&self, bufs: &[io::IoSlice]) -> io::Result<usize> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn write_fmt(&self, fmt: std::fmt::Arguments) -> io::Result<()> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn flush(&self) -> io::Result<()> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn seek(&self, _pos: std::io::SeekFrom) -> io::Result<u64> {
-        Err(std::io::Error::from_raw_os_error(libc::ESPIPE))
-    }
-    fn stream_position(&self) -> io::Result<u64> {
-        Err(std::io::Error::from_raw_os_error(libc::ESPIPE))
-    }
-    fn peek(&self, _buf: &mut [u8]) -> io::Result<usize> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF)) // XXX is this right? or do we have to implement this faithfully, and add a buffer of peeked values to handle during reads?
-    }
-}
-
-impl<R: Read> fs_set_times::SetTimes for ReadPipe<R> {
-    fn set_times(
-        &self,
-        _: Option<fs_set_times::SystemTimeSpec>,
-        _: Option<fs_set_times::SystemTimeSpec>,
-    ) -> io::Result<()> {
-        todo!()
-    }
-}
-
-impl<R: Read + Any> ReadReady for ReadPipe<R> {
-    fn num_ready_bytes(&self) -> Result<u64, std::io::Error> {
-        todo!()
-    }
-}
-
 impl<R: Read + Any> WasiFile for ReadPipe<R> {
     fn as_any(&self) -> &dyn Any {
         self
@@ -205,6 +129,44 @@ impl<R: Read + Any> WasiFile for ReadPipe<R> {
     }
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
         Err(Error::Perm)
+    }
+    fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
+        Err(Error::Badf)
+    }
+    fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
+        Err(Error::Badf)
+    }
+    fn read_vectored(&self, bufs: &mut [io::IoSliceMut]) -> Result<u64, Error> {
+        let n = self.borrow().read_vectored(bufs)?;
+        Ok(n.try_into().map_err(|_| Error::Overflow)?)
+    }
+    fn read_vectored_at(&self, bufs: &mut [io::IoSliceMut], offset: u64) -> Result<u64, Error> {
+        Err(Error::Badf)
+    }
+    fn write_vectored(&self, bufs: &[io::IoSlice]) -> Result<u64, Error> {
+        Err(Error::Badf)
+    }
+    fn write_vectored_at(&self, bufs: &[io::IoSlice], offset: u64) -> Result<u64, Error> {
+        Err(Error::Badf)
+    }
+    fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
+        Err(Error::Badf)
+    }
+    fn stream_position(&self) -> Result<u64, Error> {
+        Err(Error::Badf)
+    }
+    fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
+        Err(Error::Badf)
+    }
+    fn set_times(
+        &self,
+        atime: Option<fs_set_times::SystemTimeSpec>,
+        mtime: Option<fs_set_times::SystemTimeSpec>,
+    ) -> Result<(), Error> {
+        Err(Error::Badf)
+    }
+    fn num_ready_bytes(&self) -> Result<u64, Error> {
+        Ok(0)
     }
 }
 
@@ -273,82 +235,6 @@ impl WritePipe<io::Cursor<Vec<u8>>> {
     }
 }
 
-impl<W: Write> FileIoExt for WritePipe<W> {
-    fn advise(&self, offset: u64, len: u64, advice: Advice) -> io::Result<()> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn allocate(&self, offset: u64, len: u64) -> io::Result<()> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn read(&self, buf: &mut [u8]) -> io::Result<usize> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn read_exact(&self, buf: &mut [u8]) -> io::Result<()> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn read_exact_at(&self, buf: &mut [u8], offset: u64) -> io::Result<()> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn read_vectored(&self, bufs: &mut [io::IoSliceMut]) -> io::Result<usize> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn read_to_end(&self, buf: &mut Vec<u8>) -> io::Result<usize> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn read_to_string(&self, buf: &mut String) -> io::Result<usize> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn write(&self, buf: &[u8]) -> io::Result<usize> {
-        self.borrow().write(buf)
-    }
-    fn write_all(&self, buf: &[u8]) -> io::Result<()> {
-        self.borrow().write_all(buf)
-    }
-    fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn write_all_at(&self, buf: &[u8], offset: u64) -> io::Result<()> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-    fn write_vectored(&self, bufs: &[io::IoSlice]) -> io::Result<usize> {
-        self.borrow().write_vectored(bufs)
-    }
-    fn write_fmt(&self, fmt: std::fmt::Arguments) -> io::Result<()> {
-        self.borrow().write_fmt(fmt)
-    }
-    fn flush(&self) -> io::Result<()> {
-        self.borrow().flush()
-    }
-    fn seek(&self, pos: std::io::SeekFrom) -> io::Result<u64> {
-        Err(std::io::Error::from_raw_os_error(libc::ESPIPE))
-    }
-    fn stream_position(&self) -> io::Result<u64> {
-        Err(std::io::Error::from_raw_os_error(libc::ESPIPE))
-    }
-    fn peek(&self, _buf: &mut [u8]) -> io::Result<usize> {
-        Err(std::io::Error::from_raw_os_error(libc::EBADF))
-    }
-}
-
-impl<W: Write> fs_set_times::SetTimes for WritePipe<W> {
-    fn set_times(
-        &self,
-        _: Option<fs_set_times::SystemTimeSpec>,
-        _: Option<fs_set_times::SystemTimeSpec>,
-    ) -> io::Result<()> {
-        todo!() //
-    }
-}
-
-impl<W: Write + Any> ReadReady for WritePipe<W> {
-    fn num_ready_bytes(&self) -> Result<u64, std::io::Error> {
-        Ok(0)
-    }
-}
-
 impl<W: Write + Any> WasiFile for WritePipe<W> {
     fn as_any(&self) -> &dyn Any {
         self
@@ -382,5 +268,43 @@ impl<W: Write + Any> WasiFile for WritePipe<W> {
     }
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
         Err(Error::Perm)
+    }
+    fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
+        Err(Error::Badf)
+    }
+    fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
+        Err(Error::Badf)
+    }
+    fn read_vectored(&self, bufs: &mut [io::IoSliceMut]) -> Result<u64, Error> {
+        Err(Error::Badf)
+    }
+    fn read_vectored_at(&self, bufs: &mut [io::IoSliceMut], offset: u64) -> Result<u64, Error> {
+        Err(Error::Badf)
+    }
+    fn write_vectored(&self, bufs: &[io::IoSlice]) -> Result<u64, Error> {
+        let n = self.borrow().write_vectored(bufs)?;
+        Ok(n.try_into().map_err(|_| Error::Overflow)?)
+    }
+    fn write_vectored_at(&self, bufs: &[io::IoSlice], offset: u64) -> Result<u64, Error> {
+        Err(Error::Badf)
+    }
+    fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
+        Err(Error::Badf)
+    }
+    fn stream_position(&self) -> Result<u64, Error> {
+        Err(Error::Badf)
+    }
+    fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
+        Err(Error::Badf)
+    }
+    fn set_times(
+        &self,
+        atime: Option<fs_set_times::SystemTimeSpec>,
+        mtime: Option<fs_set_times::SystemTimeSpec>,
+    ) -> Result<(), Error> {
+        Err(Error::Badf)
+    }
+    fn num_ready_bytes(&self) -> Result<u64, Error> {
+        Ok(0)
     }
 }

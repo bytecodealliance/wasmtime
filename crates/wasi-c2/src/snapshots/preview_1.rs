@@ -369,8 +369,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 .get_file(fd)
                 .expect("checked that entry is file")
                 .get_cap(FileCaps::FILESTAT_SET_TIMES)?
-                .set_times(atim, mtim)?;
-            Ok(())
+                .set_times(atim, mtim)
         } else if table.is::<DirEntry>(fd) {
             use cap_std::time::{Duration, SystemClock};
 
@@ -398,8 +397,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 .get_dir(fd)
                 .expect("checked that entry is dir")
                 .get_cap(DirCaps::FILESTAT_SET_TIMES)?
-                .set_times(".", atim, mtim)?;
-            Ok(())
+                .set_times(".", atim, mtim)
         } else {
             Err(Error::Badf)
         }
