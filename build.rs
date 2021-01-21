@@ -243,9 +243,12 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 return env::var("CARGO_CFG_TARGET_ARCH").unwrap() != "x86_64";
             }
 
+            // Waiting for an update to the spec testsuite to not use old
+            // instruction names.
+            ("simd", "simd_boolean") | ("simd", "simd_lane") => return true,
+
             // These are only implemented on aarch64 and x64.
-            ("simd", "simd_boolean")
-            | ("simd", "simd_f32x4_pmin_pmax")
+            ("simd", "simd_f32x4_pmin_pmax")
             | ("simd", "simd_f64x2_pmin_pmax")
             | ("simd", "simd_f32x4_rounding")
             | ("simd", "simd_f64x2_rounding")
