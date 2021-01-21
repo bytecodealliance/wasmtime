@@ -239,9 +239,29 @@ pub enum Initializer {
         args: IndexMap<String, EntityIndex>,
     },
 
-    /// A module is defined into the module index space, and which module is
-    /// being defined is specified by the index payload.
+    /// A module is being created from a set of compiled artifacts.
+    CreateModule {
+        /// The index of the artifact that's being convereted into a module.
+        artifact_index: usize,
+        /// The list of artifacts that this module value will be inheriting.
+        artifacts: Vec<usize>,
+        /// The list of modules that this module value will inherit.
+        modules: Vec<ModuleUpvar>,
+    },
+
+    /// A module is created from a closed-over-module value, defined when this
+    /// module was created.
     DefineModule(usize),
+}
+
+/// Where module values can come from when creating a new module from a compiled
+/// artifact.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ModuleUpvar {
+    /// A module value is inherited from the module creating the new module.
+    Inherit(usize),
+    /// A module value comes from the instance-to-be-created module index space.
+    Local(ModuleIndex),
 }
 
 impl Module {

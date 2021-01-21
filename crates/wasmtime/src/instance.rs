@@ -62,46 +62,27 @@ fn instantiate(
                     .with_context(|| format!("incompatible import type for `{}`", name))?;
             }
 
-            // Turns out defining any kind of module is pretty easy, we're just
-            // slinging around pointers.
-            Initializer::DefineModule(idx) => {
-                imports.modules.push(module.submodule(*idx));
-            }
-
             // Here we lookup our instance handle, find the right export,
             // and then push that item into our own index space. We eschew
-            // type-checking since only valid modules reach this point.
-            //
-            // Note that export lookup here needs to happen by name. The
-            // `export` index is an index into our local type definition of the
-            // type of the instance to figure out what name it was assigned.
-            // This is where the subtyping happens!
-            //
-            // Note that the unsafety here is because we're asserting that the
-            // handle comes from our same store, but this should be true because
-            // we acquired the handle from an instance in the store.
+            // type-checking since only valid modules should reach this point.
             Initializer::AliasInstanceExport { instance, export } => {
                 let export = &imports.instances[*instance][export];
                 let item = unsafe { Extern::from_wasmtime_export(export, store) };
                 imports.push_extern(&item);
             }
 
-            // Oh boy a recursive instantiation! The recursive arguments here
-            // are pretty simple, and the only slightly-meaty one is how
-            // arguments are pulled from `args` and pushed directly into the
-            // builder specified, which should be an easy enough
-            // copy-the-pointer operation in all cases.
+            // Oh boy a recursive instantiation!
             //
-            // Note that this recursive call shouldn't result in an infinite
-            // loop because of wasm module validation which requires everything
-            // to be a DAG. Additionally the recursion should also be bounded
-            // due to validation. We may one day need to make this an iterative
-            // loop, however.
+            // We use our local index space of modules to find the module to
+            // instantiate and argument lookup is defined as looking inside of
+            // `args`. Like above with aliases all type checking is eschewed
+            // because only valid modules should reach this point.
             //
-            // Also note that there's some unsafety here around cloning
-            // `InstanceHandle` because the handle may not live long enough, but
-            // we're doing all of this in the context of our `Store` argument
-            // above so we should be safe here.
+            // Note that it's thought that due to the acyclic nature of
+            // instantiation this can't loop to blow the native stack, and
+            // validation should in theory ensure this has a bounded depth.
+            // Despite this we may need to change this to a loop instead of
+            // recursion one day.
             Initializer::Instantiate { module, args } => {
                 let handle = instantiate(
                     store,
@@ -133,6 +114,33 @@ fn instantiate(
                     },
                 )?;
                 imports.instances.push(handle);
+            }
+
+            // A new module is being defined, and the source of this module is
+            // our module's list of closed-over-modules.
+            //
+            // This is used for outer aliases.
+            Initializer::DefineModule(upvar_index) => {
+                imports
+                    .modules
+                    .push(module.module_upvar(*upvar_index).clone());
+            }
+
+            // A new module is defined, created from a set of compiled
+            // artifacts. The new module value will be created with the
+            // specified artifacts being closed over as well as the specified
+            // set of module values in our index/upvar index spaces being closed
+            // over.
+            //
+            // This is used for defining submodules.
+            Initializer::CreateModule {
+                artifact_index,
+                artifacts,
+                modules,
+            } => {
+                let submodule =
+                    module.create_submodule(*artifact_index, artifacts, modules, &imports.modules);
+                imports.modules.push(submodule);
             }
         }
     }

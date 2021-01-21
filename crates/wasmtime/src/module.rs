@@ -2,12 +2,16 @@ use crate::types::{ExportType, ExternType, ImportType};
 use crate::{Engine, ModuleType};
 use anyhow::{bail, Context, Result};
 use bincode::Options;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::hash::Hash;
 use std::path::Path;
 use std::sync::Arc;
 use wasmparser::Validator;
 #[cfg(feature = "cache")]
 use wasmtime_cache::ModuleCacheEntry;
+use wasmtime_environ::entity::PrimaryMap;
+use wasmtime_environ::wasm::ModuleIndex;
 use wasmtime_jit::{CompilationArtifacts, CompiledModule, TypeTables};
 
 /// A compiled WebAssembly module, ready to be instantiated.
@@ -80,14 +84,72 @@ use wasmtime_jit::{CompilationArtifacts, CompiledModule, TypeTables};
 /// [`Config`]: crate::Config
 #[derive(Clone)]
 pub struct Module {
-    engine: Engine,
-    data: Arc<ModuleData>,
-    index: usize,
+    inner: Arc<ModuleInner>,
 }
 
-pub(crate) struct ModuleData {
-    pub(crate) types: Arc<TypeTables>,
-    pub(crate) modules: Vec<CompiledModule>,
+struct ModuleInner {
+    engine: Engine,
+    /// The compiled artifacts for this module that will be instantiated and
+    /// executed.
+    module: Arc<CompiledModule>,
+    /// Closed-over compilation artifacts used to create submodules when this
+    /// module is instantiated.
+    artifact_upvars: Vec<Arc<CompiledModule>>,
+    /// Closed-over module values which are used when this module is
+    /// instantiated.
+    module_upvars: Vec<Module>,
+    /// Type information of this module and all `artifact_upvars` compiled
+    /// modules.
+    types: Arc<TypeTables>,
+}
+
+/// A small helper struct which defines modules are serialized.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct ModuleSerialized<'a> {
+    /// All compiled artifacts neeeded by this module, where the last entry in
+    /// this list is the artifacts for the module itself.
+    artifacts: Vec<MyCow<'a, CompilationArtifacts>>,
+    /// Closed-over module values that are also needed for this module.
+    modules: Vec<ModuleSerialized<'a>>,
+    /// The index into the list of type tables that are used for this module's
+    /// type tables.
+    type_tables: usize,
+}
+
+// This is like `std::borrow::Cow` but it doesn't have a `Clone` bound on `T`
+enum MyCow<'a, T> {
+    Borrowed(&'a T),
+    Owned(T),
+}
+
+impl<'a, T> MyCow<'a, T> {
+    fn unwrap_owned(self) -> T {
+        match self {
+            MyCow::Owned(val) => val,
+            MyCow::Borrowed(_) => unreachable!(),
+        }
+    }
+}
+
+impl<'a, T: Serialize> Serialize for MyCow<'a, T> {
+    fn serialize<S>(&self, dst: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        match self {
+            MyCow::Borrowed(val) => val.serialize(dst),
+            MyCow::Owned(val) => val.serialize(dst),
+        }
+    }
+}
+
+impl<'a, 'b, T: Deserialize<'a>> Deserialize<'a> for MyCow<'b, T> {
+    fn deserialize<D>(src: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'a>,
+    {
+        Ok(MyCow::Owned(T::deserialize(src)?))
+    }
 }
 
 impl Module {
@@ -169,7 +231,8 @@ impl Module {
     /// See [`Module::new`] for other details.
     pub fn new_with_name(engine: &Engine, bytes: impl AsRef<[u8]>, name: &str) -> Result<Module> {
         let mut module = Module::new(engine, bytes.as_ref())?;
-        Arc::get_mut(&mut module.data).unwrap().modules[module.index]
+        Arc::get_mut(&mut Arc::get_mut(&mut module.inner).unwrap().module)
+            .unwrap()
             .module_mut()
             .expect("mutable module")
             .name = Some(name.to_string());
@@ -254,17 +317,21 @@ impl Module {
         let (main_module, artifacts, types) =
             CompilationArtifacts::build(engine.compiler(), binary)?;
 
-        let modules = CompiledModule::from_artifacts_list(
+        let mut modules = CompiledModule::from_artifacts_list(
             artifacts,
             engine.compiler().isa(),
             &*engine.config().profiler,
         )?;
+        let module = modules.remove(main_module);
 
-        let types = Arc::new(types);
         Ok(Module {
-            engine: engine.clone(),
-            index: main_module,
-            data: Arc::new(ModuleData { types, modules }),
+            inner: Arc::new(ModuleInner {
+                engine: engine.clone(),
+                module,
+                types: Arc::new(types),
+                artifact_upvars: modules,
+                module_upvars: Vec::new(),
+            }),
         })
     }
 
@@ -313,19 +380,44 @@ impl Module {
 
     /// Serialize compilation artifacts to the buffer. See also `deseriaize`.
     pub fn serialize(&self) -> Result<Vec<u8>> {
-        let artifacts = (
-            compiler_fingerprint(&self.engine),
-            self.data
-                .modules
-                .iter()
-                .map(|i| i.compilation_artifacts())
-                .collect::<Vec<_>>(),
-            &*self.data.types,
-            self.index,
-        );
-
+        let mut pushed = HashMap::new();
+        let mut tables = Vec::new();
+        let module = self.serialized_module(&mut pushed, &mut tables);
+        let artifacts = (compiler_fingerprint(self.engine()), tables, module);
         let buffer = bincode_options().serialize(&artifacts)?;
         Ok(buffer)
+    }
+
+    fn serialized_module<'a>(
+        &'a self,
+        type_tables_pushed: &mut HashMap<usize, usize>,
+        type_tables: &mut Vec<&'a TypeTables>,
+    ) -> ModuleSerialized<'a> {
+        // Deduplicate `Arc<TypeTables>` using our two parameters to ensure we
+        // serialize type tables as little as possible.
+        let ptr = Arc::as_ptr(self.types());
+        let type_tables_idx = *type_tables_pushed.entry(ptr as usize).or_insert_with(|| {
+            type_tables.push(self.types());
+            type_tables.len() - 1
+        });
+        ModuleSerialized {
+            artifacts: self
+                .inner
+                .artifact_upvars
+                .iter()
+                .map(|i| MyCow::Borrowed(i.compilation_artifacts()))
+                .chain(Some(MyCow::Borrowed(
+                    self.compiled_module().compilation_artifacts(),
+                )))
+                .collect(),
+            modules: self
+                .inner
+                .module_upvars
+                .iter()
+                .map(|i| i.serialized_module(type_tables_pushed, type_tables))
+                .collect(),
+            type_tables: type_tables_idx,
+        }
     }
 
     /// Deserializes and creates a module from the compilation artifacts.
@@ -338,44 +430,113 @@ impl Module {
     /// for modifications or curruptions. All responsibily of signing and its
     /// verification falls on the embedder.
     pub fn deserialize(engine: &Engine, serialized: &[u8]) -> Result<Module> {
-        let expected_fingerprint = compiler_fingerprint(engine);
-
-        let (fingerprint, artifacts, types, index) = bincode_options()
-            .deserialize::<(u64, _, _, _)>(serialized)
+        let (fingerprint, types, serialized) = bincode_options()
+            .deserialize::<(u64, Vec<TypeTables>, _)>(serialized)
             .context("Deserialize compilation artifacts")?;
-        if fingerprint != expected_fingerprint {
+
+        if fingerprint != compiler_fingerprint(engine) {
             bail!("Incompatible compilation artifact");
         }
 
-        let modules = CompiledModule::from_artifacts_list(
-            artifacts,
-            engine.compiler().isa(),
-            &*engine.config().profiler,
-        )?;
+        let types = types.into_iter().map(Arc::new).collect::<Vec<_>>();
+        return mk(engine, &types, serialized);
 
-        let types = Arc::new(types);
-        Ok(Module {
-            engine: engine.clone(),
-            index,
-            data: Arc::new(ModuleData { modules, types }),
-        })
-    }
-
-    pub(crate) fn compiled_module(&self) -> &CompiledModule {
-        &self.data.modules[self.index]
-    }
-
-    pub(crate) fn submodule(&self, index: usize) -> Module {
-        assert!(index < self.data.modules.len());
-        Module {
-            engine: self.engine.clone(),
-            data: self.data.clone(),
-            index,
+        fn mk(
+            engine: &Engine,
+            types: &Vec<Arc<TypeTables>>,
+            module: ModuleSerialized<'_>,
+        ) -> Result<Module> {
+            let mut artifacts = CompiledModule::from_artifacts_list(
+                module
+                    .artifacts
+                    .into_iter()
+                    .map(|i| i.unwrap_owned())
+                    .collect(),
+                engine.compiler().isa(),
+                &*engine.config().profiler,
+            )?;
+            let inner = ModuleInner {
+                engine: engine.clone(),
+                types: types[module.type_tables].clone(),
+                module: artifacts.pop().unwrap(),
+                artifact_upvars: artifacts,
+                module_upvars: module
+                    .modules
+                    .into_iter()
+                    .map(|m| mk(engine, types, m))
+                    .collect::<Result<Vec<_>>>()?,
+            };
+            Ok(Module {
+                inner: Arc::new(inner),
+            })
         }
     }
 
+    /// Creates a submodule `Module` value from the specified parameters.
+    ///
+    /// This is used for creating submodules as part of module instantiation.
+    ///
+    /// * `artifact_index` - the index in `artifact_upvars` that we're creating
+    ///   a module for
+    /// * `artifact_upvars` - the mapping of indices of what artifact upvars are
+    ///   needed for the submodule. The length of this array is the length of
+    ///   the upvars array in the submodule to be created, and each element of
+    ///   this array is an index into this module's upvar array.
+    /// * `module_upvars` - similar to `artifact_upvars` this is a mapping of
+    ///   how to create the e`module_upvars` of the submodule being created.
+    ///   Each entry in this array is either an index into this module's own
+    ///   module upvars array or it's an index into `modules`, the list of
+    ///   modules so far for the instance where this submodule is being
+    ///   created.
+    /// * `modules` - array indexed by `module_upvars`.
+    ///
+    /// Note that the real meat of this happens in `ModuleEnvironment`
+    /// translation inside of `wasmtime_environ`. This just does the easy thing
+    /// of handling all the indices, over there is where the indices are
+    /// actually calculated and such.
+    pub(crate) fn create_submodule(
+        &self,
+        artifact_index: usize,
+        artifact_upvars: &[usize],
+        module_upvars: &[wasmtime_environ::ModuleUpvar],
+        modules: &PrimaryMap<ModuleIndex, Module>,
+    ) -> Module {
+        Module {
+            inner: Arc::new(ModuleInner {
+                types: self.types().clone(),
+                engine: self.engine().clone(),
+                module: self.inner.artifact_upvars[artifact_index].clone(),
+                artifact_upvars: artifact_upvars
+                    .iter()
+                    .map(|i| self.inner.artifact_upvars[*i].clone())
+                    .collect(),
+                module_upvars: module_upvars
+                    .iter()
+                    .map(|i| match *i {
+                        wasmtime_environ::ModuleUpvar::Inherit(i) => {
+                            self.inner.module_upvars[i].clone()
+                        }
+                        wasmtime_environ::ModuleUpvar::Local(i) => modules[i].clone(),
+                    })
+                    .collect(),
+            }),
+        }
+    }
+
+    pub(crate) fn compiled_module(&self) -> &CompiledModule {
+        &self.inner.module
+    }
+
     pub(crate) fn types(&self) -> &Arc<TypeTables> {
-        &self.data.types
+        &self.inner.types
+    }
+
+    /// Looks up the module upvar value at the `index` specified.
+    ///
+    /// Note that this panics if `index` is out of bounds since this should
+    /// only be called for valid indices as part of instantiation.
+    pub(crate) fn module_upvar(&self, index: usize) -> &Module {
+        &self.inner.module_upvars[index]
     }
 
     /// Returns identifier/name that this [`Module`] has. This name
@@ -585,7 +746,7 @@ impl Module {
 
     /// Returns the [`Engine`] that this [`Module`] was compiled by.
     pub fn engine(&self) -> &Engine {
-        &self.engine
+        &self.inner.engine
     }
 }
 
