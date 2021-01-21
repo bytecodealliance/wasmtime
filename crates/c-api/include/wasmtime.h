@@ -275,7 +275,7 @@ WASMTIME_CONFIG_PROP(void, static_memory_guard_size, uint64_t)
 WASMTIME_CONFIG_PROP(void, dynamic_memory_guard_size, uint64_t)
 
 /**
- * \brief Configures the maximum number of instances that cana be created.
+ * \brief Configures the maximum number of instances that can be created.
  *
  * For more information see the Rust documentation at
  * https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.max_instances.
