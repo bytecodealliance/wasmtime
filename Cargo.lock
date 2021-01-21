@@ -205,25 +205,9 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce7f38ec6d0dd8a67d9553f95a61ee41fce23c9947bceac7bfe5b3711f9ab2fe"
 dependencies = [
- "cap-primitives 0.11.0",
- "cap-std 0.11.0",
+ "cap-primitives",
+ "cap-std",
  "unsafe-io",
-]
-
-[[package]]
-name = "cap-primitives"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "505ddaf5f8748b3d448826fc27408264ab2d78302d706025f532d9f0789ff16d"
-dependencies = [
- "errno",
- "fs-set-times",
- "ipnet",
- "libc",
- "once_cell",
- "posish",
- "winapi",
- "winx 0.21.0",
 ]
 
 [[package]]
@@ -256,20 +240,11 @@ dependencies = [
 
 [[package]]
 name = "cap-std"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bdd2d37dc52e2a73735c6056a336f877c5cfb7a20f5301b40d3d04d8c469ca9b"
-dependencies = [
- "cap-primitives 0.9.0",
-]
-
-[[package]]
-name = "cap-std"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e03b5ca2d4181980f2546074ad15a069f0f5860519e0d83e492c78b411d7c39f"
 dependencies = [
- "cap-primitives 0.11.0",
+ "cap-primitives",
  "unsafe-io",
 ]
 
@@ -279,7 +254,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f51194e7bd1b6e77f10c367b1c7b21856a49142e70b4cd3d4da17b51c25ca76"
 dependencies = [
- "cap-primitives 0.11.0",
+ "cap-primitives",
  "once_cell",
  "posish",
  "winx 0.22.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2230,7 +2205,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f553b2d73f8d21a632ffdd399f8f50cb1f7bc642c1c9f3764bf05ba7f2999c5"
 dependencies = [
  "atty",
- "cap-std 0.11.0",
+ "cap-std",
  "posish",
  "rustc_version 0.3.3",
  "unsafe-io",
@@ -2292,7 +2267,7 @@ name = "test-programs"
 version = "0.19.0"
 dependencies = [
  "anyhow",
- "cap-std 0.9.0",
+ "cap-std",
  "cfg-if 1.0.0",
  "os_pipe",
  "pretty_env_logger",
@@ -2553,7 +2528,7 @@ dependencies = [
  "anyhow",
  "bitflags",
  "cap-rand",
- "cap-std 0.11.0",
+ "cap-std",
  "libc",
  "system-interface",
  "thiserror",
@@ -2567,7 +2542,7 @@ version = "0.22.0"
 dependencies = [
  "cap-fs-ext",
  "cap-rand",
- "cap-std 0.11.0",
+ "cap-std",
  "cap-time-ext",
  "fs-set-times",
  "libc",
@@ -3170,17 +3145,6 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
-
-[[package]]
-name = "winx"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bcaffab7dbdc695c5d1e8adc37247111444c44f2df159f730d7ac85dbc27b5f"
-dependencies = [
- "bitflags",
- "cvt",
- "winapi",
-]
 
 [[package]]
 name = "winx"
