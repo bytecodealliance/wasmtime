@@ -197,7 +197,7 @@ impl WasiDir for Dir {
     fn hard_link(
         &self,
         src_path: &str,
-        symlink_follow: bool,
+        symlink_follow: bool, // XXX not in cap-std yet
         target_dir: &dyn WasiDir,
         target_path: &str,
     ) -> Result<(), Error> {
@@ -213,10 +213,22 @@ impl WasiDir for Dir {
     fn set_times(
         &self,
         path: &str,
-        atime: Option<SystemTimeSpec>,
-        mtime: Option<SystemTimeSpec>,
+        atime: Option<wasi_c2::SystemTimeSpec>,
+        mtime: Option<wasi_c2::SystemTimeSpec>,
     ) -> Result<(), Error> {
-        self.0.set_times(Path::new(path), atime, mtime)?;
+        self.0.set_times(
+            Path::new(path),
+            convert_systimespec(atime),
+            convert_systimespec(mtime),
+        )?;
         Ok(())
+    }
+}
+
+fn convert_systimespec(t: Option<wasi_c2::SystemTimeSpec>) -> Option<SystemTimeSpec> {
+    match t {
+        Some(wasi_c2::SystemTimeSpec::Absolute(t)) => Some(SystemTimeSpec::Absolute(t)),
+        Some(wasi_c2::SystemTimeSpec::SymbolicNow) => Some(SystemTimeSpec::SymbolicNow),
+        None => None,
     }
 }

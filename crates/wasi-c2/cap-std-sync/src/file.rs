@@ -68,10 +68,11 @@ impl WasiFile for File {
     }
     fn set_times(
         &self,
-        atime: Option<SystemTimeSpec>,
-        mtime: Option<SystemTimeSpec>,
+        atime: Option<wasi_c2::SystemTimeSpec>,
+        mtime: Option<wasi_c2::SystemTimeSpec>,
     ) -> Result<(), Error> {
-        self.0.set_times(atime, mtime)?;
+        self.0
+            .set_times(convert_systimespec(atime), convert_systimespec(mtime))?;
         Ok(())
     }
     fn read_vectored(&self, bufs: &mut [io::IoSliceMut]) -> Result<u64, Error> {
@@ -92,9 +93,6 @@ impl WasiFile for File {
     }
     fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
         Ok(self.0.seek(pos)?)
-    }
-    fn stream_position(&self) -> Result<u64, Error> {
-        Ok(self.0.stream_position()?)
     }
     fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
         let n = self.0.peek(buf)?;
@@ -143,5 +141,12 @@ use std::os::unix::io::{AsRawFd, RawFd};
 impl AsRawFd for File {
     fn as_raw_fd(&self) -> RawFd {
         self.0.as_raw_fd()
+    }
+}
+pub fn convert_systimespec(t: Option<wasi_c2::SystemTimeSpec>) -> Option<SystemTimeSpec> {
+    match t {
+        Some(wasi_c2::SystemTimeSpec::Absolute(t)) => Some(SystemTimeSpec::Absolute(t.into_std())),
+        Some(wasi_c2::SystemTimeSpec::SymbolicNow) => Some(SystemTimeSpec::SymbolicNow),
+        None => None,
     }
 }

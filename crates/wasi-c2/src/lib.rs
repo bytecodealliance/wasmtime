@@ -12,7 +12,7 @@ pub mod snapshots;
 mod string_array;
 pub mod table;
 
-pub use cap_fs_ext::SystemTimeSpec;
+pub use clocks::SystemTimeSpec;
 pub use ctx::{WasiCtx, WasiCtxBuilder};
 pub use dir::{DirCaps, ReaddirCursor, ReaddirEntity, WasiDir};
 pub use error::Error;

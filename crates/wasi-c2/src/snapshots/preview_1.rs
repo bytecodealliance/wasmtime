@@ -1,14 +1,17 @@
 #![allow(unused_variables)]
-use crate::dir::{
-    DirCaps, DirEntry, DirEntryExt, DirFdStat, ReaddirCursor, ReaddirEntity, TableDirExt,
+use crate::{
+    dir::{DirCaps, DirEntry, DirEntryExt, DirFdStat, ReaddirCursor, ReaddirEntity, TableDirExt},
+    file::{
+        FdFlags, FdStat, FileCaps, FileEntry, FileEntryExt, FileType, Filestat, OFlags,
+        TableFileExt,
+    },
+    sched::{
+        subscription::{RwEventFlags, SubscriptionResult},
+        Poll,
+    },
+    Error, SystemTimeSpec, WasiCtx,
 };
-use crate::file::{
-    FdFlags, FdStat, FileCaps, FileEntry, FileEntryExt, FileType, Filestat, OFlags, TableFileExt,
-};
-use crate::sched::subscription::{RwEventFlags, SubscriptionResult};
-use crate::sched::Poll;
-use crate::{Error, WasiCtx};
-use fs_set_times::SystemTimeSpec;
+use cap_std::time::{Duration, SystemClock};
 use std::cell::{Ref, RefMut};
 use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
@@ -172,7 +175,6 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         id: types::Clockid,
         precision: types::Timestamp,
     ) -> Result<types::Timestamp, Error> {
-        use cap_std::time::Duration;
         let precision = Duration::from_nanos(precision);
         match id {
             types::Clockid::Realtime => {
@@ -344,55 +346,31 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
             return Err(Error::Inval);
         }
+        let atim = if set_atim {
+            Some(SystemTimeSpec::Absolute(
+                SystemClock::UNIX_EPOCH + Duration::from_nanos(atim),
+            ))
+        } else if set_atim_now {
+            Some(SystemTimeSpec::SymbolicNow)
+        } else {
+            None
+        };
+        let mtim = if set_mtim {
+            Some(SystemTimeSpec::Absolute(
+                SystemClock::UNIX_EPOCH + Duration::from_nanos(mtim),
+            ))
+        } else if set_mtim_now {
+            Some(SystemTimeSpec::SymbolicNow)
+        } else {
+            None
+        };
         if table.is::<FileEntry>(fd) {
-            use std::time::{Duration, UNIX_EPOCH};
-            let atim = if set_atim {
-                Some(SystemTimeSpec::Absolute(
-                    UNIX_EPOCH + Duration::from_nanos(atim),
-                ))
-            } else if set_atim_now {
-                Some(SystemTimeSpec::SymbolicNow)
-            } else {
-                None
-            };
-            let mtim = if set_mtim {
-                Some(SystemTimeSpec::Absolute(
-                    UNIX_EPOCH + Duration::from_nanos(mtim),
-                ))
-            } else if set_mtim_now {
-                Some(SystemTimeSpec::SymbolicNow)
-            } else {
-                None
-            };
-
             table
                 .get_file(fd)
                 .expect("checked that entry is file")
                 .get_cap(FileCaps::FILESTAT_SET_TIMES)?
                 .set_times(atim, mtim)
         } else if table.is::<DirEntry>(fd) {
-            use cap_std::time::{Duration, SystemClock};
-
-            use cap_fs_ext::SystemTimeSpec;
-            let atim = if set_atim {
-                Some(SystemTimeSpec::Absolute(
-                    SystemClock::UNIX_EPOCH + Duration::from_nanos(atim),
-                ))
-            } else if set_atim_now {
-                Some(SystemTimeSpec::SymbolicNow)
-            } else {
-                None
-            };
-            let mtim = if set_mtim {
-                Some(SystemTimeSpec::Absolute(
-                    SystemClock::UNIX_EPOCH + Duration::from_nanos(mtim),
-                ))
-            } else if set_mtim_now {
-                Some(SystemTimeSpec::SymbolicNow)
-            } else {
-                None
-            };
-
             table
                 .get_dir(fd)
                 .expect("checked that entry is dir")
@@ -599,6 +577,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn fd_tell(&self, fd: types::Fd) -> Result<types::Filesize, Error> {
+        // XXX should this be stream_position?
         let offset = self
             .table()
             .get_file(u32::from(fd))?
@@ -694,7 +673,6 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         mtim: types::Timestamp,
         fst_flags: types::Fstflags,
     ) -> Result<(), Error> {
-        // XXX DRY these are in fd_filestat_set_times twice!
         let set_atim = fst_flags.contains(types::Fstflags::ATIM);
         let set_atim_now = fst_flags.contains(types::Fstflags::ATIM_NOW);
         let set_mtim = fst_flags.contains(types::Fstflags::MTIM);
@@ -702,27 +680,19 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
             return Err(Error::Inval);
         }
-        use cap_fs_ext::SystemTimeSpec;
-        use cap_std::time::{Duration, SystemClock};
-        let atim = if set_atim {
-            Some(SystemTimeSpec::Absolute(
-                SystemClock::UNIX_EPOCH + Duration::from_nanos(atim),
-            ))
-        } else if set_atim_now {
-            Some(SystemTimeSpec::SymbolicNow)
-        } else {
-            None
-        };
-        let mtim = if set_mtim {
-            Some(SystemTimeSpec::Absolute(
-                SystemClock::UNIX_EPOCH + Duration::from_nanos(mtim),
-            ))
-        } else if set_mtim_now {
-            Some(SystemTimeSpec::SymbolicNow)
-        } else {
-            None
-        };
-
+        fn systimespec(set: bool, ts: types::Timestamp, now: bool) -> Option<SystemTimeSpec> {
+            if set {
+                Some(SystemTimeSpec::Absolute(
+                    SystemClock::UNIX_EPOCH + Duration::from_nanos(ts),
+                ))
+            } else if now {
+                Some(SystemTimeSpec::SymbolicNow)
+            } else {
+                None
+            }
+        }
+        let atim = systimespec(set_atim, atim, set_atim_now);
+        let mtim = systimespec(set_mtim, mtim, set_mtim_now);
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::PATH_FILESTAT_SET_TIMES)?
@@ -893,7 +863,6 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             return Err(Error::Inval);
         }
 
-        use cap_std::time::Duration;
         let table = self.table();
         let mut poll = Poll::new();
 

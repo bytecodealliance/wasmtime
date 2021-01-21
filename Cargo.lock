@@ -2516,18 +2516,14 @@ version = "0.22.0"
 dependencies = [
  "anyhow",
  "bitflags",
- "cap-fs-ext",
  "cap-rand",
  "cap-std",
- "cap-time-ext",
  "cfg-if 1.0.0",
- "fs-set-times",
  "libc",
  "system-interface",
  "thiserror",
  "tracing",
  "wiggle",
- "yanix 0.22.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

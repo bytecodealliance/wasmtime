@@ -1,3 +1,4 @@
+use crate::file::convert_systimespec;
 use fs_set_times::SetTimes;
 use std::any::Any;
 use std::convert::TryInto;
@@ -87,19 +88,16 @@ macro_rules! wasi_file_impl {
             fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
                 Ok(self.0.seek(pos)?)
             }
-            fn stream_position(&self) -> Result<u64, Error> {
-                Ok(self.0.stream_position()?)
-            }
             fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
                 let n = self.0.peek(buf)?;
                 Ok(n.try_into().map_err(|_| Error::Overflow)?)
             }
             fn set_times(
                 &self,
-                atime: Option<fs_set_times::SystemTimeSpec>,
-                mtime: Option<fs_set_times::SystemTimeSpec>,
+                atime: Option<wasi_c2::SystemTimeSpec>,
+                mtime: Option<wasi_c2::SystemTimeSpec>,
             ) -> Result<(), Error> {
-                self.0.set_times(atime, mtime)?;
+                self.0.set_times(convert_systimespec(atime), convert_systimespec(mtime))?;
                 Ok(())
             }
             $additional

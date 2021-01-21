@@ -9,8 +9,10 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use crate::file::{FdFlags, FileType, Filestat, WasiFile};
-use crate::Error;
+use crate::{
+    file::{FdFlags, FileType, Filestat, WasiFile},
+    Error, SystemTimeSpec,
+};
 use std::any::Any;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
@@ -152,16 +154,13 @@ impl<R: Read + Any> WasiFile for ReadPipe<R> {
     fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
         Err(Error::Badf)
     }
-    fn stream_position(&self) -> Result<u64, Error> {
-        Err(Error::Badf)
-    }
     fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
         Err(Error::Badf)
     }
     fn set_times(
         &self,
-        atime: Option<fs_set_times::SystemTimeSpec>,
-        mtime: Option<fs_set_times::SystemTimeSpec>,
+        atime: Option<SystemTimeSpec>,
+        mtime: Option<SystemTimeSpec>,
     ) -> Result<(), Error> {
         Err(Error::Badf)
     }
@@ -291,16 +290,13 @@ impl<W: Write + Any> WasiFile for WritePipe<W> {
     fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
         Err(Error::Badf)
     }
-    fn stream_position(&self) -> Result<u64, Error> {
-        Err(Error::Badf)
-    }
     fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
         Err(Error::Badf)
     }
     fn set_times(
         &self,
-        atime: Option<fs_set_times::SystemTimeSpec>,
-        mtime: Option<fs_set_times::SystemTimeSpec>,
+        atime: Option<SystemTimeSpec>,
+        mtime: Option<SystemTimeSpec>,
     ) -> Result<(), Error> {
         Err(Error::Badf)
     }

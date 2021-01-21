@@ -1,3 +1,4 @@
+pub mod clocks;
 pub mod dir;
 pub mod file;
 pub mod sched;
@@ -7,7 +8,7 @@ use cap_rand::RngCore;
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
-use wasi_c2::{clocks::WasiClocks, table::Table, Error, WasiCtx, WasiFile};
+use wasi_c2::{table::Table, Error, WasiCtx, WasiFile};
 
 pub struct WasiCtxBuilder(wasi_c2::WasiCtxBuilder);
 
@@ -15,7 +16,7 @@ impl WasiCtxBuilder {
     pub fn new() -> Self {
         WasiCtxBuilder(WasiCtx::builder(
             random(),
-            clocks(),
+            clocks::clocks(),
             Box::new(sched::SyncSched),
             Rc::new(RefCell::new(Table::new())),
         ))
@@ -48,18 +49,6 @@ impl WasiCtxBuilder {
     }
     pub fn build(self) -> Result<WasiCtx, Error> {
         self.0.build()
-    }
-}
-
-pub fn clocks() -> WasiClocks {
-    let system = Box::new(unsafe { cap_std::time::SystemClock::new() });
-    let monotonic = unsafe { cap_std::time::MonotonicClock::new() };
-    let creation_time = monotonic.now();
-    let monotonic = Box::new(monotonic);
-    WasiClocks {
-        system,
-        monotonic,
-        creation_time,
     }
 }
 

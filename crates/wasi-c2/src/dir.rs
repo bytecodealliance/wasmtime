@@ -1,7 +1,6 @@
-use crate::error::Error;
 use crate::file::{FdFlags, FileCaps, FileType, Filestat, OFlags, WasiFile};
+use crate::{Error, SystemTimeSpec};
 use bitflags::bitflags;
-use cap_fs_ext::SystemTimeSpec;
 use std::any::Any;
 use std::cell::Ref;
 use std::ops::Deref;
