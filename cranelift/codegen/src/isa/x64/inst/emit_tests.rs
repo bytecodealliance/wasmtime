@@ -3915,6 +3915,17 @@ fn test_x64_emit() {
         "elf_tls_get_addr User { namespace: 0, index: 0 }",
     ));
 
+    insns.push((
+        Inst::MachOTlsGetAddr {
+            symbol: ExternalName::User {
+                namespace: 0,
+                index: 0,
+            },
+        },
+        "488B3D00000000FF17",
+        "macho_tls_get_addr User { namespace: 0, index: 0 }",
+    ));
+
     // ========================================================
     // Actually run the tests!
     let mut flag_builder = settings::builder();
