@@ -18,18 +18,18 @@ derive_more = "0.99"
 dynasm = "1.0.0"
 dynasmrt = "1.0.0"
 iter-enum = "0.2"
-itertools = "0.9.0"
+itertools = "0.10.0"
 memoffset = "0.6.0"
 more-asserts = "0.2.1"
 smallvec = "1.6.1"
 thiserror = "1.0.9"
 typemap = "0.3"
-wasmparser = "0.72"
+wasmparser = "0.73"
 
 [dev-dependencies]
 lazy_static = "1.2"
 wat = "1.0.23"
-quickcheck = "0.9.0"
+quickcheck = "1.0.0"
 anyhow = "1.0"
 
 [badges]

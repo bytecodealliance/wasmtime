@@ -42,4 +42,8 @@ skip = [
     { name = "humantime" }, # caused by env_logger
     { name = "getrandom" }, # rand not updates to 0.2 yet
     { name = "wast" }, # old one pulled in by witx
+    { name = "rand" }, # 0.7 pulled in by transitive deps
+    { name = "rand_core" }, # 0.7 pulled in by transitive deps
+    { name = "rand_chacha" }, # 0.7 pulled in by transitive deps
+    { name = "itertools" }, # 0.9 pulled in by zstd-sys
 ]
