@@ -10,7 +10,7 @@ pub trait WasiFile {
     fn sync(&self) -> Result<(), Error>; // file op
     fn get_filetype(&self) -> Result<FileType, Error>; // file op
     fn get_fdflags(&self) -> Result<FdFlags, Error>; // file op
-    fn set_fdflags(&self, _flags: FdFlags) -> Result<(), Error>;
+    fn reopen_with_fdflags(&self, flags: FdFlags) -> Result<Box<dyn WasiFile>, Error>; // file op
     fn get_filestat(&self) -> Result<Filestat, Error>; // split out get_length as a read & write op, rest is a file op
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error>; // write op
     fn advise(
@@ -83,10 +83,22 @@ pub struct Filestat {
 
 pub(crate) trait TableFileExt {
     fn get_file(&self, fd: u32) -> Result<Ref<FileEntry>, Error>;
+    fn update_file_in_place<F>(&mut self, fd: u32, f: F) -> Result<(), Error>
+    where
+        F: FnOnce(&dyn WasiFile) -> Result<Box<dyn WasiFile>, Error>;
 }
 impl TableFileExt for crate::table::Table {
     fn get_file(&self, fd: u32) -> Result<Ref<FileEntry>, Error> {
         self.get(fd)
+    }
+    fn update_file_in_place<F>(&mut self, fd: u32, f: F) -> Result<(), Error>
+    where
+        F: FnOnce(&dyn WasiFile) -> Result<Box<dyn WasiFile>, Error>,
+    {
+        self.update_in_place(fd, |FileEntry { caps, file }| {
+            let file = f(file.deref())?;
+            Ok(FileEntry { caps, file })
+        })
     }
 }
 

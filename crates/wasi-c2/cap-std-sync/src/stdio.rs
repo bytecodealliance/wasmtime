@@ -39,9 +39,8 @@ impl WasiFile for Stdin {
         // XXX get_fdflags is not implemented but lets lie rather than panic:
         Ok(FdFlags::empty())
     }
-    fn set_fdflags(&self, _fdflags: FdFlags) -> Result<(), Error> {
-        // XXX
-        Err(Error::Perm)
+    fn reopen_with_fdflags(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+        Err(Error::Badf)
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
         let meta = self.0.as_file_view().metadata()?;
@@ -131,9 +130,8 @@ macro_rules! wasi_file_write_impl {
                 // XXX get_fdflags is not implemented but lets lie rather than panic:
                 Ok(FdFlags::empty())
             }
-            fn set_fdflags(&self, _fdflags: FdFlags) -> Result<(), Error> {
-                // XXX
-                Err(Error::Perm)
+            fn reopen_with_fdflags(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+                Err(Error::Badf)
             }
             fn get_filestat(&self) -> Result<Filestat, Error> {
                 // XXX can unsafe-io give a way to get metadata?

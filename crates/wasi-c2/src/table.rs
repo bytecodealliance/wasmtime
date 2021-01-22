@@ -78,11 +78,23 @@ impl Table {
                 Err(Error::Exist) // Does exist, but borrowed
             }
         } else {
-            Err(Error::Exist) // Does not exist
+            Err(Error::Badf) // Does not exist
         }
     }
 
     pub fn delete(&mut self, key: u32) -> Option<Box<dyn Any>> {
         self.map.remove(&key).map(|rc| RefCell::into_inner(rc))
+    }
+
+    pub fn update_in_place<T, F>(&mut self, key: u32, f: F) -> Result<(), Error>
+    where
+        T: Any + Sized,
+        F: FnOnce(T) -> Result<T, Error>,
+    {
+        let entry = self.delete(key).ok_or(Error::Badf)?;
+        let downcast = entry.downcast::<T>().map_err(|_| Error::Exist)?;
+        let new = f(*downcast)?;
+        self.insert_at(key, Box::new(new));
+        Ok(())
     }
 }

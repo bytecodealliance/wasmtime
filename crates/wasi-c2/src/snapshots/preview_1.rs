@@ -272,11 +272,11 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn fd_fdstat_set_flags(&self, fd: types::Fd, flags: types::Fdflags) -> Result<(), Error> {
-        self.table()
-            .get_file(u32::from(fd))?
-            .get_cap(FileCaps::FDSTAT_SET_FLAGS)?
-            .set_fdflags(FdFlags::from(&flags))?;
-        Ok(())
+        let mut table = self.table();
+        let fd = u32::from(fd);
+        let table_check = table.get_file(fd)?.get_cap(FileCaps::FDSTAT_SET_FLAGS)?;
+        drop(table_check);
+        table.update_file_in_place(fd, |f| f.reopen_with_fdflags(FdFlags::from(&flags)))
     }
 
     fn fd_fdstat_set_rights(

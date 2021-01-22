@@ -38,8 +38,8 @@ impl WasiFile for File {
         // XXX get_fdflags is not implemented but lets lie rather than panic:
         Ok(FdFlags::empty())
     }
-    fn set_fdflags(&self, _fdflags: FdFlags) -> Result<(), Error> {
-        todo!("set_fdflags is not implemented")
+    fn reopen_with_fdflags(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+        todo!("reopen_with_fdflags is not implemented")
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
         let meta = self.0.metadata()?;
