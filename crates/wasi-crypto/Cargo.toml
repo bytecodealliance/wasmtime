@@ -13,7 +13,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-wasi-crypto = "0.1.3"
+wasi-crypto = { path = "spec/implementations/hostcalls/rust", version = "0.1.4" }
 wasmtime = { path = "../wasmtime", version = "0.22.0", default-features = false }
 wasmtime-wiggle = { path = "../wiggle/wasmtime", version = "0.22.0" }
 wiggle = { path = "../wiggle", version = "0.22.0" }
