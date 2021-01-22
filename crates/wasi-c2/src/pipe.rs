@@ -109,7 +109,7 @@ impl<R: Read + Any> WasiFile for ReadPipe<R> {
         Ok(()) // trivial
     }
     fn get_filetype(&self) -> Result<FileType, Error> {
-        Ok(FileType::CharacterDevice) // XXX wrong
+        Ok(FileType::Pipe)
     }
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
         Ok(FdFlags::empty())
@@ -245,7 +245,7 @@ impl<W: Write + Any> WasiFile for WritePipe<W> {
         Ok(())
     }
     fn get_filetype(&self) -> Result<FileType, Error> {
-        Ok(FileType::CharacterDevice) // XXX
+        Ok(FileType::Pipe)
     }
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
         Ok(FdFlags::APPEND)

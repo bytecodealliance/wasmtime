@@ -1294,6 +1294,7 @@ impl From<&FileType> for types::Filetype {
             FileType::SocketStream => types::Filetype::SocketStream,
             FileType::SymbolicLink => types::Filetype::SymbolicLink,
             FileType::Unknown => types::Filetype::Unknown,
+            FileType::Pipe => types::Filetype::Unknown,
         }
     }
 }

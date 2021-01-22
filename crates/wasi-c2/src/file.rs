@@ -37,19 +37,17 @@ pub trait WasiFile {
     fn num_ready_bytes(&self) -> Result<u64, Error>; // read op
 }
 
-// XXX we will add pipes to wasi - lets add it to this internal enum and present them as
-// Unknown to old wasis
-// XXX put the enum variants in same order as WASI so conversion funcs are no-op
 #[derive(Debug, Copy, Clone)]
 pub enum FileType {
-    Directory,
+    Unknown,
     BlockDevice,
     CharacterDevice,
+    Directory,
     RegularFile,
     SocketDgram,
     SocketStream,
     SymbolicLink,
-    Unknown,
+    Pipe,
 }
 
 bitflags! {
