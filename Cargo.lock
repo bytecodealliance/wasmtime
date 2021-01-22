@@ -2534,6 +2534,7 @@ dependencies = [
  "thiserror",
  "tracing",
  "wiggle",
+ "winapi",
 ]
 
 [[package]]
@@ -2551,6 +2552,7 @@ dependencies = [
  "tracing",
  "unsafe-io",
  "wasi-c2",
+ "winapi",
 ]
 
 [[package]]

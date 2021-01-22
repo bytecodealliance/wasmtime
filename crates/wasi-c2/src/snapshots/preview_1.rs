@@ -114,35 +114,72 @@ impl From<wiggle::GuestError> for types::Errno {
 impl TryFrom<std::io::Error> for types::Errno {
     type Error = Error;
     fn try_from(err: std::io::Error) -> Result<types::Errno, Error> {
+        #[cfg(unix)]
+        fn raw_error_code(code: i32) -> Option<types::Errno> {
+            match code {
+                libc::EPIPE => Some(types::Errno::Pipe),
+                libc::EPERM => Some(types::Errno::Perm),
+                libc::ENOENT => Some(types::Errno::Noent),
+                libc::ENOMEM => Some(types::Errno::Nomem),
+                libc::E2BIG => Some(types::Errno::TooBig),
+                libc::EIO => Some(types::Errno::Io),
+                libc::EBADF => Some(types::Errno::Badf),
+                libc::EBUSY => Some(types::Errno::Busy),
+                libc::EACCES => Some(types::Errno::Acces),
+                libc::EFAULT => Some(types::Errno::Fault),
+                libc::ENOTDIR => Some(types::Errno::Notdir),
+                libc::EISDIR => Some(types::Errno::Isdir),
+                libc::EINVAL => Some(types::Errno::Inval),
+                libc::EEXIST => Some(types::Errno::Exist),
+                libc::EFBIG => Some(types::Errno::Fbig),
+                libc::ENOSPC => Some(types::Errno::Nospc),
+                libc::ESPIPE => Some(types::Errno::Spipe),
+                libc::EMFILE => Some(types::Errno::Mfile),
+                libc::EMLINK => Some(types::Errno::Mlink),
+                libc::ENAMETOOLONG => Some(types::Errno::Nametoolong),
+                libc::ENFILE => Some(types::Errno::Nfile),
+                libc::ENOTEMPTY => Some(types::Errno::Notempty),
+                libc::ELOOP => Some(types::Errno::Loop),
+                libc::EOVERFLOW => Some(types::Errno::Overflow),
+                libc::EILSEQ => Some(types::Errno::Ilseq),
+                libc::ENOTSUP => Some(types::Errno::Notsup),
+                _ => None,
+            }
+        }
+        #[cfg(windows)]
+        fn raw_error_code(code: i32) -> Option<types::Errno> {
+            use winapi::shared::winerror;
+            match code as u32 {
+                winerror::ERROR_BAD_ENVIRONMENT => Some(types::Errno::TooBig),
+                winerror::ERROR_FILE_NOT_FOUND => Some(types::Errno::Noent),
+                winerror::ERROR_PATH_NOT_FOUND => Some(types::Errno::Noent),
+                winerror::ERROR_TOO_MANY_OPEN_FILES => Some(types::Errno::Nfile),
+                winerror::ERROR_ACCESS_DENIED => Some(types::Errno::Acces),
+                winerror::ERROR_SHARING_VIOLATION => Some(types::Errno::Acces),
+                winerror::ERROR_PRIVILEGE_NOT_HELD => Some(types::Errno::Notcapable),
+                winerror::ERROR_INVALID_HANDLE => Some(types::Errno::Badf),
+                winerror::ERROR_INVALID_NAME => Some(types::Errno::Noent),
+                winerror::ERROR_NOT_ENOUGH_MEMORY => Some(types::Errno::Nomem),
+                winerror::ERROR_OUTOFMEMORY => Some(types::Errno::Nomem),
+                winerror::ERROR_DIR_NOT_EMPTY => Some(types::Errno::Notempty),
+                winerror::ERROR_NOT_READY => Some(types::Errno::Busy),
+                winerror::ERROR_BUSY => Some(types::Errno::Busy),
+                winerror::ERROR_NOT_SUPPORTED => Some(types::Errno::Notsup),
+                winerror::ERROR_FILE_EXISTS => Some(types::Errno::Exist),
+                winerror::ERROR_BROKEN_PIPE => Some(types::Errno::Pipe),
+                winerror::ERROR_BUFFER_OVERFLOW => Some(types::Errno::Nametoolong),
+                winerror::ERROR_NOT_A_REPARSE_POINT => Some(types::Errno::Inval),
+                winerror::ERROR_NEGATIVE_SEEK => Some(types::Errno::Inval),
+                winerror::ERROR_DIRECTORY => Some(types::Errno::Notdir),
+                winerror::ERROR_ALREADY_EXISTS => Some(types::Errno::Exist),
+                _ => None,
+            }
+        }
+
         match err.raw_os_error() {
-            Some(code) => match code {
-                libc::EPIPE => Ok(types::Errno::Pipe),
-                libc::EPERM => Ok(types::Errno::Perm),
-                libc::ENOENT => Ok(types::Errno::Noent),
-                libc::ENOMEM => Ok(types::Errno::Nomem),
-                libc::E2BIG => Ok(types::Errno::TooBig),
-                libc::EIO => Ok(types::Errno::Io),
-                libc::EBADF => Ok(types::Errno::Badf),
-                libc::EBUSY => Ok(types::Errno::Busy),
-                libc::EACCES => Ok(types::Errno::Acces),
-                libc::EFAULT => Ok(types::Errno::Fault),
-                libc::ENOTDIR => Ok(types::Errno::Notdir),
-                libc::EISDIR => Ok(types::Errno::Isdir),
-                libc::EINVAL => Ok(types::Errno::Inval),
-                libc::EEXIST => Ok(types::Errno::Exist),
-                libc::EFBIG => Ok(types::Errno::Fbig),
-                libc::ENOSPC => Ok(types::Errno::Nospc),
-                libc::ESPIPE => Ok(types::Errno::Spipe),
-                libc::EMFILE => Ok(types::Errno::Mfile),
-                libc::EMLINK => Ok(types::Errno::Mlink),
-                libc::ENAMETOOLONG => Ok(types::Errno::Nametoolong),
-                libc::ENFILE => Ok(types::Errno::Nfile),
-                libc::ENOTEMPTY => Ok(types::Errno::Notempty),
-                libc::ELOOP => Ok(types::Errno::Loop),
-                libc::EOVERFLOW => Ok(types::Errno::Overflow),
-                libc::EILSEQ => Ok(types::Errno::Ilseq),
-                libc::ENOTSUP => Ok(types::Errno::Notsup),
-                code => Err(anyhow!(err).context(format!("Unknown raw OS error: {}", code))),
+            Some(code) => match raw_error_code(code) {
+                Some(errno) => Ok(errno),
+                None => Err(anyhow!(err).context(format!("Unknown raw OS error: {}", code))),
             },
             None => match err.kind() {
                 std::io::ErrorKind::NotFound => Ok(types::Errno::Noent),
