@@ -114,7 +114,7 @@ impl<R: Read + Any> WasiFile for ReadPipe<R> {
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
         Ok(FdFlags::empty())
     }
-    fn reopen_with_fdflags(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+    unsafe fn reopen_with_fdflags(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
         Err(Error::Badf)
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
@@ -250,7 +250,7 @@ impl<W: Write + Any> WasiFile for WritePipe<W> {
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
         Ok(FdFlags::APPEND)
     }
-    fn reopen_with_fdflags(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+    unsafe fn reopen_with_fdflags(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
         Err(Error::Badf)
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {

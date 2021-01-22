@@ -39,7 +39,7 @@ impl WasiFile for Stdin {
         // XXX get_fdflags is not implemented but lets lie rather than panic:
         Ok(FdFlags::empty())
     }
-    fn reopen_with_fdflags(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+    unsafe fn reopen_with_fdflags(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
         Err(Error::Badf)
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
@@ -128,7 +128,10 @@ macro_rules! wasi_file_write_impl {
                 // XXX get_fdflags is not implemented but lets lie rather than panic:
                 Ok(FdFlags::empty())
             }
-            fn reopen_with_fdflags(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+            unsafe fn reopen_with_fdflags(
+                &self,
+                _fdflags: FdFlags,
+            ) -> Result<Box<dyn WasiFile>, Error> {
                 Err(Error::Badf)
             }
             fn get_filestat(&self) -> Result<Filestat, Error> {

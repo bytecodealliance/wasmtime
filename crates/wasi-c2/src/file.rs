@@ -10,7 +10,9 @@ pub trait WasiFile {
     fn sync(&self) -> Result<(), Error>; // file op
     fn get_filetype(&self) -> Result<FileType, Error>; // file op
     fn get_fdflags(&self) -> Result<FdFlags, Error>; // file op
-    fn reopen_with_fdflags(&self, flags: FdFlags) -> Result<Box<dyn WasiFile>, Error>; // file op
+    /// This method takes a `&self` so that it can be called on a `&dyn WasiFile`. However,
+    /// the caller makes the additional guarantee to drop `self` after the call is successful.
+    unsafe fn reopen_with_fdflags(&self, flags: FdFlags) -> Result<Box<dyn WasiFile>, Error>; // file op
     fn get_filestat(&self) -> Result<Filestat, Error>; // split out get_length as a read & write op, rest is a file op
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error>; // write op
     fn advise(

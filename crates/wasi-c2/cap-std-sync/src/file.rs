@@ -38,7 +38,7 @@ impl WasiFile for File {
         // XXX get_fdflags is not implemented but lets lie rather than panic:
         Ok(FdFlags::empty())
     }
-    fn reopen_with_fdflags(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+    unsafe fn reopen_with_fdflags(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
         todo!("reopen_with_fdflags is not implemented")
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
