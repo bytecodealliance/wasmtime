@@ -44,7 +44,6 @@ impl WasiFile for Stdin {
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
         let meta = self.0.as_file_view().metadata()?;
-        // XXX can unsafe-io give a way to get metadata?
         Ok(Filestat {
             device_id: 0,
             inode: 0,
@@ -57,8 +56,7 @@ impl WasiFile for Stdin {
         })
     }
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
-        // XXX is this the right error?
-        Err(Error::Perm)
+        Err(Error::Badf)
     }
     fn advise(&self, _offset: u64, _len: u64, _advice: Advice) -> Result<(), Error> {
         Err(Error::Badf)
@@ -124,7 +122,7 @@ macro_rules! wasi_file_write_impl {
                 Ok(())
             }
             fn get_filetype(&self) -> Result<FileType, Error> {
-                Ok(FileType::CharacterDevice) // XXX wrong
+                Ok(FileType::Unknown)
             }
             fn get_fdflags(&self) -> Result<FdFlags, Error> {
                 // XXX get_fdflags is not implemented but lets lie rather than panic:
@@ -134,21 +132,20 @@ macro_rules! wasi_file_write_impl {
                 Err(Error::Badf)
             }
             fn get_filestat(&self) -> Result<Filestat, Error> {
-                // XXX can unsafe-io give a way to get metadata?
+                let meta = self.0.as_file_view().metadata()?;
                 Ok(Filestat {
                     device_id: 0,
                     inode: 0,
                     filetype: self.get_filetype()?,
                     nlink: 0,
-                    size: 0,
-                    atim: None,
-                    mtim: None,
-                    ctim: None,
+                    size: meta.len(),
+                    atim: meta.accessed().ok(),
+                    mtim: meta.modified().ok(),
+                    ctim: meta.created().ok(),
                 })
             }
             fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
-                // XXX is this the right error?
-                Err(Error::Perm)
+                Err(Error::Badf)
             }
             fn advise(&self, _offset: u64, _len: u64, _advice: Advice) -> Result<(), Error> {
                 Err(Error::Badf)
