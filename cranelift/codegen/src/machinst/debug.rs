@@ -13,7 +13,7 @@
 //! We track, at every program point, the correspondence between each value
 //! label and *all* locations in which it resides. E.g., if it is stored to the
 //! stack, we remember that it is in both a register and the stack slot; but if
-//! the register is later overridden, then we have it just in the stack slot.
+//! the register is later overwritten, then we have it just in the stack slot.
 //! This allows us to avoid false-positives observing loads/stores that we think
 //! are spillslots but really aren't.
 //!
@@ -320,7 +320,7 @@ pub(crate) fn compute<I: VCodeInst>(
     // Initialize state at entry.
     block_starts.insert(0, AnalysisInfo::new());
 
-    // Worklist: basic-block start offset.
+    // Worklist: label indices for basic blocks.
     let mut worklist = VecDeque::new();
     let mut worklist_set = HashSet::new();
     worklist.push_back(0);
@@ -332,6 +332,8 @@ pub(crate) fn compute<I: VCodeInst>(
 
         let mut state = block_starts.get(&block).unwrap().clone();
         trace!("at block {} -> state: {:?}", block, state);
+        // Iterate for each instruction in the block (we break at the first
+        // terminator we see).
         let mut iix = label_insn_iix[block as usize];
         while iix < insts.len() as u32 {
             state.step(&insts[iix as usize]);
