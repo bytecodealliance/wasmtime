@@ -77,26 +77,26 @@ impl WasiFile for File {
     }
     fn read_vectored(&self, bufs: &mut [io::IoSliceMut]) -> Result<u64, Error> {
         let n = self.0.read_vectored(bufs)?;
-        Ok(n.try_into().map_err(|_| Error::Overflow)?)
+        Ok(n.try_into()?)
     }
     fn read_vectored_at(&self, bufs: &mut [io::IoSliceMut], offset: u64) -> Result<u64, Error> {
         let n = self.0.read_vectored_at(bufs, offset)?;
-        Ok(n.try_into().map_err(|_| Error::Overflow)?)
+        Ok(n.try_into()?)
     }
     fn write_vectored(&self, bufs: &[io::IoSlice]) -> Result<u64, Error> {
         let n = self.0.write_vectored(bufs)?;
-        Ok(n.try_into().map_err(|_| Error::Overflow)?)
+        Ok(n.try_into()?)
     }
     fn write_vectored_at(&self, bufs: &[io::IoSlice], offset: u64) -> Result<u64, Error> {
         let n = self.0.write_vectored_at(bufs, offset)?;
-        Ok(n.try_into().map_err(|_| Error::Overflow)?)
+        Ok(n.try_into()?)
     }
     fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
         Ok(self.0.seek(pos)?)
     }
     fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
         let n = self.0.peek(buf)?;
-        Ok(n.try_into().map_err(|_| Error::Overflow)?)
+        Ok(n.try_into()?)
     }
     fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(self.0.num_ready_bytes()?)

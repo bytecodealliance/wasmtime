@@ -21,6 +21,9 @@ pub enum ErrorKind {
     /// Errno::Inval: Invalid argument
     #[error("Inval: Invalid argument")]
     Inval,
+    /// Errno::Io: I/O error
+    #[error("Io: I/O error")]
+    Io,
     /// Errno::Nametoolong: Filename too long
     #[error("Nametoolong: Filename too long")]
     Nametoolong,
@@ -50,6 +53,7 @@ pub trait ErrorExt {
     fn exist() -> Self;
     fn illegal_byte_sequence() -> Self;
     fn invalid_argument() -> Self;
+    fn io() -> Self;
     fn name_too_long() -> Self;
     fn not_dir() -> Self;
     fn not_supported() -> Self;
@@ -74,6 +78,9 @@ impl ErrorExt for Error {
     }
     fn invalid_argument() -> Self {
         ErrorKind::Inval.into()
+    }
+    fn io() -> Self {
+        ErrorKind::Io.into()
     }
     fn name_too_long() -> Self {
         ErrorKind::Nametoolong.into()

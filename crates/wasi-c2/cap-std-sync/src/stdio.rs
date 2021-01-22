@@ -13,7 +13,7 @@ use std::os::windows::io::{AsRawHandle, RawHandle};
 use unsafe_io::AsUnsafeFile;
 use wasi_c2::{
     file::{FdFlags, FileType, Filestat, WasiFile},
-    Error,
+    Error, ErrorExt,
 };
 
 pub struct Stdin(std::io::Stdin);
@@ -40,7 +40,7 @@ impl WasiFile for Stdin {
         Ok(FdFlags::empty())
     }
     unsafe fn reopen_with_fdflags(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
         let meta = self.0.as_file_view().metadata()?;
@@ -56,32 +56,32 @@ impl WasiFile for Stdin {
         })
     }
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn advise(&self, _offset: u64, _len: u64, _advice: Advice) -> Result<(), Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn allocate(&self, _offset: u64, _len: u64) -> Result<(), Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn read_vectored(&self, bufs: &mut [io::IoSliceMut]) -> Result<u64, Error> {
         let n = self.0.as_file_view().read_vectored(bufs)?;
-        Ok(n.try_into().map_err(|_| Error::Overflow)?)
+        Ok(n.try_into().map_err(|_| Error::range())?)
     }
     fn read_vectored_at(&self, _bufs: &mut [io::IoSliceMut], _offset: u64) -> Result<u64, Error> {
-        Err(Error::Spipe)
+        Err(Error::seek_pipe())
     }
     fn write_vectored(&self, _bufs: &[io::IoSlice]) -> Result<u64, Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn write_vectored_at(&self, _bufs: &[io::IoSlice], _offset: u64) -> Result<u64, Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn seek(&self, _pos: std::io::SeekFrom) -> Result<u64, Error> {
-        Err(Error::Spipe)
+        Err(Error::seek_pipe())
     }
     fn peek(&self, _buf: &mut [u8]) -> Result<u64, Error> {
-        Err(Error::Spipe)
+        Err(Error::seek_pipe())
     }
     fn set_times(
         &self,
@@ -132,7 +132,7 @@ macro_rules! wasi_file_write_impl {
                 &self,
                 _fdflags: FdFlags,
             ) -> Result<Box<dyn WasiFile>, Error> {
-                Err(Error::Badf)
+                Err(Error::badf())
             }
             fn get_filestat(&self) -> Result<Filestat, Error> {
                 let meta = self.0.as_file_view().metadata()?;
@@ -148,36 +148,36 @@ macro_rules! wasi_file_write_impl {
                 })
             }
             fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
-                Err(Error::Badf)
+                Err(Error::badf())
             }
             fn advise(&self, _offset: u64, _len: u64, _advice: Advice) -> Result<(), Error> {
-                Err(Error::Badf)
+                Err(Error::badf())
             }
             fn allocate(&self, _offset: u64, _len: u64) -> Result<(), Error> {
-                Err(Error::Badf)
+                Err(Error::badf())
             }
             fn read_vectored(&self, _bufs: &mut [io::IoSliceMut]) -> Result<u64, Error> {
-                Err(Error::Badf)
+                Err(Error::badf())
             }
             fn read_vectored_at(
                 &self,
                 _bufs: &mut [io::IoSliceMut],
                 _offset: u64,
             ) -> Result<u64, Error> {
-                Err(Error::Badf)
+                Err(Error::badf())
             }
             fn write_vectored(&self, bufs: &[io::IoSlice]) -> Result<u64, Error> {
                 let n = self.0.as_file_view().write_vectored(bufs)?;
-                Ok(n.try_into().map_err(|_| Error::Overflow)?)
+                Ok(n.try_into().map_err(|c| Error::range().context(c))?)
             }
             fn write_vectored_at(&self, _bufs: &[io::IoSlice], _offset: u64) -> Result<u64, Error> {
-                Err(Error::Spipe)
+                Err(Error::seek_pipe())
             }
             fn seek(&self, _pos: std::io::SeekFrom) -> Result<u64, Error> {
-                Err(Error::Spipe)
+                Err(Error::seek_pipe())
             }
             fn peek(&self, _buf: &mut [u8]) -> Result<u64, Error> {
-                Err(Error::Badf)
+                Err(Error::badf())
             }
             fn set_times(
                 &self,

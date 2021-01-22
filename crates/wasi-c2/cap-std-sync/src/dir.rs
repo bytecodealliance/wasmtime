@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use wasi_c2::{
     dir::{ReaddirCursor, ReaddirEntity, WasiDir},
     file::{FdFlags, FileCaps, FileType, Filestat, OFlags, WasiFile},
-    Error,
+    Error, ErrorExt,
 };
 
 pub struct Dir(cap_std::fs::Dir);
@@ -118,7 +118,10 @@ impl WasiDir for Dir {
                 let meta = entry.metadata()?;
                 let inode = meta.ino();
                 let filetype = filetype_from(&meta.file_type());
-                let name = entry.file_name().into_string().map_err(|_| Error::Ilseq)?;
+                let name = entry
+                    .file_name()
+                    .into_string()
+                    .map_err(|_| Error::illegal_byte_sequence().context("filename"))?;
                 let namelen = name.as_bytes().len().try_into()?;
                 Ok((filetype, inode, namelen, name))
             }),
@@ -189,7 +192,7 @@ impl WasiDir for Dir {
         let dest_dir = dest_dir
             .as_any()
             .downcast_ref::<Self>()
-            .ok_or(Error::NotCapable)?;
+            .ok_or(Error::badf().context("failed downcast to cap-std Dir"))?;
         self.0
             .rename(Path::new(src_path), &dest_dir.0, Path::new(dest_path))?;
         Ok(())
@@ -204,7 +207,7 @@ impl WasiDir for Dir {
         let target_dir = target_dir
             .as_any()
             .downcast_ref::<Self>()
-            .ok_or(Error::NotCapable)?;
+            .ok_or(Error::badf().context("failed downcast to cap-std Dir"))?;
         let src_path = Path::new(src_path);
         let target_path = Path::new(target_path);
         self.0.hard_link(src_path, &target_dir.0, target_path)?;

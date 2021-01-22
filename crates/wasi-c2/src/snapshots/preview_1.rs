@@ -79,6 +79,7 @@ impl From<ErrorKind> for types::Errno {
             ErrorKind::Exist => Errno::Exist,
             ErrorKind::Ilseq => Errno::Ilseq,
             ErrorKind::Inval => Errno::Inval,
+            ErrorKind::Io => Errno::Io,
             ErrorKind::Nametoolong => Errno::Nametoolong,
             ErrorKind::Notdir => Errno::Notdir,
             ErrorKind::Notsup => Errno::Notsup,
@@ -141,9 +142,15 @@ impl TryFrom<std::io::Error> for types::Errno {
                 libc::EOVERFLOW => Ok(types::Errno::Overflow),
                 libc::EILSEQ => Ok(types::Errno::Ilseq),
                 libc::ENOTSUP => Ok(types::Errno::Notsup),
-                _ => Err(anyhow!(err).context("Unknown raw OS error")),
+                code => Err(anyhow!(err).context(format!("Unknown raw OS error: {}", code))),
             },
-            None => Err(anyhow!(err).context("No raw OS error")),
+            None => match err.kind() {
+                std::io::ErrorKind::NotFound => Ok(types::Errno::Noent),
+                std::io::ErrorKind::PermissionDenied => Ok(types::Errno::Perm),
+                std::io::ErrorKind::AlreadyExists => Ok(types::Errno::Exist),
+                std::io::ErrorKind::InvalidInput => Ok(types::Errno::Ilseq),
+                k => Err(anyhow!(err).context(format!("No raw OS error. Unhandled kind: {:?}", k))),
+            },
         }
     }
 }

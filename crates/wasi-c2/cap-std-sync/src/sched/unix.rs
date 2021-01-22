@@ -8,7 +8,7 @@ use wasi_c2::{
         subscription::{RwEventFlags, Subscription},
         Poll, WasiSched,
     },
-    Error,
+    Error, ErrorExt,
 };
 
 use poll::{PollFd, PollFlags};
@@ -25,12 +25,16 @@ impl WasiSched for SyncSched {
         for s in poll.rw_subscriptions() {
             match s {
                 Subscription::Read(f) => {
-                    let raw_fd = wasi_file_raw_fd(f.file.deref()).ok_or(Error::Inval)?;
+                    let raw_fd = wasi_file_raw_fd(f.file.deref()).ok_or(
+                        Error::invalid_argument().context("read subscription fd downcast failed"),
+                    )?;
                     pollfds.push(unsafe { PollFd::new(raw_fd, PollFlags::POLLIN) });
                 }
 
                 Subscription::Write(f) => {
-                    let raw_fd = wasi_file_raw_fd(f.file.deref()).ok_or(Error::Inval)?;
+                    let raw_fd = wasi_file_raw_fd(f.file.deref()).ok_or(
+                        Error::invalid_argument().context("write subscription fd downcast failed"),
+                    )?;
                     pollfds.push(unsafe { PollFd::new(raw_fd, PollFlags::POLLOUT) });
                 }
                 Subscription::MonotonicClock { .. } => unreachable!(),
@@ -45,7 +49,7 @@ impl WasiSched for SyncSched {
                     .unwrap_or(Duration::from_secs(0));
                 (duration.as_millis() + 1) // XXX try always rounding up?
                     .try_into()
-                    .map_err(|_| Error::Overflow)?
+                    .map_err(|_| Error::overflow().context("poll timeout"))?
             } else {
                 libc::c_int::max_value()
             };
@@ -78,9 +82,9 @@ impl WasiSched for SyncSched {
                         _ => unreachable!(),
                     };
                     if revents.contains(PollFlags::POLLNVAL) {
-                        rwsub.error(Error::Badf);
+                        rwsub.error(Error::badf());
                     } else if revents.contains(PollFlags::POLLERR) {
-                        rwsub.error(Error::Io);
+                        rwsub.error(Error::io());
                     } else if revents.contains(PollFlags::POLLHUP) {
                         rwsub.complete(nbytes, RwEventFlags::HANGUP);
                     } else {
