@@ -173,6 +173,6 @@ pub extern "C" fn wasmtime_config_dynamic_memory_guard_size_set(c: &mut wasm_con
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_config_max_instances(c: &mut wasm_config_t, limit: usize) {
+pub extern "C" fn wasmtime_config_max_instances_set(c: &mut wasm_config_t, limit: usize) {
     c.config.max_instances(limit);
 }
