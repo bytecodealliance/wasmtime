@@ -1,5 +1,4 @@
 use anyhow::Context;
-use std::fs::File;
 use std::path::Path;
 use wasi_c2::pipe::{ReadPipe, WritePipe};
 use wasi_c2_cap_std_sync::WasiCtxBuilder;
@@ -25,9 +24,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
 
         if let Some(workspace) = workspace {
             println!("preopen: {:?}", workspace);
-            let dirfd =
-                File::open(workspace).context(format!("error while preopening {:?}", workspace))?;
-            let preopen_dir = unsafe { cap_std::fs::Dir::from_std_file(dirfd) };
+            let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(workspace) }?;
             builder = builder.preopened_dir(preopen_dir, ".")?;
         }
 
