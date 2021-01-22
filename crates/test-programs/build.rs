@@ -146,7 +146,12 @@ mod wasi_tests {
         };
         writeln!(
             out,
-            "        runtime::instantiate(&data, &bin_name, {})",
+            "        runtime::{}(&data, &bin_name, {})",
+            if inherit_stdio(testsuite, stemstr) {
+                "instantiate_inherit_stdio"
+            } else {
+                "instantiate"
+            },
             workspace,
         )?;
         writeln!(out, "    }}")?;
@@ -190,6 +195,19 @@ mod wasi_tests {
                 "big_random_buf" => true,
                 "clock_time_get" => true,
                 "sched_yield" => true,
+                "poll_oneoff_stdio" => true,
+                _ => false,
+            }
+        } else {
+            unreachable!()
+        }
+    }
+
+    /// Mark tests which require inheriting parent process stdio
+    fn inherit_stdio(testsuite: &str, name: &str) -> bool {
+        if testsuite == "wasi-tests" {
+            match name {
+                "poll_oneoff_stdio" => true,
                 _ => false,
             }
         } else {

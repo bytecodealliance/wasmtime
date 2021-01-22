@@ -62,3 +62,42 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         }
     }
 }
+
+pub fn instantiate_inherit_stdio(
+    data: &[u8],
+    bin_name: &str,
+    workspace: Option<&Path>,
+) -> anyhow::Result<()> {
+    let r = {
+        let store = Store::default();
+
+        // Create our wasi context.
+        // Additionally register any preopened directories if we have them.
+        let mut builder = WasiCtxBuilder::new();
+
+        builder = builder.arg(bin_name)?.arg(".")?.inherit_stdio();
+
+        if let Some(workspace) = workspace {
+            println!("preopen: {:?}", workspace);
+            let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(workspace) }?;
+            builder = builder.preopened_dir(preopen_dir, ".")?;
+        }
+
+        let snapshot1 = wasi_c2_wasmtime::Wasi::new(&store, builder.build()?);
+
+        let mut linker = Linker::new(&store);
+
+        snapshot1.add_to_linker(&mut linker)?;
+
+        let module = Module::new(store.engine(), &data).context("failed to create wasm module")?;
+        let instance = linker.instantiate(&module)?;
+        let start = instance.get_func("_start").unwrap();
+        let with_type = start.get0::<()>()?;
+        with_type().map_err(anyhow::Error::from)
+    };
+
+    match r {
+        Ok(()) => Ok(()),
+        Err(trap) => Err(trap.context(format!("error while testing Wasm module '{}'", bin_name,))),
+    }
+}
