@@ -1,4 +1,4 @@
-use crate::{Error, SystemTimeSpec};
+use crate::{Error, ErrorExt, SystemTimeSpec};
 use bitflags::bitflags;
 use std::any::Any;
 use std::cell::Ref;
@@ -116,10 +116,7 @@ impl FileEntry {
         if self.caps.contains(caps) {
             Ok(())
         } else {
-            Err(Error::FileNotCapable {
-                desired: caps,
-                has: self.caps,
-            })
+            Err(Error::not_capable().context(format!("desired {:?}, has {:?}", caps, self.caps,)))
         }
     }
 

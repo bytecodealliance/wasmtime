@@ -11,7 +11,7 @@
 //!
 use crate::{
     file::{FdFlags, FileType, Filestat, WasiFile},
-    Error, SystemTimeSpec,
+    Error, ErrorExt, SystemTimeSpec,
 };
 use std::any::Any;
 use std::convert::TryInto;
@@ -115,7 +115,7 @@ impl<R: Read + Any> WasiFile for ReadPipe<R> {
         Ok(FdFlags::empty())
     }
     unsafe fn reopen_with_fdflags(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
         Ok(Filestat {
@@ -130,39 +130,39 @@ impl<R: Read + Any> WasiFile for ReadPipe<R> {
         })
     }
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
-        Err(Error::Perm)
+        Err(Error::badf())
     }
     fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn read_vectored(&self, bufs: &mut [io::IoSliceMut]) -> Result<u64, Error> {
         let n = self.borrow().read_vectored(bufs)?;
-        Ok(n.try_into().map_err(|_| Error::Overflow)?)
+        Ok(n.try_into()?)
     }
     fn read_vectored_at(&self, bufs: &mut [io::IoSliceMut], offset: u64) -> Result<u64, Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn write_vectored(&self, bufs: &[io::IoSlice]) -> Result<u64, Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn write_vectored_at(&self, bufs: &[io::IoSlice], offset: u64) -> Result<u64, Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn set_times(
         &self,
         atime: Option<SystemTimeSpec>,
         mtime: Option<SystemTimeSpec>,
     ) -> Result<(), Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(0)
@@ -251,7 +251,7 @@ impl<W: Write + Any> WasiFile for WritePipe<W> {
         Ok(FdFlags::APPEND)
     }
     unsafe fn reopen_with_fdflags(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
         Ok(Filestat {
@@ -266,39 +266,39 @@ impl<W: Write + Any> WasiFile for WritePipe<W> {
         })
     }
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
-        Err(Error::Perm)
+        Err(Error::badf())
     }
     fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn read_vectored(&self, bufs: &mut [io::IoSliceMut]) -> Result<u64, Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn read_vectored_at(&self, bufs: &mut [io::IoSliceMut], offset: u64) -> Result<u64, Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn write_vectored(&self, bufs: &[io::IoSlice]) -> Result<u64, Error> {
         let n = self.borrow().write_vectored(bufs)?;
-        Ok(n.try_into().map_err(|_| Error::Overflow)?)
+        Ok(n.try_into()?)
     }
     fn write_vectored_at(&self, bufs: &[io::IoSlice], offset: u64) -> Result<u64, Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn set_times(
         &self,
         atime: Option<SystemTimeSpec>,
         mtime: Option<SystemTimeSpec>,
     ) -> Result<(), Error> {
-        Err(Error::Badf)
+        Err(Error::badf())
     }
     fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(0)

@@ -1,5 +1,5 @@
 use crate::file::{FdFlags, FileCaps, FileType, Filestat, OFlags, WasiFile};
-use crate::{Error, SystemTimeSpec};
+use crate::{Error, ErrorExt, SystemTimeSpec};
 use bitflags::bitflags;
 use std::any::Any;
 use std::cell::Ref;
@@ -69,20 +69,15 @@ impl DirEntry {
         if self.caps.contains(caps) {
             Ok(())
         } else {
-            Err(Error::DirNotCapable {
-                desired: caps,
-                has: self.caps,
-            })
+            Err(Error::not_capable().context(format!("desired {:?}, has {:?}", caps, self.caps,)))
         }
     }
     pub fn capable_of_file(&self, caps: FileCaps) -> Result<(), Error> {
         if self.file_caps.contains(caps) {
             Ok(())
         } else {
-            Err(Error::FileNotCapable {
-                desired: caps,
-                has: self.file_caps,
-            })
+            Err(Error::not_capable()
+                .context(format!("desired {:?}, has {:?}", caps, self.file_caps)))
         }
     }
     pub fn drop_caps_to(&mut self, caps: DirCaps, file_caps: FileCaps) -> Result<(), Error> {

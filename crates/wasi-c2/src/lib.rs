@@ -15,6 +15,6 @@ pub mod table;
 pub use clocks::SystemTimeSpec;
 pub use ctx::{WasiCtx, WasiCtxBuilder};
 pub use dir::{DirCaps, ReaddirCursor, ReaddirEntity, WasiDir};
-pub use error::Error;
+pub use error::{Error, ErrorExt, ErrorKind};
 pub use file::{FdFlags, FileCaps, Filestat, OFlags, WasiFile};
 pub use string_array::StringArrayError;

@@ -1,4 +1,5 @@
-use crate::Error;
+use crate::{Error, ErrorExt};
+use anyhow::anyhow;
 use std::any::Any;
 use std::cell::{Ref, RefCell, RefMut};
 use std::collections::HashMap;
@@ -25,7 +26,10 @@ impl Table {
             let key = self.next_key;
             // XXX this is not correct. The table may still have empty entries, but our
             // linear search strategy is quite bad
-            self.next_key = self.next_key.checked_add(1).ok_or(Error::TableOverflow)?;
+            self.next_key = self
+                .next_key
+                .checked_add(1)
+                .ok_or_else(|| anyhow!("out of keys in table"))?;
             if self.map.contains_key(&key) {
                 continue;
             }
@@ -56,13 +60,13 @@ impl Table {
                 if r.is::<T>() {
                     Ok(Ref::map(r, |r| r.downcast_ref::<T>().unwrap()))
                 } else {
-                    Err(Error::Exist) // Exists at another type
+                    Err(Error::exist().context("element is a different type"))
                 }
             } else {
-                Err(Error::Exist) // Does exist, but borrowed
+                Err(Error::exist().context("element in table, but mutably borrowed"))
             }
         } else {
-            Err(Error::Badf) // Does not exist
+            Err(Error::badf().context("key not in table"))
         }
     }
 
@@ -72,13 +76,13 @@ impl Table {
                 if r.is::<T>() {
                     Ok(RefMut::map(r, |r| r.downcast_mut::<T>().unwrap()))
                 } else {
-                    Err(Error::Exist) // Exists at another type
+                    Err(Error::exist().context("element is a different type"))
                 }
             } else {
-                Err(Error::Exist) // Does exist, but borrowed
+                Err(Error::exist().context("element in table, but borrowed"))
             }
         } else {
-            Err(Error::Badf) // Does not exist
+            Err(Error::badf().context("key not in table"))
         }
     }
 
@@ -91,8 +95,10 @@ impl Table {
         T: Any + Sized,
         F: FnOnce(T) -> Result<T, Error>,
     {
-        let entry = self.delete(key).ok_or(Error::Badf)?;
-        let downcast = entry.downcast::<T>().map_err(|_| Error::Exist)?;
+        let entry = self.delete(key).ok_or(Error::badf())?;
+        let downcast = entry
+            .downcast::<T>()
+            .map_err(|_| Error::exist().context("element is a different type"))?;
         let new = f(*downcast)?;
         self.insert_at(key, Box::new(new));
         Ok(())

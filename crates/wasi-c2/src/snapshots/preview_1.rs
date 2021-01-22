@@ -9,8 +9,9 @@ use crate::{
         subscription::{RwEventFlags, SubscriptionResult},
         Poll,
     },
-    Error, SystemTimeSpec, WasiCtx,
+    Error, ErrorExt, ErrorKind, SystemTimeSpec, WasiCtx,
 };
+use anyhow::{anyhow, Context};
 use cap_std::time::{Duration, SystemClock};
 use std::cell::{Ref, RefMut};
 use std::convert::{TryFrom, TryInto};
@@ -42,74 +43,49 @@ impl types::UserErrorConversion for WasiCtx {
     fn errno_from_error(&self, e: Error) -> Result<types::Errno, wiggle::Trap> {
         debug!("Error: {:?}", e);
         e.try_into()
+            .map_err(|e| wiggle::Trap::String(format!("{:?}", e)))
     }
 }
 
 impl TryFrom<Error> for types::Errno {
-    type Error = wiggle::Trap;
-    fn try_from(e: Error) -> Result<types::Errno, wiggle::Trap> {
-        use std::io::ErrorKind;
+    type Error = Error;
+    fn try_from(e: Error) -> Result<types::Errno, Error> {
+        use types::Errno;
+        if e.is::<ErrorKind>() {
+            let e = e.downcast::<ErrorKind>().unwrap();
+            Ok(e.into())
+        } else if e.is::<std::io::Error>() {
+            let e = e.downcast::<std::io::Error>().unwrap();
+            e.try_into()
+        } else if e.is::<wiggle::GuestError>() {
+            let e = e.downcast::<wiggle::GuestError>().unwrap();
+            Ok(e.into())
+        } else if e.is::<std::num::TryFromIntError>() {
+            Ok(Errno::Overflow)
+        } else if e.is::<std::str::Utf8Error>() {
+            Ok(Errno::Ilseq)
+        } else {
+            Err(e)
+        }
+    }
+}
+
+impl From<ErrorKind> for types::Errno {
+    fn from(e: ErrorKind) -> types::Errno {
         use types::Errno;
         match e {
-            Error::Unsupported(feat) => {
-                Err(wiggle::Trap::String(format!("Unsupported: {0}", feat)))
-            }
-            Error::Guest(e) => Ok(e.into()),
-            Error::TryFromInt(_) => Ok(Errno::Overflow),
-            Error::Utf8(_) => Ok(Errno::Ilseq),
-            Error::UnexpectedIo(e) => match e.kind() {
-                ErrorKind::NotFound => Ok(Errno::Noent),
-                ErrorKind::PermissionDenied => Ok(Errno::Perm),
-                ErrorKind::AlreadyExists => Ok(Errno::Exist),
-                ErrorKind::InvalidInput => Ok(Errno::Ilseq),
-                ErrorKind::ConnectionRefused
-                | ErrorKind::ConnectionReset
-                | ErrorKind::ConnectionAborted
-                | ErrorKind::NotConnected
-                | ErrorKind::AddrInUse
-                | ErrorKind::AddrNotAvailable
-                | ErrorKind::BrokenPipe
-                | ErrorKind::WouldBlock
-                | ErrorKind::InvalidData
-                | ErrorKind::TimedOut
-                | ErrorKind::WriteZero
-                | ErrorKind::Interrupted
-                | ErrorKind::Other
-                | ErrorKind::UnexpectedEof
-                | _ => Ok(Errno::Io),
-            },
-            Error::CapRand(_) => Ok(Errno::Io),
-            Error::TooBig => Ok(Errno::TooBig),
-            Error::Acces => Ok(Errno::Acces),
-            Error::Badf => Ok(Errno::Badf),
-            Error::Busy => Ok(Errno::Busy),
-            Error::Exist => Ok(Errno::Exist),
-            Error::Fault => Ok(Errno::Fault),
-            Error::Fbig => Ok(Errno::Fbig),
-            Error::Ilseq => Ok(Errno::Ilseq),
-            Error::Inval => Ok(Errno::Inval),
-            Error::Io => Ok(Errno::Io),
-            Error::Isdir => Ok(Errno::Isdir),
-            Error::Loop => Ok(Errno::Loop),
-            Error::Mfile => Ok(Errno::Mfile),
-            Error::Mlink => Ok(Errno::Mlink),
-            Error::Nametoolong => Ok(Errno::Nametoolong),
-            Error::Nfile => Ok(Errno::Nfile),
-            Error::Noent => Ok(Errno::Noent),
-            Error::Nomem => Ok(Errno::Nomem),
-            Error::Nospc => Ok(Errno::Nospc),
-            Error::Notdir => Ok(Errno::Notdir),
-            Error::Notempty => Ok(Errno::Notempty),
-            Error::Notsup => Ok(Errno::Notsup),
-            Error::Overflow => Ok(Errno::Overflow),
-            Error::Pipe => Ok(Errno::Pipe),
-            Error::Perm => Ok(Errno::Perm),
-            Error::Range => Ok(Errno::Range),
-            Error::Spipe => Ok(Errno::Spipe),
-            Error::FileNotCapable { .. } => Ok(Errno::Notcapable),
-            Error::DirNotCapable { .. } => Ok(Errno::Notcapable),
-            Error::NotCapable => Ok(Errno::Notcapable),
-            Error::TableOverflow => Ok(Errno::Overflow),
+            ErrorKind::TooBig => Errno::TooBig,
+            ErrorKind::Badf => Errno::Badf,
+            ErrorKind::Exist => Errno::Exist,
+            ErrorKind::Ilseq => Errno::Ilseq,
+            ErrorKind::Inval => Errno::Inval,
+            ErrorKind::Nametoolong => Errno::Nametoolong,
+            ErrorKind::Notdir => Errno::Notdir,
+            ErrorKind::Notsup => Errno::Notsup,
+            ErrorKind::Overflow => Errno::Overflow,
+            ErrorKind::Range => Errno::Range,
+            ErrorKind::Spipe => Errno::Spipe,
+            ErrorKind::NotCapable => Errno::Notcapable,
         }
     }
 }
@@ -130,6 +106,44 @@ impl From<wiggle::GuestError> for types::Errno {
             InDataField { err, .. } => types::Errno::from(*err),
             SliceLengthsDiffer { .. } => Self::Fault,
             BorrowCheckerOutOfHandles { .. } => Self::Fault,
+        }
+    }
+}
+
+impl TryFrom<std::io::Error> for types::Errno {
+    type Error = Error;
+    fn try_from(err: std::io::Error) -> Result<types::Errno, Error> {
+        match err.raw_os_error() {
+            Some(code) => match code {
+                libc::EPIPE => Ok(types::Errno::Pipe),
+                libc::EPERM => Ok(types::Errno::Perm),
+                libc::ENOENT => Ok(types::Errno::Noent),
+                libc::ENOMEM => Ok(types::Errno::Nomem),
+                libc::E2BIG => Ok(types::Errno::TooBig),
+                libc::EIO => Ok(types::Errno::Io),
+                libc::EBADF => Ok(types::Errno::Badf),
+                libc::EBUSY => Ok(types::Errno::Busy),
+                libc::EACCES => Ok(types::Errno::Acces),
+                libc::EFAULT => Ok(types::Errno::Fault),
+                libc::ENOTDIR => Ok(types::Errno::Notdir),
+                libc::EISDIR => Ok(types::Errno::Isdir),
+                libc::EINVAL => Ok(types::Errno::Inval),
+                libc::EEXIST => Ok(types::Errno::Exist),
+                libc::EFBIG => Ok(types::Errno::Fbig),
+                libc::ENOSPC => Ok(types::Errno::Nospc),
+                libc::ESPIPE => Ok(types::Errno::Spipe),
+                libc::EMFILE => Ok(types::Errno::Mfile),
+                libc::EMLINK => Ok(types::Errno::Mlink),
+                libc::ENAMETOOLONG => Ok(types::Errno::Nametoolong),
+                libc::ENFILE => Ok(types::Errno::Nfile),
+                libc::ENOTEMPTY => Ok(types::Errno::Notempty),
+                libc::ELOOP => Ok(types::Errno::Loop),
+                libc::EOVERFLOW => Ok(types::Errno::Overflow),
+                libc::EILSEQ => Ok(types::Errno::Ilseq),
+                libc::ENOTSUP => Ok(types::Errno::Notsup),
+                _ => Err(anyhow!(err).context("Unknown raw OS error")),
+            },
+            None => Err(anyhow!(err).context("No raw OS error")),
         }
     }
 }
@@ -164,7 +178,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             types::Clockid::Realtime => Ok(self.clocks.system.resolution()),
             types::Clockid::Monotonic => Ok(self.clocks.monotonic.resolution()),
             types::Clockid::ProcessCputimeId | types::Clockid::ThreadCputimeId => {
-                Err(Error::NotCapable)
+                Err(Error::badf().context("process and thread clocks are not supported"))
             }
         }?;
         Ok(resolution.as_nanos().try_into()?)
@@ -181,7 +195,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 let now = self.clocks.system.now(precision).into_std();
                 let d = now
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                    .map_err(|_| Error::NotCapable)?; // XXX wrong
+                    .map_err(|_| anyhow!("current time before unix epoch"))?;
                 Ok(d.as_nanos().try_into()?)
             }
             types::Clockid::Monotonic => {
@@ -189,7 +203,9 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 let d = now.duration_since(self.clocks.creation_time);
                 Ok(d.as_nanos().try_into()?)
             }
-            types::Clockid::ProcessCputimeId | types::Clockid::ThreadCputimeId => Err(Error::Badf),
+            types::Clockid::ProcessCputimeId | types::Clockid::ThreadCputimeId => {
+                Err(Error::badf().context("process and thread clocks are not supported"))
+            }
         }
     }
 
@@ -226,7 +242,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
         // Fail fast: If not present in table, Badf
         if !table.contains_key(fd) {
-            return Err(Error::Badf);
+            return Err(Error::badf().context("key not in table"));
         }
         // fd_close must close either a File or a Dir handle
         if table.is::<FileEntry>(fd) {
@@ -235,13 +251,12 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             // We cannot close preopened directories
             let dir_entry: Ref<DirEntry> = table.get(fd).unwrap();
             if dir_entry.preopen_path().is_some() {
-                return Err(Error::Notsup);
+                return Err(Error::not_supported().context("cannot close propened directory"));
             }
             drop(dir_entry);
             let _ = table.delete(fd);
         } else {
-            // XXX do we just table delete other entry types anyway?
-            return Err(Error::Badf);
+            return Err(Error::badf().context("key does not refer to file or directory"));
         }
 
         Ok(())
@@ -267,7 +282,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             let dir_fdstat = dir_entry.get_dir_fdstat();
             Ok(types::Fdstat::from(&dir_fdstat))
         } else {
-            Err(Error::Badf)
+            Err(Error::badf())
         }
     }
 
@@ -300,7 +315,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             let file_caps = FileCaps::from(&fs_rights_inheriting);
             dir_entry.drop_caps_to(dir_caps, file_caps)
         } else {
-            Err(Error::Badf)
+            Err(Error::badf())
         }
     }
 
@@ -320,7 +335,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 .get_filestat()?;
             Ok(filestat.into())
         } else {
-            Err(Error::Badf)
+            Err(Error::badf())
         }
     }
 
@@ -346,27 +361,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let set_atim_now = fst_flags.contains(types::Fstflags::ATIM_NOW);
         let set_mtim = fst_flags.contains(types::Fstflags::MTIM);
         let set_mtim_now = fst_flags.contains(types::Fstflags::MTIM_NOW);
-        if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
-            return Err(Error::Inval);
-        }
-        let atim = if set_atim {
-            Some(SystemTimeSpec::Absolute(
-                SystemClock::UNIX_EPOCH + Duration::from_nanos(atim),
-            ))
-        } else if set_atim_now {
-            Some(SystemTimeSpec::SymbolicNow)
-        } else {
-            None
-        };
-        let mtim = if set_mtim {
-            Some(SystemTimeSpec::Absolute(
-                SystemClock::UNIX_EPOCH + Duration::from_nanos(mtim),
-            ))
-        } else if set_mtim_now {
-            Some(SystemTimeSpec::SymbolicNow)
-        } else {
-            None
-        };
+
+        let atim = systimespec(set_atim, atim, set_atim_now).context("atim")?;
+        let mtim = systimespec(set_mtim, mtim, set_mtim_now).context("mtim")?;
+
         if table.is::<FileEntry>(fd) {
             table
                 .get_file(fd)
@@ -380,7 +378,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 .get_cap(DirCaps::FILESTAT_SET_TIMES)?
                 .set_times(".", atim, mtim)
         } else {
-            Err(Error::Badf)
+            Err(Error::badf())
         }
     }
 
@@ -492,14 +490,13 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
     fn fd_prestat_get(&self, fd: types::Fd) -> Result<types::Prestat, Error> {
         let table = self.table();
-        let dir_entry: Ref<DirEntry> = table.get(u32::from(fd)).map_err(|_| Error::Badf)?;
+        let dir_entry: Ref<DirEntry> = table.get(u32::from(fd)).map_err(|_| Error::badf())?;
         if let Some(ref preopen) = dir_entry.preopen_path() {
-            let path_str = preopen.to_str().ok_or(Error::Notsup)?;
-            let pr_name_len =
-                u32::try_from(path_str.as_bytes().len()).map_err(|_| Error::Overflow)?;
+            let path_str = preopen.to_str().ok_or_else(|| Error::not_supported())?;
+            let pr_name_len = u32::try_from(path_str.as_bytes().len())?;
             Ok(types::Prestat::Dir(types::PrestatDir { pr_name_len }))
         } else {
-            Err(Error::Notsup)
+            Err(Error::not_supported().context("file is not a preopen"))
         }
     }
 
@@ -510,18 +507,21 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         path_max_len: types::Size,
     ) -> Result<(), Error> {
         let table = self.table();
-        let dir_entry: Ref<DirEntry> = table.get(u32::from(fd)).map_err(|_| Error::Notdir)?;
+        let dir_entry: Ref<DirEntry> = table.get(u32::from(fd)).map_err(|_| Error::not_dir())?;
         if let Some(ref preopen) = dir_entry.preopen_path() {
-            let path_bytes = preopen.to_str().ok_or(Error::Notsup)?.as_bytes();
+            let path_bytes = preopen
+                .to_str()
+                .ok_or_else(|| Error::not_supported())?
+                .as_bytes();
             let path_len = path_bytes.len();
             if path_len < path_max_len as usize {
-                return Err(Error::Nametoolong);
+                return Err(Error::name_too_long());
             }
             let mut p_memory = path.as_array(path_len as u32).as_slice_mut()?;
             p_memory.copy_from_slice(path_bytes);
             Ok(())
         } else {
-            Err(Error::Notsup)
+            Err(Error::not_supported())
         }
     }
     fn fd_renumber(&self, from: types::Fd, to: types::Fd) -> Result<(), Error> {
@@ -529,13 +529,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let from = u32::from(from);
         let to = u32::from(to);
         if !table.contains_key(from) {
-            return Err(Error::Badf);
+            return Err(Error::badf());
         }
-        if table.is_preopen(from) {
-            return Err(Error::Notsup);
-        }
-        if table.is_preopen(to) {
-            return Err(Error::Notsup);
+        if table.is_preopen(from) || table.is_preopen(to) {
+            return Err(Error::not_supported().context("cannot renumber a preopen"));
         }
         let from_entry = table
             .delete(from)
@@ -609,7 +606,9 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             let dirent_len: types::Size = dirent_raw.len().try_into()?;
             let name_raw = name.as_bytes();
             let name_len: types::Size = name_raw.len().try_into()?;
-            let offset = dirent_len.checked_add(name_len).ok_or(Error::Overflow)?;
+            let offset = dirent_len
+                .checked_add(name_len)
+                .ok_or_else(|| Error::overflow())?;
 
             // Copy as many bytes of the dirent as we can, up to the end of the buffer
             let dirent_copy_len = std::cmp::min(dirent_len, buf_len - bufused);
@@ -680,22 +679,9 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let set_atim_now = fst_flags.contains(types::Fstflags::ATIM_NOW);
         let set_mtim = fst_flags.contains(types::Fstflags::MTIM);
         let set_mtim_now = fst_flags.contains(types::Fstflags::MTIM_NOW);
-        if (set_atim && set_atim_now) || (set_mtim && set_mtim_now) {
-            return Err(Error::Inval);
-        }
-        fn systimespec(set: bool, ts: types::Timestamp, now: bool) -> Option<SystemTimeSpec> {
-            if set {
-                Some(SystemTimeSpec::Absolute(
-                    SystemClock::UNIX_EPOCH + Duration::from_nanos(ts),
-                ))
-            } else if now {
-                Some(SystemTimeSpec::SymbolicNow)
-            } else {
-                None
-            }
-        }
-        let atim = systimespec(set_atim, atim, set_atim_now);
-        let mtim = systimespec(set_mtim, mtim, set_mtim_now);
+
+        let atim = systimespec(set_atim, atim, set_atim_now).context("atim")?;
+        let mtim = systimespec(set_mtim, mtim, set_mtim_now).context("mtim")?;
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::PATH_FILESTAT_SET_TIMES)?
@@ -740,7 +726,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let mut table = self.table();
         let dirfd = u32::from(dirfd);
         if table.is::<FileEntry>(dirfd) {
-            return Err(Error::Notdir);
+            return Err(Error::not_dir());
         }
         let dir_entry = table.get_dir(dirfd)?;
 
@@ -754,7 +740,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 || oflags.contains(OFlags::EXCLUSIVE)
                 || oflags.contains(OFlags::TRUNCATE)
             {
-                return Err(Error::Inval);
+                return Err(Error::invalid_argument().context("directory oflags"));
             }
             let dir_caps = dir_entry.child_dir_caps(DirCaps::from(&fs_rights_base));
             let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_inheriting));
@@ -794,11 +780,11 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .read_link(path.as_str()?.deref())?
             .into_os_string()
             .into_string()
-            .map_err(|_| Error::Ilseq)?;
+            .map_err(|_| Error::illegal_byte_sequence().context("link contents"))?;
         let link_bytes = link.as_bytes();
         let link_len = link_bytes.len();
         if link_len > buf_len as usize {
-            return Err(Error::Range);
+            return Err(Error::range());
         }
         let mut buf = buf.as_array(link_len as u32).as_slice_mut()?;
         buf.copy_from_slice(link_bytes);
@@ -863,7 +849,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         nsubscriptions: types::Size,
     ) -> Result<types::Size, Error> {
         if nsubscriptions == 0 {
-            return Err(Error::Inval);
+            return Err(Error::invalid_argument().context("nsubscriptions must be nonzero"));
         }
 
         let table = self.table();
@@ -886,12 +872,12 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                             self.clocks
                                 .creation_time
                                 .checked_add(duration)
-                                .ok_or(Error::Overflow)?
+                                .ok_or_else(|| Error::overflow().context("deadline"))?
                         } else {
                             clock
                                 .now(precision)
                                 .checked_add(duration)
-                                .ok_or(Error::Overflow)?
+                                .ok_or_else(|| Error::overflow().context("deadline"))?
                         };
                         poll.subscribe_monotonic_clock(
                             clock,
@@ -900,7 +886,8 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                             sub.userdata.into(),
                         )
                     }
-                    _ => Err(Error::Inval)?,
+                    _ => Err(Error::invalid_argument()
+                        .context("timer subscriptions only support monotonic timer"))?,
                 },
                 types::SubscriptionU::FdRead(readsub) => {
                     let fd = readsub.file_descriptor;
@@ -970,7 +957,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                         },
                         Err(e) => types::Event {
                             userdata,
-                            error: e.try_into().expect("non-trapping"),
+                            error: e.try_into()?,
                             type_,
                             fd_readwrite: fd_readwrite_empty(),
                         },
@@ -982,7 +969,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                         userdata,
                         error: match r {
                             Ok(()) => types::Errno::Success,
-                            Err(e) => e.try_into().expect("non-trapping"),
+                            Err(e) => e.try_into()?,
                         },
                         type_,
                         fd_readwrite: fd_readwrite_empty(),
@@ -1004,7 +991,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn proc_raise(&self, _sig: types::Signal) -> Result<(), Error> {
-        Err(Error::Unsupported("proc_raise"))
+        Err(anyhow!("proc_raise unsupported"))
     }
 
     fn sched_yield(&self) -> Result<(), Error> {
@@ -1023,7 +1010,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         _ri_data: &types::IovecArray<'_>,
         _ri_flags: types::Riflags,
     ) -> Result<(types::Size, types::Roflags), Error> {
-        Err(Error::Unsupported("sock_recv"))
+        Err(anyhow!("sock_recv unsupported"))
     }
 
     fn sock_send(
@@ -1032,11 +1019,11 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         _si_data: &types::CiovecArray<'_>,
         _si_flags: types::Siflags,
     ) -> Result<types::Size, Error> {
-        Err(Error::Unsupported("sock_send"))
+        Err(anyhow!("sock_send unsupported"))
     }
 
     fn sock_shutdown(&self, _fd: types::Fd, _how: types::Sdflags) -> Result<(), Error> {
-        Err(Error::Unsupported("sock_shutdown"))
+        Err(anyhow!("sock_shutdown unsupported"))
     }
 }
 
@@ -1445,5 +1432,23 @@ fn fd_readwrite_empty() -> types::EventFdReadwrite {
     types::EventFdReadwrite {
         nbytes: 0,
         flags: types::Eventrwflags::empty(),
+    }
+}
+
+fn systimespec(
+    set: bool,
+    ts: types::Timestamp,
+    now: bool,
+) -> Result<Option<SystemTimeSpec>, Error> {
+    if set && now {
+        Err(Error::invalid_argument())
+    } else if set {
+        Ok(Some(SystemTimeSpec::Absolute(
+            SystemClock::UNIX_EPOCH + Duration::from_nanos(ts),
+        )))
+    } else if now {
+        Ok(Some(SystemTimeSpec::SymbolicNow))
+    } else {
+        Ok(None)
     }
 }

@@ -1,4 +1,4 @@
-use crate::Error;
+use crate::{Error, ErrorExt};
 use wiggle::GuestPtr;
 
 pub struct StringArray {
@@ -59,10 +59,13 @@ impl StringArray {
             {
                 let elem_buffer = buffer
                     .get_range(cursor..(cursor + len))
-                    .ok_or(Error::Inval)?; // Elements don't fit in buffer provided
+                    .ok_or(Error::invalid_argument())?; // Elements don't fit in buffer provided
                 elem_buffer.copy_from_slice(bytes)?;
             }
-            buffer.get(cursor + len).ok_or(Error::Inval)?.write(0)?; // 0 terminate
+            buffer
+                .get(cursor + len)
+                .ok_or(Error::invalid_argument())?
+                .write(0)?; // 0 terminate
             head?.write(buffer.get(cursor).expect("already validated"))?;
             cursor += len + 1;
         }
