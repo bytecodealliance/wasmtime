@@ -295,8 +295,8 @@ jobs:
     # Test debug (DWARF) related functionality on new backend.
     - run: |
         sudo apt-get update && sudo apt-get install -y gdb
-        cargo test --features experimental_x64 test_debug_dwarf -- --ignored --test-threads 1
-      if: matrix.target == 'x86_64-unknown-linux-gnu'
+        cargo test --features experimental_x64 test_debug_dwarf -- --ignored --test-threads 1 --test debug::
+      if: matrix.os == 'ubuntu-latest'
       env:
         RUST_BACKTRACE: 1
 
