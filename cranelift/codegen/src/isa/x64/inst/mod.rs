@@ -1,7 +1,7 @@
 //! This module defines x86_64-specific machine instruction types.
 
 use crate::binemit::{CodeOffset, StackMap};
-use crate::ir::{types, ExternalName, Opcode, SourceLoc, TrapCode, Type};
+use crate::ir::{types, ExternalName, Opcode, SourceLoc, TrapCode, Type, ValueLabel};
 use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::CallConv;
@@ -484,6 +484,9 @@ pub enum Inst {
     /// A Mach-O TLS symbol access. Returns address of the TLS
     /// symbol in rax.
     MachOTlsGetAddr { symbol: ExternalName },
+
+    /// A definition of a value label.
+    ValueLabelMarker { reg: Reg, label: ValueLabel },
 }
 
 pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
@@ -544,7 +547,8 @@ impl Inst {
             | Inst::XmmMinMaxSeq { .. }
             | Inst::XmmUninitializedValue { .. }
             | Inst::ElfTlsGetAddr { .. }
-            | Inst::MachOTlsGetAddr { .. } => None,
+            | Inst::MachOTlsGetAddr { .. }
+            | Inst::ValueLabelMarker { .. } => None,
 
             // These use dynamic SSE opcodes.
             Inst::GprToXmm { op, .. }
@@ -1800,6 +1804,10 @@ impl PrettyPrint for Inst {
             Inst::MachOTlsGetAddr { ref symbol } => {
                 format!("macho_tls_get_addr {:?}", symbol)
             }
+
+            Inst::ValueLabelMarker { label, reg } => {
+                format!("value_label {:?}, {}", label, reg.show_rru(mb_rru))
+            }
         }
     }
 }
@@ -2070,6 +2078,10 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             for reg in X64ABIMachineSpec::get_regs_clobbered_by_call(CallConv::SystemV) {
                 collector.add_def(reg);
             }
+        }
+
+        Inst::ValueLabelMarker { reg, .. } => {
+            collector.add_use(*reg);
         }
     }
 }
@@ -2446,6 +2458,8 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             dst.map_uses(mapper);
         }
 
+        Inst::ValueLabelMarker { ref mut reg, .. } => map_use(mapper, reg),
+
         Inst::Ret
         | Inst::EpiloguePlaceholder
         | Inst::JmpKnown { .. }
@@ -2533,6 +2547,25 @@ impl MachInst for Inst {
             } => MachTerminator::Indirect(&targets_for_term[..]),
             // All other cases are boring.
             _ => MachTerminator::None,
+        }
+    }
+
+    fn stack_op_info(&self) -> Option<MachInstStackOpInfo> {
+        match self {
+            Self::VirtualSPOffsetAdj { offset } => Some(MachInstStackOpInfo::NomSPAdj(*offset)),
+            Self::MovRM {
+                size: 8,
+                src,
+                dst: SyntheticAmode::NominalSPOffset { simm32 },
+            } => Some(MachInstStackOpInfo::StoreNomSPOff(*src, *simm32 as i64)),
+            Self::Mov64MR {
+                src: SyntheticAmode::NominalSPOffset { simm32 },
+                dst,
+            } => Some(MachInstStackOpInfo::LoadNomSPOff(
+                dst.to_reg(),
+                *simm32 as i64,
+            )),
+            _ => None,
         }
     }
 
@@ -2708,6 +2741,17 @@ impl MachInst for Inst {
 
     fn ref_type_regclass(_: &settings::Flags) -> RegClass {
         RegClass::I64
+    }
+
+    fn gen_value_label_marker(label: ValueLabel, reg: Reg) -> Self {
+        Inst::ValueLabelMarker { label, reg }
+    }
+
+    fn defines_value_label(&self) -> Option<(ValueLabel, Reg)> {
+        match self {
+            Inst::ValueLabelMarker { label, reg } => Some((*label, *reg)),
+            _ => None,
+        }
     }
 
     type LabelUse = LabelUse;

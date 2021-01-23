@@ -11,7 +11,7 @@ use crate::ir::{
 };
 use crate::isa::{RegInfo, TargetIsa};
 use crate::packed_option::ReservedValue;
-use crate::value_label::ValueLabelsRanges;
+use crate::value_label::{LabelValueLoc, ValueLabelsRanges};
 use crate::HashSet;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -278,11 +278,13 @@ pub fn write_block_header(
     writeln!(w, "):")
 }
 
-fn write_valueloc(w: &mut dyn Write, loc: ValueLoc, regs: &RegInfo) -> fmt::Result {
+fn write_valueloc(w: &mut dyn Write, loc: LabelValueLoc, regs: &RegInfo) -> fmt::Result {
     match loc {
-        ValueLoc::Reg(r) => write!(w, "{}", regs.display_regunit(r)),
-        ValueLoc::Stack(ss) => write!(w, "{}", ss),
-        ValueLoc::Unassigned => write!(w, "?"),
+        LabelValueLoc::ValueLoc(ValueLoc::Reg(r)) => write!(w, "{}", regs.display_regunit(r)),
+        LabelValueLoc::ValueLoc(ValueLoc::Stack(ss)) => write!(w, "{}", ss),
+        LabelValueLoc::ValueLoc(ValueLoc::Unassigned) => write!(w, "?"),
+        LabelValueLoc::Reg(r) => write!(w, "{:?}", r),
+        LabelValueLoc::SPOffset(off) => write!(w, "[sp+{}]", off),
     }
 }
 

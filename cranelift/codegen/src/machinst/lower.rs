@@ -13,6 +13,7 @@ use crate::ir::instructions::BranchInfo;
 use crate::ir::{
     ArgumentPurpose, Block, Constant, ConstantData, ExternalName, Function, GlobalValueData, Inst,
     InstructionData, MemFlags, Opcode, Signature, SourceLoc, Type, Value, ValueDef,
+    ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::{
     writable_value_regs, ABICallee, BlockIndex, BlockLoweringOrder, LoweredBlock, MachLabel, VCode,
@@ -24,7 +25,7 @@ use alloc::vec::Vec;
 use core::convert::TryInto;
 use log::debug;
 use regalloc::{Reg, StackmapRequestInfo, Writable};
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 
 /// An "instruction color" partitions CLIF instructions by side-effecting ops.
@@ -492,6 +493,14 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     fn gen_retval_setup(&mut self, gen_ret_inst: GenerateReturn) {
+        // Hack: to keep `vmctx` alive, if it exists, we emit a value label here
+        // for it if debug info is requested. This ensures that it exists either
+        // in a register or spillslot throughout the entire function body, and
+        // allows for a better debugging experience.
+        if let Some(vmctx_val) = self.f.special_param(ArgumentPurpose::VMContext) {
+            self.emit_value_label_marks_for_value(vmctx_val);
+        }
+
         let retval_regs = self.retval_regs.clone();
         for (i, regs) in retval_regs.into_iter().enumerate() {
             let regs = writable_value_regs(regs);
@@ -725,6 +734,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             if has_side_effect || value_needed {
                 debug!("lowering: inst {}: {:?}", inst, self.f.dfg[inst]);
                 backend.lower(self, inst)?;
+                // Emit value-label markers if needed, to later recover debug
+                // mappings.
+                self.emit_value_label_markers_for_inst(inst);
             }
             if data.opcode().is_return() {
                 // Return: handle specially, using ABI-appropriate sequence.
@@ -742,6 +754,80 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         }
         self.cur_scan_entry_color = None;
         Ok(())
+    }
+
+    fn get_value_labels<'a>(&'a self, val: Value, depth: usize) -> Option<&'a [ValueLabelStart]> {
+        if let Some(ref values_labels) = self.f.dfg.values_labels {
+            debug!(
+                "get_value_labels: val {} -> {} -> {:?}",
+                val,
+                self.f.dfg.resolve_aliases(val),
+                values_labels.get(&self.f.dfg.resolve_aliases(val))
+            );
+            let val = self.f.dfg.resolve_aliases(val);
+            match values_labels.get(&val) {
+                Some(&ValueLabelAssignments::Starts(ref list)) => Some(&list[..]),
+                Some(&ValueLabelAssignments::Alias { value, .. }) if depth < 10 => {
+                    self.get_value_labels(value, depth + 1)
+                }
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+
+    fn emit_value_label_marks_for_value(&mut self, val: Value) {
+        let mut markers: SmallVec<[I; 4]> = smallvec![];
+        let regs = self.value_regs[val];
+        if regs.len() > 1 {
+            return;
+        }
+        let reg = regs.only_reg().unwrap();
+
+        if let Some(label_starts) = self.get_value_labels(val, 0) {
+            let labels = label_starts
+                .iter()
+                .map(|&ValueLabelStart { label, .. }| label)
+                .collect::<FxHashSet<_>>();
+            for label in labels {
+                debug!(
+                    "value labeling: defines val {:?} -> reg {:?} -> label {:?}",
+                    val, reg, label,
+                );
+                markers.push(I::gen_value_label_marker(label, reg));
+            }
+        }
+        for marker in markers {
+            self.emit(marker);
+        }
+    }
+
+    fn emit_value_label_markers_for_inst(&mut self, inst: Inst) {
+        if self.f.dfg.values_labels.is_none() {
+            return;
+        }
+
+        debug!(
+            "value labeling: srcloc {}: inst {}",
+            self.srcloc(inst),
+            inst
+        );
+        for &val in self.f.dfg.inst_results(inst) {
+            self.emit_value_label_marks_for_value(val);
+        }
+    }
+
+    fn emit_value_label_markers_for_block_args(&mut self, block: Block) {
+        if self.f.dfg.values_labels.is_none() {
+            return;
+        }
+
+        debug!("value labeling: block {}", block);
+        for &arg in self.f.dfg.block_params(block) {
+            self.emit_value_label_marks_for_value(arg);
+        }
+        self.finish_ir_inst(SourceLoc::default());
     }
 
     fn finish_ir_inst(&mut self, loc: SourceLoc) {
@@ -885,6 +971,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // Original block body.
             if let Some(bb) = lb.orig_block() {
                 self.lower_clif_block(backend, bb)?;
+                self.emit_value_label_markers_for_block_args(bb);
             }
             // In-edge phi moves.
             if let Some((pred, inst, succ)) = lb.in_edge() {

@@ -4,13 +4,14 @@ use self::inst::EmitInfo;
 
 use super::TargetIsa;
 use crate::ir::{condcodes::IntCC, Function};
+use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::isa::x64::{inst::regs::create_reg_universe_systemv, settings as x64_settings};
 use crate::isa::Builder as IsaBuilder;
 use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter, VCode};
 use crate::result::CodegenResult;
 use crate::settings::{self as shared_settings, Flags};
 use alloc::boxed::Box;
-use regalloc::{PrettyPrint, RealRegUniverse};
+use regalloc::{PrettyPrint, RealRegUniverse, Reg};
 use target_lexicon::Triple;
 
 mod abi;
@@ -60,6 +61,7 @@ impl MachBackend for X64Backend {
         let buffer = buffer.finish();
         let frame_size = vcode.frame_size();
         let unwind_info = vcode.unwind_info()?;
+        let value_labels_ranges = vcode.value_labels_ranges()?;
 
         let disasm = if want_disasm {
             Some(vcode.show_rru(Some(&create_reg_universe_systemv(flags))))
@@ -72,6 +74,7 @@ impl MachBackend for X64Backend {
             frame_size,
             disasm,
             unwind_info,
+            value_labels_ranges,
         })
     }
 
@@ -126,6 +129,11 @@ impl MachBackend for X64Backend {
     #[cfg(feature = "unwind")]
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         Some(inst::unwind::systemv::create_cie())
+    }
+
+    #[cfg(feature = "unwind")]
+    fn map_reg_to_dwarf(&self, reg: Reg) -> Result<u16, RegisterMappingError> {
+        inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
 }
 

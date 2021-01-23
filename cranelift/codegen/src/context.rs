@@ -473,6 +473,7 @@ impl Context {
         Ok(build_value_labels_ranges::<ComparableSourceLoc>(
             &self.func,
             &self.regalloc,
+            self.mach_compile_result.as_ref(),
             isa,
         ))
     }
