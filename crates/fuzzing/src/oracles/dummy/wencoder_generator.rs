@@ -1,64 +1,110 @@
 use wasm_encoder::{
     CodeSection, Export, ExportSection, Function, FunctionSection, GlobalSection, ImportSection,
     InstanceSection, Instruction, Limits, MemorySection, Module, ModuleSection, TableSection,
-    TypeSection,
+    TypeSection, StartSection, ElementSection, CustomSection
 };
 use wasmtime::*;
-pub struct WencoderGenerator {
+pub struct WencoderGenerator<'a> {
     next: [u32; 6],
-    module: Module,
+    function_section: FunctionSection,
+    type_section: TypeSection,
+    memory_section: MemorySection,
+    table_section: TableSection,
+    global_section: GlobalSection,
+    import_section: ImportSection,
+    instance_section: InstanceSection,
+    code_section: CodeSection,
+    export_section: ExportSection,
+    module_section: ModuleSection,
+    custom_section: CustomSection<'a>,
+    start_section: StartSection,
+    element_section: ElementSection
 }
-impl WencoderGenerator {
-    pub fn new() -> WencoderGenerator {
+
+fn next_index(wg: &mut [u32;6] , ty: &ExternType) -> u32 {
+    let index = match ty {
+        ExternType::Memory(_) => 0,
+        ExternType::Table(_) => 1,
+        ExternType::Global(_) => 2,
+        ExternType::Func(_) => 3,
+        ExternType::Instance(_) => 4,
+        ExternType::Module(_) => 5,
+    };
+    wg[index] += 1;
+    wg[index]
+}
+
+impl<'a> WencoderGenerator<'a> {
+    pub fn new() -> WencoderGenerator<'a> {
         WencoderGenerator {
             next: [0, 0, 0, 0, 0, 0],
-            module: Module::new(),
+            custom_section: CustomSection{
+                name: "test",
+                data: &[11, 22, 33, 44],
+            },
+            type_section: TypeSection::new(),
+            import_section: ImportSection::new(),
+            function_section: FunctionSection::new(),
+            table_section: TableSection::new(),
+            memory_section: MemorySection::new(),
+            global_section: GlobalSection::new(),
+            export_section: ExportSection::new(),
+            start_section: StartSection { function_index: 0},
+            element_section: ElementSection::new(),
+            instance_section: InstanceSection::new(),
+            code_section: CodeSection::new(),
+
+            module_section: ModuleSection::new(),
+
         }
     }
-    fn next(&mut self, ty: &ExternType) -> u32 {
-        let index = match ty {
-            ExternType::Memory(_) => 0,
-            ExternType::Table(_) => 1,
-            ExternType::Global(_) => 2,
-            ExternType::Func(_) => 3,
-            ExternType::Instance(_) => 4,
-            ExternType::Module(_) => 5,
-        };
-        self.next[index] += 1;
-        self.next[index]
-    }
-    pub fn finish(self) -> Vec<u8> {
-        self.module.finish()
+    pub fn finish(self) ->  Vec<u8> {
+        let mut module = Module::new();
+
+        module.section(&self.custom_section);
+        module.section(&self.type_section);
+        module.section(&self.import_section);
+        module.section(&self.function_section);
+        module.section(&self.table_section);
+        module.section(&self.memory_section);
+        module.section(&self.global_section);
+        module.section(&self.export_section);
+        module.section(&self.start_section);
+        module.section(&self.element_section);
+        module.section(&self.code_section);
+        module.section(&self.module_section);
+
+
+        module.finish()
     }
     pub fn import(&mut self, ty: &ImportType<'_>) {
-        let mut imports = ImportSection::new();
+        let imports = &mut self.import_section;
         imports.import(ty.module(), ty.name(), extern_to_entity(&ty.ty()));
-        self.module.section(&imports);
     }
     pub fn export(&mut self, ty: &ExportType<'_>) {
-        let nth = self.next(&ty.ty());
+        let nth = next_index(&mut self.next,&ty.ty());
         let section_name = format!("item{}", nth);
-        let mut exports = ExportSection::new();
+
         let item_ty = ty.ty();
         self.item(&item_ty);
+
         let export = extern_to_export(&item_ty, |_| nth);
+        let exports = &mut self.export_section;
         exports.export(&section_name, export);
-        self.module.section(&exports);
     }
     fn item(&mut self, ty: &ExternType) {
         match ty {
             ExternType::Memory(mem) => {
-                let mut memories = MemorySection::new();
+                let memories = &mut self.memory_section ;
                 memories.memory(wasm_encoder::MemoryType {
                     limits: Limits {
                         min: mem.limits().min(),
                         max: mem.limits().max(),
                     },
                 });
-                self.module.section(&memories);
             }
             ExternType::Table(table) => {
-                let mut tables = TableSection::new();
+                let tables = &mut self.table_section;
                 tables.table(wasm_encoder::TableType {
                     element_type: wasm_encoder::ValType::FuncRef,
                     limits: Limits {
@@ -66,10 +112,9 @@ impl WencoderGenerator {
                         max: table.limits().max(),
                     },
                 });
-                self.module.section(&tables);
             }
             ExternType::Global(global) => {
-                let mut globals = GlobalSection::new();
+                let globals = &mut self.global_section;
                 globals.global(
                     wasm_encoder::GlobalType {
                         val_type: wasm_encoder::ValType::I32,
@@ -77,30 +122,25 @@ impl WencoderGenerator {
                     },
                     value_to_instruction(&global.content()),
                 );
-                self.module.section(&globals);
             }
             ExternType::Func(ty) => {
-                let mut types = TypeSection::new();
+                let types = &mut self.type_section;
                 types.function(
                     ty.params().into_iter().map(|it| value_to_value(&it)),
                     ty.results().into_iter().map(|it| value_to_value(&it)),
                 );
-                let mut functions = FunctionSection::new();
-                functions.function(0);
+                self.function_section.function(0);
 
                 let locals = vec![];
                 let mut func = Function::new(locals);
                 for ty in ty.results() {
                     func.instruction(value_to_instruction(&ty));
                 }
-                let mut codes = CodeSection::new();
+                let codes = &mut self.code_section;
                 codes.function(&func);
-                self.module.section(&types);
-                self.module.section(&functions);
-                self.module.section(&codes);
             }
             ExternType::Module(ty) => {
-                let mut types = TypeSection::new();
+                let types = &mut self.type_section;
                 types.module(
                     ty.imports()
                         .into_iter()
@@ -110,23 +150,21 @@ impl WencoderGenerator {
                         .map(|x| (x.name(), extern_to_entity(&x.ty()))),
                 );
 
-                let mut modules = ModuleSection::new();
+                let modules = &mut self.module_section;
                 modules.module(&Module::new());
                 modules.module(&Module::new());
-
-                self.module.section(&types);
-                self.module.section(&modules);
             }
             ExternType::Instance(ty) => {
-                let mut instances = InstanceSection::new();
+                let instances = &mut self.instance_section;
+                let next_index_a = &mut self.next;
+
                 instances.instantiate(
-                    0,
-                    ty.exports()
-                        .into_iter()
-                        .map(|it| (it.name(), extern_to_export(&it.ty(), |et| self.next(et))))
-                        .collect::<Vec<_>>(),
+                     0,
+                     ty.exports()
+                       .into_iter()
+                       .map(|it| (it.name(), extern_to_export(&it.ty(), |et| next_index(next_index_a, et))))
+                       .collect::<Vec<_>>(),
                 );
-                self.module.section(&instances);
             }
         }
     }
