@@ -226,8 +226,8 @@ fn append_memory_deref(
             }
         }
         LabelValueLoc::Reg(r) => {
-            let reg = isa.map_regalloc_reg_to_dwarf(r)? as u8;
-            writer.write_u8(gimli::constants::DW_OP_breg0.0 + reg)?;
+            let reg = isa.map_regalloc_reg_to_dwarf(r)?;
+            writer.write_op_breg(reg)?;
             let memory_offset = match frame_info.vmctx_memory_offset() {
                 Some(offset) => offset,
                 None => {
