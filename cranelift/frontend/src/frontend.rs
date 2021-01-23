@@ -975,12 +975,12 @@ mod tests {
         let shared_flags = settings::Flags::new(shared_builder);
 
         let triple =
-            ::target_lexicon::Triple::from_str("riscv32").expect("Couldn't create riscv32 triple");
+            ::target_lexicon::Triple::from_str("x86_64").expect("Couldn't create x86_64 triple");
 
         let target = isa::lookup(triple)
             .ok()
             .map(|b| b.finish(shared_flags))
-            .expect("This test requires riscv32 support.");
+            .expect("This test requires x86_64 support.");
 
         let mut sig = Signature::new(target.default_call_conv());
         sig.returns.push(AbiParam::new(I32));
@@ -1013,13 +1013,13 @@ mod tests {
         assert_eq!(
             func.display(None).to_string(),
             "function %sample() -> i32 system_v {
-    sig0 = (i32, i32, i32) system_v
+    sig0 = (i64, i64, i64) system_v
     fn0 = %Memcpy sig0
 
 block0:
-    v3 = iconst.i32 0
+    v3 = iconst.i64 0
     v1 -> v3
-    v2 = iconst.i32 0
+    v2 = iconst.i64 0
     v0 -> v2
     call fn0(v1, v0, v1)
     return v1
@@ -1037,12 +1037,12 @@ block0:
         let shared_flags = settings::Flags::new(shared_builder);
 
         let triple =
-            ::target_lexicon::Triple::from_str("riscv32").expect("Couldn't create riscv32 triple");
+            ::target_lexicon::Triple::from_str("x86_64").expect("Couldn't create x86_64 triple");
 
         let target = isa::lookup(triple)
             .ok()
             .map(|b| b.finish(shared_flags))
-            .expect("This test requires riscv32 support.");
+            .expect("This test requires x86_64 support.");
 
         let mut sig = Signature::new(target.default_call_conv());
         sig.returns.push(AbiParam::new(I32));
@@ -1074,9 +1074,9 @@ block0:
             func.display(None).to_string(),
             "function %sample() -> i32 system_v {
 block0:
-    v4 = iconst.i32 0
+    v4 = iconst.i64 0
     v1 -> v4
-    v3 = iconst.i32 0
+    v3 = iconst.i64 0
     v0 -> v3
     v2 = load.i64 aligned v0
     store aligned v2, v1
@@ -1095,12 +1095,12 @@ block0:
         let shared_flags = settings::Flags::new(shared_builder);
 
         let triple =
-            ::target_lexicon::Triple::from_str("riscv32").expect("Couldn't create riscv32 triple");
+            ::target_lexicon::Triple::from_str("x86_64").expect("Couldn't create x86_64 triple");
 
         let target = isa::lookup(triple)
             .ok()
             .map(|b| b.finish(shared_flags))
-            .expect("This test requires riscv32 support.");
+            .expect("This test requires x86_64 support.");
 
         let mut sig = Signature::new(target.default_call_conv());
         sig.returns.push(AbiParam::new(I32));
@@ -1131,15 +1131,15 @@ block0:
         assert_eq!(
             func.display(None).to_string(),
             "function %sample() -> i32 system_v {
-    sig0 = (i32, i32, i32) system_v
+    sig0 = (i64, i64, i64) system_v
     fn0 = %Memcpy sig0
 
 block0:
-    v4 = iconst.i32 0
+    v4 = iconst.i64 0
     v1 -> v4
-    v3 = iconst.i32 0
+    v3 = iconst.i64 0
     v0 -> v3
-    v2 = iconst.i32 8192
+    v2 = iconst.i64 8192
     call fn0(v1, v0, v2)
     return v1
 }
@@ -1156,12 +1156,12 @@ block0:
         let shared_flags = settings::Flags::new(shared_builder);
 
         let triple =
-            ::target_lexicon::Triple::from_str("riscv32").expect("Couldn't create riscv32 triple");
+            ::target_lexicon::Triple::from_str("x86_64").expect("Couldn't create x86_64 triple");
 
         let target = isa::lookup(triple)
             .ok()
             .map(|b| b.finish(shared_flags))
-            .expect("This test requires riscv32 support.");
+            .expect("This test requires x86_64 support.");
 
         let mut sig = Signature::new(target.default_call_conv());
         sig.returns.push(AbiParam::new(I32));
@@ -1190,7 +1190,7 @@ block0:
             func.display(None).to_string(),
             "function %sample() -> i32 system_v {
 block0:
-    v2 = iconst.i32 0
+    v2 = iconst.i64 0
     v0 -> v2
     v1 = iconst.i64 0x0001_0001_0101
     store aligned v1, v0
@@ -1209,12 +1209,12 @@ block0:
         let shared_flags = settings::Flags::new(shared_builder);
 
         let triple =
-            ::target_lexicon::Triple::from_str("riscv32").expect("Couldn't create riscv32 triple");
+            ::target_lexicon::Triple::from_str("x86_64").expect("Couldn't create x86_64 triple");
 
         let target = isa::lookup(triple)
             .ok()
             .map(|b| b.finish(shared_flags))
-            .expect("This test requires riscv32 support.");
+            .expect("This test requires x86_64 support.");
 
         let mut sig = Signature::new(target.default_call_conv());
         sig.returns.push(AbiParam::new(I32));
@@ -1242,14 +1242,14 @@ block0:
         assert_eq!(
             func.display(None).to_string(),
             "function %sample() -> i32 system_v {
-    sig0 = (i32, i32, i32) system_v
+    sig0 = (i64, i32, i64) system_v
     fn0 = %Memset sig0
 
 block0:
-    v4 = iconst.i32 0
+    v4 = iconst.i64 0
     v0 -> v4
     v1 = iconst.i8 1
-    v2 = iconst.i32 8192
+    v2 = iconst.i64 8192
     v3 = uextend.i32 v1
     call fn0(v0, v3, v2)
     return v0
