@@ -17,7 +17,7 @@ impl WasiCtxBuilder {
         WasiCtxBuilder(WasiCtx::builder(
             random(),
             clocks::clocks(),
-            Box::new(sched::SyncSched),
+            Box::new(sched::SyncSched::new()),
             Rc::new(RefCell::new(Table::new())),
         ))
     }

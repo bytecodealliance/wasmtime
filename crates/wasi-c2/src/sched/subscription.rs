@@ -44,6 +44,9 @@ impl<'a> MonotonicClockSubscription<'a> {
     pub fn now(&self) -> Instant {
         self.clock.now(self.precision)
     }
+    pub fn duration_until(&self) -> Option<Duration> {
+        self.deadline.checked_duration_since(self.now())
+    }
     pub fn result(&self) -> Option<Result<(), Error>> {
         if self.now().checked_duration_since(self.deadline).is_some() {
             Some(Ok(()))

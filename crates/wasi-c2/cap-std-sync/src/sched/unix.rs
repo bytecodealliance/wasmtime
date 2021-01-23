@@ -15,6 +15,12 @@ use poll::{PollFd, PollFlags};
 
 pub struct SyncSched;
 
+impl SyncSched {
+    pub fn new() -> Self {
+        SyncSched
+    }
+}
+
 impl WasiSched for SyncSched {
     fn poll_oneoff<'a>(&self, poll: &'a Poll<'a>) -> Result<(), Error> {
         if poll.is_empty() {
@@ -43,10 +49,7 @@ impl WasiSched for SyncSched {
 
         let ready = loop {
             let poll_timeout = if let Some(t) = timeout {
-                let duration = t
-                    .deadline
-                    .checked_duration_since(t.clock.now(t.precision))
-                    .unwrap_or(Duration::from_secs(0));
+                let duration = t.duration_until().unwrap_or(Duration::from_secs(0));
                 (duration.as_millis() + 1) // XXX try always rounding up?
                     .try_into()
                     .map_err(|_| Error::overflow().context("poll timeout"))?

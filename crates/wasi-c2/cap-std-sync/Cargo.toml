@@ -14,6 +14,7 @@ publish = false
 
 [dependencies]
 wasi-c2 = { path = "../" }
+anyhow = "1.0"
 cap-std = "0.11"
 cap-fs-ext = "0.11"
 cap-time-ext = "0.11"
@@ -29,3 +30,4 @@ libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 winapi = "0.3"
+lazy_static = "1.4"

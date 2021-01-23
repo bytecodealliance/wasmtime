@@ -2541,12 +2541,14 @@ dependencies = [
 name = "wasi-c2-cap-std-sync"
 version = "0.22.0"
 dependencies = [
+ "anyhow",
  "bitflags",
  "cap-fs-ext",
  "cap-rand",
  "cap-std",
  "cap-time-ext",
  "fs-set-times",
+ "lazy_static",
  "libc",
  "system-interface",
  "tracing",
