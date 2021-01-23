@@ -1,7 +1,5 @@
 //! Dummy implementations of things that a Wasm module can import.
 use wasmtime::*;
-mod wat_generator;
-use wat_generator::WatGenerator;
 mod wencoder_generator;
 use wencoder_generator::WencoderGenerator;
 
@@ -70,41 +68,7 @@ pub fn dummy_memory(store: &Store, ty: MemoryType) -> Memory {
 
 /// Construct a dummy instance for the given instance type.
 ///
-/// This is done by using the expected type to generate a module on-the-fly
-/// which we the instantiate.
 pub fn dummy_instance(store: &Store, ty: InstanceType) -> Instance {
-    dummy_instance_wenc(store, ty)
-}
-/// Construct a dummy module for the given module type.
-///
-/// This is done by using the expected type to generate a module on-the-fly.
-pub fn dummy_module(store: &Store, ty: ModuleType) -> Module {
-    dummy_module_wenc(store, ty)
-}
-/// Wat Generator
-/// Construct instance by wat
-pub fn dummy_instance_wat(store: &Store, ty: InstanceType) -> Instance {
-    let mut wat = WatGenerator::new();
-    for ty in ty.exports() {
-        wat.export(&ty);
-    }
-    let module = Module::new(store.engine(), &wat.finish()).unwrap();
-    Instance::new(store, &module, &[]).unwrap()
-}
-/// Construct module by wat
-pub fn dummy_module_wat(store: &Store, ty: ModuleType) -> Module {
-    let mut wat = WatGenerator::new();
-    for ty in ty.imports() {
-        wat.import(&ty);
-    }
-    for ty in ty.exports() {
-        wat.export(&ty);
-    }
-    Module::new(store.engine(), &wat.finish()).unwrap()
-}
-/// wencoder Generator
-/// Construct instance by wencoder
-pub fn dummy_instance_wenc(store: &Store, ty: InstanceType) -> Instance {
     let mut wgen = WencoderGenerator::new();
     for ty in ty.exports() {
         wgen.export(&ty);
@@ -113,7 +77,7 @@ pub fn dummy_instance_wenc(store: &Store, ty: InstanceType) -> Instance {
     Instance::new(store, &module, &[]).unwrap()
 }
 /// Construct module by wencoder
-pub fn dummy_module_wenc(store: &Store, ty: ModuleType) -> Module {
+pub fn dummy_module(store: &Store, ty: ModuleType) -> Module {
     let mut wgen = WencoderGenerator::new();
     for ty in ty.imports() {
         wgen.import(&ty);
