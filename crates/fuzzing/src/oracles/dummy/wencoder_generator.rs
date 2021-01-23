@@ -1,7 +1,7 @@
 use wasm_encoder::{
-    CodeSection, Export, ExportSection, Function, FunctionSection, GlobalSection, ImportSection,
-    InstanceSection, Instruction, Limits, MemorySection, Module, ModuleSection, TableSection,
-    TypeSection, StartSection, ElementSection, CustomSection
+    CodeSection, CustomSection, ElementSection, Export, ExportSection, Function, FunctionSection,
+    GlobalSection, ImportSection, InstanceSection, Instruction, Limits, MemorySection, Module,
+    ModuleSection, StartSection, TableSection, TypeSection,
 };
 use wasmtime::*;
 pub struct WencoderGenerator<'a> {
@@ -18,10 +18,10 @@ pub struct WencoderGenerator<'a> {
     module_section: ModuleSection,
     custom_section: CustomSection<'a>,
     start_section: StartSection,
-    element_section: ElementSection
+    element_section: ElementSection,
 }
 
-fn next_index(wg: &mut [u32;6] , ty: &ExternType) -> u32 {
+fn next_index(wg: &mut [u32; 6], ty: &ExternType) -> u32 {
     let index = match ty {
         ExternType::Memory(_) => 0,
         ExternType::Table(_) => 1,
@@ -38,7 +38,7 @@ impl<'a> WencoderGenerator<'a> {
     pub fn new() -> WencoderGenerator<'a> {
         WencoderGenerator {
             next: [0, 0, 0, 0, 0, 0],
-            custom_section: CustomSection{
+            custom_section: CustomSection {
                 name: "test",
                 data: &[11, 22, 33, 44],
             },
@@ -49,16 +49,15 @@ impl<'a> WencoderGenerator<'a> {
             memory_section: MemorySection::new(),
             global_section: GlobalSection::new(),
             export_section: ExportSection::new(),
-            start_section: StartSection { function_index: 0},
+            start_section: StartSection { function_index: 0 },
             element_section: ElementSection::new(),
             instance_section: InstanceSection::new(),
             code_section: CodeSection::new(),
 
             module_section: ModuleSection::new(),
-
         }
     }
-    pub fn finish(self) ->  Vec<u8> {
+    pub fn finish(self) -> Vec<u8> {
         let mut module = Module::new();
 
         module.section(&self.custom_section);
@@ -74,7 +73,6 @@ impl<'a> WencoderGenerator<'a> {
         module.section(&self.code_section);
         module.section(&self.module_section);
 
-
         module.finish()
     }
     pub fn import(&mut self, ty: &ImportType<'_>) {
@@ -82,7 +80,7 @@ impl<'a> WencoderGenerator<'a> {
         imports.import(ty.module(), ty.name(), extern_to_entity(&ty.ty()));
     }
     pub fn export(&mut self, ty: &ExportType<'_>) {
-        let nth = next_index(&mut self.next,&ty.ty());
+        let nth = next_index(&mut self.next, &ty.ty());
         let section_name = format!("item{}", nth);
 
         let item_ty = ty.ty();
@@ -95,7 +93,7 @@ impl<'a> WencoderGenerator<'a> {
     fn item(&mut self, ty: &ExternType) {
         match ty {
             ExternType::Memory(mem) => {
-                let memories = &mut self.memory_section ;
+                let memories = &mut self.memory_section;
                 memories.memory(wasm_encoder::MemoryType {
                     limits: Limits {
                         min: mem.limits().min(),
@@ -159,11 +157,16 @@ impl<'a> WencoderGenerator<'a> {
                 let next_index_a = &mut self.next;
 
                 instances.instantiate(
-                     0,
-                     ty.exports()
-                       .into_iter()
-                       .map(|it| (it.name(), extern_to_export(&it.ty(), |et| next_index(next_index_a, et))))
-                       .collect::<Vec<_>>(),
+                    0,
+                    ty.exports()
+                        .into_iter()
+                        .map(|it| {
+                            (
+                                it.name(),
+                                extern_to_export(&it.ty(), |et| next_index(next_index_a, et)),
+                            )
+                        })
+                        .collect::<Vec<_>>(),
                 );
             }
         }
