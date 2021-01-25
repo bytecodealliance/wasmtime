@@ -1,0 +1,43 @@
+
+TODOs:
+* File::reopen_with_fdflags is unimplemented, File::get_fdflags is lying - these are
+  fcntl on unix, reopenfile / require reopening on windows.
+
+
+
+# Linux
+
+* path_link
+    - need DirExt::hard_link that follows symlinks.
+* path_rename_trailing_slashes
+    - trailing slash behavior of files is wrong: trailing slashes are ignored,
+      should cause an error.
+* remove_directory_trailing_slashes
+    - cap-std Dir::remove_dir gives EINVAL when trying to remove dir with
+      trailing slash. otherwise, everything passes.
+
+* fd_flags_set
+    - set_fdflags is not implemented. test wanted to clear O_APPEND mode
+* path_filestat
+    - fdstat.fs_flags is not populated correctly - APPEND | SYNC aren't
+      present because File::get_fdflags isnt implemented correctly
+
+
+# Windows
+
+fd_readdir
+file_allocate
+interesting_paths
+nofollow_errors
+path_rename
+
+path_link
+
+path_rename_trailing_slashes
+path_symlink_trailing_slashes
+remove_directory_trailing_slashes
+unlink_file_trailing_slashes
+
+fd_flags_set
+path_filestat
+
