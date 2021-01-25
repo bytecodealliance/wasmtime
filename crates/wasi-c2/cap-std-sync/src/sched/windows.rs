@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use std::ops::Deref;
 use std::os::windows::io::{AsRawHandle, RawHandle};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
@@ -69,7 +69,7 @@ impl WasiSched for SyncSched {
             };
             let state = STDIN_POLL
                 .lock()
-                .map_err(|_| anyhow!("failed to take lock of STDIN_POLL"))?
+                .map_err(|_| Error::trap("failed to take lock of STDIN_POLL"))?
                 .poll(waitmode)?;
             for readsub in stdin_read_subs.into_iter() {
                 match state {
@@ -206,7 +206,7 @@ impl StdinPoll {
             // Clean up possibly unread result from previous poll.
             Ok(_) | Err(TryRecvError::Empty) => {}
             Err(TryRecvError::Disconnected) => {
-                return Err(anyhow!("StdinPoll notify_rx channel closed"))
+                return Err(Error::trap("StdinPoll notify_rx channel closed"))
             }
         }
 
@@ -221,7 +221,7 @@ impl StdinPoll {
                 Ok(r) => Ok(r),
                 Err(RecvTimeoutError::Timeout) => Ok(PollState::TimedOut),
                 Err(RecvTimeoutError::Disconnected) => {
-                    Err(anyhow!("StdinPoll notify_rx channel closed"))
+                    Err(Error::trap("StdinPoll notify_rx channel closed"))
                 }
             },
             WaitMode::Infinite => self
@@ -232,7 +232,7 @@ impl StdinPoll {
                 Ok(r) => Ok(r),
                 Err(TryRecvError::Empty) => Ok(PollState::NotReady),
                 Err(TryRecvError::Disconnected) => {
-                    Err(anyhow!("StdinPoll notify_rx channel closed"))
+                    Err(Error::trap("StdinPoll notify_rx channel closed"))
                 }
             },
         }

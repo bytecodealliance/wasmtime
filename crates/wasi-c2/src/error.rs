@@ -48,6 +48,7 @@ pub enum ErrorKind {
 }
 
 pub trait ErrorExt {
+    fn trap(msg: impl Into<String>) -> Self;
     fn too_big() -> Self;
     fn badf() -> Self;
     fn exist() -> Self;
@@ -64,6 +65,9 @@ pub trait ErrorExt {
 }
 
 impl ErrorExt for Error {
+    fn trap(msg: impl Into<String>) -> Self {
+        anyhow::anyhow!(msg.into())
+    }
     fn too_big() -> Self {
         ErrorKind::TooBig.into()
     }
