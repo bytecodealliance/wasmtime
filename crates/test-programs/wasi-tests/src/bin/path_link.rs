@@ -134,15 +134,16 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
 
     // Create a link to a directory
     wasi::path_create_directory(dir_fd, "subdir").expect("creating a subdirectory");
-    create_or_open(dir_fd, "subdir", wasi::OFLAGS_DIRECTORY);
+    let subdir_fd = create_or_open(dir_fd, "subdir", wasi::OFLAGS_DIRECTORY);
 
-    assert_eq!(
-        wasi::path_link(dir_fd, 0, "subdir", dir_fd, "link")
-            .expect_err("creating a link to a directory should fail")
-            .raw_error(),
-        wasi::ERRNO_PERM,
-        "errno should be ERRNO_PERM"
+    let path_link_errno = wasi::path_link(dir_fd, 0, "subdir", dir_fd, "link")
+        .expect_err("creating a link to a directory should fail")
+        .raw_error();
+    assert!(
+        path_link_errno == wasi::ERRNO_PERM || path_link_errno == wasi::ERRNO_ACCES,
+        "errno should be ERRNO_PERM or ERRNO_ACCES"
     );
+    wasi::fd_close(subdir_fd).expect("close subdir before deleting it");
     wasi::path_remove_directory(dir_fd, "subdir").expect("removing a subdirectory");
 
     // Create a link to a file with trailing slash
