@@ -173,6 +173,8 @@ mod wasi_tests {
             /// Ignore tests that aren't supported yet.
             fn ignore(testsuite: &str, name: &str) -> bool {
                 if testsuite == "wasi-tests" {
+                    false
+                        /*
                     match name {
                         "readlink_no_buffer" => true,
                         "dangling_symlink" => true,
@@ -181,6 +183,7 @@ mod wasi_tests {
                         "dangling_fd" => true,
                         _ => false,
                     }
+                        */
                 } else {
                     unreachable!()
                 }

@@ -33,8 +33,10 @@ TODOs:
     - on windows, opening `dir/nested/file/` (line 53) with a trailing slash
       gets you a NOENT instead of a NOTDIR errno.
 * nofollow_errors
-    - panic in my io::Error translation code: Unhandled kind: Other, caused by
-      "symlink encountered"
+    - I loosened up some errno acceptance but still cant delete a symlink to a
+      directory
+* symlink_create
+    - narrowed down the symlink delete issue that only shows up on linux
 * path_rename
     - permission denied on windows to rename a dir to an existing empty dir
 

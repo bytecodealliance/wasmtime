@@ -61,7 +61,9 @@ unsafe fn create_symlink_to_directory(dir_fd: wasi::Fd) {
     wasi::fd_close(target_dir_via_symlink).expect("closing a file");
 
     // Replace the target directory with a file.
-    wasi::path_unlink_file(dir_fd, "symlink").expect("removing a file");
+    wasi::path_unlink_file(dir_fd, "symlink").expect("remove symlink to directory");
+    // FIXME: use the line below instead of the line above, and this test passes on windows!
+    //wasi::path_remove_directory(dir_fd, "symlink").expect("remove symlink to directory");
     wasi::path_remove_directory(dir_fd, "target")
         .expect("remove_directory on a directory should succeed");
 }

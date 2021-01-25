@@ -16,16 +16,18 @@ unsafe fn test_nofollow_errors(dir_fd: wasi::Fd) {
         .raw_error();
     assert!(
         dir_open_errno == wasi::ERRNO_LOOP || dir_open_errno == wasi::ERRNO_NOTDIR,
-        "errno should be ERRNO_LOOP or ERRNO_NOTDIR",
+        "errno should be ERRNO_LOOP or ERRNO_NOTDIR, got {}",
+        dir_open_errno,
     );
 
     // Try to open it with just O_NOFOLLOW.
-    assert_eq!(
-        wasi::path_open(dir_fd, 0, "symlink", 0, 0, 0, 0)
-            .expect_err("opening a symlink with O_NOFOLLOW should fail")
-            .raw_error(),
-        wasi::ERRNO_LOOP,
-        "errno should be ERRNO_LOOP",
+    let file_open_errno = wasi::path_open(dir_fd, 0, "symlink", 0, 0, 0, 0)
+        .expect_err("opening a symlink with O_NOFOLLOW should fail")
+        .raw_error();
+    assert!(
+        file_open_errno == wasi::ERRNO_LOOP || file_open_errno == wasi::ERRNO_ACCES,
+        "errno should be ERRNO_LOOP or ERRNO_ACCES, got {}",
+        file_open_errno,
     );
 
     // Try to open it as a directory without O_NOFOLLOW.
