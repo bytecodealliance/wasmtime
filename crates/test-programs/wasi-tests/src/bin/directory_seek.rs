@@ -7,8 +7,16 @@ unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
     wasi::path_create_directory(dir_fd, "dir").expect("failed to make directory");
 
     // Open the directory and attempt to request rights for seeking.
-    let fd = wasi::path_open(dir_fd, 0, "dir", 0, wasi::RIGHTS_FD_SEEK, 0, 0)
-        .expect("failed to open file");
+    let fd = wasi::path_open(
+        dir_fd,
+        0,
+        "dir",
+        wasi::OFLAGS_DIRECTORY,
+        wasi::RIGHTS_FD_SEEK,
+        0,
+        0,
+    )
+    .expect("failed to open file");
     assert_gt!(
         fd,
         libc::STDERR_FILENO as wasi::Fd,
@@ -20,8 +28,8 @@ unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
         wasi::fd_seek(fd, 0, wasi::WHENCE_CUR)
             .expect_err("seek on a directory")
             .raw_error(),
-        wasi::ERRNO_NOTCAPABLE,
-        "errno should be ERRNO_NOTCAPABLE"
+        wasi::ERRNO_BADF,
+        "errno should be BADF"
     );
 
     // Check if we obtained the right to seek.
@@ -33,8 +41,8 @@ unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
     );
     assert_eq!(
         (fdstat.fs_rights_base & wasi::RIGHTS_FD_SEEK),
-        wasi::RIGHTS_FD_SEEK,
-        "directory has the seek right",
+        0,
+        "directory does NOT have the seek right",
     );
 
     // Clean up.
