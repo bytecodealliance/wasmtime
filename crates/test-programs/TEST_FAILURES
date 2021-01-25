@@ -25,19 +25,31 @@ TODOs:
 
 # Windows
 
-fd_readdir
-file_allocate
-interesting_paths
-nofollow_errors
-path_rename
+* fd_readdir
+    - DirEntry metadata ino panics on windows: https://github.com/bytecodealliance/cap-std/issues/142
+* file_allocate
+    - call to fd_allocate(10,10) reduces size from 100 to 20
+* interesting_paths
+    - on windows, opening `dir/nested/file/` (line 53) with a trailing slash
+      gets you a NOENT instead of a NOTDIR errno.
+* nofollow_errors
+    - panic in my io::Error translation code: Unhandled kind: Other, caused by
+      "symlink encountered"
+* path_rename
+    - permission denied on windows to rename a dir to an existing empty dir
 
-path_link
+* path_link
+    - (line 140) windows gives an ERRNO_ACCES, expects an ERRNO_PERM
 
-path_rename_trailing_slashes
-path_symlink_trailing_slashes
-remove_directory_trailing_slashes
-unlink_file_trailing_slashes
+## "Trailing slashes are a bonified boondoggle" - Dan
 
-fd_flags_set
-path_filestat
+* path_rename_trailing_slashes
+* path_symlink_trailing_slashes
+* remove_directory_trailing_slashes
+* unlink_file_trailing_slashes
+
+## Same missing functionality as over in Linux:
+
+* fd_flags_set
+* path_filestat
 
