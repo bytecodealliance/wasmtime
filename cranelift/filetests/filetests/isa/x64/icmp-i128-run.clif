@@ -1,5 +1,6 @@
 test run
-target x86_64 haswell
+target x86_64
+feature "experimental_x64"
 
 function %test_icmp_eq_i128() -> b1 {
 block0:
