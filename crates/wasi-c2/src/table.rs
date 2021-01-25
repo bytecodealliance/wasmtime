@@ -29,7 +29,7 @@ impl Table {
             self.next_key = self
                 .next_key
                 .checked_add(1)
-                .ok_or_else(|| anyhow!("out of keys in table"))?;
+                .ok_or_else(|| Error::trap("out of keys in table"))?;
             if self.map.contains_key(&key) {
                 continue;
             }
@@ -60,10 +60,10 @@ impl Table {
                 if r.is::<T>() {
                     Ok(Ref::map(r, |r| r.downcast_ref::<T>().unwrap()))
                 } else {
-                    Err(Error::exist().context("element is a different type"))
+                    Err(Error::badf().context("element is a different type"))
                 }
             } else {
-                Err(Error::exist().context("element in table, but mutably borrowed"))
+                Err(Error::trap("table get of mutably borrowed element"))
             }
         } else {
             Err(Error::badf().context("key not in table"))
@@ -76,10 +76,10 @@ impl Table {
                 if r.is::<T>() {
                     Ok(RefMut::map(r, |r| r.downcast_mut::<T>().unwrap()))
                 } else {
-                    Err(Error::exist().context("element is a different type"))
+                    Err(Error::badf().context("element is a different type"))
                 }
             } else {
-                Err(Error::exist().context("element in table, but borrowed"))
+                Err(Error::trap("table get_mut of borrowed element"))
             }
         } else {
             Err(Error::badf().context("key not in table"))
