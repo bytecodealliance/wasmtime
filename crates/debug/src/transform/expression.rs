@@ -468,7 +468,7 @@ where
                 let _ = code_chunk; // suppresses warning for final flush
             }
         };
-    };
+    }
     // Find all landing pads by scanning bytes, do not care about
     // false location at this moment.
     // Looks hacky but it is fast; does not need to be really exact.
