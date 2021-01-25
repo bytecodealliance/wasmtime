@@ -18,6 +18,12 @@ use wasmtime_wasi::Wasi;
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::{WasiNn, WasiNnCtx};
 
+#[cfg(feature = "wasi-crypto")]
+use wasmtime_wasi_crypto::{
+    WasiCryptoAsymmetricCommon, WasiCryptoCommon, WasiCryptoCtx, WasiCryptoSignatures,
+    WasiCryptoSymmetric,
+};
+
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
     // Do not accept wasmtime subcommand names as the module name
     match s.to_str() {
@@ -362,6 +368,15 @@ fn populate_with_wasi(
     {
         let wasi_nn = WasiNn::new(linker.store(), WasiNnCtx::new()?);
         wasi_nn.add_to_linker(linker)?;
+    }
+
+    #[cfg(feature = "wasi-crypto")]
+    {
+        let cx_crypto = WasiCryptoCtx::new();
+        WasiCryptoCommon::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
+        WasiCryptoAsymmetricCommon::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
+        WasiCryptoSignatures::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
+        WasiCryptoSymmetric::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
     }
 
     let wasi = wasmtime_wasi::old::snapshot_0::Wasi::new(linker.store(), mk_cx()?);

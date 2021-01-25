@@ -30,6 +30,7 @@ wasmtime-jit = { path = "crates/jit", version = "0.22.0" }
 wasmtime-obj = { path = "crates/obj", version = "0.22.0" }
 wasmtime-wast = { path = "crates/wast", version = "0.22.0" }
 wasmtime-wasi = { path = "crates/wasi", version = "0.22.0" }
+wasmtime-wasi-crypto = { path = "crates/wasi-crypto", version = "0.22.0", optional = true }
 wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "0.22.0", optional = true }
 wasi-common = { path = "crates/wasi-common", version = "0.22.0" }
 structopt = { version = "0.3.5", features = ["color", "suggestions"] }
@@ -82,6 +83,7 @@ default = ["jitdump", "wasmtime/wat", "wasmtime/parallel-compilation"]
 lightbeam = ["wasmtime/lightbeam"]
 jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
+wasi-crypto = ["wasmtime-wasi-crypto"]
 wasi-nn = ["wasmtime-wasi-nn"]
 
 # Try the experimental, work-in-progress new x86_64 backend. This is not stable
