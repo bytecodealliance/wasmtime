@@ -1823,7 +1823,7 @@ impl fmt::Debug for Inst {
 fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
     // This is a bit subtle. If some register is in the modified set, then it may not be in either
     // the use or def sets. However, enforcing that directly is somewhat difficult. Instead,
-    // regalloc.rs will "fix" this for us by removing the the modified set from the use and def
+    // regalloc.rs will "fix" this for us by removing the modified set from the use and def
     // sets.
     match inst {
         Inst::AluRmiR { src, dst, .. } => {
@@ -1895,6 +1895,10 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
                 || *op == SseOpcode::Pextrw
                 || *op == SseOpcode::Pextrd
                 || *op == SseOpcode::Pshufd
+                || *op == SseOpcode::Roundss
+                || *op == SseOpcode::Roundsd
+                || *op == SseOpcode::Roundps
+                || *op == SseOpcode::Roundpd
             {
                 src.get_regs_as_uses(collector);
                 collector.add_def(*dst);
@@ -2236,6 +2240,10 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
                 || *op == SseOpcode::Pextrw
                 || *op == SseOpcode::Pextrd
                 || *op == SseOpcode::Pshufd
+                || *op == SseOpcode::Roundss
+                || *op == SseOpcode::Roundsd
+                || *op == SseOpcode::Roundps
+                || *op == SseOpcode::Roundpd
             {
                 src.map_uses(mapper);
                 map_def(mapper, dst);

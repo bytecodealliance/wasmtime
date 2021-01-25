@@ -8,7 +8,7 @@ use crate::ir::{
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
-use crate::isa::{x64::X64Backend, CallConv};
+use crate::isa::{x64::settings as x64_settings, x64::X64Backend, CallConv};
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
@@ -1330,6 +1330,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     insn: IRInst,
     flags: &Flags,
+    isa_flags: &x64_settings::Flags,
     triple: &Triple,
 ) -> CodegenResult<()> {
     let op = ctx.data(insn).opcode();
@@ -4211,11 +4212,29 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Ceil | Opcode::Floor | Opcode::Nearest | Opcode::Trunc => {
-            // TODO use ROUNDSS/ROUNDSD after sse4.1.
-
-            // Lower to VM calls when there's no access to SSE4.1.
             let ty = ty.unwrap();
-            if !ty.is_vector() {
+            if isa_flags.use_sse41() {
+                let mode = match op {
+                    Opcode::Ceil => RoundImm::RoundUp,
+                    Opcode::Floor => RoundImm::RoundDown,
+                    Opcode::Nearest => RoundImm::RoundNearest,
+                    Opcode::Trunc => RoundImm::RoundZero,
+                    _ => panic!("unexpected opcode {:?} in Ceil/Floor/Nearest/Trunc", op),
+                };
+                let op = match ty {
+                    types::F32 => SseOpcode::Roundss,
+                    types::F64 => SseOpcode::Roundsd,
+                    types::F32X4 => SseOpcode::Roundps,
+                    types::F64X2 => SseOpcode::Roundpd,
+                    _ => panic!("unexpected type {:?} in Ceil/Floor/Nearest/Trunc", ty),
+                };
+                let src = input_to_reg_mem(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                ctx.emit(Inst::xmm_rm_r_imm(op, src, dst, mode.encode(), false));
+            } else {
+                // Lower to VM calls when there's no access to SSE4.1.
+                // Note, for vector types on platforms that don't support sse41
+                // the execution will panic here.
                 let libcall = match (op, ty) {
                     (Opcode::Ceil, types::F32) => LibCall::CeilF32,
                     (Opcode::Ceil, types::F64) => LibCall::CeilF64,
@@ -4231,28 +4250,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     ),
                 };
                 emit_vm_call(ctx, flags, triple, libcall, insn, inputs, outputs)?;
-            } else {
-                let (op, mode) = match (op, ty) {
-                    (Opcode::Ceil, types::F32X4) => (SseOpcode::Roundps, RoundImm::RoundUp),
-                    (Opcode::Ceil, types::F64X2) => (SseOpcode::Roundpd, RoundImm::RoundUp),
-                    (Opcode::Floor, types::F32X4) => (SseOpcode::Roundps, RoundImm::RoundDown),
-                    (Opcode::Floor, types::F64X2) => (SseOpcode::Roundpd, RoundImm::RoundDown),
-                    (Opcode::Trunc, types::F32X4) => (SseOpcode::Roundps, RoundImm::RoundZero),
-                    (Opcode::Trunc, types::F64X2) => (SseOpcode::Roundpd, RoundImm::RoundZero),
-                    (Opcode::Nearest, types::F32X4) => (SseOpcode::Roundps, RoundImm::RoundNearest),
-                    (Opcode::Nearest, types::F64X2) => (SseOpcode::Roundpd, RoundImm::RoundNearest),
-                    _ => panic!("Unknown op/ty combination (vector){:?}", ty),
-                };
-                let src = put_input_in_reg(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(dst, src, ty));
-                ctx.emit(Inst::xmm_rm_r_imm(
-                    op,
-                    RegMem::from(dst),
-                    dst,
-                    mode.encode(),
-                    false,
-                ));
             }
         }
 
@@ -5389,7 +5386,7 @@ impl LowerBackend for X64Backend {
     type MInst = Inst;
 
     fn lower<C: LowerCtx<I = Inst>>(&self, ctx: &mut C, ir_inst: IRInst) -> CodegenResult<()> {
-        lower_insn_to_regs(ctx, ir_inst, &self.flags, &self.triple)
+        lower_insn_to_regs(ctx, ir_inst, &self.flags, &self.x64_flags, &self.triple)
     }
 
     fn lower_branch_group<C: LowerCtx<I = Inst>>(
