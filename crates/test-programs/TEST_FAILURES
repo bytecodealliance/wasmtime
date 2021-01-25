@@ -30,11 +30,10 @@ TODOs:
 * file_allocate
     - call to fd_allocate(10,10) reduces size from 100 to 20
 * interesting_paths
-    - on windows, opening `dir/nested/file/` (line 53) with a trailing slash
-      gets you a NOENT instead of a NOTDIR errno.
+    - on windows, opening a directory with a trailing slash fails
 * nofollow_errors
-    - I loosened up some errno acceptance but still cant delete a symlink to a
-      directory
+    - I loosened up some errno acceptance but windows requires rmdir to delete
+      a symlink to a directory, rather than unlink_file
 * symlink_create
     - narrowed down the symlink delete issue that only shows up on linux
 * path_rename

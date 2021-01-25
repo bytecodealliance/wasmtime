@@ -49,21 +49,25 @@ unsafe fn test_interesting_paths(dir_fd: wasi::Fd, arg: &str) {
     );
 
     // Now open it with a trailing slash.
-    assert_eq!(
-        wasi::path_open(dir_fd, 0, "dir/nested/file/", 0, 0, 0, 0)
-            .expect_err("opening a file with a trailing slash should fail")
-            .raw_error(),
-        wasi::ERRNO_NOTDIR,
-        "errno should be ERRNO_NOTDIR",
+    let one_trailing_slash_errno = wasi::path_open(dir_fd, 0, "dir/nested/file/", 0, 0, 0, 0)
+        .expect_err("opening a file with a trailing slash should fail")
+        .raw_error();
+    assert!(
+        one_trailing_slash_errno == wasi::ERRNO_NOTDIR
+            || one_trailing_slash_errno == wasi::ERRNO_NOENT,
+        "errno should be ERRNO_NOTDIR or ERRNO_NOENT, got {}",
+        one_trailing_slash_errno
     );
 
     // Now open it with trailing slashes.
-    assert_eq!(
-        wasi::path_open(dir_fd, 0, "dir/nested/file///", 0, 0, 0, 0)
-            .expect_err("opening a file with trailing slashes should fail")
-            .raw_error(),
-        wasi::ERRNO_NOTDIR,
-        "errno should be ERRNO_NOTDIR",
+    let multi_trailing_slash_errno = wasi::path_open(dir_fd, 0, "dir/nested/file///", 0, 0, 0, 0)
+        .expect_err("opening a file with trailing slashes should fail")
+        .raw_error();
+    assert!(
+        multi_trailing_slash_errno == wasi::ERRNO_NOTDIR
+            || multi_trailing_slash_errno == wasi::ERRNO_NOENT,
+        "errno should be ERRNO_NOTDIR or ERRNO_NOENT, got {}",
+        multi_trailing_slash_errno,
     );
 
     // Now open the directory with a trailing slash.
