@@ -23,8 +23,10 @@
 * nofollow_errors
     - I loosened up some errno acceptance but windows requires rmdir to delete
       a symlink to a directory, rather than unlink_file
+    - dan is doing the upstream fix rn
 * symlink_create
     - narrowed down the symlink delete issue that only shows up on linux
+    - dan is doing the upstream fix rn
 * path_rename
     - permission denied on windows to rename a dir to an existing empty dir
     - we're not going to try to emulate this functionality.
