@@ -3,8 +3,10 @@ use fs_set_times::{SetTimes, SystemTimeSpec};
 use std::any::Any;
 use std::convert::TryInto;
 use std::io;
-use system_interface::fs::{Advice, FileIoExt};
-use system_interface::io::ReadReady;
+use system_interface::{
+    fs::{Advice, FileIoExt, GetSetFdFlags},
+    io::ReadReady,
+};
 use wasi_c2::{
     file::{FdFlags, FileType, Filestat, WasiFile},
     Error,
@@ -35,11 +37,11 @@ impl WasiFile for File {
         Ok(filetype_from(&meta.file_type()))
     }
     fn get_fdflags(&self) -> Result<FdFlags, Error> {
-        // XXX get_fdflags is not implemented but lets lie rather than panic:
-        Ok(FdFlags::empty())
+        let fdflags = self.0.get_fd_flags()?;
+        Ok(from_sysif_fdflags(fdflags))
     }
-    unsafe fn reopen_with_fdflags(&self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
-        todo!("reopen_with_fdflags is not implemented")
+    fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
+        Ok(self.0.set_fd_flags(to_sysif_fdflags(fdflags))?)
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
         let meta = self.0.metadata()?;
@@ -149,4 +151,43 @@ pub fn convert_systimespec(t: Option<wasi_c2::SystemTimeSpec>) -> Option<SystemT
         Some(wasi_c2::SystemTimeSpec::SymbolicNow) => Some(SystemTimeSpec::SymbolicNow),
         None => None,
     }
+}
+
+pub fn to_sysif_fdflags(f: wasi_c2::file::FdFlags) -> system_interface::fs::FdFlags {
+    let mut out = system_interface::fs::FdFlags::empty();
+    if f.contains(wasi_c2::file::FdFlags::APPEND) {
+        out |= system_interface::fs::FdFlags::APPEND;
+    }
+    if f.contains(wasi_c2::file::FdFlags::DSYNC) {
+        out |= system_interface::fs::FdFlags::DSYNC;
+    }
+    if f.contains(wasi_c2::file::FdFlags::NONBLOCK) {
+        out |= system_interface::fs::FdFlags::NONBLOCK;
+    }
+    if f.contains(wasi_c2::file::FdFlags::RSYNC) {
+        out |= system_interface::fs::FdFlags::RSYNC;
+    }
+    if f.contains(wasi_c2::file::FdFlags::SYNC) {
+        out |= system_interface::fs::FdFlags::SYNC;
+    }
+    out
+}
+pub fn from_sysif_fdflags(f: system_interface::fs::FdFlags) -> wasi_c2::file::FdFlags {
+    let mut out = wasi_c2::file::FdFlags::empty();
+    if f.contains(system_interface::fs::FdFlags::APPEND) {
+        out |= wasi_c2::file::FdFlags::APPEND;
+    }
+    if f.contains(system_interface::fs::FdFlags::DSYNC) {
+        out |= wasi_c2::file::FdFlags::DSYNC;
+    }
+    if f.contains(system_interface::fs::FdFlags::NONBLOCK) {
+        out |= wasi_c2::file::FdFlags::NONBLOCK;
+    }
+    if f.contains(system_interface::fs::FdFlags::RSYNC) {
+        out |= wasi_c2::file::FdFlags::RSYNC;
+    }
+    if f.contains(system_interface::fs::FdFlags::SYNC) {
+        out |= wasi_c2::file::FdFlags::SYNC;
+    }
+    out
 }

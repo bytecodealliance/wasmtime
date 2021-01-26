@@ -2,8 +2,8 @@
 use crate::{
     dir::{DirCaps, DirEntry, DirEntryExt, DirFdStat, ReaddirCursor, ReaddirEntity, TableDirExt},
     file::{
-        FdFlags, FdStat, FileCaps, FileEntry, FileEntryExt, FileType, Filestat, OFlags,
-        TableFileExt,
+        FdFlags, FdStat, FileCaps, FileEntry, FileEntryExt, FileEntryMutExt, FileType, Filestat,
+        OFlags, TableFileExt,
     },
     sched::{
         subscription::{RwEventFlags, SubscriptionResult},
@@ -332,14 +332,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn fd_fdstat_set_flags(&self, fd: types::Fd, flags: types::Fdflags) -> Result<(), Error> {
-        let mut table = self.table();
-        let fd = u32::from(fd);
-        let table_check = table.get_file(fd)?.get_cap(FileCaps::FDSTAT_SET_FLAGS)?;
-        drop(table_check);
-        table.update_file_in_place(fd, |f| unsafe {
-            // Safety: update_file_in_place will drop `f` after this call.
-            f.reopen_with_fdflags(FdFlags::from(&flags))
-        })
+        self.table()
+            .get_file_mut(u32::from(fd))?
+            .get_cap(FileCaps::FDSTAT_SET_FLAGS)?
+            .set_fdflags(FdFlags::from(&flags))
     }
 
     fn fd_fdstat_set_rights(

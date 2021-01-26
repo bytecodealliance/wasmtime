@@ -1,8 +1,4 @@
 
-TODOs:
-* File::reopen_with_fdflags is unimplemented, File::get_fdflags is lying - these are
-  fcntl on unix, reopenfile / require reopening on windows.
-
 
 # Linux
 
@@ -12,12 +8,8 @@ TODOs:
 * remove_directory_trailing_slashes
     - cap-std Dir::remove_dir gives EINVAL when trying to remove dir with
       trailing slash. otherwise, everything passes.
-
-* fd_flags_set
-    - set_fdflags is not implemented. test wanted to clear O_APPEND mode
 * path_filestat
-    - fdstat.fs_flags is not populated correctly - APPEND | SYNC aren't
-      present because File::get_fdflags isnt implemented correctly
+    - symlink mtim doesnt match expectations
 
 
 # Windows
@@ -27,6 +19,7 @@ TODOs:
 * file_allocate
     - call to fd_allocate(10,10) reduces size from 100 to 20
     - fix upstream: fd_allocate is impossible on windows, so dont even try
+    - the test should be modified to accept this fd_allocate always failing on windows.
 * nofollow_errors
     - I loosened up some errno acceptance but windows requires rmdir to delete
       a symlink to a directory, rather than unlink_file
@@ -34,14 +27,15 @@ TODOs:
     - narrowed down the symlink delete issue that only shows up on linux
 * path_rename
     - permission denied on windows to rename a dir to an existing empty dir
-        - This should fail
-        - We should disable this test on windows
-    - is there a windows api that makes this possible?
-    - if not, and we drew the line at "no racy emulation" in fallocate, then
-      is returning the error windows gives us OK here?
-
+    - we're not going to try to emulate this functionality.
+    - the test should be modified accept this operation failing completely on windows.
 * path_link
     - fails on the first dangling symlink
+* fd_flags_set
+    - same metadata panic as fd_readdir
+* path_filestat
+    - same metadata panic as fd_readdir
+
 
 ## "Trailing slashes are a bonified boondoggle" - Dan
 
@@ -51,9 +45,3 @@ TODOs:
 * path_symlink_trailing_slashes
 * remove_directory_trailing_slashes
 * unlink_file_trailing_slashes
-
-## Same missing functionality as over in Linux:
-
-* fd_flags_set
-* path_filestat
-

@@ -1,8 +1,8 @@
 use crate::{Error, ErrorExt, SystemTimeSpec};
 use bitflags::bitflags;
 use std::any::Any;
-use std::cell::Ref;
-use std::ops::Deref;
+use std::cell::{Ref, RefMut};
+use std::ops::{Deref, DerefMut};
 
 pub trait WasiFile {
     fn as_any(&self) -> &dyn Any;
@@ -10,9 +10,7 @@ pub trait WasiFile {
     fn sync(&self) -> Result<(), Error>; // file op
     fn get_filetype(&self) -> Result<FileType, Error>; // file op
     fn get_fdflags(&self) -> Result<FdFlags, Error>; // file op
-    /// This method takes a `&self` so that it can be called on a `&dyn WasiFile`. However,
-    /// the caller makes the additional guarantee to drop `self` after the call is successful.
-    unsafe fn reopen_with_fdflags(&self, flags: FdFlags) -> Result<Box<dyn WasiFile>, Error>; // file op
+    fn set_fdflags(&mut self, flags: FdFlags) -> Result<(), Error>; // file op
     fn get_filestat(&self) -> Result<Filestat, Error>; // split out get_length as a read & write op, rest is a file op
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error>; // write op
     fn advise(
@@ -83,22 +81,14 @@ pub struct Filestat {
 
 pub(crate) trait TableFileExt {
     fn get_file(&self, fd: u32) -> Result<Ref<FileEntry>, Error>;
-    fn update_file_in_place<F>(&mut self, fd: u32, f: F) -> Result<(), Error>
-    where
-        F: FnOnce(&dyn WasiFile) -> Result<Box<dyn WasiFile>, Error>;
+    fn get_file_mut(&self, fd: u32) -> Result<RefMut<FileEntry>, Error>;
 }
 impl TableFileExt for crate::table::Table {
     fn get_file(&self, fd: u32) -> Result<Ref<FileEntry>, Error> {
         self.get(fd)
     }
-    fn update_file_in_place<F>(&mut self, fd: u32, f: F) -> Result<(), Error>
-    where
-        F: FnOnce(&dyn WasiFile) -> Result<Box<dyn WasiFile>, Error>,
-    {
-        self.update_in_place(fd, |FileEntry { caps, file }| {
-            let file = f(file.deref())?;
-            Ok(FileEntry { caps, file })
-        })
+    fn get_file_mut(&self, fd: u32) -> Result<RefMut<FileEntry>, Error> {
+        self.get_mut(fd)
     }
 }
 
@@ -143,6 +133,16 @@ impl<'a> FileEntryExt<'a> for Ref<'a, FileEntry> {
     fn get_cap(self, caps: FileCaps) -> Result<Ref<'a, dyn WasiFile>, Error> {
         self.capable_of(caps)?;
         Ok(Ref::map(self, |r| r.file.deref()))
+    }
+}
+pub trait FileEntryMutExt<'a> {
+    fn get_cap(self, caps: FileCaps) -> Result<RefMut<'a, dyn WasiFile>, Error>;
+}
+
+impl<'a> FileEntryMutExt<'a> for RefMut<'a, FileEntry> {
+    fn get_cap(self, caps: FileCaps) -> Result<RefMut<'a, dyn WasiFile>, Error> {
+        self.capable_of(caps)?;
+        Ok(RefMut::map(self, |r| r.file.deref_mut()))
     }
 }
 
