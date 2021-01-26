@@ -304,8 +304,8 @@ impl Memory {
     ///
     /// The entire buffer will be filled.
     ///
-    /// If offset + buffer length exceed the current memory capacity,
-    /// a [`MemoryAccessError`] is returned.
+    /// If offset + buffer length exceed the current memory capacity, then the
+    /// buffer is left untouched and a [`MemoryAccessError`] is returned.
     pub fn read(&self, offset: usize, buffer: &mut [u8]) -> Result<(), MemoryAccessError> {
         unsafe {
             let slice = self
@@ -320,8 +320,9 @@ impl Memory {
 
     /// Safely writes contents of a buffer to this memory at the given offset.
     ///
-    /// If the offset + buffer length exceed current memory capacity, a
-    /// [`MemoryAccessError`] is returned.
+    /// If the offset + buffer length exceed current memory capacity, then none
+    /// of the buffer is written to memory and a [`MemoryAccessError`] is
+    /// returned.
     pub fn write(&self, offset: usize, buffer: &[u8]) -> Result<(), MemoryAccessError> {
         unsafe {
             self.data_unchecked_mut()

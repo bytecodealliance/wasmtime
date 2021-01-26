@@ -363,11 +363,18 @@ fn read_write_memory_via_api() {
 
     let res = mem.write(mem.data_size() - value.len() + 1, value);
     assert!(res.is_err());
+    assert_ne!(
+        unsafe { mem.data_unchecked()[mem.data_size() - value.len() + 1] },
+        value[0],
+        "no data is written",
+    );
 
     // Out of bounds read.
 
+    buffer[0] = 0x42;
     let res = mem.read(mem.data_size() - buffer.len() + 1, &mut buffer);
     assert!(res.is_err());
+    assert_eq!(buffer[0], 0x42, "no data is read");
 
     // Read offset overflow.
     let res = mem.read(usize::MAX, &mut buffer);
