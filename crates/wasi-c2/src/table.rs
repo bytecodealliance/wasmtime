@@ -1,5 +1,4 @@
 use crate::{Error, ErrorExt};
-use anyhow::anyhow;
 use std::any::Any;
 use std::cell::{Ref, RefCell, RefMut};
 use std::collections::HashMap;
