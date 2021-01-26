@@ -26,8 +26,7 @@ TODOs:
     - DirEntry metadata ino panics on windows: https://github.com/bytecodealliance/cap-std/issues/142
 * file_allocate
     - call to fd_allocate(10,10) reduces size from 100 to 20
-* interesting_paths
-    - on windows, opening a directory with a trailing slash fails
+    - fix upstream: fd_allocate is impossible on windows, so dont even try
 * nofollow_errors
     - I loosened up some errno acceptance but windows requires rmdir to delete
       a symlink to a directory, rather than unlink_file
@@ -35,12 +34,19 @@ TODOs:
     - narrowed down the symlink delete issue that only shows up on linux
 * path_rename
     - permission denied on windows to rename a dir to an existing empty dir
+        - This should fail
+        - We should disable this test on windows
+    - is there a windows api that makes this possible?
+    - if not, and we drew the line at "no racy emulation" in fallocate, then
+      is returning the error windows gives us OK here?
 
 * path_link
     - fails on the first dangling symlink
 
 ## "Trailing slashes are a bonified boondoggle" - Dan
 
+* interesting_paths
+    - on windows, opening a directory with a trailing slash fails.
 * path_rename_trailing_slashes
 * path_symlink_trailing_slashes
 * remove_directory_trailing_slashes
