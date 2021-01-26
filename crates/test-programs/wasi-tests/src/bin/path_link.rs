@@ -184,25 +184,10 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
     );
     wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
 
-    // Create a link to a file following symlinks
-    wasi::path_symlink("file", dir_fd, "symlink").expect("creating a valid symlink");
-    wasi::path_link(
-        dir_fd,
-        wasi::LOOKUPFLAGS_SYMLINK_FOLLOW,
-        "symlink",
-        dir_fd,
-        "link",
-    )
-    .expect("creating a link to a file following symlinks");
-    let link_fd = open_link(dir_fd, "link");
-    check_rights(file_fd, link_fd);
-    wasi::path_unlink_file(dir_fd, "link").expect("removing a link");
-    wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
-
     // Create a link where target is a dangling symlink following symlinks
     wasi::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
 
-    // If we do follow symlinks, this should fail
+    // Symlink following with path_link is rejected
     assert_eq!(
         wasi::path_link(
             dir_fd,
@@ -211,30 +196,11 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
             dir_fd,
             "link",
         )
-        .expect_err("creating a link to a dangling symlink following symlinks should fail")
+        .expect_err("calling path_link with LOOKUPFLAGS_SYMLINK_FOLLOW should fail")
         .raw_error(),
-        wasi::ERRNO_NOENT,
-        "errno should be ERRNO_NOENT"
+        wasi::ERRNO_INVAL,
+        "errno should be ERRNO_INVAL"
     );
-    wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
-
-    // Create a link to a symlink loop following symlinks
-    wasi::path_symlink("symlink", dir_fd, "symlink").expect("creating a symlink loop");
-
-    assert_eq!(
-        wasi::path_link(
-            dir_fd,
-            wasi::LOOKUPFLAGS_SYMLINK_FOLLOW,
-            "symlink",
-            dir_fd,
-            "link",
-        )
-        .expect_err("creating a link to a symlink loop following symlinks")
-        .raw_error(),
-        wasi::ERRNO_LOOP,
-        "errno should be ERRNO_LOOP"
-    );
-    wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
 
     // Clean up.
     wasi::path_unlink_file(dir_fd, "file").expect("removing a file");

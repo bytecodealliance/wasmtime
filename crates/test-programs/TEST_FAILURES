@@ -4,11 +4,8 @@ TODOs:
   fcntl on unix, reopenfile / require reopening on windows.
 
 
-
 # Linux
 
-* path_link
-    - need DirExt::hard_link that follows symlinks.
 * path_rename_trailing_slashes
     - trailing slash behavior of files is wrong: trailing slashes are ignored,
       should cause an error.
@@ -40,8 +37,7 @@ TODOs:
     - permission denied on windows to rename a dir to an existing empty dir
 
 * path_link
-    - fails on the first dangling symlink, which is before the hard_link
-      following symlinks issue linux hits.
+    - fails on the first dangling symlink
 
 ## "Trailing slashes are a bonified boondoggle" - Dan
 
