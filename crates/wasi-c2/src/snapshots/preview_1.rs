@@ -172,6 +172,7 @@ impl TryFrom<std::io::Error> for types::Errno {
                 winerror::ERROR_NEGATIVE_SEEK => Some(types::Errno::Inval),
                 winerror::ERROR_DIRECTORY => Some(types::Errno::Notdir),
                 winerror::ERROR_ALREADY_EXISTS => Some(types::Errno::Exist),
+                winerror::ERROR_STOPPED_ON_SYMLINK => Some(types::Errno::Loop),
                 _ => None,
             }
         }
@@ -186,16 +187,6 @@ impl TryFrom<std::io::Error> for types::Errno {
                 std::io::ErrorKind::PermissionDenied => Ok(types::Errno::Perm),
                 std::io::ErrorKind::AlreadyExists => Ok(types::Errno::Exist),
                 std::io::ErrorKind::InvalidInput => Ok(types::Errno::Ilseq),
-                std::io::ErrorKind::Other => match err.get_ref() {
-                    Some(e) => {
-                        if e.to_string() == "symlink encountered" {
-                            Ok(types::Errno::Loop)
-                        } else {
-                            Err(anyhow!(err).context("Unknown ErrorKind::Other error"))
-                        }
-                    }
-                    None => Err(anyhow!(err).context("No raw OS error or inner error")),
-                },
                 k => Err(anyhow!(err).context(format!("No raw OS error. Unhandled kind: {:?}", k))),
             },
         }
