@@ -22,13 +22,9 @@
         clippy::use_self
     )
 )]
-#![no_std]
 
 use cranelift_codegen::isa;
 use target_lexicon::Triple;
-
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use raw_cpuid::CpuId;
 
 /// Return an `isa` builder configured for the current host
 /// machine, or `Err(())` if the host machine is not supported
@@ -56,72 +52,64 @@ pub fn builder_with_options(
             isa::LookupError::Unsupported => "unsupported architecture",
         })?;
 
-    if infer_native_flags && cfg!(any(target_arch = "x86", target_arch = "x86_64")) {
-        parse_x86_cpuid(&mut isa_builder)?;
-    }
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        use cranelift_codegen::settings::Configurable;
 
-    Ok(isa_builder)
-}
-
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-fn parse_x86_cpuid(isa_builder: &mut isa::Builder) -> Result<(), &'static str> {
-    use cranelift_codegen::settings::Configurable;
-    let cpuid = CpuId::new();
-
-    if let Some(info) = cpuid.get_feature_info() {
-        if !info.has_sse2() {
+        if !std::is_x86_feature_detected!("sse2") {
             return Err("x86 support requires SSE2");
         }
-        if info.has_sse3() {
+
+        if !infer_native_flags {
+            return Ok(isa_builder);
+        }
+
+        if std::is_x86_feature_detected!("sse3") {
             isa_builder.enable("has_sse3").unwrap();
         }
-        if info.has_ssse3() {
+        if std::is_x86_feature_detected!("ssse3") {
             isa_builder.enable("has_ssse3").unwrap();
         }
-        if info.has_sse41() {
+        if std::is_x86_feature_detected!("sse4.1") {
             isa_builder.enable("has_sse41").unwrap();
         }
-        if info.has_sse42() {
+        if std::is_x86_feature_detected!("sse4.2") {
             isa_builder.enable("has_sse42").unwrap();
         }
-        if info.has_popcnt() {
+        if std::is_x86_feature_detected!("popcnt") {
             isa_builder.enable("has_popcnt").unwrap();
         }
-        if info.has_avx() {
+        if std::is_x86_feature_detected!("avx") {
             isa_builder.enable("has_avx").unwrap();
         }
-    }
-    if let Some(info) = cpuid.get_extended_feature_info() {
-        if info.has_bmi1() {
-            isa_builder.enable("has_bmi1").unwrap();
-        }
-        if info.has_bmi2() {
-            isa_builder.enable("has_bmi2").unwrap();
-        }
-        if info.has_avx2() {
+        if std::is_x86_feature_detected!("avx2") {
             isa_builder.enable("has_avx2").unwrap();
         }
-        if info.has_avx512dq() {
+        if std::is_x86_feature_detected!("bmi1") {
+            isa_builder.enable("has_bmi1").unwrap();
+        }
+        if std::is_x86_feature_detected!("bmi2") {
+            isa_builder.enable("has_bmi2").unwrap();
+        }
+        if std::is_x86_feature_detected!("avx512dq") {
             isa_builder.enable("has_avx512dq").unwrap();
         }
-        if info.has_avx512vl() {
+        if std::is_x86_feature_detected!("avx512vl") {
             isa_builder.enable("has_avx512vl").unwrap();
         }
-        if info.has_avx512f() {
+        if std::is_x86_feature_detected!("avx512f") {
             isa_builder.enable("has_avx512f").unwrap();
         }
-    }
-    if let Some(info) = cpuid.get_extended_function_info() {
-        if info.has_lzcnt() {
+        if std::is_x86_feature_detected!("lzcnt") {
             isa_builder.enable("has_lzcnt").unwrap();
         }
     }
-    Ok(())
-}
 
-#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-fn parse_x86_cpuid(_isa_builder: &mut isa::Builder) -> Result<(), &'static str> {
-    unreachable!();
+    // squelch warnings about unused mut/variables on some platforms.
+    drop(&mut isa_builder);
+    drop(infer_native_flags);
+
+    Ok(isa_builder)
 }
 
 #[cfg(test)]

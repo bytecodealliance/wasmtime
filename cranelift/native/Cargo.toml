@@ -14,9 +14,6 @@ edition = "2018"
 cranelift-codegen = { path = "../codegen", version = "0.69.0", default-features = false }
 target-lexicon = "0.11"
 
-[target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
-raw-cpuid = "9.0.0"
-
 [features]
 default = ["std"]
 std = ["cranelift-codegen/std"]
