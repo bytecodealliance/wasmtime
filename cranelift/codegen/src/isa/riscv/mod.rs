@@ -19,6 +19,7 @@ use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use core::any::Any;
 use core::fmt;
+use core::hash::{Hash, Hasher};
 use target_lexicon::{PointerWidth, Triple};
 
 #[allow(dead_code)]
@@ -67,6 +68,11 @@ impl TargetIsa for Isa {
 
     fn flags(&self) -> &shared_settings::Flags {
         &self.shared_flags
+    }
+
+    fn hash_all_flags(&self, mut hasher: &mut dyn Hasher) {
+        self.shared_flags.hash(&mut hasher);
+        self.isa_flags.hash(&mut hasher);
     }
 
     fn register_info(&self) -> RegInfo {

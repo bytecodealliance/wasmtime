@@ -69,6 +69,7 @@ use alloc::boxed::Box;
 use core::any::Any;
 use core::fmt;
 use core::fmt::{Debug, Formatter};
+use core::hash::Hasher;
 use target_lexicon::{triple, Architecture, PointerWidth, Triple};
 use thiserror::Error;
 
@@ -264,6 +265,10 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     /// Get the ISA-independent flags that were used to make this trait object.
     fn flags(&self) -> &settings::Flags;
+
+    /// Hashes all flags, both ISA-independent and ISA-specific, into the
+    /// specified hasher.
+    fn hash_all_flags(&self, hasher: &mut dyn Hasher);
 
     /// Get the default calling convention of this target.
     fn default_call_conv(&self) -> CallConv {
