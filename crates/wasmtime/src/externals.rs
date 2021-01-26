@@ -605,6 +605,22 @@ impl Table {
     }
 }
 
+/// Error for out of bounds [`Memory`] access.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct MemoryAccessError {
+    // Keep struct internals private for future extensibility.
+    _private: (),
+}
+
+impl std::fmt::Display for MemoryAccessError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "out of bounds memory access")
+    }
+}
+
+impl std::error::Error for MemoryAccessError {}
+
 /// A WebAssembly linear memory.
 ///
 /// WebAssembly memories represent a contiguous array of bytes that have a size
@@ -661,9 +677,24 @@ impl Table {
 /// Let's run through a few safe examples first of how you can use a `Memory`.
 ///
 /// ```rust
-/// use wasmtime::Memory;
+/// use wasmtime::{Memory, MemoryAccessError};
 ///
-/// fn safe_examples(mem: &Memory) {
+/// // Memory can be read and written safely with the `Memory::read` and
+/// // `Memory::write` methods.
+/// // An error is returned if the copy did not succeed.
+/// fn safe_examples(mem: &Memory) -> Result<(), MemoryAccessError> {
+///     let offset = 5;
+///     mem.write(offset, b"hello")?;
+///     let mut buffer = [0u8; 5];
+///     mem.read(offset, &mut buffer)?;
+///     assert_eq!(b"hello", &buffer);
+///     Ok(())
+/// }
+///
+/// // You can also get direct, unsafe access to the memory, but must manually
+/// // ensure that safety invariants are upheld.
+///
+/// fn correct_unsafe_examples(mem: &Memory) {
 ///     // Just like wasm, it's safe to read memory almost at any time. The
 ///     // gotcha here is that we need to be sure to load from the correct base
 ///     // pointer and perform the bounds check correctly. So long as this is
@@ -869,6 +900,39 @@ impl Memory {
     /// ```
     pub fn ty(&self) -> MemoryType {
         MemoryType::from_wasmtime_memory(&self.wasmtime_export.memory.memory)
+    }
+
+    /// Safely reads memory contents at the given offset into a buffer.
+    ///
+    /// The entire buffer will be filled.
+    ///
+    /// If offset + buffer length exceed the current memory capacity,
+    /// a [`MemoryAccessError`] is returned.
+    pub fn read(&self, offset: usize, buffer: &mut [u8]) -> Result<(), MemoryAccessError> {
+        unsafe {
+            let slice = self
+                .data_unchecked()
+                .get(offset..)
+                .and_then(|s| s.get(..buffer.len()))
+                .ok_or(MemoryAccessError { _private: () })?;
+            buffer.copy_from_slice(slice);
+            Ok(())
+        }
+    }
+
+    /// Safely writes contents of a buffer to this memory at the given offset.
+    ///
+    /// If the offset + buffer length exceed current memory capacity, a
+    /// [`MemoryAccessError`] is returned.
+    pub fn write(&self, offset: usize, buffer: &[u8]) -> Result<(), MemoryAccessError> {
+        unsafe {
+            self.data_unchecked_mut()
+                .get_mut(offset..)
+                .and_then(|s| s.get_mut(..buffer.len()))
+                .ok_or(MemoryAccessError { _private: () })?
+                .copy_from_slice(buffer);
+            Ok(())
+        }
     }
 
     /// Returns this memory as a slice view that can be read natively in Rust.
