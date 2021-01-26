@@ -1,4 +1,4 @@
-use crate::externals::MemoryCreator;
+use crate::memory::MemoryCreator;
 use crate::trampoline::MemoryCreatorProxy;
 use anyhow::{bail, Result};
 use std::cmp;
