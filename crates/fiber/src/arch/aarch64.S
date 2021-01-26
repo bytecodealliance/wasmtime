@@ -110,8 +110,7 @@ FUNCTION(wasmtime_fiber_start):
     blr x20
     // .. technically we shouldn't get here, and I would like to write in an
     // instruction which just aborts, but I don't know such an instruction in
-    // aarch64 lan, and I would like to write in an instruction which just
-    // aborts, but I don't know such an instruction in aarch64 land
+    // aarch64 land.
     .cfi_endproc
 SIZE(wasmtime_fiber_start)
 
