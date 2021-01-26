@@ -73,6 +73,7 @@
 //! ```
 
 use anyhow::{anyhow, Context, Result};
+use std::env;
 use std::os::raw::{c_int, c_void};
 use std::slice;
 use wasi_common::WasiCtxBuilder;
@@ -211,9 +212,23 @@ impl BenchState {
 
         let mut linker = Linker::new(&self.store);
 
-        // Import a very restricted WASI environment.
+        // Create a WASI environment.
+
         let mut cx = WasiCtxBuilder::new();
         cx.inherit_stdio();
+        // Allow access to the current working directory so that the benchmark
+        // can read its input workload(s). The sightglass benchmark runner will
+        // make sure that this process is spawned with its current directory set
+        // to the current benchmark's directory.
+        let cwd = wasi_common::preopen_dir(".")
+            .context("failed to open the current working directory")?;
+        cx.preopened_dir(cwd, ".");
+        // Pass this env var along so that the benchmark program can use smaller
+        // input workload(s) if it has them and that has been requested.
+        if let Ok(val) = env::var("WASM_BENCH_USE_SMALL_WORKLOAD") {
+            cx.env("WASM_BENCH_USE_SMALL_WORKLOAD", &val);
+        }
+
         let cx = cx.build()?;
         let wasi = Wasi::new(linker.store(), cx);
         wasi.add_to_linker(&mut linker)?;
