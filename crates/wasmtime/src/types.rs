@@ -466,12 +466,12 @@ impl ModuleType {
     }
 
     /// Adds a new export to this `ModuleType`.
-    pub(crate) fn add_named_export(&mut self, name: &str, ty: ExternType) {
+    pub fn add_named_export(&mut self, name: &str, ty: ExternType) {
         self.exports.push((name.to_string(), ty));
     }
 
     /// Adds a new import to this `ModuleType`.
-    pub(crate) fn add_named_import(&mut self, module: &str, field: Option<&str>, ty: ExternType) {
+    pub fn add_named_import(&mut self, module: &str, field: Option<&str>, ty: ExternType) {
         self.imports
             .push((module.to_string(), field.map(|f| f.to_string()), ty));
     }
