@@ -13,15 +13,11 @@ use wasi_c2::{
     },
     Error, ErrorExt,
 };
-pub struct SyncSched {
-    stdin_poll: Mutex<StdinPoll>,
-}
+pub struct SyncSched {}
 
 impl SyncSched {
     pub fn new() -> Self {
-        Self {
-            stdin_poll: StdinPoll::new(),
-        }
+        Self {}
     }
 }
 
