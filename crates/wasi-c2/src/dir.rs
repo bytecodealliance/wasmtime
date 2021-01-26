@@ -32,7 +32,6 @@ pub trait WasiDir {
     fn hard_link(
         &self,
         path: &str,
-        symlink_follow: bool,
         target_dir: &dyn WasiDir,
         target_path: &str,
     ) -> Result<(), Error>;

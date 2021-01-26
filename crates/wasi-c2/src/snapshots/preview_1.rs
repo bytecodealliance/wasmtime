@@ -749,10 +749,13 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_dir(u32::from(target_fd))?
             .get_cap(DirCaps::LINK_TARGET)?;
         let symlink_follow = src_flags.contains(types::Lookupflags::SYMLINK_FOLLOW);
+        if symlink_follow {
+            return Err(Error::invalid_argument()
+                .context("symlink following on path_link is not supported"));
+        }
 
         src_dir.hard_link(
             src_path.as_str()?.deref(),
-            symlink_follow,
             target_dir.deref(),
             target_path.as_str()?.deref(),
         )

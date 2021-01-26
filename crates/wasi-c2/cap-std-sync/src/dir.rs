@@ -200,7 +200,6 @@ impl WasiDir for Dir {
     fn hard_link(
         &self,
         src_path: &str,
-        symlink_follow: bool, // XXX not in cap-std yet
         target_dir: &dyn WasiDir,
         target_path: &str,
     ) -> Result<(), Error> {
