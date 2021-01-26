@@ -1,5 +1,5 @@
 use super::create_handle::create_handle;
-use crate::externals::{LinearMemory, MemoryCreator};
+use crate::memory::{LinearMemory, MemoryCreator};
 use crate::trampoline::StoreInstanceHandle;
 use crate::Store;
 use crate::{Limits, MemoryType};
