@@ -34,7 +34,7 @@ use raw_cpuid::CpuId;
 /// machine, or `Err(())` if the host machine is not supported
 /// in the current configuration.
 pub fn builder() -> Result<isa::Builder, &'static str> {
-    builder_with_backend_variant(isa::BackendVariant::Any)
+    builder_with_options(isa::BackendVariant::Any, true)
 }
 
 /// Return an `isa` builder configured for the current host
@@ -44,8 +44,9 @@ pub fn builder() -> Result<isa::Builder, &'static str> {
 /// Selects the given backend variant specifically; this is
 /// useful when more than oen backend exists for a given target
 /// (e.g., on x86-64).
-pub fn builder_with_backend_variant(
+pub fn builder_with_options(
     variant: isa::BackendVariant,
+    infer_native_flags: bool,
 ) -> Result<isa::Builder, &'static str> {
     let mut isa_builder =
         isa::lookup_variant(Triple::host(), variant).map_err(|err| match err {
@@ -55,7 +56,7 @@ pub fn builder_with_backend_variant(
             isa::LookupError::Unsupported => "unsupported architecture",
         })?;
 
-    if cfg!(any(target_arch = "x86", target_arch = "x86_64")) {
+    if infer_native_flags && cfg!(any(target_arch = "x86", target_arch = "x86_64")) {
         parse_x86_cpuid(&mut isa_builder)?;
     }
 

@@ -385,6 +385,20 @@ impl Config {
         self
     }
 
+    /// Clears native CPU flags inferred from the host.
+    ///
+    /// By default Wasmtime will tune generated code for the host that Wasmtime
+    /// itself is running on. If you're compiling on one host, however, and
+    /// shipping artifacts to another host then this behavior may not be
+    /// desired. This function will clear all inferred native CPU features.
+    ///
+    /// To enable CPU features afterwards it's recommended to use the
+    /// [`Config::cranelift_other_flag`] method.
+    pub fn cranelift_clear_cpu_flags(&mut self) -> &mut Self {
+        self.isa_flags = native::builder_without_flags();
+        self
+    }
+
     /// Allows settings another Cranelift flag defined by a flag name and value. This allows
     /// fine-tuning of Cranelift settings.
     ///

@@ -11,6 +11,7 @@ use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter,
 use crate::result::CodegenResult;
 use crate::settings::{self as shared_settings, Flags};
 use alloc::boxed::Box;
+use core::hash::{Hash, Hasher};
 use regalloc::{PrettyPrint, RealRegUniverse, Reg};
 use target_lexicon::Triple;
 
@@ -80,6 +81,11 @@ impl MachBackend for X64Backend {
 
     fn flags(&self) -> &Flags {
         &self.flags
+    }
+
+    fn hash_all_flags(&self, mut hasher: &mut dyn Hasher) {
+        self.flags.hash(&mut hasher);
+        self.x64_flags.hash(&mut hasher);
     }
 
     fn name(&self) -> &'static str {

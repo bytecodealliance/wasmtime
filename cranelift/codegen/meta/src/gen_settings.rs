@@ -418,7 +418,7 @@ fn gen_display(group: &SettingGroup, fmt: &mut Formatter) {
 
 fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
     // Generate struct.
-    fmtln!(fmt, "#[derive(Clone)]");
+    fmtln!(fmt, "#[derive(Clone, Hash)]");
     fmt.doc_comment(format!("Flags group `{}`.", group.name));
     fmtln!(fmt, "pub struct Flags {");
     fmt.indent(|fmt| {

@@ -8,6 +8,7 @@ use crate::result::CodegenResult;
 use crate::settings;
 
 use alloc::boxed::Box;
+use core::hash::{Hash, Hasher};
 use regalloc::{PrettyPrint, RealRegUniverse};
 use target_lexicon::{Architecture, ArmArchitecture, Triple};
 
@@ -88,6 +89,10 @@ impl MachBackend for Arm32Backend {
 
     fn flags(&self) -> &settings::Flags {
         &self.flags
+    }
+
+    fn hash_all_flags(&self, mut hasher: &mut dyn Hasher) {
+        self.flags.hash(&mut hasher);
     }
 
     fn reg_universe(&self) -> &RealRegUniverse {

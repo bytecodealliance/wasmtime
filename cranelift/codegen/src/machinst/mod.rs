@@ -76,6 +76,7 @@ use regalloc::{
     RealReg, RealRegUniverse, Reg, RegClass, RegUsageMapper, SpillSlot, VirtualReg, Writable,
 };
 use smallvec::{smallvec, SmallVec};
+use std::hash::Hasher;
 use std::string::String;
 use target_lexicon::Triple;
 
@@ -372,6 +373,10 @@ pub trait MachBackend {
 
     /// Return flags for this backend.
     fn flags(&self) -> &Flags;
+
+    /// Hashes all flags, both ISA-independent and ISA-specific, into the
+    /// specified hasher.
+    fn hash_all_flags(&self, hasher: &mut dyn Hasher);
 
     /// Return triple for this backend.
     fn triple(&self) -> Triple;
