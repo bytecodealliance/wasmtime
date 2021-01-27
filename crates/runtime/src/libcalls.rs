@@ -581,3 +581,8 @@ pub unsafe extern "C" fn wasmtime_imported_memory_atomic_wait64(
         "wasm atomics (fn wasmtime_imported_memory_atomic_wait64) unsupported",
     ))));
 }
+
+/// Hook for when an instance runs out of fuel.
+pub unsafe extern "C" fn wasmtime_out_of_gas(_vmctx: *mut VMContext) {
+    crate::traphandlers::out_of_gas()
+}

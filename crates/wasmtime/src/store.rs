@@ -6,6 +6,7 @@ use anyhow::{bail, Result};
 use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
+use std::convert::TryFrom;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::{Rc, Weak};
@@ -72,6 +73,10 @@ pub(crate) struct StoreInner {
     instance_count: Cell<usize>,
     memory_count: Cell<usize>,
     table_count: Cell<usize>,
+
+    /// An adjustment to add to the fuel consumed value in `interrupts` above
+    /// to get the true amount of fuel consumed.
+    fuel_adj: Cell<i64>,
 }
 
 struct HostInfoKey(VMExternRef);
@@ -117,6 +122,7 @@ impl Store {
                 instance_count: Default::default(),
                 memory_count: Default::default(),
                 table_count: Default::default(),
+                fuel_adj: Cell::new(0),
             }),
         }
     }
@@ -428,12 +434,49 @@ impl Store {
         }
     }
 
-    /// TODO
+    /// Returns the amount of fuel consumed by this store's execution so far.
+    ///
+    /// If fuel consumption is not enabled via [`Config::consume_fuel`] then
+    /// this function will return `None`. Also note that fuel, if enabled, must
+    /// be originally configured via [`Store::set_fuel_remaining`].
+    ///
+    /// Finally, this will only return the amount of fuel consumed since
+    /// [`Store::set_fuel_remaining`] was last called, so this does not return
+    /// the total amount of fuel consumed for the entire lifetime of this
+    /// [`Store`].
     pub fn fuel_consumed(&self) -> Option<u64> {
-        if self.engine().config().tunables.consume_fuel {
-            Some(unsafe { *self.inner.interrupts.fuel_consumed.get() })
-        } else {
-            None
+        if !self.engine().config().tunables.consume_fuel {
+            return None;
+        }
+        let consumed = unsafe { *self.inner.interrupts.fuel_consumed.get() };
+        Some(u64::try_from(self.inner.fuel_adj.get() + consumed).unwrap())
+    }
+
+    /// Updates the amount of fuel remaining in this [`Store`] available for
+    /// wasm to consume while executing.
+    ///
+    /// For this method to work fuel consumption must be enabled via
+    /// [`Config::consume_fuel`]. By default a [`Store`] starts with 0 fuel for
+    /// wasm to execute with (meaning it will immediately trap). This function
+    /// must be called for the store to have some fuel to allow WebAssembly to
+    /// execute.
+    ///
+    /// Note that at this time when fuel is entirely consumed it will cause
+    /// wasm to trap. More usages of fuel are planned for the future.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the store's [`Config`] did not have fuel
+    /// consumption enabled.
+    ///
+    /// This funtion will also panic if `remaining` is larger than
+    /// `i64::max_value()`.
+    pub fn set_fuel_remaining(&self, remaining: u64) {
+        assert!(self.engine().config().tunables.consume_fuel);
+        let remaining = i64::try_from(remaining).unwrap();
+        self.inner.fuel_adj.set(remaining);
+        unsafe {
+            *self.inner.interrupts.fuel_consumed.get() = -remaining;
         }
     }
 }
@@ -456,6 +499,23 @@ unsafe impl TrapInfo for Store {
 
     fn max_wasm_stack(&self) -> usize {
         self.engine().config().max_wasm_stack
+    }
+
+    fn out_of_gas(&self) {
+        #[derive(Debug)]
+        struct OutOfGas;
+
+        impl fmt::Display for OutOfGas {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("all fuel consumed by WebAssembly")
+            }
+        }
+
+        impl std::error::Error for OutOfGas {}
+
+        unsafe {
+            wasmtime_runtime::raise_lib_trap(wasmtime_runtime::Trap::User(Box::new(OutOfGas)))
+        }
     }
 }
 

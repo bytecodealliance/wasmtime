@@ -438,6 +438,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // `VMInterrupts` later.
         builder.declare_var(self.fuel_var, ir::types::I64);
         self.fuel_load_into_var(builder);
+        self.fuel_check(builder);
     }
 
     fn fuel_function_exit(&mut self, builder: &mut FunctionBuilder<'_>) {
@@ -603,6 +604,52 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             interrupt_ptr,
             i32::from(self.offsets.vminterrupts_fuel_consumed()).into(),
         )
+    }
+
+    /// Checks the amount of remaining, and if we've run out of fuel we call
+    /// the out-of-fuel function.
+    fn fuel_check(&mut self, builder: &mut FunctionBuilder) {
+        self.fuel_increment_var(builder);
+        let out_of_gas_block = builder.create_block();
+        let continuation_block = builder.create_block();
+
+        // Note that our fuel is encoded as adding positive values to a
+        // negative number. Whenever the negative number goes positive that
+        // means we ran out of fuel.
+        //
+        // Compare to see if our fuel is positive, and if so we ran out of gas.
+        // Otherwise we can continue on like usual.
+        let zero = builder.ins().iconst(ir::types::I64, 0);
+        let fuel = builder.use_var(self.fuel_var);
+        let cmp = builder.ins().ifcmp(fuel, zero);
+        builder
+            .ins()
+            .brif(IntCC::SignedGreaterThanOrEqual, cmp, out_of_gas_block, &[]);
+        builder.ins().jump(continuation_block, &[]);
+        builder.seal_block(out_of_gas_block);
+
+        // If we ran out of gas then we call our out-of-gas intrinsic and it
+        // figures out what to do. Note that this may raise a trap, or do
+        // something like yield to an async runtime. In either case we don't
+        // assume what happens and handle the case the intrinsic returns.
+        //
+        // Note that we save/reload fuel around this since the out-of-gas
+        // intrinsic may alter how much fuel is in the system.
+        builder.switch_to_block(out_of_gas_block);
+        self.fuel_save_from_var(builder);
+        let out_of_gas_sig = self.builtin_function_signatures.out_of_gas(builder.func);
+        let (vmctx, out_of_gas) = self.translate_load_builtin_function_address(
+            &mut builder.cursor(),
+            BuiltinFunctionIndex::out_of_gas(),
+        );
+        builder
+            .ins()
+            .call_indirect(out_of_gas_sig, out_of_gas, &[vmctx]);
+        self.fuel_load_into_var(builder);
+        builder.ins().jump(continuation_block, &[]);
+        builder.seal_block(continuation_block);
+
+        builder.switch_to_block(continuation_block);
     }
 }
 
@@ -1672,36 +1719,44 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
     }
 
-    fn translate_loop_header(&mut self, mut pos: FuncCursor) -> WasmResult<()> {
-        if !self.tunables.interruptable {
-            return Ok(());
-        }
-
-        // Start out each loop with a check to the interupt flag to allow
-        // interruption of long or infinite loops.
+    fn translate_loop_header(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
+        // If enabled check the interrupt flag to prevent long or infinite
+        // loops.
         //
         // For more information about this see comments in
         // `crates/environ/src/cranelift.rs`
-        let vmctx = self.vmctx(&mut pos.func);
-        let pointer_type = self.pointer_type();
-        let base = pos.ins().global_value(pointer_type, vmctx);
-        let offset = i32::try_from(self.offsets.vmctx_interrupts()).unwrap();
-        let interrupt_ptr = pos
-            .ins()
-            .load(pointer_type, ir::MemFlags::trusted(), base, offset);
-        let interrupt = pos.ins().load(
-            pointer_type,
-            ir::MemFlags::trusted(),
-            interrupt_ptr,
-            i32::from(self.offsets.vminterrupts_stack_limit()),
-        );
-        // Note that the cast to `isize` happens first to allow sign-extension,
-        // if necessary, to `i64`.
-        let interrupted_sentinel = pos.ins().iconst(pointer_type, INTERRUPTED as isize as i64);
-        let cmp = pos
-            .ins()
-            .icmp(IntCC::Equal, interrupt, interrupted_sentinel);
-        pos.ins().trapnz(cmp, ir::TrapCode::Interrupt);
+        if self.tunables.interruptable {
+            let vmctx = self.vmctx(builder.func);
+            let pointer_type = self.pointer_type();
+            let base = builder.ins().global_value(pointer_type, vmctx);
+            let offset = i32::try_from(self.offsets.vmctx_interrupts()).unwrap();
+            let interrupt_ptr =
+                builder
+                    .ins()
+                    .load(pointer_type, ir::MemFlags::trusted(), base, offset);
+            let interrupt = builder.ins().load(
+                pointer_type,
+                ir::MemFlags::trusted(),
+                interrupt_ptr,
+                i32::from(self.offsets.vminterrupts_stack_limit()),
+            );
+            // Note that the cast to `isize` happens first to allow sign-extension,
+            // if necessary, to `i64`.
+            let interrupted_sentinel = builder
+                .ins()
+                .iconst(pointer_type, INTERRUPTED as isize as i64);
+            let cmp = builder
+                .ins()
+                .icmp(IntCC::Equal, interrupt, interrupted_sentinel);
+            builder.ins().trapnz(cmp, ir::TrapCode::Interrupt);
+        }
+
+        // Additionally if enabled check how much fuel we have remaining to see
+        // if we've run out by this point.
+        if self.tunables.consume_fuel {
+            self.fuel_check(builder);
+        }
+
         Ok(())
     }
 

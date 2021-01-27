@@ -383,13 +383,16 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
 /// Executes the wast `test` spectest with the `config` specified.
 ///
 /// Ensures that spec tests pass regardless of the `Config`.
-pub fn spectest(config: crate::generators::Config, test: crate::generators::SpecTest) {
+pub fn spectest(fuzz_config: crate::generators::Config, test: crate::generators::SpecTest) {
     crate::init_fuzzing();
-    log::debug!("running {:?} with {:?}", test.file, config);
-    let mut config = config.to_wasmtime();
+    log::debug!("running {:?} with {:?}", test.file, fuzz_config);
+    let mut config = fuzz_config.to_wasmtime();
     config.wasm_reference_types(false);
     config.wasm_bulk_memory(false);
     let store = Store::new(&Engine::new(&config));
+    if fuzz_config.consume_fuel {
+        store.set_fuel_remaining(i64::max_value() as u64);
+    }
     let mut wast_context = WastContext::new(store);
     wast_context.register_spectest().unwrap();
     wast_context
@@ -398,16 +401,22 @@ pub fn spectest(config: crate::generators::Config, test: crate::generators::Spec
 }
 
 /// Execute a series of `table.get` and `table.set` operations.
-pub fn table_ops(config: crate::generators::Config, ops: crate::generators::table_ops::TableOps) {
+pub fn table_ops(
+    fuzz_config: crate::generators::Config,
+    ops: crate::generators::table_ops::TableOps,
+) {
     let _ = env_logger::try_init();
 
     let num_dropped = Rc::new(Cell::new(0));
 
     {
-        let mut config = config.to_wasmtime();
+        let mut config = fuzz_config.to_wasmtime();
         config.wasm_reference_types(true);
         let engine = Engine::new(&config);
         let store = Store::new(&engine);
+        if fuzz_config.consume_fuel {
+            store.set_fuel_remaining(i64::max_value() as u64);
+        }
 
         let wasm = ops.to_wasm_binary();
         log_wasm(&wasm);
@@ -520,6 +529,9 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
     wasmtime_config.cranelift_nan_canonicalization(true);
     let wasmtime_engine = Engine::new(&wasmtime_config);
     let wasmtime_store = Store::new(&wasmtime_engine);
+    if config.consume_fuel {
+        wasmtime_store.set_fuel_remaining(i64::max_value() as u64);
+    }
     let wasmtime_module =
         Module::new(&wasmtime_engine, &wasm).expect("Wasmtime can compile module");
     let wasmtime_instance = Instance::new(&wasmtime_store, &wasmtime_module, &[])

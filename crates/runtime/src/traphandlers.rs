@@ -410,6 +410,13 @@ pub fn with_last_info<R>(func: impl FnOnce(Option<&dyn Any>) -> R) -> R {
     tls::with(|state| func(state.map(|s| s.trap_info.as_any())))
 }
 
+/// Invokes the contextually-defined context's out-of-gas function.
+///
+/// (basically delegates to `wasmtime::Store::out_of_gas`)
+pub fn out_of_gas() {
+    tls::with(|state| state.unwrap().trap_info.out_of_gas())
+}
+
 /// Temporary state stored on the stack which is registered in the `tls` module
 /// below for calls into wasm.
 pub struct CallThreadState<'a> {
@@ -442,6 +449,12 @@ pub unsafe trait TrapInfo {
     /// Returns the maximum size, in bytes, the wasm native stack is allowed to
     /// grow to.
     fn max_wasm_stack(&self) -> usize;
+
+    /// Callback invoked whenever WebAssembly has entirely consumed the fuel
+    /// that it was allotted.
+    ///
+    /// This function may return, and it may also `raise_lib_trap`.
+    fn out_of_gas(&self);
 }
 
 enum UnwindReason {

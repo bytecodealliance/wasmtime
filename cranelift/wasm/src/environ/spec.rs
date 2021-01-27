@@ -643,7 +643,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     ///
     /// This can be used to insert explicit interrupt or safepoint checking at
     /// the beginnings of loops.
-    fn translate_loop_header(&mut self, _pos: FuncCursor) -> WasmResult<()> {
+    fn translate_loop_header(&mut self, _builder: &mut FunctionBuilder) -> WasmResult<()> {
         // By default, don't emit anything.
         Ok(())
     }
