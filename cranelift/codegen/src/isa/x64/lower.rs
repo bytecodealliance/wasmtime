@@ -2276,7 +2276,22 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Clz => {
-            // TODO when the x86 flags have use_lzcnt, we can use LZCNT.
+            let orig_ty = ty.unwrap();
+
+            if isa_flags.use_lzcnt() && (orig_ty == types::I32 || orig_ty == types::I64) {
+                // We can use a plain lzcnt instruction here. Note no special handling is required
+                // for zero inputs, because the machine instruction does what the CLIF expects for
+                // zero, i.e. it returns zero.
+                let src = input_to_reg_mem(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                ctx.emit(Inst::unary_rm_r(
+                    orig_ty.bytes() as u8,
+                    UnaryRmROpcode::Lzcnt,
+                    src,
+                    dst,
+                ));
+                return Ok(());
+            }
 
             // General formula using bit-scan reverse (BSR):
             // mov -1, %dst
@@ -2285,7 +2300,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // mov $(size_bits - 1), %dst
             // sub %tmp, %dst
 
-            let orig_ty = ty.unwrap();
             if orig_ty == types::I128 {
                 // clz upper, tmp1
                 // clz lower, dst
@@ -4427,6 +4441,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
             }
         }
+
         Opcode::Store
         | Opcode::Istore8
         | Opcode::Istore16

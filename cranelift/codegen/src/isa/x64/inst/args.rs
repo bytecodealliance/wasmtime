@@ -402,6 +402,8 @@ pub enum UnaryRmROpcode {
     Bsr,
     /// Bit-scan forward.
     Bsf,
+    /// Counts leading zeroes (Leading Zero CouNT).
+    Lzcnt,
 }
 
 impl fmt::Debug for UnaryRmROpcode {
@@ -409,6 +411,7 @@ impl fmt::Debug for UnaryRmROpcode {
         match self {
             UnaryRmROpcode::Bsr => write!(fmt, "bsr"),
             UnaryRmROpcode::Bsf => write!(fmt, "bsf"),
+            UnaryRmROpcode::Lzcnt => write!(fmt, "lzcnt"),
         }
     }
 }
