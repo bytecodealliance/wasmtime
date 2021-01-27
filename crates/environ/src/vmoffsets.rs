@@ -258,6 +258,11 @@ impl VMOffsets {
     pub fn vminterrupts_stack_limit(&self) -> u8 {
         0
     }
+
+    /// Return the offset of the `fuel_consumed` field of `VMInterrupts`
+    pub fn vminterrupts_fuel_consumed(&self) -> u8 {
+        self.pointer_size
+    }
 }
 
 /// Offsets for `VMCallerCheckedAnyfunc`.

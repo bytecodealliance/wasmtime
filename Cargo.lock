@@ -3138,6 +3138,7 @@ dependencies = [
  "wasmtime-wasi-crypto",
  "wasmtime-wasi-nn",
  "wasmtime-wast",
+ "wast 32.0.0",
  "wat",
 ]
 
@@ -3149,6 +3150,7 @@ dependencies = [
  "cranelift-entity",
  "cranelift-frontend",
  "cranelift-wasm",
+ "wasmparser",
  "wasmtime-environ",
 ]
 

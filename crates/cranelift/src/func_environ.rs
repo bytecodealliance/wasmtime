@@ -7,11 +7,14 @@ use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Si
 use cranelift_codegen::isa::{self, TargetFrontendConfig};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
+use cranelift_frontend::Variable;
 use cranelift_wasm::{
-    self, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex, TableIndex,
-    TargetEnvironment, TypeIndex, WasmError, WasmResult, WasmType,
+    self, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, MemoryIndex,
+    SignatureIndex, TableIndex, TargetEnvironment, TypeIndex, WasmError, WasmResult, WasmType,
 };
 use std::convert::TryFrom;
+use std::mem;
+use wasmparser::Operator;
 use wasmtime_environ::{
     BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, TableStyle, Tunables, VMOffsets,
     INTERRUPTED, WASM_PAGE_SIZE,
@@ -125,6 +128,10 @@ pub struct FuncEnvironment<'module_environment> {
     pub(crate) offsets: VMOffsets,
 
     tunables: &'module_environment Tunables,
+
+    fuel_var: cranelift_frontend::Variable,
+
+    fuel_consumed: i64,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
@@ -151,6 +158,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             builtin_function_signatures,
             offsets: VMOffsets::new(target_config.pointer_bytes(), module),
             tunables,
+            fuel_var: Variable::new(0),
+
+            // Start with at least one fuel being consumed because even empty
+            // functions should consume at least some fuel.
+            fuel_consumed: 1,
         }
     }
 
@@ -418,6 +430,180 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             (global, 0)
         }
     }
+
+    fn fuel_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
+        // On function entry we load the amount of fuel into a function-local
+        // `self.fuel_var` to make fuel modifications fast locally. This cache
+        // is then periodically flushed to the Store-defined location in
+        // `VMInterrupts` later.
+        builder.declare_var(self.fuel_var, ir::types::I64);
+        self.fuel_load_into_var(builder);
+    }
+
+    fn fuel_function_exit(&mut self, builder: &mut FunctionBuilder<'_>) {
+        // On exiting the function we need to be sure to save the fuel we have
+        // cached locally in `self.fuel_var` back into the Store-defined
+        // location.
+        self.fuel_save_from_var(builder);
+    }
+
+    fn fuel_before_op(
+        &mut self,
+        op: &Operator<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        reachable: bool,
+    ) {
+        if !reachable {
+            // In unreachable code we shouldn't have any leftover fuel we
+            // haven't accounted for since the reason for us to become
+            // unreachable should have already added it to `self.fuel_var`.
+            debug_assert_eq!(self.fuel_consumed, 0);
+            return;
+        }
+
+        self.fuel_consumed += match op {
+            // Nop and drop generate no code, so don't consume fuel for them.
+            Operator::Nop | Operator::Drop => 0,
+
+            // Control flow may create branches, but is generally cheap and
+            // free, so don't consume fuel. Note the lack of `if` since some
+            // cost is incurred with the conditional check.
+            Operator::Block { .. }
+            | Operator::Loop { .. }
+            | Operator::Unreachable
+            | Operator::Return
+            | Operator::Else
+            | Operator::End => 0,
+
+            // everything else, just call it one operation.
+            _ => 1,
+        };
+
+        match op {
+            // Exiting a function (via a return or unreachable) or otherwise
+            // entering a different function (via a call) means that we need to
+            // update the fuel consumption in `VMInterrupts` because we're
+            // about to move control out of this function itself and the fuel
+            // may need to be read.
+            //
+            // Before this we need to update the fuel counter from our own cost
+            // leading up to this function call, and then we can store
+            // `self.fuel_var` into `VMInterrupts`.
+            Operator::Unreachable
+            | Operator::Return
+            | Operator::CallIndirect { .. }
+            | Operator::Call { .. }
+            | Operator::ReturnCall { .. }
+            | Operator::ReturnCallIndirect { .. } => {
+                self.fuel_increment_var(builder);
+                self.fuel_save_from_var(builder);
+            }
+
+            // To ensure all code preceding a loop is only counted once we
+            // update the fuel variable on entry.
+            Operator::Loop { .. }
+
+            // Entering into an `if` block means that the edge we take isn't
+            // known until runtime, so we need to update our fuel consumption
+            // before we take the branch.
+            | Operator::If { .. }
+
+            // Control-flow instructions mean that we're moving to the end/exit
+            // of a block somewhere else. That means we need to update the fuel
+            // counter since we're effectively terminating our basic block.
+            | Operator::Br { .. }
+            | Operator::BrIf { .. }
+            | Operator::BrTable { .. }
+
+            // Exiting a scope means that we need to update the fuel
+            // consumption because there are multiple ways to exit a scope and
+            // this is the only time we have to account for instructions
+            // executed so far.
+            | Operator::End
+
+            // This is similar to `end`, except that it's only the terminator
+            // for an `if` block. The same reasoning applies though in that we
+            // are terminating a basic block and need to update the fuel
+            // variable.
+            | Operator::Else => self.fuel_increment_var(builder),
+
+            // This is a normal instruction where the fuel is buffered to later
+            // get added to `self.fuel_var`.
+            //
+            // Note that `Block` is specifically omitted from incrementing the
+            // fuel variable. Control flow entering a `block` is unconditional
+            // which means it's effectively executing straight-line code. We'll
+            // update the counter when exiting a block, but we shouldn't need to
+            // do so upon entering a block.
+            _ => {}
+        }
+    }
+
+    fn fuel_after_op(&mut self, op: &Operator<'_>, builder: &mut FunctionBuilder<'_>) {
+        // After a function call we need to reload our fuel value since the
+        // function may have changed it.
+        match op {
+            Operator::Call { .. } | Operator::CallIndirect { .. } => {
+                self.fuel_load_into_var(builder);
+            }
+            _ => {}
+        }
+    }
+
+    /// Adds `self.fuel_consumed` to the `fuel_var`, zero-ing out the amount of
+    /// fuel consumed at that point.
+    fn fuel_increment_var(&mut self, builder: &mut FunctionBuilder<'_>) {
+        let consumption = mem::replace(&mut self.fuel_consumed, 0);
+        if consumption == 0 {
+            return;
+        }
+
+        let fuel = builder.use_var(self.fuel_var);
+        let consumption = builder.ins().iconst(ir::types::I64, consumption);
+        let fuel = builder.ins().iadd(fuel, consumption);
+        builder.def_var(self.fuel_var, fuel);
+    }
+
+    /// Loads the fuel consumption value from `VMInterrupts` into `self.fuel_var`
+    fn fuel_load_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
+        let (addr, offset) = self.fuel_addr_offset(builder);
+        let fuel = builder
+            .ins()
+            .load(ir::types::I64, ir::MemFlags::trusted(), addr, offset);
+        builder.def_var(self.fuel_var, fuel);
+    }
+
+    /// Stores the fuel consumption value from `self.fuel_var` into
+    /// `VMInterrupts`.
+    fn fuel_save_from_var(&mut self, builder: &mut FunctionBuilder<'_>) {
+        let (addr, offset) = self.fuel_addr_offset(builder);
+        let fuel_consumed = builder.use_var(self.fuel_var);
+        builder
+            .ins()
+            .store(ir::MemFlags::trusted(), fuel_consumed, addr, offset);
+    }
+
+    /// Returns the `(address, offset)` of the fuel consumption within
+    /// `VMInterrupts`, used to perform loads/stores later.
+    fn fuel_addr_offset(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+    ) -> (ir::Value, ir::immediates::Offset32) {
+        // The address/offset of the fuel consumption is the second field of
+        // `VMInterrupts`, so first load the pointer to the `VMInterrupts` and
+        // then get an offset from that.
+        let vmctx = self.vmctx(builder.func);
+        let pointer_type = self.pointer_type();
+        let base = builder.ins().global_value(pointer_type, vmctx);
+        let offset = i32::try_from(self.offsets.vmctx_interrupts()).unwrap();
+        let interrupt_ptr = builder
+            .ins()
+            .load(pointer_type, ir::MemFlags::trusted(), base, offset);
+        (
+            interrupt_ptr,
+            i32::from(self.offsets.vminterrupts_fuel_consumed()).into(),
+        )
+    }
 }
 
 impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environment> {
@@ -435,6 +621,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         // The first two parameters are the vmctx and caller vmctx. The rest are
         // the wasm parameters.
         index >= 2
+    }
+
+    fn after_locals(&mut self, num_locals: usize) {
+        self.fuel_var = Variable::new(num_locals);
     }
 
     fn make_table(&mut self, func: &mut ir::Function, index: TableIndex) -> WasmResult<ir::Table> {
@@ -1512,6 +1702,52 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             .ins()
             .icmp(IntCC::Equal, interrupt, interrupted_sentinel);
         pos.ins().trapnz(cmp, ir::TrapCode::Interrupt);
+        Ok(())
+    }
+
+    fn before_translate_operator(
+        &mut self,
+        op: &Operator,
+        builder: &mut FunctionBuilder,
+        state: &FuncTranslationState,
+    ) -> WasmResult<()> {
+        if self.tunables.consume_fuel {
+            self.fuel_before_op(op, builder, state.reachable());
+        }
+        Ok(())
+    }
+
+    fn after_translate_operator(
+        &mut self,
+        op: &Operator,
+        builder: &mut FunctionBuilder,
+        state: &FuncTranslationState,
+    ) -> WasmResult<()> {
+        if self.tunables.consume_fuel && state.reachable() {
+            self.fuel_after_op(op, builder);
+        }
+        Ok(())
+    }
+
+    fn before_translate_function(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        _state: &FuncTranslationState,
+    ) -> WasmResult<()> {
+        if self.tunables.consume_fuel {
+            self.fuel_function_entry(builder);
+        }
+        Ok(())
+    }
+
+    fn after_translate_function(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        state: &FuncTranslationState,
+    ) -> WasmResult<()> {
+        if self.tunables.consume_fuel && state.reachable() {
+            self.fuel_function_exit(builder);
+        }
         Ok(())
     }
 }

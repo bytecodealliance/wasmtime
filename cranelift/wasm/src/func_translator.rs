@@ -170,6 +170,8 @@ fn parse_local_decls<FE: FuncEnvironment + ?Sized>(
         declare_locals(builder, count, ty, &mut next_local, environ)?;
     }
 
+    environ.after_locals(next_local);
+
     Ok(())
 }
 

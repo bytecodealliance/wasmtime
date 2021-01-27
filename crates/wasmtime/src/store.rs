@@ -427,6 +427,15 @@ impl Store {
             );
         }
     }
+
+    /// TODO
+    pub fn fuel_consumed(&self) -> Option<u64> {
+        if self.engine().config().tunables.consume_fuel {
+            Some(unsafe { *self.inner.interrupts.fuel_consumed.get() })
+        } else {
+            None
+        }
+    }
 }
 
 unsafe impl TrapInfo for Store {
@@ -480,6 +489,13 @@ impl Drop for StoreInner {
 pub struct InterruptHandle {
     interrupts: Arc<VMInterrupts>,
 }
+
+// The `VMInterrupts` type is a pod-type with no destructor, and we only access
+// `interrupts` from other threads, so add in these trait impls which are
+// otherwise not available due to the `fuel_consumed` variable in
+// `VMInterrupts`.
+unsafe impl Send for InterruptHandle {}
+unsafe impl Sync for InterruptHandle {}
 
 impl InterruptHandle {
     /// Flags that execution within this handle's original [`Store`] should be

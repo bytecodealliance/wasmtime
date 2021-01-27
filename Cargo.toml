@@ -55,6 +55,7 @@ test-programs = { path = "crates/test-programs" }
 wasmtime-fuzzing = { path = "crates/fuzzing" }
 wasmtime-runtime = { path = "crates/runtime" }
 tracing-subscriber = "0.2.0"
+wast = "32.0.0"
 
 [build-dependencies]
 anyhow = "1.0.19"

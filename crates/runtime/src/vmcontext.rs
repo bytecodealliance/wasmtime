@@ -4,6 +4,7 @@
 use crate::externref::VMExternRef;
 use crate::instance::Instance;
 use std::any::Any;
+use std::cell::UnsafeCell;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::u32;
@@ -668,6 +669,9 @@ pub struct VMInterrupts {
     /// This is used to control both stack overflow as well as interrupting wasm
     /// modules. For more information see `crates/environ/src/cranelift.rs`.
     pub stack_limit: AtomicUsize,
+
+    /// TODO
+    pub fuel_consumed: UnsafeCell<u64>,
 }
 
 impl VMInterrupts {
@@ -682,6 +686,7 @@ impl Default for VMInterrupts {
     fn default() -> VMInterrupts {
         VMInterrupts {
             stack_limit: AtomicUsize::new(usize::max_value()),
+            fuel_consumed: UnsafeCell::new(0),
         }
     }
 }
