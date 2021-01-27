@@ -1,4 +1,3 @@
-#![allow(unused_variables)]
 use crate::{
     dir::{DirCaps, DirEntry, DirEntryExt, DirFdStat, ReaddirCursor, ReaddirEntity, TableDirExt},
     file::{
@@ -417,7 +416,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 .get_dir(fd)
                 .expect("checked that entry is dir")
                 .get_cap(DirCaps::FILESTAT_SET_TIMES)?
-                .set_times(".", atim, mtim)
+                .set_times(".", atim, mtim, false)
         } else {
             Err(Error::badf())
         }
@@ -703,7 +702,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::PATH_FILESTAT_GET)?
-            .get_path_filestat(path.as_str()?.deref())?;
+            .get_path_filestat(
+                path.as_str()?.deref(),
+                flags.contains(types::Lookupflags::SYMLINK_FOLLOW),
+            )?;
         Ok(types::Filestat::from(filestat))
     }
 
@@ -726,7 +728,12 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::PATH_FILESTAT_SET_TIMES)?
-            .set_times(path.as_str()?.deref(), atim, mtim)
+            .set_times(
+                path.as_str()?.deref(),
+                atim,
+                mtim,
+                flags.contains(types::Lookupflags::SYMLINK_FOLLOW),
+            )
     }
 
     fn path_link(

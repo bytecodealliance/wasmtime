@@ -27,7 +27,7 @@ pub trait WasiDir {
     fn unlink_file(&self, path: &str) -> Result<(), Error>;
     fn read_link(&self, path: &str) -> Result<PathBuf, Error>;
     fn get_filestat(&self) -> Result<Filestat, Error>;
-    fn get_path_filestat(&self, path: &str) -> Result<Filestat, Error>;
+    fn get_path_filestat(&self, path: &str, follow_symlinks: bool) -> Result<Filestat, Error>;
     fn rename(&self, path: &str, dest_dir: &dyn WasiDir, dest_path: &str) -> Result<(), Error>;
     fn hard_link(
         &self,
@@ -40,6 +40,7 @@ pub trait WasiDir {
         path: &str,
         atime: Option<SystemTimeSpec>,
         mtime: Option<SystemTimeSpec>,
+        follow_symlinks: bool,
     ) -> Result<(), Error>;
 }
 

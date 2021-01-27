@@ -175,8 +175,12 @@ impl WasiDir for Dir {
             ctim: meta.created().map(|t| Some(t.into_std())).unwrap_or(None),
         })
     }
-    fn get_path_filestat(&self, path: &str) -> Result<Filestat, Error> {
-        let meta = self.0.metadata(Path::new(path))?;
+    fn get_path_filestat(&self, path: &str, follow_symlinks: bool) -> Result<Filestat, Error> {
+        let meta = if follow_symlinks {
+            self.0.metadata(Path::new(path))?
+        } else {
+            self.0.symlink_metadata(Path::new(path))?
+        };
         Ok(Filestat {
             device_id: meta.dev(),
             inode: meta.ino(),
@@ -217,12 +221,21 @@ impl WasiDir for Dir {
         path: &str,
         atime: Option<wasi_c2::SystemTimeSpec>,
         mtime: Option<wasi_c2::SystemTimeSpec>,
+        follow_symlinks: bool,
     ) -> Result<(), Error> {
-        self.0.set_times(
-            Path::new(path),
-            convert_systimespec(atime),
-            convert_systimespec(mtime),
-        )?;
+        if follow_symlinks {
+            self.0.set_times(
+                Path::new(path),
+                convert_systimespec(atime),
+                convert_systimespec(mtime),
+            )?;
+        } else {
+            self.0.set_symlink_times(
+                Path::new(path),
+                convert_systimespec(atime),
+                convert_systimespec(mtime),
+            )?;
+        }
         Ok(())
     }
 }
