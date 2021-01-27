@@ -2,7 +2,8 @@ use std::{env, process};
 use wasi_tests::{create_file, open_scratch_directory};
 
 unsafe fn test_path_symlink_trailing_slashes(dir_fd: wasi::Fd) {
-    // Link destination shouldn't end with a slash.
+    // XXX following section invalid on windows because its a dangling symlink
+    // Dangling symlink: Link destination shouldn't end with a slash.
     assert_eq!(
         wasi::path_symlink("source", dir_fd, "target/")
             .expect_err("link destination ending with a slash should fail")
@@ -11,12 +12,13 @@ unsafe fn test_path_symlink_trailing_slashes(dir_fd: wasi::Fd) {
         "errno should be ERRNO_NOENT"
     );
 
-    // Without the trailing slash, this should succeed.
+    // Dangling symlink: Without the trailing slash, this should succeed.
     wasi::path_symlink("source", dir_fd, "target").expect("link destination ending with a slash");
     wasi::path_unlink_file(dir_fd, "target").expect("removing a file");
 
     // Link destination already exists, target has trailing slash.
     wasi::path_create_directory(dir_fd, "target").expect("creating a directory");
+    // XXX windows gives NOENT
     assert_eq!(
         wasi::path_symlink("source", dir_fd, "target/")
             .expect_err("link destination already exists")
@@ -28,6 +30,7 @@ unsafe fn test_path_symlink_trailing_slashes(dir_fd: wasi::Fd) {
 
     // Link destination already exists, target has no trailing slash.
     wasi::path_create_directory(dir_fd, "target").expect("creating a directory");
+    // XXX windows gives NOENT
     assert_eq!(
         wasi::path_symlink("source", dir_fd, "target")
             .expect_err("link destination already exists")
@@ -40,18 +43,21 @@ unsafe fn test_path_symlink_trailing_slashes(dir_fd: wasi::Fd) {
     // Link destination already exists, target has trailing slash.
     create_file(dir_fd, "target");
 
+    // XXX windows gives NOENT
     let dir_symlink_errno = wasi::path_symlink("source", dir_fd, "target/")
         .expect_err("link destination already exists")
         .raw_error();
     assert!(
         dir_symlink_errno == wasi::ERRNO_EXIST || dir_symlink_errno == wasi::ERRNO_NOTDIR,
-        "errno should be ERRNO_EXIST or ERRNO_NOTDIR"
+        "errno should be ERRNO_EXIST or ERRNO_NOTDIR, got {}",
+        dir_symlink_errno
     );
     wasi::path_unlink_file(dir_fd, "target").expect("removing a file");
 
     // Link destination already exists, target has no trailing slash.
     create_file(dir_fd, "target");
 
+    // XXX windows gives NOENT
     assert_eq!(
         wasi::path_symlink("source", dir_fd, "target")
             .expect_err("link destination already exists")

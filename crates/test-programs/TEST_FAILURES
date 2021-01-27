@@ -2,14 +2,12 @@
 
 # Linux
 
-* path_rename_trailing_slashes
+* path_rename_file_trailing_slashes
     - trailing slash behavior of files is wrong: trailing slashes are ignored,
       should cause an error.
 * remove_directory_trailing_slashes
     - cap-std Dir::remove_dir gives EINVAL when trying to remove dir with
       trailing slash. otherwise, everything passes.
-* path_filestat
-    - symlink mtim doesnt match expectations
 
 
 # Windows
@@ -43,7 +41,11 @@
 
 * interesting_paths
     - on windows, opening a directory with a trailing slash fails.
-* path_rename_trailing_slashes
+* path_rename_file_trailing_slashes
+    - same incorrect behavior as linux
 * path_symlink_trailing_slashes
+    - dangling symlinks are not supported, different errnos in four spots
 * remove_directory_trailing_slashes
+    - different errno in one case
 * unlink_file_trailing_slashes
+    - different errnos in three spots
