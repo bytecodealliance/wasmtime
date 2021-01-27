@@ -42,10 +42,21 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
     wasi::path_filestat_set_times(dir_fd, 0, "symlink", 0, sym_new_mtim, wasi::FSTFLAGS_MTIM)
         .expect("path_filestat_set_times should succeed on symlink");
 
-    // Check that mtim motification worked
+    // Check that symlink mtim motification worked
     let modified_sym_stat = wasi::path_filestat_get(dir_fd, 0, "symlink")
         .expect("reading file stats after path_filestat_set_times");
-    assert_eq!(modified_sym_stat.mtim, sym_new_mtim, "mtim should change");
+    assert_eq!(
+        modified_sym_stat.mtim, sym_new_mtim,
+        "symlink mtim should change"
+    );
+
+    // Check that pointee mtim is not modified
+    let unmodified_file_stat = wasi::path_filestat_get(dir_fd, 0, "file")
+        .expect("reading file stats after path_filestat_set_times");
+    assert_eq!(
+        unmodified_file_stat.mtim, file_stat.mtim,
+        "file mtim should not change"
+    );
 
     // Now, dereference the symlink
     let deref_sym_stat =
