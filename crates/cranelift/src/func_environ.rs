@@ -129,7 +129,17 @@ pub struct FuncEnvironment<'module_environment> {
 
     tunables: &'module_environment Tunables,
 
+    /// A function-local variable which stores the cached value of the amount of
+    /// fuel remaining to execute. If used this is modified frequently so it's
+    /// stored locally as a variable instead of always referenced from the field
+    /// in `*const VMInterrupts`
     fuel_var: cranelift_frontend::Variable,
+
+    /// A function-local variable which caches the value of `*const
+    /// VMInterrupts` for this function's vmctx argument. This pointer is stored
+    /// in the vmctx itself, but never changes for the lifetime of the function,
+    /// so if we load it up front we can continue to use it throughout.
+    vminterrupts_ptr: cranelift_frontend::Variable,
 
     fuel_consumed: i64,
 }
@@ -159,6 +169,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             offsets: VMOffsets::new(target_config.pointer_bytes(), module),
             tunables,
             fuel_var: Variable::new(0),
+            vminterrupts_ptr: Variable::new(0),
 
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
@@ -431,6 +442,22 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
+    fn declare_vminterrupts_ptr(&mut self, builder: &mut FunctionBuilder<'_>) {
+        // We load the `*const VMInterrupts` value stored within vmctx at the
+        // head of the function and reuse the same value across the entire
+        // function. This is possible since we know that the pointer never
+        // changes for the lifetime of the function.
+        let pointer_type = self.pointer_type();
+        builder.declare_var(self.vminterrupts_ptr, pointer_type);
+        let vmctx = self.vmctx(builder.func);
+        let base = builder.ins().global_value(pointer_type, vmctx);
+        let offset = i32::try_from(self.offsets.vmctx_interrupts()).unwrap();
+        let interrupt_ptr = builder
+            .ins()
+            .load(pointer_type, ir::MemFlags::trusted(), base, offset);
+        builder.def_var(self.vminterrupts_ptr, interrupt_ptr);
+    }
+
     fn fuel_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
         // On function entry we load the amount of fuel into a function-local
         // `self.fuel_var` to make fuel modifications fast locally. This cache
@@ -560,8 +587,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
 
         let fuel = builder.use_var(self.fuel_var);
-        let consumption = builder.ins().iconst(ir::types::I64, consumption);
-        let fuel = builder.ins().iadd(fuel, consumption);
+        let fuel = builder.ins().iadd_imm(fuel, consumption);
         builder.def_var(self.fuel_var, fuel);
     }
 
@@ -590,18 +616,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         &mut self,
         builder: &mut FunctionBuilder<'_>,
     ) -> (ir::Value, ir::immediates::Offset32) {
-        // The address/offset of the fuel consumption is the second field of
-        // `VMInterrupts`, so first load the pointer to the `VMInterrupts` and
-        // then get an offset from that.
-        let vmctx = self.vmctx(builder.func);
-        let pointer_type = self.pointer_type();
-        let base = builder.ins().global_value(pointer_type, vmctx);
-        let offset = i32::try_from(self.offsets.vmctx_interrupts()).unwrap();
-        let interrupt_ptr = builder
-            .ins()
-            .load(pointer_type, ir::MemFlags::trusted(), base, offset);
         (
-            interrupt_ptr,
+            builder.use_var(self.vminterrupts_ptr),
             i32::from(self.offsets.vminterrupts_fuel_consumed()).into(),
         )
     }
@@ -671,7 +687,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     }
 
     fn after_locals(&mut self, num_locals: usize) {
-        self.fuel_var = Variable::new(num_locals);
+        self.vminterrupts_ptr = Variable::new(num_locals);
+        self.fuel_var = Variable::new(num_locals + 1);
     }
 
     fn make_table(&mut self, func: &mut ir::Function, index: TableIndex) -> WasmResult<ir::Table> {
@@ -1726,14 +1743,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         // For more information about this see comments in
         // `crates/environ/src/cranelift.rs`
         if self.tunables.interruptable {
-            let vmctx = self.vmctx(builder.func);
             let pointer_type = self.pointer_type();
-            let base = builder.ins().global_value(pointer_type, vmctx);
-            let offset = i32::try_from(self.offsets.vmctx_interrupts()).unwrap();
-            let interrupt_ptr =
-                builder
-                    .ins()
-                    .load(pointer_type, ir::MemFlags::trusted(), base, offset);
+            let interrupt_ptr = builder.use_var(self.vminterrupts_ptr);
             let interrupt = builder.ins().load(
                 pointer_type,
                 ir::MemFlags::trusted(),
@@ -1789,6 +1800,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         builder: &mut FunctionBuilder,
         _state: &FuncTranslationState,
     ) -> WasmResult<()> {
+        // If the `vminterrupts_ptr` variable will get used then we initialize
+        // it here.
+        if self.tunables.consume_fuel || self.tunables.interruptable {
+            self.declare_vminterrupts_ptr(builder);
+        }
+        // Additionally we initialize `fuel_var` if it will get used.
         if self.tunables.consume_fuel {
             self.fuel_function_entry(builder);
         }
