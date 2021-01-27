@@ -207,7 +207,7 @@ checksum = "ce7f38ec6d0dd8a67d9553f95a61ee41fce23c9947bceac7bfe5b3711f9ab2fe"
 dependencies = [
  "cap-primitives",
  "cap-std",
- "unsafe-io",
+ "unsafe-io 0.2.0",
 ]
 
 [[package]]
@@ -223,7 +223,7 @@ dependencies = [
  "maybe-owned",
  "once_cell",
  "posish",
- "unsafe-io",
+ "unsafe-io 0.2.0",
  "winapi",
  "winapi-util",
  "winx 0.22.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -245,7 +245,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e03b5ca2d4181980f2546074ad15a069f0f5860519e0d83e492c78b411d7c39f"
 dependencies = [
  "cap-primitives",
- "unsafe-io",
+ "unsafe-io 0.2.0",
 ]
 
 [[package]]
@@ -957,7 +957,7 @@ checksum = "0c122a393ea57648015bf06fbd3d372378992e86b9ff5a7a497b076a28c79efe"
 dependencies = [
  "cfg-if 1.0.0",
  "libc",
- "redox_syscall",
+ "redox_syscall 0.1.57",
  "winapi",
 ]
 
@@ -1586,9 +1586,9 @@ checksum = "6b063f57ec186e6140e2b8b6921e5f1bd89c7356dda5b33acc5401203ca6131c"
 
 [[package]]
 name = "posish"
-version = "0.5.7"
+version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "077963e9645b0b35e26719e32ad4f77419be1e90a4ef6039008dd5497c02312f"
+checksum = "64115dbef26d6ef8ac99bdf4cc789c261646dce3eea3a0eb032ef69dc7c777aa"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -1845,13 +1845,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "41cc0f7e4d5d4544e8861606a285bb08d3e70712ccc7d2b84d7c0ccfaf4b05ce"
 
 [[package]]
+name = "redox_syscall"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05ec8ca9416c5ea37062b502703cd7fcb207736bc294f6e0cf367ac6fc234570"
+dependencies = [
+ "bitflags",
+]
+
+[[package]]
 name = "redox_users"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de0737333e7a9502c789a36d7c7fa6092a49895d4faa31ca5df163857ded2e9d"
 dependencies = [
  "getrandom 0.1.15",
- "redox_syscall",
+ "redox_syscall 0.1.57",
  "rust-argon2",
 ]
 
@@ -2200,15 +2209,17 @@ dependencies = [
 
 [[package]]
 name = "system-interface"
-version = "0.5.2"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f553b2d73f8d21a632ffdd399f8f50cb1f7bc642c1c9f3764bf05ba7f2999c5"
+checksum = "a02b6a59a0980c8704e45b8498f07020248dc8a6734a8b3d37649800fb80a87f"
 dependencies = [
  "atty",
+ "bitflags",
+ "cap-fs-ext",
  "cap-std",
  "posish",
  "rustc_version 0.3.3",
- "unsafe-io",
+ "unsafe-io 0.3.0",
  "winapi",
  "winx 0.22.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -2221,14 +2232,14 @@ checksum = "4ee5a98e506fb7231a304c3a1bd7c132a55016cf65001e0282480665870dfcb9"
 
 [[package]]
 name = "tempfile"
-version = "3.1.0"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a6e24d9338a0a5be79593e2fa15a648add6138caa803e2d5bc782c371732ca9"
+checksum = "dac1c663cfc93810f88aed9b8941d48cabf856a1b111c29a40439018d870eb22"
 dependencies = [
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "libc",
- "rand 0.7.3",
- "redox_syscall",
+ "rand 0.8.1",
+ "redox_syscall 0.2.4",
  "remove_dir_all",
  "winapi",
 ]
@@ -2478,6 +2489,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "unsafe-io"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd35327a2b46b3350186b75a3a337d4517e5ca08118c4e54175d49d7832578d8"
+dependencies = [
+ "rustc_version 0.3.3",
+]
+
+[[package]]
 name = "vec_map"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2552,7 +2572,7 @@ dependencies = [
  "libc",
  "system-interface",
  "tracing",
- "unsafe-io",
+ "unsafe-io 0.3.0",
  "wasi-c2",
  "winapi",
 ]

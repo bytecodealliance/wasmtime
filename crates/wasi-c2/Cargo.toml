@@ -23,7 +23,7 @@ anyhow = "1.0"
 thiserror = "1.0"
 wiggle = { path = "../wiggle", default-features = false, version = "0.22.0" }
 tracing = "0.1.19"
-system-interface = { version = "0.5.2", features = ["cap_std_impls"] }
+system-interface = { version = "0.5.4", features = ["cap_std_impls"] }
 cap-std = "0.11"
 cap-rand = "0.11"
 bitflags = "1.2"
