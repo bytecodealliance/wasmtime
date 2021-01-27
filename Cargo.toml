@@ -78,6 +78,7 @@ members = [
   "examples/wasi-fs/wasm",
   "fuzz",
 ]
+resolver = "2"
 
 [features]
 default = ["jitdump", "wasmtime/wat", "wasmtime/parallel-compilation"]

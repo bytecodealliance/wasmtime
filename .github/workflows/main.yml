@@ -77,10 +77,7 @@ jobs:
     # nightly-only feature right now.
     - uses: ./.github/actions/install-rust
       with:
-        # TODO (rust-lang/rust#79661): We are seeing an internal compiler error when
-        # building with the latest (2020-12-06) nightly; pin on a slightly older
-        # version for now.
-        toolchain: nightly-2020-11-29
+        toolchain: nightly-2021-01-26
     - run: cargo doc --no-deps --all --exclude wasmtime-cli --exclude test-programs --exclude cranelift-codegen-meta
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
     - uses: actions/upload-artifact@v1
@@ -165,7 +162,7 @@ jobs:
     # flags to rustc.
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2020-11-29
+        toolchain: nightly-2021-01-26
     - run: cargo install cargo-fuzz --vers "^0.8"
     - run: cargo fetch
       working-directory: ./fuzz
@@ -222,7 +219,7 @@ jobs:
             rust: beta
           - build: nightly
             os: ubuntu-latest
-            rust: nightly-2020-11-29
+            rust: nightly-2021-01-26
           - build: macos
             os: macos-latest
             rust: stable
@@ -321,7 +318,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2020-11-29
+        toolchain: nightly-2021-01-26
     - uses: ./.github/actions/define-llvm-env
 
     # Install wasm32 targets in order to build various tests throughout the
@@ -332,7 +329,7 @@ jobs:
     # Run the x64 CI script.
     - run: ./ci/run-experimental-x64-ci.sh
       env:
-        CARGO_VERSION: "+nightly-2020-11-29"
+        CARGO_VERSION: "+nightly-2021-01-26"
         RUST_BACKTRACE: 1
 
   # Build and test the wasi-nn module.
@@ -345,7 +342,7 @@ jobs:
           submodules: true
       - uses: ./.github/actions/install-rust
         with:
-          toolchain: nightly-2020-11-29
+          toolchain: nightly-2021-01-26
       - run: rustup target add wasm32-wasi
       - uses: ./.github/actions/install-openvino
       - run: ./ci/run-wasi-nn-example.sh
