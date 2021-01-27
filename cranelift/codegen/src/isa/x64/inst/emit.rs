@@ -129,18 +129,20 @@ impl RexFlags {
 /// We may need to include one or more legacy prefix bytes before the REX prefix.  This enum
 /// covers only the small set of possibilities that we actually need.
 enum LegacyPrefixes {
-    /// No prefix bytes
+    /// No prefix bytes.
     None,
-    /// Operand Size Override -- here, denoting "16-bit operation"
+    /// Operand Size Override -- here, denoting "16-bit operation".
     _66,
-    /// The Lock prefix
+    /// The Lock prefix.
     _F0,
-    /// Operand size override and Lock
+    /// Operand size override and Lock.
     _66F0,
-    /// REPNE, but no specific meaning here -- is just an opcode extension
+    /// REPNE, but no specific meaning here -- is just an opcode extension.
     _F2,
-    /// REP/REPE, but no specific meaning here -- is just an opcode extension
+    /// REP/REPE, but no specific meaning here -- is just an opcode extension.
     _F3,
+    /// Operand size override and same effect as F3.
+    _66F3,
 }
 
 impl LegacyPrefixes {
@@ -157,6 +159,10 @@ impl LegacyPrefixes {
             }
             LegacyPrefixes::_F2 => sink.put1(0xF2),
             LegacyPrefixes::_F3 => sink.put1(0xF3),
+            LegacyPrefixes::_66F3 => {
+                sink.put1(0x66);
+                sink.put1(0xF3);
+            }
             LegacyPrefixes::None => (),
         }
     }
@@ -665,16 +671,28 @@ pub(crate) fn emit(
         }
 
         Inst::UnaryRmR { size, op, src, dst } => {
-            let (prefix, rex_flags) = match size {
-                2 => (LegacyPrefixes::_66, RexFlags::clear_w()),
-                4 => (LegacyPrefixes::None, RexFlags::clear_w()),
-                8 => (LegacyPrefixes::None, RexFlags::set_w()),
+            let rex_flags = match size {
+                2 | 4 => RexFlags::clear_w(),
+                8 => RexFlags::set_w(),
+                _ => unreachable!(),
+            };
+
+            let prefix = match size {
+                2 => match op {
+                    UnaryRmROpcode::Bsr | UnaryRmROpcode::Bsf => LegacyPrefixes::_66,
+                    UnaryRmROpcode::Lzcnt => LegacyPrefixes::_66F3,
+                },
+                4 | 8 => match op {
+                    UnaryRmROpcode::Bsr | UnaryRmROpcode::Bsf => LegacyPrefixes::None,
+                    UnaryRmROpcode::Lzcnt => LegacyPrefixes::_F3,
+                },
                 _ => unreachable!(),
             };
 
             let (opcode, num_opcodes) = match op {
                 UnaryRmROpcode::Bsr => (0x0fbd, 2),
                 UnaryRmROpcode::Bsf => (0x0fbc, 2),
+                UnaryRmROpcode::Lzcnt => (0x0fbd, 2),
             };
 
             match src {
