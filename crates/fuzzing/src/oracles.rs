@@ -40,6 +40,20 @@ fn log_wasm(wasm: &[u8]) {
     }
 }
 
+/// Methods of timing out execution of a WebAssembly module
+#[derive(Debug)]
+pub enum Timeout {
+    /// No timeout is used, it should be guaranteed via some other means that
+    /// the input does not infinite loop.
+    None,
+    /// A time-based timeout is used with a sleeping thread sending a signal
+    /// after the specified duration.
+    Time(Duration),
+    /// Fuel-based timeouts are used where the specified fuel is all that the
+    /// provided wasm module is allowed to consume.
+    Fuel(u64),
+}
+
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
 /// panic or segfault or anything else that can be detected "passively".
 ///
@@ -51,7 +65,7 @@ pub fn instantiate(wasm: &[u8], known_valid: bool, strategy: Strategy) {
     // pre-module-linking modules due to imports
     let mut cfg = crate::fuzz_default_config(strategy).unwrap();
     cfg.wasm_module_linking(false);
-    instantiate_with_config(wasm, known_valid, cfg, None);
+    instantiate_with_config(wasm, known_valid, cfg, Timeout::None);
 }
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
@@ -64,28 +78,38 @@ pub fn instantiate_with_config(
     wasm: &[u8],
     known_valid: bool,
     mut config: Config,
-    timeout: Option<Duration>,
+    timeout: Timeout,
 ) {
     crate::init_fuzzing();
 
-    config.interruptable(timeout.is_some());
+    config.interruptable(match &timeout {
+        Timeout::Time(_) => true,
+        _ => false,
+    });
+    config.consume_fuel(match &timeout {
+        Timeout::Fuel(_) => true,
+        _ => false,
+    });
     let engine = Engine::new(&config);
     let store = Store::new(&engine);
 
-    // If a timeout is requested then we spawn a helper thread to wait for the
-    // requested time and then send us a signal to get interrupted. We also
-    // arrange for the thread's sleep to get interrupted if we return early (or
-    // the wasm returns within the time limit), which allows the thread to get
-    // torn down.
-    //
-    // This prevents us from creating a huge number of sleeping threads if this
-    // function is executed in a loop, like it does on nightly fuzzing
-    // infrastructure.
-
     let mut timeout_state = SignalOnDrop::default();
-    if let Some(timeout) = timeout {
-        let handle = store.interrupt_handle().unwrap();
-        timeout_state.spawn_timeout(timeout, move || handle.interrupt());
+    match timeout {
+        Timeout::Fuel(fuel) => store.set_fuel_remaining(fuel),
+        // If a timeout is requested then we spawn a helper thread to wait for
+        // the requested time and then send us a signal to get interrupted. We
+        // also arrange for the thread's sleep to get interrupted if we return
+        // early (or the wasm returns within the time limit), which allows the
+        // thread to get torn down.
+        //
+        // This prevents us from creating a huge number of sleeping threads if
+        // this function is executed in a loop, like it does on nightly fuzzing
+        // infrastructure.
+        Timeout::Time(timeout) => {
+            let handle = store.interrupt_handle().unwrap();
+            timeout_state.spawn_timeout(timeout, move || handle.interrupt());
+        }
+        Timeout::None => {}
     }
 
     log_wasm(wasm);
@@ -98,11 +122,14 @@ pub fn instantiate_with_config(
 
     match Instance::new(&store, &module, &imports) {
         Ok(_) => {}
-        // Allow traps which can happen normally with `unreachable`
+        // Allow traps which can happen normally with `unreachable` or a timeout
         Err(e) if e.downcast_ref::<Trap>().is_some() => {}
         // Allow resource exhaustion since this is something that our wasm-smith
         // generator doesn't guarantee is forbidden.
         Err(e) if e.to_string().contains("resource limit exceeded") => {}
+        // Also allow errors related to fuel consumption
+        Err(e) if e.to_string().contains("all fuel consumed") => {}
+        // Everything else should be a bug in the fuzzer
         Err(e) => panic!("failed to instantiate {}", e),
     }
 }
