@@ -21,10 +21,16 @@
 //! # Example
 //!
 //! ```
+//! use std::ptr;
 //! use wasmtime_bench_api::*;
 //!
-//! let engine = unsafe { wasm_bench_create() };
-//! assert!(!engine.is_null());
+//! let working_dir = std::env::current_dir().unwrap().display().to_string();
+//! let mut bench_api = ptr::null_mut();
+//! unsafe {
+//!     let code = wasm_bench_create(working_dir.as_ptr(), working_dir.len(), &mut bench_api);
+//!     assert_eq!(code, OK);
+//!     assert!(!bench_api.is_null());
+//! };
 //!
 //! let wasm = wat::parse_bytes(br#"
 //!     (module
@@ -42,7 +48,7 @@
 //! "#).unwrap();
 //!
 //! // Start your compilation timer here.
-//! let code = unsafe { wasm_bench_compile(engine, wasm.as_ptr(), wasm.len()) };
+//! let code = unsafe { wasm_bench_compile(bench_api, wasm.as_ptr(), wasm.len()) };
 //! // End your compilation timer here.
 //! assert_eq!(code, OK);
 //!
@@ -57,24 +63,25 @@
 //! }
 //!
 //! // Start your instantiation timer here.
-//! let code = unsafe { wasm_bench_instantiate(engine, bench_start, bench_stop) };
+//! let code = unsafe { wasm_bench_instantiate(bench_api, bench_start, bench_stop) };
 //! // End your instantiation timer here.
 //! assert_eq!(code, OK);
 //!
 //! // No need to start timers for the execution since, by convention, the timer
 //! // functions we passed during instantiation will be called by the benchmark
 //! // at the appropriate time (before and after the benchmarked section).
-//! let code = unsafe { wasm_bench_execute(engine) };
+//! let code = unsafe { wasm_bench_execute(bench_api) };
 //! assert_eq!(code, OK);
 //!
 //! unsafe {
-//!     wasm_bench_free(engine);
+//!     wasm_bench_free(bench_api);
 //! }
 //! ```
 
 use anyhow::{anyhow, Context, Result};
 use std::env;
 use std::os::raw::{c_int, c_void};
+use std::path::Path;
 use std::slice;
 use wasi_common::WasiCtxBuilder;
 use wasmtime::{Config, Engine, Instance, Linker, Module, Store};
@@ -95,12 +102,32 @@ static ALLOC: shuffling_allocator::ShufflingAllocator<std::alloc::System> =
 /// Exposes a C-compatible way of creating the engine from the bytes of a single
 /// Wasm module.
 ///
-/// This function returns a pointer to a structure that contains the engine's
-/// initialized state.
+/// On success, the `out_bench_ptr` is initialized to a pointer to a structure
+/// that contains the engine's initialized state, and `0` is returned. On
+/// failure, a non-zero status code is returned and `out_bench_ptr` is left
+/// untouched.
 #[no_mangle]
-pub extern "C" fn wasm_bench_create() -> *mut c_void {
-    let state = Box::new(BenchState::new());
-    Box::into_raw(state) as _
+pub extern "C" fn wasm_bench_create(
+    working_dir_ptr: *const u8,
+    working_dir_len: usize,
+    out_bench_ptr: *mut *mut c_void,
+) -> ExitCode {
+    let result = (|| -> Result<_> {
+        let working_dir = unsafe { std::slice::from_raw_parts(working_dir_ptr, working_dir_len) };
+        let working_dir = std::str::from_utf8(working_dir)
+            .context("given working directory is not valid UTF-8")?;
+        let state = Box::new(BenchState::new(working_dir)?);
+        Ok(Box::into_raw(state) as _)
+    })();
+
+    if let Ok(bench_ptr) = result {
+        unsafe {
+            assert!(!out_bench_ptr.is_null());
+            *out_bench_ptr = bench_ptr;
+        }
+    }
+
+    to_exit_code(result.map(|_| ()))
 }
 
 /// Free the engine state allocated by this library.
@@ -164,27 +191,49 @@ fn to_exit_code<T>(result: impl Into<Result<T>>) -> ExitCode {
 /// to manage the Wasmtime engine between calls.
 struct BenchState {
     engine: Engine,
-    store: Store,
+    linker: Linker,
     module: Option<Module>,
     instance: Option<Instance>,
     did_execute: bool,
 }
 
 impl BenchState {
-    fn new() -> Self {
+    fn new(working_dir: impl AsRef<Path>) -> Result<Self> {
         let mut config = Config::new();
         config.wasm_simd(true);
         // NB: do not configure a code cache.
 
         let engine = Engine::new(&config);
         let store = Store::new(&engine);
-        Self {
+
+        let mut linker = Linker::new(&store);
+
+        // Create a WASI environment.
+
+        let mut cx = WasiCtxBuilder::new();
+        cx.inherit_stdio();
+        // Allow access to the working directory so that the benchmark can read
+        // its input workload(s).
+        let working_dir = wasi_common::preopen_dir(working_dir)
+            .context("failed to preopen the working directory")?;
+        cx.preopened_dir(working_dir, ".");
+        // Pass this env var along so that the benchmark program can use smaller
+        // input workload(s) if it has them and that has been requested.
+        if let Ok(val) = env::var("WASM_BENCH_USE_SMALL_WORKLOAD") {
+            cx.env("WASM_BENCH_USE_SMALL_WORKLOAD", &val);
+        }
+
+        let cx = cx.build()?;
+        let wasi = Wasi::new(&store, cx);
+        wasi.add_to_linker(&mut linker)?;
+
+        Ok(Self {
             engine,
-            store,
+            linker,
             module: None,
             instance: None,
             did_execute: false,
-        }
+        })
     }
 
     fn compile(&mut self, bytes: &[u8]) -> Result<()> {
@@ -210,34 +259,11 @@ impl BenchState {
             .as_mut()
             .expect("compile the module before instantiating it");
 
-        let mut linker = Linker::new(&self.store);
-
-        // Create a WASI environment.
-
-        let mut cx = WasiCtxBuilder::new();
-        cx.inherit_stdio();
-        // Allow access to the current working directory so that the benchmark
-        // can read its input workload(s). The sightglass benchmark runner will
-        // make sure that this process is spawned with its current directory set
-        // to the current benchmark's directory.
-        let cwd = wasi_common::preopen_dir(".")
-            .context("failed to open the current working directory")?;
-        cx.preopened_dir(cwd, ".");
-        // Pass this env var along so that the benchmark program can use smaller
-        // input workload(s) if it has them and that has been requested.
-        if let Ok(val) = env::var("WASM_BENCH_USE_SMALL_WORKLOAD") {
-            cx.env("WASM_BENCH_USE_SMALL_WORKLOAD", &val);
-        }
-
-        let cx = cx.build()?;
-        let wasi = Wasi::new(linker.store(), cx);
-        wasi.add_to_linker(&mut linker)?;
-
         // Import the specialized benchmarking functions.
-        linker.func("bench", "start", move || bench_start())?;
-        linker.func("bench", "end", move || bench_end())?;
+        self.linker.func("bench", "start", move || bench_start())?;
+        self.linker.func("bench", "end", move || bench_end())?;
 
-        self.instance = Some(linker.instantiate(&module)?);
+        self.instance = Some(self.linker.instantiate(&module)?);
         Ok(())
     }
 
