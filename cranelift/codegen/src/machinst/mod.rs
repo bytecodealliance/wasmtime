@@ -178,7 +178,7 @@ pub trait MachInst: Clone + Debug {
     /// request a NOP of that size, or as close to it as possible. The machine
     /// backend may return a NOP whose binary encoding is smaller than the
     /// preferred size, but must not return a NOP that is larger. However,
-    /// the instruction must have a nonzero size.
+    /// the instruction must have a nonzero size if preferred_size is nonzero.
     fn gen_nop(preferred_size: usize) -> Self;
 
     /// Get the register universe for this backend.

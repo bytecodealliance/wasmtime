@@ -566,7 +566,7 @@ impl Inst {
 
 impl Inst {
     pub(crate) fn nop(len: u8) -> Self {
-        debug_assert!(len <= 16);
+        debug_assert!(len <= 15);
         Self::Nop { len }
     }
 
@@ -2594,11 +2594,11 @@ impl MachInst for Inst {
     }
 
     fn gen_zero_len_nop() -> Inst {
-        Inst::Nop { len: 0 }
+        Inst::nop(0)
     }
 
     fn gen_nop(preferred_size: usize) -> Inst {
-        Inst::nop((preferred_size % 16) as u8)
+        Inst::nop(std::cmp::min(preferred_size, 15) as u8)
     }
 
     fn maybe_direct_reload(&self, _reg: VirtualReg, _slot: SpillSlot) -> Option<Inst> {
