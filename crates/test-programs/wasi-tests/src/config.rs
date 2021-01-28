@@ -5,15 +5,15 @@ pub struct TestConfig {
 }
 
 enum ErrnoMode {
-    Linux,
+    Unix,
     Windows,
     Permissive,
 }
 
 impl TestConfig {
     pub fn from_env() -> Self {
-        let errno_mode = if std::env::var("ERRNO_MODE_LINUX").is_ok() {
-            ErrnoMode::Linux
+        let errno_mode = if std::env::var("ERRNO_MODE_UNIX").is_ok() {
+            ErrnoMode::Unix
         } else if std::env::var("ERRNO_MODE_WINDOWS").is_ok() {
             ErrnoMode::Windows
         } else {
@@ -27,9 +27,9 @@ impl TestConfig {
             no_fd_allocate,
         }
     }
-    pub fn errno_expect_linux(&self) -> bool {
+    pub fn errno_expect_unix(&self) -> bool {
         match self.errno_mode {
-            ErrnoMode::Linux => true,
+            ErrnoMode::Unix => true,
             _ => false,
         }
     }

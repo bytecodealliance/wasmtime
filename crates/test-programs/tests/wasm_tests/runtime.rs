@@ -28,6 +28,18 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
             builder = builder.preopened_dir(preopen_dir, ".")?;
         }
 
+        #[cfg(windows)]
+        {
+            builder = builder
+                .env("ERRNO_MODE_WINDOWS", "1")?
+                .env("NO_DANGLING_SYMLINKS", "1")?
+                .env("NO_FD_ALLOCATE", "1")?;
+        }
+        #[cfg(unix)]
+        {
+            builder = builder.env("ERRNO_MODE_UNIX", "1")?;
+        }
+
         let snapshot1 = wasi_c2_wasmtime::Wasi::new(&store, builder.build()?);
 
         let mut linker = Linker::new(&store);

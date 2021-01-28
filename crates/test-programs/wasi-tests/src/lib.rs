@@ -80,9 +80,9 @@ macro_rules! assert_errno {
             assert_errno!(e, $($rest),+, $i);
         }
     };
-    ($s:expr, linux => $i:expr, $( $rest:expr ),+) => {
+    ($s:expr, unix => $i:expr, $( $rest:expr ),+) => {
         let e = $s;
-        if $crate::TESTCONFIG.errno_expect_linux() {
+        if $crate::TESTCONFIG.errno_expect_unix() {
             assert_errno!(e, $i);
         } else {
             assert_errno!(e, $($rest),+, $i);
