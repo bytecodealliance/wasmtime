@@ -39,6 +39,9 @@ pub fn fuzz_default_config(strategy: wasmtime::Strategy) -> anyhow::Result<wasmt
         .wasm_bulk_memory(true)
         .wasm_reference_types(true)
         .wasm_module_linking(true)
+        .max_instances(100)
+        .max_tables(100)
+        .max_memories(100)
         .strategy(strategy)?;
     Ok(config)
 }

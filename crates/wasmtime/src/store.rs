@@ -67,8 +67,11 @@ pub(crate) struct StoreInner {
     /// Set of all compiled modules that we're holding a strong reference to
     /// the module's code for. This includes JIT functions, trampolines, etc.
     modules: RefCell<HashSet<ArcModuleCode>>,
-    /// The number of instantiated instances in this store.
+
+    // Numbers of resources instantiated in this store.
     instance_count: Cell<usize>,
+    memory_count: Cell<usize>,
+    table_count: Cell<usize>,
 }
 
 struct HostInfoKey(VMExternRef);
@@ -112,6 +115,8 @@ impl Store {
                 frame_info: Default::default(),
                 modules: Default::default(),
                 instance_count: Default::default(),
+                memory_count: Default::default(),
+                table_count: Default::default(),
             }),
         }
     }
@@ -216,12 +221,40 @@ impl Store {
         }
     }
 
-    pub(crate) fn bump_instance_count(&self) -> Result<()> {
-        let n = self.inner.instance_count.get();
-        self.inner.instance_count.set(n + 1);
-        if n >= self.engine().config().max_instances {
-            bail!("instance limit of {} exceeded", n);
+    pub(crate) fn bump_resource_counts(&self, module: &Module) -> Result<()> {
+        let config = self.engine().config();
+
+        fn bump(slot: &Cell<usize>, max: usize, amt: usize, desc: &str) -> Result<()> {
+            let new = slot.get().saturating_add(amt);
+            if new > max {
+                bail!(
+                    "resource limit exceeded: {} count too high at {}",
+                    desc,
+                    new
+                );
+            }
+            slot.set(new);
+            Ok(())
         }
+
+        let module = module.env_module();
+        let memories = module.memory_plans.len() - module.num_imported_memories;
+        let tables = module.table_plans.len() - module.num_imported_tables;
+
+        bump(
+            &self.inner.instance_count,
+            config.max_instances,
+            1,
+            "instance",
+        )?;
+        bump(
+            &self.inner.memory_count,
+            config.max_memories,
+            memories,
+            "memory",
+        )?;
+        bump(&self.inner.table_count, config.max_tables, tables, "table")?;
+
         Ok(())
     }
 

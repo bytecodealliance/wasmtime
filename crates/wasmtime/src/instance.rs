@@ -257,7 +257,7 @@ impl<'a> Instantiator<'a> {
     ///   defined here.
     fn step(&mut self) -> Result<Option<(StoreInstanceHandle, Option<RuntimeInstance>)>> {
         if self.cur.initializer == 0 {
-            self.store.bump_instance_count()?;
+            self.store.bump_resource_counts(&self.cur.module)?;
         }
 
         // Read the current module's initializer and move forward the
