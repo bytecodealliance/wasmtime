@@ -439,7 +439,7 @@ impl Store {
     /// If fuel consumption is not enabled via
     /// [`Config::consume_fuel`](crate::Config::consume_fuel) then this
     /// function will return `None`. Also note that fuel, if enabled, must be
-    /// originally configured via [`Store::set_fuel_remaining`].
+    /// originally configured via [`Store::add_fuel`].
     pub fn fuel_consumed(&self) -> Option<u64> {
         if !self.engine().config().tunables.consume_fuel {
             return None;
