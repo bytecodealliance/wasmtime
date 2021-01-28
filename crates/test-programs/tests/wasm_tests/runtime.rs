@@ -34,7 +34,8 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
                 .env("ERRNO_MODE_WINDOWS", "1")?
                 .env("NO_DANGLING_SYMLINKS", "1")?
                 .env("NO_FD_ALLOCATE", "1")?
-                .env("NO_RENAME_DIR_TO_EMPTY_DIR", "1")?;
+                .env("NO_RENAME_DIR_TO_EMPTY_DIR", "1")?
+                .env("NO_DANGLING_DIRECTORY", "1")?;
         }
         #[cfg(unix)]
         {

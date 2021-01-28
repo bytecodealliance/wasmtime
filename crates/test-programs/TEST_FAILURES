@@ -14,10 +14,6 @@
 
 * fd_readdir
     - DirEntry metadata ino panics on windows: https://github.com/bytecodealliance/cap-std/issues/142
-* file_allocate
-    - call to fd_allocate(10,10) reduces size from 100 to 20
-    - fix upstream: fd_allocate is impossible on windows, so dont even try
-    - the test should be modified to accept this fd_allocate always failing on windows.
 * nofollow_errors
     - I loosened up some errno acceptance but windows requires rmdir to delete
       a symlink to a directory, rather than unlink_file
@@ -25,10 +21,6 @@
 * symlink_create
     - narrowed down the symlink delete issue that only shows up on linux
     - dan is doing the upstream fix rn
-* path_rename
-    - permission denied on windows to rename a dir to an existing empty dir
-* path_link
-    - passes everything except dangling symlinks
 * fd_flags_set
     - same metadata panic as fd_readdir
 * path_filestat
@@ -41,17 +33,11 @@
     - on windows, opening a directory with a trailing slash fails.
 * path_rename_file_trailing_slashes
     - same incorrect behavior as linux
-* path_symlink_trailing_slashes
-    - dangling symlinks are not supported, different errnos in four spots
+
+
+* dangling_fd
+* dangling_symlink
+* path_rename_trailing_slashes
 * remove_directory_trailing_slashes
-    - different errno in one case
-* unlink_file_trailing_slashes
-    - different errnos in three spots
-
-
-# Test Divergences
-
-* fd_allocate supported or not
-* dangling symlinks supported or not
-* errno: windows or linux mode?
-
+* symlink_filestat
+* symlink_loop

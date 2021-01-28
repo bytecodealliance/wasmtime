@@ -3,6 +3,7 @@ pub struct TestConfig {
     no_dangling_symlinks: bool,
     no_fd_allocate: bool,
     no_rename_dir_to_empty_dir: bool,
+    no_dangling_directory: bool,
 }
 
 enum ErrnoMode {
@@ -23,11 +24,13 @@ impl TestConfig {
         let no_dangling_symlinks = std::env::var("NO_DANGLING_SYMLINKS").is_ok();
         let no_fd_allocate = std::env::var("NO_FD_ALLOCATE").is_ok();
         let no_rename_dir_to_empty_dir = std::env::var("NO_RENAME_DIR_TO_EMPTY_DIR").is_ok();
+        let no_dangling_directory = std::env::var("NO_DANGLING_DIRECTORY").is_ok();
         TestConfig {
             errno_mode,
             no_dangling_symlinks,
             no_fd_allocate,
             no_rename_dir_to_empty_dir,
+            no_dangling_directory,
         }
     }
     pub fn errno_expect_unix(&self) -> bool {
@@ -50,5 +53,8 @@ impl TestConfig {
     }
     pub fn support_rename_dir_to_empty_dir(&self) -> bool {
         !self.no_rename_dir_to_empty_dir
+    }
+    pub fn support_dangling_directory(&self) -> bool {
+        !self.no_dangling_directory
     }
 }

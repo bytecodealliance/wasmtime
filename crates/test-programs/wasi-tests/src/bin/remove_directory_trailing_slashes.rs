@@ -11,11 +11,9 @@ unsafe fn test_remove_directory_trailing_slashes(dir_fd: wasi::Fd) {
 
     wasi::path_create_directory(dir_fd, "dir").expect("creating a directory");
 
-    /* XXX disabled: this fails presently on windows and linux
     // Test that removing it with a trailing slash succeeds.
     wasi::path_remove_directory(dir_fd, "dir/")
         .expect("remove_directory with a trailing slash on a directory should succeed");
-    */
 
     // Create a temporary file.
     create_file(dir_fd, "file");
