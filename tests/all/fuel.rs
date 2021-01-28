@@ -46,13 +46,12 @@ fn run() -> Result<()> {
 }
 
 fn fuel_consumed(wasm: &[u8]) -> u64 {
-    const MAX: u64 = 10_000;
     let mut config = Config::new();
     config.consume_fuel(true);
     let engine = Engine::new(&config);
     let module = Module::new(&engine, wasm).unwrap();
     let store = Store::new(&engine);
-    store.set_fuel_remaining(MAX);
+    store.add_fuel(u64::max_value());
     drop(Instance::new(&store, &module, &[]));
     store.fuel_consumed().unwrap()
 }
@@ -114,7 +113,7 @@ fn iloop() {
         let engine = Engine::new(&config);
         let module = Module::new(&engine, wat).unwrap();
         let store = Store::new(&engine);
-        store.set_fuel_remaining(10_000);
+        store.add_fuel(10_000);
         let error = Instance::new(&store, &module, &[]).err().unwrap();
         assert!(
             error.to_string().contains("all fuel consumed"),

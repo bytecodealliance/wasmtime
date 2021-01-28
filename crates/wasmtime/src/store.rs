@@ -440,11 +440,6 @@ impl Store {
     /// [`Config::consume_fuel`](crate::Config::consume_fuel) then this
     /// function will return `None`. Also note that fuel, if enabled, must be
     /// originally configured via [`Store::set_fuel_remaining`].
-    ///
-    /// Finally, this will only return the amount of fuel consumed since
-    /// [`Store::set_fuel_remaining`] was last called, so this does not return
-    /// the total amount of fuel consumed for the entire lifetime of this
-    /// [`Store`].
     pub fn fuel_consumed(&self) -> Option<u64> {
         if !self.engine().config().tunables.consume_fuel {
             return None;
@@ -453,8 +448,7 @@ impl Store {
         Some(u64::try_from(self.inner.fuel_adj.get() + consumed).unwrap())
     }
 
-    /// Updates the amount of fuel remaining in this [`Store`] available for
-    /// wasm to consume while executing.
+    /// Adds fuel to this [`Store`] for wasm to consume while executing.
     ///
     /// For this method to work fuel consumption must be enabled via
     /// [`Config::consume_fuel`](crate::Config::consume_fuel). By default a
@@ -469,15 +463,32 @@ impl Store {
     ///
     /// This function will panic if the store's [`Config`](crate::Config) did
     /// not have fuel consumption enabled.
-    ///
-    /// This funtion will also panic if `remaining` is larger than
-    /// `i64::max_value()`.
-    pub fn set_fuel_remaining(&self, remaining: u64) {
+    pub fn add_fuel(&self, fuel: u64) {
         assert!(self.engine().config().tunables.consume_fuel);
-        let remaining = i64::try_from(remaining).unwrap();
-        self.inner.fuel_adj.set(remaining);
-        unsafe {
-            *self.inner.interrupts.fuel_consumed.get() = -remaining;
+
+        // Fuel is stored as an i64, so we need to cast it. If the provided fuel
+        // value overflows that just assume that i64::max will suffice. Wasm
+        // execution isn't fast enough to burn through i64::max fuel in any
+        // reasonable amount of time anyway.
+        let fuel = i64::try_from(fuel).unwrap_or(i64::max_value());
+        let adj = self.inner.fuel_adj.get();
+        let consumed_ptr = unsafe { &mut *self.inner.interrupts.fuel_consumed.get() };
+
+        match (consumed_ptr.checked_sub(fuel), adj.checked_add(fuel)) {
+            // If we succesfully did arithmetic without overflowing then we can
+            // just update our fields.
+            (Some(consumed), Some(adj)) => {
+                self.inner.fuel_adj.set(adj);
+                *consumed_ptr = consumed;
+            }
+
+            // Otherwise something overflowed. Make sure that we preserve the
+            // amount of fuel that's already consumed, but otherwise assume that
+            // we were given infinite fuel.
+            _ => {
+                self.inner.fuel_adj.set(i64::max_value());
+                *consumed_ptr = (*consumed_ptr + adj) - i64::max_value();
+            }
         }
     }
 }
