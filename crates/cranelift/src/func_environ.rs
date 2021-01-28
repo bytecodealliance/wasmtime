@@ -558,6 +558,15 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // This is a normal instruction where the fuel is buffered to later
             // get added to `self.fuel_var`.
             //
+            // Note that we generally ignore instructions which may trap and
+            // therefore result in exiting a block early. Current usage of fuel
+            // means that it's not too important to account for a precise amount
+            // of fuel consumed but rather "close to the actual amount" is good
+            // enough. For 100% precise counting, however, we'd probably need to
+            // not only increment but also save the fuel amount more often
+            // around trapping instructions. (see the `unreachable` instruction
+            // case above)
+            //
             // Note that `Block` is specifically omitted from incrementing the
             // fuel variable. Control flow entering a `block` is unconditional
             // which means it's effectively executing straight-line code. We'll
