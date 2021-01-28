@@ -436,9 +436,10 @@ impl Store {
 
     /// Returns the amount of fuel consumed by this store's execution so far.
     ///
-    /// If fuel consumption is not enabled via [`Config::consume_fuel`] then
-    /// this function will return `None`. Also note that fuel, if enabled, must
-    /// be originally configured via [`Store::set_fuel_remaining`].
+    /// If fuel consumption is not enabled via
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel) then this
+    /// function will return `None`. Also note that fuel, if enabled, must be
+    /// originally configured via [`Store::set_fuel_remaining`].
     ///
     /// Finally, this will only return the amount of fuel consumed since
     /// [`Store::set_fuel_remaining`] was last called, so this does not return
@@ -456,18 +457,18 @@ impl Store {
     /// wasm to consume while executing.
     ///
     /// For this method to work fuel consumption must be enabled via
-    /// [`Config::consume_fuel`]. By default a [`Store`] starts with 0 fuel for
-    /// wasm to execute with (meaning it will immediately trap). This function
-    /// must be called for the store to have some fuel to allow WebAssembly to
-    /// execute.
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel). By default a
+    /// [`Store`] starts with 0 fuel for wasm to execute with (meaning it will
+    /// immediately trap). This function must be called for the store to have
+    /// some fuel to allow WebAssembly to execute.
     ///
     /// Note that at this time when fuel is entirely consumed it will cause
     /// wasm to trap. More usages of fuel are planned for the future.
     ///
     /// # Panics
     ///
-    /// This function will panic if the store's [`Config`] did not have fuel
-    /// consumption enabled.
+    /// This function will panic if the store's [`Config`](crate::Config) did
+    /// not have fuel consumption enabled.
     ///
     /// This funtion will also panic if `remaining` is larger than
     /// `i64::max_value()`.

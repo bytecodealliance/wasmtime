@@ -152,6 +152,8 @@ impl Config {
     /// executing some code.
     ///
     /// By default this option is `false`.
+    ///
+    /// [`Store`]: crate::Store
     pub fn consume_fuel(&mut self, enable: bool) -> &mut Self {
         self.tunables.consume_fuel = enable;
         self
