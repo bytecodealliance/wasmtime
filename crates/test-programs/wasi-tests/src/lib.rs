@@ -1,4 +1,9 @@
 use more_asserts::assert_gt;
+pub mod config;
+
+lazy_static::lazy_static! {
+    pub static ref TESTCONFIG: config::TestConfig = config::TestConfig::from_env();
+}
 
 // The `wasi` crate version 0.9.0 and beyond, doesn't
 // seem to define these constants, so we do it ourselves.
@@ -69,7 +74,7 @@ macro_rules! assert_errno {
     };
     ($s:expr, windows => $i:expr, $( $rest:expr ),+) => {
         let e = $s;
-        if std::env::var("ERRNO_EXPECT_WINDOWS").is_ok() {
+        if $crate::TESTCONFIG.errno_expect_windows() {
             assert_errno!(e, $i);
         } else {
             assert_errno!(e, $($rest),+, $i);
@@ -77,7 +82,7 @@ macro_rules! assert_errno {
     };
     ($s:expr, linux => $i:expr, $( $rest:expr ),+) => {
         let e = $s;
-        if std::env::var("ERRNO_EXPECT_LINUX").is_ok() {
+        if $crate::TESTCONFIG.errno_expect_linux() {
             assert_errno!(e, $i);
         } else {
             assert_errno!(e, $($rest),+, $i);
