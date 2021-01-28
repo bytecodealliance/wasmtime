@@ -100,6 +100,9 @@ pub fn instantiate_with_config(
         Ok(_) => {}
         // Allow traps which can happen normally with `unreachable`
         Err(e) if e.downcast_ref::<Trap>().is_some() => {}
+        // Allow resource exhaustion since this is something that our wasm-smith
+        // generator doesn't guarantee is forbidden.
+        Err(e) if e.to_string().contains("resource limit exceeded") => {}
         Err(e) => panic!("failed to instantiate {}", e),
     }
 }

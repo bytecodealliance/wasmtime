@@ -75,7 +75,7 @@ pub struct Config {
 impl Config {
     /// Converts this to a `wasmtime::Config` object
     pub fn to_wasmtime(&self) -> wasmtime::Config {
-        let mut cfg = wasmtime::Config::new();
+        let mut cfg = crate::fuzz_default_config(wasmtime::Strategy::Auto).unwrap();
         cfg.debug_info(self.debug_info)
             .static_memory_maximum_size(self.static_memory_maximum_size.unwrap_or(0).into())
             .static_memory_guard_size(self.static_memory_guard_size.unwrap_or(0).into())

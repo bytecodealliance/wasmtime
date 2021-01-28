@@ -218,6 +218,81 @@ fn limit_instances() -> Result<()> {
     )?;
     let store = Store::new(&engine);
     let err = Instance::new(&store, &module, &[]).err().unwrap();
-    assert!(err.to_string().contains("instance limit of 10 exceeded"));
+    assert!(
+        err.to_string().contains("resource limit exceeded"),
+        "bad error: {}",
+        err
+    );
+    Ok(())
+}
+
+#[test]
+fn limit_memories() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_module_linking(true);
+    config.wasm_multi_memory(true);
+    config.max_memories(10);
+    let engine = Engine::new(&config);
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (module $m0
+                (memory 1 1)
+                (memory 1 1)
+                (memory 1 1)
+                (memory 1 1)
+                (memory 1 1)
+              )
+
+              (instance (instantiate $m0))
+              (instance (instantiate $m0))
+              (instance (instantiate $m0))
+              (instance (instantiate $m0))
+            )
+        "#,
+    )?;
+    let store = Store::new(&engine);
+    let err = Instance::new(&store, &module, &[]).err().unwrap();
+    assert!(
+        err.to_string().contains("resource limit exceeded"),
+        "bad error: {}",
+        err
+    );
+    Ok(())
+}
+
+#[test]
+fn limit_tables() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_module_linking(true);
+    config.max_tables(10);
+    let engine = Engine::new(&config);
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (module $m0
+                (table 1 1 funcref)
+                (table 1 1 funcref)
+                (table 1 1 funcref)
+                (table 1 1 funcref)
+                (table 1 1 funcref)
+              )
+
+              (instance (instantiate $m0))
+              (instance (instantiate $m0))
+              (instance (instantiate $m0))
+              (instance (instantiate $m0))
+            )
+        "#,
+    )?;
+    let store = Store::new(&engine);
+    let err = Instance::new(&store, &module, &[]).err().unwrap();
+    assert!(
+        err.to_string().contains("resource limit exceeded"),
+        "bad error: {}",
+        err
+    );
     Ok(())
 }
