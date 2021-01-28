@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 libc = "0.2.65"
-wasi = { git = "https://github.com/BytecodeAlliance/wasi", branch = "pch/public_errno_names_docs" }
+wasi = "0.10.2"
 more-asserts = "0.2.1"
 
 # This crate is built with the wasm32-wasi target, so it's separate
