@@ -14,18 +14,18 @@
 
 * fd_readdir
     - DirEntry metadata ino panics on windows: https://github.com/bytecodealliance/cap-std/issues/142
-* nofollow_errors
-    - I loosened up some errno acceptance but windows requires rmdir to delete
-      a symlink to a directory, rather than unlink_file
-    - fix merged in next cap-std release
-* symlink_create
-    - narrowed down the symlink delete issue that only shows up on linux
-    - dan is doing the upstream fix rn
 * fd_flags_set
     - same metadata panic as fd_readdir
 * path_filestat
     - same metadata panic as fd_readdir
-
+* symlink_filestat
+    - same metadata panic as fd_readdir
+* nofollow_errors
+    - fix merged; in next cap-std release
+* symlink_create
+    - dan is doing the upstream fix rn (dirext will have method to delete file or symlink)
+* path_rename
+    - somehow, windows lets us rename an empty directory to an existing empty file??? line 76.
 
 ## "Trailing slashes are a bonified boondoggle" - Dan
 
@@ -33,7 +33,5 @@
     - on windows, opening a directory with a trailing slash fails.
 * path_rename_file_trailing_slashes
     - same incorrect behavior as linux
-
-
 * remove_directory_trailing_slashes
-* symlink_filestat
+    - same incorrect behavior as linux
