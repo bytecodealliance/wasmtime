@@ -159,35 +159,46 @@ mod wasi_tests {
         Ok(())
     }
 
-    cfg_if::cfg_if! {
-        if #[cfg(not(windows))] {
-            /// Ignore tests that aren't supported yet.
-            fn ignore(testsuite: &str, name: &str) -> bool {
-                if testsuite == "wasi-tests" {
-                    false
-                } else {
-                    unreachable!()
-                }
+    #[cfg(not(windows))]
+    /// Ignore tests that aren't supported yet.
+    fn ignore(testsuite: &str, name: &str) -> bool {
+        if testsuite == "wasi-tests" {
+            match name {
+                // Trailing slash related bugs:
+                "path_rename_file_trailing_slashes" => true,
+                "remove_directory_trailing_slashes" => true,
+                _ => false,
             }
         } else {
-            /// Ignore tests that aren't supported yet.
-            fn ignore(testsuite: &str, name: &str) -> bool {
-                if testsuite == "wasi-tests" {
-                    false
-                        /*
-                    match name {
-                        "readlink_no_buffer" => true,
-                        "dangling_symlink" => true,
-                        "symlink_loop" => true,
-                        "truncation_rights" => true,
-                        "dangling_fd" => true,
-                        _ => false,
-                    }
-                        */
-                } else {
-                    unreachable!()
-                }
+            unreachable!()
+        }
+    }
+
+    #[cfg(windows)]
+    /// Ignore tests that aren't supported yet.
+    fn ignore(testsuite: &str, name: &str) -> bool {
+        if testsuite == "wasi-tests" {
+            match name {
+                // Panic: Metadata not associated with open file
+                // https://github.com/bytecodealliance/cap-std/issues/142
+                "fd_readdir" => true,
+                "fd_flags_set" => true,
+                "path_filestat" => true,
+                "symlink_filestat" => true,
+                // Fix merged, waiting for cap-std release
+                "nofollow_errors" => true,
+                // waiting on DirExt::delete_file_or_symlink
+                "symlink_create" => true,
+                // Bug: windows lets us rename an empty directory to a path containing an empty file
+                "path_rename" => true,
+                // Trailing slash related bugs
+                "interesting_paths" => true,
+                "path_rename_file_trailing_slashes" => true,
+                "remove_directory_trailing_slashes" => true,
+                _ => false,
             }
+        } else {
+            unreachable!()
         }
     }
 
