@@ -4,27 +4,24 @@
 name = "libc"
 version = "0.2.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9f8082297d534141b30c8d39e9b1773713ab50fdbe4ff30f750d063b3bfd701"
 
 [[package]]
 name = "more-asserts"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0debeb9fcf88823ea64d64e4a815ab1643f33127d995978e099942ce38f25238"
 
 [[package]]
 name = "wasi"
-version = "0.10.0+wasi-snapshot-preview1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+version = "0.10.2+wasi-snapshot-preview1"
+source = "git+https://github.com/BytecodeAlliance/wasi?branch=pch/public_errno_names_docs#6ce376a4253cb36b920456e1ddc344fecf11c3bf"
 
 [[package]]
 name = "wasi-tests"
 version = "0.19.0"
 dependencies = [
- "libc 0.2.72 (registry+https://github.com/rust-lang/crates.io-index)",
- "more-asserts 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasi 0.10.0+wasi-snapshot-preview1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc",
+ "more-asserts",
+ "wasi",
 ]
-
-[metadata]
-"checksum libc 0.2.72 (registry+https://github.com/rust-lang/crates.io-index)" = "a9f8082297d534141b30c8d39e9b1773713ab50fdbe4ff30f750d063b3bfd701"
-"checksum more-asserts 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0debeb9fcf88823ea64d64e4a815ab1643f33127d995978e099942ce38f25238"
-"checksum wasi 0.10.0+wasi-snapshot-preview1 (registry+https://github.com/rust-lang/crates.io-index)" = "1a143597ca7c7793eff794def352d41792a93c481eb1042423ff7ff72ba2c31f"
