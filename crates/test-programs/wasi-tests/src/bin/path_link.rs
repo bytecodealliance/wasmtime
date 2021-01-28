@@ -1,6 +1,6 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_tests::{create_file, open_scratch_directory};
+use wasi_tests::{assert_errno, create_file, open_scratch_directory};
 
 const TEST_RIGHTS: wasi::Rights = wasi::RIGHTS_FD_READ
     | wasi::RIGHTS_PATH_LINK_SOURCE
@@ -102,33 +102,30 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
     // Create a link to a path that already exists
     create_file(dir_fd, "link");
 
-    assert_eq!(
+    assert_errno!(
         wasi::path_link(dir_fd, 0, "file", dir_fd, "link")
             .expect_err("creating a link to existing path should fail")
             .raw_error(),
-        wasi::ERRNO_EXIST,
-        "errno should be ERRNO_EXIST"
+        wasi::ERRNO_EXIST
     );
     wasi::path_unlink_file(dir_fd, "link").expect("removing a file");
 
     // Create a link to itself
-    assert_eq!(
+    assert_errno!(
         wasi::path_link(dir_fd, 0, "file", dir_fd, "file")
             .expect_err("creating a link to itself should fail")
             .raw_error(),
-        wasi::ERRNO_EXIST,
-        "errno should be ERRNO_EXIST"
+        wasi::ERRNO_EXIST
     );
 
     // Create a link where target is a directory
     wasi::path_create_directory(dir_fd, "link").expect("creating a dir");
 
-    assert_eq!(
+    assert_errno!(
         wasi::path_link(dir_fd, 0, "file", dir_fd, "link")
             .expect_err("creating a link where target is a directory should fail")
             .raw_error(),
-        wasi::ERRNO_EXIST,
-        "errno should be ERRNO_EXIST"
+        wasi::ERRNO_EXIST
     );
     wasi::path_remove_directory(dir_fd, "link").expect("removing a dir");
 
@@ -136,23 +133,22 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
     wasi::path_create_directory(dir_fd, "subdir").expect("creating a subdirectory");
     let subdir_fd = create_or_open(dir_fd, "subdir", wasi::OFLAGS_DIRECTORY);
 
-    let path_link_errno = wasi::path_link(dir_fd, 0, "subdir", dir_fd, "link")
-        .expect_err("creating a link to a directory should fail")
-        .raw_error();
-    assert!(
-        path_link_errno == wasi::ERRNO_PERM || path_link_errno == wasi::ERRNO_ACCES,
-        "errno should be ERRNO_PERM or ERRNO_ACCES"
+    assert_errno!(
+        wasi::path_link(dir_fd, 0, "subdir", dir_fd, "link")
+            .expect_err("creating a link to a directory should fail")
+            .raw_error(),
+        wasi::ERRNO_PERM,
+        wasi::ERRNO_ACCES
     );
     wasi::fd_close(subdir_fd).expect("close subdir before deleting it");
     wasi::path_remove_directory(dir_fd, "subdir").expect("removing a subdirectory");
 
     // Create a link to a file with trailing slash
-    assert_eq!(
+    assert_errno!(
         wasi::path_link(dir_fd, 0, "file", dir_fd, "link/")
             .expect_err("creating a link to a file with trailing slash should fail")
             .raw_error(),
         wasi::ERRNO_NOENT,
-        "errno should be ERRNO_NOENT"
     );
 
     // XXX windows doesnt support dangling symlinks - rest of file
@@ -176,12 +172,11 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
     // Create a link where target is a dangling symlink
     wasi::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
 
-    assert_eq!(
+    assert_errno!(
         wasi::path_link(dir_fd, 0, "file", dir_fd, "symlink")
             .expect_err("creating a link where target is a dangling symlink")
             .raw_error(),
         wasi::ERRNO_EXIST,
-        "errno should be ERRNO_EXIST"
     );
     wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
 
@@ -189,7 +184,7 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
     wasi::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
 
     // Symlink following with path_link is rejected
-    assert_eq!(
+    assert_errno!(
         wasi::path_link(
             dir_fd,
             wasi::LOOKUPFLAGS_SYMLINK_FOLLOW,
@@ -200,7 +195,6 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
         .expect_err("calling path_link with LOOKUPFLAGS_SYMLINK_FOLLOW should fail")
         .raw_error(),
         wasi::ERRNO_INVAL,
-        "errno should be ERRNO_INVAL"
     );
 
     // Clean up.

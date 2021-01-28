@@ -1,6 +1,6 @@
 use more_asserts::assert_gt;
 use std::{env, mem::MaybeUninit, process};
-use wasi_tests::open_scratch_directory;
+use wasi_tests::{assert_errno, open_scratch_directory};
 
 const CLOCK_ID: wasi::Userdata = 0x0123_45678;
 
@@ -17,12 +17,11 @@ unsafe fn poll_oneoff_impl(r#in: &[wasi::Subscription]) -> Result<Vec<wasi::Even
 unsafe fn test_empty_poll() {
     let r#in = [];
     let mut out: Vec<wasi::Event> = Vec::new();
-    let error = wasi::poll_oneoff(r#in.as_ptr(), out.as_mut_ptr(), r#in.len())
-        .expect_err("empty poll_oneoff should fail");
-    assert_eq!(
-        error.raw_error(),
+    assert_errno!(
+        wasi::poll_oneoff(r#in.as_ptr(), out.as_mut_ptr(), r#in.len())
+            .expect_err("empty poll_oneoff should fail")
+            .raw_error(),
         wasi::ERRNO_INVAL,
-        "error should be EINVAL"
     );
 }
 
@@ -43,11 +42,7 @@ unsafe fn test_timeout() {
     let out = poll_oneoff_impl(&r#in).unwrap();
     assert_eq!(out.len(), 1, "should return 1 event");
     let event = &out[0];
-    assert_eq!(
-        event.error,
-        wasi::ERRNO_SUCCESS,
-        "the event.error should be set to ESUCCESS"
-    );
+    assert_errno!(event.error, wasi::ERRNO_SUCCESS,);
     assert_eq!(
         event.r#type,
         wasi::EVENTTYPE_CLOCK,
@@ -89,11 +84,7 @@ unsafe fn test_fd_readwrite(fd: wasi::Fd, error_code: wasi::Errno) {
         out[0].userdata, 1,
         "the event.userdata should contain fd userdata specified by the user"
     );
-    assert_eq!(
-        out[0].error, error_code,
-        "the event.error should be set to {}",
-        error_code
-    );
+    assert_errno!(out[0].error, error_code);
     assert_eq!(
         out[0].r#type,
         wasi::EVENTTYPE_FD_READ,
@@ -103,11 +94,7 @@ unsafe fn test_fd_readwrite(fd: wasi::Fd, error_code: wasi::Errno) {
         out[1].userdata, 2,
         "the event.userdata should contain fd userdata specified by the user"
     );
-    assert_eq!(
-        out[1].error, error_code,
-        "the event.error should be set to {}",
-        error_code
-    );
+    assert_errno!(out[1].error, error_code);
     assert_eq!(
         out[1].r#type,
         wasi::EVENTTYPE_FD_WRITE,

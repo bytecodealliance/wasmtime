@@ -1,6 +1,6 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_tests::open_scratch_directory;
+use wasi_tests::{assert_errno, open_scratch_directory};
 
 unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
     let mut fdstat = wasi::fd_fdstat_get(dir_fd).expect("fd_fdstat_get");
@@ -58,7 +58,7 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         .expect("reading file stats after path_filestat_set_times");
     assert_eq!(modified_file_stat.mtim, new_mtim, "mtim should change");
 
-    assert_eq!(
+    assert_errno!(
         wasi::path_filestat_set_times(
             dir_fd,
             0,
@@ -69,8 +69,7 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         )
         .expect_err("MTIM and MTIM_NOW can't both be set")
         .raw_error(),
-        wasi::ERRNO_INVAL,
-        "errno should be ERRNO_INVAL"
+        wasi::ERRNO_INVAL
     );
 
     // check if the times were untouched
@@ -82,7 +81,7 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
     );
 
     // Invalid arguments to set_times:
-    assert_eq!(
+    assert_errno!(
         wasi::path_filestat_set_times(
             dir_fd,
             0,
@@ -94,7 +93,6 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         .expect_err("ATIM & ATIM_NOW can't both be set")
         .raw_error(),
         wasi::ERRNO_INVAL,
-        "errno should be ERRNO_INVAL"
     );
 
     wasi::fd_close(file_fd).expect("closing a file");

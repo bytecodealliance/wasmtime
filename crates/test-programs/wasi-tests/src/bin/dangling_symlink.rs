@@ -1,26 +1,25 @@
 use std::{env, process};
-use wasi_tests::open_scratch_directory;
+use wasi_tests::{assert_errno, open_scratch_directory};
 
 unsafe fn test_dangling_symlink(dir_fd: wasi::Fd) {
     // First create a dangling symlink.
     wasi::path_symlink("target", dir_fd, "symlink").expect("creating a symlink");
 
     // Try to open it as a directory with O_NOFOLLOW.
-    let dir_open_errno = wasi::path_open(dir_fd, 0, "symlink", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
-        .expect_err("opening a dangling symlink as a directory")
-        .raw_error();
-    assert!(
-        dir_open_errno == wasi::ERRNO_NOTDIR || dir_open_errno == wasi::ERRNO_LOOP,
-        "errno should be ERRNO_NOTDIR or ERRNO_LOOP",
+    assert_errno!(
+        wasi::path_open(dir_fd, 0, "symlink", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
+            .expect_err("opening a dangling symlink as a directory")
+            .raw_error(),
+        wasi::ERRNO_NOTDIR,
+        wasi::ERRNO_LOOP
     );
 
     // Try to open it as a file with O_NOFOLLOW.
-    assert_eq!(
+    assert_errno!(
         wasi::path_open(dir_fd, 0, "symlink", 0, 0, 0, 0)
             .expect_err("opening a dangling symlink as a file")
             .raw_error(),
         wasi::ERRNO_LOOP,
-        "errno should be ERRNO_LOOP",
     );
 
     // Clean up.

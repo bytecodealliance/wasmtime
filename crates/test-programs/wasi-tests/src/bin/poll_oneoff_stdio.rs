@@ -1,5 +1,5 @@
 use std::mem::MaybeUninit;
-use wasi_tests::{STDERR_FD, STDIN_FD, STDOUT_FD};
+use wasi_tests::{assert_errno, STDERR_FD, STDIN_FD, STDOUT_FD};
 
 const CLOCK_ID: wasi::Userdata = 0x0123_45678;
 
@@ -45,11 +45,7 @@ unsafe fn test_stdin_read() {
     let out = poll_oneoff_impl(&r#in).unwrap();
     assert_eq!(out.len(), 1, "should return 1 event");
     let event = &out[0];
-    assert_eq!(
-        event.error,
-        wasi::ERRNO_SUCCESS,
-        "the event.error should be set to ESUCCESS"
-    );
+    assert_errno!(event.error, wasi::ERRNO_SUCCESS);
     assert_eq!(
         event.r#type,
         wasi::EVENTTYPE_CLOCK,
@@ -94,11 +90,7 @@ unsafe fn test_stdout_stderr_write() {
         out[0].userdata, 1,
         "the event.userdata should contain fd userdata specified by the user"
     );
-    assert_eq!(
-        out[0].error,
-        wasi::ERRNO_SUCCESS,
-        "the event.error should be set to ERRNO_SUCCESS",
-    );
+    assert_errno!(out[0].error, wasi::ERRNO_SUCCESS);
     assert_eq!(
         out[0].r#type,
         wasi::EVENTTYPE_FD_WRITE,
@@ -108,11 +100,7 @@ unsafe fn test_stdout_stderr_write() {
         out[1].userdata, 2,
         "the event.userdata should contain fd userdata specified by the user"
     );
-    assert_eq!(
-        out[1].error,
-        wasi::ERRNO_SUCCESS,
-        "the event.error should be set to ERRNO_SUCCESS",
-    );
+    assert_errno!(out[1].error, wasi::ERRNO_SUCCESS);
     assert_eq!(
         out[1].r#type,
         wasi::EVENTTYPE_FD_WRITE,

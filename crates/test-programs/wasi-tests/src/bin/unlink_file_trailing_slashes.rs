@@ -1,5 +1,5 @@
 use std::{env, process};
-use wasi_tests::{create_file, open_scratch_directory};
+use wasi_tests::{assert_errno, create_file, open_scratch_directory};
 
 unsafe fn test_unlink_file_trailing_slashes(dir_fd: wasi::Fd) {
     // Create a directory in the scratch directory.
@@ -7,22 +7,20 @@ unsafe fn test_unlink_file_trailing_slashes(dir_fd: wasi::Fd) {
 
     // Test that unlinking it fails.
     // XXX windows errno here is ACCES
-    assert_eq!(
+    assert_errno!(
         wasi::path_unlink_file(dir_fd, "dir")
             .expect_err("unlink_file on a directory should fail")
             .raw_error(),
         wasi::ERRNO_ISDIR,
-        "errno should be ERRNO_ISDIR"
     );
 
     // Test that unlinking it with a trailing flash fails.
     // XXX windows errno here is ACCES
-    assert_eq!(
+    assert_errno!(
         wasi::path_unlink_file(dir_fd, "dir/")
             .expect_err("unlink_file on a directory should fail")
             .raw_error(),
         wasi::ERRNO_ISDIR,
-        "errno should be ERRNO_ISDIR"
     );
 
     // Clean up.
@@ -33,12 +31,11 @@ unsafe fn test_unlink_file_trailing_slashes(dir_fd: wasi::Fd) {
 
     // Test that unlinking it with a trailing flash fails.
     // XXX windows errno here is NOENT
-    assert_eq!(
+    assert_errno!(
         wasi::path_unlink_file(dir_fd, "file/")
             .expect_err("unlink_file with a trailing slash should fail")
             .raw_error(),
         wasi::ERRNO_NOTDIR,
-        "errno should be ERRNO_NOTDIR"
     );
 
     // Test that unlinking it with no trailing flash succeeds.

@@ -1,5 +1,5 @@
 use std::{env, process};
-use wasi_tests::{create_file, open_scratch_directory};
+use wasi_tests::{assert_errno, create_file, open_scratch_directory};
 
 unsafe fn test_readlink(dir_fd: wasi::Fd) {
     // Create a file in the scratch directory.
@@ -25,11 +25,7 @@ unsafe fn test_readlink(dir_fd: wasi::Fd) {
     let err = wasi::path_readlink(dir_fd, "symlink", buf.as_mut_ptr(), buf.len())
         .err()
         .expect("readlink with too-small buffer should fail");
-    assert_eq!(
-        err.raw_error(),
-        wasi::ERRNO_RANGE,
-        "readlink with too-small buffer should give ERANGE"
-    );
+    assert_errno!(err.raw_error(), wasi::ERRNO_RANGE);
 
     // Clean up.
     wasi::path_unlink_file(dir_fd, "target").expect("removing a file");

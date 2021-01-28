@@ -1,17 +1,16 @@
 use std::{env, process};
-use wasi_tests::open_scratch_directory;
+use wasi_tests::{assert_errno, open_scratch_directory};
 
 unsafe fn test_symlink_loop(dir_fd: wasi::Fd) {
     // Create a self-referencing symlink.
     wasi::path_symlink("symlink", dir_fd, "symlink").expect("creating a symlink");
 
     // Try to open it.
-    assert_eq!(
+    assert_errno!(
         wasi::path_open(dir_fd, 0, "symlink", 0, 0, 0, 0)
             .expect_err("opening a self-referencing symlink")
             .raw_error(),
         wasi::ERRNO_LOOP,
-        "errno should be ERRNO_LOOP",
     );
 
     // Clean up.

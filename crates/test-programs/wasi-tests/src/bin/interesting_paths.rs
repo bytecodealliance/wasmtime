@@ -1,6 +1,6 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_tests::{create_file, open_scratch_directory};
+use wasi_tests::{assert_errno, create_file, open_scratch_directory};
 
 unsafe fn test_interesting_paths(dir_fd: wasi::Fd, arg: &str) {
     // Create a directory in the scratch directory.
@@ -13,12 +13,11 @@ unsafe fn test_interesting_paths(dir_fd: wasi::Fd, arg: &str) {
     create_file(dir_fd, "dir/nested/file");
 
     // Now open it with an absolute path.
-    assert_eq!(
+    assert_errno!(
         wasi::path_open(dir_fd, 0, "/dir/nested/file", 0, 0, 0, 0)
             .expect_err("opening a file with an absolute path")
             .raw_error(),
         wasi::ERRNO_PERM,
-        "errno should be ERRNO_PERM"
     );
 
     // Now open it with a path containing "..".
@@ -40,34 +39,29 @@ unsafe fn test_interesting_paths(dir_fd: wasi::Fd, arg: &str) {
     wasi::fd_close(file_fd).expect("closing a file");
 
     // Now open it with a trailing NUL.
-    assert_eq!(
+    assert_errno!(
         wasi::path_open(dir_fd, 0, "dir/nested/file\0", 0, 0, 0, 0)
             .expect_err("opening a file with a trailing NUL")
             .raw_error(),
         wasi::ERRNO_ILSEQ,
-        "errno should be ERRNO_ILSEQ",
     );
 
     // Now open it with a trailing slash.
-    let one_trailing_slash_errno = wasi::path_open(dir_fd, 0, "dir/nested/file/", 0, 0, 0, 0)
-        .expect_err("opening a file with a trailing slash should fail")
-        .raw_error();
-    assert!(
-        one_trailing_slash_errno == wasi::ERRNO_NOTDIR
-            || one_trailing_slash_errno == wasi::ERRNO_NOENT,
-        "errno should be ERRNO_NOTDIR or ERRNO_NOENT, got {}",
-        one_trailing_slash_errno
+    assert_errno!(
+        wasi::path_open(dir_fd, 0, "dir/nested/file/", 0, 0, 0, 0)
+            .expect_err("opening a file with a trailing slash should fail")
+            .raw_error(),
+        wasi::ERRNO_NOTDIR,
+        wasi::ERRNO_NOENT,
     );
 
     // Now open it with trailing slashes.
-    let multi_trailing_slash_errno = wasi::path_open(dir_fd, 0, "dir/nested/file///", 0, 0, 0, 0)
-        .expect_err("opening a file with trailing slashes should fail")
-        .raw_error();
-    assert!(
-        multi_trailing_slash_errno == wasi::ERRNO_NOTDIR
-            || multi_trailing_slash_errno == wasi::ERRNO_NOENT,
-        "errno should be ERRNO_NOTDIR or ERRNO_NOENT, got {}",
-        multi_trailing_slash_errno,
+    assert_errno!(
+        wasi::path_open(dir_fd, 0, "dir/nested/file///", 0, 0, 0, 0)
+            .expect_err("opening a file with trailing slashes should fail")
+            .raw_error(),
+        wasi::ERRNO_NOTDIR,
+        wasi::ERRNO_NOENT,
     );
 
     // Now open the directory with a trailing slash.
@@ -92,12 +86,11 @@ unsafe fn test_interesting_paths(dir_fd: wasi::Fd, arg: &str) {
 
     // Now open it with a path containing too many ".."s.
     let bad_path = format!("dir/nested/../../../{}/dir/nested/file", arg);
-    assert_eq!(
+    assert_errno!(
         wasi::path_open(dir_fd, 0, &bad_path, 0, 0, 0, 0)
             .expect_err("opening a file with too many \"..\"s in the path should fail")
             .raw_error(),
         wasi::ERRNO_PERM,
-        "errno should be ERRNO_PERM",
     );
     wasi::path_unlink_file(dir_fd, "dir/nested/file")
         .expect("unlink_file on a symlink should succeed");

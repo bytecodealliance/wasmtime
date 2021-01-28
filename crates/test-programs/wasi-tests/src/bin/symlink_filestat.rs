@@ -3,7 +3,7 @@ use std::{env, process};
 use wasi_tests::open_scratch_directory;
 
 unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
-    let mut fdstat = wasi::fd_fdstat_get(dir_fd).expect("fd_fdstat_get");
+    let fdstat = wasi::fd_fdstat_get(dir_fd).expect("fd_fdstat_get");
     assert_ne!(
         fdstat.fs_rights_base & wasi::RIGHTS_PATH_FILESTAT_GET,
         0,
