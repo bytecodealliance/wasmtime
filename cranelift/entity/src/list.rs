@@ -91,17 +91,20 @@ type SizeClass = u8;
 
 /// Get the size of a given size class. The size includes the length field, so the maximum list
 /// length is one less than the class size.
+#[inline]
 fn sclass_size(sclass: SizeClass) -> usize {
     4 << sclass
 }
 
 /// Get the size class to use for a given list length.
 /// This always leaves room for the length element in addition to the list elements.
+#[inline]
 fn sclass_for_length(len: usize) -> SizeClass {
     30 - (len as u32 | 3).leading_zeros() as SizeClass
 }
 
 /// Is `len` the minimum length in its size class?
+#[inline]
 fn is_sclass_min_length(len: usize) -> bool {
     len > 3 && len.is_power_of_two()
 }
@@ -387,14 +390,34 @@ impl<T: EntityRef + ReservedValue> EntityList<T> {
         &mut pool.data[block + 1..block + 1 + new_len]
     }
 
+    /// Constructs a list from an iterator.
+    pub fn from_iter<I>(elements: I, pool: &mut ListPool<T>) -> Self
+    where
+        I: IntoIterator<Item = T>,
+    {
+        let mut list = Self::new();
+        list.extend(elements, pool);
+        list
+    }
+
     /// Appends multiple elements to the back of the list.
     pub fn extend<I>(&mut self, elements: I, pool: &mut ListPool<T>)
     where
         I: IntoIterator<Item = T>,
     {
-        // TODO: use `size_hint()` to reduce reallocations.
-        for x in elements {
-            self.push(x, pool);
+        let iterator = elements.into_iter();
+        let (len, upper) = iterator.size_hint();
+        // On most iterators this check is optimized down to `true`.
+        if upper == Some(len) {
+            let data = self.grow(len, pool);
+            let offset = data.len() - len;
+            for (src, dst) in iterator.zip(data[offset..].iter_mut()) {
+                *dst = src;
+            }
+        } else {
+            for x in iterator {
+                self.push(x, pool);
+            }
         }
     }
 
@@ -630,6 +653,10 @@ mod tests {
             list.as_slice(pool),
             &[i1, i2, i3, i4, i1, i1, i2, i2, i3, i3, i4, i4]
         );
+
+        let list2 = EntityList::from_iter([i1, i1, i2, i2, i3, i3, i4, i4].iter().cloned(), pool);
+        assert_eq!(list2.len(pool), 8);
+        assert_eq!(list2.as_slice(pool), &[i1, i1, i2, i2, i3, i3, i4, i4]);
     }
 
     #[test]
