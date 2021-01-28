@@ -35,8 +35,5 @@
     - same incorrect behavior as linux
 
 
-* dangling_symlink
-* path_rename_trailing_slashes
 * remove_directory_trailing_slashes
 * symlink_filestat
-* symlink_loop
