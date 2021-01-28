@@ -67,6 +67,22 @@ macro_rules! assert_errno {
     ($s:expr, $( $i:expr ),+,) => {
         assert_errno!($s, $( $i ),+)
     };
+    ($s:expr, windows => $i:expr, $( $rest:expr ),+) => {
+        let e = $s;
+        if std::env::var("ERRNO_EXPECT_WINDOWS").is_ok() {
+            assert_errno!(e, $i);
+        } else {
+            assert_errno!(e, $($rest),+, $i);
+        }
+    };
+    ($s:expr, linux => $i:expr, $( $rest:expr ),+) => {
+        let e = $s;
+        if std::env::var("ERRNO_EXPECT_LINUX").is_ok() {
+            assert_errno!(e, $i);
+        } else {
+            assert_errno!(e, $($rest),+, $i);
+        }
+    };
     ($s:expr, $( $i:expr ),+) => {
         let e = $s;
         {

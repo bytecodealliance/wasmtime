@@ -22,7 +22,8 @@ unsafe fn test_path_symlink_trailing_slashes(dir_fd: wasi::Fd) {
         wasi::path_symlink("source", dir_fd, "target/")
             .expect_err("link destination already exists")
             .raw_error(),
-        wasi::ERRNO_EXIST,
+        windows => wasi::ERRNO_NOENT,
+        wasi::ERRNO_EXIST
     );
     wasi::path_remove_directory(dir_fd, "target").expect("removing a directory");
 
