@@ -1,6 +1,6 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_tests::{assert_errno, create_file, open_scratch_directory};
+use wasi_tests::{assert_errno, create_file, open_scratch_directory, TESTCONFIG};
 
 const TEST_RIGHTS: wasi::Rights = wasi::RIGHTS_FD_READ
     | wasi::RIGHTS_PATH_LINK_SOURCE
@@ -151,54 +151,55 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
         wasi::ERRNO_NOENT
     );
 
-    // XXX windows doesnt support dangling symlinks - rest of file
-    // Create a link to a dangling symlink
-    wasi::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
+    if TESTCONFIG.support_dangling_symlinks() {
+        // Create a link to a dangling symlink
+        wasi::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
 
-    // This should succeed, because we're not following symlinks
-    wasi::path_link(dir_fd, 0, "symlink", dir_fd, "link")
-        .expect("creating a link to a dangling symlink should succeed");
-    wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
-    wasi::path_unlink_file(dir_fd, "link").expect("removing a hardlink");
+        // This should succeed, because we're not following symlinks
+        wasi::path_link(dir_fd, 0, "symlink", dir_fd, "link")
+            .expect("creating a link to a dangling symlink should succeed");
+        wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
+        wasi::path_unlink_file(dir_fd, "link").expect("removing a hardlink");
 
-    // Create a link to a symlink loop
-    wasi::path_symlink("symlink", dir_fd, "symlink").expect("creating a symlink loop");
+        // Create a link to a symlink loop
+        wasi::path_symlink("symlink", dir_fd, "symlink").expect("creating a symlink loop");
 
-    wasi::path_link(dir_fd, 0, "symlink", dir_fd, "link")
-        .expect("creating a link to a symlink loop should succeed");
-    wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
-    wasi::path_unlink_file(dir_fd, "link").expect("removing a hardlink");
+        wasi::path_link(dir_fd, 0, "symlink", dir_fd, "link")
+            .expect("creating a link to a symlink loop should succeed");
+        wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
+        wasi::path_unlink_file(dir_fd, "link").expect("removing a hardlink");
 
-    // Create a link where target is a dangling symlink
-    wasi::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
+        // Create a link where target is a dangling symlink
+        wasi::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
 
-    assert_errno!(
-        wasi::path_link(dir_fd, 0, "file", dir_fd, "symlink")
-            .expect_err("creating a link where target is a dangling symlink")
+        assert_errno!(
+            wasi::path_link(dir_fd, 0, "file", dir_fd, "symlink")
+                .expect_err("creating a link where target is a dangling symlink")
+                .raw_error(),
+            wasi::ERRNO_EXIST
+        );
+        wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
+
+        // Create a link where target is a dangling symlink following symlinks
+        wasi::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
+
+        // Symlink following with path_link is rejected
+        assert_errno!(
+            wasi::path_link(
+                dir_fd,
+                wasi::LOOKUPFLAGS_SYMLINK_FOLLOW,
+                "symlink",
+                dir_fd,
+                "link",
+            )
+            .expect_err("calling path_link with LOOKUPFLAGS_SYMLINK_FOLLOW should fail")
             .raw_error(),
-        wasi::ERRNO_EXIST
-    );
-    wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
+            wasi::ERRNO_INVAL
+        );
 
-    // Create a link where target is a dangling symlink following symlinks
-    wasi::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
-
-    // Symlink following with path_link is rejected
-    assert_errno!(
-        wasi::path_link(
-            dir_fd,
-            wasi::LOOKUPFLAGS_SYMLINK_FOLLOW,
-            "symlink",
-            dir_fd,
-            "link",
-        )
-        .expect_err("calling path_link with LOOKUPFLAGS_SYMLINK_FOLLOW should fail")
-        .raw_error(),
-        wasi::ERRNO_INVAL
-    );
-
-    // Clean up.
-    wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
+        // Clean up.
+        wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
+    }
 }
 
 fn main() {
