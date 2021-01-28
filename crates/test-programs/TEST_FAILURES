@@ -21,16 +21,14 @@
 * nofollow_errors
     - I loosened up some errno acceptance but windows requires rmdir to delete
       a symlink to a directory, rather than unlink_file
-    - dan is doing the upstream fix rn
+    - fix merged in next cap-std release
 * symlink_create
     - narrowed down the symlink delete issue that only shows up on linux
     - dan is doing the upstream fix rn
 * path_rename
     - permission denied on windows to rename a dir to an existing empty dir
-    - we're not going to try to emulate this functionality.
-    - the test should be modified accept this operation failing completely on windows.
 * path_link
-    - fails on the first dangling symlink
+    - passes everything except dangling symlinks
 * fd_flags_set
     - same metadata panic as fd_readdir
 * path_filestat
@@ -49,3 +47,11 @@
     - different errno in one case
 * unlink_file_trailing_slashes
     - different errnos in three spots
+
+
+# Test Divergences
+
+* fd_allocate supported or not
+* dangling symlinks supported or not
+* errno: windows or linux mode?
+

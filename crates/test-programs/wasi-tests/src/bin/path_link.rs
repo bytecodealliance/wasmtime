@@ -155,6 +155,7 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
         "errno should be ERRNO_NOENT"
     );
 
+    // XXX windows doesnt support dangling symlinks - rest of file
     // Create a link to a dangling symlink
     wasi::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
 

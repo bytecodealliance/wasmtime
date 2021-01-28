@@ -134,6 +134,7 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
     wasi::fd_close(fd).expect("closing a file");
     wasi::path_unlink_file(dir_fd, "target").expect("removing a file");
 
+    // XXX windows does not support this operation
     // Try renaming to an (empty) directory instead
     create_file(dir_fd, "source");
     wasi::path_create_directory(dir_fd, "target").expect("creating a directory");
