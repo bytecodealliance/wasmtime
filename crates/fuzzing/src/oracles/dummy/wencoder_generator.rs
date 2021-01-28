@@ -121,18 +121,18 @@ impl<'a> WencoderGenerator<'a> {
                     value_to_instruction(&global.content()),
                 );
             }
-            ExternType::Func(ty) => {
+            ExternType::Func(v) => {
                 let types = &mut self.type_section;
                 types.function(
-                    ty.params().into_iter().map(|it| value_to_value(&it)),
-                    ty.results().into_iter().map(|it| value_to_value(&it)),
+                    v.params().into_iter().map(|it| value_to_value(&it)),
+                    v.results().into_iter().map(|it| value_to_value(&it)),
                 );
-                self.function_section.function(0);
+                self.function_section.function(next_index(&mut self.next, &ty));
 
                 let locals = vec![];
                 let mut func = Function::new(locals);
-                for ty in ty.results() {
-                    func.instruction(value_to_instruction(&ty));
+                for t in v.results() {
+                    func.instruction(value_to_instruction(&t));
                 }
                 let codes = &mut self.code_section;
                 codes.function(&func);
