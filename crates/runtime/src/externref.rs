@@ -97,7 +97,7 @@
 //!
 //! For more general information on deferred reference counting, see *An
 //! Examination of Deferred Reference Counting and Cycle Detection* by Quinane:
-//! https://openresearch-repository.anu.edu.au/bitstream/1885/42030/2/hon-thesis.pdf
+//! <https://openresearch-repository.anu.edu.au/bitstream/1885/42030/2/hon-thesis.pdf>
 
 use std::alloc::Layout;
 use std::any::Any;
