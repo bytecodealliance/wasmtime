@@ -6,21 +6,21 @@ unsafe fn test_unlink_file_trailing_slashes(dir_fd: wasi::Fd) {
     wasi::path_create_directory(dir_fd, "dir").expect("creating a directory");
 
     // Test that unlinking it fails.
-    // XXX windows errno here is ACCES
     assert_errno!(
         wasi::path_unlink_file(dir_fd, "dir")
             .expect_err("unlink_file on a directory should fail")
             .raw_error(),
-        wasi::ERRNO_ISDIR
+        unix => wasi::ERRNO_ISDIR,
+        windows => wasi::ERRNO_ACCES
     );
 
     // Test that unlinking it with a trailing flash fails.
-    // XXX windows errno here is ACCES
     assert_errno!(
         wasi::path_unlink_file(dir_fd, "dir/")
             .expect_err("unlink_file on a directory should fail")
             .raw_error(),
-        wasi::ERRNO_ISDIR
+        unix => wasi::ERRNO_ISDIR,
+        windows => wasi::ERRNO_ACCES
     );
 
     // Clean up.
@@ -30,12 +30,12 @@ unsafe fn test_unlink_file_trailing_slashes(dir_fd: wasi::Fd) {
     create_file(dir_fd, "file");
 
     // Test that unlinking it with a trailing flash fails.
-    // XXX windows errno here is NOENT
     assert_errno!(
         wasi::path_unlink_file(dir_fd, "file/")
             .expect_err("unlink_file with a trailing slash should fail")
             .raw_error(),
-        wasi::ERRNO_NOTDIR
+        unix => wasi::ERRNO_NOTDIR,
+        windows => wasi::ERRNO_NOENT
     );
 
     // Test that unlinking it with no trailing flash succeeds.
