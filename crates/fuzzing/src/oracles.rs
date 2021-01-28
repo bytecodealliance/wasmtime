@@ -47,12 +47,11 @@ fn log_wasm(wasm: &[u8]) {
 ///
 /// You can control which compiler is used via passing a `Strategy`.
 pub fn instantiate(wasm: &[u8], known_valid: bool, strategy: Strategy) {
-    instantiate_with_config(
-        wasm,
-        known_valid,
-        crate::fuzz_default_config(strategy).unwrap(),
-        None,
-    );
+    // Explicitly disable module linking for now since it's a breaking change to
+    // pre-module-linking modules due to imports
+    let mut cfg = crate::fuzz_default_config(strategy).unwrap();
+    cfg.wasm_module_linking(false);
+    instantiate_with_config(wasm, known_valid, cfg, None);
 }
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
