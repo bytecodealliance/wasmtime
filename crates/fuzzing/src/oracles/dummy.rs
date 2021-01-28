@@ -68,6 +68,8 @@ pub fn dummy_memory(store: &Store, ty: MemoryType) -> Memory {
 
 /// Construct a dummy instance for the given instance type.
 ///
+/// This is done by using the expected type to generate a module on-the-fly
+/// which we the instantiate.
 pub fn dummy_instance(store: &Store, ty: InstanceType) -> Instance {
     let mut wgen = WencoderGenerator::new();
     for ty in ty.exports() {
@@ -76,7 +78,9 @@ pub fn dummy_instance(store: &Store, ty: InstanceType) -> Instance {
     let module = Module::new(store.engine(), &wgen.finish()).unwrap();
     Instance::new(store, &module, &[]).unwrap()
 }
-/// Construct module by wencoder
+/// Construct a dummy module for the given module type.
+///
+/// This is done by using the expected type to generate a module on-the-fly.
 pub fn dummy_module(store: &Store, ty: ModuleType) -> Module {
     let mut wgen = WencoderGenerator::new();
     for ty in ty.imports() {
