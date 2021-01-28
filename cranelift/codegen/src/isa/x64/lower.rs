@@ -2346,13 +2346,27 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Ctz => {
-            // TODO when the x86 flags have use_bmi1, we can use TZCNT.
+            let orig_ty = ctx.input_ty(insn, 0);
+
+            if isa_flags.use_bmi1() && (orig_ty == types::I32 || orig_ty == types::I64) {
+                // We can use a plain tzcnt instruction here. Note no special handling is required
+                // for zero inputs, because the machine instruction does what the CLIF expects for
+                // zero, i.e. it returns zero.
+                let src = input_to_reg_mem(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                ctx.emit(Inst::unary_rm_r(
+                    orig_ty.bytes() as u8,
+                    UnaryRmROpcode::Tzcnt,
+                    src,
+                    dst,
+                ));
+                return Ok(());
+            }
 
             // General formula using bit-scan forward (BSF):
             // bsf %src, %dst
             // mov $(size_bits), %tmp
             // cmovz %tmp, %dst
-            let orig_ty = ctx.input_ty(insn, 0);
             if orig_ty == types::I128 {
                 // ctz src_lo, dst
                 // ctz src_hi, tmp1
