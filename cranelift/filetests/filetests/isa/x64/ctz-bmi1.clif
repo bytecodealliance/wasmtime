@@ -1,0 +1,31 @@
+test compile
+target x86_64 has_bmi1
+feature "experimental_x64"
+
+function %ctz(i64) -> i64 {
+block0(v0: i64):
+    v1 = ctz v0
+    return v1
+}
+
+; check: pushq   %rbp
+; check: movq    %rsp, %rbp
+; check: tzcntq  %rdi, %rsi
+; check: movq    %rsi, %rax
+; check: movq    %rbp, %rsp
+; check: popq    %rbp
+; check: ret
+
+function %ctz(i32) -> i32 {
+block0(v0: i32):
+    v1 = ctz v0
+    return v1
+}
+
+; check: pushq   %rbp
+; check: movq    %rsp, %rbp
+; check: tzcntl  %edi, %esi
+; check: movq    %rsi, %rax
+; check: movq    %rbp, %rsp
+; check: popq    %rbp
+; check: ret
