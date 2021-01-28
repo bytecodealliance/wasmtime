@@ -72,6 +72,11 @@ impl WasiCtxBuilder {
         Ok(self)
     }
 
+    pub fn env(mut self, var: &str, value: &str) -> Result<Self, StringArrayError> {
+        self.0.env.push(format!("{}={}", var, value))?;
+        Ok(self)
+    }
+
     pub fn stdin(self, f: Box<dyn WasiFile>) -> Self {
         self.0.insert_file(
             0,

@@ -21,6 +21,10 @@ impl WasiCtxBuilder {
             Rc::new(RefCell::new(Table::new())),
         ))
     }
+    pub fn env(self, var: &str, value: &str) -> Result<Self, wasi_c2::StringArrayError> {
+        let s = self.0.env(var, value)?;
+        Ok(WasiCtxBuilder(s))
+    }
     pub fn arg(self, arg: &str) -> Result<Self, wasi_c2::StringArrayError> {
         let s = self.0.arg(arg)?;
         Ok(WasiCtxBuilder(s))
