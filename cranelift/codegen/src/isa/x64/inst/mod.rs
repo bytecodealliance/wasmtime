@@ -717,6 +717,7 @@ impl Inst {
     ) -> Inst {
         debug_assert!(src.get_class() == RegClass::V128);
         debug_assert!(dst.to_reg().get_class() == RegClass::I64);
+        debug_assert!(dst_size.is_size(&[OperandSize::Size32, OperandSize::Size64]));
         Inst::XmmToGpr {
             op,
             src,
@@ -732,6 +733,7 @@ impl Inst {
         dst: Writable<Reg>,
     ) -> Inst {
         src.assert_regclass_is(RegClass::I64);
+        debug_assert!(src_size.is_size(&[OperandSize::Size32, OperandSize::Size64]));
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
         Inst::GprToXmm {
             op,
@@ -776,6 +778,8 @@ impl Inst {
         tmp_gpr: Writable<Reg>,
         tmp_xmm: Writable<Reg>,
     ) -> Inst {
+        debug_assert!(src_size.is_size(&[OperandSize::Size32, OperandSize::Size64]));
+        debug_assert!(dst_size.is_size(&[OperandSize::Size32, OperandSize::Size64]));
         debug_assert!(src.to_reg().get_class() == RegClass::V128);
         debug_assert!(tmp_xmm.to_reg().get_class() == RegClass::V128);
         debug_assert!(tmp_gpr.to_reg().get_class() == RegClass::I64);
@@ -800,6 +804,8 @@ impl Inst {
         tmp_gpr: Writable<Reg>,
         tmp_xmm: Writable<Reg>,
     ) -> Inst {
+        debug_assert!(src_size.is_size(&[OperandSize::Size32, OperandSize::Size64]));
+        debug_assert!(dst_size.is_size(&[OperandSize::Size32, OperandSize::Size64]));
         debug_assert!(src.to_reg().get_class() == RegClass::V128);
         debug_assert!(tmp_xmm.to_reg().get_class() == RegClass::V128);
         debug_assert!(tmp_gpr.to_reg().get_class() == RegClass::I64);
@@ -821,6 +827,7 @@ impl Inst {
         lhs: Reg,
         rhs_dst: Writable<Reg>,
     ) -> Inst {
+        debug_assert!(size.is_size(&[OperandSize::Size32, OperandSize::Size64]));
         debug_assert_eq!(lhs.get_class(), RegClass::V128);
         debug_assert_eq!(rhs_dst.to_reg().get_class(), RegClass::V128);
         Inst::XmmMinMaxSeq {
@@ -1416,11 +1423,7 @@ impl PrettyPrint for Inst {
                     } else {
                         "xmm max seq ".to_string()
                     },
-                    match size {
-                        OperandSize::Size32 => "f32",
-                        OperandSize::Size64 => "f64",
-                    }
-                    .into()
+                    format!("f{}", size.to_bits())
                 ),
                 show_ireg_sized(*lhs, mb_rru, 8),
                 show_ireg_sized(rhs_dst.to_reg(), mb_rru, 8),
@@ -1459,10 +1462,7 @@ impl PrettyPrint for Inst {
                 dst,
                 dst_size,
             } => {
-                let dst_size = match dst_size {
-                    OperandSize::Size32 => 4,
-                    OperandSize::Size64 => 8,
-                };
+                let dst_size = dst_size.to_bytes();
                 format!(
                     "{} {}, {}",
                     ljustify(op.to_string()),
@@ -1512,16 +1512,8 @@ impl PrettyPrint for Inst {
                 "{} {}, {}",
                 ljustify(format!(
                     "cvt_float{}_to_sint{}_seq",
-                    if *src_size == OperandSize::Size64 {
-                        "64"
-                    } else {
-                        "32"
-                    },
-                    if *dst_size == OperandSize::Size64 {
-                        "64"
-                    } else {
-                        "32"
-                    }
+                    src_size.to_bits(),
+                    dst_size.to_bits()
                 )),
                 show_ireg_sized(src.to_reg(), mb_rru, 8),
                 show_ireg_sized(dst.to_reg(), mb_rru, dst_size.to_bytes()),
@@ -1537,16 +1529,8 @@ impl PrettyPrint for Inst {
                 "{} {}, {}",
                 ljustify(format!(
                     "cvt_float{}_to_uint{}_seq",
-                    if *src_size == OperandSize::Size64 {
-                        "64"
-                    } else {
-                        "32"
-                    },
-                    if *dst_size == OperandSize::Size64 {
-                        "64"
-                    } else {
-                        "32"
-                    }
+                    src_size.to_bits(),
+                    dst_size.to_bits()
                 )),
                 show_ireg_sized(src.to_reg(), mb_rru, 8),
                 show_ireg_sized(dst.to_reg(), mb_rru, dst_size.to_bytes()),
