@@ -29,12 +29,12 @@ unsafe fn test_remove_directory_trailing_slashes(dir_fd: wasi::Fd) {
     );
 
     // Test that removing it with a trailing slash fails.
-    // XXX windows behavior here is NOENT instead of NOTDIR
     assert_errno!(
         wasi::path_remove_directory(dir_fd, "file/")
             .expect_err("remove_directory with a trailing slash on a file should fail")
             .raw_error(),
-        wasi::ERRNO_NOTDIR
+        unix => wasi::ERRNO_NOTDIR,
+        windows => wasi::ERRNO_NOENT
     );
 
     wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
