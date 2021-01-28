@@ -76,8 +76,8 @@ impl<'a> WencoderGenerator<'a> {
         module.finish()
     }
     pub fn import(&mut self, ty: &ImportType<'_>) {
-        let imports = &mut self.import_section;
-        imports.import(ty.module(), ty.name(), extern_to_entity(&ty.ty()));
+        self.import_section
+            .import(ty.module(), ty.name(), extern_to_entity(&ty.ty()));
     }
     pub fn export(&mut self, ty: &ExportType<'_>) {
         let nth = next_index(&mut self.next, &ty.ty());
@@ -86,9 +86,8 @@ impl<'a> WencoderGenerator<'a> {
         let item_ty = ty.ty();
         self.item(&item_ty);
 
-        let export = extern_to_export(&item_ty, |_| nth);
-        let exports = &mut self.export_section;
-        exports.export(&section_name, export);
+        self.export_section
+            .export(&section_name, extern_to_export(&item_ty, |_| nth));
     }
     fn item(&mut self, ty: &ExternType) {
         match ty {
@@ -127,30 +126,50 @@ impl<'a> WencoderGenerator<'a> {
                     v.params().into_iter().map(|it| value_to_value(&it)),
                     v.results().into_iter().map(|it| value_to_value(&it)),
                 );
-                self.function_section.function(next_index(&mut self.next, &ty));
+                self.function_section
+                    .function(next_index(&mut self.next, &ty));
 
                 let locals = vec![];
                 let mut func = Function::new(locals);
                 for t in v.results() {
                     func.instruction(value_to_instruction(&t));
                 }
-                let codes = &mut self.code_section;
-                codes.function(&func);
+                self.code_section.function(&func);
             }
-            ExternType::Module(ty) => {
-                let types = &mut self.type_section;
-                types.module(
-                    ty.imports()
+            ExternType::Module(v) => {
+                self.type_section.module(
+                    v.imports()
                         .into_iter()
                         .map(|x| (x.module(), x.name(), extern_to_entity(&x.ty()))),
-                    ty.exports()
+                    v.exports()
                         .into_iter()
                         .map(|x| (x.name(), extern_to_entity(&x.ty()))),
                 );
+                let module = &mut Module::new();
 
-                let modules = &mut self.module_section;
-                modules.module(&Module::new());
-                modules.module(&Module::new());
+                for import in v.imports().into_iter() {
+                    self.import_section.import(
+                        import.module(),
+                        import.name(),
+                        extern_to_entity(&import.ty()),
+                    );
+                }
+
+                for export in v.exports().into_iter() {
+                    let nth = next_index(&mut self.next, &export.ty());
+                    let section_name = format!("item{}", nth);
+
+                    let item_ty = export.ty();
+                    self.item(&item_ty);
+
+                    self.export_section
+                        .export(&section_name, extern_to_export(&item_ty, |_| nth));
+                }
+                module.section(&self.type_section);
+                module.section(&self.import_section);
+                module.section(&self.export_section);
+
+                self.module_section.module(module);
             }
             ExternType::Instance(ty) => {
                 let instances = &mut self.instance_section;
