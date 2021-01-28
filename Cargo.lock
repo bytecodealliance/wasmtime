@@ -226,7 +226,7 @@ dependencies = [
  "unsafe-io 0.2.0",
  "winapi",
  "winapi-util",
- "winx 0.22.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winx",
 ]
 
 [[package]]
@@ -257,7 +257,7 @@ dependencies = [
  "cap-primitives",
  "once_cell",
  "posish",
- "winx 0.22.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winx",
 ]
 
 [[package]]
@@ -394,16 +394,6 @@ checksum = "44919ecaf6f99e8e737bc239408931c9a01e9a6c74814fee8242dd2506b65390"
 dependencies = [
  "cfg-if 1.0.0",
  "glob",
-]
-
-[[package]]
-name = "cpu-time"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9e393a7668fe1fad3075085b86c781883000b4ede868f43627b34a87c8b7ded"
-dependencies = [
- "libc",
- "winapi",
 ]
 
 [[package]]
@@ -2221,7 +2211,7 @@ dependencies = [
  "rustc_version 0.3.3",
  "unsafe-io 0.3.0",
  "winapi",
- "winx 0.22.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winx",
 ]
 
 [[package]]
@@ -2284,10 +2274,10 @@ dependencies = [
  "pretty_env_logger",
  "target-lexicon",
  "tempfile",
- "wasi-c2",
- "wasi-c2-cap-std-sync",
- "wasi-c2-wasmtime",
+ "wasi-cap-std-sync",
+ "wasi-common",
  "wasmtime",
+ "wasmtime-wasi",
  "wat",
 ]
 
@@ -2542,23 +2532,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a143597ca7c7793eff794def352d41792a93c481eb1042423ff7ff72ba2c31f"
 
 [[package]]
-name = "wasi-c2"
-version = "0.22.0"
-dependencies = [
- "anyhow",
- "bitflags",
- "cap-rand",
- "cap-std",
- "libc",
- "system-interface",
- "thiserror",
- "tracing",
- "wiggle",
- "winapi",
-]
-
-[[package]]
-name = "wasi-c2-cap-std-sync"
+name = "wasi-cap-std-sync"
 version = "0.22.0"
 dependencies = [
  "anyhow",
@@ -2573,19 +2547,8 @@ dependencies = [
  "system-interface",
  "tracing",
  "unsafe-io 0.3.0",
- "wasi-c2",
+ "wasi-common",
  "winapi",
-]
-
-[[package]]
-name = "wasi-c2-wasmtime"
-version = "0.22.0"
-dependencies = [
- "anyhow",
- "wasi-c2",
- "wasmtime",
- "wasmtime-wiggle",
- "wiggle",
 ]
 
 [[package]]
@@ -2593,18 +2556,15 @@ name = "wasi-common"
 version = "0.22.0"
 dependencies = [
  "anyhow",
- "cfg-if 1.0.0",
- "cpu-time",
- "filetime",
- "getrandom 0.2.0",
- "lazy_static",
+ "bitflags",
+ "cap-rand",
+ "cap-std",
  "libc",
+ "system-interface",
  "thiserror",
  "tracing",
  "wiggle",
  "winapi",
- "winx 0.22.0",
- "yanix",
 ]
 
 [[package]]
@@ -2982,10 +2942,8 @@ name = "wasmtime-wasi"
 version = "0.22.0"
 dependencies = [
  "anyhow",
- "tracing",
  "wasi-common",
  "wasmtime",
- "wasmtime-runtime",
  "wasmtime-wiggle",
  "wiggle",
 ]
@@ -3173,15 +3131,6 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 [[package]]
 name = "winx"
 version = "0.22.0"
-dependencies = [
- "bitflags",
- "cvt",
- "winapi",
-]
-
-[[package]]
-name = "winx"
-version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7d35176e4c7e0daf9d8da18b7e9df81a8f2358fb3d6feea775ce810f974a512"
 dependencies = [
@@ -3201,17 +3150,6 @@ dependencies = [
  "structopt",
  "thiserror",
  "wast 22.0.0",
-]
-
-[[package]]
-name = "yanix"
-version = "0.22.0"
-dependencies = [
- "bitflags",
- "cfg-if 1.0.0",
- "filetime",
- "libc",
- "tracing",
 ]
 
 [[package]]

@@ -1,24 +1,21 @@
 [package]
 name = "wasmtime-wasi"
 version = "0.22.0"
-authors = ["The Cranelift Project Developers"]
-description = "WASI API support for Wasmtime"
-documentation = "https://docs.rs/wasmtime-wasi"
+authors = ["The Wasmtime Project Developers"]
+description = "WASI implementation in Rust"
 license = "Apache-2.0 WITH LLVM-exception"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
+include = ["src/**/*", "LICENSE", "build.rs"]
+build = "build.rs"
+publish = false
 
 [dependencies]
-anyhow = "1.0"
-tracing = "0.1.15"
 wasi-common = { path = "../wasi-common", version = "0.22.0" }
-wasmtime = { path = "../wasmtime", version = "0.22.0", default-features = false }
-wasmtime-runtime = { path = "../runtime", version = "0.22.0" }
-wiggle = { path = "../wiggle", version = "0.22.0" }
-wasmtime-wiggle = { path = "../wiggle/wasmtime", version = "0.22.0" }
-
-[badges]
-maintenance = { status = "actively-developed" }
+wiggle = { path = "../wiggle", default-features = false, version = "0.22.0" }
+wasmtime-wiggle = { path = "../wiggle/wasmtime", default-features = false, version = "0.22.0" }
+wasmtime = { path = "../wasmtime", version = "0.22.0" }
+anyhow = "1.0"

@@ -1,6 +1,6 @@
 use cap_std::time::{Duration, Instant, SystemTime};
 use cap_time_ext::{MonotonicClockExt, SystemClockExt};
-use wasi_c2::clocks::{WasiClocks, WasiMonotonicClock, WasiSystemClock};
+use wasi_common::clocks::{WasiClocks, WasiMonotonicClock, WasiSystemClock};
 
 pub struct SystemClock(cap_std::time::SystemClock);
 

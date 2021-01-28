@@ -7,7 +7,7 @@ use system_interface::{
     fs::{Advice, FileIoExt, GetSetFdFlags},
     io::ReadReady,
 };
-use wasi_c2::{
+use wasi_common::{
     file::{FdFlags, FileType, Filestat, WasiFile},
     Error,
 };
@@ -70,8 +70,8 @@ impl WasiFile for File {
     }
     fn set_times(
         &self,
-        atime: Option<wasi_c2::SystemTimeSpec>,
-        mtime: Option<wasi_c2::SystemTimeSpec>,
+        atime: Option<wasi_common::SystemTimeSpec>,
+        mtime: Option<wasi_common::SystemTimeSpec>,
     ) -> Result<(), Error> {
         self.0
             .set_times(convert_systimespec(atime), convert_systimespec(mtime))?;
@@ -145,49 +145,51 @@ impl AsRawFd for File {
         self.0.as_raw_fd()
     }
 }
-pub fn convert_systimespec(t: Option<wasi_c2::SystemTimeSpec>) -> Option<SystemTimeSpec> {
+pub fn convert_systimespec(t: Option<wasi_common::SystemTimeSpec>) -> Option<SystemTimeSpec> {
     match t {
-        Some(wasi_c2::SystemTimeSpec::Absolute(t)) => Some(SystemTimeSpec::Absolute(t.into_std())),
-        Some(wasi_c2::SystemTimeSpec::SymbolicNow) => Some(SystemTimeSpec::SymbolicNow),
+        Some(wasi_common::SystemTimeSpec::Absolute(t)) => {
+            Some(SystemTimeSpec::Absolute(t.into_std()))
+        }
+        Some(wasi_common::SystemTimeSpec::SymbolicNow) => Some(SystemTimeSpec::SymbolicNow),
         None => None,
     }
 }
 
-pub fn to_sysif_fdflags(f: wasi_c2::file::FdFlags) -> system_interface::fs::FdFlags {
+pub fn to_sysif_fdflags(f: wasi_common::file::FdFlags) -> system_interface::fs::FdFlags {
     let mut out = system_interface::fs::FdFlags::empty();
-    if f.contains(wasi_c2::file::FdFlags::APPEND) {
+    if f.contains(wasi_common::file::FdFlags::APPEND) {
         out |= system_interface::fs::FdFlags::APPEND;
     }
-    if f.contains(wasi_c2::file::FdFlags::DSYNC) {
+    if f.contains(wasi_common::file::FdFlags::DSYNC) {
         out |= system_interface::fs::FdFlags::DSYNC;
     }
-    if f.contains(wasi_c2::file::FdFlags::NONBLOCK) {
+    if f.contains(wasi_common::file::FdFlags::NONBLOCK) {
         out |= system_interface::fs::FdFlags::NONBLOCK;
     }
-    if f.contains(wasi_c2::file::FdFlags::RSYNC) {
+    if f.contains(wasi_common::file::FdFlags::RSYNC) {
         out |= system_interface::fs::FdFlags::RSYNC;
     }
-    if f.contains(wasi_c2::file::FdFlags::SYNC) {
+    if f.contains(wasi_common::file::FdFlags::SYNC) {
         out |= system_interface::fs::FdFlags::SYNC;
     }
     out
 }
-pub fn from_sysif_fdflags(f: system_interface::fs::FdFlags) -> wasi_c2::file::FdFlags {
-    let mut out = wasi_c2::file::FdFlags::empty();
+pub fn from_sysif_fdflags(f: system_interface::fs::FdFlags) -> wasi_common::file::FdFlags {
+    let mut out = wasi_common::file::FdFlags::empty();
     if f.contains(system_interface::fs::FdFlags::APPEND) {
-        out |= wasi_c2::file::FdFlags::APPEND;
+        out |= wasi_common::file::FdFlags::APPEND;
     }
     if f.contains(system_interface::fs::FdFlags::DSYNC) {
-        out |= wasi_c2::file::FdFlags::DSYNC;
+        out |= wasi_common::file::FdFlags::DSYNC;
     }
     if f.contains(system_interface::fs::FdFlags::NONBLOCK) {
-        out |= wasi_c2::file::FdFlags::NONBLOCK;
+        out |= wasi_common::file::FdFlags::NONBLOCK;
     }
     if f.contains(system_interface::fs::FdFlags::RSYNC) {
-        out |= wasi_c2::file::FdFlags::RSYNC;
+        out |= wasi_common::file::FdFlags::RSYNC;
     }
     if f.contains(system_interface::fs::FdFlags::SYNC) {
-        out |= wasi_c2::file::FdFlags::SYNC;
+        out |= wasi_common::file::FdFlags::SYNC;
     }
     out
 }

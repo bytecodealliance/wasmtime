@@ -2,7 +2,7 @@ use cap_std::time::Duration;
 use std::convert::TryInto;
 use std::ops::Deref;
 use std::os::unix::io::{AsRawFd, RawFd};
-use wasi_c2::{
+use wasi_common::{
     file::WasiFile,
     sched::{
         subscription::{RwEventFlags, Subscription},

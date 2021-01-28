@@ -3,7 +3,7 @@ use cap_fs_ext::{DirExt, MetadataExt, SystemTimeSpec};
 use std::any::Any;
 use std::convert::TryInto;
 use std::path::{Path, PathBuf};
-use wasi_c2::{
+use wasi_common::{
     dir::{ReaddirCursor, ReaddirEntity, WasiDir},
     file::{FdFlags, FileCaps, FileType, Filestat, OFlags, WasiFile},
     Error, ErrorExt,
@@ -219,8 +219,8 @@ impl WasiDir for Dir {
     fn set_times(
         &self,
         path: &str,
-        atime: Option<wasi_c2::SystemTimeSpec>,
-        mtime: Option<wasi_c2::SystemTimeSpec>,
+        atime: Option<wasi_common::SystemTimeSpec>,
+        mtime: Option<wasi_common::SystemTimeSpec>,
         follow_symlinks: bool,
     ) -> Result<(), Error> {
         if follow_symlinks {
@@ -240,10 +240,10 @@ impl WasiDir for Dir {
     }
 }
 
-fn convert_systimespec(t: Option<wasi_c2::SystemTimeSpec>) -> Option<SystemTimeSpec> {
+fn convert_systimespec(t: Option<wasi_common::SystemTimeSpec>) -> Option<SystemTimeSpec> {
     match t {
-        Some(wasi_c2::SystemTimeSpec::Absolute(t)) => Some(SystemTimeSpec::Absolute(t)),
-        Some(wasi_c2::SystemTimeSpec::SymbolicNow) => Some(SystemTimeSpec::SymbolicNow),
+        Some(wasi_common::SystemTimeSpec::Absolute(t)) => Some(SystemTimeSpec::Absolute(t)),
+        Some(wasi_common::SystemTimeSpec::SymbolicNow) => Some(SystemTimeSpec::SymbolicNow),
         None => None,
     }
 }

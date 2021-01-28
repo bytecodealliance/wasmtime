@@ -1,5 +1,5 @@
 [package]
-name = "wasi-c2"
+name = "wasi-common"
 version = "0.22.0"
 authors = ["The Wasmtime Project Developers"]
 description = "WASI implementation in Rust"
@@ -14,9 +14,9 @@ build = "build.rs"
 publish = false
 
 # This doesn't actually link to a native library, but it allows us to set env
-# vars like `DEP_WASI_C2_19_*` for crates that have build scripts and depend
+# vars like `DEP_WASI_COMMON_19_*` for crates that have build scripts and depend
 # on this crate, allowing other crates to use the same witx files.
-links = "wasi-c2-19"
+links = "wasi-common-19"
 
 [dependencies]
 anyhow = "1.0"

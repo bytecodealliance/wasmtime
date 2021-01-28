@@ -11,7 +11,7 @@ use std::os::unix::io::{AsRawFd, RawFd};
 #[cfg(windows)]
 use std::os::windows::io::{AsRawHandle, RawHandle};
 use unsafe_io::AsUnsafeFile;
-use wasi_c2::{
+use wasi_common::{
     file::{FdFlags, FileType, Filestat, WasiFile},
     Error, ErrorExt,
 };
@@ -84,8 +84,8 @@ impl WasiFile for Stdin {
     }
     fn set_times(
         &self,
-        atime: Option<wasi_c2::SystemTimeSpec>,
-        mtime: Option<wasi_c2::SystemTimeSpec>,
+        atime: Option<wasi_common::SystemTimeSpec>,
+        mtime: Option<wasi_common::SystemTimeSpec>,
     ) -> Result<(), Error> {
         self.0
             .set_times(convert_systimespec(atime), convert_systimespec(mtime))?;
@@ -176,8 +176,8 @@ macro_rules! wasi_file_write_impl {
             }
             fn set_times(
                 &self,
-                atime: Option<wasi_c2::SystemTimeSpec>,
-                mtime: Option<wasi_c2::SystemTimeSpec>,
+                atime: Option<wasi_common::SystemTimeSpec>,
+                mtime: Option<wasi_common::SystemTimeSpec>,
             ) -> Result<(), Error> {
                 self.0
                     .set_times(convert_systimespec(atime), convert_systimespec(mtime))?;

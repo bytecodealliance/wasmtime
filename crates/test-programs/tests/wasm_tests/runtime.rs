@@ -1,7 +1,7 @@
 use anyhow::Context;
 use std::path::Path;
-use wasi_c2::pipe::{ReadPipe, WritePipe};
-use wasi_c2_cap_std_sync::WasiCtxBuilder;
+use wasi_cap_std_sync::WasiCtxBuilder;
+use wasi_common::pipe::{ReadPipe, WritePipe};
 use wasmtime::{Linker, Module, Store};
 
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
@@ -42,7 +42,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
             builder = builder.env("ERRNO_MODE_UNIX", "1")?;
         }
 
-        let snapshot1 = wasi_c2_wasmtime::Wasi::new(&store, builder.build()?);
+        let snapshot1 = wasi_wasmtime::Wasi::new(&store, builder.build()?);
 
         let mut linker = Linker::new(&store);
 
@@ -97,7 +97,7 @@ pub fn instantiate_inherit_stdio(
             builder = builder.preopened_dir(preopen_dir, ".")?;
         }
 
-        let snapshot1 = wasi_c2_wasmtime::Wasi::new(&store, builder.build()?);
+        let snapshot1 = wasi_wasmtime::Wasi::new(&store, builder.build()?);
 
         let mut linker = Linker::new(&store);
 
