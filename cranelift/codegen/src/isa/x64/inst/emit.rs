@@ -2063,6 +2063,7 @@ pub(crate) fn emit(
                         SseOpcode::Maxsd
                     },
                 ),
+                _ => unreachable!(),
             };
 
             let inst = Inst::xmm_cmp_rm_r(cmp_op, RegMem::reg(*lhs), rhs_dst.to_reg());
@@ -2224,6 +2225,7 @@ pub(crate) fn emit(
             let rex = match dst_size {
                 OperandSize::Size32 => RexFlags::clear_w(),
                 OperandSize::Size64 => RexFlags::set_w(),
+                _ => unreachable!(),
             };
 
             let (src, dst) = if dst_first {
@@ -2252,6 +2254,7 @@ pub(crate) fn emit(
             let rex = match *src_size {
                 OperandSize::Size32 => RexFlags::clear_w(),
                 OperandSize::Size64 => RexFlags::set_w(),
+                _ => unreachable!(),
             };
             match src_e {
                 RegMem::Reg { reg: reg_e } => {
@@ -2450,6 +2453,7 @@ pub(crate) fn emit(
             let (cast_op, cmp_op, trunc_op) = match src_size {
                 OperandSize::Size64 => (SseOpcode::Movq, SseOpcode::Ucomisd, SseOpcode::Cvttsd2si),
                 OperandSize::Size32 => (SseOpcode::Movd, SseOpcode::Ucomiss, SseOpcode::Cvttss2si),
+                _ => unreachable!(),
             };
 
             let done = sink.get_label();
@@ -2542,6 +2546,7 @@ pub(crate) fn emit(
                         let inst = Inst::imm(OperandSize::Size64, cst.bits(), *tmp_gpr);
                         inst.emit(sink, info, state);
                     }
+                    _ => unreachable!(),
                 }
 
                 let inst =
@@ -2622,28 +2627,28 @@ pub(crate) fn emit(
 
             assert_ne!(tmp_xmm, src, "tmp_xmm clobbers src!");
 
-            let (sub_op, cast_op, cmp_op, trunc_op) = if *src_size == OperandSize::Size64 {
-                (
-                    SseOpcode::Subsd,
-                    SseOpcode::Movq,
-                    SseOpcode::Ucomisd,
-                    SseOpcode::Cvttsd2si,
-                )
-            } else {
-                (
+            let (sub_op, cast_op, cmp_op, trunc_op) = match src_size {
+                OperandSize::Size32 => (
                     SseOpcode::Subss,
                     SseOpcode::Movd,
                     SseOpcode::Ucomiss,
                     SseOpcode::Cvttss2si,
-                )
+                ),
+                OperandSize::Size64 => (
+                    SseOpcode::Subsd,
+                    SseOpcode::Movq,
+                    SseOpcode::Ucomisd,
+                    SseOpcode::Cvttsd2si,
+                ),
+                _ => unreachable!(),
             };
 
             let done = sink.get_label();
 
-            let cst = if *src_size == OperandSize::Size64 {
-                Ieee64::pow2(dst_size.to_bits() - 1).bits()
-            } else {
-                Ieee32::pow2(dst_size.to_bits() - 1).bits() as u64
+            let cst = match src_size {
+                OperandSize::Size32 => Ieee32::pow2(dst_size.to_bits() - 1).bits() as u64,
+                OperandSize::Size64 => Ieee64::pow2(dst_size.to_bits() - 1).bits(),
+                _ => unreachable!(),
             };
 
             let inst = Inst::imm(*src_size, cst, *tmp_gpr);

@@ -1323,6 +1323,8 @@ impl RoundImm {
 /// An operand's size in bits.
 #[derive(Clone, Copy, PartialEq)]
 pub enum OperandSize {
+    Size8,
+    Size16,
     Size32,
     Size64,
 }
@@ -1330,24 +1332,35 @@ pub enum OperandSize {
 impl OperandSize {
     pub(crate) fn from_bytes(num_bytes: u32) -> Self {
         match num_bytes {
-            1 | 2 | 4 => OperandSize::Size32,
+            1 => OperandSize::Size8,
+            2 => OperandSize::Size16,
+            4 => OperandSize::Size32,
             8 => OperandSize::Size64,
             _ => unreachable!(),
         }
     }
 
+    // Check that the value of self is one of the allowed sizes.
+    pub(crate) fn is_size(&self, sizes: &[Self]) -> bool {
+        for val in sizes.iter() {
+            if *self == *val {
+                return true;
+            }
+        }
+        false
+    }
+
     pub(crate) fn to_bytes(&self) -> u8 {
         match self {
+            Self::Size8 => 1,
+            Self::Size16 => 2,
             Self::Size32 => 4,
             Self::Size64 => 8,
         }
     }
 
     pub(crate) fn to_bits(&self) -> u8 {
-        match self {
-            Self::Size32 => 32,
-            Self::Size64 => 64,
-        }
+        self.to_bytes() * 8
     }
 }
 
