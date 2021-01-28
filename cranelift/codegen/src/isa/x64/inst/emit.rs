@@ -677,23 +677,25 @@ pub(crate) fn emit(
                 _ => unreachable!(),
             };
 
+            use UnaryRmROpcode::*;
             let prefix = match size {
                 2 => match op {
-                    UnaryRmROpcode::Bsr | UnaryRmROpcode::Bsf => LegacyPrefixes::_66,
-                    UnaryRmROpcode::Lzcnt | UnaryRmROpcode::Tzcnt => LegacyPrefixes::_66F3,
+                    Bsr | Bsf => LegacyPrefixes::_66,
+                    Lzcnt | Tzcnt | Popcnt => LegacyPrefixes::_66F3,
                 },
                 4 | 8 => match op {
-                    UnaryRmROpcode::Bsr | UnaryRmROpcode::Bsf => LegacyPrefixes::None,
-                    UnaryRmROpcode::Lzcnt | UnaryRmROpcode::Tzcnt => LegacyPrefixes::_F3,
+                    Bsr | Bsf => LegacyPrefixes::None,
+                    Lzcnt | Tzcnt | Popcnt => LegacyPrefixes::_F3,
                 },
                 _ => unreachable!(),
             };
 
             let (opcode, num_opcodes) = match op {
-                UnaryRmROpcode::Bsr => (0x0fbd, 2),
-                UnaryRmROpcode::Bsf => (0x0fbc, 2),
-                UnaryRmROpcode::Lzcnt => (0x0fbd, 2),
-                UnaryRmROpcode::Tzcnt => (0x0fbc, 2),
+                Bsr => (0x0fbd, 2),
+                Bsf => (0x0fbc, 2),
+                Lzcnt => (0x0fbd, 2),
+                Tzcnt => (0x0fbc, 2),
+                Popcnt => (0x0fb8, 2),
             };
 
             match src {

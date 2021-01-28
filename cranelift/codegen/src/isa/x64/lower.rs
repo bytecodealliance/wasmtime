@@ -2410,14 +2410,68 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Popcnt => {
-            // TODO when the x86 flags have use_popcnt, we can use the popcnt instruction.
-
             let (ext_spec, ty) = match ctx.input_ty(insn, 0) {
                 types::I8 | types::I16 => (Some(ExtSpec::ZeroExtendTo32), types::I32),
-                a if a == types::I32 || a == types::I64 => (None, a),
-                types::I128 => (None, types::I128),
+                a if a == types::I32 || a == types::I64 || a == types::I128 => (None, a),
                 _ => unreachable!(),
             };
+
+            if isa_flags.use_popcnt() {
+                match ty {
+                    types::I32 | types::I64 => {
+                        let src = input_to_reg_mem(ctx, inputs[0]);
+                        let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                        ctx.emit(Inst::unary_rm_r(
+                            ty.bytes() as u8,
+                            UnaryRmROpcode::Popcnt,
+                            src,
+                            dst,
+                        ));
+                        return Ok(());
+                    }
+
+                    types::I128 => {
+                        // The number of ones in a 128-bits value is the plain sum of the number of
+                        // ones in its low and high parts. No risk of overflow here.
+                        let dsts = get_output_reg(ctx, outputs[0]);
+                        let dst = dsts.regs()[0];
+                        let tmp = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                        let srcs = put_input_in_regs(ctx, inputs[0]);
+                        let src_lo = srcs.regs()[0];
+                        let src_hi = srcs.regs()[1];
+
+                        ctx.emit(Inst::unary_rm_r(
+                            8,
+                            UnaryRmROpcode::Popcnt,
+                            RegMem::reg(src_lo),
+                            dst,
+                        ));
+                        ctx.emit(Inst::unary_rm_r(
+                            8,
+                            UnaryRmROpcode::Popcnt,
+                            RegMem::reg(src_hi),
+                            tmp,
+                        ));
+                        ctx.emit(Inst::alu_rmi_r(
+                            true,
+                            AluRmiROpcode::Add,
+                            RegMemImm::reg(tmp.to_reg()),
+                            dst,
+                        ));
+
+                        // Zero the result's high component.
+                        ctx.emit(Inst::alu_rmi_r(
+                            true,
+                            AluRmiROpcode::Xor,
+                            RegMemImm::reg(dsts.regs()[1].to_reg()),
+                            dsts.regs()[1],
+                        ));
+
+                        return Ok(());
+                    }
+                    _ => {}
+                }
+            }
 
             let (srcs, ty): (SmallVec<[RegMem; 2]>, Type) = if let Some(ext_spec) = ext_spec {
                 (

@@ -1,0 +1,31 @@
+test compile
+target x86_64 has_popcnt has_sse42
+feature "experimental_x64"
+
+function %popcnt(i64) -> i64 {
+block0(v0: i64):
+    v1 = popcnt v0
+    return v1
+}
+
+; check: pushq   %rbp
+; check: movq    %rsp, %rbp
+; check: popcntq %rdi, %rsi
+; check: movq    %rsi, %rax
+; check: movq    %rbp, %rsp
+; check: popq    %rbp
+; check: ret
+
+function %popcnt(i32) -> i32 {
+block0(v0: i32):
+    v1 = popcnt v0
+    return v1
+}
+
+; check: pushq   %rbp
+; check: movq    %rsp, %rbp
+; check: popcntl %edi, %esi
+; check: movq    %rsi, %rax
+; check: movq    %rbp, %rsp
+; check: popq    %rbp
+; check: ret
