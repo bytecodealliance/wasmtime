@@ -35,7 +35,6 @@
     - same incorrect behavior as linux
 
 
-* dangling_fd
 * dangling_symlink
 * path_rename_trailing_slashes
 * remove_directory_trailing_slashes
