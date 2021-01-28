@@ -432,7 +432,7 @@ pub unsafe trait TrapInfo {
 
     /// Returns whether the given program counter lies within wasm code,
     /// indicating whether we should handle a trap or not.
-    fn is_wasm_code(&self, pc: usize) -> bool;
+    fn is_wasm_trap(&self, pc: usize) -> bool;
 
     /// Uses `call` to call a custom signal handler, if one is specified.
     ///
@@ -635,7 +635,7 @@ impl<'a> CallThreadState<'a> {
         }
 
         // If this fault wasn't in wasm code, then it's not our problem
-        if !self.trap_info.is_wasm_code(pc as usize) {
+        if !self.trap_info.is_wasm_trap(pc as usize) {
             return ptr::null();
         }
 

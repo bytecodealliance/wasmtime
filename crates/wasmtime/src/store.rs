@@ -191,8 +191,9 @@ impl Store {
             None => return,
         };
         // Only register this module if it hasn't already been registered.
-        if !self.is_wasm_code(first_pc) {
-            self.inner.frame_info.borrow_mut().register(module);
+        let mut info = self.inner.frame_info.borrow_mut();
+        if !info.contains_pc(first_pc) {
+            info.register(module);
         }
     }
 
@@ -400,8 +401,8 @@ unsafe impl TrapInfo for Store {
         self
     }
 
-    fn is_wasm_code(&self, addr: usize) -> bool {
-        self.frame_info().borrow().contains_pc(addr)
+    fn is_wasm_trap(&self, addr: usize) -> bool {
+        self.frame_info().borrow().lookup_trap_info(addr).is_some()
     }
 
     fn custom_signal_handler(&self, call: &dyn Fn(&SignalHandler) -> bool) -> bool {
