@@ -406,6 +406,8 @@ pub enum UnaryRmROpcode {
     Lzcnt,
     /// Counts trailing zeroes (Trailing Zero CouNT).
     Tzcnt,
+    /// Counts the number of ones (POPulation CouNT).
+    Popcnt,
 }
 
 impl fmt::Debug for UnaryRmROpcode {
@@ -415,6 +417,7 @@ impl fmt::Debug for UnaryRmROpcode {
             UnaryRmROpcode::Bsf => write!(fmt, "bsf"),
             UnaryRmROpcode::Lzcnt => write!(fmt, "lzcnt"),
             UnaryRmROpcode::Tzcnt => write!(fmt, "tzcnt"),
+            UnaryRmROpcode::Popcnt => write!(fmt, "popcnt"),
         }
     }
 }
