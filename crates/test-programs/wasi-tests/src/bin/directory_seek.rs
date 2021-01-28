@@ -28,7 +28,7 @@ unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
         wasi::fd_seek(fd, 0, wasi::WHENCE_CUR)
             .expect_err("seek on a directory")
             .raw_error(),
-        wasi::ERRNO_BADF,
+        wasi::ERRNO_BADF
     );
 
     // Check if we obtained the right to seek.

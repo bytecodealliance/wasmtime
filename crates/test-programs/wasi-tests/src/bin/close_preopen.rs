@@ -8,12 +8,11 @@ unsafe fn test_close_preopen(dir_fd: wasi::Fd) {
     assert_gt!(dir_fd, pre_fd, "dir_fd number");
 
     // Try to close a preopened directory handle.
-    assert_eq!(
+    assert_errno!(
         wasi::fd_close(pre_fd)
             .expect_err("closing a preopened file descriptor")
             .raw_error(),
-        wasi::ERRNO_NOTSUP,
-        "errno should ERRNO_NOTSUP",
+        wasi::ERRNO_NOTSUP
     );
 
     // Try to renumber over a preopened directory handle.
@@ -21,7 +20,7 @@ unsafe fn test_close_preopen(dir_fd: wasi::Fd) {
         wasi::fd_renumber(dir_fd, pre_fd)
             .expect_err("renumbering over a preopened file descriptor")
             .raw_error(),
-        wasi::ERRNO_NOTSUP,
+        wasi::ERRNO_NOTSUP
     );
 
     // Ensure that dir_fd is still open.
@@ -37,7 +36,7 @@ unsafe fn test_close_preopen(dir_fd: wasi::Fd) {
         wasi::fd_renumber(pre_fd, dir_fd)
             .expect_err("renumbering over a preopened file descriptor")
             .raw_error(),
-        wasi::ERRNO_NOTSUP,
+        wasi::ERRNO_NOTSUP
     );
 
     // Ensure that dir_fd is still open.

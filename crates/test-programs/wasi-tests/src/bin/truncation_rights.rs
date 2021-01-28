@@ -68,7 +68,7 @@ unsafe fn test_truncation_rights(dir_fd: wasi::Fd) {
             wasi::path_open(dir_fd, 0, "file", wasi::OFLAGS_TRUNC, 0, 0, 0)
                 .expect_err("truncating a file without path_filestat_set_size right")
                 .raw_error(),
-            wasi::ERRNO_NOTCAPABLE,
+            wasi::ERRNO_NOTCAPABLE
         );
     }
 

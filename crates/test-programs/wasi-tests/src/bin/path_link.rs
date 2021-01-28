@@ -148,7 +148,7 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
         wasi::path_link(dir_fd, 0, "file", dir_fd, "link/")
             .expect_err("creating a link to a file with trailing slash should fail")
             .raw_error(),
-        wasi::ERRNO_NOENT,
+        wasi::ERRNO_NOENT
     );
 
     // XXX windows doesnt support dangling symlinks - rest of file
@@ -176,7 +176,7 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
         wasi::path_link(dir_fd, 0, "file", dir_fd, "symlink")
             .expect_err("creating a link where target is a dangling symlink")
             .raw_error(),
-        wasi::ERRNO_EXIST,
+        wasi::ERRNO_EXIST
     );
     wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
 
@@ -194,7 +194,7 @@ unsafe fn test_path_link(dir_fd: wasi::Fd) {
         )
         .expect_err("calling path_link with LOOKUPFLAGS_SYMLINK_FOLLOW should fail")
         .raw_error(),
-        wasi::ERRNO_INVAL,
+        wasi::ERRNO_INVAL
     );
 
     // Clean up.

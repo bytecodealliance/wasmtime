@@ -17,7 +17,7 @@ unsafe fn test_interesting_paths(dir_fd: wasi::Fd, arg: &str) {
         wasi::path_open(dir_fd, 0, "/dir/nested/file", 0, 0, 0, 0)
             .expect_err("opening a file with an absolute path")
             .raw_error(),
-        wasi::ERRNO_PERM,
+        wasi::ERRNO_PERM
     );
 
     // Now open it with a path containing "..".
@@ -43,7 +43,7 @@ unsafe fn test_interesting_paths(dir_fd: wasi::Fd, arg: &str) {
         wasi::path_open(dir_fd, 0, "dir/nested/file\0", 0, 0, 0, 0)
             .expect_err("opening a file with a trailing NUL")
             .raw_error(),
-        wasi::ERRNO_ILSEQ,
+        wasi::ERRNO_ILSEQ
     );
 
     // Now open it with a trailing slash.
@@ -52,7 +52,7 @@ unsafe fn test_interesting_paths(dir_fd: wasi::Fd, arg: &str) {
             .expect_err("opening a file with a trailing slash should fail")
             .raw_error(),
         wasi::ERRNO_NOTDIR,
-        wasi::ERRNO_NOENT,
+        wasi::ERRNO_NOENT
     );
 
     // Now open it with trailing slashes.
@@ -61,7 +61,7 @@ unsafe fn test_interesting_paths(dir_fd: wasi::Fd, arg: &str) {
             .expect_err("opening a file with trailing slashes should fail")
             .raw_error(),
         wasi::ERRNO_NOTDIR,
-        wasi::ERRNO_NOENT,
+        wasi::ERRNO_NOENT
     );
 
     // Now open the directory with a trailing slash.
@@ -90,7 +90,7 @@ unsafe fn test_interesting_paths(dir_fd: wasi::Fd, arg: &str) {
         wasi::path_open(dir_fd, 0, &bad_path, 0, 0, 0, 0)
             .expect_err("opening a file with too many \"..\"s in the path should fail")
             .raw_error(),
-        wasi::ERRNO_PERM,
+        wasi::ERRNO_PERM
     );
     wasi::path_unlink_file(dir_fd, "dir/nested/file")
         .expect("unlink_file on a symlink should succeed");

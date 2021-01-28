@@ -11,7 +11,7 @@ unsafe fn test_unlink_file_trailing_slashes(dir_fd: wasi::Fd) {
         wasi::path_unlink_file(dir_fd, "dir")
             .expect_err("unlink_file on a directory should fail")
             .raw_error(),
-        wasi::ERRNO_ISDIR,
+        wasi::ERRNO_ISDIR
     );
 
     // Test that unlinking it with a trailing flash fails.
@@ -20,7 +20,7 @@ unsafe fn test_unlink_file_trailing_slashes(dir_fd: wasi::Fd) {
         wasi::path_unlink_file(dir_fd, "dir/")
             .expect_err("unlink_file on a directory should fail")
             .raw_error(),
-        wasi::ERRNO_ISDIR,
+        wasi::ERRNO_ISDIR
     );
 
     // Clean up.
@@ -35,7 +35,7 @@ unsafe fn test_unlink_file_trailing_slashes(dir_fd: wasi::Fd) {
         wasi::path_unlink_file(dir_fd, "file/")
             .expect_err("unlink_file with a trailing slash should fail")
             .raw_error(),
-        wasi::ERRNO_NOTDIR,
+        wasi::ERRNO_NOTDIR
     );
 
     // Test that unlinking it with no trailing flash succeeds.

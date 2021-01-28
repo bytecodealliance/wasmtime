@@ -21,7 +21,7 @@ unsafe fn test_empty_poll() {
         wasi::poll_oneoff(r#in.as_ptr(), out.as_mut_ptr(), r#in.len())
             .expect_err("empty poll_oneoff should fail")
             .raw_error(),
-        wasi::ERRNO_INVAL,
+        wasi::ERRNO_INVAL
     );
 }
 
@@ -42,7 +42,7 @@ unsafe fn test_timeout() {
     let out = poll_oneoff_impl(&r#in).unwrap();
     assert_eq!(out.len(), 1, "should return 1 event");
     let event = &out[0];
-    assert_errno!(event.error, wasi::ERRNO_SUCCESS,);
+    assert_errno!(event.error, wasi::ERRNO_SUCCESS);
     assert_eq!(
         event.r#type,
         wasi::EVENTTYPE_CLOCK,

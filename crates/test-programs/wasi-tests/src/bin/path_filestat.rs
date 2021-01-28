@@ -92,7 +92,7 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         )
         .expect_err("ATIM & ATIM_NOW can't both be set")
         .raw_error(),
-        wasi::ERRNO_INVAL,
+        wasi::ERRNO_INVAL
     );
 
     wasi::fd_close(file_fd).expect("closing a file");

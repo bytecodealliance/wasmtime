@@ -19,7 +19,7 @@ unsafe fn test_dangling_symlink(dir_fd: wasi::Fd) {
         wasi::path_open(dir_fd, 0, "symlink", 0, 0, 0, 0)
             .expect_err("opening a dangling symlink as a file")
             .raw_error(),
-        wasi::ERRNO_LOOP,
+        wasi::ERRNO_LOOP
     );
 
     // Clean up.

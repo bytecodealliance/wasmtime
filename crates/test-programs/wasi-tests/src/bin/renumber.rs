@@ -53,7 +53,7 @@ unsafe fn test_renumber(dir_fd: wasi::Fd) {
         wasi::fd_close(fd_from)
             .expect_err("closing already closed file descriptor")
             .raw_error(),
-        wasi::ERRNO_BADF,
+        wasi::ERRNO_BADF
     );
 
     // Ensure that fd_to is still open.

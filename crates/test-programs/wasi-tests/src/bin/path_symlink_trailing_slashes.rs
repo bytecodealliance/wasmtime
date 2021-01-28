@@ -8,7 +8,7 @@ unsafe fn test_path_symlink_trailing_slashes(dir_fd: wasi::Fd) {
         wasi::path_symlink("source", dir_fd, "target/")
             .expect_err("link destination ending with a slash should fail")
             .raw_error(),
-        wasi::ERRNO_NOENT,
+        wasi::ERRNO_NOENT
     );
 
     // Dangling symlink: Without the trailing slash, this should succeed.
@@ -34,7 +34,7 @@ unsafe fn test_path_symlink_trailing_slashes(dir_fd: wasi::Fd) {
         wasi::path_symlink("source", dir_fd, "target")
             .expect_err("link destination already exists")
             .raw_error(),
-        wasi::ERRNO_EXIST,
+        wasi::ERRNO_EXIST
     );
     wasi::path_remove_directory(dir_fd, "target").expect("removing a directory");
 
@@ -47,7 +47,7 @@ unsafe fn test_path_symlink_trailing_slashes(dir_fd: wasi::Fd) {
             .expect_err("link destination already exists")
             .raw_error(),
         wasi::ERRNO_EXIST,
-        wasi::ERRNO_NOTDIR,
+        wasi::ERRNO_NOTDIR
     );
     wasi::path_unlink_file(dir_fd, "target").expect("removing a file");
 
@@ -59,7 +59,7 @@ unsafe fn test_path_symlink_trailing_slashes(dir_fd: wasi::Fd) {
         wasi::path_symlink("source", dir_fd, "target")
             .expect_err("link destination already exists")
             .raw_error(),
-        wasi::ERRNO_EXIST,
+        wasi::ERRNO_EXIST
     );
     wasi::path_unlink_file(dir_fd, "target").expect("removing a file");
 }

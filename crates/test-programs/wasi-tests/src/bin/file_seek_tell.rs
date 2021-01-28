@@ -61,7 +61,7 @@ unsafe fn test_file_seek_tell(dir_fd: wasi::Fd) {
         wasi::fd_seek(file_fd, -2000, wasi::WHENCE_CUR)
             .expect_err("seeking before byte 0 should be an error")
             .raw_error(),
-        wasi::ERRNO_INVAL,
+        wasi::ERRNO_INVAL
     );
 
     // Check that fd_read properly updates the file offset

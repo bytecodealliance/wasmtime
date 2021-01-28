@@ -25,7 +25,7 @@ unsafe fn test_remove_directory_trailing_slashes(dir_fd: wasi::Fd) {
         wasi::path_remove_directory(dir_fd, "file")
             .expect_err("remove_directory without a trailing slash on a file should fail")
             .raw_error(),
-        wasi::ERRNO_NOTDIR,
+        wasi::ERRNO_NOTDIR
     );
 
     // Test that removing it with a trailing slash fails.
@@ -34,7 +34,7 @@ unsafe fn test_remove_directory_trailing_slashes(dir_fd: wasi::Fd) {
         wasi::path_remove_directory(dir_fd, "file/")
             .expect_err("remove_directory with a trailing slash on a file should fail")
             .raw_error(),
-        wasi::ERRNO_NOTDIR,
+        wasi::ERRNO_NOTDIR
     );
 
     wasi::path_unlink_file(dir_fd, "file").expect("removing a file");

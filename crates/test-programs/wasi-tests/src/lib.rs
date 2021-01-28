@@ -69,23 +69,20 @@ pub unsafe fn drop_rights(fd: wasi::Fd, drop_base: wasi::Rights, drop_inheriting
 
 #[macro_export]
 macro_rules! assert_errno {
-    ($s:expr, $( $i:expr ),+,) => {
-        assert_errno!($s, $( $i ),+)
-    };
-    ($s:expr, windows => $i:expr, $( $rest:expr ),+) => {
+    ($s:expr, windows => $i:expr, $( $rest:tt )+) => {
         let e = $s;
         if $crate::TESTCONFIG.errno_expect_windows() {
             assert_errno!(e, $i);
         } else {
-            assert_errno!(e, $($rest),+, $i);
+            assert_errno!(e, $($rest)+, $i);
         }
     };
-    ($s:expr, unix => $i:expr, $( $rest:expr ),+) => {
+    ($s:expr, unix => $i:expr, $( $rest:tt )+) => {
         let e = $s;
         if $crate::TESTCONFIG.errno_expect_unix() {
             assert_errno!(e, $i);
         } else {
-            assert_errno!(e, $($rest),+, $i);
+            assert_errno!(e, $($rest)+, $i);
         }
     };
     ($s:expr, $( $i:expr ),+) => {

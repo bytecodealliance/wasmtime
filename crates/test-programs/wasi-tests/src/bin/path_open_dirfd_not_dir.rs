@@ -10,7 +10,7 @@ unsafe fn test_dirfd_not_dir(dir_fd: wasi::Fd) {
         wasi::path_open(file_fd, 0, "foo", wasi::OFLAGS_CREAT, 0, 0, 0)
             .expect_err("non-directory base fd should get ERRNO_NOTDIR")
             .raw_error(),
-        wasi::ERRNO_NOTDIR,
+        wasi::ERRNO_NOTDIR
     );
     wasi::fd_close(file_fd).expect("closing a file");
 }
