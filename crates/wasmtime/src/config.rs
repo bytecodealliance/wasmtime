@@ -137,6 +137,28 @@ impl Config {
         self
     }
 
+    /// Configures whether execution of WebAssembly will "consume fuel" to
+    /// either halt or yield execution as desired.
+    ///
+    /// This option is similar in purpose to [`Config::interruptable`] where
+    /// you can prevent infinitely-executing WebAssembly code. The difference
+    /// is that this option allows deterministic execution of WebAssembly code
+    /// by instrumenting generated code consume fuel as it executes. When fuel
+    /// runs out the behavior is defined by configuration within a [`Store`],
+    /// and by default a trap is raised.
+    ///
+    /// Note that a [`Store`] starts with no fuel, so if you enable this option
+    /// you'll have to be sure to pour some fuel into [`Store`] before
+    /// executing some code.
+    ///
+    /// By default this option is `false`.
+    ///
+    /// [`Store`]: crate::Store
+    pub fn consume_fuel(&mut self, enable: bool) -> &mut Self {
+        self.tunables.consume_fuel = enable;
+        self
+    }
+
     /// Configures the maximum amount of native stack space available to
     /// executing WebAssembly code.
     ///

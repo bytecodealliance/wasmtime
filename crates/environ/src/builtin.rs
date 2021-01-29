@@ -57,6 +57,8 @@ macro_rules! foreach_builtin_function {
             memory_atomic_wait64(vmctx, i32, i32, i64, i64) -> (i32);
             /// Returns an index for wasm's `memory.atomic.wait64` for imported memories.
             imported_memory_atomic_wait64(vmctx, i32, i32, i64, i64) -> (i32);
+            /// Invoked when fuel has run out while executing a function.
+            out_of_gas(vmctx) -> ();
         }
     };
 }

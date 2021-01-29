@@ -23,6 +23,10 @@ pub struct Tunables {
     /// calls and interrupts are implemented through the `VMInterrupts`
     /// structure, or `InterruptHandle` in the `wasmtime` crate.
     pub interruptable: bool,
+
+    /// Whether or not fuel is enabled for generated code, meaning that fuel
+    /// will be consumed every time a wasm instruction is executed.
+    pub consume_fuel: bool,
 }
 
 impl Default for Tunables {
@@ -57,6 +61,7 @@ impl Default for Tunables {
             generate_native_debuginfo: false,
             parse_wasm_debuginfo: true,
             interruptable: false,
+            consume_fuel: false,
         }
     }
 }

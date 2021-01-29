@@ -64,6 +64,8 @@ pub struct Config {
     debug_info: bool,
     canonicalize_nans: bool,
     interruptable: bool,
+    #[allow(missing_docs)]
+    pub consume_fuel: bool,
 
     // Note that we use 32-bit values here to avoid blowing the 64-bit address
     // space by requesting ungodly-large sizes/guards.
@@ -82,7 +84,8 @@ impl Config {
             .dynamic_memory_guard_size(self.dynamic_memory_guard_size.unwrap_or(0).into())
             .cranelift_nan_canonicalization(self.canonicalize_nans)
             .cranelift_opt_level(self.opt_level.to_wasmtime())
-            .interruptable(self.interruptable);
+            .interruptable(self.interruptable)
+            .consume_fuel(self.consume_fuel);
         return cfg;
     }
 }

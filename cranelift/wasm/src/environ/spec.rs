@@ -295,6 +295,12 @@ pub trait FuncEnvironment: TargetEnvironment {
         ReturnMode::NormalReturns
     }
 
+    /// Called after the locals for a function have been parsed, and the number
+    /// of variables defined by this function is provided.
+    fn after_locals(&mut self, num_locals_defined: usize) {
+        drop(num_locals_defined);
+    }
+
     /// Set up the necessary preamble definitions in `func` to access the global variable
     /// identified by `index`.
     ///
@@ -637,7 +643,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     ///
     /// This can be used to insert explicit interrupt or safepoint checking at
     /// the beginnings of loops.
-    fn translate_loop_header(&mut self, _pos: FuncCursor) -> WasmResult<()> {
+    fn translate_loop_header(&mut self, _builder: &mut FunctionBuilder) -> WasmResult<()> {
         // By default, don't emit anything.
         Ok(())
     }

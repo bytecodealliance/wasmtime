@@ -2,6 +2,7 @@ mod cli_tests;
 mod custom_signal_handler;
 mod debug;
 mod externals;
+mod fuel;
 mod func;
 mod fuzzing;
 mod globals;
