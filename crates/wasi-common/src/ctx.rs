@@ -64,6 +64,17 @@ pub struct WasiCtxBuilder(WasiCtx);
 
 impl WasiCtxBuilder {
     pub fn build(self) -> Result<WasiCtx, Error> {
+        use crate::file::TableFileExt;
+        let t = self.0.table();
+        for (fd, name) in ["stdin", "stdout", "stderr"].iter().enumerate() {
+            if t.get_file(fd as u32).is_err() {
+                return Err(anyhow::anyhow!(
+                    "Cannot build WasiCtx: Missing required file `{}`",
+                    name
+                ));
+            }
+        }
+        drop(t);
         Ok(self.0)
     }
 
