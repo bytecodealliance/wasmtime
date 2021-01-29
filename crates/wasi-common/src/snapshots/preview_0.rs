@@ -1,7 +1,15 @@
+use crate::file::{FileCaps, FileEntryExt, TableFileExt};
+use crate::sched::{
+    subscription::{RwEventFlags, SubscriptionResult},
+    Poll,
+};
 use crate::snapshots::preview_1::types as snapshot1_types;
 use crate::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1 as Snapshot1;
 use crate::{Error, ErrorExt, WasiCtx};
+use cap_std::time::Duration;
 use std::convert::{TryFrom, TryInto};
+use std::io::{IoSlice, IoSliceMut};
+use std::ops::Deref;
 use tracing::debug;
 use wiggle::GuestPtr;
 
@@ -41,26 +49,30 @@ impl TryFrom<Error> for types::Errno {
     }
 }
 
-impl From<snapshot1_types::Errno> for types::Errno {
-    fn from(e: snapshot1_types::Errno) -> types::Errno {
-        match e {
-            snapshot1_types::Errno::Success => types::Errno::Success,
-            _ => todo!(),
-        }
-    }
-}
+// Type conversions
+// The vast majority of the types defined in `types` and `snapshot1_types` are identical. However,
+// since they are defined in separate places for mechanical (wiggle) reasons, we need to manually
+// define conversion functions between them.
+// Below we have defined these functions as they are needed.
 
+/// Fd is a newtype wrapper around u32. Unwrap and wrap it.
 impl From<types::Fd> for snapshot1_types::Fd {
     fn from(fd: types::Fd) -> snapshot1_types::Fd {
         u32::from(fd).into()
     }
 }
+/// Fd is a newtype wrapper around u32. Unwrap and wrap it.
 impl From<snapshot1_types::Fd> for types::Fd {
     fn from(fd: snapshot1_types::Fd) -> types::Fd {
         u32::from(fd).into()
     }
 }
 
+/// Trivial conversion between two c-style enums that have the exact same set of variants.
+/// Could we do something unsafe and not list all these variants out? Probably, but doing
+/// it this way doesn't bother me much. I copy-pasted the list of variants out of the
+/// rendered rustdocs.
+/// LLVM ought to compile these From impls into no-ops, inshallah
 macro_rules! convert_enum {
     ($from:ty, $to:ty, $($var:ident),+) => {
         impl From<$from> for $to {
@@ -72,7 +84,87 @@ macro_rules! convert_enum {
         }
     }
 }
-
+convert_enum!(
+    snapshot1_types::Errno,
+    types::Errno,
+    Success,
+    TooBig,
+    Acces,
+    Addrinuse,
+    Addrnotavail,
+    Afnosupport,
+    Again,
+    Already,
+    Badf,
+    Badmsg,
+    Busy,
+    Canceled,
+    Child,
+    Connaborted,
+    Connrefused,
+    Connreset,
+    Deadlk,
+    Destaddrreq,
+    Dom,
+    Dquot,
+    Exist,
+    Fault,
+    Fbig,
+    Hostunreach,
+    Idrm,
+    Ilseq,
+    Inprogress,
+    Intr,
+    Inval,
+    Io,
+    Isconn,
+    Isdir,
+    Loop,
+    Mfile,
+    Mlink,
+    Msgsize,
+    Multihop,
+    Nametoolong,
+    Netdown,
+    Netreset,
+    Netunreach,
+    Nfile,
+    Nobufs,
+    Nodev,
+    Noent,
+    Noexec,
+    Nolck,
+    Nolink,
+    Nomem,
+    Nomsg,
+    Noprotoopt,
+    Nospc,
+    Nosys,
+    Notconn,
+    Notdir,
+    Notempty,
+    Notrecoverable,
+    Notsock,
+    Notsup,
+    Notty,
+    Nxio,
+    Overflow,
+    Ownerdead,
+    Perm,
+    Pipe,
+    Proto,
+    Protonosupport,
+    Prototype,
+    Range,
+    Rofs,
+    Spipe,
+    Srch,
+    Stale,
+    Timedout,
+    Txtbsy,
+    Xdev,
+    Notcapable
+);
 convert_enum!(
     types::Clockid,
     snapshot1_types::Clockid,
@@ -92,7 +184,6 @@ convert_enum!(
     Dontneed,
     Noreuse
 );
-
 convert_enum!(
     snapshot1_types::Filetype,
     types::Filetype,
@@ -105,9 +196,10 @@ convert_enum!(
     SymbolicLink,
     Unknown
 );
-
 convert_enum!(types::Whence, snapshot1_types::Whence, Cur, End, Set);
 
+/// Prestat isn't a c-style enum, its a union where the variant has a payload. Its the only one of
+/// those we need to convert, so write it by hand.
 impl From<snapshot1_types::Prestat> for types::Prestat {
     fn from(p: snapshot1_types::Prestat) -> types::Prestat {
         match p {
@@ -116,6 +208,8 @@ impl From<snapshot1_types::Prestat> for types::Prestat {
     }
 }
 
+/// Trivial conversion between two structs that have the exact same set of fields,
+/// with recursive descent into the field types.
 macro_rules! convert_struct {
     ($from:ty, $to:path, $($field:ident),+) => {
         impl From<$from> for $to {
@@ -129,7 +223,6 @@ macro_rules! convert_struct {
 }
 
 convert_struct!(snapshot1_types::PrestatDir, types::PrestatDir, pr_name_len);
-
 convert_struct!(
     snapshot1_types::Fdstat,
     types::Fdstat,
@@ -139,6 +232,9 @@ convert_struct!(
     fs_flags
 );
 
+/// Snapshot1 Filestat is incompatible with Snapshot0 Filestat - the nlink
+/// field is u32 on this Filestat, and u64 on theirs. If you've got more than
+/// 2^32 links I don't know what to tell you
 impl From<snapshot1_types::Filestat> for types::Filestat {
     fn from(f: snapshot1_types::Filestat) -> types::Filestat {
         types::Filestat {
@@ -154,6 +250,7 @@ impl From<snapshot1_types::Filestat> for types::Filestat {
     }
 }
 
+/// Trivial conversion between two bitflags that have the exact same set of flags.
 macro_rules! convert_flags {
     ($from:ty, $to:ty, $($flag:ident),+) => {
         impl From<$from> for $to {
@@ -170,10 +267,11 @@ macro_rules! convert_flags {
     }
 }
 
+/// Need to convert in both directions? This saves listing out the flags twice
 macro_rules! convert_flags_bidirectional {
-    ($from:ty, $to:ty, $($rest:tt)*) => {
-        convert_flags!($from, $to, $($rest)*);
-        convert_flags!($to, $from, $($rest)*);
+    ($from:ty, $to:ty, $($flag:tt)*) => {
+        convert_flags!($from, $to, $($flag)*);
+        convert_flags!($to, $from, $($flag)*);
     }
 }
 
@@ -186,13 +284,11 @@ convert_flags_bidirectional!(
     RSYNC,
     SYNC
 );
-
 convert_flags!(
     types::Lookupflags,
     snapshot1_types::Lookupflags,
     SYMLINK_FOLLOW
 );
-
 convert_flags!(
     types::Fstflags,
     snapshot1_types::Fstflags,
@@ -201,7 +297,6 @@ convert_flags!(
     MTIM,
     MTIM_NOW
 );
-
 convert_flags!(
     types::Oflags,
     snapshot1_types::Oflags,
@@ -210,7 +305,6 @@ convert_flags!(
     EXCL,
     TRUNC
 );
-
 convert_flags_bidirectional!(
     types::Rights,
     snapshot1_types::Rights,
@@ -245,6 +339,8 @@ convert_flags_bidirectional!(
     SOCK_SHUTDOWN
 );
 
+// This implementation, wherever possible, delegates directly to the Snapshot1 implementation,
+// performing the no-op type conversions along the way.
 impl<'a> wasi_unstable::WasiUnstable for WasiCtx {
     fn args_get<'b>(
         &self,
@@ -349,8 +445,34 @@ impl<'a> wasi_unstable::WasiUnstable for WasiCtx {
         Snapshot1::fd_filestat_set_times(self, fd.into(), atim, mtim, fst_flags.into())
     }
 
+    // NOTE on fd_read, fd_pread, fd_write, fd_pwrite implementations:
+    // Because the arguments to these function sit behind GuestPtrs, they are not values we
+    // can convert and pass to the corresponding function in Snapshot1.
+    // Instead, we have copied the implementation of these functions from the Snapshot1 code.
+    // The implementations are identical, but the `types::` in scope locally is different.
+    // The bodies of these functions is mostly about converting the GuestPtr and types::-based
+    // representation to a std::io::IoSlice(Mut) representation.
+
     fn fd_read(&self, fd: types::Fd, iovs: &types::IovecArray<'_>) -> Result<types::Size, Error> {
-        Snapshot1::fd_read(self, fd.into(), iovs)
+        let table = self.table();
+        let f = table.get_file(u32::from(fd))?.get_cap(FileCaps::READ)?;
+
+        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+            .iter()
+            .map(|iov_ptr| {
+                let iov_ptr = iov_ptr?;
+                let iov: types::Iovec = iov_ptr.read()?;
+                Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?)
+            })
+            .collect::<Result<_, Error>>()?;
+
+        let mut ioslices: Vec<IoSliceMut> = guest_slices
+            .iter_mut()
+            .map(|s| IoSliceMut::new(&mut *s))
+            .collect();
+
+        let bytes_read = f.read_vectored(&mut ioslices)?;
+        Ok(types::Size::try_from(bytes_read)?)
     }
 
     fn fd_pread(
@@ -359,7 +481,27 @@ impl<'a> wasi_unstable::WasiUnstable for WasiCtx {
         iovs: &types::IovecArray<'_>,
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
-        Snapshot1::fd_pread(self, fd.into(), iovs, offset)
+        let table = self.table();
+        let f = table
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::READ | FileCaps::SEEK)?;
+
+        let mut guest_slices: Vec<wiggle::GuestSliceMut<u8>> = iovs
+            .iter()
+            .map(|iov_ptr| {
+                let iov_ptr = iov_ptr?;
+                let iov: types::Iovec = iov_ptr.read()?;
+                Ok(iov.buf.as_array(iov.buf_len).as_slice_mut()?)
+            })
+            .collect::<Result<_, Error>>()?;
+
+        let mut ioslices: Vec<IoSliceMut> = guest_slices
+            .iter_mut()
+            .map(|s| IoSliceMut::new(&mut *s))
+            .collect();
+
+        let bytes_read = f.read_vectored_at(&mut ioslices, offset)?;
+        Ok(types::Size::try_from(bytes_read)?)
     }
 
     fn fd_write(
@@ -367,7 +509,25 @@ impl<'a> wasi_unstable::WasiUnstable for WasiCtx {
         fd: types::Fd,
         ciovs: &types::CiovecArray<'_>,
     ) -> Result<types::Size, Error> {
-        Snapshot1::fd_write(self, fd.into(), ciovs)
+        let table = self.table();
+        let f = table.get_file(u32::from(fd))?.get_cap(FileCaps::WRITE)?;
+
+        let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
+            .iter()
+            .map(|iov_ptr| {
+                let iov_ptr = iov_ptr?;
+                let iov: types::Ciovec = iov_ptr.read()?;
+                Ok(iov.buf.as_array(iov.buf_len).as_slice()?)
+            })
+            .collect::<Result<_, Error>>()?;
+
+        let ioslices: Vec<IoSlice> = guest_slices
+            .iter()
+            .map(|s| IoSlice::new(s.deref()))
+            .collect();
+        let bytes_written = f.write_vectored(&ioslices)?;
+
+        Ok(types::Size::try_from(bytes_written)?)
     }
 
     fn fd_pwrite(
@@ -376,7 +536,27 @@ impl<'a> wasi_unstable::WasiUnstable for WasiCtx {
         ciovs: &types::CiovecArray<'_>,
         offset: types::Filesize,
     ) -> Result<types::Size, Error> {
-        Snapshot1::fd_pwrite(self, fd.into(), ciovs, offset)
+        let table = self.table();
+        let f = table
+            .get_file(u32::from(fd))?
+            .get_cap(FileCaps::WRITE | FileCaps::SEEK)?;
+
+        let guest_slices: Vec<wiggle::GuestSlice<u8>> = ciovs
+            .iter()
+            .map(|iov_ptr| {
+                let iov_ptr = iov_ptr?;
+                let iov: types::Ciovec = iov_ptr.read()?;
+                Ok(iov.buf.as_array(iov.buf_len).as_slice()?)
+            })
+            .collect::<Result<_, Error>>()?;
+
+        let ioslices: Vec<IoSlice> = guest_slices
+            .iter()
+            .map(|s| IoSlice::new(s.deref()))
+            .collect();
+        let bytes_written = f.write_vectored_at(&ioslices, offset)?;
+
+        Ok(types::Size::try_from(bytes_written)?)
     }
 
     fn fd_prestat_get(&self, fd: types::Fd) -> Result<types::Prestat, Error> {
@@ -542,13 +722,150 @@ impl<'a> wasi_unstable::WasiUnstable for WasiCtx {
         Snapshot1::path_unlink_file(self, dirfd.into(), path)
     }
 
+    // NOTE on poll_oneoff implementation:
+    // Like fd_write and friends, the arguments and return values are behind GuestPtrs,
+    // so they are not values we can convert and pass to the poll_oneoff in Snapshot1.
+    // Instead, we have copied the implementation of these functions from the Snapshot1 code.
+    // The implementations are identical, but the `types::` in scope locally is different.
+    // The bodies of these functions is mostly about converting the GuestPtr and types::-based
+    // representation to use the Poll abstraction.
     fn poll_oneoff(
         &self,
         subs: &GuestPtr<types::Subscription>,
         events: &GuestPtr<types::Event>,
         nsubscriptions: types::Size,
     ) -> Result<types::Size, Error> {
-        Snapshot1::poll_oneoff(self, subs, events, nsubscriptions)
+        if nsubscriptions == 0 {
+            return Err(Error::invalid_argument().context("nsubscriptions must be nonzero"));
+        }
+
+        let table = self.table();
+        let mut poll = Poll::new();
+
+        let subs = subs.as_array(nsubscriptions);
+        for sub_elem in subs.iter() {
+            let sub_ptr = sub_elem?;
+            let sub = sub_ptr.read()?;
+            match sub.u {
+                types::SubscriptionU::Clock(clocksub) => match clocksub.id {
+                    types::Clockid::Monotonic => {
+                        let clock = self.clocks.monotonic.deref();
+                        let precision = Duration::from_micros(clocksub.precision);
+                        let duration = Duration::from_micros(clocksub.timeout);
+                        let deadline = if clocksub
+                            .flags
+                            .contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME)
+                        {
+                            self.clocks
+                                .creation_time
+                                .checked_add(duration)
+                                .ok_or_else(|| Error::overflow().context("deadline"))?
+                        } else {
+                            clock
+                                .now(precision)
+                                .checked_add(duration)
+                                .ok_or_else(|| Error::overflow().context("deadline"))?
+                        };
+                        poll.subscribe_monotonic_clock(
+                            clock,
+                            deadline,
+                            precision,
+                            sub.userdata.into(),
+                        )
+                    }
+                    _ => Err(Error::invalid_argument()
+                        .context("timer subscriptions only support monotonic timer"))?,
+                },
+                types::SubscriptionU::FdRead(readsub) => {
+                    let fd = readsub.file_descriptor;
+                    let file = table
+                        .get_file(u32::from(fd))?
+                        .get_cap(FileCaps::POLL_READWRITE)?;
+                    poll.subscribe_read(file, sub.userdata.into());
+                }
+                types::SubscriptionU::FdWrite(writesub) => {
+                    let fd = writesub.file_descriptor;
+                    let file = table
+                        .get_file(u32::from(fd))?
+                        .get_cap(FileCaps::POLL_READWRITE)?;
+                    poll.subscribe_write(file, sub.userdata.into());
+                }
+            }
+        }
+
+        self.sched.poll_oneoff(&poll)?;
+
+        let results = poll.results();
+        let num_results = results.len();
+        assert!(
+            num_results <= nsubscriptions as usize,
+            "results exceeds subscriptions"
+        );
+        let events = events.as_array(
+            num_results
+                .try_into()
+                .expect("not greater than nsubscriptions"),
+        );
+        for ((result, userdata), event_elem) in results.into_iter().zip(events.iter()) {
+            let event_ptr = event_elem?;
+            let userdata: types::Userdata = userdata.into();
+            event_ptr.write(match result {
+                SubscriptionResult::Read(r) => {
+                    let type_ = types::Eventtype::FdRead;
+                    match r {
+                        Ok((nbytes, flags)) => types::Event {
+                            userdata,
+                            error: types::Errno::Success,
+                            type_,
+                            fd_readwrite: types::EventFdReadwrite {
+                                nbytes,
+                                flags: types::Eventrwflags::from(&flags),
+                            },
+                        },
+                        Err(e) => types::Event {
+                            userdata,
+                            error: e.try_into().expect("non-trapping"),
+                            type_,
+                            fd_readwrite: fd_readwrite_empty(),
+                        },
+                    }
+                }
+                SubscriptionResult::Write(r) => {
+                    let type_ = types::Eventtype::FdWrite;
+                    match r {
+                        Ok((nbytes, flags)) => types::Event {
+                            userdata,
+                            error: types::Errno::Success,
+                            type_,
+                            fd_readwrite: types::EventFdReadwrite {
+                                nbytes,
+                                flags: types::Eventrwflags::from(&flags),
+                            },
+                        },
+                        Err(e) => types::Event {
+                            userdata,
+                            error: e.try_into()?,
+                            type_,
+                            fd_readwrite: fd_readwrite_empty(),
+                        },
+                    }
+                }
+                SubscriptionResult::MonotonicClock(r) => {
+                    let type_ = types::Eventtype::Clock;
+                    types::Event {
+                        userdata,
+                        error: match r {
+                            Ok(()) => types::Errno::Success,
+                            Err(e) => e.try_into()?,
+                        },
+                        type_,
+                        fd_readwrite: fd_readwrite_empty(),
+                    }
+                }
+            })?;
+        }
+
+        Ok(num_results.try_into().expect("results fit into memory"))
     }
 
     fn proc_exit(&self, status: types::Exitcode) -> wiggle::Trap {
@@ -587,5 +904,22 @@ impl<'a> wasi_unstable::WasiUnstable for WasiCtx {
 
     fn sock_shutdown(&self, _fd: types::Fd, _how: types::Sdflags) -> Result<(), Error> {
         Err(Error::trap("sock_shutdown unsupported"))
+    }
+}
+
+impl From<&RwEventFlags> for types::Eventrwflags {
+    fn from(flags: &RwEventFlags) -> types::Eventrwflags {
+        let mut out = types::Eventrwflags::empty();
+        if flags.contains(RwEventFlags::HANGUP) {
+            out = out | types::Eventrwflags::FD_READWRITE_HANGUP;
+        }
+        out
+    }
+}
+
+fn fd_readwrite_empty() -> types::EventFdReadwrite {
+    types::EventFdReadwrite {
+        nbytes: 0,
+        flags: types::Eventrwflags::empty(),
     }
 }
