@@ -34,7 +34,7 @@
 //!         // The x86_64 target ISA is not available.
 //!     }
 //!     Ok(mut isa_builder) => {
-//!         isa_builder.set("use_opcnt", "on");
+//!         isa_builder.set("use_pocnt", "on");
 //!         let isa = isa_builder.finish(shared_flags);
 //!     }
 //! }
