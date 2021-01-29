@@ -2601,10 +2601,6 @@ impl MachInst for Inst {
         }
     }
 
-    fn gen_zero_len_nop() -> Inst {
-        Inst::nop(0)
-    }
-
     fn gen_nop(preferred_size: usize) -> Inst {
         Inst::nop(std::cmp::min(preferred_size, 15) as u8)
     }

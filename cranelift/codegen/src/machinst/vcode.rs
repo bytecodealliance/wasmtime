@@ -726,7 +726,7 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
     }
 
     fn gen_zero_len_nop(&self) -> I {
-        I::gen_zero_len_nop()
+        I::gen_nop(0)
     }
 
     fn maybe_direct_reload(&self, insn: &I, reg: VirtualReg, slot: SpillSlot) -> Option<I> {
