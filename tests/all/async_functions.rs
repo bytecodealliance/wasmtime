@@ -301,3 +301,57 @@ fn dummy_waker() -> Waker {
         assert_eq!(ptr as usize, 5);
     }
 }
+
+#[test]
+fn iloop_with_fuel() {
+    let engine = Engine::new(Config::new().consume_fuel(true));
+    let store = Store::new_async(&engine);
+    store.out_of_fuel_async_yield(10);
+    let module = Module::new(
+        &engine,
+        "
+            (module
+                (func (loop br 0))
+                (start 0)
+            )
+        ",
+    )
+    .unwrap();
+    let instance = Instance::new_async(&store, &module, &[]);
+    let mut f = Pin::from(Box::new(instance));
+    let waker = dummy_waker();
+    let mut cx = Context::from_waker(&waker);
+
+    for _ in 0..100 {
+        assert!(f.as_mut().poll(&mut cx).is_pending());
+    }
+}
+
+#[test]
+fn fuel_eventually_finishes() {
+    let engine = Engine::new(Config::new().consume_fuel(true));
+    let store = Store::new_async(&engine);
+    store.out_of_fuel_async_yield(10);
+    let module = Module::new(
+        &engine,
+        "
+            (module
+                (func
+                    (local i32)
+                    i32.const 100
+                    local.set 0
+                    (loop
+                        local.get 0
+                        i32.const -1
+                        i32.add
+                        local.tee 0
+                        br_if 0)
+                )
+                (start 0)
+            )
+        ",
+    )
+    .unwrap();
+    let instance = Instance::new_async(&store, &module, &[]);
+    run(instance).unwrap();
+}

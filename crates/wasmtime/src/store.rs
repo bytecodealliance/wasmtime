@@ -78,17 +78,22 @@ pub(crate) struct StoreInner {
     instance_count: Cell<usize>,
     memory_count: Cell<usize>,
     table_count: Cell<usize>,
-<<<<<<< HEAD
 
     /// An adjustment to add to the fuel consumed value in `interrupts` above
     /// to get the true amount of fuel consumed.
     fuel_adj: Cell<i64>,
-=======
+
     #[cfg(feature = "async")]
     current_suspend: Cell<*const wasmtime_fiber::Suspend<Result<(), Trap>, (), Result<(), Trap>>>,
     #[cfg(feature = "async")]
     current_poll_cx: Cell<*mut Context<'static>>,
->>>>>>> Implement support for `async` functions in Wasmtime
+    out_of_gas_behavior: Cell<OutOfGas>,
+}
+
+#[derive(Copy, Clone)]
+enum OutOfGas {
+    Trap,
+    InjectFuel(u64),
 }
 
 struct HostInfoKey(VMExternRef);
@@ -202,6 +207,7 @@ impl Store {
                 current_suspend: Cell::new(ptr::null()),
                 #[cfg(feature = "async")]
                 current_poll_cx: Cell::new(ptr::null_mut()),
+                out_of_gas_behavior: Cell::new(OutOfGas::Trap),
             }),
         }
     }
@@ -576,6 +582,57 @@ impl Store {
         Ok(())
     }
 
+    /// Configures a [`Store`] to generate a [`Trap`] whenever it runs out of
+    /// fuel.
+    ///
+    /// When a [`Store`] is configured to consume fuel with
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel) this method will
+    /// configure what happens when fuel runs out. Specifically a WebAssembly
+    /// trap will be raised and the current execution of WebAssembly will be
+    /// aborted.
+    ///
+    /// This is the default behavior for running out of fuel.
+    pub fn out_of_fuel_trap(&self) {
+        self.inner.out_of_gas_behavior.set(OutOfGas::Trap);
+    }
+
+    /// Configures a [`Store`] to yield execution of async WebAssembly code
+    /// periodically.
+    ///
+    /// When a [`Store`] is configured to consume fuel with
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel) this method will
+    /// configure what happens when fuel runs out. Specifically executing
+    /// WebAssembly will be suspended and control will be yielded back to the
+    /// caller. This is only suitable with use of [async
+    /// stores](Store::new_async) because only then are futures used and yields
+    /// are possible.
+    ///
+    /// The purpose of this behavior is to ensure that futures which represent
+    /// execution of WebAssembly do not execute too long inside their
+    /// `Future::poll` method. This allows for some form of cooperative
+    /// multitasking where WebAssembly will voluntarily yield control
+    /// periodically (based on fuel consumption) back to the running thread.
+    ///
+    /// Note that futures returned by this crate will automatically flag
+    /// themselves to get re-polled if a yield happens. This means that
+    /// WebAssembly will continue to execute, just after giving the host an
+    /// opportunity to do something else.
+    ///
+    /// The `fuel_to_inject` parameter indicates how much fuel should be
+    /// automatically re-injected after fuel runs out. This is how much fuel
+    /// will be consumed between yields of an async future.
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if it is not called on an [async
+    /// store](Store::new_async).
+    pub fn out_of_fuel_async_yield(&self, fuel_to_inject: u64) {
+        assert!(self.is_async());
+        self.inner
+            .out_of_gas_behavior
+            .set(OutOfGas::InjectFuel(fuel_to_inject));
+    }
+
     pub(crate) fn is_async(&self) -> bool {
         self.inner.is_async
     }
@@ -755,6 +812,64 @@ impl Store {
             }
         }
     }
+
+    /// Immediately raise a trap on an out-of-gas condition.
+    fn out_of_gas_trap(&self) {
+        #[derive(Debug)]
+        struct OutOfGasError;
+
+        impl fmt::Display for OutOfGasError {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("all fuel consumed by WebAssembly")
+            }
+        }
+
+        impl std::error::Error for OutOfGasError {}
+        unsafe {
+            wasmtime_runtime::raise_lib_trap(wasmtime_runtime::Trap::User(Box::new(OutOfGasError)))
+        }
+    }
+
+    /// Yields execution to the caller on out-of-gas
+    ///
+    /// This only works on async futures and stores, and assumes that we're
+    /// executing on a fiber. This will yield execution back to the caller once
+    /// and when we come back we'll continue with `fuel_to_inject` more fuel.
+    fn out_of_gas_yield(&self, fuel_to_inject: u64) {
+        // Small future that yields once and then returns ()
+        #[derive(Default)]
+        struct Yield {
+            yielded: bool,
+        }
+
+        impl Future for Yield {
+            type Output = ();
+
+            fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+                if self.yielded {
+                    Poll::Ready(())
+                } else {
+                    // Flag ourselves as yielded to return next time, and also
+                    // flag the waker that we're already ready to get
+                    // re-enqueued for another poll.
+                    self.yielded = true;
+                    cx.waker().wake_by_ref();
+                    Poll::Pending
+                }
+            }
+        }
+
+        let mut future = Yield::default();
+        match self.block_on(unsafe { Pin::new_unchecked(&mut future) }) {
+            // If this finished successfully then we were resumed normally via a
+            // `poll`, so inject some more fuel and keep going.
+            Ok(()) => self.add_fuel(fuel_to_inject),
+            // If the future was dropped while we were yielded, then we need to
+            // clean up this fiber. Do so by raising a trap which will abort all
+            // wasm and get caught on the other side to clean things up.
+            Err(trap) => unsafe { wasmtime_runtime::raise_user_trap(trap.into()) },
+        }
+    }
 }
 
 unsafe impl TrapInfo for Store {
@@ -778,19 +893,12 @@ unsafe impl TrapInfo for Store {
     }
 
     fn out_of_gas(&self) {
-        #[derive(Debug)]
-        struct OutOfGas;
-
-        impl fmt::Display for OutOfGas {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("all fuel consumed by WebAssembly")
-            }
-        }
-
-        impl std::error::Error for OutOfGas {}
-
-        unsafe {
-            wasmtime_runtime::raise_lib_trap(wasmtime_runtime::Trap::User(Box::new(OutOfGas)))
+        match self.inner.out_of_gas_behavior.get() {
+            OutOfGas::Trap => self.out_of_gas_trap(),
+            #[cfg(feature = "async")]
+            OutOfGas::InjectFuel(fuel) => self.out_of_gas_yield(fuel),
+            #[cfg(not(feature = "async"))]
+            OutOfGas::InjectFuel(_) => unreachable!(),
         }
     }
 }
