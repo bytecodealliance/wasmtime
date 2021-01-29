@@ -105,8 +105,13 @@ fn imports_exports() -> Result<()> {
     assert_eq!(i.len(), 1);
     let import = i.next().unwrap();
     assert_eq!(import.module(), "");
-    assert_eq!(import.name(), Some("a"));
-    let module_ty = match import.ty() {
+    assert_eq!(import.name(), None);
+    let instance_ty = match import.ty() {
+        ExternType::Instance(t) => t,
+        _ => panic!("unexpected type"),
+    };
+    assert_eq!(instance_ty.exports().len(), 1);
+    let module_ty = match instance_ty.exports().next().unwrap().ty() {
         ExternType::Module(m) => m,
         _ => panic!("unexpected type"),
     };
@@ -148,8 +153,13 @@ fn imports_exports() -> Result<()> {
     assert_eq!(i.len(), 1);
     let import = i.next().unwrap();
     assert_eq!(import.module(), "");
-    assert_eq!(import.name(), Some("b"));
+    assert_eq!(import.name(), None);
     let instance_ty = match import.ty() {
+        ExternType::Instance(t) => t,
+        _ => panic!("unexpected type"),
+    };
+    assert_eq!(instance_ty.exports().len(), 1);
+    let instance_ty = match instance_ty.exports().next().unwrap().ty() {
         ExternType::Instance(m) => m,
         _ => panic!("unexpected type"),
     };
@@ -173,5 +183,116 @@ fn imports_exports() -> Result<()> {
         }
         _ => panic!("unexpected type"),
     }
+    Ok(())
+}
+
+#[test]
+fn limit_instances() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_module_linking(true);
+    config.max_instances(10);
+    let engine = Engine::new(&config);
+    let module = Module::new(
+        &engine,
+        r#"
+            (module $PARENT
+              (module $m0)
+              (module $m1
+                (instance (instantiate (module outer $PARENT $m0)))
+                (instance (instantiate (module outer $PARENT $m0))))
+              (module $m2
+                (instance (instantiate (module outer $PARENT $m1)))
+                (instance (instantiate (module outer $PARENT $m1))))
+              (module $m3
+                (instance (instantiate (module outer $PARENT $m2)))
+                (instance (instantiate (module outer $PARENT $m2))))
+              (module $m4
+                (instance (instantiate (module outer $PARENT $m3)))
+                (instance (instantiate (module outer $PARENT $m3))))
+              (module $m5
+                (instance (instantiate (module outer $PARENT $m4)))
+                (instance (instantiate (module outer $PARENT $m4))))
+              (instance (instantiate $m5))
+            )
+        "#,
+    )?;
+    let store = Store::new(&engine);
+    let err = Instance::new(&store, &module, &[]).err().unwrap();
+    assert!(
+        err.to_string().contains("resource limit exceeded"),
+        "bad error: {}",
+        err
+    );
+    Ok(())
+}
+
+#[test]
+fn limit_memories() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_module_linking(true);
+    config.wasm_multi_memory(true);
+    config.max_memories(10);
+    let engine = Engine::new(&config);
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (module $m0
+                (memory 1 1)
+                (memory 1 1)
+                (memory 1 1)
+                (memory 1 1)
+                (memory 1 1)
+              )
+
+              (instance (instantiate $m0))
+              (instance (instantiate $m0))
+              (instance (instantiate $m0))
+              (instance (instantiate $m0))
+            )
+        "#,
+    )?;
+    let store = Store::new(&engine);
+    let err = Instance::new(&store, &module, &[]).err().unwrap();
+    assert!(
+        err.to_string().contains("resource limit exceeded"),
+        "bad error: {}",
+        err
+    );
+    Ok(())
+}
+
+#[test]
+fn limit_tables() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_module_linking(true);
+    config.max_tables(10);
+    let engine = Engine::new(&config);
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (module $m0
+                (table 1 1 funcref)
+                (table 1 1 funcref)
+                (table 1 1 funcref)
+                (table 1 1 funcref)
+                (table 1 1 funcref)
+              )
+
+              (instance (instantiate $m0))
+              (instance (instantiate $m0))
+              (instance (instantiate $m0))
+              (instance (instantiate $m0))
+            )
+        "#,
+    )?;
+    let store = Store::new(&engine);
+    let err = Instance::new(&store, &module, &[]).err().unwrap();
+    assert!(
+        err.to_string().contains("resource limit exceeded"),
+        "bad error: {}",
+        err
+    );
     Ok(())
 }

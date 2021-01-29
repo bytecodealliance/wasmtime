@@ -1231,7 +1231,7 @@ impl LowerBackend for AArch64Backend {
     type MInst = Inst;
 
     fn lower<C: LowerCtx<I = Inst>>(&self, ctx: &mut C, ir_inst: IRInst) -> CodegenResult<()> {
-        lower_inst::lower_insn_to_regs(ctx, ir_inst)
+        lower_inst::lower_insn_to_regs(ctx, ir_inst, &self.flags)
     }
 
     fn lower_branch_group<C: LowerCtx<I = Inst>>(

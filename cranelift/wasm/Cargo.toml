@@ -12,12 +12,12 @@ keywords = ["webassembly", "wasm"]
 edition = "2018"
 
 [dependencies]
-wasmparser = { version = "0.71", default-features = false }
+wasmparser = { version = "0.73", default-features = false }
 cranelift-codegen = { path = "../codegen", version = "0.69.0", default-features = false }
 cranelift-entity = { path = "../entity", version = "0.69.0" }
 cranelift-frontend = { path = "../frontend", version = "0.69.0", default-features = false }
 hashbrown = { version = "0.9.1", optional = true }
-itertools = "0.9.0"
+itertools = "0.10.0"
 log = { version = "0.4.6", default-features = false }
 serde = { version = "1.0.94", features = ["derive"], optional = true }
 smallvec = "1.6.1"

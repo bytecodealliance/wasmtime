@@ -10,7 +10,11 @@ use crate::settings::Flags;
 #[cfg(feature = "testing_hooks")]
 use crate::regalloc::RegDiversions;
 
+#[cfg(feature = "unwind")]
+use crate::isa::unwind::systemv::RegisterMappingError;
+
 use core::any::Any;
+use core::hash::Hasher;
 use std::borrow::Cow;
 use std::fmt;
 use target_lexicon::Triple;
@@ -53,6 +57,10 @@ impl TargetIsa for TargetIsaAdapter {
 
     fn flags(&self) -> &Flags {
         self.backend.flags()
+    }
+
+    fn hash_all_flags(&self, hasher: &mut dyn Hasher) {
+        self.backend.hash_all_flags(hasher)
     }
 
     fn register_info(&self) -> RegInfo {
@@ -132,6 +140,11 @@ impl TargetIsa for TargetIsaAdapter {
     #[cfg(feature = "unwind")]
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         self.backend.create_systemv_cie()
+    }
+
+    #[cfg(feature = "unwind")]
+    fn map_regalloc_reg_to_dwarf(&self, r: Reg) -> Result<u16, RegisterMappingError> {
+        self.backend.map_reg_to_dwarf(r)
     }
 
     fn as_any(&self) -> &dyn Any {

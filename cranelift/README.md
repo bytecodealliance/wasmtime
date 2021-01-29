@@ -19,7 +19,7 @@ For more information, see [the documentation](docs/index.md).
 For an example of how to use the JIT, see the [JIT Demo], which
 implements a toy language.
 
-[JIT Demo]: https://github.com/bytecodealliance/simplejit-demo
+[JIT Demo]: https://github.com/bytecodealliance/cranelift-jit-demo
 
 For an example of how to use Cranelift to run WebAssembly code, see
 [Wasmtime], which implements a standalone, embeddable, VM using Cranelift.

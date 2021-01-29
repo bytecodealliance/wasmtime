@@ -48,7 +48,7 @@ pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<StoreIn
                 module
                     .initializers
                     .push(wasmtime_environ::Initializer::Import {
-                        module: "".into(),
+                        name: "".into(),
                         field: None,
                         index: wasm::EntityIndex::Function(func_index),
                     });
@@ -80,7 +80,7 @@ pub fn create_global(store: &Store, gt: &GlobalType, val: Val) -> Result<StoreIn
     )?;
 
     if let Some(x) = externref_init {
-        match handle.lookup("").unwrap() {
+        match handle.lookup_by_declaration(&wasm::EntityIndex::Global(global_id)) {
             wasmtime_runtime::Export::Global(g) => unsafe {
                 *(*g.definition).as_externref_mut() = Some(x.inner);
             },

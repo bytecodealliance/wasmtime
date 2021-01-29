@@ -90,7 +90,10 @@ int main() {
   wasmtime_linker_get_default(linker, &empty, &func);
   if (error != NULL)
     exit_with_error("failed to locate default export for module", error, NULL);
-  error = wasmtime_func_call(func, NULL, 0, NULL, 0, &trap);
+
+  wasm_val_vec_t args_vec = WASM_EMPTY_VEC;
+  wasm_val_vec_t results_vec = WASM_EMPTY_VEC;
+  error = wasmtime_func_call(func, &args_vec, &results_vec, &trap);
   if (error != NULL)
     exit_with_error("error calling default export", error, trap);
 

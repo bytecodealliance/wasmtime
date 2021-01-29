@@ -15,10 +15,10 @@ publish = false
 [dependencies]
 wasi-common = { path = "../", version = "0.22.0" }
 anyhow = "1.0"
-cap-std = "0.11"
-cap-fs-ext = "0.11"
-cap-time-ext = "0.11"
-cap-rand = "0.11"
+cap-std = "0.12"
+cap-fs-ext = "0.12"
+cap-time-ext = "0.12"
+cap-rand = "0.12"
 fs-set-times = "0.2.2"
 unsafe-io = "0.3"
 system-interface = { version = "0.5.4", features = ["cap_std_impls"] }

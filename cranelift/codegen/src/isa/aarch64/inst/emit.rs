@@ -1463,12 +1463,18 @@ impl MachInstEmit for Inst {
                         debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
                         (0b0, 0b11000, enc_size | 0b10)
                     }
+                    VecMisc2::Cnt => {
+                        debug_assert!(size == VectorSize::Size8x8 || size == VectorSize::Size8x16);
+                        (0b0, 0b00101, enc_size)
+                    }
                 };
                 sink.put4(enc_vec_rr_misc((q << 1) | u, size, bits_12_16, rd, rn));
             }
             &Inst::VecLanes { op, rd, rn, size } => {
                 let (q, size) = match size {
+                    VectorSize::Size8x8 => (0b0, 0b00),
                     VectorSize::Size8x16 => (0b1, 0b00),
+                    VectorSize::Size16x4 => (0b0, 0b01),
                     VectorSize::Size16x8 => (0b1, 0b01),
                     VectorSize::Size32x4 => (0b1, 0b10),
                     _ => unreachable!(),
@@ -2364,6 +2370,9 @@ impl MachInstEmit for Inst {
                     sink.emit_island();
                     sink.bind_label(jump_around_label);
                 }
+            }
+            &Inst::ValueLabelMarker { .. } => {
+                // Nothing; this is only used to compute debug info.
             }
         }
 

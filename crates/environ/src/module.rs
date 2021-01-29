@@ -142,12 +142,6 @@ impl ModuleType {
 /// memory initializers.
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Module {
-    /// The parent index of this module, used for the module linking proposal.
-    ///
-    /// This index is into the list of modules returned from compilation of a
-    /// single wasm file with nested modules.
-    pub parent: Option<usize>,
-
     /// The name of this wasm module, often found in the wasm file.
     pub name: Option<String>,
 
@@ -213,25 +207,26 @@ pub struct Module {
 pub enum Initializer {
     /// An imported item is required to be provided.
     Import {
-        /// Module name of this import
-        module: String,
-        /// Optional field name of this import
+        /// Name of this import
+        name: String,
+        /// The field name projection of this import. When module-linking is
+        /// enabled this is always `None`. Otherwise this is always `Some`.
         field: Option<String>,
         /// Where this import will be placed, which also has type information
         /// about the import.
         index: EntityIndex,
     },
 
-    /// A module from the parent's declared modules is inserted into our own
+    /// An export from a previously defined instance is being inserted into our
     /// index space.
-    AliasParentModule(ModuleIndex),
-
-    /// A module from the parent's declared modules is inserted into our own
-    /// index space.
-    #[allow(missing_docs)]
+    ///
+    /// Note that when the module linking proposal is enabled two-level imports
+    /// will implicitly desugar to this initializer.
     AliasInstanceExport {
+        /// The instance that we're referencing.
         instance: InstanceIndex,
-        export: usize,
+        /// Which export is being inserted into our index space.
+        export: String,
     },
 
     /// A module is being instantiated with previously configured intializers
@@ -239,13 +234,34 @@ pub enum Initializer {
     Instantiate {
         /// The module that this instance is instantiating.
         module: ModuleIndex,
-        /// The arguments provided to instantiation.
-        args: Vec<EntityIndex>,
+        /// The arguments provided to instantiation, along with their name in
+        /// the instance being instantiated.
+        args: IndexMap<String, EntityIndex>,
     },
 
-    /// A module is defined into the module index space, and which module is
-    /// being defined is specified by the index payload.
+    /// A module is being created from a set of compiled artifacts.
+    CreateModule {
+        /// The index of the artifact that's being convereted into a module.
+        artifact_index: usize,
+        /// The list of artifacts that this module value will be inheriting.
+        artifacts: Vec<usize>,
+        /// The list of modules that this module value will inherit.
+        modules: Vec<ModuleUpvar>,
+    },
+
+    /// A module is created from a closed-over-module value, defined when this
+    /// module was created.
     DefineModule(usize),
+}
+
+/// Where module values can come from when creating a new module from a compiled
+/// artifact.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ModuleUpvar {
+    /// A module value is inherited from the module creating the new module.
+    Inherit(usize),
+    /// A module value comes from the instance-to-be-created module index space.
+    Local(ModuleIndex),
 }
 
 impl Module {
@@ -351,11 +367,9 @@ impl Module {
     /// module name, field name, and type that's being imported.
     pub fn imports(&self) -> impl Iterator<Item = (&str, Option<&str>, EntityType)> {
         self.initializers.iter().filter_map(move |i| match i {
-            Initializer::Import {
-                module,
-                field,
-                index,
-            } => Some((module.as_str(), field.as_deref(), self.type_of(*index))),
+            Initializer::Import { name, field, index } => {
+                Some((name.as_str(), field.as_deref(), self.type_of(*index)))
+            }
             _ => None,
         })
     }
@@ -389,16 +403,16 @@ pub struct TypeTables {
 /// The type signature of known modules.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModuleSignature {
-    /// All imports in this module, listed in order with their module/name and
+    /// All imports in this module, listed in order with their name and
     /// what type they're importing.
-    pub imports: Vec<(String, Option<String>, EntityType)>,
+    pub imports: IndexMap<String, EntityType>,
     /// Exports are what an instance type conveys, so we go through an
     /// indirection over there.
     pub exports: InstanceTypeIndex,
 }
 
 /// The type signature of known instances.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct InstanceSignature {
     /// The name of what's being exported as well as its type signature.
     pub exports: IndexMap<String, EntityType>,

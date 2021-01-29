@@ -346,23 +346,35 @@ impl PrettyPrintSized for RegMem {
 #[derive(Copy, Clone, PartialEq)]
 pub enum AluRmiROpcode {
     Add,
+    Adc,
     Sub,
+    Sbb,
     And,
     Or,
     Xor,
     /// The signless, non-extending (N x N -> N, for N in {32,64}) variant.
     Mul,
+    /// 8-bit form of And. Handled separately as we don't have full 8-bit op
+    /// support (we just use wider instructions). Used only with some sequences
+    /// with SETcc.
+    And8,
+    /// 8-bit form of Or.
+    Or8,
 }
 
 impl fmt::Debug for AluRmiROpcode {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let name = match self {
             AluRmiROpcode::Add => "add",
+            AluRmiROpcode::Adc => "adc",
             AluRmiROpcode::Sub => "sub",
+            AluRmiROpcode::Sbb => "sbb",
             AluRmiROpcode::And => "and",
             AluRmiROpcode::Or => "or",
             AluRmiROpcode::Xor => "xor",
             AluRmiROpcode::Mul => "imul",
+            AluRmiROpcode::And8 => "and",
+            AluRmiROpcode::Or8 => "or",
         };
         write!(fmt, "{}", name)
     }
@@ -374,12 +386,28 @@ impl fmt::Display for AluRmiROpcode {
     }
 }
 
+impl AluRmiROpcode {
+    /// Is this a special-cased 8-bit ALU op?
+    pub fn is_8bit(self) -> bool {
+        match self {
+            AluRmiROpcode::And8 | AluRmiROpcode::Or8 => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Clone, PartialEq)]
 pub enum UnaryRmROpcode {
     /// Bit-scan reverse.
     Bsr,
     /// Bit-scan forward.
     Bsf,
+    /// Counts leading zeroes (Leading Zero CouNT).
+    Lzcnt,
+    /// Counts trailing zeroes (Trailing Zero CouNT).
+    Tzcnt,
+    /// Counts the number of ones (POPulation CouNT).
+    Popcnt,
 }
 
 impl fmt::Debug for UnaryRmROpcode {
@@ -387,6 +415,9 @@ impl fmt::Debug for UnaryRmROpcode {
         match self {
             UnaryRmROpcode::Bsr => write!(fmt, "bsr"),
             UnaryRmROpcode::Bsf => write!(fmt, "bsf"),
+            UnaryRmROpcode::Lzcnt => write!(fmt, "lzcnt"),
+            UnaryRmROpcode::Tzcnt => write!(fmt, "tzcnt"),
+            UnaryRmROpcode::Popcnt => write!(fmt, "popcnt"),
         }
     }
 }
@@ -1010,7 +1041,7 @@ impl fmt::Display for ExtMode {
 }
 
 /// These indicate the form of a scalar shift/rotate: left, signed right, unsigned right.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum ShiftKind {
     ShiftLeft,
     /// Inserts zeros in the most significant bits.

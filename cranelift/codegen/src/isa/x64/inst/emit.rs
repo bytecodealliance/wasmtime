@@ -1,5 +1,6 @@
 use crate::binemit::{Addend, Reloc};
 use crate::ir::immediates::{Ieee32, Ieee64};
+use crate::ir::LibCall;
 use crate::ir::TrapCode;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
@@ -84,6 +85,14 @@ impl RexFlags {
     }
 
     #[inline(always)]
+    fn always_emit_if_8bit_needed(&mut self, reg: u8) -> &mut Self {
+        if reg >= 4 && reg <= 7 {
+            self.always_emit();
+        }
+        self
+    }
+
+    #[inline(always)]
     fn must_clear_w(&self) -> bool {
         (self.0 & 1) != 0
     }
@@ -120,18 +129,20 @@ impl RexFlags {
 /// We may need to include one or more legacy prefix bytes before the REX prefix.  This enum
 /// covers only the small set of possibilities that we actually need.
 enum LegacyPrefixes {
-    /// No prefix bytes
+    /// No prefix bytes.
     None,
-    /// Operand Size Override -- here, denoting "16-bit operation"
+    /// Operand Size Override -- here, denoting "16-bit operation".
     _66,
-    /// The Lock prefix
+    /// The Lock prefix.
     _F0,
-    /// Operand size override and Lock
+    /// Operand size override and Lock.
     _66F0,
-    /// REPNE, but no specific meaning here -- is just an opcode extension
+    /// REPNE, but no specific meaning here -- is just an opcode extension.
     _F2,
-    /// REP/REPE, but no specific meaning here -- is just an opcode extension
+    /// REP/REPE, but no specific meaning here -- is just an opcode extension.
     _F3,
+    /// Operand size override and same effect as F3.
+    _66F3,
 }
 
 impl LegacyPrefixes {
@@ -148,6 +159,10 @@ impl LegacyPrefixes {
             }
             LegacyPrefixes::_F2 => sink.put1(0xF2),
             LegacyPrefixes::_F3 => sink.put1(0xF3),
+            LegacyPrefixes::_66F3 => {
+                sink.put1(0x66);
+                sink.put1(0xF3);
+            }
             LegacyPrefixes::None => (),
         }
     }
@@ -527,7 +542,7 @@ pub(crate) fn emit(
             src,
             dst: reg_g,
         } => {
-            let rex = if *is_64 {
+            let mut rex = if *is_64 {
                 RexFlags::set_w()
             } else {
                 RexFlags::clear_w()
@@ -581,17 +596,26 @@ pub(crate) fn emit(
                     }
                 }
             } else {
-                let (opcode_r, opcode_m, subopcode_i) = match op {
-                    AluRmiROpcode::Add => (0x01, 0x03, 0),
-                    AluRmiROpcode::Sub => (0x29, 0x2B, 5),
-                    AluRmiROpcode::And => (0x21, 0x23, 4),
-                    AluRmiROpcode::Or => (0x09, 0x0B, 1),
-                    AluRmiROpcode::Xor => (0x31, 0x33, 6),
+                let (opcode_r, opcode_m, subopcode_i, is_8bit) = match op {
+                    AluRmiROpcode::Add => (0x01, 0x03, 0, false),
+                    AluRmiROpcode::Adc => (0x11, 0x03, 0, false),
+                    AluRmiROpcode::Sub => (0x29, 0x2B, 5, false),
+                    AluRmiROpcode::Sbb => (0x19, 0x2B, 5, false),
+                    AluRmiROpcode::And => (0x21, 0x23, 4, false),
+                    AluRmiROpcode::Or => (0x09, 0x0B, 1, false),
+                    AluRmiROpcode::Xor => (0x31, 0x33, 6, false),
+                    AluRmiROpcode::And8 => (0x20, 0x22, 4, true),
+                    AluRmiROpcode::Or8 => (0x08, 0x0A, 1, true),
                     AluRmiROpcode::Mul => panic!("unreachable"),
                 };
+                assert!(!(is_8bit && *is_64));
 
                 match src {
                     RegMemImm::Reg { reg: reg_e } => {
+                        if is_8bit {
+                            rex.always_emit_if_8bit_needed(int_reg_enc(*reg_e));
+                            rex.always_emit_if_8bit_needed(int_reg_enc(reg_g.to_reg()));
+                        }
                         // GCC/llvm use the swapped operand encoding (viz., the R/RM vs RM/R
                         // duality). Do this too, so as to be able to compare generated machine
                         // code easily.
@@ -604,11 +628,12 @@ pub(crate) fn emit(
                             reg_g.to_reg(),
                             rex,
                         );
-                        // NB: if this is ever extended to handle byte size ops, be sure to retain
-                        // redundant REX prefixes.
                     }
 
                     RegMemImm::Mem { addr } => {
+                        if is_8bit {
+                            rex.always_emit_if_8bit_needed(int_reg_enc(reg_g.to_reg()));
+                        }
                         // Here we revert to the "normal" G-E ordering.
                         let amode = addr.finalize(state, sink);
                         emit_std_reg_mem(
@@ -625,6 +650,7 @@ pub(crate) fn emit(
                     }
 
                     RegMemImm::Imm { simm32 } => {
+                        assert!(!is_8bit);
                         let use_imm8 = low8_will_sign_extend_to_32(*simm32);
                         let opcode = if use_imm8 { 0x83 } else { 0x81 };
                         // And also here we use the "normal" G-E ordering.
@@ -645,16 +671,31 @@ pub(crate) fn emit(
         }
 
         Inst::UnaryRmR { size, op, src, dst } => {
-            let (prefix, rex_flags) = match size {
-                2 => (LegacyPrefixes::_66, RexFlags::clear_w()),
-                4 => (LegacyPrefixes::None, RexFlags::clear_w()),
-                8 => (LegacyPrefixes::None, RexFlags::set_w()),
+            let rex_flags = match size {
+                2 | 4 => RexFlags::clear_w(),
+                8 => RexFlags::set_w(),
+                _ => unreachable!(),
+            };
+
+            use UnaryRmROpcode::*;
+            let prefix = match size {
+                2 => match op {
+                    Bsr | Bsf => LegacyPrefixes::_66,
+                    Lzcnt | Tzcnt | Popcnt => LegacyPrefixes::_66F3,
+                },
+                4 | 8 => match op {
+                    Bsr | Bsf => LegacyPrefixes::None,
+                    Lzcnt | Tzcnt | Popcnt => LegacyPrefixes::_F3,
+                },
                 _ => unreachable!(),
             };
 
             let (opcode, num_opcodes) = match op {
-                UnaryRmROpcode::Bsr => (0x0fbd, 2),
-                UnaryRmROpcode::Bsf => (0x0fbc, 2),
+                Bsr => (0x0fbd, 2),
+                Bsf => (0x0fbc, 2),
+                Lzcnt => (0x0fbd, 2),
+                Tzcnt => (0x0fbc, 2),
+                Popcnt => (0x0fb8, 2),
             };
 
             match src {
@@ -685,8 +726,13 @@ pub(crate) fn emit(
         }
 
         Inst::Not { size, src } => {
+            let src = int_reg_enc(src.to_reg());
             let (opcode, prefix, rex_flags) = match size {
-                1 => (0xF6, LegacyPrefixes::None, RexFlags::clear_w()),
+                1 => (
+                    0xF6,
+                    LegacyPrefixes::None,
+                    *RexFlags::clear_w().always_emit_if_8bit_needed(src),
+                ),
                 2 => (0xF7, LegacyPrefixes::_66, RexFlags::clear_w()),
                 4 => (0xF7, LegacyPrefixes::None, RexFlags::clear_w()),
                 8 => (0xF7, LegacyPrefixes::None, RexFlags::set_w()),
@@ -694,13 +740,17 @@ pub(crate) fn emit(
             };
 
             let subopcode = 2;
-            let src = int_reg_enc(src.to_reg());
             emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, src, rex_flags)
         }
 
         Inst::Neg { size, src } => {
+            let src = int_reg_enc(src.to_reg());
             let (opcode, prefix, rex_flags) = match size {
-                1 => (0xF6, LegacyPrefixes::None, RexFlags::clear_w()),
+                1 => (
+                    0xF6,
+                    LegacyPrefixes::None,
+                    *RexFlags::clear_w().always_emit_if_8bit_needed(src),
+                ),
                 2 => (0xF7, LegacyPrefixes::_66, RexFlags::clear_w()),
                 4 => (0xF7, LegacyPrefixes::None, RexFlags::clear_w()),
                 8 => (0xF7, LegacyPrefixes::None, RexFlags::set_w()),
@@ -708,7 +758,6 @@ pub(crate) fn emit(
             };
 
             let subopcode = 3;
-            let src = int_reg_enc(src.to_reg());
             emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, src, rex_flags)
         }
 
@@ -717,7 +766,7 @@ pub(crate) fn emit(
             signed,
             divisor,
         } => {
-            let (opcode, prefix, rex_flags) = match size {
+            let (opcode, prefix, mut rex_flags) = match size {
                 1 => (0xF6, LegacyPrefixes::None, RexFlags::clear_w()),
                 2 => (0xF7, LegacyPrefixes::_66, RexFlags::clear_w()),
                 4 => (0xF7, LegacyPrefixes::None, RexFlags::clear_w()),
@@ -732,6 +781,9 @@ pub(crate) fn emit(
             match divisor {
                 RegMem::Reg { reg } => {
                     let src = int_reg_enc(*reg);
+                    if *size == 1 {
+                        rex_flags.always_emit_if_8bit_needed(src);
+                    }
                     emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, src, rex_flags)
                 }
                 RegMem::Mem { addr: src } => {
@@ -987,9 +1039,7 @@ pub(crate) fn emit(
                         ExtMode::BL | ExtMode::BQ => {
                             // A redundant REX prefix must be emitted for certain register inputs.
                             let enc_src = int_reg_enc(*src);
-                            if enc_src >= 4 && enc_src <= 7 {
-                                rex_flags.always_emit();
-                            };
+                            rex_flags.always_emit_if_8bit_needed(enc_src);
                         }
                         _ => {}
                     }
@@ -1084,9 +1134,7 @@ pub(crate) fn emit(
                         ExtMode::BL | ExtMode::BQ => {
                             // A redundant REX prefix must be emitted for certain register inputs.
                             let enc_src = int_reg_enc(*src);
-                            if enc_src >= 4 && enc_src <= 7 {
-                                rex_flags.always_emit();
-                            };
+                            rex_flags.always_emit_if_8bit_needed(enc_src);
                         }
                         _ => {}
                     }
@@ -1130,9 +1178,7 @@ pub(crate) fn emit(
                     let mut rex = RexFlags::clear_w();
 
                     let enc_src = int_reg_enc(*src);
-                    if enc_src >= 4 && enc_src <= 7 {
-                        rex.always_emit();
-                    };
+                    rex.always_emit_if_8bit_needed(enc_src);
 
                     // MOV r8, r/m8 is (REX.W==0) 88 /r
                     emit_std_reg_mem(
@@ -1215,7 +1261,11 @@ pub(crate) fn emit(
             match num_bits {
                 None => {
                     let (opcode, prefix, rex_flags) = match size {
-                        1 => (0xD2, LegacyPrefixes::None, RexFlags::clear_w()),
+                        1 => (
+                            0xD2,
+                            LegacyPrefixes::None,
+                            *RexFlags::clear_w().always_emit_if_8bit_needed(enc_dst),
+                        ),
                         2 => (0xD3, LegacyPrefixes::_66, RexFlags::clear_w()),
                         4 => (0xD3, LegacyPrefixes::None, RexFlags::clear_w()),
                         8 => (0xD3, LegacyPrefixes::None, RexFlags::set_w()),
@@ -1231,7 +1281,11 @@ pub(crate) fn emit(
 
                 Some(num_bits) => {
                     let (opcode, prefix, rex_flags) = match size {
-                        1 => (0xC0, LegacyPrefixes::None, RexFlags::clear_w()),
+                        1 => (
+                            0xC0,
+                            LegacyPrefixes::None,
+                            *RexFlags::clear_w().always_emit_if_8bit_needed(enc_dst),
+                        ),
                         2 => (0xC1, LegacyPrefixes::_66, RexFlags::clear_w()),
                         4 => (0xC1, LegacyPrefixes::None, RexFlags::clear_w()),
                         8 => (0xC1, LegacyPrefixes::None, RexFlags::set_w()),
@@ -1330,9 +1384,7 @@ pub(crate) fn emit(
                     let mut rex = RexFlags::clear_w();
                     // Here, a redundant REX prefix changes the meaning of the instruction.
                     let enc_g = int_reg_enc(*reg_g);
-                    if enc_g >= 4 && enc_g <= 7 {
-                        rex.always_emit();
-                    }
+                    rex.always_emit_if_8bit_needed(enc_g);
                     rex
                 }
                 _ => panic!("x64::Inst::Cmp_RMI_R::emit: unreachable"),
@@ -1343,9 +1395,7 @@ pub(crate) fn emit(
                     if *size == 1 {
                         // Check whether the E register forces the use of a redundant REX.
                         let enc_e = int_reg_enc(*reg_e);
-                        if enc_e >= 4 && enc_e <= 7 {
-                            rex.always_emit();
-                        }
+                        rex.always_emit_if_8bit_needed(enc_e);
                     }
 
                     // Use the swapped operands encoding for CMP, to stay consistent with the output of
@@ -2065,7 +2115,9 @@ pub(crate) fn emit(
                 SseOpcode::Pextrd => (LegacyPrefixes::_66, 0x0F3A16, 3),
                 SseOpcode::Pshufd => (LegacyPrefixes::_66, 0x0F70, 2),
                 SseOpcode::Roundps => (LegacyPrefixes::_66, 0x0F3A08, 3),
+                SseOpcode::Roundss => (LegacyPrefixes::_66, 0x0F3A0A, 3),
                 SseOpcode::Roundpd => (LegacyPrefixes::_66, 0x0F3A09, 3),
+                SseOpcode::Roundsd => (LegacyPrefixes::_66, 0x0F3A0B, 3),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
             let rex = if *is64 {
@@ -2761,9 +2813,7 @@ pub(crate) fn emit(
                 types::I8 => {
                     let mut rex_flags = RexFlags::clear_w();
                     let enc_src = int_reg_enc(*src);
-                    if enc_src >= 4 && enc_src <= 7 {
-                        rex_flags.always_emit();
-                    };
+                    rex_flags.always_emit_if_8bit_needed(enc_src);
                     (LegacyPrefixes::_F0, rex_flags, 0x0FB0)
                 }
                 types::I16 => (LegacyPrefixes::_66F0, RexFlags::clear_w(), 0x0FB1),
@@ -2961,6 +3011,50 @@ pub(crate) fn emit(
 
         Inst::EpiloguePlaceholder => {
             // Generate no code.
+        }
+
+        Inst::ElfTlsGetAddr { ref symbol } => {
+            // N.B.: Must be exactly this byte sequence; the linker requires it,
+            // because it must know how to rewrite the bytes.
+
+            // data16 lea gv@tlsgd(%rip),%rdi
+            sink.put1(0x66); // data16
+            sink.put1(0b01001000); // REX.W
+            sink.put1(0x8d); // LEA
+            sink.put1(0x3d); // ModRM byte
+            emit_reloc(sink, state, Reloc::ElfX86_64TlsGd, symbol, -4);
+            sink.put4(0); // offset
+
+            // data16 data16 callq __tls_get_addr-4
+            sink.put1(0x66); // data16
+            sink.put1(0x66); // data16
+            sink.put1(0b01001000); // REX.W
+            sink.put1(0xe8); // CALL
+            emit_reloc(
+                sink,
+                state,
+                Reloc::X86CallPLTRel4,
+                &ExternalName::LibCall(LibCall::ElfTlsGetAddr),
+                -4,
+            );
+            sink.put4(0); // offset
+        }
+
+        Inst::MachOTlsGetAddr { ref symbol } => {
+            // movq gv@tlv(%rip), %rdi
+            sink.put1(0x48); // REX.w
+            sink.put1(0x8b); // MOV
+            sink.put1(0x3d); // ModRM byte
+            emit_reloc(sink, state, Reloc::MachOX86_64Tlv, symbol, -4);
+            sink.put4(0); // offset
+
+            // callq *(%rdi)
+            sink.put1(0xff);
+            sink.put1(0x17);
+        }
+
+        Inst::ValueLabelMarker { .. } => {
+            // Nothing; this is only used to compute debug info.
         }
     }
 

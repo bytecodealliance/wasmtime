@@ -40,6 +40,20 @@ fn log_wasm(wasm: &[u8]) {
     }
 }
 
+/// Methods of timing out execution of a WebAssembly module
+#[derive(Debug)]
+pub enum Timeout {
+    /// No timeout is used, it should be guaranteed via some other means that
+    /// the input does not infinite loop.
+    None,
+    /// A time-based timeout is used with a sleeping thread sending a signal
+    /// after the specified duration.
+    Time(Duration),
+    /// Fuel-based timeouts are used where the specified fuel is all that the
+    /// provided wasm module is allowed to consume.
+    Fuel(u64),
+}
+
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
 /// panic or segfault or anything else that can be detected "passively".
 ///
@@ -47,12 +61,11 @@ fn log_wasm(wasm: &[u8]) {
 ///
 /// You can control which compiler is used via passing a `Strategy`.
 pub fn instantiate(wasm: &[u8], known_valid: bool, strategy: Strategy) {
-    instantiate_with_config(
-        wasm,
-        known_valid,
-        crate::fuzz_default_config(strategy).unwrap(),
-        None,
-    );
+    // Explicitly disable module linking for now since it's a breaking change to
+    // pre-module-linking modules due to imports
+    let mut cfg = crate::fuzz_default_config(strategy).unwrap();
+    cfg.wasm_module_linking(false);
+    instantiate_with_config(wasm, known_valid, cfg, Timeout::None);
 }
 
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
@@ -65,28 +78,38 @@ pub fn instantiate_with_config(
     wasm: &[u8],
     known_valid: bool,
     mut config: Config,
-    timeout: Option<Duration>,
+    timeout: Timeout,
 ) {
     crate::init_fuzzing();
 
-    config.interruptable(timeout.is_some());
+    config.interruptable(match &timeout {
+        Timeout::Time(_) => true,
+        _ => false,
+    });
+    config.consume_fuel(match &timeout {
+        Timeout::Fuel(_) => true,
+        _ => false,
+    });
     let engine = Engine::new(&config);
     let store = Store::new(&engine);
 
-    // If a timeout is requested then we spawn a helper thread to wait for the
-    // requested time and then send us a signal to get interrupted. We also
-    // arrange for the thread's sleep to get interrupted if we return early (or
-    // the wasm returns within the time limit), which allows the thread to get
-    // torn down.
-    //
-    // This prevents us from creating a huge number of sleeping threads if this
-    // function is executed in a loop, like it does on nightly fuzzing
-    // infrastructure.
-
     let mut timeout_state = SignalOnDrop::default();
-    if let Some(timeout) = timeout {
-        let handle = store.interrupt_handle().unwrap();
-        timeout_state.spawn_timeout(timeout, move || handle.interrupt());
+    match timeout {
+        Timeout::Fuel(fuel) => store.add_fuel(fuel),
+        // If a timeout is requested then we spawn a helper thread to wait for
+        // the requested time and then send us a signal to get interrupted. We
+        // also arrange for the thread's sleep to get interrupted if we return
+        // early (or the wasm returns within the time limit), which allows the
+        // thread to get torn down.
+        //
+        // This prevents us from creating a huge number of sleeping threads if
+        // this function is executed in a loop, like it does on nightly fuzzing
+        // infrastructure.
+        Timeout::Time(timeout) => {
+            let handle = store.interrupt_handle().unwrap();
+            timeout_state.spawn_timeout(timeout, move || handle.interrupt());
+        }
+        Timeout::None => {}
     }
 
     log_wasm(wasm);
@@ -99,8 +122,14 @@ pub fn instantiate_with_config(
 
     match Instance::new(&store, &module, &imports) {
         Ok(_) => {}
-        // Allow traps which can happen normally with `unreachable`
+        // Allow traps which can happen normally with `unreachable` or a timeout
         Err(e) if e.downcast_ref::<Trap>().is_some() => {}
+        // Allow resource exhaustion since this is something that our wasm-smith
+        // generator doesn't guarantee is forbidden.
+        Err(e) if e.to_string().contains("resource limit exceeded") => {}
+        // Also allow errors related to fuel consumption
+        Err(e) if e.to_string().contains("all fuel consumed") => {}
+        // Everything else should be a bug in the fuzzer
         Err(e) => panic!("failed to instantiate {}", e),
     }
 }
@@ -381,13 +410,16 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
 /// Executes the wast `test` spectest with the `config` specified.
 ///
 /// Ensures that spec tests pass regardless of the `Config`.
-pub fn spectest(config: crate::generators::Config, test: crate::generators::SpecTest) {
+pub fn spectest(fuzz_config: crate::generators::Config, test: crate::generators::SpecTest) {
     crate::init_fuzzing();
-    log::debug!("running {:?} with {:?}", test.file, config);
-    let mut config = config.to_wasmtime();
+    log::debug!("running {:?} with {:?}", test.file, fuzz_config);
+    let mut config = fuzz_config.to_wasmtime();
     config.wasm_reference_types(false);
     config.wasm_bulk_memory(false);
     let store = Store::new(&Engine::new(&config));
+    if fuzz_config.consume_fuel {
+        store.add_fuel(u64::max_value());
+    }
     let mut wast_context = WastContext::new(store);
     wast_context.register_spectest().unwrap();
     wast_context
@@ -396,16 +428,22 @@ pub fn spectest(config: crate::generators::Config, test: crate::generators::Spec
 }
 
 /// Execute a series of `table.get` and `table.set` operations.
-pub fn table_ops(config: crate::generators::Config, ops: crate::generators::table_ops::TableOps) {
+pub fn table_ops(
+    fuzz_config: crate::generators::Config,
+    ops: crate::generators::table_ops::TableOps,
+) {
     let _ = env_logger::try_init();
 
     let num_dropped = Rc::new(Cell::new(0));
 
     {
-        let mut config = config.to_wasmtime();
+        let mut config = fuzz_config.to_wasmtime();
         config.wasm_reference_types(true);
         let engine = Engine::new(&config);
         let store = Store::new(&engine);
+        if fuzz_config.consume_fuel {
+            store.add_fuel(u64::max_value());
+        }
 
         let wasm = ops.to_wasm_binary();
         log_wasm(&wasm);
@@ -518,6 +556,9 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
     wasmtime_config.cranelift_nan_canonicalization(true);
     let wasmtime_engine = Engine::new(&wasmtime_config);
     let wasmtime_store = Store::new(&wasmtime_engine);
+    if config.consume_fuel {
+        wasmtime_store.add_fuel(u64::max_value());
+    }
     let wasmtime_module =
         Module::new(&wasmtime_engine, &wasm).expect("Wasmtime can compile module");
     let wasmtime_instance = Instance::new(&wasmtime_store, &wasmtime_module, &[])

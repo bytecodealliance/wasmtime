@@ -340,3 +340,47 @@ fn grow_externref_tables_via_api() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn read_write_memory_via_api() {
+    let cfg = Config::new();
+    let store = Store::new(&Engine::new(&cfg));
+    let ty = MemoryType::new(Limits::new(1, None));
+    let mem = Memory::new(&store, ty);
+    mem.grow(1).unwrap();
+
+    let value = b"hello wasm";
+    mem.write(mem.data_size() - value.len(), value).unwrap();
+
+    let mut buffer = [0u8; 10];
+    mem.read(mem.data_size() - buffer.len(), &mut buffer)
+        .unwrap();
+    assert_eq!(value, &buffer);
+
+    // Error conditions.
+
+    // Out of bounds write.
+
+    let res = mem.write(mem.data_size() - value.len() + 1, value);
+    assert!(res.is_err());
+    assert_ne!(
+        unsafe { mem.data_unchecked()[mem.data_size() - value.len() + 1] },
+        value[0],
+        "no data is written",
+    );
+
+    // Out of bounds read.
+
+    buffer[0] = 0x42;
+    let res = mem.read(mem.data_size() - buffer.len() + 1, &mut buffer);
+    assert!(res.is_err());
+    assert_eq!(buffer[0], 0x42, "no data is read");
+
+    // Read offset overflow.
+    let res = mem.read(usize::MAX, &mut buffer);
+    assert!(res.is_err());
+
+    // Write offset overflow.
+    let res = mem.write(usize::MAX, &mut buffer);
+    assert!(res.is_err());
+}

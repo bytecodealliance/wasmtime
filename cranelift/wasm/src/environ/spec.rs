@@ -205,25 +205,34 @@ pub enum ReturnMode {
 
 /// An entry in the alias section of a wasm module (from the module linking
 /// proposal)
-pub enum Alias {
-    /// A parent's module is being aliased into our own index space.
-    ///
-    /// Note that the index here is in the parent's index space, not our own.
-    ParentModule(ModuleIndex),
+pub enum Alias<'a> {
+    /// An outer module's module is being aliased into our own index space.
+    OuterModule {
+        /// The number of modules above us that we're referencing.
+        relative_depth: u32,
+        /// The module index in the outer module's index space we're referencing.
+        index: ModuleIndex,
+    },
 
-    /// A parent's type is being aliased into our own index space
+    /// An outer module's type is being aliased into our own index space
     ///
-    /// Note that the index here is in the parent's index space, not our own.
-    ParentType(TypeIndex),
+    /// Note that the index here is in the outer module's index space, not our
+    /// own.
+    OuterType {
+        /// The number of modules above us that we're referencing.
+        relative_depth: u32,
+        /// The type index in the outer module's index space we're referencing.
+        index: TypeIndex,
+    },
 
     /// A previously created instance is having one of its exports aliased into
     /// our index space.
-    Child {
+    InstanceExport {
         /// The index we're aliasing.
         instance: InstanceIndex,
         /// The nth export that we're inserting into our own index space
         /// locally.
-        export: usize,
+        export: &'a str,
     },
 }
 
@@ -284,6 +293,12 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// to append custom epilogues.
     fn return_mode(&self) -> ReturnMode {
         ReturnMode::NormalReturns
+    }
+
+    /// Called after the locals for a function have been parsed, and the number
+    /// of variables defined by this function is provided.
+    fn after_locals(&mut self, num_locals_defined: usize) {
+        drop(num_locals_defined);
     }
 
     /// Set up the necessary preamble definitions in `func` to access the global variable
@@ -628,7 +643,7 @@ pub trait FuncEnvironment: TargetEnvironment {
     ///
     /// This can be used to insert explicit interrupt or safepoint checking at
     /// the beginnings of loops.
-    fn translate_loop_header(&mut self, _pos: FuncCursor) -> WasmResult<()> {
+    fn translate_loop_header(&mut self, _builder: &mut FunctionBuilder) -> WasmResult<()> {
         // By default, don't emit anything.
         Ok(())
     }
@@ -1014,30 +1029,15 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         drop(amount);
     }
 
-    /// Declares that a module will come later with the type signature provided.
-    fn declare_module(&mut self, ty: TypeIndex) -> WasmResult<()> {
-        drop(ty);
-        Err(WasmError::Unsupported("module linking".to_string()))
-    }
-
     /// Called at the beginning of translating a module.
     ///
-    /// The `index` argument is a monotonically increasing index which
-    /// corresponds to the nth module that's being translated. This is not the
-    /// 32-bit index in the current module's index space. For example the first
-    /// call to `module_start` will have index 0.
-    ///
     /// Note that for nested modules this may be called multiple times.
-    fn module_start(&mut self, index: usize) {
-        drop(index);
-    }
+    fn module_start(&mut self) {}
 
     /// Called at the end of translating a module.
     ///
     /// Note that for nested modules this may be called multiple times.
-    fn module_end(&mut self, index: usize) {
-        drop(index);
-    }
+    fn module_end(&mut self) {}
 
     /// Indicates that this module will have `amount` instances.
     fn reserve_instances(&mut self, amount: u32) {
@@ -1046,7 +1046,11 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
 
     /// Declares a new instance which this module will instantiate before it's
     /// instantiated.
-    fn declare_instance(&mut self, module: ModuleIndex, args: Vec<EntityIndex>) -> WasmResult<()> {
+    fn declare_instance(
+        &mut self,
+        module: ModuleIndex,
+        args: Vec<(&'data str, EntityIndex)>,
+    ) -> WasmResult<()> {
         drop((module, args));
         Err(WasmError::Unsupported("wasm instance".to_string()))
     }
@@ -1056,7 +1060,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
     /// The alias comes from the `instance` specified (or the parent if `None`
     /// is supplied) and the index is either in the module's own index spaces
     /// for the parent or an index into the exports for nested instances.
-    fn declare_alias(&mut self, alias: Alias) -> WasmResult<()> {
+    fn declare_alias(&mut self, alias: Alias<'data>) -> WasmResult<()> {
         drop(alias);
         Err(WasmError::Unsupported("wasm alias".to_string()))
     }

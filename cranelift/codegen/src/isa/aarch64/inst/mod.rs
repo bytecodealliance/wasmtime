@@ -7,7 +7,7 @@ use crate::binemit::CodeOffset;
 use crate::ir::types::{
     B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS, R32, R64,
 };
-use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, TrapCode, Type};
+use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, TrapCode, Type, ValueLabel};
 use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
@@ -331,6 +331,8 @@ pub enum VecMisc2 {
     Frintm,
     /// Floating point round to integral, rounding towards plus infinity
     Frintp,
+    /// Population count per byte
+    Cnt,
 }
 
 /// A Vector narrowing operation with two registers.
@@ -1208,6 +1210,12 @@ pub enum Inst {
         /// The needed space before the next deadline.
         needed_space: CodeOffset,
     },
+
+    /// A definition of a value label.
+    ValueLabelMarker {
+        reg: Reg,
+        label: ValueLabel,
+    },
 }
 
 fn count_zero_half_words(mut value: u64, num_half_words: u8) -> usize {
@@ -2015,6 +2023,9 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             memarg_regs(mem, collector);
         }
         &Inst::VirtualSPOffsetAdj { .. } => {}
+        &Inst::ValueLabelMarker { reg, .. } => {
+            collector.add_use(reg);
+        }
         &Inst::EmitIsland { .. } => {}
     }
 }
@@ -2765,6 +2776,9 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         }
         &mut Inst::VirtualSPOffsetAdj { .. } => {}
         &mut Inst::EmitIsland { .. } => {}
+        &mut Inst::ValueLabelMarker { ref mut reg, .. } => {
+            map_use(mapper, reg);
+        }
     }
 }
 
@@ -2893,11 +2907,10 @@ impl MachInst for Inst {
         }
     }
 
-    fn gen_zero_len_nop() -> Inst {
-        Inst::Nop0
-    }
-
     fn gen_nop(preferred_size: usize) -> Inst {
+        if preferred_size == 0 {
+            return Inst::Nop0;
+        }
         // We can't give a NOP (or any insn) < 4 bytes.
         assert!(preferred_size >= 4);
         Inst::Nop4
@@ -2959,6 +2972,17 @@ impl MachInst for Inst {
 
     fn ref_type_regclass(_: &settings::Flags) -> RegClass {
         RegClass::I64
+    }
+
+    fn gen_value_label_marker(label: ValueLabel, reg: Reg) -> Self {
+        Inst::ValueLabelMarker { label, reg }
+    }
+
+    fn defines_value_label(&self) -> Option<(ValueLabel, Reg)> {
+        match self {
+            Inst::ValueLabelMarker { label, reg } => Some((*label, *reg)),
+            _ => None,
+        }
     }
 }
 
@@ -3752,6 +3776,7 @@ impl Inst {
                     VecMisc2::Frintz => ("frintz", size),
                     VecMisc2::Frintm => ("frintm", size),
                     VecMisc2::Frintp => ("frintp", size),
+                    VecMisc2::Cnt => ("cnt", size),
                 };
 
                 let rd_size = if is_shll { size.widen() } else { size };
@@ -4068,6 +4093,10 @@ impl Inst {
                 format!("virtual_sp_offset_adjust {}", offset)
             }
             &Inst::EmitIsland { needed_space } => format!("emit_island {}", needed_space),
+
+            &Inst::ValueLabelMarker { label, reg } => {
+                format!("value_label {:?}, {}", label, reg.show_rru(mb_rru))
+            }
         }
     }
 }

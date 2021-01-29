@@ -7,6 +7,7 @@ use crate::ir::Inst as IRInst;
 use crate::ir::{InstructionData, Opcode, TrapCode};
 use crate::machinst::lower::*;
 use crate::machinst::*;
+use crate::settings::Flags;
 use crate::{CodegenError, CodegenResult};
 
 use crate::isa::aarch64::abi::*;
@@ -24,6 +25,7 @@ use super::lower::*;
 pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     insn: IRInst,
+    flags: &Flags,
 ) -> CodegenResult<()> {
     let op = ctx.data(insn).opcode();
     let inputs = insn_inputs(ctx, insn);
@@ -960,143 +962,57 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Popcnt => {
-            // Lower popcount using the following algorithm:
-            //
-            //   x -= (x >> 1) & 0x5555555555555555
-            //   x = (x & 0x3333333333333333) + ((x >> 2) & 0x3333333333333333)
-            //   x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0f
-            //   x += x << 8
-            //   x += x << 16
-            //   x += x << 32
-            //   x >> 56
-            let ty = ty.unwrap();
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            // FIXME(#1537): zero-extend 8/16/32-bit operands only to 32 bits,
-            // and fix the sequence below to work properly for this.
-            let narrow_mode = NarrowValueMode::ZeroExtend64;
-            let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
-            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let ty = ty.unwrap();
+            let size = ScalarSize::from_operand_size(OperandSize::from_ty(ty));
+            let tmp = ctx.alloc_tmp(I8X16).only_reg().unwrap();
 
-            // If this is a 32-bit Popcnt, use Lsr32 to clear the top 32 bits of the register, then
-            // the rest of the code is identical to the 64-bit version.
-            // lsr [wx]d, [wx]n, #1
-            ctx.emit(Inst::AluRRImmShift {
-                alu_op: choose_32_64(ty, ALUOp::Lsr32, ALUOp::Lsr64),
-                rd: rd,
+            // fmov tmp, rn
+            // cnt tmp.8b, tmp.8b
+            // addp tmp.8b, tmp.8b, tmp.8b / addv tmp, tmp.8b / (no instruction for 8-bit inputs)
+            // umov rd, tmp.b[0]
+
+            ctx.emit(Inst::MovToFpu {
+                rd: tmp,
                 rn: rn,
-                immshift: ImmShift::maybe_from_u64(1).unwrap(),
+                size,
             });
-
-            // and xd, xd, #0x5555555555555555
-            ctx.emit(Inst::AluRRImmLogic {
-                alu_op: ALUOp::And64,
-                rd: rd,
-                rn: rd.to_reg(),
-                imml: ImmLogic::maybe_from_u64(0x5555555555555555, I64).unwrap(),
-            });
-
-            // sub xd, xn, xd
-            ctx.emit(Inst::AluRRR {
-                alu_op: ALUOp::Sub64,
-                rd: rd,
-                rn: rn,
-                rm: rd.to_reg(),
-            });
-
-            // and xt, xd, #0x3333333333333333
-            ctx.emit(Inst::AluRRImmLogic {
-                alu_op: ALUOp::And64,
-                rd: tmp,
-                rn: rd.to_reg(),
-                imml: ImmLogic::maybe_from_u64(0x3333333333333333, I64).unwrap(),
-            });
-
-            // lsr xd, xd, #2
-            ctx.emit(Inst::AluRRImmShift {
-                alu_op: ALUOp::Lsr64,
-                rd: rd,
-                rn: rd.to_reg(),
-                immshift: ImmShift::maybe_from_u64(2).unwrap(),
-            });
-
-            // and xd, xd, #0x3333333333333333
-            ctx.emit(Inst::AluRRImmLogic {
-                alu_op: ALUOp::And64,
-                rd: rd,
-                rn: rd.to_reg(),
-                imml: ImmLogic::maybe_from_u64(0x3333333333333333, I64).unwrap(),
-            });
-
-            // add xt, xd, xt
-            ctx.emit(Inst::AluRRR {
-                alu_op: ALUOp::Add64,
-                rd: tmp,
-                rn: rd.to_reg(),
-                rm: tmp.to_reg(),
-            });
-
-            // add xt, xt, xt LSR #4
-            ctx.emit(Inst::AluRRRShift {
-                alu_op: ALUOp::Add64,
+            ctx.emit(Inst::VecMisc {
+                op: VecMisc2::Cnt,
                 rd: tmp,
                 rn: tmp.to_reg(),
-                rm: tmp.to_reg(),
-                shiftop: ShiftOpAndAmt::new(
-                    ShiftOp::LSR,
-                    ShiftOpShiftImm::maybe_from_shift(4).unwrap(),
-                ),
+                size: VectorSize::Size8x8,
             });
 
-            // and xt, xt, #0x0f0f0f0f0f0f0f0f
-            ctx.emit(Inst::AluRRImmLogic {
-                alu_op: ALUOp::And64,
-                rd: tmp,
-                rn: tmp.to_reg(),
-                imml: ImmLogic::maybe_from_u64(0x0f0f0f0f0f0f0f0f, I64).unwrap(),
-            });
+            match ScalarSize::from_ty(ty) {
+                ScalarSize::Size8 => {}
+                ScalarSize::Size16 => {
+                    // ADDP is usually cheaper than ADDV.
+                    ctx.emit(Inst::VecRRR {
+                        alu_op: VecALUOp::Addp,
+                        rd: tmp,
+                        rn: tmp.to_reg(),
+                        rm: tmp.to_reg(),
+                        size: VectorSize::Size8x8,
+                    });
+                }
+                ScalarSize::Size32 | ScalarSize::Size64 => {
+                    ctx.emit(Inst::VecLanes {
+                        op: VecLanesOp::Addv,
+                        rd: tmp,
+                        rn: tmp.to_reg(),
+                        size: VectorSize::Size8x8,
+                    });
+                }
+                sz => panic!("Unexpected scalar FP operand size: {:?}", sz),
+            }
 
-            // add xt, xt, xt, LSL #8
-            ctx.emit(Inst::AluRRRShift {
-                alu_op: ALUOp::Add64,
-                rd: tmp,
+            ctx.emit(Inst::MovFromVec {
+                rd,
                 rn: tmp.to_reg(),
-                rm: tmp.to_reg(),
-                shiftop: ShiftOpAndAmt::new(
-                    ShiftOp::LSL,
-                    ShiftOpShiftImm::maybe_from_shift(8).unwrap(),
-                ),
-            });
-
-            // add xt, xt, xt, LSL #16
-            ctx.emit(Inst::AluRRRShift {
-                alu_op: ALUOp::Add64,
-                rd: tmp,
-                rn: tmp.to_reg(),
-                rm: tmp.to_reg(),
-                shiftop: ShiftOpAndAmt::new(
-                    ShiftOp::LSL,
-                    ShiftOpShiftImm::maybe_from_shift(16).unwrap(),
-                ),
-            });
-
-            // add xt, xt, xt, LSL #32
-            ctx.emit(Inst::AluRRRShift {
-                alu_op: ALUOp::Add64,
-                rd: tmp,
-                rn: tmp.to_reg(),
-                rm: tmp.to_reg(),
-                shiftop: ShiftOpAndAmt::new(
-                    ShiftOp::LSL,
-                    ShiftOpShiftImm::maybe_from_shift(32).unwrap(),
-                ),
-            });
-
-            // lsr xd, xt, #56
-            ctx.emit(Inst::AluRRImmShift {
-                alu_op: ALUOp::Lsr64,
-                rd: rd,
-                rn: tmp.to_reg(),
-                immshift: ImmShift::maybe_from_u64(56).unwrap(),
+                idx: 0,
+                size: VectorSize::Size8x16,
             });
         }
 
@@ -1803,7 +1719,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert!(inputs.len() == sig.params.len());
                     assert!(outputs.len() == sig.returns.len());
                     (
-                        AArch64ABICaller::from_func(sig, &extname, dist, caller_conv)?,
+                        AArch64ABICaller::from_func(sig, &extname, dist, caller_conv, flags)?,
                         &inputs[..],
                     )
                 }
@@ -1813,7 +1729,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert!(inputs.len() - 1 == sig.params.len());
                     assert!(outputs.len() == sig.returns.len());
                     (
-                        AArch64ABICaller::from_ptr(sig, ptr, op, caller_conv)?,
+                        AArch64ABICaller::from_ptr(sig, ptr, op, caller_conv, flags)?,
                         &inputs[1..],
                     )
                 }
@@ -1822,8 +1738,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             abi.emit_stack_pre_adjust(ctx);
             assert!(inputs.len() == abi.num_args());
-            for (i, input) in inputs.iter().enumerate() {
-                let arg_reg = put_input_in_reg(ctx, *input, NarrowValueMode::None);
+            for i in abi.get_copy_to_arg_order() {
+                let input = inputs[i];
+                let arg_reg = put_input_in_reg(ctx, input, NarrowValueMode::None);
                 abi.emit_copy_regs_to_arg(ctx, i, ValueRegs::one(arg_reg));
             }
             abi.emit_call(ctx);

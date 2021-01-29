@@ -83,7 +83,8 @@ fn main() -> anyhow::Result<()> {
                     .arg("userenv.lib")
                     .arg("ntdll.lib")
                     .arg("shell32.lib")
-                    .arg("ole32.lib");
+                    .arg("ole32.lib")
+                    .arg("bcrypt.lib");
                 if is_dir {
                     "main.exe".to_string()
                 } else {

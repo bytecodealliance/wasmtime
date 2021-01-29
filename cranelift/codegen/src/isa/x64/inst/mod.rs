@@ -1,8 +1,10 @@
 //! This module defines x86_64-specific machine instruction types.
 
 use crate::binemit::{CodeOffset, StackMap};
-use crate::ir::{types, ExternalName, Opcode, SourceLoc, TrapCode, Type};
+use crate::ir::{types, ExternalName, Opcode, SourceLoc, TrapCode, Type, ValueLabel};
+use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::settings as x64_settings;
+use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::{settings, settings::Flags, CodegenError, CodegenResult};
 use alloc::boxed::Box;
@@ -474,6 +476,17 @@ pub enum Inst {
     /// reports its own `def`s/`use`s/`mod`s; this adds complexity (the instruction list is no
     /// longer flat) and requires knowledge about semantics and initial-value independence anyway.
     XmmUninitializedValue { dst: Writable<Reg> },
+
+    /// A call to the `ElfTlsGetAddr` libcall. Returns address
+    /// of TLS symbol in rax.
+    ElfTlsGetAddr { symbol: ExternalName },
+
+    /// A Mach-O TLS symbol access. Returns address of the TLS
+    /// symbol in rax.
+    MachOTlsGetAddr { symbol: ExternalName },
+
+    /// A definition of a value label.
+    ValueLabelMarker { reg: Reg, label: ValueLabel },
 }
 
 pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
@@ -532,7 +545,10 @@ impl Inst {
             | Inst::XmmCmpRmR { .. }
             | Inst::XmmLoadConst { .. }
             | Inst::XmmMinMaxSeq { .. }
-            | Inst::XmmUninitializedValue { .. } => None,
+            | Inst::XmmUninitializedValue { .. }
+            | Inst::ElfTlsGetAddr { .. }
+            | Inst::MachOTlsGetAddr { .. }
+            | Inst::ValueLabelMarker { .. } => None,
 
             // These use dynamic SSE opcodes.
             Inst::GprToXmm { op, .. }
@@ -550,7 +566,7 @@ impl Inst {
 
 impl Inst {
     pub(crate) fn nop(len: u8) -> Self {
-        debug_assert!(len <= 16);
+        debug_assert!(len <= 15);
         Self::Nop { len }
     }
 
@@ -1243,8 +1259,26 @@ impl PrettyPrint for Inst {
             (if is_64 { "q" } else { "l" }).to_string()
         }
 
+        fn suffix_lqb(is_64: bool, is_8: bool) -> String {
+            match (is_64, is_8) {
+                (_, true) => "b".to_string(),
+                (true, false) => "q".to_string(),
+                (false, false) => "l".to_string(),
+            }
+        }
+
         fn size_lq(is_64: bool) -> u8 {
             if is_64 {
+                8
+            } else {
+                4
+            }
+        }
+
+        fn size_lqb(is_64: bool, is_8: bool) -> u8 {
+            if is_8 {
+                1
+            } else if is_64 {
                 8
             } else {
                 4
@@ -1271,9 +1305,9 @@ impl PrettyPrint for Inst {
                 dst,
             } => format!(
                 "{} {}, {}",
-                ljustify2(op.to_string(), suffix_lq(*is_64)),
-                src.show_rru_sized(mb_rru, size_lq(*is_64)),
-                show_ireg_sized(dst.to_reg(), mb_rru, size_lq(*is_64)),
+                ljustify2(op.to_string(), suffix_lqb(*is_64, op.is_8bit())),
+                src.show_rru_sized(mb_rru, size_lqb(*is_64, op.is_8bit())),
+                show_ireg_sized(dst.to_reg(), mb_rru, size_lqb(*is_64, op.is_8bit())),
             ),
 
             Inst::UnaryRmR { src, dst, op, size } => format!(
@@ -1762,6 +1796,18 @@ impl PrettyPrint for Inst {
             Inst::Hlt => "hlt".into(),
 
             Inst::Ud2 { trap_code } => format!("ud2 {}", trap_code),
+
+            Inst::ElfTlsGetAddr { ref symbol } => {
+                format!("elf_tls_get_addr {:?}", symbol)
+            }
+
+            Inst::MachOTlsGetAddr { ref symbol } => {
+                format!("macho_tls_get_addr {:?}", symbol)
+            }
+
+            Inst::ValueLabelMarker { label, reg } => {
+                format!("value_label {:?}, {}", label, reg.show_rru(mb_rru))
+            }
         }
     }
 }
@@ -1777,7 +1823,7 @@ impl fmt::Debug for Inst {
 fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
     // This is a bit subtle. If some register is in the modified set, then it may not be in either
     // the use or def sets. However, enforcing that directly is somewhat difficult. Instead,
-    // regalloc.rs will "fix" this for us by removing the the modified set from the use and def
+    // regalloc.rs will "fix" this for us by removing the modified set from the use and def
     // sets.
     match inst {
         Inst::AluRmiR { src, dst, .. } => {
@@ -1849,6 +1895,10 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
                 || *op == SseOpcode::Pextrw
                 || *op == SseOpcode::Pextrd
                 || *op == SseOpcode::Pshufd
+                || *op == SseOpcode::Roundss
+                || *op == SseOpcode::Roundsd
+                || *op == SseOpcode::Roundps
+                || *op == SseOpcode::Roundpd
             {
                 src.get_regs_as_uses(collector);
                 collector.add_def(*dst);
@@ -2021,6 +2071,22 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         | Inst::Fence { .. } => {
             // No registers are used.
         }
+
+        Inst::ElfTlsGetAddr { .. } | Inst::MachOTlsGetAddr { .. } => {
+            // All caller-saves are clobbered.
+            //
+            // We use the SysV calling convention here because the
+            // pseudoinstruction (and relocation that it emits) is specific to
+            // ELF systems; other x86-64 targets with other conventions (i.e.,
+            // Windows) use different TLS strategies.
+            for reg in X64ABIMachineSpec::get_regs_clobbered_by_call(CallConv::SystemV) {
+                collector.add_def(reg);
+            }
+        }
+
+        Inst::ValueLabelMarker { reg, .. } => {
+            collector.add_use(*reg);
+        }
     }
 }
 
@@ -2064,6 +2130,17 @@ impl Amode {
                 // RIP isn't involved in regalloc.
             }
         }
+    }
+
+    /// Offset the amode by a fixed offset.
+    pub(crate) fn offset(&self, offset: u32) -> Self {
+        let mut ret = self.clone();
+        match &mut ret {
+            &mut Amode::ImmReg { ref mut simm32, .. } => *simm32 += offset,
+            &mut Amode::ImmRegRegShift { ref mut simm32, .. } => *simm32 += offset,
+            _ => panic!("Cannot offset amode: {:?}", self),
+        }
+        ret
     }
 }
 
@@ -2163,6 +2240,10 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
                 || *op == SseOpcode::Pextrw
                 || *op == SseOpcode::Pextrd
                 || *op == SseOpcode::Pshufd
+                || *op == SseOpcode::Roundss
+                || *op == SseOpcode::Roundsd
+                || *op == SseOpcode::Roundps
+                || *op == SseOpcode::Roundpd
             {
                 src.map_uses(mapper);
                 map_def(mapper, dst);
@@ -2385,6 +2466,8 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             dst.map_uses(mapper);
         }
 
+        Inst::ValueLabelMarker { ref mut reg, .. } => map_use(mapper, reg),
+
         Inst::Ret
         | Inst::EpiloguePlaceholder
         | Inst::JmpKnown { .. }
@@ -2396,6 +2479,8 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         | Inst::Ud2 { .. }
         | Inst::Hlt
         | Inst::AtomicRmwSeq { .. }
+        | Inst::ElfTlsGetAddr { .. }
+        | Inst::MachOTlsGetAddr { .. }
         | Inst::Fence { .. } => {
             // Instruction doesn't explicitly mention any regs, so it can't have any virtual
             // regs that we'd need to remap.  Hence no action required.
@@ -2473,6 +2558,25 @@ impl MachInst for Inst {
         }
     }
 
+    fn stack_op_info(&self) -> Option<MachInstStackOpInfo> {
+        match self {
+            Self::VirtualSPOffsetAdj { offset } => Some(MachInstStackOpInfo::NomSPAdj(*offset)),
+            Self::MovRM {
+                size: 8,
+                src,
+                dst: SyntheticAmode::NominalSPOffset { simm32 },
+            } => Some(MachInstStackOpInfo::StoreNomSPOff(*src, *simm32 as i64)),
+            Self::Mov64MR {
+                src: SyntheticAmode::NominalSPOffset { simm32 },
+                dst,
+            } => Some(MachInstStackOpInfo::LoadNomSPOff(
+                dst.to_reg(),
+                *simm32 as i64,
+            )),
+            _ => None,
+        }
+    }
+
     fn gen_move(dst_reg: Writable<Reg>, src_reg: Reg, ty: Type) -> Inst {
         let rc_dst = dst_reg.to_reg().get_class();
         let rc_src = src_reg.get_class();
@@ -2497,12 +2601,8 @@ impl MachInst for Inst {
         }
     }
 
-    fn gen_zero_len_nop() -> Inst {
-        Inst::Nop { len: 0 }
-    }
-
     fn gen_nop(preferred_size: usize) -> Inst {
-        Inst::nop((preferred_size % 16) as u8)
+        Inst::nop(std::cmp::min(preferred_size, 15) as u8)
     }
 
     fn maybe_direct_reload(&self, _reg: VirtualReg, _slot: SpillSlot) -> Option<Inst> {
@@ -2548,77 +2648,88 @@ impl MachInst for Inst {
         ty: Type,
         mut alloc_tmp: F,
     ) -> SmallVec<[Self; 4]> {
-        // We don't support 128-bit constants.
-        assert!(value <= u64::MAX as u128);
         let mut ret = SmallVec::new();
-        let to_reg = to_regs
-            .only_reg()
-            .expect("multi-reg values not supported on x64");
-        if ty == types::F32 {
-            if value == 0 {
-                ret.push(Inst::xmm_rm_r(
-                    SseOpcode::Xorps,
-                    RegMem::reg(to_reg.to_reg()),
-                    to_reg,
-                ));
-            } else {
-                let tmp = alloc_tmp(types::I32);
-                ret.push(Inst::imm(OperandSize::Size32, value as u64, tmp));
-
-                ret.push(Inst::gpr_to_xmm(
-                    SseOpcode::Movd,
-                    RegMem::reg(tmp.to_reg()),
-                    OperandSize::Size32,
-                    to_reg,
-                ));
-            }
-        } else if ty == types::F64 {
-            if value == 0 {
-                ret.push(Inst::xmm_rm_r(
-                    SseOpcode::Xorpd,
-                    RegMem::reg(to_reg.to_reg()),
-                    to_reg,
-                ));
-            } else {
-                let tmp = alloc_tmp(types::I64);
-                ret.push(Inst::imm(OperandSize::Size64, value as u64, tmp));
-
-                ret.push(Inst::gpr_to_xmm(
-                    SseOpcode::Movq,
-                    RegMem::reg(tmp.to_reg()),
-                    OperandSize::Size64,
-                    to_reg,
-                ));
-            }
+        if ty == types::I128 {
+            ret.push(Inst::imm(
+                OperandSize::Size64,
+                value as u64,
+                to_regs.regs()[0],
+            ));
+            ret.push(Inst::imm(
+                OperandSize::Size64,
+                (value >> 64) as u64,
+                to_regs.regs()[1],
+            ));
         } else {
-            // Must be an integer type.
-            debug_assert!(
-                ty == types::B1
-                    || ty == types::I8
-                    || ty == types::B8
-                    || ty == types::I16
-                    || ty == types::B16
-                    || ty == types::I32
-                    || ty == types::B32
-                    || ty == types::I64
-                    || ty == types::B64
-                    || ty == types::R32
-                    || ty == types::R64
-            );
-            if value == 0 {
-                ret.push(Inst::alu_rmi_r(
-                    ty == types::I64,
-                    AluRmiROpcode::Xor,
-                    RegMemImm::reg(to_reg.to_reg()),
-                    to_reg,
-                ));
+            let to_reg = to_regs
+                .only_reg()
+                .expect("multi-reg values not supported on x64");
+            if ty == types::F32 {
+                if value == 0 {
+                    ret.push(Inst::xmm_rm_r(
+                        SseOpcode::Xorps,
+                        RegMem::reg(to_reg.to_reg()),
+                        to_reg,
+                    ));
+                } else {
+                    let tmp = alloc_tmp(types::I32);
+                    ret.push(Inst::imm(OperandSize::Size32, value as u64, tmp));
+
+                    ret.push(Inst::gpr_to_xmm(
+                        SseOpcode::Movd,
+                        RegMem::reg(tmp.to_reg()),
+                        OperandSize::Size32,
+                        to_reg,
+                    ));
+                }
+            } else if ty == types::F64 {
+                if value == 0 {
+                    ret.push(Inst::xmm_rm_r(
+                        SseOpcode::Xorpd,
+                        RegMem::reg(to_reg.to_reg()),
+                        to_reg,
+                    ));
+                } else {
+                    let tmp = alloc_tmp(types::I64);
+                    ret.push(Inst::imm(OperandSize::Size64, value as u64, tmp));
+
+                    ret.push(Inst::gpr_to_xmm(
+                        SseOpcode::Movq,
+                        RegMem::reg(tmp.to_reg()),
+                        OperandSize::Size64,
+                        to_reg,
+                    ));
+                }
             } else {
-                let value = value as u64;
-                ret.push(Inst::imm(
-                    OperandSize::from_bytes(ty.bytes()),
-                    value.into(),
-                    to_reg,
-                ));
+                // Must be an integer type.
+                debug_assert!(
+                    ty == types::B1
+                        || ty == types::I8
+                        || ty == types::B8
+                        || ty == types::I16
+                        || ty == types::B16
+                        || ty == types::I32
+                        || ty == types::B32
+                        || ty == types::I64
+                        || ty == types::B64
+                        || ty == types::R32
+                        || ty == types::R64
+                );
+                if value == 0 {
+                    ret.push(Inst::alu_rmi_r(
+                        ty == types::I64,
+                        AluRmiROpcode::Xor,
+                        RegMemImm::reg(to_reg.to_reg()),
+                        to_reg,
+                    ));
+                } else {
+                    let value = value as u64;
+                    ret.push(Inst::imm(
+                        OperandSize::from_bytes(ty.bytes()),
+                        value.into(),
+                        to_reg,
+                    ));
+                }
             }
         }
         ret
@@ -2634,6 +2745,17 @@ impl MachInst for Inst {
 
     fn ref_type_regclass(_: &settings::Flags) -> RegClass {
         RegClass::I64
+    }
+
+    fn gen_value_label_marker(label: ValueLabel, reg: Reg) -> Self {
+        Inst::ValueLabelMarker { label, reg }
+    }
+
+    fn defines_value_label(&self) -> Option<(ValueLabel, Reg)> {
+        match self {
+            Inst::ValueLabelMarker { label, reg } => Some((*label, *reg)),
+            _ => None,
+        }
     }
 
     type LabelUse = LabelUse;

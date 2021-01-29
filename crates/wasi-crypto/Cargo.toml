@@ -1,0 +1,22 @@
+[package]
+name = "wasmtime-wasi-crypto"
+version = "0.22.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Wasmtime implementation of the wasi-crypto API"
+documentation = "https://docs.rs/wasmtime-wasi-crypto"
+license = "Apache-2.0 WITH LLVM-exception"
+categories = ["wasm", "cryptography"]
+keywords = ["webassembly", "wasm", "crypto"]
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0"
+wasi-crypto = { path = "spec/implementations/hostcalls/rust", version = "0.1.4" }
+wasmtime = { path = "../wasmtime", version = "0.22.0", default-features = false }
+wasmtime-wiggle = { path = "../wiggle/wasmtime", version = "0.22.0" }
+wiggle = { path = "../wiggle", version = "0.22.0" }
+
+[badges]
+maintenance = { status = "experimental" }

@@ -4,8 +4,9 @@ use crate::trampoline::StoreInstanceHandle;
 use crate::{Engine, Module};
 use anyhow::{bail, Result};
 use std::any::Any;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
+use std::convert::TryFrom;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::rc::{Rc, Weak};
@@ -13,8 +14,8 @@ use std::sync::Arc;
 use wasmtime_environ::wasm;
 use wasmtime_jit::{CompiledModule, ModuleCode, TypeTables};
 use wasmtime_runtime::{
-    InstanceHandle, RuntimeMemoryCreator, SignalHandler, StackMapRegistry, TrapInfo, VMExternRef,
-    VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
+    InstanceHandle, RuntimeMemoryCreator, SignalHandler, StackMapRegistry, TrapInfo, VMContext,
+    VMExternRef, VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
 };
 
 /// A `Store` is a collection of WebAssembly instances and host-defined items.
@@ -67,6 +68,15 @@ pub(crate) struct StoreInner {
     /// Set of all compiled modules that we're holding a strong reference to
     /// the module's code for. This includes JIT functions, trampolines, etc.
     modules: RefCell<HashSet<ArcModuleCode>>,
+
+    // Numbers of resources instantiated in this store.
+    instance_count: Cell<usize>,
+    memory_count: Cell<usize>,
+    table_count: Cell<usize>,
+
+    /// An adjustment to add to the fuel consumed value in `interrupts` above
+    /// to get the true amount of fuel consumed.
+    fuel_adj: Cell<i64>,
 }
 
 struct HostInfoKey(VMExternRef);
@@ -109,6 +119,10 @@ impl Store {
                 stack_map_registry: StackMapRegistry::default(),
                 frame_info: Default::default(),
                 modules: Default::default(),
+                instance_count: Default::default(),
+                memory_count: Default::default(),
+                table_count: Default::default(),
+                fuel_adj: Cell::new(0),
             }),
         }
     }
@@ -188,8 +202,9 @@ impl Store {
             None => return,
         };
         // Only register this module if it hasn't already been registered.
-        if !self.is_wasm_code(first_pc) {
-            self.inner.frame_info.borrow_mut().register(module);
+        let mut info = self.inner.frame_info.borrow_mut();
+        if !info.contains_pc(first_pc) {
+            info.register(module);
         }
     }
 
@@ -213,6 +228,43 @@ impl Store {
         }
     }
 
+    pub(crate) fn bump_resource_counts(&self, module: &Module) -> Result<()> {
+        let config = self.engine().config();
+
+        fn bump(slot: &Cell<usize>, max: usize, amt: usize, desc: &str) -> Result<()> {
+            let new = slot.get().saturating_add(amt);
+            if new > max {
+                bail!(
+                    "resource limit exceeded: {} count too high at {}",
+                    desc,
+                    new
+                );
+            }
+            slot.set(new);
+            Ok(())
+        }
+
+        let module = module.env_module();
+        let memories = module.memory_plans.len() - module.num_imported_memories;
+        let tables = module.table_plans.len() - module.num_imported_tables;
+
+        bump(
+            &self.inner.instance_count,
+            config.max_instances,
+            1,
+            "instance",
+        )?;
+        bump(
+            &self.inner.memory_count,
+            config.max_memories,
+            memories,
+            "memory",
+        )?;
+        bump(&self.inner.table_count, config.max_tables, tables, "table")?;
+
+        Ok(())
+    }
+
     pub(crate) unsafe fn add_instance(&self, handle: InstanceHandle) -> StoreInstanceHandle {
         self.inner.instances.borrow_mut().push(handle.clone());
         StoreInstanceHandle {
@@ -232,6 +284,10 @@ impl Store {
             store: self.clone(),
             handle,
         }
+    }
+
+    pub(crate) unsafe fn existing_vmctx(&self, cx: *mut VMContext) -> StoreInstanceHandle {
+        self.existing_instance_handle(InstanceHandle::from_vmctx(cx))
     }
 
     pub(crate) fn weak(&self) -> Weak<StoreInner> {
@@ -377,6 +433,64 @@ impl Store {
             );
         }
     }
+
+    /// Returns the amount of fuel consumed by this store's execution so far.
+    ///
+    /// If fuel consumption is not enabled via
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel) then this
+    /// function will return `None`. Also note that fuel, if enabled, must be
+    /// originally configured via [`Store::add_fuel`].
+    pub fn fuel_consumed(&self) -> Option<u64> {
+        if !self.engine().config().tunables.consume_fuel {
+            return None;
+        }
+        let consumed = unsafe { *self.inner.interrupts.fuel_consumed.get() };
+        Some(u64::try_from(self.inner.fuel_adj.get() + consumed).unwrap())
+    }
+
+    /// Adds fuel to this [`Store`] for wasm to consume while executing.
+    ///
+    /// For this method to work fuel consumption must be enabled via
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel). By default a
+    /// [`Store`] starts with 0 fuel for wasm to execute with (meaning it will
+    /// immediately trap). This function must be called for the store to have
+    /// some fuel to allow WebAssembly to execute.
+    ///
+    /// Note that at this time when fuel is entirely consumed it will cause
+    /// wasm to trap. More usages of fuel are planned for the future.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the store's [`Config`](crate::Config) did
+    /// not have fuel consumption enabled.
+    pub fn add_fuel(&self, fuel: u64) {
+        assert!(self.engine().config().tunables.consume_fuel);
+
+        // Fuel is stored as an i64, so we need to cast it. If the provided fuel
+        // value overflows that just assume that i64::max will suffice. Wasm
+        // execution isn't fast enough to burn through i64::max fuel in any
+        // reasonable amount of time anyway.
+        let fuel = i64::try_from(fuel).unwrap_or(i64::max_value());
+        let adj = self.inner.fuel_adj.get();
+        let consumed_ptr = unsafe { &mut *self.inner.interrupts.fuel_consumed.get() };
+
+        match (consumed_ptr.checked_sub(fuel), adj.checked_add(fuel)) {
+            // If we succesfully did arithmetic without overflowing then we can
+            // just update our fields.
+            (Some(consumed), Some(adj)) => {
+                self.inner.fuel_adj.set(adj);
+                *consumed_ptr = consumed;
+            }
+
+            // Otherwise something overflowed. Make sure that we preserve the
+            // amount of fuel that's already consumed, but otherwise assume that
+            // we were given infinite fuel.
+            _ => {
+                self.inner.fuel_adj.set(i64::max_value());
+                *consumed_ptr = (*consumed_ptr + adj) - i64::max_value();
+            }
+        }
+    }
 }
 
 unsafe impl TrapInfo for Store {
@@ -384,8 +498,8 @@ unsafe impl TrapInfo for Store {
         self
     }
 
-    fn is_wasm_code(&self, addr: usize) -> bool {
-        self.frame_info().borrow().contains_pc(addr)
+    fn is_wasm_trap(&self, addr: usize) -> bool {
+        self.frame_info().borrow().lookup_trap_info(addr).is_some()
     }
 
     fn custom_signal_handler(&self, call: &dyn Fn(&SignalHandler) -> bool) -> bool {
@@ -397,6 +511,23 @@ unsafe impl TrapInfo for Store {
 
     fn max_wasm_stack(&self) -> usize {
         self.engine().config().max_wasm_stack
+    }
+
+    fn out_of_gas(&self) {
+        #[derive(Debug)]
+        struct OutOfGas;
+
+        impl fmt::Display for OutOfGas {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("all fuel consumed by WebAssembly")
+            }
+        }
+
+        impl std::error::Error for OutOfGas {}
+
+        unsafe {
+            wasmtime_runtime::raise_lib_trap(wasmtime_runtime::Trap::User(Box::new(OutOfGas)))
+        }
     }
 }
 
@@ -430,6 +561,13 @@ impl Drop for StoreInner {
 pub struct InterruptHandle {
     interrupts: Arc<VMInterrupts>,
 }
+
+// The `VMInterrupts` type is a pod-type with no destructor, and we only access
+// `interrupts` from other threads, so add in these trait impls which are
+// otherwise not available due to the `fuel_consumed` variable in
+// `VMInterrupts`.
+unsafe impl Send for InterruptHandle {}
+unsafe impl Sync for InterruptHandle {}
 
 impl InterruptHandle {
     /// Flags that execution within this handle's original [`Store`] should be

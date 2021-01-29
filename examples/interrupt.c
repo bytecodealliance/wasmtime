@@ -42,6 +42,7 @@ static void* helper(void *_handle) {
   printf("Sending an interrupt\n");
   wasmtime_interrupt_handle_interrupt(handle);
   wasmtime_interrupt_handle_delete(handle);
+  return 0;
 }
 
 static void spawn_interrupt(wasmtime_interrupt_handle_t *handle) {
@@ -89,11 +90,12 @@ int main() {
   wasm_module_t *module = NULL;
   wasm_trap_t *trap = NULL;
   wasm_instance_t *instance = NULL;
+  wasm_extern_vec_t imports = WASM_EMPTY_VEC;
   error = wasmtime_module_new(engine, &wasm, &module);
   wasm_byte_vec_delete(&wasm);
   if (error != NULL)
     exit_with_error("failed to compile module", error, NULL);
-  error = wasmtime_instance_new(store, module, NULL, 0, &instance, &trap);
+  error = wasmtime_instance_new(store, module, &imports, &instance, &trap);
   if (instance == NULL)
     exit_with_error("failed to instantiate", error, trap);
 
@@ -109,7 +111,9 @@ int main() {
 
   // And call it!
   printf("Entering infinite loop...\n");
-  error = wasmtime_func_call(run, NULL, 0, NULL, 0, &trap);
+  wasm_val_vec_t args_vec = WASM_EMPTY_VEC;
+  wasm_val_vec_t results_vec = WASM_EMPTY_VEC;
+  error = wasmtime_func_call(run, &args_vec, &results_vec, &trap);
   assert(error == NULL);
   assert(trap != NULL);
   printf("Got a trap!...\n");

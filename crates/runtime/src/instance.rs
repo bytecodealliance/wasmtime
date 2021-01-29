@@ -14,6 +14,7 @@ use crate::vmcontext::{
     VMSharedSignatureIndex, VMTableDefinition, VMTableImport,
 };
 use crate::{ExportFunction, ExportGlobal, ExportMemory, ExportTable};
+use indexmap::IndexMap;
 use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::alloc::{self, Layout};
@@ -22,16 +23,21 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::ptr::NonNull;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::{mem, ptr, slice};
 use thiserror::Error;
 use wasmtime_environ::entity::{packed_option::ReservedValue, BoxedSlice, EntityRef, PrimaryMap};
 use wasmtime_environ::wasm::{
     DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
-    ElemIndex, EntityIndex, FuncIndex, GlobalIndex, GlobalInit, InstanceIndex, MemoryIndex,
-    ModuleIndex, SignatureIndex, TableElementType, TableIndex, WasmType,
+    ElemIndex, EntityIndex, FuncIndex, GlobalIndex, GlobalInit, MemoryIndex, SignatureIndex,
+    TableElementType, TableIndex, WasmType,
 };
 use wasmtime_environ::{ir, DataInitializer, Module, ModuleType, TableElements, VMOffsets};
+
+/// Runtime representation of an instance value, which erases all `Instance`
+/// information since instances are just a collection of values.
+pub type RuntimeInstance = Rc<IndexMap<String, Export>>;
 
 /// A WebAssembly instance.
 ///
@@ -49,15 +55,6 @@ pub(crate) struct Instance {
 
     /// WebAssembly table data.
     tables: BoxedSlice<DefinedTableIndex, Table>,
-
-    /// Instances our module defined and their handles.
-    instances: PrimaryMap<InstanceIndex, InstanceHandle>,
-
-    /// Modules that are located in our index space.
-    ///
-    /// For now these are `Box<Any>` so the caller can define the type of what a
-    /// module looks like.
-    modules: PrimaryMap<ModuleIndex, Box<dyn Any>>,
 
     /// Passive elements in this instantiation. As `elem.drop`s happen, these
     /// entries get removed. A missing entry is considered equivalent to an
@@ -266,18 +263,8 @@ impl Instance {
         self.vmctx() as *const VMContext as *mut VMContext
     }
 
-    /// Lookup an export with the given name.
-    pub fn lookup(&self, field: &str) -> Option<Export> {
-        let export = if let Some(export) = self.module.exports.get(field) {
-            export.clone()
-        } else {
-            return None;
-        };
-        Some(self.lookup_by_declaration(&export))
-    }
-
     /// Lookup an export with the given export declaration.
-    pub fn lookup_by_declaration(&self, export: &EntityIndex) -> Export<'_> {
+    pub fn lookup_by_declaration(&self, export: &EntityIndex) -> Export {
         match export {
             EntityIndex::Function(index) => {
                 let anyfunc = self.get_caller_checked_anyfunc(*index).unwrap();
@@ -326,8 +313,9 @@ impl Instance {
             }
             .into(),
 
-            EntityIndex::Instance(index) => Export::Instance(&self.instances[*index]),
-            EntityIndex::Module(index) => Export::Module(&*self.modules[*index]),
+            EntityIndex::Instance(_) | EntityIndex::Module(_) => {
+                panic!("can't use this api for modules/instances")
+            }
         }
     }
 
@@ -855,8 +843,6 @@ impl InstanceHandle {
                 passive_elements: Default::default(),
                 passive_data,
                 host_state,
-                instances: imports.instances,
-                modules: imports.modules,
                 vmctx: VMContext {},
             };
             let layout = instance.alloc_layout();
@@ -1013,11 +999,6 @@ impl InstanceHandle {
     /// Return a reference to a module.
     pub fn module(&self) -> &Module {
         self.instance().module()
-    }
-
-    /// Lookup an export with the given name.
-    pub fn lookup(&self, field: &str) -> Option<Export> {
-        self.instance().lookup(field)
     }
 
     /// Lookup an export with the given export declaration.

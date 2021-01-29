@@ -4,6 +4,7 @@
 use crate::externref::VMExternRef;
 use crate::instance::Instance;
 use std::any::Any;
+use std::cell::UnsafeCell;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::u32;
@@ -612,6 +613,7 @@ impl VMBuiltinFunctionsArray {
             wasmtime_memory_atomic_wait64 as usize;
         ptrs[BuiltinFunctionIndex::imported_memory_atomic_wait64().index() as usize] =
             wasmtime_imported_memory_atomic_wait64 as usize;
+        ptrs[BuiltinFunctionIndex::out_of_gas().index() as usize] = wasmtime_out_of_gas as usize;
 
         if cfg!(debug_assertions) {
             for i in 0..ptrs.len() {
@@ -658,8 +660,7 @@ impl VMInvokeArgument {
     }
 }
 
-/// Structure used to control interrupting wasm code, currently with only one
-/// atomic flag internally used.
+/// Structure used to control interrupting wasm code.
 #[derive(Debug)]
 #[repr(C)]
 pub struct VMInterrupts {
@@ -668,6 +669,14 @@ pub struct VMInterrupts {
     /// This is used to control both stack overflow as well as interrupting wasm
     /// modules. For more information see `crates/environ/src/cranelift.rs`.
     pub stack_limit: AtomicUsize,
+
+    /// Indicator of how much fuel has been consumed and is remaining to
+    /// WebAssembly.
+    ///
+    /// This field is typically negative and increments towards positive. Upon
+    /// turning positive a wasm trap will be generated. This field is only
+    /// modified if wasm is configured to consume fuel.
+    pub fuel_consumed: UnsafeCell<i64>,
 }
 
 impl VMInterrupts {
@@ -682,6 +691,7 @@ impl Default for VMInterrupts {
     fn default() -> VMInterrupts {
         VMInterrupts {
             stack_limit: AtomicUsize::new(usize::max_value()),
+            fuel_consumed: UnsafeCell::new(0),
         }
     }
 }

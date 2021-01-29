@@ -19,6 +19,6 @@ peepmatic-runtime = { path = "../runtime", features = ["construct"] }
 peepmatic-test = { path = "../test" }
 peepmatic-test-operator = { path = "../test-operator" }
 peepmatic-traits = { path = "../traits" }
-rand = { version = "0.7.3", features = ["small_rng"] }
+rand = { version = "0.8.2", features = ["small_rng"] }
 serde = "1.0.106"
-wast = "29.0.0"
+wast = "32.0.0"

@@ -4,6 +4,7 @@ use crate::{
     wasm_moduletype_t, wasm_tabletype_t, wasm_val_t, wasm_valtype_t,
 };
 use std::mem;
+use std::mem::MaybeUninit;
 use std::ptr;
 use std::slice;
 
@@ -51,6 +52,18 @@ macro_rules! declare_vecs {
                 } else {
                     assert!(!self.data.is_null());
                     unsafe { slice::from_raw_parts(self.data, self.size) }
+                }
+            }
+
+            pub fn as_uninit_slice(&mut self) -> &mut [MaybeUninit<$elem_ty>] {
+                // Note that we're careful to not create a slice with a null
+                // pointer as the data pointer, since that isn't defined
+                // behavior in Rust.
+                if self.size == 0 {
+                    &mut []
+                } else {
+                    assert!(!self.data.is_null());
+                    unsafe { slice::from_raw_parts_mut(self.data as _, self.size) }
                 }
             }
 

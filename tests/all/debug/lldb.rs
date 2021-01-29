@@ -137,7 +137,11 @@ check: exited with status
 #[ignore]
 #[cfg(all(
     any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64"
+    target_pointer_width = "64",
+    // Ignore test on new backend. The value this is looking for is
+    // not available at the point that the breakpoint is set when
+    // compiled by the new backend.
+    not(feature = "experimental_x64"),
 ))]
 pub fn test_debug_dwarf_ptr() -> Result<()> {
     let output = lldb_with_script(

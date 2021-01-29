@@ -37,7 +37,7 @@ pub mod libcalls;
 pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
-pub use crate::instance::{InstanceHandle, InstantiationError, LinkError};
+pub use crate::instance::{InstanceHandle, InstantiationError, LinkError, RuntimeInstance};
 pub use crate::jit_int::GdbJitImageRegistration;
 pub use crate::memory::{RuntimeLinearMemory, RuntimeMemoryCreator};
 pub use crate::mmap::Mmap;
