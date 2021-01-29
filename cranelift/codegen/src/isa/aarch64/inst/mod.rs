@@ -2907,11 +2907,10 @@ impl MachInst for Inst {
         }
     }
 
-    fn gen_zero_len_nop() -> Inst {
-        Inst::Nop0
-    }
-
     fn gen_nop(preferred_size: usize) -> Inst {
+        if preferred_size == 0 {
+            return Inst::Nop0;
+        }
         // We can't give a NOP (or any insn) < 4 bytes.
         assert!(preferred_size >= 4);
         Inst::Nop4

@@ -148,9 +148,6 @@ pub trait MachInst: Clone + Debug {
         alloc_tmp: F,
     ) -> SmallVec<[Self; 4]>;
 
-    /// Generate a zero-length no-op.
-    fn gen_zero_len_nop() -> Self;
-
     /// Possibly operate on a value directly in a spill-slot rather than a
     /// register. Useful if the machine has register-memory instruction forms
     /// (e.g., add directly from or directly to memory), like x86.

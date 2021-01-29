@@ -831,11 +831,10 @@ impl MachInst for Inst {
         }
     }
 
-    fn gen_zero_len_nop() -> Inst {
-        Inst::Nop0
-    }
-
     fn gen_nop(preferred_size: usize) -> Inst {
+        if preferred_size == 0 {
+            return Inst::Nop0;
+        }
         assert!(preferred_size >= 2);
         Inst::Nop2
     }
