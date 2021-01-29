@@ -363,17 +363,21 @@ fn populate_with_wasi(
 
     #[cfg(feature = "wasi-nn")]
     {
-        let wasi_nn = WasiNn::new(linker.store(), WasiNnCtx::new()?);
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        let wasi_nn = WasiNn::new(linker.store(), Rc::new(RefCell::new(WasiNnCtx::new()?)));
         wasi_nn.add_to_linker(linker)?;
     }
 
     #[cfg(feature = "wasi-crypto")]
     {
-        let cx_crypto = WasiCryptoCtx::new();
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        let cx_crypto = Rc::new(RefCell::new(WasiCryptoCtx::new()));
         WasiCryptoCommon::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
         WasiCryptoAsymmetricCommon::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
         WasiCryptoSignatures::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
-        WasiCryptoSymmetric::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
+        WasiCryptoSymmetric::new(linker.store(), cx_crypto).add_to_linker(linker)?;
     }
 
     Ok(())
