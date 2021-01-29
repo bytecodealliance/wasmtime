@@ -10,7 +10,7 @@ use crate::{
     },
     Error, ErrorExt, ErrorKind, SystemTimeSpec, WasiCtx,
 };
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use cap_std::time::{Duration, SystemClock};
 use std::cell::{Ref, RefMut};
 use std::convert::{TryFrom, TryInto};
@@ -179,14 +179,17 @@ impl TryFrom<std::io::Error> for types::Errno {
         match err.raw_os_error() {
             Some(code) => match raw_error_code(code) {
                 Some(errno) => Ok(errno),
-                None => Err(anyhow!(err).context(format!("Unknown raw OS error: {}", code))),
+                None => {
+                    Err(anyhow::anyhow!(err).context(format!("Unknown raw OS error: {}", code)))
+                }
             },
             None => match err.kind() {
                 std::io::ErrorKind::NotFound => Ok(types::Errno::Noent),
                 std::io::ErrorKind::PermissionDenied => Ok(types::Errno::Perm),
                 std::io::ErrorKind::AlreadyExists => Ok(types::Errno::Exist),
                 std::io::ErrorKind::InvalidInput => Ok(types::Errno::Ilseq),
-                k => Err(anyhow!(err).context(format!("No raw OS error. Unhandled kind: {:?}", k))),
+                k => Err(anyhow::anyhow!(err)
+                    .context(format!("No raw OS error. Unhandled kind: {:?}", k))),
             },
         }
     }
@@ -239,7 +242,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 let now = self.clocks.system.now(precision).into_std();
                 let d = now
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                    .map_err(|_| anyhow!("current time before unix epoch"))?;
+                    .map_err(|_| Error::trap("current time before unix epoch"))?;
                 Ok(d.as_nanos().try_into()?)
             }
             types::Clockid::Monotonic => {
@@ -334,7 +337,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_file_mut(u32::from(fd))?
             .get_cap(FileCaps::FDSTAT_SET_FLAGS)?
-            .set_fdflags(FdFlags::from(&flags))
+            .set_fdflags(FdFlags::from(flags))
     }
 
     fn fd_fdstat_set_rights(
@@ -784,7 +787,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let symlink_follow = dirflags.contains(types::Lookupflags::SYMLINK_FOLLOW);
 
         let oflags = OFlags::from(&oflags);
-        let fdflags = FdFlags::from(&fdflags);
+        let fdflags = FdFlags::from(fdflags);
         let path = path.as_str()?;
         if oflags.contains(OFlags::DIRECTORY) {
             if oflags.contains(OFlags::CREATE)
@@ -1042,7 +1045,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     fn proc_raise(&self, _sig: types::Signal) -> Result<(), Error> {
-        Err(anyhow!("proc_raise unsupported"))
+        Err(Error::trap("proc_raise unsupported"))
     }
 
     fn sched_yield(&self) -> Result<(), Error> {
@@ -1061,7 +1064,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         _ri_data: &types::IovecArray<'_>,
         _ri_flags: types::Riflags,
     ) -> Result<(types::Size, types::Roflags), Error> {
-        Err(anyhow!("sock_recv unsupported"))
+        Err(Error::trap("sock_recv unsupported"))
     }
 
     fn sock_send(
@@ -1070,11 +1073,11 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         _si_data: &types::CiovecArray<'_>,
         _si_flags: types::Siflags,
     ) -> Result<types::Size, Error> {
-        Err(anyhow!("sock_send unsupported"))
+        Err(Error::trap("sock_send unsupported"))
     }
 
     fn sock_shutdown(&self, _fd: types::Fd, _how: types::Sdflags) -> Result<(), Error> {
-        Err(anyhow!("sock_shutdown unsupported"))
+        Err(Error::trap("sock_shutdown unsupported"))
     }
 }
 
@@ -1097,7 +1100,7 @@ impl From<&FdStat> for types::Fdstat {
             fs_filetype: types::Filetype::from(&fdstat.filetype),
             fs_rights_base: types::Rights::from(&fdstat.caps),
             fs_rights_inheriting: types::Rights::empty(),
-            fs_flags: types::Fdflags::from(&fdstat.flags),
+            fs_flags: types::Fdflags::from(fdstat.flags),
         }
     }
 }
@@ -1336,49 +1339,39 @@ impl From<&FileType> for types::Filetype {
         }
     }
 }
-impl From<&FdFlags> for types::Fdflags {
-    fn from(fdflags: &FdFlags) -> types::Fdflags {
-        let mut out = types::Fdflags::empty();
-        if fdflags.contains(FdFlags::APPEND) {
-            out = out | types::Fdflags::APPEND;
+
+macro_rules! convert_flags {
+    ($from:ty, $to:ty, $($flag:ident),+) => {
+        impl From<$from> for $to {
+            fn from(f: $from) -> $to {
+                let mut out = <$to>::empty();
+                $(
+                    if f.contains(<$from>::$flag) {
+                        out |= <$to>::$flag;
+                    }
+                )+
+                out
+            }
         }
-        if fdflags.contains(FdFlags::DSYNC) {
-            out = out | types::Fdflags::DSYNC;
-        }
-        if fdflags.contains(FdFlags::NONBLOCK) {
-            out = out | types::Fdflags::NONBLOCK;
-        }
-        if fdflags.contains(FdFlags::RSYNC) {
-            out = out | types::Fdflags::RSYNC;
-        }
-        if fdflags.contains(FdFlags::SYNC) {
-            out = out | types::Fdflags::SYNC;
-        }
-        out
     }
 }
 
-impl From<&types::Fdflags> for FdFlags {
-    fn from(fdflags: &types::Fdflags) -> FdFlags {
-        let mut out = FdFlags::empty();
-        if fdflags.contains(types::Fdflags::APPEND) {
-            out = out | FdFlags::APPEND;
-        }
-        if fdflags.contains(types::Fdflags::DSYNC) {
-            out = out | FdFlags::DSYNC;
-        }
-        if fdflags.contains(types::Fdflags::NONBLOCK) {
-            out = out | FdFlags::NONBLOCK;
-        }
-        if fdflags.contains(types::Fdflags::RSYNC) {
-            out = out | FdFlags::RSYNC;
-        }
-        if fdflags.contains(types::Fdflags::SYNC) {
-            out = out | FdFlags::SYNC;
-        }
-        out
+macro_rules! convert_flags_bidirectional {
+    ($from:ty, $to:ty, $($rest:tt)*) => {
+        convert_flags!($from, $to, $($rest)*);
+        convert_flags!($to, $from, $($rest)*);
     }
 }
+
+convert_flags_bidirectional!(
+    FdFlags,
+    types::Fdflags,
+    APPEND,
+    DSYNC,
+    NONBLOCK,
+    RSYNC,
+    SYNC
+);
 
 impl From<&types::Oflags> for OFlags {
     fn from(oflags: &types::Oflags) -> OFlags {
