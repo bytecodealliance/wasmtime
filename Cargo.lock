@@ -2718,6 +2718,7 @@ name = "wasmtime-cli"
 version = "0.22.0"
 dependencies = [
  "anyhow",
+ "cap-std",
  "env_logger 0.8.2",
  "file-per-thread-logger",
  "filecheck",
@@ -2733,6 +2734,7 @@ dependencies = [
  "tempfile",
  "test-programs",
  "tracing-subscriber",
+ "wasi-cap-std-sync",
  "wasi-common",
  "wasmparser",
  "wasmtime",

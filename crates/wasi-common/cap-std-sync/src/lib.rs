@@ -25,6 +25,13 @@ impl WasiCtxBuilder {
         let s = self.0.env(var, value)?;
         Ok(WasiCtxBuilder(s))
     }
+    pub fn envs(self, env: &[(String, String)]) -> Result<Self, wasi_common::StringArrayError> {
+        let mut s = self;
+        for (k, v) in env {
+            s = s.env(k, v)?;
+        }
+        Ok(s)
+    }
     pub fn inherit_env(self) -> Result<Self, wasi_common::StringArrayError> {
         let mut s = self.0;
         for (key, value) in std::env::vars() {
@@ -35,6 +42,13 @@ impl WasiCtxBuilder {
     pub fn arg(self, arg: &str) -> Result<Self, wasi_common::StringArrayError> {
         let s = self.0.arg(arg)?;
         Ok(WasiCtxBuilder(s))
+    }
+    pub fn args(self, arg: &[String]) -> Result<Self, wasi_common::StringArrayError> {
+        let mut s = self;
+        for a in arg {
+            s = s.arg(&a)?;
+        }
+        Ok(s)
     }
     pub fn stdin(self, f: Box<dyn WasiFile>) -> Self {
         WasiCtxBuilder(self.0.stdin(f))

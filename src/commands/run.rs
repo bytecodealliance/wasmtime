@@ -2,18 +2,19 @@
 
 use crate::{init_file_per_thread_logger, CommonOptions};
 use anyhow::{bail, Context as _, Result};
+use cap_std::fs::Dir;
 use std::thread;
 use std::time::Duration;
 use std::{
     ffi::{OsStr, OsString},
-    fs::File,
     path::{Component, PathBuf},
     process,
 };
 use structopt::{clap::AppSettings, StructOpt};
-use wasi_common::{preopen_dir, WasiCtxBuilder};
+use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
-use wasmtime_wasi::Wasi;
+use wasmtime_wasi::snapshots::preview_0::Wasi as WasiSnapshot0;
+use wasmtime_wasi::snapshots::preview_1::Wasi as WasiSnapshot1;
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::{WasiNn, WasiNnCtx};
@@ -139,7 +140,7 @@ impl RunCommand {
         let argv = self.compute_argv();
 
         let mut linker = Linker::new(&store);
-        populate_with_wasi(&mut linker, &preopen_dirs, &argv, &self.vars)?;
+        populate_with_wasi(&mut linker, preopen_dirs, &argv, &self.vars)?;
 
         // Load the preload wasm modules.
         for (name, path) in self.preloads.iter() {
@@ -195,20 +196,21 @@ impl RunCommand {
         Ok(())
     }
 
-    fn compute_preopen_dirs(&self) -> Result<Vec<(String, File)>> {
+    fn compute_preopen_dirs(&self) -> Result<Vec<(String, Dir)>> {
         let mut preopen_dirs = Vec::new();
 
         for dir in self.dirs.iter() {
             preopen_dirs.push((
                 dir.clone(),
-                preopen_dir(dir).with_context(|| format!("failed to open directory '{}'", dir))?,
+                unsafe { Dir::open_ambient_dir(dir) }
+                    .with_context(|| format!("failed to open directory '{}'", dir))?,
             ));
         }
 
         for (guest, host) in self.map_dirs.iter() {
             preopen_dirs.push((
                 guest.clone(),
-                preopen_dir(host)
+                unsafe { Dir::open_ambient_dir(host) }
                     .with_context(|| format!("failed to open directory '{}'", host))?,
             ));
         }
@@ -340,32 +342,31 @@ impl RunCommand {
 /// Populates the given `Linker` with WASI APIs.
 fn populate_with_wasi(
     linker: &mut Linker,
-    preopen_dirs: &[(String, File)],
+    preopen_dirs: Vec<(String, Dir)>,
     argv: &[String],
     vars: &[(String, String)],
 ) -> Result<()> {
-    let mk_cx = || {
-        // Add the current snapshot to the linker.
-        let mut cx = WasiCtxBuilder::new();
-        cx.inherit_stdio().args(argv).envs(vars);
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
-        for (name, file) in preopen_dirs {
-            cx.preopened_dir(file.try_clone()?, name);
-        }
+    // Add the current snapshot to the linker.
+    let mut builder = WasiCtxBuilder::new();
+    builder = builder.inherit_stdio().args(argv)?.envs(vars)?;
 
-        cx.build()
-    };
-    let wasi = Wasi::new(linker.store(), mk_cx()?);
-    wasi.add_to_linker(linker)?;
+    for (name, dir) in preopen_dirs.into_iter() {
+        builder = builder.preopened_dir(dir, name)?;
+    }
+
+    let cx = Rc::new(RefCell::new(builder.build()?));
+
+    WasiSnapshot1::new(linker.store(), cx.clone()).add_to_linker(linker)?;
+    WasiSnapshot0::new(linker.store(), cx).add_to_linker(linker)?;
 
     #[cfg(feature = "wasi-nn")]
     {
         let wasi_nn = WasiNn::new(linker.store(), WasiNnCtx::new()?);
         wasi_nn.add_to_linker(linker)?;
     }
-
-    let wasi = wasmtime_wasi::old::snapshot_0::Wasi::new(linker.store(), mk_cx()?);
-    wasi.add_to_linker(linker)?;
 
     Ok(())
 }
