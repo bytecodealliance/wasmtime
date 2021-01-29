@@ -122,8 +122,7 @@ contained in the `cx` parameter.",
 
         impl #type_name {
             #[doc = #constructor_docs]
-            pub fn new(store: &wasmtime::Store, cx: #ctx_type) -> Self {
-                let cx = std::rc::Rc::new(std::cell::RefCell::new(cx));
+            pub fn new(store: &wasmtime::Store, cx: std::rc::Rc<std::cell::RefCell<#ctx_type>>) -> Self {
                 #(#ctor_externs)*
 
                 Self {
