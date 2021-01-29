@@ -50,6 +50,13 @@ impl WasiCtxBuilder {
         }
         Ok(s)
     }
+    pub fn inherit_args(self) -> Result<Self, wasi_common::StringArrayError> {
+        let mut s = self.0;
+        for arg in std::env::args() {
+            s = s.arg(&arg)?;
+        }
+        Ok(WasiCtxBuilder(s))
+    }
     pub fn stdin(self, f: Box<dyn WasiFile>) -> Self {
         WasiCtxBuilder(self.0.stdin(f))
     }
@@ -59,10 +66,17 @@ impl WasiCtxBuilder {
     pub fn stderr(self, f: Box<dyn WasiFile>) -> Self {
         WasiCtxBuilder(self.0.stderr(f))
     }
-    pub fn inherit_stdio(self) -> Self {
+    pub fn inherit_stdin(self) -> Self {
         self.stdin(Box::new(crate::stdio::stdin()))
-            .stdout(Box::new(crate::stdio::stdout()))
-            .stderr(Box::new(crate::stdio::stderr()))
+    }
+    pub fn inherit_stdout(self) -> Self {
+        self.stdout(Box::new(crate::stdio::stdout()))
+    }
+    pub fn inherit_stderr(self) -> Self {
+        self.stderr(Box::new(crate::stdio::stderr()))
+    }
+    pub fn inherit_stdio(self) -> Self {
+        self.inherit_stdin().inherit_stdout().inherit_stderr()
     }
     pub fn preopened_dir(
         self,

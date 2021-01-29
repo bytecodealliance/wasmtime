@@ -3237,8 +3237,10 @@ name = "wasmtime-c-api"
 version = "0.19.0"
 dependencies = [
  "anyhow",
+ "cap-std",
  "env_logger 0.8.2",
  "once_cell",
+ "wasi-cap-std-sync",
  "wasi-common",
  "wasmtime",
  "wasmtime-c-api-macros",
