@@ -835,6 +835,7 @@ impl Store {
     /// This only works on async futures and stores, and assumes that we're
     /// executing on a fiber. This will yield execution back to the caller once
     /// and when we come back we'll continue with `fuel_to_inject` more fuel.
+    #[cfg(feature = "async")]
     fn out_of_gas_yield(&self, fuel_to_inject: u64) {
         // Small future that yields once and then returns ()
         #[derive(Default)]
