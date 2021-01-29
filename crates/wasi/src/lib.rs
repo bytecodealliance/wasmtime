@@ -6,6 +6,8 @@ pub use wasi_common::{
 };
 use wasmtime::{Linker, Store};
 
+/// An instantiated instance of all available wasi exports. Presently includes
+/// both the "preview1" snapshot and the "unstable" (preview0) snapshot.
 pub struct Wasi {
     preview_1: snapshots::preview_1::Wasi,
     preview_0: snapshots::preview_0::Wasi,
