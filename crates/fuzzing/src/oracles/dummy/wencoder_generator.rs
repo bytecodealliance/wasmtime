@@ -148,22 +148,10 @@ impl<'a> WencoderGenerator<'a> {
                 let module = &mut Module::new();
 
                 for import in v.imports().into_iter() {
-                    self.import_section.import(
-                        import.module(),
-                        import.name(),
-                        extern_to_entity(&import.ty()),
-                    );
+                    self.import(&import);
                 }
-
                 for export in v.exports().into_iter() {
-                    let nth = next_index(&mut self.next, &export.ty());
-                    let section_name = format!("item{}", nth);
-
-                    let item_ty = export.ty();
-                    self.item(&item_ty);
-
-                    self.export_section
-                        .export(&section_name, extern_to_export(&item_ty, |_| nth));
+                    self.export(&export);
                 }
                 module.section(&self.type_section);
                 module.section(&self.import_section);
@@ -171,13 +159,13 @@ impl<'a> WencoderGenerator<'a> {
 
                 self.module_section.module(module);
             }
-            ExternType::Instance(ty) => {
+            ExternType::Instance(v) => {
                 let instances = &mut self.instance_section;
                 let next_index_a = &mut self.next;
 
                 instances.instantiate(
                     0,
-                    ty.exports()
+                    v.exports()
                         .into_iter()
                         .map(|it| {
                             (
