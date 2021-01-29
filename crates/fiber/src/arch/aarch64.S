@@ -20,7 +20,7 @@ TYPE(wasmtime_fiber_switch)
 FUNCTION(wasmtime_fiber_switch):
     // Save all callee-saved registers on the stack since we're assuming
     // they're clobbered as a result of the stack switch.
-    str lr, [sp, -16]!
+    stp lr, fp, [sp, -16]!
     stp x20, x19, [sp, -16]!
     stp x22, x21, [sp, -16]!
     stp x24, x23, [sp, -16]!
@@ -49,7 +49,7 @@ FUNCTION(wasmtime_fiber_switch):
     ldp x24, x23, [sp], 16
     ldp x22, x21, [sp], 16
     ldp x20, x19, [sp], 16
-    ldr lr, [sp], 16
+    ldp lr, fp, [sp], 16
     ret
 SIZE(wasmtime_fiber_switch)
 
