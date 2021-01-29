@@ -83,7 +83,7 @@ use std::env;
 use std::os::raw::{c_int, c_void};
 use std::path::Path;
 use std::slice;
-use wasi_common::WasiCtxBuilder;
+use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{Config, Engine, Instance, Linker, Module, Store};
 use wasmtime_wasi::Wasi;
 
@@ -211,16 +211,16 @@ impl BenchState {
         // Create a WASI environment.
 
         let mut cx = WasiCtxBuilder::new();
-        cx.inherit_stdio();
+        cx = cx.inherit_stdio();
         // Allow access to the working directory so that the benchmark can read
         // its input workload(s).
-        let working_dir = wasi_common::preopen_dir(working_dir)
+        let working_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(working_dir) }
             .context("failed to preopen the working directory")?;
-        cx.preopened_dir(working_dir, ".");
+        cx = cx.preopened_dir(working_dir, ".")?;
         // Pass this env var along so that the benchmark program can use smaller
         // input workload(s) if it has them and that has been requested.
         if let Ok(val) = env::var("WASM_BENCH_USE_SMALL_WORKLOAD") {
-            cx.env("WASM_BENCH_USE_SMALL_WORKLOAD", &val);
+            cx = cx.env("WASM_BENCH_USE_SMALL_WORKLOAD", &val)?;
         }
 
         let cx = cx.build()?;

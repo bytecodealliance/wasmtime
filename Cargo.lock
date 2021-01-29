@@ -3224,8 +3224,9 @@ name = "wasmtime-bench-api"
 version = "0.19.0"
 dependencies = [
  "anyhow",
+ "cap-std",
  "shuffling-allocator",
- "wasi-common",
+ "wasi-cap-std-sync",
  "wasmtime",
  "wasmtime-wasi",
  "wat",
