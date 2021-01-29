@@ -1,7 +1,32 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 pub use wasi_common::{
     Error, FdFlags, FileCaps, Filestat, OFlags, ReaddirCursor, ReaddirEntity, SystemTimeSpec,
     WasiCtx, WasiCtxBuilder, WasiDir, WasiFile,
 };
+use wasmtime::{Linker, Store};
+
+pub struct Wasi {
+    preview_1: snapshots::preview_1::Wasi,
+    preview_0: snapshots::preview_0::Wasi,
+}
+
+impl Wasi {
+    pub fn new(store: &Store, context: WasiCtx) -> Self {
+        let context = Rc::new(RefCell::new(context));
+        let preview_1 = snapshots::preview_1::Wasi::new(store, context.clone());
+        let preview_0 = snapshots::preview_0::Wasi::new(store, context);
+        Self {
+            preview_1,
+            preview_0,
+        }
+    }
+    pub fn add_to_linker(&self, linker: &mut Linker) -> Result<(), anyhow::Error> {
+        self.preview_1.add_to_linker(linker)?;
+        self.preview_0.add_to_linker(linker)?;
+        Ok(())
+    }
+}
 
 pub mod snapshots {
     pub mod preview_1 {

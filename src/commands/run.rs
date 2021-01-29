@@ -13,8 +13,7 @@ use std::{
 use structopt::{clap::AppSettings, StructOpt};
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
-use wasmtime_wasi::snapshots::preview_0::Wasi as WasiSnapshot0;
-use wasmtime_wasi::snapshots::preview_1::Wasi as WasiSnapshot1;
+use wasmtime_wasi::Wasi;
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::{WasiNn, WasiNnCtx};
@@ -352,9 +351,6 @@ fn populate_with_wasi(
     argv: &[String],
     vars: &[(String, String)],
 ) -> Result<()> {
-    use std::cell::RefCell;
-    use std::rc::Rc;
-
     // Add the current snapshot to the linker.
     let mut builder = WasiCtxBuilder::new();
     builder = builder.inherit_stdio().args(argv)?.envs(vars)?;
@@ -363,10 +359,7 @@ fn populate_with_wasi(
         builder = builder.preopened_dir(dir, name)?;
     }
 
-    let cx = Rc::new(RefCell::new(builder.build()?));
-
-    WasiSnapshot1::new(linker.store(), cx.clone()).add_to_linker(linker)?;
-    WasiSnapshot0::new(linker.store(), cx).add_to_linker(linker)?;
+    Wasi::new(linker.store(), builder.build()?).add_to_linker(linker)?;
 
     #[cfg(feature = "wasi-nn")]
     {
