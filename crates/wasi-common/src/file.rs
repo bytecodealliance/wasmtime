@@ -13,12 +13,7 @@ pub trait WasiFile {
     fn set_fdflags(&mut self, flags: FdFlags) -> Result<(), Error>; // file op
     fn get_filestat(&self) -> Result<Filestat, Error>; // split out get_length as a read & write op, rest is a file op
     fn set_filestat_size(&self, _size: u64) -> Result<(), Error>; // write op
-    fn advise(
-        &self,
-        offset: u64,
-        len: u64,
-        advice: system_interface::fs::Advice,
-    ) -> Result<(), Error>; // file op
+    fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error>; // file op
     fn allocate(&self, offset: u64, len: u64) -> Result<(), Error>; // write op
     fn set_times(
         &self,
@@ -169,4 +164,14 @@ pub struct FdStat {
     pub filetype: FileType,
     pub caps: FileCaps,
     pub flags: FdFlags,
+}
+
+#[derive(Debug, Clone)]
+pub enum Advice {
+    Normal,
+    Sequential,
+    Random,
+    WillNeed,
+    DontNeed,
+    NoReuse,
 }

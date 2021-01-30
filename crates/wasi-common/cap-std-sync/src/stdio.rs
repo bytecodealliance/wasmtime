@@ -4,7 +4,7 @@ use std::any::Any;
 use std::convert::TryInto;
 use std::io;
 use std::io::{Read, Write};
-use system_interface::{fs::Advice, io::ReadReady};
+use system_interface::io::ReadReady;
 
 #[cfg(unix)]
 use std::os::unix::io::{AsRawFd, RawFd};
@@ -12,7 +12,7 @@ use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::windows::io::{AsRawHandle, RawHandle};
 use unsafe_io::AsUnsafeFile;
 use wasi_common::{
-    file::{FdFlags, FileType, Filestat, WasiFile},
+    file::{Advice, FdFlags, FileType, Filestat, WasiFile},
     Error, ErrorExt,
 };
 

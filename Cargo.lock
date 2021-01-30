@@ -3093,7 +3093,6 @@ dependencies = [
  "cap-rand",
  "cap-std",
  "libc",
- "system-interface",
  "thiserror",
  "tracing",
  "wiggle",
@@ -3127,6 +3126,15 @@ dependencies = [
  "thiserror",
  "xoodyak",
  "zeroize",
+]
+
+[[package]]
+name = "wasi-virtfs"
+version = "0.22.0"
+dependencies = [
+ "anyhow",
+ "cap-std",
+ "wasi-common",
 ]
 
 [[package]]

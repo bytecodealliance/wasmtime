@@ -4,11 +4,11 @@ use std::any::Any;
 use std::convert::TryInto;
 use std::io;
 use system_interface::{
-    fs::{Advice, FileIoExt, GetSetFdFlags},
+    fs::{FileIoExt, GetSetFdFlags},
     io::ReadReady,
 };
 use wasi_common::{
-    file::{FdFlags, FileType, Filestat, WasiFile},
+    file::{Advice, FdFlags, FileType, Filestat, WasiFile},
     Error,
 };
 
@@ -61,7 +61,7 @@ impl WasiFile for File {
         Ok(())
     }
     fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
-        self.0.advise(offset, len, advice)?;
+        self.0.advise(offset, len, convert_advice(advice))?;
         Ok(())
     }
     fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
@@ -192,4 +192,14 @@ pub fn from_sysif_fdflags(f: system_interface::fs::FdFlags) -> wasi_common::file
         out |= wasi_common::file::FdFlags::SYNC;
     }
     out
+}
+pub fn convert_advice(advice: Advice) -> system_interface::fs::Advice {
+    match advice {
+        Advice::Normal => system_interface::fs::Advice::Normal,
+        Advice::Sequential => system_interface::fs::Advice::Sequential,
+        Advice::Random => system_interface::fs::Advice::Random,
+        Advice::WillNeed => system_interface::fs::Advice::WillNeed,
+        Advice::DontNeed => system_interface::fs::Advice::DontNeed,
+        Advice::NoReuse => system_interface::fs::Advice::NoReuse,
+    }
 }

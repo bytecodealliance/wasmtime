@@ -10,14 +10,13 @@
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
 use crate::{
-    file::{FdFlags, FileType, Filestat, WasiFile},
+    file::{Advice, FdFlags, FileType, Filestat, WasiFile},
     Error, ErrorExt, SystemTimeSpec,
 };
 use std::any::Any;
 use std::convert::TryInto;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, RwLock};
-use system_interface::fs::Advice;
 
 /// A virtual pipe read end.
 ///

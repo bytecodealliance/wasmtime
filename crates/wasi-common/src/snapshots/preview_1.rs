@@ -1,8 +1,8 @@
 use crate::{
     dir::{DirCaps, DirEntry, DirEntryExt, DirFdStat, ReaddirCursor, ReaddirEntity, TableDirExt},
     file::{
-        FdFlags, FdStat, FileCaps, FileEntry, FileEntryExt, FileEntryMutExt, FileType, Filestat,
-        OFlags, TableFileExt,
+        Advice, FdFlags, FdStat, FileCaps, FileEntry, FileEntryExt, FileEntryMutExt, FileType,
+        Filestat, OFlags, TableFileExt,
     },
     sched::{
         subscription::{RwEventFlags, SubscriptionResult},
@@ -1081,15 +1081,15 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 }
 
-impl From<types::Advice> for system_interface::fs::Advice {
-    fn from(advice: types::Advice) -> system_interface::fs::Advice {
+impl From<types::Advice> for Advice {
+    fn from(advice: types::Advice) -> Advice {
         match advice {
-            types::Advice::Normal => system_interface::fs::Advice::Normal,
-            types::Advice::Sequential => system_interface::fs::Advice::Sequential,
-            types::Advice::Random => system_interface::fs::Advice::Random,
-            types::Advice::Willneed => system_interface::fs::Advice::WillNeed,
-            types::Advice::Dontneed => system_interface::fs::Advice::DontNeed,
-            types::Advice::Noreuse => system_interface::fs::Advice::NoReuse,
+            types::Advice::Normal => Advice::Normal,
+            types::Advice::Sequential => Advice::Sequential,
+            types::Advice::Random => Advice::Random,
+            types::Advice::Willneed => Advice::WillNeed,
+            types::Advice::Dontneed => Advice::DontNeed,
+            types::Advice::Noreuse => Advice::NoReuse,
         }
     }
 }
