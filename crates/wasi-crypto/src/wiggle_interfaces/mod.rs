@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 pub use wasi_crypto::CryptoCtx as WasiCryptoCtx;
 
 wiggle::from_witx!({
