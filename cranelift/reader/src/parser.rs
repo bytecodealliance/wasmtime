@@ -3706,7 +3706,10 @@ mod tests {
             IsaSpec::None(_) => panic!("Expected some ISA"),
             IsaSpec::Some(v) => {
                 assert_eq!(v.len(), 1);
+                #[cfg(not(feature = "experimental_x64"))]
                 assert_eq!(v[0].name(), "x86");
+                #[cfg(feature = "experimental_x64")]
+                assert_eq!(v[0].name(), "x64");
             }
         }
     }
