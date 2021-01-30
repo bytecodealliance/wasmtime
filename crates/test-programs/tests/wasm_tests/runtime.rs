@@ -97,7 +97,7 @@ pub fn instantiate_inherit_stdio(
             builder = builder.preopened_dir(preopen_dir, ".")?;
         }
 
-        let snapshot1 = wasi_wasmtime::Wasi::new(&store, builder.build()?);
+        let snapshot1 = wasmtime_wasi::Wasi::new(&store, builder.build()?);
 
         let mut linker = Linker::new(&store);
 
