@@ -2,7 +2,7 @@
 use cap_std::time::{Duration, SystemTime};
 use std::any::Any;
 use std::cell::{Cell, Ref, RefCell, RefMut};
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 use std::convert::TryInto;
 use std::io::{Cursor, IoSlice, IoSliceMut, Read, Seek, SeekFrom, Write};
 use std::ops::Deref;
@@ -16,10 +16,50 @@ use wasi_common::{
 };
 
 pub struct Filesystem {
-    root: Rc<RefCell<DirInode>>,
+    // Always .get() out a Some - this is an RefCell<Option to get around a circular init problem
+    root: RefCell<Option<Rc<RefCell<DirInode>>>>,
     clock: Box<dyn WasiSystemClock>,
     device_id: u64,
     next_serial: Cell<u64>,
+}
+
+impl Filesystem {
+    pub fn new(clock: Box<dyn WasiSystemClock>, device_id: u64) -> Rc<Filesystem> {
+        let now = clock.now(Duration::from_secs(0));
+        let fs = Rc::new(Filesystem {
+            root: RefCell::new(None),
+            clock,
+            device_id,
+            next_serial: Cell::new(1),
+        });
+        let root = Rc::new(RefCell::new(DirInode {
+            fs: Rc::downgrade(&fs),
+            serial: 0,
+            parent: None,
+            contents: HashMap::new(),
+            atim: now,
+            mtim: now,
+            ctim: now,
+        }));
+        fs.root.replace(Some(root.clone()));
+        fs
+    }
+    pub fn root(&self) -> Box<dyn WasiDir> {
+        Box::new(Dir(self
+            .root
+            .borrow()
+            .as_ref()
+            .expect("root option always Some after init")
+            .clone())) as Box<dyn WasiDir>
+    }
+    fn now(&self) -> SystemTime {
+        self.clock.now(Duration::from_secs(0))
+    }
+    fn fresh_serial(&self) -> u64 {
+        let s = self.next_serial.get();
+        self.next_serial.set(s + 1);
+        s
+    }
 }
 
 pub enum Inode {
@@ -240,9 +280,46 @@ impl WasiFile for File {
     }
 }
 
-pub struct Dir;
+pub struct Dir(Rc<RefCell<DirInode>>);
 
-impl Dir {}
+impl Dir {
+    fn at_path<F, A>(&self, path: &str, f: F) -> Result<A, Error>
+    where
+        F: FnOnce(&Dir, &str) -> Result<A, Error>,
+    {
+        // Doesnt even attempt to deal with trailing slashes
+        if let Some(slash_index) = path.find('/') {
+            let dirname = &path[..slash_index];
+            let rest = &path[slash_index + 1..];
+            if rest == "" {
+                return Err(Error::invalid_argument()
+                    .context("empty filename, probably related to trailing slashes"));
+            }
+            if let Some(inode) = self.0.borrow().contents.get(dirname) {
+                match inode {
+                    Inode::Dir(d) => Dir(d.clone()).at_path(rest, f),
+                    Inode::File { .. } => Err(Error::not_found()),
+                }
+            } else {
+                Err(Error::not_found())
+            }
+        } else {
+            f(self, path)
+        }
+    }
+    fn child_dir(&self, name: &str) -> Result<Rc<RefCell<DirInode>>, Error> {
+        match self.0.borrow().contents.get(name) {
+            Some(Inode::Dir(d)) => Ok(d.clone()),
+            _ => Err(Error::not_found()),
+        }
+    }
+    fn child_file(&self, name: &str) -> Result<Rc<RefCell<FileInode>>, Error> {
+        match self.0.borrow().contents.get(name) {
+            Some(Inode::File(f)) => Ok(f.clone()),
+            _ => Err(Error::not_found()),
+        }
+    }
+}
 
 impl WasiDir for Dir {
     fn as_any(&self) -> &dyn Any {
@@ -250,22 +327,130 @@ impl WasiDir for Dir {
     }
     fn open_file(
         &self,
-        symlink_follow: bool,
+        _symlink_follow: bool,
         path: &str,
         oflags: OFlags,
         read: bool,
         write: bool,
         fdflags: FdFlags,
     ) -> Result<Box<dyn WasiFile>, Error> {
-        todo!()
+        let mode = if read && write {
+            FileMode::ReadWrite
+        } else if read {
+            FileMode::ReadOnly
+        } else if write {
+            FileMode::WriteOnly
+        } else {
+            return Err(Error::invalid_argument().context("must be read or write"));
+        };
+        // XXX TERRIBLE CODE DUPLICATION HERE
+        self.at_path(path, |dir, filename| {
+            if oflags.contains(OFlags::CREATE | OFlags::EXCLUSIVE) {
+                match dir.child_file(filename) {
+                    Err(_notfound) => {
+                        let d = dir.0.borrow();
+                        let now = d.fs().now();
+                        let serial = d.fs().fresh_serial();
+                        let inode = Rc::new(RefCell::new(FileInode {
+                            fs: d.fs.clone(),
+                            serial,
+                            contents: Vec::new(),
+                            atim: now,
+                            ctim: now,
+                            mtim: now,
+                        }));
+                        dir.0
+                            .borrow_mut()
+                            .contents
+                            .insert(filename.to_owned(), Inode::File(inode.clone()));
+                        Ok(Box::new(File {
+                            inode,
+                            position: Cell::new(0),
+                            fdflags,
+                            mode,
+                        }) as Box<dyn WasiFile>)
+                    }
+                    Ok(_) => Err(Error::exist()),
+                }
+            } else if oflags.contains(OFlags::CREATE) {
+                match dir.child_file(filename) {
+                    Ok(inode) => {
+                        // XXX update atime here!
+                        Ok(Box::new(File {
+                            inode,
+                            position: Cell::new(0),
+                            fdflags,
+                            mode,
+                        }) as Box<dyn WasiFile>)
+                    }
+                    Err(_notfound) => {
+                        let d = dir.0.borrow();
+                        let now = d.fs().now();
+                        let serial = d.fs().fresh_serial();
+                        let inode = Rc::new(RefCell::new(FileInode {
+                            fs: d.fs.clone(),
+                            serial,
+                            contents: Vec::new(),
+                            atim: now,
+                            ctim: now,
+                            mtim: now,
+                        }));
+                        dir.0
+                            .borrow_mut()
+                            .contents
+                            .insert(filename.to_owned(), Inode::File(inode.clone()));
+                        Ok(Box::new(File {
+                            inode,
+                            position: Cell::new(0),
+                            fdflags,
+                            mode,
+                        }) as Box<dyn WasiFile>)
+                    }
+                }
+            } else {
+                let inode = dir.child_file(filename)?;
+                // XXX update atime here!
+                Ok(Box::new(File {
+                    inode,
+                    position: Cell::new(0),
+                    fdflags,
+                    mode,
+                }) as Box<dyn WasiFile>)
+            }
+        })
     }
 
-    fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error> {
-        todo!()
+    fn open_dir(&self, _symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error> {
+        self.at_path(path, |dir, dirname| {
+            let d = dir.child_dir(dirname)?;
+            Ok(Box::new(Dir(d)) as Box<dyn WasiDir>)
+        })
     }
 
     fn create_dir(&self, path: &str) -> Result<(), Error> {
-        todo!()
+        self.at_path(path, |dir, dirname| {
+            let d = dir.0.borrow();
+            let fs = d.fs.clone();
+            let serial = d.fs().fresh_serial();
+            let now = d.fs().now();
+            drop(d);
+            match dir.0.borrow_mut().contents.entry(dirname.to_owned()) {
+                Entry::Vacant(v) => {
+                    let parent = Some(Rc::downgrade(&self.0));
+                    v.insert(Inode::Dir(Rc::new(RefCell::new(DirInode {
+                        fs,
+                        serial,
+                        parent,
+                        contents: HashMap::new(),
+                        atim: now,
+                        mtim: now,
+                        ctim: now,
+                    }))));
+                    Ok(())
+                }
+                Entry::Occupied(_) => Err(Error::exist()),
+            }
+        })
     }
     fn readdir(
         &self,
