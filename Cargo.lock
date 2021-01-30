@@ -3131,6 +3131,7 @@ version = "0.22.0"
 dependencies = [
  "anyhow",
  "cap-std",
+ "tracing",
  "wasi-common",
 ]
 

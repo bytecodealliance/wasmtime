@@ -16,3 +16,4 @@ publish = false
 wasi-common = { path = "../", version = "0.22.0" }
 anyhow = "1.0"
 cap-std = "0.12"
+tracing = "0.1.19"

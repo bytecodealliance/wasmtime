@@ -8,6 +8,7 @@ use std::io::{Cursor, IoSlice, IoSliceMut, Read, Seek, SeekFrom, Write};
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::rc::{Rc, Weak};
+use tracing::trace;
 use wasi_common::{
     clocks::WasiSystemClock,
     dir::{ReaddirCursor, ReaddirEntity, WasiDir},
@@ -283,7 +284,7 @@ impl WasiFile for File {
 pub struct Dir(Rc<RefCell<DirInode>>);
 
 impl Dir {
-    fn at_path<F, A>(&self, path: &str, f: F) -> Result<A, Error>
+    fn at_path<F, A>(&self, path: &str, accept_trailing_slash: bool, f: F) -> Result<A, Error>
     where
         F: FnOnce(&Dir, &str) -> Result<A, Error>,
     {
@@ -292,12 +293,16 @@ impl Dir {
             let dirname = &path[..slash_index];
             let rest = &path[slash_index + 1..];
             if rest == "" {
-                return Err(Error::invalid_argument()
-                    .context("empty filename, probably related to trailing slashes"));
+                if accept_trailing_slash {
+                    return f(self, path);
+                } else {
+                    return Err(Error::invalid_argument()
+                        .context("empty filename, probably related to trailing slashes"));
+                }
             }
             if let Some(inode) = self.0.borrow().contents.get(dirname) {
                 match inode {
-                    Inode::Dir(d) => Dir(d.clone()).at_path(rest, f),
+                    Inode::Dir(d) => Dir(d.clone()).at_path(rest, accept_trailing_slash, f),
                     Inode::File { .. } => Err(Error::not_found()),
                 }
             } else {
@@ -308,6 +313,9 @@ impl Dir {
         }
     }
     fn child_dir(&self, name: &str) -> Result<Rc<RefCell<DirInode>>, Error> {
+        if name == "." {
+            return Ok(self.0.clone());
+        }
         match self.0.borrow().contents.get(name) {
             Some(Inode::Dir(d)) => Ok(d.clone()),
             _ => Err(Error::not_found()),
@@ -336,15 +344,13 @@ impl WasiDir for Dir {
     ) -> Result<Box<dyn WasiFile>, Error> {
         let mode = if read && write {
             FileMode::ReadWrite
-        } else if read {
-            FileMode::ReadOnly
         } else if write {
             FileMode::WriteOnly
         } else {
-            return Err(Error::invalid_argument().context("must be read or write"));
+            FileMode::ReadOnly
         };
         // XXX TERRIBLE CODE DUPLICATION HERE
-        self.at_path(path, |dir, filename| {
+        self.at_path(path, false, |dir, filename| {
             if oflags.contains(OFlags::CREATE | OFlags::EXCLUSIVE) {
                 match dir.child_file(filename) {
                     Err(_notfound) => {
@@ -421,14 +427,14 @@ impl WasiDir for Dir {
     }
 
     fn open_dir(&self, _symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error> {
-        self.at_path(path, |dir, dirname| {
+        self.at_path(path, true, |dir, dirname| {
             let d = dir.child_dir(dirname)?;
             Ok(Box::new(Dir(d)) as Box<dyn WasiDir>)
         })
     }
 
     fn create_dir(&self, path: &str) -> Result<(), Error> {
-        self.at_path(path, |dir, dirname| {
+        self.at_path(path, true, |dir, dirname| {
             let d = dir.0.borrow();
             let fs = d.fs.clone();
             let serial = d.fs().fresh_serial();
