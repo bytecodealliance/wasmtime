@@ -1,8 +1,9 @@
-use crate::file::{filetype_from, File};
+use crate::file::{filetype_from, to_sysif_fdflags, File};
 use cap_fs_ext::{DirExt, MetadataExt, SystemTimeSpec};
 use std::any::Any;
 use std::convert::TryInto;
 use std::path::{Path, PathBuf};
+use system_interface::fs::GetSetFdFlags;
 use wasi_common::{
     dir::{ReaddirCursor, ReaddirEntity, WasiDir},
     file::{FdFlags, FileType, Filestat, OFlags, WasiFile},
@@ -58,9 +59,6 @@ impl WasiDir for Dir {
         if fdflags.contains(FdFlags::APPEND) {
             opts.append(true);
         }
-        // XXX what about rest of fdflags - dsync, sync become oflags.
-        // what do we do with nonblock?
-        // what do we do with rsync?
 
         if symlink_follow {
             opts.follow(FollowSymlinks::Yes);
@@ -68,7 +66,12 @@ impl WasiDir for Dir {
             opts.follow(FollowSymlinks::No);
         }
 
-        let f = self.0.open_with(Path::new(path), &opts)?;
+        let mut f = self.0.open_with(Path::new(path), &opts)?;
+        // This takes care of setting the fdflags that can't be handled by OpenOptions (yet)
+        // (DSYNC, SYNC, NONBLOCK, RSYNC)
+        // ideally OpenOptions would just support this though:
+        // https://github.com/bytecodealliance/cap-std/issues/146
+        f.set_fd_flags(to_sysif_fdflags(fdflags))?;
         Ok(Box::new(File::from_cap_std(f)))
     }
 
