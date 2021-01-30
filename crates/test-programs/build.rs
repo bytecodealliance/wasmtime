@@ -173,7 +173,7 @@ mod wasi_tests {
     fn ignore(testsuite: &str, name: &str) -> bool {
         match testsuite {
             "wasi-cap-std-sync" => cap_std_sync_ignore(name),
-            "wasi-virtfs" => false,
+            "wasi-virtfs" => virtfs_ignore(name),
             _ => panic!("unknown test suite: {}", testsuite),
         }
     }
@@ -181,36 +181,78 @@ mod wasi_tests {
     #[cfg(not(windows))]
     /// Ignore tests that aren't supported yet.
     fn cap_std_sync_ignore(name: &str) -> bool {
-        match name {
+        [
             // Trailing slash related bugs:
-            "path_rename_file_trailing_slashes" => true,
-            "remove_directory_trailing_slashes" => true,
-            _ => false,
-        }
+            "path_rename_file_trailing_slashes",
+            "remove_directory_trailing_slashes",
+        ]
+        .contains(name)
     }
 
     #[cfg(windows)]
     /// Ignore tests that aren't supported yet.
     fn cap_std_sync_ignore(name: &str) -> bool {
-        match name {
+        [
             // Panic: Metadata not associated with open file
             // https://github.com/bytecodealliance/cap-std/issues/142
-            "fd_readdir" => true,
-            "fd_flags_set" => true,
-            "path_filestat" => true,
-            "symlink_filestat" => true,
+            "fd_readdir",
+            "fd_flags_set",
+            "path_filestat",
+            "symlink_filestat",
             // Fix merged, waiting for cap-std release
-            "nofollow_errors" => true,
+            "nofollow_errors",
             // waiting on DirExt::delete_file_or_symlink
-            "symlink_create" => true,
+            "symlink_create",
             // Bug: windows lets us rename an empty directory to a path containing an empty file
-            "path_rename" => true,
+            "path_rename",
             // Trailing slash related bugs
-            "interesting_paths" => true,
-            "path_rename_file_trailing_slashes" => true,
-            "remove_directory_trailing_slashes" => true,
-            _ => false,
-        }
+            "interesting_paths",
+            "path_rename_file_trailing_slashes",
+            "remove_directory_trailing_slashes",
+        ]
+        .contains(name)
+    }
+
+    /// Virtfs barely works at all and is not suitable for any purpose
+    fn virtfs_ignore(name: &str) -> bool {
+        [
+            "dangling_fd",
+            "dangling_symlink",
+            "directory_seek",
+            "fd_advise",
+            "fd_filestat_set",
+            "fd_flags_set",
+            "fd_readdir",
+            "file_allocate",
+            "file_pread_pwrite",
+            "file_seek_tell",
+            "file_truncation",
+            "file_unbuffered_write",
+            "interesting_paths",
+            "isatty",
+            "nofollow_errors",
+            "path_filestat",
+            "path_link",
+            "path_open_create_existing",
+            "path_open_dirfd_not_dir",
+            "path_open_read_without_rights",
+            "path_rename",
+            "path_rename_dir_trailing_slashes",
+            "path_rename_file_trailing_slashes",
+            "path_symlink_trailing_slashes",
+            "poll_oneoff",
+            "poll_oneoff_stdio",
+            "readlink",
+            "remove_directory_trailing_slashes",
+            "remove_nonempty_directory",
+            "renumber",
+            "symlink_create",
+            "symlink_filestat",
+            "symlink_loop",
+            "truncation_rights",
+            "unlink_file_trailing_slashes",
+        ]
+        .contains(name)
     }
 
     /// Mark tests which do not require preopens
