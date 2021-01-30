@@ -2805,6 +2805,7 @@ dependencies = [
  "tempfile",
  "wasi-cap-std-sync",
  "wasi-common",
+ "wasi-virtfs",
  "wasmtime",
  "wasmtime-wasi",
  "wat",

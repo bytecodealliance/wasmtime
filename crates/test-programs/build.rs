@@ -39,7 +39,9 @@ mod wasi_tests {
         let mut out =
             File::create(out_dir.join("wasi_tests.rs")).expect("error generating test source file");
         build_tests("wasi-tests", &out_dir).expect("building tests");
-        test_directory(&mut out, "wasi-tests", &out_dir).expect("generating tests");
+        test_directory(&mut out, "wasi-cap-std-sync", "cap_std_sync", &out_dir)
+            .expect("generating tests");
+        test_directory(&mut out, "wasi-virtfs", "virtfs", &out_dir).expect("generating tests");
     }
 
     fn build_tests(testsuite: &str, out_dir: &Path) -> io::Result<()> {
@@ -68,7 +70,12 @@ mod wasi_tests {
         Ok(())
     }
 
-    fn test_directory(out: &mut File, testsuite: &str, out_dir: &Path) -> io::Result<()> {
+    fn test_directory(
+        out: &mut File,
+        testsuite: &str,
+        runtime: &str,
+        out_dir: &Path,
+    ) -> io::Result<()> {
         let mut dir_entries: Vec<_> = read_dir(out_dir.join("wasm32-wasi/release"))
             .expect("reading testsuite directory")
             .map(|r| r.expect("reading testsuite directory entry"))
@@ -103,7 +110,11 @@ mod wasi_tests {
                 .expect("testsuite filename should be representable as a string")
                 .replace("-", "_")
         )?;
-        writeln!(out, "    use super::{{runtime, utils, setup_log}};")?;
+        writeln!(
+            out,
+            "    use super::{{runtime::{} as runtime, utils, setup_log}};",
+            runtime
+        )?;
         for dir_entry in dir_entries {
             write_testsuite_tests(out, &dir_entry.path(), testsuite)?;
         }
@@ -159,52 +170,52 @@ mod wasi_tests {
         Ok(())
     }
 
+    fn ignore(testsuite: &str, name: &str) -> bool {
+        match testsuite {
+            "wasi-cap-std-sync" => cap_std_sync_ignore(name),
+            "wasi-virtfs" => false,
+            _ => panic!("unknown test suite: {}", testsuite),
+        }
+    }
+
     #[cfg(not(windows))]
     /// Ignore tests that aren't supported yet.
-    fn ignore(testsuite: &str, name: &str) -> bool {
-        if testsuite == "wasi-tests" {
-            match name {
-                // Trailing slash related bugs:
-                "path_rename_file_trailing_slashes" => true,
-                "remove_directory_trailing_slashes" => true,
-                _ => false,
-            }
-        } else {
-            unreachable!()
+    fn cap_std_sync_ignore(name: &str) -> bool {
+        match name {
+            // Trailing slash related bugs:
+            "path_rename_file_trailing_slashes" => true,
+            "remove_directory_trailing_slashes" => true,
+            _ => false,
         }
     }
 
     #[cfg(windows)]
     /// Ignore tests that aren't supported yet.
-    fn ignore(testsuite: &str, name: &str) -> bool {
-        if testsuite == "wasi-tests" {
-            match name {
-                // Panic: Metadata not associated with open file
-                // https://github.com/bytecodealliance/cap-std/issues/142
-                "fd_readdir" => true,
-                "fd_flags_set" => true,
-                "path_filestat" => true,
-                "symlink_filestat" => true,
-                // Fix merged, waiting for cap-std release
-                "nofollow_errors" => true,
-                // waiting on DirExt::delete_file_or_symlink
-                "symlink_create" => true,
-                // Bug: windows lets us rename an empty directory to a path containing an empty file
-                "path_rename" => true,
-                // Trailing slash related bugs
-                "interesting_paths" => true,
-                "path_rename_file_trailing_slashes" => true,
-                "remove_directory_trailing_slashes" => true,
-                _ => false,
-            }
-        } else {
-            unreachable!()
+    fn cap_std_sync_ignore(name: &str) -> bool {
+        match name {
+            // Panic: Metadata not associated with open file
+            // https://github.com/bytecodealliance/cap-std/issues/142
+            "fd_readdir" => true,
+            "fd_flags_set" => true,
+            "path_filestat" => true,
+            "symlink_filestat" => true,
+            // Fix merged, waiting for cap-std release
+            "nofollow_errors" => true,
+            // waiting on DirExt::delete_file_or_symlink
+            "symlink_create" => true,
+            // Bug: windows lets us rename an empty directory to a path containing an empty file
+            "path_rename" => true,
+            // Trailing slash related bugs
+            "interesting_paths" => true,
+            "path_rename_file_trailing_slashes" => true,
+            "remove_directory_trailing_slashes" => true,
+            _ => false,
         }
     }
 
     /// Mark tests which do not require preopens
     fn no_preopens(testsuite: &str, name: &str) -> bool {
-        if testsuite == "wasi-tests" {
+        if testsuite.starts_with("wasi-") {
             match name {
                 "big_random_buf" => true,
                 "clock_time_get" => true,
@@ -213,19 +224,19 @@ mod wasi_tests {
                 _ => false,
             }
         } else {
-            unreachable!()
+            panic!("unknown test suite {}", testsuite)
         }
     }
 
     /// Mark tests which require inheriting parent process stdio
     fn inherit_stdio(testsuite: &str, name: &str) -> bool {
-        if testsuite == "wasi-tests" {
-            match name {
+        match testsuite {
+            "wasi-cap-std-sync" => match name {
                 "poll_oneoff_stdio" => true,
                 _ => false,
-            }
-        } else {
-            unreachable!()
+            },
+            "wasi-virtfs" => false,
+            _ => panic!("unknown test suite {}", testsuite),
         }
     }
 }

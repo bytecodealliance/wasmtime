@@ -42,11 +42,11 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
             builder = builder.env("ERRNO_MODE_UNIX", "1")?;
         }
 
-        let snapshot1 = wasmtime_wasi::Wasi::new(&store, builder.build()?);
+        let wasi = wasmtime_wasi::Wasi::new(&store, builder.build()?);
 
         let mut linker = Linker::new(&store);
 
-        snapshot1.add_to_linker(&mut linker)?;
+        wasi.add_to_linker(&mut linker)?;
 
         let module = Module::new(store.engine(), &data).context("failed to create wasm module")?;
         let instance = linker.instantiate(&module)?;
