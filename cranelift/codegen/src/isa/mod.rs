@@ -69,6 +69,7 @@ use alloc::boxed::Box;
 use core::any::Any;
 use core::fmt;
 use core::fmt::{Debug, Formatter};
+use core::hash::Hasher;
 use target_lexicon::{triple, Architecture, PointerWidth, Triple};
 use thiserror::Error;
 
@@ -265,6 +266,10 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Get the ISA-independent flags that were used to make this trait object.
     fn flags(&self) -> &settings::Flags;
 
+    /// Hashes all flags, both ISA-independent and ISA-specific, into the
+    /// specified hasher.
+    fn hash_all_flags(&self, hasher: &mut dyn Hasher);
+
     /// Get the default calling convention of this target.
     fn default_call_conv(&self) -> CallConv {
         CallConv::triple_default(self.triple())
@@ -322,6 +327,12 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     #[cfg(feature = "unwind")]
     /// Map a Cranelift register to its corresponding DWARF register.
     fn map_dwarf_register(&self, _: RegUnit) -> Result<u16, RegisterMappingError> {
+        Err(RegisterMappingError::UnsupportedArchitecture)
+    }
+
+    #[cfg(feature = "unwind")]
+    /// Map a regalloc::Reg to its corresponding DWARF register.
+    fn map_regalloc_reg_to_dwarf(&self, _: ::regalloc::Reg) -> Result<u16, RegisterMappingError> {
         Err(RegisterMappingError::UnsupportedArchitecture)
     }
 

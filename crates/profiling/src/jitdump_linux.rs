@@ -1,6 +1,6 @@
 //! Support for jitdump files which can be used by perf for profiling jitted code.
 //! Spec definitions for the output format is as described here:
-//! https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/tools/perf/Documentation/jitdump-specification.txt
+//! <https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/tools/perf/Documentation/jitdump-specification.txt>
 //!
 //! Usage Example:
 //!     Record

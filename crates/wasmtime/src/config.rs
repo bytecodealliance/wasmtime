@@ -1,4 +1,4 @@
-use crate::externals::MemoryCreator;
+use crate::memory::MemoryCreator;
 use crate::trampoline::MemoryCreatorProxy;
 use anyhow::{bail, Result};
 use std::cmp;
@@ -33,6 +33,9 @@ pub struct Config {
     pub(crate) max_wasm_stack: usize,
     pub(crate) features: WasmFeatures,
     pub(crate) wasm_backtrace_details_env_used: bool,
+    pub(crate) max_instances: usize,
+    pub(crate) max_tables: usize,
+    pub(crate) max_memories: usize,
 }
 
 impl Config {
@@ -79,6 +82,9 @@ impl Config {
                 multi_value: true,
                 ..WasmFeatures::default()
             },
+            max_instances: 10_000,
+            max_tables: 10_000,
+            max_memories: 10_000,
         };
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
         return ret;
@@ -128,6 +134,28 @@ impl Config {
     /// By default this option is `false`.
     pub fn interruptable(&mut self, enable: bool) -> &mut Self {
         self.tunables.interruptable = enable;
+        self
+    }
+
+    /// Configures whether execution of WebAssembly will "consume fuel" to
+    /// either halt or yield execution as desired.
+    ///
+    /// This option is similar in purpose to [`Config::interruptable`] where
+    /// you can prevent infinitely-executing WebAssembly code. The difference
+    /// is that this option allows deterministic execution of WebAssembly code
+    /// by instrumenting generated code consume fuel as it executes. When fuel
+    /// runs out the behavior is defined by configuration within a [`Store`],
+    /// and by default a trap is raised.
+    ///
+    /// Note that a [`Store`] starts with no fuel, so if you enable this option
+    /// you'll have to be sure to pour some fuel into [`Store`] before
+    /// executing some code.
+    ///
+    /// By default this option is `false`.
+    ///
+    /// [`Store`]: crate::Store
+    pub fn consume_fuel(&mut self, enable: bool) -> &mut Self {
+        self.tunables.consume_fuel = enable;
         self
     }
 
@@ -383,6 +411,20 @@ impl Config {
         self
     }
 
+    /// Clears native CPU flags inferred from the host.
+    ///
+    /// By default Wasmtime will tune generated code for the host that Wasmtime
+    /// itself is running on. If you're compiling on one host, however, and
+    /// shipping artifacts to another host then this behavior may not be
+    /// desired. This function will clear all inferred native CPU features.
+    ///
+    /// To enable CPU features afterwards it's recommended to use the
+    /// [`Config::cranelift_other_flag`] method.
+    pub fn cranelift_clear_cpu_flags(&mut self) -> &mut Self {
+        self.isa_flags = native::builder_without_flags();
+        self
+    }
+
     /// Allows settings another Cranelift flag defined by a flag name and value. This allows
     /// fine-tuning of Cranelift settings.
     ///
@@ -632,6 +674,39 @@ impl Config {
         self.tunables.dynamic_memory_offset_guard_size = guard_size;
         self.tunables.static_memory_offset_guard_size =
             cmp::max(guard_size, self.tunables.static_memory_offset_guard_size);
+        self
+    }
+
+    /// Configures the maximum number of instances which can be created within
+    /// this `Store`.
+    ///
+    /// Instantiation will fail with an error if this limit is exceeded.
+    ///
+    /// This value defaults to 10,000.
+    pub fn max_instances(&mut self, instances: usize) -> &mut Self {
+        self.max_instances = instances;
+        self
+    }
+
+    /// Configures the maximum number of tables which can be created within
+    /// this `Store`.
+    ///
+    /// Instantiation will fail with an error if this limit is exceeded.
+    ///
+    /// This value defaults to 10,000.
+    pub fn max_tables(&mut self, tables: usize) -> &mut Self {
+        self.max_tables = tables;
+        self
+    }
+
+    /// Configures the maximum number of memories which can be created within
+    /// this `Store`.
+    ///
+    /// Instantiation will fail with an error if this limit is exceeded.
+    ///
+    /// This value defaults to 10,000.
+    pub fn max_memories(&mut self, memories: usize) -> &mut Self {
+        self.max_memories = memories;
         self
     }
 

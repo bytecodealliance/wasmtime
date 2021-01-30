@@ -3,7 +3,7 @@
 // Some variants are never constructed, but we still want them as options in the future.
 #![allow(dead_code)]
 
-use crate::ir::types::{F32X2, F32X4, F64X2, I16X4, I16X8, I32X2, I32X4, I64X2, I8X16, I8X8};
+use crate::ir::types::*;
 use crate::ir::Type;
 use crate::isa::aarch64::inst::*;
 use crate::machinst::{ty_bits, MachLabel};
@@ -598,6 +598,14 @@ impl ScalarSize {
             ScalarSize::Size32 => OperandSize::Size32,
             ScalarSize::Size64 => OperandSize::Size64,
             _ => panic!("Unexpected operand_size request for: {:?}", self),
+        }
+    }
+
+    /// Convert from an integer operand size.
+    pub fn from_operand_size(size: OperandSize) -> ScalarSize {
+        match size {
+            OperandSize::Size32 => ScalarSize::Size32,
+            OperandSize::Size64 => ScalarSize::Size64,
         }
     }
 

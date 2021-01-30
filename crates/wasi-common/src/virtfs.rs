@@ -299,7 +299,7 @@ impl Handle for InMemoryFile {
         trace!("write_vectored(iovs={:?})", iovs);
         let mut data = self.data.borrow_mut();
 
-        let append_mode = self.fd_flags.get().contains(&Fdflags::APPEND);
+        let append_mode = self.fd_flags.get().contains(Fdflags::APPEND);
         trace!("     | fd_flags={}", self.fd_flags.get());
 
         // If this file is in append mode, we write to the end.
@@ -353,7 +353,7 @@ impl Handle for InMemoryFile {
         oflags: Oflags,
         _fd_flags: Fdflags,
     ) -> Result<Box<dyn Handle>> {
-        if oflags.contains(&Oflags::DIRECTORY) {
+        if oflags.contains(Oflags::DIRECTORY) {
             tracing::trace!(
                 "InMemoryFile::openat was passed oflags DIRECTORY, but {:?} is a file.",
                 path
@@ -652,7 +652,7 @@ impl Handle for VirtualDir {
                     return Err(Error::Exist);
                 }
 
-                if oflags.contains(&Oflags::DIRECTORY)
+                if oflags.contains(Oflags::DIRECTORY)
                     && e.get().get_file_type() != Filetype::Directory
                 {
                     tracing::trace!(
@@ -665,7 +665,7 @@ impl Handle for VirtualDir {
                 e.get().try_clone().map_err(Into::into)
             }
             Entry::Vacant(v) => {
-                if oflags.contains(&Oflags::CREAT) {
+                if oflags.contains(Oflags::CREAT) {
                     if self.writable {
                         // Enforce a hard limit at `u32::MAX - 2` files.
                         // This is to have a constant limit (rather than target-dependent limit we

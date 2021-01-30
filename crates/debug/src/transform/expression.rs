@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use wasmtime_environ::entity::EntityRef;
-use wasmtime_environ::ir::{StackSlots, ValueLabel, ValueLabelsRanges, ValueLoc};
+use wasmtime_environ::ir::{LabelValueLoc, StackSlots, ValueLabel, ValueLabelsRanges, ValueLoc};
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{get_vmctx_value_label, DefinedFuncIndex};
 use wasmtime_environ::ModuleMemoryOffset;
@@ -131,27 +131,24 @@ impl CompiledExpression {
 const X86_64_STACK_OFFSET: i64 = 16;
 
 fn translate_loc(
-    loc: ValueLoc,
+    loc: LabelValueLoc,
     frame_info: Option<&FunctionFrameInfo>,
     isa: &dyn TargetIsa,
     add_stack_value: bool,
 ) -> Result<Option<Vec<u8>>> {
     Ok(match loc {
-        ValueLoc::Reg(reg) if add_stack_value => {
+        LabelValueLoc::ValueLoc(ValueLoc::Reg(reg)) => {
             let machine_reg = isa.map_dwarf_register(reg)?;
             let mut writer = ExpressionWriter::new();
-            writer.write_op_reg(machine_reg)?;
+            if add_stack_value {
+                writer.write_op_reg(machine_reg)?;
+            } else {
+                writer.write_op_breg(machine_reg)?;
+                writer.write_sleb128(0)?;
+            }
             Some(writer.into_vec())
         }
-        ValueLoc::Reg(reg) => {
-            assert!(!add_stack_value);
-            let machine_reg = isa.map_dwarf_register(reg)?;
-            let mut writer = ExpressionWriter::new();
-            writer.write_op_breg(machine_reg)?;
-            writer.write_sleb128(0)?;
-            Some(writer.into_vec())
-        }
-        ValueLoc::Stack(ss) => {
+        LabelValueLoc::ValueLoc(ValueLoc::Stack(ss)) => {
             if let Some(frame_info) = frame_info {
                 if let Some(ss_offset) = frame_info.stack_slots[ss].offset {
                     let mut writer = ExpressionWriter::new();
@@ -165,6 +162,27 @@ fn translate_loc(
             }
             None
         }
+        LabelValueLoc::Reg(r) => {
+            let machine_reg = isa.map_regalloc_reg_to_dwarf(r)?;
+            let mut writer = ExpressionWriter::new();
+            if add_stack_value {
+                writer.write_op_reg(machine_reg)?;
+            } else {
+                writer.write_op_breg(machine_reg)?;
+                writer.write_sleb128(0)?;
+            }
+            Some(writer.into_vec())
+        }
+        LabelValueLoc::SPOffset(off) => {
+            let mut writer = ExpressionWriter::new();
+            writer.write_op_breg(X86_64::RSP.0)?;
+            writer.write_sleb128(off)?;
+            if !add_stack_value {
+                writer.write_op(gimli::constants::DW_OP_deref)?;
+            }
+            return Ok(Some(writer.into_vec()));
+        }
+
         _ => None,
     })
 }
@@ -172,13 +190,13 @@ fn translate_loc(
 fn append_memory_deref(
     buf: &mut Vec<u8>,
     frame_info: &FunctionFrameInfo,
-    vmctx_loc: ValueLoc,
+    vmctx_loc: LabelValueLoc,
     isa: &dyn TargetIsa,
 ) -> Result<bool> {
     let mut writer = ExpressionWriter::new();
     // FIXME for imported memory
     match vmctx_loc {
-        ValueLoc::Reg(vmctx_reg) => {
+        LabelValueLoc::ValueLoc(ValueLoc::Reg(vmctx_reg)) => {
             let reg = isa.map_dwarf_register(vmctx_reg)? as u8;
             writer.write_u8(gimli::constants::DW_OP_breg0.0 + reg)?;
             let memory_offset = match frame_info.vmctx_memory_offset() {
@@ -189,7 +207,7 @@ fn append_memory_deref(
             };
             writer.write_sleb128(memory_offset)?;
         }
-        ValueLoc::Stack(ss) => {
+        LabelValueLoc::ValueLoc(ValueLoc::Stack(ss)) => {
             if let Some(ss_offset) = frame_info.stack_slots[ss].offset {
                 writer.write_op_breg(X86_64::RBP.0)?;
                 writer.write_sleb128(ss_offset as i64 + X86_64_STACK_OFFSET)?;
@@ -206,6 +224,31 @@ fn append_memory_deref(
             } else {
                 return Ok(false);
             }
+        }
+        LabelValueLoc::Reg(r) => {
+            let reg = isa.map_regalloc_reg_to_dwarf(r)?;
+            writer.write_op_breg(reg)?;
+            let memory_offset = match frame_info.vmctx_memory_offset() {
+                Some(offset) => offset,
+                None => {
+                    return Ok(false);
+                }
+            };
+            writer.write_sleb128(memory_offset)?;
+        }
+        LabelValueLoc::SPOffset(off) => {
+            writer.write_op_breg(X86_64::RSP.0)?;
+            writer.write_sleb128(off)?;
+            writer.write_op(gimli::constants::DW_OP_deref)?;
+            writer.write_op(gimli::constants::DW_OP_consts)?;
+            let memory_offset = match frame_info.vmctx_memory_offset() {
+                Some(offset) => offset,
+                None => {
+                    return Ok(false);
+                }
+            };
+            writer.write_sleb128(memory_offset)?;
+            writer.write_op(gimli::constants::DW_OP_plus)?;
         }
         _ => {
             return Ok(false);
@@ -468,7 +511,7 @@ where
                 let _ = code_chunk; // suppresses warning for final flush
             }
         };
-    };
+    }
     // Find all landing pads by scanning bytes, do not care about
     // false location at this moment.
     // Looks hacky but it is fast; does not need to be really exact.
@@ -653,7 +696,7 @@ struct CachedValueLabelRange {
     func_index: DefinedFuncIndex,
     start: usize,
     end: usize,
-    label_location: HashMap<ValueLabel, ValueLoc>,
+    label_location: HashMap<ValueLabel, LabelValueLoc>,
 }
 
 struct ValueLabelRangesBuilder<'a, 'b> {
@@ -1179,7 +1222,7 @@ mod tests {
     fn create_mock_value_ranges() -> (ValueLabelsRanges, (ValueLabel, ValueLabel, ValueLabel)) {
         use std::collections::HashMap;
         use wasmtime_environ::entity::EntityRef;
-        use wasmtime_environ::ir::{ValueLoc, ValueLocRange};
+        use wasmtime_environ::ir::{LabelValueLoc, ValueLoc, ValueLocRange};
         let mut value_ranges = HashMap::new();
         let value_0 = ValueLabel::new(0);
         let value_1 = ValueLabel::new(1);
@@ -1187,7 +1230,7 @@ mod tests {
         value_ranges.insert(
             value_0,
             vec![ValueLocRange {
-                loc: ValueLoc::Unassigned,
+                loc: LabelValueLoc::ValueLoc(ValueLoc::Unassigned),
                 start: 0,
                 end: 25,
             }],
@@ -1195,7 +1238,7 @@ mod tests {
         value_ranges.insert(
             value_1,
             vec![ValueLocRange {
-                loc: ValueLoc::Unassigned,
+                loc: LabelValueLoc::ValueLoc(ValueLoc::Unassigned),
                 start: 5,
                 end: 30,
             }],
@@ -1204,12 +1247,12 @@ mod tests {
             value_2,
             vec![
                 ValueLocRange {
-                    loc: ValueLoc::Unassigned,
+                    loc: LabelValueLoc::ValueLoc(ValueLoc::Unassigned),
                     start: 0,
                     end: 10,
                 },
                 ValueLocRange {
-                    loc: ValueLoc::Unassigned,
+                    loc: LabelValueLoc::ValueLoc(ValueLoc::Unassigned),
                     start: 20,
                     end: 30,
                 },

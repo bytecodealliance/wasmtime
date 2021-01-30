@@ -182,14 +182,10 @@ impl Hash for Compiler {
         // misc tunables.
         strategy.hash(hasher);
         isa.triple().hash(hasher);
-        features.hash(hasher);
-        // TODO: if this `to_string()` is too expensive then we should upstream
-        // a native hashing ability of flags into cranelift itself, but
-        // compilation and/or cache loading is relatively expensive so seems
-        // unlikely.
-        isa.flags().to_string().hash(hasher);
+        isa.hash_all_flags(hasher);
         isa.frontend_config().hash(hasher);
         tunables.hash(hasher);
+        features.hash(hasher);
 
         // Catch accidental bugs of reusing across crate versions.
         env!("CARGO_PKG_VERSION").hash(hasher);

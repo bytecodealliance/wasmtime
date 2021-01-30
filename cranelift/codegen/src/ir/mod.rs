@@ -58,6 +58,7 @@ pub use crate::ir::table::TableData;
 pub use crate::ir::trapcode::TrapCode;
 pub use crate::ir::types::Type;
 pub use crate::ir::valueloc::{ArgumentLoc, ValueLoc};
+pub use crate::value_label::LabelValueLoc;
 pub use cranelift_codegen_shared::condcodes;
 
 use crate::binemit;

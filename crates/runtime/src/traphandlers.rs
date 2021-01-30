@@ -164,9 +164,15 @@ cfg_if::cfg_if! {
                 } else if #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64"))] {
                     let cx = &*(cx as *const libc::ucontext_t);
                     cx.uc_mcontext.pc as *const u8
-                } else if #[cfg(target_os = "macos")] {
+                } else if #[cfg(all(target_os = "macos", target_arch = "x86_64"))] {
                     let cx = &*(cx as *const libc::ucontext_t);
                     (*cx.uc_mcontext).__ss.__rip as *const u8
+                } else if #[cfg(all(target_os = "macos", target_arch = "x86"))] {
+                    let cx = &*(cx as *const libc::ucontext_t);
+                    (*cx.uc_mcontext).__ss.__eip as *const u8
+                } else if #[cfg(all(target_os = "macos", target_arch = "aarch64"))] {
+                    let cx = &*(cx as *const libc::ucontext_t);
+                    (*cx.uc_mcontext).__ss.__pc as *const u8
                 } else if #[cfg(all(target_os = "freebsd", target_arch = "x86_64"))] {
                     let cx = &*(cx as *const libc::ucontext_t);
                     cx.uc_mcontext.mc_rip as *const u8
@@ -404,6 +410,13 @@ pub fn with_last_info<R>(func: impl FnOnce(Option<&dyn Any>) -> R) -> R {
     tls::with(|state| func(state.map(|s| s.trap_info.as_any())))
 }
 
+/// Invokes the contextually-defined context's out-of-gas function.
+///
+/// (basically delegates to `wasmtime::Store::out_of_gas`)
+pub fn out_of_gas() {
+    tls::with(|state| state.unwrap().trap_info.out_of_gas())
+}
+
 /// Temporary state stored on the stack which is registered in the `tls` module
 /// below for calls into wasm.
 pub struct CallThreadState<'a> {
@@ -426,7 +439,7 @@ pub unsafe trait TrapInfo {
 
     /// Returns whether the given program counter lies within wasm code,
     /// indicating whether we should handle a trap or not.
-    fn is_wasm_code(&self, pc: usize) -> bool;
+    fn is_wasm_trap(&self, pc: usize) -> bool;
 
     /// Uses `call` to call a custom signal handler, if one is specified.
     ///
@@ -436,6 +449,12 @@ pub unsafe trait TrapInfo {
     /// Returns the maximum size, in bytes, the wasm native stack is allowed to
     /// grow to.
     fn max_wasm_stack(&self) -> usize;
+
+    /// Callback invoked whenever WebAssembly has entirely consumed the fuel
+    /// that it was allotted.
+    ///
+    /// This function may return, and it may also `raise_lib_trap`.
+    fn out_of_gas(&self);
 }
 
 enum UnwindReason {
@@ -629,7 +648,7 @@ impl<'a> CallThreadState<'a> {
         }
 
         // If this fault wasn't in wasm code, then it's not our problem
-        if !self.trap_info.is_wasm_code(pc as usize) {
+        if !self.trap_info.is_wasm_trap(pc as usize) {
             return ptr::null();
         }
 

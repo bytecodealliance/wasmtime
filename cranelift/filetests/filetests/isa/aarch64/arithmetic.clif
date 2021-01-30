@@ -422,3 +422,35 @@ block0(v0: i64):
 ; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
+
+function %f29(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 1
+  v2 = ineg v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln:  mov fp, sp
+; nextln:  movz x0, #1
+; nextln:  sub x0, xzr, x0
+; nextln:  mov sp, fp
+; nextln:  ldp fp, lr, [sp], #16
+; nextln:  ret
+
+function %f30(i8x16) -> i8x16 {
+block0(v0: i8x16):
+  v1 = iconst.i64 1
+  v2 = ushr.i8x16 v0, v1
+  return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x0, #1
+; nextln: sub w0, wzr, w0
+; nextln: dup v1.16b, w0
+; nextln: ushl v0.16b, v0.16b, v1.16b
+; nextln: mov sp, fp
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret

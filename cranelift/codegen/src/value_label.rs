@@ -1,13 +1,16 @@
 use crate::ir::{Function, SourceLoc, Value, ValueLabel, ValueLabelAssignments, ValueLoc};
 use crate::isa::TargetIsa;
+use crate::machinst::MachCompileResult;
 use crate::regalloc::{Context, RegDiversions};
 use crate::HashMap;
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
+use core::convert::From;
 use core::iter::Iterator;
 use core::ops::Bound::*;
 use core::ops::Deref;
+use regalloc::Reg;
 
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -17,11 +20,29 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ValueLocRange {
     /// The ValueLoc containing a ValueLabel during this range.
-    pub loc: ValueLoc,
+    pub loc: LabelValueLoc,
     /// The start of the range. It is an offset in the generated code.
     pub start: u32,
     /// The end of the range. It is an offset in the generated code.
     pub end: u32,
+}
+
+/// The particular location for a value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+pub enum LabelValueLoc {
+    /// Old-backend location: RegUnit, StackSlot, or Unassigned.
+    ValueLoc(ValueLoc),
+    /// New-backend Reg.
+    Reg(Reg),
+    /// New-backend offset from stack pointer.
+    SPOffset(i64),
+}
+
+impl From<ValueLoc> for LabelValueLoc {
+    fn from(v: ValueLoc) -> Self {
+        LabelValueLoc::ValueLoc(v)
+    }
 }
 
 /// Resulting map of Value labels and their ranges/locations.
@@ -86,14 +107,18 @@ where
 pub fn build_value_labels_ranges<T>(
     func: &Function,
     regalloc: &Context,
+    mach_compile_result: Option<&MachCompileResult>,
     isa: &dyn TargetIsa,
 ) -> ValueLabelsRanges
 where
     T: From<SourceLoc> + Deref<Target = SourceLoc> + Ord + Copy,
 {
-    // FIXME(#1523): New-style backend does not yet have debug info.
-    if isa.get_mach_backend().is_some() {
-        return HashMap::new();
+    if mach_compile_result.is_some() && mach_compile_result.unwrap().value_labels_ranges.is_some() {
+        return mach_compile_result
+            .unwrap()
+            .value_labels_ranges
+            .clone()
+            .unwrap();
     }
 
     let values_labels = build_value_labels_index::<T>(func);
@@ -113,7 +138,7 @@ where
             .entry(label)
             .or_insert_with(Vec::new)
             .push(ValueLocRange {
-                loc,
+                loc: loc.into(),
                 start: range.0,
                 end: range.1,
             });

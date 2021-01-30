@@ -105,8 +105,8 @@ impl CompilationArtifacts {
     pub fn build(
         compiler: &Compiler,
         data: &[u8],
-    ) -> Result<(Vec<CompilationArtifacts>, TypeTables), SetupError> {
-        let (translations, types) = ModuleEnvironment::new(
+    ) -> Result<(usize, Vec<CompilationArtifacts>, TypeTables), SetupError> {
+        let (main_module, translations, types) = ModuleEnvironment::new(
             compiler.frontend_config(),
             compiler.tunables(),
             compiler.features(),
@@ -166,6 +166,7 @@ impl CompilationArtifacts {
             })
             .collect::<Result<Vec<_>, SetupError>>()?;
         Ok((
+            main_module,
             list,
             TypeTables {
                 wasm_signatures: types.wasm_signatures,
@@ -220,7 +221,7 @@ impl CompiledModule {
         artifacts: Vec<CompilationArtifacts>,
         isa: &dyn TargetIsa,
         profiler: &dyn ProfilingAgent,
-    ) -> Result<Vec<Self>, SetupError> {
+    ) -> Result<Vec<Arc<Self>>, SetupError> {
         maybe_parallel!(artifacts.(into_iter | into_par_iter))
             .map(|a| CompiledModule::from_artifacts(a, isa, profiler))
             .collect()
@@ -231,7 +232,7 @@ impl CompiledModule {
         artifacts: CompilationArtifacts,
         isa: &dyn TargetIsa,
         profiler: &dyn ProfilingAgent,
-    ) -> Result<Self, SetupError> {
+    ) -> Result<Arc<Self>, SetupError> {
         // Allocate all of the compiled functions into executable memory,
         // copying over their contents.
         let (code_memory, code_range, finished_functions, trampolines) = build_code_memory(
@@ -265,7 +266,7 @@ impl CompiledModule {
 
         let finished_functions = FinishedFunctions(finished_functions);
 
-        Ok(Self {
+        Ok(Arc::new(Self {
             module: Arc::new(artifacts.module.clone()),
             artifacts,
             code: Arc::new(ModuleCode {
@@ -274,7 +275,7 @@ impl CompiledModule {
             }),
             finished_functions,
             trampolines,
-        })
+        }))
     }
 
     /// Crate an `Instance` from this `CompiledModule`.

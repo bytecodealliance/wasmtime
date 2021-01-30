@@ -72,7 +72,7 @@ fn file_access_mode_from_fdflags(fdflags: Fdflags, read: bool, write: bool) -> A
     // For append, grant the handle FILE_APPEND_DATA access but *not* FILE_WRITE_DATA.
     // This makes the handle "append only".
     // Changes to the file pointer will be ignored (like POSIX's O_APPEND behavior).
-    if fdflags.contains(&Fdflags::APPEND) {
+    if fdflags.contains(Fdflags::APPEND) {
         access_mode.insert(AccessMode::FILE_APPEND_DATA);
         access_mode.remove(AccessMode::FILE_WRITE_DATA);
     }
@@ -100,16 +100,16 @@ pub(crate) fn open_rights(
     let mut needed_inheriting = input_rights.base | input_rights.inheriting;
 
     // convert open flags
-    if oflags.contains(&Oflags::CREAT) {
+    if oflags.contains(Oflags::CREAT) {
         needed_base |= Rights::PATH_CREATE_FILE;
-    } else if oflags.contains(&Oflags::TRUNC) {
+    } else if oflags.contains(Oflags::TRUNC) {
         needed_base |= Rights::PATH_FILESTAT_SET_SIZE;
     }
 
     // convert file descriptor flags
-    if fdflags.contains(&Fdflags::DSYNC)
-        || fdflags.contains(&Fdflags::RSYNC)
-        || fdflags.contains(&Fdflags::SYNC)
+    if fdflags.contains(Fdflags::DSYNC)
+        || fdflags.contains(Fdflags::RSYNC)
+        || fdflags.contains(Fdflags::SYNC)
     {
         needed_inheriting |= Rights::FD_DATASYNC;
         needed_inheriting |= Rights::FD_SYNC;
@@ -211,13 +211,13 @@ pub(crate) fn open(
 ) -> Result<Box<dyn Handle>> {
     use winx::file::{AccessMode, CreationDisposition, Flags};
 
-    let is_trunc = oflags.contains(&Oflags::TRUNC);
+    let is_trunc = oflags.contains(Oflags::TRUNC);
 
     if is_trunc {
         // Windows does not support append mode when opening for truncation
         // This is because truncation requires `GENERIC_WRITE` access, which will override the removal
         // of the `FILE_WRITE_DATA` permission.
-        if fdflags.contains(&Fdflags::APPEND) {
+        if fdflags.contains(Fdflags::APPEND) {
             return Err(Error::Notsup);
         }
     }
@@ -246,7 +246,7 @@ pub(crate) fn open(
                 return Err(Error::Loop);
             }
             // check if we are trying to open a file as a dir
-            if file_type.is_file() && oflags.contains(&Oflags::DIRECTORY) {
+            if file_type.is_file() && oflags.contains(Oflags::DIRECTORY) {
                 return Err(Error::Notdir);
             }
         }

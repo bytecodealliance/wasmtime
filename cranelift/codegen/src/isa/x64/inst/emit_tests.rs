@@ -1026,6 +1026,56 @@ fn test_x64_emit() {
         "orq     %r15, %rdx",
     ));
     insns.push((
+        Inst::alu_rmi_r(false, AluRmiROpcode::And8, RegMemImm::reg(r15), w_rdx),
+        "4420FA",
+        "andb    %r15b, %dl",
+    ));
+    insns.push((
+        Inst::alu_rmi_r(false, AluRmiROpcode::And8, RegMemImm::reg(rax), w_rsi),
+        "4020C6",
+        "andb    %al, %sil",
+    ));
+    insns.push((
+        Inst::alu_rmi_r(false, AluRmiROpcode::And8, RegMemImm::reg(rax), w_rbx),
+        "20C3",
+        "andb    %al, %bl",
+    ));
+    insns.push((
+        Inst::alu_rmi_r(
+            false,
+            AluRmiROpcode::And8,
+            RegMemImm::mem(Amode::imm_reg(0, rax)),
+            w_rbx,
+        ),
+        "2218",
+        "andb    0(%rax), %bl",
+    ));
+    insns.push((
+        Inst::alu_rmi_r(false, AluRmiROpcode::Or8, RegMemImm::reg(r15), w_rdx),
+        "4408FA",
+        "orb     %r15b, %dl",
+    ));
+    insns.push((
+        Inst::alu_rmi_r(false, AluRmiROpcode::Or8, RegMemImm::reg(rax), w_rsi),
+        "4008C6",
+        "orb     %al, %sil",
+    ));
+    insns.push((
+        Inst::alu_rmi_r(false, AluRmiROpcode::Or8, RegMemImm::reg(rax), w_rbx),
+        "08C3",
+        "orb     %al, %bl",
+    ));
+    insns.push((
+        Inst::alu_rmi_r(
+            false,
+            AluRmiROpcode::Or8,
+            RegMemImm::mem(Amode::imm_reg(0, rax)),
+            w_rbx,
+        ),
+        "0A18",
+        "orb     0(%rax), %bl",
+    ));
+    insns.push((
         Inst::alu_rmi_r(true, AluRmiROpcode::Xor, RegMemImm::reg(r15), w_rdx),
         "4C31FA",
         "xorq    %r15, %rdx",
@@ -1193,6 +1243,16 @@ fn test_x64_emit() {
         "66F7D7",
         "notw    %di",
     ));
+    insns.push((
+        Inst::not(1, Writable::from_reg(regs::rdi())),
+        "40F6D7",
+        "notb    %dil",
+    ));
+    insns.push((
+        Inst::not(1, Writable::from_reg(regs::rax())),
+        "F6D0",
+        "notb    %al",
+    ));
 
     // ========================================================
     // Neg
@@ -1216,6 +1276,16 @@ fn test_x64_emit() {
         "66F7DF",
         "negw    %di",
     ));
+    insns.push((
+        Inst::neg(1, Writable::from_reg(regs::rdi())),
+        "40F6DF",
+        "negb    %dil",
+    ));
+    insns.push((
+        Inst::neg(1, Writable::from_reg(regs::rax())),
+        "F6D8",
+        "negb    %al",
+    ));
 
     // ========================================================
     // Div
@@ -1238,6 +1308,16 @@ fn test_x64_emit() {
         Inst::div(8, false /*signed*/, RegMem::reg(regs::rdi())),
         "48F7F7",
         "div     %rdi",
+    ));
+    insns.push((
+        Inst::div(1, false, RegMem::reg(regs::rax())),
+        "F6F0",
+        "div     %al",
+    ));
+    insns.push((
+        Inst::div(1, false, RegMem::reg(regs::rsi())),
+        "40F6F6",
+        "div     %sil",
     ));
 
     // ========================================================
@@ -2352,8 +2432,13 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::shift_r(1, ShiftKind::RotateRight, None, w_rsi),
-        "D2CE",
+        "40D2CE",
         "rorb    %cl, %sil",
+    ));
+    insns.push((
+        Inst::shift_r(1, ShiftKind::RotateRight, None, w_rax),
+        "D2C8",
+        "rorb    %cl, %al",
     ));
     insns.push((
         Inst::shift_r(1, ShiftKind::RotateRight, Some(5), w_r15),
@@ -2649,6 +2734,88 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
+    // TestRmiR
+    insns.push((
+        Inst::test_rmi_r(8, RegMemImm::reg(r15), rdx),
+        "4C85FA",
+        "testq   %r15, %rdx",
+    ));
+    insns.push((
+        Inst::test_rmi_r(8, RegMemImm::mem(Amode::imm_reg(99, rdi)), rdx),
+        "48855763",
+        "testq   99(%rdi), %rdx",
+    ));
+    insns.push((
+        Inst::test_rmi_r(8, RegMemImm::imm(76543210), rdx),
+        "48F7C2EAF48F04",
+        "testq   $76543210, %rdx",
+    ));
+    //
+    insns.push((
+        Inst::test_rmi_r(4, RegMemImm::reg(r15), rdx),
+        "4485FA",
+        "testl   %r15d, %edx",
+    ));
+    insns.push((
+        Inst::test_rmi_r(4, RegMemImm::mem(Amode::imm_reg(99, rdi)), rdx),
+        "855763",
+        "testl   99(%rdi), %edx",
+    ));
+    insns.push((
+        Inst::test_rmi_r(4, RegMemImm::imm(76543210), rdx),
+        "F7C2EAF48F04",
+        "testl   $76543210, %edx",
+    ));
+    //
+    insns.push((
+        Inst::test_rmi_r(2, RegMemImm::reg(r15), rdx),
+        "664485FA",
+        "testw   %r15w, %dx",
+    ));
+    insns.push((
+        Inst::test_rmi_r(2, RegMemImm::mem(Amode::imm_reg(99, rdi)), rdx),
+        "66855763",
+        "testw   99(%rdi), %dx",
+    ));
+    insns.push((
+        Inst::test_rmi_r(2, RegMemImm::imm(23210), rdx),
+        "66F7C2AA5A",
+        "testw   $23210, %dx",
+    ));
+    //
+    insns.push((
+        Inst::test_rmi_r(1, RegMemImm::reg(r15), rdx),
+        "4484FA",
+        "testb   %r15b, %dl",
+    ));
+    insns.push((
+        Inst::test_rmi_r(1, RegMemImm::mem(Amode::imm_reg(99, rdi)), rdx),
+        "845763",
+        "testb   99(%rdi), %dl",
+    ));
+    insns.push((
+        Inst::test_rmi_r(1, RegMemImm::imm(70), rdx),
+        "F6C246",
+        "testb   $70, %dl",
+    ));
+    // Extra byte-cases (paranoia!) for test_rmi_r for first operand = R
+    insns.push((
+        Inst::test_rmi_r(1, RegMemImm::reg(rax), rbx),
+        "84C3",
+        "testb   %al, %bl",
+    ));
+    insns.push((
+        Inst::test_rmi_r(1, RegMemImm::reg(rcx), rsi),
+        "4084CE",
+        "testb   %cl, %sil",
+    ));
+    insns.push((
+        Inst::test_rmi_r(1, RegMemImm::reg(rcx), r10),
+        "4184CA",
+        "testb   %cl, %r10b",
+    ));
+
+    // ========================================================
     // SetCC
     insns.push((Inst::setcc(CC::O, w_rsi), "400F90C6", "seto    %sil"));
     insns.push((Inst::setcc(CC::NLE, w_rsi), "400F9FC6", "setnle  %sil"));
@@ -2776,6 +2943,46 @@ fn test_x64_emit() {
         call_unknown(RegMem::mem(Amode::imm_reg_reg_shift(321, r10, rdx, 2))),
         "41FF949241010000",
         "call    *321(%r10,%rdx,4)",
+    ));
+
+    // ========================================================
+    // LoadExtName
+    // N.B.: test harness below sets is_pic.
+    insns.push((
+        Inst::LoadExtName {
+            dst: Writable::from_reg(r11),
+            name: Box::new(ExternalName::User {
+                namespace: 0,
+                index: 0,
+            }),
+            offset: 0,
+        },
+        "4C8B1D00000000",
+        "load_ext_name u0:0+0, %r11",
+    ));
+    insns.push((
+        Inst::LoadExtName {
+            dst: Writable::from_reg(r11),
+            name: Box::new(ExternalName::User {
+                namespace: 0,
+                index: 0,
+            }),
+            offset: 0x12345678,
+        },
+        "4C8B1D000000004981C378563412",
+        "load_ext_name u0:0+305419896, %r11",
+    ));
+    insns.push((
+        Inst::LoadExtName {
+            dst: Writable::from_reg(r11),
+            name: Box::new(ExternalName::User {
+                namespace: 0,
+                index: 0,
+            }),
+            offset: -0x12345678,
+        },
+        "4C8B1D000000004981EB78563412",
+        "load_ext_name u0:0+-305419896, %r11",
     ));
 
     // ========================================================
@@ -3697,9 +3904,33 @@ fn test_x64_emit() {
     let trap_code = TrapCode::UnreachableCodeReached;
     insns.push((Inst::Ud2 { trap_code }, "0F0B", "ud2 unreachable"));
 
+    insns.push((
+        Inst::ElfTlsGetAddr {
+            symbol: ExternalName::User {
+                namespace: 0,
+                index: 0,
+            },
+        },
+        "66488D3D00000000666648E800000000",
+        "elf_tls_get_addr User { namespace: 0, index: 0 }",
+    ));
+
+    insns.push((
+        Inst::MachOTlsGetAddr {
+            symbol: ExternalName::User {
+                namespace: 0,
+                index: 0,
+            },
+        },
+        "488B3D00000000FF17",
+        "macho_tls_get_addr User { namespace: 0, index: 0 }",
+    ));
+
     // ========================================================
     // Actually run the tests!
-    let flags = settings::Flags::new(settings::builder());
+    let mut flag_builder = settings::builder();
+    flag_builder.enable("is_pic").unwrap();
+    let flags = settings::Flags::new(flag_builder);
 
     use crate::settings::Configurable;
     let mut isa_flag_builder = x64::settings::builder();

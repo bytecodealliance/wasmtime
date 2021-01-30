@@ -8,17 +8,17 @@ use crate::ir::{
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
-use crate::isa::{x64::X64Backend, CallConv};
+use crate::isa::{x64::settings as x64_settings, x64::X64Backend, CallConv};
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
-use crate::settings::Flags;
+use crate::settings::{Flags, TlsModel};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use cranelift_codegen_shared::condcodes::CondCode;
 use log::trace;
 use regalloc::{Reg, RegClass, Writable};
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
 use target_lexicon::Triple;
 
@@ -28,6 +28,7 @@ use target_lexicon::Triple;
 fn is_int_or_ref_ty(ty: Type) -> bool {
     match ty {
         types::I8 | types::I16 | types::I32 | types::I64 | types::R64 => true,
+        types::B1 | types::B8 | types::B16 | types::B32 | types::B64 => true,
         types::R32 => panic!("shouldn't have 32-bits refs on x64"),
         _ => false,
     }
@@ -88,7 +89,7 @@ fn matches_input_any<C: LowerCtx<I = Inst>>(
 
 /// Emits instruction(s) to generate the given 64-bit constant value into a newly-allocated
 /// temporary register, returning that register.
-fn generate_constant<C: LowerCtx<I = Inst>>(ctx: &mut C, ty: Type, c: u64) -> Reg {
+fn generate_constant<C: LowerCtx<I = Inst>>(ctx: &mut C, ty: Type, c: u64) -> ValueRegs<Reg> {
     let from_bits = ty_bits(ty);
     let masked = if from_bits < 64 {
         c & ((1u64 << from_bits) - 1)
@@ -96,19 +97,19 @@ fn generate_constant<C: LowerCtx<I = Inst>>(ctx: &mut C, ty: Type, c: u64) -> Re
         c
     };
 
-    let cst_copy = ctx.alloc_tmp(Inst::rc_for_type(ty).unwrap(), ty);
-    for inst in Inst::gen_constant(cst_copy, masked, ty, |reg_class, ty| {
-        ctx.alloc_tmp(reg_class, ty)
+    let cst_copy = ctx.alloc_tmp(ty);
+    for inst in Inst::gen_constant(cst_copy, masked as u128, ty, |ty| {
+        ctx.alloc_tmp(ty).only_reg().unwrap()
     })
     .into_iter()
     {
         ctx.emit(inst);
     }
-    cst_copy.to_reg()
+    non_writable_value_regs(cst_copy)
 }
 
-/// Put the given input into a register, and mark it as used (side-effect).
-fn put_input_in_reg<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Reg {
+/// Put the given input into possibly multiple registers, and mark it as used (side-effect).
+fn put_input_in_regs<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> ValueRegs<Reg> {
     let ty = ctx.input_ty(spec.insn, spec.input);
     let input = ctx.get_input_as_source_or_const(spec.insn, spec.input);
 
@@ -116,8 +117,15 @@ fn put_input_in_reg<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Reg 
         // Generate constants fresh at each use to minimize long-range register pressure.
         generate_constant(ctx, ty, c)
     } else {
-        ctx.put_input_in_reg(spec.insn, spec.input)
+        ctx.put_input_in_regs(spec.insn, spec.input)
     }
+}
+
+/// Put the given input into a register, and mark it as used (side-effect).
+fn put_input_in_reg<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Reg {
+    put_input_in_regs(ctx, spec)
+        .only_reg()
+        .expect("Multi-register value not expected")
 }
 
 /// Determines whether a load operation (indicated by `src_insn`) can be merged
@@ -172,7 +180,7 @@ fn input_to_reg_mem<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> RegM
     if let Some(c) = inputs.constant {
         // Generate constants fresh at each use to minimize long-range register pressure.
         let ty = ctx.input_ty(spec.insn, spec.input);
-        return RegMem::reg(generate_constant(ctx, ty, c));
+        return RegMem::reg(generate_constant(ctx, ty, c).only_reg().unwrap());
     }
 
     if let Some((src_insn, 0)) = inputs.inst {
@@ -183,7 +191,11 @@ fn input_to_reg_mem<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> RegM
         }
     }
 
-    RegMem::reg(ctx.put_input_in_reg(spec.insn, spec.input))
+    RegMem::reg(
+        ctx.put_input_in_regs(spec.insn, spec.input)
+            .only_reg()
+            .unwrap(),
+    )
 }
 
 /// An extension specification for `extend_input_to_reg`.
@@ -221,7 +233,7 @@ fn extend_input_to_reg<C: LowerCtx<I = Inst>>(
     };
 
     let src = input_to_reg_mem(ctx, spec);
-    let dst = ctx.alloc_tmp(RegClass::I64, requested_ty);
+    let dst = ctx.alloc_tmp(requested_ty).only_reg().unwrap();
     match ext_spec {
         ExtSpec::ZeroExtendTo32 | ExtSpec::ZeroExtendTo64 => {
             ctx.emit(Inst::movzx_rm_r(ext_mode, src, dst))
@@ -246,12 +258,6 @@ fn non_reg_input_to_sext_imm(input: NonRegInput, input_ty: Type) -> Option<u32> 
             None
         }
     })
-}
-
-fn input_to_sext_imm<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Option<u32> {
-    let input = ctx.get_input_as_source_or_const(spec.insn, spec.input);
-    let input_ty = ctx.input_ty(spec.insn, spec.input);
-    non_reg_input_to_sext_imm(input, input_ty)
 }
 
 fn input_to_imm<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput) -> Option<u64> {
@@ -371,18 +377,120 @@ fn emit_extract_lane<C: LowerCtx<I = Inst>>(
 ///
 /// Note: make sure that there are no instructions modifying the flags between a call to this
 /// function and the use of the flags!
-fn emit_cmp<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
+///
+/// Takes the condition code that will be tested, and returns
+/// the condition code that should be used. This allows us to
+/// synthesize comparisons out of multiple instructions for
+/// special cases (e.g., 128-bit integers).
+fn emit_cmp<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst, cc: IntCC) -> IntCC {
     let ty = ctx.input_ty(insn, 0);
 
     let inputs = [InsnInput { insn, input: 0 }, InsnInput { insn, input: 1 }];
 
-    // TODO Try to commute the operands (and invert the condition) if one is an immediate.
-    let lhs = put_input_in_reg(ctx, inputs[0]);
-    let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
+    if ty == types::I128 {
+        // We need to compare both halves and combine the results appropriately.
+        let cmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+        let cmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+        let lhs = put_input_in_regs(ctx, inputs[0]);
+        let lhs_lo = lhs.regs()[0];
+        let lhs_hi = lhs.regs()[1];
+        let rhs = put_input_in_regs(ctx, inputs[1]);
+        let rhs_lo = RegMemImm::reg(rhs.regs()[0]);
+        let rhs_hi = RegMemImm::reg(rhs.regs()[1]);
+        match cc {
+            IntCC::Equal => {
+                ctx.emit(Inst::cmp_rmi_r(8, rhs_hi, lhs_hi));
+                ctx.emit(Inst::setcc(CC::Z, cmp1));
+                ctx.emit(Inst::cmp_rmi_r(8, rhs_lo, lhs_lo));
+                ctx.emit(Inst::setcc(CC::Z, cmp2));
+                ctx.emit(Inst::alu_rmi_r(
+                    true,
+                    AluRmiROpcode::And,
+                    RegMemImm::reg(cmp1.to_reg()),
+                    cmp2,
+                ));
+                ctx.emit(Inst::alu_rmi_r(
+                    true,
+                    AluRmiROpcode::And,
+                    RegMemImm::imm(1),
+                    cmp2,
+                ));
+                IntCC::NotEqual
+            }
+            IntCC::NotEqual => {
+                ctx.emit(Inst::cmp_rmi_r(8, rhs_hi, lhs_hi));
+                ctx.emit(Inst::setcc(CC::NZ, cmp1));
+                ctx.emit(Inst::cmp_rmi_r(8, rhs_lo, lhs_lo));
+                ctx.emit(Inst::setcc(CC::NZ, cmp2));
+                ctx.emit(Inst::alu_rmi_r(
+                    true,
+                    AluRmiROpcode::Or,
+                    RegMemImm::reg(cmp1.to_reg()),
+                    cmp2,
+                ));
+                ctx.emit(Inst::alu_rmi_r(
+                    true,
+                    AluRmiROpcode::And,
+                    RegMemImm::imm(1),
+                    cmp2,
+                ));
+                IntCC::NotEqual
+            }
+            IntCC::SignedLessThan
+            | IntCC::SignedLessThanOrEqual
+            | IntCC::SignedGreaterThan
+            | IntCC::SignedGreaterThanOrEqual
+            | IntCC::UnsignedLessThan
+            | IntCC::UnsignedLessThanOrEqual
+            | IntCC::UnsignedGreaterThan
+            | IntCC::UnsignedGreaterThanOrEqual => {
+                // Result = (lhs_hi <> rhs_hi) ||
+                //          (lhs_hi == rhs_hi && lhs_lo <> rhs_lo)
+                let cmp3 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                ctx.emit(Inst::cmp_rmi_r(8, rhs_hi, lhs_hi));
+                ctx.emit(Inst::setcc(CC::from_intcc(cc.without_equal()), cmp1));
+                ctx.emit(Inst::setcc(CC::Z, cmp2));
+                ctx.emit(Inst::cmp_rmi_r(8, rhs_lo, lhs_lo));
+                ctx.emit(Inst::setcc(CC::from_intcc(cc.unsigned()), cmp3));
+                ctx.emit(Inst::alu_rmi_r(
+                    true,
+                    AluRmiROpcode::And,
+                    RegMemImm::reg(cmp2.to_reg()),
+                    cmp3,
+                ));
+                ctx.emit(Inst::alu_rmi_r(
+                    true,
+                    AluRmiROpcode::Or,
+                    RegMemImm::reg(cmp1.to_reg()),
+                    cmp3,
+                ));
+                ctx.emit(Inst::alu_rmi_r(
+                    true,
+                    AluRmiROpcode::And,
+                    RegMemImm::imm(1),
+                    cmp3,
+                ));
+                IntCC::NotEqual
+            }
+            _ => panic!("Unhandled IntCC in I128 comparison: {:?}", cc),
+        }
+    } else {
+        // TODO Try to commute the operands (and invert the condition) if one is an immediate.
+        let lhs = put_input_in_reg(ctx, inputs[0]);
+        // We force the RHS into a register, and disallow load-op fusion, because we
+        // do not have a transitive guarantee that this cmp-site will be the sole
+        // user of the value. Consider: the icmp might be the only user of a load,
+        // but there may be multiple users of the icmp (e.g.  select or bint
+        // instructions) that each invoke `emit_cmp()`. If we were to allow a load
+        // to sink to the *latest* one, but other sites did not permit sinking, then
+        // we would be missing the load for other cmp-sites.
+        let rhs = put_input_in_reg(ctx, inputs[1]);
 
-    // Cranelift's icmp semantics want to compare lhs - rhs, while Intel gives
-    // us dst - src at the machine instruction level, so invert operands.
-    ctx.emit(Inst::cmp_rmi_r(ty.bytes() as u8, rhs, lhs));
+        // Cranelift's icmp semantics want to compare lhs - rhs, while Intel gives
+        // us dst - src at the machine instruction level, so invert operands.
+        ctx.emit(Inst::cmp_rmi_r(ty.bytes() as u8, RegMemImm::reg(rhs), lhs));
+        cc
+    }
 }
 
 /// A specification for a fcmp emission.
@@ -463,8 +571,10 @@ fn emit_fcmp<C: LowerCtx<I = Inst>>(
         (inputs[0], inputs[1])
     };
     let lhs = put_input_in_reg(ctx, lhs_input);
-    let rhs = input_to_reg_mem(ctx, rhs_input);
-    ctx.emit(Inst::xmm_cmp_rm_r(op, rhs, lhs));
+    // See above in `emit_cmp()`. We must only use the reg/reg form of the
+    // comparison in order to avoid issues with merged loads.
+    let rhs = put_input_in_reg(ctx, rhs_input);
+    ctx.emit(Inst::xmm_cmp_rm_r(op, RegMem::reg(rhs), lhs));
 
     let cond_result = match cond_code {
         FloatCC::Equal => FcmpCondResult::AndConditions(CC::NP, CC::Z),
@@ -476,6 +586,458 @@ fn emit_fcmp<C: LowerCtx<I = Inst>>(
     };
 
     cond_result
+}
+
+fn emit_bitrev<C: LowerCtx<I = Inst>>(ctx: &mut C, src: Reg, dst: Writable<Reg>, ty: Type) {
+    let bits = ty.bits();
+    let const_mask = if bits == 64 {
+        0xffff_ffff_ffff_ffff
+    } else {
+        (1u64 << bits) - 1
+    };
+    let tmp0 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+    let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+    let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+
+    ctx.emit(Inst::gen_move(tmp0, src, types::I64));
+
+    // Swap 1-bit units.
+    // tmp1 = src
+    ctx.emit(Inst::gen_move(tmp1, tmp0.to_reg(), types::I64));
+    // tmp2 = 0b0101..
+    ctx.emit(Inst::imm(
+        OperandSize::Size64,
+        0x5555_5555_5555_5555 & const_mask,
+        tmp2,
+    ));
+    // tmp1 = src >> 1
+    ctx.emit(Inst::shift_r(
+        8,
+        ShiftKind::ShiftRightLogical,
+        Some(1),
+        tmp1,
+    ));
+    // tmp1 = (src >> 1) & 0b0101..
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::And,
+        RegMemImm::reg(tmp2.to_reg()),
+        tmp1,
+    ));
+    // tmp2 = src & 0b0101..
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::And,
+        RegMemImm::reg(tmp0.to_reg()),
+        tmp2,
+    ));
+    // tmp2 = (src & 0b0101..) << 1
+    ctx.emit(Inst::shift_r(8, ShiftKind::ShiftLeft, Some(1), tmp2));
+    // tmp0 = (src >> 1) & 0b0101.. | (src & 0b0101..) << 1
+    ctx.emit(Inst::gen_move(tmp0, tmp2.to_reg(), types::I64));
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::Or,
+        RegMemImm::reg(tmp1.to_reg()),
+        tmp0,
+    ));
+
+    // Swap 2-bit units.
+    ctx.emit(Inst::gen_move(tmp1, tmp0.to_reg(), types::I64));
+    ctx.emit(Inst::imm(
+        OperandSize::Size64,
+        0x3333_3333_3333_3333 & const_mask,
+        tmp2,
+    ));
+    ctx.emit(Inst::shift_r(
+        8,
+        ShiftKind::ShiftRightLogical,
+        Some(2),
+        tmp1,
+    ));
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::And,
+        RegMemImm::reg(tmp2.to_reg()),
+        tmp1,
+    ));
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::And,
+        RegMemImm::reg(tmp0.to_reg()),
+        tmp2,
+    ));
+    ctx.emit(Inst::shift_r(8, ShiftKind::ShiftLeft, Some(2), tmp2));
+    ctx.emit(Inst::gen_move(tmp0, tmp2.to_reg(), types::I64));
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::Or,
+        RegMemImm::reg(tmp1.to_reg()),
+        tmp0,
+    ));
+
+    // Swap 4-bit units.
+    ctx.emit(Inst::gen_move(tmp1, tmp0.to_reg(), types::I64));
+    ctx.emit(Inst::imm(
+        OperandSize::Size64,
+        0x0f0f_0f0f_0f0f_0f0f & const_mask,
+        tmp2,
+    ));
+    ctx.emit(Inst::shift_r(
+        8,
+        ShiftKind::ShiftRightLogical,
+        Some(4),
+        tmp1,
+    ));
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::And,
+        RegMemImm::reg(tmp2.to_reg()),
+        tmp1,
+    ));
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::And,
+        RegMemImm::reg(tmp0.to_reg()),
+        tmp2,
+    ));
+    ctx.emit(Inst::shift_r(8, ShiftKind::ShiftLeft, Some(4), tmp2));
+    ctx.emit(Inst::gen_move(tmp0, tmp2.to_reg(), types::I64));
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::Or,
+        RegMemImm::reg(tmp1.to_reg()),
+        tmp0,
+    ));
+
+    if bits > 8 {
+        // Swap 8-bit units.
+        ctx.emit(Inst::gen_move(tmp1, tmp0.to_reg(), types::I64));
+        ctx.emit(Inst::imm(
+            OperandSize::Size64,
+            0x00ff_00ff_00ff_00ff & const_mask,
+            tmp2,
+        ));
+        ctx.emit(Inst::shift_r(
+            8,
+            ShiftKind::ShiftRightLogical,
+            Some(8),
+            tmp1,
+        ));
+        ctx.emit(Inst::alu_rmi_r(
+            true,
+            AluRmiROpcode::And,
+            RegMemImm::reg(tmp2.to_reg()),
+            tmp1,
+        ));
+        ctx.emit(Inst::alu_rmi_r(
+            true,
+            AluRmiROpcode::And,
+            RegMemImm::reg(tmp0.to_reg()),
+            tmp2,
+        ));
+        ctx.emit(Inst::shift_r(8, ShiftKind::ShiftLeft, Some(8), tmp2));
+        ctx.emit(Inst::gen_move(tmp0, tmp2.to_reg(), types::I64));
+        ctx.emit(Inst::alu_rmi_r(
+            true,
+            AluRmiROpcode::Or,
+            RegMemImm::reg(tmp1.to_reg()),
+            tmp0,
+        ));
+    }
+
+    if bits > 16 {
+        // Swap 16-bit units.
+        ctx.emit(Inst::gen_move(tmp1, tmp0.to_reg(), types::I64));
+        ctx.emit(Inst::imm(
+            OperandSize::Size64,
+            0x0000_ffff_0000_ffff & const_mask,
+            tmp2,
+        ));
+        ctx.emit(Inst::shift_r(
+            8,
+            ShiftKind::ShiftRightLogical,
+            Some(16),
+            tmp1,
+        ));
+        ctx.emit(Inst::alu_rmi_r(
+            true,
+            AluRmiROpcode::And,
+            RegMemImm::reg(tmp2.to_reg()),
+            tmp1,
+        ));
+        ctx.emit(Inst::alu_rmi_r(
+            true,
+            AluRmiROpcode::And,
+            RegMemImm::reg(tmp0.to_reg()),
+            tmp2,
+        ));
+        ctx.emit(Inst::shift_r(8, ShiftKind::ShiftLeft, Some(16), tmp2));
+        ctx.emit(Inst::gen_move(tmp0, tmp2.to_reg(), types::I64));
+        ctx.emit(Inst::alu_rmi_r(
+            true,
+            AluRmiROpcode::Or,
+            RegMemImm::reg(tmp1.to_reg()),
+            tmp0,
+        ));
+    }
+
+    if bits > 32 {
+        // Swap 32-bit units.
+        ctx.emit(Inst::gen_move(tmp1, tmp0.to_reg(), types::I64));
+        ctx.emit(Inst::imm(
+            OperandSize::Size64,
+            0x0000_0000_ffff_ffff & const_mask,
+            tmp2,
+        ));
+        ctx.emit(Inst::shift_r(
+            8,
+            ShiftKind::ShiftRightLogical,
+            Some(32),
+            tmp1,
+        ));
+        ctx.emit(Inst::alu_rmi_r(
+            true,
+            AluRmiROpcode::And,
+            RegMemImm::reg(tmp2.to_reg()),
+            tmp1,
+        ));
+        ctx.emit(Inst::alu_rmi_r(
+            true,
+            AluRmiROpcode::And,
+            RegMemImm::reg(tmp0.to_reg()),
+            tmp2,
+        ));
+        ctx.emit(Inst::shift_r(8, ShiftKind::ShiftLeft, Some(32), tmp2));
+        ctx.emit(Inst::gen_move(tmp0, tmp2.to_reg(), types::I64));
+        ctx.emit(Inst::alu_rmi_r(
+            true,
+            AluRmiROpcode::Or,
+            RegMemImm::reg(tmp1.to_reg()),
+            tmp0,
+        ));
+    }
+
+    ctx.emit(Inst::gen_move(dst, tmp0.to_reg(), types::I64));
+}
+
+fn emit_shl_i128<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    src: ValueRegs<Reg>,
+    dst: ValueRegs<Writable<Reg>>,
+    amt_src: Reg,
+) {
+    let src_lo = src.regs()[0];
+    let src_hi = src.regs()[1];
+    let dst_lo = dst.regs()[0];
+    let dst_hi = dst.regs()[1];
+
+    // mov tmp1, src_lo
+    // shl tmp1, amt_src
+    // mov tmp2, src_hi
+    // shl tmp2, amt_src
+    // mov amt, 64
+    // sub amt, amt_src
+    // mov tmp3, src_lo
+    // shr tmp3, amt
+    // or tmp3, tmp2
+    // xor dst_lo, dst_lo
+    // mov amt, amt_src
+    // and amt, 64
+    // cmovz dst_hi, tmp3
+    // cmovz dst_lo, tmp1
+    // cmovnz dst_hi, tmp1
+
+    let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+    let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+    let tmp3 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+    let amt = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+
+    ctx.emit(Inst::gen_move(tmp1, src_lo, types::I64));
+    ctx.emit(Inst::gen_move(
+        Writable::from_reg(regs::rcx()),
+        amt_src,
+        types::I64,
+    ));
+    ctx.emit(Inst::shift_r(8, ShiftKind::ShiftLeft, None, tmp1));
+
+    ctx.emit(Inst::gen_move(tmp2, src_hi, types::I64));
+    ctx.emit(Inst::gen_move(
+        Writable::from_reg(regs::rcx()),
+        amt_src,
+        types::I64,
+    ));
+    ctx.emit(Inst::shift_r(8, ShiftKind::ShiftLeft, None, tmp2));
+
+    ctx.emit(Inst::imm(OperandSize::Size64, 64, amt));
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::Sub,
+        RegMemImm::reg(amt_src),
+        amt,
+    ));
+
+    ctx.emit(Inst::gen_move(tmp3, src_lo, types::I64));
+    ctx.emit(Inst::gen_move(
+        Writable::from_reg(regs::rcx()),
+        amt.to_reg(),
+        types::I64,
+    ));
+    ctx.emit(Inst::shift_r(8, ShiftKind::ShiftRightLogical, None, tmp3));
+
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::Or,
+        RegMemImm::reg(tmp2.to_reg()),
+        tmp3,
+    ));
+
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::Xor,
+        RegMemImm::reg(dst_lo.to_reg()),
+        dst_lo,
+    ));
+    // This isn't semantically necessary, but it keeps the
+    // register allocator happy, because it cannot otherwise
+    // infer that cmovz + cmovnz always defines dst_hi.
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::Xor,
+        RegMemImm::reg(dst_hi.to_reg()),
+        dst_hi,
+    ));
+
+    ctx.emit(Inst::gen_move(amt, amt_src, types::I64));
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::And,
+        RegMemImm::imm(64),
+        amt,
+    ));
+    ctx.emit(Inst::cmove(8, CC::Z, RegMem::reg(tmp3.to_reg()), dst_hi));
+    ctx.emit(Inst::cmove(8, CC::Z, RegMem::reg(tmp1.to_reg()), dst_lo));
+    ctx.emit(Inst::cmove(8, CC::NZ, RegMem::reg(tmp1.to_reg()), dst_hi));
+}
+
+fn emit_shr_i128<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    src: ValueRegs<Reg>,
+    dst: ValueRegs<Writable<Reg>>,
+    amt_src: Reg,
+    is_signed: bool,
+) {
+    let src_lo = src.regs()[0];
+    let src_hi = src.regs()[1];
+    let dst_lo = dst.regs()[0];
+    let dst_hi = dst.regs()[1];
+
+    // mov tmp1, src_hi
+    // {u,s}shr tmp1, amt_src
+    // mov tmp2, src_lo
+    // {u,s}shr tmp2, amt_src
+    // mov amt, 64
+    // sub amt, amt_src
+    // mov tmp3, src_hi
+    // shl tmp3, amt
+    // or tmp3, tmp2
+    // if is_signed:
+    //   mov dst_hi, src_hi
+    //   sshr dst_hi, 63  // get the sign bit
+    // else:
+    //   xor dst_hi, dst_hi
+    // mov amt, amt_src
+    // and amt, 64
+    // cmovz dst_hi, tmp1
+    // cmovz dst_lo, tmp3
+    // cmovnz dst_lo, tmp1
+
+    let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+    let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+    let tmp3 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+    let amt = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+
+    let shift_kind = if is_signed {
+        ShiftKind::ShiftRightArithmetic
+    } else {
+        ShiftKind::ShiftRightLogical
+    };
+
+    ctx.emit(Inst::gen_move(tmp1, src_hi, types::I64));
+    ctx.emit(Inst::gen_move(
+        Writable::from_reg(regs::rcx()),
+        amt_src,
+        types::I64,
+    ));
+    ctx.emit(Inst::shift_r(8, shift_kind, None, tmp1));
+
+    ctx.emit(Inst::gen_move(tmp2, src_lo, types::I64));
+    ctx.emit(Inst::gen_move(
+        Writable::from_reg(regs::rcx()),
+        amt_src,
+        types::I64,
+    ));
+    ctx.emit(Inst::shift_r(8, shift_kind, None, tmp2));
+
+    ctx.emit(Inst::imm(OperandSize::Size64, 64, amt));
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::Sub,
+        RegMemImm::reg(amt_src),
+        amt,
+    ));
+
+    ctx.emit(Inst::gen_move(tmp3, src_hi, types::I64));
+    ctx.emit(Inst::gen_move(
+        Writable::from_reg(regs::rcx()),
+        amt.to_reg(),
+        types::I64,
+    ));
+    ctx.emit(Inst::shift_r(8, ShiftKind::ShiftLeft, None, tmp3));
+
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::Or,
+        RegMemImm::reg(tmp2.to_reg()),
+        tmp3,
+    ));
+
+    if is_signed {
+        ctx.emit(Inst::gen_move(dst_hi, src_hi, types::I64));
+        ctx.emit(Inst::shift_r(
+            8,
+            ShiftKind::ShiftRightArithmetic,
+            Some(63),
+            dst_hi,
+        ));
+    } else {
+        ctx.emit(Inst::alu_rmi_r(
+            true,
+            AluRmiROpcode::Xor,
+            RegMemImm::reg(dst_hi.to_reg()),
+            dst_hi,
+        ));
+    }
+    // This isn't semantically necessary, but it keeps the
+    // register allocator happy, because it cannot otherwise
+    // infer that cmovz + cmovnz always defines dst_lo.
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::Xor,
+        RegMemImm::reg(dst_lo.to_reg()),
+        dst_lo,
+    ));
+
+    ctx.emit(Inst::gen_move(amt, amt_src, types::I64));
+    ctx.emit(Inst::alu_rmi_r(
+        true,
+        AluRmiROpcode::And,
+        RegMemImm::imm(64),
+        amt,
+    ));
+    ctx.emit(Inst::cmove(8, CC::Z, RegMem::reg(tmp1.to_reg()), dst_hi));
+    ctx.emit(Inst::cmove(8, CC::Z, RegMem::reg(tmp3.to_reg()), dst_lo));
+    ctx.emit(Inst::cmove(8, CC::NZ, RegMem::reg(tmp1.to_reg()), dst_lo));
 }
 
 fn make_libcall_sig<C: LowerCtx<I = Inst>>(
@@ -521,7 +1083,7 @@ fn emit_vm_call<C: LowerCtx<I = Inst>>(
     let sig = make_libcall_sig(ctx, insn, call_conv, types::I64);
     let caller_conv = ctx.abi().call_conv();
 
-    let mut abi = X64ABICaller::from_func(&sig, &extname, dist, caller_conv)?;
+    let mut abi = X64ABICaller::from_func(&sig, &extname, dist, caller_conv, flags)?;
 
     abi.emit_stack_pre_adjust(ctx);
 
@@ -530,19 +1092,19 @@ fn emit_vm_call<C: LowerCtx<I = Inst>>(
 
     for (i, input) in inputs.iter().enumerate() {
         let arg_reg = put_input_in_reg(ctx, *input);
-        abi.emit_copy_reg_to_arg(ctx, i, arg_reg);
+        abi.emit_copy_regs_to_arg(ctx, i, ValueRegs::one(arg_reg));
     }
     if call_conv.extends_baldrdash() {
         let vm_context_vreg = ctx
             .get_vm_context()
             .expect("should have a VMContext to pass to libcall funcs");
-        abi.emit_copy_reg_to_arg(ctx, inputs.len(), vm_context_vreg);
+        abi.emit_copy_regs_to_arg(ctx, inputs.len(), ValueRegs::one(vm_context_vreg));
     }
 
     abi.emit_call(ctx);
     for (i, output) in outputs.iter().enumerate() {
-        let retval_reg = get_output_reg(ctx, *output);
-        abi.emit_copy_retval_to_reg(ctx, i, retval_reg);
+        let retval_reg = get_output_reg(ctx, *output).only_reg().unwrap();
+        abi.emit_copy_retval_to_regs(ctx, i, ValueRegs::one(retval_reg));
     }
     abi.emit_stack_post_adjust(ctx);
 
@@ -665,6 +1227,101 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i
     Amode::imm_reg(offset as u32, input).with_flags(flags)
 }
 
+fn emit_moves<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    dst: ValueRegs<Writable<Reg>>,
+    src: ValueRegs<Reg>,
+    ty: Type,
+) {
+    let (_, tys) = Inst::rc_for_type(ty).unwrap();
+    for ((dst, src), ty) in dst.regs().iter().zip(src.regs().iter()).zip(tys.iter()) {
+        ctx.emit(Inst::gen_move(*dst, *src, *ty));
+    }
+}
+
+fn emit_cmoves<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    size: u8,
+    cc: CC,
+    src: ValueRegs<Reg>,
+    dst: ValueRegs<Writable<Reg>>,
+) {
+    let size = size / src.len() as u8;
+    let size = u8::max(size, 4); // at least 32 bits
+    for (dst, src) in dst.regs().iter().zip(src.regs().iter()) {
+        ctx.emit(Inst::cmove(size, cc, RegMem::reg(*src), *dst));
+    }
+}
+
+fn emit_clz<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    orig_ty: Type,
+    ty: Type,
+    src: Reg,
+    dst: Writable<Reg>,
+) {
+    let src = RegMem::reg(src);
+    let tmp = ctx.alloc_tmp(ty).only_reg().unwrap();
+    ctx.emit(Inst::imm(
+        OperandSize::from_bytes(ty.bytes()),
+        u64::max_value(),
+        dst,
+    ));
+
+    ctx.emit(Inst::unary_rm_r(
+        ty.bytes() as u8,
+        UnaryRmROpcode::Bsr,
+        src,
+        tmp,
+    ));
+
+    ctx.emit(Inst::cmove(
+        ty.bytes() as u8,
+        CC::Z,
+        RegMem::reg(dst.to_reg()),
+        tmp,
+    ));
+
+    ctx.emit(Inst::imm(
+        OperandSize::from_bytes(ty.bytes()),
+        orig_ty.bits() as u64 - 1,
+        dst,
+    ));
+
+    ctx.emit(Inst::alu_rmi_r(
+        ty == types::I64,
+        AluRmiROpcode::Sub,
+        RegMemImm::reg(tmp.to_reg()),
+        dst,
+    ));
+}
+
+fn emit_ctz<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    orig_ty: Type,
+    ty: Type,
+    src: Reg,
+    dst: Writable<Reg>,
+) {
+    let src = RegMem::reg(src);
+    let tmp = ctx.alloc_tmp(ty).only_reg().unwrap();
+    ctx.emit(Inst::imm(OperandSize::Size32, orig_ty.bits() as u64, tmp));
+
+    ctx.emit(Inst::unary_rm_r(
+        ty.bytes() as u8,
+        UnaryRmROpcode::Bsf,
+        src,
+        dst,
+    ));
+
+    ctx.emit(Inst::cmove(
+        ty.bytes() as u8,
+        CC::Z,
+        RegMem::reg(tmp.to_reg()),
+        dst,
+    ));
+}
+
 //=============================================================================
 // Top-level instruction lowering entry point, for one instruction.
 
@@ -673,6 +1330,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     insn: IRInst,
     flags: &Flags,
+    isa_flags: &x64_settings::Flags,
     triple: &Triple,
 ) -> CodegenResult<()> {
     let op = ctx.data(insn).opcode();
@@ -696,8 +1354,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 .get_constant(insn)
                 .expect("constant value for iconst et al");
             let dst = get_output_reg(ctx, outputs[0]);
-            for inst in Inst::gen_constant(dst, value, ty.unwrap(), |reg_class, ty| {
-                ctx.alloc_tmp(reg_class, ty)
+            for inst in Inst::gen_constant(dst, value as u128, ty.unwrap(), |ty| {
+                ctx.alloc_tmp(ty).only_reg().unwrap()
             }) {
                 ctx.emit(inst);
             }
@@ -793,10 +1451,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                             // Get inputs rhs=A and lhs=B and the dst register
                             let lhs = put_input_in_reg(ctx, inputs[0]);
                             let rhs = put_input_in_reg(ctx, inputs[1]);
-                            let dst = get_output_reg(ctx, outputs[0]);
+                            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
                             // A' = A
-                            let rhs_1 = ctx.alloc_tmp(RegClass::V128, types::I64X2);
+                            let rhs_1 = ctx.alloc_tmp(types::I64X2).only_reg().unwrap();
                             ctx.emit(Inst::gen_move(rhs_1, rhs, ty));
 
                             // A' = A' >> 32
@@ -813,7 +1471,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                             ));
 
                             // B' = B
-                            let lhs_1 = ctx.alloc_tmp(RegClass::V128, types::I64X2);
+                            let lhs_1 = ctx.alloc_tmp(types::I64X2).only_reg().unwrap();
                             ctx.emit(Inst::gen_move(lhs_1, lhs, ty));
 
                             // B' = B' >> 32
@@ -882,11 +1540,107 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 };
                 let lhs = put_input_in_reg(ctx, inputs[0]);
                 let rhs = input_to_reg_mem(ctx, inputs[1]);
-                let dst = get_output_reg(ctx, outputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
                 // Move the `lhs` to the same register as `dst`.
                 ctx.emit(Inst::gen_move(dst, lhs, ty));
                 ctx.emit(Inst::xmm_rm_r(sse_op, rhs, dst));
+            } else if ty == types::I128 || ty == types::B128 {
+                let alu_ops = match op {
+                    Opcode::Iadd => (AluRmiROpcode::Add, AluRmiROpcode::Adc),
+                    Opcode::Isub => (AluRmiROpcode::Sub, AluRmiROpcode::Sbb),
+                    // multiply handled specially below
+                    Opcode::Imul => (AluRmiROpcode::Mul, AluRmiROpcode::Mul),
+                    Opcode::Band => (AluRmiROpcode::And, AluRmiROpcode::And),
+                    Opcode::Bor => (AluRmiROpcode::Or, AluRmiROpcode::Or),
+                    Opcode::Bxor => (AluRmiROpcode::Xor, AluRmiROpcode::Xor),
+                    _ => panic!("Unsupported opcode with 128-bit integers: {:?}", op),
+                };
+                let lhs = put_input_in_regs(ctx, inputs[0]);
+                let rhs = put_input_in_regs(ctx, inputs[1]);
+                let dst = get_output_reg(ctx, outputs[0]);
+                assert_eq!(lhs.len(), 2);
+                assert_eq!(rhs.len(), 2);
+                assert_eq!(dst.len(), 2);
+
+                if op != Opcode::Imul {
+                    // add, sub, and, or, xor: just do ops on lower then upper half. Carry-flag
+                    // propagation is implicit (add/adc, sub/sbb).
+                    ctx.emit(Inst::gen_move(dst.regs()[0], lhs.regs()[0], types::I64));
+                    ctx.emit(Inst::gen_move(dst.regs()[1], lhs.regs()[1], types::I64));
+                    ctx.emit(Inst::alu_rmi_r(
+                        /* is_64 = */ true,
+                        alu_ops.0,
+                        RegMemImm::reg(rhs.regs()[0]),
+                        dst.regs()[0],
+                    ));
+                    ctx.emit(Inst::alu_rmi_r(
+                        /* is_64 = */ true,
+                        alu_ops.1,
+                        RegMemImm::reg(rhs.regs()[1]),
+                        dst.regs()[1],
+                    ));
+                } else {
+                    // mul:
+                    //   dst_lo = lhs_lo * rhs_lo
+                    //   dst_hi = umulhi(lhs_lo, rhs_lo) + lhs_lo * rhs_hi + lhs_hi * rhs_lo
+                    //
+                    // so we emit:
+                    //   mov dst_lo, lhs_lo
+                    //   mul dst_lo, rhs_lo
+                    //   mov dst_hi, lhs_lo
+                    //   mul dst_hi, rhs_hi
+                    //   mov tmp, lhs_hi
+                    //   mul tmp, rhs_lo
+                    //   add dst_hi, tmp
+                    //   mov rax, lhs_lo
+                    //   umulhi rhs_lo  // implicit rax arg/dst
+                    //   add dst_hi, rax
+                    let tmp = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                    ctx.emit(Inst::gen_move(dst.regs()[0], lhs.regs()[0], types::I64));
+                    ctx.emit(Inst::alu_rmi_r(
+                        /* is_64 = */ true,
+                        AluRmiROpcode::Mul,
+                        RegMemImm::reg(rhs.regs()[0]),
+                        dst.regs()[0],
+                    ));
+                    ctx.emit(Inst::gen_move(dst.regs()[1], lhs.regs()[0], types::I64));
+                    ctx.emit(Inst::alu_rmi_r(
+                        /* is_64 = */ true,
+                        AluRmiROpcode::Mul,
+                        RegMemImm::reg(rhs.regs()[1]),
+                        dst.regs()[1],
+                    ));
+                    ctx.emit(Inst::gen_move(tmp, lhs.regs()[1], types::I64));
+                    ctx.emit(Inst::alu_rmi_r(
+                        /* is_64 = */ true,
+                        AluRmiROpcode::Mul,
+                        RegMemImm::reg(rhs.regs()[0]),
+                        tmp,
+                    ));
+                    ctx.emit(Inst::alu_rmi_r(
+                        /* is_64 = */ true,
+                        AluRmiROpcode::Add,
+                        RegMemImm::reg(tmp.to_reg()),
+                        dst.regs()[1],
+                    ));
+                    ctx.emit(Inst::gen_move(
+                        Writable::from_reg(regs::rax()),
+                        lhs.regs()[0],
+                        types::I64,
+                    ));
+                    ctx.emit(Inst::mul_hi(
+                        /* size = */ 8,
+                        /* signed = */ false,
+                        RegMem::reg(rhs.regs()[0]),
+                    ));
+                    ctx.emit(Inst::alu_rmi_r(
+                        /* is_64 = */ true,
+                        AluRmiROpcode::Add,
+                        RegMemImm::reg(regs::rdx()),
+                        dst.regs()[1],
+                    ));
+                }
             } else {
                 let is_64 = ty == types::I64;
                 let alu_op = match op {
@@ -926,7 +1680,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     _ => unreachable!(),
                 };
 
-                let dst = get_output_reg(ctx, outputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                 ctx.emit(Inst::mov_r_r(true, lhs, dst));
                 ctx.emit(Inst::alu_rmi_r(is_64, alu_op, rhs, dst));
             }
@@ -937,7 +1691,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             debug_assert!(ty.is_vector() && ty.bytes() == 16);
             let lhs = input_to_reg_mem(ctx, inputs[0]);
             let rhs = put_input_in_reg(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let sse_op = match ty {
                 types::F32X4 => SseOpcode::Andnps,
                 types::F64X2 => SseOpcode::Andnpd,
@@ -951,7 +1705,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Iabs => {
             let src = input_to_reg_mem(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
             if ty.is_vector() {
                 let opcode = match ty {
@@ -969,7 +1723,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Imax | Opcode::Umax | Opcode::Imin | Opcode::Umin => {
             let lhs = put_input_in_reg(ctx, inputs[0]);
             let rhs = input_to_reg_mem(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
             if ty.is_vector() {
                 let sse_op = match op {
@@ -1011,17 +1765,27 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Bnot => {
             let ty = ty.unwrap();
             let size = ty.bytes() as u8;
-            let src = put_input_in_reg(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]);
-            ctx.emit(Inst::gen_move(dst, src, ty));
 
             if ty.is_vector() {
-                let tmp = ctx.alloc_tmp(RegClass::V128, ty);
+                let src = put_input_in_reg(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                ctx.emit(Inst::gen_move(dst, src, ty));
+                let tmp = ctx.alloc_tmp(ty).only_reg().unwrap();
                 ctx.emit(Inst::equals(ty, RegMem::from(tmp), tmp));
                 ctx.emit(Inst::xor(ty, RegMem::from(tmp), dst));
+            } else if ty == types::I128 || ty == types::B128 {
+                let src = put_input_in_regs(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]);
+                ctx.emit(Inst::gen_move(dst.regs()[0], src.regs()[0], types::I64));
+                ctx.emit(Inst::not(8, dst.regs()[0]));
+                ctx.emit(Inst::gen_move(dst.regs()[1], src.regs()[1], types::I64));
+                ctx.emit(Inst::not(8, dst.regs()[1]));
             } else if ty.is_bool() {
                 unimplemented!("bool bnot")
             } else {
+                let src = put_input_in_reg(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                ctx.emit(Inst::gen_move(dst, src, ty));
                 ctx.emit(Inst::not(size, dst));
             }
         }
@@ -1031,14 +1795,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let condition = put_input_in_reg(ctx, inputs[0]);
             let if_true = put_input_in_reg(ctx, inputs[1]);
             let if_false = input_to_reg_mem(ctx, inputs[2]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
             if ty.is_vector() {
-                let tmp1 = ctx.alloc_tmp(RegClass::V128, ty);
+                let tmp1 = ctx.alloc_tmp(ty).only_reg().unwrap();
                 ctx.emit(Inst::gen_move(tmp1, if_true, ty));
                 ctx.emit(Inst::and(ty, RegMem::reg(condition.clone()), tmp1));
 
-                let tmp2 = ctx.alloc_tmp(RegClass::V128, ty);
+                let tmp2 = ctx.alloc_tmp(ty).only_reg().unwrap();
                 ctx.emit(Inst::gen_move(tmp2, condition, ty));
                 ctx.emit(Inst::and_not(ty, if_false, tmp2));
 
@@ -1053,7 +1817,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let dst_ty = ctx.output_ty(insn, 0);
             debug_assert_eq!(ctx.input_ty(insn, 0), dst_ty);
 
-            if !dst_ty.is_vector() {
+            if !dst_ty.is_vector() && dst_ty.bits() <= 64 {
                 // Scalar shifts on x86 have various encodings:
                 // - shift by one bit, e.g. `SAL r/m8, 1` (not used here)
                 // - shift by an immediate amount, e.g. `SAL r/m8, imm8`
@@ -1090,7 +1854,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         (None, Some(put_input_in_reg(ctx, inputs[1])))
                     };
 
-                let dst = get_output_reg(ctx, outputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
                 let shift_kind = match op {
                     Opcode::Ishl => ShiftKind::ShiftLeft,
@@ -1107,6 +1871,89 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     ctx.emit(Inst::mov_r_r(true, rhs.unwrap(), w_rcx));
                 }
                 ctx.emit(Inst::shift_r(size, shift_kind, count, dst));
+            } else if dst_ty == types::I128 {
+                let amt_src = put_input_in_reg(ctx, inputs[1]);
+                let src = put_input_in_regs(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]);
+
+                match op {
+                    Opcode::Ishl => {
+                        emit_shl_i128(ctx, src, dst, amt_src);
+                    }
+                    Opcode::Ushr => {
+                        emit_shr_i128(ctx, src, dst, amt_src, /* is_signed = */ false);
+                    }
+                    Opcode::Sshr => {
+                        emit_shr_i128(ctx, src, dst, amt_src, /* is_signed = */ true);
+                    }
+                    Opcode::Rotl => {
+                        // (mov tmp, src)
+                        // (shl.i128 tmp, amt)
+                        // (mov dst, src)
+                        // (ushr.i128 dst, 128-amt)
+                        // (or dst, tmp)
+                        let tmp = ctx.alloc_tmp(types::I128);
+                        emit_shl_i128(ctx, src, tmp, amt_src);
+                        let inv_amt = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                        ctx.emit(Inst::imm(OperandSize::Size64, 128, inv_amt));
+                        ctx.emit(Inst::alu_rmi_r(
+                            true,
+                            AluRmiROpcode::Sub,
+                            RegMemImm::reg(amt_src),
+                            inv_amt,
+                        ));
+                        emit_shr_i128(
+                            ctx,
+                            src,
+                            dst,
+                            inv_amt.to_reg(),
+                            /* is_signed = */ false,
+                        );
+                        ctx.emit(Inst::alu_rmi_r(
+                            true,
+                            AluRmiROpcode::Or,
+                            RegMemImm::reg(tmp.regs()[0].to_reg()),
+                            dst.regs()[0],
+                        ));
+                        ctx.emit(Inst::alu_rmi_r(
+                            true,
+                            AluRmiROpcode::Or,
+                            RegMemImm::reg(tmp.regs()[1].to_reg()),
+                            dst.regs()[1],
+                        ));
+                    }
+                    Opcode::Rotr => {
+                        // (mov tmp, src)
+                        // (ushr.i128 tmp, amt)
+                        // (mov dst, src)
+                        // (shl.i128 dst, 128-amt)
+                        // (or dst, tmp)
+                        let tmp = ctx.alloc_tmp(types::I128);
+                        emit_shr_i128(ctx, src, tmp, amt_src, /* is_signed = */ false);
+                        let inv_amt = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                        ctx.emit(Inst::imm(OperandSize::Size64, 128, inv_amt));
+                        ctx.emit(Inst::alu_rmi_r(
+                            true,
+                            AluRmiROpcode::Sub,
+                            RegMemImm::reg(amt_src),
+                            inv_amt,
+                        ));
+                        emit_shl_i128(ctx, src, dst, inv_amt.to_reg());
+                        ctx.emit(Inst::alu_rmi_r(
+                            true,
+                            AluRmiROpcode::Or,
+                            RegMemImm::reg(tmp.regs()[0].to_reg()),
+                            dst.regs()[0],
+                        ));
+                        ctx.emit(Inst::alu_rmi_r(
+                            true,
+                            AluRmiROpcode::Or,
+                            RegMemImm::reg(tmp.regs()[1].to_reg()),
+                            dst.regs()[1],
+                        ));
+                    }
+                    _ => unreachable!(),
+                }
             } else if dst_ty == types::I8X16 && (op == Opcode::Ishl || op == Opcode::Ushr) {
                 // Since the x86 instruction set does not have any 8x16 shift instructions (even in higher feature sets
                 // like AVX), we lower the `ishl.i8x16` and `ushr.i8x16` to a sequence of instructions. The basic idea,
@@ -1114,13 +1961,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // incorrect bits to 0s (see below for handling signs in `sshr.i8x16`).
                 let src = put_input_in_reg(ctx, inputs[0]);
                 let shift_by = input_to_reg_mem_imm(ctx, inputs[1]);
-                let dst = get_output_reg(ctx, outputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
                 // If necessary, move the shift index into the lowest bits of a vector register.
                 let shift_by_moved = match &shift_by {
                     RegMemImm::Imm { .. } => shift_by.clone(),
                     RegMemImm::Reg { reg } => {
-                        let tmp_shift_by = ctx.alloc_tmp(RegClass::V128, dst_ty);
+                        let tmp_shift_by = ctx.alloc_tmp(dst_ty).only_reg().unwrap();
                         ctx.emit(Inst::gpr_to_xmm(
                             SseOpcode::Movd,
                             RegMem::reg(*reg),
@@ -1193,8 +2040,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         // Otherwise, we must emit the entire mask table and dynamically (i.e. at run time) find the correct
                         // mask offset in the table. We do this use LEA to find the base address of the mask table and then
                         // complex addressing to offset to the right mask: `base_address + shift_by * 4`
-                        let base_mask_address = ctx.alloc_tmp(RegClass::I64, types::I64);
-                        let mask_offset = ctx.alloc_tmp(RegClass::I64, types::I64);
+                        let base_mask_address = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                        let mask_offset = ctx.alloc_tmp(types::I64).only_reg().unwrap();
                         let mask_constant = ctx.use_constant(VCodeConstantData::WellKnown(mask));
                         ctx.emit(Inst::lea(
                             SyntheticAmode::ConstantOffset(mask_constant),
@@ -1214,7 +2061,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 };
 
                 // Load the mask into a temporary register, `mask_value`.
-                let mask_value = ctx.alloc_tmp(RegClass::V128, dst_ty);
+                let mask_value = ctx.alloc_tmp(dst_ty).only_reg().unwrap();
                 ctx.emit(Inst::load(dst_ty, mask_address, mask_value, ExtKind::None));
 
                 // Remove the bits that would have disappeared in a true 8x16 shift. TODO in the future,
@@ -1238,7 +2085,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let src = put_input_in_reg(ctx, inputs[0]);
                 let shift_by = input_to_reg_mem_imm(ctx, inputs[1]);
                 let shift_by_ty = ctx.input_ty(insn, 1);
-                let dst = get_output_reg(ctx, outputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
                 // In order for PACKSSWB later to only use the high byte of each 16x8 lane, we shift right an extra 8
                 // bits, relying on PSRAW to fill in the upper bits appropriately.
@@ -1248,7 +2095,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     // Otherwise we add instructions to add the extra shift amount and move the value into an XMM
                     // register.
                     RegMemImm::Reg { reg } => {
-                        let bigger_shift_by_gpr = ctx.alloc_tmp(RegClass::I64, shift_by_ty);
+                        let bigger_shift_by_gpr = ctx.alloc_tmp(shift_by_ty).only_reg().unwrap();
                         ctx.emit(Inst::mov_r_r(true, reg, bigger_shift_by_gpr));
 
                         let is_64 = shift_by_ty == types::I64;
@@ -1260,7 +2107,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                             bigger_shift_by_gpr,
                         ));
 
-                        let bigger_shift_by_xmm = ctx.alloc_tmp(RegClass::V128, dst_ty);
+                        let bigger_shift_by_xmm = ctx.alloc_tmp(dst_ty).only_reg().unwrap();
                         ctx.emit(Inst::gpr_to_xmm(
                             SseOpcode::Movd,
                             RegMem::from(bigger_shift_by_gpr),
@@ -1282,7 +2129,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ));
 
                 // Unpack and shift the upper lanes of `src` into a temporary register, `upper_lanes`.
-                let upper_lanes = ctx.alloc_tmp(RegClass::V128, dst_ty);
+                let upper_lanes = ctx.alloc_tmp(dst_ty).only_reg().unwrap();
                 ctx.emit(Inst::gen_move(upper_lanes, src, dst_ty));
                 ctx.emit(Inst::xmm_rm_r(
                     SseOpcode::Punpckhbw,
@@ -1308,13 +2155,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // alternate lowering here). To remedy this, we extract each 64-bit lane to a GPR, shift each using a
                 // scalar instruction, and insert the shifted values back in the `dst` XMM register.
                 let src = put_input_in_reg(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                 ctx.emit(Inst::gen_move(dst, src, dst_ty));
 
                 // Extract the upper and lower lanes into temporary GPRs.
-                let lower_lane = ctx.alloc_tmp(RegClass::I64, types::I64);
+                let lower_lane = ctx.alloc_tmp(types::I64).only_reg().unwrap();
                 emit_extract_lane(ctx, src, lower_lane, 0, types::I64);
-                let upper_lane = ctx.alloc_tmp(RegClass::I64, types::I64);
+                let upper_lane = ctx.alloc_tmp(types::I64).only_reg().unwrap();
                 emit_extract_lane(ctx, src, upper_lane, 1, types::I64);
 
                 // Shift each value.
@@ -1343,7 +2190,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // - shift using a dynamic value given in the lower bits of another XMM register.
                 let src = put_input_in_reg(ctx, inputs[0]);
                 let shift_by = input_to_reg_mem_imm(ctx, inputs[1]);
-                let dst = get_output_reg(ctx, outputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                 let sse_op = match dst_ty {
                     types::I16X8 => match op {
                         Opcode::Ishl => SseOpcode::Psllw,
@@ -1369,7 +2216,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let shift_by = match shift_by {
                     RegMemImm::Imm { .. } => shift_by,
                     RegMemImm::Reg { reg } => {
-                        let tmp_shift_by = ctx.alloc_tmp(RegClass::V128, dst_ty);
+                        let tmp_shift_by = ctx.alloc_tmp(dst_ty).only_reg().unwrap();
                         ctx.emit(Inst::gpr_to_xmm(
                             SseOpcode::Movd,
                             RegMem::reg(reg),
@@ -1389,7 +2236,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Ineg => {
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
 
             if ty.is_vector() {
@@ -1397,7 +2244,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // of the input from the register.
 
                 let src = input_to_reg_mem(ctx, inputs[0]);
-                let tmp = ctx.alloc_tmp(RegClass::V128, types::I32X4);
+                let tmp = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
 
                 let subtract_opcode = match ty {
                     types::I8X16 => SseOpcode::Psubb,
@@ -1429,7 +2276,22 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Clz => {
-            // TODO when the x86 flags have use_lzcnt, we can use LZCNT.
+            let orig_ty = ty.unwrap();
+
+            if isa_flags.use_lzcnt() && (orig_ty == types::I32 || orig_ty == types::I64) {
+                // We can use a plain lzcnt instruction here. Note no special handling is required
+                // for zero inputs, because the machine instruction does what the CLIF expects for
+                // zero, i.e. it returns zero.
+                let src = input_to_reg_mem(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                ctx.emit(Inst::unary_rm_r(
+                    orig_ty.bytes() as u8,
+                    UnaryRmROpcode::Lzcnt,
+                    src,
+                    dst,
+                ));
+                return Ok(());
+            }
 
             // General formula using bit-scan reverse (BSR):
             // mov -1, %dst
@@ -1438,358 +2300,498 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // mov $(size_bits - 1), %dst
             // sub %tmp, %dst
 
-            let (ext_spec, ty) = match ctx.input_ty(insn, 0) {
-                types::I8 | types::I16 => (Some(ExtSpec::ZeroExtendTo32), types::I32),
-                a if a == types::I32 || a == types::I64 => (None, a),
-                _ => unreachable!(),
-            };
-
-            let src = if let Some(ext_spec) = ext_spec {
-                RegMem::reg(extend_input_to_reg(ctx, inputs[0], ext_spec))
+            if orig_ty == types::I128 {
+                // clz upper, tmp1
+                // clz lower, dst
+                // add dst, 64
+                // cmp tmp1, 64
+                // cmovnz tmp1, dst
+                let dsts = get_output_reg(ctx, outputs[0]);
+                let dst = dsts.regs()[0];
+                let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                let srcs = put_input_in_regs(ctx, inputs[0]);
+                let src_lo = srcs.regs()[0];
+                let src_hi = srcs.regs()[1];
+                emit_clz(ctx, types::I64, types::I64, src_hi, tmp1);
+                emit_clz(ctx, types::I64, types::I64, src_lo, dst);
+                ctx.emit(Inst::alu_rmi_r(
+                    true,
+                    AluRmiROpcode::Add,
+                    RegMemImm::imm(64),
+                    dst,
+                ));
+                ctx.emit(Inst::cmp_rmi_r(8, RegMemImm::imm(64), tmp1.to_reg()));
+                ctx.emit(Inst::cmove(8, CC::NZ, RegMem::reg(tmp1.to_reg()), dst));
+                ctx.emit(Inst::alu_rmi_r(
+                    true,
+                    AluRmiROpcode::Xor,
+                    RegMemImm::reg(dsts.regs()[1].to_reg()),
+                    dsts.regs()[1],
+                ));
             } else {
-                input_to_reg_mem(ctx, inputs[0])
-            };
-            let dst = get_output_reg(ctx, outputs[0]);
+                let (ext_spec, ty) = match orig_ty {
+                    types::I8 | types::I16 => (Some(ExtSpec::ZeroExtendTo32), types::I32),
+                    a if a == types::I32 || a == types::I64 => (None, a),
+                    _ => unreachable!(),
+                };
+                let src = if let Some(ext_spec) = ext_spec {
+                    extend_input_to_reg(ctx, inputs[0], ext_spec)
+                } else {
+                    put_input_in_reg(ctx, inputs[0])
+                };
 
-            let tmp = ctx.alloc_tmp(RegClass::I64, ty);
-            ctx.emit(Inst::imm(
-                OperandSize::from_bytes(ty.bytes()),
-                u64::max_value(),
-                dst,
-            ));
-
-            ctx.emit(Inst::unary_rm_r(
-                ty.bytes() as u8,
-                UnaryRmROpcode::Bsr,
-                src,
-                tmp,
-            ));
-
-            ctx.emit(Inst::cmove(
-                ty.bytes() as u8,
-                CC::Z,
-                RegMem::reg(dst.to_reg()),
-                tmp,
-            ));
-
-            ctx.emit(Inst::imm(
-                OperandSize::from_bytes(ty.bytes()),
-                ty.bits() as u64 - 1,
-                dst,
-            ));
-
-            ctx.emit(Inst::alu_rmi_r(
-                ty == types::I64,
-                AluRmiROpcode::Sub,
-                RegMemImm::reg(tmp.to_reg()),
-                dst,
-            ));
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                emit_clz(ctx, orig_ty, ty, src, dst);
+            }
         }
 
         Opcode::Ctz => {
-            // TODO when the x86 flags have use_bmi1, we can use TZCNT.
+            let orig_ty = ctx.input_ty(insn, 0);
+
+            if isa_flags.use_bmi1() && (orig_ty == types::I32 || orig_ty == types::I64) {
+                // We can use a plain tzcnt instruction here. Note no special handling is required
+                // for zero inputs, because the machine instruction does what the CLIF expects for
+                // zero, i.e. it returns zero.
+                let src = input_to_reg_mem(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                ctx.emit(Inst::unary_rm_r(
+                    orig_ty.bytes() as u8,
+                    UnaryRmROpcode::Tzcnt,
+                    src,
+                    dst,
+                ));
+                return Ok(());
+            }
 
             // General formula using bit-scan forward (BSF):
             // bsf %src, %dst
             // mov $(size_bits), %tmp
             // cmovz %tmp, %dst
-            let ty = ctx.input_ty(insn, 0);
-            let ty = if ty.bits() < 32 { types::I32 } else { ty };
-            debug_assert!(ty == types::I32 || ty == types::I64);
+            if orig_ty == types::I128 {
+                // ctz src_lo, dst
+                // ctz src_hi, tmp1
+                // add tmp1, 64
+                // cmp dst, 64
+                // cmovz tmp1, dst
+                let dsts = get_output_reg(ctx, outputs[0]);
+                let dst = dsts.regs()[0];
+                let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                let srcs = put_input_in_regs(ctx, inputs[0]);
+                let src_lo = srcs.regs()[0];
+                let src_hi = srcs.regs()[1];
+                emit_ctz(ctx, types::I64, types::I64, src_lo, dst);
+                emit_ctz(ctx, types::I64, types::I64, src_hi, tmp1);
+                ctx.emit(Inst::alu_rmi_r(
+                    true,
+                    AluRmiROpcode::Add,
+                    RegMemImm::imm(64),
+                    tmp1,
+                ));
+                ctx.emit(Inst::cmp_rmi_r(8, RegMemImm::imm(64), dst.to_reg()));
+                ctx.emit(Inst::cmove(8, CC::Z, RegMem::reg(tmp1.to_reg()), dst));
+                ctx.emit(Inst::alu_rmi_r(
+                    true,
+                    AluRmiROpcode::Xor,
+                    RegMemImm::reg(dsts.regs()[1].to_reg()),
+                    dsts.regs()[1],
+                ));
+            } else {
+                let ty = if orig_ty.bits() < 32 {
+                    types::I32
+                } else {
+                    orig_ty
+                };
+                debug_assert!(ty == types::I32 || ty == types::I64);
 
-            let src = input_to_reg_mem(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]);
-
-            let tmp = ctx.alloc_tmp(RegClass::I64, ty);
-            ctx.emit(Inst::imm(OperandSize::Size32, ty.bits() as u64, tmp));
-
-            ctx.emit(Inst::unary_rm_r(
-                ty.bytes() as u8,
-                UnaryRmROpcode::Bsf,
-                src,
-                dst,
-            ));
-
-            ctx.emit(Inst::cmove(
-                ty.bytes() as u8,
-                CC::Z,
-                RegMem::reg(tmp.to_reg()),
-                dst,
-            ));
+                let src = put_input_in_reg(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                emit_ctz(ctx, orig_ty, ty, src, dst);
+            }
         }
 
         Opcode::Popcnt => {
-            // TODO when the x86 flags have use_popcnt, we can use the popcnt instruction.
-
             let (ext_spec, ty) = match ctx.input_ty(insn, 0) {
                 types::I8 | types::I16 => (Some(ExtSpec::ZeroExtendTo32), types::I32),
-                a if a == types::I32 || a == types::I64 => (None, a),
+                a if a == types::I32 || a == types::I64 || a == types::I128 => (None, a),
                 _ => unreachable!(),
             };
 
-            let src = if let Some(ext_spec) = ext_spec {
-                RegMem::reg(extend_input_to_reg(ctx, inputs[0], ext_spec))
+            if isa_flags.use_popcnt() {
+                match ty {
+                    types::I32 | types::I64 => {
+                        let src = input_to_reg_mem(ctx, inputs[0]);
+                        let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                        ctx.emit(Inst::unary_rm_r(
+                            ty.bytes() as u8,
+                            UnaryRmROpcode::Popcnt,
+                            src,
+                            dst,
+                        ));
+                        return Ok(());
+                    }
+
+                    types::I128 => {
+                        // The number of ones in a 128-bits value is the plain sum of the number of
+                        // ones in its low and high parts. No risk of overflow here.
+                        let dsts = get_output_reg(ctx, outputs[0]);
+                        let dst = dsts.regs()[0];
+                        let tmp = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                        let srcs = put_input_in_regs(ctx, inputs[0]);
+                        let src_lo = srcs.regs()[0];
+                        let src_hi = srcs.regs()[1];
+
+                        ctx.emit(Inst::unary_rm_r(
+                            8,
+                            UnaryRmROpcode::Popcnt,
+                            RegMem::reg(src_lo),
+                            dst,
+                        ));
+                        ctx.emit(Inst::unary_rm_r(
+                            8,
+                            UnaryRmROpcode::Popcnt,
+                            RegMem::reg(src_hi),
+                            tmp,
+                        ));
+                        ctx.emit(Inst::alu_rmi_r(
+                            true,
+                            AluRmiROpcode::Add,
+                            RegMemImm::reg(tmp.to_reg()),
+                            dst,
+                        ));
+
+                        // Zero the result's high component.
+                        ctx.emit(Inst::alu_rmi_r(
+                            true,
+                            AluRmiROpcode::Xor,
+                            RegMemImm::reg(dsts.regs()[1].to_reg()),
+                            dsts.regs()[1],
+                        ));
+
+                        return Ok(());
+                    }
+                    _ => {}
+                }
+            }
+
+            let (srcs, ty): (SmallVec<[RegMem; 2]>, Type) = if let Some(ext_spec) = ext_spec {
+                (
+                    smallvec![RegMem::reg(extend_input_to_reg(ctx, inputs[0], ext_spec))],
+                    ty,
+                )
+            } else if ty == types::I128 {
+                let regs = put_input_in_regs(ctx, inputs[0]);
+                (
+                    smallvec![RegMem::reg(regs.regs()[0]), RegMem::reg(regs.regs()[1])],
+                    types::I64,
+                )
             } else {
                 // N.B.: explicitly put input in a reg here because the width of the instruction
                 // into which this RM op goes may not match the width of the input type (in fact,
                 // it won't for i32.popcnt), and we don't want a larger than necessary load.
-                RegMem::reg(put_input_in_reg(ctx, inputs[0]))
+                (smallvec![RegMem::reg(put_input_in_reg(ctx, inputs[0]))], ty)
             };
-            let dst = get_output_reg(ctx, outputs[0]);
 
-            if ty == types::I64 {
-                let is_64 = true;
+            let mut dsts: SmallVec<[Reg; 2]> = smallvec![];
+            for src in srcs {
+                let dst = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                dsts.push(dst.to_reg());
+                if ty == types::I64 {
+                    let is_64 = true;
 
-                let tmp1 = ctx.alloc_tmp(RegClass::I64, types::I64);
-                let tmp2 = ctx.alloc_tmp(RegClass::I64, types::I64);
-                let cst = ctx.alloc_tmp(RegClass::I64, types::I64);
+                    let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                    let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                    let cst = ctx.alloc_tmp(types::I64).only_reg().unwrap();
 
-                // mov src, tmp1
-                ctx.emit(Inst::mov64_rm_r(src.clone(), tmp1));
+                    // mov src, tmp1
+                    ctx.emit(Inst::mov64_rm_r(src.clone(), tmp1));
 
-                // shr $1, tmp1
-                ctx.emit(Inst::shift_r(
-                    8,
-                    ShiftKind::ShiftRightLogical,
-                    Some(1),
-                    tmp1,
-                ));
+                    // shr $1, tmp1
+                    ctx.emit(Inst::shift_r(
+                        8,
+                        ShiftKind::ShiftRightLogical,
+                        Some(1),
+                        tmp1,
+                    ));
 
-                // mov 0x7777_7777_7777_7777, cst
-                ctx.emit(Inst::imm(OperandSize::Size64, 0x7777777777777777, cst));
+                    // mov 0x7777_7777_7777_7777, cst
+                    ctx.emit(Inst::imm(OperandSize::Size64, 0x7777777777777777, cst));
 
-                // andq cst, tmp1
-                ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::And,
-                    RegMemImm::reg(cst.to_reg()),
-                    tmp1,
-                ));
+                    // andq cst, tmp1
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::And,
+                        RegMemImm::reg(cst.to_reg()),
+                        tmp1,
+                    ));
 
-                // mov src, tmp2
-                ctx.emit(Inst::mov64_rm_r(src, tmp2));
+                    // mov src, tmp2
+                    ctx.emit(Inst::mov64_rm_r(src, tmp2));
 
-                // sub tmp1, tmp2
-                ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::Sub,
-                    RegMemImm::reg(tmp1.to_reg()),
-                    tmp2,
-                ));
+                    // sub tmp1, tmp2
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::Sub,
+                        RegMemImm::reg(tmp1.to_reg()),
+                        tmp2,
+                    ));
 
-                // shr $1, tmp1
-                ctx.emit(Inst::shift_r(
-                    8,
-                    ShiftKind::ShiftRightLogical,
-                    Some(1),
-                    tmp1,
-                ));
+                    // shr $1, tmp1
+                    ctx.emit(Inst::shift_r(
+                        8,
+                        ShiftKind::ShiftRightLogical,
+                        Some(1),
+                        tmp1,
+                    ));
 
-                // and cst, tmp1
-                ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::And,
-                    RegMemImm::reg(cst.to_reg()),
-                    tmp1,
-                ));
+                    // and cst, tmp1
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::And,
+                        RegMemImm::reg(cst.to_reg()),
+                        tmp1,
+                    ));
 
-                // sub tmp1, tmp2
-                ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::Sub,
-                    RegMemImm::reg(tmp1.to_reg()),
-                    tmp2,
-                ));
+                    // sub tmp1, tmp2
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::Sub,
+                        RegMemImm::reg(tmp1.to_reg()),
+                        tmp2,
+                    ));
 
-                // shr $1, tmp1
-                ctx.emit(Inst::shift_r(
-                    8,
-                    ShiftKind::ShiftRightLogical,
-                    Some(1),
-                    tmp1,
-                ));
+                    // shr $1, tmp1
+                    ctx.emit(Inst::shift_r(
+                        8,
+                        ShiftKind::ShiftRightLogical,
+                        Some(1),
+                        tmp1,
+                    ));
 
-                // and cst, tmp1
-                ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::And,
-                    RegMemImm::reg(cst.to_reg()),
-                    tmp1,
-                ));
+                    // and cst, tmp1
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::And,
+                        RegMemImm::reg(cst.to_reg()),
+                        tmp1,
+                    ));
 
-                // sub tmp1, tmp2
-                ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::Sub,
-                    RegMemImm::reg(tmp1.to_reg()),
-                    tmp2,
-                ));
+                    // sub tmp1, tmp2
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::Sub,
+                        RegMemImm::reg(tmp1.to_reg()),
+                        tmp2,
+                    ));
 
-                // mov tmp2, dst
-                ctx.emit(Inst::mov64_rm_r(RegMem::reg(tmp2.to_reg()), dst));
+                    // mov tmp2, dst
+                    ctx.emit(Inst::mov64_rm_r(RegMem::reg(tmp2.to_reg()), dst));
 
-                // shr $4, dst
-                ctx.emit(Inst::shift_r(8, ShiftKind::ShiftRightLogical, Some(4), dst));
+                    // shr $4, dst
+                    ctx.emit(Inst::shift_r(8, ShiftKind::ShiftRightLogical, Some(4), dst));
 
-                // add tmp2, dst
-                ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::Add,
-                    RegMemImm::reg(tmp2.to_reg()),
-                    dst,
-                ));
+                    // add tmp2, dst
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::Add,
+                        RegMemImm::reg(tmp2.to_reg()),
+                        dst,
+                    ));
 
-                // mov $0x0F0F_0F0F_0F0F_0F0F, cst
-                ctx.emit(Inst::imm(OperandSize::Size64, 0x0F0F0F0F0F0F0F0F, cst));
+                    // mov $0x0F0F_0F0F_0F0F_0F0F, cst
+                    ctx.emit(Inst::imm(OperandSize::Size64, 0x0F0F0F0F0F0F0F0F, cst));
 
-                // and cst, dst
-                ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::And,
-                    RegMemImm::reg(cst.to_reg()),
-                    dst,
-                ));
+                    // and cst, dst
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::And,
+                        RegMemImm::reg(cst.to_reg()),
+                        dst,
+                    ));
 
-                // mov $0x0101_0101_0101_0101, cst
-                ctx.emit(Inst::imm(OperandSize::Size64, 0x0101010101010101, cst));
+                    // mov $0x0101_0101_0101_0101, cst
+                    ctx.emit(Inst::imm(OperandSize::Size64, 0x0101010101010101, cst));
 
-                // mul cst, dst
-                ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::Mul,
-                    RegMemImm::reg(cst.to_reg()),
-                    dst,
-                ));
+                    // mul cst, dst
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::Mul,
+                        RegMemImm::reg(cst.to_reg()),
+                        dst,
+                    ));
 
-                // shr $56, dst
-                ctx.emit(Inst::shift_r(
-                    8,
-                    ShiftKind::ShiftRightLogical,
-                    Some(56),
-                    dst,
-                ));
+                    // shr $56, dst
+                    ctx.emit(Inst::shift_r(
+                        8,
+                        ShiftKind::ShiftRightLogical,
+                        Some(56),
+                        dst,
+                    ));
+                } else {
+                    assert_eq!(ty, types::I32);
+                    let is_64 = false;
+
+                    let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                    let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+
+                    // mov src, tmp1
+                    ctx.emit(Inst::mov64_rm_r(src.clone(), tmp1));
+
+                    // shr $1, tmp1
+                    ctx.emit(Inst::shift_r(
+                        4,
+                        ShiftKind::ShiftRightLogical,
+                        Some(1),
+                        tmp1,
+                    ));
+
+                    // andq $0x7777_7777, tmp1
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::And,
+                        RegMemImm::imm(0x77777777),
+                        tmp1,
+                    ));
+
+                    // mov src, tmp2
+                    ctx.emit(Inst::mov64_rm_r(src, tmp2));
+
+                    // sub tmp1, tmp2
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::Sub,
+                        RegMemImm::reg(tmp1.to_reg()),
+                        tmp2,
+                    ));
+
+                    // shr $1, tmp1
+                    ctx.emit(Inst::shift_r(
+                        4,
+                        ShiftKind::ShiftRightLogical,
+                        Some(1),
+                        tmp1,
+                    ));
+
+                    // and 0x7777_7777, tmp1
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::And,
+                        RegMemImm::imm(0x77777777),
+                        tmp1,
+                    ));
+
+                    // sub tmp1, tmp2
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::Sub,
+                        RegMemImm::reg(tmp1.to_reg()),
+                        tmp2,
+                    ));
+
+                    // shr $1, tmp1
+                    ctx.emit(Inst::shift_r(
+                        4,
+                        ShiftKind::ShiftRightLogical,
+                        Some(1),
+                        tmp1,
+                    ));
+
+                    // and $0x7777_7777, tmp1
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::And,
+                        RegMemImm::imm(0x77777777),
+                        tmp1,
+                    ));
+
+                    // sub tmp1, tmp2
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::Sub,
+                        RegMemImm::reg(tmp1.to_reg()),
+                        tmp2,
+                    ));
+
+                    // mov tmp2, dst
+                    ctx.emit(Inst::mov64_rm_r(RegMem::reg(tmp2.to_reg()), dst));
+
+                    // shr $4, dst
+                    ctx.emit(Inst::shift_r(4, ShiftKind::ShiftRightLogical, Some(4), dst));
+
+                    // add tmp2, dst
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::Add,
+                        RegMemImm::reg(tmp2.to_reg()),
+                        dst,
+                    ));
+
+                    // and $0x0F0F_0F0F, dst
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::And,
+                        RegMemImm::imm(0x0F0F0F0F),
+                        dst,
+                    ));
+
+                    // mul $0x0101_0101, dst
+                    ctx.emit(Inst::alu_rmi_r(
+                        is_64,
+                        AluRmiROpcode::Mul,
+                        RegMemImm::imm(0x01010101),
+                        dst,
+                    ));
+
+                    // shr $24, dst
+                    ctx.emit(Inst::shift_r(
+                        4,
+                        ShiftKind::ShiftRightLogical,
+                        Some(24),
+                        dst,
+                    ));
+                }
+            }
+
+            if dsts.len() == 1 {
+                let final_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                ctx.emit(Inst::gen_move(final_dst, dsts[0], types::I64));
             } else {
-                assert_eq!(ty, types::I32);
-                let is_64 = false;
-
-                let tmp1 = ctx.alloc_tmp(RegClass::I64, types::I64);
-                let tmp2 = ctx.alloc_tmp(RegClass::I64, types::I64);
-
-                // mov src, tmp1
-                ctx.emit(Inst::mov64_rm_r(src.clone(), tmp1));
-
-                // shr $1, tmp1
-                ctx.emit(Inst::shift_r(
-                    4,
-                    ShiftKind::ShiftRightLogical,
-                    Some(1),
-                    tmp1,
-                ));
-
-                // andq $0x7777_7777, tmp1
+                assert!(dsts.len() == 2);
+                let final_dst = get_output_reg(ctx, outputs[0]);
+                ctx.emit(Inst::gen_move(final_dst.regs()[0], dsts[0], types::I64));
                 ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::And,
-                    RegMemImm::imm(0x77777777),
-                    tmp1,
-                ));
-
-                // mov src, tmp2
-                ctx.emit(Inst::mov64_rm_r(src, tmp2));
-
-                // sub tmp1, tmp2
-                ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::Sub,
-                    RegMemImm::reg(tmp1.to_reg()),
-                    tmp2,
-                ));
-
-                // shr $1, tmp1
-                ctx.emit(Inst::shift_r(
-                    4,
-                    ShiftKind::ShiftRightLogical,
-                    Some(1),
-                    tmp1,
-                ));
-
-                // and 0x7777_7777, tmp1
-                ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::And,
-                    RegMemImm::imm(0x77777777),
-                    tmp1,
-                ));
-
-                // sub tmp1, tmp2
-                ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::Sub,
-                    RegMemImm::reg(tmp1.to_reg()),
-                    tmp2,
-                ));
-
-                // shr $1, tmp1
-                ctx.emit(Inst::shift_r(
-                    4,
-                    ShiftKind::ShiftRightLogical,
-                    Some(1),
-                    tmp1,
-                ));
-
-                // and $0x7777_7777, tmp1
-                ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::And,
-                    RegMemImm::imm(0x77777777),
-                    tmp1,
-                ));
-
-                // sub tmp1, tmp2
-                ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::Sub,
-                    RegMemImm::reg(tmp1.to_reg()),
-                    tmp2,
-                ));
-
-                // mov tmp2, dst
-                ctx.emit(Inst::mov64_rm_r(RegMem::reg(tmp2.to_reg()), dst));
-
-                // shr $4, dst
-                ctx.emit(Inst::shift_r(4, ShiftKind::ShiftRightLogical, Some(4), dst));
-
-                // add tmp2, dst
-                ctx.emit(Inst::alu_rmi_r(
-                    is_64,
+                    true,
                     AluRmiROpcode::Add,
-                    RegMemImm::reg(tmp2.to_reg()),
-                    dst,
+                    RegMemImm::reg(dsts[1]),
+                    final_dst.regs()[0],
                 ));
-
-                // and $0x0F0F_0F0F, dst
                 ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::And,
-                    RegMemImm::imm(0x0F0F0F0F),
-                    dst,
+                    true,
+                    AluRmiROpcode::Xor,
+                    RegMemImm::reg(final_dst.regs()[1].to_reg()),
+                    final_dst.regs()[1],
                 ));
+            }
+        }
 
-                // mul $0x0101_0101, dst
-                ctx.emit(Inst::alu_rmi_r(
-                    is_64,
-                    AluRmiROpcode::Mul,
-                    RegMemImm::imm(0x01010101),
-                    dst,
-                ));
+        Opcode::Bitrev => {
+            let ty = ctx.input_ty(insn, 0);
+            assert!(
+                ty == types::I8
+                    || ty == types::I16
+                    || ty == types::I32
+                    || ty == types::I64
+                    || ty == types::I128
+            );
 
-                // shr $24, dst
-                ctx.emit(Inst::shift_r(
-                    4,
-                    ShiftKind::ShiftRightLogical,
-                    Some(24),
-                    dst,
-                ));
+            if ty == types::I128 {
+                let src = put_input_in_regs(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]);
+                emit_bitrev(ctx, src.regs()[0], dst.regs()[1], types::I64);
+                emit_bitrev(ctx, src.regs()[1], dst.regs()[0], types::I64);
+            } else {
+                let src = put_input_in_reg(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                emit_bitrev(ctx, src, dst, ty);
             }
         }
 
@@ -1798,7 +2800,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // represented by the constant value -1. See `define_reftypes()` in
             // `meta/src/isa/x86/encodings.rs` to confirm.
             let src = put_input_in_reg(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ctx.input_ty(insn, 0);
             let imm = match op {
                 Opcode::IsNull => {
@@ -1825,72 +2827,121 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let src_ty = ctx.input_ty(insn, 0);
             let dst_ty = ctx.output_ty(insn, 0);
 
-            // Sextend requires a sign-extended move, but all the other opcodes are simply a move
-            // from a zero-extended source. Here is why this works, in each case:
-            //
-            // - Bint: Bool-to-int. We always represent a bool as a 0 or 1, so we merely need to
-            // zero-extend here.
-            //
-            // - Breduce, Bextend: changing width of a boolean. We represent a bool as a 0 or 1, so
-            // again, this is a zero-extend / no-op.
-            //
-            // - Ireduce: changing width of an integer. Smaller ints are stored with undefined
-            // high-order bits, so we can simply do a copy.
+            if src_ty == types::I128 {
+                assert!(dst_ty.bits() <= 64);
+                assert!(op == Opcode::Ireduce);
+                let src = put_input_in_regs(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                ctx.emit(Inst::gen_move(dst, src.regs()[0], types::I64));
+            } else if dst_ty == types::I128 {
+                assert!(src_ty.bits() <= 64);
+                let src = put_input_in_reg(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]);
+                assert!(op == Opcode::Uextend || op == Opcode::Sextend || op == Opcode::Bint);
+                // Extend to 64 bits first.
 
-            if src_ty == types::I32 && dst_ty == types::I64 && op != Opcode::Sextend {
-                // As a particular x64 extra-pattern matching opportunity, all the ALU opcodes on
-                // 32-bits will zero-extend the upper 32-bits, so we can even not generate a
-                // zero-extended move in this case.
-                // TODO add loads and shifts here.
-                if let Some(_) = matches_input_any(
-                    ctx,
-                    inputs[0],
-                    &[
-                        Opcode::Iadd,
-                        Opcode::IaddIfcout,
-                        Opcode::Isub,
-                        Opcode::Imul,
-                        Opcode::Band,
-                        Opcode::Bor,
-                        Opcode::Bxor,
-                    ],
-                ) {
-                    let src = put_input_in_reg(ctx, inputs[0]);
-                    let dst = get_output_reg(ctx, outputs[0]);
-                    ctx.emit(Inst::gen_move(dst, src, types::I64));
-                    return Ok(());
-                }
-            }
-
-            let src = input_to_reg_mem(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]);
-
-            let ext_mode = ExtMode::new(src_ty.bits(), dst_ty.bits());
-            assert_eq!(
-                src_ty.bits() < dst_ty.bits(),
-                ext_mode.is_some(),
-                "unexpected extension: {} -> {}",
-                src_ty,
-                dst_ty
-            );
-
-            if let Some(ext_mode) = ext_mode {
-                if op == Opcode::Sextend {
-                    ctx.emit(Inst::movsx_rm_r(ext_mode, src, dst));
+                let ext_mode = ExtMode::new(src_ty.bits(), /* dst bits = */ 64);
+                if let Some(ext_mode) = ext_mode {
+                    if op == Opcode::Sextend {
+                        ctx.emit(Inst::movsx_rm_r(ext_mode, RegMem::reg(src), dst.regs()[0]));
+                    } else {
+                        ctx.emit(Inst::movzx_rm_r(ext_mode, RegMem::reg(src), dst.regs()[0]));
+                    }
                 } else {
-                    ctx.emit(Inst::movzx_rm_r(ext_mode, src, dst));
+                    ctx.emit(Inst::mov64_rm_r(RegMem::reg(src), dst.regs()[0]));
+                }
+
+                // Now generate the top 64 bits.
+                if op == Opcode::Sextend {
+                    // Sign-extend: move dst[0] into dst[1] and arithmetic-shift right by 63 bits
+                    // to spread the sign bit across all bits.
+                    ctx.emit(Inst::gen_move(
+                        dst.regs()[1],
+                        dst.regs()[0].to_reg(),
+                        types::I64,
+                    ));
+                    ctx.emit(Inst::shift_r(
+                        8,
+                        ShiftKind::ShiftRightArithmetic,
+                        Some(63),
+                        dst.regs()[1],
+                    ));
+                } else {
+                    // Zero-extend: just zero the top word.
+                    ctx.emit(Inst::alu_rmi_r(
+                        true,
+                        AluRmiROpcode::Xor,
+                        RegMemImm::reg(dst.regs()[1].to_reg()),
+                        dst.regs()[1],
+                    ));
                 }
             } else {
-                ctx.emit(Inst::mov64_rm_r(src, dst));
+                // Sextend requires a sign-extended move, but all the other opcodes are simply a move
+                // from a zero-extended source. Here is why this works, in each case:
+                //
+                // - Bint: Bool-to-int. We always represent a bool as a 0 or 1, so we merely need to
+                // zero-extend here.
+                //
+                // - Breduce, Bextend: changing width of a boolean. We represent a bool as a 0 or 1, so
+                // again, this is a zero-extend / no-op.
+                //
+                // - Ireduce: changing width of an integer. Smaller ints are stored with undefined
+                // high-order bits, so we can simply do a copy.
+                if src_ty == types::I32 && dst_ty == types::I64 && op != Opcode::Sextend {
+                    // As a particular x64 extra-pattern matching opportunity, all the ALU opcodes on
+                    // 32-bits will zero-extend the upper 32-bits, so we can even not generate a
+                    // zero-extended move in this case.
+                    // TODO add loads and shifts here.
+                    if let Some(_) = matches_input_any(
+                        ctx,
+                        inputs[0],
+                        &[
+                            Opcode::Iadd,
+                            Opcode::IaddIfcout,
+                            Opcode::Isub,
+                            Opcode::Imul,
+                            Opcode::Band,
+                            Opcode::Bor,
+                            Opcode::Bxor,
+                        ],
+                    ) {
+                        let src = put_input_in_reg(ctx, inputs[0]);
+                        let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                        ctx.emit(Inst::gen_move(dst, src, types::I64));
+                        return Ok(());
+                    }
+                }
+
+                let src = input_to_reg_mem(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+
+                let ext_mode = ExtMode::new(src_ty.bits(), dst_ty.bits());
+                assert_eq!(
+                    src_ty.bits() < dst_ty.bits(),
+                    ext_mode.is_some(),
+                    "unexpected extension: {} -> {}",
+                    src_ty,
+                    dst_ty
+                );
+
+                if let Some(ext_mode) = ext_mode {
+                    if op == Opcode::Sextend {
+                        ctx.emit(Inst::movsx_rm_r(ext_mode, src, dst));
+                    } else {
+                        ctx.emit(Inst::movzx_rm_r(ext_mode, src, dst));
+                    }
+                } else {
+                    ctx.emit(Inst::mov64_rm_r(src, dst));
+                }
             }
         }
 
         Opcode::Icmp => {
             let condcode = ctx.data(insn).cond_code().unwrap();
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ctx.input_ty(insn, 0);
             if !ty.is_vector() {
-                emit_cmp(ctx, insn);
+                let condcode = emit_cmp(ctx, insn, condcode);
                 let cc = CC::from_intcc(condcode);
                 ctx.emit(Inst::setcc(cc, dst));
             } else {
@@ -1970,7 +3021,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     IntCC::NotEqual => {
                         ctx.emit(Inst::xmm_rm_r(eq(ty), input, dst));
                         // Emit all 1s into the `tmp` register.
-                        let tmp = ctx.alloc_tmp(RegClass::V128, ty);
+                        let tmp = ctx.alloc_tmp(ty).only_reg().unwrap();
                         ctx.emit(Inst::xmm_rm_r(eq(ty), RegMem::from(tmp), tmp));
                         // Invert the result of the `PCMPEQ*`.
                         ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp), dst));
@@ -1986,7 +3037,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         ctx.emit(Inst::xmm_rm_r(maxu(ty), input.clone(), dst));
                         ctx.emit(Inst::xmm_rm_r(eq(ty), input, dst));
                         // Emit all 1s into the `tmp` register.
-                        let tmp = ctx.alloc_tmp(RegClass::V128, ty);
+                        let tmp = ctx.alloc_tmp(ty).only_reg().unwrap();
                         ctx.emit(Inst::xmm_rm_r(eq(ty), RegMem::from(tmp), tmp));
                         // Invert the result of the `PCMPEQ*`.
                         ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp), dst));
@@ -2019,14 +3070,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // set, then both the ZF and CF flag bits must also be set we can get away with using
                 // one setcc for most condition codes.
 
-                let dst = get_output_reg(ctx, outputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
                 match emit_fcmp(ctx, insn, cond_code, FcmpSpec::Normal) {
                     FcmpCondResult::Condition(cc) => {
                         ctx.emit(Inst::setcc(cc, dst));
                     }
                     FcmpCondResult::AndConditions(cc1, cc2) => {
-                        let tmp = ctx.alloc_tmp(RegClass::I64, types::I32);
+                        let tmp = ctx.alloc_tmp(types::I32).only_reg().unwrap();
                         ctx.emit(Inst::setcc(cc1, tmp));
                         ctx.emit(Inst::setcc(cc2, dst));
                         ctx.emit(Inst::alu_rmi_r(
@@ -2037,7 +3088,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         ));
                     }
                     FcmpCondResult::OrConditions(cc1, cc2) => {
-                        let tmp = ctx.alloc_tmp(RegClass::I64, types::I32);
+                        let tmp = ctx.alloc_tmp(types::I32).only_reg().unwrap();
                         ctx.emit(Inst::setcc(cc1, tmp));
                         ctx.emit(Inst::setcc(cc2, dst));
                         ctx.emit(Inst::alu_rmi_r(
@@ -2087,7 +3138,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // Move the `lhs` to the same register as `dst`; this may not emit an actual move
                 // but ensures that the registers are the same to match x86's read-write operand
                 // encoding.
-                let dst = get_output_reg(ctx, outputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                 ctx.emit(Inst::gen_move(dst, lhs, input_ty));
 
                 // Emit the comparison.
@@ -2097,10 +3148,19 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::FallthroughReturn | Opcode::Return => {
             for i in 0..ctx.num_inputs(insn) {
-                let src_reg = put_input_in_reg(ctx, inputs[i]);
+                let src_reg = put_input_in_regs(ctx, inputs[i]);
                 let retval_reg = ctx.retval(i);
                 let ty = ctx.input_ty(insn, i);
-                ctx.emit(Inst::gen_move(retval_reg, src_reg, ty));
+                assert!(src_reg.len() == retval_reg.len());
+                let (_, tys) = Inst::rc_for_type(ty)?;
+                for ((&src, &dst), &ty) in src_reg
+                    .regs()
+                    .iter()
+                    .zip(retval_reg.regs().iter())
+                    .zip(tys.iter())
+                {
+                    ctx.emit(Inst::gen_move(dst, src, ty));
+                }
             }
             // N.B.: the Ret itself is generated by the ABI.
         }
@@ -2114,7 +3174,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert_eq!(inputs.len(), sig.params.len());
                     assert_eq!(outputs.len(), sig.returns.len());
                     (
-                        X64ABICaller::from_func(sig, &extname, dist, caller_conv)?,
+                        X64ABICaller::from_func(sig, &extname, dist, caller_conv, flags)?,
                         &inputs[..],
                     )
                 }
@@ -2125,7 +3185,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert_eq!(inputs.len() - 1, sig.params.len());
                     assert_eq!(outputs.len(), sig.returns.len());
                     (
-                        X64ABICaller::from_ptr(sig, ptr, op, caller_conv)?,
+                        X64ABICaller::from_ptr(sig, ptr, op, caller_conv, flags)?,
                         &inputs[1..],
                     )
                 }
@@ -2135,14 +3195,15 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             abi.emit_stack_pre_adjust(ctx);
             assert_eq!(inputs.len(), abi.num_args());
-            for (i, input) in inputs.iter().enumerate() {
-                let arg_reg = put_input_in_reg(ctx, *input);
-                abi.emit_copy_reg_to_arg(ctx, i, arg_reg);
+            for i in abi.get_copy_to_arg_order() {
+                let input = inputs[i];
+                let arg_regs = put_input_in_regs(ctx, input);
+                abi.emit_copy_regs_to_arg(ctx, i, arg_regs);
             }
             abi.emit_call(ctx);
             for (i, output) in outputs.iter().enumerate() {
-                let retval_reg = get_output_reg(ctx, *output);
-                abi.emit_copy_retval_to_reg(ctx, i, retval_reg);
+                let retval_regs = get_output_reg(ctx, *output);
+                abi.emit_copy_retval_to_regs(ctx, i, retval_regs);
             }
             abi.emit_stack_post_adjust(ctx);
         }
@@ -2169,11 +3230,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit_safepoint(Inst::TrapIf { trap_code, cc });
             } else if op == Opcode::Trapif {
                 let cond_code = ctx.data(insn).cond_code().unwrap();
-                let cc = CC::from_intcc(cond_code);
 
                 // Verification ensures that the input is always a single-def ifcmp.
                 let ifcmp = matches_input(ctx, inputs[0], Opcode::Ifcmp).unwrap();
-                emit_cmp(ctx, ifcmp);
+                let cond_code = emit_cmp(ctx, ifcmp, cond_code);
+                let cc = CC::from_intcc(cond_code);
 
                 ctx.emit_safepoint(Inst::TrapIf { trap_code, cc });
             } else {
@@ -2189,8 +3250,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     FcmpCondResult::AndConditions(cc1, cc2) => {
                         // A bit unfortunate, but materialize the flags in their own register, and
                         // check against this.
-                        let tmp = ctx.alloc_tmp(RegClass::I64, types::I32);
-                        let tmp2 = ctx.alloc_tmp(RegClass::I64, types::I32);
+                        let tmp = ctx.alloc_tmp(types::I32).only_reg().unwrap();
+                        let tmp2 = ctx.alloc_tmp(types::I32).only_reg().unwrap();
                         ctx.emit(Inst::setcc(cc1, tmp));
                         ctx.emit(Inst::setcc(cc2, tmp2));
                         ctx.emit(Inst::alu_rmi_r(
@@ -2217,8 +3278,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // TODO use cmpeqpd for all 1s.
             let value = ctx.get_constant(insn).unwrap();
             let dst = get_output_reg(ctx, outputs[0]);
-            for inst in Inst::gen_constant(dst, value, types::F64, |reg_class, ty| {
-                ctx.alloc_tmp(reg_class, ty)
+            for inst in Inst::gen_constant(dst, value as u128, types::F64, |ty| {
+                ctx.alloc_tmp(ty).only_reg().unwrap()
             }) {
                 ctx.emit(inst);
             }
@@ -2228,8 +3289,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // TODO use cmpeqps for all 1s.
             let value = ctx.get_constant(insn).unwrap();
             let dst = get_output_reg(ctx, outputs[0]);
-            for inst in Inst::gen_constant(dst, value, types::F32, |reg_class, ty| {
-                ctx.alloc_tmp(reg_class, ty)
+            for inst in Inst::gen_constant(dst, value as u128, types::F32, |ty| {
+                ctx.alloc_tmp(ty).only_reg().unwrap()
             }) {
                 ctx.emit(inst);
             }
@@ -2238,7 +3299,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::WideningPairwiseDotProductS => {
             let lhs = put_input_in_reg(ctx, inputs[0]);
             let rhs = input_to_reg_mem(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
 
             ctx.emit(Inst::gen_move(dst, lhs, ty));
@@ -2255,8 +3316,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv => {
             let lhs = put_input_in_reg(ctx, inputs[0]);
-            let rhs = input_to_reg_mem(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            // We can't guarantee the RHS (if a load) is 128-bit aligned, so we
+            // must avoid merging a load here.
+            let rhs = RegMem::reg(put_input_in_reg(ctx, inputs[1]));
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
 
             // Move the `lhs` to the same register as `dst`; this may not emit an actual move
@@ -2307,7 +3370,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Fmin | Opcode::Fmax => {
             let lhs = put_input_in_reg(ctx, inputs[0]);
             let rhs = put_input_in_reg(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let is_min = op == Opcode::Fmin;
             let output_ty = ty.unwrap();
             ctx.emit(Inst::gen_move(dst, rhs, output_ty));
@@ -2386,7 +3449,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         };
 
                     // Copy lhs into tmp
-                    let tmp_xmm1 = ctx.alloc_tmp(RegClass::V128, output_ty);
+                    let tmp_xmm1 = ctx.alloc_tmp(output_ty).only_reg().unwrap();
                     ctx.emit(Inst::xmm_mov(mov_op, RegMem::reg(lhs), tmp_xmm1));
 
                     // Perform min in reverse direction
@@ -2463,7 +3526,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     };
 
                     // Copy lhs into tmp.
-                    let tmp_xmm1 = ctx.alloc_tmp(RegClass::V128, types::F32);
+                    let tmp_xmm1 = ctx.alloc_tmp(types::F32).only_reg().unwrap();
                     ctx.emit(Inst::xmm_mov(mov_op, RegMem::reg(lhs), tmp_xmm1));
 
                     // Perform max in reverse direction.
@@ -2512,9 +3575,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FminPseudo | Opcode::FmaxPseudo => {
-            let lhs = input_to_reg_mem(ctx, inputs[0]);
+            // We can't guarantee the RHS (if a load) is 128-bit aligned, so we
+            // must avoid merging a load here.
+            let lhs = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
             let rhs = put_input_in_reg(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
             ctx.emit(Inst::gen_move(dst, rhs, ty));
             let sse_opcode = match (ty, op) {
@@ -2528,8 +3593,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Sqrt => {
-            let src = input_to_reg_mem(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            // We can't guarantee the RHS (if a load) is 128-bit aligned, so we
+            // must avoid merging a load here.
+            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
 
             let sse_op = match ty {
@@ -2547,14 +3614,18 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fpromote => {
-            let src = input_to_reg_mem(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            // We can't guarantee the RHS (if a load) is 128-bit aligned, so we
+            // must avoid merging a load here.
+            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             ctx.emit(Inst::xmm_unary_rm_r(SseOpcode::Cvtss2sd, src, dst));
         }
 
         Opcode::Fdemote => {
-            let src = input_to_reg_mem(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            // We can't guarantee the RHS (if a load) is 128-bit aligned, so we
+            // must avoid merging a load here.
+            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             ctx.emit(Inst::xmm_unary_rm_r(SseOpcode::Cvtsd2ss, src, dst));
         }
 
@@ -2570,7 +3641,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 let src = match ext_spec {
                     Some(ext_spec) => RegMem::reg(extend_input_to_reg(ctx, inputs[0], ext_spec)),
-                    None => input_to_reg_mem(ctx, inputs[0]),
+                    None => RegMem::reg(put_input_in_reg(ctx, inputs[0])),
                 };
 
                 let opcode = if output_ty == types::F32 {
@@ -2579,12 +3650,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert_eq!(output_ty, types::F64);
                     SseOpcode::Cvtsi2sd
                 };
-                let dst = get_output_reg(ctx, outputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                 ctx.emit(Inst::gpr_to_xmm(opcode, src, src_size, dst));
             } else {
                 let ty = ty.unwrap();
                 let src = put_input_in_reg(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                 let opcode = match ctx.input_ty(insn, 0) {
                     types::I32X4 => SseOpcode::Cvtdq2ps,
                     _ => {
@@ -2597,7 +3668,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FcvtFromUint => {
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
 
             let input_ty = ctx.input_ty(insn, 0);
@@ -2624,11 +3695,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     types::I64 => {
                         let src = put_input_in_reg(ctx, inputs[0]);
 
-                        let src_copy = ctx.alloc_tmp(RegClass::I64, types::I64);
+                        let src_copy = ctx.alloc_tmp(types::I64).only_reg().unwrap();
                         ctx.emit(Inst::gen_move(src_copy, src, types::I64));
 
-                        let tmp_gpr1 = ctx.alloc_tmp(RegClass::I64, types::I64);
-                        let tmp_gpr2 = ctx.alloc_tmp(RegClass::I64, types::I64);
+                        let tmp_gpr1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                        let tmp_gpr2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
                         ctx.emit(Inst::cvt_u64_to_float_seq(
                             ty == types::F64,
                             src_copy,
@@ -2662,10 +3733,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 assert_eq!(ctx.input_ty(insn, 0), types::I32X4);
                 let src = put_input_in_reg(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
                 // Create a temporary register
-                let tmp = ctx.alloc_tmp(RegClass::V128, types::I32X4);
+                let tmp = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
                 ctx.emit(Inst::xmm_unary_rm_r(
                     SseOpcode::Movapd,
                     RegMem::reg(src),
@@ -2703,7 +3774,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::FcvtToUint | Opcode::FcvtToUintSat | Opcode::FcvtToSint | Opcode::FcvtToSintSat => {
             let src = put_input_in_reg(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
             let input_ty = ctx.input_ty(insn, 0);
             if !input_ty.is_vector() {
@@ -2725,11 +3796,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let to_signed = op == Opcode::FcvtToSint || op == Opcode::FcvtToSintSat;
                 let is_sat = op == Opcode::FcvtToUintSat || op == Opcode::FcvtToSintSat;
 
-                let src_copy = ctx.alloc_tmp(RegClass::V128, input_ty);
+                let src_copy = ctx.alloc_tmp(input_ty).only_reg().unwrap();
                 ctx.emit(Inst::gen_move(src_copy, src, input_ty));
 
-                let tmp_xmm = ctx.alloc_tmp(RegClass::V128, input_ty);
-                let tmp_gpr = ctx.alloc_tmp(RegClass::I64, output_ty);
+                let tmp_xmm = ctx.alloc_tmp(input_ty).only_reg().unwrap();
+                let tmp_gpr = ctx.alloc_tmp(output_ty).only_reg().unwrap();
 
                 if to_signed {
                     ctx.emit(Inst::cvt_float_to_sint_seq(
@@ -2744,7 +3815,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 if op == Opcode::FcvtToSintSat {
                     // Sets destination to zero if float is NaN
                     assert_eq!(types::F32X4, ctx.input_ty(insn, 0));
-                    let tmp = ctx.alloc_tmp(RegClass::V128, types::I32X4);
+                    let tmp = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
                     ctx.emit(Inst::xmm_unary_rm_r(
                         SseOpcode::Movapd,
                         RegMem::reg(src),
@@ -2849,8 +3920,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                     // Create temporaries
                     assert_eq!(types::F32X4, ctx.input_ty(insn, 0));
-                    let tmp1 = ctx.alloc_tmp(RegClass::V128, types::I32X4);
-                    let tmp2 = ctx.alloc_tmp(RegClass::V128, types::I32X4);
+                    let tmp1 = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
+                    let tmp2 = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
 
                     // Converting to unsigned int so if float src is negative or NaN
                     // will first set to zero.
@@ -2923,7 +3994,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let input_ty = ctx.input_ty(insn, 0);
             let output_ty = ctx.output_ty(insn, 0);
             let src = put_input_in_reg(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             if output_ty.is_vector() {
                 match op {
                     Opcode::SwidenLow => match (input_ty, output_ty) {
@@ -3005,7 +4076,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let output_ty = ctx.output_ty(insn, 0);
             let src1 = put_input_in_reg(ctx, inputs[0]);
             let src2 = put_input_in_reg(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             if output_ty.is_vector() {
                 match op {
                     Opcode::Snarrow => match (input_ty, output_ty) {
@@ -3042,7 +4113,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             match (input_ty, output_ty) {
                 (types::F32, types::I32) => {
                     let src = put_input_in_reg(ctx, inputs[0]);
-                    let dst = get_output_reg(ctx, outputs[0]);
+                    let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                     ctx.emit(Inst::xmm_to_gpr(
                         SseOpcode::Movd,
                         src,
@@ -3052,7 +4123,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
                 (types::I32, types::F32) => {
                     let src = input_to_reg_mem(ctx, inputs[0]);
-                    let dst = get_output_reg(ctx, outputs[0]);
+                    let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                     ctx.emit(Inst::gpr_to_xmm(
                         SseOpcode::Movd,
                         src,
@@ -3062,7 +4133,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
                 (types::F64, types::I64) => {
                     let src = put_input_in_reg(ctx, inputs[0]);
-                    let dst = get_output_reg(ctx, outputs[0]);
+                    let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                     ctx.emit(Inst::xmm_to_gpr(
                         SseOpcode::Movq,
                         src,
@@ -3072,7 +4143,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
                 (types::I64, types::F64) => {
                     let src = input_to_reg_mem(ctx, inputs[0]);
-                    let dst = get_output_reg(ctx, outputs[0]);
+                    let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                     ctx.emit(Inst::gpr_to_xmm(
                         SseOpcode::Movq,
                         src,
@@ -3085,8 +4156,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fabs | Opcode::Fneg => {
-            let src = input_to_reg_mem(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
             // In both cases, generate a constant and apply a single binary instruction:
             // - to compute the absolute value, set all bits to 1 but the MSB to 0, and bit-AND the
@@ -3095,7 +4166,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // src with it.
             let output_ty = ty.unwrap();
             if !output_ty.is_vector() {
-                let (val, opcode) = match output_ty {
+                let (val, opcode): (u64, _) = match output_ty {
                     types::F32 => match op {
                         Opcode::Fabs => (0x7fffffff, SseOpcode::Andps),
                         Opcode::Fneg => (0x80000000, SseOpcode::Xorps),
@@ -3109,8 +4180,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     _ => panic!("unexpected type {:?} for Fabs", output_ty),
                 };
 
-                for inst in Inst::gen_constant(dst, val, output_ty, |reg_class, ty| {
-                    ctx.alloc_tmp(reg_class, ty)
+                for inst in Inst::gen_constant(ValueRegs::one(dst), val as u128, output_ty, |ty| {
+                    ctx.alloc_tmp(ty).only_reg().unwrap()
                 }) {
                     ctx.emit(inst);
                 }
@@ -3127,8 +4198,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     ctx.emit(Inst::gen_move(dst, src, output_ty));
 
                     // Generate an all 1s constant in an XMM register. This uses CMPPS but could
-                    // have used CMPPD with the same effect.
-                    let tmp = ctx.alloc_tmp(RegClass::V128, output_ty);
+                    // have used CMPPD with the same effect. Note, we zero the temp we allocate
+                    // because if not, there is a chance that the register we use could be initialized
+                    // with NaN .. in which case the CMPPS would fail since NaN != NaN.
+                    let tmp = ctx.alloc_tmp(output_ty).only_reg().unwrap();
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Xorps, RegMem::from(tmp), tmp));
                     let cond = FcmpImm::from(FloatCC::Equal);
                     let cmpps = Inst::xmm_rm_r_imm(
                         SseOpcode::Cmpps,
@@ -3164,7 +4238,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fcopysign => {
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let lhs = put_input_in_reg(ctx, inputs[0]);
             let rhs = put_input_in_reg(ctx, inputs[1]);
 
@@ -3180,8 +4254,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // andp{s,d}  tmp_xmm1, tmp_xmm2
             // orp{s,d}   tmp_xmm2, dst
 
-            let tmp_xmm1 = ctx.alloc_tmp(RegClass::V128, types::F32);
-            let tmp_xmm2 = ctx.alloc_tmp(RegClass::V128, types::F32);
+            let tmp_xmm1 = ctx.alloc_tmp(types::F32).only_reg().unwrap();
+            let tmp_xmm2 = ctx.alloc_tmp(types::F32).only_reg().unwrap();
 
             let (sign_bit_cst, mov_op, and_not_op, and_op, or_op) = match ty {
                 types::F32 => (
@@ -3203,8 +4277,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
             };
 
-            for inst in Inst::gen_constant(tmp_xmm1, sign_bit_cst, ty, |reg_class, ty| {
-                ctx.alloc_tmp(reg_class, ty)
+            for inst in Inst::gen_constant(ValueRegs::one(tmp_xmm1), sign_bit_cst, ty, |ty| {
+                ctx.alloc_tmp(ty).only_reg().unwrap()
             }) {
                 ctx.emit(inst);
             }
@@ -3220,11 +4294,29 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Ceil | Opcode::Floor | Opcode::Nearest | Opcode::Trunc => {
-            // TODO use ROUNDSS/ROUNDSD after sse4.1.
-
-            // Lower to VM calls when there's no access to SSE4.1.
             let ty = ty.unwrap();
-            if !ty.is_vector() {
+            if isa_flags.use_sse41() {
+                let mode = match op {
+                    Opcode::Ceil => RoundImm::RoundUp,
+                    Opcode::Floor => RoundImm::RoundDown,
+                    Opcode::Nearest => RoundImm::RoundNearest,
+                    Opcode::Trunc => RoundImm::RoundZero,
+                    _ => panic!("unexpected opcode {:?} in Ceil/Floor/Nearest/Trunc", op),
+                };
+                let op = match ty {
+                    types::F32 => SseOpcode::Roundss,
+                    types::F64 => SseOpcode::Roundsd,
+                    types::F32X4 => SseOpcode::Roundps,
+                    types::F64X2 => SseOpcode::Roundpd,
+                    _ => panic!("unexpected type {:?} in Ceil/Floor/Nearest/Trunc", ty),
+                };
+                let src = input_to_reg_mem(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                ctx.emit(Inst::xmm_rm_r_imm(op, src, dst, mode.encode(), false));
+            } else {
+                // Lower to VM calls when there's no access to SSE4.1.
+                // Note, for vector types on platforms that don't support sse41
+                // the execution will panic here.
                 let libcall = match (op, ty) {
                     (Opcode::Ceil, types::F32) => LibCall::CeilF32,
                     (Opcode::Ceil, types::F64) => LibCall::CeilF64,
@@ -3240,28 +4332,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     ),
                 };
                 emit_vm_call(ctx, flags, triple, libcall, insn, inputs, outputs)?;
-            } else {
-                let (op, mode) = match (op, ty) {
-                    (Opcode::Ceil, types::F32X4) => (SseOpcode::Roundps, RoundImm::RoundUp),
-                    (Opcode::Ceil, types::F64X2) => (SseOpcode::Roundpd, RoundImm::RoundUp),
-                    (Opcode::Floor, types::F32X4) => (SseOpcode::Roundps, RoundImm::RoundDown),
-                    (Opcode::Floor, types::F64X2) => (SseOpcode::Roundpd, RoundImm::RoundDown),
-                    (Opcode::Trunc, types::F32X4) => (SseOpcode::Roundps, RoundImm::RoundZero),
-                    (Opcode::Trunc, types::F64X2) => (SseOpcode::Roundpd, RoundImm::RoundZero),
-                    (Opcode::Nearest, types::F32X4) => (SseOpcode::Roundps, RoundImm::RoundNearest),
-                    (Opcode::Nearest, types::F64X2) => (SseOpcode::Roundpd, RoundImm::RoundNearest),
-                    _ => panic!("Unknown op/ty combination (vector){:?}", ty),
-                };
-                let src = put_input_in_reg(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]);
-                ctx.emit(Inst::gen_move(dst, src, ty));
-                ctx.emit(Inst::xmm_rm_r_imm(
-                    op,
-                    RegMem::from(dst),
-                    dst,
-                    mode.encode(),
-                    false,
-                ));
             }
         }
 
@@ -3378,62 +4448,68 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 _ => unreachable!(),
             };
 
-            let dst = get_output_reg(ctx, outputs[0]);
-            let is_xmm = elem_ty.is_float() || elem_ty.is_vector();
-
-            match (sign_extend, is_xmm) {
-                (true, false) => {
-                    // The load is sign-extended only when the output size is lower than 64 bits,
-                    // so ext-mode is defined in this case.
-                    ctx.emit(Inst::movsx_rm_r(ext_mode.unwrap(), RegMem::mem(amode), dst));
-                }
-                (false, false) => {
-                    if elem_ty.bytes() == 8 {
-                        // Use a plain load.
-                        ctx.emit(Inst::mov64_m_r(amode, dst))
-                    } else {
-                        // Use a zero-extended load.
-                        ctx.emit(Inst::movzx_rm_r(ext_mode.unwrap(), RegMem::mem(amode), dst))
+            if elem_ty == types::I128 {
+                let dsts = get_output_reg(ctx, outputs[0]);
+                ctx.emit(Inst::mov64_m_r(amode.clone(), dsts.regs()[0]));
+                ctx.emit(Inst::mov64_m_r(amode.offset(8), dsts.regs()[1]));
+            } else {
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                let is_xmm = elem_ty.is_float() || elem_ty.is_vector();
+                match (sign_extend, is_xmm) {
+                    (true, false) => {
+                        // The load is sign-extended only when the output size is lower than 64 bits,
+                        // so ext-mode is defined in this case.
+                        ctx.emit(Inst::movsx_rm_r(ext_mode.unwrap(), RegMem::mem(amode), dst));
                     }
-                }
-                (_, true) => {
-                    ctx.emit(match elem_ty {
-                        types::F32 => Inst::xmm_mov(SseOpcode::Movss, RegMem::mem(amode), dst),
-                        types::F64 => Inst::xmm_mov(SseOpcode::Movsd, RegMem::mem(amode), dst),
-                        types::I8X8 => {
-                            if sign_extend == true {
-                                Inst::xmm_mov(SseOpcode::Pmovsxbw, RegMem::mem(amode), dst)
-                            } else {
-                                Inst::xmm_mov(SseOpcode::Pmovzxbw, RegMem::mem(amode), dst)
+                    (false, false) => {
+                        if elem_ty.bytes() == 8 {
+                            // Use a plain load.
+                            ctx.emit(Inst::mov64_m_r(amode, dst))
+                        } else {
+                            // Use a zero-extended load.
+                            ctx.emit(Inst::movzx_rm_r(ext_mode.unwrap(), RegMem::mem(amode), dst))
+                        }
+                    }
+                    (_, true) => {
+                        ctx.emit(match elem_ty {
+                            types::F32 => Inst::xmm_mov(SseOpcode::Movss, RegMem::mem(amode), dst),
+                            types::F64 => Inst::xmm_mov(SseOpcode::Movsd, RegMem::mem(amode), dst),
+                            types::I8X8 => {
+                                if sign_extend == true {
+                                    Inst::xmm_mov(SseOpcode::Pmovsxbw, RegMem::mem(amode), dst)
+                                } else {
+                                    Inst::xmm_mov(SseOpcode::Pmovzxbw, RegMem::mem(amode), dst)
+                                }
                             }
-                        }
-                        types::I16X4 => {
-                            if sign_extend == true {
-                                Inst::xmm_mov(SseOpcode::Pmovsxwd, RegMem::mem(amode), dst)
-                            } else {
-                                Inst::xmm_mov(SseOpcode::Pmovzxwd, RegMem::mem(amode), dst)
+                            types::I16X4 => {
+                                if sign_extend == true {
+                                    Inst::xmm_mov(SseOpcode::Pmovsxwd, RegMem::mem(amode), dst)
+                                } else {
+                                    Inst::xmm_mov(SseOpcode::Pmovzxwd, RegMem::mem(amode), dst)
+                                }
                             }
-                        }
-                        types::I32X2 => {
-                            if sign_extend == true {
-                                Inst::xmm_mov(SseOpcode::Pmovsxdq, RegMem::mem(amode), dst)
-                            } else {
-                                Inst::xmm_mov(SseOpcode::Pmovzxdq, RegMem::mem(amode), dst)
+                            types::I32X2 => {
+                                if sign_extend == true {
+                                    Inst::xmm_mov(SseOpcode::Pmovsxdq, RegMem::mem(amode), dst)
+                                } else {
+                                    Inst::xmm_mov(SseOpcode::Pmovzxdq, RegMem::mem(amode), dst)
+                                }
                             }
-                        }
-                        _ if elem_ty.is_vector() && elem_ty.bits() == 128 => {
-                            Inst::xmm_mov(SseOpcode::Movups, RegMem::mem(amode), dst)
-                        }
-                        // TODO Specialize for different types: MOVUPD, MOVDQU
-                        _ => unreachable!(
-                            "unexpected type for load: {:?} - {:?}",
-                            elem_ty,
-                            elem_ty.bits()
-                        ),
-                    });
+                            _ if elem_ty.is_vector() && elem_ty.bits() == 128 => {
+                                Inst::xmm_mov(SseOpcode::Movups, RegMem::mem(amode), dst)
+                            }
+                            // TODO Specialize for different types: MOVUPD, MOVDQU
+                            _ => unreachable!(
+                                "unexpected type for load: {:?} - {:?}",
+                                elem_ty,
+                                elem_ty.bits()
+                            ),
+                        });
+                    }
                 }
             }
         }
+
         Opcode::Store
         | Opcode::Istore8
         | Opcode::Istore16
@@ -3477,17 +4553,23 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 _ => unreachable!(),
             };
 
-            let src = put_input_in_reg(ctx, inputs[0]);
+            if elem_ty == types::I128 {
+                let srcs = put_input_in_regs(ctx, inputs[0]);
+                ctx.emit(Inst::mov_r_m(8, srcs.regs()[0], addr.clone()));
+                ctx.emit(Inst::mov_r_m(8, srcs.regs()[1], addr.offset(8)));
+            } else {
+                let src = put_input_in_reg(ctx, inputs[0]);
 
-            ctx.emit(match elem_ty {
-                types::F32 => Inst::xmm_mov_r_m(SseOpcode::Movss, src, addr),
-                types::F64 => Inst::xmm_mov_r_m(SseOpcode::Movsd, src, addr),
-                _ if elem_ty.is_vector() && elem_ty.bits() == 128 => {
-                    // TODO Specialize for different types: MOVUPD, MOVDQU, etc.
-                    Inst::xmm_mov_r_m(SseOpcode::Movups, src, addr)
-                }
-                _ => Inst::mov_r_m(elem_ty.bytes() as u8, src, addr),
-            });
+                ctx.emit(match elem_ty {
+                    types::F32 => Inst::xmm_mov_r_m(SseOpcode::Movss, src, addr),
+                    types::F64 => Inst::xmm_mov_r_m(SseOpcode::Movsd, src, addr),
+                    _ if elem_ty.is_vector() && elem_ty.bits() == 128 => {
+                        // TODO Specialize for different types: MOVUPD, MOVDQU, etc.
+                        Inst::xmm_mov_r_m(SseOpcode::Movups, src, addr)
+                    }
+                    _ => Inst::mov_r_m(elem_ty.bytes() as u8, src, addr),
+                });
+            }
         }
 
         Opcode::AtomicRmw => {
@@ -3500,7 +4582,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // use the single instruction `lock xadd`.  However, those improvements have been
             // left for another day.
             // TODO: filed as https://github.com/bytecodealliance/wasmtime/issues/2153
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let mut addr = put_input_in_reg(ctx, inputs[0]);
             let mut arg2 = put_input_in_reg(ctx, inputs[1]);
             let ty_access = ty.unwrap();
@@ -3537,7 +4619,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::AtomicCas => {
             // This is very similar to, but not identical to, the `AtomicRmw` case.  As with
             // `AtomicRmw`, there's no need to zero-extend narrow values here.
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let addr = lower_to_amode(ctx, inputs[0], 0);
             let expected = put_input_in_reg(ctx, inputs[1]);
             let replacement = put_input_in_reg(ctx, inputs[2]);
@@ -3565,7 +4647,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // This is a normal load.  The x86-TSO memory model provides sufficient sequencing
             // to satisfy the CLIF synchronisation requirements for `AtomicLoad` without the
             // need for any fence instructions.
-            let data = get_output_reg(ctx, outputs[0]);
+            let data = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let addr = lower_to_amode(ctx, inputs[0], 0);
             let ty_access = ty.unwrap();
             assert!(is_valid_atomic_transaction_ty(ty_access));
@@ -3603,7 +4685,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FuncAddr => {
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let (extname, _) = ctx.call_target(insn).unwrap();
             let extname = extname.clone();
             ctx.emit(Inst::LoadExtName {
@@ -3614,7 +4696,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::SymbolValue => {
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let (extname, _, offset) = ctx.symbol_value(insn).unwrap();
             let extname = extname.clone();
             ctx.emit(Inst::LoadExtName {
@@ -3633,7 +4715,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 } => (stack_slot, offset),
                 _ => unreachable!(),
             };
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let offset: i32 = offset.into();
             let inst = ctx
                 .abi()
@@ -3654,17 +4736,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 };
 
                 let ty = ctx.output_ty(insn, 0);
-                let rhs = put_input_in_reg(ctx, rhs_input);
+                let rhs = put_input_in_regs(ctx, rhs_input);
                 let dst = get_output_reg(ctx, outputs[0]);
-                let lhs = if is_int_or_ref_ty(ty) && ty.bytes() < 4 {
-                    // Special case: since the higher bits are undefined per CLIF semantics, we
-                    // can just apply a 32-bit cmove here. Force inputs into registers, to
-                    // avoid partial spilling out-of-bounds with memory accesses, though.
-                    // Sign-extend operands to 32, then do a cmove of size 4.
-                    RegMem::reg(put_input_in_reg(ctx, lhs_input))
-                } else {
-                    input_to_reg_mem(ctx, lhs_input)
-                };
+                let lhs = put_input_in_regs(ctx, lhs_input);
 
                 // We request inversion of Equal to NotEqual here: taking LHS if equal would mean
                 // take it if both CC::NP and CC::Z are set, the conjunction of which can't be
@@ -3677,15 +4751,20 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert_eq!(cond_code, FloatCC::Equal);
                 }
 
-                ctx.emit(Inst::gen_move(dst, rhs, ty));
+                emit_moves(ctx, dst, rhs, ty);
 
                 match fcmp_results {
                     FcmpCondResult::Condition(cc) => {
-                        if is_int_or_ref_ty(ty) {
-                            let size = u8::max(ty.bytes() as u8, 4);
-                            ctx.emit(Inst::cmove(size, cc, lhs, dst));
+                        if is_int_or_ref_ty(ty) || ty == types::I128 || ty == types::B128 {
+                            let size = ty.bytes() as u8;
+                            emit_cmoves(ctx, size, cc, lhs, dst);
                         } else {
-                            ctx.emit(Inst::xmm_cmove(ty == types::F64, cc, lhs, dst));
+                            ctx.emit(Inst::xmm_cmove(
+                                ty == types::F64,
+                                cc,
+                                RegMem::reg(lhs.only_reg().unwrap()),
+                                dst.only_reg().unwrap(),
+                            ));
                         }
                     }
                     FcmpCondResult::AndConditions(_, _) => {
@@ -3695,64 +4774,81 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     }
                     FcmpCondResult::InvertedEqualOrConditions(cc1, cc2)
                     | FcmpCondResult::OrConditions(cc1, cc2) => {
-                        if is_int_or_ref_ty(ty) {
-                            let size = u8::max(ty.bytes() as u8, 4);
-                            ctx.emit(Inst::cmove(size, cc1, lhs.clone(), dst));
-                            ctx.emit(Inst::cmove(size, cc2, lhs, dst));
+                        if is_int_or_ref_ty(ty) || ty == types::I128 {
+                            let size = ty.bytes() as u8;
+                            emit_cmoves(ctx, size, cc1, lhs.clone(), dst);
+                            emit_cmoves(ctx, size, cc2, lhs, dst);
                         } else {
-                            ctx.emit(Inst::xmm_cmove(ty == types::F64, cc1, lhs.clone(), dst));
-                            ctx.emit(Inst::xmm_cmove(ty == types::F64, cc2, lhs, dst));
+                            ctx.emit(Inst::xmm_cmove(
+                                ty == types::F64,
+                                cc1,
+                                RegMem::reg(lhs.only_reg().unwrap()),
+                                dst.only_reg().unwrap(),
+                            ));
+                            ctx.emit(Inst::xmm_cmove(
+                                ty == types::F64,
+                                cc2,
+                                RegMem::reg(lhs.only_reg().unwrap()),
+                                dst.only_reg().unwrap(),
+                            ));
                         }
                     }
                 }
             } else {
                 let ty = ty.unwrap();
 
-                let mut size = ty.bytes() as u8;
-                let lhs = if is_int_or_ref_ty(ty) {
-                    if size < 4 {
-                        // Special case: since the higher bits are undefined per CLIF semantics, we
-                        // can just apply a 32-bit cmove here. Force inputs into registers, to
-                        // avoid partial spilling out-of-bounds with memory accesses, though.
-                        size = 4;
-                        RegMem::reg(put_input_in_reg(ctx, inputs[1]))
-                    } else {
-                        input_to_reg_mem(ctx, inputs[1])
-                    }
-                } else {
-                    input_to_reg_mem(ctx, inputs[1])
-                };
-
-                let rhs = put_input_in_reg(ctx, inputs[2]);
+                let size = ty.bytes() as u8;
+                let lhs = put_input_in_regs(ctx, inputs[1]);
+                let rhs = put_input_in_regs(ctx, inputs[2]);
                 let dst = get_output_reg(ctx, outputs[0]);
 
                 let cc = if let Some(icmp) = matches_input(ctx, flag_input, Opcode::Icmp) {
-                    emit_cmp(ctx, icmp);
                     let cond_code = ctx.data(icmp).cond_code().unwrap();
+                    let cond_code = emit_cmp(ctx, icmp, cond_code);
                     CC::from_intcc(cond_code)
                 } else {
-                    // The input is a boolean value, compare it against zero.
+                    let sel_ty = ctx.input_ty(insn, 0);
                     let size = ctx.input_ty(insn, 0).bytes() as u8;
                     let test = put_input_in_reg(ctx, flag_input);
-                    ctx.emit(Inst::cmp_rmi_r(size, RegMemImm::imm(0), test));
+                    let test_input = if sel_ty == types::B1 {
+                        // The input is a boolean value; test the LSB for nonzero with:
+                        //     test reg, 1
+                        RegMemImm::imm(1)
+                    } else {
+                        // The input is an integer; test the whole value for
+                        // nonzero with:
+                        //     test reg, reg
+                        //
+                        // (It doesn't make sense to have a boolean wider than
+                        // one bit here -- which bit would cause us to select an
+                        // input?)
+                        assert!(!is_bool_ty(sel_ty));
+                        RegMemImm::reg(test)
+                    };
+                    ctx.emit(Inst::test_rmi_r(size, test_input, test));
                     CC::NZ
                 };
 
                 // This doesn't affect the flags.
-                ctx.emit(Inst::gen_move(dst, rhs, ty));
+                emit_moves(ctx, dst, rhs, ty);
 
-                if is_int_or_ref_ty(ty) {
-                    ctx.emit(Inst::cmove(size, cc, lhs, dst));
+                if is_int_or_ref_ty(ty) || ty == types::I128 {
+                    emit_cmoves(ctx, size, cc, lhs, dst);
                 } else {
                     debug_assert!(ty == types::F32 || ty == types::F64);
-                    ctx.emit(Inst::xmm_cmove(ty == types::F64, cc, lhs, dst));
+                    ctx.emit(Inst::xmm_cmove(
+                        ty == types::F64,
+                        cc,
+                        RegMem::reg(lhs.only_reg().unwrap()),
+                        dst.only_reg().unwrap(),
+                    ));
                 }
             }
         }
 
         Opcode::Selectif | Opcode::SelectifSpectreGuard => {
-            let lhs = input_to_reg_mem(ctx, inputs[1]);
-            let rhs = put_input_in_reg(ctx, inputs[2]);
+            let lhs = put_input_in_regs(ctx, inputs[1]);
+            let rhs = put_input_in_regs(ctx, inputs[2]);
             let dst = get_output_reg(ctx, outputs[0]);
             let ty = ctx.output_ty(insn, 0);
 
@@ -3763,26 +4859,24 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 .unwrap()
                 .0;
             debug_assert_eq!(ctx.data(cmp_insn).opcode(), Opcode::Ifcmp);
-            emit_cmp(ctx, cmp_insn);
+            let cond_code = ctx.data(insn).cond_code().unwrap();
+            let cond_code = emit_cmp(ctx, cmp_insn, cond_code);
 
-            let cc = CC::from_intcc(ctx.data(insn).cond_code().unwrap());
+            let cc = CC::from_intcc(cond_code);
 
-            if is_int_or_ref_ty(ty) {
+            if is_int_or_ref_ty(ty) || ty == types::I128 {
                 let size = ty.bytes() as u8;
-                if size == 1 {
-                    // Sign-extend operands to 32, then do a cmove of size 4.
-                    let lhs_se = ctx.alloc_tmp(RegClass::I64, types::I32);
-                    ctx.emit(Inst::movsx_rm_r(ExtMode::BL, lhs, lhs_se));
-                    ctx.emit(Inst::movsx_rm_r(ExtMode::BL, RegMem::reg(rhs), dst));
-                    ctx.emit(Inst::cmove(4, cc, RegMem::reg(lhs_se.to_reg()), dst));
-                } else {
-                    ctx.emit(Inst::gen_move(dst, rhs, ty));
-                    ctx.emit(Inst::cmove(size, cc, lhs, dst));
-                }
+                emit_moves(ctx, dst, rhs, ty);
+                emit_cmoves(ctx, size, cc, lhs, dst);
             } else {
                 debug_assert!(ty == types::F32 || ty == types::F64);
-                ctx.emit(Inst::gen_move(dst, rhs, ty));
-                ctx.emit(Inst::xmm_cmove(ty == types::F64, cc, lhs, dst));
+                emit_moves(ctx, dst, rhs, ty);
+                ctx.emit(Inst::xmm_cmove(
+                    ty == types::F64,
+                    cc,
+                    RegMem::reg(lhs.only_reg().unwrap()),
+                    dst.only_reg().unwrap(),
+                ));
             }
         }
 
@@ -3800,7 +4894,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let size = input_ty.bytes() as u8;
 
             let dividend = put_input_in_reg(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
             ctx.emit(Inst::gen_move(
                 Writable::from_reg(regs::rax()),
@@ -3818,11 +4912,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // destination register.
                 let divisor = put_input_in_reg(ctx, inputs[1]);
 
-                let divisor_copy = ctx.alloc_tmp(RegClass::I64, types::I64);
+                let divisor_copy = ctx.alloc_tmp(types::I64).only_reg().unwrap();
                 ctx.emit(Inst::gen_move(divisor_copy, divisor, types::I64));
 
                 let tmp = if op == Opcode::Sdiv && size == 8 {
-                    Some(ctx.alloc_tmp(RegClass::I64, types::I64))
+                    Some(ctx.alloc_tmp(types::I64).only_reg().unwrap())
                 } else {
                     None
                 };
@@ -3865,8 +4959,19 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // The quotient is in rax.
                 ctx.emit(Inst::gen_move(dst, regs::rax(), input_ty));
             } else {
-                // The remainder is in rdx.
-                ctx.emit(Inst::gen_move(dst, regs::rdx(), input_ty));
+                if size == 1 {
+                    // The remainder is in AH. Right-shift by 8 bits then move from rax.
+                    ctx.emit(Inst::shift_r(
+                        8,
+                        ShiftKind::ShiftRightLogical,
+                        Some(8),
+                        Writable::from_reg(regs::rax()),
+                    ));
+                    ctx.emit(Inst::gen_move(dst, regs::rax(), input_ty));
+                } else {
+                    // The remainder is in rdx.
+                    ctx.emit(Inst::gen_move(dst, regs::rdx(), input_ty));
+                }
             }
         }
 
@@ -3876,7 +4981,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             let lhs = put_input_in_reg(ctx, inputs[0]);
             let rhs = input_to_reg_mem(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
             // Move lhs in %rax.
             ctx.emit(Inst::gen_move(
@@ -3894,7 +4999,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::GetPinnedReg => {
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             ctx.emit(Inst::gen_move(dst, regs::pinned_reg(), types::I64));
         }
 
@@ -3920,7 +5025,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 unreachable!("vconst should always have unary_const format")
             };
             // TODO use Inst::gen_constant() instead.
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
             ctx.emit(Inst::xmm_load_const(used_constant, dst, ty));
         }
@@ -3931,14 +5036,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // instruction should emit no machine code but a move is necessary to give the register
             // allocator a definition for the output virtual register.
             let src = put_input_in_reg(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
             ctx.emit(Inst::gen_move(dst, src, ty));
         }
 
         Opcode::Shuffle => {
             let ty = ty.unwrap();
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let lhs_ty = ctx.input_ty(insn, 0);
             let lhs = put_input_in_reg(ctx, inputs[0]);
             let rhs = put_input_in_reg(ctx, inputs[1]);
@@ -3964,7 +5069,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     .map(zero_unknown_lane_index)
                     .collect();
                 let constant = ctx.use_constant(VCodeConstantData::Generated(constructed_mask));
-                let tmp = ctx.alloc_tmp(RegClass::V128, types::I8X16);
+                let tmp = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
                 ctx.emit(Inst::xmm_load_const(constant, tmp, ty));
                 // After loading the constructed mask in a temporary register, we use this to
                 // shuffle the `dst` register (remember that, in this case, it is the same as
@@ -3976,11 +5081,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // we build the `constructed_mask` for each case statically.
 
                 // PSHUFB the `lhs` argument into `tmp0`, placing zeroes for unused lanes.
-                let tmp0 = ctx.alloc_tmp(RegClass::V128, lhs_ty);
+                let tmp0 = ctx.alloc_tmp(lhs_ty).only_reg().unwrap();
                 ctx.emit(Inst::gen_move(tmp0, lhs, lhs_ty));
                 let constructed_mask = mask.iter().cloned().map(zero_unknown_lane_index).collect();
                 let constant = ctx.use_constant(VCodeConstantData::Generated(constructed_mask));
-                let tmp1 = ctx.alloc_tmp(RegClass::V128, types::I8X16);
+                let tmp1 = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
                 ctx.emit(Inst::xmm_load_const(constant, tmp1, ty));
                 ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::from(tmp1), tmp0));
 
@@ -3991,7 +5096,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     .map(zero_unknown_lane_index)
                     .collect();
                 let constant = ctx.use_constant(VCodeConstantData::Generated(constructed_mask));
-                let tmp2 = ctx.alloc_tmp(RegClass::V128, types::I8X16);
+                let tmp2 = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
                 ctx.emit(Inst::xmm_load_const(constant, tmp2, ty));
                 ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::from(tmp2), dst));
 
@@ -4010,7 +5115,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // semantics match the Wasm SIMD semantics for this instruction.
             // The instruction format maps to variables like: %dst = swizzle %src, %mask
             let ty = ty.unwrap();
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let src = put_input_in_reg(ctx, inputs[0]);
             let swizzle_mask = put_input_in_reg(ctx, inputs[1]);
 
@@ -4018,7 +5123,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::gen_move(dst, src, ty));
 
             // Create a mask for zeroing out-of-bounds lanes of the swizzle mask.
-            let zero_mask = ctx.alloc_tmp(RegClass::V128, types::I8X16);
+            let zero_mask = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
             static ZERO_MASK_VALUE: [u8; 16] = [
                 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70, 0x70,
                 0x70, 0x70,
@@ -4045,7 +5150,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Insertlane => {
             // The instruction format maps to variables like: %dst = insertlane %in_vec, %src, %lane
             let ty = ty.unwrap();
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let in_vec = put_input_in_reg(ctx, inputs[0]);
             let src_ty = ctx.input_ty(insn, 1);
             debug_assert!(!src_ty.is_vector());
@@ -4064,7 +5169,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Extractlane => {
             // The instruction format maps to variables like: %dst = extractlane %src, %lane
             let ty = ty.unwrap();
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let src_ty = ctx.input_ty(insn, 0);
             assert_eq!(src_ty.bits(), 128);
             let src = put_input_in_reg(ctx, inputs[0]);
@@ -4078,6 +5183,53 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             emit_extract_lane(ctx, src, dst, lane, ty);
         }
 
+        Opcode::ScalarToVector => {
+            // When moving a scalar value to a vector register, we must be handle several
+            // situations:
+            //  1. a scalar float is already in an XMM register, so we simply move it
+            //  2. a scalar of any other type resides in a GPR register: MOVD moves the bits to an
+            //     XMM register and zeroes the upper bits
+            //  3. a scalar (float or otherwise) that has previously been loaded from memory (e.g.
+            //     the default lowering of Wasm's `load[32|64]_zero`) can be lowered to a single
+            //     MOVSS/MOVSD instruction; to do this, we rely on `input_to_reg_mem` to sink the
+            //     unused load.
+            let src = input_to_reg_mem(ctx, inputs[0]);
+            let src_ty = ctx.input_ty(insn, 0);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let dst_ty = ty.unwrap();
+            assert!(src_ty == dst_ty.lane_type() && dst_ty.bits() == 128);
+            match src {
+                RegMem::Reg { reg } => {
+                    if src_ty.is_float() {
+                        // Case 1: when moving a scalar float, we simply move from one XMM register
+                        // to another, expecting the register allocator to elide this. Here we
+                        // assume that the upper bits of a scalar float have not been munged with
+                        // (the same assumption the old backend makes).
+                        ctx.emit(Inst::gen_move(dst, reg, dst_ty));
+                    } else {
+                        // Case 2: when moving a scalar value of any other type, use MOVD to zero
+                        // the upper lanes.
+                        let src_size = match src_ty.bits() {
+                            32 => OperandSize::Size32,
+                            64 => OperandSize::Size64,
+                            _ => unimplemented!("invalid source size for type: {}", src_ty),
+                        };
+                        ctx.emit(Inst::gpr_to_xmm(SseOpcode::Movd, src, src_size, dst));
+                    }
+                }
+                RegMem::Mem { .. } => {
+                    // Case 3: when presented with `load + scalar_to_vector`, coalesce into a single
+                    // MOVSS/MOVSD instruction.
+                    let opcode = match src_ty.bits() {
+                        32 => SseOpcode::Movss,
+                        64 => SseOpcode::Movsd,
+                        _ => unimplemented!("unable to move scalar to vector for type: {}", src_ty),
+                    };
+                    ctx.emit(Inst::xmm_mov(opcode, src, dst));
+                }
+            }
+        }
+
         Opcode::Splat => {
             let ty = ty.unwrap();
             assert_eq!(ty.bits(), 128);
@@ -4085,7 +5237,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             assert!(src_ty.bits() < 128);
 
             let src = input_to_reg_mem(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
             // We know that splat will overwrite all of the lanes of `dst` but it takes several
             // instructions to do so. Because of the multiple instructions, there is no good way to
@@ -4098,7 +5250,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 8 => {
                     emit_insert_lane(ctx, src, dst, 0, ty.lane_type());
                     // Initialize a register with all 0s.
-                    let tmp = ctx.alloc_tmp(RegClass::V128, ty);
+                    let tmp = ctx.alloc_tmp(ty).only_reg().unwrap();
                     ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp), tmp));
                     // Shuffle the lowest byte lane to all other lanes.
                     ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::from(tmp), dst))
@@ -4135,7 +5287,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::VanyTrue => {
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let src_ty = ctx.input_ty(insn, 0);
             assert_eq!(src_ty.bits(), 128);
             let src = put_input_in_reg(ctx, inputs[0]);
@@ -4146,8 +5298,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::VallTrue => {
-            let ty = ty.unwrap();
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let src_ty = ctx.input_ty(insn, 0);
             assert_eq!(src_ty.bits(), 128);
             let src = input_to_reg_mem(ctx, inputs[0]);
@@ -4161,7 +5312,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             };
 
             // Initialize a register with all 0s.
-            let tmp = ctx.alloc_tmp(RegClass::V128, ty);
+            let tmp = ctx.alloc_tmp(src_ty).only_reg().unwrap();
             ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp), tmp));
             // Compare to see what lanes are filled with all 1s.
             ctx.emit(Inst::xmm_rm_r(eq(src_ty), src, tmp));
@@ -4179,7 +5330,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let src = put_input_in_reg(ctx, inputs[0]);
             let src_ty = ctx.input_ty(insn, 0);
             debug_assert!(src_ty.is_vector() && src_ty.bits() == 128);
-            let dst = get_output_reg(ctx, outputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             debug_assert!(dst.to_reg().get_class() == RegClass::I64);
 
             // The Intel specification allows using both 32-bit and 64-bit GPRs as destination for
@@ -4207,7 +5358,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     //     PACKSSWB([x1, x2, ...], [x1, x2, ...]) = [x1', x2', ..., x1', x2', ...]
                     // - use PMOVMSKB to gather the high bits; now we have duplicates, though
                     // - shift away the bottom 8 high bits to remove the duplicates.
-                    let tmp = ctx.alloc_tmp(RegClass::V128, src_ty);
+                    let tmp = ctx.alloc_tmp(src_ty).only_reg().unwrap();
                     ctx.emit(Inst::gen_move(tmp, src, src_ty));
                     ctx.emit(Inst::xmm_rm_r(SseOpcode::Packsswb, RegMem::reg(src), tmp));
                     ctx.emit(Inst::xmm_to_gpr(
@@ -4221,6 +5372,61 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 _ => unimplemented!("unknown input type {} for {}", src_ty, op),
             }
         }
+
+        Opcode::Iconcat => {
+            let ty = ctx.output_ty(insn, 0);
+            assert_eq!(
+                ty,
+                types::I128,
+                "Iconcat not expected to be used for non-128-bit type"
+            );
+            assert_eq!(ctx.input_ty(insn, 0), types::I64);
+            assert_eq!(ctx.input_ty(insn, 1), types::I64);
+            let lo = put_input_in_reg(ctx, inputs[0]);
+            let hi = put_input_in_reg(ctx, inputs[1]);
+            let dst = get_output_reg(ctx, outputs[0]);
+            ctx.emit(Inst::gen_move(dst.regs()[0], lo, types::I64));
+            ctx.emit(Inst::gen_move(dst.regs()[1], hi, types::I64));
+        }
+
+        Opcode::Isplit => {
+            let ty = ctx.input_ty(insn, 0);
+            assert_eq!(
+                ty,
+                types::I128,
+                "Iconcat not expected to be used for non-128-bit type"
+            );
+            assert_eq!(ctx.output_ty(insn, 0), types::I64);
+            assert_eq!(ctx.output_ty(insn, 1), types::I64);
+            let src = put_input_in_regs(ctx, inputs[0]);
+            let dst_lo = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let dst_hi = get_output_reg(ctx, outputs[1]).only_reg().unwrap();
+            ctx.emit(Inst::gen_move(dst_lo, src.regs()[0], types::I64));
+            ctx.emit(Inst::gen_move(dst_hi, src.regs()[1], types::I64));
+        }
+
+        Opcode::TlsValue => match flags.tls_model() {
+            TlsModel::ElfGd => {
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                let (name, _, _) = ctx.symbol_value(insn).unwrap();
+                let symbol = name.clone();
+                ctx.emit(Inst::ElfTlsGetAddr { symbol });
+                ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
+            }
+            TlsModel::Macho => {
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                let (name, _, _) = ctx.symbol_value(insn).unwrap();
+                let symbol = name.clone();
+                ctx.emit(Inst::MachOTlsGetAddr { symbol });
+                ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
+            }
+            _ => {
+                todo!(
+                    "Unimplemented TLS model in x64 backend: {:?}",
+                    flags.tls_model()
+                );
+            }
+        },
 
         Opcode::IaddImm
         | Opcode::ImulImm
@@ -4263,7 +5469,7 @@ impl LowerBackend for X64Backend {
     type MInst = Inst;
 
     fn lower<C: LowerCtx<I = Inst>>(&self, ctx: &mut C, ir_inst: IRInst) -> CodegenResult<()> {
-        lower_insn_to_regs(ctx, ir_inst, &self.flags, &self.triple)
+        lower_insn_to_regs(ctx, ir_inst, &self.flags, &self.x64_flags, &self.triple)
     }
 
     fn lower_branch_group<C: LowerCtx<I = Inst>>(
@@ -4309,9 +5515,9 @@ impl LowerBackend for X64Backend {
                     let src_ty = ctx.input_ty(branches[0], 0);
 
                     if let Some(icmp) = matches_input(ctx, flag_input, Opcode::Icmp) {
-                        emit_cmp(ctx, icmp);
-
                         let cond_code = ctx.data(icmp).cond_code().unwrap();
+                        let cond_code = emit_cmp(ctx, icmp, cond_code);
+
                         let cond_code = if op0 == Opcode::Brz {
                             cond_code.inverse()
                         } else {
@@ -4341,6 +5547,32 @@ impl LowerBackend for X64Backend {
                             }
                             FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
                         }
+                    } else if src_ty == types::I128 {
+                        let src = put_input_in_regs(
+                            ctx,
+                            InsnInput {
+                                insn: branches[0],
+                                input: 0,
+                            },
+                        );
+                        let (half_cc, comb_op) = match op0 {
+                            Opcode::Brz => (CC::Z, AluRmiROpcode::And8),
+                            Opcode::Brnz => (CC::NZ, AluRmiROpcode::Or8),
+                            _ => unreachable!(),
+                        };
+                        let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                        let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                        ctx.emit(Inst::cmp_rmi_r(8, RegMemImm::imm(0), src.regs()[0]));
+                        ctx.emit(Inst::setcc(half_cc, tmp1));
+                        ctx.emit(Inst::cmp_rmi_r(8, RegMemImm::imm(0), src.regs()[1]));
+                        ctx.emit(Inst::setcc(half_cc, tmp2));
+                        ctx.emit(Inst::alu_rmi_r(
+                            false,
+                            comb_op,
+                            RegMemImm::reg(tmp1.to_reg()),
+                            tmp2,
+                        ));
+                        ctx.emit(Inst::jmp_cond(CC::NZ, taken, not_taken));
                     } else if is_int_or_ref_ty(src_ty) || is_bool_ty(src_ty) {
                         let src = put_input_in_reg(
                             ctx,
@@ -4355,7 +5587,18 @@ impl LowerBackend for X64Backend {
                             _ => unreachable!(),
                         };
                         let size_bytes = src_ty.bytes() as u8;
-                        ctx.emit(Inst::cmp_rmi_r(size_bytes, RegMemImm::imm(0), src));
+                        // See case for `Opcode::Select` above re: testing the
+                        // boolean input.
+                        let test_input = if src_ty == types::B1 {
+                            // test src, 1
+                            RegMemImm::imm(1)
+                        } else {
+                            assert!(!is_bool_ty(src_ty));
+                            // test src, src
+                            RegMemImm::reg(src)
+                        };
+
+                        ctx.emit(Inst::test_rmi_r(size_bytes, test_input, src));
                         ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
                     } else {
                         unimplemented!("brz/brnz with non-int type {:?}", src_ty);
@@ -4397,8 +5640,8 @@ impl LowerBackend for X64Backend {
                     };
 
                     if let Some(ifcmp) = matches_input(ctx, flag_input, Opcode::Ifcmp) {
-                        emit_cmp(ctx, ifcmp);
                         let cond_code = ctx.data(branches[0]).cond_code().unwrap();
+                        let cond_code = emit_cmp(ctx, ifcmp, cond_code);
                         let cc = CC::from_intcc(cond_code);
                         ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
                     } else if let Some(ifcmp_sp) = matches_input(ctx, flag_input, Opcode::IfcmpSp) {
@@ -4495,12 +5738,12 @@ impl LowerBackend for X64Backend {
                     // worse.)
 
                     // This temporary is used as a signed integer of 64-bits (to hold addresses).
-                    let tmp1 = ctx.alloc_tmp(RegClass::I64, types::I64);
+                    let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
                     // This temporary is used as a signed integer of 32-bits (for the wasm-table
                     // index) and then 64-bits (address addend). The small lie about the I64 type
                     // is benign, since the temporary is dead after this instruction (and its
                     // Cranelift type is thus unused).
-                    let tmp2 = ctx.alloc_tmp(RegClass::I64, types::I64);
+                    let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
 
                     let targets_for_term: Vec<MachLabel> = targets.to_vec();
                     let default_target = targets[0];

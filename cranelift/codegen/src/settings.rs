@@ -188,7 +188,7 @@ pub type SetResult<T> = Result<T, SetError>;
 /// The settings objects themselves are generated and appear in the `isa/*/settings.rs` modules.
 /// Each settings object provides a `predicate_view()` method that makes it possible to query
 /// ISA predicates by number.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Hash)]
 pub struct PredicateView<'a>(&'a [u8]);
 
 impl<'a> PredicateView<'a> {

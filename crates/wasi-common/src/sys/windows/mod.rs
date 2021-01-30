@@ -147,13 +147,13 @@ impl TryFrom<&File> for Filestat {
 
 impl From<Oflags> for CreationDisposition {
     fn from(oflags: Oflags) -> Self {
-        if oflags.contains(&Oflags::CREAT) {
-            if oflags.contains(&Oflags::EXCL) {
+        if oflags.contains(Oflags::CREAT) {
+            if oflags.contains(Oflags::EXCL) {
                 CreationDisposition::CREATE_NEW
             } else {
                 CreationDisposition::CREATE_ALWAYS
             }
-        } else if oflags.contains(&Oflags::TRUNC) {
+        } else if oflags.contains(Oflags::TRUNC) {
             CreationDisposition::TRUNCATE_EXISTING
         } else {
             CreationDisposition::OPEN_EXISTING
@@ -171,9 +171,9 @@ impl From<Fdflags> for Flags {
         // treat I/O operations on files as synchronous. WASI might have an async-io API in the future.
 
         // Technically, Windows only supports __WASI_FDFLAGS_SYNC, but treat all the flags as the same.
-        if fdflags.contains(&Fdflags::DSYNC)
-            || fdflags.contains(&Fdflags::RSYNC)
-            || fdflags.contains(&Fdflags::SYNC)
+        if fdflags.contains(Fdflags::DSYNC)
+            || fdflags.contains(Fdflags::RSYNC)
+            || fdflags.contains(Fdflags::SYNC)
         {
             flags.insert(Flags::FILE_FLAG_WRITE_THROUGH);
         }

@@ -1,4 +1,5 @@
 use crate::{Error, WasiCtx};
+use std::convert::{TryFrom, TryInto};
 use tracing::debug;
 
 wiggle::from_witx!({
@@ -23,47 +24,51 @@ impl types::GuestErrorConversion for WasiCtx {
 }
 
 impl types::UserErrorConversion for WasiCtx {
-    fn errno_from_error(&self, e: Error) -> Result<Errno, String> {
+    fn errno_from_error(&self, e: Error) -> Result<Errno, wiggle::Trap> {
         debug!("Error: {:?}", e);
-        Ok(e.into())
+        e.try_into()
     }
 }
 
-impl From<Error> for Errno {
-    fn from(e: Error) -> Errno {
+impl TryFrom<Error> for Errno {
+    type Error = wiggle::Trap;
+    fn try_from(e: Error) -> Result<Errno, wiggle::Trap> {
         match e {
-            Error::Guest(e) => e.into(),
-            Error::TryFromInt(_) => Errno::Overflow,
-            Error::Utf8(_) => Errno::Ilseq,
-            Error::UnexpectedIo(_) => Errno::Io,
-            Error::GetRandom(_) => Errno::Io,
-            Error::TooBig => Errno::TooBig,
-            Error::Acces => Errno::Acces,
-            Error::Badf => Errno::Badf,
-            Error::Busy => Errno::Busy,
-            Error::Exist => Errno::Exist,
-            Error::Fault => Errno::Fault,
-            Error::Fbig => Errno::Fbig,
-            Error::Ilseq => Errno::Ilseq,
-            Error::Inval => Errno::Inval,
-            Error::Io => Errno::Io,
-            Error::Isdir => Errno::Isdir,
-            Error::Loop => Errno::Loop,
-            Error::Mfile => Errno::Mfile,
-            Error::Mlink => Errno::Mlink,
-            Error::Nametoolong => Errno::Nametoolong,
-            Error::Nfile => Errno::Nfile,
-            Error::Noent => Errno::Noent,
-            Error::Nomem => Errno::Nomem,
-            Error::Nospc => Errno::Nospc,
-            Error::Notdir => Errno::Notdir,
-            Error::Notempty => Errno::Notempty,
-            Error::Notsup => Errno::Notsup,
-            Error::Overflow => Errno::Overflow,
-            Error::Pipe => Errno::Pipe,
-            Error::Perm => Errno::Perm,
-            Error::Spipe => Errno::Spipe,
-            Error::Notcapable => Errno::Notcapable,
+            Error::Guest(e) => Ok(e.into()),
+            Error::TryFromInt(_) => Ok(Errno::Overflow),
+            Error::Utf8(_) => Ok(Errno::Ilseq),
+            Error::UnexpectedIo(_) => Ok(Errno::Io),
+            Error::GetRandom(_) => Ok(Errno::Io),
+            Error::TooBig => Ok(Errno::TooBig),
+            Error::Acces => Ok(Errno::Acces),
+            Error::Badf => Ok(Errno::Badf),
+            Error::Busy => Ok(Errno::Busy),
+            Error::Exist => Ok(Errno::Exist),
+            Error::Fault => Ok(Errno::Fault),
+            Error::Fbig => Ok(Errno::Fbig),
+            Error::Ilseq => Ok(Errno::Ilseq),
+            Error::Inval => Ok(Errno::Inval),
+            Error::Io => Ok(Errno::Io),
+            Error::Isdir => Ok(Errno::Isdir),
+            Error::Loop => Ok(Errno::Loop),
+            Error::Mfile => Ok(Errno::Mfile),
+            Error::Mlink => Ok(Errno::Mlink),
+            Error::Nametoolong => Ok(Errno::Nametoolong),
+            Error::Nfile => Ok(Errno::Nfile),
+            Error::Noent => Ok(Errno::Noent),
+            Error::Nomem => Ok(Errno::Nomem),
+            Error::Nospc => Ok(Errno::Nospc),
+            Error::Notdir => Ok(Errno::Notdir),
+            Error::Notempty => Ok(Errno::Notempty),
+            Error::Notsup => Ok(Errno::Notsup),
+            Error::Overflow => Ok(Errno::Overflow),
+            Error::Pipe => Ok(Errno::Pipe),
+            Error::Perm => Ok(Errno::Perm),
+            Error::Spipe => Ok(Errno::Spipe),
+            Error::Notcapable => Ok(Errno::Notcapable),
+            Error::Unsupported(feature) => {
+                Err(wiggle::Trap::String(format!("unsupported: {}", feature)))
+            }
         }
     }
 }
@@ -80,8 +85,8 @@ impl From<wiggle::GuestError> for Errno {
             PtrBorrowed { .. } => Self::Fault,
             InvalidUtf8 { .. } => Self::Ilseq,
             TryFromIntError { .. } => Self::Overflow,
-            InFunc { .. } => Self::Inval,
-            InDataField { .. } => Self::Inval,
+            InFunc { err, .. } => Errno::from(*err),
+            InDataField { err, .. } => Errno::from(*err),
             SliceLengthsDiffer { .. } => Self::Fault,
             BorrowCheckerOutOfHandles { .. } => Self::Fault,
         }

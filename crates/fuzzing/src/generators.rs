@@ -64,6 +64,8 @@ pub struct Config {
     debug_info: bool,
     canonicalize_nans: bool,
     interruptable: bool,
+    #[allow(missing_docs)]
+    pub consume_fuel: bool,
 
     // Note that we use 32-bit values here to avoid blowing the 64-bit address
     // space by requesting ungodly-large sizes/guards.
@@ -75,14 +77,15 @@ pub struct Config {
 impl Config {
     /// Converts this to a `wasmtime::Config` object
     pub fn to_wasmtime(&self) -> wasmtime::Config {
-        let mut cfg = wasmtime::Config::new();
+        let mut cfg = crate::fuzz_default_config(wasmtime::Strategy::Auto).unwrap();
         cfg.debug_info(self.debug_info)
             .static_memory_maximum_size(self.static_memory_maximum_size.unwrap_or(0).into())
             .static_memory_guard_size(self.static_memory_guard_size.unwrap_or(0).into())
             .dynamic_memory_guard_size(self.dynamic_memory_guard_size.unwrap_or(0).into())
             .cranelift_nan_canonicalization(self.canonicalize_nans)
             .cranelift_opt_level(self.opt_level.to_wasmtime())
-            .interruptable(self.interruptable);
+            .interruptable(self.interruptable)
+            .consume_fuel(self.consume_fuel);
         return cfg;
     }
 }

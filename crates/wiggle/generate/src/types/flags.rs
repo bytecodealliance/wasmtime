@@ -27,92 +27,21 @@ pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDataty
     }
 
     quote! {
-        #[repr(transparent)]
-        #[derive(Copy, Clone, Debug, ::std::hash::Hash, Eq, PartialEq)]
-        pub struct #ident(#repr);
-
-        impl #ident {
-            #(pub const #names_: #ident = #ident(#values_);)*
-
-            #[inline]
-            pub const fn empty() -> Self {
-                #ident(0)
-            }
-
-            #[inline]
-            pub const fn all() -> Self {
-                #ident(#(#values_)|*)
-            }
-
-            #[inline]
-            pub fn contains(&self, other: &#ident) -> bool {
-                !*self & *other == Self::empty()
+        #rt::bitflags::bitflags! {
+            pub struct #ident: #repr {
+                #(const #names_ = #values_;)*
             }
         }
 
         impl ::std::fmt::Display for #ident {
             fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-                let mut first = true;
-                #(
-                    if self.0 & #values_ == #values_ {
-                        if !first {
-                            f.write_str("|")?;
-                        }
-                        first = false;
-                        f.write_fmt(format_args!("{}", stringify!(#names_).to_lowercase()))?;
-                    }
-                )*
-                if first {
-                    f.write_str("empty")?;
-                }
-                f.write_fmt(format_args!(" ({:#x})", self.0))?;
+                f.write_str(stringify!(#ident))?;
+                f.write_str("(")?;
+                ::std::fmt::Debug::fmt(self, f)?;
+                f.write_str(" (0x")?;
+                ::std::fmt::LowerHex::fmt(&self.bits, f)?;
+                f.write_str("))")?;
                 Ok(())
-            }
-        }
-
-        impl ::std::ops::BitAnd for #ident {
-            type Output = Self;
-            fn bitand(self, rhs: Self) -> Self::Output {
-                #ident(self.0 & rhs.0)
-            }
-        }
-
-        impl ::std::ops::BitAndAssign for #ident {
-            fn bitand_assign(&mut self, rhs: Self) {
-                *self = *self & rhs
-            }
-        }
-
-        impl ::std::ops::BitOr for #ident {
-            type Output = Self;
-            fn bitor(self, rhs: Self) -> Self::Output {
-                #ident(self.0 | rhs.0)
-            }
-        }
-
-        impl ::std::ops::BitOrAssign for #ident {
-            fn bitor_assign(&mut self, rhs: Self) {
-                *self = *self | rhs
-            }
-        }
-
-        impl ::std::ops::BitXor for #ident {
-            type Output = Self;
-            fn bitxor(self, rhs: Self) -> Self::Output {
-                #ident(self.0 ^ rhs.0)
-            }
-        }
-
-        impl ::std::ops::BitXorAssign for #ident {
-            fn bitxor_assign(&mut self, rhs: Self) {
-                *self = *self ^ rhs
-            }
-        }
-
-        impl ::std::ops::Not for #ident {
-            type Output = Self;
-            fn not(self) -> Self::Output {
-                #ident(!self.0)
             }
         }
 
@@ -122,7 +51,7 @@ pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDataty
                 if #repr::from(!#ident::all()) & value != 0 {
                     Err(#rt::GuestError::InvalidFlagValue(stringify!(#ident)))
                 } else {
-                    Ok(#ident(value))
+                    Ok(#ident { bits: value })
                 }
             }
         }
@@ -136,7 +65,7 @@ pub(super) fn define_flags(names: &Names, name: &witx::Id, f: &witx::FlagsDataty
 
         impl From<#ident> for #repr {
             fn from(e: #ident) -> #repr {
-                e.0
+                e.bits
             }
         }
 

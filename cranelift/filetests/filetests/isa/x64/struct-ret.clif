@@ -1,0 +1,19 @@
+test compile
+target x86_64
+feature "experimental_x64"
+
+function %f0(i64 sret) {
+block0(v0: i64):
+    v1 = iconst.i64 42
+    store v1, v0
+    return
+}
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: movq    %rdi, %rax
+; nextln: movl    $$42, %esi
+; nextln: movq    %rsi, 0(%rdi)
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret

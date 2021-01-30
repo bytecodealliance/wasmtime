@@ -807,12 +807,17 @@ impl MachInst for Inst {
         Inst::mov(to_reg, from_reg)
     }
 
-    fn gen_constant<F: FnMut(RegClass, Type) -> Writable<Reg>>(
-        to_reg: Writable<Reg>,
-        value: u64,
+    fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
+        to_regs: ValueRegs<Writable<Reg>>,
+        value: u128,
         ty: Type,
         _alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
+        let to_reg = to_regs
+            .only_reg()
+            .expect("multi-reg values not supported yet");
+        let value = value as u64;
+
         match ty {
             B1 | I8 | B8 | I16 | B16 | I32 | B32 => {
                 let v: i64 = value as i64;
@@ -826,11 +831,10 @@ impl MachInst for Inst {
         }
     }
 
-    fn gen_zero_len_nop() -> Inst {
-        Inst::Nop0
-    }
-
     fn gen_nop(preferred_size: usize) -> Inst {
+        if preferred_size == 0 {
+            return Inst::Nop0;
+        }
         assert!(preferred_size >= 2);
         Inst::Nop2
     }
@@ -839,10 +843,10 @@ impl MachInst for Inst {
         None
     }
 
-    fn rc_for_type(ty: Type) -> CodegenResult<RegClass> {
+    fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
         match ty {
-            I8 | I16 | I32 | B1 | B8 | B16 | B32 => Ok(RegClass::I32),
-            IFLAGS => Ok(RegClass::I32),
+            I8 | I16 | I32 | B1 | B8 | B16 | B32 => Ok((&[RegClass::I32], &[I32])),
+            IFLAGS => Ok((&[RegClass::I32], &[I32])),
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {}",
                 ty

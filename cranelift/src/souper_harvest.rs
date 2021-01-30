@@ -12,7 +12,7 @@ static WASM_MAGIC: &[u8] = &[0x00, 0x61, 0x73, 0x6D];
 /// Harvest candidates for superoptimization from a Wasm or Clif file.
 ///
 /// Candidates are emitted in Souper's text format:
-/// https://github.com/google/souper
+/// <https://github.com/google/souper>
 #[derive(StructOpt)]
 pub struct Options {
     /// Specify an input file to be used. Use '-' for stdin.

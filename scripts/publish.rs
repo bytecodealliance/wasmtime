@@ -65,6 +65,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wiggle",
     "wasmtime-wasi",
     "wasmtime-wasi-nn",
+    "wasmtime-wasi-crypto",
     "wasmtime-rust-macro",
     "wasmtime-rust",
     "wasmtime-wast",
@@ -176,7 +177,7 @@ fn read_crate(manifest: &Path) -> Crate {
     } else {
         version.clone()
     };
-    if name == "witx" {
+    if ["witx", "wasi-crypto"].contains(&&name[..]) {
         publish = false;
     }
     Crate {
@@ -298,6 +299,13 @@ fn verify(crates: &[Crate]) {
         .find(|c| c.name == "witx" && c.manifest.iter().any(|p| p == "wasi-common"))
         .unwrap();
     verify_and_vendor(&witx);
+
+    // Vendor wasi-crypto which is also a path dependency
+    let wasi_crypto = crates
+        .iter()
+        .find(|c| c.name == "wasi-crypto")
+        .unwrap();
+    verify_and_vendor(&wasi_crypto);
 
     for krate in crates {
         if !krate.publish {

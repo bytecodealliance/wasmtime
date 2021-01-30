@@ -274,6 +274,7 @@ jobs:
             --exclude lightbeam \
             --exclude wasmtime-lightbeam \
             --exclude wasmtime-wasi-nn \
+            --exclude wasmtime-wasi-crypto \
             --exclude peepmatic \
             --exclude peepmatic-automata \
             --exclude peepmatic-fuzzing \
@@ -288,6 +289,14 @@ jobs:
     - run: |
         sudo apt-get update && sudo apt-get install -y gdb
         cargo test test_debug_dwarf -- --ignored --test-threads 1
+      if: matrix.os == 'ubuntu-latest'
+      env:
+        RUST_BACKTRACE: 1
+
+    # Test debug (DWARF) related functionality on new backend.
+    - run: |
+        sudo apt-get update && sudo apt-get install -y gdb
+        cargo test --features experimental_x64 test_debug_dwarf -- --ignored --test-threads 1 --test debug::
       if: matrix.os == 'ubuntu-latest'
       env:
         RUST_BACKTRACE: 1
@@ -342,6 +351,21 @@ jobs:
       - run: ./ci/run-wasi-nn-example.sh
         env:
           RUST_BACKTRACE: 1
+
+  # Build and test the wasi-crypto module.
+  test_wasi_crypto:
+    name: Test wasi-crypto module
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - run: rustup target add wasm32-wasi
+    - name: Install Rust
+      run: rustup update stable && rustup default stable
+    - run: ./ci/run-wasi-crypto-example.sh
+      env:
+        RUST_BACKTRACE: 1
 
   # Verify that cranelift's code generation is deterministic
   meta_determinist_check:
@@ -451,6 +475,7 @@ jobs:
             --exclude lightbeam \
             --exclude wasmtime-lightbeam \
             --exclude wasmtime-wasi-nn \
+            --exclude wasmtime-wasi-crypto \
             --exclude peepmatic \
             --exclude peepmatic-automata \
             --exclude peepmatic-fuzzing \

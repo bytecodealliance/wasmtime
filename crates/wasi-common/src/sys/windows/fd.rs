@@ -86,7 +86,7 @@ fn file_access_mode_from_fdflags(fdflags: Fdflags, read: bool, write: bool) -> A
     // For append, grant the handle FILE_APPEND_DATA access but *not* FILE_WRITE_DATA.
     // This makes the handle "append only".
     // Changes to the file pointer will be ignored (like POSIX's O_APPEND behavior).
-    if fdflags.contains(&Fdflags::APPEND) {
+    if fdflags.contains(Fdflags::APPEND) {
         access_mode.insert(AccessMode::FILE_APPEND_DATA);
         access_mode.remove(AccessMode::FILE_WRITE_DATA);
     }

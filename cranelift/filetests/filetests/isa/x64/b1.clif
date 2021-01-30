@@ -1,0 +1,73 @@
+test compile
+target x86_64
+feature "experimental_x64"
+
+function %f0(b1, i32, i32) -> i32 {
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+
+block0(v0: b1, v1: i32, v2: i32):
+    v3 = select.i32 v0, v1, v2
+; nextln: testb   $$1, %dil
+; nextln: cmovnzl %esi, %edx
+
+    return v3
+; nextln: movq    %rdx, %rax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+}
+
+function %f1(b1) -> i32 {
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+
+block0(v0: b1):
+    brnz v0, block1
+    jump block2
+; nextln: testb   $$1, %dil
+; nextln: jnz     label1; j label2
+
+block1:
+    v1 = iconst.i32 1
+    return v1
+; check:  movl    $$1, %eax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+
+block2:
+    v2 = iconst.i32 2
+    return v2
+; check:  movl    $$2, %eax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+}
+
+function %f2(b1) -> i32 {
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+
+block0(v0: b1):
+    brz v0, block1
+    jump block2
+; nextln: testb   $$1, %dil
+; nextln: jz      label1; j label2
+
+block1:
+    v1 = iconst.i32 1
+    return v1
+; check:  movl    $$1, %eax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+
+block2:
+    v2 = iconst.i32 2
+    return v2
+; check:  movl    $$2, %eax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+}
