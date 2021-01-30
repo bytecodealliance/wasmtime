@@ -1122,10 +1122,6 @@ name = "example-fib-debug-wasm"
 version = "0.0.0"
 
 [[package]]
-name = "example-wasi-fs-wasm"
-version = "0.0.0"
-
-[[package]]
 name = "example-wasi-wasm"
 version = "0.0.0"
 
@@ -3126,15 +3122,6 @@ dependencies = [
  "thiserror",
  "xoodyak",
  "zeroize",
-]
-
-[[package]]
-name = "wasi-virtfs"
-version = "0.22.0"
-dependencies = [
- "anyhow",
- "cap-std",
- "wasi-common",
 ]
 
 [[package]]
