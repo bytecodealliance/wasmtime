@@ -529,9 +529,13 @@ pub(crate) fn emit(
         match iset_requirement {
             // Cranelift assumes SSE2 at least.
             InstructionSet::SSE | InstructionSet::SSE2 => {}
-            InstructionSet::SSSE3 => assert!(info.isa_flags.has_ssse3()),
-            InstructionSet::SSE41 => assert!(info.isa_flags.has_sse41()),
-            InstructionSet::SSE42 => assert!(info.isa_flags.has_sse42()),
+            InstructionSet::SSSE3 => assert!(info.isa_flags.use_ssse3()),
+            InstructionSet::SSE41 => assert!(info.isa_flags.use_sse41()),
+            InstructionSet::SSE42 => assert!(info.isa_flags.use_sse42()),
+            InstructionSet::Popcnt => assert!(info.isa_flags.use_popcnt()),
+            InstructionSet::Lzcnt => assert!(info.isa_flags.use_lzcnt()),
+            InstructionSet::BMI1 => assert!(info.isa_flags.use_bmi1()),
+            InstructionSet::BMI2 => assert!(info.isa_flags.has_bmi2()),
         }
     }
 
