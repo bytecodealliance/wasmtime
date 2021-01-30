@@ -33,7 +33,7 @@ impl WasiMonotonicClock for MonotonicClock {
     }
 }
 
-pub fn clocks() -> WasiClocks {
+pub fn clocks_ctx() -> WasiClocks {
     let system = Box::new(unsafe { SystemClock::new() });
     let monotonic = unsafe { cap_std::time::MonotonicClock::new() };
     let creation_time = monotonic.now();

@@ -7,3 +7,9 @@ pub use unix::*;
 mod windows;
 #[cfg(windows)]
 pub use windows::*;
+
+use wasi_common::sched::WasiSched;
+
+pub fn sched_ctx() -> Box<dyn WasiSched> {
+    Box::new(SyncSched::new())
+}

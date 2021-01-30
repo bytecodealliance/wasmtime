@@ -4,6 +4,9 @@ pub mod file;
 pub mod sched;
 pub mod stdio;
 
+pub use clocks::clocks_ctx;
+pub use sched::sched_ctx;
+
 use cap_rand::RngCore;
 use std::cell::RefCell;
 use std::path::Path;
@@ -15,9 +18,9 @@ pub struct WasiCtxBuilder(wasi_common::WasiCtxBuilder);
 impl WasiCtxBuilder {
     pub fn new() -> Self {
         WasiCtxBuilder(WasiCtx::builder(
-            random(),
-            clocks::clocks(),
-            Box::new(sched::SyncSched::new()),
+            random_ctx(),
+            clocks_ctx(),
+            sched_ctx(),
             Rc::new(RefCell::new(Table::new())),
         ))
     }
@@ -91,6 +94,6 @@ impl WasiCtxBuilder {
     }
 }
 
-pub fn random() -> RefCell<Box<dyn RngCore>> {
+pub fn random_ctx() -> RefCell<Box<dyn RngCore>> {
     RefCell::new(Box::new(unsafe { cap_rand::rngs::OsRng::default() }))
 }
