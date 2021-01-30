@@ -5,7 +5,7 @@ use std::convert::TryInto;
 use std::path::{Path, PathBuf};
 use wasi_common::{
     dir::{ReaddirCursor, ReaddirEntity, WasiDir},
-    file::{FdFlags, FileCaps, FileType, Filestat, OFlags, WasiFile},
+    file::{FdFlags, FileType, Filestat, OFlags, WasiFile},
     Error, ErrorExt,
 };
 
@@ -26,7 +26,8 @@ impl WasiDir for Dir {
         symlink_follow: bool,
         path: &str,
         oflags: OFlags,
-        caps: FileCaps,
+        read: bool,
+        write: bool,
         fdflags: FdFlags,
     ) -> Result<Box<dyn WasiFile>, Error> {
         use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt};
@@ -43,19 +44,15 @@ impl WasiDir for Dir {
         if oflags.contains(OFlags::TRUNCATE) {
             opts.truncate(true);
         }
-        if caps.contains(FileCaps::WRITE)
-            || caps.contains(FileCaps::DATASYNC)
-            || caps.contains(FileCaps::ALLOCATE)
-            || caps.contains(FileCaps::FILESTAT_SET_SIZE)
-        {
+        if read {
+            opts.read(true);
+        }
+        if write {
             opts.write(true);
         } else {
             // If not opened write, open read. This way the OS lets us open the file.
             // If FileCaps::READ is not set, read calls will be rejected at the
             // get_cap check.
-            opts.read(true);
-        }
-        if caps.contains(FileCaps::READ) {
             opts.read(true);
         }
         if fdflags.contains(FdFlags::APPEND) {

@@ -13,7 +13,8 @@ pub trait WasiDir {
         symlink_follow: bool,
         path: &str,
         oflags: OFlags,
-        caps: FileCaps,
+        read: bool,
+        write: bool,
         fdflags: FdFlags,
     ) -> Result<Box<dyn WasiFile>, Error>;
     fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error>;

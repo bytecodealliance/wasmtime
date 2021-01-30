@@ -813,7 +813,11 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
 
             let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_base));
             let dir = dir_entry.get_cap(required_caps)?;
-            let file = dir.open_file(symlink_follow, path.deref(), oflags, file_caps, fdflags)?;
+            let read = file_caps.contains(FileCaps::READ);
+            let write = file_caps.contains(FileCaps::WRITE)
+                || file_caps.contains(FileCaps::ALLOCATE)
+                || file_caps.contains(FileCaps::FILESTAT_SET_SIZE);
+            let file = dir.open_file(symlink_follow, path.deref(), oflags, read, write, fdflags)?;
             drop(dir);
             let fd = table.push(Box::new(FileEntry::new(file_caps, file)))?;
             Ok(types::Fd::from(fd))
