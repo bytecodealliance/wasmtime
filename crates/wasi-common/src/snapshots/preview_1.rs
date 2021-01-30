@@ -73,6 +73,7 @@ impl From<ErrorKind> for types::Errno {
     fn from(e: ErrorKind) -> types::Errno {
         use types::Errno;
         match e {
+            ErrorKind::Noent => Errno::Noent,
             ErrorKind::TooBig => Errno::TooBig,
             ErrorKind::Badf => Errno::Badf,
             ErrorKind::Exist => Errno::Exist,

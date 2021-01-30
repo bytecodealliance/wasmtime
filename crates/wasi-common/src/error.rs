@@ -6,6 +6,9 @@ pub use anyhow::Error;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ErrorKind {
+    /// Errno::Noent: No such file or directory
+    #[error("Noent: No such file or directory")]
+    Noent,
     /// Errno::TooBig: Argument list too long
     #[error("TooBig: Argument list too long")]
     TooBig,
@@ -49,6 +52,7 @@ pub enum ErrorKind {
 
 pub trait ErrorExt {
     fn trap(msg: impl Into<String>) -> Self;
+    fn not_found() -> Self;
     fn too_big() -> Self;
     fn badf() -> Self;
     fn exist() -> Self;
@@ -67,6 +71,9 @@ pub trait ErrorExt {
 impl ErrorExt for Error {
     fn trap(msg: impl Into<String>) -> Self {
         anyhow::anyhow!(msg.into())
+    }
+    fn not_found() -> Self {
+        ErrorKind::Noent.into()
     }
     fn too_big() -> Self {
         ErrorKind::TooBig.into()
