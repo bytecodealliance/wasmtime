@@ -42,7 +42,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
             builder = builder.env("ERRNO_MODE_UNIX", "1")?;
         }
 
-        let snapshot1 = wasi_wasmtime::Wasi::new(&store, builder.build()?);
+        let snapshot1 = wasmtime_wasi::Wasi::new(&store, builder.build()?);
 
         let mut linker = Linker::new(&store);
 
