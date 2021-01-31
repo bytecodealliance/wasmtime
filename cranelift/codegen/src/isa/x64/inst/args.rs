@@ -3,7 +3,7 @@
 use super::regs::{self, show_ireg_sized};
 use super::EmitState;
 use crate::ir::condcodes::{FloatCC, IntCC};
-use crate::ir::MemFlags;
+use crate::ir::{MemFlags, Type};
 use crate::isa::x64::inst::Inst;
 use crate::machinst::*;
 use regalloc::{
@@ -1336,8 +1336,14 @@ impl OperandSize {
             2 => OperandSize::Size16,
             4 => OperandSize::Size32,
             8 => OperandSize::Size64,
-            _ => unreachable!(),
+            _ => unreachable!("Invalid OperandSize: {}", num_bytes),
         }
+    }
+
+    // Computes the OperandSize for a given type.
+    // For vectors, the OperandSize of the lanes is returned.
+    pub(crate) fn from_ty(ty: Type) -> Self {
+        Self::from_bytes(ty.lane_type().bytes())
     }
 
     // Check that the value of self is one of the allowed sizes.
