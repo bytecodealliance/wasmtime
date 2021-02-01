@@ -304,7 +304,6 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             let dirent_len: types::Size = dirent_raw.len().try_into()?;
             let name_raw = name.as_bytes();
             let name_len = name_raw.len().try_into()?;
-            let offset = dirent_len.checked_add(name_len).ok_or(Error::Overflow)?;
 
             // Copy as many bytes of the dirent as we can, up to the end of the buffer.
             let dirent_copy_len = min(dirent_len, buf_len - bufused);
@@ -318,6 +317,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             }
 
             buf = buf.add(dirent_copy_len)?;
+            bufused += dirent_copy_len;
 
             // Copy as many bytes of the name as we can, up to the end of the buffer.
             let name_copy_len = min(name_len, buf_len - bufused);
@@ -331,8 +331,7 @@ impl<'a> WasiSnapshotPreview1 for WasiCtx {
             }
 
             buf = buf.add(name_copy_len)?;
-
-            bufused += offset;
+            bufused += name_copy_len;
         }
 
         Ok(bufused)

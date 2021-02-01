@@ -1,5 +1,5 @@
 use more_asserts::assert_gt;
-use std::{cmp::min, env, mem, process, slice, str};
+use std::{env, mem, process, slice, str};
 use wasi_tests::open_scratch_directory;
 
 const BUF_LEN: usize = 256;
@@ -59,7 +59,9 @@ unsafe fn exec_fd_readdir(fd: wasi::Fd, cookie: wasi::Dircookie) -> (Vec<DirEntr
     let bufused =
         wasi::fd_readdir(fd, buf.as_mut_ptr(), BUF_LEN, cookie).expect("failed fd_readdir");
 
-    let sl = slice::from_raw_parts(buf.as_ptr(), min(BUF_LEN, bufused));
+    assert!(bufused <= BUF_LEN);
+
+    let sl = slice::from_raw_parts(buf.as_ptr(), bufused);
     let dirs: Vec<_> = ReadDir::from_slice(sl).collect();
     let eof = bufused < BUF_LEN;
     (dirs, eof)
