@@ -186,7 +186,7 @@ mod wasi_tests {
             "path_rename_file_trailing_slashes",
             "remove_directory_trailing_slashes",
         ]
-        .contains(name)
+        .contains(&name)
     }
 
     #[cfg(windows)]
@@ -210,7 +210,7 @@ mod wasi_tests {
             "path_rename_file_trailing_slashes",
             "remove_directory_trailing_slashes",
         ]
-        .contains(name)
+        .contains(&name)
     }
 
     /// Virtfs barely works at all and is not suitable for any purpose
@@ -252,7 +252,7 @@ mod wasi_tests {
             "truncation_rights",
             "unlink_file_trailing_slashes",
         ]
-        .contains(name)
+        .contains(&name)
     }
 
     /// Mark tests which do not require preopens
