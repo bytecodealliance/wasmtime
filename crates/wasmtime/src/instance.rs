@@ -121,6 +121,10 @@ impl Instance {
         ty
     }
 
+    pub(crate) fn wasmtime_export(&self) -> &RuntimeInstance {
+        &self.items
+    }
+
     /// Returns the associated [`Store`] that this `Instance` is compiled into.
     ///
     /// This is the [`Store`] that generally serves as a sort of global cache

@@ -1,4 +1,6 @@
 use anyhow::Result;
+use std::cell::Cell;
+use std::rc::Rc;
 use wasmtime::*;
 
 #[test]
@@ -158,5 +160,66 @@ fn module_interposition() -> Result<()> {
     let func = instance.get_export("export").unwrap().into_func().unwrap();
     let func = func.get0::<i32>()?;
     assert_eq!(func()?, 112);
+    Ok(())
+}
+
+#[test]
+fn no_leak() -> Result<()> {
+    struct DropMe(Rc<Cell<bool>>);
+
+    impl Drop for DropMe {
+        fn drop(&mut self) {
+            self.0.set(true);
+        }
+    }
+
+    let flag = Rc::new(Cell::new(false));
+    {
+        let store = Store::default();
+        let mut linker = Linker::new(&store);
+        let drop_me = DropMe(flag.clone());
+        linker.func("", "", move || drop(&drop_me))?;
+        let module = Module::new(
+            store.engine(),
+            r#"
+                (module
+                    (func (export "_start"))
+                )
+            "#,
+        )?;
+        linker.module("a", &module)?;
+    }
+    assert!(flag.get(), "store was leaked");
+    Ok(())
+}
+
+#[test]
+fn no_leak_with_imports() -> Result<()> {
+    struct DropMe(Rc<Cell<bool>>);
+
+    impl Drop for DropMe {
+        fn drop(&mut self) {
+            self.0.set(true);
+        }
+    }
+
+    let flag = Rc::new(Cell::new(false));
+    {
+        let store = Store::default();
+        let mut linker = Linker::new(&store);
+        let drop_me = DropMe(flag.clone());
+        linker.func("", "", move || drop(&drop_me))?;
+        let module = Module::new(
+            store.engine(),
+            r#"
+                (module
+                    (import "" "" (func))
+                    (func (export "_start"))
+                )
+            "#,
+        )?;
+        linker.module("a", &module)?;
+    }
+    assert!(flag.get(), "store was leaked");
     Ok(())
 }
