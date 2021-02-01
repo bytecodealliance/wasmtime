@@ -67,22 +67,25 @@ GLOBL(wasmtime_fiber_init)
 .align 16
 TYPE(wasmtime_fiber_init)
 FUNCTION(wasmtime_fiber_init):
-    // The first 16 bytes of the stack are reserved (see unix.rs) so we store
-    // the initial data used in `wasmtime_fiber_start` just below
-    // that.
-    movq %rdi, -0x18(%rdi)
-    movq %rsi, -0x20(%rdi)
-    movq %rdx, -0x28(%rdi)
-
-    // After these arguments is the return address of where to switch to,
-    // which for the first run is `wasmtime_fiber_start`.
+    // Here we're going to set up a stack frame as expected by
+    // `wasmtime_fiber_switch`. The values we store here will get restored into
+    // registers by that function and the `wasmtime_fiber_start` function will
+    // take over and understands which values are in which registers.
+    //
+    // The first 16 bytes of stack aree reserveed for metadata, so we start
+    // sttoring values beneatht that.
     lea FUNCTION(wasmtime_fiber_start)(%rip), %rax
-    movq %rax, -0x30(%rdi)
+    movq %rax, -0x18(%rdi)
+    movq %rdi, -0x20(%rdi)    // loaded into rbp during switch
+    movq %rsi, -0x28(%rdi)    // loaded into rbx during switch
+    movq %rdx, -0x30(%rdi)    // loaded into r12 during switch
 
     // And then we specify the stack pointer resumption should begin at. Our
-    // `wasmtime_fiber_switch` function saves 6 registers so we need to ensure
-    // that there's space for that as well. 0x30 + 6 * 8 == 0x60 here.
-    lea -0x60(%rdi), %rax
+    // `wasmtime_fiber_switch` function consumes 6 registers plus a return
+    // pointer, and the top 16 bytes aree resereved, so that's:
+    //
+    //	(6 + 1) * 16 + 16 = 0x48
+    lea -0x48(%rdi), %rax
     movq %rax, -0x10(%rdi)
     ret
 SIZE(wasmtime_fiber_init)
@@ -117,14 +120,13 @@ FUNCTION(wasmtime_fiber_start):
     // The expression we're encoding here is that the CFA, the stack pointer of
     // whatever called into `wasmtime_fiber_start`, is:
     //
-    //        *($rsp + 0x18) + 0x38
+    //        *$rsp + 0x38
     //
     // $rsp is the stack pointer of `wasmtime_fiber_start` at the time the next
     // instruction after the `.cfi_escape` is executed. Our $rsp at the start
-    // of this function is 3 words below stack start (0xAff0 in
-    // the diagram in unix.rs). The $rsp to resume at is at 0xAff0, so we
-    // add an offset to $rsp to get to that memory location and then we
-    // dereference it.
+    // of this function is 16 bytes below the top of the stack (0xAff0 in
+    // the diagram in unix.rs). The $rsp to resume at is stored at that
+    // location, so we dereference the stack pointer to load it.
     //
     // After dereferencing, though, we have the $rsp value for
     // `wasmtime_fiber_switch` itself. That's a weird function which sort of
@@ -134,8 +136,8 @@ FUNCTION(wasmtime_fiber_start):
     // the return address of the caller's `call` instruction. Hence we offset
     // another 0x38 bytes.
     .cfi_escape 0x0f, /* DW_CFA_def_cfa_expression */ \
-        5,            /* the byte length of this expression */ \
-        0x77, 0x18,   /* DW_OP_breg7 (%rsp) + 0x18 */ \
+        4,            /* the byte length of this expression */ \
+        0x57,         /* DW_OP_reg7 (%rsp) */ \
         0x06,         /* DW_OP_deref */ \
         0x23, 0x38    /* DW_OP_plus_uconst 0x38 */
 
@@ -152,21 +154,17 @@ FUNCTION(wasmtime_fiber_start):
     .cfi_rel_offset r14, -48
     .cfi_rel_offset r15, -56
 
-    // Update the CFA expression after each adjustment of $rsp as we load
-    // registers to call the entrypoint. The major change is that the $rsp
-    // offset is decreasing by 8, and for the last adjustment a 0 offset means
-    // we can use DW_OP_reg7.
-    popq %rdi
-    .cfi_escape 0x0f, 5, 0x77, 0x10, 0x06, 0x23, 0x38
-    popq %rax
-    .cfi_escape 0x0f, 5, 0x77, 0x08, 0x06, 0x23, 0x38
-    popq %rsi
-    .cfi_escape 0x0f, 4, 0x57,       0x06, 0x23, 0x38
 
-    // And finally head off into the fiber. Note the `callq` keeps this frame
-    // on the stack so all our CFI directives can be read. Additionally this
-    // is not expected to ever return, but for safety we put a `ud2` at the end.
-    callq *%rax
+    // The body of this function is pretty similar. All our parameters are
+    // already loaded into registers by the switch function. The
+    // `wasmtime_fiber_init` routine arranged the various values to be
+    // materialized into the registers used here. Our job is to then move the
+    // values into the ABI-defined registers and call the entry-point. Note that
+    // `callq` is used here to leave this frame on the stack so we can use the
+    // dwarf info here for unwinding. The trailing `ud2` is just for safety.
+    mov %r12,%rdi
+    mov %rbp,%rsi
+    callq *%rbx
     ud2
     .cfi_endproc
 SIZE(wasmtime_fiber_start)
