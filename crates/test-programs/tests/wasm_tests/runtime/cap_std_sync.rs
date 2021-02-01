@@ -88,6 +88,10 @@ pub fn instantiate_inherit_stdio(
     let r = {
         let store = Store::default();
 
+        // Tests assume that stdin does not have any bytes available to read. Make sure this is the
+        // case, regardless of the test environment:
+        let _ = std::io::stdin().read_to_end().expect("read stdin to end");
+
         // Create our wasi context.
         // Additionally register any preopened directories if we have them.
         let mut builder = WasiCtxBuilder::new();
