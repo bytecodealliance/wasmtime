@@ -3075,6 +3075,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "system-interface",
+ "tempfile",
  "tracing",
  "unsafe-io",
  "wasi-common",

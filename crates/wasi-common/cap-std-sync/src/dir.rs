@@ -1,4 +1,4 @@
-use crate::file::{filetype_from, to_sysif_fdflags, File};
+use crate::file::{filetype_from, File};
 use cap_fs_ext::{DirExt, MetadataExt, SystemTimeSpec};
 use std::any::Any;
 use std::convert::TryInto;
@@ -254,5 +254,22 @@ fn convert_systimespec(t: Option<wasi_common::SystemTimeSpec>) -> Option<SystemT
         Some(wasi_common::SystemTimeSpec::Absolute(t)) => Some(SystemTimeSpec::Absolute(t)),
         Some(wasi_common::SystemTimeSpec::SymbolicNow) => Some(SystemTimeSpec::SymbolicNow),
         None => None,
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::Dir;
+    #[test]
+    fn scratch_dir() {
+        let tempdir = tempfile::Builder::new()
+            .prefix("cap-std-sync")
+            .tempdir()
+            .expect("create temporary dir");
+        let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(tempdir.path()) }
+            .expect("open ambient temporary dir");
+        let preopen_dir = Dir::from_cap_std(preopen_dir);
+        wasi_common::WasiDir::open_dir(&preopen_dir, false, ".")
+            .expect("open the same directory via WasiDir abstraction");
     }
 }
