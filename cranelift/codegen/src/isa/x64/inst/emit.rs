@@ -541,12 +541,12 @@ pub(crate) fn emit(
 
     match inst {
         Inst::AluRmiR {
-            is_64,
+            size,
             op,
             src,
             dst: reg_g,
         } => {
-            let mut rex = if *is_64 {
+            let mut rex = if *size == OperandSize::Size64 {
                 RexFlags::set_w()
             } else {
                 RexFlags::clear_w()
@@ -612,7 +612,7 @@ pub(crate) fn emit(
                     AluRmiROpcode::Or8 => (0x08, 0x0A, 1, true),
                     AluRmiROpcode::Mul => panic!("unreachable"),
                 };
-                assert!(!(is_8bit && *is_64));
+                assert!(!(is_8bit && *size == OperandSize::Size64));
 
                 match src {
                     RegMemImm::Reg { reg: reg_e } => {
@@ -960,12 +960,12 @@ pub(crate) fn emit(
         }
 
         Inst::Imm {
-            dst_is_64,
+            dst_size,
             simm64,
             dst,
         } => {
             let enc_dst = int_reg_enc(dst.to_reg());
-            if *dst_is_64 {
+            if *dst_size == OperandSize::Size64 {
                 if low32_will_sign_extend_to_64(*simm64) {
                     // Sign-extended move imm32.
                     emit_std_enc_enc(
@@ -992,8 +992,8 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::MovRR { is_64, src, dst } => {
-            let rex = if *is_64 {
+        Inst::MovRR { size, src, dst } => {
+            let rex = if *size == OperandSize::Size64 {
                 RexFlags::set_w()
             } else {
                 RexFlags::clear_w()
@@ -1495,12 +1495,7 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::XmmCmove {
-            is_64,
-            cc,
-            src,
-            dst,
-        } => {
+        Inst::XmmCmove { size, cc, src, dst } => {
             // Lowering of the Select IR opcode when the input is an fcmp relies on the fact that
             // this doesn't clobber flags. Make sure to not do so here.
             let next = sink.get_label();
@@ -1508,7 +1503,7 @@ pub(crate) fn emit(
             // Jump if cc is *not* set.
             one_way_jmp(sink, cc.invert(), next);
 
-            let op = if *is_64 {
+            let op = if *size == OperandSize::Size64 {
                 SseOpcode::Movsd
             } else {
                 SseOpcode::Movss
@@ -1774,7 +1769,7 @@ pub(crate) fn emit(
 
             // Add base of jump table to jump-table-sourced block offset.
             let inst = Inst::alu_rmi_r(
-                true, /* is_64 */
+                OperandSize::Size64,
                 AluRmiROpcode::Add,
                 RegMemImm::reg(tmp2.to_reg()),
                 *tmp1,
@@ -2094,7 +2089,7 @@ pub(crate) fn emit(
             src,
             dst,
             imm,
-            is64,
+            size,
         } => {
             let (prefix, opcode, len) = match op {
                 SseOpcode::Cmpps => (LegacyPrefixes::None, 0x0FC2, 2),
@@ -2116,7 +2111,7 @@ pub(crate) fn emit(
                 SseOpcode::Roundsd => (LegacyPrefixes::_66, 0x0F3A0B, 3),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
-            let rex = if *is64 {
+            let rex = if *size == OperandSize::Size64 {
                 RexFlags::set_w()
             } else {
                 RexFlags::clear_w()
@@ -2289,7 +2284,7 @@ pub(crate) fn emit(
         }
 
         Inst::CvtUint64ToFloatSeq {
-            to_f64,
+            dst_size,
             src,
             dst,
             tmp_gpr1,
@@ -2336,7 +2331,14 @@ pub(crate) fn emit(
 
             // Handle a positive int64, which is the "easy" case: a signed conversion will do the
             // right thing.
-            emit_signed_cvt(sink, info, state, src.to_reg(), *dst, *to_f64);
+            emit_signed_cvt(
+                sink,
+                info,
+                state,
+                src.to_reg(),
+                *dst,
+                *dst_size == OperandSize::Size64,
+            );
 
             let inst = Inst::jmp_known(done);
             inst.emit(sink, info, state);
@@ -2361,7 +2363,7 @@ pub(crate) fn emit(
             inst.emit(sink, info, state);
 
             let inst = Inst::alu_rmi_r(
-                true, /* 64bits */
+                OperandSize::Size64,
                 AluRmiROpcode::And,
                 RegMemImm::imm(1),
                 *tmp_gpr2,
@@ -2369,16 +2371,23 @@ pub(crate) fn emit(
             inst.emit(sink, info, state);
 
             let inst = Inst::alu_rmi_r(
-                true, /* 64bits */
+                OperandSize::Size64,
                 AluRmiROpcode::Or,
                 RegMemImm::reg(tmp_gpr1.to_reg()),
                 *tmp_gpr2,
             );
             inst.emit(sink, info, state);
 
-            emit_signed_cvt(sink, info, state, tmp_gpr2.to_reg(), *dst, *to_f64);
+            emit_signed_cvt(
+                sink,
+                info,
+                state,
+                tmp_gpr2.to_reg(),
+                *dst,
+                *dst_size == OperandSize::Size64,
+            );
 
-            let add_op = if *to_f64 {
+            let add_op = if *dst_size == OperandSize::Size64 {
                 SseOpcode::Addsd
             } else {
                 SseOpcode::Addss
@@ -2475,7 +2484,7 @@ pub(crate) fn emit(
             if *is_saturating {
                 // For NaN, emit 0.
                 let inst = Inst::alu_rmi_r(
-                    *dst_size == OperandSize::Size64,
+                    *dst_size,
                     AluRmiROpcode::Xor,
                     RegMemImm::reg(dst.to_reg()),
                     *dst,
@@ -2666,7 +2675,7 @@ pub(crate) fn emit(
             if *is_saturating {
                 // Emit 0.
                 let inst = Inst::alu_rmi_r(
-                    *dst_size == OperandSize::Size64,
+                    *dst_size,
                     AluRmiROpcode::Xor,
                     RegMemImm::reg(dst.to_reg()),
                     *dst,
@@ -2698,7 +2707,7 @@ pub(crate) fn emit(
                 // The input was "small" (< 2**(width -1)), so the only way to get an integer
                 // overflow is because the input was too small: saturate to the min value, i.e. 0.
                 let inst = Inst::alu_rmi_r(
-                    *dst_size == OperandSize::Size64,
+                    *dst_size,
                     AluRmiROpcode::Xor,
                     RegMemImm::reg(dst.to_reg()),
                     *dst,
@@ -2757,15 +2766,19 @@ pub(crate) fn emit(
                 inst.emit(sink, info, state);
 
                 let inst = Inst::alu_rmi_r(
-                    true,
+                    OperandSize::Size64,
                     AluRmiROpcode::Add,
                     RegMemImm::reg(tmp_gpr.to_reg()),
                     *dst,
                 );
                 inst.emit(sink, info, state);
             } else {
-                let inst =
-                    Inst::alu_rmi_r(false, AluRmiROpcode::Add, RegMemImm::imm(1 << 31), *dst);
+                let inst = Inst::alu_rmi_r(
+                    OperandSize::Size32,
+                    AluRmiROpcode::Add,
+                    RegMemImm::imm(1 << 31),
+                    *dst,
+                );
                 inst.emit(sink, info, state);
             }
 
@@ -2865,13 +2878,13 @@ pub(crate) fn emit(
             sink.bind_label(again_label);
 
             // movq %rax, %r11
-            let i2 = Inst::mov_r_r(true, rax, r11_w);
+            let i2 = Inst::mov_r_r(OperandSize::Size64, rax, r11_w);
             i2.emit(sink, info, state);
 
             // opq %r10, %r11
             let r10_rmi = RegMemImm::reg(r10);
             let i3 = if *op == inst_common::AtomicRmwOp::Xchg {
-                Inst::mov_r_r(true, r10, r11_w)
+                Inst::mov_r_r(OperandSize::Size64, r10, r11_w)
             } else {
                 let alu_op = match op {
                     inst_common::AtomicRmwOp::Add => AluRmiROpcode::Add,
@@ -2881,7 +2894,7 @@ pub(crate) fn emit(
                     inst_common::AtomicRmwOp::Xor => AluRmiROpcode::Xor,
                     inst_common::AtomicRmwOp::Xchg => unreachable!(),
                 };
-                Inst::alu_rmi_r(true, alu_op, r10_rmi, r11_w)
+                Inst::alu_rmi_r(OperandSize::Size64, alu_op, r10_rmi, r11_w)
             };
             i3.emit(sink, info, state);
 
