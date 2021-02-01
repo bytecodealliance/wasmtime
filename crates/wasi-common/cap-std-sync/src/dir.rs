@@ -71,7 +71,16 @@ impl WasiDir for Dir {
         // (DSYNC, SYNC, NONBLOCK, RSYNC)
         // ideally OpenOptions would just support this though:
         // https://github.com/bytecodealliance/cap-std/issues/146
-        f.set_fd_flags(to_sysif_fdflags(fdflags))?;
+        {
+            // Even worse - set_fd_flags panicks when given DSYNC, SYNC, RSYNC!
+            // it only supports NONBLOCK
+            let fdflags = if fdflags.contains(wasi_common::file::FdFlags::NONBLOCK) {
+                system_interface::fs::FdFlags::NONBLOCK
+            } else {
+                system_interface::fs::FdFlags::empty()
+            };
+            f.set_fd_flags(fdflags)?;
+        }
         Ok(Box::new(File::from_cap_std(f)))
     }
 
