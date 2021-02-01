@@ -42,6 +42,9 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
             builder = builder.env("ERRNO_MODE_UNIX", "1")?;
         }
 
+        // cap-std-sync does not yet support the sync family of fdflags
+        builder = builder.env("NO_FDFLAGS_SYNC_SUPPORT", "1")?;
+
         let wasi = wasmtime_wasi::Wasi::new(&store, builder.build()?);
 
         let mut linker = Linker::new(&store);

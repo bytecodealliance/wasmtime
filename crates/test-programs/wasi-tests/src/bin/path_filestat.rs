@@ -1,6 +1,6 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_tests::{assert_errno, open_scratch_directory};
+use wasi_tests::{assert_errno, open_scratch_directory, TESTCONFIG};
 
 unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
     let mut fdstat = wasi::fd_fdstat_get(dir_fd).expect("fd_fdstat_get");
@@ -9,6 +9,12 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         0,
         "the scratch directory should have RIGHT_PATH_FILESTAT_GET as base right",
     );
+
+    let fdflags = if TESTCONFIG.support_fdflags_sync() {
+        wasi::FDFLAGS_APPEND | wasi::FDFLAGS_SYNC
+    } else {
+        wasi::FDFLAGS_APPEND
+    };
 
     // Create a file in the scratch directory.
     let file_fd = wasi::path_open(
@@ -19,7 +25,7 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE | wasi::RIGHTS_PATH_FILESTAT_GET,
         0,
         // Pass some flags for later retrieval
-        wasi::FDFLAGS_APPEND | wasi::FDFLAGS_SYNC,
+        fdflags,
     )
     .expect("opening a file");
     assert_gt!(
@@ -39,11 +45,35 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         0,
         "files shouldn't have rights for path_* syscalls even if manually given",
     );
-    assert_ne!(
-        fdstat.fs_flags & (wasi::FDFLAGS_APPEND | wasi::FDFLAGS_SYNC),
-        0,
-        "file should have the same flags used to create the file"
+    assert_eq!(
+        fdstat.fs_flags & wasi::FDFLAGS_APPEND,
+        wasi::FDFLAGS_APPEND,
+        "file should have the APPEND fdflag used to create the file"
     );
+    if TESTCONFIG.support_fdflags_sync() {
+        assert_eq!(
+            fdstat.fs_flags & wasi::FDFLAGS_SYNC,
+            wasi::FDFLAGS_SYNC,
+            "file should have the SYNC fdflag used to create the file"
+        );
+    }
+
+    if !TESTCONFIG.support_fdflags_sync() {
+        assert_errno!(
+            wasi::path_open(
+                dir_fd,
+                0,
+                "file",
+                0,
+                wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE | wasi::RIGHTS_PATH_FILESTAT_GET,
+                0,
+                wasi::FDFLAGS_SYNC,
+            )
+            .expect_err("FDFLAGS_SYNC not supported by platform")
+            .raw_error(),
+            wasi::ERRNO_NOTSUP
+        );
+    }
 
     // Check file size
     let file_stat = wasi::path_filestat_get(dir_fd, 0, "file").expect("reading file stats");
