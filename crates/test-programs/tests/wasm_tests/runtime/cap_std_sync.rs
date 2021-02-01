@@ -1,4 +1,5 @@
 use anyhow::Context;
+use std::convert::TryInto;
 use std::path::Path;
 use wasi_cap_std_sync::WasiCtxBuilder;
 use wasi_common::pipe::{ReadPipe, WritePipe};
@@ -90,7 +91,18 @@ pub fn instantiate_inherit_stdio(
 
         // Tests assume that stdin does not have any bytes available to read. Make sure this is the
         // case, regardless of the test environment:
-        let _ = std::io::stdin().read_to_end().expect("read stdin to end");
+        use std::io::Read;
+        use system_interface::io::ReadReady;
+        let nbytes = std::io::stdin()
+            .num_ready_bytes()
+            .expect("get stdin's ready bytes");
+        if nbytes > 0 {
+            let mut stdin_contents = Vec::new();
+            stdin_contents.resize(nbytes.try_into().expect("ready bytes fits in memory"), 0);
+            std::io::stdin()
+                .read(stdin_contents.as_mut_slice())
+                .expect("read stdin to end");
+        }
 
         // Create our wasi context.
         // Additionally register any preopened directories if we have them.

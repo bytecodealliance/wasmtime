@@ -2801,6 +2801,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "os_pipe",
  "pretty_env_logger",
+ "system-interface",
  "target-lexicon",
  "tempfile",
  "wasi-cap-std-sync",
