@@ -203,8 +203,6 @@ mod wasi_tests {
             "nofollow_errors",
             // waiting on DirExt::delete_file_or_symlink
             "symlink_create",
-            // Bug: windows lets us rename an empty directory to a path containing an empty file
-            "path_rename",
             // Trailing slash related bugs
             "interesting_paths",
             "path_rename_file_trailing_slashes",
