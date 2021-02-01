@@ -885,23 +885,38 @@ fn test_x64_emit() {
     //
     // Alu_RMI_R
     insns.push((
-        Inst::alu_rmi_r(true, AluRmiROpcode::Add, RegMemImm::reg(r15), w_rdx),
+        Inst::alu_rmi_r(
+            OperandSize::Size64,
+            AluRmiROpcode::Add,
+            RegMemImm::reg(r15),
+            w_rdx,
+        ),
         "4C01FA",
         "addq    %r15, %rdx",
     ));
     insns.push((
-        Inst::alu_rmi_r(false, AluRmiROpcode::Add, RegMemImm::reg(rcx), w_r8),
+        Inst::alu_rmi_r(
+            OperandSize::Size32,
+            AluRmiROpcode::Add,
+            RegMemImm::reg(rcx),
+            w_r8,
+        ),
         "4101C8",
         "addl    %ecx, %r8d",
     ));
     insns.push((
-        Inst::alu_rmi_r(false, AluRmiROpcode::Add, RegMemImm::reg(rcx), w_rsi),
+        Inst::alu_rmi_r(
+            OperandSize::Size32,
+            AluRmiROpcode::Add,
+            RegMemImm::reg(rcx),
+            w_rsi,
+        ),
         "01CE",
         "addl    %ecx, %esi",
     ));
     insns.push((
         Inst::alu_rmi_r(
-            true,
+            OperandSize::Size64,
             AluRmiROpcode::Add,
             RegMemImm::mem(Amode::imm_reg(99, rdi)),
             w_rdx,
@@ -911,7 +926,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::alu_rmi_r(
-            false,
+            OperandSize::Size32,
             AluRmiROpcode::Add,
             RegMemImm::mem(Amode::imm_reg(99, rdi)),
             w_r8,
@@ -921,7 +936,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::alu_rmi_r(
-            false,
+            OperandSize::Size32,
             AluRmiROpcode::Add,
             RegMemImm::mem(Amode::imm_reg(99, rdi)),
             w_rsi,
@@ -931,7 +946,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::alu_rmi_r(
-            true,
+            OperandSize::Size64,
             AluRmiROpcode::Add,
             RegMemImm::imm(-127i32 as u32),
             w_rdx,
@@ -941,7 +956,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::alu_rmi_r(
-            true,
+            OperandSize::Size64,
             AluRmiROpcode::Add,
             RegMemImm::imm(-129i32 as u32),
             w_rdx,
@@ -950,13 +965,18 @@ fn test_x64_emit() {
         "addq    $-129, %rdx",
     ));
     insns.push((
-        Inst::alu_rmi_r(true, AluRmiROpcode::Add, RegMemImm::imm(76543210), w_rdx),
+        Inst::alu_rmi_r(
+            OperandSize::Size64,
+            AluRmiROpcode::Add,
+            RegMemImm::imm(76543210),
+            w_rdx,
+        ),
         "4881C2EAF48F04",
         "addq    $76543210, %rdx",
     ));
     insns.push((
         Inst::alu_rmi_r(
-            false,
+            OperandSize::Size32,
             AluRmiROpcode::Add,
             RegMemImm::imm(-127i32 as u32),
             w_r8,
@@ -966,7 +986,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::alu_rmi_r(
-            false,
+            OperandSize::Size32,
             AluRmiROpcode::Add,
             RegMemImm::imm(-129i32 as u32),
             w_r8,
@@ -976,7 +996,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::alu_rmi_r(
-            false,
+            OperandSize::Size32,
             AluRmiROpcode::Add,
             RegMemImm::imm(-76543210i32 as u32),
             w_r8,
@@ -986,7 +1006,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::alu_rmi_r(
-            false,
+            OperandSize::Size32,
             AluRmiROpcode::Add,
             RegMemImm::imm(-127i32 as u32),
             w_rsi,
@@ -996,7 +1016,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::alu_rmi_r(
-            false,
+            OperandSize::Size32,
             AluRmiROpcode::Add,
             RegMemImm::imm(-129i32 as u32),
             w_rsi,
@@ -1005,44 +1025,79 @@ fn test_x64_emit() {
         "addl    $-129, %esi",
     ));
     insns.push((
-        Inst::alu_rmi_r(false, AluRmiROpcode::Add, RegMemImm::imm(76543210), w_rsi),
+        Inst::alu_rmi_r(
+            OperandSize::Size32,
+            AluRmiROpcode::Add,
+            RegMemImm::imm(76543210),
+            w_rsi,
+        ),
         "81C6EAF48F04",
         "addl    $76543210, %esi",
     ));
     // This is pretty feeble
     insns.push((
-        Inst::alu_rmi_r(true, AluRmiROpcode::Sub, RegMemImm::reg(r15), w_rdx),
+        Inst::alu_rmi_r(
+            OperandSize::Size64,
+            AluRmiROpcode::Sub,
+            RegMemImm::reg(r15),
+            w_rdx,
+        ),
         "4C29FA",
         "subq    %r15, %rdx",
     ));
     insns.push((
-        Inst::alu_rmi_r(true, AluRmiROpcode::And, RegMemImm::reg(r15), w_rdx),
+        Inst::alu_rmi_r(
+            OperandSize::Size64,
+            AluRmiROpcode::And,
+            RegMemImm::reg(r15),
+            w_rdx,
+        ),
         "4C21FA",
         "andq    %r15, %rdx",
     ));
     insns.push((
-        Inst::alu_rmi_r(true, AluRmiROpcode::Or, RegMemImm::reg(r15), w_rdx),
+        Inst::alu_rmi_r(
+            OperandSize::Size64,
+            AluRmiROpcode::Or,
+            RegMemImm::reg(r15),
+            w_rdx,
+        ),
         "4C09FA",
         "orq     %r15, %rdx",
     ));
     insns.push((
-        Inst::alu_rmi_r(false, AluRmiROpcode::And8, RegMemImm::reg(r15), w_rdx),
+        Inst::alu_rmi_r(
+            OperandSize::Size32,
+            AluRmiROpcode::And8,
+            RegMemImm::reg(r15),
+            w_rdx,
+        ),
         "4420FA",
         "andb    %r15b, %dl",
     ));
     insns.push((
-        Inst::alu_rmi_r(false, AluRmiROpcode::And8, RegMemImm::reg(rax), w_rsi),
+        Inst::alu_rmi_r(
+            OperandSize::Size32,
+            AluRmiROpcode::And8,
+            RegMemImm::reg(rax),
+            w_rsi,
+        ),
         "4020C6",
         "andb    %al, %sil",
     ));
     insns.push((
-        Inst::alu_rmi_r(false, AluRmiROpcode::And8, RegMemImm::reg(rax), w_rbx),
+        Inst::alu_rmi_r(
+            OperandSize::Size32,
+            AluRmiROpcode::And8,
+            RegMemImm::reg(rax),
+            w_rbx,
+        ),
         "20C3",
         "andb    %al, %bl",
     ));
     insns.push((
         Inst::alu_rmi_r(
-            false,
+            OperandSize::Size32,
             AluRmiROpcode::And8,
             RegMemImm::mem(Amode::imm_reg(0, rax)),
             w_rbx,
@@ -1051,23 +1106,38 @@ fn test_x64_emit() {
         "andb    0(%rax), %bl",
     ));
     insns.push((
-        Inst::alu_rmi_r(false, AluRmiROpcode::Or8, RegMemImm::reg(r15), w_rdx),
+        Inst::alu_rmi_r(
+            OperandSize::Size32,
+            AluRmiROpcode::Or8,
+            RegMemImm::reg(r15),
+            w_rdx,
+        ),
         "4408FA",
         "orb     %r15b, %dl",
     ));
     insns.push((
-        Inst::alu_rmi_r(false, AluRmiROpcode::Or8, RegMemImm::reg(rax), w_rsi),
+        Inst::alu_rmi_r(
+            OperandSize::Size32,
+            AluRmiROpcode::Or8,
+            RegMemImm::reg(rax),
+            w_rsi,
+        ),
         "4008C6",
         "orb     %al, %sil",
     ));
     insns.push((
-        Inst::alu_rmi_r(false, AluRmiROpcode::Or8, RegMemImm::reg(rax), w_rbx),
+        Inst::alu_rmi_r(
+            OperandSize::Size32,
+            AluRmiROpcode::Or8,
+            RegMemImm::reg(rax),
+            w_rbx,
+        ),
         "08C3",
         "orb     %al, %bl",
     ));
     insns.push((
         Inst::alu_rmi_r(
-            false,
+            OperandSize::Size32,
             AluRmiROpcode::Or8,
             RegMemImm::mem(Amode::imm_reg(0, rax)),
             w_rbx,
@@ -1076,29 +1146,49 @@ fn test_x64_emit() {
         "orb     0(%rax), %bl",
     ));
     insns.push((
-        Inst::alu_rmi_r(true, AluRmiROpcode::Xor, RegMemImm::reg(r15), w_rdx),
+        Inst::alu_rmi_r(
+            OperandSize::Size64,
+            AluRmiROpcode::Xor,
+            RegMemImm::reg(r15),
+            w_rdx,
+        ),
         "4C31FA",
         "xorq    %r15, %rdx",
     ));
     // Test all mul cases, though
     insns.push((
-        Inst::alu_rmi_r(true, AluRmiROpcode::Mul, RegMemImm::reg(r15), w_rdx),
+        Inst::alu_rmi_r(
+            OperandSize::Size64,
+            AluRmiROpcode::Mul,
+            RegMemImm::reg(r15),
+            w_rdx,
+        ),
         "490FAFD7",
         "imulq   %r15, %rdx",
     ));
     insns.push((
-        Inst::alu_rmi_r(false, AluRmiROpcode::Mul, RegMemImm::reg(rcx), w_r8),
+        Inst::alu_rmi_r(
+            OperandSize::Size32,
+            AluRmiROpcode::Mul,
+            RegMemImm::reg(rcx),
+            w_r8,
+        ),
         "440FAFC1",
         "imull   %ecx, %r8d",
     ));
     insns.push((
-        Inst::alu_rmi_r(false, AluRmiROpcode::Mul, RegMemImm::reg(rcx), w_rsi),
+        Inst::alu_rmi_r(
+            OperandSize::Size32,
+            AluRmiROpcode::Mul,
+            RegMemImm::reg(rcx),
+            w_rsi,
+        ),
         "0FAFF1",
         "imull   %ecx, %esi",
     ));
     insns.push((
         Inst::alu_rmi_r(
-            true,
+            OperandSize::Size64,
             AluRmiROpcode::Mul,
             RegMemImm::mem(Amode::imm_reg(99, rdi)),
             w_rdx,
@@ -1108,7 +1198,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::alu_rmi_r(
-            false,
+            OperandSize::Size32,
             AluRmiROpcode::Mul,
             RegMemImm::mem(Amode::imm_reg(99, rdi)),
             w_r8,
@@ -1118,7 +1208,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::alu_rmi_r(
-            false,
+            OperandSize::Size32,
             AluRmiROpcode::Mul,
             RegMemImm::mem(Amode::imm_reg(99, rdi)),
             w_rsi,
@@ -1128,7 +1218,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::alu_rmi_r(
-            true,
+            OperandSize::Size64,
             AluRmiROpcode::Mul,
             RegMemImm::imm(-127i32 as u32),
             w_rdx,
@@ -1138,7 +1228,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::alu_rmi_r(
-            true,
+            OperandSize::Size64,
             AluRmiROpcode::Mul,
             RegMemImm::imm(-129i32 as u32),
             w_rdx,
@@ -1147,13 +1237,18 @@ fn test_x64_emit() {
         "imulq   $-129, %rdx",
     ));
     insns.push((
-        Inst::alu_rmi_r(true, AluRmiROpcode::Mul, RegMemImm::imm(76543210), w_rdx),
+        Inst::alu_rmi_r(
+            OperandSize::Size64,
+            AluRmiROpcode::Mul,
+            RegMemImm::imm(76543210),
+            w_rdx,
+        ),
         "4869D2EAF48F04",
         "imulq   $76543210, %rdx",
     ));
     insns.push((
         Inst::alu_rmi_r(
-            false,
+            OperandSize::Size32,
             AluRmiROpcode::Mul,
             RegMemImm::imm(-127i32 as u32),
             w_r8,
@@ -1163,7 +1258,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::alu_rmi_r(
-            false,
+            OperandSize::Size32,
             AluRmiROpcode::Mul,
             RegMemImm::imm(-129i32 as u32),
             w_r8,
@@ -1173,7 +1268,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::alu_rmi_r(
-            false,
+            OperandSize::Size32,
             AluRmiROpcode::Mul,
             RegMemImm::imm(-76543210i32 as u32),
             w_r8,
@@ -1183,7 +1278,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::alu_rmi_r(
-            false,
+            OperandSize::Size32,
             AluRmiROpcode::Mul,
             RegMemImm::imm(-127i32 as u32),
             w_rsi,
@@ -1193,7 +1288,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::alu_rmi_r(
-            false,
+            OperandSize::Size32,
             AluRmiROpcode::Mul,
             RegMemImm::imm(-129i32 as u32),
             w_rsi,
@@ -1202,7 +1297,12 @@ fn test_x64_emit() {
         "imull   $-129, %esi",
     ));
     insns.push((
-        Inst::alu_rmi_r(false, AluRmiROpcode::Mul, RegMemImm::imm(76543210), w_rsi),
+        Inst::alu_rmi_r(
+            OperandSize::Size32,
+            AluRmiROpcode::Mul,
+            RegMemImm::imm(76543210),
+            w_rsi,
+        ),
         "69F6EAF48F04",
         "imull   $76543210, %esi",
     ));
@@ -1442,42 +1542,42 @@ fn test_x64_emit() {
     // ========================================================
     // Mov_R_R
     insns.push((
-        Inst::mov_r_r(false, rbx, w_rsi),
+        Inst::mov_r_r(OperandSize::Size32, rbx, w_rsi),
         "89DE",
         "movl    %ebx, %esi",
     ));
     insns.push((
-        Inst::mov_r_r(false, rbx, w_r9),
+        Inst::mov_r_r(OperandSize::Size32, rbx, w_r9),
         "4189D9",
         "movl    %ebx, %r9d",
     ));
     insns.push((
-        Inst::mov_r_r(false, r11, w_rsi),
+        Inst::mov_r_r(OperandSize::Size32, r11, w_rsi),
         "4489DE",
         "movl    %r11d, %esi",
     ));
     insns.push((
-        Inst::mov_r_r(false, r12, w_r9),
+        Inst::mov_r_r(OperandSize::Size32, r12, w_r9),
         "4589E1",
         "movl    %r12d, %r9d",
     ));
     insns.push((
-        Inst::mov_r_r(true, rbx, w_rsi),
+        Inst::mov_r_r(OperandSize::Size64, rbx, w_rsi),
         "4889DE",
         "movq    %rbx, %rsi",
     ));
     insns.push((
-        Inst::mov_r_r(true, rbx, w_r9),
+        Inst::mov_r_r(OperandSize::Size64, rbx, w_r9),
         "4989D9",
         "movq    %rbx, %r9",
     ));
     insns.push((
-        Inst::mov_r_r(true, r11, w_rsi),
+        Inst::mov_r_r(OperandSize::Size64, r11, w_rsi),
         "4C89DE",
         "movq    %r11, %rsi",
     ));
     insns.push((
-        Inst::mov_r_r(true, r12, w_r9),
+        Inst::mov_r_r(OperandSize::Size64, r12, w_r9),
         "4D89E1",
         "movq    %r12, %r9",
     ));
@@ -3879,38 +3979,80 @@ fn test_x64_emit() {
     // ========================================================
     // XmmRmRImm
     insns.push((
-        Inst::xmm_rm_r_imm(SseOpcode::Cmppd, RegMem::reg(xmm5), w_xmm1, 2, false),
+        Inst::xmm_rm_r_imm(
+            SseOpcode::Cmppd,
+            RegMem::reg(xmm5),
+            w_xmm1,
+            2,
+            OperandSize::Size32,
+        ),
         "660FC2CD02",
         "cmppd   $2, %xmm5, %xmm1",
     ));
     insns.push((
-        Inst::xmm_rm_r_imm(SseOpcode::Cmpps, RegMem::reg(xmm15), w_xmm7, 0, false),
+        Inst::xmm_rm_r_imm(
+            SseOpcode::Cmpps,
+            RegMem::reg(xmm15),
+            w_xmm7,
+            0,
+            OperandSize::Size32,
+        ),
         "410FC2FF00",
         "cmpps   $0, %xmm15, %xmm7",
     ));
     insns.push((
-        Inst::xmm_rm_r_imm(SseOpcode::Palignr, RegMem::reg(xmm1), w_xmm9, 3, false),
+        Inst::xmm_rm_r_imm(
+            SseOpcode::Palignr,
+            RegMem::reg(xmm1),
+            w_xmm9,
+            3,
+            OperandSize::Size32,
+        ),
         "66440F3A0FC903",
         "palignr $3, %xmm1, %xmm9",
     ));
 
     insns.push((
-        Inst::xmm_rm_r_imm(SseOpcode::Roundps, RegMem::reg(xmm7), w_xmm8, 3, false),
+        Inst::xmm_rm_r_imm(
+            SseOpcode::Roundps,
+            RegMem::reg(xmm7),
+            w_xmm8,
+            3,
+            OperandSize::Size32,
+        ),
         "66440F3A08C703",
         "roundps $3, %xmm7, %xmm8",
     ));
     insns.push((
-        Inst::xmm_rm_r_imm(SseOpcode::Roundpd, RegMem::reg(xmm10), w_xmm7, 2, false),
+        Inst::xmm_rm_r_imm(
+            SseOpcode::Roundpd,
+            RegMem::reg(xmm10),
+            w_xmm7,
+            2,
+            OperandSize::Size32,
+        ),
         "66410F3A09FA02",
         "roundpd $2, %xmm10, %xmm7",
     ));
     insns.push((
-        Inst::xmm_rm_r_imm(SseOpcode::Roundps, RegMem::reg(xmm4), w_xmm8, 1, false),
+        Inst::xmm_rm_r_imm(
+            SseOpcode::Roundps,
+            RegMem::reg(xmm4),
+            w_xmm8,
+            1,
+            OperandSize::Size32,
+        ),
         "66440F3A08C401",
         "roundps $1, %xmm4, %xmm8",
     ));
     insns.push((
-        Inst::xmm_rm_r_imm(SseOpcode::Roundpd, RegMem::reg(xmm15), w_xmm15, 0, false),
+        Inst::xmm_rm_r_imm(
+            SseOpcode::Roundpd,
+            RegMem::reg(xmm15),
+            w_xmm15,
+            0,
+            OperandSize::Size32,
+        ),
         "66450F3A09FF00",
         "roundpd $0, %xmm15, %xmm15",
     ));

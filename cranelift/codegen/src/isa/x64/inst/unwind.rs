@@ -1,6 +1,6 @@
 use crate::isa::unwind::input::UnwindInfo;
 use crate::isa::x64::inst::{
-    args::{AluRmiROpcode, Amode, RegMemImm, SyntheticAmode},
+    args::{AluRmiROpcode, Amode, OperandSize, RegMemImm, SyntheticAmode},
     regs, Inst,
 };
 use crate::machinst::{UnwindInfoContext, UnwindInfoGenerator};
@@ -50,7 +50,7 @@ impl UnwindInfoGenerator<Inst> for X64UnwindInfo {
                     }
                 }
                 Inst::AluRmiR {
-                    is_64: true,
+                    size: OperandSize::Size64,
                     op: AluRmiROpcode::Sub,
                     src: RegMemImm::Imm { simm32 },
                     dst,
@@ -75,7 +75,7 @@ impl UnwindInfoGenerator<Inst> for X64UnwindInfo {
                     ));
                 }
                 Inst::AluRmiR {
-                    is_64: true,
+                    size: OperandSize::Size64,
                     op: AluRmiROpcode::Add,
                     src: RegMemImm::Imm { simm32 },
                     dst,

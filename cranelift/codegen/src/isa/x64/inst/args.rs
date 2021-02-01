@@ -1347,13 +1347,8 @@ impl OperandSize {
     }
 
     // Check that the value of self is one of the allowed sizes.
-    pub(crate) fn is_size(&self, sizes: &[Self]) -> bool {
-        for val in sizes.iter() {
-            if *self == *val {
-                return true;
-            }
-        }
-        false
+    pub(crate) fn is_one_of(&self, sizes: &[Self]) -> bool {
+        sizes.iter().any(|val| *self == *val)
     }
 
     pub(crate) fn to_bytes(&self) -> u8 {

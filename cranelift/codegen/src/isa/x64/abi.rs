@@ -329,7 +329,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             ret.push(Inst::gen_move(into_reg, from_reg, I64));
         }
         ret.push(Inst::alu_rmi_r(
-            true,
+            OperandSize::Size64,
             AluRmiROpcode::Add,
             RegMemImm::imm(imm),
             into_reg,
@@ -388,7 +388,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let amount = amount as u32;
 
         smallvec![Inst::alu_rmi_r(
-            true,
+            OperandSize::Size64,
             alu_op,
             RegMemImm::imm(amount),
             Writable::from_reg(regs::rsp()),
@@ -409,14 +409,14 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // RSP before the call will be 0 % 16.  So here, it is 8 % 16.
         insts.push(Inst::push64(RegMemImm::reg(r_rbp)));
         // RSP is now 0 % 16
-        insts.push(Inst::mov_r_r(true, r_rsp, w_rbp));
+        insts.push(Inst::mov_r_r(OperandSize::Size64, r_rsp, w_rbp));
         insts
     }
 
     fn gen_epilogue_frame_restore() -> SmallInstVec<Self::I> {
         let mut insts = SmallVec::new();
         insts.push(Inst::mov_r_r(
-            true,
+            OperandSize::Size64,
             regs::rbp(),
             Writable::from_reg(regs::rsp()),
         ));
@@ -461,7 +461,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // instruction.
         if stack_size > 0 {
             insts.push(Inst::alu_rmi_r(
-                true,
+                OperandSize::Size64,
                 AluRmiROpcode::Sub,
                 RegMemImm::imm(stack_size),
                 Writable::from_reg(regs::rsp()),
@@ -520,7 +520,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // Adjust RSP back upward.
         if stack_size > 0 {
             insts.push(Inst::alu_rmi_r(
-                true,
+                OperandSize::Size64,
                 AluRmiROpcode::Add,
                 RegMemImm::imm(stack_size),
                 Writable::from_reg(regs::rsp()),
