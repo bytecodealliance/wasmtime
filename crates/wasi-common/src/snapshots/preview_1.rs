@@ -156,7 +156,7 @@ impl TryFrom<std::io::Error> for types::Errno {
                 winerror::ERROR_TOO_MANY_OPEN_FILES => Some(types::Errno::Nfile),
                 winerror::ERROR_ACCESS_DENIED => Some(types::Errno::Acces),
                 winerror::ERROR_SHARING_VIOLATION => Some(types::Errno::Acces),
-                winerror::ERROR_PRIVILEGE_NOT_HELD => Some(types::Errno::Notcapable),
+                winerror::ERROR_PRIVILEGE_NOT_HELD => Some(types::Errno::Perm),
                 winerror::ERROR_INVALID_HANDLE => Some(types::Errno::Badf),
                 winerror::ERROR_INVALID_NAME => Some(types::Errno::Noent),
                 winerror::ERROR_NOT_ENOUGH_MEMORY => Some(types::Errno::Nomem),

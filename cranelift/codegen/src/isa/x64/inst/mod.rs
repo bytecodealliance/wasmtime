@@ -539,7 +539,6 @@ impl Inst {
             | Inst::SignExtendData { .. }
             | Inst::TrapIf { .. }
             | Inst::Ud2 { .. }
-            | Inst::UnaryRmR { .. }
             | Inst::VirtualSPOffsetAdj { .. }
             | Inst::XmmCmove { .. }
             | Inst::XmmCmpRmR { .. }
@@ -549,6 +548,8 @@ impl Inst {
             | Inst::ElfTlsGetAddr { .. }
             | Inst::MachOTlsGetAddr { .. }
             | Inst::ValueLabelMarker { .. } => None,
+
+            Inst::UnaryRmR { op, .. } => op.available_from(),
 
             // These use dynamic SSE opcodes.
             Inst::GprToXmm { op, .. }

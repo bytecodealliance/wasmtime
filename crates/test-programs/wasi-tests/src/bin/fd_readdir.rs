@@ -59,6 +59,7 @@ unsafe fn exec_fd_readdir(fd: wasi::Fd, cookie: wasi::Dircookie) -> (Vec<DirEntr
     let bufused =
         wasi::fd_readdir(fd, buf.as_mut_ptr(), BUF_LEN, cookie).expect("failed fd_readdir");
     assert!(bufused <= BUF_LEN);
+
     let sl = slice::from_raw_parts(buf.as_ptr(), bufused);
     let dirs: Vec<_> = ReadDir::from_slice(sl).collect();
     let eof = bufused < BUF_LEN;

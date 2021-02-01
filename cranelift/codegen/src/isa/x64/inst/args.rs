@@ -410,6 +410,17 @@ pub enum UnaryRmROpcode {
     Popcnt,
 }
 
+impl UnaryRmROpcode {
+    pub(crate) fn available_from(&self) -> Option<InstructionSet> {
+        match self {
+            UnaryRmROpcode::Bsr | UnaryRmROpcode::Bsf => None,
+            UnaryRmROpcode::Lzcnt => Some(InstructionSet::Lzcnt),
+            UnaryRmROpcode::Tzcnt => Some(InstructionSet::BMI1),
+            UnaryRmROpcode::Popcnt => Some(InstructionSet::Popcnt),
+        }
+    }
+}
+
 impl fmt::Debug for UnaryRmROpcode {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -442,6 +453,10 @@ pub(crate) enum InstructionSet {
     SSSE3,
     SSE41,
     SSE42,
+    Popcnt,
+    Lzcnt,
+    BMI1,
+    BMI2,
 }
 
 /// Some SSE operations requiring 2 operands r/m and r.

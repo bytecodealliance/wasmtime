@@ -160,6 +160,17 @@ impl Extern {
             Extern::Module(_) => "module",
         }
     }
+
+    pub(crate) fn wasmtime_export(&self) -> wasmtime_runtime::Export {
+        match self {
+            Extern::Func(f) => f.wasmtime_export().clone().into(),
+            Extern::Global(f) => f.wasmtime_export().clone().into(),
+            Extern::Table(f) => f.wasmtime_export().clone().into(),
+            Extern::Memory(f) => f.wasmtime_export().clone().into(),
+            Extern::Instance(f) => wasmtime_runtime::Export::Instance(f.wasmtime_export().clone()),
+            Extern::Module(f) => wasmtime_runtime::Export::Module(Box::new(f.clone())),
+        }
+    }
 }
 
 impl From<Func> for Extern {
