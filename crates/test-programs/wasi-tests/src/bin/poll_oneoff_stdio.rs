@@ -2,6 +2,7 @@ use std::mem::MaybeUninit;
 use wasi_tests::{assert_errno, STDERR_FD, STDIN_FD, STDOUT_FD};
 
 const CLOCK_ID: wasi::Userdata = 0x0123_45678;
+const STDIN_ID: wasi::Userdata = 0x8765_43210;
 
 unsafe fn poll_oneoff_impl(r#in: &[wasi::Subscription]) -> Result<Vec<wasi::Event>, wasi::Error> {
     let mut out: Vec<wasi::Event> = Vec::new();
@@ -23,6 +24,7 @@ unsafe fn test_stdin_read() {
     let fd_readwrite = wasi::SubscriptionFdReadwrite {
         file_descriptor: STDIN_FD,
     };
+    // Either stdin can be ready for reading, or this poll can timeout.
     let r#in = [
         wasi::Subscription {
             userdata: CLOCK_ID,
@@ -31,9 +33,8 @@ unsafe fn test_stdin_read() {
                 u: wasi::SubscriptionUU { clock },
             },
         },
-        // Make sure that timeout is returned only once even if there are multiple read events
         wasi::Subscription {
-            userdata: 1,
+            userdata: STDIN_ID,
             u: wasi::SubscriptionU {
                 tag: wasi::EVENTTYPE_FD_READ,
                 u: wasi::SubscriptionUU {
@@ -43,18 +44,25 @@ unsafe fn test_stdin_read() {
         },
     ];
     let out = poll_oneoff_impl(&r#in).unwrap();
+    // The result should be either a timeout, or that stdin is ready for reading.
+    // Both are valid behaviors that depend on the test environment.
     assert_eq!(out.len(), 1, "should return 1 event");
     let event = &out[0];
-    assert_errno!(event.error, wasi::ERRNO_SUCCESS);
-    assert_eq!(
-        event.r#type,
-        wasi::EVENTTYPE_CLOCK,
-        "the event.type should equal clock"
-    );
-    assert_eq!(
-        event.userdata, CLOCK_ID,
-        "the event.userdata should contain clock_id specified by the user"
-    );
+    if event.r#type == wasi::EVENTTYPE_CLOCK {
+        assert_errno!(event.error, wasi::ERRNO_SUCCESS);
+        assert_eq!(
+            event.userdata, CLOCK_ID,
+            "the event.userdata should contain CLOCK_ID",
+        );
+    } else if event.r#type == wasi::EVENTTYPE_FD_READ {
+        assert_errno!(event.error, wasi::ERRNO_SUCCESS);
+        assert_eq!(
+            event.userdata, STDIN_ID,
+            "the event.userdata should contain STDIN_ID",
+        );
+    } else {
+        panic!("unexpected event type {}", event.r#type);
+    }
 }
 
 unsafe fn test_stdout_stderr_write() {
