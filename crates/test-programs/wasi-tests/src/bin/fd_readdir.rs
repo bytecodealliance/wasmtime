@@ -1,5 +1,5 @@
 use more_asserts::assert_gt;
-use std::{cmp::min, env, mem, process, slice, str};
+use std::{env, mem, process, slice, str};
 use wasi_tests::open_scratch_directory;
 
 const BUF_LEN: usize = 256;
@@ -58,8 +58,8 @@ unsafe fn exec_fd_readdir(fd: wasi::Fd, cookie: wasi::Dircookie) -> (Vec<DirEntr
     let mut buf: [u8; BUF_LEN] = [0; BUF_LEN];
     let bufused =
         wasi::fd_readdir(fd, buf.as_mut_ptr(), BUF_LEN, cookie).expect("failed fd_readdir");
-
-    let sl = slice::from_raw_parts(buf.as_ptr(), min(BUF_LEN, bufused));
+    assert!(bufused <= BUF_LEN);
+    let sl = slice::from_raw_parts(buf.as_ptr(), bufused);
     let dirs: Vec<_> = ReadDir::from_slice(sl).collect();
     let eof = bufused < BUF_LEN;
     (dirs, eof)
@@ -181,7 +181,7 @@ unsafe fn test_fd_readdir_lots(dir_fd: wasi::Fd) {
         if eof {
             break;
         }
-        cookie = dirs[dirs.len()-1].dirent.d_next;
+        cookie = dirs[dirs.len() - 1].dirent.d_next;
     }
     assert_eq!(total, 1002, "expected 1000 entries plus . and ..");
 

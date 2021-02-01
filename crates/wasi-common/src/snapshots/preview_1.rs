@@ -650,9 +650,6 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             let dirent_len: types::Size = dirent_raw.len().try_into()?;
             let name_raw = name.as_bytes();
             let name_len: types::Size = name_raw.len().try_into()?;
-            let offset = dirent_len
-                .checked_add(name_len)
-                .ok_or_else(|| Error::overflow())?;
 
             // Copy as many bytes of the dirent as we can, up to the end of the buffer
             let dirent_copy_len = std::cmp::min(dirent_len, buf_len - bufused);
@@ -666,6 +663,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             }
 
             buf = buf.add(dirent_copy_len)?;
+            bufused += dirent_copy_len;
 
             // Copy as many bytes of the name as we can, up to the end of the buffer
             let name_copy_len = std::cmp::min(name_len, buf_len - bufused);
@@ -680,7 +678,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             }
 
             buf = buf.add(name_copy_len)?;
-            bufused += offset;
+            bufused += name_copy_len;
         }
         Ok(bufused)
     }
