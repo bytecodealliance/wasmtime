@@ -530,8 +530,13 @@ fn parse_dwarf_info() -> Result<()> {
     let store = Store::new(&engine);
     let module = Module::new(&engine, &wasm)?;
     let mut linker = Linker::new(&store);
-    wasmtime_wasi::Wasi::new(&store, wasi_cap_std_sync::WasiCtxBuilder::new().build()?)
-        .add_to_linker(&mut linker)?;
+    wasmtime_wasi::Wasi::new(
+        &store,
+        wasi_cap_std_sync::WasiCtxBuilder::new()
+            .inherit_stdio()
+            .build()?,
+    )
+    .add_to_linker(&mut linker)?;
     linker.module("", &module)?;
     let run = linker.get_default("")?;
     let trap = run.call(&[]).unwrap_err().downcast::<Trap>()?;
