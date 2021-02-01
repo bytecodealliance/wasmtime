@@ -69,6 +69,13 @@ impl WasiDir for Dir {
         // have support for them in cap-std yet.
         // ideally OpenOptions would just support this though:
         // https://github.com/bytecodealliance/cap-std/issues/146
+        if fdflags.intersects(
+            wasi_common::file::FdFlags::DSYNC
+                | wasi_common::file::FdFlags::SYNC
+                | wasi_common::file::FdFlags::RSYNC,
+        ) {
+            return Err(Error::not_supported().context("SYNC family of FdFlags"));
+        }
 
         let mut f = self.0.open_with(Path::new(path), &opts)?;
         // NONBLOCK does not have an OpenOption either, but we can patch that on with set_fd_flags:
