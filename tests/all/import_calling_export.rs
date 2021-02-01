@@ -1,4 +1,5 @@
 use anyhow::Result;
+use wasmtime_wasi::{Wasi, WasiCtx};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasmtime::*;
@@ -89,5 +90,28 @@ fn test_returns_incorrect_type() -> Result<()> {
     assert!(trap
         .to_string()
         .contains("function attempted to return an incompatible value"));
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "unstable-allow-missing-imports"), ignore)]
+fn unstable_allow_missing_imports() -> Result<()> {
+    const WAT: &str = r#"
+    (module
+        (type $t0 (func))
+        (import "env" "missing_function" (func $missing_function (type $t0)))
+        (func $main (type $t0)
+          call $missing_function
+          return))
+    "#;
+
+    let store = Store::default();
+    let mut linker = Linker::new(&store);
+    let wasi = Wasi::new(&store, WasiCtx::new(std::env::args())?);
+    wasi.add_to_linker(&mut linker)?;
+    
+    let module = Module::new(store.engine(), WAT)?;
+    linker.module("", &module)?;
+
     Ok(())
 }

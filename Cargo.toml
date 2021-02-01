@@ -85,6 +85,7 @@ jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
 wasi-crypto = ["wasmtime-wasi-crypto"]
 wasi-nn = ["wasmtime-wasi-nn"]
+unstable-allow-missing-imports = ["wasmtime/unstable-allow-missing-imports"]
 
 # Try the experimental, work-in-progress new x86_64 backend. This is not stable
 # as of June 2020.

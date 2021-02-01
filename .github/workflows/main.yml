@@ -204,6 +204,8 @@ jobs:
     - name: Test with Peepmatic-based peephole optimizers
       run: cargo test --features 'enable-peepmatic'
       working-directory: ./cranelift
+    - name: Test unstable imports
+      run cargo test --features 'unstable-allow-missing-imports'
 
   # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
   # channels of Rust as well as macOS/Linux/Windows.

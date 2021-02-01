@@ -578,14 +578,34 @@ impl Linker {
     /// ```
     pub fn instantiate(&self, module: &Module) -> Result<Instance> {
         let imports = self.compute_imports(module)?;
-
         Instance::new(&self.store, module, &imports)
     }
 
     fn compute_imports(&self, module: &Module) -> Result<Vec<Extern>> {
         module
             .imports()
-            .map(|import| self.get(&import).ok_or_else(|| self.link_error(&import)))
+            .map(|import| {
+                let import_func = self.get(&import);
+                match import_func {
+                    Some(import) => Ok(import),
+                    None => {
+                        #[cfg(feature = "unstable-allow-missing-imports")]
+                        {
+                            // If missing imports are allowed, insert a trap in place for the missing ones.
+                            // We should remove this once optional imports are added:
+                            // https://github.com/WebAssembly/WASI/blob/main/design/optional-imports.md
+                            let ty = import.ty();
+                            if let Some(func_ty) = ty.func() {
+                                let panic_func =
+                                    Func::new(&self.store, func_ty.clone(), panic_func);
+                                return Ok(Extern::Func(panic_func));
+                            }
+                        }
+
+                        Err(self.link_error(&import))
+                    }
+                }
+            })
             .collect()
     }
 
@@ -762,6 +782,11 @@ impl Linker {
             move |_, _, _| Ok(()),
         ))
     }
+}
+
+#[cfg(feature = "unstable-allow-missing-imports")]
+fn panic_func(_: crate::Caller<'_>, _: &[crate::Val], _: &mut [crate::Val]) -> Result<(), Trap> {
+    Err(Trap::new("Calling non-existing function!"))
 }
 
 /// Modules can be interpreted either as Commands or Reactors.

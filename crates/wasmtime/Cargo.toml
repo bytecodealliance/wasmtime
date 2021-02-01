@@ -63,3 +63,6 @@ cache = ["wasmtime-cache"]
 
 # Enables support for new x64 backend.
 experimental_x64 = ["wasmtime-jit/experimental_x64"]
+
+# Enables support for missing imports. They will trap if the called import is missing.
+unstable-allow-missing-imports = []
