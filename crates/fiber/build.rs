@@ -9,6 +9,8 @@ fn main() {
         build.file("src/arch/windows.c");
     } else if arch == "x86_64" {
         build.file("src/arch/x86_64.S");
+    } else if arch == "x86" {
+        build.file("src/arch/x86.S");
     } else if arch == "aarch64" {
         build.file("src/arch/aarch64.S");
     } else {
