@@ -9,7 +9,7 @@ use system_interface::{
 };
 use wasi_common::{
     file::{Advice, FdFlags, FileType, Filestat, WasiFile},
-    Error,
+    Error, ErrorExt,
 };
 
 pub struct File(cap_std::fs::File);
@@ -41,6 +41,13 @@ impl WasiFile for File {
         Ok(from_sysif_fdflags(fdflags))
     }
     fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
+        if fdflags.intersects(
+            wasi_common::file::FdFlags::DSYNC
+                | wasi_common::file::FdFlags::SYNC
+                | wasi_common::file::FdFlags::RSYNC,
+        ) {
+            return Err(Error::invalid_argument().context("cannot set DSYNC, SYNC, or RSYNC flag"));
+        }
         Ok(self.0.set_fd_flags(to_sysif_fdflags(fdflags))?)
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
