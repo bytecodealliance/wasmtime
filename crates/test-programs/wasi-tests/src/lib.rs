@@ -77,6 +77,14 @@ macro_rules! assert_errno {
             assert_errno!(e, $($rest)+, $i);
         }
     };
+    ($s:expr, macos => $i:expr, $( $rest:tt )+) => {
+        let e = $s;
+        if $crate::TESTCONFIG.errno_expect_macos() {
+            assert_errno!(e, $i);
+        } else {
+            assert_errno!(e, $($rest)+, $i);
+        }
+    };
     ($s:expr, unix => $i:expr, $( $rest:tt )+) => {
         let e = $s;
         if $crate::TESTCONFIG.errno_expect_unix() {

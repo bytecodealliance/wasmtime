@@ -37,9 +37,15 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
                 .env("NO_RENAME_DIR_TO_EMPTY_DIR", "1")?
                 .env("NO_DANGLING_DIRECTORY", "1")?;
         }
-        #[cfg(unix)]
+        #[cfg(all(unix, not(target_os = "macos")))]
         {
             builder = builder.env("ERRNO_MODE_UNIX", "1")?;
+        }
+        #[cfg(target_os = "macos")]
+        {
+            builder = builder
+                .env("ERRNO_MODE_MACOS", "1")?
+                .env("NO_FD_ALLOCATE", "1")?;
         }
 
         // cap-std-sync does not yet support the sync family of fdflags

@@ -9,6 +9,7 @@ pub struct TestConfig {
 
 enum ErrnoMode {
     Unix,
+    MacOS,
     Windows,
     Permissive,
 }
@@ -17,6 +18,8 @@ impl TestConfig {
     pub fn from_env() -> Self {
         let errno_mode = if std::env::var("ERRNO_MODE_UNIX").is_ok() {
             ErrnoMode::Unix
+        } else if std::env::var("ERRNO_MODE_MACOS").is_ok() {
+            ErrnoMode::MacOS
         } else if std::env::var("ERRNO_MODE_WINDOWS").is_ok() {
             ErrnoMode::Windows
         } else {
@@ -38,7 +41,13 @@ impl TestConfig {
     }
     pub fn errno_expect_unix(&self) -> bool {
         match self.errno_mode {
-            ErrnoMode::Unix => true,
+            ErrnoMode::Unix | ErrnoMode::MacOS => true,
+            _ => false,
+        }
+    }
+    pub fn errno_expect_macos(&self) -> bool {
+        match self.errno_mode {
+            ErrnoMode::MacOS => true,
             _ => false,
         }
     }
