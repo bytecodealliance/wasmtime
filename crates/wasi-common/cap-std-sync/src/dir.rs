@@ -274,16 +274,28 @@ mod test {
         dbg!(preopen_dir.symlink_metadata(".")).ok();
         let preopen_dir = Dir::from_cap_std(preopen_dir);
         match wasi_common::WasiDir::open_dir(&preopen_dir, false, ".") {
-            Ok(_) => { dbg!("false success"); }
-            Err(e) => { dbg!(e); }
+            Ok(_) => {
+                dbg!("false success");
+            }
+            Err(e) => {
+                dbg!(e);
+            }
         }
         match wasi_common::WasiDir::open_dir(&preopen_dir, true, ".") {
-            Ok(_) => { dbg!("true success"); }
-            Err(e) => { dbg!(e); }
+            Ok(_) => {
+                dbg!("true success");
+            }
+            Err(e) => {
+                dbg!(e);
+            }
         }
         match wasi_common::WasiDir::get_filestat(&preopen_dir) {
-            Ok(_) => { dbg!("filestat success"); }
-            Err(e) => { dbg!(e); }
+            Ok(_) => {
+                dbg!("filestat success");
+            }
+            Err(e) => {
+                dbg!(e);
+            }
         }
         wasi_common::WasiDir::open_dir(&preopen_dir, false, ".")
             .expect("open the same directory via WasiDir abstraction");
