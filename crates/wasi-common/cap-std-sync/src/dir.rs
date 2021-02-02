@@ -266,8 +266,13 @@ mod test {
             .prefix("cap-std-sync")
             .tempdir()
             .expect("create temporary dir");
+        dbg!(&tempdir);
+        dbg!(tempdir.path());
+        dbg!(std::fs::metadata(tempdir.path())).ok();
         let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(tempdir.path()) }
             .expect("open ambient temporary dir");
+        dbg!(preopen_dir.dir_metadata()).ok();
+        dbg!(preopen_dir.entries()).ok();
         dbg!(preopen_dir.open_dir(".")).ok();
         dbg!(preopen_dir.open_dir_nofollow(".")).ok();
         dbg!(preopen_dir.metadata(".")).ok();
