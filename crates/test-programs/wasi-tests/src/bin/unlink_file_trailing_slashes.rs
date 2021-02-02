@@ -20,6 +20,7 @@ unsafe fn test_unlink_file_trailing_slashes(dir_fd: wasi::Fd) {
         wasi::path_unlink_file(dir_fd, "dir/")
             .expect_err("unlink_file on a directory should fail")
             .raw_error(),
+        macos => wasi::ERRNO_PERM,
         unix => wasi::ERRNO_ISDIR,
         windows => wasi::ERRNO_ACCES
     );
