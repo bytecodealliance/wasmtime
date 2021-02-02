@@ -30,7 +30,7 @@ pub trait WasiFile {
     fn num_ready_bytes(&self) -> Result<u64, Error>; // read op
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum FileType {
     Unknown,
     BlockDevice,
@@ -62,7 +62,7 @@ bitflags! {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Filestat {
     pub device_id: u64,
     pub inode: u64,

@@ -162,6 +162,7 @@ impl TableDirExt for crate::table::Table {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct ReaddirEntity {
     pub next: ReaddirCursor,
     pub inode: u64,

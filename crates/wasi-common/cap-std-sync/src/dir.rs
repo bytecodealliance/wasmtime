@@ -259,6 +259,9 @@ fn convert_systimespec(t: Option<wasi_common::SystemTimeSpec>) -> Option<SystemT
 #[cfg(test)]
 mod test {
     use super::Dir;
+    use std::collections::HashMap;
+    use wasi_common::dir::{ReaddirCursor, ReaddirEntity, WasiDir};
+    use wasi_common::file::{FdFlags, FileType, OFlags};
     #[test]
     fn scratch_dir() {
         let tempdir = tempfile::Builder::new()
@@ -270,5 +273,64 @@ mod test {
         let preopen_dir = Dir::from_cap_std(preopen_dir);
         wasi_common::WasiDir::open_dir(&preopen_dir, false, ".")
             .expect("open the same directory via WasiDir abstraction");
+    }
+
+    #[test]
+    fn readdir() {
+        let tempdir = tempfile::Builder::new()
+            .prefix("cap-std-sync")
+            .tempdir()
+            .expect("create temporary dir");
+        let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(tempdir.path()) }
+            .expect("open ambient temporary dir");
+        let preopen_dir = Dir::from_cap_std(preopen_dir);
+
+        let entities = readdir_into_map(&preopen_dir);
+        assert_eq!(
+            entities.len(),
+            2,
+            "should just be . and .. in empty dir: {:?}",
+            entities
+        );
+        assert!(entities.get(".").is_some());
+        assert!(entities.get("..").is_some());
+
+        preopen_dir
+            .open_file(
+                false,
+                "file1",
+                OFlags::CREATE,
+                true,
+                false,
+                FdFlags::empty(),
+            )
+            .expect("create file1");
+
+        let entities = readdir_into_map(&preopen_dir);
+        assert_eq!(entities.len(), 3, "should be ., .., file1 {:?}", entities);
+        assert_eq!(
+            entities.get(".").expect(". entry").filetype,
+            FileType::Directory
+        );
+        assert_eq!(
+            entities.get("..").expect(".. entry").filetype,
+            FileType::Directory
+        );
+        assert_eq!(
+            entities.get("file1").expect("file1 entry").filetype,
+            FileType::RegularFile
+        );
+    }
+
+    fn readdir_into_map(dir: &dyn WasiDir) -> HashMap<String, ReaddirEntity> {
+        let mut out = HashMap::new();
+        for readdir_result in dir
+            .readdir(ReaddirCursor::from(0))
+            .expect("readdir succeeds")
+        {
+            let (entity, name) = readdir_result.expect("readdir entry is valid");
+            out.insert(name, entity);
+        }
+        out
     }
 }
