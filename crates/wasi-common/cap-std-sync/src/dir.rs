@@ -113,8 +113,6 @@ impl WasiDir for Dir {
                 Ok((FileType::Directory, dir_meta.ino(), namelen, name))
             },
             {
-                // XXX if parent dir is mounted it *might* be possible to give its inode, but we
-                // don't know that in this context.
                 let name = "..".to_owned();
                 let namelen = name.as_bytes().len().try_into().expect("2 wont overflow");
                 Ok((FileType::Directory, dir_meta.ino(), namelen, name))
