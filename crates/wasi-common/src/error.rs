@@ -1,9 +1,33 @@
+//! `wasi_common::Error` is now `anyhow::Error`.
+//!
+//! Snapshots (right now only `wasi_common::snapshots::preview_1`) contains
+//! all of the logic for transforming an `Error` into the snapshot's own
+//! `Errno`. They may do so by downcasting the error into any of:
+//! * `std::io::Error` - these are thrown by `std`, `cap_std`, etc for most of
+//! the operations WASI is concerned with.
+//! * `wasi_common::ErrorKind` - these are a subset of the Errnos, and are
+//! constructed directly by wasi-common or an impl rather than coming from the
+//! OS or some library which doesn't know about WASI.
+//! * `wiggle::GuestError`
+//! * `std::num::TryFromIntError`
+//! * `std::str::Utf8Error`
+//! and then applying specialized logic to translate each of those into
+//! `Errno`s.
+//!
+//! The `wasi_common::ErrorExt` trait provides human-friendly constructors for
+//! the `wasi_common::ErrorKind` variants .
+//!
+//! If you throw an error that does not downcast to one of those, it will turn
+//! into a `wiggle::Trap` and terminate execution.
+//!
+//! The real value of using `anyhow::Error` here is being able to use
+//! `anyhow::Result::context` to aid in debugging of errors.
+
 pub use anyhow::Error;
 
 /// Internal error type for the `wasi-common` crate.
 /// Contains variants of the WASI `$errno` type are added according to what is actually used internally by
 /// the crate. Not all values are represented presently.
-
 #[derive(Debug, thiserror::Error)]
 pub enum ErrorKind {
     /// Errno::Noent: No such file or directory
