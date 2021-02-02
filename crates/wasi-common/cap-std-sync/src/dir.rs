@@ -336,18 +336,24 @@ mod test {
     }
 
     #[test]
-    fn rename_dir_to_existing_file() {
-        use std::path::Path;
-        fn cleanup(p: &Path) {
-            if p.exists() {
-                if p.is_dir() {
-                    std::fs::remove_dir_all(p).expect("delete dir");
-                } else {
-                    std::fs::remove_file(p).expect("delete file");
-                }
-            }
-        }
+    fn std_rename_dir_to_existing_file() {
+        let tempdir = tempfile::Builder::new()
+            .prefix("cap-std-sync")
+            .tempdir()
+            .expect("create temporary dir");
+        let target_path = tempdir.path().join("target");
+        let source_path = tempdir.path().join("source");
 
+        let file = std::fs::File::create(&target_path).expect("create target file");
+        drop(file);
+        std::fs::create_dir(&source_path).expect("create source dir");
+
+        std::fs::rename(&source_path, &target_path)
+            .expect_err("it should  be impossible to rename a directory to an existing file");
+    }
+
+    #[test]
+    fn rename_dir_to_existing_file() {
         let tempdir = tempfile::Builder::new()
             .prefix("cap-std-sync")
             .tempdir()
@@ -355,21 +361,8 @@ mod test {
 
         let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(tempdir.path()) }
             .expect("open ambient temporary dir");
-        /* DEBUG - non-temporary directory
-        let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir("c:\\") }
-            .expect("open ambient temporary dir");
-        */
         let preopen_dir = Dir::from_cap_std(preopen_dir);
         let wasi_dir: &dyn WasiDir = &preopen_dir;
-
-        let target_path = tempdir.path().join("target");
-        /* DEBUG - non-temporary directory
-        let target_path = Path::new("c:\\target");
-        */
-        // Clean up in case last test run
-        cleanup(&target_path);
-        let source_path = tempdir.path().join("source");
-        cleanup(&source_path);
 
         let file = wasi_dir
             .open_file(
