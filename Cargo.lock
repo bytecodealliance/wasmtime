@@ -3216,6 +3216,7 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "tempfile",
+ "wasi-cap-std-sync",
  "wasmparser",
  "wasmtime-cache",
  "wasmtime-environ",
