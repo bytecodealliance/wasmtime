@@ -10,9 +10,12 @@ pub mod snapshots;
 mod string_array;
 pub mod table;
 
-pub use clocks::SystemTimeSpec;
+pub use cap_rand::RngCore;
+pub use clocks::{SystemTimeSpec, WasiClocks, WasiMonotonicClock, WasiSystemClock};
 pub use ctx::{WasiCtx, WasiCtxBuilder};
-pub use dir::{DirCaps, ReaddirCursor, ReaddirEntity, WasiDir};
+pub use dir::WasiDir;
 pub use error::{Error, ErrorExt, ErrorKind};
-pub use file::{FdFlags, FileCaps, Filestat, OFlags, WasiFile};
+pub use file::WasiFile;
+pub use sched::{Poll, WasiSched};
 pub use string_array::StringArrayError;
+pub use table::Table;
