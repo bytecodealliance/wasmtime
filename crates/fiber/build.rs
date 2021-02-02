@@ -1,20 +1,18 @@
 use std::env;
+use std::fs;
 
 fn main() {
     let mut build = cc::Build::new();
     let arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
     let family = env::var("CARGO_CFG_TARGET_FAMILY").unwrap();
     let os = env::var("CARGO_CFG_TARGET_OS").unwrap();
-    if family == "windows" {
-        build.file("src/arch/windows.c");
-    } else if arch == "x86_64" {
-        build.file("src/arch/x86_64.S");
-    } else if arch == "x86" {
-        build.file("src/arch/x86.S");
-    } else if arch == "arm" {
-        build.file("src/arch/arm.S");
-    } else if arch == "aarch64" {
-        build.file("src/arch/aarch64.S");
+
+    let family_file = format!("src/arch/{}.c", family);
+    let arch_file = format!("src/arch/{}.S", arch);
+    if fs::metadata(&family_file).is_ok() {
+        build.file(&family_file);
+    } else if fs::metadata(&arch_file).is_ok() {
+        build.file(&arch_file);
     } else {
         panic!(
             "wasmtime doesn't support fibers on platform: {}",
