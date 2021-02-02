@@ -275,8 +275,21 @@ mod test {
             .expect("open the same directory via WasiDir abstraction");
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn readdir() {
+        fn readdir_into_map(dir: &dyn WasiDir) -> HashMap<String, ReaddirEntity> {
+            let mut out = HashMap::new();
+            for readdir_result in dir
+                .readdir(ReaddirCursor::from(0))
+                .expect("readdir succeeds")
+            {
+                let (entity, name) = readdir_result.expect("readdir entry is valid");
+                out.insert(name, entity);
+            }
+            out
+        }
+
         let tempdir = tempfile::Builder::new()
             .prefix("cap-std-sync")
             .tempdir()
@@ -322,15 +335,61 @@ mod test {
         );
     }
 
-    fn readdir_into_map(dir: &dyn WasiDir) -> HashMap<String, ReaddirEntity> {
-        let mut out = HashMap::new();
-        for readdir_result in dir
-            .readdir(ReaddirCursor::from(0))
-            .expect("readdir succeeds")
-        {
-            let (entity, name) = readdir_result.expect("readdir entry is valid");
-            out.insert(name, entity);
+    #[test]
+    fn rename_dir_to_existing_file() {
+        use std::path::Path;
+        fn cleanup(p: &Path) {
+            if p.exists() {
+                if p.is_dir() {
+                    std::fs::remove_dir_all(p).expect("delete dir");
+                } else {
+                    std::fs::remove_file(p).expect("delete file");
+                }
+            }
         }
-        out
+
+        let tempdir = tempfile::Builder::new()
+            .prefix("cap-std-sync")
+            .tempdir()
+            .expect("create temporary dir");
+
+        let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(tempdir.path()) }
+            .expect("open ambient temporary dir");
+        /* DEBUG - non-temporary directory
+        let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir("c:\\") }
+            .expect("open ambient temporary dir");
+        */
+        let preopen_dir = Dir::from_cap_std(preopen_dir);
+        let wasi_dir: &dyn WasiDir = &preopen_dir;
+
+        let target_path = tempdir.path().join("target");
+        /* DEBUG - non-temporary directory
+        let target_path = Path::new("c:\\target");
+        */
+        // Clean up in case last test run
+        cleanup(&target_path);
+        let source_path = tempdir.path().join("source");
+        cleanup(&source_path);
+
+        let file = wasi_dir
+            .open_file(
+                false,
+                "target",
+                OFlags::CREATE,
+                true,
+                false,
+                FdFlags::empty(),
+            )
+            .expect("create target");
+        // Close the file:
+        drop(file);
+
+        wasi_dir
+            .create_dir("source")
+            .expect("create source directory");
+
+        wasi_dir
+            .rename("source", wasi_dir, "target")
+            .expect_err("it should be impossible to rename a directory to an existing file");
     }
 }
