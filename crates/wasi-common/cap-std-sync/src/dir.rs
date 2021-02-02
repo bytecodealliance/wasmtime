@@ -269,6 +269,7 @@ mod test {
         dbg!(&tempdir);
         dbg!(tempdir.path());
         dbg!(std::fs::metadata(tempdir.path())).ok();
+        dbg!(std::fs::read_dir(tempdir.path())).ok();
         let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(tempdir.path()) }
             .expect("open ambient temporary dir");
         dbg!(preopen_dir.dir_metadata()).ok();

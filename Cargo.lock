@@ -276,8 +276,18 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0341ab6f42e202d53cac0823df52f1e3bc07f5f0407f03439a74de4902442c24"
 dependencies = [
- "cap-primitives",
- "cap-std",
+ "cap-primitives 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cap-std 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unsafe-io",
+]
+
+[[package]]
+name = "cap-fs-ext"
+version = "0.12.0"
+source = "git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging#323c129007cf0b9d6bb750a15dd42dd78291b373"
+dependencies = [
+ "cap-primitives 0.12.0 (git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging)",
+ "cap-std 0.12.0 (git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging)",
  "unsafe-io",
 ]
 
@@ -301,10 +311,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap-primitives"
+version = "0.12.0"
+source = "git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging#323c129007cf0b9d6bb750a15dd42dd78291b373"
+dependencies = [
+ "errno",
+ "fs-set-times",
+ "ipnet",
+ "libc",
+ "maybe-owned",
+ "once_cell",
+ "posish",
+ "unsafe-io",
+ "winapi",
+ "winapi-util",
+ "winx",
+]
+
+[[package]]
 name = "cap-rand"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "703eebf88df08a21d6f689e0781babb9b03e446b65d8da9d7663306bf8d7499a"
+source = "git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging#323c129007cf0b9d6bb750a15dd42dd78291b373"
 dependencies = [
  "rand 0.8.3",
 ]
@@ -315,17 +342,25 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "710da2154f2853ac49014a72a11f73cea87420d304fa0e5324266d350cfaad00"
 dependencies = [
- "cap-primitives",
+ "cap-primitives 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unsafe-io",
+]
+
+[[package]]
+name = "cap-std"
+version = "0.12.0"
+source = "git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging#323c129007cf0b9d6bb750a15dd42dd78291b373"
+dependencies = [
+ "cap-primitives 0.12.0 (git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging)",
  "unsafe-io",
 ]
 
 [[package]]
 name = "cap-time-ext"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a366f04445d4d818ea2eb60a09ca5c81e35ac04fd612f82488171604e22598ee"
+source = "git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging#323c129007cf0b9d6bb750a15dd42dd78291b373"
 dependencies = [
- "cap-primitives",
+ "cap-primitives 0.12.0 (git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging)",
  "once_cell",
  "posish",
  "winx",
@@ -2734,8 +2769,8 @@ checksum = "ae234a0c346c613b2bae30491bf786d9edbf005c63fa267424da0d55dfdd2cc7"
 dependencies = [
  "atty",
  "bitflags",
- "cap-fs-ext",
- "cap-std",
+ "cap-fs-ext 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cap-std 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "posish",
  "rustc_version",
  "unsafe-io",
@@ -2797,7 +2832,7 @@ name = "test-programs"
 version = "0.19.0"
 dependencies = [
  "anyhow",
- "cap-std",
+ "cap-std 0.12.0 (git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging)",
  "cfg-if 1.0.0",
  "os_pipe",
  "pretty_env_logger",
@@ -3068,9 +3103,9 @@ version = "0.22.0"
 dependencies = [
  "anyhow",
  "bitflags",
- "cap-fs-ext",
+ "cap-fs-ext 0.12.0 (git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging)",
  "cap-rand",
- "cap-std",
+ "cap-std 0.12.0 (git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging)",
  "cap-time-ext",
  "fs-set-times",
  "lazy_static",
@@ -3090,7 +3125,7 @@ dependencies = [
  "anyhow",
  "bitflags",
  "cap-rand",
- "cap-std",
+ "cap-std 0.12.0 (git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging)",
  "libc",
  "thiserror",
  "tracing",
@@ -3132,7 +3167,7 @@ name = "wasi-virtfs"
 version = "0.22.0"
 dependencies = [
  "anyhow",
- "cap-std",
+ "cap-std 0.12.0 (git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging)",
  "tracing",
  "wasi-common",
 ]
@@ -3232,7 +3267,7 @@ name = "wasmtime-bench-api"
 version = "0.19.0"
 dependencies = [
  "anyhow",
- "cap-std",
+ "cap-std 0.12.0 (git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging)",
  "shuffling-allocator",
  "wasi-cap-std-sync",
  "wasmtime",
@@ -3245,7 +3280,7 @@ name = "wasmtime-c-api"
 version = "0.19.0"
 dependencies = [
  "anyhow",
- "cap-std",
+ "cap-std 0.12.0 (git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging)",
  "env_logger 0.8.2",
  "once_cell",
  "wasi-cap-std-sync",
@@ -3293,7 +3328,7 @@ name = "wasmtime-cli"
 version = "0.22.0"
 dependencies = [
  "anyhow",
- "cap-std",
+ "cap-std 0.12.0 (git+https://github.com/bytecodealliance/cap-std?branch=sunfishcode/debugging)",
  "env_logger 0.8.2",
  "file-per-thread-logger",
  "filecheck",
