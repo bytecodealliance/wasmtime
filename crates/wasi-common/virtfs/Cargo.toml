@@ -15,5 +15,5 @@ publish = false
 [dependencies]
 wasi-common = { path = "../", version = "0.22.0" }
 anyhow = "1.0"
-cap-std = "0.12"
+cap-std = { git = "https://github.com/bytecodealliance/cap-std", branch = "sunfishcode/debugging" }
 tracing = "0.1.19"

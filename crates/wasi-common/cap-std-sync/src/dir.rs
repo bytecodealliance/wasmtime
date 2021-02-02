@@ -295,8 +295,8 @@ mod test {
             }
         }
         match wasi_common::WasiDir::get_filestat(&preopen_dir) {
-            Ok(_) => {
-                dbg!("filestat success");
+            Ok(filestat) => {
+                dbg!(filestat);
             }
             Err(e) => {
                 dbg!(e);
