@@ -1,3 +1,12 @@
+//! `wasmtime-wasi` now supports using multiple snapshots to interface to the
+//! same `WasiCtx`!
+//!
+//! `wasmtime_wasi::Wasi::new(&Store, WasiCtx)` is a struct which owns your
+//! `WasiCtx` and provides linkage to every available snapshot.
+//!
+//! Individual snapshots are available through
+//! `wasmtime_wasi::snapshots::preview_{0, 1}::Wasi::new(&Store, Rc<RefCell<WasiCtx>>)`.
+
 use std::cell::RefCell;
 use std::rc::Rc;
 pub use wasi_common::{Error, WasiCtx, WasiCtxBuilder, WasiDir, WasiFile};
