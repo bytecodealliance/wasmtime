@@ -5,7 +5,6 @@ use std::convert::TryInto;
 use std::io;
 use system_interface::{
     fs::{FileIoExt, GetSetFdFlags},
-    io::ReadReady,
 };
 use wasi_common::{
     file::{Advice, FdFlags, FileType, Filestat, WasiFile},
@@ -108,7 +107,7 @@ impl WasiFile for File {
         Ok(n.try_into()?)
     }
     fn num_ready_bytes(&self) -> Result<u64, Error> {
-        Ok(self.0.num_ready_bytes()?)
+        Ok(0)
     }
 }
 
