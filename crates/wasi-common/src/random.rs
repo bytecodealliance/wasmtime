@@ -15,10 +15,16 @@ impl Deterministic {
 
 impl RngCore for Deterministic {
     fn next_u32(&mut self) -> u32 {
-        todo!()
+        let b0 = self.cycle.next().expect("infinite sequence");
+        let b1 = self.cycle.next().expect("infinite sequence");
+        let b2 = self.cycle.next().expect("infinite sequence");
+        let b3 = self.cycle.next().expect("infinite sequence");
+        ((b0 as u32) << 24) + ((b1 as u32) << 16) + ((b2 as u32) << 8) + (b3 as u32)
     }
     fn next_u64(&mut self) -> u64 {
-        todo!()
+        let w0 = self.next_u32();
+        let w1 = self.next_u32();
+        ((w0 as u64) << 32) + (w1 as u64)
     }
     fn fill_bytes(&mut self, buf: &mut [u8]) {
         for b in buf.iter_mut() {
