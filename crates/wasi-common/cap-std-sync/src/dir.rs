@@ -261,13 +261,30 @@ mod test {
     use super::Dir;
     #[test]
     fn scratch_dir() {
+        use cap_fs_ext::DirExt;
         let tempdir = tempfile::Builder::new()
             .prefix("cap-std-sync")
             .tempdir()
             .expect("create temporary dir");
         let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(tempdir.path()) }
             .expect("open ambient temporary dir");
+        dbg!(preopen_dir.open_dir(".")).ok();
+        dbg!(preopen_dir.open_dir_nofollow(".")).ok();
+        dbg!(preopen_dir.metadata(".")).ok();
+        dbg!(preopen_dir.symlink_metadata(".")).ok();
         let preopen_dir = Dir::from_cap_std(preopen_dir);
+        match wasi_common::WasiDir::open_dir(&preopen_dir, false, ".") {
+            Ok(_) => { dbg!("false success"); }
+            Err(e) => { dbg!(e); }
+        }
+        match wasi_common::WasiDir::open_dir(&preopen_dir, true, ".") {
+            Ok(_) => { dbg!("true success"); }
+            Err(e) => { dbg!(e); }
+        }
+        match wasi_common::WasiDir::get_filestat(&preopen_dir) {
+            Ok(_) => { dbg!("filestat success"); }
+            Err(e) => { dbg!(e); }
+        }
         wasi_common::WasiDir::open_dir(&preopen_dir, false, ".")
             .expect("open the same directory via WasiDir abstraction");
     }
