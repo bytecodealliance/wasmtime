@@ -30,6 +30,10 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
     wasi::fd_close(fd).expect("closing a file");
     wasi::path_remove_directory(dir_fd, "target").expect("removing a directory");
 
+    // Yes, renaming a dir to an empty dir is a property guaranteed by rename(2)
+    // and its fairly important that it is atomic.
+    // But, we haven't found a way to emulate it on windows. So, sometimes this
+    // behavior is just hosed. Sorry.
     if TESTCONFIG.support_rename_dir_to_empty_dir() {
         // Now, try renaming renaming a dir to existing empty dir
         wasi::path_create_directory(dir_fd, "source").expect("creating a directory");
@@ -55,6 +59,13 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
 
         wasi::fd_close(fd).expect("closing a file");
         wasi::path_remove_directory(dir_fd, "target").expect("removing a directory");
+    } else {
+        wasi::path_create_directory(dir_fd, "source").expect("creating a directory");
+        wasi::path_create_directory(dir_fd, "target").expect("creating a directory");
+        wasi::path_rename(dir_fd, "source", dir_fd, "target")
+            .expect_err("windows does not support renaming a directory to an empty directory");
+        wasi::path_remove_directory(dir_fd, "target").expect("removing a directory");
+        wasi::path_remove_directory(dir_fd, "source").expect("removing a directory");
     }
 
     // Now, try renaming a dir to existing non-empty dir
@@ -70,17 +81,27 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
         unix => wasi::ERRNO_NOTEMPTY
     );
 
-    // Try renaming dir to a file
-    assert_errno!(
+    // This is technically a different property, but the root of these divergent behaviors is in
+    // the semantics that windows gives us around renaming directories. So, it lives under the same
+    // flag.
+    if TESTCONFIG.support_rename_dir_to_empty_dir() {
+        // Try renaming dir to a file
+        assert_errno!(
+            wasi::path_rename(dir_fd, "source", dir_fd, "target/file")
+                .expect_err("renaming a directory to a file")
+                .raw_error(),
+            wasi::ERRNO_NOTDIR
+        );
+        wasi::path_unlink_file(dir_fd, "target/file").expect("removing a file");
+        wasi::path_remove_directory(dir_fd, "source").expect("removing a directory");
+    } else {
+        // Windows will let you erase a file by renaming a directory to it.
+        // WASI users can't depend on this error getting caught to prevent data loss.
         wasi::path_rename(dir_fd, "source", dir_fd, "target/file")
-            .expect_err("renaming a directory to a file")
-            .raw_error(),
-        wasi::ERRNO_NOTDIR
-    );
-
-    wasi::path_unlink_file(dir_fd, "target/file").expect("removing a file");
+            .expect("windows happens to support renaming a directory to a file");
+        wasi::path_remove_directory(dir_fd, "target/file").expect("removing a file");
+    }
     wasi::path_remove_directory(dir_fd, "target").expect("removing a directory");
-    wasi::path_remove_directory(dir_fd, "source").expect("removing a directory");
 
     // Now, try renaming a file to a nonexistent path
     create_file(dir_fd, "source");
@@ -139,7 +160,8 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
         wasi::path_rename(dir_fd, "source", dir_fd, "target")
             .expect_err("renaming a file to existing directory should fail")
             .raw_error(),
-        wasi::ERRNO_ISDIR
+        windows => wasi::ERRNO_ACCES,
+        unix => wasi::ERRNO_ISDIR
     );
 
     wasi::path_remove_directory(dir_fd, "target").expect("removing a directory");
