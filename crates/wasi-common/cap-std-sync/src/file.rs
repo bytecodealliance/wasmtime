@@ -3,9 +3,7 @@ use fs_set_times::{SetTimes, SystemTimeSpec};
 use std::any::Any;
 use std::convert::TryInto;
 use std::io;
-use system_interface::{
-    fs::{FileIoExt, GetSetFdFlags},
-};
+use system_interface::fs::{FileIoExt, GetSetFdFlags};
 use wasi_common::{
     file::{Advice, FdFlags, FileType, Filestat, WasiFile},
     Error, ErrorExt,
