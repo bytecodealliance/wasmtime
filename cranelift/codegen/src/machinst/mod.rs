@@ -62,7 +62,7 @@
 
 use crate::binemit::{CodeInfo, CodeOffset, StackMap};
 use crate::ir::condcodes::IntCC;
-use crate::ir::{Function, SourceLoc, Type, ValueLabel};
+use crate::ir::{Function, SourceLoc, StackSlot, Type, ValueLabel};
 use crate::isa::unwind::input as unwind_input;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
@@ -71,6 +71,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::ops::Range;
+use cranelift_entity::PrimaryMap;
 use regalloc::RegUsageCollector;
 use regalloc::{
     RealReg, RealRegUniverse, Reg, RegClass, RegUsageMapper, SpillSlot, VirtualReg, Writable,
@@ -343,6 +344,8 @@ pub struct MachCompileResult {
     pub unwind_info: Option<unwind_input::UnwindInfo<Reg>>,
     /// Debug info: value labels to registers/stackslots at code offsets.
     pub value_labels_ranges: Option<ValueLabelsRanges>,
+    /// Debug info: stackslots to stack pointer offsets.
+    pub stackslot_offsets: PrimaryMap<StackSlot, u32>,
 }
 
 impl MachCompileResult {

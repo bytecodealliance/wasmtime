@@ -61,6 +61,7 @@ impl MachBackend for Arm32Backend {
         let vcode = self.compile_vcode(func, flags.clone())?;
         let buffer = vcode.emit();
         let frame_size = vcode.frame_size();
+        let stackslot_offsets = vcode.stackslot_offsets().clone();
 
         let disasm = if want_disasm {
             Some(vcode.show_rru(Some(&create_reg_universe())))
@@ -76,6 +77,7 @@ impl MachBackend for Arm32Backend {
             disasm,
             unwind_info: None,
             value_labels_ranges: None,
+            stackslot_offsets,
         })
     }
 

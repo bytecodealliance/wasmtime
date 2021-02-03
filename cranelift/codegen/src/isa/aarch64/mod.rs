@@ -66,6 +66,7 @@ impl MachBackend for AArch64Backend {
         let buffer = vcode.emit();
         let frame_size = vcode.frame_size();
         let unwind_info = vcode.unwind_info()?;
+        let stackslot_offsets = vcode.stackslot_offsets().clone();
 
         let disasm = if want_disasm {
             Some(vcode.show_rru(Some(&create_reg_universe(flags))))
@@ -81,6 +82,7 @@ impl MachBackend for AArch64Backend {
             disasm,
             unwind_info,
             value_labels_ranges: None,
+            stackslot_offsets,
         })
     }
 
