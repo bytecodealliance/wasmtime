@@ -1,7 +1,7 @@
 use wasm_encoder::{
-    CodeSection, ElementSection, Export, ExportSection, Function, FunctionSection,
-    GlobalSection, ImportSection, InstanceSection, Instruction, Limits, MemorySection, Module,
-    ModuleSection, TableSection, TypeSection,
+    CodeSection, ElementSection, Export, ExportSection, Function, FunctionSection, GlobalSection,
+    ImportSection, InstanceSection, Instruction, Limits, MemorySection, Module, ModuleSection,
+    TableSection, TypeSection,
 };
 use wasmtime::*;
 
@@ -72,18 +72,21 @@ impl WencoderGenerator {
         module.finish()
     }
     pub fn import(&mut self, ty: &ImportType<'_>) {
-        let num_types = self.num_types; 
+        let num_types = self.num_types;
 
         let item_ty = ty.ty();
         self.item_import(&item_ty);
 
-        self.import_section
-            .import(ty.module(), ty.name(), extern_to_entity(&ty.ty(),num_types));
+        self.import_section.import(
+            ty.module(),
+            ty.name(),
+            extern_to_entity(&ty.ty(), num_types),
+        );
     }
     pub fn export(&mut self, ty: &ExportType<'_>) {
         let item_ty = ty.ty();
         let num_whatever = self.item_export(&item_ty);
-        
+
         self.export_section
             .export(&ty.name(), extern_to_export(&item_ty, num_whatever));
     }
@@ -91,7 +94,7 @@ impl WencoderGenerator {
         match ty {
             ExternType::Memory(mem) => {
                 self.memory_section_add_item(mem);
-            },
+            }
             ExternType::Table(table) => {
                 self.table_section_add_item(table);
             }
@@ -121,15 +124,9 @@ impl WencoderGenerator {
     }
     fn item_export(&mut self, ty: &ExternType) -> u32 {
         match ty {
-            ExternType::Memory(mem) => {
-                self.memory_section_add_item(mem) -1
-            }
-            ExternType::Table(table) => {
-                self.table_section_add_item(table) -1
-            }
-            ExternType::Global(global) => {
-                self.global_section_add_item(global) -1
-            }
+            ExternType::Memory(mem) => self.memory_section_add_item(mem) - 1,
+            ExternType::Table(table) => self.table_section_add_item(table) - 1,
+            ExternType::Global(global) => self.global_section_add_item(global) - 1,
             ExternType::Func(v) => {
                 self.type_section_add_item_func(v);
                 self.func_section_add_item(v, self.num_types - 1) - 1
@@ -143,11 +140,11 @@ impl WencoderGenerator {
                 }
 
                 let module = &mut Module::new();
-                self.module_init(module,&v);
+                self.module_init(module, &v);
                 self.module_section.module(module);
                 self.num_modules += 1;
                 self.modules_for_instantiate.push(self.num_modules - 1);
-                self.num_modules -1
+                self.num_modules - 1
             }
             ExternType::Instance(v) => {
                 self.type_section_add_item_instance(&v);
@@ -158,10 +155,11 @@ impl WencoderGenerator {
                         v.exports()
                             .into_iter()
                             .enumerate()
-                            .map(|(i,it)| (it.name(),extern_to_export(&it.ty(),i as u32))));
-                    self.num_instances +=1;
+                            .map(|(i, it)| (it.name(), extern_to_export(&it.ty(), i as u32))),
+                    );
+                    self.num_instances += 1;
                 }
-                self.num_instances -1
+                self.num_instances - 1
             }
         }
     }
@@ -172,7 +170,7 @@ impl WencoderGenerator {
                 max: mem.limits().max(),
             },
         });
-        self.num_memories +=1;
+        self.num_memories += 1;
         self.num_memories
     }
     fn table_section_add_item(&mut self, table: &TableType) -> u32 {
@@ -183,7 +181,7 @@ impl WencoderGenerator {
                 max: table.limits().max(),
             },
         });
-        self.num_tables +=1;
+        self.num_tables += 1;
         self.num_tables
     }
     fn global_section_add_item(&mut self, global: &GlobalType) -> u32 {
@@ -194,38 +192,49 @@ impl WencoderGenerator {
             },
             value_to_instruction(&global.content()),
         );
-        self.num_globals +=1;
+        self.num_globals += 1;
         self.num_globals
     }
     fn type_section_add_item_func(&mut self, item_type: &FuncType) -> u32 {
         self.type_section.function(
             item_type.params().into_iter().map(|it| value_to_value(&it)),
-            item_type.results().into_iter().map(|it| value_to_value(&it)),
+            item_type
+                .results()
+                .into_iter()
+                .map(|it| value_to_value(&it)),
         );
-        self.num_types +=1;
+        self.num_types += 1;
         self.num_types
     }
     fn type_section_add_item_module(&mut self, item_type: &ModuleType) -> u32 {
         self.type_section.module(
-            item_type.imports().into_iter().enumerate().map(|(i, it)| (it.module(), it.name(), extern_to_entity(&it.ty(),i as u32))),
-            item_type.exports().into_iter().enumerate().map(|(i,it)| (it.name(), extern_to_entity(&it.ty(),i as u32))), 
+            item_type
+                .imports()
+                .into_iter()
+                .enumerate()
+                .map(|(i, it)| (it.module(), it.name(), extern_to_entity(&it.ty(), i as u32))),
+            item_type
+                .exports()
+                .into_iter()
+                .enumerate()
+                .map(|(i, it)| (it.name(), extern_to_entity(&it.ty(), i as u32))),
         );
         self.num_types += 1;
         self.num_types
     }
     fn type_section_add_item_instance(&mut self, item_type: &InstanceType) -> u32 {
         self.type_section.instance(
-            item_type.exports()
+            item_type
+                .exports()
                 .into_iter()
                 .enumerate()
-                .map(|(i,t)| (t.name(), extern_to_entity(&t.ty(), i as u32)))  
+                .map(|(i, t)| (t.name(), extern_to_entity(&t.ty(), i as u32))),
         );
-        self.num_types +=1;
+        self.num_types += 1;
         self.num_types
     }
     fn func_section_add_item(&mut self, item_type: &FuncType, type_index: u32) -> u32 {
-        self.function_section
-            .function(type_index);
+        self.function_section.function(type_index);
         self.num_funcs += 1;
 
         let locals = vec![];
@@ -238,20 +247,20 @@ impl WencoderGenerator {
         self.num_funcs
     }
     fn module_init<'a>(&mut self, module: &'a mut Module, item_type: &ModuleType) -> &'a Module {
-
         let mut import_section = ImportSection::new();
 
-        for (i,imp) in item_type.imports().into_iter().enumerate() {
-            import_section.import(imp.module(),
-                                  imp.name(),
-                                  extern_to_entity(&imp.ty(), i as u32));
+        for (i, imp) in item_type.imports().into_iter().enumerate() {
+            import_section.import(
+                imp.module(),
+                imp.name(),
+                extern_to_entity(&imp.ty(), i as u32),
+            );
         }
-        module.section(&import_section); 
+        module.section(&import_section);
 
         let mut export_section = ExportSection::new();
-        for (i,exp) in item_type.exports().into_iter().enumerate() {
-            export_section
-                .export(&exp.name(), extern_to_export(&exp.ty(), i as u32));
+        for (i, exp) in item_type.exports().into_iter().enumerate() {
+            export_section.export(&exp.name(), extern_to_export(&exp.ty(), i as u32));
         }
         module.section(&export_section);
         module
@@ -295,7 +304,7 @@ fn extern_to_entity(val: &wasmtime::ExternType, num_types: u32) -> wasm_encoder:
             })
         }
         wasmtime::ExternType::Instance(_) => wasm_encoder::EntityType::Instance(num_types),
-        wasmtime::ExternType::Module(_) =>  wasm_encoder::EntityType::Module(num_types)   
+        wasmtime::ExternType::Module(_) => wasm_encoder::EntityType::Module(num_types),
     }
 }
 fn value_to_value(from: &ValType) -> wasm_encoder::ValType {
@@ -309,8 +318,7 @@ fn value_to_value(from: &ValType) -> wasm_encoder::ValType {
         ValType::FuncRef => wasm_encoder::ValType::FuncRef,
     }
 }
-fn extern_to_export(val: &wasmtime::ExternType, index: u32) -> wasm_encoder::Export
-{
+fn extern_to_export(val: &wasmtime::ExternType, index: u32) -> wasm_encoder::Export {
     match val {
         wasmtime::ExternType::Func(_) => Export::Function(index),
         wasmtime::ExternType::Global(_) => Export::Global(index),
@@ -320,4 +328,3 @@ fn extern_to_export(val: &wasmtime::ExternType, index: u32) -> wasm_encoder::Exp
         wasmtime::ExternType::Module(_) => Export::Module(index),
     }
 }
-
