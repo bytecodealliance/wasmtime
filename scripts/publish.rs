@@ -323,7 +323,7 @@ fn verify(crates: &[Crate]) {
             cmd.arg("--no-verify");
         }
         let status = cmd.status().unwrap();
-        assert!(status.success());
+        assert!(status.success(), "failed to verify {:?}", &krate.manifest);
         let tar = Command::new("tar")
             .arg("xf")
             .arg(format!(
