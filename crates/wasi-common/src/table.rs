@@ -31,14 +31,14 @@ impl Table {
 
     /// Insert a resource at the next available index.
     pub fn push(&mut self, a: Box<dyn Any>) -> Result<u32, Error> {
+        // NOTE: The performance of this new key calculation could be very bad once keys wrap
+        // around.
+        if self.map.len() == u32::MAX as usize {
+            return Err(Error::trap("table has no free keys"));
+        }
         loop {
             let key = self.next_key;
-            // XXX this is not correct. The table may still have empty entries, but our
-            // linear search strategy is quite bad
-            self.next_key = self
-                .next_key
-                .checked_add(1)
-                .ok_or_else(|| Error::trap("out of keys in table"))?;
+            self.next_key = self.next_key.wrapping_add(1);
             if self.map.contains_key(&key) {
                 continue;
             }
