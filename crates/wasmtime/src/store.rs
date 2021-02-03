@@ -299,6 +299,7 @@ impl Store {
         Some(Self { inner })
     }
 
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))] // not used on all platforms
     pub(crate) fn set_signal_handler(&self, handler: Option<Box<SignalHandler<'static>>>) {
         *self.inner.signal_handler.borrow_mut() = handler;
     }
