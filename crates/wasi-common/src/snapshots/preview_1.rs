@@ -173,6 +173,7 @@ impl TryFrom<std::io::Error> for types::Errno {
                 winerror::ERROR_DIRECTORY => Some(types::Errno::Notdir),
                 winerror::ERROR_ALREADY_EXISTS => Some(types::Errno::Exist),
                 winerror::ERROR_STOPPED_ON_SYMLINK => Some(types::Errno::Loop),
+                winerror::ERROR_DIRECTORY_NOT_SUPPORTED => Some(types::Errno::Isdir),
                 _ => None,
             }
         }

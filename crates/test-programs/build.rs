@@ -199,8 +199,9 @@ mod wasi_tests {
             "fd_flags_set",
             "path_filestat",
             "symlink_filestat",
-            // waiting on DirExt::delete_file_or_symlink
-            "symlink_create",
+            // upstream fixes pending:
+            "symlink_create",  // cap-std #149
+            "nofollow_errors", // cap-std #149 and #150
             // Trailing slash related bugs
             "interesting_paths",
             "path_rename_file_trailing_slashes",
