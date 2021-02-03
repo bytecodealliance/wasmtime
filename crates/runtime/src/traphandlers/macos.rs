@@ -39,7 +39,6 @@ use mach::mach_port::*;
 use mach::mach_types::*;
 use mach::message::*;
 use mach::port::*;
-use mach::structs::*;
 use mach::thread_act::*;
 use mach::thread_status::*;
 use mach::traps::*;
@@ -253,6 +252,8 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // * `thread_state_count` - the size to pass to `mach_msg`.
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "x86_64")] {
+            use mach::structs::*;
+
             type ThreadState = x86_thread_state64_t;
 
             let thread_state_flavor = x86_THREAD_STATE64;
@@ -288,7 +289,39 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__rsi = arg1 as u64;
             };
             let mut thread_state = ThreadState::new();
-            let mut thread_state_count = ThreadState::count();
+        } else if #[cfg(target_arch = "aarch64")] {
+            // TODO: upstream this to the `mach` crate?
+            #[repr(C)]
+            struct arm_thread_state64_t {
+                __x: [u64; 29],
+                __fp: u64,
+                __lr: u64,
+                __sp: u64,
+                __pc: u64,
+                __cpsr: u64,
+                __pad: u64,
+            }
+
+            // TODO: upstream this to the `mach` crate?
+            const ARM_THREAD_STATE64: i32 = 6;
+
+            type ThreadState = arm_thread_state64_t;
+
+            let thread_state_flavor = ARM_THREAD_STATE64;
+
+            let get_pc = |state: &ThreadState| state.__pc as *const u8;
+
+            let resume = |state: &mut ThreadState, arg0: usize, arg1: usize| {
+                // TODO: what to do with the previous `__pc`? We could put that
+                // into `__lr` but then we'd clobber `__lr` and would need to
+                // figure out what to do with that. This is likely only needed
+                // for the native unwinder, and probably needs testing one way
+                // or another.
+                state.__pc = unwind as u64;
+                state.__x[0] = arg0 as u64;
+                state.__x[1] = arg1 as u64;
+            };
+            let mut thread_state = mem::zeroed::<ThreadState>();
         } else {
             compile_error!("unsupported target architecture");
         }
@@ -296,6 +329,8 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 
     // First up read our origin thread's state into the area defined above.
     let origin_thread = request.body.thread.name;
+    let mut thread_state_count =
+        (mem::size_of_val(&thread_state) / mem::size_of::<libc::c_int>()) as u32;
     let kret = thread_get_state(
         origin_thread,
         thread_state_flavor,
