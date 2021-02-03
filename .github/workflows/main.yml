@@ -463,10 +463,6 @@ jobs:
 
     # Build `libwasmtime.so`
     - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
-    - run: |
-        $CENTOS cargo test \
-            --release \
-            -p wasi-cap-std-sync
 
     # Test what we just built.
     #
