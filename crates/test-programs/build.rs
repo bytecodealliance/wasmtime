@@ -41,7 +41,6 @@ mod wasi_tests {
         build_tests("wasi-tests", &out_dir).expect("building tests");
         test_directory(&mut out, "wasi-cap-std-sync", "cap_std_sync", &out_dir)
             .expect("generating tests");
-        test_directory(&mut out, "wasi-virtfs", "virtfs", &out_dir).expect("generating tests");
     }
 
     fn build_tests(testsuite: &str, out_dir: &Path) -> io::Result<()> {
