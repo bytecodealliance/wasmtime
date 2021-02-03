@@ -57,6 +57,9 @@ pub trait ABICallee {
     /// Number of stack slots (not spill slots).
     fn num_stackslots(&self) -> usize;
 
+    /// The offsets of all stack slots (not spill slots) for debuginfo purposes.
+    fn stackslot_offsets(&self) -> &PrimaryMap<StackSlot, u32>;
+
     /// Generate an instruction which copies an argument to a destination
     /// register.
     fn gen_copy_arg_to_regs(

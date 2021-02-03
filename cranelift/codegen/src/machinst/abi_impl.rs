@@ -506,7 +506,7 @@ pub struct ABICalleeImpl<M: ABIMachineSpec> {
     /// Signature: arg and retval regs.
     sig: ABISig,
     /// Offsets to each stackslot.
-    stackslots: Vec<u32>,
+    stackslots: PrimaryMap<StackSlot, u32>,
     /// Total stack size of all stackslots.
     stackslots_size: u32,
     /// Stack size to be reserved for outgoing arguments.
@@ -584,7 +584,7 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
 
         // Compute stackslot locations and total stackslot size.
         let mut stack_offset: u32 = 0;
-        let mut stackslots = vec![];
+        let mut stackslots = PrimaryMap::new();
         for (stackslot, data) in f.stack_slots.iter() {
             let off = stack_offset;
             stack_offset += data.size;
@@ -926,6 +926,10 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         self.stackslots.len()
     }
 
+    fn stackslot_offsets(&self) -> &PrimaryMap<StackSlot, u32> {
+        &self.stackslots
+    }
+
     fn gen_copy_arg_to_regs(
         &self,
         idx: usize,
@@ -1101,7 +1105,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     ) -> SmallInstVec<Self::I> {
         // Offset from beginning of stackslot area, which is at nominal SP (see
         // [MemArg::NominalSPOffset] for more details on nominal SP tracking).
-        let stack_off = self.stackslots[slot.as_u32() as usize] as i64;
+        let stack_off = self.stackslots[slot] as i64;
         let sp_off: i64 = stack_off + (offset as i64);
         trace!("load_stackslot: slot {} -> sp_off {}", slot, sp_off);
         gen_load_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), into_regs, ty)
@@ -1117,7 +1121,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     ) -> SmallInstVec<Self::I> {
         // Offset from beginning of stackslot area, which is at nominal SP (see
         // [MemArg::NominalSPOffset] for more details on nominal SP tracking).
-        let stack_off = self.stackslots[slot.as_u32() as usize] as i64;
+        let stack_off = self.stackslots[slot] as i64;
         let sp_off: i64 = stack_off + (offset as i64);
         trace!("store_stackslot: slot {} -> sp_off {}", slot, sp_off);
         gen_store_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), from_regs, ty)
@@ -1127,7 +1131,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
     fn stackslot_addr(&self, slot: StackSlot, offset: u32, into_reg: Writable<Reg>) -> Self::I {
         // Offset from beginning of stackslot area, which is at nominal SP (see
         // [MemArg::NominalSPOffset] for more details on nominal SP tracking).
-        let stack_off = self.stackslots[slot.as_u32() as usize] as i64;
+        let stack_off = self.stackslots[slot] as i64;
         let sp_off: i64 = stack_off + (offset as i64);
         M::gen_get_stack_addr(StackAMode::NominalSPOffset(sp_off, I8), into_reg, I8)
     }

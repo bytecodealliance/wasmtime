@@ -617,17 +617,18 @@ impl<I: VCodeInst> VCode<I> {
     }
 
     /// Generates value-label ranges.
-    pub fn value_labels_ranges(&self) -> crate::result::CodegenResult<Option<ValueLabelsRanges>> {
+    pub fn value_labels_ranges(&self) -> Option<ValueLabelsRanges> {
         if !self.has_value_labels {
-            return Ok(None);
+            return None;
         }
 
         let layout = &self.insts_layout.borrow();
-        Ok(Some(debug::compute(
-            &self.insts,
-            &layout.0[..],
-            &layout.1[..],
-        )))
+        Some(debug::compute(&self.insts, &layout.0[..], &layout.1[..]))
+    }
+
+    /// Get the offsets of stackslots.
+    pub fn stackslot_offsets(&self) -> &PrimaryMap<StackSlot, u32> {
+        self.abi.stackslot_offsets()
     }
 
     /// Get the IR block for a BlockIndex, if one exists.
