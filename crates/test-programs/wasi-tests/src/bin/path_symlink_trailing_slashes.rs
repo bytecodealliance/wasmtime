@@ -2,7 +2,7 @@ use std::{env, process};
 use wasi_tests::{assert_errno, create_file, open_scratch_directory, TESTCONFIG};
 
 unsafe fn test_path_symlink_trailing_slashes(dir_fd: wasi::Fd) {
-    if TESTCONFIG.support_dangling_symlinks() {
+    if TESTCONFIG.support_dangling_filesystem() {
         // Dangling symlink: Link destination shouldn't end with a slash.
         assert_errno!(
             wasi::path_symlink("source", dir_fd, "target/")

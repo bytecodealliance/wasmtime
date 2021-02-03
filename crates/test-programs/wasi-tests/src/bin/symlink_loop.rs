@@ -2,7 +2,7 @@ use std::{env, process};
 use wasi_tests::{assert_errno, open_scratch_directory, TESTCONFIG};
 
 unsafe fn test_symlink_loop(dir_fd: wasi::Fd) {
-    if TESTCONFIG.support_dangling_symlinks() {
+    if TESTCONFIG.support_dangling_filesystem() {
         // Create a self-referencing symlink.
         wasi::path_symlink("symlink", dir_fd, "symlink").expect("creating a symlink");
 

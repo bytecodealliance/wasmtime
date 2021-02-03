@@ -1,9 +1,8 @@
 pub struct TestConfig {
     errno_mode: ErrnoMode,
-    no_dangling_symlinks: bool,
+    no_dangling_filesystem: bool,
     no_fd_allocate: bool,
     no_rename_dir_to_empty_dir: bool,
-    no_dangling_directory: bool,
     no_fdflags_sync_support: bool,
 }
 
@@ -25,17 +24,15 @@ impl TestConfig {
         } else {
             ErrnoMode::Permissive
         };
-        let no_dangling_symlinks = std::env::var("NO_DANGLING_SYMLINKS").is_ok();
+        let no_dangling_filesystem = std::env::var("NO_DANGLING_FILESYSTEM").is_ok();
         let no_fd_allocate = std::env::var("NO_FD_ALLOCATE").is_ok();
         let no_rename_dir_to_empty_dir = std::env::var("NO_RENAME_DIR_TO_EMPTY_DIR").is_ok();
-        let no_dangling_directory = std::env::var("NO_DANGLING_DIRECTORY").is_ok();
         let no_fdflags_sync_support = std::env::var("NO_FDFLAGS_SYNC_SUPPORT").is_ok();
         TestConfig {
             errno_mode,
-            no_dangling_symlinks,
+            no_dangling_filesystem,
             no_fd_allocate,
             no_rename_dir_to_empty_dir,
-            no_dangling_directory,
             no_fdflags_sync_support,
         }
     }
@@ -57,17 +54,14 @@ impl TestConfig {
             _ => false,
         }
     }
-    pub fn support_dangling_symlinks(&self) -> bool {
-        !self.no_dangling_symlinks
+    pub fn support_dangling_filesystem(&self) -> bool {
+        !self.no_dangling_filesystem
     }
     pub fn support_fd_allocate(&self) -> bool {
         !self.no_fd_allocate
     }
     pub fn support_rename_dir_to_empty_dir(&self) -> bool {
         !self.no_rename_dir_to_empty_dir
-    }
-    pub fn support_dangling_directory(&self) -> bool {
-        !self.no_dangling_directory
     }
     pub fn support_fdflags_sync(&self) -> bool {
         !self.no_fdflags_sync_support
