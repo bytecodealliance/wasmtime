@@ -307,7 +307,9 @@ pub use crate::types::*;
 pub use crate::values::*;
 
 cfg_if::cfg_if! {
-    if #[cfg(unix)] {
+    if #[cfg(target_os = "macos")] {
+        // no extensions for macOS at this time
+    } else if #[cfg(unix)] {
         pub mod unix;
     } else if #[cfg(windows)] {
         pub mod windows;

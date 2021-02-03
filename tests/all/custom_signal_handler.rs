@@ -1,4 +1,4 @@
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "linux")]
 mod tests {
     use anyhow::Result;
     use std::rc::Rc;
