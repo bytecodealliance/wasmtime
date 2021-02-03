@@ -10,7 +10,6 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
 include = ["src/**/*", "LICENSE" ]
-publish = false
 
 [dependencies]
 wasi-common = { path = "../", version = "0.22.0" }
