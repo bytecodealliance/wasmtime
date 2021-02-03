@@ -14,11 +14,7 @@ static mut PREV_SIGBUS: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
 static mut PREV_SIGILL: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
 static mut PREV_SIGFPE: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
 
-/// Function which may handle custom signals while processing traps.
-pub type SignalHandler<'a> =
-    dyn Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool + 'a;
-
-unsafe fn platform_init() {
+pub unsafe fn platform_init() {
     let register = |slot: &mut MaybeUninit<libc::sigaction>, signal: i32| {
         let mut handler: libc::sigaction = mem::zeroed();
         // The flags here are relatively careful, and they are...
@@ -89,8 +85,9 @@ unsafe extern "C" fn trap_handler(
         // Otherwise flag ourselves as handling a trap, do the trap
         // handling, and reset our trap handling flag. Then we figure
         // out what to do based on the result of the trap handling.
+        let pc = get_pc(context);
         let jmp_buf =
-            info.handle_trap(get_pc(context), |handler| handler(signum, siginfo, context));
+            info.jmp_buf_if_trap(pc, |handler| handler(signum, siginfo, context));
 
         // Figure out what to do based on the result of this handling of
         // the trap. Note that our sentinel value of 1 means that the
@@ -98,11 +95,12 @@ unsafe extern "C" fn trap_handler(
         // keep executing.
         if jmp_buf.is_null() {
             return false;
-        } else if jmp_buf as usize == 1 {
-            return true;
-        } else {
-            Unwind(jmp_buf)
         }
+        if jmp_buf as usize == 1 {
+            return true;
+        }
+        info.capture_backtrace(pc);
+        Unwind(jmp_buf)
     });
 
     if handled {
