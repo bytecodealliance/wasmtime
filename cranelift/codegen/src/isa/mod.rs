@@ -20,7 +20,6 @@
 //! appropriate for the requested ISA:
 //!
 //! ```
-//! # extern crate cranelift_codegen;
 //! # #[macro_use] extern crate target_lexicon;
 //! use cranelift_codegen::isa;
 //! use cranelift_codegen::settings::{self, Configurable};
@@ -30,12 +29,12 @@
 //! let shared_builder = settings::builder();
 //! let shared_flags = settings::Flags::new(shared_builder);
 //!
-//! match isa::lookup(triple!("riscv32")) {
+//! match isa::lookup(triple!("x86_64")) {
 //!     Err(_) => {
-//!         // The RISC-V target ISA is not available.
+//!         // The x86_64 target ISA is not available.
 //!     }
 //!     Ok(mut isa_builder) => {
-//!         isa_builder.set("supports_m", "on");
+//!         isa_builder.set("use_popcnt", "on");
 //!         let isa = isa_builder.finish(shared_flags);
 //!     }
 //! }
