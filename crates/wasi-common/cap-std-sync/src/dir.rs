@@ -259,9 +259,6 @@ fn convert_systimespec(t: Option<wasi_common::SystemTimeSpec>) -> Option<SystemT
 #[cfg(test)]
 mod test {
     use super::Dir;
-    use std::collections::HashMap;
-    use wasi_common::dir::{ReaddirCursor, ReaddirEntity, WasiDir};
-    use wasi_common::file::{FdFlags, FileType, OFlags};
     #[test]
     fn scratch_dir() {
         let tempdir = tempfile::Builder::new()
@@ -275,9 +272,14 @@ mod test {
             .expect("open the same directory via WasiDir abstraction");
     }
 
+    // Readdir does not work on windows, so we won't test it there.
     #[cfg(not(windows))]
     #[test]
     fn readdir() {
+        use std::collections::HashMap;
+        use wasi_common::dir::{ReaddirCursor, ReaddirEntity, WasiDir};
+        use wasi_common::file::{FdFlags, FileType, OFlags};
+
         fn readdir_into_map(dir: &dyn WasiDir) -> HashMap<String, ReaddirEntity> {
             let mut out = HashMap::new();
             for readdir_result in dir
