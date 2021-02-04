@@ -1651,14 +1651,6 @@ pub trait IntoFunc<Params, Results> {
     fn into_func(self, store: &Store) -> Func;
 }
 
-/// TODO
-#[cfg(feature = "async")]
-#[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
-pub trait IntoFuncAsync<T, Params, Results> {
-    #[doc(hidden)]
-    fn into_func(self, store: &Store, state: T) -> Func;
-}
-
 /// A structure representing the *caller's* context when creating a function
 /// via [`Func::wrap`].
 ///
