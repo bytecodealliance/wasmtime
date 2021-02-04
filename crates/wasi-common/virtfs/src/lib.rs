@@ -94,6 +94,15 @@ pub enum Inode {
     File(Rc<RefCell<FileInode>>),
 }
 
+impl Inode {
+    fn get_filestat(&self) -> Filestat {
+        match self {
+            Inode::File(f) => f.borrow().get_filestat(),
+            Inode::Dir(f) => f.borrow().get_filestat(),
+        }
+    }
+}
+
 pub struct DirInode {
     fs: Weak<Filesystem>,
     serial: u64,
@@ -472,7 +481,34 @@ impl WasiDir for Dir {
         &self,
         cursor: ReaddirCursor,
     ) -> Result<Box<dyn Iterator<Item = Result<(ReaddirEntity, String), Error>>>, Error> {
-        todo!()
+        struct Readdir {
+            inode: Rc<RefCell<DirInode>>,
+            cursor: usize,
+        };
+        impl Iterator for Readdir {
+            type Item = Result<(ReaddirEntity, String), Error>;
+            fn next(&mut self) -> Option<Self::Item> {
+                let inode = self.inode.borrow();
+                let (name, child) = inode.contents.iter().nth(self.cursor)?;
+                let stat = child.get_filestat();
+                let next = self.cursor + 1;
+                self.cursor = next;
+                Some(Ok((
+                    ReaddirEntity {
+                        filetype: stat.filetype,
+                        inode: stat.inode,
+                        next: (next as u64).into(),
+                    },
+                    name.to_owned(),
+                )))
+            }
+        }
+
+        let cursor = u64::from(cursor) as usize;
+        Ok(Box::new(Readdir {
+            inode: self.0.clone(),
+            cursor,
+        }))
     }
 
     fn symlink(&self, src_path: &str, dest_path: &str) -> Result<(), Error> {
@@ -493,11 +529,12 @@ impl WasiDir for Dir {
     }
     fn get_path_filestat(&self, path: &str, follow_symlinks: bool) -> Result<Filestat, Error> {
         self.at_path(path, false, |dir, filename| {
-            match dir.inode().contents.get(filename) {
-                Some(Inode::File(f)) => Ok(f.borrow().get_filestat()),
-                Some(Inode::Dir(f)) => Ok(f.borrow().get_filestat()),
-                None => Err(Error::not_found()),
-            }
+            Ok(dir
+                .inode()
+                .contents
+                .get(filename)
+                .ok_or_else(|| Error::not_found())?
+                .get_filestat())
         })
     }
     fn rename(&self, src_path: &str, dest_dir: &dyn WasiDir, dest_path: &str) -> Result<(), Error> {
