@@ -640,16 +640,16 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     ) -> Result<types::Size, Error> {
         let mut bufused = 0;
         let mut buf = buf.clone();
-        for pair in self
+        for entity in self
             .table()
             .get_dir(u32::from(fd))?
             .get_cap(DirCaps::READDIR)?
             .readdir(ReaddirCursor::from(cookie))?
         {
-            let (entity, name) = pair?;
-            let dirent_raw = dirent_bytes(types::Dirent::from(&entity));
+            let entity = entity?;
+            let dirent_raw = dirent_bytes(types::Dirent::try_from(&entity)?);
             let dirent_len: types::Size = dirent_raw.len().try_into()?;
-            let name_raw = name.as_bytes();
+            let name_raw = entity.name.as_bytes();
             let name_len: types::Size = name_raw.len().try_into()?;
 
             // Copy as many bytes of the dirent as we can, up to the end of the buffer
@@ -1438,14 +1438,15 @@ impl From<Filestat> for types::Filestat {
     }
 }
 
-impl From<&ReaddirEntity> for types::Dirent {
-    fn from(e: &ReaddirEntity) -> types::Dirent {
-        types::Dirent {
+impl TryFrom<&ReaddirEntity> for types::Dirent {
+    type Error = Error;
+    fn try_from(e: &ReaddirEntity) -> Result<types::Dirent, Error> {
+        Ok(types::Dirent {
             d_ino: e.inode,
-            d_namlen: e.namelen,
+            d_namlen: e.name.as_bytes().len().try_into()?,
             d_type: types::Filetype::from(&e.filetype),
             d_next: e.next.into(),
-        }
+        })
     }
 }
 

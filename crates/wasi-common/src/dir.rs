@@ -22,7 +22,7 @@ pub trait WasiDir {
     fn readdir(
         &self,
         cursor: ReaddirCursor,
-    ) -> Result<Box<dyn Iterator<Item = Result<(ReaddirEntity, String), Error>>>, Error>;
+    ) -> Result<Box<dyn Iterator<Item = Result<ReaddirEntity, Error>>>, Error>;
     fn symlink(&self, old_path: &str, new_path: &str) -> Result<(), Error>;
     fn remove_dir(&self, path: &str) -> Result<(), Error>;
     fn unlink_file(&self, path: &str) -> Result<(), Error>;
@@ -166,7 +166,7 @@ impl TableDirExt for crate::table::Table {
 pub struct ReaddirEntity {
     pub next: ReaddirCursor,
     pub inode: u64,
-    pub namelen: u32,
+    pub name: String,
     pub filetype: FileType,
 }
 

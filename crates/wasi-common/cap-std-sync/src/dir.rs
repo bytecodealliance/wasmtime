@@ -1,7 +1,6 @@
 use crate::file::{filetype_from, File};
 use cap_fs_ext::{DirEntryExt, DirExt, MetadataExt, SystemTimeSpec};
 use std::any::Any;
-use std::convert::TryInto;
 use std::path::{Path, PathBuf};
 use system_interface::fs::GetSetFdFlags;
 use wasi_common::{
@@ -101,7 +100,7 @@ impl WasiDir for Dir {
     fn readdir(
         &self,
         cursor: ReaddirCursor,
-    ) -> Result<Box<dyn Iterator<Item = Result<(ReaddirEntity, String), Error>>>, Error> {
+    ) -> Result<Box<dyn Iterator<Item = Result<ReaddirEntity, Error>>>, Error> {
         // cap_std's read_dir does not include . and .., we should prepend these.
         // Why does the Ok contain a tuple? We can't construct a cap_std::fs::DirEntry, and we don't
         // have enough info to make a ReaddirEntity yet.
@@ -109,13 +108,11 @@ impl WasiDir for Dir {
         let rd = vec![
             {
                 let name = ".".to_owned();
-                let namelen = name.as_bytes().len().try_into().expect("1 wont overflow");
-                Ok((FileType::Directory, dir_meta.ino(), namelen, name))
+                Ok((FileType::Directory, dir_meta.ino(), name))
             },
             {
                 let name = "..".to_owned();
-                let namelen = name.as_bytes().len().try_into().expect("2 wont overflow");
-                Ok((FileType::Directory, dir_meta.ino(), namelen, name))
+                Ok((FileType::Directory, dir_meta.ino(), name))
             },
         ]
         .into_iter()
@@ -130,22 +127,18 @@ impl WasiDir for Dir {
                     .file_name()
                     .into_string()
                     .map_err(|_| Error::illegal_byte_sequence().context("filename"))?;
-                let namelen = name.as_bytes().len().try_into()?;
-                Ok((filetype, inode, namelen, name))
+                Ok((filetype, inode, name))
             }),
         )
         // Enumeration of the iterator makes it possible to define the ReaddirCursor
         .enumerate()
         .map(|(ix, r)| match r {
-            Ok((filetype, inode, namelen, name)) => Ok((
-                ReaddirEntity {
-                    next: ReaddirCursor::from(ix as u64 + 1),
-                    filetype,
-                    inode,
-                    namelen,
-                },
+            Ok((filetype, inode, name)) => Ok(ReaddirEntity {
+                next: ReaddirCursor::from(ix as u64 + 1),
+                filetype,
+                inode,
                 name,
-            )),
+            }),
             Err(e) => Err(e),
         })
         .skip(u64::from(cursor) as usize);
@@ -286,8 +279,8 @@ mod test {
                 .readdir(ReaddirCursor::from(0))
                 .expect("readdir succeeds")
             {
-                let (entity, name) = readdir_result.expect("readdir entry is valid");
-                out.insert(name, entity);
+                let entity = readdir_result.expect("readdir entry is valid");
+                out.insert(entity.name.clone(), entity);
             }
             out
         }
