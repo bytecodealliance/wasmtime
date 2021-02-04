@@ -399,8 +399,9 @@ macro_rules! generate_wrap_async_func {
             $($args: WasmTy,)*
             R: WasmRet,
         {
+            assert!(store.is_async());
             Func::wrap(store, move |caller: Caller<'_>, $($args: $args),*| {
-                let store = Store::upgrade(&caller.store).unwrap();
+                let store = caller.store();
                 let mut future = Pin::from(func(caller, &state, $($args),*));
                 match store.block_on(future.as_mut()) {
                     Ok(ret) => ret.into_result(),
@@ -589,7 +590,7 @@ impl Func {
     {
         assert!(store.is_async());
         Func::new(store, ty, move |caller, params, results| {
-            let store = Store::upgrade(&caller.store).unwrap();
+            let store = caller.store();
             let mut future = Pin::from(func(caller, &state, params, results));
             match store.block_on(future.as_mut()) {
                 Ok(Ok(())) => Ok(()),
