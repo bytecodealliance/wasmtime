@@ -306,7 +306,7 @@ fn dummy_waker() -> Waker {
 fn iloop_with_fuel() {
     let engine = Engine::new(Config::new().consume_fuel(true));
     let store = Store::new_async(&engine);
-    store.out_of_fuel_async_yield(10);
+    store.out_of_fuel_async_yield(1_000, 10);
     let module = Module::new(
         &engine,
         "
@@ -322,8 +322,17 @@ fn iloop_with_fuel() {
     let waker = dummy_waker();
     let mut cx = Context::from_waker(&waker);
 
+    // This should yield a bunch of times...
     for _ in 0..100 {
         assert!(f.as_mut().poll(&mut cx).is_pending());
+    }
+
+    // ... but it should eventually also finish.
+    loop {
+        match f.as_mut().poll(&mut cx) {
+            Poll::Ready(_) => break,
+            Poll::Pending => {}
+        }
     }
 }
 
@@ -331,7 +340,7 @@ fn iloop_with_fuel() {
 fn fuel_eventually_finishes() {
     let engine = Engine::new(Config::new().consume_fuel(true));
     let store = Store::new_async(&engine);
-    store.out_of_fuel_async_yield(10);
+    store.out_of_fuel_async_yield(u32::max_value(), 10);
     let module = Module::new(
         &engine,
         "

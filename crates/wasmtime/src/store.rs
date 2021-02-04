@@ -93,7 +93,10 @@ pub(crate) struct StoreInner {
 #[derive(Copy, Clone)]
 enum OutOfGas {
     Trap,
-    InjectFuel(u64),
+    InjectFuel {
+        injection_count: u32,
+        fuel_to_inject: u64,
+    },
 }
 
 struct HostInfoKey(VMExternRef);
@@ -158,21 +161,51 @@ impl Store {
     /// resolves to `Pending` we switch away from the temporary stack back to
     /// the main stack and propagate the `Pending` status.
     ///
-    /// Note that the intention with supporting asynchronous WebAssembly in
-    /// Wasmtime is to primarily provide the *ability* to suspend wasm
-    /// computation while the host is waiting for a result. You'll likely need
-    /// to continue to massage the exact future returned to suit your
-    /// application's needs. For example the `Future::poll` method is not
-    /// expected to take a large amount of time, but executing WebAssembly can
-    /// take arbitrarily long. This means that you may want to run futures on a
-    /// dedicated thread pool in some scenarios, or perhaps have some form of
-    /// "fuel" in other scenarios (Wasmtime hopes to support fuel natively in
-    /// the future).
-    ///
     /// In general it's encouraged that the integration with `async` and
     /// wasmtime is designed early on in your embedding of Wasmtime to ensure
     /// that it's planned that WebAssembly executes in the right context of your
     /// application.
+    ///
+    /// # Execution in `poll`
+    ///
+    /// The [`Future::poll`](std::future::Future::poll) method is the main
+    /// driving force behind Rust's futures. That method's own documentation
+    /// states "an implementation of `poll` should strive to return quickly, and
+    /// should not block". This, however, can be at odds with executing
+    /// WebAssembly code as part of the `poll` method itself. If your
+    /// WebAssembly is untrusted then this could allow the `poll` method to take
+    /// arbitrarily long in the worst case, likely blocking all other
+    /// asynchronous tasks.
+    ///
+    /// To remedy this situation you have a two possible ways to solve this:
+    ///
+    /// * First you can spawn futures into a thread pool. Care must be taken for
+    ///   this because Wasmtime futures are not `Send` or `Sync`. If you ensure
+    ///   that the entire state of a `Store` is wrapped up in a single future,
+    ///   though, you can send the whole future at once to a separate thread. By
+    ///   doing this in a thread pool you are relaxing the requirement that
+    ///   `Future::poll` must be fast because your future is executing on a
+    ///   separate thread. This strategy, however, would likely still require
+    ///   some form of cancellation via [`Store::interrupt_handle`] to ensure
+    ///   wasm doesn't take *too* long to execute.
+    ///
+    /// * Alternatively you can enable the
+    ///   [`Config::consume_fuel`](crate::Config::consume_fuel) method as well
+    ///   as [`Store::out_of_fuel_async_yield`] When doing so this will
+    ///   configure Wasmtime futures to yield periodically while they're
+    ///   executing WebAssembly code. After consuming the specified amount of
+    ///   fuel wasm futures will return `Poll::Pending` from their `poll`
+    ///   method, and will get automatically re-polled later. This enables the
+    ///   `Future::poll` method to take roughly a fixed amount of time since
+    ///   fuel is guaranteed to get consumed while wasm is executing. Note that
+    ///   to prevent infinite execution of wasm you'll still need to use
+    ///   [`Store::interrupt_handle`].
+    ///
+    /// In either case special care needs to be taken when integrating
+    /// asynchronous wasm into your application. You should carefully plan where
+    /// WebAssembly will execute and what compute resources will be allotted to
+    /// it. If Wasmtime doesn't support exactly what you'd like just yet, please
+    /// feel free to open an issue!
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub fn new_async(engine: &Engine) -> Store {
@@ -622,15 +655,20 @@ impl Store {
     /// automatically re-injected after fuel runs out. This is how much fuel
     /// will be consumed between yields of an async future.
     ///
+    /// The `injection_count` parameter indicates how many times this fuel will
+    /// be injected. Multiplying the two parameters is the total amount of fuel
+    /// this store is allowed before wasm traps.
+    ///
     /// # Panics
     ///
     /// This method will panic if it is not called on an [async
     /// store](Store::new_async).
-    pub fn out_of_fuel_async_yield(&self, fuel_to_inject: u64) {
+    pub fn out_of_fuel_async_yield(&self, injection_count: u32, fuel_to_inject: u64) {
         assert!(self.is_async());
-        self.inner
-            .out_of_gas_behavior
-            .set(OutOfGas::InjectFuel(fuel_to_inject));
+        self.inner.out_of_gas_behavior.set(OutOfGas::InjectFuel {
+            injection_count,
+            fuel_to_inject,
+        });
     }
 
     pub(crate) fn is_async(&self) -> bool {
@@ -814,7 +852,7 @@ impl Store {
     }
 
     /// Immediately raise a trap on an out-of-gas condition.
-    fn out_of_gas_trap(&self) {
+    fn out_of_gas_trap(&self) -> ! {
         #[derive(Debug)]
         struct OutOfGasError;
 
@@ -897,9 +935,21 @@ unsafe impl TrapInfo for Store {
         match self.inner.out_of_gas_behavior.get() {
             OutOfGas::Trap => self.out_of_gas_trap(),
             #[cfg(feature = "async")]
-            OutOfGas::InjectFuel(fuel) => self.out_of_gas_yield(fuel),
+            OutOfGas::InjectFuel {
+                injection_count,
+                fuel_to_inject,
+            } => {
+                if injection_count == 0 {
+                    self.out_of_gas_trap();
+                }
+                self.inner.out_of_gas_behavior.set(OutOfGas::InjectFuel {
+                    injection_count: injection_count - 1,
+                    fuel_to_inject,
+                });
+                self.out_of_gas_yield(fuel_to_inject);
+            }
             #[cfg(not(feature = "async"))]
-            OutOfGas::InjectFuel(_) => unreachable!(),
+            OutOfGas::InjectFuel { .. } => unreachable!(),
         }
     }
 }
