@@ -194,13 +194,9 @@ mod wasi_tests {
         [
             // Panic: Metadata not associated with open file
             // https://github.com/bytecodealliance/cap-std/issues/142
-            "fd_readdir",
             "fd_flags_set",
             "path_filestat",
             "symlink_filestat",
-            // upstream fixes pending:
-            "symlink_create",  // cap-std #149
-            "nofollow_errors", // cap-std #149 and #150
             // Trailing slash related bugs
             "interesting_paths",
             "path_rename_file_trailing_slashes",

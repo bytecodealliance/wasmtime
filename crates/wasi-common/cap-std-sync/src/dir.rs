@@ -1,5 +1,5 @@
 use crate::file::{filetype_from, File};
-use cap_fs_ext::{DirExt, MetadataExt, SystemTimeSpec};
+use cap_fs_ext::{DirEntryExt, DirExt, MetadataExt, SystemTimeSpec};
 use std::any::Any;
 use std::convert::TryInto;
 use std::path::{Path, PathBuf};
@@ -123,7 +123,7 @@ impl WasiDir for Dir {
             // Now process the `DirEntry`s:
             self.0.entries()?.map(|entry| {
                 let entry = entry?;
-                let meta = entry.metadata()?;
+                let meta = entry.full_metadata()?;
                 let inode = meta.ino();
                 let filetype = filetype_from(&meta.file_type());
                 let name = entry
@@ -163,7 +163,7 @@ impl WasiDir for Dir {
     }
 
     fn unlink_file(&self, path: &str) -> Result<(), Error> {
-        self.0.remove_file(Path::new(path))?;
+        self.0.remove_file_or_symlink(Path::new(path))?;
         Ok(())
     }
     fn read_link(&self, path: &str) -> Result<PathBuf, Error> {
