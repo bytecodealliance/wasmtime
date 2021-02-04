@@ -31,10 +31,14 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
             .stdout(Box::new(stdout.clone()))
             .stderr(Box::new(stderr.clone()));
 
-        if workspace.is_some() {
+        // fs needs to outlive instance
+        let _fs = if workspace.is_some() {
             let fs = wasi_virtfs::Filesystem::new(wasi_cap_std_sync::clocks_ctx().system, 420); // XXX this is duplicated - should be reference counted so I can use the same in the builder...
             builder = builder.preopened_dir(fs.root(), ".")?;
-        }
+            Some(fs)
+        } else {
+            None
+        };
         let wasi = wasmtime_wasi::Wasi::new(&store, builder.build()?);
 
         let mut linker = Linker::new(&store);
