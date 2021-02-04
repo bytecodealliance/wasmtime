@@ -192,11 +192,6 @@ mod wasi_tests {
     /// Ignore tests that aren't supported yet.
     fn cap_std_sync_ignore(name: &str) -> bool {
         [
-            // Panic: Metadata not associated with open file
-            // https://github.com/bytecodealliance/cap-std/issues/142
-            "fd_flags_set",
-            "path_filestat",
-            "symlink_filestat",
             // Trailing slash related bugs
             "interesting_paths",
             "path_rename_file_trailing_slashes",
