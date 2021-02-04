@@ -492,11 +492,35 @@ impl WasiDir for Dir {
         todo!()
     }
     fn remove_dir(&self, path: &str) -> Result<(), Error> {
-        todo!()
+        self.at_path(path, true, |dir, dirname| {
+            let mut d = dir.inode_mut();
+            match d.contents.get(dirname) {
+                Some(Inode::File(_)) => return Err(Error::not_dir()),
+                Some(Inode::Dir(d)) => {
+                    if !d.borrow().contents.is_empty() {
+                        return Err(Error::not_empty());
+                    }
+                }
+                None => return Err(Error::not_found()),
+            }
+            d.contents.remove(dirname);
+            Ok(())
+        })
     }
 
     fn unlink_file(&self, path: &str) -> Result<(), Error> {
-        todo!()
+        self.at_path(path, false, |dir, filename| {
+            let mut d = dir.inode_mut();
+            match d.contents.get(filename) {
+                Some(Inode::File(_)) => {}
+                Some(Inode::Dir(d)) => {
+                    return Err(Error::is_dir());
+                }
+                None => return Err(Error::not_found()),
+            }
+            d.contents.remove(filename);
+            Ok(())
+        })
     }
     fn read_link(&self, path: &str) -> Result<PathBuf, Error> {
         todo!()
