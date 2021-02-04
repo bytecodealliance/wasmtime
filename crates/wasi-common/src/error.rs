@@ -57,6 +57,12 @@ pub enum ErrorKind {
     /// Errno::Notdir: Not a directory or a symbolic link to a directory.
     #[error("Notdir: Not a directory or a symbolic link to a directory")]
     Notdir,
+    /// Errno::Notempty: Directory not empty.
+    #[error("Notempty: Directory not empty")]
+    Notempty,
+    /// Errno::Isdir: Is a directory.
+    #[error("Isdir: Is a directory")]
+    Isdir,
     /// Errno::Notsup: Not supported, or operation not supported on socket.
     #[error("Notsup: Not supported, or operation not supported on socket")]
     Notsup,
@@ -85,6 +91,8 @@ pub trait ErrorExt {
     fn io() -> Self;
     fn name_too_long() -> Self;
     fn not_dir() -> Self;
+    fn not_empty() -> Self;
+    fn is_dir() -> Self;
     fn not_supported() -> Self;
     fn overflow() -> Self;
     fn range() -> Self;
@@ -122,6 +130,12 @@ impl ErrorExt for Error {
     }
     fn not_dir() -> Self {
         ErrorKind::Notdir.into()
+    }
+    fn not_empty() -> Self {
+        ErrorKind::Notempty.into()
+    }
+    fn is_dir() -> Self {
+        ErrorKind::Isdir.into()
     }
     fn not_supported() -> Self {
         ErrorKind::Notsup.into()
