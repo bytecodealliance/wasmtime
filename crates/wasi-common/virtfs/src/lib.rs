@@ -61,6 +61,32 @@ impl Filesystem {
         self.next_serial.set(s + 1);
         s
     }
+    fn new_file(self: Rc<Self>) -> Rc<RefCell<FileInode>> {
+        let now = self.now();
+        let serial = self.fresh_serial();
+        Rc::new(RefCell::new(FileInode {
+            fs: Rc::downgrade(&self),
+            serial,
+            contents: Vec::new(),
+            atim: now,
+            ctim: now,
+            mtim: now,
+        }))
+    }
+    fn new_dir(self: Rc<Self>, parent: &Rc<RefCell<DirInode>>) -> Rc<RefCell<DirInode>> {
+        let now = self.now();
+        let serial = self.fresh_serial();
+        let parent = Some(Rc::downgrade(parent));
+        Rc::new(RefCell::new(DirInode {
+            fs: Rc::downgrade(&self),
+            serial,
+            parent,
+            contents: HashMap::new(),
+            atim: now,
+            mtim: now,
+            ctim: now,
+        }))
+    }
 }
 
 pub enum Inode {
@@ -82,6 +108,18 @@ impl DirInode {
     pub fn fs(&self) -> Rc<Filesystem> {
         Weak::upgrade(&self.fs).unwrap()
     }
+    pub fn get_filestat(&self) -> Filestat {
+        Filestat {
+            device_id: self.fs().device_id,
+            inode: self.serial,
+            filetype: FileType::Directory,
+            nlink: 0,
+            size: self.contents.len() as u64,
+            atim: Some(self.atim.into_std()),
+            ctim: Some(self.ctim.into_std()),
+            mtim: Some(self.mtim.into_std()),
+        }
+    }
 }
 
 pub struct FileInode {
@@ -96,6 +134,18 @@ pub struct FileInode {
 impl FileInode {
     pub fn fs(&self) -> Rc<Filesystem> {
         Weak::upgrade(&self.fs).unwrap()
+    }
+    pub fn get_filestat(&self) -> Filestat {
+        Filestat {
+            device_id: self.fs().device_id,
+            inode: self.serial,
+            filetype: FileType::RegularFile,
+            nlink: 0,
+            size: self.contents.len() as u64,
+            atim: Some(self.atim.into_std()),
+            ctim: Some(self.ctim.into_std()),
+            mtim: Some(self.mtim.into_std()),
+        }
     }
 }
 
@@ -157,18 +207,7 @@ impl WasiFile for File {
         Ok(())
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
-        let inode = self.inode();
-        let fs = inode.fs();
-        Ok(Filestat {
-            device_id: fs.device_id,
-            inode: inode.serial,
-            filetype: self.get_filetype().unwrap(),
-            nlink: 0,
-            size: inode.contents.len() as u64,
-            atim: Some(inode.atim.into_std()),
-            ctim: Some(inode.ctim.into_std()),
-            mtim: Some(inode.mtim.into_std()),
-        })
+        Ok(self.inode().get_filestat())
     }
     fn set_filestat_size(&self, size: u64) -> Result<(), Error> {
         let mut inode = self.inode.borrow_mut();
@@ -312,6 +351,12 @@ impl Dir {
             f(self, path)
         }
     }
+    fn inode(&self) -> Ref<DirInode> {
+        self.0.borrow()
+    }
+    fn inode_mut(&self) -> RefMut<DirInode> {
+        self.0.borrow_mut()
+    }
     fn child_dir(&self, name: &str) -> Result<Rc<RefCell<DirInode>>, Error> {
         if name == "." {
             return Ok(self.0.clone());
@@ -349,24 +394,12 @@ impl WasiDir for Dir {
         } else {
             FileMode::ReadOnly
         };
-        // XXX TERRIBLE CODE DUPLICATION HERE
         self.at_path(path, false, |dir, filename| {
             if oflags.contains(OFlags::CREATE | OFlags::EXCLUSIVE) {
                 match dir.child_file(filename) {
                     Err(_notfound) => {
-                        let d = dir.0.borrow();
-                        let now = d.fs().now();
-                        let serial = d.fs().fresh_serial();
-                        let inode = Rc::new(RefCell::new(FileInode {
-                            fs: d.fs.clone(),
-                            serial,
-                            contents: Vec::new(),
-                            atim: now,
-                            ctim: now,
-                            mtim: now,
-                        }));
-                        dir.0
-                            .borrow_mut()
+                        let inode = dir.inode().fs().new_file();
+                        dir.inode_mut()
                             .contents
                             .insert(filename.to_owned(), Inode::File(inode.clone()));
                         Ok(Box::new(File {
@@ -390,19 +423,8 @@ impl WasiDir for Dir {
                         }) as Box<dyn WasiFile>)
                     }
                     Err(_notfound) => {
-                        let d = dir.0.borrow();
-                        let now = d.fs().now();
-                        let serial = d.fs().fresh_serial();
-                        let inode = Rc::new(RefCell::new(FileInode {
-                            fs: d.fs.clone(),
-                            serial,
-                            contents: Vec::new(),
-                            atim: now,
-                            ctim: now,
-                            mtim: now,
-                        }));
-                        dir.0
-                            .borrow_mut()
+                        let inode = dir.inode().fs().new_file();
+                        dir.inode_mut()
                             .contents
                             .insert(filename.to_owned(), Inode::File(inode.clone()));
                         Ok(Box::new(File {
@@ -436,26 +458,14 @@ impl WasiDir for Dir {
     fn create_dir(&self, path: &str) -> Result<(), Error> {
         self.at_path(path, true, |dir, dirname| {
             let d = dir.0.borrow();
-            let fs = d.fs.clone();
-            let serial = d.fs().fresh_serial();
-            let now = d.fs().now();
-            drop(d);
-            match dir.0.borrow_mut().contents.entry(dirname.to_owned()) {
-                Entry::Vacant(v) => {
-                    let parent = Some(Rc::downgrade(&self.0));
-                    v.insert(Inode::Dir(Rc::new(RefCell::new(DirInode {
-                        fs,
-                        serial,
-                        parent,
-                        contents: HashMap::new(),
-                        atim: now,
-                        mtim: now,
-                        ctim: now,
-                    }))));
-                    Ok(())
-                }
-                Entry::Occupied(_) => Err(Error::exist()),
+            if d.contents.contains_key(dirname) {
+                return Err(Error::exist());
             }
+            let inode = d.fs().new_dir(&self.0);
+            drop(d); // now need a mutable borrow
+            let mut d = dir.0.borrow_mut();
+            d.contents.insert(dirname.to_owned(), Inode::Dir(inode));
+            Ok(())
         })
     }
     fn readdir(
@@ -479,10 +489,16 @@ impl WasiDir for Dir {
         todo!()
     }
     fn get_filestat(&self) -> Result<Filestat, Error> {
-        todo!()
+        Ok(self.0.borrow().get_filestat())
     }
     fn get_path_filestat(&self, path: &str, follow_symlinks: bool) -> Result<Filestat, Error> {
-        todo!()
+        self.at_path(path, false, |dir, filename| {
+            match dir.inode().contents.get(filename) {
+                Some(Inode::File(f)) => Ok(f.borrow().get_filestat()),
+                Some(Inode::Dir(f)) => Ok(f.borrow().get_filestat()),
+                None => Err(Error::not_found()),
+            }
+        })
     }
     fn rename(&self, src_path: &str, dest_dir: &dyn WasiDir, dest_path: &str) -> Result<(), Error> {
         todo!()
