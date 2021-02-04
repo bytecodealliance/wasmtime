@@ -567,16 +567,40 @@ struct Readdir {
 impl Iterator for Readdir {
     type Item = Result<ReaddirEntity, Error>;
     fn next(&mut self) -> Option<Self::Item> {
-        let inode = self.inode.borrow();
-        let (name, child) = inode.contents.iter().nth(self.cursor)?;
-        let stat = child.get_filestat();
-        let next = self.cursor + 1;
-        self.cursor = next;
-        Some(Ok(ReaddirEntity {
-            filetype: stat.filetype,
-            inode: stat.inode,
-            next: (next as u64).into(),
-            name: name.to_owned(),
-        }))
+        let cursor = self.cursor;
+        self.cursor = cursor + 1;
+        let next = (self.cursor as u64).into();
+        if cursor == 0 {
+            let stat = self.inode.borrow().get_filestat();
+            Some(Ok(ReaddirEntity {
+                filetype: stat.filetype,
+                inode: stat.inode,
+                next,
+                name: ".".to_owned(),
+            }))
+        } else if cursor == 1 {
+            let dir = self.inode.borrow();
+            let stat = dir
+                .parent
+                .as_ref()
+                .map(|p| Weak::upgrade(&p).unwrap().borrow().get_filestat())
+                .unwrap_or_else(|| dir.get_filestat()); // Root is its own parent
+            Some(Ok(ReaddirEntity {
+                filetype: stat.filetype,
+                inode: stat.inode,
+                next,
+                name: "..".to_owned(),
+            }))
+        } else {
+            let inode = self.inode.borrow();
+            let (name, child) = inode.contents.iter().nth(cursor - 2)?;
+            let stat = child.get_filestat();
+            Some(Ok(ReaddirEntity {
+                filetype: stat.filetype,
+                inode: stat.inode,
+                next,
+                name: name.to_owned(),
+            }))
+        }
     }
 }

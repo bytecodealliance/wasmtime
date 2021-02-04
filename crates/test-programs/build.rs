@@ -206,7 +206,6 @@ mod wasi_tests {
         [
             "dangling_symlink",
             "fd_flags_set",
-            "fd_readdir",
             "file_seek_tell",
             "file_truncation",
             "interesting_paths",
