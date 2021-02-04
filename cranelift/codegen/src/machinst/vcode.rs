@@ -617,13 +617,13 @@ impl<I: VCodeInst> VCode<I> {
     }
 
     /// Generates value-label ranges.
-    pub fn value_labels_ranges(&self) -> Option<ValueLabelsRanges> {
+    pub fn value_labels_ranges(&self) -> ValueLabelsRanges {
         if !self.has_value_labels {
-            return None;
+            return ValueLabelsRanges::default();
         }
 
         let layout = &self.insts_layout.borrow();
-        Some(debug::compute(&self.insts, &layout.0[..], &layout.1[..]))
+        debug::compute(&self.insts, &layout.0[..], &layout.1[..])
     }
 
     /// Get the offsets of stackslots.

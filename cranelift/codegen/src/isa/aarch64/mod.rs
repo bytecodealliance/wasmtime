@@ -81,7 +81,7 @@ impl MachBackend for AArch64Backend {
             frame_size,
             disasm,
             unwind_info,
-            value_labels_ranges: None,
+            value_labels_ranges: Default::default(),
             stackslot_offsets,
         })
     }

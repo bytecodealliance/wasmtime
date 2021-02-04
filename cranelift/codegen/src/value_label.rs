@@ -113,12 +113,8 @@ pub fn build_value_labels_ranges<T>(
 where
     T: From<SourceLoc> + Deref<Target = SourceLoc> + Ord + Copy,
 {
-    if mach_compile_result.is_some() && mach_compile_result.unwrap().value_labels_ranges.is_some() {
-        return mach_compile_result
-            .unwrap()
-            .value_labels_ranges
-            .clone()
-            .unwrap();
+    if let Some(mach_compile_result) = mach_compile_result {
+        return mach_compile_result.value_labels_ranges.clone();
     }
 
     let values_labels = build_value_labels_index::<T>(func);

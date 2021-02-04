@@ -343,7 +343,7 @@ pub struct MachCompileResult {
     /// Unwind info.
     pub unwind_info: Option<unwind_input::UnwindInfo<Reg>>,
     /// Debug info: value labels to registers/stackslots at code offsets.
-    pub value_labels_ranges: Option<ValueLabelsRanges>,
+    pub value_labels_ranges: ValueLabelsRanges,
     /// Debug info: stackslots to stack pointer offsets.
     pub stackslot_offsets: PrimaryMap<StackSlot, u32>,
 }
