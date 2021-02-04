@@ -22,7 +22,6 @@ os_pipe = "0.9"
 anyhow = "1.0.19"
 wat = "1.0.23"
 cap-std = "0.13"
-system-interface = "0.5.4"
 
 [features]
 test_programs = []

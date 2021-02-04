@@ -272,44 +272,14 @@ checksum = "ae44d1a3d5a19df61dd0c8beb138458ac2a53a7ac09eba97d55592540004306b"
 
 [[package]]
 name = "cap-fs-ext"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0341ab6f42e202d53cac0823df52f1e3bc07f5f0407f03439a74de4902442c24"
-dependencies = [
- "cap-primitives 0.12.1",
- "cap-std 0.12.0",
- "unsafe-io",
-]
-
-[[package]]
-name = "cap-fs-ext"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "428ffbea1dc13c83ffc2a4111f02052dc87bbc38a2e4616c175961da3c6d71e3"
 dependencies = [
- "cap-primitives 0.13.0",
- "cap-std 0.13.0",
+ "cap-primitives",
+ "cap-std",
  "rustc_version",
  "unsafe-io",
-]
-
-[[package]]
-name = "cap-primitives"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9bcfaeba5aaf71f83226b063079526cb65399a7efded3aae2122e52305c5a60"
-dependencies = [
- "errno",
- "fs-set-times",
- "ipnet",
- "libc",
- "maybe-owned",
- "once_cell",
- "posish",
- "unsafe-io",
- "winapi",
- "winapi-util",
- "winx",
 ]
 
 [[package]]
@@ -343,21 +313,11 @@ dependencies = [
 
 [[package]]
 name = "cap-std"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "710da2154f2853ac49014a72a11f73cea87420d304fa0e5324266d350cfaad00"
-dependencies = [
- "cap-primitives 0.12.1",
- "unsafe-io",
-]
-
-[[package]]
-name = "cap-std"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "803f12a2be467810562a71e340638cdff7496ef9e3f3657b77cfcc2eb53b0e37"
 dependencies = [
- "cap-primitives 0.13.0",
+ "cap-primitives",
  "rustc_version",
  "unsafe-io",
 ]
@@ -368,7 +328,7 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2afb176d23c08c20be9db2d65304a927991706cb4fc1708697f70e2e695fc2ba"
 dependencies = [
- "cap-primitives 0.13.0",
+ "cap-primitives",
  "once_cell",
  "posish",
  "winx",
@@ -2771,14 +2731,14 @@ dependencies = [
 
 [[package]]
 name = "system-interface"
-version = "0.5.6"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae234a0c346c613b2bae30491bf786d9edbf005c63fa267424da0d55dfdd2cc7"
+checksum = "e89794731b407bc2bd80dba457ff3bef6ddfcea77e3ec55340e4838f7b70657d"
 dependencies = [
  "atty",
  "bitflags",
- "cap-fs-ext 0.12.0",
- "cap-std 0.12.0",
+ "cap-fs-ext",
+ "cap-std",
  "posish",
  "rustc_version",
  "unsafe-io",
@@ -2840,11 +2800,10 @@ name = "test-programs"
 version = "0.19.0"
 dependencies = [
  "anyhow",
- "cap-std 0.13.0",
+ "cap-std",
  "cfg-if 1.0.0",
  "os_pipe",
  "pretty_env_logger",
- "system-interface",
  "target-lexicon",
  "tempfile",
  "wasi-cap-std-sync",
@@ -3110,9 +3069,9 @@ version = "0.22.0"
 dependencies = [
  "anyhow",
  "bitflags",
- "cap-fs-ext 0.13.0",
+ "cap-fs-ext",
  "cap-rand",
- "cap-std 0.13.0",
+ "cap-std",
  "cap-time-ext",
  "fs-set-times",
  "lazy_static",
@@ -3132,7 +3091,7 @@ dependencies = [
  "anyhow",
  "bitflags",
  "cap-rand",
- "cap-std 0.13.0",
+ "cap-std",
  "libc",
  "thiserror",
  "tracing",
@@ -3265,7 +3224,7 @@ name = "wasmtime-bench-api"
 version = "0.19.0"
 dependencies = [
  "anyhow",
- "cap-std 0.13.0",
+ "cap-std",
  "shuffling-allocator",
  "wasi-cap-std-sync",
  "wasmtime",
@@ -3278,7 +3237,7 @@ name = "wasmtime-c-api"
 version = "0.19.0"
 dependencies = [
  "anyhow",
- "cap-std 0.12.0",
+ "cap-std",
  "env_logger 0.8.2",
  "once_cell",
  "wasi-cap-std-sync",
@@ -3326,7 +3285,7 @@ name = "wasmtime-cli"
 version = "0.22.0"
 dependencies = [
  "anyhow",
- "cap-std 0.13.0",
+ "cap-std",
  "env_logger 0.8.2",
  "file-per-thread-logger",
  "filecheck",
