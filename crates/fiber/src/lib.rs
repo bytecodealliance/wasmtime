@@ -51,6 +51,27 @@ impl<'a, Resume, Yield, Return> Fiber<'a, Resume, Yield, Return> {
         })
     }
 
+    /// Creates a new fiber with existing stack space that will execute `func`.
+    ///
+    /// This function returns a `Fiber` which, when resumed, will execute `func`
+    /// to completion. When desired the `func` can suspend itself via
+    /// `Fiber::suspend`.
+    ///
+    /// # Safety
+    ///
+    /// The caller must properly allocate the stack space with a guard page and
+    /// make the pages accessible for correct behavior.
+    pub unsafe fn new_with_stack(
+        top_of_stack: *mut u8,
+        func: impl FnOnce(Resume, &Suspend<Resume, Yield, Return>) -> Return + 'a,
+    ) -> io::Result<Fiber<'a, Resume, Yield, Return>> {
+        Ok(Fiber {
+            inner: imp::Fiber::new_with_stack(top_of_stack, func),
+            done: Cell::new(false),
+            _phantom: PhantomData,
+        })
+    }
+
     /// Resumes execution of this fiber.
     ///
     /// This function will transfer execution to the fiber and resume from where

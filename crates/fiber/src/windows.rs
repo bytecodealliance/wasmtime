@@ -40,7 +40,7 @@ where
 }
 
 impl Fiber {
-    pub fn new<F, A, B, C>(stack_size: usize, func: F) -> io::Result<Fiber>
+    pub fn new<F, A, B, C>(stack_size: usize, func: F) -> io::Result<Self>
     where
         F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
     {
@@ -61,9 +61,17 @@ impl Fiber {
                 drop(Box::from_raw(state.initial_closure.get().cast::<F>()));
                 Err(io::Error::last_os_error())
             } else {
-                Ok(Fiber { fiber, state })
+                Ok(Self { fiber, state })
             }
         }
+    }
+
+    pub fn new_with_stack<F, A, B, C>(_top_of_stack: *mut u8, _func: F) -> Self
+    where
+        F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
+    {
+        // Windows fibers have no support for custom stacks
+        unimplemented!()
     }
 
     pub(crate) fn resume<A, B, C>(&self, result: &Cell<RunResult<A, B, C>>) {

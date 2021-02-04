@@ -74,6 +74,17 @@ pub enum InstantiationError {
     Trap(Trap),
 }
 
+/// An error while creating a fiber stack.
+#[derive(Error, Debug)]
+pub enum FiberStackError {
+    /// An error for when the allocator doesn't support custom fiber stacks.
+    #[error("Custom fiber stacks are not supported by the allocator")]
+    NotSupported,
+    /// A limit on how many fibers are supported has been reached.
+    #[error("Limit of {0} concurrent fibers has been reached")]
+    Limit(u32),
+}
+
 /// Represents a runtime instance allocator.
 ///
 /// # Safety
@@ -127,6 +138,22 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     ///
     /// Use extreme care when deallocating an instance so that there are no dangling instance pointers.
     unsafe fn deallocate(&self, handle: &InstanceHandle);
+
+    /// Allocates a fiber stack for calling async functions on.
+    ///
+    /// Returns the top of the fiber stack if successfully allocated.
+    fn allocate_fiber_stack(&self) -> Result<*mut u8, FiberStackError>;
+
+    /// Deallocates a fiber stack that was previously allocated.
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe because there are no guarantees that the given stack
+    /// is no longer in use.
+    ///
+    /// Additionally, passing a stack pointer that was not returned from `allocate_fiber_stack`
+    /// will lead to undefined behavior.
+    unsafe fn deallocate_fiber_stack(&self, stack: *mut u8);
 }
 
 unsafe fn initialize_vmcontext(
@@ -543,5 +570,15 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         let layout = instance.alloc_layout();
         ptr::drop_in_place(instance as *const Instance as *mut Instance);
         alloc::dealloc(instance as *const Instance as *mut _, layout);
+    }
+
+    fn allocate_fiber_stack(&self) -> Result<*mut u8, FiberStackError> {
+        // The on-demand allocator does not support allocating fiber stacks
+        Err(FiberStackError::NotSupported)
+    }
+
+    unsafe fn deallocate_fiber_stack(&self, _stack: *mut u8) {
+        // This should never be called as `allocate_fiber_stack` never returns success
+        unreachable!()
     }
 }
