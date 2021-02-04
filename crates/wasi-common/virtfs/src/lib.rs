@@ -480,30 +480,7 @@ impl WasiDir for Dir {
     fn readdir(
         &self,
         cursor: ReaddirCursor,
-    ) -> Result<Box<dyn Iterator<Item = Result<(ReaddirEntity, String), Error>>>, Error> {
-        struct Readdir {
-            inode: Rc<RefCell<DirInode>>,
-            cursor: usize,
-        };
-        impl Iterator for Readdir {
-            type Item = Result<(ReaddirEntity, String), Error>;
-            fn next(&mut self) -> Option<Self::Item> {
-                let inode = self.inode.borrow();
-                let (name, child) = inode.contents.iter().nth(self.cursor)?;
-                let stat = child.get_filestat();
-                let next = self.cursor + 1;
-                self.cursor = next;
-                Some(Ok((
-                    ReaddirEntity {
-                        filetype: stat.filetype,
-                        inode: stat.inode,
-                        next: (next as u64).into(),
-                    },
-                    name.to_owned(),
-                )))
-            }
-        }
-
+    ) -> Result<Box<dyn Iterator<Item = Result<ReaddirEntity, Error>>>, Error> {
         let cursor = u64::from(cursor) as usize;
         Ok(Box::new(Readdir {
             inode: self.0.clone(),
@@ -556,5 +533,26 @@ impl WasiDir for Dir {
         follow_symlinks: bool,
     ) -> Result<(), Error> {
         todo!()
+    }
+}
+
+struct Readdir {
+    inode: Rc<RefCell<DirInode>>,
+    cursor: usize,
+}
+impl Iterator for Readdir {
+    type Item = Result<ReaddirEntity, Error>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let inode = self.inode.borrow();
+        let (name, child) = inode.contents.iter().nth(self.cursor)?;
+        let stat = child.get_filestat();
+        let next = self.cursor + 1;
+        self.cursor = next;
+        Some(Ok(ReaddirEntity {
+            filetype: stat.filetype,
+            inode: stat.inode,
+            next: (next as u64).into(),
+            name: name.to_owned(),
+        }))
     }
 }
