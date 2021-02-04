@@ -21,6 +21,8 @@ struct StartState {
     result_location: Cell<*const u8>,
 }
 
+const FIBER_FLAG_FLOAT_SWITCH: DWORD = 1;
+
 extern "C" {
     fn wasmtime_fiber_get_current() -> LPVOID;
 }
@@ -48,8 +50,10 @@ impl Fiber {
                 parent: Cell::new(ptr::null_mut()),
                 result_location: Cell::new(ptr::null()),
             });
-            let fiber = CreateFiber(
+            let fiber = CreateFiberEx(
+                0,
                 stack_size,
+                FIBER_FLAG_FLOAT_SWITCH,
                 Some(fiber_start::<F, A, B, C>),
                 &*state as *const StartState as *mut _,
             );
