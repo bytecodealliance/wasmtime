@@ -58,6 +58,8 @@ pub struct Config {
     pub(crate) max_instances: usize,
     pub(crate) max_tables: usize,
     pub(crate) max_memories: usize,
+    #[cfg(feature = "async")]
+    pub(crate) async_stack_size: usize,
 }
 
 impl Config {
@@ -108,6 +110,8 @@ impl Config {
             max_instances: 10_000,
             max_tables: 10_000,
             max_memories: 10_000,
+            #[cfg(feature = "async")]
+            async_stack_size: 2 << 20,
         };
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
         return ret;
@@ -182,23 +186,58 @@ impl Config {
         self
     }
 
-    /// Configures the maximum amount of native stack space available to
+    /// Configures the maximum amount of stack space available for
     /// executing WebAssembly code.
     ///
-    /// WebAssembly code currently executes on the native call stack for its own
-    /// call frames. WebAssembly, however, also has well-defined semantics on
-    /// stack overflow. This is intended to be a knob which can help configure
-    /// how much native stack space a wasm module is allowed to consume. Note
-    /// that the number here is not super-precise, but rather wasm will take at
-    /// most "pretty close to this much" stack space.
+    /// WebAssembly has well-defined semantics on stack overflow. This is
+    /// intended to be a knob which can help configure how much stack space
+    /// wasm execution is allowed to consume. Note that the number here is not
+    /// super-precise, but rather wasm will take at most "pretty close to this
+    /// much" stack space.
     ///
     /// If a wasm call (or series of nested wasm calls) take more stack space
     /// than the `size` specified then a stack overflow trap will be raised.
     ///
-    /// By default this option is 1 MB.
-    pub fn max_wasm_stack(&mut self, size: usize) -> &mut Self {
+    /// When the `async` feature is enabled, this value cannot exceed the
+    /// `async_stack_size` option. Be careful not to set this value too close
+    /// to `async_stack_size` as doing so may limit how much stack space
+    /// is available for host functions. Unlike wasm functions that trap
+    /// on stack overflow, a host function that overflows the stack will
+    /// abort the process.
+    ///
+    /// By default this option is 1 MiB.
+    pub fn max_wasm_stack(&mut self, size: usize) -> Result<&mut Self> {
+        #[cfg(feature = "async")]
+        if size > self.async_stack_size {
+            bail!("wasm stack size cannot exceed the async stack size");
+        }
+
+        if size == 0 {
+            bail!("wasm stack size cannot be zero");
+        }
+
         self.max_wasm_stack = size;
-        self
+        Ok(self)
+    }
+
+    /// Configures the size of the stacks used for asynchronous execution.
+    ///
+    /// This setting configures the size of the stacks that are allocated for
+    /// asynchronous execution. The value cannot be less than `max_wasm_stack`.
+    ///
+    /// The amount of stack space guaranteed for host functions is
+    /// `async_stack_size - max_wasm_stack`, so take care not to set these two values
+    /// close to one another; doing so may cause host functions to overflow the
+    /// stack and abort the process.
+    ///
+    /// By default this option is 2 MiB.
+    #[cfg(feature = "async")]
+    pub fn async_stack_size(&mut self, size: usize) -> Result<&mut Self> {
+        if size < self.max_wasm_stack {
+            bail!("async stack size cannot be less than the maximum wasm stack size");
+        }
+        self.async_stack_size = size;
+        Ok(self)
     }
 
     /// Configures whether the WebAssembly threads proposal will be enabled for

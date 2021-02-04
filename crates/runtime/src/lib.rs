@@ -55,6 +55,9 @@ pub use crate::vmcontext::{
     VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMTrampoline,
 };
 
+#[cfg(feature = "async")]
+pub use crate::instance::FiberStackError;
+
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

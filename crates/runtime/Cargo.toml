@@ -33,3 +33,9 @@ cc = "1.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[features]
+default = ["async"]
+
+# Enables support for "async" fiber stacks in the instance allocator
+async = []

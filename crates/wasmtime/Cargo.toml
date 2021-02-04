@@ -71,4 +71,4 @@ experimental_x64 = ["wasmtime-jit/experimental_x64"]
 
 # Enables support for "async stores" as well as defining host functions as
 # `async fn` and calling functions asynchronously.
-async = ["wasmtime-fiber"]
+async = ["wasmtime-fiber", "wasmtime-runtime/async"]
