@@ -211,7 +211,6 @@ jobs:
     name: Test
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         build: [stable, beta, nightly, windows, macos]
         include:
@@ -388,7 +387,6 @@ jobs:
     name: Build wasmtime
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         include:
         - build: x86_64-linux

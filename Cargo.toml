@@ -82,8 +82,6 @@ members = [
   "fuzz",
 ]
 
-exclude = ["crates/cap-std"]
-
 [features]
 default = ["jitdump", "wasmtime/wat", "wasmtime/parallel-compilation"]
 lightbeam = ["wasmtime/lightbeam"]
