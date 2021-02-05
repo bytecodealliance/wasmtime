@@ -272,21 +272,22 @@ checksum = "ae44d1a3d5a19df61dd0c8beb138458ac2a53a7ac09eba97d55592540004306b"
 
 [[package]]
 name = "cap-fs-ext"
-version = "0.13.2"
+version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08cf602c99ab5dadc9d6d81f56888e9c6ed0cf36cb39c0e3dacfcb2298f2ae2c"
+checksum = "209aca9ff6a807ff2df9f0b75634f5680cad4e86b1712516ed3aa82053e16466"
 dependencies = [
  "cap-primitives",
  "cap-std",
  "rustc_version",
  "unsafe-io",
+ "winapi",
 ]
 
 [[package]]
 name = "cap-primitives"
-version = "0.13.2"
+version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65191f18ed7e50a1a10396baeb9d0c88104128c5b38ca7234480641a6b14abc1"
+checksum = "6da225ce9df468bef6626bfe020c00269f8f2b54086aaef0605665762a77be9a"
 dependencies = [
  "errno",
  "fs-set-times",
@@ -313,9 +314,9 @@ dependencies = [
 
 [[package]]
 name = "cap-std"
-version = "0.13.2"
+version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "205288b9c608b079e53e045c71636bd3bfec7d9e25fb92cefd54e0e1cc6f3c6b"
+checksum = "1304c7889d8a5f9f9fdf6df401c026ac95b3a628ded9d890058e802125d72fa2"
 dependencies = [
  "cap-primitives",
  "rustc_version",
