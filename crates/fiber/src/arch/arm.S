@@ -8,11 +8,13 @@
 // Also at this time this file is heavily based off the x86_64 file, so you'll
 // probably want to read that one as well.
 
-#define SIZE(fnname) .size fnname,.-fnname
+#include "header.h"
 
 // fn(top_of_stack(%r0): *mut u8)
-.globl wasmtime_fiber_switch
-wasmtime_fiber_switch:
+HIDDEN(wasmtime_fiber_switch)
+GLOBL(wasmtime_fiber_switch)
+TYPE(wasmtime_fiber_switch)
+FUNCTION(wasmtime_fiber_switch):
     // Save callee-saved registers
     push {r4-r11,lr}
 
@@ -31,9 +33,11 @@ SIZE(wasmtime_fiber_switch)
 //    entry_point(%r1): extern fn(*mut u8, *mut u8),
 //    entry_arg0(%r2): *mut u8,
 // )
-.globl wasmtime_fiber_init
-wasmtime_fiber_init:
-    adr r3, wasmtime_fiber_start
+HIDDEN(wasmtime_fiber_init)
+GLOBL(wasmtime_fiber_init)
+TYPE(wasmtime_fiber_init)
+FUNCTION(wasmtime_fiber_init):
+    adr r3, FUNCTION(wasmtime_fiber_start)
     str r3, [r0, #-0x0c] // => lr
     str r0, [r0, #-0x10] // => r11
     str r1, [r0, #-0x14] // => r10
@@ -44,7 +48,7 @@ wasmtime_fiber_init:
     bx lr
 SIZE(wasmtime_fiber_init)
 
-wasmtime_fiber_start:
+FUNCTION(wasmtime_fiber_start):
 .cfi_startproc simple
     // See the x86_64 file for more commentary on what these CFI directives are
     // doing. Like over there note that the relative offsets to registers here
@@ -76,4 +80,4 @@ wasmtime_fiber_start:
     .cfi_endproc
 SIZE(wasmtime_fiber_start)
 
-.section .note.GNU-stack,"",%progbits
+FOOTER

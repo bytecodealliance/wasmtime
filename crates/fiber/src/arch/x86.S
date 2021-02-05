@@ -10,14 +10,13 @@
 // different so the reserved space at the top of the stack is 8 bytes, not 16
 // bytes. Still two pointers though.
 
-.text
-
-#define SIZE(fnname) .size fnname,.-fnname
+#include "header.h"
 
 // fn(top_of_stack: *mut u8)
-.globl wasmtime_fiber_switch
-.type wasmtime_fiber_switch,@function
-wasmtime_fiber_switch:
+HIDDEN(wasmtime_fiber_switch)
+GLOBL(wasmtime_fiber_switch)
+TYPE(wasmtime_fiber_switch)
+FUNCTION(wasmtime_fiber_switch):
     // Load our stack-to-use
     mov 0x4(%esp), %eax
     mov -0x8(%eax), %ecx
@@ -45,9 +44,10 @@ SIZE(wasmtime_fiber_switch)
 //    entry_point: extern fn(*mut u8, *mut u8),
 //    entry_arg0: *mut u8,
 // )
-.globl wasmtime_fiber_init
-.type wasmtime_fiber_init,@function
-wasmtime_fiber_init:
+HIDDEN(wasmtime_fiber_init)
+GLOBL(wasmtime_fiber_init)
+TYPE(wasmtime_fiber_init)
+FUNCTION(wasmtime_fiber_init):
     mov 4(%esp), %eax
 
     // move top_of_stack to the 2nd argument
@@ -59,7 +59,7 @@ wasmtime_fiber_init:
 
     // Move our start function to the return address which the `ret` in
     // `wasmtime_fiber_start` will return to.
-    lea wasmtime_fiber_start, %ecx
+    lea FUNCTION(wasmtime_fiber_start), %ecx
     mov %ecx, -0x14(%eax)
 
     // And move `entry_point` to get loaded into `%ebp` through the context
@@ -82,8 +82,8 @@ wasmtime_fiber_init:
     ret
 SIZE(wasmtime_fiber_init)
 
-.type wasmtime_fiber_start,@function
-wasmtime_fiber_start:
+TYPE(wasmtime_fiber_start)
+FUNCTION(wasmtime_fiber_start):
 .cfi_startproc simple
     .cfi_escape 0x0f, /* DW_CFA_def_cfa_expression */ \
         5,            /* the byte length of this expression */ \
@@ -104,6 +104,4 @@ wasmtime_fiber_start:
     .cfi_endproc
 SIZE(wasmtime_fiber_start)
 
-// Mark that we don't need executable stack.
-.section .note.GNU-stack,"",%progbits
-
+FOOTER

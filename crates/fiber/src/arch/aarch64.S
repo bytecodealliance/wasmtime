@@ -8,12 +8,10 @@
 // Also at this time this file is heavily based off the x86_64 file, so you'll
 // probably want to read that one as well.
 
-#define GLOBL(fnname) .globl fnname
-#define TYPE(fnname) .type fnname,@function
-#define FUNCTION(fnname) fnname
-#define SIZE(fnname) .size fnname,.-fnname
+#include "header.h"
 
 // fn(top_of_stack(%x0): *mut u8)
+HIDDEN(wasmtime_fiber_switch)
 GLOBL(wasmtime_fiber_switch)
 .p2align 2
 TYPE(wasmtime_fiber_switch)
@@ -58,11 +56,12 @@ SIZE(wasmtime_fiber_switch)
 //    entry_point(%x1): extern fn(*mut u8, *mut u8),
 //    entry_arg0(%x2): *mut u8,
 // )
+HIDDEN(wasmtime_fiber_init)
 GLOBL(wasmtime_fiber_init)
 .p2align 2
 TYPE(wasmtime_fiber_init)
 FUNCTION(wasmtime_fiber_init):
-    adr x8, wasmtime_fiber_start
+    adr x8, FUNCTION(wasmtime_fiber_start)
     stp x0, x8, [x0, -0x28] // x0 => x19, x8 => lr
     stp x2, x1, [x0, -0x38] // x1 => x20, x2 => x21
 
@@ -114,5 +113,10 @@ FUNCTION(wasmtime_fiber_start):
     .cfi_endproc
 SIZE(wasmtime_fiber_start)
 
-.section .note.GNU-stack,"",%progbits
-
+// This omits the `.subsections_via_symbols` directive on macOS which means we
+// can't GC specific intrinsics from this file, but it enables usage of the
+// `adr` instruction above in lieu of figuring out a slightly more complicated
+// way of implementing that.
+#ifndef CFG_TARGET_OS_macos
+FOOTER
+#endif

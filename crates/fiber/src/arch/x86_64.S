@@ -5,25 +5,10 @@
 // all the other bits. Documentation tries to reference various bits here and
 // there but try to make sure to read over everything before tweaking things!
 
-.text
-
-#if CFG_TARGET_OS_macos
-
-#define GLOBL(fnname) .globl _##fnname
-#define TYPE(fnname)
-#define FUNCTION(fnname) _##fnname
-#define SIZE(fnname)
-
-#else
-
-#define GLOBL(fnname) .globl fnname
-#define TYPE(fnname) .type fnname,@function
-#define FUNCTION(fnname) fnname
-#define SIZE(fnname) .size fnname,.-fnname
-
-#endif
+#include "header.h"
 
 // fn(top_of_stack(%rdi): *mut u8)
+HIDDEN(wasmtime_fiber_switch)
 GLOBL(wasmtime_fiber_switch)
 .align 16
 TYPE(wasmtime_fiber_switch)
@@ -63,6 +48,7 @@ SIZE(wasmtime_fiber_switch)
 //    entry_point(%rsi): extern fn(*mut u8, *mut u8),
 //    entry_arg0(%rdx): *mut u8,
 // )
+HIDDEN(wasmtime_fiber_init)
 GLOBL(wasmtime_fiber_init)
 .align 16
 TYPE(wasmtime_fiber_init)
@@ -169,7 +155,5 @@ FUNCTION(wasmtime_fiber_start):
     .cfi_endproc
 SIZE(wasmtime_fiber_start)
 
-// Mark that we don't need executable stack.
-#if defined(__ELF__)
-.section .note.GNU-stack,"",%progbits
-#endif
+FOOTER
+
