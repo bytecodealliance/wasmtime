@@ -9,7 +9,8 @@ keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
-include = ["src/**/*", "LICENSE", "WASI/phases", "build.rs"]
+include = ["src/**/*", "WASI/phases/**/*", "LICENSE", "build.rs"]
+build = "build.rs"
 
 # This doesn't actually link to a native library, but it allows us to set env
 # vars like `DEP_WASI_COMMON_19_*` for crates that have build scripts and depend
@@ -19,21 +20,17 @@ links = "wasi-common-19"
 [dependencies]
 anyhow = "1.0"
 thiserror = "1.0"
-libc = "0.2"
-getrandom = { version = "0.2.0", features = ["std"] }
-cfg-if = "1.0"
-filetime = "0.2.7"
-lazy_static = "1.4.0"
 wiggle = { path = "../wiggle", default-features = false, version = "0.22.0" }
 tracing = "0.1.19"
+cap-std = "0.13"
+cap-rand = "0.13"
+bitflags = "1.2"
 
 [target.'cfg(unix)'.dependencies]
-yanix = { path = "yanix", version = "0.22.0" }
+libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
-winx = { path = "winx", version = "0.22.0" }
 winapi = "0.3"
-cpu-time = "1.0"
 
 [badges]
 maintenance = { status = "actively-developed" }

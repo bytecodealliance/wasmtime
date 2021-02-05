@@ -66,7 +66,3 @@ Now, you should be able to run the integration testsuite by running `cargo test`
 cargo test --features test-programs/test_programs --package test-programs
 ```
 
-## Third-Party Code
-Significant parts of our hostcall implementations are derived from the C implementations in
-`cloudabi-utils`. See [LICENSE.cloudabi-utils](LICENSE.cloudabi-utils) for license information.
-

@@ -19,7 +19,8 @@ anyhow = "1.0"
 shuffling-allocator = { version = "1.1.1", optional = true }
 wasmtime = { path = "../wasmtime", default-features = false }
 wasmtime-wasi = { path = "../wasi" }
-wasi-common = { path = "../wasi-common" }
+wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
+cap-std = "0.13"
 
 [dev-dependencies]
 wat = "1.0"

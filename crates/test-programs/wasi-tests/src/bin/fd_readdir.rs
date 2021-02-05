@@ -58,7 +58,6 @@ unsafe fn exec_fd_readdir(fd: wasi::Fd, cookie: wasi::Dircookie) -> (Vec<DirEntr
     let mut buf: [u8; BUF_LEN] = [0; BUF_LEN];
     let bufused =
         wasi::fd_readdir(fd, buf.as_mut_ptr(), BUF_LEN, cookie).expect("failed fd_readdir");
-
     assert!(bufused <= BUF_LEN);
 
     let sl = slice::from_raw_parts(buf.as_ptr(), bufused);
@@ -183,7 +182,7 @@ unsafe fn test_fd_readdir_lots(dir_fd: wasi::Fd) {
         if eof {
             break;
         }
-        cookie = dirs[dirs.len()-1].dirent.d_next;
+        cookie = dirs[dirs.len() - 1].dirent.d_next;
     }
     assert_eq!(total, 1002, "expected 1000 entries plus . and ..");
 

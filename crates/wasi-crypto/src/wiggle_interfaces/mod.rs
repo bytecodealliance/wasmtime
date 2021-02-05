@@ -1,6 +1,4 @@
-use std::rc::Rc;
-
-use wasi_crypto::CryptoCtx;
+pub use wasi_crypto::CryptoCtx as WasiCryptoCtx;
 
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/spec/witx/wasi_ephemeral_crypto.witx"],
@@ -16,19 +14,6 @@ pub mod wasi_modules {
 }
 
 pub use types as guest_types;
-
-#[derive(Clone)]
-pub struct WasiCryptoCtx {
-    ctx: Rc<CryptoCtx>,
-}
-
-impl WasiCryptoCtx {
-    pub fn new() -> Self {
-        WasiCryptoCtx {
-            ctx: Rc::new(CryptoCtx::new()),
-        }
-    }
-}
 
 mod asymmetric_common;
 mod common;

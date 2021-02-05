@@ -153,7 +153,8 @@
 //! ```no_run
 //! # use anyhow::Result;
 //! # use wasmtime::*;
-//! use wasmtime_wasi::{Wasi, WasiCtx};
+//! use wasmtime_wasi::Wasi;
+//! use wasi_cap_std_sync::WasiCtxBuilder;
 //!
 //! # fn main() -> Result<()> {
 //! let store = Store::default();
@@ -162,7 +163,7 @@
 //! // Create an instance of `Wasi` which contains a `WasiCtx`. Note that
 //! // `WasiCtx` provides a number of ways to configure what the target program
 //! // will have access to.
-//! let wasi = Wasi::new(&store, WasiCtx::new(std::env::args())?);
+//! let wasi = Wasi::new(&store, WasiCtxBuilder::new().inherit_stdio().build()?);
 //! wasi.add_to_linker(&mut linker)?;
 //!
 //! // Instantiate our module with the imports we've created, and run it.

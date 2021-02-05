@@ -1,4 +1,9 @@
 use more_asserts::assert_gt;
+pub mod config;
+
+lazy_static::lazy_static! {
+    pub static ref TESTCONFIG: config::TestConfig = config::TestConfig::from_env();
+}
 
 // The `wasi` crate version 0.9.0 and beyond, doesn't
 // seem to define these constants, so we do it ourselves.
@@ -60,4 +65,69 @@ pub unsafe fn drop_rights(fd: wasi::Fd, drop_base: wasi::Rights, drop_inheriting
     let new_inheriting = current_inheriting & !drop_inheriting;
 
     wasi::fd_fdstat_set_rights(fd, new_base, new_inheriting).expect("dropping fd rights");
+}
+
+#[macro_export]
+macro_rules! assert_errno {
+    ($s:expr, windows => $i:expr, $( $rest:tt )+) => {
+        let e = $s;
+        if $crate::TESTCONFIG.errno_expect_windows() {
+            assert_errno!(e, $i);
+        } else {
+            assert_errno!(e, $($rest)+, $i);
+        }
+    };
+    ($s:expr, macos => $i:expr, $( $rest:tt )+) => {
+        let e = $s;
+        if $crate::TESTCONFIG.errno_expect_macos() {
+            assert_errno!(e, $i);
+        } else {
+            assert_errno!(e, $($rest)+, $i);
+        }
+    };
+    ($s:expr, unix => $i:expr, $( $rest:tt )+) => {
+        let e = $s;
+        if $crate::TESTCONFIG.errno_expect_unix() {
+            assert_errno!(e, $i);
+        } else {
+            assert_errno!(e, $($rest)+, $i);
+        }
+    };
+    ($s:expr, $( $i:expr ),+) => {
+        let e = $s;
+        {
+            // Pretty printing infrastructure
+            struct Alt<'a>(&'a [&'static str]);
+            impl<'a> std::fmt::Display for Alt<'a> {
+                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    let l = self.0.len();
+                    if l == 0 {
+                        unreachable!()
+                    } else if l == 1 {
+                        f.write_str(self.0[0])
+                    } else if l == 2 {
+                        f.write_str(self.0[0])?;
+                        f.write_str(" or ")?;
+                        f.write_str(self.0[1])
+                    } else {
+                        for (ix, s) in self.0.iter().enumerate() {
+                            if ix == l - 1 {
+                                f.write_str("or ")?;
+                                f.write_str(s)?;
+                            } else {
+                                f.write_str(s)?;
+                                f.write_str(", ")?;
+                            }
+                        }
+                        Ok(())
+                    }
+                }
+            }
+            assert!( $( e == $i || )+ false,
+                "expected errno {}; got {}",
+                Alt(&[ $( wasi::errno_name($i) ),+ ]),
+                wasi::errno_name(e),
+            )
+        }
+    };
 }

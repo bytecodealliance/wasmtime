@@ -16,14 +16,6 @@ mod wasi_tests {
     use std::path::{Path, PathBuf};
     use std::process::{Command, Stdio};
 
-    #[derive(Clone, Copy, Debug)]
-    enum PreopenType {
-        /// Preopens should be satisfied with real OS files.
-        OS,
-        /// Preopens should be satisfied with virtual files.
-        Virtual,
-    }
-
     pub(super) fn build_and_generate_tests() {
         // Validate if any of test sources are present and if they changed
         // This should always work since there is no submodule to init anymore
@@ -47,11 +39,13 @@ mod wasi_tests {
         let mut out =
             File::create(out_dir.join("wasi_tests.rs")).expect("error generating test source file");
         build_tests("wasi-tests", &out_dir).expect("building tests");
-        test_directory(&mut out, "wasi-tests", &out_dir).expect("generating tests");
+        test_directory(&mut out, "wasi-cap-std-sync", "cap_std_sync", &out_dir)
+            .expect("generating tests");
     }
 
     fn build_tests(testsuite: &str, out_dir: &Path) -> io::Result<()> {
         let mut cmd = Command::new("cargo");
+        cmd.env("CARGO_PROFILE_RELEASE_DEBUG", "1");
         cmd.args(&[
             "build",
             "--release",
@@ -75,7 +69,12 @@ mod wasi_tests {
         Ok(())
     }
 
-    fn test_directory(out: &mut File, testsuite: &str, out_dir: &Path) -> io::Result<()> {
+    fn test_directory(
+        out: &mut File,
+        testsuite: &str,
+        runtime: &str,
+        out_dir: &Path,
+    ) -> io::Result<()> {
         let mut dir_entries: Vec<_> = read_dir(out_dir.join("wasm32-wasi/release"))
             .expect("reading testsuite directory")
             .map(|r| r.expect("reading testsuite directory entry"))
@@ -110,33 +109,19 @@ mod wasi_tests {
                 .expect("testsuite filename should be representable as a string")
                 .replace("-", "_")
         )?;
-        writeln!(out, "    use super::{{runtime, utils, setup_log}};")?;
-        writeln!(out, "    use runtime::PreopenType;")?;
+        writeln!(
+            out,
+            "    use super::{{runtime::{} as runtime, utils, setup_log}};",
+            runtime
+        )?;
         for dir_entry in dir_entries {
-            let test_path = dir_entry.path();
-            let stemstr = test_path
-                .file_stem()
-                .expect("file_stem")
-                .to_str()
-                .expect("to_str");
-
-            if no_preopens(testsuite, stemstr) {
-                write_testsuite_tests(out, &test_path, testsuite, PreopenType::OS)?;
-            } else {
-                write_testsuite_tests(out, &test_path, testsuite, PreopenType::OS)?;
-                write_testsuite_tests(out, &test_path, testsuite, PreopenType::Virtual)?;
-            }
+            write_testsuite_tests(out, &dir_entry.path(), testsuite)?;
         }
         writeln!(out, "}}")?;
         Ok(())
     }
 
-    fn write_testsuite_tests(
-        out: &mut File,
-        path: &Path,
-        testsuite: &str,
-        preopen_type: PreopenType,
-    ) -> io::Result<()> {
+    fn write_testsuite_tests(out: &mut File, path: &Path, testsuite: &str) -> io::Result<()> {
         let stemstr = path
             .file_stem()
             .expect("file_stem")
@@ -144,15 +129,7 @@ mod wasi_tests {
             .expect("to_str");
 
         writeln!(out, "    #[test]")?;
-        let test_fn_name = format!(
-            "{}{}",
-            &stemstr.replace("-", "_"),
-            if let PreopenType::Virtual = preopen_type {
-                "_virtualfs"
-            } else {
-                ""
-            }
-        );
+        let test_fn_name = stemstr.replace("-", "_");
         if ignore(testsuite, &test_fn_name) {
             writeln!(out, "    #[ignore]")?;
         }
@@ -171,109 +148,124 @@ mod wasi_tests {
         let workspace = if no_preopens(testsuite, stemstr) {
             "None"
         } else {
-            match preopen_type {
-                PreopenType::OS => {
-                    writeln!(
-                        out,
-                        "        let workspace = utils::prepare_workspace(&bin_name)?;"
-                    )?;
-                    "Some(workspace.path())"
-                }
-                PreopenType::Virtual => "Some(std::path::Path::new(&bin_name))",
-            }
+            writeln!(
+                out,
+                "        let workspace = utils::prepare_workspace(&bin_name)?;"
+            )?;
+            "Some(workspace.path())"
         };
         writeln!(
             out,
-            "        runtime::instantiate(&data, &bin_name, {}, {})",
+            "        runtime::{}(&data, &bin_name, {})",
+            if inherit_stdio(testsuite, stemstr) {
+                "instantiate_inherit_stdio"
+            } else {
+                "instantiate"
+            },
             workspace,
-            match preopen_type {
-                PreopenType::OS => "PreopenType::OS",
-                PreopenType::Virtual => "PreopenType::Virtual",
-            }
         )?;
         writeln!(out, "    }}")?;
         writeln!(out)?;
         Ok(())
     }
 
-    cfg_if::cfg_if! {
-        if #[cfg(not(windows))] {
-            /// Ignore tests that aren't supported yet.
-            fn ignore(testsuite: &str, name: &str) -> bool {
-                if testsuite == "wasi-tests" {
-                    match name {
-                        // TODO: virtfs files cannot be poll_oneoff'd yet
-                        "poll_oneoff_virtualfs" => true,
-                        // TODO: virtfs does not support filetimes yet.
-                        "path_filestat_virtualfs" |
-                        "fd_filestat_set_virtualfs" => true,
-                        // TODO: virtfs does not support symlinks yet.
-                        "nofollow_errors_virtualfs" |
-                        "path_link_virtualfs" |
-                        "readlink_virtualfs" |
-                        "readlink_no_buffer_virtualfs" |
-                        "dangling_symlink_virtualfs" |
-                        "symlink_loop_virtualfs" |
-                        "path_symlink_trailing_slashes_virtualfs" => true,
-                        // TODO: virtfs does not support rename yet.
-                        "path_rename_trailing_slashes_virtualfs" |
-                        "path_rename_virtualfs" => true,
-                        // TODO: virtfs does not support truncation yet.
-                        "file_truncation_virtualfs" => true,
-                        _ => false,
-                    }
-                } else {
-                    unreachable!()
-                }
-            }
-        } else {
-            /// Ignore tests that aren't supported yet.
-            fn ignore(testsuite: &str, name: &str) -> bool {
-                if testsuite == "wasi-tests" {
-                    match name {
-                        "readlink_no_buffer" => true,
-                        "dangling_symlink" => true,
-                        "symlink_loop" => true,
-                        "truncation_rights" => true,
-                        "dangling_fd" => true,
-                        // TODO: virtfs files cannot be poll_oneoff'd yet
-                        "poll_oneoff_virtualfs" => true,
-                        // TODO: virtfs does not support filetimes yet.
-                        "path_filestat_virtualfs" |
-                        "fd_filestat_set_virtualfs" => true,
-                        // TODO: virtfs does not support symlinks yet.
-                        "nofollow_errors_virtualfs" |
-                        "path_link_virtualfs" |
-                        "readlink_virtualfs" |
-                        "readlink_no_buffer_virtualfs" |
-                        "dangling_symlink_virtualfs" |
-                        "symlink_loop_virtualfs" |
-                        "path_symlink_trailing_slashes_virtualfs" => true,
-                        // TODO: virtfs does not support rename yet.
-                        "path_rename_trailing_slashes_virtualfs" |
-                        "path_rename_virtualfs" => true,
-                        // TODO: virtfs does not support truncation yet.
-                        "file_truncation_virtualfs" => true,
-                        _ => false,
-                    }
-                } else {
-                    unreachable!()
-                }
-            }
+    fn ignore(testsuite: &str, name: &str) -> bool {
+        match testsuite {
+            "wasi-cap-std-sync" => cap_std_sync_ignore(name),
+            "wasi-virtfs" => virtfs_ignore(name),
+            _ => panic!("unknown test suite: {}", testsuite),
         }
+    }
+
+    #[cfg(not(windows))]
+    /// Ignore tests that aren't supported yet.
+    fn cap_std_sync_ignore(name: &str) -> bool {
+        [
+            // Trailing slash related bugs:
+            "path_rename_file_trailing_slashes",
+            "remove_directory_trailing_slashes",
+        ]
+        .contains(&name)
+    }
+
+    #[cfg(windows)]
+    /// Ignore tests that aren't supported yet.
+    fn cap_std_sync_ignore(name: &str) -> bool {
+        [
+            // Trailing slash related bugs
+            "interesting_paths",
+            "path_rename_file_trailing_slashes",
+            "remove_directory_trailing_slashes",
+        ]
+        .contains(&name)
+    }
+
+    /// Virtfs barely works at all and is not suitable for any purpose
+    fn virtfs_ignore(name: &str) -> bool {
+        [
+            "dangling_fd",
+            "dangling_symlink",
+            "directory_seek",
+            "fd_advise",
+            "fd_filestat_set",
+            "fd_flags_set",
+            "fd_readdir",
+            "file_allocate",
+            "file_pread_pwrite",
+            "file_seek_tell",
+            "file_truncation",
+            "file_unbuffered_write",
+            "interesting_paths",
+            "isatty",
+            "nofollow_errors",
+            "path_filestat",
+            "path_link",
+            "path_open_create_existing",
+            "path_open_dirfd_not_dir",
+            "path_open_read_without_rights",
+            "path_rename",
+            "path_rename_dir_trailing_slashes",
+            "path_rename_file_trailing_slashes",
+            "path_symlink_trailing_slashes",
+            "poll_oneoff",
+            "poll_oneoff_stdio",
+            "readlink",
+            "remove_directory_trailing_slashes",
+            "remove_nonempty_directory",
+            "renumber",
+            "symlink_create",
+            "symlink_filestat",
+            "symlink_loop",
+            "truncation_rights",
+            "unlink_file_trailing_slashes",
+        ]
+        .contains(&name)
     }
 
     /// Mark tests which do not require preopens
     fn no_preopens(testsuite: &str, name: &str) -> bool {
-        if testsuite == "wasi-tests" {
+        if testsuite.starts_with("wasi-") {
             match name {
                 "big_random_buf" => true,
                 "clock_time_get" => true,
                 "sched_yield" => true,
+                "poll_oneoff_stdio" => true,
                 _ => false,
             }
         } else {
-            unreachable!()
+            panic!("unknown test suite {}", testsuite)
+        }
+    }
+
+    /// Mark tests which require inheriting parent process stdio
+    fn inherit_stdio(testsuite: &str, name: &str) -> bool {
+        match testsuite {
+            "wasi-cap-std-sync" => match name {
+                "poll_oneoff_stdio" => true,
+                _ => false,
+            },
+            "wasi-virtfs" => false,
+            _ => panic!("unknown test suite {}", testsuite),
         }
     }
 }

@@ -18,7 +18,6 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
             guest_types::OptOptions::None => None,
         };
         Ok(self
-            .ctx
             .symmetric_key_generate_managed(
                 secrets_manager_handle.into(),
                 alg_str,
@@ -37,7 +36,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         let key_id_buf = &mut *symmetric_key_id_ptr
             .as_array(symmetric_key_id_max_len)
             .as_slice_mut()?;
-        Ok(self.ctx.symmetric_key_store_managed(
+        Ok(self.symmetric_key_store_managed(
             secrets_manager_handle.into(),
             symmetric_key_handle.into(),
             key_id_buf,
@@ -51,7 +50,6 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         symmetric_key_new_handle: guest_types::SymmetricKey,
     ) -> Result<guest_types::Version, guest_types::CryptoErrno> {
         Ok(self
-            .ctx
             .symmetric_key_replace_managed(
                 secrets_manager_handle.into(),
                 symmetric_key_old_handle.into(),
@@ -71,7 +69,6 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
             .as_array(symmetric_key_id_len)
             .as_slice()?;
         Ok(self
-            .ctx
             .symmetric_key_from_id(
                 secrets_manager_handle.into(),
                 symmetric_key_id,
@@ -93,7 +90,6 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
             guest_types::OptOptions::None => None,
         };
         Ok(self
-            .ctx
             .symmetric_key_generate(alg_str, options_handle.map(Into::into))?
             .into())
     }
@@ -106,7 +102,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
     ) -> Result<guest_types::SymmetricKey, guest_types::CryptoErrno> {
         let alg_str = &*alg_str.as_str()?;
         let raw = &*raw_ptr.as_array(raw_len).as_slice()?;
-        Ok(self.ctx.symmetric_key_import(alg_str, raw)?.into())
+        Ok(self.symmetric_key_import(alg_str, raw)?.into())
     }
 
     fn symmetric_key_export(
@@ -114,7 +110,6 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         symmetric_key_handle: guest_types::SymmetricKey,
     ) -> Result<guest_types::ArrayOutput, guest_types::CryptoErrno> {
         Ok(self
-            .ctx
             .symmetric_key_export(symmetric_key_handle.into())?
             .into())
     }
@@ -128,7 +123,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         let key_id_buf = &mut *symmetric_key_id_ptr
             .as_array(symmetric_key_id_max_len)
             .as_slice_mut()?;
-        let (key_id, version) = self.ctx.symmetric_key_id(symmetric_key_handle.into())?;
+        let (key_id, version) = self.symmetric_key_id(symmetric_key_handle.into())?;
         ensure!(
             key_id.len() <= key_id_buf.len(),
             CryptoError::Overflow.into()
@@ -141,7 +136,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         &self,
         key_handle: guest_types::SymmetricKey,
     ) -> Result<(), guest_types::CryptoErrno> {
-        Ok(self.ctx.symmetric_key_close(key_handle.into())?)
+        Ok(self.symmetric_key_close(key_handle.into())?)
     }
 
     // --- state
@@ -162,7 +157,6 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
             guest_types::OptOptions::None => None,
         };
         Ok(self
-            .ctx
             .symmetric_state_open(
                 alg_str,
                 key_handle.map(Into::into),
@@ -181,7 +175,6 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         let name_str: &str = &*name_str.as_str()?;
         let value = &mut *value_ptr.as_array(value_max_len).as_slice_mut()?;
         Ok(self
-            .ctx
             .options_get(symmetric_state_handle.into(), name_str, value)?
             .try_into()?)
     }
@@ -192,18 +185,14 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         name_str: &wiggle::GuestPtr<'_, str>,
     ) -> Result<u64, guest_types::CryptoErrno> {
         let name_str: &str = &*name_str.as_str()?;
-        Ok(self
-            .ctx
-            .options_get_u64(symmetric_state_handle.into(), name_str)?)
+        Ok(self.options_get_u64(symmetric_state_handle.into(), name_str)?)
     }
 
     fn symmetric_state_close(
         &self,
         symmetric_state_handle: guest_types::SymmetricState,
     ) -> Result<(), guest_types::CryptoErrno> {
-        Ok(self
-            .ctx
-            .symmetric_state_close(symmetric_state_handle.into())?)
+        Ok(self.symmetric_state_close(symmetric_state_handle.into())?)
     }
 
     fn symmetric_state_absorb(
@@ -213,9 +202,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         data_len: guest_types::Size,
     ) -> Result<(), guest_types::CryptoErrno> {
         let data = &*data_ptr.as_array(data_len).as_slice()?;
-        Ok(self
-            .ctx
-            .symmetric_state_absorb(symmetric_state_handle.into(), data)?)
+        Ok(self.symmetric_state_absorb(symmetric_state_handle.into(), data)?)
     }
 
     fn symmetric_state_squeeze(
@@ -225,9 +212,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         out_len: guest_types::Size,
     ) -> Result<(), guest_types::CryptoErrno> {
         let out = &mut *out_ptr.as_array(out_len).as_slice_mut()?;
-        Ok(self
-            .ctx
-            .symmetric_state_squeeze(symmetric_state_handle.into(), out)?)
+        Ok(self.symmetric_state_squeeze(symmetric_state_handle.into(), out)?)
     }
 
     fn symmetric_state_squeeze_tag(
@@ -235,7 +220,6 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         symmetric_state_handle: guest_types::SymmetricState,
     ) -> Result<guest_types::SymmetricTag, guest_types::CryptoErrno> {
         Ok(self
-            .ctx
             .symmetric_state_squeeze_tag(symmetric_state_handle.into())?
             .into())
     }
@@ -247,7 +231,6 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
     ) -> Result<guest_types::SymmetricKey, guest_types::CryptoErrno> {
         let alg_str = &*alg_str.as_str()?;
         Ok(self
-            .ctx
             .symmetric_state_squeeze_key(symmetric_state_handle.into(), alg_str)?
             .into())
     }
@@ -257,7 +240,6 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         symmetric_state_handle: guest_types::SymmetricState,
     ) -> Result<guest_types::Size, guest_types::CryptoErrno> {
         Ok(self
-            .ctx
             .symmetric_state_max_tag_len(symmetric_state_handle.into())?
             .try_into()?)
     }
@@ -273,7 +255,6 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         let out = &mut *out_ptr.as_array(out_len).as_slice_mut()?;
         let data = &*data_ptr.as_array(data_len).as_slice()?;
         Ok(self
-            .ctx
             .symmetric_state_encrypt(symmetric_state_handle.into(), out, data)?
             .try_into()?)
     }
@@ -289,7 +270,6 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         let out = &mut *out_ptr.as_array(out_len).as_slice_mut()?;
         let data = &*data_ptr.as_array(data_len).as_slice()?;
         Ok(self
-            .ctx
             .symmetric_state_encrypt_detached(symmetric_state_handle.into(), out, data)?
             .into())
     }
@@ -305,7 +285,6 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         let out = &mut *out_ptr.as_array(out_len).as_slice_mut()?;
         let data = &*data_ptr.as_array(data_len).as_slice()?;
         Ok(self
-            .ctx
             .symmetric_state_decrypt(symmetric_state_handle.into(), out, data)?
             .try_into()?)
     }
@@ -324,7 +303,6 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         let data = &*data_ptr.as_array(data_len).as_slice()?;
         let raw_tag: &[u8] = &*raw_tag_ptr.as_array(raw_tag_len).as_slice()?;
         Ok(self
-            .ctx
             .symmetric_state_decrypt_detached(symmetric_state_handle.into(), out, data, raw_tag)?
             .try_into()?)
     }
@@ -333,9 +311,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         &self,
         symmetric_state_handle: guest_types::SymmetricState,
     ) -> Result<(), guest_types::CryptoErrno> {
-        Ok(self
-            .ctx
-            .symmetric_state_ratchet(symmetric_state_handle.into())?)
+        Ok(self.symmetric_state_ratchet(symmetric_state_handle.into())?)
     }
 
     // --- tag
@@ -345,7 +321,6 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         symmetric_tag_handle: guest_types::SymmetricTag,
     ) -> Result<guest_types::Size, guest_types::CryptoErrno> {
         Ok(self
-            .ctx
             .symmetric_tag_len(symmetric_tag_handle.into())?
             .try_into()?)
     }
@@ -358,7 +333,6 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
     ) -> Result<guest_types::Size, guest_types::CryptoErrno> {
         let buf = &mut *buf_ptr.as_array(buf_len).as_slice_mut()?;
         Ok(self
-            .ctx
             .symmetric_tag_pull(symmetric_tag_handle.into(), buf)?
             .try_into()?)
     }
@@ -370,15 +344,13 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
         expected_raw_len: guest_types::Size,
     ) -> Result<(), guest_types::CryptoErrno> {
         let expected_raw = &*expected_raw_ptr.as_array(expected_raw_len).as_slice()?;
-        Ok(self
-            .ctx
-            .symmetric_tag_verify(symmetric_tag_handle.into(), expected_raw)?)
+        Ok(self.symmetric_tag_verify(symmetric_tag_handle.into(), expected_raw)?)
     }
 
     fn symmetric_tag_close(
         &self,
         symmetric_tag_handle: guest_types::SymmetricTag,
     ) -> Result<(), guest_types::CryptoErrno> {
-        Ok(self.ctx.symmetric_tag_close(symmetric_tag_handle.into())?)
+        Ok(self.symmetric_tag_close(symmetric_tag_handle.into())?)
     }
 }

@@ -1,9 +1,9 @@
 use std::{env, process};
-use wasi_tests::{create_file, open_scratch_directory};
+use wasi_tests::{assert_errno, create_file, open_scratch_directory};
 
 unsafe fn test_path_open_create_existing(dir_fd: wasi::Fd) {
     create_file(dir_fd, "file");
-    assert_eq!(
+    assert_errno!(
         wasi::path_open(
             dir_fd,
             0,
@@ -15,8 +15,7 @@ unsafe fn test_path_open_create_existing(dir_fd: wasi::Fd) {
         )
         .expect_err("trying to create a file that already exists")
         .raw_error(),
-        wasi::ERRNO_EXIST,
-        "errno should be ERRNO_EXIST"
+        wasi::ERRNO_EXIST
     );
     wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
 }

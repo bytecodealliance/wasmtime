@@ -37,6 +37,7 @@ winapi = "0.3.7"
 [dev-dependencies]
 tempfile = "3.0"
 wasmtime-wasi = { path = "../wasi" }
+wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
 
 [badges]
 maintenance = { status = "actively-developed" }

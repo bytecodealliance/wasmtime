@@ -46,10 +46,9 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wiggle",
     "wiggle-borrow",
     "wasmtime-wiggle-macro",
-    // wasi-common bits
-    "winx",
-    "yanix",
+    // wasi-common
     "wasi-common",
+    "wasi-cap-std-sync",
     // wasmtime
     "lightbeam",
     "wasmtime-environ",
@@ -301,10 +300,7 @@ fn verify(crates: &[Crate]) {
     verify_and_vendor(&witx);
 
     // Vendor wasi-crypto which is also a path dependency
-    let wasi_crypto = crates
-        .iter()
-        .find(|c| c.name == "wasi-crypto")
-        .unwrap();
+    let wasi_crypto = crates.iter().find(|c| c.name == "wasi-crypto").unwrap();
     verify_and_vendor(&wasi_crypto);
 
     for krate in crates {
@@ -327,7 +323,7 @@ fn verify(crates: &[Crate]) {
             cmd.arg("--no-verify");
         }
         let status = cmd.status().unwrap();
-        assert!(status.success());
+        assert!(status.success(), "failed to verify {:?}", &krate.manifest);
         let tar = Command::new("tar")
             .arg("xf")
             .arg(format!(

@@ -1,6 +1,6 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_tests::open_scratch_directory;
+use wasi_tests::{assert_errno, open_scratch_directory, TESTCONFIG};
 
 unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
     let mut fdstat = wasi::fd_fdstat_get(dir_fd).expect("fd_fdstat_get");
@@ -9,11 +9,12 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         0,
         "the scratch directory should have RIGHT_PATH_FILESTAT_GET as base right",
     );
-    assert_ne!(
-        fdstat.fs_rights_inheriting & wasi::RIGHTS_PATH_FILESTAT_GET,
-        0,
-        "the scratch directory should have RIGHT_PATH_FILESTAT_GET as base right",
-    );
+
+    let fdflags = if TESTCONFIG.support_fdflags_sync() {
+        wasi::FDFLAGS_APPEND | wasi::FDFLAGS_SYNC
+    } else {
+        wasi::FDFLAGS_APPEND
+    };
 
     // Create a file in the scratch directory.
     let file_fd = wasi::path_open(
@@ -24,7 +25,7 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE | wasi::RIGHTS_PATH_FILESTAT_GET,
         0,
         // Pass some flags for later retrieval
-        wasi::FDFLAGS_APPEND | wasi::FDFLAGS_SYNC,
+        fdflags,
     )
     .expect("opening a file");
     assert_gt!(
@@ -44,26 +45,50 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         0,
         "files shouldn't have rights for path_* syscalls even if manually given",
     );
-    assert_ne!(
-        fdstat.fs_flags & (wasi::FDFLAGS_APPEND | wasi::FDFLAGS_SYNC),
-        0,
-        "file should have the same flags used to create the file"
+    assert_eq!(
+        fdstat.fs_flags & wasi::FDFLAGS_APPEND,
+        wasi::FDFLAGS_APPEND,
+        "file should have the APPEND fdflag used to create the file"
     );
+    if TESTCONFIG.support_fdflags_sync() {
+        assert_eq!(
+            fdstat.fs_flags & wasi::FDFLAGS_SYNC,
+            wasi::FDFLAGS_SYNC,
+            "file should have the SYNC fdflag used to create the file"
+        );
+    }
+
+    if !TESTCONFIG.support_fdflags_sync() {
+        assert_errno!(
+            wasi::path_open(
+                dir_fd,
+                0,
+                "file",
+                0,
+                wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE | wasi::RIGHTS_PATH_FILESTAT_GET,
+                0,
+                wasi::FDFLAGS_SYNC,
+            )
+            .expect_err("FDFLAGS_SYNC not supported by platform")
+            .raw_error(),
+            wasi::ERRNO_NOTSUP
+        );
+    }
 
     // Check file size
-    let mut stat = wasi::path_filestat_get(dir_fd, 0, "file").expect("reading file stats");
-    assert_eq!(stat.size, 0, "file size should be 0");
+    let file_stat = wasi::path_filestat_get(dir_fd, 0, "file").expect("reading file stats");
+    assert_eq!(file_stat.size, 0, "file size should be 0");
 
     // Check path_filestat_set_times
-    let new_mtim = stat.mtim - 100;
+    let new_mtim = file_stat.mtim - 100;
     wasi::path_filestat_set_times(dir_fd, 0, "file", 0, new_mtim, wasi::FSTFLAGS_MTIM)
         .expect("path_filestat_set_times should succeed");
 
-    stat = wasi::path_filestat_get(dir_fd, 0, "file")
+    let modified_file_stat = wasi::path_filestat_get(dir_fd, 0, "file")
         .expect("reading file stats after path_filestat_set_times");
-    assert_eq!(stat.mtim, new_mtim, "mtim should change");
+    assert_eq!(modified_file_stat.mtim, new_mtim, "mtim should change");
 
-    assert_eq!(
+    assert_errno!(
         wasi::path_filestat_set_times(
             dir_fd,
             0,
@@ -74,16 +99,19 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         )
         .expect_err("MTIM and MTIM_NOW can't both be set")
         .raw_error(),
-        wasi::ERRNO_INVAL,
-        "errno should be ERRNO_INVAL"
+        wasi::ERRNO_INVAL
     );
 
     // check if the times were untouched
-    stat = wasi::path_filestat_get(dir_fd, 0, "file")
+    let unmodified_file_stat = wasi::path_filestat_get(dir_fd, 0, "file")
         .expect("reading file stats after ERRNO_INVAL fd_filestat_set_times");
-    assert_eq!(stat.mtim, new_mtim, "mtim should not change");
-
     assert_eq!(
+        unmodified_file_stat.mtim, new_mtim,
+        "mtim should not change"
+    );
+
+    // Invalid arguments to set_times:
+    assert_errno!(
         wasi::path_filestat_set_times(
             dir_fd,
             0,
@@ -94,50 +122,11 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
         )
         .expect_err("ATIM & ATIM_NOW can't both be set")
         .raw_error(),
-        wasi::ERRNO_INVAL,
-        "errno should be ERRNO_INVAL"
+        wasi::ERRNO_INVAL
     );
-
-    // Create a symlink
-    wasi::path_symlink("file", dir_fd, "symlink").expect("creating symlink to a file");
-
-    // Check path_filestat_set_times on the symlink itself
-    let mut sym_stat = wasi::path_filestat_get(dir_fd, 0, "file").expect("reading file stats");
-
-    let sym_new_mtim = sym_stat.mtim - 200;
-    wasi::path_filestat_set_times(dir_fd, 0, "symlink", 0, sym_new_mtim, wasi::FSTFLAGS_MTIM)
-        .expect("path_filestat_set_times should succeed on symlink");
-
-    sym_stat = wasi::path_filestat_get(dir_fd, 0, "symlink")
-        .expect("reading file stats after path_filestat_set_times");
-    assert_eq!(sym_stat.mtim, sym_new_mtim, "mtim should change");
-
-    // Now, dereference the symlink
-    sym_stat = wasi::path_filestat_get(dir_fd, wasi::LOOKUPFLAGS_SYMLINK_FOLLOW, "symlink")
-        .expect("reading file stats on the dereferenced symlink");
-    assert_eq!(
-        sym_stat.mtim, stat.mtim,
-        "symlink mtim should be equal to pointee's when dereferenced"
-    );
-
-    // Finally, change stat of the original file by dereferencing the symlink
-    wasi::path_filestat_set_times(
-        dir_fd,
-        wasi::LOOKUPFLAGS_SYMLINK_FOLLOW,
-        "symlink",
-        0,
-        sym_stat.mtim,
-        wasi::FSTFLAGS_MTIM,
-    )
-    .expect("path_filestat_set_times should succeed on setting stat on original file");
-
-    stat = wasi::path_filestat_get(dir_fd, 0, "file")
-        .expect("reading file stats after path_filestat_set_times");
-    assert_eq!(stat.mtim, sym_stat.mtim, "mtim should change");
 
     wasi::fd_close(file_fd).expect("closing a file");
     wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
-    wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
 }
 fn main() {
     let mut args = env::args();

@@ -1,5 +1,5 @@
 use std::{env, process};
-use wasi_tests::open_scratch_directory;
+use wasi_tests::{assert_errno, open_scratch_directory};
 
 unsafe fn test_remove_nonempty_directory(dir_fd: wasi::Fd) {
     // Create a directory in the scratch directory.
@@ -9,12 +9,11 @@ unsafe fn test_remove_nonempty_directory(dir_fd: wasi::Fd) {
     wasi::path_create_directory(dir_fd, "dir/nested").expect("creating a subdirectory");
 
     // Test that attempting to unlink the first directory returns the expected error code.
-    assert_eq!(
+    assert_errno!(
         wasi::path_remove_directory(dir_fd, "dir")
             .expect_err("remove_directory on a directory should return ENOTEMPTY")
             .raw_error(),
-        wasi::ERRNO_NOTEMPTY,
-        "errno should be ERRNO_NOTEMPTY",
+        wasi::ERRNO_NOTEMPTY
     );
 
     // Removing the directories.

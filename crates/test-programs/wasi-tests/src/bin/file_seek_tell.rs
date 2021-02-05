@@ -1,6 +1,6 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_tests::open_scratch_directory;
+use wasi_tests::{assert_errno, open_scratch_directory};
 
 unsafe fn test_file_seek_tell(dir_fd: wasi::Fd) {
     // Create a file in the scratch directory.
@@ -57,16 +57,16 @@ unsafe fn test_file_seek_tell(dir_fd: wasi::Fd) {
     wasi::fd_seek(file_fd, 1000, wasi::WHENCE_CUR).expect("seeking beyond the end of the file");
 
     // Seek before byte 0 is an error though
-    assert_eq!(
+    assert_errno!(
         wasi::fd_seek(file_fd, -2000, wasi::WHENCE_CUR)
             .expect_err("seeking before byte 0 should be an error")
             .raw_error(),
-        wasi::ERRNO_INVAL,
-        "errno should be ERRNO_INVAL",
+        wasi::ERRNO_INVAL
     );
 
     // Check that fd_read properly updates the file offset
-    wasi::fd_seek(file_fd, 0, wasi::WHENCE_SET).expect("seeking to the beginning of the file again");
+    wasi::fd_seek(file_fd, 0, wasi::WHENCE_SET)
+        .expect("seeking to the beginning of the file again");
 
     let buffer = &mut [0u8; 100];
     let iovec = wasi::Iovec {

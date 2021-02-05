@@ -1,6 +1,6 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_tests::open_scratch_directory;
+use wasi_tests::{assert_errno, open_scratch_directory};
 
 unsafe fn test_renumber(dir_fd: wasi::Fd) {
     let pre_fd: wasi::Fd = (libc::STDERR_FILENO + 1) as wasi::Fd;
@@ -49,12 +49,11 @@ unsafe fn test_renumber(dir_fd: wasi::Fd) {
     wasi::fd_renumber(fd_from, fd_to).expect("renumbering two descriptors");
 
     // Ensure that fd_from is closed
-    assert_eq!(
+    assert_errno!(
         wasi::fd_close(fd_from)
             .expect_err("closing already closed file descriptor")
             .raw_error(),
-        wasi::ERRNO_BADF,
-        "errno should be ERRNO_BADF"
+        wasi::ERRNO_BADF
     );
 
     // Ensure that fd_to is still open.

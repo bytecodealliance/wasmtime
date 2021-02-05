@@ -21,7 +21,6 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
             guest_types::OptOptions::None => None,
         };
         Ok(self
-            .ctx
             .keypair_generate_managed(
                 secrets_manager_handle.into(),
                 alg_type.into(),
@@ -39,7 +38,7 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         kp_id_max_len: guest_types::Size,
     ) -> Result<(), guest_types::CryptoErrno> {
         let key_id_buf = &mut *kp_id_ptr.as_array(kp_id_max_len).as_slice_mut()?;
-        Ok(self.ctx.keypair_store_managed(
+        Ok(self.keypair_store_managed(
             secrets_manager_handle.into(),
             kp_handle.into(),
             key_id_buf,
@@ -53,7 +52,6 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         kp_new_handle: guest_types::Keypair,
     ) -> Result<guest_types::Version, guest_types::CryptoErrno> {
         Ok(self
-            .ctx
             .keypair_replace_managed(
                 secrets_manager_handle.into(),
                 kp_old_handle.into(),
@@ -71,7 +69,6 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
     ) -> Result<guest_types::Keypair, guest_types::CryptoErrno> {
         let kp_id = &*kp_id_ptr.as_array(kp_id_len).as_slice()?;
         Ok(self
-            .ctx
             .keypair_from_id(secrets_manager_handle.into(), kp_id, kp_version.into())?
             .into())
     }
@@ -90,7 +87,6 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
             guest_types::OptOptions::None => None,
         };
         Ok(self
-            .ctx
             .keypair_generate(alg_type.into(), alg_str, options_handle.map(Into::into))?
             .into())
     }
@@ -106,7 +102,6 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         let alg_str = &*alg_str.as_str()?;
         let encoded = &*encoded_ptr.as_array(encoded_len).as_slice()?;
         Ok(self
-            .ctx
             .keypair_import(alg_type.into(), alg_str, encoded, encoding.into())?
             .into())
     }
@@ -118,7 +113,7 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         kp_id_max_len: guest_types::Size,
     ) -> Result<(guest_types::Size, guest_types::Version), guest_types::CryptoErrno> {
         let kp_id_buf = &mut *kp_id_ptr.as_array(kp_id_max_len as _).as_slice_mut()?;
-        let (kp_id, version) = self.ctx.keypair_id(kp_handle.into())?;
+        let (kp_id, version) = self.keypair_id(kp_handle.into())?;
         ensure!(kp_id.len() <= kp_id_buf.len(), CryptoError::Overflow.into());
         kp_id_buf.copy_from_slice(&kp_id);
         Ok((kp_id.len().try_into()?, version.into()))
@@ -130,7 +125,6 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         encoding: guest_types::KeypairEncoding,
     ) -> Result<guest_types::ArrayOutput, guest_types::CryptoErrno> {
         Ok(self
-            .ctx
             .keypair_export(kp_handle.into(), encoding.into())?
             .into())
     }
@@ -139,14 +133,14 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         &self,
         kp_handle: guest_types::Keypair,
     ) -> Result<guest_types::Publickey, guest_types::CryptoErrno> {
-        Ok(self.ctx.keypair_publickey(kp_handle.into())?.into())
+        Ok(self.keypair_publickey(kp_handle.into())?.into())
     }
 
     fn keypair_close(
         &self,
         kp_handle: guest_types::Keypair,
     ) -> Result<(), guest_types::CryptoErrno> {
-        Ok(self.ctx.keypair_close(kp_handle.into())?)
+        Ok(self.keypair_close(kp_handle.into())?)
     }
 
     // --- publickey
@@ -162,7 +156,6 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         let alg_str = &*alg_str.as_str()?;
         let encoded = &*encoded_ptr.as_array(encoded_len).as_slice()?;
         Ok(self
-            .ctx
             .publickey_import(alg_type.into(), alg_str, encoded, encoding.into())?
             .into())
     }
@@ -173,7 +166,6 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         encoding: guest_types::PublickeyEncoding,
     ) -> Result<guest_types::ArrayOutput, guest_types::CryptoErrno> {
         Ok(self
-            .ctx
             .publickey_export(pk_handle.into(), encoding.into())?
             .into())
     }
@@ -182,21 +174,21 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         &self,
         sk_handle: guest_types::Secretkey,
     ) -> Result<guest_types::Publickey, guest_types::CryptoErrno> {
-        Ok(self.ctx.keypair_publickey(sk_handle.into())?.into())
+        Ok(self.keypair_publickey(sk_handle.into())?.into())
     }
 
     fn publickey_verify(
         &self,
         pk_handle: guest_types::Publickey,
     ) -> Result<(), guest_types::CryptoErrno> {
-        Ok(self.ctx.publickey_verify(pk_handle.into())?)
+        Ok(self.publickey_verify(pk_handle.into())?)
     }
 
     fn publickey_close(
         &self,
         pk_handle: guest_types::Publickey,
     ) -> Result<(), guest_types::CryptoErrno> {
-        Ok(self.ctx.publickey_close(pk_handle.into())?)
+        Ok(self.publickey_close(pk_handle.into())?)
     }
 
     // --- secretkey
@@ -212,7 +204,6 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         let alg_str = &*alg_str.as_str()?;
         let encoded = &*encoded_ptr.as_array(encoded_len).as_slice()?;
         Ok(self
-            .ctx
             .secretkey_import(alg_type.into(), alg_str, encoded, encoding.into())?
             .into())
     }
@@ -223,7 +214,6 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         encoding: guest_types::SecretkeyEncoding,
     ) -> Result<guest_types::ArrayOutput, guest_types::CryptoErrno> {
         Ok(self
-            .ctx
             .secretkey_export(sk_handle.into(), encoding.into())?
             .into())
     }
@@ -232,7 +222,7 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         &self,
         sk_handle: guest_types::Secretkey,
     ) -> Result<(), guest_types::CryptoErrno> {
-        Ok(self.ctx.secretkey_close(sk_handle.into())?)
+        Ok(self.secretkey_close(sk_handle.into())?)
     }
 
     fn keypair_from_pk_and_sk(
@@ -241,7 +231,6 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         sk_handle: guest_types::Secretkey,
     ) -> Result<guest_types::Keypair, guest_types::CryptoErrno> {
         Ok(self
-            .ctx
             .keypair_from_pk_and_sk(pk_handle.into(), sk_handle.into())?
             .into())
     }
@@ -250,7 +239,7 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         &self,
         kp_handle: guest_types::Keypair,
     ) -> Result<guest_types::Secretkey, guest_types::CryptoErrno> {
-        Ok(self.ctx.keypair_secretkey(kp_handle.into())?.into())
+        Ok(self.keypair_secretkey(kp_handle.into())?.into())
     }
 }
 

@@ -1,6 +1,5 @@
 use std::{env, process};
-use wasi_tests::open_scratch_directory;
-use wasi_tests::{create_file, drop_rights, fd_get_rights};
+use wasi_tests::{assert_errno, create_file, drop_rights, fd_get_rights, open_scratch_directory};
 
 const TEST_FILENAME: &'static str = "file";
 
@@ -27,12 +26,11 @@ unsafe fn try_read_file(dir_fd: wasi::Fd) {
     };
     // Since we no longer have the right to fd_read, trying to read a file
     // should be an error.
-    assert_eq!(
+    assert_errno!(
         wasi::fd_read(fd, &[iovec])
             .expect_err("reading bytes from file should fail")
             .raw_error(),
-        wasi::ERRNO_NOTCAPABLE,
-        "the errno should be ENOTCAPABLE"
+        wasi::ERRNO_NOTCAPABLE
     );
 }
 

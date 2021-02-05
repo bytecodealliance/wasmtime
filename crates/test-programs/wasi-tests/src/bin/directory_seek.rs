@@ -1,14 +1,22 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_tests::open_scratch_directory;
+use wasi_tests::{assert_errno, open_scratch_directory};
 
 unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
     // Create a directory in the scratch directory.
     wasi::path_create_directory(dir_fd, "dir").expect("failed to make directory");
 
     // Open the directory and attempt to request rights for seeking.
-    let fd = wasi::path_open(dir_fd, 0, "dir", 0, wasi::RIGHTS_FD_SEEK, 0, 0)
-        .expect("failed to open file");
+    let fd = wasi::path_open(
+        dir_fd,
+        0,
+        "dir",
+        wasi::OFLAGS_DIRECTORY,
+        wasi::RIGHTS_FD_SEEK,
+        0,
+        0,
+    )
+    .expect("failed to open file");
     assert_gt!(
         fd,
         libc::STDERR_FILENO as wasi::Fd,
@@ -16,12 +24,11 @@ unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
     );
 
     // Attempt to seek.
-    assert_eq!(
+    assert_errno!(
         wasi::fd_seek(fd, 0, wasi::WHENCE_CUR)
             .expect_err("seek on a directory")
             .raw_error(),
-        wasi::ERRNO_NOTCAPABLE,
-        "errno should be ERRNO_NOTCAPABLE"
+        wasi::ERRNO_BADF
     );
 
     // Check if we obtained the right to seek.
@@ -34,7 +41,7 @@ unsafe fn test_directory_seek(dir_fd: wasi::Fd) {
     assert_eq!(
         (fdstat.fs_rights_base & wasi::RIGHTS_FD_SEEK),
         0,
-        "directory has the seek right",
+        "directory does NOT have the seek right",
     );
 
     // Clean up.

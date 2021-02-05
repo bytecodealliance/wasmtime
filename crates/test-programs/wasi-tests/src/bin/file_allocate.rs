@@ -1,6 +1,6 @@
 use more_asserts::assert_gt;
 use std::{env, process};
-use wasi_tests::open_scratch_directory;
+use wasi_tests::{open_scratch_directory, TESTCONFIG};
 
 unsafe fn test_file_allocate(dir_fd: wasi::Fd) {
     // Create a file in the scratch directory.
@@ -27,21 +27,22 @@ unsafe fn test_file_allocate(dir_fd: wasi::Fd) {
     let mut stat = wasi::fd_filestat_get(file_fd).expect("reading file stats");
     assert_eq!(stat.size, 0, "file size should be 0");
 
-    // Allocate some size
-    wasi::fd_allocate(file_fd, 0, 100).expect("allocating size");
-    stat = wasi::fd_filestat_get(file_fd).expect("reading file stats");
-    assert_eq!(stat.size, 100, "file size should be 100");
+    if TESTCONFIG.support_fd_allocate() {
+        // Allocate some size
+        wasi::fd_allocate(file_fd, 0, 100).expect("allocating size");
+        stat = wasi::fd_filestat_get(file_fd).expect("reading file stats");
+        assert_eq!(stat.size, 100, "file size should be 100");
 
-    // Allocate should not modify if less than current size
-    wasi::fd_allocate(file_fd, 10, 10).expect("allocating size less than current size");
-    stat = wasi::fd_filestat_get(file_fd).expect("reading file stats");
-    assert_eq!(stat.size, 100, "file size should remain unchanged at 100");
+        // Allocate should not modify if less than current size
+        wasi::fd_allocate(file_fd, 10, 10).expect("allocating size less than current size");
+        stat = wasi::fd_filestat_get(file_fd).expect("reading file stats");
+        assert_eq!(stat.size, 100, "file size should remain unchanged at 100");
 
-    // Allocate should modify if offset+len > current_len
-    wasi::fd_allocate(file_fd, 90, 20).expect("allocating size larger than current size");
-    stat = wasi::fd_filestat_get(file_fd).expect("reading file stats");
-    assert_eq!(stat.size, 110, "file size should increase from 100 to 110");
-
+        // Allocate should modify if offset+len > current_len
+        wasi::fd_allocate(file_fd, 90, 20).expect("allocating size larger than current size");
+        stat = wasi::fd_filestat_get(file_fd).expect("reading file stats");
+        assert_eq!(stat.size, 110, "file size should increase from 100 to 110");
+    }
     wasi::fd_close(file_fd).expect("closing a file");
     wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
 }
