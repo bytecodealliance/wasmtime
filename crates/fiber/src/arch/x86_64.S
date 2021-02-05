@@ -72,8 +72,8 @@ FUNCTION(wasmtime_fiber_init):
     // registers by that function and the `wasmtime_fiber_start` function will
     // take over and understands which values are in which registers.
     //
-    // The first 16 bytes of stack aree reserveed for metadata, so we start
-    // sttoring values beneatht that.
+    // The first 16 bytes of stack are reserved for metadata, so we start
+    // storing values beneath that.
     lea FUNCTION(wasmtime_fiber_start)(%rip), %rax
     movq %rax, -0x18(%rdi)
     movq %rdi, -0x20(%rdi)    // loaded into rbp during switch
