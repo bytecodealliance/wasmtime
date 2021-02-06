@@ -42,3 +42,13 @@ pub extern "C" fn wasmtime_interrupt_handle_new(
 pub extern "C" fn wasmtime_interrupt_handle_interrupt(handle: &wasmtime_interrupt_handle_t) {
     handle.handle.interrupt();
 }
+
+#[no_mangle]
+pub extern "C" fn wasmtime_add_fuel(store: &wasm_store_t, fuel: u64) {
+    store.store.add_fuel(fuel);
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_fuel_consumed(store: &wasm_store_t) -> u64 {
+    store.store.fuel_consumed().unwrap_or(0)
+}
