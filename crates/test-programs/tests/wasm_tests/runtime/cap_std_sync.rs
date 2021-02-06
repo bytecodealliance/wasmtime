@@ -1,7 +1,7 @@
 use anyhow::Context;
 use std::path::Path;
 use wasi_cap_std_sync::WasiCtxBuilder;
-use wasi_common::pipe::{ReadPipe, WritePipe};
+use wasi_common::pipe::WritePipe;
 use wasmtime::{Linker, Module, Store};
 
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
@@ -18,7 +18,6 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         builder = builder
             .arg(bin_name)?
             .arg(".")?
-            .stdin(Box::new(ReadPipe::from(Vec::new())))
             .stdout(Box::new(stdout.clone()))
             .stderr(Box::new(stderr.clone()));
 
