@@ -56,6 +56,11 @@ pub extern "C" fn wasmtime_config_interruptable_set(c: &mut wasm_config_t, enabl
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_config_consume_fuel_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.consume_fuel(enable);
+}
+
+#[no_mangle]
 pub extern "C" fn wasmtime_config_max_wasm_stack_set(c: &mut wasm_config_t, size: usize) {
     c.config.max_wasm_stack(size);
 }
