@@ -95,7 +95,7 @@ pub fn instantiate_with_config(
 
     let mut timeout_state = SignalOnDrop::default();
     match timeout {
-        Timeout::Fuel(fuel) => store.add_fuel(fuel),
+        Timeout::Fuel(fuel) => store.add_fuel(fuel).unwrap(),
         // If a timeout is requested then we spawn a helper thread to wait for
         // the requested time and then send us a signal to get interrupted. We
         // also arrange for the thread's sleep to get interrupted if we return
@@ -418,7 +418,7 @@ pub fn spectest(fuzz_config: crate::generators::Config, test: crate::generators:
     config.wasm_bulk_memory(false);
     let store = Store::new(&Engine::new(&config));
     if fuzz_config.consume_fuel {
-        store.add_fuel(u64::max_value());
+        store.add_fuel(u64::max_value()).unwrap();
     }
     let mut wast_context = WastContext::new(store);
     wast_context.register_spectest().unwrap();
@@ -442,7 +442,7 @@ pub fn table_ops(
         let engine = Engine::new(&config);
         let store = Store::new(&engine);
         if fuzz_config.consume_fuel {
-            store.add_fuel(u64::max_value());
+            store.add_fuel(u64::max_value()).unwrap();
         }
 
         let wasm = ops.to_wasm_binary();
@@ -557,7 +557,7 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
     let wasmtime_engine = Engine::new(&wasmtime_config);
     let wasmtime_store = Store::new(&wasmtime_engine);
     if config.consume_fuel {
-        wasmtime_store.add_fuel(u64::max_value());
+        wasmtime_store.add_fuel(u64::max_value()).unwrap();
     }
     let wasmtime_module =
         Module::new(&wasmtime_engine, &wasm).expect("Wasmtime can compile module");

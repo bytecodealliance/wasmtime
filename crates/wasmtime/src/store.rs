@@ -463,8 +463,11 @@ impl Store {
     ///
     /// This function will panic if the store's [`Config`](crate::Config) did
     /// not have fuel consumption enabled.
-    pub fn add_fuel(&self, fuel: u64) {
-        assert!(self.engine().config().tunables.consume_fuel);
+    pub fn add_fuel(&self, fuel: u64) -> Result<()> {
+        anyhow::ensure!(
+            self.engine().config().tunables.consume_fuel,
+            "fuel is not configured in this store"
+        );
 
         // Fuel is stored as an i64, so we need to cast it. If the provided fuel
         // value overflows that just assume that i64::max will suffice. Wasm
@@ -490,6 +493,8 @@ impl Store {
                 *consumed_ptr = (*consumed_ptr + adj) - i64::max_value();
             }
         }
+
+        Ok(())
     }
 }
 
