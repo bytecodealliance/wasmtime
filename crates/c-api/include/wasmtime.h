@@ -655,17 +655,23 @@ WASM_API_EXTERN own wasmtime_interrupt_handle_t *wasmtime_interrupt_handle_new(w
  *
  * Note that at this time when fuel is entirely consumed it will cause
  * wasm to trap. More usages of fuel are planned for the future.
+ *
+ * If fuel is not enabled within this store then an error is returned. If fuel
+ * is successfully added then NULL is returned.
  */
-WASM_API_EXTERN void wasmtime_add_fuel(wasm_store_t *store, uint64_t fuel);
+WASM_API_EXTERN own wasmtime_error_t *wasmtime_store_add_fuel(wasm_store_t *store, uint64_t fuel);
 
 /**
  * \brief Returns the amount of fuel consumed by this store's execution so far.
  *
  * If fuel consumption is not enabled via #wasmtime_config_consume_fuel_set
- * then this function will return 0. Also note that fuel, if enabled, must be
- * originally configured via #wasmtime_add_fuel.
+ * then this function will return false. Otherwise true is returned and the
+ * fuel parameter is filled in with fuel consuemd so far.
+ *
+ * Also note that fuel, if enabled, must be originally configured via
+ * #wasmtime_store_add_fuel.
  */
-WASM_API_EXTERN uint64_t wasmtime_fuel_consumed(wasm_store_t *store);
+WASM_API_EXTERN bool wasmtime_store_fuel_consumed(wasm_store_t *store, uint64_t *fuel);
 
 /**
  * \brief Requests that WebAssembly code running in the store attached to this

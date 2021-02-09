@@ -1,4 +1,4 @@
-use crate::wasm_engine_t;
+use crate::{wasm_engine_t, wasmtime_error_t};
 use wasmtime::{InterruptHandle, Store};
 
 #[repr(C)]
@@ -44,11 +44,20 @@ pub extern "C" fn wasmtime_interrupt_handle_interrupt(handle: &wasmtime_interrup
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_add_fuel(store: &wasm_store_t, fuel: u64) {
-    store.store.add_fuel(fuel);
+pub extern "C" fn wasmtime_store_add_fuel(
+    store: &wasm_store_t,
+    fuel: u64,
+) -> Option<Box<wasmtime_error_t>> {
+    crate::handle_result(store.store.add_fuel(fuel), |()| {})
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_fuel_consumed(store: &wasm_store_t) -> u64 {
-    store.store.fuel_consumed().unwrap_or(0)
+pub extern "C" fn wasmtime_store_fuel_consumed(store: &wasm_store_t, fuel: &mut u64) -> bool {
+    match store.store.fuel_consumed() {
+        Some(amt) => {
+            *fuel = amt;
+            true
+        }
+        None => false,
+    }
 }
