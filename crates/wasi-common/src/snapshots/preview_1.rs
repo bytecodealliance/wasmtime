@@ -1112,7 +1112,7 @@ impl From<&FdStat> for types::Fdstat {
 impl From<&DirFdStat> for types::Fdstat {
     fn from(dirstat: &DirFdStat) -> types::Fdstat {
         let fs_rights_base = types::Rights::from(&dirstat.dir_caps);
-        let fs_rights_inheriting = types::Rights::from(&dirstat.file_caps);
+        let fs_rights_inheriting = types::Rights::from(&dirstat.file_caps) | fs_rights_base;
         types::Fdstat {
             fs_filetype: types::Filetype::Directory,
             fs_rights_base,
