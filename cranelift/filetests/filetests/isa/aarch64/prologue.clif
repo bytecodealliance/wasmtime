@@ -77,22 +77,72 @@ block0(v0: f64):
 
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: str q8, [sp, #-16]!
-; nextln: str q9, [sp, #-16]!
-; nextln: str q10, [sp, #-16]!
-; nextln: str q11, [sp, #-16]!
-; nextln: str q12, [sp, #-16]!
-; nextln: str q13, [sp, #-16]!
-; nextln: str q14, [sp, #-16]!
-; nextln: str q15, [sp, #-16]!
+; nextln: stp d14, d15, [sp, #-16]!
+; nextln: stp d12, d13, [sp, #-16]!
+; nextln: stp d10, d11, [sp, #-16]!
+; nextln: stp d8, d9, [sp, #-16]!
 
-; check: ldr q15, [sp], #16
-; nextln: ldr q14, [sp], #16
-; nextln: ldr q13, [sp], #16
-; nextln: ldr q12, [sp], #16
-; nextln: ldr q11, [sp], #16
-; nextln: ldr q10, [sp], #16
-; nextln: ldr q9, [sp], #16
-; nextln: ldr q8, [sp], #16
+; check: ldp d8, d9, [sp], #16
+; nextln: ldp d10, d11, [sp], #16
+; nextln: ldp d12, d13, [sp], #16
+; nextln: ldp d14, d15, [sp], #16
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f2(i64) -> i64 {
+block0(v0: i64):
+    v1 = iadd.i64 v0, v0
+    v2 = iadd.i64 v0, v1
+    v3 = iadd.i64 v0, v2
+    v4 = iadd.i64 v0, v3
+    v5 = iadd.i64 v0, v4
+    v6 = iadd.i64 v0, v5
+    v7 = iadd.i64 v0, v6
+    v8 = iadd.i64 v0, v7
+    v9 = iadd.i64 v0, v8
+    v10 = iadd.i64 v0, v9
+    v11 = iadd.i64 v0, v10
+    v12 = iadd.i64 v0, v11
+    v13 = iadd.i64 v0, v12
+    v14 = iadd.i64 v0, v13
+    v15 = iadd.i64 v0, v14
+    v16 = iadd.i64 v0, v15
+    v17 = iadd.i64 v0, v16
+    v18 = iadd.i64 v0, v17
+
+    v19 = iadd.i64 v0, v1
+    v20 = iadd.i64 v2, v3
+    v21 = iadd.i64 v4, v5
+    v22 = iadd.i64 v6, v7
+    v23 = iadd.i64 v8, v9
+    v24 = iadd.i64 v10, v11
+    v25 = iadd.i64 v12, v13
+    v26 = iadd.i64 v14, v15
+    v27 = iadd.i64 v16, v17
+
+    v28 = iadd.i64 v18, v19
+    v29 = iadd.i64 v20, v21
+    v30 = iadd.i64 v22, v23
+    v31 = iadd.i64 v24, v25
+    v32 = iadd.i64 v26, v27
+
+    v33 = iadd.i64 v28, v29
+    v34 = iadd.i64 v30, v31
+
+    v35 = iadd.i64 v32, v33
+    v36 = iadd.i64 v34, v35
+
+    return v36
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: str x22, [sp, #-16]!
+; nextln: stp x19, x20, [sp, #-16]!
+; nextln: add x1, x0, x0
+
+; check: add x0, x1, x0
+; nextln: ldp x19, x20, [sp], #16
+; nextln: ldr x22, [sp], #16
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret

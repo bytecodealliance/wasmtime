@@ -5106,6 +5106,168 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::FpuLoadP64 {
+            rt: writable_vreg(0),
+            rt2: writable_vreg(31),
+            mem: PairAMode::SignedOffset(xreg(0), SImm7Scaled::zero(F64)),
+            flags: MemFlags::trusted(),
+        },
+        "007C406D",
+        "ldp d0, d31, [x0]",
+    ));
+
+    insns.push((
+        Inst::FpuLoadP64 {
+            rt: writable_vreg(19),
+            rt2: writable_vreg(11),
+            mem: PairAMode::PreIndexed(
+                writable_xreg(25),
+                SImm7Scaled::maybe_from_i64(-512, F64).unwrap(),
+            ),
+            flags: MemFlags::trusted(),
+        },
+        "332FE06D",
+        "ldp d19, d11, [x25, #-512]!",
+    ));
+
+    insns.push((
+        Inst::FpuLoadP64 {
+            rt: writable_vreg(7),
+            rt2: writable_vreg(20),
+            mem: PairAMode::PostIndexed(
+                writable_stack_reg(),
+                SImm7Scaled::maybe_from_i64(64, F64).unwrap(),
+            ),
+            flags: MemFlags::trusted(),
+        },
+        "E753C46C",
+        "ldp d7, d20, [sp], #64",
+    ));
+
+    insns.push((
+        Inst::FpuStoreP64 {
+            rt: vreg(4),
+            rt2: vreg(26),
+            mem: PairAMode::SignedOffset(
+                stack_reg(),
+                SImm7Scaled::maybe_from_i64(504, F64).unwrap(),
+            ),
+            flags: MemFlags::trusted(),
+        },
+        "E4EB1F6D",
+        "stp d4, d26, [sp, #504]",
+    ));
+
+    insns.push((
+        Inst::FpuStoreP64 {
+            rt: vreg(16),
+            rt2: vreg(8),
+            mem: PairAMode::PreIndexed(
+                writable_xreg(15),
+                SImm7Scaled::maybe_from_i64(48, F64).unwrap(),
+            ),
+            flags: MemFlags::trusted(),
+        },
+        "F021836D",
+        "stp d16, d8, [x15, #48]!",
+    ));
+
+    insns.push((
+        Inst::FpuStoreP64 {
+            rt: vreg(5),
+            rt2: vreg(6),
+            mem: PairAMode::PostIndexed(
+                writable_xreg(28),
+                SImm7Scaled::maybe_from_i64(-32, F64).unwrap(),
+            ),
+            flags: MemFlags::trusted(),
+        },
+        "851BBE6C",
+        "stp d5, d6, [x28], #-32",
+    ));
+
+    insns.push((
+        Inst::FpuLoadP128 {
+            rt: writable_vreg(0),
+            rt2: writable_vreg(17),
+            mem: PairAMode::SignedOffset(xreg(3), SImm7Scaled::zero(I8X16)),
+            flags: MemFlags::trusted(),
+        },
+        "604440AD",
+        "ldp q0, q17, [x3]",
+    ));
+
+    insns.push((
+        Inst::FpuLoadP128 {
+            rt: writable_vreg(29),
+            rt2: writable_vreg(9),
+            mem: PairAMode::PreIndexed(
+                writable_xreg(16),
+                SImm7Scaled::maybe_from_i64(-1024, I8X16).unwrap(),
+            ),
+            flags: MemFlags::trusted(),
+        },
+        "1D26E0AD",
+        "ldp q29, q9, [x16, #-1024]!",
+    ));
+
+    insns.push((
+        Inst::FpuLoadP128 {
+            rt: writable_vreg(10),
+            rt2: writable_vreg(20),
+            mem: PairAMode::PostIndexed(
+                writable_xreg(26),
+                SImm7Scaled::maybe_from_i64(256, I8X16).unwrap(),
+            ),
+            flags: MemFlags::trusted(),
+        },
+        "4A53C8AC",
+        "ldp q10, q20, [x26], #256",
+    ));
+
+    insns.push((
+        Inst::FpuStoreP128 {
+            rt: vreg(9),
+            rt2: vreg(31),
+            mem: PairAMode::SignedOffset(
+                stack_reg(),
+                SImm7Scaled::maybe_from_i64(1008, I8X16).unwrap(),
+            ),
+            flags: MemFlags::trusted(),
+        },
+        "E9FF1FAD",
+        "stp q9, q31, [sp, #1008]",
+    ));
+
+    insns.push((
+        Inst::FpuStoreP128 {
+            rt: vreg(27),
+            rt2: vreg(13),
+            mem: PairAMode::PreIndexed(
+                writable_stack_reg(),
+                SImm7Scaled::maybe_from_i64(-192, I8X16).unwrap(),
+            ),
+            flags: MemFlags::trusted(),
+        },
+        "FB37BAAD",
+        "stp q27, q13, [sp, #-192]!",
+    ));
+
+    insns.push((
+        Inst::FpuStoreP128 {
+            rt: vreg(18),
+            rt2: vreg(22),
+            mem: PairAMode::PostIndexed(
+                writable_xreg(13),
+                SImm7Scaled::maybe_from_i64(304, I8X16).unwrap(),
+            ),
+            flags: MemFlags::trusted(),
+        },
+        "B2D989AC",
+        "stp q18, q22, [x13], #304",
+    ));
+
+    insns.push((
         Inst::LoadFpuConst64 {
             rd: writable_vreg(16),
             const_data: 1.0_f64.to_bits(),

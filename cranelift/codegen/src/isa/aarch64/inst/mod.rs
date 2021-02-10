@@ -848,7 +848,34 @@ pub enum Inst {
         mem: AMode,
         flags: MemFlags,
     },
-
+    /// A load of a pair of floating-point registers, double precision (64-bit).
+    FpuLoadP64 {
+        rt: Writable<Reg>,
+        rt2: Writable<Reg>,
+        mem: PairAMode,
+        flags: MemFlags,
+    },
+    /// A store of a pair of floating-point registers, double precision (64-bit).
+    FpuStoreP64 {
+        rt: Reg,
+        rt2: Reg,
+        mem: PairAMode,
+        flags: MemFlags,
+    },
+    /// A load of a pair of floating-point registers, 128-bit.
+    FpuLoadP128 {
+        rt: Writable<Reg>,
+        rt2: Writable<Reg>,
+        mem: PairAMode,
+        flags: MemFlags,
+    },
+    /// A store of a pair of floating-point registers, 128-bit.
+    FpuStoreP128 {
+        rt: Reg,
+        rt2: Reg,
+        mem: PairAMode,
+        flags: MemFlags,
+    },
     LoadFpuConst64 {
         rd: Writable<Reg>,
         const_data: u64,
@@ -1908,6 +1935,34 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(rd);
             memarg_regs(mem, collector);
         }
+        &Inst::FpuLoadP64 {
+            rt, rt2, ref mem, ..
+        } => {
+            collector.add_def(rt);
+            collector.add_def(rt2);
+            pairmemarg_regs(mem, collector);
+        }
+        &Inst::FpuStoreP64 {
+            rt, rt2, ref mem, ..
+        } => {
+            collector.add_use(rt);
+            collector.add_use(rt2);
+            pairmemarg_regs(mem, collector);
+        }
+        &Inst::FpuLoadP128 {
+            rt, rt2, ref mem, ..
+        } => {
+            collector.add_def(rt);
+            collector.add_def(rt2);
+            pairmemarg_regs(mem, collector);
+        }
+        &Inst::FpuStoreP128 {
+            rt, rt2, ref mem, ..
+        } => {
+            collector.add_use(rt);
+            collector.add_use(rt2);
+            pairmemarg_regs(mem, collector);
+        }
         &Inst::LoadFpuConst64 { rd, .. } | &Inst::LoadFpuConst128 { rd, .. } => {
             collector.add_def(rd);
         }
@@ -2589,6 +2644,46 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         } => {
             map_use(mapper, rd);
             map_mem(mapper, mem);
+        }
+        &mut Inst::FpuLoadP64 {
+            ref mut rt,
+            ref mut rt2,
+            ref mut mem,
+            ..
+        } => {
+            map_def(mapper, rt);
+            map_def(mapper, rt2);
+            map_pairmem(mapper, mem);
+        }
+        &mut Inst::FpuStoreP64 {
+            ref mut rt,
+            ref mut rt2,
+            ref mut mem,
+            ..
+        } => {
+            map_use(mapper, rt);
+            map_use(mapper, rt2);
+            map_pairmem(mapper, mem);
+        }
+        &mut Inst::FpuLoadP128 {
+            ref mut rt,
+            ref mut rt2,
+            ref mut mem,
+            ..
+        } => {
+            map_def(mapper, rt);
+            map_def(mapper, rt2);
+            map_pairmem(mapper, mem);
+        }
+        &mut Inst::FpuStoreP128 {
+            ref mut rt,
+            ref mut rt2,
+            ref mut mem,
+            ..
+        } => {
+            map_use(mapper, rt);
+            map_use(mapper, rt2);
+            map_pairmem(mapper, mem);
         }
         &mut Inst::LoadFpuConst64 { ref mut rd, .. } => {
             map_def(mapper, rd);
@@ -3507,6 +3602,42 @@ impl Inst {
                 let (mem_str, mem) = mem_finalize_for_show(mem, mb_rru, state);
                 let mem = mem.show_rru(mb_rru);
                 format!("{}str {}, {}", mem_str, rd, mem)
+            }
+            &Inst::FpuLoadP64 {
+                rt, rt2, ref mem, ..
+            } => {
+                let rt = show_vreg_scalar(rt.to_reg(), mb_rru, ScalarSize::Size64);
+                let rt2 = show_vreg_scalar(rt2.to_reg(), mb_rru, ScalarSize::Size64);
+                let mem = mem.show_rru(mb_rru);
+
+                format!("ldp {}, {}, {}", rt, rt2, mem)
+            }
+            &Inst::FpuStoreP64 {
+                rt, rt2, ref mem, ..
+            } => {
+                let rt = show_vreg_scalar(rt, mb_rru, ScalarSize::Size64);
+                let rt2 = show_vreg_scalar(rt2, mb_rru, ScalarSize::Size64);
+                let mem = mem.show_rru(mb_rru);
+
+                format!("stp {}, {}, {}", rt, rt2, mem)
+            }
+            &Inst::FpuLoadP128 {
+                rt, rt2, ref mem, ..
+            } => {
+                let rt = show_vreg_scalar(rt.to_reg(), mb_rru, ScalarSize::Size128);
+                let rt2 = show_vreg_scalar(rt2.to_reg(), mb_rru, ScalarSize::Size128);
+                let mem = mem.show_rru(mb_rru);
+
+                format!("ldp {}, {}, {}", rt, rt2, mem)
+            }
+            &Inst::FpuStoreP128 {
+                rt, rt2, ref mem, ..
+            } => {
+                let rt = show_vreg_scalar(rt, mb_rru, ScalarSize::Size128);
+                let rt2 = show_vreg_scalar(rt2, mb_rru, ScalarSize::Size128);
+                let mem = mem.show_rru(mb_rru);
+
+                format!("stp {}, {}, {}", rt, rt2, mem)
             }
             &Inst::LoadFpuConst64 { rd, const_data } => {
                 let rd = show_vreg_scalar(rd.to_reg(), mb_rru, ScalarSize::Size64);
