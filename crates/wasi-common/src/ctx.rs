@@ -65,16 +65,19 @@ pub struct WasiCtxBuilder(WasiCtx);
 impl WasiCtxBuilder {
     pub fn build(self) -> Result<WasiCtx, Error> {
         use crate::file::TableFileExt;
-        let t = self.0.table();
-        for (fd, name) in ["stdin", "stdout", "stderr"].iter().enumerate() {
-            if t.get_file(fd as u32).is_err() {
-                return Err(anyhow::anyhow!(
-                    "Cannot build WasiCtx: Missing required file `{}`",
-                    name
-                ));
+        // Default to an empty readpipe for stdin:
+        if self.0.table().get_file(0).is_err() {
+            let stdin = crate::pipe::ReadPipe::new(std::io::empty());
+            self.0.insert_file(0, Box::new(stdin), FileCaps::all());
+        }
+        // Default to a sink writepipe for stdout, stderr:
+        for stdio_write in &[1, 2] {
+            if self.0.table().get_file(*stdio_write).is_err() {
+                let output_file = crate::pipe::WritePipe::new(std::io::sink());
+                self.0
+                    .insert_file(*stdio_write, Box::new(output_file), FileCaps::all());
             }
         }
-        drop(t);
         Ok(self.0)
     }
 
@@ -89,29 +92,17 @@ impl WasiCtxBuilder {
     }
 
     pub fn stdin(self, f: Box<dyn WasiFile>) -> Self {
-        self.0.insert_file(
-            0,
-            f,
-            FileCaps::READ | FileCaps::POLL_READWRITE, // XXX fixme: more rights are ok, but this is read-only
-        );
+        self.0.insert_file(0, f, FileCaps::all());
         self
     }
 
     pub fn stdout(self, f: Box<dyn WasiFile>) -> Self {
-        self.0.insert_file(
-            1,
-            f,
-            FileCaps::WRITE | FileCaps::POLL_READWRITE, // XXX fixme: more rights are ok, but this is append only
-        );
+        self.0.insert_file(1, f, FileCaps::all());
         self
     }
 
     pub fn stderr(self, f: Box<dyn WasiFile>) -> Self {
-        self.0.insert_file(
-            2,
-            f,
-            FileCaps::WRITE | FileCaps::POLL_READWRITE, // XXX fixme: more rights are ok, but this is append only
-        );
+        self.0.insert_file(2, f, FileCaps::all());
         self
     }
 

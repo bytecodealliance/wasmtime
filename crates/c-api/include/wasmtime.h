@@ -153,6 +153,15 @@ WASMTIME_CONFIG_PROP(void, debug_info, bool)
 WASMTIME_CONFIG_PROP(void, interruptable, bool)
 
 /**
+ * \brief Whether or not fuel is enabled for generated code.
+ *
+ * This setting is `false` by default. When enabled it will enable fuel counting
+ * meaning that fuel will be consumed every time a wasm instruction is executed,
+ * and trap when reaching zero.
+ */
+WASMTIME_CONFIG_PROP(void, consume_fuel, bool)
+
+/**
  * \brief Configures the maximum stack size, in bytes, that JIT code can use.
  *
  * This setting is 2MB by default. Configuring this setting will limit the
@@ -634,6 +643,35 @@ WASMTIME_DECLARE_OWN(interrupt_handle)
  * interrupts enabled. See #wasmtime_config_interruptable_set.
  */
 WASM_API_EXTERN own wasmtime_interrupt_handle_t *wasmtime_interrupt_handle_new(wasm_store_t *store);
+
+/**
+ * \brief Adds fuel to this Store for wasm to consume while executing.
+ *
+ * For this method to work fuel consumption must be enabled via
+ * #wasmtime_config_consume_fuel_set. By default a Store starts with 0 fuel
+ * for wasm to execute with (meaning it will immediately trap).
+ * This function must be called for the store to have
+ * some fuel to allow WebAssembly to execute.
+ *
+ * Note that at this time when fuel is entirely consumed it will cause
+ * wasm to trap. More usages of fuel are planned for the future.
+ *
+ * If fuel is not enabled within this store then an error is returned. If fuel
+ * is successfully added then NULL is returned.
+ */
+WASM_API_EXTERN own wasmtime_error_t *wasmtime_store_add_fuel(wasm_store_t *store, uint64_t fuel);
+
+/**
+ * \brief Returns the amount of fuel consumed by this store's execution so far.
+ *
+ * If fuel consumption is not enabled via #wasmtime_config_consume_fuel_set
+ * then this function will return false. Otherwise true is returned and the
+ * fuel parameter is filled in with fuel consuemd so far.
+ *
+ * Also note that fuel, if enabled, must be originally configured via
+ * #wasmtime_store_add_fuel.
+ */
+WASM_API_EXTERN bool wasmtime_store_fuel_consumed(wasm_store_t *store, uint64_t *fuel);
 
 /**
  * \brief Requests that WebAssembly code running in the store attached to this
