@@ -55,7 +55,6 @@ unsafe fn test_path_exists(dir_fd: wasi::Fd) {
 }
 
 fn main() {
-    /*
     let mut args = env::args();
     let prog = args.next().unwrap();
     let arg = if let Some(arg) = args.next() {
@@ -73,7 +72,6 @@ fn main() {
             process::exit(1)
         }
     };
-    */
     // Run the tests.
-    unsafe { test_path_exists(3) }
+    unsafe { test_path_exists(dir_fd) }
 }
