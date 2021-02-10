@@ -30,6 +30,9 @@ pub use anyhow::Error;
 /// the crate. Not all values are represented presently.
 #[derive(Debug, thiserror::Error)]
 pub enum ErrorKind {
+    /// Errno::Acces: Permission denied.
+    #[error("Acces: Permission denied")]
+    Acces,
     /// Errno::Noent: No such file or directory
     #[error("Noent: No such file or directory")]
     Noent,
@@ -82,6 +85,7 @@ pub enum ErrorKind {
 
 pub trait ErrorExt {
     fn trap(msg: impl Into<String>) -> Self;
+    fn permission_denied() -> Self;
     fn not_found() -> Self;
     fn too_big() -> Self;
     fn badf() -> Self;
@@ -103,6 +107,9 @@ pub trait ErrorExt {
 impl ErrorExt for Error {
     fn trap(msg: impl Into<String>) -> Self {
         anyhow::anyhow!(msg.into())
+    }
+    fn permission_denied() -> Self {
+        ErrorKind::Acces.into()
     }
     fn not_found() -> Self {
         ErrorKind::Noent.into()

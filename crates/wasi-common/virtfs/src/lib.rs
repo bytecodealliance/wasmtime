@@ -67,6 +67,7 @@ impl Filesystem {
         Rc::new(RefCell::new(FileInode {
             fs: Rc::downgrade(&self),
             serial,
+            nlink: 1,
             contents: Vec::new(),
             atim: now,
             ctim: now,
@@ -89,6 +90,7 @@ impl Filesystem {
     }
 }
 
+#[derive(Clone)]
 pub enum Inode {
     Dir(Rc<RefCell<DirInode>>),
     File(Rc<RefCell<FileInode>>),
@@ -135,6 +137,7 @@ pub struct FileInode {
     fs: Weak<Filesystem>,
     serial: u64,
     contents: Vec<u8>,
+    nlink: u64,
     atim: SystemTime,
     mtim: SystemTime,
     ctim: SystemTime,
@@ -149,12 +152,22 @@ impl FileInode {
             device_id: self.fs().device_id,
             inode: self.serial,
             filetype: FileType::RegularFile,
-            nlink: 0,
+            nlink: self.nlink,
             size: self.contents.len() as u64,
             atim: Some(self.atim.into_std()),
             ctim: Some(self.ctim.into_std()),
             mtim: Some(self.mtim.into_std()),
         }
+    }
+    pub fn update_atim(&mut self) {
+        let now = self.fs().now();
+        self.atim = now;
+    }
+    pub fn link_increment(&mut self) {
+        self.nlink += 1;
+    }
+    pub fn link_decrement(&mut self) {
+        self.nlink -= 1;
     }
 }
 
@@ -344,7 +357,7 @@ impl Dir {
                 if accept_trailing_slash {
                     return f(self, path);
                 } else {
-                    return Err(Error::invalid_argument()
+                    return Err(Error::not_found()
                         .context("empty filename, probably related to trailing slashes"));
                 }
             }
@@ -423,7 +436,7 @@ impl WasiDir for Dir {
             } else if oflags.contains(OFlags::CREATE) {
                 match dir.child_file(filename) {
                     Ok(inode) => {
-                        // XXX update atime here!
+                        inode.borrow_mut().update_atim();
                         Ok(Box::new(File {
                             inode,
                             position: Cell::new(0),
@@ -446,7 +459,7 @@ impl WasiDir for Dir {
                 }
             } else {
                 let inode = dir.child_file(filename)?;
-                // XXX update atime here!
+                inode.borrow_mut().update_atim();
                 Ok(Box::new(File {
                     inode,
                     position: Cell::new(0),
@@ -512,7 +525,7 @@ impl WasiDir for Dir {
         self.at_path(path, false, |dir, filename| {
             let mut d = dir.inode_mut();
             match d.contents.get(filename) {
-                Some(Inode::File(_)) => {}
+                Some(Inode::File(f)) => f.borrow_mut().link_decrement(),
                 Some(Inode::Dir(d)) => {
                     return Err(Error::is_dir());
                 }
@@ -547,7 +560,38 @@ impl WasiDir for Dir {
         target_dir: &dyn WasiDir,
         target_path: &str,
     ) -> Result<(), Error> {
-        todo!()
+        self.at_path(src_path, false, |dir, filename| {
+            let src_inode = match dir
+                .inode()
+                .contents
+                .get(filename)
+                .ok_or_else(|| Error::not_found().context("link source not found"))?
+            {
+                Inode::Dir(_) => {
+                    Err(Error::permission_denied().context("link source cannot be directory"))?
+                }
+                Inode::File(f) => f.clone(),
+            };
+            let target_dir = target_dir.as_any().downcast_ref::<Dir>().ok_or_else(|| {
+                Error::not_capable().context("link destination must be inside a virtfs::Dir")
+            })?;
+            target_dir.at_path(target_path, false, |dir, filename| {
+                if Rc::as_ptr(&dir.inode().fs()) as usize
+                    != Rc::as_ptr(&src_inode.borrow().fs()) as usize
+                {
+                    return Err(Error::not_supported()
+                        .context("link source and destination must be in same filesystem"));
+                }
+                if dir.inode().contents.get(filename).is_some() {
+                    return Err(Error::exist().context("link destination exists"));
+                }
+                src_inode.borrow_mut().link_increment();
+                dir.inode_mut()
+                    .contents
+                    .insert(filename.to_owned(), Inode::File(src_inode));
+                Ok(())
+            })
+        })
     }
     fn set_times(
         &self,
