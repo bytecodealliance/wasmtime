@@ -6,7 +6,9 @@
 
 use anyhow::Context;
 use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
+use std::fmt::Display;
 #[cfg(feature = "structopt")]
 use structopt::StructOpt;
 
@@ -45,6 +47,20 @@ pub struct Wizer {
     )]
     init_func: String,
 
+    /// Any function renamings to perform.
+    ///
+    /// A renaming specification `dst=src` renames a function export `src` to
+    /// `dst`, overwriting any previous `dst` export.
+    ///
+    /// Multiple renamings can be specified. It is an error to specify more than
+    /// one source to rename to a destination name, or to specify more than one
+    /// renaming destination for one source.
+    ///
+    /// This option can be used, for example, to replace a `_start` entry point
+    /// in an initialized module with an alternate entry point.
+    #[cfg_attr(feature = "structopt", structopt(short = "r", long = "func-rename"))]
+    func_renames: Vec<String>,
+
     /// Allow WASI imports to be called during initialization.
     ///
     /// This can introduce diverging semantics because the initialization can
@@ -81,11 +97,53 @@ fn translate_global_type(ty: wasmparser::GlobalType) -> wasm_encoder::GlobalType
     }
 }
 
+struct FuncRenames {
+    /// For a given export name that we encounter in the original module, a map
+    /// to a new name, if any, to emit in the output module.
+    rename_src_to_dst: HashMap<String, String>,
+    /// A set of export names that we ignore in the original module (because
+    /// they are overwritten by renamings).
+    rename_dsts: HashSet<String>,
+}
+
+impl FuncRenames {
+    fn parse(renames: &Vec<String>) -> anyhow::Result<FuncRenames> {
+        let mut ret = FuncRenames {
+            rename_src_to_dst: HashMap::new(),
+            rename_dsts: HashSet::new(),
+        };
+        if renames.is_empty() {
+            return Ok(ret);
+        }
+
+        for rename_spec in renames {
+            let equal = rename_spec
+                .trim()
+                .find('=')
+                .ok_or_else(|| anyhow::anyhow!("Invalid function rename part: {}", rename_spec))?;
+            // TODO: use .split_off() when the API is stabilized.
+            let dst = rename_spec[..equal].to_owned();
+            let src = rename_spec[equal + 1..].to_owned();
+            if ret.rename_dsts.contains(&dst) {
+                anyhow::bail!("Duplicated function rename dst {}", dst);
+            }
+            if ret.rename_src_to_dst.contains_key(&src) {
+                anyhow::bail!("Duplicated function rename src {}", src);
+            }
+            ret.rename_dsts.insert(dst.clone());
+            ret.rename_src_to_dst.insert(src, dst);
+        }
+
+        Ok(ret)
+    }
+}
+
 impl Wizer {
     /// Construct a new `Wizer` builder.
     pub fn new() -> Self {
         Wizer {
             init_func: "wizer.initialize".into(),
+            func_renames: vec![],
             allow_wasi: false,
         }
     }
@@ -95,6 +153,12 @@ impl Wizer {
     /// Defaults to `"wizer.initialize"`.
     pub fn init_func(&mut self, init_func: impl Into<String>) -> &mut Self {
         self.init_func = init_func.into();
+        self
+    }
+
+    /// Add a function rename to perform.
+    pub fn func_rename(&mut self, new_name: impl Display, old_name: impl Display) -> &mut Self {
+        self.func_renames.push(format!("{}={}", new_name, old_name));
         self
     }
 
@@ -120,6 +184,9 @@ impl Wizer {
     /// Initialize the given Wasm, snapshot it, and return the serialized
     /// snapshot as a new, pre-initialized Wasm module.
     pub fn run(&self, wasm: &[u8]) -> anyhow::Result<Vec<u8>> {
+        // Parse rename spec.
+        let renames = FuncRenames::parse(&self.func_renames)?;
+
         // Make sure we're given valid Wasm from the get go.
         self.wasm_validate(wasm)?;
 
@@ -135,7 +202,7 @@ impl Wizer {
 
         let instance = self.initialize(&store, &module)?;
         let diff = self.diff(&instance);
-        let initialized_wasm = self.rewrite(&wasm, &diff);
+        let initialized_wasm = self.rewrite(&wasm, &diff, &renames);
 
         Ok(initialized_wasm)
     }
@@ -569,7 +636,7 @@ impl Wizer {
         }
     }
 
-    fn rewrite(&self, full_wasm: &[u8], diff: &Diff) -> Vec<u8> {
+    fn rewrite(&self, full_wasm: &[u8], diff: &Diff, renames: &FuncRenames) -> Vec<u8> {
         log::debug!("Rewriting input Wasm to pre-initialized state");
 
         let mut wasm = full_wasm;
@@ -685,6 +752,10 @@ impl Wizer {
                     // function's export. Removing the latter will enable
                     // further Wasm optimizations (notably GC'ing unused
                     // functions) via `wasm-opt` and similar tools.
+                    //
+                    // We also perform renames at this stage. We have
+                    // precomputed the list of old dsts to remove, and the
+                    // mapping from srcs to dsts, so we can do this in one pass.
                     let count = exports.get_count();
                     let mut exports_encoder = wasm_encoder::ExportSection::new();
                     for _ in 0..count {
@@ -692,8 +763,21 @@ impl Wizer {
                         if export.field.starts_with("__wizer_") || export.field == self.init_func {
                             continue;
                         }
+                        if !renames.rename_src_to_dst.contains_key(export.field)
+                            && renames.rename_dsts.contains(export.field)
+                        {
+                            // A rename overwrites this export, and it is not renamed to another
+                            // export, so skip it.
+                            continue;
+                        }
+                        let field = match renames.rename_src_to_dst.get(export.field) {
+                            None => export.field,
+                            // A rename spec renames the export to this new
+                            // name, so use it.
+                            Some(dst) => dst,
+                        };
                         exports_encoder.export(
-                            export.field,
+                            field,
                             match export.kind {
                                 wasmparser::ExternalKind::Function => {
                                     wasm_encoder::Export::Function(export.index)

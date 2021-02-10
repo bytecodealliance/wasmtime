@@ -87,3 +87,45 @@ fn rust_regex() -> anyhow::Result<()> {
         &include_bytes!("./regex_test.wasm")[..],
     )
 }
+
+#[test]
+fn rename_functions() -> anyhow::Result<()> {
+    let wat = r#"
+(module
+ (func (export "wizer.initialize"))
+ (func (export "func_a") (result i32)
+  i32.const 1)
+ (func (export "func_b") (result i32)
+  i32.const 2)
+ (func (export "func_c") (result i32)
+  i32.const 3))
+  "#;
+
+    let wasm = wat_to_wasm(wat)?;
+    let mut wizer = Wizer::new();
+    wizer.allow_wasi(true);
+    wizer.func_rename("func_a", "func_b");
+    wizer.func_rename("func_b", "func_c");
+    let wasm = wizer.run(&wasm)?;
+
+    let expected_wat = r#"
+(module
+  (type (;0;) (func))
+  (type (;1;) (func (result i32)))
+  (func (;0;) (type 0))
+  (func (;1;) (type 1) (result i32)
+    i32.const 1)
+  (func (;2;) (type 1) (result i32)
+    i32.const 2)
+  (func (;3;) (type 1) (result i32)
+    i32.const 3)
+  (export "func_a" (func 2))
+  (export "func_b" (func 3)))
+  "#;
+
+    let expected_wasm = wat_to_wasm(expected_wat)?;
+
+    assert_eq!(expected_wasm, wasm);
+
+    Ok(())
+}
