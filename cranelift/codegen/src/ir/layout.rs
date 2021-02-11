@@ -781,6 +781,17 @@ impl<'f> DoubleEndedIterator for Insts<'f> {
     }
 }
 
+/// A custom serialize and deserialize implementation for [`Layout`].
+///
+/// This doesn't use a derived implementation as [`Layout`] is a manual implementation of a linked
+/// list. Storing it directly as a regular list saves a lot of space.
+///
+/// The following format is used. (notated in EBNF form)
+///
+/// ```plain
+/// data = block_data * ;
+/// block_data = "block_id" , "inst_count" , ( "inst_id" * ) ;
+/// ```
 #[cfg(feature = "enable-serde")]
 mod serde {
     use ::serde::de::{Deserializer, Error, SeqAccess, Visitor};
