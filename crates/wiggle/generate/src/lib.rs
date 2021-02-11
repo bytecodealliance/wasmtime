@@ -6,10 +6,9 @@ mod module_trait;
 mod names;
 mod types;
 
+use lifetimes::anon_lifetime;
 use proc_macro2::TokenStream;
 use quote::quote;
-
-use lifetimes::anon_lifetime;
 
 pub use config::Config;
 pub use error_transform::{ErrorTransform, UserErrorType};
@@ -67,6 +66,8 @@ pub fn generate(doc: &witx::Document, names: &Names, errs: &ErrorTransform) -> T
 
     quote!(
         pub mod types {
+            use std::convert::TryFrom;
+
             #(#types)*
             #guest_error_conversion
             #user_error_conversion

@@ -1,11 +1,12 @@
-use proc_macro2::TokenStream;
-use quote::quote;
-
 use crate::error_transform::ErrorTransform;
 use crate::lifetimes::anon_lifetime;
 use crate::module_trait::passed_by_reference;
 use crate::names::Names;
 use crate::types::WiggleType;
+use proc_macro2::{Ident, Span, TokenStream};
+use quote::quote;
+use std::mem;
+use witx::Instruction;
 
 pub fn define_func(
     names: &Names,
@@ -13,163 +14,54 @@ pub fn define_func(
     func: &witx::InterfaceFunc,
     errxform: &ErrorTransform,
 ) -> TokenStream {
-    let funcname = func.name.as_str();
-
-    let ident = names.func(&func.name);
     let rt = names.runtime_mod();
+    let ident = names.func(&func.name);
     let ctx_type = names.ctx_type();
-    let coretype = func.core_type();
 
-    let params = coretype.args.iter().map(|arg| {
-        let name = names.func_core_arg(arg);
-        let atom = names.atom_type(arg.repr());
-        quote!(#name : #atom)
+    let (wasm_params, wasm_results) = func.wasm_signature();
+    let param_names = (0..wasm_params.len())
+        .map(|i| Ident::new(&format!("arg{}", i), Span::call_site()))
+        .collect::<Vec<_>>();
+    let abi_params = wasm_params.iter().zip(&param_names).map(|(arg, name)| {
+        let wasm = names.wasm_type(*arg);
+        quote!(#name : #wasm)
     });
 
-    let abi_args = quote!(
-            ctx: &#ctx_type,
-            memory: &dyn #rt::GuestMemory,
-            #(#params),*
+    let abi_ret = match wasm_results.len() {
+        0 => quote!(()),
+        1 => {
+            let ty = names.wasm_type(wasm_results[0]);
+            quote!(#ty)
+        }
+        _ => unimplemented!(),
+    };
+
+    let mut body = TokenStream::new();
+    func.call_interface(
+        &module.name,
+        &mut Rust {
+            src: &mut body,
+            params: &param_names,
+            block_storage: Vec::new(),
+            blocks: Vec::new(),
+            rt: &rt,
+            names,
+            module,
+            funcname: func.name.as_str(),
+            errxform,
+        },
     );
-    let abi_ret = if let Some(ret) = &coretype.ret {
-        match ret.signifies {
-            witx::CoreParamSignifies::Value(atom) => names.atom_type(atom),
-            _ => unreachable!("ret should always be passed by value"),
-        }
-    } else {
-        quote!(())
-    };
 
-    let err_type = coretype.ret.clone().map(|ret| ret.param.tref);
-    let ret_err = coretype
-        .ret
-        .map(|ret| {
-            let name = names.func_param(&ret.param.name);
-            let conversion = if let Some(user_err) = errxform.for_abi_error(&ret.param.tref) {
-                let method = names.user_error_conversion_method(&user_err);
-                quote!(UserErrorConversion::#method(ctx, e))
-            } else {
-                quote!(Ok(e))
-            };
-            quote! {
-                let e = #conversion;
-                #rt::tracing::event!(
-                    #rt::tracing::Level::TRACE,
-                    #name = #rt::tracing::field::debug(&e),
-                );
-                match e {
-                    Ok(e) => { return Ok(#abi_ret::from(e)); },
-                    Err(e) => { return Err(e); },
-                }
-            }
-        })
-        .unwrap_or_else(|| quote!(()));
-
-    let error_handling = |location: &str| -> TokenStream {
-        if let Some(tref) = &err_type {
-            let abi_ret = match tref.type_().passed_by() {
-                witx::TypePassedBy::Value(atom) => names.atom_type(atom),
-                _ => unreachable!("err should always be passed by value"),
-            };
-            let err_typename = names.type_ref(&tref, anon_lifetime());
-            let err_method = names.guest_error_conversion_method(&tref);
-            quote! {
-                let e = #rt::GuestError::InFunc { funcname: #funcname, location: #location, err: Box::new(e.into()) };
-                let err: #err_typename = GuestErrorConversion::#err_method(ctx, e);
-                return Ok(#abi_ret::from(err));
-            }
-        } else {
-            quote! {
-                panic!("error: {:?}", e)
-            }
-        }
-    };
-
-    let marshal_args = func
-        .params
-        .iter()
-        .map(|p| marshal_arg(names, p, error_handling(p.name.as_str())));
-    let trait_args = func.params.iter().map(|param| {
-        let name = names.func_param(&param.name);
-        if passed_by_reference(&*param.tref.type_()) {
-            quote!(&#name)
-        } else {
-            quote!(#name)
-        }
-    });
-
-    let log_marshalled_args = if func.params.len() > 0 {
-        let rt = names.runtime_mod();
-        let args = func.params.iter().map(|param| {
-            let name = names.func_param(&param.name);
-            if param.impls_display() {
-                quote!( #name = #rt::tracing::field::display(&#name) )
-            } else {
-                quote!( #name = #rt::tracing::field::debug(&#name) )
-            }
-        });
-        quote! {
-            #rt::tracing::event!(#rt::tracing::Level::TRACE, #(#args),*);
-        }
-    } else {
-        quote!()
-    };
-
-    let (trait_rets, trait_bindings) = if func.results.len() < 2 {
-        (quote!({}), quote!(_))
-    } else {
-        let trait_rets: Vec<_> = func
-            .results
-            .iter()
-            .skip(1)
-            .map(|result| names.func_param(&result.name))
-            .collect();
-        let bindings = quote!((#(#trait_rets),*));
-        let trace_rets = func.results.iter().skip(1).map(|result| {
-            let name = names.func_param(&result.name);
-            if result.tref.impls_display() {
-                quote!(#name = #rt::tracing::field::display(&#name))
-            } else {
-                quote!(#name = #rt::tracing::field::debug(&#name))
-            }
-        });
-        let rets = quote! {
-            #rt::tracing::event!(#rt::tracing::Level::TRACE, #(#trace_rets),*);
-            (#(#trait_rets),*)
-        };
-        (rets, bindings)
-    };
-
-    // Return value pointers need to be validated before the api call, then
-    // assigned to afterwards. marshal_result returns these two statements as a pair.
-    let marshal_rets = func
-        .results
-        .iter()
-        .skip(1)
-        .map(|result| marshal_result(names, result, &error_handling));
-    let marshal_rets_pre = marshal_rets.clone().map(|(pre, _post)| pre);
-    let marshal_rets_post = marshal_rets.map(|(_pre, post)| post);
-
-    let success = if let Some(ref err_type) = err_type {
-        let err_typename = names.type_ref(&err_type, anon_lifetime());
-        quote! {
-            let success:#err_typename = #rt::GuestErrorType::success();
-            #rt::tracing::event!(
-                #rt::tracing::Level::TRACE,
-                success=#rt::tracing::field::display(&success)
-            );
-            Ok(#abi_ret::from(success))
-        }
-    } else {
-        quote!(Ok(()))
-    };
-
-    let trait_name = names.trait_name(&module.name);
     let mod_name = &module.name.as_str();
     let func_name = &func.name.as_str();
+    quote! {
+        pub fn #ident(
+            ctx: &#ctx_type,
+            memory: &dyn #rt::GuestMemory,
+            #(#abi_params),*
+        ) -> Result<#abi_ret, #rt::Trap> {
+            use std::convert::TryFrom as _;
 
-    if func.noreturn {
-        quote!(pub fn #ident(#abi_args) -> Result<#abi_ret, #rt::Trap> {
             let _span = #rt::tracing::span!(
                 #rt::tracing::Level::TRACE,
                 "wiggle abi",
@@ -178,176 +70,259 @@ pub fn define_func(
             );
             let _enter = _span.enter();
 
-            #(#marshal_args)*
-            #log_marshalled_args
-            let trap = #trait_name::#ident(ctx, #(#trait_args),*);
-            Err(trap)
-        })
-    } else {
-        quote!(pub fn #ident(#abi_args) -> Result<#abi_ret, #rt::Trap> {
-            let _span = #rt::tracing::span!(
-                #rt::tracing::Level::TRACE,
-                "wiggle abi",
-                module = #mod_name,
-                function = #func_name
-            );
-            let _enter = _span.enter();
-
-            #(#marshal_args)*
-            #(#marshal_rets_pre)*
-            #log_marshalled_args
-            let #trait_bindings  = match #trait_name::#ident(ctx, #(#trait_args),*) {
-                Ok(#trait_bindings) => { #trait_rets },
-                Err(e) => { #ret_err },
-            };
-            #(#marshal_rets_post)*
-            #success
-        })
-    }
-}
-
-fn marshal_arg(
-    names: &Names,
-    param: &witx::InterfaceFuncParam,
-    error_handling: TokenStream,
-) -> TokenStream {
-    let rt = names.runtime_mod();
-    let tref = &param.tref;
-    let interface_typename = names.type_ref(&tref, anon_lifetime());
-
-    let try_into_conversion = {
-        let name = names.func_param(&param.name);
-        quote! {
-            let #name: #interface_typename = {
-                use ::std::convert::TryInto;
-                match #name.try_into() {
-                    Ok(a) => a,
-                    Err(e) => {
-                        #error_handling
-                    }
-                }
-            };
-        }
-    };
-
-    let read_conversion = {
-        let pointee_type = names.type_ref(tref, anon_lifetime());
-        let arg_name = names.func_ptr_binding(&param.name);
-        let name = names.func_param(&param.name);
-        quote! {
-            let #name = match #rt::GuestPtr::<#pointee_type>::new(memory, #arg_name as u32).read() {
-                Ok(r) => r,
-                Err(e) => {
-                    #error_handling
-                }
-            };
-        }
-    };
-
-    match &*tref.type_() {
-        witx::Type::Enum(_e) => try_into_conversion,
-        witx::Type::Flags(_f) => try_into_conversion,
-        witx::Type::Int(_i) => try_into_conversion,
-        witx::Type::Builtin(b) => match b {
-            witx::BuiltinType::U8 | witx::BuiltinType::U16 | witx::BuiltinType::Char8 => {
-                try_into_conversion
-            }
-            witx::BuiltinType::S8 | witx::BuiltinType::S16 => {
-                let name = names.func_param(&param.name);
-                quote! {
-                    let #name: #interface_typename = match (#name as i32).try_into() {
-                        Ok(a) => a,
-                        Err(e) => {
-                            #error_handling
-                        }
-                    }
-                }
-            }
-            witx::BuiltinType::U32
-            | witx::BuiltinType::S32
-            | witx::BuiltinType::U64
-            | witx::BuiltinType::S64
-            | witx::BuiltinType::USize
-            | witx::BuiltinType::F32
-            | witx::BuiltinType::F64 => {
-                let name = names.func_param(&param.name);
-                quote! {
-                    let #name = #name as #interface_typename;
-                }
-            }
-            witx::BuiltinType::String => {
-                let lifetime = anon_lifetime();
-                let ptr_name = names.func_ptr_binding(&param.name);
-                let len_name = names.func_len_binding(&param.name);
-                let name = names.func_param(&param.name);
-                quote! {
-                    let #name = #rt::GuestPtr::<#lifetime, str>::new(memory, (#ptr_name as u32, #len_name as u32));
-                }
-            }
-        },
-        witx::Type::Pointer(pointee) | witx::Type::ConstPointer(pointee) => {
-            let pointee_type = names.type_ref(pointee, anon_lifetime());
-            let name = names.func_param(&param.name);
-            quote! {
-                let #name = #rt::GuestPtr::<#pointee_type>::new(memory, #name as u32);
-            }
-        }
-        witx::Type::Struct(_) => read_conversion,
-        witx::Type::Array(arr) => {
-            let pointee_type = names.type_ref(arr, anon_lifetime());
-            let ptr_name = names.func_ptr_binding(&param.name);
-            let len_name = names.func_len_binding(&param.name);
-            let name = names.func_param(&param.name);
-            quote! {
-                let #name = #rt::GuestPtr::<[#pointee_type]>::new(memory, (#ptr_name as u32, #len_name as u32));
-            }
-        }
-        witx::Type::Union(_u) => read_conversion,
-        witx::Type::Handle(_h) => {
-            let name = names.func_param(&param.name);
-            let handle_type = names.type_ref(tref, anon_lifetime());
-            quote!( let #name = #handle_type::from(#name); )
+            #body
         }
     }
 }
 
-fn marshal_result<F>(
-    names: &Names,
-    result: &witx::InterfaceFuncParam,
-    error_handling: F,
-) -> (TokenStream, TokenStream)
-where
-    F: Fn(&str) -> TokenStream,
-{
-    let rt = names.runtime_mod();
-    let tref = &result.tref;
+struct Rust<'a> {
+    src: &'a mut TokenStream,
+    params: &'a [Ident],
+    block_storage: Vec<TokenStream>,
+    blocks: Vec<TokenStream>,
+    rt: &'a TokenStream,
+    names: &'a Names,
+    module: &'a witx::Module,
+    funcname: &'a str,
+    errxform: &'a ErrorTransform,
+}
 
-    let write_val_to_ptr = {
-        let pointee_type = names.type_ref(tref, anon_lifetime());
-        // core type is given func_ptr_binding name.
-        let ptr_name = names.func_ptr_binding(&result.name);
-        let ptr_err_handling = error_handling(&format!("{}:result_ptr_mut", result.name.as_str()));
-        let pre = quote! {
-            let #ptr_name = #rt::GuestPtr::<#pointee_type>::new(memory, #ptr_name as u32);
-        };
-        // trait binding returns func_param name.
-        let val_name = names.func_param(&result.name);
-        let post = quote! {
-            if let Err(e) = #ptr_name.write(#val_name) {
-                #ptr_err_handling
+impl witx::Bindgen for Rust<'_> {
+    type Operand = TokenStream;
+
+    fn push_block(&mut self) {
+        let prev = mem::replace(self.src, TokenStream::new());
+        self.block_storage.push(prev);
+    }
+
+    fn finish_block(&mut self, operand: Option<TokenStream>) {
+        let to_restore = self.block_storage.pop().unwrap();
+        let src = mem::replace(self.src, to_restore);
+        match operand {
+            None => self.blocks.push(src),
+            Some(s) => {
+                if src.is_empty() {
+                    self.blocks.push(s);
+                } else {
+                    self.blocks.push(quote!({ #src; #s }));
+                }
+            }
+        }
+    }
+
+    // This is only used for `call_wasm` at this time.
+    fn allocate_space(&mut self, _: usize, _: &witx::NamedType) {
+        unimplemented!()
+    }
+
+    fn emit(
+        &mut self,
+        inst: &Instruction<'_>,
+        operands: &mut Vec<TokenStream>,
+        results: &mut Vec<TokenStream>,
+    ) {
+        let rt = self.rt;
+        let wrap_err = |location: &str| {
+            let funcname = self.funcname;
+            quote! {
+                |e| {
+                    #rt::GuestError::InFunc {
+                        funcname: #funcname,
+                        location: #location,
+                        err: Box::new(#rt::GuestError::from(e)),
+                    }
+                }
             }
         };
-        (pre, post)
-    };
 
-    match &*tref.type_() {
-        witx::Type::Builtin(b) => match b {
-            witx::BuiltinType::String => unimplemented!("string result types"),
-            _ => write_val_to_ptr,
-        },
-        witx::Type::Pointer { .. } | witx::Type::ConstPointer { .. } | witx::Type::Array { .. } => {
-            unimplemented!("pointer/array result types")
+        let mut try_from = |ty: TokenStream| {
+            let val = operands.pop().unwrap();
+            let wrap_err = wrap_err(&format!("convert {}", ty));
+            results.push(quote!(#ty::try_from(#val).map_err(#wrap_err)?));
+        };
+
+        match inst {
+            Instruction::GetArg { nth } => {
+                let param = &self.params[*nth];
+                results.push(quote!(#param));
+            }
+
+            Instruction::PointerFromI32 { ty } | Instruction::ConstPointerFromI32 { ty } => {
+                let val = operands.pop().unwrap();
+                let pointee_type = self.names.type_ref(ty, anon_lifetime());
+                results.push(quote! {
+                    #rt::GuestPtr::<#pointee_type>::new(memory, #val as u32)
+                });
+            }
+
+            Instruction::ListFromPointerLength { ty } => {
+                let ptr = &operands[0];
+                let len = &operands[1];
+                let ty = match &**ty.type_() {
+                    witx::Type::Builtin(witx::BuiltinType::Char) => quote!(str),
+                    _ => {
+                        let ty = self.names.type_ref(ty, anon_lifetime());
+                        quote!([#ty])
+                    }
+                };
+                results.push(quote! {
+                    #rt::GuestPtr::<#ty>::new(memory, (#ptr as u32, #len as u32));
+                })
+            }
+
+            Instruction::CallInterface { func, .. } => {
+                // Use the `tracing` crate to log all arguments that are going
+                // out, and afterwards we call the function with those bindings.
+                let mut args = Vec::new();
+                for (i, param) in func.params.iter().enumerate() {
+                    let name = self.names.func_param(&param.name);
+                    let val = &operands[i];
+                    self.src.extend(quote!(let #name = #val;));
+                    if passed_by_reference(param.tref.type_()) {
+                        args.push(quote!(&#name));
+                    } else {
+                        args.push(quote!(#name));
+                    }
+                }
+                if func.params.len() > 0 {
+                    let args = func
+                        .params
+                        .iter()
+                        .map(|param| {
+                            let name = self.names.func_param(&param.name);
+                            if param.impls_display() {
+                                quote!( #name = #rt::tracing::field::display(&#name) )
+                            } else {
+                                quote!( #name = #rt::tracing::field::debug(&#name) )
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    self.src.extend(quote! {
+                        #rt::tracing::event!(#rt::tracing::Level::TRACE, #(#args),*);
+                    });
+                }
+
+                let trait_name = self.names.trait_name(&self.module.name);
+                let ident = self.names.func(&func.name);
+                self.src.extend(quote! {
+                    let ret = #trait_name::#ident(ctx, #(#args),*);
+                    #rt::tracing::event!(
+                        #rt::tracing::Level::TRACE,
+                        result = #rt::tracing::field::debug(&ret),
+                    );
+                });
+
+                if func.results.len() > 0 {
+                    results.push(quote!(ret));
+                } else if func.noreturn {
+                    self.src.extend(quote!(return Err(ret)));
+                }
+            }
+
+            // Lowering an enum is typically simple but if we have an error
+            // transformation registered for this enum then what we're actually
+            // doing is lowering from a user-defined error type to the error
+            // enum, and *then* we lower to an i32.
+            Instruction::EnumLower { ty } => {
+                let val = operands.pop().unwrap();
+                let val = match self.errxform.for_name(ty) {
+                    Some(custom) => {
+                        let method = self.names.user_error_conversion_method(&custom);
+                        quote!(UserErrorConversion::#method(ctx, #val)?)
+                    }
+                    None => val,
+                };
+                results.push(quote!(#val as i32));
+            }
+
+            Instruction::ResultLower { err: err_ty, .. } => {
+                let err = self.blocks.pop().unwrap();
+                let ok = self.blocks.pop().unwrap();
+                let val = operands.pop().unwrap();
+                let err_typename = self.names.type_ref(err_ty.unwrap(), anon_lifetime());
+                results.push(quote! {
+                    match #val {
+                        Ok(e) => { #ok; <#err_typename as #rt::GuestErrorType>::success() as i32 }
+                        Err(e) => { #err }
+                    }
+                });
+            }
+
+            Instruction::VariantPayload => results.push(quote!(e)),
+
+            Instruction::Return { amt: 0 } => {}
+            Instruction::Return { amt: 1 } => {
+                let val = operands.pop().unwrap();
+                self.src.extend(quote!(return Ok(#val)));
+            }
+            Instruction::Return { .. } => unimplemented!(),
+
+            Instruction::TupleLower { amt } => {
+                let names = (0..*amt)
+                    .map(|i| Ident::new(&format!("t{}", i), Span::call_site()))
+                    .collect::<Vec<_>>();
+                let val = operands.pop().unwrap();
+                self.src.extend(quote!( let (#(#names,)*) = #val;));
+                results.extend(names.iter().map(|i| quote!(#i)));
+            }
+
+            Instruction::Store { ty } => {
+                let ptr = operands.pop().unwrap();
+                let val = operands.pop().unwrap();
+                let wrap_err = wrap_err(&format!("write {}", ty.name.as_str()));
+                let pointee_type = self.names.type_(&ty.name);
+                self.src.extend(quote! {
+                    #rt::GuestPtr::<#pointee_type>::new(memory, #ptr as u32)
+                        .write(#val)
+                        .map_err(#wrap_err)?;
+                });
+            }
+
+            Instruction::HandleFromI32 { ty } => {
+                let val = operands.pop().unwrap();
+                let ty = self.names.type_(&ty.name);
+                results.push(quote!(#ty::from(#val)));
+            }
+
+            // Smaller-than-32 numerical conversions are done with `TryFrom` to
+            // ensure we're not losing bits.
+            Instruction::U8FromI32 => try_from(quote!(u8)),
+            Instruction::S8FromI32 => try_from(quote!(i8)),
+            Instruction::Char8FromI32 => try_from(quote!(u8)),
+            Instruction::U16FromI32 => try_from(quote!(u16)),
+            Instruction::S16FromI32 => try_from(quote!(i16)),
+
+            // Conversions with matching bit-widths but different signededness
+            // use `as` since we're basically just reinterpreting the bits.
+            Instruction::U32FromI32 => {
+                let val = operands.pop().unwrap();
+                results.push(quote!(#val as u32));
+            }
+            Instruction::U64FromI64 => {
+                let val = operands.pop().unwrap();
+                results.push(quote!(#val as u64));
+            }
+
+            // Conversions to enums/bitflags use `TryFrom` to ensure that the
+            // values are valid coming in.
+            Instruction::EnumLift { ty }
+            | Instruction::BitflagsFromI64 { ty }
+            | Instruction::BitflagsFromI32 { ty } => {
+                let ty = self.names.type_(&ty.name);
+                try_from(quote!(#ty))
+            }
+
+            // No conversions necessary for these, the native wasm type matches
+            // our own representation.
+            Instruction::If32FromF32
+            | Instruction::If64FromF64
+            | Instruction::S32FromI32
+            | Instruction::S64FromI64 => results.push(operands.pop().unwrap()),
+
+            // There's a number of other instructions we could implement but
+            // they're not exercised by WASI at this time. As necessary we can
+            // add code to implement them.
+            other => panic!("no implementation for {:?}", other),
         }
-        _ => write_val_to_ptr,
     }
 }

@@ -7,17 +7,9 @@ use crate::names::Names;
 use witx::Module;
 
 pub fn passed_by_reference(ty: &witx::Type) -> bool {
-    let passed_by = match ty.passed_by() {
-        witx::TypePassedBy::Value { .. } => false,
-        witx::TypePassedBy::Pointer { .. } | witx::TypePassedBy::PointerLengthPair { .. } => true,
-    };
     match ty {
-        witx::Type::Builtin(b) => match &*b {
-            witx::BuiltinType::String => true,
-            _ => passed_by,
-        },
-        witx::Type::Pointer(_) | witx::Type::ConstPointer(_) | witx::Type::Array(_) => true,
-        _ => passed_by,
+        witx::Type::Pointer(_) | witx::Type::ConstPointer(_) | witx::Type::List(_) => true,
+        _ => false,
     }
 }
 
@@ -49,28 +41,36 @@ pub fn define_module_trait(names: &Names, m: &Module, errxform: &ErrorTransform)
             quote!(#arg_name: #arg_type)
         });
 
-        let result = if !f.noreturn {
-            let rets = f
-                .results
-                .iter()
-                .skip(1)
-                .map(|ret| names.type_ref(&ret.tref, lifetime.clone()));
-            let err = f
-                .results
-                .get(0)
-                .map(|err_result| {
-                    if let Some(custom_err) = errxform.for_abi_error(&err_result.tref) {
-                        let tn = custom_err.typename();
-                        quote!(super::#tn)
-                    } else {
-                        names.type_ref(&err_result.tref, lifetime.clone())
-                    }
-                })
-                .unwrap_or(quote!(()));
-            quote!( Result<(#(#rets),*), #err> )
-        } else {
-            let rt = names.runtime_mod();
-            quote!(#rt::Trap)
+        let rt = names.runtime_mod();
+        let result = match f.results.len() {
+            0 if f.noreturn => quote!(#rt::Trap),
+            0 => quote!(()),
+            1 => {
+                let (ok, err) = match &**f.results[0].tref.type_() {
+                    witx::Type::Variant(v) => match v.as_expected() {
+                        Some(p) => p,
+                        None => unimplemented!("anonymous variant ref {:?}", v),
+                    },
+                    _ => unimplemented!(),
+                };
+
+                let ok = match ok {
+                    Some(ty) => names.type_ref(ty, lifetime.clone()),
+                    None => quote!(()),
+                };
+                let err = match err {
+                    Some(ty) => match errxform.for_abi_error(ty) {
+                        Some(custom) => {
+                            let tn = custom.typename();
+                            quote!(super::#tn)
+                        }
+                        None => names.type_ref(ty, lifetime.clone()),
+                    },
+                    None => quote!(()),
+                };
+                quote!(Result<#ok, #err>)
+            }
+            _ => unimplemented!(),
         };
 
         if is_anonymous {

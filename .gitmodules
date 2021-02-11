@@ -6,7 +6,8 @@
 	url = https://github.com/WebAssembly/wasm-c-api
 [submodule "WASI"]
 	path = crates/wasi-common/WASI
-	url = https://github.com/WebAssembly/WASI
+	url = https://github.com/alexcrichton/WASI
+	branch = abis
 [submodule "crates/wasi-nn/spec"]
 	path = crates/wasi-nn/spec
 	url = https://github.com/WebAssembly/wasi-nn

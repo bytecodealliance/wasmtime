@@ -19,46 +19,37 @@ impl LifetimeExt for witx::Type {
     fn is_transparent(&self) -> bool {
         match self {
             witx::Type::Builtin(b) => b.is_transparent(),
-            witx::Type::Struct(s) => s.is_transparent(),
-            witx::Type::Enum { .. }
-            | witx::Type::Flags { .. }
-            | witx::Type::Int { .. }
-            | witx::Type::Handle { .. } => true,
-            witx::Type::Union { .. }
+            witx::Type::Record(s) => s.is_transparent(),
+            witx::Type::Handle { .. } => true,
+            witx::Type::Variant { .. }
             | witx::Type::Pointer { .. }
             | witx::Type::ConstPointer { .. }
-            | witx::Type::Array { .. } => false,
+            | witx::Type::List { .. } => false,
         }
     }
     fn needs_lifetime(&self) -> bool {
         match self {
             witx::Type::Builtin(b) => b.needs_lifetime(),
-            witx::Type::Struct(s) => s.needs_lifetime(),
-            witx::Type::Union(u) => u.needs_lifetime(),
-            witx::Type::Enum { .. }
-            | witx::Type::Flags { .. }
-            | witx::Type::Int { .. }
-            | witx::Type::Handle { .. } => false,
+            witx::Type::Record(s) => s.needs_lifetime(),
+            witx::Type::Variant(u) => u.needs_lifetime(),
+            witx::Type::Handle { .. } => false,
             witx::Type::Pointer { .. }
             | witx::Type::ConstPointer { .. }
-            | witx::Type::Array { .. } => true,
+            | witx::Type::List { .. } => true,
         }
     }
 }
 
 impl LifetimeExt for witx::BuiltinType {
     fn is_transparent(&self) -> bool {
-        !self.needs_lifetime()
+        true
     }
     fn needs_lifetime(&self) -> bool {
-        match self {
-            witx::BuiltinType::String => true,
-            _ => false,
-        }
+        false
     }
 }
 
-impl LifetimeExt for witx::StructDatatype {
+impl LifetimeExt for witx::RecordDatatype {
     fn is_transparent(&self) -> bool {
         self.members.iter().all(|m| m.tref.is_transparent())
     }
@@ -67,12 +58,12 @@ impl LifetimeExt for witx::StructDatatype {
     }
 }
 
-impl LifetimeExt for witx::UnionDatatype {
+impl LifetimeExt for witx::Variant {
     fn is_transparent(&self) -> bool {
         false
     }
     fn needs_lifetime(&self) -> bool {
-        self.variants
+        self.cases
             .iter()
             .any(|m| m.tref.as_ref().map(|t| t.needs_lifetime()).unwrap_or(false))
     }

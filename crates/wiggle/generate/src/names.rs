@@ -2,7 +2,7 @@ use escaping::{escape_id, handle_2big_enum_variant, NamingConvention};
 use heck::{ShoutySnakeCase, SnakeCase};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
-use witx::{AtomType, BuiltinType, Id, Type, TypeRef};
+use witx::{BuiltinType, Id, Type, TypeRef, WasmType};
 
 use crate::{lifetimes::LifetimeExt, UserErrorType};
 
@@ -32,15 +32,11 @@ impl Names {
         quote!(#ident)
     }
 
-    pub fn builtin_type(&self, b: BuiltinType, lifetime: TokenStream) -> TokenStream {
+    pub fn builtin_type(&self, b: BuiltinType) -> TokenStream {
         match b {
-            BuiltinType::String => {
-                let rt = self.runtime_mod();
-                quote!(#rt::GuestPtr<#lifetime, str>)
-            }
-            BuiltinType::U8 => quote!(u8),
+            BuiltinType::U8 { .. } => quote!(u8),
             BuiltinType::U16 => quote!(u16),
-            BuiltinType::U32 => quote!(u32),
+            BuiltinType::U32 { .. } => quote!(u32),
             BuiltinType::U64 => quote!(u64),
             BuiltinType::S8 => quote!(i8),
             BuiltinType::S16 => quote!(i16),
@@ -48,16 +44,16 @@ impl Names {
             BuiltinType::S64 => quote!(i64),
             BuiltinType::F32 => quote!(f32),
             BuiltinType::F64 => quote!(f64),
-            BuiltinType::Char8 => quote!(u8),
-            BuiltinType::USize => quote!(u32),
+            BuiltinType::Char => quote!(char),
         }
     }
-    pub fn atom_type(&self, atom: AtomType) -> TokenStream {
-        match atom {
-            AtomType::I32 => quote!(i32),
-            AtomType::I64 => quote!(i64),
-            AtomType::F32 => quote!(f32),
-            AtomType::F64 => quote!(f64),
+
+    pub fn wasm_type(&self, ty: WasmType) -> TokenStream {
+        match ty {
+            WasmType::I32 => quote!(i32),
+            WasmType::I64 => quote!(i64),
+            WasmType::F32 => quote!(f32),
+            WasmType::F64 => quote!(f64),
         }
     }
 
@@ -72,16 +68,44 @@ impl Names {
                 }
             }
             TypeRef::Value(ty) => match &**ty {
-                Type::Builtin(builtin) => self.builtin_type(*builtin, lifetime.clone()),
+                Type::Builtin(builtin) => self.builtin_type(*builtin),
                 Type::Pointer(pointee) | Type::ConstPointer(pointee) => {
                     let rt = self.runtime_mod();
                     let pointee_type = self.type_ref(&pointee, lifetime.clone());
                     quote!(#rt::GuestPtr<#lifetime, #pointee_type>)
                 }
-                Type::Array(pointee) => {
-                    let rt = self.runtime_mod();
-                    let pointee_type = self.type_ref(&pointee, lifetime.clone());
-                    quote!(#rt::GuestPtr<#lifetime, [#pointee_type]>)
+                Type::List(pointee) => match &**pointee.type_() {
+                    Type::Builtin(BuiltinType::Char) => {
+                        let rt = self.runtime_mod();
+                        quote!(#rt::GuestPtr<#lifetime, str>)
+                    }
+                    _ => {
+                        let rt = self.runtime_mod();
+                        let pointee_type = self.type_ref(&pointee, lifetime.clone());
+                        quote!(#rt::GuestPtr<#lifetime, [#pointee_type]>)
+                    }
+                },
+                Type::Variant(v) => match v.as_expected() {
+                    Some((ok, err)) => {
+                        let ok = match ok {
+                            Some(ty) => self.type_ref(ty, lifetime.clone()),
+                            None => quote!(()),
+                        };
+                        let err = match err {
+                            Some(ty) => self.type_ref(ty, lifetime.clone()),
+                            None => quote!(()),
+                        };
+                        quote!(Result<#ok, #err>)
+                    }
+                    None => unimplemented!("anonymous variant ref {:?}", tref),
+                },
+                Type::Record(r) if r.is_tuple() => {
+                    let types = r
+                        .members
+                        .iter()
+                        .map(|m| self.type_ref(&m.tref, lifetime.clone()))
+                        .collect::<Vec<_>>();
+                    quote!((#(#types,)*))
                 }
                 _ => unimplemented!("anonymous type ref {:?}", tref),
             },
@@ -144,14 +168,6 @@ impl Names {
         escape_id(id, NamingConvention::SnakeCase)
     }
 
-    pub fn func_core_arg(&self, arg: &witx::CoreParamType) -> Ident {
-        match arg.signifies {
-            witx::CoreParamSignifies::Value { .. } => self.func_param(&arg.param.name),
-            witx::CoreParamSignifies::PointerTo => self.func_ptr_binding(&arg.param.name),
-            witx::CoreParamSignifies::LengthOf => self.func_len_binding(&arg.param.name),
-        }
-    }
-
     /// For when you need a {name}_ptr binding for passing a value by reference:
     pub fn func_ptr_binding(&self, id: &Id) -> Ident {
         format_ident!("{}_ptr", id.as_str().to_snake_case())
@@ -164,10 +180,9 @@ impl Names {
 
     fn builtin_name(b: &BuiltinType) -> &'static str {
         match b {
-            BuiltinType::String => "string",
-            BuiltinType::U8 => "u8",
+            BuiltinType::U8 { .. } => "u8",
             BuiltinType::U16 => "u16",
-            BuiltinType::U32 => "u32",
+            BuiltinType::U32 { .. } => "u32",
             BuiltinType::U64 => "u64",
             BuiltinType::S8 => "i8",
             BuiltinType::S16 => "i16",
@@ -175,8 +190,7 @@ impl Names {
             BuiltinType::S64 => "i64",
             BuiltinType::F32 => "f32",
             BuiltinType::F64 => "f64",
-            BuiltinType::Char8 => "char8",
-            BuiltinType::USize => "usize",
+            BuiltinType::Char => "char",
         }
     }
 

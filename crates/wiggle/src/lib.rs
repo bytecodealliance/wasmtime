@@ -942,3 +942,9 @@ pub enum Trap {
     /// Any other Trap is just an unstructured String, for reporting and debugging.
     String(String),
 }
+
+impl From<GuestError> for Trap {
+    fn from(err: GuestError) -> Trap {
+        Trap::String(err.to_string())
+    }
+}
