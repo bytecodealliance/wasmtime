@@ -31,6 +31,11 @@ cfg_if::cfg_if! {
     if #[cfg(windows)] {
         mod windows;
         use windows as imp;
+    } else if #[cfg(all(feature = "uffd", target_os = "linux"))] {
+        mod uffd;
+        use uffd as imp;
+        use imp::{PageFaultHandler, reset_guard_page};
+        use std::sync::atomic::{AtomicBool, Ordering};
     } else if #[cfg(target_os = "linux")] {
         mod linux;
         use linux as imp;
@@ -335,6 +340,9 @@ impl Iterator for BasePointerIterator {
 /// structure depending on the limits used to create the pool.
 ///
 /// The pool maintains a free list for fast instance allocation.
+///
+/// The userfault handler relies on how instances are stored in the mapping,
+/// so make sure the uffd implementation is kept up-to-date.
 #[derive(Debug)]
 struct InstancePool {
     mapping: Mmap,
@@ -413,6 +421,8 @@ impl InstancePool {
                     dropped_elements: RefCell::new(EntitySet::new()),
                     dropped_data: RefCell::new(EntitySet::new()),
                     host_state: Box::new(()),
+                    #[cfg(all(feature = "uffd", target_os = "linux"))]
+                    guard_page_faults: RefCell::new(Vec::new()),
                     vmctx: VMContext {},
                 },
             );
@@ -523,6 +533,12 @@ impl InstancePool {
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
 
+        // Reset all guard pages before reusing the instance
+        #[cfg(all(feature = "uffd", target_os = "linux"))]
+        instance
+            .reset_guard_pages()
+            .map_err(InstantiationError::Resource)?;
+
         instance.memories.clear();
 
         for plan in
@@ -590,6 +606,10 @@ impl Drop for InstancePool {
 ///
 /// Each instance index into the pool returns an iterator over the base addresses
 /// of the instance's linear memories.
+///
+///
+/// The userfault handler relies on how memories are stored in the mapping,
+/// so make sure the uffd implementation is kept up-to-date.
 #[derive(Debug)]
 struct MemoryPool {
     mapping: Mmap,
@@ -646,6 +666,9 @@ impl MemoryPool {
 ///
 /// Each instance index into the pool returns an iterator over the base addresses
 /// of the instance's tables.
+///
+/// The userfault handler relies on how tables are stored in the mapping,
+/// so make sure the uffd implementation is kept up-to-date.
 #[derive(Debug)]
 struct TablePool {
     mapping: Mmap,
@@ -710,6 +733,9 @@ impl TablePool {
 ///
 /// The top of the stack (starting stack pointer) is returned when a stack is allocated
 /// from the pool.
+///
+/// The userfault handler relies on how stacks are stored in the mapping,
+/// so make sure the uffd implementation is kept up-to-date.
 #[derive(Debug)]
 struct StackPool {
     mapping: Mmap,
@@ -717,6 +743,8 @@ struct StackPool {
     max_instances: usize,
     page_size: usize,
     free_list: Mutex<Vec<usize>>,
+    #[cfg(all(feature = "uffd", target_os = "linux"))]
+    faulted_guard_pages: Arc<[AtomicBool]>,
 }
 
 impl StackPool {
@@ -745,6 +773,11 @@ impl StackPool {
             max_instances,
             page_size,
             free_list: Mutex::new((0..max_instances).collect()),
+            #[cfg(all(feature = "uffd", target_os = "linux"))]
+            faulted_guard_pages: std::iter::repeat_with(|| false.into())
+                .take(max_instances)
+                .collect::<Vec<_>>()
+                .into(),
         })
     }
 
@@ -774,11 +807,25 @@ impl StackPool {
                 .as_mut_ptr()
                 .add((index * self.stack_size) + self.page_size);
 
-            // Make the stack accessible (excluding the guard page)
-            if !make_accessible(bottom_of_stack, size_without_guard) {
-                return Err(FiberStackError::Resource(
-                    "failed to make instance memory accessible".into(),
-                ));
+            cfg_if::cfg_if! {
+                if #[cfg(all(feature = "uffd", target_os = "linux"))] {
+                    // Check to see if a guard page needs to be reset
+                    if self.faulted_guard_pages[index].swap(false, Ordering::SeqCst) {
+                        if !reset_guard_page(bottom_of_stack.sub(self.page_size), self.page_size) {
+                            return Err(FiberStackError::Resource(
+                                "failed to reset stack guard page".into(),
+                            ));
+                        }
+                    }
+
+                } else {
+                    // Make the stack accessible (excluding the guard page)
+                    if !make_accessible(bottom_of_stack, size_without_guard) {
+                        return Err(FiberStackError::Resource(
+                            "failed to make instance memory accessible".into(),
+                        ));
+                    }
+                }
             }
 
             // The top of the stack should be returned
@@ -824,6 +871,8 @@ pub struct PoolingInstanceAllocator {
     instance_limits: InstanceLimits,
     instances: mem::ManuallyDrop<InstancePool>,
     stacks: mem::ManuallyDrop<StackPool>,
+    #[cfg(all(feature = "uffd", target_os = "linux"))]
+    _fault_handler: PageFaultHandler,
 }
 
 impl PoolingInstanceAllocator {
@@ -866,19 +915,28 @@ impl PoolingInstanceAllocator {
             ));
         }
 
+        let instances = InstancePool::new(&module_limits, &instance_limits)?;
+        let stacks = StackPool::new(&instance_limits, stack_size)?;
+
+        #[cfg(all(feature = "uffd", target_os = "linux"))]
+        let _fault_handler = PageFaultHandler::new(&instances, &stacks)?;
+
         Ok(Self {
             strategy,
             module_limits,
             instance_limits,
-            instances: mem::ManuallyDrop::new(InstancePool::new(&module_limits, &instance_limits)?),
-            stacks: mem::ManuallyDrop::new(StackPool::new(&instance_limits, stack_size)?),
+            instances: mem::ManuallyDrop::new(instances),
+            stacks: mem::ManuallyDrop::new(stacks),
+            #[cfg(all(feature = "uffd", target_os = "linux"))]
+            _fault_handler,
         })
     }
 }
 
 impl Drop for PoolingInstanceAllocator {
     fn drop(&mut self) {
-        // There are manually dropped for the future uffd implementation
+        // Manually drop the pools before the fault handler (if uffd is enabled)
+        // This ensures that any fault handler thread monitoring the pool memory terminates
         unsafe {
             mem::ManuallyDrop::drop(&mut self.instances);
             mem::ManuallyDrop::drop(&mut self.stacks);

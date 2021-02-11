@@ -37,3 +37,9 @@ cc = "1.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[features]
+default = []
+
+# Enables support for userfaultfd in the pooling allocator when building on Linux
+uffd = ["userfaultfd"]

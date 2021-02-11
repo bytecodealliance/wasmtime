@@ -89,6 +89,7 @@ jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
 wasi-crypto = ["wasmtime-wasi-crypto"]
 wasi-nn = ["wasmtime-wasi-nn"]
+uffd = ["wasmtime/uffd"]
 
 # Try the experimental, work-in-progress new x86_64 backend. This is not stable
 # as of June 2020.
