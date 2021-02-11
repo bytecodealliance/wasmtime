@@ -1557,7 +1557,7 @@ mod test {
         Ok(())
     }
 
-    #[cfg(target_pointer_width = "64")]
+    #[cfg(all(unix, target_pointer_width = "64"))]
     #[test]
     fn test_stack_pool() -> Result<(), String> {
         let pool = StackPool::new(
@@ -1680,7 +1680,7 @@ mod test {
     }
 
     #[cfg_attr(target_arch = "aarch64", ignore)] // https://github.com/bytecodealliance/wasmtime/pull/2518#issuecomment-747280133
-    #[cfg(unix)]
+    #[cfg(all(unix, target_pointer_width = "64"))]
     #[test]
     fn test_stack_zeroed() -> Result<(), String> {
         let allocator = PoolingInstanceAllocator::new(
