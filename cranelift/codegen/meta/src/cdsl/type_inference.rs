@@ -210,7 +210,8 @@ impl TypeEnvironment {
                 None => {
                     assert!(
                         !actual_tv.name.starts_with("typeof_"),
-                        format!("variable {} should be explicitly ranked", actual_tv.name)
+                        "variable {} should be explicitly ranked",
+                        actual_tv.name
                     );
                     None
                 }

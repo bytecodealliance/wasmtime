@@ -74,19 +74,18 @@ impl Transform {
         for &var_index in &input_vars {
             assert!(
                 var_pool.get(var_index).is_input(),
-                format!("'{:?}' used as both input and def", var_pool.get(var_index))
+                "'{:?}' used as both input and def",
+                var_pool.get(var_index)
             );
         }
         assert!(
             input_vars.len() == num_src_inputs,
-            format!(
-                "extra input vars in dst pattern: {:?}",
-                input_vars
-                    .iter()
-                    .map(|&i| var_pool.get(i))
-                    .skip(num_src_inputs)
-                    .collect::<Vec<_>>()
-            )
+            "extra input vars in dst pattern: {:?}",
+            input_vars
+                .iter()
+                .map(|&i| var_pool.get(i))
+                .skip(num_src_inputs)
+                .collect::<Vec<_>>()
         );
 
         // Perform type inference and cleanup.
@@ -143,7 +142,8 @@ impl Transform {
             let defined_var = self.var_pool.get(var_index);
             assert!(
                 defined_var.is_output(),
-                format!("{:?} not defined in the destination pattern", defined_var)
+                "{:?} not defined in the destination pattern",
+                defined_var
             );
         }
     }
@@ -226,7 +226,8 @@ fn rewrite_expr(
                 let var = var_pool.get(own_var);
                 assert!(
                     var.is_input() || var.get_def(position).is_some(),
-                    format!("{:?} used as both input and def", var)
+                    "{:?} used as both input and def",
+                    var
                 );
                 args.push(Expr::Var(own_var));
             }
@@ -400,10 +401,8 @@ impl TransformGroupBuilder {
             self.custom_legalizes
                 .insert(inst.camel_name.clone(), func_name)
                 .is_none(),
-            format!(
-                "custom legalization action for {} inserted twice",
-                inst.name
-            )
+            "custom legalization action for {} inserted twice",
+            inst.name
         );
     }
 
@@ -442,7 +441,8 @@ impl TransformGroups {
         for group in self.groups.values() {
             assert!(
                 group.name != new_group.name,
-                format!("trying to insert {} for the second time", new_group.name)
+                "trying to insert {} for the second time",
+                new_group.name
             );
         }
         self.groups.push(new_group)
@@ -459,7 +459,7 @@ impl TransformGroups {
                 return group;
             }
         }
-        panic!(format!("transform group with name {} not found", name));
+        panic!("transform group with name {} not found", name);
     }
 }
 

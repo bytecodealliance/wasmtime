@@ -45,10 +45,8 @@ impl PerCpuModeEncodings {
         if let Some(found_index) = self.recipes_by_name.get(&recipe.name) {
             assert!(
                 self.recipes[*found_index] == recipe,
-                format!(
-                    "trying to insert different recipes with a same name ({})",
-                    recipe.name
-                )
+                "trying to insert different recipes with a same name ({})",
+                recipe.name
             );
             *found_index
         } else {
