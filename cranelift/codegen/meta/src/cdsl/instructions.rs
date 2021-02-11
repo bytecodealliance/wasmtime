@@ -394,7 +394,7 @@ impl ValueTypeOrAny {
     pub fn expect(self, msg: &str) -> ValueType {
         match self {
             ValueTypeOrAny::ValueType(vt) => vt,
-            ValueTypeOrAny::Any => panic!(format!("Unexpected Any: {}", msg)),
+            ValueTypeOrAny::Any => panic!("Unexpected Any: {}", msg),
         }
     }
 }
@@ -665,7 +665,7 @@ fn verify_polymorphic(
     if operands_out.is_empty() {
         // No result means no other possible type variable, so it's a type inference failure.
         match maybe_error_message {
-            Some(msg) => panic!(msg),
+            Some(msg) => panic!("{}", msg),
             None => panic!("typevar_operand must be a free type variable"),
         }
     }

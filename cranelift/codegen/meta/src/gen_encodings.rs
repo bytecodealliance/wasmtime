@@ -99,8 +99,8 @@ fn emit_instp(instp: &InstructionPredicate, has_func: bool, fmt: &mut Formatter)
                 Some(previous_format_name) => {
                     assert!(
                         previous_format_name == leaf_format_name,
-                        format!("Format predicate can only operate on a single InstructionFormat; trying to use both {} and {}", previous_format_name, leaf_format_name
-                    ));
+                        "Format predicate can only operate on a single InstructionFormat; trying to use both {} and {}", previous_format_name, leaf_format_name
+                    );
                 }
             }
         }
