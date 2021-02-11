@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::parse_macro_input;
 use wiggle_generate::Names;
@@ -88,14 +88,9 @@ fn generate_module(
     let module_id = names.module(&module.name);
     let target_module = quote! { #target_path::#module_id };
 
-    let ctor_externs = module.funcs().map(|f| {
-        if let Some(func_override) = module_conf.function_override.find(&f.name.as_str()) {
-            let name_ident = names.func(&f.name);
-            quote! { let #name_ident = wasmtime::Func::wrap(store, #func_override); }
-        } else {
-            generate_func(&f, names, &target_module)
-        }
-    });
+    let ctor_externs = module
+        .funcs()
+        .map(|f| generate_func(&f, names, &target_module));
 
     let type_name = module_conf.name.clone();
     let type_docs = module_conf
@@ -158,23 +153,21 @@ fn generate_func(
 ) -> TokenStream2 {
     let name_ident = names.func(&func.name);
 
-    let coretype = func.core_type();
+    let (params, results) = func.wasm_signature();
 
-    let arg_decls = coretype.args.iter().map(|arg| {
-        let name = names.func_core_arg(arg);
-        let atom = names.atom_type(arg.repr());
-        quote! { #name: #atom }
+    let arg_names = (0..params.len())
+        .map(|i| Ident::new(&format!("arg{}", i), Span::call_site()))
+        .collect::<Vec<_>>();
+    let arg_decls = params.iter().enumerate().map(|(i, ty)| {
+        let name = &arg_names[i];
+        let wasm = names.wasm_type(*ty);
+        quote! { #name: #wasm }
     });
-    let arg_names = coretype.args.iter().map(|arg| names.func_core_arg(arg));
 
-    let ret_ty = if let Some(ret) = &coretype.ret {
-        let ret_ty = match ret.signifies {
-            witx::CoreParamSignifies::Value(atom) => names.atom_type(atom),
-            _ => unreachable!("coretype ret should always be passed by value"),
-        };
-        quote! { #ret_ty }
-    } else {
-        quote! {()}
+    let ret_ty = match results.len() {
+        0 => quote!(()),
+        1 => names.wasm_type(results[0]),
+        _ => unimplemented!(),
     };
 
     let runtime = names.runtime_mod();

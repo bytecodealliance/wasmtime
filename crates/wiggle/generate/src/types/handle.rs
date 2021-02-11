@@ -78,8 +78,6 @@ pub(super) fn define_handle(
                 Ok(())
             }
         }
-
-
     }
 }
 

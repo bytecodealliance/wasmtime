@@ -144,7 +144,6 @@ impl Parse for TargetConf {
 enum ModuleConfField {
     Name(Ident),
     Docs(String),
-    FunctionOverride(FunctionOverrideConf),
 }
 
 impl Parse for ModuleConfField {
@@ -159,10 +158,6 @@ impl Parse for ModuleConfField {
             input.parse::<Token![:]>()?;
             let docs: syn::LitStr = input.parse()?;
             Ok(ModuleConfField::Docs(docs.value()))
-        } else if lookahead.peek(kw::function_override) {
-            input.parse::<kw::function_override>()?;
-            input.parse::<Token![:]>()?;
-            Ok(ModuleConfField::FunctionOverride(input.parse()?))
         } else {
             Err(lookahead.error())
         }
@@ -173,14 +168,12 @@ impl Parse for ModuleConfField {
 pub struct ModuleConf {
     pub name: Ident,
     pub docs: Option<String>,
-    pub function_override: FunctionOverrideConf,
 }
 
 impl ModuleConf {
     fn build(fields: impl Iterator<Item = ModuleConfField>, err_loc: Span) -> Result<Self> {
         let mut name = None;
         let mut docs = None;
-        let mut function_override = None;
         for f in fields {
             match f {
                 ModuleConfField::Name(c) => {
@@ -195,18 +188,11 @@ impl ModuleConf {
                     }
                     docs = Some(c);
                 }
-                ModuleConfField::FunctionOverride(c) => {
-                    if function_override.is_some() {
-                        return Err(Error::new(err_loc, "duplicate `function_override` field"));
-                    }
-                    function_override = Some(c);
-                }
             }
         }
         Ok(ModuleConf {
             name: name.ok_or_else(|| Error::new(err_loc, "`name` field required"))?,
             docs,
-            function_override: function_override.unwrap_or_default(),
         })
     }
 }
@@ -246,44 +232,5 @@ impl Parse for ModulesConf {
         Ok(ModulesConf {
             mods: fields.into_iter().collect(),
         })
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct FunctionOverrideConf {
-    pub funcs: Vec<FunctionOverrideField>,
-}
-impl FunctionOverrideConf {
-    pub fn find(&self, name: &str) -> Option<&Ident> {
-        self.funcs
-            .iter()
-            .find(|f| f.name == name)
-            .map(|f| &f.replacement)
-    }
-}
-
-impl Parse for FunctionOverrideConf {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let contents;
-        let _lbrace = braced!(contents in input);
-        let fields: Punctuated<FunctionOverrideField, Token![,]> =
-            contents.parse_terminated(FunctionOverrideField::parse)?;
-        Ok(FunctionOverrideConf {
-            funcs: fields.into_iter().collect(),
-        })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct FunctionOverrideField {
-    pub name: String,
-    pub replacement: Ident,
-}
-impl Parse for FunctionOverrideField {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let name = input.parse::<Ident>()?.to_string();
-        input.parse::<Token![=>]>()?;
-        let replacement = input.parse::<Ident>()?;
-        Ok(FunctionOverrideField { name, replacement })
     }
 }

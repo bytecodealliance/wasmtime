@@ -8,7 +8,7 @@ use witx::Layout;
 pub(super) fn define_struct(
     names: &Names,
     name: &witx::Id,
-    s: &witx::StructDatatype,
+    s: &witx::RecordDatatype,
 ) -> TokenStream {
     let rt = names.runtime_mod();
     let ident = names.type_(name);
@@ -28,7 +28,7 @@ pub(super) fn define_struct(
                 }
             }
             witx::TypeRef::Value(ty) => match &**ty {
-                witx::Type::Builtin(builtin) => names.builtin_type(*builtin, quote!('a)),
+                witx::Type::Builtin(builtin) => names.builtin_type(*builtin),
                 witx::Type::Pointer(pointee) | witx::Type::ConstPointer(pointee) => {
                     let pointee_type = names.type_ref(&pointee, quote!('a));
                     quote!(#rt::GuestPtr<'a, #pointee_type>)
@@ -52,9 +52,9 @@ pub(super) fn define_struct(
             }
             witx::TypeRef::Value(ty) => match &**ty {
                 witx::Type::Builtin(builtin) => {
-                    let type_ = names.builtin_type(*builtin, anon_lifetime());
+                    let type_ = names.builtin_type(*builtin);
                     quote! {
-                    let #name = <#type_ as #rt::GuestType>::read(&#location)?;
+                        let #name = <#type_ as #rt::GuestType>::read(&#location)?;
                     }
                 }
                 witx::Type::Pointer(pointee) | witx::Type::ConstPointer(pointee) => {
@@ -141,7 +141,7 @@ pub(super) fn define_struct(
     }
 }
 
-impl super::WiggleType for witx::StructDatatype {
+impl super::WiggleType for witx::RecordDatatype {
     fn impls_display(&self) -> bool {
         false
     }

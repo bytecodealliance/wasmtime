@@ -49,9 +49,13 @@ impl ErrorTransform {
 
     pub fn for_abi_error(&self, tref: &TypeRef) -> Option<&UserErrorType> {
         match tref {
-            TypeRef::Name(nt) => self.m.iter().find(|u| u.abi_type.name == nt.name),
+            TypeRef::Name(nt) => self.for_name(nt),
             TypeRef::Value { .. } => None,
         }
+    }
+
+    pub fn for_name(&self, nt: &NamedType) -> Option<&UserErrorType> {
+        self.m.iter().find(|u| u.abi_type.name == nt.name)
     }
 }
 
