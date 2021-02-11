@@ -124,6 +124,10 @@ impl Mmap {
         use winapi::um::memoryapi::VirtualAlloc;
         use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_NOACCESS, PAGE_READWRITE};
 
+        if mapping_size == 0 {
+            return Ok(Self::new());
+        }
+
         let page_size = region::page::size();
         assert_le!(accessible_size, mapping_size);
         assert_eq!(mapping_size & (page_size - 1), 0);
