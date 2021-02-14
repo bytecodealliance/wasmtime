@@ -4186,6 +4186,11 @@ fn test_x64_emit() {
         "atomically { 32_bits_at_[%r9]) Xchg= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
     ));
     insns.push((
+        Inst::AtomicRmwSeq { ty: types::I32, op: inst_common::AtomicRmwOp::Umin, },
+        "418B014989C34539DA4D0F46DAF0450FB1190F85EBFFFFFF",
+        "atomically { 32_bits_at_[%r9]) Umin= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
+    ));
+    insns.push((
         Inst::AtomicRmwSeq { ty: types::I64, op: inst_common::AtomicRmwOp::Add, },
         "498B014989C34D01D3F04D0FB1190F85EFFFFFFF",
         "atomically { 64_bits_at_[%r9]) Add= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"

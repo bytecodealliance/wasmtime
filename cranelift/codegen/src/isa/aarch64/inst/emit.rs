@@ -1137,6 +1137,11 @@ impl MachInstEmit for Inst {
                         inst_common::AtomicRmwOp::And => 0b100_01010_00_0,
                         inst_common::AtomicRmwOp::Or => 0b101_01010_00_0,
                         inst_common::AtomicRmwOp::Xor => 0b110_01010_00_0,
+                        inst_common::AtomicRmwOp::Nand
+                        | inst_common::AtomicRmwOp::Umin
+                        | inst_common::AtomicRmwOp::Umax
+                        | inst_common::AtomicRmwOp::Smin
+                        | inst_common::AtomicRmwOp::Smax => todo!("{:?}", op),
                         inst_common::AtomicRmwOp::Xchg => unreachable!(),
                     };
                     sink.put4(enc_arith_rrr(bits_31_21, 0b000000, x28wr, x27, x26));
