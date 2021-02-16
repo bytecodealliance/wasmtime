@@ -121,5 +121,4 @@ mod souper_harvest;
 
 pub use crate::result::{CodegenError, CodegenResult};
 
-/// Version number of this crate.
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+include!(concat!(env!("OUT_DIR"), "/version.rs"));
