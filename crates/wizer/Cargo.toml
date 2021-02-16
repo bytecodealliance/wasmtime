@@ -26,20 +26,20 @@ name = "uap"
 harness = false
 
 [dependencies]
-anyhow = "1.0.34"
-env_logger = { version = "0.8.1", optional = true }
-log = "0.4.11"
-structopt = { version = "0.3.20", optional = true }
-wasm-encoder = "0.3.1"
-wasmparser = "0.68.0"
+anyhow = "1.0.38"
+env_logger = { version = "0.8.2", optional = true }
+log = "0.4.14"
+structopt = { version = "0.3.21", optional = true }
+wasm-encoder = "0.4.0"
+wasmparser = "0.74.0"
 wasmtime = "0.22.0"
 wasmtime-wasi = "0.22.0"
 rayon = "1.5.0"
 
 [dev-dependencies]
-wat = "1.0.28"
+wat = "1.0.34"
 env_logger = "0.8.2"
-criterion = "0.3.3"
+criterion = "0.3.4"
 
 [workspace]
 members = [

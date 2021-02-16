@@ -339,7 +339,10 @@ impl Wizer {
                         data: &full_wasm[imports.range().start..imports.range().end],
                     });
                 }
-                AliasSection(_) | InstanceSection(_) | ModuleSection(_) => {
+                AliasSection(_)
+                | InstanceSection(_)
+                | ModuleSectionStart { .. }
+                | ModuleSectionEntry { .. } => {
                     anyhow::bail!("module linking is not supported yet")
                 }
                 FunctionSection(funcs) => {
@@ -448,9 +451,6 @@ impl Wizer {
                     });
                 }
                 CodeSectionEntry(_) => continue,
-                ModuleCodeSectionStart { .. } | ModuleCodeSectionEntry { .. } => {
-                    anyhow::bail!("module linking is not supported yet")
-                }
                 UnknownSection { .. } => anyhow::bail!("unknown section"),
                 EventSection(_) => anyhow::bail!("exceptions are not supported yet"),
                 End => return Ok(module.finish()),
@@ -752,7 +752,7 @@ impl Wizer {
                         data: &full_wasm[imports.range().start..imports.range().end],
                     });
                 }
-                AliasSection(_) | InstanceSection(_) | ModuleSection(_) => unreachable!(),
+                AliasSection(_) | InstanceSection(_) => unreachable!(),
                 FunctionSection(funcs) => {
                     module.section(&wasm_encoder::RawSection {
                         id: wasm_encoder::SectionId::Function as u8,
@@ -903,8 +903,8 @@ impl Wizer {
                     });
                 }
                 CodeSectionEntry(_) => continue,
-                ModuleCodeSectionStart { .. }
-                | ModuleCodeSectionEntry { .. }
+                ModuleSectionStart { .. }
+                | ModuleSectionEntry { .. }
                 | UnknownSection { .. }
                 | EventSection(_) => unreachable!(),
                 End => {
