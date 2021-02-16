@@ -5,7 +5,7 @@ use errno;
 use libc;
 
 #[cfg(feature = "selinux-fix")]
-use memmap::MmapMut;
+use memmap2::MmapMut;
 
 use region;
 use std::convert::TryFrom;
