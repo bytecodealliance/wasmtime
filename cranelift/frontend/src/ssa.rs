@@ -1098,7 +1098,7 @@ mod tests {
             Ok(()) => {}
             Err(_errors) => {
                 #[cfg(feature = "std")]
-                panic!(_errors);
+                panic!("{}", _errors);
                 #[cfg(not(feature = "std"))]
                 panic!("function failed to verify");
             }
@@ -1291,7 +1291,7 @@ mod tests {
             Ok(()) => {}
             Err(_errors) => {
                 #[cfg(feature = "std")]
-                panic!(_errors);
+                panic!("{}", _errors);
                 #[cfg(not(feature = "std"))]
                 panic!("function failed to verify");
             }
@@ -1357,7 +1357,7 @@ mod tests {
             Ok(()) => {}
             Err(_errors) => {
                 #[cfg(feature = "std")]
-                panic!(_errors);
+                panic!("{}", _errors);
                 #[cfg(not(feature = "std"))]
                 panic!("function failed to verify");
             }

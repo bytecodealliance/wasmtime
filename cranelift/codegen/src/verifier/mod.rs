@@ -2064,10 +2064,7 @@ mod tests {
                 Some(&VerifierError { ref message, .. }) => {
                     if !message.contains($msg) {
                         #[cfg(feature = "std")]
-                        panic!(format!(
-                            "'{}' did not contain the substring '{}'",
-                            message, $msg
-                        ));
+                        panic!("'{}' did not contain the substring '{}'", message, $msg);
                         #[cfg(not(feature = "std"))]
                         panic!("error message did not contain the expected substring");
                     }

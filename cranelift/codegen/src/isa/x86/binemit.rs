@@ -277,6 +277,7 @@ impl EvexContext {
 }
 
 /// The EVEX format allows choosing a vector length in the `L'` and `L` bits; see `EvexContext`.
+#[allow(dead_code)]
 enum EvexVectorLength {
     V128,
     V256,
@@ -296,6 +297,7 @@ impl EvexVectorLength {
 }
 
 /// The EVEX format allows defining rounding control in the `L'` and `L` bits; see `EvexContext`.
+#[allow(dead_code)]
 enum EvexRoundingControl {
     RNE,
     RD,
