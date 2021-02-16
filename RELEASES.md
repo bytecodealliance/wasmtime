@@ -24,7 +24,7 @@ Released 2021-02-16.
   [#2593](https://github.com/bytecodealliance/wasmtime/pull/2593)
 * Implemented module-linking's outer module aliases
   [#2590](https://github.com/bytecodealliance/wasmtime/pull/2590)
-* Cranelift now supports 128-bit operations
+* Cranelift now supports 128-bit operations for the new x64 backend.
   [#2539](https://github.com/bytecodealliance/wasmtime/pull/2539)
 * Cranelift now has detailed debug-info (DWARF) support in new backends (initially x64).
   [#2565](https://github.com/bytecodealliance/wasmtime/pull/2565)
