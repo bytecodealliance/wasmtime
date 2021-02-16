@@ -31,7 +31,7 @@ cranelift-preopt = { path = "preopt", version = "0.69.0" }
 cranelift = { path = "umbrella", version = "0.69.0" }
 filecheck = "0.5.0"
 log = "0.4.8"
-term = "0.6.1"
+termcolor = "1.1.2"
 capstone = { version = "0.7.0", optional = true }
 wat = { version = "1.0.18", optional = true }
 target-lexicon = { version = "0.11", features = ["std"] }
