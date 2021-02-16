@@ -2516,6 +2516,7 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::V128AndNot
         | Operator::V128Or
         | Operator::V128Xor
+        | Operator::V128AnyTrue
         | Operator::V128Bitselect => I8X16, // default type representing V128
 
         Operator::I8x16Shuffle { .. }
