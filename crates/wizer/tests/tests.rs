@@ -14,7 +14,12 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> anyhow::Resul
     wizer.allow_wasi(true);
     let wasm = wizer.run(&wasm)?;
 
-    let store = wasmtime::Store::default();
+    let mut config = wasmtime::Config::new();
+    config.wasm_multi_memory(true);
+    config.wasm_multi_value(true);
+
+    let engine = wasmtime::Engine::new(&config);
+    let store = wasmtime::Store::new(&engine);
     let module = wasmtime::Module::new(store.engine(), wasm)?;
 
     let mut linker = wasmtime::Linker::new(&store);
@@ -76,6 +81,32 @@ fn basic_memory() -> anyhow::Result<()> {
     i32.const 0
     i32.load offset=1337))
         "#,
+    )
+}
+
+#[test]
+fn multi_memory() -> anyhow::Result<()> {
+    run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (memory $m1 1)
+  (memory $m2 1)
+  (func (export "wizer.initialize")
+    i32.const 0
+    i32.const 41
+    i32.store $m1 offset=1337
+    i32.const 0
+    i32.const 1
+    i32.store $m2 offset=1337)
+  (func (export "run") (result i32)
+    i32.const 0
+    i32.load $m1 offset=1337
+    i32.const 0
+    i32.load $m2 offset=1337
+    i32.add))
+"#,
     )
 }
 
