@@ -785,6 +785,7 @@ use labels::{LabelInfo, LabelValue, Labels};
 pub struct Context<'this, M> {
     pub asm: &'this mut Assembler,
     pointer_type: SignlessType,
+    #[allow(dead_code)]
     source_loc: SourceLoc,
     reloc_sink: &'this mut dyn binemit::RelocSink,
     module_context: &'this M,
