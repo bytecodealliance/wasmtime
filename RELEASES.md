@@ -2,6 +2,54 @@
 
 --------------------------------------------------------------------------------
 
+## 0.23.0
+
+Released 2021-02-16.
+
+### Added
+
+* Support for limiting WebAssembly execution with fuel was added, including
+  support in the C API.
+  [#2611](https://github.com/bytecodealliance/wasmtime/pull/2611)
+  [#2643](https://github.com/bytecodealliance/wasmtime/pull/2643)
+* Wasmtime now has more knobs for limiting memory and table allocations
+  [#2617](https://github.com/bytecodealliance/wasmtime/pull/2617)
+* Added a method to share `Config` across machines
+  [#2608](https://github.com/bytecodealliance/wasmtime/pull/2608)
+* Added a safe memory read/write API
+  [#2528](https://github.com/bytecodealliance/wasmtime/pull/2528)
+* Added support for the experimental wasi-crypto APIs
+  [#2597](https://github.com/bytecodealliance/wasmtime/pull/2597)
+* Added an instance limit to `Config`
+  [#2593](https://github.com/bytecodealliance/wasmtime/pull/2593)
+* Implemented module-linking's outer module aliases
+  [#2590](https://github.com/bytecodealliance/wasmtime/pull/2590)
+* Cranelift now supports 128-bit operations
+  [#2539](https://github.com/bytecodealliance/wasmtime/pull/2539)
+* Cranelift now has detailed debug-info (DWARF) support in new backends (initially x64).
+  [#2565](https://github.com/bytecodealliance/wasmtime/pull/2565)
+* Cranelift now uses the `POPCNT`, `TZCNT`, and `LZCNT`, as well as SSE 4.1
+  rounding instructions on x64 when available.
+* Cranelift now uses the `CNT`, instruction on aarch64 when available.
+
+### Changed
+
+* A new WASI implementation built on the new
+  [`cap-std`](https://github.com/bytecodealliance/cap-std) crate was added,
+  replacing the previous implementation. This brings improved robustness,
+  portability, and performance.
+* The WebAssembly C API is updated, with a few minor API changes
+  [#2579](https://github.com/bytecodealliance/wasmtime/pull/2579)
+
+### Fixed
+
+* Fixed a panic in WASI `fd_readdir` on large directories
+  [#2620](https://github.com/bytecodealliance/wasmtime/pull/2620)
+* Fixed a memory leak with command modules
+  [#2017](https://github.com/bytecodealliance/wasmtime/pull/2017)
+
+--------------------------------------------------------------------------------
+
 ## 0.22.0
 
 Released 2021-01-07.
