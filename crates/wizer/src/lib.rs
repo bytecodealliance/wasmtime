@@ -61,7 +61,15 @@ pub struct Wizer {
     ///
     /// This option can be used, for example, to replace a `_start` entry point
     /// in an initialized module with an alternate entry point.
-    #[cfg_attr(feature = "structopt", structopt(short = "r", long = "func-rename"))]
+    #[cfg_attr(
+        feature = "structopt",
+        structopt(
+            short = "r",
+            long = "rename-func",
+            alias = "func-rename",
+            value_name = "dst=src"
+        )
+    )]
     func_renames: Vec<String>,
 
     /// Allow WASI imports to be called during initialization.
