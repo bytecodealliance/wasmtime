@@ -572,7 +572,7 @@ dependencies = [
  "filecheck",
  "gimli",
  "log",
- "memmap",
+ "memmap2",
  "num_cpus",
  "target-lexicon",
  "thiserror",
@@ -616,7 +616,7 @@ dependencies = [
  "errno",
  "libc",
  "log",
- "memmap",
+ "memmap2",
  "region",
  "target-lexicon",
  "winapi",
@@ -1534,20 +1534,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ee1c47aaa256ecabcaea351eae4a9b01ef39ed810004e298d2511ed284b1525"
 
 [[package]]
-name = "memmap"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6585fd95e7bb50d6cc31e20d4cf9afb4e2ba16c5846fc76793f11218da9c475b"
-dependencies = [
- "libc",
- "winapi",
-]
-
-[[package]]
 name = "memmap2"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e73be3b7d04a0123e933fea1d50d126cc7196bbc0362c0ce426694f777194eee"
+checksum = "04e3e85b970d650e2ae6d70592474087051c11c54da7f7b4949725c5735fbcc6"
 dependencies = [
  "libc",
 ]
