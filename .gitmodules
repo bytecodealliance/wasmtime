@@ -10,7 +10,8 @@
 	branch = abis
 [submodule "crates/wasi-nn/spec"]
 	path = crates/wasi-nn/spec
-	url = https://github.com/WebAssembly/wasi-nn
+	url = https://github.com/alexcrichton/wasi-nn
+	branch = witx-next
 [submodule "crates/wasi-crypto/spec"]
 	path = crates/wasi-crypto/spec
 	url = https://github.com/WebAssembly/wasi-crypto.git
