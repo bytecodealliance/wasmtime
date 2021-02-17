@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-reader"
-version = "0.69.0"
+version = "0.70.0"
 description = "Cranelift textual IR reader"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-reader"
@@ -10,7 +10,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../codegen", version = "0.69.0" }
+cranelift-codegen = { path = "../codegen", version = "0.70.0" }
 smallvec = "1.6.1"
 target-lexicon = "0.11"
 thiserror = "1.0.15"
