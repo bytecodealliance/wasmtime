@@ -6,23 +6,23 @@ use crate::ctx::WasiNnError;
 wiggle::from_witx!({
     witx: ["$WASI_ROOT/phases/ephemeral/witx/wasi_ephemeral_nn.witx"],
     ctx: WasiNnCtx,
-    errors: { errno => WasiNnError }
+    errors: { nn_errno => WasiNnError }
 });
 
-use types::Errno;
+use types::NnErrno;
 
 /// Wiggle generates code that performs some input validation on the arguments passed in by users of
 /// wasi-nn. Here we convert the validation error into one (or more, eventually) of the error
 /// variants defined in the witx.
 impl types::GuestErrorConversion for WasiNnCtx {
-    fn into_errno(&self, e: wiggle::GuestError) -> Errno {
+    fn into_nn_errno(&self, e: wiggle::GuestError) -> NnErrno {
         eprintln!("Guest error: {:?}", e);
-        Errno::InvalidArgument
+        NnErrno::InvalidArgument
     }
 }
 
 impl<'a> types::UserErrorConversion for WasiNnCtx {
-    fn errno_from_wasi_nn_error(&self, e: WasiNnError) -> Result<Errno, wiggle::Trap> {
+    fn nn_errno_from_wasi_nn_error(&self, e: WasiNnError) -> Result<NnErrno, wiggle::Trap> {
         eprintln!("Host error: {:?}", e);
         match e {
             WasiNnError::OpenvinoError(_) => unimplemented!(),
@@ -33,7 +33,7 @@ impl<'a> types::UserErrorConversion for WasiNnCtx {
 }
 
 /// Additionally, we must let Wiggle know which of our error codes represents a successful operation.
-impl wiggle::GuestErrorType for Errno {
+impl wiggle::GuestErrorType for NnErrno {
     fn success() -> Self {
         Self::Success
     }

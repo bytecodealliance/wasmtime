@@ -12,7 +12,7 @@ use wiggle::GuestPtr;
 
 #[derive(Debug, Error)]
 pub enum UsageError {
-    #[error("Only OpenVINO's IR is currently supported, passed encoding: {0}")]
+    #[error("Only OpenVINO's IR is currently supported, passed encoding: {0:?}")]
     InvalidEncoding(GraphEncoding),
     #[error("OpenVINO expects only two buffers (i.e. [ir, weights]), passed: {0}")]
     InvalidNumberOfBuilders(u32),
