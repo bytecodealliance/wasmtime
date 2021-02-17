@@ -1,7 +1,7 @@
 use super::{guest_types, WasiCryptoCtx};
 
 use std::convert::TryInto;
-use wasi_crypto::{ensure, CryptoError};
+use wasi_crypto::{ensure, CryptoError, Version};
 
 impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for WasiCryptoCtx {
     // --- secrets_manager
@@ -55,7 +55,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
                 symmetric_key_old_handle.into(),
                 symmetric_key_new_handle.into(),
             )?
-            .into())
+            .0)
     }
 
     fn symmetric_key_from_id(
@@ -72,7 +72,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
             .symmetric_key_from_id(
                 secrets_manager_handle.into(),
                 symmetric_key_id,
-                symmetric_key_version.into(),
+                Version(symmetric_key_version),
             )?
             .into())
     }
@@ -129,7 +129,7 @@ impl super::wasi_ephemeral_crypto_symmetric::WasiEphemeralCryptoSymmetric for Wa
             CryptoError::Overflow.into()
         );
         key_id_buf.copy_from_slice(&key_id);
-        Ok((key_id.len().try_into()?, version.into()))
+        Ok((key_id.len().try_into()?, version.0))
     }
 
     fn symmetric_key_close(

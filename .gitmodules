@@ -14,4 +14,5 @@
 	branch = witx-next
 [submodule "crates/wasi-crypto/spec"]
 	path = crates/wasi-crypto/spec
-	url = https://github.com/WebAssembly/wasi-crypto.git
+	url = https://github.com/alexcrichton/wasi-crypto.git
+	branch = witx-next
