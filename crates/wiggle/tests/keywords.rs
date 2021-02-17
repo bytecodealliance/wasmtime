@@ -8,7 +8,7 @@ mod enum_test {
     wiggle::from_witx!({
         witx_literal:
             "(typename $self
-                 (enum u8
+                 (enum (@witx tag u8)
                      $self
                      $2big
                  )
@@ -35,7 +35,7 @@ mod module_trait_fn_and_arg_test {
     });
     impl<'a> self_::Self_ for WasiCtx<'a> {
         #[allow(unused_variables)]
-        fn fn_(&self, use_: u32, virtual_: u32) -> Result<(), ()> {
+        fn fn_(&self, use_: u32, virtual_: u32) {
             unimplemented!();
         }
     }
@@ -46,7 +46,7 @@ mod struct_test {
     wiggle::from_witx!({
         witx_literal:
             "(typename $self
-                 (struct
+                 (record
                      (field $become s32)
                      (field $mut s32)
                  )

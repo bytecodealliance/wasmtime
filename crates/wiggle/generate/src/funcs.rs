@@ -55,6 +55,7 @@ pub fn define_func(
     let mod_name = &module.name.as_str();
     let func_name = &func.name.as_str();
     quote! {
+        #[allow(unreachable_code)] // deals with warnings in noreturn functions
         pub fn #ident(
             ctx: &#ctx_type,
             memory: &dyn #rt::GuestMemory,
@@ -215,7 +216,7 @@ impl witx::Bindgen for Rust<'_> {
                 if func.results.len() > 0 {
                     results.push(quote!(ret));
                 } else if func.noreturn {
-                    self.src.extend(quote!(return Err(ret)));
+                    self.src.extend(quote!(return Err(ret);));
                 }
             }
 
@@ -250,7 +251,9 @@ impl witx::Bindgen for Rust<'_> {
 
             Instruction::VariantPayload => results.push(quote!(e)),
 
-            Instruction::Return { amt: 0 } => {}
+            Instruction::Return { amt: 0 } => {
+                self.src.extend(quote!(return Ok(())));
+            }
             Instruction::Return { amt: 1 } => {
                 let val = operands.pop().unwrap();
                 self.src.extend(quote!(return Ok(#val)));
@@ -278,6 +281,17 @@ impl witx::Bindgen for Rust<'_> {
                 });
             }
 
+            Instruction::Load { ty } => {
+                let ptr = operands.pop().unwrap();
+                let wrap_err = wrap_err(&format!("read {}", ty.name.as_str()));
+                let pointee_type = self.names.type_(&ty.name);
+                results.push(quote! {
+                    #rt::GuestPtr::<#pointee_type>::new(memory, #ptr as u32)
+                        .read()
+                        .map_err(#wrap_err)?
+                });
+            }
+
             Instruction::HandleFromI32 { ty } => {
                 let val = operands.pop().unwrap();
                 let ty = self.names.type_(&ty.name);
@@ -294,7 +308,7 @@ impl witx::Bindgen for Rust<'_> {
 
             // Conversions with matching bit-widths but different signededness
             // use `as` since we're basically just reinterpreting the bits.
-            Instruction::U32FromI32 => {
+            Instruction::U32FromI32 | Instruction::UsizeFromI32 => {
                 let val = operands.pop().unwrap();
                 results.push(quote!(#val as u32));
             }

@@ -105,7 +105,7 @@ impl ReduceExcusesExcercise {
             self.return_ptr_loc.ptr as i32,
         );
 
-        assert_eq!(res, Ok(types::Errno::Ok.into()), "reduce excuses errno");
+        assert_eq!(res, Ok(types::Errno::Ok as i32), "reduce excuses errno");
 
         let expected = *self
             .excuse_values
@@ -183,7 +183,7 @@ impl PopulateExcusesExcercise {
             self.array_ptr_loc.ptr as i32,
             self.elements.len() as i32,
         );
-        assert_eq!(res, Ok(types::Errno::Ok.into()), "populate excuses errno");
+        assert_eq!(res, Ok(types::Errno::Ok as i32), "populate excuses errno");
 
         let arr: GuestPtr<'_, [GuestPtr<'_, types::Excuse>]> =
             host_memory.ptr((self.array_ptr_loc.ptr, self.elements.len() as u32));
@@ -309,7 +309,7 @@ impl SumElementsExercise {
             self.start_ix as i32,
             self.return_loc.ptr as i32,
         );
-        assert_eq!(res, Ok(types::Errno::Ok.into()), "sum_of_element errno");
+        assert_eq!(res, Ok(types::Errno::Ok as i32), "sum_of_element errno");
         let result_ptr = host_memory.ptr::<i32>(self.return_loc.ptr);
         let result = result_ptr.read().expect("read result");
 
@@ -330,7 +330,7 @@ impl SumElementsExercise {
         );
         assert_eq!(
             res,
-            Ok(types::Errno::InvalidArg.into()),
+            Ok(types::Errno::InvalidArg as i32),
             "out of bounds sum_of_element errno"
         );
 
@@ -346,7 +346,7 @@ impl SumElementsExercise {
         if self.start_ix <= self.end_ix {
             assert_eq!(
                 res,
-                Ok(types::Errno::Ok.into()),
+                Ok(types::Errno::Ok as i32),
                 "expected ok sum_of_elements errno"
             );
             let result_ptr = host_memory.ptr::<i32>(self.return_loc.ptr);
@@ -367,7 +367,7 @@ impl SumElementsExercise {
         } else {
             assert_eq!(
                 res,
-                Ok(types::Errno::InvalidArg.into()),
+                Ok(types::Errno::InvalidArg as i32),
                 "expected error out-of-bounds sum_of_elements"
             );
         }
@@ -384,7 +384,7 @@ impl SumElementsExercise {
         );
         assert_eq!(
             res,
-            Ok(types::Errno::InvalidArg.into()),
+            Ok(types::Errno::InvalidArg as i32),
             "out of bounds sum_of_elements errno"
         );
     }

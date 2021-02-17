@@ -2,49 +2,46 @@
 (use "errno.witx")
 
 (typename $pair_ints
-  (struct
+  (record
     (field $first s32)
     (field $second s32)))
 
 (typename $pair_int_ptrs
-  (struct
+  (record
     (field $first (@witx const_pointer s32))
     (field $second (@witx const_pointer s32))))
 
 (typename $pair_int_and_ptr
-  (struct
+  (record
     (field $first (@witx const_pointer s32))
     (field $second s32)))
 
-(typename $some_bytes (array u8))
+(typename $some_bytes (list u8))
 
 (typename $struct_of_array
-  (struct
+  (record
     (field $arr $some_bytes)))
+
+(typename $s64 s64)
+(typename $u16 u16)
 
 (module $structs
   (@interface func (export "sum_of_pair")
     (param $an_pair $pair_ints)
-    (result $error $errno)
-    (result $doubled s64))
+    (result $error (expected $s64 (error $errno))))
   (@interface func (export "sum_of_pair_of_ptrs")
     (param $an_pair $pair_int_ptrs)
-    (result $error $errno)
-    (result $doubled s64))
+    (result $error (expected $s64 (error $errno))))
   (@interface func (export "sum_of_int_and_ptr")
     (param $an_pair $pair_int_and_ptr)
-    (result $error $errno)
-    (result $double s64))
+    (result $error (expected $s64 (error $errno))))
   (@interface func (export "return_pair_ints")
-    (result $error $errno)
-    (result $an_pair $pair_ints))
+    (result $error (expected $pair_ints (error $errno))))
   (@interface func (export "return_pair_of_ptrs")
     (param $first (@witx const_pointer s32))
     (param $second (@witx const_pointer s32))
-    (result $error $errno)
-    (result $an_pair $pair_int_ptrs))
+    (result $error (expected $pair_int_ptrs (error $errno))))
   (@interface func (export "sum_array")
     (param $an_arr $struct_of_array)
-    (result $error $errno)
-    (result $doubled u16))
+    (result $error (expected $u16 (error $errno))))
 )

@@ -1,7 +1,7 @@
 (use "errno.witx")
 
 (typename $car_config
-  (flags u8
+  (flags (@witx repr u8)
     $automatic
     $awd
     $suv))
@@ -10,7 +10,6 @@
   (@interface func (export "configure_car")
     (param $old_config $car_config)
     (param $old_config_by_ptr (@witx const_pointer $car_config))
-    (result $error $errno)
-    (result $new_config $car_config)
+    (result $error (expected $car_config (error $errno)))
   )
 )

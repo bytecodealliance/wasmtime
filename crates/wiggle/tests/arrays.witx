@@ -1,36 +1,36 @@
 (use "errno.witx")
 (use "excuse.witx")
 
-(typename $const_excuse_array (array (@witx const_pointer $excuse)))
-(typename $excuse_array (array (@witx pointer $excuse)))
+(typename $const_excuse_array (list (@witx const_pointer $excuse)))
+(typename $excuse_array (list (@witx pointer $excuse)))
 
 (module $arrays
   (@interface func (export "reduce_excuses")
     (param $excuses $const_excuse_array)
-    (result $error $errno)
-    (result $reduced $excuse)
+    (result $error (expected $excuse (error $errno)))
   )
   (@interface func (export "populate_excuses")
     (param $excuses $excuse_array)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 )
 
 (typename $pair_ints
-  (struct
+  (record
     (field $first s32)
     (field $second s32)))
 
+(typename $s32 s32)
+
 (module $array_traversal
   (@interface func (export "sum_of_element")
-    (param $elements (array $pair_ints))
+    (param $elements (list $pair_ints))
     (param $index (@witx usize))
-    (result $error $errno)
-    (result $sum s32))
+    (result $error (expected $s32 (error $errno))))
 
   (@interface func (export "sum_of_elements")
-    (param $elements (array $pair_ints))
+    (param $elements (list $pair_ints))
     (param $start (@witx usize))
     (param $end (@witx usize))
-    (result $error $errno)
-    (result $sum s32)))
+    (result $error (expected $s32 (error $errno))))
+)

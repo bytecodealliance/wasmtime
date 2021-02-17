@@ -9,6 +9,8 @@ use witx::Module;
 pub fn passed_by_reference(ty: &witx::Type) -> bool {
     match ty {
         witx::Type::Pointer(_) | witx::Type::ConstPointer(_) | witx::Type::List(_) => true,
+        witx::Type::Record(r) => r.bitflags_repr().is_none(),
+        witx::Type::Variant(v) => !v.is_enum(),
         _ => false,
     }
 }
