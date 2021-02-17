@@ -111,7 +111,7 @@ impl super::wasi_ephemeral_crypto_common::WasiEphemeralCryptoCommon for WasiCryp
         Ok(self.secrets_manager_invalidate(
             secrets_manager_handle.into(),
             key_id,
-            key_version.into(),
+            Version(key_version),
         )?)
     }
 }
@@ -123,17 +123,5 @@ impl From<guest_types::AlgorithmType> for AlgorithmType {
             guest_types::AlgorithmType::Symmetric => AlgorithmType::Symmetric,
             guest_types::AlgorithmType::KeyExchange => AlgorithmType::KeyExchange,
         }
-    }
-}
-
-impl From<guest_types::Version> for Version {
-    fn from(version: guest_types::Version) -> Self {
-        Version(version.into())
-    }
-}
-
-impl From<Version> for guest_types::Version {
-    fn from(version: Version) -> Self {
-        version.into()
     }
 }

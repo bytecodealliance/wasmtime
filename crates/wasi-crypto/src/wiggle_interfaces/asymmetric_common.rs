@@ -1,7 +1,9 @@
 use super::{guest_types, WasiCryptoCtx};
 
 use std::convert::TryInto;
-use wasi_crypto::{ensure, CryptoError, KeyPairEncoding, PublicKeyEncoding, SecretKeyEncoding};
+use wasi_crypto::{
+    ensure, CryptoError, KeyPairEncoding, PublicKeyEncoding, SecretKeyEncoding, Version,
+};
 
 impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetricCommon
     for WasiCryptoCtx
@@ -57,7 +59,7 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
                 kp_old_handle.into(),
                 kp_new_handle.into(),
             )?
-            .into())
+            .0)
     }
 
     fn keypair_from_id(
@@ -69,7 +71,7 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
     ) -> Result<guest_types::Keypair, guest_types::CryptoErrno> {
         let kp_id = &*kp_id_ptr.as_array(kp_id_len).as_slice()?;
         Ok(self
-            .keypair_from_id(secrets_manager_handle.into(), kp_id, kp_version.into())?
+            .keypair_from_id(secrets_manager_handle.into(), kp_id, Version(kp_version))?
             .into())
     }
 
@@ -116,7 +118,7 @@ impl super::wasi_ephemeral_crypto_asymmetric_common::WasiEphemeralCryptoAsymmetr
         let (kp_id, version) = self.keypair_id(kp_handle.into())?;
         ensure!(kp_id.len() <= kp_id_buf.len(), CryptoError::Overflow.into());
         kp_id_buf.copy_from_slice(&kp_id);
-        Ok((kp_id.len().try_into()?, version.into()))
+        Ok((kp_id.len().try_into()?, version.0))
     }
 
     fn keypair_export(
