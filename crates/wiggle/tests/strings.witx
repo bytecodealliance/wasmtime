@@ -1,16 +1,17 @@
 (use "errno.witx")
+
+(typename $ret u32)
+
 (module $strings
   (@interface func (export "hello_string")
     (param $a_string string)
-    (result $error $errno)
-    (result $total_bytes u32)
+    (result $error (expected $ret (error $errno)))
   )
 
   (@interface func (export "multi_string")
     (param $a string)
     (param $b string)
     (param $c string)
-    (result $error $errno)
-    (result $total_bytes u32)
+    (result $error (expected $ret (error $errno)))
   )
 )

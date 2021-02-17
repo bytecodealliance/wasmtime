@@ -6,8 +6,9 @@ mod module_trait;
 mod names;
 mod types;
 
+use heck::ShoutySnakeCase;
 use lifetimes::anon_lifetime;
-use proc_macro2::TokenStream;
+use proc_macro2::{Literal, TokenStream};
 use quote::quote;
 
 pub use config::Config;
@@ -23,6 +24,19 @@ pub fn generate(doc: &witx::Document, names: &Names, errs: &ErrorTransform) -> T
     let rt = names.runtime_mod();
 
     let types = doc.typenames().map(|t| define_datatype(&names, &t));
+
+    let constants = doc.constants().map(|c| {
+        let name = quote::format_ident!(
+            "{}_{}",
+            c.ty.as_str().to_shouty_snake_case(),
+            c.name.as_str().to_shouty_snake_case()
+        );
+        let ty = names.type_(&c.ty);
+        let value = Literal::u64_unsuffixed(c.value);
+        quote! {
+            pub const #name: #ty = #value;
+        }
+    });
 
     let guest_error_methods = doc.error_types().map(|t| {
         let typename = names.type_ref(&t, anon_lifetime());
@@ -69,6 +83,7 @@ pub fn generate(doc: &witx::Document, names: &Names, errs: &ErrorTransform) -> T
             use std::convert::TryFrom;
 
             #(#types)*
+            #(#constants)*
             #guest_error_conversion
             #user_error_conversion
         }

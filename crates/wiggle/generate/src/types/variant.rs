@@ -65,6 +65,7 @@ pub(super) fn define_variant(names: &Names, name: &witx::Id, v: &witx::Variant) 
         }
     });
 
+    let mut extra_derive = quote!();
     let enum_try_from = if v.cases.iter().all(|c| c.tref.is_none()) {
         let tryfrom_repr_cases = v.cases.iter().enumerate().map(|(i, c)| {
             let variant_name = names.enum_variant(&c.name);
@@ -72,6 +73,7 @@ pub(super) fn define_variant(names: &Names, name: &witx::Id, v: &witx::Variant) 
             quote!(#n => Ok(#ident::#variant_name))
         });
         let abi_ty = names.wasm_type(v.tag_repr.into());
+        extra_derive = quote!(, Copy);
         quote! {
             impl TryFrom<#tag_ty> for #ident {
                 type Error = #rt::GuestError;
@@ -97,7 +99,7 @@ pub(super) fn define_variant(names: &Names, name: &witx::Id, v: &witx::Variant) 
     let (enum_lifetime, extra_derive) = if v.needs_lifetime() {
         (quote!(<'a>), quote!())
     } else {
-        (quote!(), quote!(, PartialEq))
+        (quote!(), quote!(, PartialEq #extra_derive))
     };
 
     quote! {

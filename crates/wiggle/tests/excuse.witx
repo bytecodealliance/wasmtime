@@ -1,5 +1,5 @@
 (typename $excuse
-  (enum u8
+  (enum (@witx tag u8)
      $dog_ate
      $traffic
      $sleeping))

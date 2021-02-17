@@ -17,15 +17,13 @@
   (@interface func (export "args_get")
     (param $argv (@witx pointer (@witx pointer u8)))
     (param $argv_buf (@witx pointer u8))
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
   ;;; Return command-line argument data sizes.
   (@interface func (export "args_sizes_get")
-    (result $error $errno)
-    ;;; The number of arguments.
-    (result $argc $size)
-    ;;; The size of the argument string data.
-    (result $argv_buf_size $size)
+    ;;; Returns the number of arguments and the size of the argument string
+    ;;; data, or an error.
+    (result $error (expected (tuple $size $size) (error $errno)))
   )
 
   ;;; Read environment variable data.
@@ -33,15 +31,13 @@
   (@interface func (export "environ_get")
     (param $environ (@witx pointer (@witx pointer u8)))
     (param $environ_buf (@witx pointer u8))
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
   ;;; Return environment variable data sizes.
   (@interface func (export "environ_sizes_get")
-    (result $error $errno)
-    ;;; The number of environment variable arguments.
-    (result $environc $size)
-    ;;; The size of the environment variable data.
-    (result $environ_buf_size $size)
+    ;;; Returns the number of environment variable arguments and the size of the
+    ;;; environment variable data.
+    (result $error (expected (tuple $size $size) (error $errno)))
   )
 
   ;;; Return the resolution of a clock.
@@ -51,9 +47,8 @@
   (@interface func (export "clock_res_get")
     ;;; The clock for which to return the resolution.
     (param $id $clockid)
-    (result $error $errno)
-    ;;; The resolution of the clock.
-    (result $resolution $timestamp)
+    ;;; The resolution of the clock, or an error if one happened.
+    (result $error (expected $timestamp (error $errno)))
   )
   ;;; Return the time value of a clock.
   ;;; Note: This is similar to `clock_gettime` in POSIX.
@@ -62,9 +57,8 @@
     (param $id $clockid)
     ;;; The maximum lag (exclusive) that the returned time value may have, compared to its actual value.
     (param $precision $timestamp)
-    (result $error $errno)
     ;;; The time value of the clock.
-    (result $time $timestamp)
+    (result $error (expected $timestamp (error $errno)))
   )
 
   ;;; Provide file advisory information on a file descriptor.
@@ -77,7 +71,7 @@
     (param $len $filesize)
     ;;; The advice.
     (param $advice $advice)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Force the allocation of space in a file.
@@ -88,30 +82,29 @@
     (param $offset $filesize)
     ;;; The length of the area that is allocated.
     (param $len $filesize)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Close a file descriptor.
   ;;; Note: This is similar to `close` in POSIX.
   (@interface func (export "fd_close")
     (param $fd $fd)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Synchronize the data of a file to disk.
   ;;; Note: This is similar to `fdatasync` in POSIX.
   (@interface func (export "fd_datasync")
     (param $fd $fd)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Get the attributes of a file descriptor.
   ;;; Note: This returns similar flags to `fsync(fd, F_GETFL)` in POSIX, as well as additional fields.
   (@interface func (export "fd_fdstat_get")
     (param $fd $fd)
-    (result $error $errno)
     ;;; The buffer where the file descriptor's attributes are stored.
-    (result $stat $fdstat)
+    (result $error (expected $fdstat (error $errno)))
   )
 
   ;;; Adjust the flags associated with a file descriptor.
@@ -120,7 +113,7 @@
     (param $fd $fd)
     ;;; The desired values of the file descriptor flags.
     (param $flags $fdflags)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Adjust the rights associated with a file descriptor.
@@ -130,15 +123,14 @@
     ;;; The desired rights of the file descriptor.
     (param $fs_rights_base $rights)
     (param $fs_rights_inheriting $rights)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Return the attributes of an open file.
   (@interface func (export "fd_filestat_get")
     (param $fd $fd)
-    (result $error $errno)
     ;;; The buffer where the file's attributes are stored.
-    (result $buf $filestat)
+    (result $error (expected $filestat (error $errno)))
   )
 
   ;;; Adjust the size of an open file. If this increases the file's size, the extra bytes are filled with zeros.
@@ -147,7 +139,7 @@
     (param $fd $fd)
     ;;; The desired file size.
     (param $size $filesize)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Adjust the timestamps of an open file or directory.
@@ -160,7 +152,7 @@
     (param $mtim $timestamp)
     ;;; A bitmask indicating which timestamps to adjust.
     (param $fst_flags $fstflags)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Read from a file descriptor, without using and updating the file descriptor's offset.
@@ -171,17 +163,15 @@
     (param $iovs $iovec_array)
     ;;; The offset within the file at which to read.
     (param $offset $filesize)
-    (result $error $errno)
     ;;; The number of bytes read.
-    (result $nread $size)
+    (result $error (expected $size (error $errno)))
   )
 
   ;;; Return a description of the given preopened file descriptor.
   (@interface func (export "fd_prestat_get")
     (param $fd $fd)
-    (result $error $errno)
     ;;; The buffer where the description is stored.
-    (result $buf $prestat)
+    (result $error (expected $prestat (error $errno)))
   )
 
   ;;; Return a description of the given preopened file descriptor.
@@ -190,7 +180,7 @@
     ;;; A buffer into which to write the preopened directory name.
     (param $path (@witx pointer u8))
     (param $path_len $size)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Write to a file descriptor, without using and updating the file descriptor's offset.
@@ -201,9 +191,8 @@
     (param $iovs $ciovec_array)
     ;;; The offset within the file at which to write.
     (param $offset $filesize)
-    (result $error $errno)
     ;;; The number of bytes written.
-    (result $nwritten $size)
+    (result $error (expected $size (error $errno)))
   )
 
   ;;; Read from a file descriptor.
@@ -212,15 +201,14 @@
     (param $fd $fd)
     ;;; List of scatter/gather vectors to which to store data.
     (param $iovs $iovec_array)
-    (result $error $errno)
     ;;; The number of bytes read.
-    (result $nread $size)
+    (result $error (expected $size (error $errno)))
   )
 
   ;;; Read directory entries from a directory.
   ;;; When successful, the contents of the output buffer consist of a sequence of
-  ;;; directory entries. Each directory entry consists of a dirent_t object,
-  ;;; followed by dirent_t::d_namlen bytes holding the name of the directory
+  ;;; directory entries. Each directory entry consists of a `dirent` object,
+  ;;; followed by `dirent::d_namlen` bytes holding the name of the directory
   ;;; entry.
   ;;
   ;;; This function fills the output buffer as much as possible, potentially
@@ -234,9 +222,8 @@
     (param $buf_len $size)
     ;;; The location within the directory to start reading
     (param $cookie $dircookie)
-    (result $error $errno)
     ;;; The number of bytes stored in the read buffer. If less than the size of the read buffer, the end of the directory has been reached.
-    (result $bufused $size)
+    (result $error (expected $size (error $errno)))
   )
 
   ;;; Atomically replace a file descriptor by renumbering another file descriptor.
@@ -253,7 +240,7 @@
     (param $fd $fd)
     ;;; The file descriptor to overwrite.
     (param $to $fd)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Move the offset of a file descriptor.
@@ -264,25 +251,23 @@
     (param $offset $filedelta)
     ;;; The base from which the offset is relative.
     (param $whence $whence)
-    (result $error $errno)
     ;;; The new offset of the file descriptor, relative to the start of the file.
-    (result $newoffset $filesize)
+    (result $error (expected $filesize (error $errno)))
   )
 
   ;;; Synchronize the data and metadata of a file to disk.
   ;;; Note: This is similar to `fsync` in POSIX.
   (@interface func (export "fd_sync")
     (param $fd $fd)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Return the current offset of a file descriptor.
   ;;; Note: This is similar to `lseek(fd, 0, SEEK_CUR)` in POSIX.
   (@interface func (export "fd_tell")
     (param $fd $fd)
-    (result $error $errno)
     ;;; The current offset of the file descriptor, relative to the start of the file.
-    (result $offset $filesize)
+    (result $error (expected $filesize (error $errno)))
   )
 
   ;;; Write to a file descriptor.
@@ -291,9 +276,7 @@
     (param $fd $fd)
     ;;; List of scatter/gather vectors from which to retrieve data.
     (param $iovs $ciovec_array)
-    (result $error $errno)
-    ;;; The number of bytes written.
-    (result $nwritten $size)
+    (result $error (expected $size (error $errno)))
   )
 
   ;;; Create a directory.
@@ -302,7 +285,7 @@
     (param $fd $fd)
     ;;; The path at which to create the directory.
     (param $path string)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Return the attributes of a file or directory.
@@ -313,9 +296,8 @@
     (param $flags $lookupflags)
     ;;; The path of the file or directory to inspect.
     (param $path string)
-    (result $error $errno)
     ;;; The buffer where the file's attributes are stored.
-    (result $buf $filestat)
+    (result $error (expected $filestat (error $errno)))
   )
 
   ;;; Adjust the timestamps of a file or directory.
@@ -332,7 +314,7 @@
     (param $mtim $timestamp)
     ;;; A bitmask indicating which timestamps to adjust.
     (param $fst_flags $fstflags)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Create a hard link.
@@ -347,7 +329,7 @@
     (param $new_fd $fd)
     ;;; The destination path at which to create the hard link.
     (param $new_path string)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Open a file or directory.
@@ -377,11 +359,10 @@
     ;;; descriptor itself, while the *inheriting* rights are rights that apply to
     ;;; file descriptors derived from it.
     (param $fs_rights_base $rights)
-    (param $fs_rights_inherting $rights)
+    (param $fs_rights_inheriting $rights)
     (param $fdflags $fdflags)
-    (result $error $errno)
     ;;; The file descriptor of the file that has been opened.
-    (result $opened_fd $fd)
+    (result $error (expected $fd (error $errno)))
   )
 
   ;;; Read the contents of a symbolic link.
@@ -393,9 +374,8 @@
     ;;; The buffer to which to write the contents of the symbolic link.
     (param $buf (@witx pointer u8))
     (param $buf_len $size)
-    (result $error $errno)
     ;;; The number of bytes placed in the buffer.
-    (result $bufused $size)
+    (result $error (expected $size (error $errno)))
   )
 
   ;;; Remove a directory.
@@ -405,7 +385,7 @@
     (param $fd $fd)
     ;;; The path to a directory to remove.
     (param $path string)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Rename a file or directory.
@@ -418,7 +398,7 @@
     (param $new_fd $fd)
     ;;; The destination path to which to rename the file or directory.
     (param $new_path string)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Create a symbolic link.
@@ -429,7 +409,7 @@
     (param $fd $fd)
     ;;; The destination path at which to create the symbolic link.
     (param $new_path string)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
 
@@ -440,7 +420,7 @@
     (param $fd $fd)
     ;;; The path to a file to unlink.
     (param $path string)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Concurrently poll for the occurrence of a set of events.
@@ -451,9 +431,8 @@
     (param $out (@witx pointer $event))
     ;;; Both the number of subscriptions and events.
     (param $nsubscriptions $size)
-    (result $error $errno)
     ;;; The number of events stored.
-    (result $nevents $size)
+    (result $error (expected $size (error $errno)))
   )
 
   ;;; Terminate the process normally. An exit code of 0 indicates successful
@@ -462,6 +441,7 @@
   (@interface func (export "proc_exit")
     ;;; The exit code returned by the process.
     (param $rval $exitcode)
+    (@witx noreturn)
   )
 
   ;;; Send a signal to the process of the calling thread.
@@ -469,13 +449,13 @@
   (@interface func (export "proc_raise")
     ;;; The signal condition to trigger.
     (param $sig $signal)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Temporarily yield execution of the calling thread.
   ;;; Note: This is similar to `sched_yield` in POSIX.
   (@interface func (export "sched_yield")
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Write high-quality random data into a buffer.
@@ -488,7 +468,7 @@
     ;;; The buffer to fill with random data.
     (param $buf (@witx pointer u8))
     (param $buf_len $size)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 
   ;;; Receive a message from a socket.
@@ -500,11 +480,8 @@
     (param $ri_data $iovec_array)
     ;;; Message flags.
     (param $ri_flags $riflags)
-    (result $error $errno)
-    ;;; Number of bytes stored in ri_data.
-    (result $ro_datalen $size)
-    ;;; Message flags.
-    (result $ro_flags $roflags)
+    ;;; Number of bytes stored in ri_data and message flags.
+    (result $error (expected (tuple $size $roflags) (error $errno)))
   )
 
   ;;; Send a message on a socket.
@@ -516,9 +493,8 @@
     (param $si_data $ciovec_array)
     ;;; Message flags.
     (param $si_flags $siflags)
-    (result $error $errno)
     ;;; Number of bytes transmitted.
-    (result $so_datalen $size)
+    (result $error (expected $size (error $errno)))
   )
 
   ;;; Shut down socket send and receive channels.
@@ -527,6 +503,6 @@
     (param $fd $fd)
     ;;; Which channels on the socket to shut down.
     (param $how $sdflags)
-    (result $error $errno)
+    (result $error (expected (error $errno)))
   )
 )

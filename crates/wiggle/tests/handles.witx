@@ -4,9 +4,8 @@
 
 (module $handle_examples
   (@interface func (export "fd_create")
-    (result $error $errno)
-    (result $fd $fd))
+    (result $error (expected $fd (error $errno))))
   (@interface func (export "fd_consume")
     (param $fd $fd)
-    (result $error $errno))
+    (result $error (expected (error $errno))))
 )

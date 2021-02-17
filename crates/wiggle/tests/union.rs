@@ -108,7 +108,7 @@ impl GetTagExercise {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
-        let discriminant: u8 = reason_tag(&self.input).into();
+        let discriminant = reason_tag(&self.input) as u8;
         host_memory
             .ptr(self.input_loc.ptr)
             .write(discriminant)
@@ -133,7 +133,7 @@ impl GetTagExercise {
             self.return_loc.ptr as i32,
         );
 
-        assert_eq!(e, Ok(types::Errno::Ok.into()), "get_tag errno");
+        assert_eq!(e, Ok(types::Errno::Ok as i32), "get_tag errno");
 
         let return_val: types::Excuse = host_memory
             .ptr(self.return_loc.ptr)
@@ -185,7 +185,7 @@ impl ReasonMultExercise {
         let ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
-        let discriminant: u8 = reason_tag(&self.input).into();
+        let discriminant = reason_tag(&self.input) as u8;
         host_memory
             .ptr(self.input_loc.ptr)
             .write(discriminant)
@@ -217,7 +217,7 @@ impl ReasonMultExercise {
             self.multiply_by as i32,
         );
 
-        assert_eq!(e, Ok(types::Errno::Ok.into()), "reason_mult errno");
+        assert_eq!(e, Ok(types::Errno::Ok as i32), "reason_mult errno");
 
         match self.input {
             types::Reason::DogAte(f) => {
