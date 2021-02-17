@@ -21,8 +21,9 @@ use wasmtime_environ::wasm::{
     DefinedFuncIndex, InstanceTypeIndex, ModuleTypeIndex, SignatureIndex, WasmFuncType,
 };
 use wasmtime_environ::{
-    CompileError, DebugInfoData, FunctionAddressMap, InstanceSignature, Module, ModuleEnvironment,
-    ModuleSignature, ModuleTranslation, OwnedDataInitializer, StackMapInformation, TrapInformation,
+    CompileError, DebugInfoData, FunctionAddressMap, InstanceSignature, MemoryInitialization,
+    Module, ModuleEnvironment, ModuleSignature, ModuleTranslation, StackMapInformation,
+    TrapInformation,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{GdbJitImageRegistration, InstantiationError, VMFunctionBody, VMTrampoline};
@@ -61,10 +62,6 @@ pub struct CompilationArtifacts {
 
     /// Unwind information for function code.
     unwind_info: Box<[ObjectUnwindInfo]>,
-
-    /// Data initiailizers.
-    #[serde(with = "arc_slice_serde")]
-    data_initializers: Arc<[OwnedDataInitializer]>,
 
     /// Descriptions of compiled functions
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
@@ -122,18 +119,15 @@ impl CompilationArtifacts {
                 } = compiler.compile(&mut translation, &types)?;
 
                 let ModuleTranslation {
-                    module,
+                    mut module,
                     data_initializers,
                     debuginfo,
                     has_unparsed_debuginfo,
                     ..
                 } = translation;
 
-                let data_initializers = data_initializers
-                    .into_iter()
-                    .map(OwnedDataInitializer::new)
-                    .collect::<Vec<_>>()
-                    .into();
+                module.memory_initialization =
+                    Some(MemoryInitialization::new(&module, data_initializers));
 
                 let obj = obj.write().map_err(|_| {
                     SetupError::Instantiate(InstantiationError::Resource(
@@ -145,7 +139,6 @@ impl CompilationArtifacts {
                     module: Arc::new(module),
                     obj: obj.into_boxed_slice(),
                     unwind_info: unwind_info.into_boxed_slice(),
-                    data_initializers,
                     funcs: funcs
                         .into_iter()
                         .map(|(_, func)| FunctionInfo {
@@ -278,11 +271,6 @@ impl CompiledModule {
     /// Extracts `CompilationArtifacts` from the compiled module.
     pub fn compilation_artifacts(&self) -> &CompilationArtifacts {
         &self.artifacts
-    }
-
-    /// Returns the data initializers from the compiled module.
-    pub fn data_initializers(&self) -> &Arc<[OwnedDataInitializer]> {
-        &self.artifacts.data_initializers
     }
 
     /// Return a reference-counting pointer to a module.
@@ -544,26 +532,5 @@ mod arc_serde {
         T: Deserialize<'de>,
     {
         Ok(Arc::new(T::deserialize(de)?))
-    }
-}
-
-mod arc_slice_serde {
-    use super::Arc;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-    pub(super) fn serialize<S, T>(arc: &Arc<[T]>, ser: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-        T: Serialize,
-    {
-        (**arc).serialize(ser)
-    }
-
-    pub(super) fn deserialize<'de, D, T>(de: D) -> Result<Arc<[T]>, D::Error>
-    where
-        D: Deserializer<'de>,
-        T: Deserialize<'de>,
-    {
-        Ok(Vec::<T>::deserialize(de)?.into())
     }
 }

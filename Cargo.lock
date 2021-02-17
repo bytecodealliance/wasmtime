@@ -3324,6 +3324,7 @@ dependencies = [
  "indexmap",
  "log",
  "more-asserts",
+ "region",
  "serde",
  "thiserror",
  "wasmparser",

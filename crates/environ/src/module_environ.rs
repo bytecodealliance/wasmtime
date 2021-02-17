@@ -1,6 +1,6 @@
 use crate::module::{
     Initializer, InstanceSignature, MemoryPlan, Module, ModuleSignature, ModuleType, ModuleUpvar,
-    TableElements, TablePlan, TypeTables,
+    TableInitializer, TablePlan, TypeTables,
 };
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
@@ -13,7 +13,6 @@ use cranelift_wasm::{
     ModuleIndex, ModuleTypeIndex, SignatureIndex, Table, TableIndex, TargetEnvironment, TypeIndex,
     WasmError, WasmFuncType, WasmResult,
 };
-use serde::{Deserialize, Serialize};
 use std::collections::{hash_map::Entry, HashMap};
 use std::convert::TryFrom;
 use std::mem;
@@ -684,7 +683,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     fn reserve_table_elements(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
-            .table_elements
+            .table_initializers
             .reserve_exact(usize::try_from(num).unwrap());
         Ok(())
     }
@@ -696,12 +695,15 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         offset: usize,
         elements: Box<[FuncIndex]>,
     ) -> WasmResult<()> {
-        self.result.module.table_elements.push(TableElements {
-            table_index,
-            base,
-            offset,
-            elements,
-        });
+        self.result
+            .module
+            .table_initializers
+            .push(TableInitializer {
+                table_index,
+                base,
+                offset,
+                elements,
+            });
         Ok(())
     }
 
@@ -774,11 +776,9 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         data: &'data [u8],
     ) -> WasmResult<()> {
         self.result.data_initializers.push(DataInitializer {
-            location: DataInitializerLocation {
-                memory_index,
-                base,
-                offset,
-            },
+            memory_index,
+            base,
+            offset,
             data,
         });
         Ok(())
@@ -1072,10 +1072,8 @@ pub fn translate_signature(mut sig: ir::Signature, pointer_type: ir::Type) -> ir
     sig
 }
 
-/// A memory index and offset within that memory where a data initialization
-/// should is to be performed.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct DataInitializerLocation {
+/// A data initializer for linear memory.
+pub struct DataInitializer<'data> {
     /// The index of the memory to initialize.
     pub memory_index: MemoryIndex,
 
@@ -1084,34 +1082,7 @@ pub struct DataInitializerLocation {
 
     /// A constant offset to initialize at.
     pub offset: usize,
-}
-
-/// A data initializer for linear memory.
-pub struct DataInitializer<'data> {
-    /// The location where the initialization is to be performed.
-    pub location: DataInitializerLocation,
 
     /// The initialization data.
     pub data: &'data [u8],
-}
-
-/// Similar to `DataInitializer`, but owns its own copy of the data rather
-/// than holding a slice of the original module.
-#[derive(Serialize, Deserialize)]
-pub struct OwnedDataInitializer {
-    /// The location where the initialization is to be performed.
-    pub location: DataInitializerLocation,
-
-    /// The initialization data.
-    pub data: Box<[u8]>,
-}
-
-impl OwnedDataInitializer {
-    /// Creates a new owned data initializer from a borrowed data initializer.
-    pub fn new(borrowed: DataInitializer<'_>) -> Self {
-        Self {
-            location: borrowed.location.clone(),
-            data: borrowed.data.into(),
-        }
-    }
 }

@@ -522,11 +522,7 @@ impl<'a> Instantiator<'a> {
             // initialization is successful, we need to keep the instance alive.
             let instance = self.store.add_instance(instance, false);
             allocator
-                .initialize(
-                    &instance.handle,
-                    config.features.bulk_memory,
-                    &compiled_module.data_initializers(),
-                )
+                .initialize(&instance.handle, config.features.bulk_memory)
                 .map_err(|e| -> Error {
                     match e {
                         InstantiationError::Trap(trap) => {

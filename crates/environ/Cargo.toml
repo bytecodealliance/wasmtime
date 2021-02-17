@@ -13,6 +13,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
+region = "2.2.0"
 cranelift-codegen = { path = "../../cranelift/codegen", version = "0.71.0", features = ["enable-serde"] }
 cranelift-entity = { path = "../../cranelift/entity", version = "0.71.0", features = ["enable-serde"] }
 cranelift-wasm = { path = "../../cranelift/wasm", version = "0.71.0", features = ["enable-serde"] }

@@ -23,7 +23,8 @@ use wasmtime_environ::wasm::{
     TableElementType, WasmType,
 };
 use wasmtime_environ::{
-    ir, Module, ModuleTranslation, ModuleType, OwnedDataInitializer, TableElements, VMOffsets,
+    ir, MemoryInitialization, MemoryInitializer, Module, ModuleTranslation, ModuleType,
+    TableInitializer, VMOffsets,
 };
 
 mod pooling;
@@ -139,7 +140,6 @@ pub unsafe trait InstanceAllocator: Send + Sync {
         &self,
         handle: &InstanceHandle,
         is_bulk_memory: bool,
-        data_initializers: &Arc<[OwnedDataInitializer]>,
     ) -> Result<(), InstantiationError>;
 
     /// Deallocates a previously allocated instance.
@@ -167,6 +167,228 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     /// Additionally, passing a stack pointer that was not returned from `allocate_fiber_stack`
     /// will lead to undefined behavior.
     unsafe fn deallocate_fiber_stack(&self, stack: *mut u8);
+}
+
+fn get_table_init_start(init: &TableInitializer, instance: &Instance) -> usize {
+    let mut start = init.offset;
+
+    if let Some(base) = init.base {
+        let val = unsafe {
+            if let Some(def_index) = instance.module.defined_global_index(base) {
+                *instance.global(def_index).as_u32()
+            } else {
+                *(*instance.imported_global(base).from).as_u32()
+            }
+        };
+        start += usize::try_from(val).unwrap();
+    }
+
+    start
+}
+
+fn check_table_init_bounds(instance: &Instance) -> Result<(), InstantiationError> {
+    for init in &instance.module.table_initializers {
+        let start = get_table_init_start(init, instance);
+        let table = instance.get_table(init.table_index);
+
+        let size = usize::try_from(table.size()).unwrap();
+        if size < start + init.elements.len() {
+            return Err(InstantiationError::Link(LinkError(
+                "table out of bounds: elements segment does not fit".to_owned(),
+            )));
+        }
+    }
+
+    Ok(())
+}
+
+fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
+    for init in &instance.module.table_initializers {
+        let start = get_table_init_start(init, instance);
+        let table = instance.get_table(init.table_index);
+
+        if start
+            .checked_add(init.elements.len())
+            .map_or(true, |end| end > table.size() as usize)
+        {
+            return Err(InstantiationError::Trap(Trap::wasm(
+                ir::TrapCode::TableOutOfBounds,
+            )));
+        }
+
+        for (i, func_idx) in init.elements.iter().enumerate() {
+            let item = match table.element_type() {
+                TableElementType::Func => instance
+                    .get_caller_checked_anyfunc(*func_idx)
+                    .map_or(ptr::null_mut(), |f: &VMCallerCheckedAnyfunc| {
+                        f as *const VMCallerCheckedAnyfunc as *mut VMCallerCheckedAnyfunc
+                    })
+                    .into(),
+                TableElementType::Val(_) => {
+                    assert!(*func_idx == FuncIndex::reserved_value());
+                    TableElement::ExternRef(None)
+                }
+            };
+            table.set(u32::try_from(start + i).unwrap(), item).unwrap();
+        }
+    }
+
+    Ok(())
+}
+
+fn get_memory_init_start(init: &MemoryInitializer, instance: &Instance) -> usize {
+    let mut start = init.offset;
+
+    if let Some(base) = init.base {
+        let val = unsafe {
+            if let Some(def_index) = instance.module.defined_global_index(base) {
+                *instance.global(def_index).as_u32()
+            } else {
+                *(*instance.imported_global(base).from).as_u32()
+            }
+        };
+        start += usize::try_from(val).unwrap();
+    }
+
+    start
+}
+
+unsafe fn get_memory_slice<'instance>(
+    init: &MemoryInitializer,
+    instance: &'instance Instance,
+) -> &'instance mut [u8] {
+    let memory = if let Some(defined_memory_index) =
+        instance.module.defined_memory_index(init.memory_index)
+    {
+        instance.memory(defined_memory_index)
+    } else {
+        let import = instance.imported_memory(init.memory_index);
+        let foreign_instance = (&mut *(import).vmctx).instance();
+        let foreign_memory = &mut *(import).from;
+        let foreign_index = foreign_instance.memory_index(foreign_memory);
+        foreign_instance.memory(foreign_index)
+    };
+    slice::from_raw_parts_mut(memory.base, memory.current_length)
+}
+
+fn check_memory_init_bounds(
+    instance: &Instance,
+    initializers: &[MemoryInitializer],
+) -> Result<(), InstantiationError> {
+    for init in initializers {
+        let start = get_memory_init_start(init, instance);
+        unsafe {
+            let mem_slice = get_memory_slice(init, instance);
+            if mem_slice.get_mut(start..start + init.data.len()).is_none() {
+                return Err(InstantiationError::Link(LinkError(
+                    "memory out of bounds: data segment does not fit".into(),
+                )));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn initialize_memories(
+    instance: &Instance,
+    initializers: &[MemoryInitializer],
+) -> Result<(), InstantiationError> {
+    for init in initializers {
+        let memory = instance.get_memory(init.memory_index);
+
+        let start = get_memory_init_start(init, instance);
+        if start
+            .checked_add(init.data.len())
+            .map_or(true, |end| end > memory.current_length)
+        {
+            return Err(InstantiationError::Trap(Trap::wasm(
+                ir::TrapCode::HeapOutOfBounds,
+            )));
+        }
+
+        unsafe {
+            let mem_slice = get_memory_slice(init, instance);
+            let end = start + init.data.len();
+            let to_init = &mut mem_slice[start..end];
+            to_init.copy_from_slice(&init.data);
+        }
+    }
+
+    Ok(())
+}
+
+fn check_init_bounds(instance: &Instance) -> Result<(), InstantiationError> {
+    check_table_init_bounds(instance)?;
+
+    match &instance.module.memory_initialization {
+        Some(MemoryInitialization::Paged { .. }) | None => {
+            // Bounds were checked at compile-time
+        }
+        Some(MemoryInitialization::OutOfBounds) => {
+            return Err(InstantiationError::Link(LinkError(
+                "memory out of bounds: data segment does not fit".into(),
+            )));
+        }
+        Some(MemoryInitialization::Segmented(initializers)) => {
+            check_memory_init_bounds(instance, initializers)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn initialize_instance(
+    instance: &Instance,
+    is_bulk_memory: bool,
+) -> Result<(), InstantiationError> {
+    // If bulk memory is not enabled, bounds check the data and element segments before
+    // making any changes. With bulk memory enabled, initializers are processed
+    // in-order and side effects are observed up to the point of an out-of-bounds
+    // initializer, so the early checking is not desired.
+    if !is_bulk_memory {
+        check_init_bounds(instance)?;
+    }
+
+    // Initialize the tables
+    initialize_tables(instance)?;
+
+    // Initialize the memories
+    match &instance.module.memory_initialization {
+        Some(MemoryInitialization::Paged { page_size, map }) => {
+            for (index, pages) in map {
+                let memory = instance.memory(index);
+
+                for (page_index, page) in pages.iter().enumerate() {
+                    if let Some(data) = page {
+                        // Bounds checking should have occurred when the module was compiled
+                        // The data should always be page sized
+                        assert!((page_index * page_size) < memory.current_length);
+                        assert_eq!(data.len(), *page_size);
+
+                        unsafe {
+                            ptr::copy_nonoverlapping(
+                                data.as_ptr(),
+                                memory.base.add(page_index * page_size),
+                                data.len(),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        Some(MemoryInitialization::OutOfBounds) => {
+            return Err(InstantiationError::Trap(Trap::wasm(
+                ir::TrapCode::HeapOutOfBounds,
+            )))
+        }
+        Some(MemoryInitialization::Segmented(initializers)) => {
+            initialize_memories(instance, initializers)?;
+        }
+        None => {}
+    }
+
+    Ok(())
 }
 
 unsafe fn initialize_vmcontext(
@@ -350,157 +572,6 @@ impl OnDemandInstanceAllocator {
         }
         Ok(memories)
     }
-
-    fn check_table_init_bounds(instance: &Instance) -> Result<(), InstantiationError> {
-        for init in &instance.module.table_elements {
-            let start = Self::get_table_init_start(init, instance);
-            let table = instance.get_table(init.table_index);
-
-            let size = usize::try_from(table.size()).unwrap();
-            if size < start + init.elements.len() {
-                return Err(InstantiationError::Link(LinkError(
-                    "table out of bounds: elements segment does not fit".to_owned(),
-                )));
-            }
-        }
-
-        Ok(())
-    }
-
-    fn get_memory_init_start(init: &OwnedDataInitializer, instance: &Instance) -> usize {
-        let mut start = init.location.offset;
-
-        if let Some(base) = init.location.base {
-            let val = unsafe {
-                if let Some(def_index) = instance.module.defined_global_index(base) {
-                    *instance.global(def_index).as_u32()
-                } else {
-                    *(*instance.imported_global(base).from).as_u32()
-                }
-            };
-            start += usize::try_from(val).unwrap();
-        }
-
-        start
-    }
-
-    unsafe fn get_memory_slice<'instance>(
-        init: &OwnedDataInitializer,
-        instance: &'instance Instance,
-    ) -> &'instance mut [u8] {
-        let memory = if let Some(defined_memory_index) = instance
-            .module
-            .defined_memory_index(init.location.memory_index)
-        {
-            instance.memory(defined_memory_index)
-        } else {
-            let import = instance.imported_memory(init.location.memory_index);
-            let foreign_instance = (&mut *(import).vmctx).instance();
-            let foreign_memory = &mut *(import).from;
-            let foreign_index = foreign_instance.memory_index(foreign_memory);
-            foreign_instance.memory(foreign_index)
-        };
-        slice::from_raw_parts_mut(memory.base, memory.current_length)
-    }
-
-    fn check_memory_init_bounds(
-        instance: &Instance,
-        data_initializers: &[OwnedDataInitializer],
-    ) -> Result<(), InstantiationError> {
-        for init in data_initializers {
-            let start = Self::get_memory_init_start(init, instance);
-            unsafe {
-                let mem_slice = Self::get_memory_slice(init, instance);
-                if mem_slice.get_mut(start..start + init.data.len()).is_none() {
-                    return Err(InstantiationError::Link(LinkError(
-                        "memory out of bounds: data segment does not fit".into(),
-                    )));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn get_table_init_start(init: &TableElements, instance: &Instance) -> usize {
-        let mut start = init.offset;
-
-        if let Some(base) = init.base {
-            let val = unsafe {
-                if let Some(def_index) = instance.module.defined_global_index(base) {
-                    *instance.global(def_index).as_u32()
-                } else {
-                    *(*instance.imported_global(base).from).as_u32()
-                }
-            };
-            start += usize::try_from(val).unwrap();
-        }
-
-        start
-    }
-
-    fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
-        for init in &instance.module.table_elements {
-            let start = Self::get_table_init_start(init, instance);
-            let table = instance.get_table(init.table_index);
-
-            if start
-                .checked_add(init.elements.len())
-                .map_or(true, |end| end > table.size() as usize)
-            {
-                return Err(InstantiationError::Trap(Trap::wasm(
-                    ir::TrapCode::TableOutOfBounds,
-                )));
-            }
-
-            for (i, func_idx) in init.elements.iter().enumerate() {
-                let item = match table.element_type() {
-                    TableElementType::Func => instance
-                        .get_caller_checked_anyfunc(*func_idx)
-                        .map_or(ptr::null_mut(), |f: &VMCallerCheckedAnyfunc| {
-                            f as *const VMCallerCheckedAnyfunc as *mut VMCallerCheckedAnyfunc
-                        })
-                        .into(),
-                    TableElementType::Val(_) => {
-                        assert!(*func_idx == FuncIndex::reserved_value());
-                        TableElement::ExternRef(None)
-                    }
-                };
-                table.set(u32::try_from(start + i).unwrap(), item).unwrap();
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Initialize the table memory from the provided initializers.
-    fn initialize_memories(
-        instance: &Instance,
-        data_initializers: &[OwnedDataInitializer],
-    ) -> Result<(), InstantiationError> {
-        for init in data_initializers {
-            let memory = instance.get_memory(init.location.memory_index);
-
-            let start = Self::get_memory_init_start(init, instance);
-            if start
-                .checked_add(init.data.len())
-                .map_or(true, |end| end > memory.current_length)
-            {
-                return Err(InstantiationError::Trap(Trap::wasm(
-                    ir::TrapCode::HeapOutOfBounds,
-                )));
-            }
-
-            unsafe {
-                let mem_slice = Self::get_memory_slice(init, instance);
-                let end = start + init.data.len();
-                let to_init = &mut mem_slice[start..end];
-                to_init.copy_from_slice(&init.data);
-            }
-        }
-
-        Ok(())
-    }
 }
 
 unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
@@ -561,23 +632,8 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         &self,
         handle: &InstanceHandle,
         is_bulk_memory: bool,
-        data_initializers: &Arc<[OwnedDataInitializer]>,
     ) -> Result<(), InstantiationError> {
-        // Check initializer bounds before initializing anything. Only do this
-        // when bulk memory is disabled, since the bulk memory proposal changes
-        // instantiation such that the intermediate results of failed
-        // initializations are visible.
-        if !is_bulk_memory {
-            Self::check_table_init_bounds(handle.instance())?;
-            Self::check_memory_init_bounds(handle.instance(), data_initializers.as_ref())?;
-        }
-
-        // Apply fallible initializers. Note that this can "leak" state even if
-        // it fails.
-        Self::initialize_tables(handle.instance())?;
-        Self::initialize_memories(handle.instance(), data_initializers.as_ref())?;
-
-        Ok(())
+        initialize_instance(handle.instance(), is_bulk_memory)
     }
 
     unsafe fn deallocate(&self, handle: &InstanceHandle) {

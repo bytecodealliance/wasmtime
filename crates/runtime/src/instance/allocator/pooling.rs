@@ -8,13 +8,10 @@
 //! when modules can be constrained based on configurable limits.
 
 use super::{
-    initialize_vmcontext, FiberStackError, InstanceAllocationRequest, InstanceAllocator,
-    InstanceHandle, InstantiationError,
+    initialize_instance, initialize_vmcontext, FiberStackError, InstanceAllocationRequest,
+    InstanceAllocator, InstanceHandle, InstantiationError,
 };
-use crate::{
-    instance::Instance, table::max_table_element_size, Memory, Mmap, OnDemandInstanceAllocator,
-    Table, VMContext,
-};
+use crate::{instance::Instance, table::max_table_element_size, Memory, Mmap, Table, VMContext};
 use rand::Rng;
 use std::cell::RefCell;
 use std::cmp::min;
@@ -23,8 +20,7 @@ use std::mem;
 use std::sync::{Arc, Mutex};
 use wasmtime_environ::{
     entity::{EntitySet, PrimaryMap},
-    MemoryStyle, Module, ModuleTranslation, OwnedDataInitializer, Tunables, VMOffsets,
-    WASM_PAGE_SIZE,
+    MemoryStyle, Module, ModuleTranslation, Tunables, VMOffsets, WASM_PAGE_SIZE,
 };
 
 cfg_if::cfg_if! {
@@ -35,6 +31,8 @@ cfg_if::cfg_if! {
         mod uffd;
         use uffd as imp;
         use imp::{PageFaultHandler, reset_guard_page};
+        use super::{check_init_bounds, initialize_tables};
+        use wasmtime_environ::MemoryInitialization;
         use std::sync::atomic::{AtomicBool, Ordering};
     } else if #[cfg(target_os = "linux")] {
         mod linux;
@@ -979,31 +977,29 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         &self,
         handle: &InstanceHandle,
         is_bulk_memory: bool,
-        data_initializers: &Arc<[OwnedDataInitializer]>,
     ) -> Result<(), InstantiationError> {
-        // TODO: refactor this implementation
+        let instance = handle.instance();
 
-        // Check initializer bounds before initializing anything. Only do this
-        // when bulk memory is disabled, since the bulk memory proposal changes
-        // instantiation such that the intermediate results of failed
-        // initializations are visible.
-        if !is_bulk_memory {
-            OnDemandInstanceAllocator::check_table_init_bounds(handle.instance())?;
-            OnDemandInstanceAllocator::check_memory_init_bounds(
-                handle.instance(),
-                data_initializers.as_ref(),
-            )?;
+        cfg_if::cfg_if! {
+            if #[cfg(all(feature = "uffd", target_os = "linux"))] {
+                match instance.module.memory_initialization {
+                    Some(MemoryInitialization::Paged{ .. }) => {
+                        if !is_bulk_memory {
+                            check_init_bounds(instance)?;
+                        }
+
+                        // Initialize the tables
+                        initialize_tables(instance)?;
+
+                        // Don't initialize the memory; the fault handler will fill the pages when accessed
+                        Ok(())
+                    },
+                    _ => initialize_instance(instance, is_bulk_memory)
+                }
+            } else {
+                initialize_instance(instance, is_bulk_memory)
+            }
         }
-
-        // Apply fallible initializers. Note that this can "leak" state even if
-        // it fails.
-        OnDemandInstanceAllocator::initialize_tables(handle.instance())?;
-        OnDemandInstanceAllocator::initialize_memories(
-            handle.instance(),
-            data_initializers.as_ref(),
-        )?;
-
-        Ok(())
     }
 
     unsafe fn deallocate(&self, handle: &InstanceHandle) {

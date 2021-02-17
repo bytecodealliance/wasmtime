@@ -20,7 +20,9 @@ use std::sync::{
 };
 use std::thread;
 use userfaultfd::{Event, FeatureFlags, IoctlFlags, Uffd, UffdBuilder};
-use wasmtime_environ::{wasm::DefinedMemoryIndex, WASM_PAGE_SIZE};
+use wasmtime_environ::{entity::EntityRef, wasm::DefinedMemoryIndex, MemoryInitialization};
+
+const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
 
 pub unsafe fn make_accessible(_addr: *mut u8, _len: usize) -> bool {
     // A no-op when userfaultfd is used
@@ -191,7 +193,7 @@ impl AddressLocator {
             let index = (addr - self.memories_start) / self.memory_size;
             let memory_index = index % self.max_memories;
             let memory_start = self.memories_start + (index * self.memory_size);
-            let page_index = (addr - memory_start) / (WASM_PAGE_SIZE as usize);
+            let page_index = (addr - memory_start) / WASM_PAGE_SIZE;
             let instance = self.get_instance(index / self.max_memories);
 
             let init_page_index = instance
@@ -210,8 +212,8 @@ impl AddressLocator {
                 });
 
             return Some(AddressLocation::MemoryPage {
-                page_addr: (memory_start + page_index * (WASM_PAGE_SIZE as usize)) as _,
-                len: WASM_PAGE_SIZE as usize,
+                page_addr: (memory_start + page_index * WASM_PAGE_SIZE) as _,
+                len: WASM_PAGE_SIZE,
                 instance,
                 memory_index,
                 page_index: init_page_index,
@@ -250,18 +252,98 @@ impl AddressLocator {
     }
 }
 
-fn wake_guard_page_access(uffd: &Uffd, page_addr: *const u8, len: usize) -> Result<(), String> {
-    unsafe {
-        // Set the page to NONE to induce a SIGSEV for the access on the next retry
-        region::protect(page_addr, len, region::Protection::NONE)
-            .map_err(|e| format!("failed to change guard page protection: {}", e))?;
+unsafe fn wake_guard_page_access(
+    uffd: &Uffd,
+    page_addr: *const u8,
+    len: usize,
+) -> Result<(), String> {
+    // Set the page to NONE to induce a SIGSEV for the access on the next retry
+    region::protect(page_addr, len, region::Protection::NONE)
+        .map_err(|e| format!("failed to change guard page protection: {}", e))?;
 
-        uffd.wake(page_addr as _, len).map_err(|e| {
+    uffd.wake(page_addr as _, len).map_err(|e| {
+        format!(
+            "failed to wake page at {:p} with length {}: {}",
+            page_addr, len, e
+        )
+    })?;
+
+    Ok(())
+}
+
+unsafe fn initialize_wasm_page(
+    uffd: &Uffd,
+    instance: &Instance,
+    page_addr: *const u8,
+    memory_index: usize,
+    page_index: usize,
+) -> Result<(), String> {
+    if let Some(MemoryInitialization::Paged { page_size, map }) =
+        &instance.module.memory_initialization
+    {
+        let memory_index = DefinedMemoryIndex::new(memory_index);
+        let memory = instance.memory(memory_index);
+        let pages = &map[memory_index];
+        debug_assert_eq!(WASM_PAGE_SIZE % page_size, 0);
+
+        let count = WASM_PAGE_SIZE / page_size;
+        let start = page_index * count;
+
+        for i in start..start + count {
+            let dst = memory.base.add(i * page_size);
+
+            match pages.get(i) {
+                Some(Some(data)) => {
+                    log::trace!(
+                        "copying page initialization data from {:p} to {:p} with length {}",
+                        data,
+                        dst,
+                        page_size
+                    );
+
+                    // Copy the page data without waking
+                    uffd.copy(data.as_ptr() as _, dst as _, *page_size, false)
+                        .map_err(|e| {
+                            format!(
+                                "failed to copy page from {:p} to {:p} with length {}: {}",
+                                data, dst, page_size, e
+                            )
+                        })?;
+                }
+                _ => {
+                    log::trace!("zeroing page at {:p} with length {}", dst, page_size);
+
+                    // No data, zero the page without waking
+                    uffd.zeropage(dst as _, *page_size, false).map_err(|e| {
+                        format!(
+                            "failed to zero page at {:p} with length {}: {}",
+                            dst, page_size, e
+                        )
+                    })?;
+                }
+            }
+        }
+
+        // Finally wake the entire wasm page
+        uffd.wake(page_addr as _, WASM_PAGE_SIZE).map_err(|e| {
             format!(
                 "failed to wake page at {:p} with length {}: {}",
-                page_addr, len, e
+                page_addr, WASM_PAGE_SIZE, e
             )
-        })?;
+        })
+    } else {
+        log::trace!(
+            "initialization data is not paged; zeroing Wasm page at {:p}",
+            page_addr
+        );
+
+        uffd.zeropage(page_addr as _, WASM_PAGE_SIZE, true)
+            .map_err(|e| {
+                format!(
+                    "failed to zero page at {:p} with length {}: {}",
+                    page_addr, WASM_PAGE_SIZE, e
+                )
+            })?;
 
         Ok(())
     }
@@ -327,13 +409,13 @@ fn handler_thread(
 
                             match page_index {
                                 Some(page_index) => {
-                                    // TODO: copy the memory initialization data rather than zero the page
-                                    uffd.zeropage(page_addr as _, len, true).map_err(|e| {
-                                        format!(
-                                            "failed to zero page at {:p} with length {}: {}",
-                                            page_addr, len, e
-                                        )
-                                    })?;
+                                    initialize_wasm_page(
+                                        &uffd,
+                                        instance,
+                                        page_addr,
+                                        memory_index,
+                                        page_index,
+                                    )?;
                                 }
                                 None => {
                                     log::trace!("out of bounds memory access at {:p}", access_addr);
@@ -529,7 +611,7 @@ mod test {
             locator.memories_end,
             locator.memories_start + instances.memories.mapping.len()
         );
-        assert_eq!(locator.memory_size, (WASM_PAGE_SIZE * 10) as usize);
+        assert_eq!(locator.memory_size, WASM_PAGE_SIZE * 10);
         assert_eq!(locator.max_memories, 2);
         assert_eq!(
             locator.tables_start,
@@ -634,7 +716,7 @@ mod test {
                             page_index,
                         }) => {
                             assert_eq!(page_addr, memory_start as _);
-                            assert_eq!(len, WASM_PAGE_SIZE as usize);
+                            assert_eq!(len, WASM_PAGE_SIZE);
                             assert_eq!(mem_index, memory_index);
                             assert_eq!(page_index, Some(0));
                         }
@@ -642,7 +724,7 @@ mod test {
                     }
 
                     // Test for access to second page
-                    match locator.get_location(memory_start + 1024 + WASM_PAGE_SIZE as usize) {
+                    match locator.get_location(memory_start + 1024 + WASM_PAGE_SIZE) {
                         Some(AddressLocation::MemoryPage {
                             page_addr,
                             len,
@@ -650,8 +732,8 @@ mod test {
                             memory_index: mem_index,
                             page_index,
                         }) => {
-                            assert_eq!(page_addr, (memory_start + WASM_PAGE_SIZE as usize) as _);
-                            assert_eq!(len, WASM_PAGE_SIZE as usize);
+                            assert_eq!(page_addr, (memory_start + WASM_PAGE_SIZE) as _);
+                            assert_eq!(len, WASM_PAGE_SIZE);
                             assert_eq!(mem_index, memory_index);
                             assert_eq!(page_index, Some(1));
                         }
@@ -659,7 +741,7 @@ mod test {
                     }
 
                     // Test for guard page
-                    match locator.get_location(memory_start + 10 + 9 * WASM_PAGE_SIZE as usize) {
+                    match locator.get_location(memory_start + 10 + 9 * WASM_PAGE_SIZE) {
                         Some(AddressLocation::MemoryPage {
                             page_addr,
                             len,
@@ -667,11 +749,8 @@ mod test {
                             memory_index: mem_index,
                             page_index,
                         }) => {
-                            assert_eq!(
-                                page_addr,
-                                (memory_start + (9 * WASM_PAGE_SIZE as usize)) as _
-                            );
-                            assert_eq!(len, WASM_PAGE_SIZE as usize);
+                            assert_eq!(page_addr, (memory_start + (9 * WASM_PAGE_SIZE)) as _);
+                            assert_eq!(len, WASM_PAGE_SIZE);
                             assert_eq!(mem_index, memory_index);
                             assert_eq!(page_index, None);
                         }

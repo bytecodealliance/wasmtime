@@ -1,7 +1,7 @@
 //! Data structures for representing decoded wasm modules.
 
 use crate::tunables::Tunables;
-use crate::WASM_MAX_PAGES;
+use crate::{DataInitializer, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::*;
@@ -9,19 +9,6 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-
-/// A WebAssembly table initializer.
-#[derive(Clone, Debug, Hash, Serialize, Deserialize)]
-pub struct TableElements {
-    /// The index of a table to initialize.
-    pub table_index: TableIndex,
-    /// Optionally, a global variable giving a base index.
-    pub base: Option<GlobalIndex>,
-    /// The offset to add to the base.
-    pub offset: usize,
-    /// The values to write into the table elements.
-    pub elements: Box<[FuncIndex]>,
-}
 
 /// Implemenation styles for WebAssembly linear memory.
 #[derive(Debug, Clone, Hash, Serialize, Deserialize)]
@@ -92,6 +79,164 @@ impl MemoryPlan {
     }
 }
 
+/// A WebAssembly linear memory initializer.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MemoryInitializer {
+    /// The index of a linear memory to initialize.
+    pub memory_index: MemoryIndex,
+    /// Optionally, a global variable giving a base index.
+    pub base: Option<GlobalIndex>,
+    /// The offset to add to the base.
+    pub offset: usize,
+    /// The data to write into the linear memory.
+    pub data: Box<[u8]>,
+}
+
+impl From<DataInitializer<'_>> for MemoryInitializer {
+    fn from(initializer: DataInitializer) -> Self {
+        Self {
+            memory_index: initializer.memory_index,
+            base: initializer.base,
+            offset: initializer.offset,
+            data: initializer.data.into(),
+        }
+    }
+}
+
+/// The type of WebAssembly linear memory initialization.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum MemoryInitialization {
+    /// Memory initialization is paged.
+    ///
+    /// To be paged, the following requirements must be met:
+    ///
+    /// * All data segments must reference defined memories.
+    /// * All data segments must not use a global base.
+    /// * All data segments must be in bounds.
+    ///
+    /// Paged initialization is performed by memcopying individual pages to the linear memory.
+    Paged {
+        /// The size of each page stored in the map.
+        /// This is expected to be the host page size.
+        page_size: usize,
+        /// The map of defined memory index to a list of page data.
+        /// The list of page data is sparse, with None representing a zero page.
+        /// The size of the list will be the maximum page written to by a data segment.
+        map: PrimaryMap<DefinedMemoryIndex, Vec<Option<Box<[u8]>>>>,
+    },
+    /// Memory initialization is out of bounds.
+    ///
+    /// To be out of bounds, the following requirements must be met:
+    ///
+    /// * All data segments must reference defined memories.
+    /// * All data segments must not use a global base.
+    /// * At least one data segments was out of bounds.
+    ///
+    /// This can be used to quickly return an error when the module is instantiated.
+    OutOfBounds,
+    /// Memory initialization is segmented.
+    ///
+    /// To be segmented, at least one of the following requirements must be met:
+    ///
+    /// * A data segment referenced an imported memory.
+    /// * A data segment uses a global base.
+    ///
+    /// Segmented initialization is performed by processing the complete set of data segments
+    /// when the module is instantiated.
+    ///
+    /// This ensures that initialization side-effects are observed according to the bulk-memory proposal.
+    Segmented(Box<[MemoryInitializer]>),
+}
+
+impl MemoryInitialization {
+    /// Creates a new memory initialization for a module and its data initializers.
+    pub fn new(module: &Module, initializers: Vec<DataInitializer>) -> Self {
+        let page_size = region::page::size();
+        let num_defined_memories = module.memory_plans.len() - module.num_imported_memories;
+        let mut out_of_bounds = false;
+        let mut memories = PrimaryMap::with_capacity(num_defined_memories);
+
+        for _ in 0..num_defined_memories {
+            memories.push(Vec::new());
+        }
+
+        for initializer in &initializers {
+            match (
+                module.defined_memory_index(initializer.memory_index),
+                initializer.base.is_some(),
+            ) {
+                (None, _) | (_, true) => {
+                    // If the initializer references an imported memory or uses a global base,
+                    // the complete set of segments will need to be processed at module instantiation
+                    return Self::Segmented(
+                        initializers
+                            .into_iter()
+                            .map(Into::into)
+                            .collect::<Vec<_>>()
+                            .into_boxed_slice(),
+                    );
+                }
+                (Some(index), false) => {
+                    if out_of_bounds {
+                        continue;
+                    }
+
+                    // Perform a bounds check on the segment
+                    if (initializer.offset + initializer.data.len())
+                        > ((module.memory_plans[initializer.memory_index].memory.minimum as usize)
+                            * (WASM_PAGE_SIZE as usize))
+                    {
+                        out_of_bounds = true;
+                        continue;
+                    }
+
+                    let pages = &mut memories[index];
+                    let mut page_index = initializer.offset / page_size;
+                    let mut page_offset = initializer.offset % page_size;
+                    let mut data_offset = 0;
+                    let mut data_remaining = initializer.data.len();
+
+                    if data_remaining == 0 {
+                        continue;
+                    }
+
+                    // Copy the initialization data by each page
+                    loop {
+                        if page_index >= pages.len() {
+                            pages.resize(page_index + 1, None);
+                        }
+
+                        let page = pages[page_index]
+                            .get_or_insert_with(|| vec![0; page_size].into_boxed_slice());
+                        let len = std::cmp::min(data_remaining, page_size - page_offset);
+
+                        page[page_offset..page_offset + len]
+                            .copy_from_slice(&initializer.data[data_offset..(data_offset + len)]);
+
+                        if len == data_remaining {
+                            break;
+                        }
+
+                        page_index += 1;
+                        page_offset = 0;
+                        data_offset += len;
+                        data_remaining -= len;
+                    }
+                }
+            };
+        }
+
+        if out_of_bounds {
+            Self::OutOfBounds
+        } else {
+            Self::Paged {
+                page_size,
+                map: memories,
+            }
+        }
+    }
+}
+
 /// Implemenation styles for WebAssembly tables.
 #[derive(Debug, Clone, Hash, Serialize, Deserialize)]
 pub enum TableStyle {
@@ -122,6 +267,19 @@ impl TablePlan {
         let style = TableStyle::for_table(table, tunables);
         Self { table, style }
     }
+}
+
+/// A WebAssembly table initializer.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TableInitializer {
+    /// The index of a table to initialize.
+    pub table_index: TableIndex,
+    /// Optionally, a global variable giving a base index.
+    pub base: Option<GlobalIndex>,
+    /// The offset to add to the base.
+    pub offset: usize,
+    /// The values to write into the table elements.
+    pub elements: Box<[FuncIndex]>,
 }
 
 /// Different types that can appear in a module.
@@ -164,7 +322,10 @@ pub struct Module {
     pub start_func: Option<FuncIndex>,
 
     /// WebAssembly table initializers.
-    pub table_elements: Vec<TableElements>,
+    pub table_initializers: Vec<TableInitializer>,
+
+    /// WebAssembly linear memory initializer.
+    pub memory_initialization: Option<MemoryInitialization>,
 
     /// WebAssembly passive elements.
     pub passive_elements: Vec<Box<[FuncIndex]>>,
