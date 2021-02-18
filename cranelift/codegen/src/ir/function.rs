@@ -18,15 +18,63 @@ use crate::isa::{CallConv, EncInfo, Encoding, Legalize, TargetIsa};
 use crate::regalloc::{EntryRegDiversions, RegDiversions};
 use crate::value_label::ValueLabelsRanges;
 use crate::write::write_function;
+#[cfg(feature = "enable-serde")]
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
 
-/// A function.
+#[cfg(feature = "enable-serde")]
+use serde::de::{Deserializer, Error};
+#[cfg(feature = "enable-serde")]
+use serde::ser::Serializer;
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
+/// A version marker used to ensure that serialized clif ir is never deserialized with a
+/// different version of Cranelift.
+#[derive(Copy, Clone, Debug)]
+pub struct VersionMarker;
+
+#[cfg(feature = "enable-serde")]
+impl Serialize for VersionMarker {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        crate::VERSION.serialize(serializer)
+    }
+}
+
+#[cfg(feature = "enable-serde")]
+impl<'de> Deserialize<'de> for VersionMarker {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let version = String::deserialize(deserializer)?;
+        if version != crate::VERSION {
+            return Err(D::Error::custom(&format!(
+                "Expected a clif ir function for version {}, found one for version {}",
+                crate::VERSION,
+                version,
+            )));
+        }
+        Ok(VersionMarker)
+    }
+}
+
 ///
 /// Functions can be cloned, but it is not a very fast operation.
 /// The clone will have all the same entity numbers as the original.
 #[derive(Clone)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Function {
+    /// A version marker used to ensure that serialized clif ir is never deserialized with a
+    /// different version of Cranelift.
+    // Note: This must be the first field to ensure that Serde will deserialize it before
+    // attempting to deserialize other fields that are potentially changed between versions.
+    pub version_marker: VersionMarker,
+
     /// Name of this function. Mostly used by `.clif` files.
     pub name: ExternalName,
 
@@ -109,6 +157,7 @@ impl Function {
     /// Create a function with the given name and signature.
     pub fn with_name_signature(name: ExternalName, sig: Signature) -> Self {
         Self {
+            version_marker: VersionMarker,
             name,
             signature: sig,
             old_signature: None,

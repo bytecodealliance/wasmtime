@@ -4,8 +4,12 @@ use crate::ir::immediates::Uimm64;
 use crate::ir::{GlobalValue, Type};
 use core::fmt;
 
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
 /// Information about a table declaration.
 #[derive(Clone)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct TableData {
     /// Global value giving the address of the start of the table.
     pub base_gv: GlobalValue,

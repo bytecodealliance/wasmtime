@@ -2,6 +2,9 @@
 
 use core::fmt;
 
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
 enum FlagBit {
     Notrap,
     Aligned,
@@ -32,6 +35,7 @@ pub enum Endianness {
 /// be overridden for individual accesses by explicitly specifying little- or big-endian
 /// semantics via the flags.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct MemFlags {
     bits: u8,
 }

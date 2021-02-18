@@ -13,6 +13,9 @@ use core::num::NonZeroU32;
 use core::ops::{Deref, DerefMut};
 use core::str::FromStr;
 
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
 use crate::ir::{self, trapcode::TrapCode, types, Block, FuncRef, JumpTable, SigRef, Type, Value};
 use crate::isa;
 

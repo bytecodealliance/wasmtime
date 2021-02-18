@@ -19,12 +19,16 @@ use core::slice::Iter;
 use core::str::{from_utf8, FromStr};
 use cranelift_entity::EntityRef;
 
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
 /// This type describes the actual constant data. Note that the bytes stored in this structure are
 /// expected to be in little-endian order; this is due to ease-of-use when interacting with
 /// WebAssembly values, which are [little-endian by design].
 ///
 /// [little-endian by design]: https://github.com/WebAssembly/design/blob/master/Portability.md
 #[derive(Clone, Hash, Eq, PartialEq, Debug, Default)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ConstantData(Vec<u8>);
 
 impl FromIterator<u8> for ConstantData {
@@ -173,6 +177,7 @@ pub type ConstantOffset = u32;
 /// from the beginning of the function is known (see
 /// `relaxation` in `relaxation.rs`).
 #[derive(Clone)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ConstantPoolEntry {
     data: ConstantData,
     offset: Option<ConstantOffset>,
@@ -197,6 +202,7 @@ impl ConstantPoolEntry {
 /// Maintains the mapping between a constant handle (i.e.  [`Constant`](crate::ir::Constant)) and
 /// its constant data (i.e.  [`ConstantData`](crate::ir::ConstantData)).
 #[derive(Clone)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ConstantPool {
     /// This mapping maintains the insertion order as long as Constants are created with
     /// sequentially increasing integers.

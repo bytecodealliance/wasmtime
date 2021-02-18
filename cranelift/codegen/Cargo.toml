@@ -74,7 +74,12 @@ all-arch = [
 ]
 
 # For dependent crates that want to serialize some parts of cranelift
-enable-serde = ["serde", "regalloc/enable-serde"]
+enable-serde = [
+    "serde",
+    "regalloc/enable-serde",
+    "cranelift-entity/enable-serde",
+    "cranelift-codegen-shared/enable-serde"
+]
 
 # Allow snapshotting regalloc test cases. Useful only to report bad register
 # allocation failures, or for regalloc.rs developers.

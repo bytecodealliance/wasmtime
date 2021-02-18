@@ -409,6 +409,7 @@ impl FromStr for ArgumentPurpose {
 ///
 /// Information about a function that can be called directly with a direct `call` instruction.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ExtFuncData {
     /// Name of the external function.
     pub name: ExternalName,

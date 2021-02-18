@@ -21,6 +21,9 @@ use core::mem;
 use core::ops::{Index, IndexMut};
 use core::u16;
 
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
 /// A data flow graph defines all instructions and basic blocks in a function as well as
 /// the data flow dependencies between them. The DFG also tracks values which can be either
 /// instruction results or block parameters.
@@ -29,6 +32,7 @@ use core::u16;
 /// `Layout` data structure which forms the other half of the function representation.
 ///
 #[derive(Clone)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct DataFlowGraph {
     /// Data about all of the instructions in the function, including opcodes and operands.
     /// The instructions in this map are not in program order. That is tracked by `Layout`, along
@@ -416,6 +420,7 @@ impl ValueDef {
 
 /// Internal table storage for extended values.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 enum ValueData {
     /// Value is defined by an instruction.
     Inst { ty: Type, num: u16, inst: Inst },
@@ -935,6 +940,7 @@ impl DataFlowGraph {
 /// branches to this block must provide matching arguments, and the arguments to the entry block must
 /// match the function arguments.
 #[derive(Clone)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 struct BlockData {
     /// List of parameters to this block.
     params: ValueList,

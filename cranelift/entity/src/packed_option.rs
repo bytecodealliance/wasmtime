@@ -10,6 +10,9 @@
 use core::fmt;
 use core::mem;
 
+#[cfg(feature = "enable-serde")]
+use serde::{Deserialize, Serialize};
+
 /// Types that have a reserved value which can't be created any other way.
 pub trait ReservedValue {
     /// Create an instance of the reserved value.
@@ -20,6 +23,7 @@ pub trait ReservedValue {
 
 /// Packed representation of `Option<T>`.
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct PackedOption<T: ReservedValue>(T);
 
 impl<T: ReservedValue> PackedOption<T> {

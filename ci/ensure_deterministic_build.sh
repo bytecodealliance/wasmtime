@@ -11,7 +11,7 @@ BUILD_SCRIPT=$(find -wholename "./target/debug/build/cranelift-codegen-*/build-s
 # First, run the script to generate a reference comparison.
 rm -rf /tmp/reference
 mkdir /tmp/reference
-OUT_DIR=/tmp/reference TARGET=x86_64 $BUILD_SCRIPT
+OUT_DIR=/tmp/reference TARGET=x86_64 CARGO_PKG_VERSION=0.1.0 CARGO_MANIFEST_DIR=/tmp $BUILD_SCRIPT
 
 # To make sure the build script doesn't depend on the current directory, we'll
 # change the current working directory on every iteration. Make this easy to
@@ -36,6 +36,6 @@ do
 
     rm -rf /tmp/try
     mkdir /tmp/try
-    OUT_DIR=/tmp/try TARGET=x86_64 $BUILD_SCRIPT
+    OUT_DIR=/tmp/try TARGET=x86_64 CARGO_PKG_VERSION=0.1.0 CARGO_MANIFEST_DIR=/tmp/src$i $BUILD_SCRIPT
     diff -qr /tmp/reference /tmp/try
 done
