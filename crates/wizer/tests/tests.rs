@@ -23,7 +23,7 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> anyhow::Resul
     let module = wasmtime::Module::new(store.engine(), wasm)?;
 
     let mut linker = wasmtime::Linker::new(&store);
-    let ctx = wasmtime_wasi::WasiCtx::new(None::<String>)?;
+    let ctx = wasi_cap_std_sync::WasiCtxBuilder::new().build()?;
     let wasi = wasmtime_wasi::Wasi::new(&store, ctx);
     wasi.add_to_linker(&mut linker)?;
     let instance = linker.instantiate(&module)?;

@@ -559,9 +559,8 @@ impl Wizer {
 
         let mut linker = wasmtime::Linker::new(store);
         if self.allow_wasi {
-            let ctx = wasmtime_wasi::WasiCtx::new(None::<String>)?;
-            let wasi = wasmtime_wasi::Wasi::new(store, ctx);
-            wasi.add_to_linker(&mut linker)?;
+            let ctx = wasi_cap_std_sync::WasiCtxBuilder::new().build()?;
+            wasmtime_wasi::Wasi::new(store, ctx).add_to_linker(&mut linker)?;
         }
         self.dummy_imports(&store, &module, &mut linker)?;
         let instance = linker.instantiate(module)?;
