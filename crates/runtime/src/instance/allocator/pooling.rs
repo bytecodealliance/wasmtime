@@ -430,7 +430,7 @@ impl InstancePool {
     fn allocate(
         &self,
         strategy: PoolingAllocationStrategy,
-        req: InstanceAllocationRequest,
+        mut req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
         let index = {
             let mut free_list = self.free_list.lock().unwrap();
@@ -441,17 +441,19 @@ impl InstancePool {
             free_list.swap_remove(free_index)
         };
 
+        let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
+
         unsafe {
             debug_assert!(index < self.max_instances);
             let instance =
                 &mut *(self.mapping.as_mut_ptr().add(index * self.instance_size) as *mut Instance);
 
-            instance.module = req.module;
+            instance.module = req.module.clone();
             instance.offsets = VMOffsets::new(
                 std::mem::size_of::<*const u8>() as u8,
                 instance.module.as_ref(),
             );
-            instance.host_state = req.host_state;
+            instance.host_state = host_state;
 
             Self::set_instance_memories(
                 instance,
@@ -460,20 +462,7 @@ impl InstancePool {
             )?;
             Self::set_instance_tables(instance, self.tables.get(index), self.tables.max_elements)?;
 
-            initialize_vmcontext(
-                instance,
-                req.imports.functions,
-                req.imports.tables,
-                req.imports.memories,
-                req.imports.globals,
-                req.finished_functions,
-                req.lookup_shared_signature,
-                req.interrupts,
-                req.externref_activations_table,
-                req.stack_map_registry,
-                &|index| instance.memories[index].vmmemory(),
-                &|index| instance.tables[index].vmtable(),
-            );
+            initialize_vmcontext(instance, req);
 
             Ok(InstanceHandle::new(instance as _))
         }
@@ -517,6 +506,9 @@ impl InstancePool {
                     decommit(base, size);
                 }
             }
+
+            // Drop the host state
+            (*handle.instance).host_state = Box::new(());
         }
 
         {
