@@ -304,6 +304,14 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
+    # Test uffd functionality on Linux
+    - run: |
+        cargo test --features uffd -p wasmtime-runtime instance::allocator::pooling
+        cargo test --features uffd -p wasmtime-cli pooling_allocator
+      if: matrix.os == 'ubuntu-latest'
+      env:
+        RUST_BACKTRACE: 1
+
     # Build and test lightbeam. Note that
     # Lightbeam tests fail right now, but we don't want to block on that.
     - run: cargo build --package lightbeam
