@@ -6,13 +6,11 @@
 	url = https://github.com/WebAssembly/wasm-c-api
 [submodule "WASI"]
 	path = crates/wasi-common/WASI
-	url = https://github.com/alexcrichton/WASI
-	branch = abis
+	url = https://github.com/WebAssembly/WASI
 [submodule "crates/wasi-nn/spec"]
 	path = crates/wasi-nn/spec
 	url = https://github.com/alexcrichton/wasi-nn
 	branch = witx-next
 [submodule "crates/wasi-crypto/spec"]
 	path = crates/wasi-crypto/spec
-	url = https://github.com/alexcrichton/wasi-crypto.git
-	branch = witx-next
+	url = https://github.com/WebAssembly/wasi-crypto.git
