@@ -3,7 +3,7 @@ use wiggle::{GuestMemory, GuestType};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
-    witx: ["$CARGO_MANIFEST_DIR/tests/union.witx"],
+    witx: ["$CARGO_MANIFEST_DIR/tests/variant.witx"],
     ctx: WasiCtx,
 });
 
@@ -31,7 +31,7 @@ fn mult_zero_nan(a: f32, b: u32) -> f32 {
     }
 }
 
-impl<'a> union_example::UnionExample for WasiCtx<'a> {
+impl<'a> variant_example::VariantExample for WasiCtx<'a> {
     fn get_tag(&self, u: &types::Reason) -> Result<types::Excuse, types::Errno> {
         println!("GET TAG: {:?}", u);
         match u {
@@ -126,7 +126,7 @@ impl GetTagExercise {
                 .expect("input contents ref_mut"),
             types::Reason::Sleeping => {} // Do nothing
         }
-        let e = union_example::get_tag(
+        let e = variant_example::get_tag(
             &ctx,
             &host_memory,
             self.input_loc.ptr as i32,
@@ -210,7 +210,7 @@ impl ReasonMultExercise {
             }
             types::Reason::Sleeping => {} // Do nothing
         }
-        let e = union_example::reason_mult(
+        let e = variant_example::reason_mult(
             &ctx,
             &host_memory,
             self.input_loc.ptr as i32,
