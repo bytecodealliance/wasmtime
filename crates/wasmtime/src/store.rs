@@ -902,7 +902,7 @@ impl Store {
         match self.block_on(unsafe { Pin::new_unchecked(&mut future) }) {
             // If this finished successfully then we were resumed normally via a
             // `poll`, so inject some more fuel and keep going.
-            Ok(()) => self.add_fuel(fuel_to_inject),
+            Ok(()) => self.add_fuel(fuel_to_inject).unwrap(),
             // If the future was dropped while we were yielded, then we need to
             // clean up this fiber. Do so by raising a trap which will abort all
             // wasm and get caught on the other side to clean things up.
