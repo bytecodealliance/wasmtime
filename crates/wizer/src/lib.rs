@@ -15,6 +15,9 @@ use structopt::StructOpt;
 const WASM_PAGE_SIZE: u32 = 65_536;
 const NATIVE_PAGE_SIZE: u32 = 4_096;
 
+const DEFAULT_WASM_MULTI_VALUE: bool = true;
+const DEFAULT_WASM_MULTI_MEMORY: bool = true;
+
 /// Wizer: the WebAssembly pre-initializer!
 ///
 /// Don't wait for your Wasm module to initialize itself, pre-initialize it!
@@ -58,7 +61,15 @@ pub struct Wizer {
     ///
     /// This option can be used, for example, to replace a `_start` entry point
     /// in an initialized module with an alternate entry point.
-    #[cfg_attr(feature = "structopt", structopt(short = "r", long = "func-rename"))]
+    #[cfg_attr(
+        feature = "structopt",
+        structopt(
+            short = "r",
+            long = "rename-func",
+            alias = "func-rename",
+            value_name = "dst=src"
+        )
+    )]
     func_renames: Vec<String>,
 
     /// Allow WASI imports to be called during initialization.
@@ -75,6 +86,18 @@ pub struct Wizer {
     /// rather than per-instance.
     #[cfg_attr(feature = "structopt", structopt(long = "allow-wasi"))]
     allow_wasi: bool,
+
+    /// Enable or disable Wasm multi-memory proposal.
+    ///
+    /// Enabled by default.
+    #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
+    wasm_multi_memory: Option<bool>,
+
+    /// Enable or disable the Wasm multi-value proposal.
+    ///
+    /// Enabled by default.
+    #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
+    wasm_multi_value: Option<bool>,
 }
 
 fn translate_val_type(ty: wasmparser::Type) -> wasm_encoder::ValType {
@@ -145,6 +168,8 @@ impl Wizer {
             init_func: "wizer.initialize".into(),
             func_renames: vec![],
             allow_wasi: false,
+            wasm_multi_memory: None,
+            wasm_multi_value: None,
         }
     }
 
@@ -181,6 +206,22 @@ impl Wizer {
         self
     }
 
+    /// Enable or disable the Wasm multi-memory proposal.
+    ///
+    /// Defaults to `true`.
+    pub fn wasm_multi_memory(&mut self, enable: bool) -> &mut Self {
+        self.wasm_multi_memory = Some(enable);
+        self
+    }
+
+    /// Enable or disable the Wasm multi-value proposal.
+    ///
+    /// Defaults to `true`.
+    pub fn wasm_multi_value(&mut self, enable: bool) -> &mut Self {
+        self.wasm_multi_value = Some(enable);
+        self
+    }
+
     /// Initialize the given Wasm, snapshot it, and return the serialized
     /// snapshot as a new, pre-initialized Wasm module.
     pub fn run(&self, wasm: &[u8]) -> anyhow::Result<Vec<u8>> {
@@ -196,7 +237,9 @@ impl Wizer {
             "if the Wasm was originally valid, then our preparation step shouldn't invalidate it"
         );
 
-        let store = wasmtime::Store::default();
+        let config = self.wasmtime_config();
+        let engine = wasmtime::Engine::new(&config);
+        let store = wasmtime::Store::new(&engine);
         let module = wasmtime::Module::new(store.engine(), &wasm)?;
         self.validate_init_func(&module)?;
 
@@ -207,11 +250,30 @@ impl Wizer {
         Ok(initialized_wasm)
     }
 
+    // NB: keep this in sync with the wasmparser features.
+    fn wasmtime_config(&self) -> wasmtime::Config {
+        let mut config = wasmtime::Config::new();
+
+        // Proposals we support.
+        config.wasm_multi_memory(self.wasm_multi_memory.unwrap_or(DEFAULT_WASM_MULTI_MEMORY));
+        config.wasm_multi_value(self.wasm_multi_value.unwrap_or(DEFAULT_WASM_MULTI_VALUE));
+
+        // Proposoals that we should add support for.
+        config.wasm_reference_types(false);
+        config.wasm_module_linking(false);
+        config.wasm_simd(false);
+        config.wasm_threads(false);
+        config.wasm_bulk_memory(false);
+
+        config
+    }
+
+    // NB: keep this in sync with the Wasmtime config.
     fn wasm_features(&self) -> wasmparser::WasmFeatures {
         wasmparser::WasmFeatures {
             // Proposals that we support.
-            multi_memory: true,
-            multi_value: true,
+            multi_memory: self.wasm_multi_memory.unwrap_or(DEFAULT_WASM_MULTI_MEMORY),
+            multi_value: self.wasm_multi_value.unwrap_or(DEFAULT_WASM_MULTI_VALUE),
 
             // Proposals that we should add support for.
             reference_types: false,
@@ -277,7 +339,10 @@ impl Wizer {
                         data: &full_wasm[imports.range().start..imports.range().end],
                     });
                 }
-                AliasSection(_) | InstanceSection(_) | ModuleSection(_) => {
+                AliasSection(_)
+                | InstanceSection(_)
+                | ModuleSectionStart { .. }
+                | ModuleSectionEntry { .. } => {
                     anyhow::bail!("module linking is not supported yet")
                 }
                 FunctionSection(funcs) => {
@@ -386,9 +451,6 @@ impl Wizer {
                     });
                 }
                 CodeSectionEntry(_) => continue,
-                ModuleCodeSectionStart { .. } | ModuleCodeSectionEntry { .. } => {
-                    anyhow::bail!("module linking is not supported yet")
-                }
                 UnknownSection { .. } => anyhow::bail!("unknown section"),
                 EventSection(_) => anyhow::bail!("exceptions are not supported yet"),
                 End => return Ok(module.finish()),
@@ -497,9 +559,8 @@ impl Wizer {
 
         let mut linker = wasmtime::Linker::new(store);
         if self.allow_wasi {
-            let ctx = wasmtime_wasi::WasiCtx::new(None::<String>)?;
-            let wasi = wasmtime_wasi::Wasi::new(store, ctx);
-            wasi.add_to_linker(&mut linker)?;
+            let ctx = wasi_cap_std_sync::WasiCtxBuilder::new().build()?;
+            wasmtime_wasi::Wasi::new(store, ctx).add_to_linker(&mut linker)?;
         }
         self.dummy_imports(&store, &module, &mut linker)?;
         let instance = linker.instantiate(module)?;
@@ -690,7 +751,7 @@ impl Wizer {
                         data: &full_wasm[imports.range().start..imports.range().end],
                     });
                 }
-                AliasSection(_) | InstanceSection(_) | ModuleSection(_) => unreachable!(),
+                AliasSection(_) | InstanceSection(_) => unreachable!(),
                 FunctionSection(funcs) => {
                     module.section(&wasm_encoder::RawSection {
                         id: wasm_encoder::SectionId::Function as u8,
@@ -841,8 +902,8 @@ impl Wizer {
                     });
                 }
                 CodeSectionEntry(_) => continue,
-                ModuleCodeSectionStart { .. }
-                | ModuleCodeSectionEntry { .. }
+                ModuleSectionStart { .. }
+                | ModuleSectionEntry { .. }
                 | UnknownSection { .. }
                 | EventSection(_) => unreachable!(),
                 End => {
