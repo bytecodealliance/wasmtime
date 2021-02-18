@@ -180,30 +180,18 @@ impl Table {
         }
 
         match val {
-            TableElement::FuncRef(r) => {
-                unsafe {
-                    self.with_funcrefs_mut(move |elements| {
-                        let elements = elements.unwrap();
-
-                        // TODO: replace this with slice::fill (https://github.com/rust-lang/rust/issues/70758) when stabilized
-                        for e in &mut elements[start as usize..end as usize] {
-                            *e = r;
-                        }
-                    });
-                }
-            }
-            TableElement::ExternRef(r) => {
-                unsafe {
-                    self.with_externrefs_mut(move |elements| {
-                        let elements = elements.unwrap();
-
-                        // TODO: replace this with slice::fill (https://github.com/rust-lang/rust/issues/70758) when stabilized
-                        for e in &mut elements[start as usize..end as usize] {
-                            *e = r.clone();
-                        }
-                    });
-                }
-            }
+            TableElement::FuncRef(r) => unsafe {
+                self.with_funcrefs_mut(move |elements| {
+                    let elements = elements.unwrap();
+                    elements[start as usize..end as usize].fill(r);
+                });
+            },
+            TableElement::ExternRef(r) => unsafe {
+                self.with_externrefs_mut(move |elements| {
+                    let elements = elements.unwrap();
+                    elements[start as usize..end as usize].fill(r);
+                });
+            },
         }
 
         Ok(())
