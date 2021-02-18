@@ -164,9 +164,14 @@ impl Immediates {
                 atomic_rmw_op_values.insert("add", "Add");
                 atomic_rmw_op_values.insert("sub", "Sub");
                 atomic_rmw_op_values.insert("and", "And");
+                atomic_rmw_op_values.insert("nand", "Nand");
                 atomic_rmw_op_values.insert("or", "Or");
                 atomic_rmw_op_values.insert("xor", "Xor");
                 atomic_rmw_op_values.insert("xchg", "Xchg");
+                atomic_rmw_op_values.insert("umin", "Umin");
+                atomic_rmw_op_values.insert("umax", "Umax");
+                atomic_rmw_op_values.insert("smin", "Smin");
+                atomic_rmw_op_values.insert("smax", "Smax");
                 new_enum("op", "ir::AtomicRmwOp", atomic_rmw_op_values)
                     .with_doc("Atomic Read-Modify-Write Ops")
             },

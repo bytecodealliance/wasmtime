@@ -56,12 +56,22 @@ pub enum AtomicRmwOp {
     Sub,
     /// And
     And,
+    /// Nand
+    Nand,
     /// Or
     Or,
     /// Exclusive Or
     Xor,
     /// Exchange (swap operands)
     Xchg,
+    /// Unsigned min
+    Umin,
+    /// Unsigned max
+    Umax,
+    /// Signed min
+    Smin,
+    /// Signed max
+    Smax,
 }
 
 impl AtomicRmwOp {
@@ -71,9 +81,14 @@ impl AtomicRmwOp {
             ir::AtomicRmwOp::Add => AtomicRmwOp::Add,
             ir::AtomicRmwOp::Sub => AtomicRmwOp::Sub,
             ir::AtomicRmwOp::And => AtomicRmwOp::And,
+            ir::AtomicRmwOp::Nand => AtomicRmwOp::Nand,
             ir::AtomicRmwOp::Or => AtomicRmwOp::Or,
             ir::AtomicRmwOp::Xor => AtomicRmwOp::Xor,
             ir::AtomicRmwOp::Xchg => AtomicRmwOp::Xchg,
+            ir::AtomicRmwOp::Umin => AtomicRmwOp::Umin,
+            ir::AtomicRmwOp::Umax => AtomicRmwOp::Umax,
+            ir::AtomicRmwOp::Smin => AtomicRmwOp::Smin,
+            ir::AtomicRmwOp::Smax => AtomicRmwOp::Smax,
         }
     }
 }

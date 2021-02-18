@@ -2817,22 +2817,61 @@ pub(crate) fn emit(
             let i2 = Inst::mov_r_r(OperandSize::Size64, rax, r11_w);
             i2.emit(sink, info, state);
 
-            // opq %r10, %r11
             let r10_rmi = RegMemImm::reg(r10);
-            let i3 = if *op == inst_common::AtomicRmwOp::Xchg {
-                Inst::mov_r_r(OperandSize::Size64, r10, r11_w)
-            } else {
-                let alu_op = match op {
-                    inst_common::AtomicRmwOp::Add => AluRmiROpcode::Add,
-                    inst_common::AtomicRmwOp::Sub => AluRmiROpcode::Sub,
-                    inst_common::AtomicRmwOp::And => AluRmiROpcode::And,
-                    inst_common::AtomicRmwOp::Or => AluRmiROpcode::Or,
-                    inst_common::AtomicRmwOp::Xor => AluRmiROpcode::Xor,
-                    inst_common::AtomicRmwOp::Xchg => unreachable!(),
-                };
-                Inst::alu_rmi_r(OperandSize::Size64, alu_op, r10_rmi, r11_w)
-            };
-            i3.emit(sink, info, state);
+            match op {
+                inst_common::AtomicRmwOp::Xchg => {
+                    // movq %r10, %r11
+                    let i3 = Inst::mov_r_r(OperandSize::Size64, r10, r11_w);
+                    i3.emit(sink, info, state);
+                }
+                inst_common::AtomicRmwOp::Nand => {
+                    // andq %r10, %r11
+                    let i3 =
+                        Inst::alu_rmi_r(OperandSize::Size64, AluRmiROpcode::And, r10_rmi, r11_w);
+                    i3.emit(sink, info, state);
+
+                    // notq %r11
+                    let i4 = Inst::not(OperandSize::Size64, r11_w);
+                    i4.emit(sink, info, state);
+                }
+                inst_common::AtomicRmwOp::Umin
+                | inst_common::AtomicRmwOp::Umax
+                | inst_common::AtomicRmwOp::Smin
+                | inst_common::AtomicRmwOp::Smax => {
+                    // cmp %r11, %r10
+                    let i3 = Inst::cmp_rmi_r(OperandSize::from_ty(*ty), RegMemImm::reg(r11), r10);
+                    i3.emit(sink, info, state);
+
+                    // cmovcc %r10, %r11
+                    let cc = match op {
+                        inst_common::AtomicRmwOp::Umin => CC::BE,
+                        inst_common::AtomicRmwOp::Umax => CC::NB,
+                        inst_common::AtomicRmwOp::Smin => CC::LE,
+                        inst_common::AtomicRmwOp::Smax => CC::NL,
+                        _ => unreachable!(),
+                    };
+                    let i4 = Inst::cmove(OperandSize::Size64, cc, RegMem::reg(r10), r11_w);
+                    i4.emit(sink, info, state);
+                }
+                _ => {
+                    // opq %r10, %r11
+                    let alu_op = match op {
+                        inst_common::AtomicRmwOp::Add => AluRmiROpcode::Add,
+                        inst_common::AtomicRmwOp::Sub => AluRmiROpcode::Sub,
+                        inst_common::AtomicRmwOp::And => AluRmiROpcode::And,
+                        inst_common::AtomicRmwOp::Or => AluRmiROpcode::Or,
+                        inst_common::AtomicRmwOp::Xor => AluRmiROpcode::Xor,
+                        inst_common::AtomicRmwOp::Xchg
+                        | inst_common::AtomicRmwOp::Nand
+                        | inst_common::AtomicRmwOp::Umin
+                        | inst_common::AtomicRmwOp::Umax
+                        | inst_common::AtomicRmwOp::Smin
+                        | inst_common::AtomicRmwOp::Smax => unreachable!(),
+                    };
+                    let i3 = Inst::alu_rmi_r(OperandSize::Size64, alu_op, r10_rmi, r11_w);
+                    i3.emit(sink, info, state);
+                }
+            }
 
             // lock cmpxchg{b,w,l,q} %r11, (%r9)
             // No need to call `add_trap` here, since the `i4` emit will do that.
