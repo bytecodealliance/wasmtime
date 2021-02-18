@@ -271,6 +271,17 @@ fn publish(krate: &Crate) {
     if !status.success() {
         println!("FAIL: failed to publish `{}`: {}", krate.name, status);
     }
+
+    // Note that the status is ignored here. This fails most of the time because
+    // the owner is already set and present, so we only want to add this to
+    // crates which haven't previously been published.
+    Command::new("cargo")
+        .arg("owner")
+        .arg("-a")
+        .arg("github:bytecodealliance:wasmtime-publish")
+        .arg(&krate.name)
+        .status()
+        .expect("failed to run cargo");
 }
 
 // Verify the current tree is publish-able to crates.io. The intention here is
