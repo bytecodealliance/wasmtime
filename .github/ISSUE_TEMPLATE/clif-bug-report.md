@@ -7,13 +7,37 @@ assignees: ''
 
 ---
 
-Thanks for opening a bug report! Please answer the questions below
-if they're relevant and delete this text before submitting.
+Thanks for filing an issue! Please fill out the TODOs below.
 
-- What are the steps to reproduce the issue? Can you include a CLIF test case,
-  ideally reduced with the `bugpoint` clif-util command?
-- What do you expect to happen? What does actually happen? Does it panic, and
-  if so, with which assertion?
-- Which Cranelift version / commit hash / branch are you using?
-- If relevant, can you include some extra information about your environment?
-  (Rust version, operating system, architecture...)
+### `.clif` Test Case
+
+```
+TODO: paste .clif test case here. Ideally, a test case that has been reduced via
+the `clif-util bugpoint` command.
+```
+
+### Steps to Reproduce
+
+* TODO: First, ...
+* TODO: Then, ...
+* Etc...
+
+### Expected Results
+
+TODO: What do you expect to happen?
+
+### Actual Results
+
+TODO: What actually happens? Panic? Segfault? Incorrect result?
+
+### Versions and Environment
+
+Cranelift version or commit: TODO
+
+Operating system: TODO
+
+Architecture: TODO
+
+### Extra Info
+
+Anything else you'd like to add?

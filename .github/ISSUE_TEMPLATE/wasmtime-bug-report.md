@@ -1,5 +1,5 @@
 ---
-name: Wasmtime bug report
+name: Wasmtime Bug Report
 about: Report a bug or a crash in Wasmtime
 title: ''
 labels: bug
@@ -7,12 +7,34 @@ assignees: ''
 
 ---
 
-Thanks for opening a bug report! Please answer the questions below
-if they're relevant and delete this text before submitting.
+Thanks for filing a bug report! Please fill out the TODOs below.
 
-- What are the steps to reproduce the issue?
-- What do you expect to happen? What does actually happen? Does it panic, and
-  if so, with which assertion?
-- Which Wasmtime version / commit hash / branch are you using?
-- If relevant, can you include some extra information about your environment?
-  (Rust version, operating system, architecture...)
+### Test Case
+
+TODO: upload Wasm file here
+
+### Steps to Reproduce
+
+* TODO: first, ...
+* TODO: second, ...
+* Etc...
+
+### Expected Results
+
+TODO: What do you expect to happen?
+
+### Actual Results
+
+TODO: What actually happens? Panic? Segfault? Incorrect result?
+
+### Versions and Environment
+
+Wasmtime version or commit: TODO
+
+Operating system: TODO
+
+Architecture: TODO
+
+### Extra Info
+
+Anything else you'd like to add?
