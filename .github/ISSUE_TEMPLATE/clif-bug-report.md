@@ -1,5 +1,5 @@
 ---
-name: Cranelift Bug report
+name: Cranelift Bug Report
 about: Report a bug or a crash in Cranelift.
 title: 'Cranelift: '
 labels: bug, cranelift
