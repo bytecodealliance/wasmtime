@@ -7,26 +7,25 @@ assignees: ''
 
 ---
 
-<!-- Please try to describe precisely what you would like to do in
-Cranelift/Wasmtime and/or expect from it. You can answer the questions below if
-they're relevant and delete this text before submitting. Thanks for opening an
-issue! -->
+Thanks for filing a feature request! Please fill out the TODOs below.
 
 #### Feature
 
-<!-- What is the feature or code improvement you would like to do in
-Cranelift/Wasmtime? -->
+TODO: Brief description of the feature/improvement you'd like to see in
+Cranelift/Wasmtime.
 
 #### Benefit
 
-<!-- What is the value of adding this in Cranelift/Wasmtime? -->
+TODO: What is the value of adding this in Cranelift/Wasmtime? What problems does
+it solve?
 
 #### Implementation
 
-<!-- Do you have an implementation plan, and/or ideas for data structures or
-algorithms to use? -->
+TODO: Do you have an implementation plan, and/or ideas for data structures or
+algorithms to use?
 
 #### Alternatives
 
-<!-- Have you considered alternative implementations? If so, how are they
-better or worse than your proposal? -->
+TODO: What are the alternative implementation approaches or alternative ways to
+solve the problem that this feature would solve? How do these alternatives
+compare to this proposal?
