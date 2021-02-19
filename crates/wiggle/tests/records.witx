@@ -18,14 +18,14 @@
 
 (typename $some_bytes (list u8))
 
-(typename $struct_of_array
+(typename $record_of_list
   (record
     (field $arr $some_bytes)))
 
 (typename $s64 s64)
 (typename $u16 u16)
 
-(module $structs
+(module $records
   (@interface func (export "sum_of_pair")
     (param $an_pair $pair_ints)
     (result $error (expected $s64 (error $errno))))
@@ -42,6 +42,6 @@
     (param $second (@witx const_pointer s32))
     (result $error (expected $pair_int_ptrs (error $errno))))
   (@interface func (export "sum_array")
-    (param $an_arr $struct_of_array)
+    (param $a_list $record_of_list)
     (result $error (expected $u16 (error $errno))))
 )

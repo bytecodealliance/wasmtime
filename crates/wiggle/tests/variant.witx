@@ -1,9 +1,6 @@
 (use "errno.witx")
 (use "excuse.witx")
 
-;; Every worker needs a union. Organize your workplace!
-;; Fight for the full product of your labor!
-
 (typename $reason
   (variant (@witx tag $excuse)
     (case $dog_ate f32)
@@ -16,7 +13,7 @@
     (case $traffic (@witx pointer s32))
     (case $sleeping)))
 
-(module $union_example
+(module $variant_example
   (@interface func (export "get_tag")
     (param $r $reason)
     (result $error (expected $excuse (error $errno)))

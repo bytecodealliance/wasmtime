@@ -3,13 +3,13 @@ use wiggle::{GuestMemory, GuestPtr, GuestType};
 use wiggle_test::{impl_errno, HostMemory, MemArea, MemAreas, WasiCtx};
 
 wiggle::from_witx!({
-    witx: ["$CARGO_MANIFEST_DIR/tests/arrays.witx"],
+    witx: ["$CARGO_MANIFEST_DIR/tests/lists.witx"],
     ctx: WasiCtx,
 });
 
 impl_errno!(types::Errno, types::GuestErrorConversion);
 
-impl<'a> arrays::Arrays for WasiCtx<'a> {
+impl<'a> lists::Lists for WasiCtx<'a> {
     fn reduce_excuses(
         &self,
         excuses: &types::ConstExcuseArray,
@@ -97,7 +97,7 @@ impl ReduceExcusesExcercise {
             }
         }
 
-        let res = arrays::reduce_excuses(
+        let res = lists::reduce_excuses(
             &ctx,
             &host_memory,
             self.array_ptr_loc.ptr as i32,
@@ -177,7 +177,7 @@ impl PopulateExcusesExcercise {
                 .expect("failed to write value");
         }
 
-        let res = arrays::populate_excuses(
+        let res = lists::populate_excuses(
             &ctx,
             &host_memory,
             self.array_ptr_loc.ptr as i32,

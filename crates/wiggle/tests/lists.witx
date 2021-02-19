@@ -4,7 +4,7 @@
 (typename $const_excuse_array (list (@witx const_pointer $excuse)))
 (typename $excuse_array (list (@witx pointer $excuse)))
 
-(module $arrays
+(module $lists
   (@interface func (export "reduce_excuses")
     (param $excuses $const_excuse_array)
     (result $error (expected $excuse (error $errno)))
