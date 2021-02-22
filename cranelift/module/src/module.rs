@@ -464,14 +464,12 @@ pub trait Module {
     /// Returns the size of the function's code and constant data.
     ///
     /// Note: After calling this function the given `Context` will contain the compiled function.
-    fn define_function<TS>(
+    fn define_function(
         &mut self,
         func: FuncId,
         ctx: &mut Context,
-        trap_sink: &mut TS,
-    ) -> ModuleResult<ModuleCompiledFunction>
-    where
-        TS: binemit::TrapSink;
+        trap_sink: &mut dyn binemit::TrapSink,
+    ) -> ModuleResult<ModuleCompiledFunction>;
 
     /// Define a function, taking the function body from the given `bytes`.
     ///
@@ -559,15 +557,12 @@ impl<M: Module> Module for &mut M {
         (**self).declare_data_in_data(data, ctx)
     }
 
-    fn define_function<TS>(
+    fn define_function(
         &mut self,
         func: FuncId,
         ctx: &mut Context,
-        trap_sink: &mut TS,
-    ) -> ModuleResult<ModuleCompiledFunction>
-    where
-        TS: binemit::TrapSink,
-    {
+        trap_sink: &mut dyn binemit::TrapSink,
+    ) -> ModuleResult<ModuleCompiledFunction> {
         (**self).define_function(func, ctx, trap_sink)
     }
 

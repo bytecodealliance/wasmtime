@@ -596,15 +596,12 @@ impl Module for JITModule {
         ctx.import_global_value(ir::ExternalName::user(1, data.as_u32()))
     }
 
-    fn define_function<TS>(
+    fn define_function(
         &mut self,
         id: FuncId,
         ctx: &mut cranelift_codegen::Context,
-        trap_sink: &mut TS,
-    ) -> ModuleResult<ModuleCompiledFunction>
-    where
-        TS: TrapSink,
-    {
+        trap_sink: &mut dyn TrapSink,
+    ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {}: {}", id, ctx.func.display(self.isa()));
         let CodeInfo {
             total_size: code_size,
