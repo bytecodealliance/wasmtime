@@ -45,7 +45,7 @@ libc = "0.2.60"
 log = "0.4.8"
 rayon = "1.2.1"
 humantime = "2.0.0"
-wasmparser = "0.73.0"
+wasmparser = "0.75.0"
 cap-std = "0.13"
 
 [dev-dependencies]
@@ -57,7 +57,7 @@ test-programs = { path = "crates/test-programs" }
 wasmtime-fuzzing = { path = "crates/fuzzing" }
 wasmtime-runtime = { path = "crates/runtime" }
 tracing-subscriber = "0.2.0"
-wast = "32.0.0"
+wast = "34.0.0"
 
 [build-dependencies]
 anyhow = "1.0.19"
