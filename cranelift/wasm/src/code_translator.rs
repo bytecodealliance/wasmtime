@@ -553,7 +553,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::Catch { .. }
         | Operator::Throw { .. }
         | Operator::Unwind
-        | Operator::Rethrow { .. } => {
+        | Operator::Rethrow { .. }
+        | Operator::Delegate { .. }
+        | Operator::CatchAll => {
             return Err(wasm_unsupported!(
                 "proposed exception handling operator {:?}",
                 op
@@ -1849,7 +1851,26 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64x2ExtMulLowI32x4S
         | Operator::I64x2ExtMulHighI32x4S
         | Operator::I64x2ExtMulLowI32x4U
-        | Operator::I64x2ExtMulHighI32x4U => {
+        | Operator::I64x2ExtMulHighI32x4U
+        | Operator::I64x2Eq
+        | Operator::I64x2Ne
+        | Operator::I64x2LtS
+        | Operator::I64x2GtS
+        | Operator::I64x2LeS
+        | Operator::I64x2GeS
+        | Operator::I64x2Abs
+        | Operator::I64x2AllTrue
+        | Operator::I16x8ExtAddPairwiseI8x16S
+        | Operator::I16x8ExtAddPairwiseI8x16U
+        | Operator::I32x4ExtAddPairwiseI16x8S
+        | Operator::I32x4ExtAddPairwiseI16x8U
+        | Operator::F32x4DemoteF64x2Zero
+        | Operator::F64x2PromoteLowF32x4
+        | Operator::F64x2ConvertLowI32x4S
+        | Operator::F64x2ConvertLowI32x4U
+        | Operator::I32x4TruncSatF64x2SZero
+        | Operator::I32x4TruncSatF64x2UZero
+        | Operator::I8x16Popcnt => {
             return Err(wasm_unsupported!("proposed simd operator {:?}", op));
         }
         Operator::ReturnCall { .. } | Operator::ReturnCallIndirect { .. } => {
