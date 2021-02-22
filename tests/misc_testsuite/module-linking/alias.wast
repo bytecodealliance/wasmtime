@@ -30,7 +30,7 @@
     (data (i32.const 0) "\03\00\00\00")
   )
   (instance $a (instantiate $m))
-  (alias $m (memory $a "m"))
+  (alias $a "m" (memory $m))
 
   (func (export "get") (result i32)
     i32.const 0
@@ -108,7 +108,7 @@
   (type $t (func))
   (module $m
     ;; alias
-    (alias $thunk (type outer 0 $t))
+    (alias outer 0 $t (type $thunk))
     ;; import
     (import "" "" (func (type $thunk)))
     ;; module (referencing parent type)
@@ -125,12 +125,12 @@
     ;; instance
     (instance $i (instantiate $m2))
     ;; alias that instance
-    (alias $my_f (func $i ""))
+    (alias $i "" (func $my_f))
     ;; module
     (module $m3
       (import "" (func)))
     ;; use our aliased function to create the module
-    (instance $i2 (instantiate $m3 "" (func $my_f)))
+    (instance $i2 (instantiate $m3 (import "" (func $my_f))))
     ;; module
     (module $m4
       (import "" (func)))
@@ -139,5 +139,5 @@
   ;; instantiate the above module
   (module $smol (func $f (export "")))
   (instance $smol (instantiate $smol))
-  (instance (instantiate $m "" (instance $smol)))
+  (instance (instantiate $m (import "" (instance $smol))))
 )

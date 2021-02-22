@@ -49,12 +49,12 @@
   (module $m1
     (func (export "f") (result i32)
       i32.const 0))
-  (instance $m_g1 (instantiate $m0 "m" (module $m1)))
+  (instance $m_g1 (instantiate $m0 (import "m" (module $m1))))
   (instance $g1 (instantiate (module $m_g1 "m")))
   (module $m2
     (func (export "f") (result i32)
       i32.const 1))
-  (instance $m_g2 (instantiate $m0 "m" (module $m2)))
+  (instance $m_g2 (instantiate $m0 (import "m" (module $m2))))
   (instance $g2 (instantiate (module $m_g2 "m")))
 
   (func (export "get1") (result i32)
