@@ -223,9 +223,34 @@ impl BenchState {
             cx = cx.env("WASM_BENCH_USE_SMALL_WORKLOAD", &val)?;
         }
 
-        let cx = cx.build()?;
-        let wasi = Wasi::new(&store, cx);
-        wasi.add_to_linker(&mut linker)?;
+        Wasi::new(linker.store(), cx.build()?).add_to_linker(&mut linker)?;
+
+        #[cfg(feature = "wasi-nn")]
+        {
+            use std::cell::RefCell;
+            use std::rc::Rc;
+            use wasmtime_wasi_nn::{WasiNn, WasiNnCtx};
+
+            let wasi_nn = WasiNn::new(linker.store(), Rc::new(RefCell::new(WasiNnCtx::new()?)));
+            wasi_nn.add_to_linker(&mut linker)?;
+        }
+
+        #[cfg(feature = "wasi-crypto")]
+        {
+            use std::cell::RefCell;
+            use std::rc::Rc;
+            use wasmtime_wasi_crypto::{
+                WasiCryptoAsymmetricCommon, WasiCryptoCommon, WasiCryptoCtx, WasiCryptoSignatures,
+                WasiCryptoSymmetric,
+            };
+
+            let cx_crypto = Rc::new(RefCell::new(WasiCryptoCtx::new()));
+            WasiCryptoCommon::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
+            WasiCryptoAsymmetricCommon::new(linker.store(), cx_crypto.clone())
+                .add_to_linker(linker)?;
+            WasiCryptoSignatures::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
+            WasiCryptoSymmetric::new(linker.store(), cx_crypto).add_to_linker(linker)?;
+        }
 
         Ok(Self {
             engine,
