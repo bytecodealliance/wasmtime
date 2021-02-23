@@ -19,6 +19,8 @@ anyhow = "1.0"
 shuffling-allocator = { version = "1.1.1", optional = true }
 wasmtime = { path = "../wasmtime", default-features = false }
 wasmtime-wasi = { path = "../wasi" }
+wasmtime-wasi-crypto = { path = "../wasi-crypto", optional = true }
+wasmtime-wasi-nn = { path = "../wasi-nn", optional = true }
 wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
 cap-std = "0.13"
 
@@ -27,3 +29,6 @@ wat = "1.0"
 
 [features]
 default = ["shuffling-allocator"]
+wasi-crypto = ["wasmtime-wasi-crypto"]
+wasi-nn = ["wasmtime-wasi-nn"]
+
