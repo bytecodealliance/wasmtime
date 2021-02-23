@@ -51,6 +51,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
 
     fn compute_arg_locs(
         _call_conv: isa::CallConv,
+        _flags: &settings::Flags,
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
@@ -81,12 +82,12 @@ impl ABIMachineSpec for Arm32MachineDeps {
             if next_rreg < max_reg_val {
                 let reg = rreg(next_rreg);
 
-                ret.push(ABIArg::Reg {
-                    regs: ValueRegs::one(reg.to_real_reg()),
-                    ty: param.value_type,
-                    extension: param.extension,
-                    purpose: param.purpose,
-                });
+                ret.push(ABIArg::reg(
+                    reg.to_real_reg(),
+                    param.value_type,
+                    param.extension,
+                    param.purpose,
+                ));
                 next_rreg += 1;
             } else {
                 // Arguments are stored on stack in reversed order.
@@ -101,12 +102,12 @@ impl ABIMachineSpec for Arm32MachineDeps {
         let extra_arg = if add_ret_area_ptr {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
             if next_rreg < max_reg_val {
-                ret.push(ABIArg::Reg {
-                    regs: ValueRegs::one(rreg(next_rreg).to_real_reg()),
-                    ty: I32,
-                    extension: ir::ArgumentExtension::None,
-                    purpose: ir::ArgumentPurpose::Normal,
-                });
+                ret.push(ABIArg::reg(
+                    rreg(next_rreg).to_real_reg(),
+                    I32,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                ));
             } else {
                 stack_args.push((
                     I32,
@@ -124,12 +125,12 @@ impl ABIMachineSpec for Arm32MachineDeps {
         let max_stack = next_stack;
         for (ty, ext, purpose) in stack_args.into_iter().rev() {
             next_stack -= 4;
-            ret.push(ABIArg::Stack {
-                offset: (max_stack - next_stack) as i64,
+            ret.push(ABIArg::stack(
+                (max_stack - next_stack) as i64,
                 ty,
-                extension: ext,
+                ext,
                 purpose,
-            });
+            ));
         }
         assert_eq!(next_stack, 0);
 

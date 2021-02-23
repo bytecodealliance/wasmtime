@@ -175,11 +175,13 @@ impl<R: Clone + Copy + Debug + PartialEq + Eq + InvalidSentinel> ValueRegs<R> {
 }
 
 /// Create a writable ValueRegs.
+#[allow(dead_code)]
 pub(crate) fn writable_value_regs(regs: ValueRegs<Reg>) -> ValueRegs<Writable<Reg>> {
     regs.map(|r| Writable::from_reg(r))
 }
 
 /// Strip a writable ValueRegs down to a readonly ValueRegs.
+#[allow(dead_code)]
 pub(crate) fn non_writable_value_regs(regs: ValueRegs<Writable<Reg>>) -> ValueRegs<Reg> {
     regs.map(|r| r.to_reg())
 }

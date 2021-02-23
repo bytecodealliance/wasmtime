@@ -78,41 +78,41 @@ fn try_fill_baldrdash_reg(call_conv: isa::CallConv, param: &ir::AbiParam) -> Opt
         match &param.purpose {
             &ir::ArgumentPurpose::VMContext => {
                 // This is SpiderMonkey's `WasmTlsReg`.
-                Some(ABIArg::Reg {
-                    regs: ValueRegs::one(xreg(BALDRDASH_TLS_REG).to_real_reg()),
-                    ty: ir::types::I64,
-                    extension: param.extension,
-                    purpose: param.purpose,
-                })
+                Some(ABIArg::reg(
+                    xreg(BALDRDASH_TLS_REG).to_real_reg(),
+                    ir::types::I64,
+                    param.extension,
+                    param.purpose,
+                ))
             }
             &ir::ArgumentPurpose::SignatureId => {
                 // This is SpiderMonkey's `WasmTableCallSigReg`.
-                Some(ABIArg::Reg {
-                    regs: ValueRegs::one(xreg(BALDRDASH_SIG_REG).to_real_reg()),
-                    ty: ir::types::I64,
-                    extension: param.extension,
-                    purpose: param.purpose,
-                })
+                Some(ABIArg::reg(
+                    xreg(BALDRDASH_SIG_REG).to_real_reg(),
+                    ir::types::I64,
+                    param.extension,
+                    param.purpose,
+                ))
             }
             &ir::ArgumentPurpose::CalleeTLS => {
                 // This is SpiderMonkey's callee TLS slot in the extended frame of Wasm's ABI-2020.
                 assert!(call_conv == isa::CallConv::Baldrdash2020);
-                Some(ABIArg::Stack {
-                    offset: BALDRDASH_CALLEE_TLS_OFFSET,
-                    ty: ir::types::I64,
-                    extension: ir::ArgumentExtension::None,
-                    purpose: param.purpose,
-                })
+                Some(ABIArg::stack(
+                    BALDRDASH_CALLEE_TLS_OFFSET,
+                    ir::types::I64,
+                    ir::ArgumentExtension::None,
+                    param.purpose,
+                ))
             }
             &ir::ArgumentPurpose::CallerTLS => {
                 // This is SpiderMonkey's caller TLS slot in the extended frame of Wasm's ABI-2020.
                 assert!(call_conv == isa::CallConv::Baldrdash2020);
-                Some(ABIArg::Stack {
-                    offset: BALDRDASH_CALLER_TLS_OFFSET,
-                    ty: ir::types::I64,
-                    extension: ir::ArgumentExtension::None,
-                    purpose: param.purpose,
-                })
+                Some(ABIArg::stack(
+                    BALDRDASH_CALLER_TLS_OFFSET,
+                    ir::types::I64,
+                    ir::ArgumentExtension::None,
+                    param.purpose,
+                ))
             }
             _ => None,
         }
@@ -161,6 +161,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
     fn compute_arg_locs(
         call_conv: isa::CallConv,
+        _flags: &settings::Flags,
         params: &[ir::AbiParam],
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
@@ -253,12 +254,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     RegClass::V128 => vreg(*next_reg),
                     _ => unreachable!(),
                 };
-                ret.push(ABIArg::Reg {
-                    regs: ValueRegs::one(reg.to_real_reg()),
-                    ty: param.value_type,
-                    extension: param.extension,
-                    purpose: param.purpose,
-                });
+                ret.push(ABIArg::reg(
+                    reg.to_real_reg(),
+                    param.value_type,
+                    param.extension,
+                    param.purpose,
+                ));
                 *next_reg += 1;
                 remaining_reg_vals -= 1;
             } else {
@@ -268,13 +269,13 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 let size = std::cmp::max(size, 8);
                 // Align.
                 debug_assert!(size.is_power_of_two());
-                next_stack = (next_stack + size - 1) & !(size - 1);
-                ret.push(ABIArg::Stack {
-                    offset: next_stack as i64,
-                    ty: param.value_type,
-                    extension: param.extension,
-                    purpose: param.purpose,
-                });
+                next_stack = align_to(next_stack, size);
+                ret.push(ABIArg::stack(
+                    next_stack as i64,
+                    param.value_type,
+                    param.extension,
+                    param.purpose,
+                ));
                 next_stack += size;
             }
         }
@@ -286,19 +287,19 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let extra_arg = if add_ret_area_ptr {
             debug_assert!(args_or_rets == ArgsOrRets::Args);
             if next_xreg < max_per_class_reg_vals && remaining_reg_vals > 0 {
-                ret.push(ABIArg::Reg {
-                    regs: ValueRegs::one(xreg(next_xreg).to_real_reg()),
-                    ty: I64,
-                    extension: ir::ArgumentExtension::None,
-                    purpose: ir::ArgumentPurpose::Normal,
-                });
+                ret.push(ABIArg::reg(
+                    xreg(next_xreg).to_real_reg(),
+                    I64,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                ));
             } else {
-                ret.push(ABIArg::Stack {
-                    offset: next_stack as i64,
-                    ty: I64,
-                    extension: ir::ArgumentExtension::None,
-                    purpose: ir::ArgumentPurpose::Normal,
-                });
+                ret.push(ABIArg::stack(
+                    next_stack as i64,
+                    I64,
+                    ir::ArgumentExtension::None,
+                    ir::ArgumentPurpose::Normal,
+                ));
                 next_stack += 8;
             }
             Some(ret.len() - 1)
@@ -306,7 +307,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             None
         };
 
-        next_stack = (next_stack + 15) & !15;
+        next_stack = align_to(next_stack, 16);
 
         // To avoid overflow issues, limit the arg/return size to something
         // reasonable -- here, 128 MB.

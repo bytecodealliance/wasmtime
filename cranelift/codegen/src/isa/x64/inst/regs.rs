@@ -23,11 +23,20 @@ use regalloc::{
 };
 use std::string::String;
 
-// Hardware encodings for a few registers.
+// Hardware encodings (note the special rax, rcx, rdx, rbx order).
 
+pub const ENC_RAX: u8 = 0;
+pub const ENC_RCX: u8 = 1;
+pub const ENC_RDX: u8 = 2;
 pub const ENC_RBX: u8 = 3;
 pub const ENC_RSP: u8 = 4;
 pub const ENC_RBP: u8 = 5;
+pub const ENC_RSI: u8 = 6;
+pub const ENC_RDI: u8 = 7;
+pub const ENC_R8: u8 = 8;
+pub const ENC_R9: u8 = 9;
+pub const ENC_R10: u8 = 10;
+pub const ENC_R11: u8 = 11;
 pub const ENC_R12: u8 = 12;
 pub const ENC_R13: u8 = 13;
 pub const ENC_R14: u8 = 14;
@@ -38,31 +47,31 @@ fn gpr(enc: u8, index: u8) -> Reg {
 }
 
 pub(crate) fn rsi() -> Reg {
-    gpr(6, 16)
+    gpr(ENC_RSI, 16)
 }
 pub(crate) fn rdi() -> Reg {
-    gpr(7, 17)
+    gpr(ENC_RDI, 17)
 }
 pub(crate) fn rax() -> Reg {
-    gpr(0, 18)
+    gpr(ENC_RAX, 18)
 }
 pub(crate) fn rcx() -> Reg {
-    gpr(1, 19)
+    gpr(ENC_RCX, 19)
 }
 pub(crate) fn rdx() -> Reg {
-    gpr(2, 20)
+    gpr(ENC_RDX, 20)
 }
 pub(crate) fn r8() -> Reg {
-    gpr(8, 21)
+    gpr(ENC_R8, 21)
 }
 pub(crate) fn r9() -> Reg {
-    gpr(9, 22)
+    gpr(ENC_R9, 22)
 }
 pub(crate) fn r10() -> Reg {
-    gpr(10, 23)
+    gpr(ENC_R10, 23)
 }
 pub(crate) fn r11() -> Reg {
-    gpr(11, 24)
+    gpr(ENC_R11, 24)
 }
 pub(crate) fn r12() -> Reg {
     gpr(ENC_R12, 25)

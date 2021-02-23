@@ -1,0 +1,299 @@
+test compile
+set enable_llvm_abi_extensions=true
+target x86_64
+feature "experimental_x64"
+
+function %f0(i64, i64, i64, i64) -> i64 windows_fastcall {
+block0(v0: i64, v1: i64, v2: i64, v3: i64):
+  return v0
+}
+
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+; nextln:  movq    %rcx, %rax
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+
+function %f1(i64, i64, i64, i64) -> i64 windows_fastcall {
+block0(v0: i64, v1: i64, v2: i64, v3: i64):
+  return v1
+}
+
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+; nextln:  movq    %rdx, %rax
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+
+function %f2(i64, i64, i64, i64) -> i64 windows_fastcall {
+block0(v0: i64, v1: i64, v2: i64, v3: i64):
+  return v2
+}
+
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+; nextln:  movq    %r8, %rax
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+
+function %f3(i64, i64, i64, i64) -> i64 windows_fastcall {
+block0(v0: i64, v1: i64, v2: i64, v3: i64):
+  return v3
+}
+
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+; nextln:  movq    %r9, %rax
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+
+function %f4(i64, i64, f64, i64) -> f64 windows_fastcall {
+block0(v0: i64, v1: i64, v2: f64, v3: i64):
+  return v2
+}
+
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+; nextln:  movaps  %xmm2, %xmm0
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+
+function %f5(i64, i64, f64, i64) -> i64 windows_fastcall {
+block0(v0: i64, v1: i64, v2: f64, v3: i64):
+  return v3
+}
+
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+; nextln:  movq    %r9, %rax
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
+
+function %f6(i64, i64, i64, i64, i64, i64) -> i64 windows_fastcall {
+block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64):
+  return v5
+}
+
+;; This is truly odd (because of the regalloc ordering), but it works. Note
+;; that we're spilling and using rsi, which is a callee-save in fastcall, because
+;; the regalloc order is optimized for SysV. Also note that because we copy args
+;; out of their input locations to separate vregs, we have a spurious load
+;; from [rbp+48]. Ordinarily these moves are coalesced because the dest vreg
+;; is allocated as a caller-save (volatile), but here again we allocate rsi
+;; first and so have to spill it (and consequently don't coalesce).
+;;
+;; TODO(#2704): fix regalloc's register priority ordering!
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: subq    $$16, %rsp
+; nextln: movq    %rsi, 0(%rsp)
+; nextln: virtual_sp_offset_adjust 16
+; nextln: movq    48(%rbp), %rsi
+; nextln: movq    56(%rbp), %rsi
+; nextln: movq    %rsi, %rax
+; nextln: movq    0(%rsp), %rsi
+; nextln: addq    $$16, %rsp
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+
+function %f7(i128, i64, i128, i128) -> i128 windows_fastcall {
+block0(v0: i128, v1: i64, v2: i128, v3: i128):
+  return v3
+}
+
+;; Again, terrible regalloc behavior. The important part is that `v3` comes
+;; from [rbp+56] and [rbp+64], i.e., the second and third non-shadow
+;; stack slot.
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: subq    $$16, %rsp
+; nextln: movq    %rsi, 0(%rsp)
+; nextln: movq    %rdi, 8(%rsp)
+; nextln: virtual_sp_offset_adjust 16
+; nextln: movq    48(%rbp), %rsi
+; nextln: movq    56(%rbp), %rsi
+; nextln: movq    64(%rbp), %rdi
+; nextln: movq    %rsi, %rax
+; nextln: movq    %rdi, %rdx
+; nextln: movq    0(%rsp), %rsi
+; nextln: movq    8(%rsp), %rdi
+; nextln: addq    $$16, %rsp
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+
+function %f8(i64) -> i64 windows_fastcall {
+  sig0 = (i64, i64, f64, f64, i64, i64) -> i64 windows_fastcall
+  fn0 = %g sig0
+
+block0(v0: i64):
+  v1 = fcvt_from_sint.f64 v0
+  v2 = call fn0(v0, v0, v1, v1, v0, v0)
+  return v2
+}
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: subq    $$16, %rsp
+; nextln: movq    %rsi, 0(%rsp)
+; nextln: virtual_sp_offset_adjust 16
+; nextln: movq    %rcx, %rsi
+; nextln: cvtsi2sd %rsi, %xmm3
+; nextln: subq    $$48, %rsp
+; nextln: virtual_sp_offset_adjust 48
+; nextln: movq    %rsi, %rcx
+; nextln: movq    %rsi, %rdx
+; nextln: movaps  %xmm3, %xmm2
+; nextln: movq    %rsi, 32(%rsp)
+; nextln: movq    %rsi, 40(%rsp)
+; nextln: load_ext_name %g+0, %rsi
+; nextln: call    *%rsi
+; nextln: addq    $$48, %rsp
+; nextln: virtual_sp_offset_adjust -48
+; nextln: movq    0(%rsp), %rsi
+; nextln: addq    $$16, %rsp
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+
+function %f9(i64) -> f64 windows_fastcall {
+block0(v0: i64):
+  v1 = load.f64 v0+0
+  v2 = load.f64 v0+8
+  v3 = load.f64 v0+16
+  v4 = load.f64 v0+24
+  v5 = load.f64 v0+32
+  v6 = load.f64 v0+40
+  v7 = load.f64 v0+48
+  v8 = load.f64 v0+56
+  v9 = load.f64 v0+64
+  v10 = load.f64 v0+72
+  v11 = load.f64 v0+80
+  v12 = load.f64 v0+88
+  v13 = load.f64 v0+96
+  v14 = load.f64 v0+104
+  v15 = load.f64 v0+112
+  v16 = load.f64 v0+120
+  v17 = load.f64 v0+128
+  v18 = load.f64 v0+136
+  v19 = load.f64 v0+144
+  v20 = load.f64 v0+152
+  
+  v21 = fadd.f64 v1, v2
+  v22 = fadd.f64 v3, v4
+  v23 = fadd.f64 v5, v6
+  v24 = fadd.f64 v7, v8
+  v25 = fadd.f64 v9, v10
+  v26 = fadd.f64 v11, v12
+  v27 = fadd.f64 v13, v14
+  v28 = fadd.f64 v15, v16
+  v29 = fadd.f64 v17, v18
+  v30 = fadd.f64 v19, v20
+
+  v31 = fadd.f64 v21, v22
+  v32 = fadd.f64 v23, v24
+  v33 = fadd.f64 v25, v26
+  v34 = fadd.f64 v27, v28
+  v35 = fadd.f64 v29, v30
+
+  v36 = fadd.f64 v31, v32
+  v37 = fadd.f64 v33, v34
+
+  v38 = fadd.f64 v36, v37
+
+  v39 = fadd.f64 v38, v35
+
+  return v39
+}
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: subq    $$208, %rsp
+; nextln: movdqu  %xmm6, 0(%rsp)
+; nextln: movdqu  %xmm7, 16(%rsp)
+; nextln: movdqu  %xmm8, 32(%rsp)
+; nextln: movdqu  %xmm9, 48(%rsp)
+; nextln: movdqu  %xmm10, 64(%rsp)
+; nextln: movdqu  %xmm11, 80(%rsp)
+; nextln: movdqu  %xmm12, 96(%rsp)
+; nextln: movdqu  %xmm13, 112(%rsp)
+; nextln: movdqu  %xmm14, 128(%rsp)
+; nextln: movdqu  %xmm15, 144(%rsp)
+; nextln: virtual_sp_offset_adjust 160
+; nextln: movsd   0(%rcx), %xmm0
+; nextln: movsd   %xmm0, rsp(16 + virtual offset)
+; nextln: movsd   8(%rcx), %xmm1
+; nextln: movsd   16(%rcx), %xmm0
+; nextln: movsd   %xmm0, rsp(24 + virtual offset)
+; nextln: movsd   24(%rcx), %xmm3
+; nextln: movsd   32(%rcx), %xmm0
+; nextln: movsd   %xmm0, rsp(32 + virtual offset)
+; nextln: movsd   40(%rcx), %xmm5
+; nextln: movsd   48(%rcx), %xmm6
+; nextln: movsd   56(%rcx), %xmm7
+; nextln: movsd   64(%rcx), %xmm8
+; nextln: movsd   72(%rcx), %xmm9
+; nextln: movsd   80(%rcx), %xmm10
+; nextln: movsd   88(%rcx), %xmm11
+; nextln: movsd   96(%rcx), %xmm12
+; nextln: movsd   104(%rcx), %xmm13
+; nextln: movsd   112(%rcx), %xmm14
+; nextln: movsd   120(%rcx), %xmm15
+; nextln: movsd   128(%rcx), %xmm0
+; nextln: movsd   %xmm0, rsp(0 + virtual offset)
+; nextln: movsd   136(%rcx), %xmm0
+; nextln: movsd   144(%rcx), %xmm2
+; nextln: movsd   %xmm2, rsp(8 + virtual offset)
+; nextln: movsd   152(%rcx), %xmm2
+; nextln: nop     len=0
+; nextln: movsd   rsp(16 + virtual offset), %xmm4
+; nextln: addsd   %xmm1, %xmm4
+; nextln: movsd   %xmm4, rsp(16 + virtual offset)
+; nextln: movsd   rsp(24 + virtual offset), %xmm1
+; nextln: addsd   %xmm3, %xmm1
+; nextln: movsd   rsp(32 + virtual offset), %xmm4
+; nextln: addsd   %xmm5, %xmm4
+; nextln: addsd   %xmm7, %xmm6
+; nextln: addsd   %xmm9, %xmm8
+; nextln: addsd   %xmm11, %xmm10
+; nextln: addsd   %xmm13, %xmm12
+; nextln: addsd   %xmm15, %xmm14
+; nextln: movsd   rsp(0 + virtual offset), %xmm3
+; nextln: addsd   %xmm0, %xmm3
+; nextln: movsd   rsp(8 + virtual offset), %xmm0
+; nextln: addsd   %xmm2, %xmm0
+; nextln: movsd   rsp(16 + virtual offset), %xmm2
+; nextln: addsd   %xmm1, %xmm2
+; nextln: addsd   %xmm6, %xmm4
+; nextln: addsd   %xmm10, %xmm8
+; nextln: addsd   %xmm14, %xmm12
+; nextln: addsd   %xmm0, %xmm3
+; nextln: addsd   %xmm4, %xmm2
+; nextln: addsd   %xmm12, %xmm8
+; nextln: addsd   %xmm8, %xmm2
+; nextln: addsd   %xmm3, %xmm2
+; nextln: movaps  %xmm2, %xmm0
+; nextln: movdqu  0(%rsp), %xmm6
+; nextln: movdqu  16(%rsp), %xmm7
+; nextln: movdqu  32(%rsp), %xmm8
+; nextln: movdqu  48(%rsp), %xmm9
+; nextln: movdqu  64(%rsp), %xmm10
+; nextln: movdqu  80(%rsp), %xmm11
+; nextln: movdqu  96(%rsp), %xmm12
+; nextln: movdqu  112(%rsp), %xmm13
+; nextln: movdqu  128(%rsp), %xmm14
+; nextln: movdqu  144(%rsp), %xmm15
+; nextln: addq    $$160, %rsp
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+
