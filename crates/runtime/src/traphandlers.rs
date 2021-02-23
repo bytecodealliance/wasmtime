@@ -118,6 +118,42 @@ cfg_if::cfg_if! {
                     return false;
                 } else if jmp_buf as usize == 1 {
                     return true;
+
+                // on macOS this is a bit special, unfortunately. If we were to
+                // `siglongjmp` out of the signal handler that notably does
+                // *not* reset the sigaltstack state of our signal handler. This
+                // seems to trick the kernel into thinking that the sigaltstack
+                // is still in use upon delivery of the next signal, meaning
+                // that the sigaltstack is not ever used again if we immediately
+                // call `Unwind` here.
+                //
+                // Note that if we use `longjmp` instead of `siglongjmp` then
+                // the problem is fixed. The problem with that, however, is that
+                // `setjmp` is much slower than `sigsetjmp` due to the
+                // preservation of the proceses signal mask. The reason
+                // `longjmp` appears to work is that it seems to call a function
+                // (according to published macOS sources) called
+                // `_sigunaltstack` which updates the kernel to say the
+                // sigaltstack is no longer in use. We ideally want to call that
+                // here but I don't think there's a stable way for us to call
+                // that.
+                //
+                // Given all that, on macOS only, we do the next best thing. We
+                // return from the signal handler after updating the register
+                // context. This will cause control to return to our
+                // `unwind_shim` function defined here which will perform the
+                // `Unwind` (`siglongjmp`) for us. The reason this works is that
+                // by returning from the signal handler we'll trigger all the
+                // normal machinery for "the signal handler is done running"
+                // which will clear the sigaltstack flag and allow reusing it
+                // for the next signal. Then upon resuming in our custom code we
+                // blow away the stack anyway with a longjmp.
+                } else if cfg!(target_os = "macos") {
+                    unsafe extern "C" fn unwind_shim(jmp_buf: *const u8) {
+                        Unwind(jmp_buf)
+                    }
+                    set_pc(context, unwind_shim as usize, jmp_buf as usize);
+                    return true;
                 } else {
                     Unwind(jmp_buf)
                 }
@@ -178,6 +214,41 @@ cfg_if::cfg_if! {
                     cx.uc_mcontext.mc_rip as *const u8
                 } else {
                     compile_error!("unsupported platform");
+                }
+            }
+        }
+
+        // This is only used on macOS targets for calling an unwinding shim
+        // function to ensure that we return from the signal handler.
+        //
+        // See more comments above where this is called for what it's doing.
+        unsafe fn set_pc(cx: *mut libc::c_void, pc: usize, arg1: usize) {
+            cfg_if::cfg_if! {
+                if #[cfg(not(target_os = "macos"))] {
+                    drop((cx, pc, arg1));
+                    unreachable!(); // not used on these platforms
+                } else if #[cfg(target_arch = "x86_64")] {
+                    let cx = &mut *(cx as *mut libc::ucontext_t);
+                    (*cx.uc_mcontext).__ss.__rip = pc as u64;
+                    (*cx.uc_mcontext).__ss.__rdi = arg1 as u64;
+                    // We're simulating a "pseudo-call" so we need to ensure
+                    // stack alignment is properly respected, notably that on a
+                    // `call` instruction the stack is 8/16-byte aligned, then
+                    // the function adjusts itself to be 16-byte aligned.
+                    //
+                    // Most of the time the stack pointer is 16-byte aligned at
+                    // the time of the trap but for more robust-ness with JIT
+                    // code where it may ud2 in a prologue check before the
+                    // stack is aligned we double-check here.
+                    if (*cx.uc_mcontext).__ss.__rsp % 16 == 0 {
+                        (*cx.uc_mcontext).__ss.__rsp -= 8;
+                    }
+                } else if #[cfg(target_arch = "aarch64")] {
+                    let cx = &mut *(cx as *mut libc::ucontext_t);
+                    (*cx.uc_mcontext).__ss.__pc = pc as u64;
+                    (*cx.uc_mcontext).__ss.__x[0] = arg1 as u64;
+                } else {
+                    compile_error!("unsupported macos target architecture");
                 }
             }
         }
