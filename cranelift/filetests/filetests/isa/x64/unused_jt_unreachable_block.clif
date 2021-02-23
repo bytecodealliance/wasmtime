@@ -1,0 +1,21 @@
+test compile
+target x86_64
+feature "experimental_x64"
+
+;; From: https://github.com/bytecodealliance/wasmtime/issues/2670
+
+function %f() system_v {
+    jt0 = jump_table [block1]
+
+block0:
+    return
+
+block1:
+    trap unreachable
+}
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
