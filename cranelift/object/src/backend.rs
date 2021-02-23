@@ -243,15 +243,12 @@ impl Module for ObjectModule {
         Ok(id)
     }
 
-    fn define_function<TS>(
+    fn define_function(
         &mut self,
         func_id: FuncId,
         ctx: &mut cranelift_codegen::Context,
-        trap_sink: &mut TS,
-    ) -> ModuleResult<ModuleCompiledFunction>
-    where
-        TS: TrapSink,
-    {
+        trap_sink: &mut dyn TrapSink,
+    ) -> ModuleResult<ModuleCompiledFunction> {
         info!(
             "defining function {}: {}",
             func_id,
