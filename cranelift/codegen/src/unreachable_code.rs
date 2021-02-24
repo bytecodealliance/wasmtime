@@ -43,4 +43,17 @@ pub fn eliminate_unreachable_code(
         // Finally, remove the block from the layout.
         pos.func.layout.remove_block(block);
     }
+
+    // Remove all jumptable block-list contents that refer to unreachable
+    // blocks; the jumptable itself must have been unused (or used only in an
+    // unreachable block) if so. Note that we are not necessarily removing *all*
+    // unused jumptables, because that would require computing their
+    // reachability as well; we are just removing enough to clean up references
+    // to deleted blocks.
+    for jt_data in func.jump_tables.values_mut() {
+        let invalid_ref = jt_data.iter().any(|block| !domtree.is_reachable(*block));
+        if invalid_ref {
+            jt_data.clear();
+        }
+    }
 }

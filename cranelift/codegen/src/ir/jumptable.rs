@@ -68,6 +68,11 @@ impl JumpTableData {
     pub fn iter_mut(&mut self) -> IterMut<Block> {
         self.table.iter_mut()
     }
+
+    /// Clears all entries in this jump table.
+    pub fn clear(&mut self) {
+        self.table.clear();
+    }
 }
 
 impl Display for JumpTableData {
