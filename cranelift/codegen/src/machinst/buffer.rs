@@ -1314,26 +1314,25 @@ impl MachBufferFinalized {
         let mut next_trap = 0;
         let mut next_call_site = 0;
         for (idx, byte) in self.data.iter().enumerate() {
-            if next_reloc < self.relocs.len() {
+            while next_reloc < self.relocs.len()
+                && self.relocs[next_reloc].offset == idx as CodeOffset
+            {
                 let reloc = &self.relocs[next_reloc];
-                if reloc.offset == idx as CodeOffset {
-                    sink.reloc_external(reloc.srcloc, reloc.kind, &reloc.name, reloc.addend);
-                    next_reloc += 1;
-                }
+                sink.reloc_external(reloc.srcloc, reloc.kind, &reloc.name, reloc.addend);
+                next_reloc += 1;
             }
-            if next_trap < self.traps.len() {
+            while next_trap < self.traps.len() && self.traps[next_trap].offset == idx as CodeOffset
+            {
                 let trap = &self.traps[next_trap];
-                if trap.offset == idx as CodeOffset {
-                    sink.trap(trap.code, trap.srcloc);
-                    next_trap += 1;
-                }
+                sink.trap(trap.code, trap.srcloc);
+                next_trap += 1;
             }
-            if next_call_site < self.call_sites.len() {
+            while next_call_site < self.call_sites.len()
+                && self.call_sites[next_call_site].ret_addr == idx as CodeOffset
+            {
                 let call_site = &self.call_sites[next_call_site];
-                if call_site.ret_addr == idx as CodeOffset {
-                    sink.add_call_site(call_site.opcode, call_site.srcloc);
-                    next_call_site += 1;
-                }
+                sink.add_call_site(call_site.opcode, call_site.srcloc);
+                next_call_site += 1;
             }
             sink.put1(*byte);
         }
@@ -1468,11 +1467,14 @@ impl MachBranch {
 #[cfg(all(test, feature = "arm64"))]
 mod test {
     use super::*;
+    use crate::ir::{ConstantOffset, Function, JumpTable, Value};
     use crate::isa::aarch64::inst::xreg;
     use crate::isa::aarch64::inst::{BranchTarget, CondBrKind, EmitInfo, Inst};
+    use crate::isa::TargetIsa;
     use crate::machinst::MachInstEmit;
     use crate::settings;
     use std::default::Default;
+    use std::vec::Vec;
 
     fn label(n: u32) -> MachLabel {
         MachLabel::from_block(n)
@@ -1818,5 +1820,91 @@ mod test {
         ];
 
         assert_eq!(&golden_data[..], &buf.data[..]);
+    }
+
+    #[test]
+    fn metadata_records() {
+        let mut buf = MachBuffer::<Inst>::new();
+
+        buf.reserve_labels_for_blocks(1);
+
+        buf.bind_label(label(0));
+        buf.put1(1);
+        buf.add_trap(SourceLoc::default(), TrapCode::HeapOutOfBounds);
+        buf.put1(2);
+        buf.add_trap(SourceLoc::default(), TrapCode::IntegerOverflow);
+        buf.add_trap(SourceLoc::default(), TrapCode::IntegerDivisionByZero);
+        buf.add_call_site(SourceLoc::default(), Opcode::Call);
+        buf.add_reloc(
+            SourceLoc::default(),
+            Reloc::Abs4,
+            &ExternalName::user(0, 0),
+            0,
+        );
+        buf.put1(3);
+        buf.add_reloc(
+            SourceLoc::default(),
+            Reloc::Abs8,
+            &ExternalName::user(1, 1),
+            1,
+        );
+        buf.put1(4);
+
+        let buf = buf.finish();
+
+        #[derive(Default)]
+        struct TestCodeSink {
+            offset: CodeOffset,
+            traps: Vec<(CodeOffset, TrapCode)>,
+            callsites: Vec<(CodeOffset, Opcode)>,
+            relocs: Vec<(CodeOffset, Reloc)>,
+        }
+        impl CodeSink for TestCodeSink {
+            fn offset(&self) -> CodeOffset {
+                self.offset
+            }
+            fn put1(&mut self, _: u8) {
+                self.offset += 1;
+            }
+            fn put2(&mut self, _: u16) {
+                self.offset += 2;
+            }
+            fn put4(&mut self, _: u32) {
+                self.offset += 4;
+            }
+            fn put8(&mut self, _: u64) {
+                self.offset += 8;
+            }
+            fn reloc_external(&mut self, _: SourceLoc, r: Reloc, _: &ExternalName, _: Addend) {
+                self.relocs.push((self.offset, r));
+            }
+            fn reloc_constant(&mut self, _: Reloc, _: ConstantOffset) {}
+            fn reloc_jt(&mut self, _: Reloc, _: JumpTable) {}
+            fn trap(&mut self, t: TrapCode, _: SourceLoc) {
+                self.traps.push((self.offset, t));
+            }
+            fn begin_jumptables(&mut self) {}
+            fn begin_rodata(&mut self) {}
+            fn end_codegen(&mut self) {}
+            fn add_stack_map(&mut self, _: &[Value], _: &Function, _: &dyn TargetIsa) {}
+            fn add_call_site(&mut self, op: Opcode, _: SourceLoc) {
+                self.callsites.push((self.offset, op));
+            }
+        }
+
+        let mut sink = TestCodeSink::default();
+        buf.emit(&mut sink);
+
+        assert_eq!(sink.offset, 4);
+        assert_eq!(
+            sink.traps,
+            vec![
+                (1, TrapCode::HeapOutOfBounds),
+                (2, TrapCode::IntegerOverflow),
+                (2, TrapCode::IntegerDivisionByZero)
+            ]
+        );
+        assert_eq!(sink.callsites, vec![(2, Opcode::Call),]);
+        assert_eq!(sink.relocs, vec![(2, Reloc::Abs4), (3, Reloc::Abs8)]);
     }
 }
