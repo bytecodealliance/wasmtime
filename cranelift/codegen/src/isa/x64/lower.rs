@@ -5113,7 +5113,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ));
                 ctx.emit(Inst::checked_div_or_rem_seq(kind, size, divisor_copy, tmp));
             } else {
-                let divisor = input_to_reg_mem(ctx, inputs[1]);
+                // We don't want more than one trap record for a single instruction,
+                // so let's not allow the "mem" case (load-op merging) here; force
+                // divisor into a register instead.
+                let divisor = RegMem::reg(put_input_in_reg(ctx, inputs[1]));
 
                 // Fill in the high parts:
                 if kind.is_signed() {

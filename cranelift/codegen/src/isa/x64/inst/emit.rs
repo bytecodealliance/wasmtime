@@ -232,7 +232,7 @@ fn emit_std_enc_mem(
 
     let srcloc = state.cur_srcloc();
     let can_trap = mem_e.can_trap();
-    if srcloc != SourceLoc::default() && can_trap {
+    if can_trap {
         sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
     }
 
