@@ -102,8 +102,8 @@ pub struct SpecTest {
     pub contents: &'static str,
 }
 
-impl Arbitrary for SpecTest {
-    fn arbitrary(u: &mut Unstructured) -> arbitrary::Result<Self> {
+impl<'a> Arbitrary<'a> for SpecTest {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         // NB: this does get a uniform value in the provided range.
         let i = u.int_in_range(0..=FILES.len() - 1)?;
         let (file, contents) = FILES[i];

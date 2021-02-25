@@ -12,12 +12,12 @@ cargo-fuzz = true
 cranelift-codegen = { path = "../cranelift/codegen" }
 cranelift-reader = { path = "../cranelift/reader" }
 cranelift-wasm = { path = "../cranelift/wasm" }
-libfuzzer-sys = "0.3.3"
+libfuzzer-sys = "0.4.0"
 target-lexicon = "0.11"
 peepmatic-fuzzing = { path = "../cranelift/peepmatic/crates/fuzzing", optional = true }
 wasmtime = { path = "../crates/wasmtime" }
 wasmtime-fuzzing = { path = "../crates/fuzzing" }
-wasm-smith = "0.3.1"
+wasm-smith = "0.4.0"
 
 [features]
 experimental_x64 = ["wasmtime-fuzzing/experimental_x64"]
