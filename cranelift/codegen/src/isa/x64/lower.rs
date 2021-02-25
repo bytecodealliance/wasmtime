@@ -888,7 +888,7 @@ fn emit_shl_i128<C: LowerCtx<I = Inst>>(
     // shr tmp3, amt
     // xor dst_lo, dst_lo
     // test amt_src, 127
-    // cmovz tmp2, dst_lo
+    // cmovz tmp3, dst_lo
     // or tmp3, tmp2
     // mov amt, amt_src
     // and amt, 64
@@ -963,7 +963,7 @@ fn emit_shl_i128<C: LowerCtx<I = Inst>>(
         OperandSize::Size64,
         CC::Z,
         RegMem::reg(dst_lo.to_reg()),
-        tmp2,
+        tmp3,
     ));
 
     ctx.emit(Inst::alu_rmi_r(
