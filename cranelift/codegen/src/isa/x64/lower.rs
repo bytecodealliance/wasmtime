@@ -3185,11 +3185,27 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     ),
                 };
 
-                // Here we decide which operand to use as the read/write `dst` (ModRM reg field)
-                // and which to use as the read `input` (ModRM r/m field). In the normal case we
-                // use Cranelift's first operand, the `lhs`, as `dst` but we flip the operands for
-                // the less-than cases so that we can reuse the greater-than implementation.
+                // Here we decide which operand to use as the read/write `dst` (ModRM reg field) and
+                // which to use as the read `input` (ModRM r/m field). In the normal case we use
+                // Cranelift's first operand, the `lhs`, as `dst` but we flip the operands for the
+                // less-than cases so that we can reuse the greater-than implementation.
+                //
+                // In a surprising twist, the operands for i64x2 `gte`/`sle` must also be flipped
+                // from the normal order because of the special-case lowering for these instructions
+                // (i.e. we use PCMPGTQ with flipped operands and negate the result).
                 let input = match condcode {
+                    IntCC::SignedLessThanOrEqual if ty == types::I64X2 => {
+                        let lhs = put_input_in_reg(ctx, inputs[0]);
+                        let rhs = input_to_reg_mem(ctx, inputs[1]);
+                        ctx.emit(Inst::gen_move(dst, lhs, ty));
+                        rhs
+                    }
+                    IntCC::SignedGreaterThanOrEqual if ty == types::I64X2 => {
+                        let lhs = input_to_reg_mem(ctx, inputs[0]);
+                        let rhs = put_input_in_reg(ctx, inputs[1]);
+                        ctx.emit(Inst::gen_move(dst, rhs, ty));
+                        lhs
+                    }
                     IntCC::SignedLessThan
                     | IntCC::SignedLessThanOrEqual
                     | IntCC::UnsignedLessThan
@@ -3220,9 +3236,24 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     IntCC::SignedGreaterThan | IntCC::SignedLessThan => {
                         ctx.emit(Inst::xmm_rm_r(gt(ty), input, dst))
                     }
-                    IntCC::SignedGreaterThanOrEqual | IntCC::SignedLessThanOrEqual => {
+                    IntCC::SignedGreaterThanOrEqual | IntCC::SignedLessThanOrEqual
+                        if ty != types::I64X2 =>
+                    {
                         ctx.emit(Inst::xmm_rm_r(mins(ty), input.clone(), dst));
                         ctx.emit(Inst::xmm_rm_r(eq(ty), input, dst))
+                    }
+                    IntCC::SignedGreaterThanOrEqual | IntCC::SignedLessThanOrEqual
+                        if ty == types::I64X2 =>
+                    {
+                        // The PMINS* instruction is only available in AVX512VL/F so we must instead
+                        // compare with flipped operands and negate the result (emitting one more
+                        // instruction).
+                        ctx.emit(Inst::xmm_rm_r(gt(ty), input, dst));
+                        // Emit all 1s into the `tmp` register.
+                        let tmp = ctx.alloc_tmp(ty).only_reg().unwrap();
+                        ctx.emit(Inst::xmm_rm_r(eq(ty), RegMem::from(tmp), tmp));
+                        // Invert the result of the `PCMPGT*`.
+                        ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp), dst));
                     }
                     IntCC::UnsignedGreaterThan | IntCC::UnsignedLessThan => {
                         ctx.emit(Inst::xmm_rm_r(maxu(ty), input.clone(), dst));
