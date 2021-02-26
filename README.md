@@ -115,7 +115,7 @@ the implementation:
 The [wasmtime guide][guide] is the best starting point to learn about what
 Wasmtime can do for you or help answer your questions about Wasmtime. If you're
 curious in contributing to Wasmtime, [it can also help you do
-that][contributing]!.
+that][contributing]!
 
 [contributing]: https://bytecodealliance.github.io/wasmtime/contributing.html
 [guide]: https://bytecodealliance.github.io/wasmtime
