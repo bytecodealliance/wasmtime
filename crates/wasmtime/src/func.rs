@@ -72,11 +72,11 @@ use wasmtime_runtime::{
 ///   function that you're calling you'll be using [`Func::call`] or
 ///   [`Func::call_async`]. These functions take a variable-length slice of
 ///   "boxed" arguments in their [`Val`] representation. Additionally the
-///   results are returned as an owned slice of [`Val`]. These methods are the
-///   most heavily optimized due to the dynamic type checks that must occur, in
-///   addition to some dynamic allocations for where to put all the arguments.
-///   While this allows you to call all possible wasm function signatures, if
-///   you're looking for a speedier alternative you can also use...
+///   results are returned as an owned slice of [`Val`]. These methods are not
+///   optimized due to the dynamic type checks that must occur, in addition to
+///   some dynamic allocations for where to put all the arguments. While this
+///   allows you to call all possible wasm function signatures, if you're
+///   looking for a speedier alternative you can also use...
 ///
 /// * Statically typed - if you statically know the type signature of the wasm
 ///   function you're calling then you can use the [`Func::getN`](Func::get1)

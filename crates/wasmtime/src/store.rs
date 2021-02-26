@@ -833,7 +833,7 @@ impl Store {
         // `block_on`, and the idea is that the trap propagates all the way back
         // up to the original fiber start, finishing execution.
         //
-        // We don't actually care about the fiber's return value here (one one's
+        // We don't actually care about the fiber's return value here (no one's
         // around to look at it), we just assert the fiber finished to
         // completion.
         impl Drop for FiberFuture<'_> {
