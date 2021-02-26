@@ -886,8 +886,10 @@ fn emit_shl_i128<C: LowerCtx<I = Inst>>(
     // sub amt, amt_src
     // mov tmp3, src_lo
     // shr tmp3, amt
-    // or tmp3, tmp2
     // xor dst_lo, dst_lo
+    // test amt_src, 127
+    // cmovz tmp3, dst_lo
+    // or tmp3, tmp2
     // mov amt, amt_src
     // and amt, 64
     // cmovz dst_hi, tmp3
@@ -945,6 +947,24 @@ fn emit_shl_i128<C: LowerCtx<I = Inst>>(
         None,
         tmp3,
     ));
+    ctx.emit(Inst::alu_rmi_r(
+        OperandSize::Size64,
+        AluRmiROpcode::Xor,
+        RegMemImm::reg(dst_lo.to_reg()),
+        dst_lo,
+    ));
+
+    ctx.emit(Inst::test_rmi_r(
+        OperandSize::Size64,
+        RegMemImm::imm(127),
+        amt_src,
+    ));
+    ctx.emit(Inst::cmove(
+        OperandSize::Size64,
+        CC::Z,
+        RegMem::reg(dst_lo.to_reg()),
+        tmp3,
+    ));
 
     ctx.emit(Inst::alu_rmi_r(
         OperandSize::Size64,
@@ -953,12 +973,6 @@ fn emit_shl_i128<C: LowerCtx<I = Inst>>(
         tmp3,
     ));
 
-    ctx.emit(Inst::alu_rmi_r(
-        OperandSize::Size64,
-        AluRmiROpcode::Xor,
-        RegMemImm::reg(dst_lo.to_reg()),
-        dst_lo,
-    ));
     // This isn't semantically necessary, but it keeps the
     // register allocator happy, because it cannot otherwise
     // infer that cmovz + cmovnz always defines dst_hi.
@@ -1011,11 +1025,14 @@ fn emit_shr_i128<C: LowerCtx<I = Inst>>(
     // mov tmp1, src_hi
     // {u,s}shr tmp1, amt_src
     // mov tmp2, src_lo
-    // {u,s}shr tmp2, amt_src
+    // ushr tmp2, amt_src
     // mov amt, 64
     // sub amt, amt_src
     // mov tmp3, src_hi
     // shl tmp3, amt
+    // xor dst_lo, dst_lo
+    // test amt_src, 127
+    // cmovz tmp3, dst_lo
     // or tmp3, tmp2
     // if is_signed:
     //   mov dst_hi, src_hi
@@ -1053,7 +1070,13 @@ fn emit_shr_i128<C: LowerCtx<I = Inst>>(
         amt_src,
         types::I64,
     ));
-    ctx.emit(Inst::shift_r(OperandSize::Size64, shift_kind, None, tmp2));
+    // N.B.: right-shift of *lower* half is *always* unsigned (its MSB is not a sign bit).
+    ctx.emit(Inst::shift_r(
+        OperandSize::Size64,
+        ShiftKind::ShiftRightLogical,
+        None,
+        tmp2,
+    ));
 
     ctx.emit(Inst::imm(OperandSize::Size64, 64, amt));
     ctx.emit(Inst::alu_rmi_r(
@@ -1073,6 +1096,24 @@ fn emit_shr_i128<C: LowerCtx<I = Inst>>(
         OperandSize::Size64,
         ShiftKind::ShiftLeft,
         None,
+        tmp3,
+    ));
+
+    ctx.emit(Inst::alu_rmi_r(
+        OperandSize::Size64,
+        AluRmiROpcode::Xor,
+        RegMemImm::reg(dst_lo.to_reg()),
+        dst_lo,
+    ));
+    ctx.emit(Inst::test_rmi_r(
+        OperandSize::Size64,
+        RegMemImm::imm(127),
+        amt_src,
+    ));
+    ctx.emit(Inst::cmove(
+        OperandSize::Size64,
+        CC::Z,
+        RegMem::reg(dst_lo.to_reg()),
         tmp3,
     ));
 
@@ -1957,7 +1998,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         let cst = (cst as u8) & (dst_ty.bits() as u8 - 1);
                         (Some(cst), None)
                     } else {
-                        (None, Some(put_input_in_reg(ctx, inputs[1])))
+                        // We can ignore upper registers if shift amount is multi-reg, because we
+                        // are taking the shift amount mod 2^(lhs_width) anyway.
+                        (None, Some(put_input_in_regs(ctx, inputs[1]).regs()[0]))
                     };
 
                 let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();

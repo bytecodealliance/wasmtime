@@ -1371,7 +1371,7 @@ pub(crate) fn emit(
                 RegMemImm::Imm { simm32 } => {
                     // FIXME JRS 2020Feb11: there are shorter encodings for
                     // cmp $imm, rax/eax/ax/al.
-                    let use_imm8 = low8_will_sign_extend_to_32(*simm32);
+                    let use_imm8 = is_cmp && low8_will_sign_extend_to_32(*simm32);
 
                     // And also here we use the "normal" G-E ordering.
                     let opcode = if is_cmp {

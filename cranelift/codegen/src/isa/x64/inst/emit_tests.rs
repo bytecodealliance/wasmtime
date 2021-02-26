@@ -3000,6 +3000,11 @@ fn test_x64_emit() {
         "testq   99(%rdi), %rdx",
     ));
     insns.push((
+        Inst::test_rmi_r(OperandSize::Size64, RegMemImm::imm(127), rdx),
+        "48F7C27F000000",
+        "testq   $127, %rdx",
+    ));
+    insns.push((
         Inst::test_rmi_r(OperandSize::Size64, RegMemImm::imm(76543210), rdx),
         "48F7C2EAF48F04",
         "testq   $76543210, %rdx",
