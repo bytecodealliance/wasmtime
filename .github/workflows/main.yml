@@ -67,7 +67,7 @@ jobs:
     name: Doc - build the API documentation
     runs-on: ubuntu-latest
     env:
-      RUSTDOCFLAGS: -Dbroken_intra_doc_links
+      RUSTDOCFLAGS: -Dbroken_intra_doc_links --cfg nightlydoc
       OPENVINO_SKIP_LINKING: 1
     steps:
     - uses: actions/checkout@v2
@@ -120,6 +120,8 @@ jobs:
     - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features wat
     - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features lightbeam
     - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features jitdump
+    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features cache
+    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features async
 
     # Check some feature combinations of the `wasmtime-c-api` crate
     - run: cargo check --manifest-path crates/c-api/Cargo.toml --no-default-features

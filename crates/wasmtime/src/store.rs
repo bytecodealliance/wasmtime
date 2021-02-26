@@ -1,16 +1,20 @@
 use crate::frame_info::StoreFrameInfo;
 use crate::sig_registry::SignatureRegistry;
 use crate::trampoline::StoreInstanceHandle;
-use crate::{Engine, Module};
+use crate::{Engine, Module, Trap};
 use anyhow::{bail, Result};
 use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::fmt;
+use std::future::Future;
 use std::hash::{Hash, Hasher};
+use std::pin::Pin;
+use std::ptr;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
+use std::task::{Context, Poll};
 use wasmtime_environ::wasm;
 use wasmtime_jit::{CompiledModule, ModuleCode, TypeTables};
 use wasmtime_runtime::{
@@ -55,6 +59,7 @@ pub struct Store {
 }
 
 pub(crate) struct StoreInner {
+    is_async: bool,
     engine: Engine,
     interrupts: Arc<VMInterrupts>,
     signatures: RefCell<SignatureRegistry>,
@@ -77,6 +82,21 @@ pub(crate) struct StoreInner {
     /// An adjustment to add to the fuel consumed value in `interrupts` above
     /// to get the true amount of fuel consumed.
     fuel_adj: Cell<i64>,
+
+    #[cfg(feature = "async")]
+    current_suspend: Cell<*const wasmtime_fiber::Suspend<Result<(), Trap>, (), Result<(), Trap>>>,
+    #[cfg(feature = "async")]
+    current_poll_cx: Cell<*mut Context<'static>>,
+    out_of_gas_behavior: Cell<OutOfGas>,
+}
+
+#[derive(Copy, Clone)]
+enum OutOfGas {
+    Trap,
+    InjectFuel {
+        injection_count: u32,
+        fuel_to_inject: u64,
+    },
 }
 
 struct HostInfoKey(VMExternRef);
@@ -100,7 +120,99 @@ impl Hash for HostInfoKey {
 
 impl Store {
     /// Creates a new store to be associated with the given [`Engine`].
+    ///
+    /// Note that this `Store` cannot be used with asynchronous host calls nor
+    /// can it be used to call functions asynchronously. For that you'll want to
+    /// use [`Store::new_async`].
     pub fn new(engine: &Engine) -> Store {
+        Store::_new(engine, false)
+    }
+
+    /// Creates a new async store to be associated with the given [`Engine`].
+    ///
+    /// The returned store can optionally define host functions with `async`.
+    /// Instances created and functions called within the returned `Store`
+    /// *must* be called through their asynchronous APIs, however. For example
+    /// using [`Func::call`](crate::Func::call) will panic in the returned
+    /// store.
+    ///
+    /// # Asynchronous Wasm
+    ///
+    /// WebAssembly does not currently have a way to specify at the bytecode
+    /// level what is and isn't async. Host-defined functions, however, may be
+    /// defined as `async`. WebAssembly imports always appear synchronous, which
+    /// gives rise to a bit of an impedence mismatch here. To solve this
+    /// Wasmtime supports "asynchronous stores" which enables calling these
+    /// asynchronous functions in a way that looks synchronous to the executing
+    /// WebAssembly code.
+    ///
+    /// An asynchronous store must always invoke wasm code asynchronously,
+    /// meaning we'll always represent its computation as a
+    /// [`Future`](std::future::Future). The `poll` method of the futures
+    /// returned by Wasmtime will perform the actual work of calling the
+    /// WebAssembly. Wasmtime won't manage its own thread pools or similar,
+    /// that's left up to the embedder.
+    ///
+    /// To implement futures in a way that WebAssembly sees asynchronous host
+    /// functions as synchronous, all async Wasmtime futures will execute on a
+    /// separately allocated native stack from the thread otherwise executing
+    /// Wasmtime. This separate native stack can then be switched to and from.
+    /// Using this whenever an `async` host function returns a future that
+    /// resolves to `Pending` we switch away from the temporary stack back to
+    /// the main stack and propagate the `Pending` status.
+    ///
+    /// In general it's encouraged that the integration with `async` and
+    /// wasmtime is designed early on in your embedding of Wasmtime to ensure
+    /// that it's planned that WebAssembly executes in the right context of your
+    /// application.
+    ///
+    /// # Execution in `poll`
+    ///
+    /// The [`Future::poll`](std::future::Future::poll) method is the main
+    /// driving force behind Rust's futures. That method's own documentation
+    /// states "an implementation of `poll` should strive to return quickly, and
+    /// should not block". This, however, can be at odds with executing
+    /// WebAssembly code as part of the `poll` method itself. If your
+    /// WebAssembly is untrusted then this could allow the `poll` method to take
+    /// arbitrarily long in the worst case, likely blocking all other
+    /// asynchronous tasks.
+    ///
+    /// To remedy this situation you have a two possible ways to solve this:
+    ///
+    /// * First you can spawn futures into a thread pool. Care must be taken for
+    ///   this because Wasmtime futures are not `Send` or `Sync`. If you ensure
+    ///   that the entire state of a `Store` is wrapped up in a single future,
+    ///   though, you can send the whole future at once to a separate thread. By
+    ///   doing this in a thread pool you are relaxing the requirement that
+    ///   `Future::poll` must be fast because your future is executing on a
+    ///   separate thread. This strategy, however, would likely still require
+    ///   some form of cancellation via [`Store::interrupt_handle`] to ensure
+    ///   wasm doesn't take *too* long to execute.
+    ///
+    /// * Alternatively you can enable the
+    ///   [`Config::consume_fuel`](crate::Config::consume_fuel) method as well
+    ///   as [`Store::out_of_fuel_async_yield`] When doing so this will
+    ///   configure Wasmtime futures to yield periodically while they're
+    ///   executing WebAssembly code. After consuming the specified amount of
+    ///   fuel wasm futures will return `Poll::Pending` from their `poll`
+    ///   method, and will get automatically re-polled later. This enables the
+    ///   `Future::poll` method to take roughly a fixed amount of time since
+    ///   fuel is guaranteed to get consumed while wasm is executing. Note that
+    ///   to prevent infinite execution of wasm you'll still need to use
+    ///   [`Store::interrupt_handle`].
+    ///
+    /// In either case special care needs to be taken when integrating
+    /// asynchronous wasm into your application. You should carefully plan where
+    /// WebAssembly will execute and what compute resources will be allotted to
+    /// it. If Wasmtime doesn't support exactly what you'd like just yet, please
+    /// feel free to open an issue!
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub fn new_async(engine: &Engine) -> Store {
+        Store::_new(engine, true)
+    }
+
+    fn _new(engine: &Engine, is_async: bool) -> Store {
         // Ensure that wasmtime_runtime's signal handlers are configured. Note
         // that at the `Store` level it means we should perform this
         // once-per-thread. Platforms like Unix, however, only require this
@@ -110,6 +222,7 @@ impl Store {
 
         Store {
             inner: Rc::new(StoreInner {
+                is_async,
                 engine: engine.clone(),
                 interrupts: Arc::new(Default::default()),
                 signatures: RefCell::new(Default::default()),
@@ -123,6 +236,11 @@ impl Store {
                 memory_count: Default::default(),
                 table_count: Default::default(),
                 fuel_adj: Cell::new(0),
+                #[cfg(feature = "async")]
+                current_suspend: Cell::new(ptr::null()),
+                #[cfg(feature = "async")]
+                current_poll_cx: Cell::new(ptr::null_mut()),
+                out_of_gas_behavior: Cell::new(OutOfGas::Trap),
             }),
         }
     }
@@ -496,6 +614,301 @@ impl Store {
 
         Ok(())
     }
+
+    /// Configures a [`Store`] to generate a [`Trap`] whenever it runs out of
+    /// fuel.
+    ///
+    /// When a [`Store`] is configured to consume fuel with
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel) this method will
+    /// configure what happens when fuel runs out. Specifically a WebAssembly
+    /// trap will be raised and the current execution of WebAssembly will be
+    /// aborted.
+    ///
+    /// This is the default behavior for running out of fuel.
+    pub fn out_of_fuel_trap(&self) {
+        self.inner.out_of_gas_behavior.set(OutOfGas::Trap);
+    }
+
+    /// Configures a [`Store`] to yield execution of async WebAssembly code
+    /// periodically.
+    ///
+    /// When a [`Store`] is configured to consume fuel with
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel) this method will
+    /// configure what happens when fuel runs out. Specifically executing
+    /// WebAssembly will be suspended and control will be yielded back to the
+    /// caller. This is only suitable with use of [async
+    /// stores](Store::new_async) because only then are futures used and yields
+    /// are possible.
+    ///
+    /// The purpose of this behavior is to ensure that futures which represent
+    /// execution of WebAssembly do not execute too long inside their
+    /// `Future::poll` method. This allows for some form of cooperative
+    /// multitasking where WebAssembly will voluntarily yield control
+    /// periodically (based on fuel consumption) back to the running thread.
+    ///
+    /// Note that futures returned by this crate will automatically flag
+    /// themselves to get re-polled if a yield happens. This means that
+    /// WebAssembly will continue to execute, just after giving the host an
+    /// opportunity to do something else.
+    ///
+    /// The `fuel_to_inject` parameter indicates how much fuel should be
+    /// automatically re-injected after fuel runs out. This is how much fuel
+    /// will be consumed between yields of an async future.
+    ///
+    /// The `injection_count` parameter indicates how many times this fuel will
+    /// be injected. Multiplying the two parameters is the total amount of fuel
+    /// this store is allowed before wasm traps.
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if it is not called on an [async
+    /// store](Store::new_async).
+    pub fn out_of_fuel_async_yield(&self, injection_count: u32, fuel_to_inject: u64) {
+        assert!(self.is_async());
+        self.inner.out_of_gas_behavior.set(OutOfGas::InjectFuel {
+            injection_count,
+            fuel_to_inject,
+        });
+    }
+
+    pub(crate) fn is_async(&self) -> bool {
+        self.inner.is_async
+    }
+
+    /// Blocks on the asynchronous computation represented by `future` and
+    /// produces the result here, in-line.
+    ///
+    /// This function is designed to only work when it's currently executing on
+    /// a native fiber. This fiber provides the ability for us to handle the
+    /// future's `Pending` state as "jump back to whomever called the fiber in
+    /// an asynchronous fashion and propagate `Pending`". This tight coupling
+    /// with `on_fiber` below is what powers the asynchronicity of calling wasm.
+    /// Note that the asynchronous part only applies to host functions, wasm
+    /// itself never really does anything asynchronous at this time.
+    ///
+    /// This function takes a `future` and will (appear to) synchronously wait
+    /// on the result. While this function is executing it will fiber switch
+    /// to-and-from the original frame calling `on_fiber` which should be a
+    /// guarantee due to how async stores are configured.
+    ///
+    /// The return value here is either the output of the future `T`, or a trap
+    /// which represents that the asynchronous computation was cancelled. It is
+    /// not recommended to catch the trap and try to keep executing wasm, so
+    /// we've tried to liberally document this.
+    #[cfg(feature = "async")]
+    pub(crate) fn block_on<T>(
+        &self,
+        mut future: Pin<&mut dyn Future<Output = T>>,
+    ) -> Result<T, Trap> {
+        debug_assert!(self.is_async());
+
+        // Take our current `Suspend` context which was configured as soon as
+        // our fiber started. Note that we must load it at the front here and
+        // save it on our stack frame. While we're polling the future other
+        // fibers may be started for recursive computations, and the current
+        // suspend context is only preserved at the edges of the fiber, not
+        // during the fiber itself.
+        //
+        // For a little bit of extra safety we also replace the current value
+        // with null to try to catch any accidental bugs on our part early.
+        // This is all pretty unsafe so we're trying to be careful...
+        //
+        // Note that there should be a segfaulting test  in `async_functions.rs`
+        // if this `Reset` is removed.
+        let suspend = self.inner.current_suspend.replace(ptr::null());
+        let _reset = Reset(&self.inner.current_suspend, suspend);
+        assert!(!suspend.is_null());
+
+        loop {
+            let future_result = unsafe {
+                let current_poll_cx = self.inner.current_poll_cx.replace(ptr::null_mut());
+                let _reset = Reset(&self.inner.current_poll_cx, current_poll_cx);
+                assert!(!current_poll_cx.is_null());
+                future.as_mut().poll(&mut *current_poll_cx)
+            };
+            match future_result {
+                Poll::Ready(t) => break Ok(t),
+                Poll::Pending => {}
+            }
+            unsafe {
+                (*suspend).suspend(())?;
+            }
+        }
+    }
+
+    /// Executes a synchronous computation `func` asynchronously on a new fiber.
+    ///
+    /// This function will convert the synchronous `func` into an asynchronous
+    /// future. This is done by running `func` in a fiber on a separate native
+    /// stack which can be suspended and resumed from.
+    ///
+    /// Most of the nitty-gritty here is how we juggle the various contexts
+    /// necessary to suspend the fiber later on and poll sub-futures. It's hoped
+    /// that the various comments are illuminating as to what's going on here.
+    #[cfg(feature = "async")]
+    pub(crate) async fn on_fiber<R>(&self, func: impl FnOnce() -> R) -> Result<R, Trap> {
+        debug_assert!(self.is_async());
+
+        // TODO: allocation of a fiber should be much more abstract where we
+        // shouldn't be allocating huge stacks on every async wasm function call.
+        let mut slot = None;
+        let fiber = wasmtime_fiber::Fiber::new(10 * 1024 * 1024, |keep_going, suspend| {
+            // First check and see if we were interrupted/dropped, and only
+            // continue if we haven't been.
+            keep_going?;
+
+            // Configure our store's suspension context for the rest of the
+            // execution of this fiber. Note that a raw pointer is stored here
+            // which is only valid for the duration of this closure.
+            // Consequently we at least replace it with the previous value when
+            // we're done. This reset is also required for correctness because
+            // otherwise our value will overwrite another active fiber's value.
+            // There should be a test that segfaults in `async_functions.rs` if
+            // this `Replace` is removed.
+            let prev = self.inner.current_suspend.replace(suspend);
+            let _reset = Reset(&self.inner.current_suspend, prev);
+
+            slot = Some(func());
+            Ok(())
+        })
+        .map_err(|e| Trap::from(anyhow::Error::from(e)))?;
+
+        // Once we have the fiber representing our synchronous computation, we
+        // wrap that in a custom future implementation which does the
+        // translation from the future protocol to our fiber API.
+        FiberFuture { fiber, store: self }.await?;
+        return Ok(slot.unwrap());
+
+        struct FiberFuture<'a> {
+            fiber: wasmtime_fiber::Fiber<'a, Result<(), Trap>, (), Result<(), Trap>>,
+            store: &'a Store,
+        }
+
+        impl Future for FiberFuture<'_> {
+            type Output = Result<(), Trap>;
+
+            fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+                // We need to carry over this `cx` into our fiber's runtime
+                // for when it trys to poll sub-futures that are created. Doing
+                // this must be done unsafely, however, since `cx` is only alive
+                // for this one singular function call. Here we do a `transmute`
+                // to extend the lifetime of `Context` so it can be stored in
+                // our `Store`, and then we replace the current polling context
+                // with this one.
+                //
+                // Note that the replace is done for weird situations where
+                // futures might be switching contexts and there's multiple
+                // wasmtime futures in a chain of futures.
+                //
+                // On exit from this function, though, we reset the polling
+                // context back to what it was to signify that `Store` no longer
+                // has access to this pointer.
+                let cx =
+                    unsafe { std::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx) };
+                let prev = self.store.inner.current_poll_cx.replace(cx);
+                let _reste = Reset(&self.store.inner.current_poll_cx, prev);
+
+                // After that's set up we resume execution of the fiber, which
+                // may also start the fiber for the first time. This either
+                // returns `Ok` saying the fiber finished (yay!) or it returns
+                // `Err` with the payload passed to `suspend`, which in our case
+                // is `()`. If `Err` is returned that means the fiber polled a
+                // future but it said "Pending", so we propagate that here.
+                match self.fiber.resume(Ok(())) {
+                    Ok(result) => Poll::Ready(result),
+                    Err(()) => Poll::Pending,
+                }
+            }
+        }
+
+        // Dropping futures is pretty special in that it means the future has
+        // been requested to be cancelled. Here we run the risk of dropping an
+        // in-progress fiber, and if we were to do nothing then the fiber would
+        // leak all its owned stack resources.
+        //
+        // To handle this we implement `Drop` here and, if the fiber isn't done,
+        // resume execution of the fiber saying "hey please stop you're
+        // interrupted". Our `Trap` created here (which has the stack trace
+        // of whomever dropped us) will then get propagated in whatever called
+        // `block_on`, and the idea is that the trap propagates all the way back
+        // up to the original fiber start, finishing execution.
+        //
+        // We don't actually care about the fiber's return value here (no one's
+        // around to look at it), we just assert the fiber finished to
+        // completion.
+        impl Drop for FiberFuture<'_> {
+            fn drop(&mut self) {
+                if self.fiber.done() {
+                    return;
+                }
+                let result = self.fiber.resume(Err(Trap::new("future dropped")));
+                // This resumption with an error should always complete the
+                // fiber. While it's technically possible for host code to catch
+                // the trap and re-resume, we'd ideally like to signal that to
+                // callers that they shouldn't be doing that.
+                debug_assert!(result.is_ok());
+            }
+        }
+    }
+
+    /// Immediately raise a trap on an out-of-gas condition.
+    fn out_of_gas_trap(&self) -> ! {
+        #[derive(Debug)]
+        struct OutOfGasError;
+
+        impl fmt::Display for OutOfGasError {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("all fuel consumed by WebAssembly")
+            }
+        }
+
+        impl std::error::Error for OutOfGasError {}
+        unsafe {
+            wasmtime_runtime::raise_lib_trap(wasmtime_runtime::Trap::User(Box::new(OutOfGasError)))
+        }
+    }
+
+    /// Yields execution to the caller on out-of-gas
+    ///
+    /// This only works on async futures and stores, and assumes that we're
+    /// executing on a fiber. This will yield execution back to the caller once
+    /// and when we come back we'll continue with `fuel_to_inject` more fuel.
+    #[cfg(feature = "async")]
+    fn out_of_gas_yield(&self, fuel_to_inject: u64) {
+        // Small future that yields once and then returns ()
+        #[derive(Default)]
+        struct Yield {
+            yielded: bool,
+        }
+
+        impl Future for Yield {
+            type Output = ();
+
+            fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+                if self.yielded {
+                    Poll::Ready(())
+                } else {
+                    // Flag ourselves as yielded to return next time, and also
+                    // flag the waker that we're already ready to get
+                    // re-enqueued for another poll.
+                    self.yielded = true;
+                    cx.waker().wake_by_ref();
+                    Poll::Pending
+                }
+            }
+        }
+
+        let mut future = Yield::default();
+        match self.block_on(unsafe { Pin::new_unchecked(&mut future) }) {
+            // If this finished successfully then we were resumed normally via a
+            // `poll`, so inject some more fuel and keep going.
+            Ok(()) => self.add_fuel(fuel_to_inject).unwrap(),
+            // If the future was dropped while we were yielded, then we need to
+            // clean up this fiber. Do so by raising a trap which will abort all
+            // wasm and get caught on the other side to clean things up.
+            Err(trap) => unsafe { wasmtime_runtime::raise_user_trap(trap.into()) },
+        }
+    }
 }
 
 unsafe impl TrapInfo for Store {
@@ -519,19 +932,24 @@ unsafe impl TrapInfo for Store {
     }
 
     fn out_of_gas(&self) {
-        #[derive(Debug)]
-        struct OutOfGas;
-
-        impl fmt::Display for OutOfGas {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("all fuel consumed by WebAssembly")
+        match self.inner.out_of_gas_behavior.get() {
+            OutOfGas::Trap => self.out_of_gas_trap(),
+            #[cfg(feature = "async")]
+            OutOfGas::InjectFuel {
+                injection_count,
+                fuel_to_inject,
+            } => {
+                if injection_count == 0 {
+                    self.out_of_gas_trap();
+                }
+                self.inner.out_of_gas_behavior.set(OutOfGas::InjectFuel {
+                    injection_count: injection_count - 1,
+                    fuel_to_inject,
+                });
+                self.out_of_gas_yield(fuel_to_inject);
             }
-        }
-
-        impl std::error::Error for OutOfGas {}
-
-        unsafe {
-            wasmtime_runtime::raise_lib_trap(wasmtime_runtime::Trap::User(Box::new(OutOfGas)))
+            #[cfg(not(feature = "async"))]
+            OutOfGas::InjectFuel { .. } => unreachable!(),
         }
     }
 }
@@ -602,5 +1020,13 @@ impl Eq for ArcModuleCode {}
 impl Hash for ArcModuleCode {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
         Arc::as_ptr(&self.0).hash(hasher)
+    }
+}
+
+struct Reset<'a, T: Copy>(&'a Cell<T>, T);
+
+impl<T: Copy> Drop for Reset<'_, T> {
+    fn drop(&mut self) {
+        self.0.set(self.1);
     }
 }

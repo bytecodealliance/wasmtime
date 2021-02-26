@@ -5,10 +5,13 @@ use anyhow::{bail, ensure, Context as _, Result};
 use smallvec::{smallvec, SmallVec};
 use std::cmp::max;
 use std::fmt;
+use std::future::Future;
 use std::mem;
 use std::panic::{self, AssertUnwindSafe};
+use std::pin::Pin;
 use std::ptr::{self, NonNull};
 use std::rc::Weak;
+use std::task::{Context, Poll};
 use wasmtime_environ::wasm::EntityIndex;
 use wasmtime_runtime::{
     raise_user_trap, InstanceHandle, VMContext, VMFunctionBody, VMSharedSignatureIndex,
@@ -33,6 +36,61 @@ use wasmtime_runtime::{
 /// Functions are internally reference counted so you can `clone` a `Func`. The
 /// cloning process only performs a shallow clone, so two cloned `Func`
 /// instances are equivalent in their functionality.
+///
+/// # `Func` and `async`
+///
+/// Functions from the perspective of WebAssembly are always synchronous. You
+/// might have an `async` function in Rust, however, which you'd like to make
+/// available from WebAssembly. Wasmtime supports asynchronously calling
+/// WebAssembly through native stack switching. You can get some more
+/// information about [asynchronous stores](Store::new_async), but from the
+/// perspective of `Func` it's important to know that whether or not your
+/// [`Store`] is asynchronous will dictate whether you call functions through
+/// [`Func::call`] or [`Func::call_async`] (or the wrappers such as
+/// [`Func::get0`] vs [`Func::get0_async`]).
+///
+/// Note that asynchronous function APIs here are a bit trickier than their
+/// synchronous bretheren. For example [`Func::new_async`] and
+/// [`Func::wrapN_async`](Func::wrap1_async) take explicit state parameters to
+/// allow you to close over the state in the returned future. It's recommended
+/// that you pass state via these parameters instead of through the closure's
+/// environment, which may give Rust lifetime errors. Additionally unlike
+/// synchronous functions which can all get wrapped through [`Func::wrap`]
+/// asynchronous functions need to explicitly wrap based on the number of
+/// parameters that they have (e.g. no wasm parameters gives you
+/// [`Func::wrap0_async`], one wasm parameter you'd use [`Func::wrap1_async`],
+/// etc). Be sure to consult the documentation for [`Func::wrap`] for how the
+/// wasm type signature is inferred from the Rust type signature.
+///
+/// # To `Func::call` or to `Func::getN`
+///
+/// There are four ways to call a `Func`. Half are asynchronus and half are
+/// synchronous, corresponding to the type of store you're using. Within each
+/// half you've got two choices:
+///
+/// * Dynamically typed - if you don't statically know the signature of the
+///   function that you're calling you'll be using [`Func::call`] or
+///   [`Func::call_async`]. These functions take a variable-length slice of
+///   "boxed" arguments in their [`Val`] representation. Additionally the
+///   results are returned as an owned slice of [`Val`]. These methods are not
+///   optimized due to the dynamic type checks that must occur, in addition to
+///   some dynamic allocations for where to put all the arguments. While this
+///   allows you to call all possible wasm function signatures, if you're
+///   looking for a speedier alternative you can also use...
+///
+/// * Statically typed - if you statically know the type signature of the wasm
+///   function you're calling then you can use the [`Func::getN`](Func::get1)
+///   family of functions where `N` is the number of wasm arguments the function
+///   takes. Asynchronous users can use [`Func::getN_async`](Func::get1_async).
+///   These functions will perform type validation up-front and then return a
+///   specialized closure which can be used to invoke the wasm function. This
+///   route involves no dynamic allocation and does not type-checks during
+///   runtime, so it's recommended to use this where possible for maximal speed.
+///
+/// Unfortunately a limitation of the code generation backend right now means
+/// that the statically typed `getN` methods only work with wasm functions that
+/// return 0 or 1 value. If 2 or more values are returned you'll need to use the
+/// dynamic `call` API. We hope to fix this in the future, though!
 ///
 /// # Examples
 ///
@@ -148,15 +206,104 @@ pub struct Func {
     export: wasmtime_runtime::ExportFunction,
 }
 
-macro_rules! getters {
-    ($(
-        $(#[$doc:meta])*
-        ($name:ident $(,$args:ident)*)
-    )*) => ($(
-        $(#[$doc])*
+macro_rules! for_each_function_signature {
+    ($mac:ident) => {
+        $mac!(0);
+        $mac!(1 A1);
+        $mac!(2 A1 A2);
+        $mac!(3 A1 A2 A3);
+        $mac!(4 A1 A2 A3 A4);
+        $mac!(5 A1 A2 A3 A4 A5);
+        $mac!(6 A1 A2 A3 A4 A5 A6);
+        $mac!(7 A1 A2 A3 A4 A5 A6 A7);
+        $mac!(8 A1 A2 A3 A4 A5 A6 A7 A8);
+        $mac!(9 A1 A2 A3 A4 A5 A6 A7 A8 A9);
+        $mac!(10 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10);
+        $mac!(11 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11);
+        $mac!(12 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12);
+        $mac!(13 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13);
+        $mac!(14 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14);
+        $mac!(15 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15);
+        $mac!(16 A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15 A16);
+    };
+}
+
+macro_rules! generate_get_methods {
+    ($num:tt $($args:ident)*) => (paste::paste! {
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func`] structure for more documentation. Returns an error
+        /// if the type parameters and return parameter provided don't match the
+        /// actual function's type signature.
+        ///
+        /// # Panics
+        ///
+        /// Panics if this is called on a function in an asynchronous store.
         #[allow(non_snake_case)]
-        pub fn $name<$($args,)* R>(&self)
-            -> anyhow::Result<impl Fn($($args,)*) -> Result<R, Trap>>
+        pub fn [<get $num>]<$($args,)* R>(&self)
+            -> Result<impl Fn($($args,)*) -> Result<R, Trap>>
+        where
+            $($args: WasmTy,)*
+            R: WasmTy,
+        {
+            assert!(!self.store().is_async(), concat!("must use `get", $num, "_async` on synchronous stores"));
+            self.[<_get $num>]::<$($args,)* R>()
+        }
+
+        /// Extracts a natively-callable object from this `Func`, if the
+        /// signature matches.
+        ///
+        /// See the [`Func`] structure for more documentation. Returns an error
+        /// if the type parameters and return parameter provided don't match the
+        /// actual function's type signature.
+        ///
+        /// # Panics
+        ///
+        /// Panics if this is called on a function in a synchronous store.
+        #[allow(non_snake_case, warnings)]
+        #[cfg(feature = "async")]
+        #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+        pub fn [<get $num _async>]<$($args,)* R>(&self)
+            -> Result<impl Fn($($args,)*) -> WasmCall<R>>
+        where
+            $($args: WasmTy + 'static,)*
+            R: WasmTy + 'static,
+        {
+            assert!(self.store().is_async(), concat!("must use `get", $num, "` on synchronous stores"));
+
+            // TODO: ideally we wouldn't box up the future here but could
+            // instead name the future returned by `on_fiber`.  Unfortunately
+            // that would require a bunch of inter-future borrows which are safe
+            // but gnarly to implement by hand.
+            //
+            // Otherwise the implementation here is pretty similar to
+            // `call_async` where we're just calling the `on_fiber` method to
+            // run the blocking work. Most of the goop here is juggling
+            // lifetimes and making sure everything lives long enough and
+            // closures have the right signatures.
+            //
+            // This is... less readable than ideal.
+            let func = self.[<_get $num>]::<$($args,)* R>()?;
+            let store = self.store().clone();
+            Ok(move |$($args),*| {
+                let func = func.clone();
+                let store = store.clone();
+                WasmCall {
+                    inner: Pin::from(Box::new(async move {
+                        match store.on_fiber(|| func($($args,)*)).await {
+                            Ok(result) => result,
+                            Err(trap) => Err(trap),
+                        }
+                    }))
+                }
+            })
+        }
+
+        // Internal helper to share between `getN` and `getN_async`
+        #[allow(non_snake_case)]
+        fn [<_get $num>]<$($args,)* R>(&self)
+            -> Result<impl Fn($($args,)*) -> Result<R, Trap> + Clone>
         where
             $($args: WasmTy,)*
             R: WasmTy,
@@ -228,7 +375,41 @@ macro_rules! getters {
                 }
             })
         }
-    )*)
+    })
+}
+
+macro_rules! generate_wrap_async_func {
+    ($num:tt $($args:ident)*) => (paste::paste!{
+        /// Same as [`Func::wrap`], except the closure asynchronously produces
+        /// its result. For more information see the [`Func`] documentation.
+        ///
+        /// # Panics
+        ///
+        /// This function will panic if called with a non-asynchronous store.
+        #[allow(non_snake_case)]
+        #[cfg(feature = "async")]
+        #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+        pub fn [<wrap $num _async>]<T, $($args,)* R>(
+            store: &Store,
+            state: T,
+            func: impl for<'a> Fn(Caller<'a>, &'a T, $($args),*) -> Box<dyn Future<Output = R> + 'a> + 'static,
+        ) -> Func
+        where
+            T: 'static,
+            $($args: WasmTy,)*
+            R: WasmRet,
+        {
+            assert!(store.is_async());
+            Func::wrap(store, move |caller: Caller<'_>, $($args: $args),*| {
+                let store = caller.store();
+                let mut future = Pin::from(func(caller, &state, $($args),*));
+                match store.block_on(future.as_mut()) {
+                    Ok(ret) => ret.into_result(),
+                    Err(e) => Err(e),
+                }
+            })
+        }
+    })
 }
 
 impl Func {
@@ -322,6 +503,100 @@ impl Func {
             trampoline,
             export,
         }
+    }
+
+    /// Creates a new host-defined WebAssembly function which, when called,
+    /// will run the asynchronous computation defined by `func` to completion
+    /// and then return the result to WebAssembly.
+    ///
+    /// This function is the asynchronous analogue of [`Func::new`] and much of
+    /// that documentation applies to this as well. There are a few key
+    /// differences (besides being asynchronous) that are worth pointing out:
+    ///
+    /// * The state parameter `T` is passed to the provided function `F` on
+    ///   each invocation. This is done so you can use the state in `T` in the
+    ///   computation of the output future (the future can close over this
+    ///   value). Unfortunately due to limitations of async-in-Rust right now
+    ///   you **cannot** close over the captured variables in `F` itself in the
+    ///   returned future. This means that you likely won't close over much
+    ///   state in `F` and will instead use `T`.
+    ///
+    /// * The closure here returns a *boxed* future, not something that simply
+    ///   implements a future. This is also unfortunately due to limitations in
+    ///   Rust right now.
+    ///
+    /// Overall we're not super happy with this API signature and would love to
+    /// change it to make it more ergonomic. Despite this, however, you should
+    /// be able to still hook into asynchronous computations and plug them into
+    /// wasm. Improvements are always welcome with PRs!
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if `store` is not an [asynchronous
+    /// store](Store::new_async).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// // Simulate some application-specific state as well as asynchronous
+    /// // functions to query that state.
+    /// struct MyDatabase {
+    ///     // ...
+    /// }
+    ///
+    /// impl MyDatabase {
+    ///     async fn get_row_count(&self) -> u32 {
+    ///         // ...
+    /// #       100
+    ///     }
+    /// }
+    ///
+    /// let my_database = MyDatabase {
+    ///     // ...
+    /// };
+    ///
+    /// // Using `new_async` we can hook up into calling our async
+    /// // `get_row_count` function.
+    /// let store = Store::new_async(&Engine::default());
+    /// let get_row_count_type = wasmtime::FuncType::new(
+    ///     None,
+    ///     Some(wasmtime::ValType::I32),
+    /// );
+    /// let double = Func::new_async(&store, get_row_count_type, my_database, |_, database, params, results| {
+    ///     Box::new(async move {
+    ///         let count = database.get_row_count().await;
+    ///         results[0] = Val::I32(count as i32);
+    ///         Ok(())
+    ///     })
+    /// });
+    /// // ...
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub fn new_async<T, F>(store: &Store, ty: FuncType, state: T, func: F) -> Func
+    where
+        T: 'static,
+        F: for<'a> Fn(
+                Caller<'a>,
+                &'a T,
+                &'a [Val],
+                &'a mut [Val],
+            ) -> Box<dyn Future<Output = Result<(), Trap>> + 'a>
+            + 'static,
+    {
+        assert!(store.is_async());
+        Func::new(store, ty, move |caller, params, results| {
+            let store = caller.store();
+            let mut future = Pin::from(func(caller, &state, params, results));
+            match store.block_on(future.as_mut()) {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(trap)) | Err(trap) => Err(trap),
+            }
+        })
     }
 
     pub(crate) unsafe fn from_caller_checked_anyfunc(
@@ -535,6 +810,8 @@ impl Func {
         func.into_func(store)
     }
 
+    for_each_function_signature!(generate_wrap_async_func);
+
     pub(crate) fn sig_index(&self) -> VMSharedSignatureIndex {
         unsafe { self.export.anyfunc.as_ref().type_index }
     }
@@ -579,9 +856,52 @@ impl Func {
     /// trap will occur. If a trap occurs while executing this function, then a
     /// trap will also be returned.
     ///
-    /// This function should not panic unless the underlying function itself
+    /// # Panics
+    ///
+    /// This function will panic if called on a function belonging to an async
+    /// store. Asynchronous stores must always use `call_async`.
     /// initiates a panic.
     pub fn call(&self, params: &[Val]) -> Result<Box<[Val]>> {
+        assert!(
+            !self.store().is_async(),
+            "must use `call_async` on asynchronous stores",
+        );
+        self._call(params)
+    }
+
+    /// Invokes this function with the `params` given, returning the results
+    /// asynchronously.
+    ///
+    /// This function is the same as [`Func::call`] except that it is
+    /// asynchronous. This is only compatible with [asynchronous
+    /// stores](Store::new_async).
+    ///
+    /// It's important to note that the execution of WebAssembly will happen
+    /// synchronously in the `poll` method of the future returned from this
+    /// function. Wasmtime does not manage its own thread pool or similar to
+    /// execute WebAssembly in. Future `poll` methods are generally expected to
+    /// resolve quickly, so it's recommended that you run or poll this future
+    /// in a "blocking context".
+    ///
+    /// For more information see the documentation on [asynchronous
+    /// stores](Store::new_async).
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is called on a function in a synchronous store. This
+    /// only works with functions defined within an asynchronous store.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub async fn call_async(&self, params: &[Val]) -> Result<Box<[Val]>> {
+        assert!(
+            self.store().is_async(),
+            "must use `call` on synchronous stores",
+        );
+        let result = self.store().on_fiber(|| self._call(params)).await??;
+        Ok(result)
+    }
+
+    fn _call(&self, params: &[Val]) -> Result<Box<[Val]>> {
         // We need to perform a dynamic check that the arguments given to us
         // match the signature of this function and are appropriate to pass to
         // this function. This involves checking to make sure we have the right
@@ -669,127 +989,7 @@ impl Func {
         }
     }
 
-    getters! {
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func::get1`] method for more documentation.
-        (get0)
-
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// This function serves as an optimized version of the [`Func::call`]
-        /// method if the type signature of a function is statically known to
-        /// the program. This method is faster than `call` on a few metrics:
-        ///
-        /// * Runtime type-checking only happens once, when this method is
-        ///   called.
-        /// * The result values, if any, aren't boxed into a vector.
-        /// * Arguments and return values don't go through boxing and unboxing.
-        /// * No trampolines are used to transfer control flow to/from JIT code,
-        ///   instead this function jumps directly into JIT code.
-        ///
-        /// For more information about which Rust types match up to which wasm
-        /// types, see the documentation on [`Func::wrap`].
-        ///
-        /// # Return
-        ///
-        /// This function will return `None` if the type signature asserted
-        /// statically does not match the runtime type signature. `Some`,
-        /// however, will be returned if the underlying function takes one
-        /// parameter of type `A` and returns the parameter `R`. Currently `R`
-        /// can either be `()` (no return values) or one wasm type. At this time
-        /// a multi-value return isn't supported.
-        ///
-        /// The returned closure will always return a `Result<R, Trap>` and an
-        /// `Err` is returned if a trap happens while the wasm is executing.
-        (get1, A1)
-
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func::get1`] method for more documentation.
-        (get2, A1, A2)
-
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func::get1`] method for more documentation.
-        (get3, A1, A2, A3)
-
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func::get1`] method for more documentation.
-        (get4, A1, A2, A3, A4)
-
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func::get1`] method for more documentation.
-        (get5, A1, A2, A3, A4, A5)
-
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func::get1`] method for more documentation.
-        (get6, A1, A2, A3, A4, A5, A6)
-
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func::get1`] method for more documentation.
-        (get7, A1, A2, A3, A4, A5, A6, A7)
-
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func::get1`] method for more documentation.
-        (get8, A1, A2, A3, A4, A5, A6, A7, A8)
-
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func::get1`] method for more documentation.
-        (get9, A1, A2, A3, A4, A5, A6, A7, A8, A9)
-
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func::get1`] method for more documentation.
-        (get10, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10)
-
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func::get1`] method for more documentation.
-        (get11, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11)
-
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func::get1`] method for more documentation.
-        (get12, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12)
-
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func::get1`] method for more documentation.
-        (get13, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13)
-
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func::get1`] method for more documentation.
-        (get14, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14)
-
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func::get1`] method for more documentation.
-        (get15, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15)
-    }
+    for_each_function_signature!(generate_get_methods);
 
     /// Get a reference to this function's store.
     pub fn store(&self) -> &Store {
@@ -900,6 +1100,11 @@ pub unsafe trait WasmRet {
     #[doc(hidden)]
     type Abi: Copy;
 
+    // The "ok" version of this, meaning that which is returned if there is no
+    // error.
+    #[doc(hidden)]
+    type Ok: WasmTy;
+
     // Same as `WasmTy::compatible_with_store`.
     #[doc(hidden)]
     fn compatible_with_store<'a>(&self, store: WeakStore<'a>) -> bool;
@@ -932,6 +1137,10 @@ pub unsafe trait WasmRet {
     // Same as `WasmTy::store_to_args`.
     #[doc(hidden)]
     unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128);
+
+    // Converts this result into an explicit `Result` to match on.
+    #[doc(hidden)]
+    fn into_result(self) -> Result<Self::Ok, Trap>;
 }
 
 unsafe impl WasmTy for () {
@@ -1335,6 +1544,7 @@ where
     T: WasmTy,
 {
     type Abi = <T as WasmTy>::Abi;
+    type Ok = T;
 
     #[inline]
     fn compatible_with_store<'a>(&self, store: WeakStore<'a>) -> bool {
@@ -1369,6 +1579,11 @@ where
     unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
         <Self as WasmTy>::store_to_args(abi, ptr)
     }
+
+    #[inline]
+    fn into_result(self) -> Result<T, Trap> {
+        Ok(self)
+    }
 }
 
 unsafe impl<T> WasmRet for Result<T, Trap>
@@ -1376,6 +1591,7 @@ where
     T: WasmTy,
 {
     type Abi = <T as WasmTy>::Abi;
+    type Ok = T;
 
     #[inline]
     fn compatible_with_store<'a>(&self, store: WeakStore<'a>) -> bool {
@@ -1418,6 +1634,11 @@ where
     #[inline]
     unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
         <T as WasmTy>::store_to_args(abi, ptr);
+    }
+
+    #[inline]
+    fn into_result(self) -> Result<T, Trap> {
+        self
     }
 }
 
@@ -1552,9 +1773,7 @@ unsafe fn raise_cross_store_trap() -> ! {
 }
 
 macro_rules! impl_into_func {
-    ($(
-        ($($args:ident)*)
-    )*) => ($(
+    ($num:tt $($args:ident)*) => {
         // Implement for functions without a leading `&Caller` parameter,
         // delegating to the implementation below which does have the leading
         // `Caller` parameter.
@@ -1699,27 +1918,23 @@ macro_rules! impl_into_func {
                 }
             }
         }
-    )*)
+    }
 }
 
-impl_into_func! {
-    ()
-    (A1)
-    (A1 A2)
-    (A1 A2 A3)
-    (A1 A2 A3 A4)
-    (A1 A2 A3 A4 A5)
-    (A1 A2 A3 A4 A5 A6)
-    (A1 A2 A3 A4 A5 A6 A7)
-    (A1 A2 A3 A4 A5 A6 A7 A8)
-    (A1 A2 A3 A4 A5 A6 A7 A8 A9)
-    (A1 A2 A3 A4 A5 A6 A7 A8 A9 A10)
-    (A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11)
-    (A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12)
-    (A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13)
-    (A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14)
-    (A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15)
-    (A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 A14 A15 A16)
+for_each_function_signature!(impl_into_func);
+
+/// Returned future from the [`Func::get1_async`] family of methods, used to
+/// represent an asynchronous call into WebAssembly.
+pub struct WasmCall<R> {
+    inner: Pin<Box<dyn Future<Output = Result<R, Trap>>>>,
+}
+
+impl<R> Future for WasmCall<R> {
+    type Output = Result<R, Trap>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.inner.as_mut().poll(cx)
+    }
 }
 
 #[test]

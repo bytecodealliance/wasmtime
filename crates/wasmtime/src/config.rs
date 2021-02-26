@@ -470,6 +470,7 @@ impl Config {
     ///
     /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
     #[cfg(feature = "cache")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cache")))]
     pub fn cache_config_load(&mut self, path: impl AsRef<Path>) -> Result<&mut Self> {
         self.cache_config = CacheConfig::from_file(Some(path.as_ref()))?;
         Ok(self)
@@ -497,6 +498,7 @@ impl Config {
     ///
     /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
     #[cfg(feature = "cache")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cache")))]
     pub fn cache_config_load_default(&mut self) -> Result<&mut Self> {
         self.cache_config = CacheConfig::from_file(None)?;
         Ok(self)

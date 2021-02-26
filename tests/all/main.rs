@@ -1,3 +1,4 @@
+mod async_functions;
 mod cli_tests;
 mod custom_signal_handler;
 mod debug;

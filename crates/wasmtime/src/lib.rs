@@ -140,6 +140,38 @@
 //! create a "wasi instance" and then add all of its items into a [`Linker`],
 //! which can then be used to instantiate a [`Module`] that uses WASI.
 //!
+//! ## Crate Features
+//!
+//! The `wasmtime` crate comes with a number of compile-time features that can
+//! be used to customize what features it supports. Some of these features are
+//! just internal details, but some affect the public API of the `wasmtime`
+//! crate. Be sure to check the API you're using to see if any crate features
+//! are enabled.
+//!
+//! * `cache` - Enabled by default, this feature adds support for wasmtime to
+//!   perform internal caching of modules in a global location. This must still
+//!   be enabled explicitly through [`Config::cache_config_load`] or
+//!   [`Config::cache_config_load_default`].
+//!
+//! * `wat` - Enabled by default, this feature adds support for accepting the
+//!   text format of WebAssembly in [`Module::new`]. The text format will be
+//!   automatically recognized and translated to binary when compiling a
+//!   module.
+//!
+//! * `parallel-compilation` - Enabled by default, this feature enables support
+//!   for compiling functions of a module in parallel with `rayon`.
+//!
+//! * `async` - Enabled by default, this feature enables APIs and runtime
+//!   support for defining asynchronous host functions and calling WebAssembly
+//!   asynchronously.
+//!
+//! * `jitdump` - Enabled by default, this feature compiles in support for the
+//!   jitdump runtime profilng format. The profiler can be selected with
+//!   [`Config::profiler`].
+//!
+//! * `vtune` - Not enabled by default, this feature compiles in support for
+//!   supporting VTune profiling of JIT code.
+//!
 //! ## Examples
 //!
 //! In addition to the examples below be sure to check out the [online embedding
@@ -234,6 +266,8 @@
 #![deny(missing_docs, broken_intra_doc_links)]
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
+#![cfg_attr(nightlydoc, feature(doc_cfg))]
+#![cfg_attr(not(feature = "default"), allow(dead_code, unused_imports))]
 
 mod config;
 mod engine;
