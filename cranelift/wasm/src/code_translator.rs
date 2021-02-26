@@ -1642,16 +1642,16 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().vhigh_bits(I32, a));
         }
-        Operator::I8x16Eq | Operator::I16x8Eq | Operator::I32x4Eq => {
+        Operator::I8x16Eq | Operator::I16x8Eq | Operator::I32x4Eq | Operator::I64x2Eq => {
             translate_vector_icmp(IntCC::Equal, type_of(op), builder, state)
         }
-        Operator::I8x16Ne | Operator::I16x8Ne | Operator::I32x4Ne => {
+        Operator::I8x16Ne | Operator::I16x8Ne | Operator::I32x4Ne | Operator::I64x2Ne => {
             translate_vector_icmp(IntCC::NotEqual, type_of(op), builder, state)
         }
-        Operator::I8x16GtS | Operator::I16x8GtS | Operator::I32x4GtS => {
+        Operator::I8x16GtS | Operator::I16x8GtS | Operator::I32x4GtS | Operator::I64x2GtS => {
             translate_vector_icmp(IntCC::SignedGreaterThan, type_of(op), builder, state)
         }
-        Operator::I8x16LtS | Operator::I16x8LtS | Operator::I32x4LtS => {
+        Operator::I8x16LtS | Operator::I16x8LtS | Operator::I32x4LtS | Operator::I64x2LtS => {
             translate_vector_icmp(IntCC::SignedLessThan, type_of(op), builder, state)
         }
         Operator::I8x16GtU | Operator::I16x8GtU | Operator::I32x4GtU => {
@@ -1660,10 +1660,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::I8x16LtU | Operator::I16x8LtU | Operator::I32x4LtU => {
             translate_vector_icmp(IntCC::UnsignedLessThan, type_of(op), builder, state)
         }
-        Operator::I8x16GeS | Operator::I16x8GeS | Operator::I32x4GeS => {
+        Operator::I8x16GeS | Operator::I16x8GeS | Operator::I32x4GeS | Operator::I64x2GeS => {
             translate_vector_icmp(IntCC::SignedGreaterThanOrEqual, type_of(op), builder, state)
         }
-        Operator::I8x16LeS | Operator::I16x8LeS | Operator::I32x4LeS => {
+        Operator::I8x16LeS | Operator::I16x8LeS | Operator::I32x4LeS | Operator::I64x2LeS => {
             translate_vector_icmp(IntCC::SignedLessThanOrEqual, type_of(op), builder, state)
         }
         Operator::I8x16GeU | Operator::I16x8GeU | Operator::I32x4GeU => translate_vector_icmp(
@@ -1852,12 +1852,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64x2ExtMulHighI32x4S
         | Operator::I64x2ExtMulLowI32x4U
         | Operator::I64x2ExtMulHighI32x4U
-        | Operator::I64x2Eq
-        | Operator::I64x2Ne
-        | Operator::I64x2LtS
-        | Operator::I64x2GtS
-        | Operator::I64x2LeS
-        | Operator::I64x2GeS
         | Operator::I64x2Abs
         | Operator::I64x2AllTrue
         | Operator::I16x8ExtAddPairwiseI8x16S
@@ -2646,7 +2640,14 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::V128Load64Splat { .. }
         | Operator::I64x2ExtractLane { .. }
         | Operator::I64x2ReplaceLane { .. }
+        | Operator::I64x2Eq
+        | Operator::I64x2Ne
+        | Operator::I64x2LtS
+        | Operator::I64x2GtS
+        | Operator::I64x2LeS
+        | Operator::I64x2GeS
         | Operator::I64x2Neg
+        | Operator::I64x2Abs
         | Operator::I64x2Shl
         | Operator::I64x2ShrS
         | Operator::I64x2ShrU
