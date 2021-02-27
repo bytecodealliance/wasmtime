@@ -1,12 +1,12 @@
-//! Implements user-mode page fault handling with the `userfaultfd` ("uffd") system call on Linux.
+//! Implements user space page fault handling with the `userfaultfd` ("uffd") system call on Linux.
 //!
 //! Handling page faults for memory accesses in regions relating to WebAssembly instances
-//! enables the implementation of guard pages in user space rather than kernel space.
+//! enables the implementation of protecting guard pages in user space rather than kernel space.
 //!
 //! This reduces the number of system calls and kernel locks needed to provide correct
 //! WebAssembly memory semantics.
 //!
-//! Additionally, linear memories and WebAssembly tables can be lazy-initialized upon access.
+//! Additionally, linear memories can be lazy-initialized upon access.
 //!
 //! This feature requires a Linux kernel 4.11 or newer to use.
 
@@ -49,7 +49,7 @@ pub fn create_memory_map(_accessible_size: usize, mapping_size: usize) -> Result
     // Allocate a single read-write region at once
     // As writable pages need to count towards commit charge, use MAP_NORESERVE to override.
     // This implies that the kernel is configured to allow overcommit or else
-    // this allocation will almost certainly fail without a plethora of physical memory to back the alloction.
+    // this allocation will almost certainly fail without a plethora of physical memory to back the allocation.
     // The consequence of not reserving is that our process may segfault on any write to a memory
     // page that cannot be backed (i.e. out of memory conditions).
 
@@ -170,8 +170,8 @@ impl AddressLocator {
         }
     }
 
-    // This is super-duper unsafe as it is used from the handler thread
-    // to access instance data without any locking primitives.
+    /// This is super-duper unsafe as it is used from the handler thread
+    /// to access instance data without any locking primitives.
     ///
     /// It is assumed that the thread that owns the instance being accessed is
     /// currently suspended waiting on a fault to be handled.
@@ -182,9 +182,9 @@ impl AddressLocator {
     ///
     /// If the assumption holds true, accessing the instance data from the handler thread
     /// should, in theory, be safe.
-    unsafe fn get_instance(&self, index: usize) -> &mut Instance {
+    unsafe fn get_instance(&self, index: usize) -> &Instance {
         debug_assert!(index < self.max_instances);
-        &mut *((self.instances_start + (index * self.instance_size)) as *mut Instance)
+        &*((self.instances_start + (index * self.instance_size)) as *const Instance)
     }
 
     unsafe fn get_location(&self, addr: usize) -> Option<AddressLocation> {
@@ -475,6 +475,8 @@ fn handler_thread(
         }
     }
 
+    log::trace!("fault handler thread has successfully terminated");
+
     Ok(())
 }
 
@@ -591,7 +593,7 @@ mod test {
         };
         let instance_limits = InstanceLimits {
             count: 3,
-            address_space_size: (WASM_PAGE_SIZE * 10) as u64,
+            memory_reservation_size: (WASM_PAGE_SIZE * 10) as u64,
         };
 
         let instances =

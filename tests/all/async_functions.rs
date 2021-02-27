@@ -378,7 +378,7 @@ fn async_with_pooling_stacks() {
             },
             instance_limits: InstanceLimits {
                 count: 1,
-                address_space_size: 1,
+                memory_reservation_size: 1,
             },
         })
         .expect("pooling allocator created");

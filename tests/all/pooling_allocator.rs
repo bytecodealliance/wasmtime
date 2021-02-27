@@ -13,7 +13,7 @@ fn successful_instantiation() -> Result<()> {
         },
         instance_limits: InstanceLimits {
             count: 1,
-            address_space_size: 1,
+            memory_reservation_size: 1,
         },
     })?;
 
@@ -39,7 +39,7 @@ fn memory_limit() -> Result<()> {
         },
         instance_limits: InstanceLimits {
             count: 1,
-            address_space_size: 196608,
+            memory_reservation_size: 196608,
         },
     })?;
 
@@ -191,7 +191,7 @@ fn memory_zeroed() -> Result<()> {
         },
         instance_limits: InstanceLimits {
             count: 1,
-            address_space_size: 1,
+            memory_reservation_size: 1,
         },
     })?;
 
@@ -234,7 +234,7 @@ fn table_limit() -> Result<()> {
         },
         instance_limits: InstanceLimits {
             count: 1,
-            address_space_size: 1,
+            memory_reservation_size: 1,
         },
     })?;
 
@@ -349,7 +349,7 @@ fn table_zeroed() -> Result<()> {
         },
         instance_limits: InstanceLimits {
             count: 1,
-            address_space_size: 1,
+            memory_reservation_size: 1,
         },
     })?;
 
@@ -391,7 +391,7 @@ fn instantiation_limit() -> Result<()> {
         },
         instance_limits: InstanceLimits {
             count: INSTANCE_LIMIT,
-            address_space_size: 1,
+            memory_reservation_size: 1,
         },
     })?;
 

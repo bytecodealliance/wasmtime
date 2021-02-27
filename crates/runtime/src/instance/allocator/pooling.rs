@@ -60,7 +60,7 @@ pub struct ModuleLimits {
     /// The maximum number of imported tables for a module (default is 0).
     pub imported_tables: u32,
 
-    /// The maximum number of imported memories for a module (default is 0).
+    /// The maximum number of imported linear memories for a module (default is 0).
     pub imported_memories: u32,
 
     /// The maximum number of imported globals for a module (default is 0).
@@ -75,7 +75,7 @@ pub struct ModuleLimits {
     /// The maximum number of defined tables for a module (default is 1).
     pub tables: u32,
 
-    /// The maximum number of defined memories for a module (default is 1).
+    /// The maximum number of defined linear memories for a module (default is 1).
     pub memories: u32,
 
     /// The maximum number of defined globals for a module (default is 10).
@@ -90,7 +90,7 @@ pub struct ModuleLimits {
     /// the maximum will be `table_elements` for the purpose of any `table.grow` instruction.
     pub table_elements: u32,
 
-    /// The maximum number of pages for any memory defined in a module (default is 160).
+    /// The maximum number of pages for any linear memory defined in a module (default is 160).
     ///
     /// The default of 160 means at most 10 MiB of host memory may be committed for each instance.
     ///
@@ -100,7 +100,7 @@ pub struct ModuleLimits {
     /// If a memory's maximum page limit is unbounded or greater than this value,
     /// the maximum will be `memory_pages` for the purpose of any `memory.grow` instruction.
     ///
-    /// This value cannot exceed any address space limits placed on instances.
+    /// This value cannot exceed any memory reservation size limits placed on instances.
     pub memory_pages: u32,
 }
 
@@ -234,14 +234,14 @@ pub struct InstanceLimits {
     /// The maximum number of concurrent instances supported (default is 1000).
     pub count: u32,
 
-    /// The maximum reserved host address space size to use for each instance in bytes.
+    /// The maximum size, in bytes, of host address space to reserve for each linear memory of an instance.
     ///
     /// Note: this value has important performance ramifications.
     ///
     /// On 64-bit platforms, the default for this value will be 6 GiB.  A value of less than 4 GiB will
     /// force runtime bounds checking for memory accesses and thus will negatively impact performance.
     /// Any value above 4 GiB will start eliding bounds checks provided the `offset` of the memory access is
-    /// less than (`address_space_size` - 4 GiB).  A value of 8 GiB will completely elide *all* bounds
+    /// less than (`memory_reservation_size` - 4 GiB).  A value of 8 GiB will completely elide *all* bounds
     /// checks; consequently, 8 GiB will be the maximum supported value. The default of 6 GiB reserves
     /// less host address space for each instance, but a memory access with an offet above 2 GiB will incur
     /// runtime bounds checks.
@@ -251,7 +251,7 @@ pub struct InstanceLimits {
     /// for all memory accesses.  For better runtime performance, a 64-bit host is recommended.
     ///
     /// This value will be rounded up by the WebAssembly page size (64 KiB).
-    pub address_space_size: u64,
+    pub memory_reservation_size: u64,
 }
 
 impl Default for InstanceLimits {
@@ -260,9 +260,9 @@ impl Default for InstanceLimits {
         Self {
             count: 1000,
             #[cfg(target_pointer_width = "32")]
-            address_space_size: 0xA00000,
+            memory_reservation_size: 0xA00000,
             #[cfg(target_pointer_width = "64")]
-            address_space_size: 0x180000000,
+            memory_reservation_size: 0x180000000,
         }
     }
 }
@@ -611,8 +611,8 @@ struct MemoryPool {
 
 impl MemoryPool {
     fn new(module_limits: &ModuleLimits, instance_limits: &InstanceLimits) -> Result<Self, String> {
-        let memory_size = usize::try_from(instance_limits.address_space_size)
-            .map_err(|_| "address space size exceeds addressable memory".to_string())?;
+        let memory_size = usize::try_from(instance_limits.memory_reservation_size)
+            .map_err(|_| "memory reservation size exceeds addressable memory".to_string())?;
 
         debug_assert!(
             memory_size % region::page::size() == 0,
@@ -627,7 +627,7 @@ impl MemoryPool {
             .checked_mul(max_memories)
             .and_then(|c| c.checked_mul(max_instances))
             .ok_or_else(|| {
-                "total size of instance address space exceeds addressable memory".to_string()
+                "total size of memory reservation exceeds addressable memory".to_string()
             })?;
 
         Ok(Self {
@@ -877,15 +877,16 @@ impl PoolingInstanceAllocator {
             return Err("the instance count limit cannot be zero".into());
         }
 
-        // Round the instance address space size to the nearest Wasm page size
-        instance_limits.address_space_size = u64::try_from(round_up_to_pow2(
-            usize::try_from(instance_limits.address_space_size).unwrap(),
+        // Round the memory reservation size to the nearest Wasm page size
+        instance_limits.memory_reservation_size = u64::try_from(round_up_to_pow2(
+            usize::try_from(instance_limits.memory_reservation_size).unwrap(),
             WASM_PAGE_SIZE as usize,
         ))
         .unwrap();
 
-        // Cap the instance address space size to 8 GiB (maximum 4 GiB address space + 4 GiB of guard region)
-        instance_limits.address_space_size = min(instance_limits.address_space_size, 0x200000000);
+        // Cap the memory reservation size to 8 GiB (maximum 4 GiB accessible + 4 GiB of guard region)
+        instance_limits.memory_reservation_size =
+            min(instance_limits.memory_reservation_size, 0x200000000);
 
         // The maximum module memory page count cannot exceed 65536 pages
         if module_limits.memory_pages > 0x10000 {
@@ -895,13 +896,14 @@ impl PoolingInstanceAllocator {
             ));
         }
 
-        // The maximum module memory page count cannot exceed the instance address space size
-        if (module_limits.memory_pages * WASM_PAGE_SIZE) as u64 > instance_limits.address_space_size
+        // The maximum module memory page count cannot exceed the memory reservation size
+        if (module_limits.memory_pages * WASM_PAGE_SIZE) as u64
+            > instance_limits.memory_reservation_size
         {
             return Err(format!(
-                "module memory page limit of {} pages exeeds the instance address space size limit of {} bytes",
+                "module memory page limit of {} pages exeeds the memory reservation size limit of {} bytes",
                 module_limits.memory_pages,
-                instance_limits.address_space_size
+                instance_limits.memory_reservation_size
             ));
         }
 
@@ -940,15 +942,15 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
     }
 
     fn adjust_tunables(&self, tunables: &mut Tunables) {
-        let address_space_size = self.instance_limits.address_space_size;
+        let memory_reservation_size = self.instance_limits.memory_reservation_size;
 
-        // For address spaces larger than 4 GiB, use a guard region to elide
-        if address_space_size >= 0x100000000 {
+        // For reservation sizes larger than 4 GiB, use a guard region to elide bounds checks
+        if memory_reservation_size >= 0x100000000 {
             tunables.static_memory_bound = 0x10000; // in Wasm pages
-            tunables.static_memory_offset_guard_size = address_space_size - 0x100000000;
+            tunables.static_memory_offset_guard_size = memory_reservation_size - 0x100000000;
         } else {
             tunables.static_memory_bound =
-                u32::try_from(address_space_size).unwrap() / WASM_PAGE_SIZE;
+                u32::try_from(memory_reservation_size).unwrap() / WASM_PAGE_SIZE;
             tunables.static_memory_offset_guard_size = 0;
         }
 
@@ -1349,7 +1351,7 @@ mod test {
         };
         let instance_limits = InstanceLimits {
             count: 3,
-            address_space_size: 4096,
+            memory_reservation_size: 4096,
         };
 
         let instances = InstancePool::new(&module_limits, &instance_limits)?;
@@ -1471,7 +1473,7 @@ mod test {
             },
             &InstanceLimits {
                 count: 5,
-                address_space_size: WASM_PAGE_SIZE as u64,
+                memory_reservation_size: WASM_PAGE_SIZE as u64,
             },
         )?;
 
@@ -1517,7 +1519,7 @@ mod test {
             },
             &InstanceLimits {
                 count: 7,
-                address_space_size: WASM_PAGE_SIZE as u64,
+                memory_reservation_size: WASM_PAGE_SIZE as u64,
             },
         )?;
 
@@ -1551,7 +1553,7 @@ mod test {
         let pool = StackPool::new(
             &InstanceLimits {
                 count: 10,
-                address_space_size: 0,
+                memory_reservation_size: 0,
             },
             1,
         )?;
@@ -1638,7 +1640,7 @@ mod test {
                 },
                 InstanceLimits {
                     count: 1,
-                    address_space_size: 1,
+                    memory_reservation_size: 1,
                 },
                 4096
             )
@@ -1648,7 +1650,7 @@ mod test {
     }
 
     #[test]
-    fn test_pooling_allocator_with_address_space_exeeded() {
+    fn test_pooling_allocator_with_reservation_size_exeeded() {
         assert_eq!(
             PoolingInstanceAllocator::new(
                 PoolingAllocationStrategy::Random,
@@ -1658,12 +1660,12 @@ mod test {
                 },
                 InstanceLimits {
                     count: 1,
-                    address_space_size: 1,
+                    memory_reservation_size: 1,
                 },
                 4096,
             )
             .expect_err("expected a failure constructing instance allocator"),
-            "module memory page limit of 2 pages exeeds the instance address space size limit of 65536 bytes"
+            "module memory page limit of 2 pages exeeds the memory reservation size limit of 65536 bytes"
         );
     }
 
@@ -1686,7 +1688,7 @@ mod test {
             },
             InstanceLimits {
                 count: 1,
-                address_space_size: 1,
+                memory_reservation_size: 1,
             },
             4096,
         )?;

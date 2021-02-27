@@ -173,7 +173,7 @@
 //!   supporting VTune profiling of JIT code.
 //!
 //! * `uffd` - Not enabled by default. This feature enables `userfaultfd` support
-//!   when using the pooling instance allocator. As handling page faults in userspace
+//!   when using the pooling instance allocator. As handling page faults in user space
 //!   comes with a performance penalty, this feature should only be enabled when kernel
 //!   lock contention is hampering multithreading throughput. This feature is only
 //!   supported on Linux and requires a Linux kernel version 4.11 or higher.

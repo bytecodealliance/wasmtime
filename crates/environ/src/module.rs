@@ -33,7 +33,7 @@ impl MemoryStyle {
         let maximum = std::cmp::min(
             memory.maximum.unwrap_or(WASM_MAX_PAGES),
             if tunables.static_memory_bound_is_maximum {
-                tunables.static_memory_bound
+                std::cmp::min(tunables.static_memory_bound, WASM_MAX_PAGES)
             } else {
                 WASM_MAX_PAGES
             },
