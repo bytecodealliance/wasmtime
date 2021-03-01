@@ -230,6 +230,28 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             // instruction names.
             ("simd", "simd_boolean") | ("simd", "simd_lane") => return true,
 
+            // These are new instructions that are not really implemented in any backend.
+            ("simd", "simd_i64x2_cmp")
+            | ("simd", "simd_i8x16_arith2")
+            | ("simd", "simd_i64x2_arith2")
+            | ("simd", "simd_conversions")
+            | ("simd", "simd_i16x8_extadd_pairwise_i8x16")
+            | ("simd", "simd_i16x8_extmul_i8x16")
+            | ("simd", "simd_i16x8_q15mulr_sat_s")
+            | ("simd", "simd_i32x4_extadd_pairwise_i16x8")
+            | ("simd", "simd_i32x4_extmul_i16x8")
+            | ("simd", "simd_i32x4_trunc_sat_f64x2")
+            | ("simd", "simd_i64x2_extmul_i32x4")
+            | ("simd", "simd_int_to_int_extend")
+            | ("simd", "simd_load16_lane")
+            | ("simd", "simd_load32_lane")
+            | ("simd", "simd_load64_lane")
+            | ("simd", "simd_load8_lane")
+            | ("simd", "simd_store16_lane")
+            | ("simd", "simd_store32_lane")
+            | ("simd", "simd_store64_lane")
+            | ("simd", "simd_store8_lane") => return true,
+
             // These are only implemented on aarch64 and x64.
             ("simd", "simd_f32x4_pmin_pmax")
             | ("simd", "simd_f64x2_pmin_pmax")
