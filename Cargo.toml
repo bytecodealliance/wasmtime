@@ -40,12 +40,12 @@ anyhow = "1.0.19"
 target-lexicon = { version = "0.11.0", default-features = false }
 pretty_env_logger = "0.4.0"
 file-per-thread-logger = "0.1.1"
-wat = "1.0.33"
+wat = "1.0.36"
 libc = "0.2.60"
 log = "0.4.8"
 rayon = "1.2.1"
 humantime = "2.0.0"
-wasmparser = "0.75.0"
+wasmparser = "0.76.0"
 cap-std = "0.13"
 
 [dev-dependencies]
@@ -57,7 +57,7 @@ test-programs = { path = "crates/test-programs" }
 wasmtime-fuzzing = { path = "crates/fuzzing" }
 wasmtime-runtime = { path = "crates/runtime" }
 tracing-subscriber = "0.2.16"
-wast = "34.0.0"
+wast = "35.0.0"
 
 [build-dependencies]
 anyhow = "1.0.19"

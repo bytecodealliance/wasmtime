@@ -33,7 +33,7 @@ filecheck = "0.5.0"
 log = "0.4.8"
 termcolor = "1.1.2"
 capstone = { version = "0.7.0", optional = true }
-wat = { version = "1.0.18", optional = true }
+wat = { version = "1.0.36", optional = true }
 target-lexicon = { version = "0.11", features = ["std"] }
 peepmatic-souper = { path = "./peepmatic/crates/souper", version = "0.70.0", optional = true }
 pretty_env_logger = "0.4.0"
