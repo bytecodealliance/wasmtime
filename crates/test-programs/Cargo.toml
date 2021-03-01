@@ -20,7 +20,7 @@ pretty_env_logger = "0.4.0"
 tempfile = "3.1.0"
 os_pipe = "0.9"
 anyhow = "1.0.19"
-wat = "1.0.23"
+wat = "1.0.36"
 cap-std = "0.13"
 
 [features]

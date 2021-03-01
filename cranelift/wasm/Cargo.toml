@@ -12,7 +12,7 @@ keywords = ["webassembly", "wasm"]
 edition = "2018"
 
 [dependencies]
-wasmparser = { version = "0.75", default-features = false }
+wasmparser = { version = "0.76", default-features = false }
 cranelift-codegen = { path = "../codegen", version = "0.70.0", default-features = false }
 cranelift-entity = { path = "../entity", version = "0.70.0" }
 cranelift-frontend = { path = "../frontend", version = "0.70.0", default-features = false }
@@ -24,7 +24,7 @@ smallvec = "1.6.1"
 thiserror = "1.0.4"
 
 [dev-dependencies]
-wat = "1.0.23"
+wat = "1.0.36"
 target-lexicon = "0.11"
 # Enable the riscv feature for cranelift-codegen, as some tests require it
 cranelift-codegen = { path = "../codegen", version = "0.70.0", default-features = false, features = ["riscv"] }

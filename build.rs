@@ -182,44 +182,27 @@ fn experimental_x64_should_panic(testsuite: &str, testname: &str, strategy: &str
     }
 
     match (testsuite, testname) {
-        ("simd", "simd_address") => return false,
-        ("simd", "simd_align") => return false,
-        ("simd", "simd_bitwise") => return false,
-        ("simd", "simd_bit_shift") => return false,
-        ("simd", "simd_boolean") => return false,
-        ("simd", "simd_const") => return false,
-        ("simd", "simd_i8x16_arith") => return false,
-        ("simd", "simd_i8x16_arith2") => return false,
-        ("simd", "simd_i8x16_cmp") => return false,
-        ("simd", "simd_i8x16_sat_arith") => return false,
-        ("simd", "simd_i16x8_arith") => return false,
-        ("simd", "simd_i16x8_arith2") => return false,
-        ("simd", "simd_i16x8_cmp") => return false,
-        ("simd", "simd_i16x8_sat_arith") => return false,
-        ("simd", "simd_i32x4_arith") => return false,
-        ("simd", "simd_i32x4_arith2") => return false,
-        ("simd", "simd_i32x4_cmp") => return false,
-        ("simd", "simd_i32x4_dot_i16x8") => return false,
-        ("simd", "simd_i64x2_arith") => return false,
-        ("simd", "simd_f32x4") => return false,
-        ("simd", "simd_f32x4_arith") => return false,
-        ("simd", "simd_f32x4_cmp") => return false,
-        ("simd", "simd_f32x4_pmin_pmax") => return false,
-        ("simd", "simd_f64x2") => return false,
-        ("simd", "simd_f64x2_arith") => return false,
-        ("simd", "simd_f64x2_cmp") => return false,
-        ("simd", "simd_f64x2_pmin_pmax") => return false,
-        ("simd", "simd_lane") => return false,
-        ("simd", "simd_load") => return false,
-        ("simd", "simd_load_extend") => return false,
-        ("simd", "simd_load_splat") => return false,
-        ("simd", "simd_load_zero") => return false,
-        ("simd", "simd_splat") => return false,
-        ("simd", "simd_store") => return false,
-        ("simd", "simd_conversions") => return false,
-        ("simd", "simd_f32x4_rounding") => return false,
-        ("simd", "simd_f64x2_rounding") => return false,
-        ("simd", _) => return true,
+        ("simd", "simd_i64x2_cmp") => return true,
+        ("simd", "simd_i8x16_arith2") => return true, // Unsupported feature: proposed simd operator I8x16Popcnt
+        ("simd", "simd_i64x2_arith2") => return true, // Unsupported feature: proposed simd operator I64x2Abs
+        ("simd", "simd_conversions") => return true, // unknown operator or unexpected token: tests/spec_testsuite/proposals/simd/simd_conversions.wast:724:6
+        ("simd", "simd_i16x8_extadd_pairwise_i8x16") => return true,
+        ("simd", "simd_i16x8_extmul_i8x16") => return true,
+        ("simd", "simd_i16x8_q15mulr_sat_s") => return true,
+        ("simd", "simd_i32x4_extadd_pairwise_i16x8") => return true,
+        ("simd", "simd_i32x4_extmul_i16x8") => return true,
+        ("simd", "simd_i32x4_trunc_sat_f64x2") => return true,
+        ("simd", "simd_i64x2_extmul_i32x4") => return true,
+        ("simd", "simd_int_to_int_extend") => return true,
+        ("simd", "simd_load16_lane") => return true,
+        ("simd", "simd_load32_lane") => return true,
+        ("simd", "simd_load64_lane") => return true,
+        ("simd", "simd_load8_lane") => return true,
+        ("simd", "simd_store16_lane") => return true,
+        ("simd", "simd_store32_lane") => return true,
+        ("simd", "simd_store64_lane") => return true,
+        ("simd", "simd_store8_lane") => return true,
+        ("simd", _) => return false,
         _ => {}
     }
     false
@@ -246,6 +229,28 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             // Waiting for an update to the spec testsuite to not use old
             // instruction names.
             ("simd", "simd_boolean") | ("simd", "simd_lane") => return true,
+
+            // These are new instructions that are not really implemented in any backend.
+            ("simd", "simd_i64x2_cmp")
+            | ("simd", "simd_i8x16_arith2")
+            | ("simd", "simd_i64x2_arith2")
+            | ("simd", "simd_conversions")
+            | ("simd", "simd_i16x8_extadd_pairwise_i8x16")
+            | ("simd", "simd_i16x8_extmul_i8x16")
+            | ("simd", "simd_i16x8_q15mulr_sat_s")
+            | ("simd", "simd_i32x4_extadd_pairwise_i16x8")
+            | ("simd", "simd_i32x4_extmul_i16x8")
+            | ("simd", "simd_i32x4_trunc_sat_f64x2")
+            | ("simd", "simd_i64x2_extmul_i32x4")
+            | ("simd", "simd_int_to_int_extend")
+            | ("simd", "simd_load16_lane")
+            | ("simd", "simd_load32_lane")
+            | ("simd", "simd_load64_lane")
+            | ("simd", "simd_load8_lane")
+            | ("simd", "simd_store16_lane")
+            | ("simd", "simd_store32_lane")
+            | ("simd", "simd_store64_lane")
+            | ("simd", "simd_store8_lane") => return true,
 
             // These are only implemented on aarch64 and x64.
             ("simd", "simd_f32x4_pmin_pmax")

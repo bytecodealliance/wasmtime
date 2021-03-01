@@ -1769,35 +1769,35 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, I32X4, builder);
             state.push1(builder.ins().unarrow(a, b))
         }
-        Operator::I16x8WidenLowI8x16S => {
+        Operator::I16x8ExtendLowI8x16S => {
             let a = pop1_with_bitcast(state, I8X16, builder);
             state.push1(builder.ins().swiden_low(a))
         }
-        Operator::I16x8WidenHighI8x16S => {
+        Operator::I16x8ExtendHighI8x16S => {
             let a = pop1_with_bitcast(state, I8X16, builder);
             state.push1(builder.ins().swiden_high(a))
         }
-        Operator::I16x8WidenLowI8x16U => {
+        Operator::I16x8ExtendLowI8x16U => {
             let a = pop1_with_bitcast(state, I8X16, builder);
             state.push1(builder.ins().uwiden_low(a))
         }
-        Operator::I16x8WidenHighI8x16U => {
+        Operator::I16x8ExtendHighI8x16U => {
             let a = pop1_with_bitcast(state, I8X16, builder);
             state.push1(builder.ins().uwiden_high(a))
         }
-        Operator::I32x4WidenLowI16x8S => {
+        Operator::I32x4ExtendLowI16x8S => {
             let a = pop1_with_bitcast(state, I16X8, builder);
             state.push1(builder.ins().swiden_low(a))
         }
-        Operator::I32x4WidenHighI16x8S => {
+        Operator::I32x4ExtendHighI16x8S => {
             let a = pop1_with_bitcast(state, I16X8, builder);
             state.push1(builder.ins().swiden_high(a))
         }
-        Operator::I32x4WidenLowI16x8U => {
+        Operator::I32x4ExtendLowI16x8U => {
             let a = pop1_with_bitcast(state, I16X8, builder);
             state.push1(builder.ins().uwiden_low(a))
         }
-        Operator::I32x4WidenHighI16x8U => {
+        Operator::I32x4ExtendHighI16x8U => {
             let a = pop1_with_bitcast(state, I16X8, builder);
             state.push1(builder.ins().uwiden_high(a))
         }
@@ -1827,10 +1827,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             state.push1(builder.ins().widening_pairwise_dot_product_s(a, b));
         }
         Operator::I64x2Bitmask
-        | Operator::I64x2WidenLowI32x4S
-        | Operator::I64x2WidenHighI32x4S
-        | Operator::I64x2WidenLowI32x4U
-        | Operator::I64x2WidenHighI32x4U
+        | Operator::I64x2ExtendLowI32x4S
+        | Operator::I64x2ExtendHighI32x4S
+        | Operator::I64x2ExtendLowI32x4U
+        | Operator::I64x2ExtendHighI32x4U
         | Operator::V128Load8Lane { .. }
         | Operator::V128Load16Lane { .. }
         | Operator::V128Load32Lane { .. }

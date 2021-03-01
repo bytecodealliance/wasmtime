@@ -24,11 +24,11 @@ more-asserts = "0.2.1"
 smallvec = "1.6.1"
 thiserror = "1.0.9"
 typemap = "0.3"
-wasmparser = "0.75"
+wasmparser = "0.76"
 
 [dev-dependencies]
 lazy_static = "1.2"
-wat = "1.0.23"
+wat = "1.0.36"
 quickcheck = "1.0.0"
 anyhow = "1.0"
 
