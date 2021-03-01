@@ -65,41 +65,6 @@ test = false
 doc = false
 
 [[bin]]
-name = "peepmatic_simple_automata"
-path = "fuzz_targets/peepmatic_simple_automata.rs"
-test = false
-doc = false
-required-features = ["peepmatic-fuzzing"]
-
-[[bin]]
-name = "peepmatic_fst_differential"
-path = "fuzz_targets/peepmatic_fst_differential.rs"
-test = false
-doc = false
-required-features = ["peepmatic-fuzzing"]
-
-[[bin]]
-name = "peepmatic_parser"
-path = "fuzz_targets/peepmatic_parser.rs"
-test = false
-doc = false
-required-features = ["peepmatic-fuzzing"]
-
-[[bin]]
-name = "peepmatic_compile"
-path = "fuzz_targets/peepmatic_compile.rs"
-test = false
-doc = false
-required-features = ["peepmatic-fuzzing"]
-
-[[bin]]
-name = "peepmatic_interp"
-path = "fuzz_targets/peepmatic_interp.rs"
-test = false
-doc = false
-required-features = ["peepmatic-fuzzing"]
-
-[[bin]]
 name = "instantiate-wasm-smith"
 path = "fuzz_targets/instantiate-wasm-smith.rs"
 test = false
