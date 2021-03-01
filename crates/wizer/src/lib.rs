@@ -4,23 +4,28 @@
 
 #![deny(missing_docs)]
 
+mod dummy;
+mod info;
+mod instrument;
+mod parse;
+mod rewrite;
+mod snapshot;
+mod stack_ext;
+mod translate;
+
 use anyhow::Context;
-use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
+use dummy::dummy_imports;
 use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
 use std::fmt::Display;
 use std::path::PathBuf;
 #[cfg(feature = "structopt")]
 use structopt::StructOpt;
 
-const WASM_PAGE_SIZE: u32 = 65_536;
-const NATIVE_PAGE_SIZE: u32 = 4_096;
-
 const DEFAULT_INHERIT_STDIO: bool = true;
 const DEFAULT_INHERIT_ENV: bool = false;
-
 const DEFAULT_WASM_MULTI_VALUE: bool = true;
 const DEFAULT_WASM_MULTI_MEMORY: bool = true;
+const DEFAULT_WASM_MODULE_LINKING: bool = false;
 
 /// Wizer: the WebAssembly pre-initializer!
 ///
@@ -65,6 +70,9 @@ pub struct Wizer {
     ///
     /// This option can be used, for example, to replace a `_start` entry point
     /// in an initialized module with an alternate entry point.
+    ///
+    /// When module linking is enabled, these renames are only applied to the
+    /// outermost module.
     #[cfg_attr(
         feature = "structopt",
         structopt(
@@ -132,26 +140,12 @@ pub struct Wizer {
     /// Enabled by default.
     #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
     wasm_multi_value: Option<bool>,
-}
 
-fn translate_val_type(ty: wasmparser::Type) -> wasm_encoder::ValType {
-    use wasm_encoder::ValType;
-    use wasmparser::Type::*;
-    match ty {
-        I32 => ValType::I32,
-        I64 => ValType::I64,
-        F32 => ValType::F32,
-        F64 => ValType::F64,
-        V128 | FuncRef | ExternRef | ExnRef => panic!("not supported"),
-        Func | EmptyBlockType => unreachable!(),
-    }
-}
-
-fn translate_global_type(ty: wasmparser::GlobalType) -> wasm_encoder::GlobalType {
-    wasm_encoder::GlobalType {
-        val_type: translate_val_type(ty.content_type),
-        mutable: ty.mutable,
-    }
+    /// Enable or disable the Wasm module-linking proposal.
+    ///
+    /// Disabled by default.
+    #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
+    wasm_module_linking: Option<bool>,
 }
 
 struct FuncRenames {
@@ -207,6 +201,7 @@ impl Wizer {
             dirs: vec![],
             wasm_multi_memory: None,
             wasm_multi_value: None,
+            wasm_module_linking: None,
         }
     }
 
@@ -286,6 +281,14 @@ impl Wizer {
         self
     }
 
+    /// Enable or disable the Wasm module-linking proposal.
+    ///
+    /// Defaults to `false`.
+    pub fn wasm_module_linking(&mut self, enable: bool) -> &mut Self {
+        self.wasm_module_linking = Some(enable);
+        self
+    }
+
     /// Initialize the given Wasm, snapshot it, and return the serialized
     /// snapshot as a new, pre-initialized Wasm module.
     pub fn run(&self, wasm: &[u8]) -> anyhow::Result<Vec<u8>> {
@@ -293,23 +296,33 @@ impl Wizer {
         let renames = FuncRenames::parse(&self.func_renames)?;
 
         // Make sure we're given valid Wasm from the get go.
-        self.wasm_validate(wasm)?;
+        self.wasm_validate(&wasm)?;
 
-        let wasm = self.prepare_input_wasm(wasm)?;
-        debug_assert!(
-            self.wasm_validate(&wasm).is_ok(),
-            "if the Wasm was originally valid, then our preparation step shouldn't invalidate it"
-        );
+        let info = parse::parse(wasm)?;
+        let wasm = instrument::instrument(&info);
+
+        if cfg!(debug_assertions) {
+            if let Err(error) = self.wasm_validate(&wasm) {
+                panic!("instrumented Wasm is not valid: {:?}", error);
+            }
+        }
 
         let config = self.wasmtime_config()?;
         let engine = wasmtime::Engine::new(&config)?;
         let store = wasmtime::Store::new(&engine);
-        let module = wasmtime::Module::new(store.engine(), &wasm)?;
+        let module =
+            wasmtime::Module::new(&engine, &wasm).context("failed to compile the Wasm module")?;
         self.validate_init_func(&module)?;
 
         let instance = self.initialize(&store, &module)?;
-        let snapshot = self.snapshot(&instance);
-        let initialized_wasm = self.rewrite(&wasm, &snapshot, &renames);
+        let snapshot = snapshot::snapshot(&store, &instance);
+        let initialized_wasm = self.rewrite(&snapshot, &info, &renames);
+
+        if cfg!(debug_assertions) {
+            if let Err(error) = self.wasm_validate(&initialized_wasm) {
+                panic!("rewritten Wasm is not valid: {:?}", error);
+            }
+        }
 
         Ok(initialized_wasm)
     }
@@ -326,10 +339,13 @@ impl Wizer {
         // Proposals we support.
         config.wasm_multi_memory(self.wasm_multi_memory.unwrap_or(DEFAULT_WASM_MULTI_MEMORY));
         config.wasm_multi_value(self.wasm_multi_value.unwrap_or(DEFAULT_WASM_MULTI_VALUE));
+        config.wasm_module_linking(
+            self.wasm_module_linking
+                .unwrap_or(DEFAULT_WASM_MODULE_LINKING),
+        );
 
         // Proposoals that we should add support for.
         config.wasm_reference_types(false);
-        config.wasm_module_linking(false);
         config.wasm_simd(false);
         config.wasm_threads(false);
         config.wasm_bulk_memory(false);
@@ -343,16 +359,42 @@ impl Wizer {
             // Proposals that we support.
             multi_memory: self.wasm_multi_memory.unwrap_or(DEFAULT_WASM_MULTI_MEMORY),
             multi_value: self.wasm_multi_value.unwrap_or(DEFAULT_WASM_MULTI_VALUE),
+            module_linking: self
+                .wasm_module_linking
+                .unwrap_or(DEFAULT_WASM_MODULE_LINKING),
 
             // Proposals that we should add support for.
             reference_types: false,
-            module_linking: false,
             simd: false,
             threads: false,
             tail_call: false,
-            bulk_memory: false,
             memory64: false,
             exceptions: false,
+
+            // XXX: Though we don't actually support bulk memory yet, we
+            // unconditionally turn it on.
+            //
+            // Many parsers, notably our own `wasmparser`, assume that which
+            // Wasm features are enabled or disabled cannot affect parsing, only
+            // validation. That assumption is incorrect when it comes to data
+            // segments, the multi-memory proposal, and the bulk memory
+            // proposal. A `0x01` prefix of a data segment can either mean "this
+            // is a passive segment" if bulk memory is enabled or "this segment
+            // is referring to memory index 1" if both bulk memory is disabled
+            // and multi-memory is enabled. `wasmparser` fails to handle this
+            // edge case, which means that everything built on top of it, like
+            // Wasmtime, also fail to handle this edge case. However, because
+            // bulk memory is merged into the spec proper and is no longer
+            // technically a "proposal", and because a fix would require
+            // significant refactoring and API changes to give a
+            // `wasmparser::Parser` a `wasmparser::WasmFeatures`, we won't ever
+            // resolve this discrepancy in `wasmparser`.
+            //
+            // So we enable bulk memory during parsing, validation, and
+            // execution, but we add our own custom validation pass to ensure
+            // that no table-mutating instructions exist in our input modules
+            // until we *actually* support bulk memory.
+            bulk_memory: true,
 
             // We will never want to enable this.
             deterministic_only: false,
@@ -361,170 +403,66 @@ impl Wizer {
 
     fn wasm_validate(&self, wasm: &[u8]) -> anyhow::Result<()> {
         log::debug!("Validating input Wasm");
+
         let mut validator = wasmparser::Validator::new();
         validator.wasm_features(self.wasm_features());
         validator.validate_all(wasm)?;
-        Ok(())
-    }
 
-    /// Rewrite the input Wasm with our own custom exports for all globals, and
-    /// memories. This way we can reflect on their values later on in the
-    /// snapshot phase.
-    ///
-    /// TODO: will have to also export tables once we support reference types.
-    fn prepare_input_wasm(&self, full_wasm: &[u8]) -> anyhow::Result<Vec<u8>> {
-        log::debug!("Preparing input Wasm");
-
-        let mut wasm = full_wasm;
-        let mut parser = wasmparser::Parser::new(0);
-        let mut module = wasm_encoder::Module::new();
-
-        // Count how many globals and memories we see in this module, so that we
-        // can export them all.
-        let mut memory_count = 0;
-        let mut global_count = 0;
-
-        loop {
-            let (payload, consumed) =
-                match parser.parse(wasm, true).context("failed to parse Wasm")? {
-                    wasmparser::Chunk::NeedMoreData(_) => anyhow::bail!("invalid Wasm module"),
-                    wasmparser::Chunk::Parsed { payload, consumed } => (payload, consumed),
-                };
-            wasm = &wasm[consumed..];
-
-            use wasmparser::Payload::*;
-            use wasmparser::SectionReader;
+        // Reject bulk memory stuff that manipulates state we don't
+        // snapshot. See the comment inside `wasm_features`.
+        let mut wasm = wasm;
+        let mut parsers = vec![wasmparser::Parser::new(0)];
+        while !parsers.is_empty() {
+            let payload = match parsers.last_mut().unwrap().parse(wasm, true).unwrap() {
+                wasmparser::Chunk::NeedMoreData(_) => unreachable!(),
+                wasmparser::Chunk::Parsed { consumed, payload } => {
+                    wasm = &wasm[consumed..];
+                    payload
+                }
+            };
             match payload {
-                Version { .. } => continue,
-                TypeSection(types) => {
-                    module.section(&wasm_encoder::RawSection {
-                        id: wasm_encoder::SectionId::Type as u8,
-                        data: &full_wasm[types.range().start..types.range().end],
-                    });
+                wasmparser::Payload::CodeSectionEntry(code) => {
+                    let mut ops = code.get_operators_reader().unwrap();
+                    while !ops.eof() {
+                        match ops.read().unwrap() {
+                            wasmparser::Operator::TableCopy { .. } => {
+                                anyhow::bail!("unsupported `table.copy` instruction")
+                            }
+                            wasmparser::Operator::TableInit { .. } => {
+                                anyhow::bail!("unsupported `table.init` instruction")
+                            }
+                            wasmparser::Operator::ElemDrop { .. } => {
+                                anyhow::bail!("unsupported `elem.drop` instruction")
+                            }
+                            wasmparser::Operator::DataDrop { .. } => {
+                                anyhow::bail!("unsupported `data.drop` instruction")
+                            }
+                            wasmparser::Operator::TableSet { .. } => {
+                                unreachable!("part of reference types")
+                            }
+                            _ => continue,
+                        }
+                    }
                 }
-                ImportSection(imports) => {
-                    module.section(&wasm_encoder::RawSection {
-                        id: wasm_encoder::SectionId::Import as u8,
-                        data: &full_wasm[imports.range().start..imports.range().end],
-                    });
+                wasmparser::Payload::ModuleSectionEntry { parser, .. } => {
+                    parsers.push(parser);
                 }
-                AliasSection(_)
-                | InstanceSection(_)
-                | ModuleSectionStart { .. }
-                | ModuleSectionEntry { .. } => {
-                    anyhow::bail!("module linking is not supported yet")
-                }
-                FunctionSection(funcs) => {
-                    module.section(&wasm_encoder::RawSection {
-                        id: wasm_encoder::SectionId::Function as u8,
-                        data: &full_wasm[funcs.range().start..funcs.range().end],
-                    });
-                }
-                TableSection(tables) => {
-                    module.section(&wasm_encoder::RawSection {
-                        id: wasm_encoder::SectionId::Table as u8,
-                        data: &full_wasm[tables.range().start..tables.range().end],
-                    });
-                }
-                MemorySection(mems) => {
-                    memory_count += mems.get_count();
-                    module.section(&wasm_encoder::RawSection {
-                        id: wasm_encoder::SectionId::Memory as u8,
-                        data: &full_wasm[mems.range().start..mems.range().end],
-                    });
-                }
-                GlobalSection(globals) => {
-                    global_count += globals.get_count();
-                    module.section(&wasm_encoder::RawSection {
-                        id: wasm_encoder::SectionId::Global as u8,
-                        data: &full_wasm[globals.range().start..globals.range().end],
-                    });
-                }
-                ExportSection(mut exports) => {
-                    let count = exports.get_count();
-                    let mut exports_encoder = wasm_encoder::ExportSection::new();
+                wasmparser::Payload::DataSection(mut data) => {
+                    let count = data.get_count();
                     for _ in 0..count {
-                        let export = exports.read()?;
-                        exports_encoder.export(
-                            export.field,
-                            match export.kind {
-                                wasmparser::ExternalKind::Function => {
-                                    wasm_encoder::Export::Function(export.index)
-                                }
-                                wasmparser::ExternalKind::Table => {
-                                    wasm_encoder::Export::Table(export.index)
-                                }
-                                wasmparser::ExternalKind::Memory => {
-                                    wasm_encoder::Export::Memory(export.index)
-                                }
-                                wasmparser::ExternalKind::Global => {
-                                    wasm_encoder::Export::Global(export.index)
-                                }
-                                wasmparser::ExternalKind::Type
-                                | wasmparser::ExternalKind::Module
-                                | wasmparser::ExternalKind::Instance => {
-                                    anyhow::bail!("module linking is not supported yet");
-                                }
-                                wasmparser::ExternalKind::Event => {
-                                    anyhow::bail!("exceptions are not supported yet")
-                                }
-                            },
-                        );
+                        if let wasmparser::DataKind::Passive = data.read().unwrap().kind {
+                            anyhow::bail!("unsupported passive data segment");
+                        }
                     }
-                    // Export all of the globals and memories under known names
-                    // so we can manipulate them later.
-                    for i in 0..global_count {
-                        let name = format!("__wizer_global_{}", i);
-                        exports_encoder.export(&name, wasm_encoder::Export::Global(i));
-                    }
-                    for i in 0..memory_count {
-                        let name = format!("__wizer_memory_{}", i);
-                        exports_encoder.export(&name, wasm_encoder::Export::Memory(i));
-                    }
-                    module.section(&exports_encoder);
                 }
-                StartSection { func, range: _ } => {
-                    module.section(&wasm_encoder::StartSection {
-                        function_index: func,
-                    });
+                wasmparser::Payload::End => {
+                    parsers.pop();
                 }
-                ElementSection(elems) => {
-                    module.section(&wasm_encoder::RawSection {
-                        id: wasm_encoder::SectionId::Element as u8,
-                        data: &full_wasm[elems.range().start..elems.range().end],
-                    });
-                }
-                DataCountSection { .. } => anyhow::bail!("bulk memory is not supported yet"),
-                DataSection(data) => {
-                    module.section(&wasm_encoder::RawSection {
-                        id: wasm_encoder::SectionId::Data as u8,
-                        data: &full_wasm[data.range().start..data.range().end],
-                    });
-                }
-                CustomSection {
-                    name,
-                    data,
-                    data_offset: _,
-                } => {
-                    module.section(&wasm_encoder::CustomSection { name, data });
-                }
-                CodeSectionStart {
-                    range,
-                    count: _,
-                    size: _,
-                } => {
-                    let data = &full_wasm[range.start..range.end];
-                    module.section(&wasm_encoder::RawSection {
-                        id: wasm_encoder::SectionId::Code as u8,
-                        data,
-                    });
-                }
-                CodeSectionEntry(_) => continue,
-                UnknownSection { .. } => anyhow::bail!("unknown section"),
-                EventSection(_) => anyhow::bail!("exceptions are not supported yet"),
-                End => return Ok(module.finish()),
+                _ => continue,
             }
         }
+
+        Ok(())
     }
 
     /// Check that the module exports an initialization function, and that the
@@ -549,72 +487,6 @@ impl Wizer {
                 &self.init_func
             ),
         }
-        Ok(())
-    }
-
-    /// Create dummy imports for instantiating the module.
-    fn dummy_imports(
-        &self,
-        store: &wasmtime::Store,
-        module: &wasmtime::Module,
-        linker: &mut wasmtime::Linker,
-    ) -> anyhow::Result<()> {
-        log::debug!("Creating dummy imports");
-
-        for imp in module.imports() {
-            if linker.get_one_by_name(imp.module(), imp.name()).is_ok() {
-                // Already defined, must be part of WASI.
-                continue;
-            }
-
-            match imp.ty() {
-                wasmtime::ExternType::Func(func_ty) => {
-                    let trap = wasmtime::Trap::new(format!(
-                        "cannot call imports within the initialization function; attempted \
-                         to call `'{}' '{}'`",
-                        imp.module(),
-                        imp.name().unwrap()
-                    ));
-                    linker.define(
-                        imp.module(),
-                        imp.name().unwrap(),
-                        wasmtime::Func::new(
-                            store,
-                            func_ty,
-                            move |_caller: wasmtime::Caller, _params, _results| Err(trap.clone()),
-                        ),
-                    )?;
-                }
-                wasmtime::ExternType::Global(_global_ty) => {
-                    // The Wasm module could use `global.get` to read the
-                    // imported value and branch on that or use `global.set` to
-                    // update it if it's mutable. We can't create a trapping
-                    // dummy value, like we can for functions, and we can't
-                    // define a "global segment" to update any imported values
-                    // (although I suppose we could inject a `start` function).
-                    anyhow::bail!("cannot initialize Wasm modules that import globals")
-                }
-                wasmtime::ExternType::Table(_table_ty) => {
-                    // TODO: we could import a dummy table full of trapping
-                    // functions *if* the reference types proposal is not
-                    // enabled, so there is no way the Wasm module can
-                    // manipulate the table. This would allow initializing such
-                    // modules, as long as the initialization didn't do any
-                    // `call_indirect`s.
-                    anyhow::bail!("cannot initialize Wasm modules that import tables")
-                }
-                wasmtime::ExternType::Memory(_memory_ty) => {
-                    // The Wasm module could read the memory and branch on its
-                    // contents, and since we can't create a dummy memory that
-                    // matches the "real" import, nor can we create a trapping
-                    // dummy version like we can for functions, we can't support
-                    // imported memories.
-                    anyhow::bail!("cannot initialize Wasm modules that import memories")
-                }
-                _ => anyhow::bail!("module linking is not supported yet"),
-            };
-        }
-
         Ok(())
     }
 
@@ -646,8 +518,12 @@ impl Wizer {
             let ctx = ctx.build()?;
             wasmtime_wasi::Wasi::new(store, ctx).add_to_linker(&mut linker)?;
         }
-        self.dummy_imports(&store, &module, &mut linker)?;
-        let instance = linker.instantiate(module)?;
+
+        dummy_imports(&store, &module, &mut linker)?;
+
+        let instance = linker
+            .instantiate(module)
+            .context("failed to instantiate the Wasm module")?;
 
         let init_func = instance
             .get_typed_func::<(), ()>(&self.init_func)
@@ -658,364 +534,4 @@ impl Wizer {
 
         Ok(instance)
     }
-
-    /// Snapshot the given instance's globals, memories, and tables.
-    ///
-    /// TODO: when we support reference types, we will have to snapshot tables.
-    fn snapshot<'a>(&self, instance: &'a wasmtime::Instance) -> Snapshot<'a> {
-        // Get the initialized values of all globals.
-        log::debug!("Snapshotting global values");
-        let mut globals = vec![];
-        let mut global_index = 0;
-        loop {
-            let name = format!("__wizer_global_{}", global_index);
-            match instance.get_global(&name) {
-                None => break,
-                Some(global) => {
-                    globals.push(global.get());
-                    global_index += 1;
-                }
-            }
-        }
-
-        // Find and record non-zero regions of memory (in parallel).
-        //
-        // TODO: This could be really slow for large memories. Instead, we
-        // should bring our own memories, protect the pages, and keep a table
-        // with a dirty bit for each page, so we can just snapshot the pages
-        // that actually got changed to non-zero values.
-        log::debug!("Snapshotting memories");
-        let mut memory_mins = vec![];
-        let mut data_segments = vec![];
-        let mut memory_index = 0;
-        loop {
-            let name = format!("__wizer_memory_{}", memory_index);
-            match instance.get_memory(&name) {
-                None => break,
-                Some(memory) => {
-                    memory_mins.push(memory.size());
-
-                    let num_wasm_pages = memory.size();
-                    let num_native_pages = num_wasm_pages * (WASM_PAGE_SIZE / NATIVE_PAGE_SIZE);
-
-                    let memory: &'a [u8] = unsafe {
-                        // Safe because no one else has a (potentially mutable)
-                        // view to this memory and we know the memory will live
-                        // as long as the instance is alive.
-                        std::slice::from_raw_parts(memory.data_ptr(), memory.data_size())
-                    };
-
-                    // Consider each "native" page of the memory. (Scare quotes
-                    // because we have no guarantee that anyone isn't using huge
-                    // page sizes or something). Process each page in
-                    // parallel. If any byte has changed, add the whole page as
-                    // a data segment. This means that the resulting Wasm module
-                    // should instantiate faster, since there are fewer segments
-                    // to bounds check on instantiation. Engines could even
-                    // theoretically recognize that each of these segments is
-                    // page sized and aligned, and use lazy copy-on-write
-                    // initialization of each instance's memory.
-                    data_segments.par_extend((0..num_native_pages).into_par_iter().filter_map(
-                        |i| {
-                            let start = i * NATIVE_PAGE_SIZE;
-                            let end = ((i + 1) * NATIVE_PAGE_SIZE) as usize;
-                            let page = &memory[start as usize..end];
-                            for byte in page {
-                                if *byte != 0 {
-                                    return Some(DataSegment {
-                                        memory_index,
-                                        offset: start as u32,
-                                        data: page,
-                                    });
-                                }
-                            }
-                            None
-                        },
-                    ));
-
-                    memory_index += 1;
-                }
-            }
-        }
-
-        // Sort data segments to enforce determinism in the face of the
-        // parallelism above.
-        data_segments.sort_by_key(|s| (s.memory_index, s.offset));
-
-        // Merge any contiguous pages, so that the engine can initialize them
-        // all at once (ideally with a single copy-on-write `mmap`) rather than
-        // initializing each data segment individually.
-        for i in (1..data_segments.len()).rev() {
-            let a = &data_segments[i - 1];
-            let b = &data_segments[i];
-
-            // Only merge segments for the same memory.
-            if a.memory_index != b.memory_index {
-                continue;
-            }
-
-            // Only merge segments if they are contiguous.
-            if a.offset + u32::try_from(a.data.len()).unwrap() != b.offset {
-                continue;
-            }
-
-            // Okay, merge them together into `a` (so that the next iteration
-            // can merge it with its predecessor) and then remove `b`!
-            data_segments[i - 1].data = unsafe {
-                debug_assert_eq!(
-                    a.data
-                        .as_ptr()
-                        .offset(isize::try_from(a.data.len()).unwrap()),
-                    b.data.as_ptr()
-                );
-                std::slice::from_raw_parts(a.data.as_ptr(), a.data.len() + b.data.len())
-            };
-            data_segments.remove(i);
-        }
-
-        Snapshot {
-            globals,
-            memory_mins,
-            data_segments,
-        }
-    }
-
-    fn rewrite(&self, full_wasm: &[u8], snapshot: &Snapshot, renames: &FuncRenames) -> Vec<u8> {
-        log::debug!("Rewriting input Wasm to pre-initialized state");
-
-        let mut wasm = full_wasm;
-        let mut parser = wasmparser::Parser::new(0);
-        let mut module = wasm_encoder::Module::new();
-
-        // Encode the initialized data segments from the snapshot rather than
-        // the original, uninitialized data segments.
-        let mut added_data = false;
-        let mut add_data_section = |module: &mut wasm_encoder::Module| {
-            if added_data || snapshot.data_segments.is_empty() {
-                return;
-            }
-            let mut data_section = wasm_encoder::DataSection::new();
-            for DataSegment {
-                memory_index,
-                offset,
-                data,
-            } in &snapshot.data_segments
-            {
-                data_section.active(
-                    *memory_index,
-                    wasm_encoder::Instruction::I32Const(*offset as i32),
-                    data.iter().copied(),
-                );
-            }
-            module.section(&data_section);
-            added_data = true;
-        };
-
-        loop {
-            let (payload, consumed) = match parser.parse(wasm, true).unwrap() {
-                wasmparser::Chunk::NeedMoreData(_) => unreachable!(),
-                wasmparser::Chunk::Parsed { payload, consumed } => (payload, consumed),
-            };
-            wasm = &wasm[consumed..];
-
-            use wasmparser::Payload::*;
-            use wasmparser::SectionReader;
-            match payload {
-                Version { .. } => continue,
-                TypeSection(types) => {
-                    module.section(&wasm_encoder::RawSection {
-                        id: wasm_encoder::SectionId::Type as u8,
-                        data: &full_wasm[types.range().start..types.range().end],
-                    });
-                }
-                ImportSection(imports) => {
-                    module.section(&wasm_encoder::RawSection {
-                        id: wasm_encoder::SectionId::Import as u8,
-                        data: &full_wasm[imports.range().start..imports.range().end],
-                    });
-                }
-                AliasSection(_) | InstanceSection(_) => unreachable!(),
-                FunctionSection(funcs) => {
-                    module.section(&wasm_encoder::RawSection {
-                        id: wasm_encoder::SectionId::Function as u8,
-                        data: &full_wasm[funcs.range().start..funcs.range().end],
-                    });
-                }
-                TableSection(tables) => {
-                    module.section(&wasm_encoder::RawSection {
-                        id: wasm_encoder::SectionId::Table as u8,
-                        data: &full_wasm[tables.range().start..tables.range().end],
-                    });
-                }
-                MemorySection(mut mems) => {
-                    // Set the minimum size of each memory to the snapshot's
-                    // initialized size for that memory.
-                    let mut memory_encoder = wasm_encoder::MemorySection::new();
-                    for i in 0..mems.get_count() {
-                        let memory = mems.read().unwrap();
-                        match memory {
-                            wasmparser::MemoryType::M32 { limits, shared: _ } => {
-                                memory_encoder.memory(wasm_encoder::MemoryType {
-                                    limits: wasm_encoder::Limits {
-                                        min: snapshot.memory_mins[i as usize],
-                                        max: limits.maximum,
-                                    },
-                                });
-                            }
-                            _ => unreachable!(),
-                        }
-                    }
-                    module.section(&memory_encoder);
-                }
-                GlobalSection(mut globals) => {
-                    // Encode the initialized values from the snapshot, rather
-                    // than the original values.
-                    let mut globals_encoder = wasm_encoder::GlobalSection::new();
-                    for i in 0..globals.get_count() {
-                        let global = globals.read().unwrap();
-                        globals_encoder.global(
-                            translate_global_type(global.ty),
-                            match snapshot.globals[i as usize] {
-                                wasmtime::Val::I32(x) => wasm_encoder::Instruction::I32Const(x),
-                                wasmtime::Val::I64(x) => wasm_encoder::Instruction::I64Const(x),
-                                wasmtime::Val::F32(x) => {
-                                    wasm_encoder::Instruction::F32Const(f32::from_bits(x))
-                                }
-                                wasmtime::Val::F64(x) => {
-                                    wasm_encoder::Instruction::F64Const(f64::from_bits(x))
-                                }
-                                _ => unreachable!(),
-                            },
-                        );
-                    }
-                    module.section(&globals_encoder);
-                }
-                ExportSection(mut exports) => {
-                    // Remove the `__wizer_*` exports we added during the
-                    // preparation phase, as well as the initialization
-                    // function's export. Removing the latter will enable
-                    // further Wasm optimizations (notably GC'ing unused
-                    // functions) via `wasm-opt` and similar tools.
-                    //
-                    // We also perform renames at this stage. We have
-                    // precomputed the list of old dsts to remove, and the
-                    // mapping from srcs to dsts, so we can do this in one pass.
-                    let count = exports.get_count();
-                    let mut exports_encoder = wasm_encoder::ExportSection::new();
-                    for _ in 0..count {
-                        let export = exports.read().unwrap();
-                        if export.field.starts_with("__wizer_") || export.field == self.init_func {
-                            continue;
-                        }
-                        if !renames.rename_src_to_dst.contains_key(export.field)
-                            && renames.rename_dsts.contains(export.field)
-                        {
-                            // A rename overwrites this export, and it is not renamed to another
-                            // export, so skip it.
-                            continue;
-                        }
-                        let field = match renames.rename_src_to_dst.get(export.field) {
-                            None => export.field,
-                            // A rename spec renames the export to this new
-                            // name, so use it.
-                            Some(dst) => dst,
-                        };
-                        exports_encoder.export(
-                            field,
-                            match export.kind {
-                                wasmparser::ExternalKind::Function => {
-                                    wasm_encoder::Export::Function(export.index)
-                                }
-                                wasmparser::ExternalKind::Table => {
-                                    wasm_encoder::Export::Table(export.index)
-                                }
-                                wasmparser::ExternalKind::Memory => {
-                                    wasm_encoder::Export::Memory(export.index)
-                                }
-                                wasmparser::ExternalKind::Global => {
-                                    wasm_encoder::Export::Global(export.index)
-                                }
-                                wasmparser::ExternalKind::Type
-                                | wasmparser::ExternalKind::Module
-                                | wasmparser::ExternalKind::Instance
-                                | wasmparser::ExternalKind::Event => unreachable!(),
-                            },
-                        );
-                    }
-                    module.section(&exports_encoder);
-                }
-                StartSection { .. } => {
-                    // Skip the `start` function -- it's already been run!
-                    continue;
-                }
-                ElementSection(elems) => {
-                    module.section(&wasm_encoder::RawSection {
-                        id: wasm_encoder::SectionId::Element as u8,
-                        data: &full_wasm[elems.range().start..elems.range().end],
-                    });
-                }
-                DataCountSection { .. } => unreachable!(),
-                DataSection(_) => {
-                    // TODO: supporting bulk memory will require copying over
-                    // any active or declared segments.
-                    add_data_section(&mut module);
-                }
-                CustomSection {
-                    name,
-                    data,
-                    data_offset: _,
-                } => {
-                    // Some tools expect the name custom section to come last,
-                    // even though custom sections are allowed in any order.
-                    if name == "name" {
-                        add_data_section(&mut module);
-                    }
-
-                    module.section(&wasm_encoder::CustomSection { name, data });
-                }
-                CodeSectionStart {
-                    range,
-                    count: _,
-                    size: _,
-                } => {
-                    let data = &full_wasm[range.start..range.end];
-                    module.section(&wasm_encoder::RawSection {
-                        id: wasm_encoder::SectionId::Code as u8,
-                        data,
-                    });
-                }
-                CodeSectionEntry(_) => continue,
-                ModuleSectionStart { .. }
-                | ModuleSectionEntry { .. }
-                | UnknownSection { .. }
-                | EventSection(_) => unreachable!(),
-                End => {
-                    add_data_section(&mut module);
-                    return module.finish();
-                }
-            }
-        }
-    }
-}
-
-/// A "snapshot" of non-default Wasm state after an instance has been
-/// initialized.
-struct Snapshot<'a> {
-    /// Maps global index to its initialized value.
-    globals: Vec<wasmtime::Val>,
-
-    /// A new minimum size for each memory (in units of pages).
-    memory_mins: Vec<u32>,
-
-    /// Segments of non-zero memory.
-    data_segments: Vec<DataSegment<'a>>,
-}
-
-struct DataSegment<'a> {
-    /// The index of this data segment's memory.
-    memory_index: u32,
-    /// The offset within the memory that `data` should be copied to.
-    offset: u32,
-    /// This segment's (non-zero) data.
-    data: &'a [u8],
 }
