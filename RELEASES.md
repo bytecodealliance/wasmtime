@@ -38,6 +38,10 @@ Released 2021-02-16.
   [`cap-std`](https://github.com/bytecodealliance/cap-std) crate was added,
   replacing the previous implementation. This brings improved robustness,
   portability, and performance.
+
+* `wasmtime_wasi::WasiCtxBuilder` moved to
+  `wasi_cap_std_sync::WasiCtxBuilder`.
+
 * The WebAssembly C API is updated, with a few minor API changes
   [#2579](https://github.com/bytecodealliance/wasmtime/pull/2579)
 
