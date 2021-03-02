@@ -250,11 +250,9 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             | ("simd", "simd_store64_lane")
             | ("simd", "simd_store8_lane") => return true,
 
-            // These are only implemented on x64.
-            ("simd", "simd_i64x2_cmp") => return !cfg!(feature = "experimental_x64"),
-
             // These are only implemented on aarch64 and x64.
-            ("simd", "simd_f32x4_pmin_pmax")
+            ("simd", "simd_i64x2_cmp")
+            | ("simd", "simd_f32x4_pmin_pmax")
             | ("simd", "simd_f64x2_pmin_pmax")
             | ("simd", "simd_f32x4_rounding")
             | ("simd", "simd_f64x2_rounding")
