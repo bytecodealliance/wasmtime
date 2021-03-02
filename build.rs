@@ -226,7 +226,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
 
             // Waiting for an update to the spec testsuite to not use old
             // instruction names.
-            ("simd", "simd_boolean") | ("simd", "simd_lane") => return true,
+            ("simd", "simd_lane") => return true,
 
             // These are new instructions that are not really implemented in any backend.
             ("simd", "simd_i8x16_arith2")
@@ -249,7 +249,9 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             | ("simd", "simd_store8_lane") => return true,
 
             // These are only implemented on x64.
-            ("simd", "simd_i64x2_arith2") => return !cfg!(feature = "experimental_x64"),
+            ("simd", "simd_i64x2_arith2") | ("simd", "simd_boolean") => {
+                return !cfg!(feature = "experimental_x64")
+            }
 
             // These are only implemented on aarch64 and x64.
             ("simd", "simd_i64x2_cmp")

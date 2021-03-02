@@ -1633,12 +1633,18 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let bool_result = builder.ins().vany_true(a);
             state.push1(builder.ins().bint(I32, bool_result))
         }
-        Operator::I8x16AllTrue | Operator::I16x8AllTrue | Operator::I32x4AllTrue => {
+        Operator::I8x16AllTrue
+        | Operator::I16x8AllTrue
+        | Operator::I32x4AllTrue
+        | Operator::I64x2AllTrue => {
             let a = pop1_with_bitcast(state, type_of(op), builder);
             let bool_result = builder.ins().vall_true(a);
             state.push1(builder.ins().bint(I32, bool_result))
         }
-        Operator::I8x16Bitmask | Operator::I16x8Bitmask | Operator::I32x4Bitmask => {
+        Operator::I8x16Bitmask
+        | Operator::I16x8Bitmask
+        | Operator::I32x4Bitmask
+        | Operator::I64x2Bitmask => {
             let a = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().vhigh_bits(I32, a));
         }
@@ -1826,8 +1832,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, I16X8, builder);
             state.push1(builder.ins().widening_pairwise_dot_product_s(a, b));
         }
-        Operator::I64x2Bitmask
-        | Operator::I64x2ExtendLowI32x4S
+
+        Operator::I64x2ExtendLowI32x4S
         | Operator::I64x2ExtendHighI32x4S
         | Operator::I64x2ExtendLowI32x4U
         | Operator::I64x2ExtendHighI32x4U
@@ -1852,7 +1858,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64x2ExtMulHighI32x4S
         | Operator::I64x2ExtMulLowI32x4U
         | Operator::I64x2ExtMulHighI32x4U
-        | Operator::I64x2AllTrue
         | Operator::I16x8ExtAddPairwiseI8x16S
         | Operator::I16x8ExtAddPairwiseI8x16U
         | Operator::I32x4ExtAddPairwiseI16x8S
@@ -2647,12 +2652,14 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I64x2GeS
         | Operator::I64x2Neg
         | Operator::I64x2Abs
+        | Operator::I64x2AllTrue
         | Operator::I64x2Shl
         | Operator::I64x2ShrS
         | Operator::I64x2ShrU
         | Operator::I64x2Add
         | Operator::I64x2Sub
         | Operator::I64x2Mul
+        | Operator::I64x2Bitmask
         | Operator::V128Load64Zero { .. } => I64X2,
 
         Operator::F32x4Splat
