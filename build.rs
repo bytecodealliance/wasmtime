@@ -224,10 +224,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
                 return env::var("CARGO_CFG_TARGET_ARCH").unwrap() != "x86_64";
             }
 
-            // Waiting for an update to the spec testsuite to not use old
-            // instruction names.
-            ("simd", "simd_lane") => return true,
-
             // These are new instructions that are not really implemented in any backend.
             ("simd", "simd_i8x16_arith2")
             | ("simd", "simd_conversions")
