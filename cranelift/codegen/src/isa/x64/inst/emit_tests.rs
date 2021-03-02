@@ -3426,6 +3426,12 @@ fn test_x64_emit() {
         "orps    %xmm5, %xmm4",
     ));
 
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Blendvpd, RegMem::reg(xmm15), w_xmm4),
+        "66410F3815E7",
+        "blendvpd %xmm15, %xmm4",
+    ));
+
     // ========================================================
     // XMM_RM_R: Integer Packed
 

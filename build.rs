@@ -183,7 +183,6 @@ fn experimental_x64_should_panic(testsuite: &str, testname: &str, strategy: &str
 
     match (testsuite, testname) {
         ("simd", "simd_i8x16_arith2") => return true, // Unsupported feature: proposed simd operator I8x16Popcnt
-        ("simd", "simd_i64x2_arith2") => return true, // Unsupported feature: proposed simd operator I64x2Abs
         ("simd", "simd_conversions") => return true, // unknown operator or unexpected token: tests/spec_testsuite/proposals/simd/simd_conversions.wast:724:6
         ("simd", "simd_i16x8_extadd_pairwise_i8x16") => return true,
         ("simd", "simd_i16x8_extmul_i8x16") => return true,
@@ -231,7 +230,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
 
             // These are new instructions that are not really implemented in any backend.
             ("simd", "simd_i8x16_arith2")
-            | ("simd", "simd_i64x2_arith2")
             | ("simd", "simd_conversions")
             | ("simd", "simd_i16x8_extadd_pairwise_i8x16")
             | ("simd", "simd_i16x8_extmul_i8x16")
@@ -249,6 +247,9 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             | ("simd", "simd_store32_lane")
             | ("simd", "simd_store64_lane")
             | ("simd", "simd_store8_lane") => return true,
+
+            // These are only implemented on x64.
+            ("simd", "simd_i64x2_arith2") => return !cfg!(feature = "experimental_x64"),
 
             // These are only implemented on aarch64 and x64.
             ("simd", "simd_i64x2_cmp")

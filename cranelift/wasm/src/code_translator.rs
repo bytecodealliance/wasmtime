@@ -1564,7 +1564,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().ineg(a))
         }
-        Operator::I8x16Abs | Operator::I16x8Abs | Operator::I32x4Abs => {
+        Operator::I8x16Abs | Operator::I16x8Abs | Operator::I32x4Abs | Operator::I64x2Abs => {
             let a = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().iabs(a))
         }
@@ -1852,7 +1852,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64x2ExtMulHighI32x4S
         | Operator::I64x2ExtMulLowI32x4U
         | Operator::I64x2ExtMulHighI32x4U
-        | Operator::I64x2Abs
         | Operator::I64x2AllTrue
         | Operator::I16x8ExtAddPairwiseI8x16S
         | Operator::I16x8ExtAddPairwiseI8x16U
