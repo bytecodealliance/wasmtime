@@ -2,10 +2,11 @@
 
 use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
+use crate::isa::aarch64::settings as aarch64_settings;
 use crate::isa::Builder as IsaBuilder;
 use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter, VCode};
 use crate::result::CodegenResult;
-use crate::settings;
+use crate::settings as shared_settings;
 
 use alloc::boxed::Box;
 use core::hash::{Hash, Hasher};
@@ -18,6 +19,7 @@ mod abi;
 pub(crate) mod inst;
 mod lower;
 mod lower_inst;
+mod settings;
 
 use inst::create_reg_universe;
 
@@ -26,17 +28,23 @@ use self::inst::EmitInfo;
 /// An AArch64 backend.
 pub struct AArch64Backend {
     triple: Triple,
-    flags: settings::Flags,
+    flags: shared_settings::Flags,
+    isa_flags: aarch64_settings::Flags,
     reg_universe: RealRegUniverse,
 }
 
 impl AArch64Backend {
     /// Create a new AArch64 backend with the given (shared) flags.
-    pub fn new_with_flags(triple: Triple, flags: settings::Flags) -> AArch64Backend {
+    pub fn new_with_flags(
+        triple: Triple,
+        flags: shared_settings::Flags,
+        isa_flags: aarch64_settings::Flags,
+    ) -> AArch64Backend {
         let reg_universe = create_reg_universe(&flags);
         AArch64Backend {
             triple,
             flags,
+            isa_flags,
             reg_universe,
         }
     }
@@ -46,7 +54,7 @@ impl AArch64Backend {
     fn compile_vcode(
         &self,
         func: &Function,
-        flags: settings::Flags,
+        flags: shared_settings::Flags,
     ) -> CodegenResult<VCode<inst::Inst>> {
         let emit_info = EmitInfo::new(flags.clone());
         let abi = Box::new(abi::AArch64ABICallee::new(func, flags)?);
@@ -92,12 +100,13 @@ impl MachBackend for AArch64Backend {
         self.triple.clone()
     }
 
-    fn flags(&self) -> &settings::Flags {
+    fn flags(&self) -> &shared_settings::Flags {
         &self.flags
     }
 
     fn hash_all_flags(&self, mut hasher: &mut dyn Hasher) {
         self.flags.hash(&mut hasher);
+        self.isa_flags.hash(&mut hasher);
     }
 
     fn reg_universe(&self) -> &RealRegUniverse {
@@ -155,9 +164,10 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
     assert!(triple.architecture == Architecture::Aarch64(Aarch64Architecture::Aarch64));
     IsaBuilder {
         triple,
-        setup: settings::builder(),
-        constructor: |triple, shared_flags, _| {
-            let backend = AArch64Backend::new_with_flags(triple, shared_flags);
+        setup: aarch64_settings::builder(),
+        constructor: |triple, shared_flags, builder| {
+            let isa_flags = aarch64_settings::Flags::new(&shared_flags, builder);
+            let backend = AArch64Backend::new_with_flags(triple, shared_flags, isa_flags);
             Box::new(TargetIsaAdapter::new(backend))
         },
     }
@@ -192,11 +202,14 @@ mod test {
         let v1 = pos.ins().iadd(arg0, v0);
         pos.ins().return_(&[v1]);
 
-        let mut shared_flags = settings::builder();
-        shared_flags.set("opt_level", "none").unwrap();
+        let mut shared_flags_builder = settings::builder();
+        shared_flags_builder.set("opt_level", "none").unwrap();
+        let shared_flags = settings::Flags::new(shared_flags_builder);
+        let isa_flags = aarch64_settings::Flags::new(&shared_flags, aarch64_settings::builder());
         let backend = AArch64Backend::new_with_flags(
             Triple::from_str("aarch64").unwrap(),
-            settings::Flags::new(shared_flags),
+            shared_flags,
+            isa_flags,
         );
         let buffer = backend.compile_function(&mut func, false).unwrap().buffer;
         let code = &buffer.data[..];
@@ -246,11 +259,14 @@ mod test {
         let v3 = pos.ins().isub(v1, v0);
         pos.ins().return_(&[v3]);
 
-        let mut shared_flags = settings::builder();
-        shared_flags.set("opt_level", "none").unwrap();
+        let mut shared_flags_builder = settings::builder();
+        shared_flags_builder.set("opt_level", "none").unwrap();
+        let shared_flags = settings::Flags::new(shared_flags_builder);
+        let isa_flags = aarch64_settings::Flags::new(&shared_flags, aarch64_settings::builder());
         let backend = AArch64Backend::new_with_flags(
             Triple::from_str("aarch64").unwrap(),
-            settings::Flags::new(shared_flags),
+            shared_flags,
+            isa_flags,
         );
         let result = backend
             .compile_function(&mut func, /* want_disasm = */ false)

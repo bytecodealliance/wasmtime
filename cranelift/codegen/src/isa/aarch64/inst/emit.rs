@@ -462,6 +462,16 @@ fn enc_stxr(ty: Type, rs: Writable<Reg>, rt: Reg, rn: Reg) -> u32 {
         | machreg_to_gpr(rt)
 }
 
+fn enc_cas(size: u32, rs: Writable<Reg>, rt: Reg, rn: Reg) -> u32 {
+    debug_assert_eq!(size & 0b11, size);
+
+    0b00_0010001_1_1_00000_1_11111_00000_00000
+        | size << 30
+        | machreg_to_gpr(rs.to_reg()) << 16
+        | machreg_to_gpr(rn) << 5
+        | machreg_to_gpr(rt)
+}
+
 fn enc_asimd_mod_imm(rd: Writable<Reg>, q_op: u32, cmode: u32, imm: u8) -> u32 {
     let abc = (imm >> 5) as u32;
     let defgh = (imm & 0b11111) as u32;
@@ -1164,7 +1174,18 @@ impl MachInstEmit for Inst {
 
                 sink.put4(enc_dmb_ish()); // dmb ish
             }
-            &Inst::AtomicCAS { ty } => {
+            &Inst::AtomicCAS { rs, rt, rn, ty } => {
+                let size = match ty {
+                    I8 => 0b00,
+                    I16 => 0b01,
+                    I32 => 0b10,
+                    I64 => 0b11,
+                    _ => panic!("Unsupported type: {}", ty),
+                };
+
+                sink.put4(enc_cas(size, rs, rt, rn));
+            }
+            &Inst::AtomicCASLoop { ty } => {
                 /* Emit this:
                      dmb         ish
                     again:

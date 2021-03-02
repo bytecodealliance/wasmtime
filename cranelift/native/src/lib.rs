@@ -105,6 +105,20 @@ pub fn builder_with_options(
         }
     }
 
+    // `stdsimd` is necessary for std::is_aarch64_feature_detected!().
+    #[cfg(all(target_arch = "aarch64", feature = "stdsimd"))]
+    {
+        use cranelift_codegen::settings::Configurable;
+
+        if !infer_native_flags {
+            return Ok(isa_builder);
+        }
+
+        if std::is_aarch64_feature_detected!("lse") {
+            isa_builder.enable("has_lse").unwrap();
+        }
+    }
+
     // squelch warnings about unused mut/variables on some platforms.
     drop(&mut isa_builder);
     drop(infer_native_flags);

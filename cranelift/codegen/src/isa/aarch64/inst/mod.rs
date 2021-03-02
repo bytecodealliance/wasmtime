@@ -696,19 +696,26 @@ pub enum Inst {
         op: inst_common::AtomicRmwOp,
     },
 
+    /// An atomic compare-and-swap operation. This instruction is sequentially consistent.
+    AtomicCAS {
+        rs: Writable<Reg>,
+        rt: Reg,
+        rn: Reg,
+        ty: Type,
+    },
+
     /// Similar to AtomicRMW, a compare-and-swap operation implemented using a load-linked
-    /// store-conditional loop.  (Although we could possibly implement it more directly using
-    /// CAS insns that are available in some revisions of AArch64 above 8.0).  The sequence is
-    /// both preceded and followed by a fence which is at least as comprehensive as that of the
-    /// `Fence` instruction below.  This instruction is sequentially consistent.  Note that the
-    /// operand conventions, although very similar to AtomicRMW, are different:
+    /// store-conditional loop. The sequence is both preceded and followed by a fence which is
+    /// at least as comprehensive as that of the `Fence` instruction below.  This instruction
+    /// is sequentially consistent.  Note that the operand conventions, although very similar
+    /// to AtomicRMW, are different:
     ///
     /// x25   (rd) address
     /// x26   (rd) expected value
     /// x28   (rd) replacement value
     /// x27   (wr) old value
     /// x24   (wr) scratch reg; value afterwards has no meaning
-    AtomicCAS {
+    AtomicCASLoop {
         ty: Type, // I8, I16, I32 or I64
     },
 
@@ -1755,7 +1762,12 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(writable_xreg(27));
             collector.add_def(writable_xreg(28));
         }
-        &Inst::AtomicCAS { .. } => {
+        &Inst::AtomicCAS { rs, rt, rn, .. } => {
+            collector.add_mod(rs);
+            collector.add_use(rt);
+            collector.add_use(rn);
+        }
+        &Inst::AtomicCASLoop { .. } => {
             collector.add_use(xreg(25));
             collector.add_use(xreg(26));
             collector.add_use(xreg(28));
@@ -2330,7 +2342,17 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         &mut Inst::AtomicRMW { .. } => {
             // There are no vregs to map in this insn.
         }
-        &mut Inst::AtomicCAS { .. } => {
+        &mut Inst::AtomicCAS {
+            ref mut rs,
+            ref mut rt,
+            ref mut rn,
+            ..
+        } => {
+            map_mod(mapper, rs);
+            map_use(mapper, rt);
+            map_use(mapper, rn);
+        }
+        &mut Inst::AtomicCASLoop { .. } => {
             // There are no vregs to map in this insn.
         }
         &mut Inst::AtomicLoad {
@@ -3302,7 +3324,21 @@ impl Inst {
                     "atomically {{ {}_bits_at_[x25]) {:?}= x26 ; x27 = old_value_at_[x25]; x24,x28 = trash }}",
                     ty.bits(), op)
             }
-            &Inst::AtomicCAS { ty, .. } => {
+            &Inst::AtomicCAS { rs, rt, rn, ty } => {
+                let op = match ty {
+                    I8 => "casalb",
+                    I16 => "casalh",
+                    I32 | I64 => "casal",
+                    _ => panic!("Unsupported type: {}", ty),
+                };
+                let size = OperandSize::from_ty(ty);
+                let rs = show_ireg_sized(rs.to_reg(), mb_rru, size);
+                let rt = show_ireg_sized(rt, mb_rru, size);
+                let rn = rn.show_rru(mb_rru);
+
+                format!("{} {}, {}, [{}]", op, rs, rt, rn)
+            }
+            &Inst::AtomicCASLoop { ty } => {
                 format!(
                     "atomically {{ compare-and-swap({}_bits_at_[x25], x26 -> x28), x27 = old_value_at_[x25]; x24 = trash }}",
                     ty.bits())
