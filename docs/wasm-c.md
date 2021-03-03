@@ -20,4 +20,9 @@ that stack overflow will often lead to corrupted globals. The
 by the globals and the heap, which may produce slightly larger code, but will
 more reliably trap on stack overflow.
 
+See the [wasm-ld documentation] for more information and additional flags. Note
+flags related to dynamic linking, such `-shared` and `--export-dynamic` are
+not yet stable and are expected to change behavior in the future.
+
 [unwinding support in WebAssembly]: https://github.com/WebAssembly/exception-handling/
+[wasm-ld documentation]: https://lld.llvm.org/WebAssembly.html
