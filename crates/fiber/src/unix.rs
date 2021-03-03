@@ -75,7 +75,7 @@ impl Fiber {
         Ok(fiber)
     }
 
-    pub fn new_with_stack<F, A, B, C>(top_of_stack: *mut u8, func: F) -> Self
+    pub fn new_with_stack<F, A, B, C>(top_of_stack: *mut u8, func: F) -> io::Result<Self>
     where
         F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
     {
@@ -86,7 +86,7 @@ impl Fiber {
 
         fiber.init(func);
 
-        fiber
+        Ok(fiber)
     }
 
     fn init<F, A, B, C>(&self, func: F)

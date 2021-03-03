@@ -66,7 +66,7 @@ impl<'a, Resume, Yield, Return> Fiber<'a, Resume, Yield, Return> {
         func: impl FnOnce(Resume, &Suspend<Resume, Yield, Return>) -> Return + 'a,
     ) -> io::Result<Fiber<'a, Resume, Yield, Return>> {
         Ok(Fiber {
-            inner: imp::Fiber::new_with_stack(top_of_stack, func),
+            inner: imp::Fiber::new_with_stack(top_of_stack, func)?,
             done: Cell::new(false),
             _phantom: PhantomData,
         })

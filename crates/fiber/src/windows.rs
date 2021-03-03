@@ -3,6 +3,7 @@ use std::cell::Cell;
 use std::io;
 use std::ptr;
 use winapi::shared::minwindef::*;
+use winapi::shared::winerror::ERROR_NOT_SUPPORTED;
 use winapi::um::fibersapi::*;
 use winapi::um::winbase::*;
 
@@ -66,12 +67,11 @@ impl Fiber {
         }
     }
 
-    pub fn new_with_stack<F, A, B, C>(_top_of_stack: *mut u8, _func: F) -> Self
+    pub fn new_with_stack<F, A, B, C>(_top_of_stack: *mut u8, _func: F) -> io::Result<Self>
     where
         F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
     {
-        // Windows fibers have no support for custom stacks
-        unimplemented!()
+        Err(io::Error::from_raw_os_error(ERROR_NOT_SUPPORTED as i32))
     }
 
     pub(crate) fn resume<A, B, C>(&self, result: &Cell<RunResult<A, B, C>>) {
