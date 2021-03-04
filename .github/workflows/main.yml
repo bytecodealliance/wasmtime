@@ -346,6 +346,39 @@ jobs:
         CARGO_VERSION: "+nightly-2020-12-26"
         RUST_BACKTRACE: 1
 
+  # Perform tests on the new x64 backend on Windows as well.
+  test_x64_win:
+    name: Test x64 new backend on Windows
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+      with:
+        toolchain: nightly-2020-11-29
+    - uses: ./.github/actions/define-llvm-env
+
+    - name: Install libclang
+      # Note: libclang is pre-installed on the macOS and linux images.
+      if: matrix.os == 'windows-latest'
+      run: |
+        curl https://releases.llvm.org/9.0.0/LLVM-9.0.0-win64.exe -o llvm-installer.exe
+        7z x llvm-installer.exe -oC:/llvm-binary
+        echo LIBCLANG_PATH=C:/llvm-binary/bin/libclang.dll >> $GITHUB_ENV
+        echo C:/llvm-binary/bin >> $GITHUB_PATH
+
+    # Install wasm32 targets in order to build various tests throughout the
+    # repo.
+    - run: rustup target add wasm32-wasi
+    - run: rustup target add wasm32-unknown-unknown
+
+    # Run the x64 CI script.
+    - run: ./ci/run-experimental-x64-ci.sh
+      env:
+        CARGO_VERSION: "+nightly-2020-11-29"
+        RUST_BACKTRACE: 1
+
   # Build and test the wasi-nn module.
   test_wasi_nn:
     name: Test wasi-nn module
