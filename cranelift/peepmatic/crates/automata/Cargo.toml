@@ -1,6 +1,6 @@
 [package]
 name = "peepmatic-automata"
-version = "0.70.0"
+version = "0.71.0"
 authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
