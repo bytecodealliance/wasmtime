@@ -2,6 +2,24 @@
 
 --------------------------------------------------------------------------------
 
+## 0.24.0
+
+### Added
+
+* Implement support for `async` functions in Wasmtime
+  [#2434](https://github.com/bytecodealliance/wasmtime/pull/2434)
+
+### Fixed
+
+* Fix preservation of the sigaltstack on macOS
+  [#2676](https://github.com/bytecodealliance/wasmtime/pull/2676)
+* Fix incorrect semver dependencies involving fs-set-times.
+  [#2705](https://github.com/bytecodealliance/wasmtime/pull/2705)
+* Fix some `i128` shift-related bugs in x64 backend.
+  [#2682](https://github.com/bytecodealliance/wasmtime/pull/2682)
+* Fix incomplete trap metadata due to multiple traps at one address
+  [#2685](https://github.com/bytecodealliance/wasmtime/pull/2685)
+
 ## 0.23.0
 
 Released 2021-02-16.
