@@ -601,6 +601,16 @@ impl Linker {
         Instance::new(&self.store, module, &imports)
     }
 
+    /// Attempts to instantiate the `module` provided. This is the same as [`Linker::instantiate`],
+    /// except for async `Store`s.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub async fn instantiate_async(&self, module: &Module) -> Result<Instance> {
+        let imports = self.compute_imports(module)?;
+
+        Instance::new_async(&self.store, module, &imports).await
+    }
+
     fn compute_imports(&self, module: &Module) -> Result<Vec<Extern>> {
         module
             .imports()
