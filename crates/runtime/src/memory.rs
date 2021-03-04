@@ -4,6 +4,7 @@
 
 use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
+use anyhow::Result;
 use more_asserts::{assert_ge, assert_le};
 use std::cell::{Cell, RefCell};
 use std::cmp::min;
@@ -13,7 +14,7 @@ use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 /// A memory allocator
 pub trait RuntimeMemoryCreator: Send + Sync {
     /// Create new RuntimeLinearMemory
-    fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn RuntimeLinearMemory>, String>;
+    fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn RuntimeLinearMemory>>;
 }
 
 /// A default memory allocator used by Wasmtime
@@ -21,8 +22,8 @@ pub struct DefaultMemoryCreator;
 
 impl RuntimeMemoryCreator for DefaultMemoryCreator {
     /// Create new MmapMemory
-    fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn RuntimeLinearMemory>, String> {
-        Ok(Box::new(MmapMemory::new(plan)?) as Box<dyn RuntimeLinearMemory>)
+    fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn RuntimeLinearMemory>> {
+        Ok(Box::new(MmapMemory::new(plan)?) as _)
     }
 }
 
@@ -65,7 +66,7 @@ struct WasmMmap {
 
 impl MmapMemory {
     /// Create a new linear memory instance with specified minimum and maximum number of wasm pages.
-    pub fn new(plan: &MemoryPlan) -> Result<Self, String> {
+    pub fn new(plan: &MemoryPlan) -> Result<Self> {
         // `maximum` cannot be set to more than `65536` pages.
         assert_le!(plan.memory.minimum, WASM_MAX_PAGES);
         assert!(plan.memory.maximum.is_none() || plan.memory.maximum.unwrap() <= WASM_MAX_PAGES);
@@ -177,7 +178,7 @@ enum MemoryStorage {
         base: *mut u8,
         size: Cell<u32>,
         maximum: u32,
-        make_accessible: unsafe fn(*mut u8, usize) -> bool,
+        make_accessible: fn(*mut u8, usize) -> Result<()>,
     },
     Dynamic(Box<dyn RuntimeLinearMemory>),
 }
@@ -189,10 +190,7 @@ pub struct Memory {
 
 impl Memory {
     /// Create a new dynamic (movable) memory instance for the specified plan.
-    pub fn new_dynamic(
-        plan: &MemoryPlan,
-        creator: &dyn RuntimeMemoryCreator,
-    ) -> Result<Self, String> {
+    pub fn new_dynamic(plan: &MemoryPlan, creator: &dyn RuntimeMemoryCreator) -> Result<Self> {
         Ok(Self {
             storage: MemoryStorage::Dynamic(creator.new_memory(plan)?),
         })
@@ -203,14 +201,10 @@ impl Memory {
         plan: &MemoryPlan,
         base: *mut u8,
         maximum: u32,
-        make_accessible: unsafe fn(*mut u8, usize) -> bool,
-    ) -> Result<Self, String> {
+        make_accessible: fn(*mut u8, usize) -> Result<()>,
+    ) -> Result<Self> {
         if plan.memory.minimum > 0 {
-            if unsafe {
-                !make_accessible(base, plan.memory.minimum as usize * WASM_PAGE_SIZE as usize)
-            } {
-                return Err("memory cannot be made accessible".into());
-            }
+            make_accessible(base, plan.memory.minimum as usize * WASM_PAGE_SIZE as usize)?;
         }
 
         Ok(Self {
@@ -258,9 +252,7 @@ impl Memory {
                 let start = usize::try_from(old_size).unwrap() * WASM_PAGE_SIZE as usize;
                 let len = usize::try_from(delta).unwrap() * WASM_PAGE_SIZE as usize;
 
-                if unsafe { !make_accessible(base.add(start), len) } {
-                    return None;
-                }
+                make_accessible(unsafe { base.add(start) }, len).ok()?;
 
                 size.set(new_size);
 

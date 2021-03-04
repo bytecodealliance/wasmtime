@@ -1,27 +1,64 @@
-use crate::Mmap;
-use anyhow::{anyhow, Result};
+use anyhow::{bail, Context, Result};
 
-pub unsafe fn make_accessible(addr: *mut u8, len: usize) -> bool {
-    region::protect(addr, len, region::Protection::READ_WRITE).is_ok()
-}
+fn decommit(addr: *mut u8, len: usize, protect: bool) -> Result<()> {
+    if len == 0 {
+        return Ok(());
+    }
 
-pub unsafe fn decommit(addr: *mut u8, len: usize) {
-    assert_eq!(
+    if unsafe {
         libc::mmap(
             addr as _,
             len,
-            libc::PROT_NONE,
+            if protect {
+                libc::PROT_NONE
+            } else {
+                libc::PROT_READ | libc::PROT_WRITE
+            },
             libc::MAP_PRIVATE | libc::MAP_ANON | libc::MAP_FIXED,
             -1,
             0,
-        ) as *mut u8,
-        addr,
-        "mmap failed to remap pages: {}",
-        std::io::Error::last_os_error()
-    );
+        ) as *mut u8
+    } != addr
+    {
+        bail!(
+            "mmap failed to remap pages: {}",
+            std::io::Error::last_os_error()
+        );
+    }
+
+    Ok(())
 }
 
-pub fn create_memory_map(accessible_size: usize, mapping_size: usize) -> Result<Mmap> {
-    Mmap::accessible_reserved(accessible_size, mapping_size)
-        .map_err(|e| anyhow!("failed to allocate pool memory: {}", e))
+pub fn commit_memory_pages(addr: *mut u8, len: usize) -> Result<()> {
+    if len == 0 {
+        return Ok(());
+    }
+
+    // Just change the protection level to READ|WRITE
+    unsafe {
+        region::protect(addr, len, region::Protection::READ_WRITE)
+            .context("failed to make linear memory pages read/write")
+    }
+}
+
+pub fn decommit_memory_pages(addr: *mut u8, len: usize) -> Result<()> {
+    decommit(addr, len, true)
+}
+
+pub fn commit_table_pages(_addr: *mut u8, _len: usize) -> Result<()> {
+    // A no-op as table pages remain READ|WRITE
+    Ok(())
+}
+
+pub fn decommit_table_pages(addr: *mut u8, len: usize) -> Result<()> {
+    decommit(addr, len, false)
+}
+
+pub fn commit_stack_pages(_addr: *mut u8, _len: usize) -> Result<()> {
+    // A no-op as stack pages remain READ|WRITE
+    Ok(())
+}
+
+pub fn decommit_stack_pages(addr: *mut u8, len: usize) -> Result<()> {
+    decommit(addr, len, false)
 }

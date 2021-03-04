@@ -31,9 +31,7 @@ cfg_if::cfg_if! {
     } else if #[cfg(all(feature = "uffd", target_os = "linux"))] {
         mod uffd;
         use uffd as imp;
-        use imp::PageFaultHandler;
-        use super::{check_init_bounds, initialize_tables};
-        use wasmtime_environ::MemoryInitialization;
+        use imp::initialize_memory_pool;
     } else if #[cfg(target_os = "linux")] {
         mod linux;
         use linux as imp;
@@ -43,7 +41,10 @@ cfg_if::cfg_if! {
     }
 }
 
-use imp::{create_memory_map, decommit, make_accessible};
+use imp::{
+    commit_memory_pages, commit_stack_pages, commit_table_pages, decommit_memory_pages,
+    decommit_stack_pages, decommit_table_pages,
+};
 
 fn round_up_to_pow2(n: usize, to: usize) -> usize {
     debug_assert!(to > 0);
@@ -272,9 +273,9 @@ impl Default for InstanceLimits {
         Self {
             count: 1000,
             #[cfg(target_pointer_width = "32")]
-            memory_reservation_size: 0xA00000,
+            memory_reservation_size: 10 * (1 << 20), // 10 MiB,
             #[cfg(target_pointer_width = "64")]
-            memory_reservation_size: 0x180000000,
+            memory_reservation_size: 6 * (1 << 30), // 6 GiB,
         }
     }
 }
@@ -302,45 +303,6 @@ impl PoolingAllocationStrategy {
 impl Default for PoolingAllocationStrategy {
     fn default() -> Self {
         Self::NextAvailable
-    }
-}
-
-// Used to iterate the base address of instance memories and tables.
-struct BasePointerIterator {
-    base: *mut u8,
-    current: usize,
-    num: usize,
-    size: usize,
-}
-
-impl BasePointerIterator {
-    fn new(base: *mut u8, num: usize, size: usize) -> Self {
-        Self {
-            base,
-            current: 0,
-            num,
-            size,
-        }
-    }
-}
-
-impl Iterator for BasePointerIterator {
-    type Item = *mut u8;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let current = self.current;
-        if current == self.num {
-            return None;
-        }
-
-        self.current += 1;
-
-        Some(unsafe { self.base.add(current * self.size) })
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.num - self.current;
-        (remaining, Some(remaining))
     }
 }
 
@@ -395,8 +357,11 @@ impl InstancePool {
             .checked_mul(max_instances)
             .ok_or_else(|| anyhow!("total size of instance data exceeds addressable memory"))?;
 
+        let mapping = Mmap::accessible_reserved(allocation_size, allocation_size)
+            .context("failed to create instance pool mapping")?;
+
         let pool = Self {
-            mapping: create_memory_map(allocation_size, allocation_size)?,
+            mapping,
             offsets,
             instance_size,
             max_instances,
@@ -414,15 +379,18 @@ impl InstancePool {
         Ok(pool)
     }
 
-    fn initialize(&self, index: usize, module: &Arc<Module>) {
+    unsafe fn instance(&self, index: usize) -> &mut Instance {
         debug_assert!(index < self.max_instances);
+        &mut *(self.mapping.as_mut_ptr().add(index * self.instance_size) as *mut Instance)
+    }
 
+    fn initialize(&self, index: usize, module: &Arc<Module>) {
         unsafe {
-            let instance_ptr = self.mapping.as_mut_ptr().add(index * self.instance_size);
+            let instance = self.instance(index);
 
             // Write a default instance with preallocated memory/table map storage to the ptr
             std::ptr::write(
-                instance_ptr as _,
+                instance as _,
                 Instance {
                     module: module.clone(),
                     offsets: self.offsets,
@@ -456,9 +424,7 @@ impl InstancePool {
         let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
 
         unsafe {
-            debug_assert!(index < self.max_instances);
-            let instance =
-                &mut *(self.mapping.as_mut_ptr().add(index * self.instance_size) as *mut Instance);
+            let instance = self.instance(index);
 
             instance.module = req.module.clone();
             instance.offsets = VMOffsets::new(
@@ -490,47 +456,40 @@ impl InstancePool {
         let index = (addr - base) / self.instance_size;
         debug_assert!(index < self.max_instances);
 
-        unsafe {
-            // Decommit any linear memories that were used
-            for (mem, base) in (*handle.instance)
-                .memories
-                .values()
-                .zip(self.memories.get(index))
-            {
-                let size = (mem.size() * WASM_PAGE_SIZE) as usize;
-                if size > 0 {
-                    decommit(base, size);
-                }
-            }
+        let instance = unsafe { &mut *handle.instance };
 
-            // Decommit any tables that were used
-            let table_element_size = max_table_element_size();
-            for (table, base) in (*handle.instance)
-                .tables
-                .values()
-                .zip(self.tables.get(index))
-            {
-                let size = round_up_to_pow2(
-                    table.size() as usize * table_element_size,
-                    self.tables.page_size,
-                );
-                if size > 0 {
-                    decommit(base, size);
-                }
-            }
-
-            // Drop the host state
-            (*handle.instance).host_state = Box::new(());
+        // Decommit any linear memories that were used
+        for (mem, base) in instance.memories.values().zip(self.memories.get(index)) {
+            let size = (mem.size() * WASM_PAGE_SIZE) as usize;
+            decommit_memory_pages(base, size).unwrap();
         }
 
-        {
-            self.free_list.lock().unwrap().push(index);
+        instance.memories.clear();
+        instance.dropped_data.borrow_mut().clear();
+
+        // Decommit any tables that were used
+        let table_element_size = max_table_element_size();
+        for (table, base) in instance.tables.values().zip(self.tables.get(index)) {
+            let size = round_up_to_pow2(
+                table.size() as usize * table_element_size,
+                self.tables.page_size,
+            );
+
+            decommit_table_pages(base, size).unwrap();
         }
+
+        instance.tables.clear();
+        instance.dropped_elements.borrow_mut().clear();
+
+        // Drop any host state
+        instance.host_state = Box::new(());
+
+        self.free_list.lock().unwrap().push(index);
     }
 
     fn set_instance_memories(
         instance: &mut Instance,
-        mut memories: BasePointerIterator,
+        mut memories: impl Iterator<Item = *mut u8>,
         max_pages: u32,
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
@@ -541,19 +500,24 @@ impl InstancePool {
             .reset_guard_pages()
             .map_err(|e| InstantiationError::Resource(e.to_string()))?;
 
-        instance.memories.clear();
+        debug_assert!(instance.memories.is_empty());
 
         for plan in
             (&module.memory_plans.values().as_slice()[module.num_imported_memories..]).iter()
         {
             instance.memories.push(
-                Memory::new_static(plan, memories.next().unwrap(), max_pages, make_accessible)
-                    .map_err(InstantiationError::Resource)?,
+                Memory::new_static(
+                    plan,
+                    memories.next().unwrap(),
+                    max_pages,
+                    commit_memory_pages,
+                )
+                .map_err(|e| InstantiationError::Resource(e.to_string()))?,
             );
         }
 
         let mut dropped_data = instance.dropped_data.borrow_mut();
-        dropped_data.clear();
+        debug_assert!(dropped_data.is_empty());
         dropped_data.resize(module.passive_data.len());
 
         Ok(())
@@ -561,22 +525,18 @@ impl InstancePool {
 
     fn set_instance_tables(
         instance: &mut Instance,
-        mut tables: BasePointerIterator,
+        mut tables: impl Iterator<Item = *mut u8>,
         max_elements: u32,
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
 
-        instance.tables.clear();
+        debug_assert!(instance.tables.is_empty());
 
         for plan in (&module.table_plans.values().as_slice()[module.num_imported_tables..]).iter() {
             let base = tables.next().unwrap();
 
-            // Make the table data accessible
-            if unsafe { !make_accessible(base, max_elements as usize * max_table_element_size()) } {
-                return Err(InstantiationError::Resource(
-                    "failed to make instance memory accessible".into(),
-                ));
-            }
+            commit_table_pages(base, max_elements as usize * max_table_element_size())
+                .map_err(|e| InstantiationError::Resource(e.to_string()))?;
 
             instance
                 .tables
@@ -584,7 +544,7 @@ impl InstancePool {
         }
 
         let mut dropped_elements = instance.dropped_elements.borrow_mut();
-        dropped_elements.clear();
+        debug_assert!(dropped_elements.is_empty());
         dropped_elements.resize(module.passive_elements.len());
 
         Ok(())
@@ -623,8 +583,31 @@ struct MemoryPool {
 
 impl MemoryPool {
     fn new(module_limits: &ModuleLimits, instance_limits: &InstanceLimits) -> Result<Self> {
-        let memory_size = usize::try_from(instance_limits.memory_reservation_size)
-            .map_err(|_| anyhow!("memory reservation size exceeds addressable memory"))?;
+        // The maximum module memory page count cannot exceed 65536 pages
+        if module_limits.memory_pages > 0x10000 {
+            bail!(
+                "module memory page limit of {} exceeds the maximum of 65536",
+                module_limits.memory_pages
+            );
+        }
+
+        // The maximum module memory page count cannot exceed the memory reservation size
+        if (module_limits.memory_pages * WASM_PAGE_SIZE) as u64
+            > instance_limits.memory_reservation_size
+        {
+            bail!(
+                "module memory page limit of {} pages exceeds the memory reservation size limit of {} bytes",
+                module_limits.memory_pages,
+                instance_limits.memory_reservation_size
+            );
+        }
+
+        let memory_size = if module_limits.memory_pages > 0 {
+            usize::try_from(instance_limits.memory_reservation_size)
+                .map_err(|_| anyhow!("memory reservation size exceeds addressable memory"))?
+        } else {
+            0
+        };
 
         debug_assert!(
             memory_size % region::page::size() == 0,
@@ -642,25 +625,36 @@ impl MemoryPool {
                 anyhow!("total size of memory reservation exceeds addressable memory")
             })?;
 
-        Ok(Self {
-            mapping: create_memory_map(0, allocation_size)?,
+        // Create a completely inaccessible region to start
+        let mapping = Mmap::accessible_reserved(0, allocation_size)
+            .context("failed to create memory pool mapping")?;
+
+        let pool = Self {
+            mapping,
             memory_size,
             max_memories,
             max_instances,
             max_wasm_pages: module_limits.memory_pages,
-        })
+        };
+
+        // uffd support requires some special setup for the memory pool
+        #[cfg(all(feature = "uffd", target_os = "linux"))]
+        initialize_memory_pool(&pool)?;
+
+        Ok(pool)
     }
 
-    fn get(&self, instance_index: usize) -> BasePointerIterator {
+    fn get(&self, instance_index: usize) -> impl Iterator<Item = *mut u8> {
         debug_assert!(instance_index < self.max_instances);
 
-        let base = unsafe {
+        let base: *mut u8 = unsafe {
             self.mapping
                 .as_mut_ptr()
                 .add(instance_index * self.memory_size * self.max_memories) as _
         };
 
-        BasePointerIterator::new(base, self.max_memories, self.memory_size)
+        let size = self.memory_size;
+        (0..self.max_memories).map(move |i| unsafe { base.add(i * size) })
     }
 }
 
@@ -668,9 +662,6 @@ impl MemoryPool {
 ///
 /// Each instance index into the pool returns an iterator over the base addresses
 /// of the instance's tables.
-///
-/// The userfault handler relies on how tables are stored in the mapping,
-/// so make sure the uffd implementation is kept up-to-date.
 #[derive(Debug)]
 struct TablePool {
     mapping: Mmap,
@@ -685,12 +676,16 @@ impl TablePool {
     fn new(module_limits: &ModuleLimits, instance_limits: &InstanceLimits) -> Result<Self> {
         let page_size = region::page::size();
 
-        let table_size = round_up_to_pow2(
-            max_table_element_size()
-                .checked_mul(module_limits.table_elements as usize)
-                .ok_or_else(|| anyhow!("table size exceeds addressable memory"))?,
-            page_size,
-        );
+        let table_size = if module_limits.table_elements > 0 {
+            round_up_to_pow2(
+                max_table_element_size()
+                    .checked_mul(module_limits.table_elements as usize)
+                    .ok_or_else(|| anyhow!("table size exceeds addressable memory"))?,
+                page_size,
+            )
+        } else {
+            0
+        };
 
         let max_instances = instance_limits.count as usize;
         let max_tables = module_limits.tables as usize;
@@ -700,26 +695,30 @@ impl TablePool {
             .and_then(|c| c.checked_mul(max_instances))
             .ok_or_else(|| anyhow!("total size of instance tables exceeds addressable memory"))?;
 
+        let mapping = Mmap::accessible_reserved(allocation_size, allocation_size)
+            .context("failed to create table pool mapping")?;
+
         Ok(Self {
-            mapping: create_memory_map(0, allocation_size)?,
+            mapping,
             table_size,
             max_tables,
             max_instances,
-            page_size: region::page::size(),
+            page_size,
             max_elements: module_limits.table_elements,
         })
     }
 
-    fn get(&self, instance_index: usize) -> BasePointerIterator {
+    fn get(&self, instance_index: usize) -> impl Iterator<Item = *mut u8> {
         debug_assert!(instance_index < self.max_instances);
 
-        let base = unsafe {
+        let base: *mut u8 = unsafe {
             self.mapping
                 .as_mut_ptr()
                 .add(instance_index * self.table_size * self.max_tables) as _
         };
 
-        BasePointerIterator::new(base, self.max_tables, self.table_size)
+        let size = self.table_size;
+        (0..self.max_tables).map(move |i| unsafe { base.add(i * size) })
     }
 }
 
@@ -733,9 +732,6 @@ impl TablePool {
 ///
 /// The top of the stack (starting stack pointer) is returned when a stack is allocated
 /// from the pool.
-///
-/// The userfault handler relies on how stacks are stored in the mapping,
-/// so make sure the uffd implementation is kept up-to-date.
 #[derive(Debug)]
 struct StackPool {
     mapping: Mmap,
@@ -765,15 +761,18 @@ impl StackPool {
             .checked_mul(max_instances)
             .ok_or_else(|| anyhow!("total size of execution stacks exceeds addressable memory"))?;
 
-        let mapping = create_memory_map(allocation_size, allocation_size)?;
+        let mapping = Mmap::accessible_reserved(allocation_size, allocation_size)
+            .context("failed to create stack pool mapping")?;
 
         // Set up the stack guard pages
-        unsafe {
-            for i in 0..max_instances {
-                // Make the stack guard page inaccessible
-                let bottom_of_stack = mapping.as_mut_ptr().add(i * stack_size);
-                region::protect(bottom_of_stack, page_size, region::Protection::NONE)
-                    .context("failed to protect stack guard page")?;
+        if allocation_size > 0 {
+            unsafe {
+                for i in 0..max_instances {
+                    // Make the stack guard page inaccessible
+                    let bottom_of_stack = mapping.as_mut_ptr().add(i * stack_size);
+                    region::protect(bottom_of_stack, page_size, region::Protection::NONE)
+                        .context("failed to protect stack guard page")?;
+                }
             }
         }
 
@@ -804,8 +803,19 @@ impl StackPool {
         debug_assert!(index < self.max_instances);
 
         unsafe {
-            // The top (end) of the stack should be returned
-            Ok(self.mapping.as_mut_ptr().add((index + 1) * self.stack_size))
+            // Remove the guard page from the size
+            let size_without_guard = self.stack_size - self.page_size;
+
+            let bottom_of_stack = self
+                .mapping
+                .as_mut_ptr()
+                .add((index * self.stack_size) + self.page_size);
+
+            commit_stack_pages(bottom_of_stack, size_without_guard)
+                .map_err(|e| FiberStackError::Resource(e.to_string()))?;
+
+            // The top of the stack should be returned
+            Ok(bottom_of_stack.add(size_without_guard))
         }
     }
 
@@ -826,18 +836,16 @@ impl StackPool {
             let index = (start_of_stack - base) / self.stack_size;
             debug_assert!(index < self.max_instances);
 
-            decommit(bottom_of_stack, stack_size);
+            decommit_stack_pages(bottom_of_stack, stack_size).unwrap();
 
-            {
-                self.free_list.lock().unwrap().push(index);
-            }
+            self.free_list.lock().unwrap().push(index);
         }
     }
 }
 
 /// Implements the pooling instance allocator.
 ///
-/// This allocator interinally maintains pools of instances, memories, tables, and stacks.
+/// This allocator internally maintains pools of instances, memories, tables, and stacks.
 ///
 /// Note: the resource pools are manually dropped so that the fault handler terminates correctly.
 #[derive(Debug)]
@@ -845,10 +853,11 @@ pub struct PoolingInstanceAllocator {
     strategy: PoolingAllocationStrategy,
     module_limits: ModuleLimits,
     instance_limits: InstanceLimits,
+    // This is manually drop so that the pools unmap their memory before the page fault handler drops.
     instances: mem::ManuallyDrop<InstancePool>,
-    stacks: mem::ManuallyDrop<StackPool>,
+    stacks: StackPool,
     #[cfg(all(feature = "uffd", target_os = "linux"))]
-    _fault_handler: PageFaultHandler,
+    _fault_handler: imp::PageFaultHandler,
 }
 
 impl PoolingInstanceAllocator {
@@ -874,37 +883,18 @@ impl PoolingInstanceAllocator {
         instance_limits.memory_reservation_size =
             min(instance_limits.memory_reservation_size, 0x200000000);
 
-        // The maximum module memory page count cannot exceed 65536 pages
-        if module_limits.memory_pages > 0x10000 {
-            bail!(
-                "module memory page limit of {} exceeds the maximum of 65536",
-                module_limits.memory_pages
-            );
-        }
-
-        // The maximum module memory page count cannot exceed the memory reservation size
-        if (module_limits.memory_pages * WASM_PAGE_SIZE) as u64
-            > instance_limits.memory_reservation_size
-        {
-            bail!(
-                "module memory page limit of {} pages exeeds the memory reservation size limit of {} bytes",
-                module_limits.memory_pages,
-                instance_limits.memory_reservation_size
-            );
-        }
-
         let instances = InstancePool::new(&module_limits, &instance_limits)?;
         let stacks = StackPool::new(&instance_limits, stack_size)?;
 
         #[cfg(all(feature = "uffd", target_os = "linux"))]
-        let _fault_handler = PageFaultHandler::new(&instances)?;
+        let _fault_handler = imp::PageFaultHandler::new(&instances)?;
 
         Ok(Self {
             strategy,
             module_limits,
             instance_limits,
             instances: mem::ManuallyDrop::new(instances),
-            stacks: mem::ManuallyDrop::new(stacks),
+            stacks,
             #[cfg(all(feature = "uffd", target_os = "linux"))]
             _fault_handler,
         })
@@ -917,7 +907,6 @@ impl Drop for PoolingInstanceAllocator {
         // This ensures that any fault handler thread monitoring the pool memory terminates
         unsafe {
             mem::ManuallyDrop::drop(&mut self.instances);
-            mem::ManuallyDrop::drop(&mut self.stacks);
         }
     }
 }
@@ -963,13 +952,13 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         cfg_if::cfg_if! {
             if #[cfg(all(feature = "uffd", target_os = "linux"))] {
                 match &instance.module.memory_initialization {
-                    MemoryInitialization::Paged{ out_of_bounds, .. } => {
+                    wasmtime_environ::MemoryInitialization::Paged{ out_of_bounds, .. } => {
                         if !is_bulk_memory {
-                            check_init_bounds(instance)?;
+                            super::check_init_bounds(instance)?;
                         }
 
                         // Initialize the tables
-                        initialize_tables(instance)?;
+                        super::initialize_tables(instance)?;
 
                         // Don't initialize the memory; the fault handler will back the pages when accessed
 
@@ -1312,21 +1301,6 @@ mod test {
         assert_eq!(strat.next(1), 0);
     }
 
-    #[test]
-    fn test_base_pointer_iterator() {
-        let mut iter = BasePointerIterator::new(std::ptr::null_mut(), 5, 3);
-
-        assert_eq!(iter.next(), Some(0usize as _));
-        assert_eq!(iter.next(), Some(3usize as _));
-        assert_eq!(iter.next(), Some(6usize as _));
-        assert_eq!(iter.next(), Some(9usize as _));
-        assert_eq!(iter.next(), Some(12usize as _));
-        assert_eq!(iter.next(), None);
-
-        let mut iter = BasePointerIterator::new(std::ptr::null_mut(), 0, 10);
-        assert_eq!(iter.next(), None);
-    }
-
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn test_instance_pool() -> Result<()> {
@@ -1341,11 +1315,11 @@ mod test {
             memories: 1,
             globals: 0,
             table_elements: 10,
-            memory_pages: 10,
+            memory_pages: 1,
         };
         let instance_limits = InstanceLimits {
             count: 3,
-            memory_reservation_size: 4096,
+            memory_reservation_size: WASM_PAGE_SIZE as u64,
         };
 
         let instances = InstancePool::new(&module_limits, &instance_limits)?;
@@ -1366,7 +1340,7 @@ mod test {
         assert_eq!(instances.instance_size, 4096);
         assert_eq!(instances.max_instances, 3);
 
-        assert_eq!(&*instances.free_list.lock().unwrap(), &[0, 1, 2],);
+        assert_eq!(&*instances.free_list.lock().unwrap(), &[0, 1, 2]);
 
         let mut handles = Vec::new();
         let module = Arc::new(Module::default());
@@ -1397,7 +1371,7 @@ mod test {
             );
         }
 
-        assert_eq!(&*instances.free_list.lock().unwrap(), &[],);
+        assert_eq!(&*instances.free_list.lock().unwrap(), &[]);
 
         match instances.allocate(
             PoolingAllocationStrategy::NextAvailable,
@@ -1425,7 +1399,7 @@ mod test {
             instances.deallocate(&handle);
         }
 
-        assert_eq!(&*instances.free_list.lock().unwrap(), &[2, 1, 0],);
+        assert_eq!(&*instances.free_list.lock().unwrap(), &[2, 1, 0]);
 
         Ok(())
     }
@@ -1445,7 +1419,7 @@ mod test {
                 memories: 3,
                 globals: 0,
                 table_elements: 0,
-                memory_pages: 10,
+                memory_pages: 1,
             },
             &InstanceLimits {
                 count: 5,
@@ -1456,7 +1430,7 @@ mod test {
         assert_eq!(pool.memory_size, WASM_PAGE_SIZE as usize);
         assert_eq!(pool.max_memories, 3);
         assert_eq!(pool.max_instances, 5);
-        assert_eq!(pool.max_wasm_pages, 10);
+        assert_eq!(pool.max_wasm_pages, 1);
 
         let base = pool.mapping.as_ptr() as usize;
 
@@ -1554,7 +1528,7 @@ mod test {
             stacks.push(stack);
         }
 
-        assert_eq!(&*pool.free_list.lock().unwrap(), &[],);
+        assert_eq!(&*pool.free_list.lock().unwrap(), &[]);
 
         match pool
             .allocate(PoolingAllocationStrategy::NextAvailable)
@@ -1632,7 +1606,7 @@ mod test {
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
-            "module memory page limit of 2 pages exeeds the memory reservation size limit of 65536 bytes"
+            "module memory page limit of 2 pages exceeds the memory reservation size limit of 65536 bytes"
         );
     }
 

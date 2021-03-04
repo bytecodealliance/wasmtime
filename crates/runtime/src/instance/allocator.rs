@@ -549,8 +549,10 @@ impl OnDemandInstanceAllocator {
         let mut memories: PrimaryMap<DefinedMemoryIndex, _> =
             PrimaryMap::with_capacity(module.memory_plans.len() - num_imports);
         for plan in &module.memory_plans.values().as_slice()[num_imports..] {
-            memories
-                .push(Memory::new_dynamic(plan, creator).map_err(InstantiationError::Resource)?);
+            memories.push(
+                Memory::new_dynamic(plan, creator)
+                    .map_err(|e| InstantiationError::Resource(e.to_string()))?,
+            );
         }
         Ok(memories)
     }

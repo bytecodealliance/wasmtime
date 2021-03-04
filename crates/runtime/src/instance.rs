@@ -67,10 +67,10 @@ pub(crate) struct Instance {
     /// Hosts can store arbitrary per-instance information here.
     host_state: Box<dyn Any>,
 
-    /// Stores guard page faults in memory relating to the instance.
-    /// This is used for the pooling allocator with uffd enabled on Linux.
+    /// Stores linear memory guard page faults for the pooling allocator with uffd enabled.
+    /// These pages need to be reset after the signal handler generates the out-of-bounds trap.
     #[cfg(all(feature = "uffd", target_os = "linux"))]
-    guard_page_faults: RefCell<Vec<(*mut u8, usize, unsafe fn(*mut u8, usize) -> bool)>>,
+    guard_page_faults: RefCell<Vec<(*mut u8, usize, fn(*mut u8, usize) -> anyhow::Result<()>)>>,
 
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
@@ -821,7 +821,7 @@ impl Instance {
         &self,
         page_addr: *mut u8,
         size: usize,
-        reset: unsafe fn(*mut u8, usize) -> bool,
+        reset: fn(*mut u8, usize) -> anyhow::Result<()>,
     ) {
         self.guard_page_faults
             .borrow_mut()
@@ -837,11 +837,7 @@ impl Instance {
     pub(crate) fn reset_guard_pages(&self) -> anyhow::Result<()> {
         let mut faults = self.guard_page_faults.borrow_mut();
         for (addr, len, reset) in faults.drain(..) {
-            unsafe {
-                if !reset(addr, len) {
-                    anyhow::bail!("failed to reset previously faulted memory guard page");
-                }
-            }
+            reset(addr, len)?;
         }
 
         Ok(())

@@ -1,22 +1,55 @@
-use crate::Mmap;
-use anyhow::{anyhow, Result};
+use anyhow::{bail, Result};
 use winapi::um::memoryapi::{VirtualAlloc, VirtualFree};
 use winapi::um::winnt::{MEM_COMMIT, MEM_DECOMMIT, PAGE_READWRITE};
 
-pub unsafe fn make_accessible(addr: *mut u8, len: usize) -> bool {
-    // This doesn't use the `region` crate because the memory needs to be committed
-    !VirtualAlloc(addr as _, len, MEM_COMMIT, PAGE_READWRITE).is_null()
+pub fn commit(addr: *mut u8, len: usize) -> Result<()> {
+    if len == 0 {
+        return Ok(());
+    }
+
+    // Memory needs to be committed, so don't use the `region` crate
+    if unsafe { VirtualAlloc(addr as _, len, MEM_COMMIT, PAGE_READWRITE).is_null() } {
+        bail!("failed to commit memory as read/write");
+    }
+
+    Ok(())
 }
 
-pub unsafe fn decommit(addr: *mut u8, len: usize) {
-    assert!(
-        VirtualFree(addr as _, len, MEM_DECOMMIT) != 0,
-        "failed to decommit memory pages: {}",
-        std::io::Error::last_os_error()
-    );
+pub fn decommit(addr: *mut u8, len: usize) -> Result<()> {
+    if len == 0 {
+        return Ok(());
+    }
+
+    if unsafe { VirtualFree(addr as _, len, MEM_DECOMMIT) } == 0 {
+        bail!(
+            "failed to decommit memory pages: {}",
+            std::io::Error::last_os_error()
+        );
+    }
+
+    Ok(())
 }
 
-pub fn create_memory_map(accessible_size: usize, mapping_size: usize) -> Result<Mmap> {
-    Mmap::accessible_reserved(accessible_size, mapping_size)
-        .map_err(|e| anyhow!("failed to allocate pool memory: {}", e))
+pub fn commit_memory_pages(addr: *mut u8, len: usize) -> Result<()> {
+    commit(addr, len)
+}
+
+pub fn decommit_memory_pages(addr: *mut u8, len: usize) -> Result<()> {
+    decommit(addr, len)
+}
+
+pub fn commit_table_pages(addr: *mut u8, len: usize) -> Result<()> {
+    commit(addr, len)
+}
+
+pub fn decommit_table_pages(addr: *mut u8, len: usize) -> Result<()> {
+    decommit(addr, len)
+}
+
+pub fn commit_stack_pages(addr: *mut u8, len: usize) -> Result<()> {
+    commit(addr, len)
+}
+
+pub fn decommit_stack_pages(addr: *mut u8, len: usize) -> Result<()> {
+    decommit(addr, len)
 }
