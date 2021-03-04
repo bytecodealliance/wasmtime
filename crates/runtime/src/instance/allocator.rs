@@ -9,6 +9,7 @@ use crate::vmcontext::{
     VMGlobalDefinition, VMGlobalImport, VMInterrupts, VMMemoryImport, VMSharedSignatureIndex,
     VMTableImport,
 };
+use anyhow::Result;
 use std::alloc;
 use std::any::Any;
 use std::cell::RefCell;
@@ -23,8 +24,8 @@ use wasmtime_environ::wasm::{
     TableElementType, WasmType,
 };
 use wasmtime_environ::{
-    ir, MemoryInitialization, MemoryInitializer, Module, ModuleTranslation, ModuleType,
-    TableInitializer, VMOffsets,
+    ir, MemoryInitialization, MemoryInitializer, Module, ModuleType, TableInitializer, VMOffsets,
+    WASM_PAGE_SIZE,
 };
 
 mod pooling;
@@ -105,11 +106,9 @@ pub enum FiberStackError {
 ///
 /// This trait is unsafe as it requires knowledge of Wasmtime's runtime internals to implement correctly.
 pub unsafe trait InstanceAllocator: Send + Sync {
-    /// Validates a module translation.
-    ///
-    /// This is used to ensure a module being compiled is supported by the instance allocator.
-    fn validate_module(&self, translation: &ModuleTranslation) -> Result<(), String> {
-        drop(translation);
+    /// Validates that a module is supported by the allocator.
+    fn validate(&self, module: &Module) -> Result<()> {
+        drop(module);
         Ok(())
     }
 
@@ -322,15 +321,14 @@ fn check_init_bounds(instance: &Instance) -> Result<(), InstantiationError> {
     check_table_init_bounds(instance)?;
 
     match &instance.module.memory_initialization {
-        Some(MemoryInitialization::Paged { .. }) | None => {
-            // Bounds were checked at compile-time
+        MemoryInitialization::Paged { out_of_bounds, .. } => {
+            if *out_of_bounds {
+                return Err(InstantiationError::Link(LinkError(
+                    "memory out of bounds: data segment does not fit".into(),
+                )));
+            }
         }
-        Some(MemoryInitialization::OutOfBounds) => {
-            return Err(InstantiationError::Link(LinkError(
-                "memory out of bounds: data segment does not fit".into(),
-            )));
-        }
-        Some(MemoryInitialization::Segmented(initializers)) => {
+        MemoryInitialization::Segmented(initializers) => {
             check_memory_init_bounds(instance, initializers)?;
         }
     }
@@ -355,37 +353,31 @@ fn initialize_instance(
 
     // Initialize the memories
     match &instance.module.memory_initialization {
-        Some(MemoryInitialization::Paged { page_size, map }) => {
+        MemoryInitialization::Paged { map, out_of_bounds } => {
             for (index, pages) in map {
                 let memory = instance.memory(index);
+                let slice =
+                    unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
 
                 for (page_index, page) in pages.iter().enumerate() {
                     if let Some(data) = page {
-                        // Bounds checking should have occurred when the module was compiled
-                        // The data should always be page sized
-                        assert!((page_index * page_size) < memory.current_length);
-                        assert_eq!(data.len(), *page_size);
-
-                        unsafe {
-                            ptr::copy_nonoverlapping(
-                                data.as_ptr(),
-                                memory.base.add(page_index * page_size),
-                                data.len(),
-                            );
-                        }
+                        debug_assert_eq!(data.len(), WASM_PAGE_SIZE as usize);
+                        slice[page_index * WASM_PAGE_SIZE as usize..].copy_from_slice(data);
                     }
                 }
             }
+
+            // Check for out of bound access after initializing the pages to maintain
+            // the expected behavior of the bulk memory spec.
+            if *out_of_bounds {
+                return Err(InstantiationError::Trap(Trap::wasm(
+                    ir::TrapCode::HeapOutOfBounds,
+                )));
+            }
         }
-        Some(MemoryInitialization::OutOfBounds) => {
-            return Err(InstantiationError::Trap(Trap::wasm(
-                ir::TrapCode::HeapOutOfBounds,
-            )))
-        }
-        Some(MemoryInitialization::Segmented(initializers)) => {
+        MemoryInitialization::Segmented(initializers) => {
             initialize_memories(instance, initializers)?;
         }
-        None => {}
     }
 
     Ok(())
@@ -615,10 +607,9 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
     }
 
     unsafe fn deallocate(&self, handle: &InstanceHandle) {
-        let instance = handle.instance();
-        let layout = instance.alloc_layout();
-        ptr::drop_in_place(instance as *const Instance as *mut Instance);
-        alloc::dealloc(instance as *const Instance as *mut _, layout);
+        let layout = handle.instance().alloc_layout();
+        ptr::drop_in_place(handle.instance);
+        alloc::dealloc(handle.instance.cast(), layout);
     }
 
     fn allocate_fiber_stack(&self) -> Result<*mut u8, FiberStackError> {

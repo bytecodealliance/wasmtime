@@ -1,23 +1,40 @@
-//! Implements user space page fault handling with the `userfaultfd` ("uffd") system call on Linux.
+//! This module implements user space page fault handling with the `userfaultfd` ("uffd") system call on Linux.
 //!
 //! Handling page faults for memory accesses in regions relating to WebAssembly instances
-//! enables the implementation of protecting guard pages in user space rather than kernel space.
+//! enables the runtime to protect guard pages in user space rather than kernel space (i.e. without `mprotect`).
 //!
-//! This reduces the number of system calls and kernel locks needed to provide correct
-//! WebAssembly memory semantics.
+//! Additionally, linear memories can be lazy-initialized upon first access.
 //!
-//! Additionally, linear memories can be lazy-initialized upon access.
+//! Handling faults in user space is slower than handling faults in the kernel. However,
+//! in use cases where there is a high number of concurrently executing instances, handling the faults
+//! in user space requires rarely changing memory protection levels.  This can improve concurrency
+//! by not taking kernel memory manager locks and may decrease TLB shootdowns as fewer page table entries need
+//! to continually change.
+//!
+//! Here's how the `uffd` feature works:
+//!
+//! 1. A user fault file descriptor is created to monitor specific areas of the address space.
+//! 2. A thread is spawned to continually read events from the user fault file descriptor.
+//! 3. When a page fault event is received, the handler thread calculates where the fault occurred:
+//!    a) If the fault occurs on a table page, it is handled by zeroing the page.
+//!    b) If the fault occurs on a linear memory page, it is handled by either copying the page from
+//!       initialization data or zeroing it.
+//!    c) If the fault occurs on a guard page, the protection level of the guard page is changed to
+//!       force the kernel to signal SIGSEV on the next retry. The faulting page is recorded so the
+//!       protection level can be reset in the future.
+//! 4. Faults to address space relating to an instance may occur from both Wasmtime (e.g. instance
+//!    initialization) or from WebAssembly code (e.g. reading from or writing to linear memory),
+//!    therefore the user fault handling must do as little work as possible to handle the fault.
+//! 5. When the pooling allocator is dropped, it will drop the memory mappings relating to the pool; this
+//!    generates unmap events for the fault handling thread, which responds by decrementing the mapping
+//!    count. When the count reaches zero, the user fault handling thread will gracefully terminate.
 //!
 //! This feature requires a Linux kernel 4.11 or newer to use.
 
-use super::{InstancePool, StackPool};
+use super::InstancePool;
 use crate::{instance::Instance, Mmap};
-use std::convert::TryInto;
+use anyhow::{bail, Context, Result};
 use std::ptr;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
 use std::thread;
 use userfaultfd::{Event, FeatureFlags, IoctlFlags, Uffd, UffdBuilder};
 use wasmtime_environ::{entity::EntityRef, wasm::DefinedMemoryIndex, MemoryInitialization};
@@ -45,11 +62,11 @@ pub unsafe fn decommit(addr: *mut u8, len: usize) {
     );
 }
 
-pub fn create_memory_map(_accessible_size: usize, mapping_size: usize) -> Result<Mmap, String> {
+pub fn create_memory_map(_accessible_size: usize, mapping_size: usize) -> Result<Mmap> {
     // Allocate a single read-write region at once
     // As writable pages need to count towards commit charge, use MAP_NORESERVE to override.
-    // This implies that the kernel is configured to allow overcommit or else
-    // this allocation will almost certainly fail without a plethora of physical memory to back the allocation.
+    // This implies that the kernel is configured to allow overcommit or else this allocation
+    // will almost certainly fail without a plethora of physical memory to back the allocation.
     // The consequence of not reserving is that our process may segfault on any write to a memory
     // page that cannot be backed (i.e. out of memory conditions).
 
@@ -68,10 +85,10 @@ pub fn create_memory_map(_accessible_size: usize, mapping_size: usize) -> Result
         );
 
         if ptr as isize == -1_isize {
-            return Err(format!(
-                "failed to allocate pool memory: {}",
+            bail!(
+                "failed to allocate pool memory: mmap failed with {}",
                 std::io::Error::last_os_error()
-            ));
+            );
         }
 
         Ok(Mmap::from_raw(ptr as usize, mapping_size))
@@ -98,21 +115,9 @@ enum AddressLocation<'a> {
         /// The instance related to the memory page that was accessed.
         instance: &'a Instance,
         /// The index of the memory that was accessed.
-        memory_index: usize,
+        memory_index: DefinedMemoryIndex,
         /// The Wasm page index to initialize if the access was not a guard page.
         page_index: Option<usize>,
-    },
-    /// The address location is in an execution stack.
-    /// The fault handler will zero the page.
-    StackPage {
-        /// The address of the page being accessed.
-        page_addr: *mut u8,
-        /// The length of the page being accessed.
-        len: usize,
-        /// The index of the stack that was accessed.
-        index: usize,
-        /// Whether or not the access was to a guard page.
-        guard_page: bool,
     },
 }
 
@@ -132,22 +137,16 @@ struct AddressLocator {
     tables_start: usize,
     tables_end: usize,
     table_size: usize,
-    stacks_start: usize,
-    stacks_end: usize,
-    stack_size: usize,
     page_size: usize,
 }
 
 impl AddressLocator {
-    fn new(instances: &InstancePool, stacks: &StackPool) -> Self {
+    fn new(instances: &InstancePool) -> Self {
         let instances_start = instances.mapping.as_ptr() as usize;
         let memories_start = instances.memories.mapping.as_ptr() as usize;
         let memories_end = memories_start + instances.memories.mapping.len();
         let tables_start = instances.tables.mapping.as_ptr() as usize;
         let tables_end = tables_start + instances.tables.mapping.len();
-        let stacks_start = stacks.mapping.as_ptr() as usize;
-        let stacks_end = stacks_start + stacks.mapping.len();
-        let stack_size = stacks.stack_size;
 
         // Should always have instances
         debug_assert!(instances_start != 0);
@@ -163,9 +162,6 @@ impl AddressLocator {
             tables_start,
             tables_end,
             table_size: instances.tables.table_size,
-            stacks_start,
-            stacks_end,
-            stack_size,
             page_size: instances.tables.page_size,
         }
     }
@@ -191,25 +187,18 @@ impl AddressLocator {
         // Check for a memory location
         if addr >= self.memories_start && addr < self.memories_end {
             let index = (addr - self.memories_start) / self.memory_size;
-            let memory_index = index % self.max_memories;
+            let memory_index = DefinedMemoryIndex::new(index % self.max_memories);
             let memory_start = self.memories_start + (index * self.memory_size);
             let page_index = (addr - memory_start) / WASM_PAGE_SIZE;
             let instance = self.get_instance(index / self.max_memories);
 
-            let init_page_index = instance
-                .memories
-                .get(
-                    DefinedMemoryIndex::from_u32(memory_index as u32)
-                        .try_into()
-                        .unwrap(),
-                )
-                .and_then(|m| {
-                    if page_index < m.size() as usize {
-                        Some(page_index)
-                    } else {
-                        None
-                    }
-                });
+            let init_page_index = instance.memories.get(memory_index).and_then(|m| {
+                if page_index < m.size() as usize {
+                    Some(page_index)
+                } else {
+                    None
+                }
+            });
 
             return Some(AddressLocation::MemoryPage {
                 page_addr: (memory_start + page_index * WASM_PAGE_SIZE) as _,
@@ -233,128 +222,125 @@ impl AddressLocator {
             });
         }
 
-        // Check for a stack location
-        if addr >= self.stacks_start && addr < self.stacks_end {
-            let index = (addr - self.stacks_start) / self.stack_size;
-            let stack_start = self.stacks_start + (index * self.stack_size);
-            let stack_offset = addr - stack_start;
-            let page_offset = (stack_offset / self.page_size) * self.page_size;
-
-            return Some(AddressLocation::StackPage {
-                page_addr: (stack_start + page_offset) as _,
-                len: self.page_size,
-                index,
-                guard_page: stack_offset < self.page_size,
-            });
-        }
-
         None
     }
 }
 
-unsafe fn wake_guard_page_access(
-    uffd: &Uffd,
-    page_addr: *const u8,
-    len: usize,
-) -> Result<(), String> {
-    // Set the page to NONE to induce a SIGSEV for the access on the next retry
+/// This is called following a fault on a guard page.
+///
+/// Because the region being monitored is protected read-write, this needs to set the
+/// protection level to `NONE` before waking the page.
+///
+/// This will cause the kernel to raise a SIGSEGV when retrying the fault.
+unsafe fn wake_guard_page_access(uffd: &Uffd, page_addr: *const u8, len: usize) -> Result<()> {
+    // Set the page to NONE to induce a SIGSEGV for the access on the next retry
     region::protect(page_addr, len, region::Protection::NONE)
-        .map_err(|e| format!("failed to change guard page protection: {}", e))?;
+        .context("failed to change guard page protection")?;
 
-    uffd.wake(page_addr as _, len).map_err(|e| {
-        format!(
-            "failed to wake page at {:p} with length {}: {}",
-            page_addr, len, e
-        )
-    })?;
+    uffd.wake(page_addr as _, len)
+        .context("failed to wake guard page access")?;
 
     Ok(())
 }
 
+/// This is called to initialize a linear memory page (64 KiB).
+///
+/// If paged initialization is used for the module, then we can instruct the kernel to back the page with
+/// what is already stored in the initialization data; if the page isn't in the initialization data,
+/// it will be zeroed instead.
+///
+/// If paged initialization isn't being used, we zero the page. Initialization happens
+/// at module instantiation in this case and the segment data will be then copied to the zeroed page.
 unsafe fn initialize_wasm_page(
     uffd: &Uffd,
     instance: &Instance,
     page_addr: *const u8,
-    memory_index: usize,
+    memory_index: DefinedMemoryIndex,
     page_index: usize,
-) -> Result<(), String> {
-    if let Some(MemoryInitialization::Paged { page_size, map }) =
-        &instance.module.memory_initialization
-    {
-        let memory_index = DefinedMemoryIndex::new(memory_index);
-        let memory = instance.memory(memory_index);
+) -> Result<()> {
+    // Check for paged initialization and copy the page if present in the initialization data
+    if let MemoryInitialization::Paged { map, .. } = &instance.module.memory_initialization {
         let pages = &map[memory_index];
-        debug_assert_eq!(WASM_PAGE_SIZE % page_size, 0);
 
-        let count = WASM_PAGE_SIZE / page_size;
-        let start = page_index * count;
+        if let Some(Some(data)) = pages.get(page_index) {
+            debug_assert_eq!(data.len(), WASM_PAGE_SIZE);
 
-        for i in start..start + count {
-            let dst = memory.base.add(i * page_size);
+            log::trace!(
+                "copying linear memory page from {:p} to {:p}",
+                data.as_ptr(),
+                page_addr
+            );
 
-            match pages.get(i) {
-                Some(Some(data)) => {
-                    log::trace!(
-                        "copying page initialization data from {:p} to {:p} with length {}",
-                        data,
-                        dst,
-                        page_size
-                    );
+            uffd.copy(data.as_ptr() as _, page_addr as _, WASM_PAGE_SIZE, true)
+                .context("failed to copy linear memory page")?;
 
-                    // Copy the page data without waking
-                    uffd.copy(data.as_ptr() as _, dst as _, *page_size, false)
-                        .map_err(|e| {
-                            format!(
-                                "failed to copy page from {:p} to {:p} with length {}: {}",
-                                data, dst, page_size, e
-                            )
-                        })?;
+            return Ok(());
+        }
+    }
+
+    log::trace!("zeroing linear memory page at {:p}", page_addr);
+
+    uffd.zeropage(page_addr as _, WASM_PAGE_SIZE, true)
+        .context("failed to zero linear memory page")?;
+
+    Ok(())
+}
+
+unsafe fn handle_page_fault(
+    uffd: &Uffd,
+    locator: &AddressLocator,
+    addr: *mut std::ffi::c_void,
+) -> Result<()> {
+    match locator.get_location(addr as usize) {
+        Some(AddressLocation::TablePage { page_addr, len }) => {
+            log::trace!(
+                "handling fault in table at address {:p} on page {:p}",
+                addr,
+                page_addr,
+            );
+
+            // Tables are always initialized upon instantiation, so zero the page
+            uffd.zeropage(page_addr as _, len, true)
+                .context("failed to zero table page")?;
+        }
+        Some(AddressLocation::MemoryPage {
+            page_addr,
+            len,
+            instance,
+            memory_index,
+            page_index,
+        }) => {
+            log::trace!(
+                "handling fault in linear memory at address {:p} on page {:p}",
+                addr,
+                page_addr
+            );
+
+            match page_index {
+                Some(page_index) => {
+                    initialize_wasm_page(&uffd, instance, page_addr, memory_index, page_index)?;
                 }
-                _ => {
-                    log::trace!("zeroing page at {:p} with length {}", dst, page_size);
+                None => {
+                    log::trace!("out of bounds memory access at {:p}", addr);
 
-                    // No data, zero the page without waking
-                    uffd.zeropage(dst as _, *page_size, false).map_err(|e| {
-                        format!(
-                            "failed to zero page at {:p} with length {}: {}",
-                            dst, page_size, e
-                        )
-                    })?;
+                    // Record the guard page fault with the instance so it can be reset later.
+                    instance.record_guard_page_fault(page_addr, len, reset_guard_page);
+                    wake_guard_page_access(&uffd, page_addr, len)?;
                 }
             }
         }
-
-        // Finally wake the entire wasm page
-        uffd.wake(page_addr as _, WASM_PAGE_SIZE).map_err(|e| {
-            format!(
-                "failed to wake page at {:p} with length {}: {}",
-                page_addr, WASM_PAGE_SIZE, e
-            )
-        })
-    } else {
-        log::trace!(
-            "initialization data is not paged; zeroing Wasm page at {:p}",
-            page_addr
-        );
-
-        uffd.zeropage(page_addr as _, WASM_PAGE_SIZE, true)
-            .map_err(|e| {
-                format!(
-                    "failed to zero page at {:p} with length {}: {}",
-                    page_addr, WASM_PAGE_SIZE, e
-                )
-            })?;
-
-        Ok(())
+        None => {
+            bail!(
+                "failed to locate fault address {:p} in registered memory regions",
+                addr
+            );
+        }
     }
+
+    Ok(())
 }
 
-fn handler_thread(
-    uffd: Uffd,
-    locator: AddressLocator,
-    mut registrations: usize,
-    faulted_stack_guard_pages: Arc<[AtomicBool]>,
-) -> Result<(), String> {
+fn handler_thread(uffd: Uffd, locator: AddressLocator, mut registrations: usize) -> Result<()> {
     loop {
         match uffd.read_event().expect("failed to read event") {
             Some(Event::Unmap { start, end }) => {
@@ -364,7 +350,6 @@ fn handler_thread(
 
                 if (start == locator.memories_start && end == locator.memories_end)
                     || (start == locator.tables_start && end == locator.tables_end)
-                    || (start == locator.stacks_start && end == locator.stacks_end)
                 {
                     registrations -= 1;
                     if registrations == 0 {
@@ -374,104 +359,11 @@ fn handler_thread(
                     panic!("unexpected memory region unmapped");
                 }
             }
-            Some(Event::Pagefault {
-                addr: access_addr, ..
-            }) => {
-                unsafe {
-                    match locator.get_location(access_addr as usize) {
-                        Some(AddressLocation::TablePage { page_addr, len }) => {
-                            log::trace!(
-                                "handling fault in table at address {:p} on page {:p}",
-                                access_addr,
-                                page_addr,
-                            );
-
-                            // Tables are always initialized upon instantiation, so zero the page
-                            uffd.zeropage(page_addr as _, len, true).map_err(|e| {
-                                format!(
-                                    "failed to zero page at {:p} with length {}: {}",
-                                    page_addr, len, e
-                                )
-                            })?;
-                        }
-                        Some(AddressLocation::MemoryPage {
-                            page_addr,
-                            len,
-                            instance,
-                            memory_index,
-                            page_index,
-                        }) => {
-                            log::trace!(
-                                "handling fault in linear memory at address {:p} on page {:p}",
-                                access_addr,
-                                page_addr
-                            );
-
-                            match page_index {
-                                Some(page_index) => {
-                                    initialize_wasm_page(
-                                        &uffd,
-                                        instance,
-                                        page_addr,
-                                        memory_index,
-                                        page_index,
-                                    )?;
-                                }
-                                None => {
-                                    log::trace!("out of bounds memory access at {:p}", access_addr);
-
-                                    // Record the guard page fault with the instance so it can be reset later.
-                                    instance.record_guard_page_fault(
-                                        page_addr,
-                                        len,
-                                        reset_guard_page,
-                                    );
-                                    wake_guard_page_access(&uffd, page_addr, len)?;
-                                }
-                            }
-                        }
-                        Some(AddressLocation::StackPage {
-                            page_addr,
-                            len,
-                            index,
-                            guard_page,
-                        }) => {
-                            log::trace!(
-                                "handling fault in stack {} at address {:p}",
-                                index,
-                                access_addr,
-                            );
-
-                            if guard_page {
-                                // Logging as trace as stack guard pages might be a trap condition in the future
-                                log::trace!("stack overflow fault at {:p}", access_addr);
-
-                                // Mark the stack as having a faulted guard page
-                                // The next time the stack is used the guard page will be reset
-                                faulted_stack_guard_pages[index].store(true, Ordering::SeqCst);
-                                wake_guard_page_access(&uffd, page_addr, len)?;
-                                continue;
-                            }
-
-                            // Always zero stack pages
-                            uffd.zeropage(page_addr as _, len, true).map_err(|e| {
-                                format!(
-                                    "failed to zero page at {:p} with length {}: {}",
-                                    page_addr, len, e
-                                )
-                            })?;
-                        }
-                        None => {
-                            return Err(format!(
-                                "failed to locate fault address {:p} in registered memory regions",
-                                access_addr
-                            ));
-                        }
-                    }
-                }
-            }
+            Some(Event::Pagefault { addr, .. }) => unsafe {
+                handle_page_fault(&uffd, &locator, addr as _)?
+            },
             Some(_) => continue,
-            None => break,
+            None => bail!("no event was read from the user fault descriptor"),
         }
     }
 
@@ -482,16 +374,16 @@ fn handler_thread(
 
 #[derive(Debug)]
 pub struct PageFaultHandler {
-    thread: Option<thread::JoinHandle<Result<(), String>>>,
+    thread: Option<thread::JoinHandle<Result<()>>>,
 }
 
 impl PageFaultHandler {
-    pub(super) fn new(instances: &InstancePool, stacks: &StackPool) -> Result<Self, String> {
+    pub(super) fn new(instances: &InstancePool) -> Result<Self> {
         let uffd = UffdBuilder::new()
             .close_on_exec(true)
             .require_features(FeatureFlags::EVENT_UNMAP)
             .create()
-            .map_err(|e| format!("failed to create user fault descriptor: {}", e))?;
+            .context("failed to create user fault descriptor")?;
 
         // Register the ranges with the userfault fd
         let mut registrations = 0;
@@ -504,7 +396,6 @@ impl PageFaultHandler {
                 instances.tables.mapping.as_ptr() as usize,
                 instances.tables.mapping.len(),
             ),
-            (stacks.mapping.as_ptr() as usize, stacks.mapping.len()),
         ] {
             if *start == 0 || *len == 0 {
                 continue;
@@ -512,13 +403,13 @@ impl PageFaultHandler {
 
             let ioctls = uffd
                 .register(*start as _, *len)
-                .map_err(|e| format!("failed to register user fault range: {}", e))?;
+                .context("failed to register user fault range")?;
 
             if !ioctls.contains(IoctlFlags::WAKE | IoctlFlags::COPY | IoctlFlags::ZEROPAGE) {
-                return Err(format!(
+                bail!(
                     "required user fault ioctls not supported; found: {:?}",
                     ioctls,
-                ));
+                );
             }
 
             registrations += 1;
@@ -533,17 +424,13 @@ impl PageFaultHandler {
                 registrations
             );
 
-            let locator = AddressLocator::new(&instances, &stacks);
-
-            let faulted_stack_guard_pages = stacks.faulted_guard_pages.clone();
+            let locator = AddressLocator::new(&instances);
 
             Some(
                 thread::Builder::new()
                     .name("page fault handler".into())
-                    .spawn(move || {
-                        handler_thread(uffd, locator, registrations, faulted_stack_guard_pages)
-                    })
-                    .map_err(|e| format!("failed to spawn page fault handler thread: {}", e))?,
+                    .spawn(move || handler_thread(uffd, locator, registrations))
+                    .context("failed to spawn page fault handler thread")?,
             )
         };
 
@@ -553,6 +440,9 @@ impl PageFaultHandler {
 
 impl Drop for PageFaultHandler {
     fn drop(&mut self) {
+        // The handler thread should terminate once all monitored regions of memory are unmapped.
+        // The pooling instance allocator ensures that the regions are unmapped prior to dropping
+        // the user fault handler.
         if let Some(thread) = self.thread.take() {
             thread
                 .join()
@@ -569,6 +459,7 @@ mod test {
         table::max_table_element_size, Imports, InstanceAllocationRequest, InstanceLimits,
         ModuleLimits, PoolingAllocationStrategy, VMSharedSignatureIndex,
     };
+    use std::sync::Arc;
     use wasmtime_environ::{
         entity::PrimaryMap,
         wasm::{Memory, Table, TableElementType, WasmType},
@@ -598,9 +489,8 @@ mod test {
 
         let instances =
             InstancePool::new(&module_limits, &instance_limits).expect("should allocate");
-        let stacks = StackPool::new(&instance_limits, 8192).expect("should allocate");
 
-        let locator = AddressLocator::new(&instances, &stacks);
+        let locator = AddressLocator::new(&instances);
 
         assert_eq!(locator.instances_start, instances.mapping.as_ptr() as usize);
         assert_eq!(locator.instance_size, 4096);
@@ -625,20 +515,10 @@ mod test {
         );
         assert_eq!(locator.table_size, 8192);
 
-        assert_eq!(locator.stacks_start, stacks.mapping.as_ptr() as usize);
-        assert_eq!(
-            locator.stacks_end,
-            locator.stacks_start + stacks.mapping.len()
-        );
-        assert_eq!(locator.stack_size, 12288);
-
         unsafe {
             assert!(locator.get_location(0).is_none());
             assert!(locator
-                .get_location(std::cmp::max(
-                    locator.memories_end,
-                    std::cmp::max(locator.tables_end, locator.stacks_end)
-                ))
+                .get_location(std::cmp::max(locator.memories_end, locator.tables_end))
                 .is_none());
 
             let mut module = Module::new();
@@ -667,9 +547,7 @@ mod test {
                 });
             }
 
-            module_limits
-                .validate_module(&module)
-                .expect("should validate");
+            module_limits.validate(&module).expect("should validate");
 
             let mut handles = Vec::new();
             let module = Arc::new(module);
@@ -719,7 +597,7 @@ mod test {
                         }) => {
                             assert_eq!(page_addr, memory_start as _);
                             assert_eq!(len, WASM_PAGE_SIZE);
-                            assert_eq!(mem_index, memory_index);
+                            assert_eq!(mem_index, DefinedMemoryIndex::new(memory_index));
                             assert_eq!(page_index, Some(0));
                         }
                         _ => panic!("expected a memory page location"),
@@ -736,7 +614,7 @@ mod test {
                         }) => {
                             assert_eq!(page_addr, (memory_start + WASM_PAGE_SIZE) as _);
                             assert_eq!(len, WASM_PAGE_SIZE);
-                            assert_eq!(mem_index, memory_index);
+                            assert_eq!(mem_index, DefinedMemoryIndex::new(memory_index));
                             assert_eq!(page_index, Some(1));
                         }
                         _ => panic!("expected a memory page location"),
@@ -753,7 +631,7 @@ mod test {
                         }) => {
                             assert_eq!(page_addr, (memory_start + (9 * WASM_PAGE_SIZE)) as _);
                             assert_eq!(len, WASM_PAGE_SIZE);
-                            assert_eq!(mem_index, memory_index);
+                            assert_eq!(mem_index, DefinedMemoryIndex::new(memory_index));
                             assert_eq!(page_index, None);
                         }
                         _ => panic!("expected a memory page location"),
@@ -785,43 +663,6 @@ mod test {
                         }
                         _ => panic!("expected a table page location"),
                     }
-                }
-            }
-
-            // Validate stack locations
-            for stack_index in 0..instances.max_instances {
-                let stack_start = locator.stacks_start + (stack_index * locator.stack_size);
-
-                // Check for stack page location
-                match locator.get_location(stack_start + locator.page_size * 2) {
-                    Some(AddressLocation::StackPage {
-                        page_addr,
-                        len,
-                        index,
-                        guard_page,
-                    }) => {
-                        assert_eq!(page_addr, (stack_start + locator.page_size * 2) as _);
-                        assert_eq!(len, locator.page_size);
-                        assert_eq!(index, stack_index);
-                        assert!(!guard_page);
-                    }
-                    _ => panic!("expected a stack page location"),
-                }
-
-                // Check for guard page
-                match locator.get_location(stack_start) {
-                    Some(AddressLocation::StackPage {
-                        page_addr,
-                        len,
-                        index,
-                        guard_page,
-                    }) => {
-                        assert_eq!(page_addr, stack_start as _);
-                        assert_eq!(len, locator.page_size);
-                        assert_eq!(index, stack_index);
-                        assert!(guard_page);
-                    }
-                    _ => panic!("expected a stack page location"),
                 }
             }
 

@@ -48,7 +48,10 @@ fn memory_limit() -> Result<()> {
     // Module should fail to validate because the minimum is greater than the configured limit
     match Module::new(&engine, r#"(module (memory 4))"#) {
         Ok(_) => panic!("module compilation should fail"),
-        Err(e) => assert_eq!(e.to_string(), "Validation error: memory index 0 has a minimum page size of 4 which exceeds the limit of 3")
+        Err(e) => assert_eq!(
+            e.to_string(),
+            "memory index 0 has a minimum page size of 4 which exceeds the limit of 3"
+        ),
     }
 
     let module = Module::new(
@@ -243,7 +246,10 @@ fn table_limit() -> Result<()> {
     // Module should fail to validate because the minimum is greater than the configured limit
     match Module::new(&engine, r#"(module (table 31 funcref))"#) {
         Ok(_) => panic!("module compilation should fail"),
-        Err(e) => assert_eq!(e.to_string(), "Validation error: table index 0 has a minimum element size of 31 which exceeds the limit of 10")
+        Err(e) => assert_eq!(
+            e.to_string(),
+            "table index 0 has a minimum element size of 31 which exceeds the limit of 10"
+        ),
     }
 
     let module = Module::new(

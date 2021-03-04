@@ -1,6 +1,6 @@
 use crate::module::{
-    Initializer, InstanceSignature, MemoryPlan, Module, ModuleSignature, ModuleType, ModuleUpvar,
-    TableInitializer, TablePlan, TypeTables,
+    Initializer, InstanceSignature, MemoryInitialization, MemoryInitializer, MemoryPlan, Module,
+    ModuleSignature, ModuleType, ModuleUpvar, TableInitializer, TablePlan, TypeTables,
 };
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
@@ -58,9 +58,6 @@ pub struct ModuleTranslation<'data> {
 
     /// References to the function bodies.
     pub function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
-
-    /// References to the data initializers.
-    pub data_initializers: Vec<DataInitializer<'data>>,
 
     /// DWARF debug information, if enabled, parsed from the module.
     pub debuginfo: DebugInfoData<'data>,
@@ -762,9 +759,12 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn reserve_data_initializers(&mut self, num: u32) -> WasmResult<()> {
-        self.result
-            .data_initializers
-            .reserve_exact(usize::try_from(num).unwrap());
+        match &mut self.result.module.memory_initialization {
+            MemoryInitialization::Segmented(initializers) => {
+                initializers.reserve_exact(usize::try_from(num).unwrap())
+            }
+            _ => unreachable!(),
+        }
         Ok(())
     }
 
@@ -775,12 +775,17 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         offset: usize,
         data: &'data [u8],
     ) -> WasmResult<()> {
-        self.result.data_initializers.push(DataInitializer {
-            memory_index,
-            base,
-            offset,
-            data,
-        });
+        match &mut self.result.module.memory_initialization {
+            MemoryInitialization::Segmented(initializers) => {
+                initializers.push(MemoryInitializer {
+                    memory_index,
+                    base,
+                    offset,
+                    data: data.into(),
+                });
+            }
+            _ => unreachable!(),
+        }
         Ok(())
     }
 
@@ -1070,19 +1075,4 @@ pub fn translate_signature(mut sig: ir::Signature, pointer_type: ir::Type) -> ir
     // Prepend the caller vmctx argument.
     sig.params.insert(1, AbiParam::new(pointer_type));
     sig
-}
-
-/// A data initializer for linear memory.
-pub struct DataInitializer<'data> {
-    /// The index of the memory to initialize.
-    pub memory_index: MemoryIndex,
-
-    /// Optionally a globalvar base to initialize at.
-    pub base: Option<GlobalIndex>,
-
-    /// A constant offset to initialize at.
-    pub offset: usize,
-
-    /// The initialization data.
-    pub data: &'data [u8],
 }

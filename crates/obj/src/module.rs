@@ -7,7 +7,7 @@ use object::write::{Object, Relocation, StandardSection, Symbol, SymbolSection};
 use object::{RelocationEncoding, RelocationKind, SymbolFlags, SymbolKind, SymbolScope};
 use wasmtime_debug::DwarfSection;
 use wasmtime_environ::isa::TargetFrontendConfig;
-use wasmtime_environ::{CompiledFunctions, DataInitializer, Module};
+use wasmtime_environ::{CompiledFunctions, MemoryInitialization, Module};
 
 fn emit_vmcontext_init(
     obj: &mut Object,
@@ -54,24 +54,32 @@ pub fn emit_module(
     target_config: &TargetFrontendConfig,
     compilation: CompiledFunctions,
     dwarf_sections: Vec<DwarfSection>,
-    data_initializers: &[DataInitializer],
 ) -> Result<Object> {
     let mut builder = ObjectBuilder::new(target, module, &compilation);
     builder.set_dwarf_sections(dwarf_sections);
     let mut obj = builder.build()?;
 
     // Append data, table and vmcontext_init code to the object file.
-
-    for (i, initializer) in data_initializers.iter().enumerate() {
-        declare_data_segment(&mut obj, initializer, i)?;
+    match &module.memory_initialization {
+        MemoryInitialization::Segmented(initializers) => {
+            for (i, initializer) in initializers.iter().enumerate() {
+                declare_data_segment(&mut obj, initializer, i)?;
+            }
+        }
+        _ => unimplemented!(),
     }
 
     for i in 0..module.table_plans.len() {
         declare_table(&mut obj, i)?;
     }
 
-    for (i, initializer) in data_initializers.iter().enumerate() {
-        emit_data_segment(&mut obj, initializer, i)?;
+    match &module.memory_initialization {
+        MemoryInitialization::Segmented(initializers) => {
+            for (i, initializer) in initializers.iter().enumerate() {
+                emit_data_segment(&mut obj, initializer, i)?;
+            }
+        }
+        _ => unimplemented!(),
     }
 
     for i in 0..module.table_plans.len() {

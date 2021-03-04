@@ -3450,6 +3450,7 @@ dependencies = [
 name = "wasmtime-runtime"
 version = "0.24.0"
 dependencies = [
+ "anyhow",
  "backtrace",
  "cc",
  "cfg-if 1.0.0",

@@ -25,6 +25,7 @@ backtrace = "0.3.55"
 lazy_static = "1.3.0"
 psm = "0.1.11"
 rand = "0.7.3"
+anyhow = "1.0.38"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.7", features = ["winbase", "memoryapi", "errhandlingapi"] }

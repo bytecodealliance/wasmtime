@@ -834,12 +834,12 @@ impl Instance {
     ///
     /// Resetting the guard pages is required before growing memory.
     #[cfg(all(feature = "uffd", target_os = "linux"))]
-    pub(crate) fn reset_guard_pages(&self) -> Result<(), String> {
+    pub(crate) fn reset_guard_pages(&self) -> anyhow::Result<()> {
         let mut faults = self.guard_page_faults.borrow_mut();
         for (addr, len, reset) in faults.drain(..) {
             unsafe {
                 if !reset(addr, len) {
-                    return Err("failed to reset previously faulted memory guard page".into());
+                    anyhow::bail!("failed to reset previously faulted memory guard page");
                 }
             }
         }

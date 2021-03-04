@@ -12,6 +12,7 @@ use super::{
     InstanceAllocator, InstanceHandle, InstantiationError,
 };
 use crate::{instance::Instance, table::max_table_element_size, Memory, Mmap, Table, VMContext};
+use anyhow::{anyhow, bail, Context, Result};
 use rand::Rng;
 use std::cell::RefCell;
 use std::cmp::min;
@@ -20,7 +21,7 @@ use std::mem;
 use std::sync::{Arc, Mutex};
 use wasmtime_environ::{
     entity::{EntitySet, PrimaryMap},
-    MemoryStyle, Module, ModuleTranslation, Tunables, VMOffsets, WASM_PAGE_SIZE,
+    MemoryStyle, Module, Tunables, VMOffsets, WASM_PAGE_SIZE,
 };
 
 cfg_if::cfg_if! {
@@ -30,10 +31,9 @@ cfg_if::cfg_if! {
     } else if #[cfg(all(feature = "uffd", target_os = "linux"))] {
         mod uffd;
         use uffd as imp;
-        use imp::{PageFaultHandler, reset_guard_page};
+        use imp::PageFaultHandler;
         use super::{check_init_bounds, initialize_tables};
         use wasmtime_environ::MemoryInitialization;
-        use std::sync::atomic::{AtomicBool, Ordering};
     } else if #[cfg(target_os = "linux")] {
         mod linux;
         use linux as imp;
@@ -105,73 +105,81 @@ pub struct ModuleLimits {
 }
 
 impl ModuleLimits {
-    fn validate_module(&self, module: &Module) -> Result<(), String> {
+    fn validate(&self, module: &Module) -> Result<()> {
         if module.num_imported_funcs > self.imported_functions as usize {
-            return Err(format!(
+            bail!(
                 "imported function count of {} exceeds the limit of {}",
-                module.num_imported_funcs, self.imported_functions
-            ));
+                module.num_imported_funcs,
+                self.imported_functions
+            );
         }
 
         if module.num_imported_tables > self.imported_tables as usize {
-            return Err(format!(
+            bail!(
                 "imported tables count of {} exceeds the limit of {}",
-                module.num_imported_tables, self.imported_tables
-            ));
+                module.num_imported_tables,
+                self.imported_tables
+            );
         }
 
         if module.num_imported_memories > self.imported_memories as usize {
-            return Err(format!(
+            bail!(
                 "imported memories count of {} exceeds the limit of {}",
-                module.num_imported_memories, self.imported_memories
-            ));
+                module.num_imported_memories,
+                self.imported_memories
+            );
         }
 
         if module.num_imported_globals > self.imported_globals as usize {
-            return Err(format!(
+            bail!(
                 "imported globals count of {} exceeds the limit of {}",
-                module.num_imported_globals, self.imported_globals
-            ));
+                module.num_imported_globals,
+                self.imported_globals
+            );
         }
 
         if module.types.len() > self.types as usize {
-            return Err(format!(
+            bail!(
                 "defined types count of {} exceeds the limit of {}",
                 module.types.len(),
                 self.types
-            ));
+            );
         }
 
         let functions = module.functions.len() - module.num_imported_funcs;
         if functions > self.functions as usize {
-            return Err(format!(
+            bail!(
                 "defined functions count of {} exceeds the limit of {}",
-                functions, self.functions
-            ));
+                functions,
+                self.functions
+            );
         }
 
         let tables = module.table_plans.len() - module.num_imported_tables;
         if tables > self.tables as usize {
-            return Err(format!(
+            bail!(
                 "defined tables count of {} exceeds the limit of {}",
-                tables, self.tables
-            ));
+                tables,
+                self.tables
+            );
         }
 
         let memories = module.memory_plans.len() - module.num_imported_memories;
         if memories > self.memories as usize {
-            return Err(format!(
+            bail!(
                 "defined memories count of {} exceeds the limit of {}",
-                memories, self.memories
-            ));
+                memories,
+                self.memories
+            );
         }
 
         let globals = module.globals.len() - module.num_imported_globals;
         if globals > self.globals as usize {
-            return Err(format!(
+            bail!(
                 "defined globals count of {} exceeds the limit of {}",
-                globals, self.globals
-            ));
+                globals,
+                self.globals
+            );
         }
 
         for (i, plan) in module.table_plans.values().as_slice()[module.num_imported_tables..]
@@ -179,10 +187,12 @@ impl ModuleLimits {
             .enumerate()
         {
             if plan.table.minimum > self.table_elements {
-                return Err(format!(
+                bail!(
                     "table index {} has a minimum element size of {} which exceeds the limit of {}",
-                    i, plan.table.minimum, self.table_elements
-                ));
+                    i,
+                    plan.table.minimum,
+                    self.table_elements
+                );
             }
         }
 
@@ -191,17 +201,19 @@ impl ModuleLimits {
             .enumerate()
         {
             if plan.memory.minimum > self.memory_pages {
-                return Err(format!(
+                bail!(
                     "memory index {} has a minimum page size of {} which exceeds the limit of {}",
-                    i, plan.memory.minimum, self.memory_pages
-                ));
+                    i,
+                    plan.memory.minimum,
+                    self.memory_pages
+                );
             }
 
             if let MemoryStyle::Dynamic = plan.style {
-                return Err(format!(
+                bail!(
                     "memory index {} has an unsupported dynamic memory plan style",
                     i,
-                ));
+                );
             }
         }
 
@@ -353,7 +365,7 @@ struct InstancePool {
 }
 
 impl InstancePool {
-    fn new(module_limits: &ModuleLimits, instance_limits: &InstanceLimits) -> Result<Self, String> {
+    fn new(module_limits: &ModuleLimits, instance_limits: &InstanceLimits) -> Result<Self> {
         let page_size = region::page::size();
 
         // Calculate the maximum size of an Instance structure given the limits
@@ -373,7 +385,7 @@ impl InstancePool {
         let instance_size = round_up_to_pow2(
             mem::size_of::<Instance>()
                 .checked_add(offsets.size_of_vmctx() as usize)
-                .ok_or_else(|| "instance size exceeds addressable memory".to_string())?,
+                .ok_or_else(|| anyhow!("instance size exceeds addressable memory"))?,
             page_size,
         );
 
@@ -381,7 +393,7 @@ impl InstancePool {
 
         let allocation_size = instance_size
             .checked_mul(max_instances)
-            .ok_or_else(|| "total size of instance data exceeds addressable memory".to_string())?;
+            .ok_or_else(|| anyhow!("total size of instance data exceeds addressable memory"))?;
 
         let pool = Self {
             mapping: create_memory_map(allocation_size, allocation_size)?,
@@ -527,7 +539,7 @@ impl InstancePool {
         #[cfg(all(feature = "uffd", target_os = "linux"))]
         instance
             .reset_guard_pages()
-            .map_err(InstantiationError::Resource)?;
+            .map_err(|e| InstantiationError::Resource(e.to_string()))?;
 
         instance.memories.clear();
 
@@ -610,9 +622,9 @@ struct MemoryPool {
 }
 
 impl MemoryPool {
-    fn new(module_limits: &ModuleLimits, instance_limits: &InstanceLimits) -> Result<Self, String> {
+    fn new(module_limits: &ModuleLimits, instance_limits: &InstanceLimits) -> Result<Self> {
         let memory_size = usize::try_from(instance_limits.memory_reservation_size)
-            .map_err(|_| "memory reservation size exceeds addressable memory".to_string())?;
+            .map_err(|_| anyhow!("memory reservation size exceeds addressable memory"))?;
 
         debug_assert!(
             memory_size % region::page::size() == 0,
@@ -627,7 +639,7 @@ impl MemoryPool {
             .checked_mul(max_memories)
             .and_then(|c| c.checked_mul(max_instances))
             .ok_or_else(|| {
-                "total size of memory reservation exceeds addressable memory".to_string()
+                anyhow!("total size of memory reservation exceeds addressable memory")
             })?;
 
         Ok(Self {
@@ -670,13 +682,13 @@ struct TablePool {
 }
 
 impl TablePool {
-    fn new(module_limits: &ModuleLimits, instance_limits: &InstanceLimits) -> Result<Self, String> {
+    fn new(module_limits: &ModuleLimits, instance_limits: &InstanceLimits) -> Result<Self> {
         let page_size = region::page::size();
 
         let table_size = round_up_to_pow2(
             max_table_element_size()
                 .checked_mul(module_limits.table_elements as usize)
-                .ok_or_else(|| "table size exceeds addressable memory".to_string())?,
+                .ok_or_else(|| anyhow!("table size exceeds addressable memory"))?,
             page_size,
         );
 
@@ -686,9 +698,7 @@ impl TablePool {
         let allocation_size = table_size
             .checked_mul(max_tables)
             .and_then(|c| c.checked_mul(max_instances))
-            .ok_or_else(|| {
-                "total size of instance tables exceeds addressable memory".to_string()
-            })?;
+            .ok_or_else(|| anyhow!("total size of instance tables exceeds addressable memory"))?;
 
         Ok(Self {
             mapping: create_memory_map(0, allocation_size)?,
@@ -733,12 +743,10 @@ struct StackPool {
     max_instances: usize,
     page_size: usize,
     free_list: Mutex<Vec<usize>>,
-    #[cfg(all(feature = "uffd", target_os = "linux"))]
-    faulted_guard_pages: Arc<[AtomicBool]>,
 }
 
 impl StackPool {
-    fn new(instance_limits: &InstanceLimits, stack_size: usize) -> Result<Self, String> {
+    fn new(instance_limits: &InstanceLimits, stack_size: usize) -> Result<Self> {
         let page_size = region::page::size();
 
         // On Windows, don't allocate any fiber stacks as native fibers are always used
@@ -748,26 +756,33 @@ impl StackPool {
         } else {
             round_up_to_pow2(stack_size, page_size)
                 .checked_add(page_size)
-                .ok_or_else(|| "stack size exceeds addressable memory".to_string())?
+                .ok_or_else(|| anyhow!("stack size exceeds addressable memory"))?
         };
 
         let max_instances = instance_limits.count as usize;
 
-        let allocation_size = stack_size.checked_mul(max_instances).ok_or_else(|| {
-            "total size of execution stacks exceeds addressable memory".to_string()
-        })?;
+        let allocation_size = stack_size
+            .checked_mul(max_instances)
+            .ok_or_else(|| anyhow!("total size of execution stacks exceeds addressable memory"))?;
+
+        let mapping = create_memory_map(allocation_size, allocation_size)?;
+
+        // Set up the stack guard pages
+        unsafe {
+            for i in 0..max_instances {
+                // Make the stack guard page inaccessible
+                let bottom_of_stack = mapping.as_mut_ptr().add(i * stack_size);
+                region::protect(bottom_of_stack, page_size, region::Protection::NONE)
+                    .context("failed to protect stack guard page")?;
+            }
+        }
 
         Ok(Self {
-            mapping: create_memory_map(0, allocation_size)?,
+            mapping,
             stack_size,
             max_instances,
             page_size,
             free_list: Mutex::new((0..max_instances).collect()),
-            #[cfg(all(feature = "uffd", target_os = "linux"))]
-            faulted_guard_pages: std::iter::repeat_with(|| false.into())
-                .take(max_instances)
-                .collect::<Vec<_>>()
-                .into(),
         })
     }
 
@@ -789,37 +804,8 @@ impl StackPool {
         debug_assert!(index < self.max_instances);
 
         unsafe {
-            // Remove the guard page from the size
-            let size_without_guard = self.stack_size - self.page_size;
-
-            let bottom_of_stack = self
-                .mapping
-                .as_mut_ptr()
-                .add((index * self.stack_size) + self.page_size);
-
-            cfg_if::cfg_if! {
-                if #[cfg(all(feature = "uffd", target_os = "linux"))] {
-                    // Check to see if a guard page needs to be reset
-                    if self.faulted_guard_pages[index].swap(false, Ordering::SeqCst) {
-                        if !reset_guard_page(bottom_of_stack.sub(self.page_size), self.page_size) {
-                            return Err(FiberStackError::Resource(
-                                "failed to reset stack guard page".into(),
-                            ));
-                        }
-                    }
-
-                } else {
-                    // Make the stack accessible (excluding the guard page)
-                    if !make_accessible(bottom_of_stack, size_without_guard) {
-                        return Err(FiberStackError::Resource(
-                            "failed to make instance memory accessible".into(),
-                        ));
-                    }
-                }
-            }
-
-            // The top of the stack should be returned
-            Ok(bottom_of_stack.add(size_without_guard))
+            // The top (end) of the stack should be returned
+            Ok(self.mapping.as_mut_ptr().add((index + 1) * self.stack_size))
         }
     }
 
@@ -872,9 +858,9 @@ impl PoolingInstanceAllocator {
         module_limits: ModuleLimits,
         mut instance_limits: InstanceLimits,
         stack_size: usize,
-    ) -> Result<Self, String> {
+    ) -> Result<Self> {
         if instance_limits.count == 0 {
-            return Err("the instance count limit cannot be zero".into());
+            bail!("the instance count limit cannot be zero");
         }
 
         // Round the memory reservation size to the nearest Wasm page size
@@ -890,28 +876,28 @@ impl PoolingInstanceAllocator {
 
         // The maximum module memory page count cannot exceed 65536 pages
         if module_limits.memory_pages > 0x10000 {
-            return Err(format!(
+            bail!(
                 "module memory page limit of {} exceeds the maximum of 65536",
                 module_limits.memory_pages
-            ));
+            );
         }
 
         // The maximum module memory page count cannot exceed the memory reservation size
         if (module_limits.memory_pages * WASM_PAGE_SIZE) as u64
             > instance_limits.memory_reservation_size
         {
-            return Err(format!(
+            bail!(
                 "module memory page limit of {} pages exeeds the memory reservation size limit of {} bytes",
                 module_limits.memory_pages,
                 instance_limits.memory_reservation_size
-            ));
+            );
         }
 
         let instances = InstancePool::new(&module_limits, &instance_limits)?;
         let stacks = StackPool::new(&instance_limits, stack_size)?;
 
         #[cfg(all(feature = "uffd", target_os = "linux"))]
-        let _fault_handler = PageFaultHandler::new(&instances, &stacks)?;
+        let _fault_handler = PageFaultHandler::new(&instances)?;
 
         Ok(Self {
             strategy,
@@ -937,8 +923,8 @@ impl Drop for PoolingInstanceAllocator {
 }
 
 unsafe impl InstanceAllocator for PoolingInstanceAllocator {
-    fn validate_module(&self, translation: &ModuleTranslation) -> Result<(), String> {
-        self.module_limits.validate_module(&translation.module)
+    fn validate(&self, module: &Module) -> Result<()> {
+        self.module_limits.validate(module)
     }
 
     fn adjust_tunables(&self, tunables: &mut Tunables) {
@@ -976,8 +962,8 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 
         cfg_if::cfg_if! {
             if #[cfg(all(feature = "uffd", target_os = "linux"))] {
-                match instance.module.memory_initialization {
-                    Some(MemoryInitialization::Paged{ .. }) => {
+                match &instance.module.memory_initialization {
+                    MemoryInitialization::Paged{ out_of_bounds, .. } => {
                         if !is_bulk_memory {
                             check_init_bounds(instance)?;
                         }
@@ -985,7 +971,15 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                         // Initialize the tables
                         initialize_tables(instance)?;
 
-                        // Don't initialize the memory; the fault handler will fill the pages when accessed
+                        // Don't initialize the memory; the fault handler will back the pages when accessed
+
+                        // If there was an out of bounds access observed in initialization, return a trap
+                        if *out_of_bounds {
+                            return Err(InstantiationError::Trap(crate::traphandlers::Trap::wasm(
+                                wasmtime_environ::ir::TrapCode::HeapOutOfBounds,
+                            )));
+                        }
+
                         Ok(())
                     },
                     _ => initialize_instance(instance, is_bulk_memory)
@@ -1030,11 +1024,11 @@ mod test {
         let mut module = Module::default();
 
         module.functions.push(SignatureIndex::new(0));
-        assert_eq!(limits.validate_module(&module), Ok(()));
+        assert!(limits.validate(&module).is_ok());
 
         module.num_imported_funcs = 1;
         assert_eq!(
-            limits.validate_module(&module),
+            limits.validate(&module).map_err(|e| e.to_string()),
             Err("imported function count of 1 exceeds the limit of 0".into())
         );
     }
@@ -1058,11 +1052,11 @@ mod test {
             },
         });
 
-        assert_eq!(limits.validate_module(&module), Ok(()));
+        assert!(limits.validate(&module).is_ok());
 
         module.num_imported_tables = 1;
         assert_eq!(
-            limits.validate_module(&module),
+            limits.validate(&module).map_err(|e| e.to_string()),
             Err("imported tables count of 1 exceeds the limit of 0".into())
         );
     }
@@ -1086,11 +1080,11 @@ mod test {
             offset_guard_size: 0,
         });
 
-        assert_eq!(limits.validate_module(&module), Ok(()));
+        assert!(limits.validate(&module).is_ok());
 
         module.num_imported_memories = 1;
         assert_eq!(
-            limits.validate_module(&module),
+            limits.validate(&module).map_err(|e| e.to_string()),
             Err("imported memories count of 1 exceeds the limit of 0".into())
         );
     }
@@ -1111,11 +1105,11 @@ mod test {
             initializer: GlobalInit::I32Const(0),
         });
 
-        assert_eq!(limits.validate_module(&module), Ok(()));
+        assert!(limits.validate(&module).is_ok());
 
         module.num_imported_globals = 1;
         assert_eq!(
-            limits.validate_module(&module),
+            limits.validate(&module).map_err(|e| e.to_string()),
             Err("imported globals count of 1 exceeds the limit of 0".into())
         );
     }
@@ -1128,13 +1122,13 @@ mod test {
         };
 
         let mut module = Module::default();
-        assert_eq!(limits.validate_module(&module), Ok(()));
+        assert!(limits.validate(&module).is_ok());
 
         module
             .types
             .push(ModuleType::Function(SignatureIndex::new(0)));
         assert_eq!(
-            limits.validate_module(&module),
+            limits.validate(&module).map_err(|e| e.to_string()),
             Err("defined types count of 1 exceeds the limit of 0".into())
         );
     }
@@ -1147,11 +1141,11 @@ mod test {
         };
 
         let mut module = Module::default();
-        assert_eq!(limits.validate_module(&module), Ok(()));
+        assert!(limits.validate(&module).is_ok());
 
         module.functions.push(SignatureIndex::new(0));
         assert_eq!(
-            limits.validate_module(&module),
+            limits.validate(&module).map_err(|e| e.to_string()),
             Err("defined functions count of 1 exceeds the limit of 0".into())
         );
     }
@@ -1164,7 +1158,7 @@ mod test {
         };
 
         let mut module = Module::default();
-        assert_eq!(limits.validate_module(&module), Ok(()));
+        assert!(limits.validate(&module).is_ok());
 
         module.table_plans.push(TablePlan {
             style: TableStyle::CallerChecksSignature,
@@ -1176,7 +1170,7 @@ mod test {
             },
         });
         assert_eq!(
-            limits.validate_module(&module),
+            limits.validate(&module).map_err(|e| e.to_string()),
             Err("defined tables count of 1 exceeds the limit of 0".into())
         );
     }
@@ -1189,7 +1183,7 @@ mod test {
         };
 
         let mut module = Module::default();
-        assert_eq!(limits.validate_module(&module), Ok(()));
+        assert!(limits.validate(&module).is_ok());
 
         module.memory_plans.push(MemoryPlan {
             style: MemoryStyle::Static { bound: 0 },
@@ -1201,7 +1195,7 @@ mod test {
             offset_guard_size: 0,
         });
         assert_eq!(
-            limits.validate_module(&module),
+            limits.validate(&module).map_err(|e| e.to_string()),
             Err("defined memories count of 1 exceeds the limit of 0".into())
         );
     }
@@ -1214,7 +1208,7 @@ mod test {
         };
 
         let mut module = Module::default();
-        assert_eq!(limits.validate_module(&module), Ok(()));
+        assert!(limits.validate(&module).is_ok());
 
         module.globals.push(Global {
             wasm_ty: WasmType::I32,
@@ -1223,7 +1217,7 @@ mod test {
             initializer: GlobalInit::I32Const(0),
         });
         assert_eq!(
-            limits.validate_module(&module),
+            limits.validate(&module).map_err(|e| e.to_string()),
             Err("defined globals count of 1 exceeds the limit of 0".into())
         );
     }
@@ -1247,7 +1241,7 @@ mod test {
             },
         });
         assert_eq!(
-            limits.validate_module(&module),
+            limits.validate(&module).map_err(|e| e.to_string()),
             Err(
                 "table index 0 has a minimum element size of 11 which exceeds the limit of 10"
                     .into()
@@ -1274,7 +1268,7 @@ mod test {
             offset_guard_size: 0,
         });
         assert_eq!(
-            limits.validate_module(&module),
+            limits.validate(&module).map_err(|e| e.to_string()),
             Err("memory index 0 has a minimum page size of 6 which exceeds the limit of 5".into())
         );
     }
@@ -1298,7 +1292,7 @@ mod test {
             offset_guard_size: 0,
         });
         assert_eq!(
-            limits.validate_module(&module),
+            limits.validate(&module).map_err(|e| e.to_string()),
             Err("memory index 0 has an unsupported dynamic memory plan style".into())
         );
     }
@@ -1335,7 +1329,7 @@ mod test {
 
     #[cfg(target_pointer_width = "64")]
     #[test]
-    fn test_instance_pool() -> Result<(), String> {
+    fn test_instance_pool() -> Result<()> {
         let module_limits = ModuleLimits {
             imported_functions: 0,
             imported_tables: 0,
@@ -1372,13 +1366,7 @@ mod test {
         assert_eq!(instances.instance_size, 4096);
         assert_eq!(instances.max_instances, 3);
 
-        assert_eq!(
-            &*instances
-                .free_list
-                .lock()
-                .map_err(|_| "failed to lock".to_string())?,
-            &[0, 1, 2],
-        );
+        assert_eq!(&*instances.free_list.lock().unwrap(), &[0, 1, 2],);
 
         let mut handles = Vec::new();
         let module = Arc::new(Module::default());
@@ -1409,13 +1397,7 @@ mod test {
             );
         }
 
-        assert_eq!(
-            &*instances
-                .free_list
-                .lock()
-                .map_err(|_| "failed to lock".to_string())?,
-            &[],
-        );
+        assert_eq!(&*instances.free_list.lock().unwrap(), &[],);
 
         match instances.allocate(
             PoolingAllocationStrategy::NextAvailable,
@@ -1443,20 +1425,14 @@ mod test {
             instances.deallocate(&handle);
         }
 
-        assert_eq!(
-            &*instances
-                .free_list
-                .lock()
-                .map_err(|_| "failed to lock".to_string())?,
-            &[2, 1, 0],
-        );
+        assert_eq!(&*instances.free_list.lock().unwrap(), &[2, 1, 0],);
 
         Ok(())
     }
 
     #[cfg(target_pointer_width = "64")]
     #[test]
-    fn test_memory_pool() -> Result<(), String> {
+    fn test_memory_pool() -> Result<()> {
         let pool = MemoryPool::new(
             &ModuleLimits {
                 imported_functions: 0,
@@ -1502,7 +1478,7 @@ mod test {
 
     #[cfg(target_pointer_width = "64")]
     #[test]
-    fn test_table_pool() -> Result<(), String> {
+    fn test_table_pool() -> Result<()> {
         let pool = TablePool::new(
             &ModuleLimits {
                 imported_functions: 0,
@@ -1549,7 +1525,7 @@ mod test {
 
     #[cfg(all(unix, target_pointer_width = "64"))]
     #[test]
-    fn test_stack_pool() -> Result<(), String> {
+    fn test_stack_pool() -> Result<()> {
         let pool = StackPool::new(
             &InstanceLimits {
                 count: 10,
@@ -1563,10 +1539,7 @@ mod test {
         assert_eq!(pool.page_size, 4096);
 
         assert_eq!(
-            &*pool
-                .free_list
-                .lock()
-                .map_err(|_| "failed to lock".to_string())?,
+            &*pool.free_list.lock().unwrap(),
             &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
         );
 
@@ -1581,13 +1554,7 @@ mod test {
             stacks.push(stack);
         }
 
-        assert_eq!(
-            &*pool
-                .free_list
-                .lock()
-                .map_err(|_| "failed to lock".to_string())?,
-            &[],
-        );
+        assert_eq!(&*pool.free_list.lock().unwrap(), &[],);
 
         match pool
             .allocate(PoolingAllocationStrategy::NextAvailable)
@@ -1602,10 +1569,7 @@ mod test {
         }
 
         assert_eq!(
-            &*pool
-                .free_list
-                .lock()
-                .map_err(|_| "failed to lock".to_string())?,
+            &*pool.free_list.lock().unwrap(),
             &[9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
         );
 
@@ -1624,6 +1588,7 @@ mod test {
                 },
                 4096
             )
+            .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
             "the instance count limit cannot be zero"
         );
@@ -1644,6 +1609,7 @@ mod test {
                 },
                 4096
             )
+            .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
             "module memory page limit of 65537 exceeds the maximum of 65536"
         );
@@ -1664,6 +1630,7 @@ mod test {
                 },
                 4096,
             )
+            .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
             "module memory page limit of 2 pages exeeds the memory reservation size limit of 65536 bytes"
         );
@@ -1672,7 +1639,7 @@ mod test {
     #[cfg_attr(target_arch = "aarch64", ignore)] // https://github.com/bytecodealliance/wasmtime/pull/2518#issuecomment-747280133
     #[cfg(all(unix, target_pointer_width = "64"))]
     #[test]
-    fn test_stack_zeroed() -> Result<(), String> {
+    fn test_stack_zeroed() -> Result<()> {
         let allocator = PoolingInstanceAllocator::new(
             PoolingAllocationStrategy::NextAvailable,
             ModuleLimits {
@@ -1695,9 +1662,7 @@ mod test {
 
         unsafe {
             for _ in 0..10 {
-                let stack = allocator
-                    .allocate_fiber_stack()
-                    .map_err(|e| format!("failed to allocate stack: {}", e))?;
+                let stack = allocator.allocate_fiber_stack()?;
 
                 // The stack pointer is at the top, so decerement it first
                 let addr = stack.sub(1);

@@ -21,9 +21,8 @@ use wasmtime_environ::wasm::{
     DefinedFuncIndex, InstanceTypeIndex, ModuleTypeIndex, SignatureIndex, WasmFuncType,
 };
 use wasmtime_environ::{
-    CompileError, DebugInfoData, FunctionAddressMap, InstanceSignature, MemoryInitialization,
-    Module, ModuleEnvironment, ModuleSignature, ModuleTranslation, StackMapInformation,
-    TrapInformation,
+    CompileError, DebugInfoData, FunctionAddressMap, InstanceSignature, Module, ModuleEnvironment,
+    ModuleSignature, ModuleTranslation, StackMapInformation, TrapInformation,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{GdbJitImageRegistration, InstantiationError, VMFunctionBody, VMTrampoline};
@@ -95,10 +94,14 @@ struct DebugInfo {
 
 impl CompilationArtifacts {
     /// Creates a `CompilationArtifacts` for a singular translated wasm module.
+    ///
+    /// The `use_paged_init` argument controls whether or not an attempt is made to
+    /// organize linear memory initialization data as entire pages or to leave
+    /// the memory initialization data as individual segments.
     pub fn build(
         compiler: &Compiler,
         data: &[u8],
-        validate: impl Fn(&ModuleTranslation) -> Result<(), String> + Sync,
+        use_paged_mem_init: bool,
     ) -> Result<(usize, Vec<CompilationArtifacts>, TypeTables), SetupError> {
         let (main_module, translations, types) = ModuleEnvironment::new(
             compiler.frontend_config(),
@@ -110,8 +113,6 @@ impl CompilationArtifacts {
 
         let list = maybe_parallel!(translations.(into_iter | into_par_iter))
             .map(|mut translation| {
-                validate(&translation).map_err(|e| SetupError::Validate(e))?;
-
                 let Compilation {
                     obj,
                     unwind_info,
@@ -120,14 +121,16 @@ impl CompilationArtifacts {
 
                 let ModuleTranslation {
                     mut module,
-                    data_initializers,
                     debuginfo,
                     has_unparsed_debuginfo,
                     ..
                 } = translation;
 
-                module.memory_initialization =
-                    Some(MemoryInitialization::new(&module, data_initializers));
+                if use_paged_mem_init {
+                    if let Some(init) = module.memory_initialization.to_paged(&module) {
+                        module.memory_initialization = init;
+                    }
+                }
 
                 let obj = obj.write().map_err(|_| {
                     SetupError::Instantiate(InstantiationError::Resource(

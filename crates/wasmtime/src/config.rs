@@ -627,15 +627,12 @@ impl Config {
                 #[cfg(not(feature = "async"))]
                 let stack_size = 0;
 
-                Some(Arc::new(
-                    PoolingInstanceAllocator::new(
-                        strategy,
-                        module_limits,
-                        instance_limits,
-                        stack_size,
-                    )
-                    .map_err(|e| anyhow::anyhow!(e))?,
-                ))
+                Some(Arc::new(PoolingInstanceAllocator::new(
+                    strategy,
+                    module_limits,
+                    instance_limits,
+                    stack_size,
+                )?))
             }
         };
         Ok(self)

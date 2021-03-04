@@ -1,4 +1,5 @@
 use crate::Mmap;
+use anyhow::{anyhow, Result};
 use winapi::um::memoryapi::{VirtualAlloc, VirtualFree};
 use winapi::um::winnt::{MEM_COMMIT, MEM_DECOMMIT, PAGE_READWRITE};
 
@@ -15,7 +16,7 @@ pub unsafe fn decommit(addr: *mut u8, len: usize) {
     );
 }
 
-pub fn create_memory_map(accessible_size: usize, mapping_size: usize) -> Result<Mmap, String> {
+pub fn create_memory_map(accessible_size: usize, mapping_size: usize) -> Result<Mmap> {
     Mmap::accessible_reserved(accessible_size, mapping_size)
-        .map_err(|e| format!("failed to allocate pool memory: {}", e))
+        .map_err(|e| anyhow!("failed to allocate pool memory: {}", e))
 }
