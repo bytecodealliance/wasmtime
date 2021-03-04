@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-wasi-crypto"
-version = "0.23.0"
+version = "0.24.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Wasmtime implementation of the wasi-crypto API"
 documentation = "https://docs.rs/wasmtime-wasi-crypto"
@@ -14,9 +14,9 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0"
 wasi-crypto = { path = "spec/implementations/hostcalls/rust", version = "0.1.4" }
-wasmtime = { path = "../wasmtime", version = "0.23.0", default-features = false }
-wasmtime-wiggle = { path = "../wiggle/wasmtime", version = "0.23.0" }
-wiggle = { path = "../wiggle", version = "0.23.0" }
+wasmtime = { path = "../wasmtime", version = "0.24.0", default-features = false }
+wasmtime-wiggle = { path = "../wiggle/wasmtime", version = "0.24.0" }
+wiggle = { path = "../wiggle", version = "0.24.0" }
 
 [badges]
 maintenance = { status = "experimental" }

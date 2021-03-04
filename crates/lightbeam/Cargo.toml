@@ -1,6 +1,6 @@
 [package]
 name = "lightbeam"
-version = "0.23.0"
+version = "0.24.0"
 authors = ["The Lightbeam Project Developers"]
 description = "An optimising one-pass streaming compiler for WebAssembly"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -13,7 +13,7 @@ edition = "2018"
 [dependencies]
 arrayvec = "0.5"
 capstone = "0.7.0"
-cranelift-codegen = { path = "../../cranelift/codegen", version = "0.70.0" }
+cranelift-codegen = { path = "../../cranelift/codegen", version = "0.71.0" }
 derive_more = "0.99"
 dynasm = "1.0.0"
 dynasmrt = "1.0.0"
