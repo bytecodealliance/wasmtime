@@ -4,7 +4,6 @@ use wiggle_test::{impl_errno, HostMemory, MemArea, MemAreas, WasiCtx};
 
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/strings.witx"],
-    ctx: WasiCtx,
 });
 
 impl_errno!(types::Errno, types::GuestErrorConversion);

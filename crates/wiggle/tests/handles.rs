@@ -6,7 +6,6 @@ const FD_VAL: u32 = 123;
 
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/handles.witx"],
-    ctx: WasiCtx,
 });
 
 impl_errno!(types::Errno, types::GuestErrorConversion);

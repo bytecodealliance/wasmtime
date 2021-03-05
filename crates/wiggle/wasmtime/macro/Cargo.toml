@@ -24,3 +24,6 @@ proc-macro2 = "1.0"
 [badges]
 maintenance = { status = "actively-developed" }
 
+[features]
+async = []
+default = []

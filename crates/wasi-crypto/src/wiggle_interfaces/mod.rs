@@ -2,7 +2,6 @@ pub use wasi_crypto::CryptoCtx as WasiCryptoCtx;
 
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/spec/witx/wasi_ephemeral_crypto.witx"],
-    ctx: WasiCryptoCtx
 });
 
 pub mod wasi_modules {

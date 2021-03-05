@@ -7,20 +7,12 @@ use witx::{BuiltinType, Id, Type, TypeRef, WasmType};
 use crate::{lifetimes::LifetimeExt, UserErrorType};
 
 pub struct Names {
-    ctx_type: Ident,
     runtime_mod: TokenStream,
 }
 
 impl Names {
-    pub fn new(ctx_type: &Ident, runtime_mod: TokenStream) -> Names {
-        Names {
-            ctx_type: ctx_type.clone(),
-            runtime_mod,
-        }
-    }
-
-    pub fn ctx_type(&self) -> Ident {
-        self.ctx_type.clone()
+    pub fn new(runtime_mod: TokenStream) -> Names {
+        Names { runtime_mod }
     }
 
     pub fn runtime_mod(&self) -> TokenStream {

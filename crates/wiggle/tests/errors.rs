@@ -23,7 +23,6 @@ mod convert_just_errno {
      (param $strike u32)
      (result $err (expected (error $errno)))))
     ",
-        ctx: WasiCtx,
         errors: { errno => RichError },
     });
 
@@ -133,7 +132,6 @@ mod convert_multiple_error_types {
      (param $drink u32)
      (@witx noreturn)))
     ",
-        ctx: WasiCtx,
         errors: { errno => RichError, errno2 => AnotherRichError },
     });
 

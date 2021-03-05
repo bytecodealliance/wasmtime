@@ -1,3 +1,4 @@
+pub use wiggle_generate::config::AsyncConf;
 use {
     proc_macro2::Span,
     std::collections::HashMap,
@@ -7,15 +8,16 @@ use {
         punctuated::Punctuated,
         Error, Ident, Path, Result, Token,
     },
-    wiggle_generate::config::{CtxConf, WitxConf},
+    wiggle_generate::config::WitxConf,
 };
-
 #[derive(Debug, Clone)]
 pub struct Config {
     pub target: TargetConf,
     pub witx: WitxConf,
     pub ctx: CtxConf,
     pub modules: ModulesConf,
+    #[cfg(feature = "async")]
+    pub async_: AsyncConf,
 }
 
 #[derive(Debug, Clone)]
@@ -24,6 +26,8 @@ pub enum ConfigField {
     Witx(WitxConf),
     Ctx(CtxConf),
     Modules(ModulesConf),
+    #[cfg(feature = "async")]
+    Async(AsyncConf),
 }
 
 mod kw {
@@ -60,6 +64,20 @@ impl Parse for ConfigField {
             input.parse::<kw::modules>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Modules(input.parse()?))
+        } else if lookahead.peek(Token![async]) {
+            input.parse::<Token![async]>()?;
+            input.parse::<Token![:]>()?;
+            #[cfg(feature = "async")]
+            {
+                Ok(ConfigField::Async(input.parse()?))
+            }
+            #[cfg(not(feature = "async"))]
+            {
+                Err(syn::Error::new(
+                    input.span(),
+                    "async not supported, enable cargo feature \"async\"",
+                ))
+            }
         } else {
             Err(lookahead.error())
         }
@@ -72,6 +90,8 @@ impl Config {
         let mut witx = None;
         let mut ctx = None;
         let mut modules = None;
+        #[cfg(feature = "async")]
+        let mut async_ = None;
         for f in fields {
             match f {
                 ConfigField::Target(c) => {
@@ -98,6 +118,13 @@ impl Config {
                     }
                     modules = Some(c);
                 }
+                #[cfg(feature = "async")]
+                ConfigField::Async(c) => {
+                    if async_.is_some() {
+                        return Err(Error::new(err_loc, "duplicate `async` field"));
+                    }
+                    async_ = Some(c);
+                }
             }
         }
         Ok(Config {
@@ -105,6 +132,8 @@ impl Config {
             witx: witx.ok_or_else(|| Error::new(err_loc, "`witx` field required"))?,
             ctx: ctx.ok_or_else(|| Error::new(err_loc, "`ctx` field required"))?,
             modules: modules.ok_or_else(|| Error::new(err_loc, "`modules` field required"))?,
+            #[cfg(feature = "async")]
+            async_: async_.unwrap_or_default(),
         })
     }
 
@@ -125,6 +154,19 @@ impl Parse for Config {
         let fields: Punctuated<ConfigField, Token![,]> =
             contents.parse_terminated(ConfigField::parse)?;
         Ok(Config::build(fields.into_iter(), input.span())?)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CtxConf {
+    pub name: syn::Type,
+}
+
+impl Parse for CtxConf {
+    fn parse(input: ParseStream) -> Result<Self> {
+        Ok(CtxConf {
+            name: input.parse()?,
+        })
     }
 }
 

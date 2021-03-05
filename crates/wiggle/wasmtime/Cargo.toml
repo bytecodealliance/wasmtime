@@ -17,10 +17,22 @@ witx = { version = "0.9", path = "../../wasi-common/WASI/tools/witx", optional =
 wiggle = { path = "..", version = "0.24.0" }
 wiggle-borrow = { path = "../borrow", version = "0.24.0" }
 
+[dev-dependencies]
+anyhow = "1"
+proptest = "0.10"
+
+[[test]]
+name = "atoms_async"
+path = "tests/atoms_async.rs"
+required-features = ["async", "wasmtime/wat"]
+
 [badges]
 maintenance = { status = "actively-developed" }
 
 [features]
+# Async support for wasmtime
+async = [ 'wasmtime/async', 'wasmtime-wiggle-macro/async' ]
+
 # The wiggle proc-macro emits some code (inside `pub mod metadata`) guarded
 # by the `wiggle_metadata` feature flag. We use this feature flag so that
 # users of wiggle are not forced to take a direct dependency on the `witx`
@@ -33,4 +45,4 @@ wiggle_metadata = ['witx', "wiggle/wiggle_metadata"]
 # the logs out of wiggle-generated libraries.
 tracing_log = [ "wiggle/tracing_log" ]
 
-default = ["wiggle_metadata" ]
+default = ["wiggle_metadata", "async"]

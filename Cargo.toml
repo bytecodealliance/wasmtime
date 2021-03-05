@@ -74,6 +74,8 @@ members = [
   "crates/misc/run-examples",
   "crates/misc/rust",
   "crates/wiggle",
+  "crates/wiggle/generate",
+  "crates/wiggle/macro",
   "crates/wiggle/wasmtime",
   "crates/wasi-common",
   "crates/wasi-common/cap-std-sync",

@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
-use crate::error_transform::ErrorTransform;
+use crate::codegen_settings::CodegenSettings;
 use crate::lifetimes::{anon_lifetime, LifetimeExt};
 use crate::names::Names;
 use witx::Module;
@@ -15,8 +15,9 @@ pub fn passed_by_reference(ty: &witx::Type) -> bool {
     }
 }
 
-pub fn define_module_trait(names: &Names, m: &Module, errxform: &ErrorTransform) -> TokenStream {
+pub fn define_module_trait(names: &Names, m: &Module, settings: &CodegenSettings) -> TokenStream {
     let traitname = names.trait_name(&m.name);
+    let rt = names.runtime_mod();
     let traitmethods = m.funcs().map(|f| {
         // Check if we're returning an entity anotated with a lifetime,
         // in which case, we'll need to annotate the function itself, and
@@ -43,7 +44,6 @@ pub fn define_module_trait(names: &Names, m: &Module, errxform: &ErrorTransform)
             quote!(#arg_name: #arg_type)
         });
 
-        let rt = names.runtime_mod();
         let result = match f.results.len() {
             0 if f.noreturn => quote!(#rt::Trap),
             0 => quote!(()),
@@ -61,7 +61,7 @@ pub fn define_module_trait(names: &Names, m: &Module, errxform: &ErrorTransform)
                     None => quote!(()),
                 };
                 let err = match err {
-                    Some(ty) => match errxform.for_abi_error(ty) {
+                    Some(ty) => match settings.errors.for_abi_error(ty) {
                         Some(custom) => {
                             let tn = custom.typename();
                             quote!(super::#tn)
@@ -75,13 +75,22 @@ pub fn define_module_trait(names: &Names, m: &Module, errxform: &ErrorTransform)
             _ => unimplemented!(),
         };
 
-        if is_anonymous {
-            quote!(fn #funcname(&self, #(#args),*) -> #result; )
+        let asyncness = if settings.is_async(&m, &f) {
+            quote!(async)
         } else {
-            quote!(fn #funcname<#lifetime>(&self, #(#args),*) -> #result;)
+            quote!()
+        };
+
+        if is_anonymous {
+            quote!(#asyncness fn #funcname(&self, #(#args),*) -> #result; )
+        } else {
+            quote!(#asyncness fn #funcname<#lifetime>(&self, #(#args),*) -> #result;)
         }
     });
+
     quote! {
+        use #rt::async_trait;
+        #[async_trait(?Send)]
         pub trait #traitname {
             #(#traitmethods)*
         }

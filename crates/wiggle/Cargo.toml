@@ -16,6 +16,7 @@ witx = { path = "../wasi-common/WASI/tools/witx", version = "0.9", optional = tr
 wiggle-macro = { path = "macro", version = "0.24.0" }
 tracing = "0.1.15"
 bitflags = "1.2"
+async-trait = "0.1.42"
 
 [badges]
 maintenance = { status = "actively-developed" }
