@@ -48,7 +48,7 @@ pub use crate::mmap::Mmap;
 pub use crate::table::{Table, TableElement};
 pub use crate::traphandlers::{
     catch_traps, init_traps, raise_lib_trap, raise_user_trap, resume_panic, with_last_info,
-    SignalHandler, Trap, TrapInfo,
+    SignalHandler, TlsRestore, Trap, TrapInfo,
 };
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,

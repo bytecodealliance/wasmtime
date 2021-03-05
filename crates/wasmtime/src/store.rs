@@ -717,7 +717,10 @@ impl Store {
                 Poll::Pending => {}
             }
             unsafe {
-                (*suspend).suspend(())?;
+                let before = wasmtime_runtime::TlsRestore::take();
+                let res = (*suspend).suspend(());
+                before.replace();
+                res?;
             }
         }
     }
