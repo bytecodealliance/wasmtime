@@ -826,6 +826,12 @@ impl Config {
     }
 
     /// Sets the instance allocation strategy to use.
+    ///
+    /// When using the pooling instance allocation strategy, all linear memories will be created as "static".
+    ///
+    /// This means the [`Config::static_memory_maximum_size`] and [`Config::static_memory_guard_size`] options
+    /// will be ignored in favor of [`InstanceLimits::memory_reservation_size`] when the pooling instance
+    /// allocation strategy is used.
     pub fn with_allocation_strategy(
         &mut self,
         strategy: InstanceAllocationStrategy,

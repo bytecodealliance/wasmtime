@@ -27,6 +27,8 @@ pub(crate) fn create_handle(
 
     unsafe {
         // Use the default allocator when creating handles associated with host objects
+        // The configured instance allocator should only be used when creating module instances
+        // as we don't want host objects to count towards instance limits.
         let handle = store
             .engine()
             .config()
