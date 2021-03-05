@@ -6,7 +6,7 @@ use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
 wasmtime_wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
-    async_: {
+    async: {
         atoms::{double_int_return_float}
     }
 });
@@ -16,7 +16,7 @@ wasmtime_wiggle::wasmtime_integration!({
     witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
     ctx: Ctx,
     modules: { atoms => { name: Atoms } },
-    async_: {
+    async: {
         atoms::double_int_return_float
     }
 });

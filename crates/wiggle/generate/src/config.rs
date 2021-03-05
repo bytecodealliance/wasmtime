@@ -27,7 +27,6 @@ mod kw {
     syn::custom_keyword!(witx);
     syn::custom_keyword!(witx_literal);
     syn::custom_keyword!(errors);
-    syn::custom_keyword!(async_);
 }
 
 impl Parse for ConfigField {
@@ -45,8 +44,8 @@ impl Parse for ConfigField {
             input.parse::<kw::errors>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Error(input.parse()?))
-        } else if lookahead.peek(kw::async_) {
-            input.parse::<kw::async_>()?;
+        } else if lookahead.peek(Token![async]) {
+            input.parse::<Token![async]>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Async(input.parse()?))
         } else {

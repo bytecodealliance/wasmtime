@@ -35,7 +35,7 @@ use syn::parse_macro_input;
 ///   `{ errno => YourErrnoType }`. This allows you to use the `UserErrorConversion`
 ///   trait to map these rich errors into the flat witx type, or to terminate
 ///   WebAssembly execution by trapping.
-/// * Optional: `async_` takes a set of witx modules and functions which are
+/// * Optional: `async` takes a set of witx modules and functions which are
 ///   made Rust `async` functions in the module trait.
 ///
 /// ## Example
@@ -61,7 +61,7 @@ use syn::parse_macro_input;
 ///              (result $r (expected $alias_to_float (error $errno)))))
 ///     ",
 ///     errors: { errno => YourRichError },
-///     async_: { example::double_int_return_float },
+///     async: { example::double_int_return_float },
 /// });
 ///
 /// /// Witx generates a set of traits, which the user must impl on a

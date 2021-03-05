@@ -39,7 +39,6 @@ mod kw {
     syn::custom_keyword!(name);
     syn::custom_keyword!(docs);
     syn::custom_keyword!(function_override);
-    syn::custom_keyword!(async_);
 }
 
 impl Parse for ConfigField {
@@ -65,8 +64,8 @@ impl Parse for ConfigField {
             input.parse::<kw::modules>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Modules(input.parse()?))
-        } else if lookahead.peek(kw::async_) {
-            input.parse::<kw::async_>()?;
+        } else if lookahead.peek(Token![async]) {
+            input.parse::<Token![async]>()?;
             input.parse::<Token![:]>()?;
             #[cfg(feature = "async")]
             {
@@ -76,7 +75,7 @@ impl Parse for ConfigField {
             {
                 Err(syn::Error::new(
                     input.span(),
-                    "async_ not supported, enable cargo feature \"async\"",
+                    "async not supported, enable cargo feature \"async\"",
                 ))
             }
         } else {
@@ -122,7 +121,7 @@ impl Config {
                 #[cfg(feature = "async")]
                 ConfigField::Async(c) => {
                     if async_.is_some() {
-                        return Err(Error::new(err_loc, "duplicate `async_` field"));
+                        return Err(Error::new(err_loc, "duplicate `async` field"));
                     }
                     async_ = Some(c);
                 }
