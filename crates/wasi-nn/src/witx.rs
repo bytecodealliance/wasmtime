@@ -5,7 +5,6 @@ use crate::ctx::WasiNnError;
 // Generate the traits and types of wasi-nn in several Rust modules (e.g. `types`).
 wiggle::from_witx!({
     witx: ["$WASI_ROOT/phases/ephemeral/witx/wasi_ephemeral_nn.witx"],
-    ctx: WasiNnCtx,
     errors: { nn_errno => WasiNnError }
 });
 

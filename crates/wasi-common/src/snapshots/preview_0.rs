@@ -15,7 +15,6 @@ use wiggle::GuestPtr;
 
 wiggle::from_witx!({
     witx: ["$WASI_ROOT/phases/old/snapshot_0/witx/wasi_unstable.witx"],
-    ctx: WasiCtx,
     errors: { errno => Error },
 });
 
