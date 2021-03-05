@@ -5,7 +5,6 @@ use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/ints.witx"],
-    ctx: WasiCtx,
 });
 
 impl_errno!(types::Errno, types::GuestErrorConversion);

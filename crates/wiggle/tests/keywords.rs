@@ -13,7 +13,6 @@ mod enum_test {
                      $2big
                  )
              )",
-        ctx: DummyCtx,
     });
 }
 
@@ -31,7 +30,6 @@ mod module_trait_fn_and_arg_test {
                      (param $virtual u32)
                  )
              )",
-        ctx: WasiCtx,
     });
     impl<'a> self_::Self_ for WasiCtx<'a> {
         #[allow(unused_variables)]
@@ -51,7 +49,6 @@ mod struct_test {
                      (field $mut s32)
                  )
              )",
-        ctx: DummyCtx,
     });
 }
 
@@ -59,6 +56,5 @@ mod struct_test {
 mod union_test {
     wiggle::from_witx!({
         witx: ["$CARGO_MANIFEST_DIR/tests/keywords_union.witx"],
-        ctx: DummyCtx,
     });
 }

@@ -8,7 +8,6 @@ use wiggle_test::WasiCtx;
 
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/wasi.witx"],
-    ctx: WasiCtx,
 });
 
 // The only test in this file is to verify that the witx document provided by the

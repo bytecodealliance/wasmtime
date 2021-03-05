@@ -24,7 +24,6 @@ witx_literal: "
      (param $s $s)
      (result $err (expected $t (error $errno)))))
     ",
-    ctx: WasiCtx,
     errors: { errno => RichError },
 });
 
