@@ -6,7 +6,7 @@ use wiggle_generate::Names;
 
 mod config;
 
-use config::{ModuleConf, TargetConf};
+use config::{AsyncConf, ModuleConf, TargetConf};
 
 /// Define the structs required to integrate a Wiggle implementation with Wasmtime.
 ///
@@ -46,13 +46,25 @@ use config::{ModuleConf, TargetConf};
 pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
     let config = parse_macro_input!(args as config::Config);
     let doc = config.load_document();
-    let names = Names::new(&config.ctx.name, quote!(wasmtime_wiggle));
+    let names = Names::new(quote!(wasmtime_wiggle));
+
+    #[cfg(feature = "async")]
+    let async_config = config.async_.clone();
+    #[cfg(not(feature = "async"))]
+    let async_config = AsyncConf::default();
 
     let modules = config.modules.iter().map(|(name, module_conf)| {
         let module = doc
             .module(&witx::Id::new(name))
             .unwrap_or_else(|| panic!("witx document did not contain module named '{}'", name));
-        generate_module(&module, &module_conf, &names, &config.target)
+        generate_module(
+            &module,
+            &module_conf,
+            &names,
+            &config.target,
+            &config.ctx.name,
+            &async_config,
+        )
     });
     quote!( #(#modules)* ).into()
 }
@@ -62,6 +74,8 @@ fn generate_module(
     module_conf: &ModuleConf,
     names: &Names,
     target_conf: &TargetConf,
+    ctx_type: &syn::Type,
+    async_conf: &AsyncConf,
 ) -> TokenStream2 {
     let fields = module.funcs().map(|f| {
         let name_ident = names.func(&f.name);
@@ -88,9 +102,14 @@ fn generate_module(
     let module_id = names.module(&module.name);
     let target_module = quote! { #target_path::#module_id };
 
-    let ctor_externs = module
-        .funcs()
-        .map(|f| generate_func(&f, names, &target_module));
+    let ctor_externs = module.funcs().map(|f| {
+        generate_func(
+            &f,
+            names,
+            &target_module,
+            async_conf.is_async(module.name.as_str(), f.name.as_str()),
+        )
+    });
 
     let type_name = module_conf.name.clone();
     let type_docs = module_conf
@@ -106,8 +125,6 @@ configuration of the wasi instance itself should be all
 contained in the `cx` parameter.",
         module_conf.name.to_string()
     );
-
-    let ctx_type = names.ctx_type();
 
     quote! {
         #type_docs
@@ -150,6 +167,7 @@ fn generate_func(
     func: &witx::InterfaceFunc,
     names: &Names,
     target_module: &TokenStream2,
+    is_async: bool,
 ) -> TokenStream2 {
     let name_ident = names.func(&func.name);
 
@@ -172,31 +190,52 @@ fn generate_func(
 
     let runtime = names.runtime_mod();
 
-    quote! {
-        let my_cx = cx.clone();
-        let #name_ident = wasmtime::Func::wrap(
-            store,
-            move |caller: wasmtime::Caller<'_> #(,#arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
-                unsafe {
-                    let mem = match caller.get_export("memory") {
-                        Some(wasmtime::Extern::Memory(m)) => m,
-                        _ => {
-                            return Err(wasmtime::Trap::new("missing required memory export"));
-                        }
-                    };
-                    let mem = #runtime::WasmtimeGuestMemory::new(mem);
-                    let result = #target_module::#name_ident(
-                        &mut my_cx.borrow_mut(),
-                        &mem,
-                        #(#arg_names),*
-                    );
-                    match result {
-                        Ok(r) => Ok(r.into()),
-                        Err(wasmtime_wiggle::Trap::String(err)) => Err(wasmtime::Trap::new(err)),
-                        Err(wasmtime_wiggle::Trap::I32Exit(err)) => Err(wasmtime::Trap::i32_exit(err)),
-                    }
+    let await_ = if is_async { quote!(.await) } else { quote!() };
+
+    let closure_body = quote! {
+        unsafe {
+            let mem = match caller.get_export("memory") {
+                Some(wasmtime::Extern::Memory(m)) => m,
+                _ => {
+                    return Err(wasmtime::Trap::new("missing required memory export"));
                 }
+            };
+            let mem = #runtime::WasmtimeGuestMemory::new(mem);
+            let result = #target_module::#name_ident(
+                &mut *my_cx.borrow_mut(),
+                &mem,
+                #(#arg_names),*
+            ) #await_;
+            match result {
+                Ok(r) => Ok(r.into()),
+                Err(wasmtime_wiggle::Trap::String(err)) => Err(wasmtime::Trap::new(err)),
+                Err(wasmtime_wiggle::Trap::I32Exit(err)) => Err(wasmtime::Trap::i32_exit(err)),
+            }
+        }
+
+    };
+    if is_async {
+        let wrapper = quote::format_ident!("wrap{}_async", params.len());
+        quote! {
+        let #name_ident = wasmtime::Func::#wrapper(
+            store,
+            cx.clone(),
+            move |caller: wasmtime::Caller<'_>, my_cx: &Rc<RefCell<_>> #(,#arg_decls)*|
+              -> Box<dyn std::future::Future<Output = Result<#ret_ty, wasmtime::Trap>>>
+            {
+                Box::new(async move { #closure_body })
             }
         );
+        }
+    } else {
+        quote! {
+            let my_cx = cx.clone();
+            let #name_ident = wasmtime::Func::wrap(
+                store,
+                move |caller: wasmtime::Caller<'_> #(,#arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
+                    #closure_body
+                }
+            );
+        }
     }
 }

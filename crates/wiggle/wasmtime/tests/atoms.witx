@@ -1,0 +1,25 @@
+
+(typename $errno
+    (enum (@witx tag u32)
+        ;;; Success
+        $ok
+        ;;; Invalid argument
+        $invalid_arg
+        ;;; I really don't want to
+        $dont_want_to
+        ;;; I am physically unable to
+        $physically_unable
+        ;;; Well, that's a picket line alright!
+        $picket_line))
+
+(typename $alias_to_float f32)
+
+(module $atoms
+  (@interface func (export "int_float_args")
+    (param $an_int u32)
+    (param $an_float f32)
+    (result $error (expected (error $errno))))
+  (@interface func (export "double_int_return_float")
+    (param $an_int u32)
+    (result $error (expected $alias_to_float (error $errno))))
+)
