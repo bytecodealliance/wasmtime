@@ -55,53 +55,37 @@ fn round_up_to_pow2(n: usize, to: usize) -> usize {
 /// Represents the limits placed on a module for compiling with the pooling instance allocator.
 #[derive(Debug, Copy, Clone)]
 pub struct ModuleLimits {
-    /// The maximum number of imported functions for a module (default is 1000).
+    /// The maximum number of imported functions for a module.
     pub imported_functions: u32,
 
-    /// The maximum number of imported tables for a module (default is 0).
+    /// The maximum number of imported tables for a module.
     pub imported_tables: u32,
 
-    /// The maximum number of imported linear memories for a module (default is 0).
+    /// The maximum number of imported linear memories for a module.
     pub imported_memories: u32,
 
-    /// The maximum number of imported globals for a module (default is 0).
+    /// The maximum number of imported globals for a module.
     pub imported_globals: u32,
 
-    /// The maximum number of defined types for a module (default is 100).
+    /// The maximum number of defined types for a module.
     pub types: u32,
 
-    /// The maximum number of defined functions for a module (default is 10000).
+    /// The maximum number of defined functions for a module.
     pub functions: u32,
 
-    /// The maximum number of defined tables for a module (default is 1).
+    /// The maximum number of defined tables for a module.
     pub tables: u32,
 
-    /// The maximum number of defined linear memories for a module (default is 1).
+    /// The maximum number of defined linear memories for a module.
     pub memories: u32,
 
-    /// The maximum number of defined globals for a module (default is 10).
+    /// The maximum number of defined globals for a module.
     pub globals: u32,
 
-    /// The maximum table elements for any table defined in a module (default is 10000).
-    ///
-    /// If a table's minimum element limit is greater than this value, the module will
-    /// fail to compile.
-    ///
-    /// If a table's maximum element limit is unbounded or greater than this value,
-    /// the maximum will be `table_elements` for the purpose of any `table.grow` instruction.
+    /// The maximum table elements for any table defined in a module.
     pub table_elements: u32,
 
-    /// The maximum number of pages for any linear memory defined in a module (default is 160).
-    ///
-    /// The default of 160 means at most 10 MiB of host memory may be committed for each instance.
-    ///
-    /// If a memory's minimum page limit is greater than this value, the module will
-    /// fail to compile.
-    ///
-    /// If a memory's maximum page limit is unbounded or greater than this value,
-    /// the maximum will be `memory_pages` for the purpose of any `memory.grow` instruction.
-    ///
-    /// This value cannot exceed any memory reservation size limits placed on instances.
+    /// The maximum number of pages for any linear memory defined in a module.
     pub memory_pages: u32,
 }
 
@@ -224,7 +208,7 @@ impl ModuleLimits {
 
 impl Default for ModuleLimits {
     fn default() -> Self {
-        // See doc comments for `ModuleLimits` for these default values
+        // See doc comments for `wasmtime::ModuleLimits` for these default values
         Self {
             imported_functions: 1000,
             imported_tables: 0,
@@ -244,32 +228,16 @@ impl Default for ModuleLimits {
 /// Represents the limits placed on instances by the pooling instance allocator.
 #[derive(Debug, Copy, Clone)]
 pub struct InstanceLimits {
-    /// The maximum number of concurrent instances supported (default is 1000).
+    /// The maximum number of concurrent instances supported.
     pub count: u32,
 
     /// The maximum size, in bytes, of host address space to reserve for each linear memory of an instance.
-    ///
-    /// Note: this value has important performance ramifications.
-    ///
-    /// On 64-bit platforms, the default for this value will be 6 GiB.  A value of less than 4 GiB will
-    /// force runtime bounds checking for memory accesses and thus will negatively impact performance.
-    /// Any value above 4 GiB will start eliding bounds checks provided the `offset` of the memory access is
-    /// less than (`memory_reservation_size` - 4 GiB).  A value of 8 GiB will completely elide *all* bounds
-    /// checks; consequently, 8 GiB will be the maximum supported value. The default of 6 GiB reserves
-    /// less host address space for each instance, but a memory access with an offet above 2 GiB will incur
-    /// runtime bounds checks.
-    ///
-    /// On 32-bit platforms, the default for this value will be 10 MiB. A 32-bit host has very limited address
-    /// space to reserve for a lot of concurrent instances.  As a result, runtime bounds checking will be used
-    /// for all memory accesses.  For better runtime performance, a 64-bit host is recommended.
-    ///
-    /// This value will be rounded up by the WebAssembly page size (64 KiB).
     pub memory_reservation_size: u64,
 }
 
 impl Default for InstanceLimits {
     fn default() -> Self {
-        // See doc comments for `InstanceLimits` for these default values
+        // See doc comments for `wasmtime::InstanceLimits` for these default values
         Self {
             count: 1000,
             #[cfg(target_pointer_width = "32")]

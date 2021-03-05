@@ -381,7 +381,11 @@ impl Instance {
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages.
     pub(crate) fn memory_grow(&self, memory_index: DefinedMemoryIndex, delta: u32) -> Option<u32> {
-        // Reset all guard pages before growing any memory
+        // Reset all guard pages before growing any memory when using the uffd feature.
+        // The uffd feature induces a trap when a fault on a linear memory page is determined to be out-of-bounds.
+        // It does this by temporarily setting the protection level to `NONE` to cause the kernel to signal SIGBUS.
+        // Because instances might still be used after a trap, this resets the page back to the expected protection
+        // level (READ_WRITE) for the uffd implementation.
         #[cfg(all(feature = "uffd", target_os = "linux"))]
         self.reset_guard_pages().ok()?;
 

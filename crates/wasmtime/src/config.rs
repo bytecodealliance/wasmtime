@@ -16,8 +16,213 @@ use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator, PoolingInstanceAllocator};
 
-// Re-export the limit structures for the pooling allocator
-pub use wasmtime_runtime::{InstanceLimits, ModuleLimits, PoolingAllocationStrategy};
+/// Represents the limits placed on a module for compiling with the pooling instance allocation strategy.
+#[derive(Debug, Copy, Clone)]
+pub struct ModuleLimits {
+    /// The maximum number of imported functions for a module (default is 1000).
+    pub imported_functions: u32,
+
+    /// The maximum number of imported tables for a module (default is 0).
+    pub imported_tables: u32,
+
+    /// The maximum number of imported linear memories for a module (default is 0).
+    pub imported_memories: u32,
+
+    /// The maximum number of imported globals for a module (default is 0).
+    pub imported_globals: u32,
+
+    /// The maximum number of defined types for a module (default is 100).
+    pub types: u32,
+
+    /// The maximum number of defined functions for a module (default is 10000).
+    pub functions: u32,
+
+    /// The maximum number of defined tables for a module (default is 1).
+    pub tables: u32,
+
+    /// The maximum number of defined linear memories for a module (default is 1).
+    pub memories: u32,
+
+    /// The maximum number of defined globals for a module (default is 10).
+    pub globals: u32,
+
+    /// The maximum table elements for any table defined in a module (default is 10000).
+    ///
+    /// If a table's minimum element limit is greater than this value, the module will
+    /// fail to compile.
+    ///
+    /// If a table's maximum element limit is unbounded or greater than this value,
+    /// the maximum will be `table_elements` for the purpose of any `table.grow` instruction.
+    pub table_elements: u32,
+
+    /// The maximum number of pages for any linear memory defined in a module (default is 160).
+    ///
+    /// The default of 160 means at most 10 MiB of host memory may be committed for each instance.
+    ///
+    /// If a memory's minimum page limit is greater than this value, the module will
+    /// fail to compile.
+    ///
+    /// If a memory's maximum page limit is unbounded or greater than this value,
+    /// the maximum will be `memory_pages` for the purpose of any `memory.grow` instruction.
+    ///
+    /// This value cannot exceed any memory reservation size limits placed on instances.
+    pub memory_pages: u32,
+}
+
+impl Default for ModuleLimits {
+    fn default() -> Self {
+        // Use the defaults from the runtime
+        let wasmtime_runtime::ModuleLimits {
+            imported_functions,
+            imported_tables,
+            imported_memories,
+            imported_globals,
+            types,
+            functions,
+            tables,
+            memories,
+            globals,
+            table_elements,
+            memory_pages,
+        } = wasmtime_runtime::ModuleLimits::default();
+
+        Self {
+            imported_functions,
+            imported_tables,
+            imported_memories,
+            imported_globals,
+            types,
+            functions,
+            tables,
+            memories,
+            globals,
+            table_elements,
+            memory_pages,
+        }
+    }
+}
+
+// This exists so we can convert between the public Wasmtime API and the runtime representation
+// without having to export runtime types from the Wasmtime API.
+#[doc(hidden)]
+impl Into<wasmtime_runtime::ModuleLimits> for ModuleLimits {
+    fn into(self) -> wasmtime_runtime::ModuleLimits {
+        let Self {
+            imported_functions,
+            imported_tables,
+            imported_memories,
+            imported_globals,
+            types,
+            functions,
+            tables,
+            memories,
+            globals,
+            table_elements,
+            memory_pages,
+        } = self;
+
+        wasmtime_runtime::ModuleLimits {
+            imported_functions,
+            imported_tables,
+            imported_memories,
+            imported_globals,
+            types,
+            functions,
+            tables,
+            memories,
+            globals,
+            table_elements,
+            memory_pages,
+        }
+    }
+}
+
+/// Represents the limits placed on instances by the pooling instance allocation strategy.
+#[derive(Debug, Copy, Clone)]
+pub struct InstanceLimits {
+    /// The maximum number of concurrent instances supported (default is 1000).
+    pub count: u32,
+
+    /// The maximum size, in bytes, of host address space to reserve for each linear memory of an instance.
+    ///
+    /// Note: this value has important performance ramifications.
+    ///
+    /// On 64-bit platforms, the default for this value will be 6 GiB.  A value of less than 4 GiB will
+    /// force runtime bounds checking for memory accesses and thus will negatively impact performance.
+    /// Any value above 4 GiB will start eliding bounds checks provided the `offset` of the memory access is
+    /// less than (`memory_reservation_size` - 4 GiB).  A value of 8 GiB will completely elide *all* bounds
+    /// checks; consequently, 8 GiB will be the maximum supported value. The default of 6 GiB reserves
+    /// less host address space for each instance, but a memory access with an offset above 2 GiB will incur
+    /// runtime bounds checks.
+    ///
+    /// On 32-bit platforms, the default for this value will be 10 MiB. A 32-bit host has very limited address
+    /// space to reserve for a lot of concurrent instances.  As a result, runtime bounds checking will be used
+    /// for all memory accesses.  For better runtime performance, a 64-bit host is recommended.
+    ///
+    /// This value will be rounded up by the WebAssembly page size (64 KiB).
+    pub memory_reservation_size: u64,
+}
+
+impl Default for InstanceLimits {
+    fn default() -> Self {
+        let wasmtime_runtime::InstanceLimits {
+            count,
+            memory_reservation_size,
+        } = wasmtime_runtime::InstanceLimits::default();
+
+        Self {
+            count,
+            memory_reservation_size,
+        }
+    }
+}
+
+// This exists so we can convert between the public Wasmtime API and the runtime representation
+// without having to export runtime types from the Wasmtime API.
+#[doc(hidden)]
+impl Into<wasmtime_runtime::InstanceLimits> for InstanceLimits {
+    fn into(self) -> wasmtime_runtime::InstanceLimits {
+        let Self {
+            count,
+            memory_reservation_size,
+        } = self;
+
+        wasmtime_runtime::InstanceLimits {
+            count,
+            memory_reservation_size,
+        }
+    }
+}
+
+/// The allocation strategy to use for the pooling instance allocation strategy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PoolingAllocationStrategy {
+    /// Allocate from the next available instance.
+    NextAvailable,
+    /// Allocate from a random available instance.
+    Random,
+}
+
+impl Default for PoolingAllocationStrategy {
+    fn default() -> Self {
+        match wasmtime_runtime::PoolingAllocationStrategy::default() {
+            wasmtime_runtime::PoolingAllocationStrategy::NextAvailable => Self::NextAvailable,
+            wasmtime_runtime::PoolingAllocationStrategy::Random => Self::Random,
+        }
+    }
+}
+
+// This exists so we can convert between the public Wasmtime API and the runtime representation
+// without having to export runtime types from the Wasmtime API.
+#[doc(hidden)]
+impl Into<wasmtime_runtime::PoolingAllocationStrategy> for PoolingAllocationStrategy {
+    fn into(self) -> wasmtime_runtime::PoolingAllocationStrategy {
+        match self {
+            Self::NextAvailable => wasmtime_runtime::PoolingAllocationStrategy::NextAvailable,
+            Self::Random => wasmtime_runtime::PoolingAllocationStrategy::Random,
+        }
+    }
+}
 
 /// Represents the module instance allocation strategy to use.
 #[derive(Clone)]
@@ -44,6 +249,17 @@ pub enum InstanceAllocationStrategy {
     },
 }
 
+impl InstanceAllocationStrategy {
+    /// The default pooling instance allocation strategy.
+    pub fn pooling() -> Self {
+        Self::Pooling {
+            strategy: PoolingAllocationStrategy::default(),
+            module_limits: ModuleLimits::default(),
+            instance_limits: InstanceLimits::default(),
+        }
+    }
+}
+
 impl Default for InstanceAllocationStrategy {
     fn default() -> Self {
         Self::OnDemand
@@ -66,7 +282,7 @@ pub struct Config {
     pub(crate) profiler: Arc<dyn ProfilingAgent>,
     pub(crate) instance_allocator: Option<Arc<dyn InstanceAllocator>>,
     // The default instance allocator is used for instantiating host objects
-    // and for module instatiation when `instance_allocator` is None
+    // and for module instantiation when `instance_allocator` is None
     pub(crate) default_instance_allocator: OnDemandInstanceAllocator,
     pub(crate) max_wasm_stack: usize,
     pub(crate) features: WasmFeatures,
@@ -628,9 +844,9 @@ impl Config {
                 let stack_size = 0;
 
                 Some(Arc::new(PoolingInstanceAllocator::new(
-                    strategy,
-                    module_limits,
-                    instance_limits,
+                    strategy.into(),
+                    module_limits.into(),
+                    instance_limits.into(),
                     stack_size,
                 )?))
             }
