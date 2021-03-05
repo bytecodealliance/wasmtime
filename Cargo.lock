@@ -126,6 +126,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
+name = "async-trait"
+version = "0.1.42"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d3a45e77e34375a7923b1e8febb049bb011f064714a8e17a1a616fef01da13d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3473,6 +3484,8 @@ dependencies = [
 name = "wasmtime-wiggle"
 version = "0.23.0"
 dependencies = [
+ "anyhow",
+ "proptest",
  "wasmtime",
  "wasmtime-wiggle-macro",
  "wiggle",
@@ -3531,6 +3544,7 @@ dependencies = [
 name = "wiggle"
 version = "0.23.0"
 dependencies = [
+ "async-trait",
  "bitflags",
  "proptest",
  "thiserror",
