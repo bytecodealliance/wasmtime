@@ -1,4 +1,5 @@
 test compile
+set enable_llvm_abi_extensions=true
 target x86_64
 feature "experimental_x64"
 
@@ -738,17 +739,17 @@ block0(v0: i128, v1: i128, v2: i64, v3: i128, v4: i128, v5: i128):
     v11 = iadd.i128 v9, v10
     return v11
 
-; check:  movq    %rsp, %rbp
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
 ; nextln: subq    $$16, %rsp
 ; nextln: movq    %r12, 0(%rsp)
 ; nextln: movq    %r13, 8(%rsp)
 ; nextln: virtual_sp_offset_adjust 16
-; nextln: movq    16(%rbp), %r9
-; nextln: movq    24(%rbp), %r10
-; nextln: movq    32(%rbp), %r12
-; nextln: movq    40(%rbp), %r11
-; nextln: movq    48(%rbp), %rax
-; nextln: movq    56(%rbp), %r13
+; nextln: movq    16(%rbp), %r10
+; nextln: movq    24(%rbp), %r12
+; nextln: movq    32(%rbp), %r11
+; nextln: movq    40(%rbp), %rax
+; nextln: movq    48(%rbp), %r13
 ; nextln: addq    %rdx, %rdi
 ; nextln: adcq    %rcx, %rsi
 ; nextln: xorq    %rcx, %rcx
@@ -786,10 +787,10 @@ block0(v0: i128):
 ; nextln: movq    %r10, 16(%rsi)
 ; nextln: movq    %r11, 24(%rsi)
 ; nextln: movq    %r12, 32(%rsi)
-; nextln: movq    %r13, 48(%rsi)
-; nextln: movq    %r14, 56(%rsi)
-; nextln: movq    %rdi, 64(%rsi)
-; nextln: movq    %rbx, 72(%rsi)
+; nextln: movq    %r13, 40(%rsi)
+; nextln: movq    %r14, 48(%rsi)
+; nextln: movq    %rdi, 56(%rsi)
+; nextln: movq    %rbx, 64(%rsi)
 
 }
 

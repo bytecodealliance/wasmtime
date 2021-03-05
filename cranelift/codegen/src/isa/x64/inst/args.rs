@@ -456,6 +456,7 @@ pub(crate) enum InstructionSet {
     Popcnt,
     Lzcnt,
     BMI1,
+    #[allow(dead_code)] // never constructed (yet).
     BMI2,
 }
 
