@@ -1,10 +1,28 @@
-use crate::config::ErrorConf;
+use crate::config::{AsyncConf, ErrorConf};
 use anyhow::{anyhow, Error};
 use proc_macro2::TokenStream;
 use quote::quote;
 use std::collections::HashMap;
 use std::rc::Rc;
-use witx::{Document, Id, NamedType, TypeRef};
+use witx::{Document, Id, InterfaceFunc, Module, NamedType, TypeRef};
+
+pub struct CodegenSettings {
+    pub errors: ErrorTransform,
+    async_: AsyncConf,
+}
+impl CodegenSettings {
+    pub fn new(error_conf: &ErrorConf, async_: &AsyncConf, doc: &Document) -> Result<Self, Error> {
+        let errors = ErrorTransform::new(error_conf, doc)?;
+        Ok(Self {
+            errors,
+            async_: async_.clone(),
+        })
+    }
+    pub fn is_async(&self, module: &Module, func: &InterfaceFunc) -> bool {
+        self.async_
+            .is_async(module.name.as_str(), func.name.as_str())
+    }
+}
 
 pub struct ErrorTransform {
     m: Vec<UserErrorType>,

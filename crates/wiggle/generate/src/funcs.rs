@@ -1,4 +1,4 @@
-use crate::error_transform::ErrorTransform;
+use crate::codegen_settings::CodegenSettings;
 use crate::lifetimes::anon_lifetime;
 use crate::module_trait::passed_by_reference;
 use crate::names::Names;
@@ -12,11 +12,10 @@ pub fn define_func(
     names: &Names,
     module: &witx::Module,
     func: &witx::InterfaceFunc,
-    errxform: &ErrorTransform,
+    settings: &CodegenSettings,
 ) -> TokenStream {
     let rt = names.runtime_mod();
     let ident = names.func(&func.name);
-    let ctx_type = names.ctx_type();
 
     let (wasm_params, wasm_results) = func.wasm_signature();
     let param_names = (0..wasm_params.len())
@@ -37,6 +36,7 @@ pub fn define_func(
     };
 
     let mut body = TokenStream::new();
+    let mut required_impls = vec![names.trait_name(&module.name)];
     func.call_interface(
         &module.name,
         &mut Rust {
@@ -48,16 +48,22 @@ pub fn define_func(
             names,
             module,
             funcname: func.name.as_str(),
-            errxform,
+            settings,
+            required_impls: &mut required_impls,
         },
     );
 
+    let asyncness = if settings.is_async(&module, &func) {
+        quote!(async)
+    } else {
+        quote!()
+    };
     let mod_name = &module.name.as_str();
     let func_name = &func.name.as_str();
     quote! {
         #[allow(unreachable_code)] // deals with warnings in noreturn functions
-        pub fn #ident(
-            ctx: &#ctx_type,
+        pub #asyncness fn #ident(
+            ctx: &(impl #(#required_impls)+*),
             memory: &dyn #rt::GuestMemory,
             #(#abi_params),*
         ) -> Result<#abi_ret, #rt::Trap> {
@@ -85,7 +91,16 @@ struct Rust<'a> {
     names: &'a Names,
     module: &'a witx::Module,
     funcname: &'a str,
-    errxform: &'a ErrorTransform,
+    settings: &'a CodegenSettings,
+    required_impls: &'a mut Vec<Ident>,
+}
+
+impl Rust<'_> {
+    fn required_impl(&mut self, i: Ident) {
+        if !self.required_impls.contains(&i) {
+            self.required_impls.push(i);
+        }
+    }
 }
 
 impl witx::Bindgen for Rust<'_> {
@@ -205,8 +220,16 @@ impl witx::Bindgen for Rust<'_> {
 
                 let trait_name = self.names.trait_name(&self.module.name);
                 let ident = self.names.func(&func.name);
+                if self.settings.is_async(&self.module, &func) {
+                    self.src.extend(quote! {
+                        let ret = #trait_name::#ident(ctx, #(#args),*).await;
+                    })
+                } else {
+                    self.src.extend(quote! {
+                        let ret = #trait_name::#ident(ctx, #(#args),*);
+                    })
+                };
                 self.src.extend(quote! {
-                    let ret = #trait_name::#ident(ctx, #(#args),*);
                     #rt::tracing::event!(
                         #rt::tracing::Level::TRACE,
                         result = #rt::tracing::field::debug(&ret),
@@ -226,9 +249,10 @@ impl witx::Bindgen for Rust<'_> {
             // enum, and *then* we lower to an i32.
             Instruction::EnumLower { ty } => {
                 let val = operands.pop().unwrap();
-                let val = match self.errxform.for_name(ty) {
+                let val = match self.settings.errors.for_name(ty) {
                     Some(custom) => {
                         let method = self.names.user_error_conversion_method(&custom);
+                        self.required_impl(quote::format_ident!("UserErrorConversion"));
                         quote!(UserErrorConversion::#method(ctx, #val)?)
                     }
                     None => val,

@@ -1,5 +1,5 @@
+mod codegen_settings;
 pub mod config;
-mod error_transform;
 mod funcs;
 mod lifetimes;
 mod module_trait;
@@ -11,14 +11,14 @@ use lifetimes::anon_lifetime;
 use proc_macro2::{Literal, TokenStream};
 use quote::quote;
 
+pub use codegen_settings::{CodegenSettings, UserErrorType};
 pub use config::Config;
-pub use error_transform::{ErrorTransform, UserErrorType};
 pub use funcs::define_func;
 pub use module_trait::define_module_trait;
 pub use names::Names;
 pub use types::define_datatype;
 
-pub fn generate(doc: &witx::Document, names: &Names, errs: &ErrorTransform) -> TokenStream {
+pub fn generate(doc: &witx::Document, names: &Names, settings: &CodegenSettings) -> TokenStream {
     // TODO at some point config should grow more ability to configure name
     // overrides.
     let rt = names.runtime_mod();
@@ -49,7 +49,7 @@ pub fn generate(doc: &witx::Document, names: &Names, errs: &ErrorTransform) -> T
         }
     };
 
-    let user_error_methods = errs.iter().map(|errtype| {
+    let user_error_methods = settings.errors.iter().map(|errtype| {
         let abi_typename = names.type_ref(&errtype.abi_type(), anon_lifetime());
         let user_typename = errtype.typename();
         let methodname = names.user_error_conversion_method(&errtype);
@@ -64,12 +64,10 @@ pub fn generate(doc: &witx::Document, names: &Names, errs: &ErrorTransform) -> T
         let modname = names.module(&module.name);
         let fs = module
             .funcs()
-            .map(|f| define_func(&names, &module, &f, &errs));
-        let modtrait = define_module_trait(&names, &module, &errs);
-        let ctx_type = names.ctx_type();
+            .map(|f| define_func(&names, &module, &f, &settings));
+        let modtrait = define_module_trait(&names, &module, &settings);
         quote!(
             pub mod #modname {
-                use super::#ctx_type;
                 use super::types::*;
                 #(#fs)*
 

@@ -6,8 +6,10 @@ use std::slice;
 use std::str;
 use std::sync::Arc;
 
-pub use bitflags;
 pub use wiggle_macro::from_witx;
+// re-exports so users of wiggle don't need to track the dependency:
+pub use async_trait::async_trait;
+pub use bitflags;
 
 #[cfg(feature = "wiggle_metadata")]
 pub use witx;
