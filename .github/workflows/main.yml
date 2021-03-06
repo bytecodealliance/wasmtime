@@ -305,6 +305,7 @@ jobs:
     - run: |
         cargo test --features uffd -p wasmtime-runtime instance::allocator::pooling
         cargo test --features uffd -p wasmtime-cli pooling_allocator
+        cargo test --features uffd -p wasmtime-cli wast::Cranelift
       if: matrix.os == 'ubuntu-latest'
       env:
         RUST_BACKTRACE: 1
