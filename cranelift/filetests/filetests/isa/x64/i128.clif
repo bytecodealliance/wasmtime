@@ -744,7 +744,6 @@ block0(v0: i128, v1: i128, v2: i64, v3: i128, v4: i128, v5: i128):
 ; nextln: subq    $$16, %rsp
 ; nextln: movq    %r12, 0(%rsp)
 ; nextln: movq    %r13, 8(%rsp)
-; nextln: virtual_sp_offset_adjust 16
 ; nextln: movq    16(%rbp), %r10
 ; nextln: movq    24(%rbp), %r12
 ; nextln: movq    32(%rbp), %r11
@@ -804,7 +803,6 @@ block0(v0: i128, v1: i128):
 ; nextln: movq    %rsp, %rbp
 ; nextln: subq    $$16, %rsp
 ; nextln: movq    %r12, 0(%rsp)
-; nextln: virtual_sp_offset_adjust 16
 ; nextln: movq    %r8, %r12
 ; nextln: subq    $$16, %rsp
 ; nextln: virtual_sp_offset_adjust 16

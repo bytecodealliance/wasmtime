@@ -106,9 +106,6 @@ pub struct VCode<I: VCodeInst> {
     /// post-regalloc.
     safepoint_slots: Vec<Vec<SpillSlot>>,
 
-    /// Ranges for prologue and epilogue instructions.
-    prologue_epilogue_ranges: Option<(InsnRange, Box<[InsnRange]>)>,
-
     /// Do we generate debug info?
     generate_debug_info: bool,
 
@@ -330,7 +327,6 @@ impl<I: VCodeInst> VCode<I> {
             emit_info,
             safepoint_insns: vec![],
             safepoint_slots: vec![],
-            prologue_epilogue_ranges: None,
             generate_debug_info,
             insts_layout: RefCell::new((vec![], vec![], 0)),
             constants,
@@ -396,10 +392,6 @@ impl<I: VCodeInst> VCode<I> {
         let mut final_safepoint_insns = vec![];
         let mut safept_idx = 0;
 
-        let mut prologue_start = None;
-        let mut prologue_end = None;
-        let mut epilogue_islands = vec![];
-
         assert!(result.target_map.elems().len() == self.num_blocks());
         for block in 0..self.num_blocks() {
             let start = result.target_map.elems()[block].get() as usize;
@@ -412,13 +404,11 @@ impl<I: VCodeInst> VCode<I> {
             let final_start = final_insns.len() as InsnIndex;
 
             if block == self.entry {
-                prologue_start = Some(final_insns.len() as InsnIndex);
                 // Start with the prologue.
                 let prologue = self.abi.gen_prologue();
                 let len = prologue.len();
                 final_insns.extend(prologue.into_iter());
                 final_srclocs.extend(iter::repeat(SourceLoc::default()).take(len));
-                prologue_end = Some(final_insns.len() as InsnIndex);
             }
 
             for i in start..end {
@@ -444,12 +434,10 @@ impl<I: VCodeInst> VCode<I> {
                 // with the epilogue.
                 let is_ret = insn.is_term() == MachTerminator::Ret;
                 if is_ret {
-                    let epilogue_start = final_insns.len() as InsnIndex;
                     let epilogue = self.abi.gen_epilogue();
                     let len = epilogue.len();
                     final_insns.extend(epilogue.into_iter());
                     final_srclocs.extend(iter::repeat(srcloc).take(len));
-                    epilogue_islands.push(epilogue_start..final_insns.len() as InsnIndex);
                 } else {
                     final_insns.push(insn.clone());
                     final_srclocs.push(srcloc);
@@ -481,11 +469,6 @@ impl<I: VCodeInst> VCode<I> {
         // for the machine backend during emission so that it can do
         // target-specific translations of slot numbers to stack offsets.
         self.safepoint_slots = result.stackmaps;
-
-        self.prologue_epilogue_ranges = Some((
-            prologue_start.unwrap()..prologue_end.unwrap(),
-            epilogue_islands.into_boxed_slice(),
-        ));
     }
 
     /// Emit the instructions to a `MachBuffer`, containing fixed-up code and external
@@ -598,22 +581,6 @@ impl<I: VCodeInst> VCode<I> {
         }
 
         buffer
-    }
-
-    /// Generates unwind info.
-    pub fn unwind_info(
-        &self,
-    ) -> crate::result::CodegenResult<Option<crate::isa::unwind::input::UnwindInfo<Reg>>> {
-        let layout = &self.insts_layout.borrow();
-        let (prologue, epilogues) = self.prologue_epilogue_ranges.as_ref().unwrap();
-        let context = UnwindInfoContext {
-            insts: &self.insts,
-            insts_layout: &layout.0,
-            len: layout.2,
-            prologue: prologue.clone(),
-            epilogues,
-        };
-        I::UnwindInfo::create_unwind_info(context)
     }
 
     /// Generates value-label ranges.

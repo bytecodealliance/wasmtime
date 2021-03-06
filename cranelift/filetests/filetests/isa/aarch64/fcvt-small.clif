@@ -1,4 +1,5 @@
 test compile
+set unwind_info=false
 target aarch64
 
 function u0:0(i8) -> f32 {
@@ -9,7 +10,6 @@ block0(v0: i8):
     ; check: uxtb w0, w0
     ; check: ucvtf s0, w0
     return v1
-    ; check: mov sp, fp
     ; check: ldp fp, lr, [sp], #16
     ; check: ret
 }
@@ -22,7 +22,6 @@ block0(v0: i8):
     ; check: uxtb w0, w0
     ; check: ucvtf d0, w0
     return v1
-    ; check: mov sp, fp
     ; check: ldp fp, lr, [sp], #16
     ; check: ret
 }
@@ -35,7 +34,6 @@ block0(v0: i16):
     ; check: uxth w0, w0
     ; check: ucvtf s0, w0
     return v1
-    ; check: mov sp, fp
     ; check: ldp fp, lr, [sp], #16
     ; check: ret
 }
@@ -48,7 +46,6 @@ block0(v0: i16):
     ; check: uxth w0, w0
     ; check: ucvtf d0, w0
     return v1
-    ; check: mov sp, fp
     ; check: ldp fp, lr, [sp], #16
     ; check: ret
 }
@@ -70,7 +67,6 @@ block0(v0: f32):
     ; check: b.mi 8 ; udf
     ; check: fcvtzu w0, s0
     return v1
-    ; check: mov sp, fp
     ; check: ldp fp, lr, [sp], #16
     ; check: ret
 }
@@ -92,7 +88,6 @@ block0(v0: f64):
     ; check: b.mi 8 ; udf
     ; check: fcvtzu w0, d0
     return v1
-    ; check: mov sp, fp
     ; check: ldp fp, lr, [sp], #16
     ; check: ret
 }
@@ -114,7 +109,6 @@ block0(v0: f32):
     ; check: b.mi 8 ; udf
     ; check: fcvtzu w0, s0
     return v1
-    ; check: mov sp, fp
     ; check: ldp fp, lr, [sp], #16
     ; check: ret
 }
@@ -136,7 +130,6 @@ block0(v0: f64):
     ; check: b.mi 8 ; udf
     ; check: fcvtzu w0, d0
     return v1
-    ; check: mov sp, fp
     ; check: ldp fp, lr, [sp], #16
     ; check: ret
 }

@@ -1,4 +1,5 @@
 test compile
+set unwind_info=false
 target aarch64
 
 function %f0(i64, i32) -> i32 {
@@ -11,7 +12,6 @@ block0(v0: i64, v1: i32):
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: ldr w0, [x0, w1, UXTW]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -25,7 +25,6 @@ block0(v0: i64, v1: i32):
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: ldr w0, [x0, w1, UXTW]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -39,7 +38,6 @@ block0(v0: i64, v1: i32):
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: ldr w0, [x0, w1, SXTW]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -53,7 +51,6 @@ block0(v0: i64, v1: i32):
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: ldr w0, [x0, w1, SXTW]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -68,7 +65,6 @@ block0(v0: i64, v1: i32):
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: ldr w0, [x0, w1, SXTW]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -83,7 +79,6 @@ block0(v0: i64, v1: i32):
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: ldr w0, [x0, w1, SXTW]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -100,7 +95,6 @@ block0(v0: i32, v1: i32):
 ; nextln: mov fp, sp
 ; nextln: mov w0, w0
 ; nextln: ldr w0, [x0, w1, UXTW]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -124,7 +118,6 @@ block0(v0: i64, v1: i32):
 ; nextln: add x0, x2, x0
 ; nextln: add x0, x0, x1, SXTW
 ; nextln: ldr w0, [x0, w1, SXTW]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -145,7 +138,6 @@ block0(v0: i64, v1: i64, v2: i64):
 ; nextln: add x0, x0, x2
 ; nextln: add x0, x0, x1
 ; nextln: ldur w0, [x0, #48]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -167,7 +159,6 @@ block0(v0: i64, v1: i64, v2: i64):
 ; nextln: add x1, x3, x1
 ; nextln: add x1, x1, x2
 ; nextln: ldr w0, [x1, x0]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -184,7 +175,6 @@ block0:
 ; nextln: mov fp, sp
 ; nextln: movz x0, #1234
 ; nextln: ldr w0, [x0]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -200,7 +190,6 @@ block0(v0: i64):
 ; nextln: mov fp, sp
 ; nextln: add x0, x0, #8388608
 ; nextln: ldr w0, [x0]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -216,7 +205,6 @@ block0(v0: i64):
 ; nextln: mov fp, sp
 ; nextln: sub x0, x0, #4
 ; nextln: ldr w0, [x0]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -234,7 +222,6 @@ block0(v0: i64):
 ; nextln: movk w1, #15258, LSL #16
 ; nextln: add x0, x1, x0
 ; nextln: ldr w0, [x0]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -249,7 +236,6 @@ block0(v0: i32):
 ; nextln: mov fp, sp
 ; nextln: sxtw x0, w0
 ; nextln: ldr w0, [x0]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -266,7 +252,6 @@ block0(v0: i32, v1: i32):
 ; nextln: mov fp, sp
 ; nextln: sxtw x0, w0
 ; nextln: ldr w0, [x0, w1, SXTW]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -281,7 +266,6 @@ block0(v0: i64):
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: ldr w0, [x0]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -296,7 +280,6 @@ block0(v0: i64):
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: ldur w0, [x0, #4]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -311,7 +294,6 @@ block0(v0: i64, v1: i32):
 ; nextln: mov fp, sp
 ; nextln: ldr d0, [x0, w1, UXTW]
 ; nextln: sxtl v0.8h, v0.8b
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -326,7 +308,6 @@ block0(v0: i64, v1: i64):
 ; nextln: add x0, x0, x1
 ; nextln: ldr d0, [x0, #8]
 ; nextln: uxtl v0.4s, v0.4h
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -341,7 +322,6 @@ block0(v0: i64, v1: i32):
 ; nextln: mov fp, sp
 ; nextln: ldr d0, [x0, w1, SXTW]
 ; nextln: uxtl v0.2d, v0.2s
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -357,7 +337,6 @@ block0(v0: i64, v1: i64, v2: i64):
 ; nextln: mov fp, sp
 ; nextln: movn w0, #4097
 ; nextln: ldrsh x0, [x0]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -373,7 +352,6 @@ block0(v0: i64, v1: i64, v2: i64):
 ; nextln: mov fp, sp
 ; nextln: movz x0, #4098
 ; nextln: ldrsh x0, [x0]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -390,7 +368,6 @@ block0(v0: i64, v1: i64, v2: i64):
 ; nextln: movn w0, #4097
 ; nextln: sxtw x0, w0
 ; nextln: ldrsh x0, [x0]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -407,6 +384,5 @@ block0(v0: i64, v1: i64, v2: i64):
 ; nextln: movz x0, #4098
 ; nextln: sxtw x0, w0
 ; nextln: ldrsh x0, [x0]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret

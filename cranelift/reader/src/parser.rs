@@ -23,7 +23,7 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::isa::{self, CallConv, Encoding, RegUnit, TargetIsa};
 use cranelift_codegen::packed_option::ReservedValue;
-use cranelift_codegen::{settings, timing};
+use cranelift_codegen::{settings, settings::Configurable, timing};
 use smallvec::SmallVec;
 use std::mem;
 use std::str::FromStr;
@@ -50,6 +50,8 @@ pub struct ParseOptions<'a> {
     pub target: Option<&'a str>,
     /// Default calling convention used when none is specified for a parsed function.
     pub default_calling_convention: CallConv,
+    /// Default for unwind-info setting (enabled or disabled).
+    pub unwind_info: bool,
 }
 
 impl Default for ParseOptions<'_> {
@@ -58,6 +60,7 @@ impl Default for ParseOptions<'_> {
             passes: None,
             target: None,
             default_calling_convention: CallConv::Fast,
+            unwind_info: false,
         }
     }
 }
@@ -81,12 +84,12 @@ pub fn parse_test<'a>(text: &'a str, options: ParseOptions<'a>) -> ParseResult<T
         Some(pass_vec) => {
             parser.parse_test_commands();
             commands = parser.parse_cmdline_passes(pass_vec);
-            parser.parse_target_specs()?;
+            parser.parse_target_specs(&options)?;
             isa_spec = parser.parse_cmdline_target(options.target)?;
         }
         None => {
             commands = parser.parse_test_commands();
-            isa_spec = parser.parse_target_specs()?;
+            isa_spec = parser.parse_target_specs(&options)?;
         }
     };
     let features = parser.parse_cranelift_features()?;
@@ -1189,7 +1192,7 @@ impl<'a> Parser<'a> {
     ///
     /// Accept a mix of `target` and `set` command lines. The `set` commands are cumulative.
     ///
-    fn parse_target_specs(&mut self) -> ParseResult<isaspec::IsaSpec> {
+    fn parse_target_specs(&mut self, options: &ParseOptions) -> ParseResult<isaspec::IsaSpec> {
         // Were there any `target` commands?
         let mut seen_target = false;
         // Location of last `set` command since the last `target`.
@@ -1197,6 +1200,11 @@ impl<'a> Parser<'a> {
 
         let mut targets = Vec::new();
         let mut flag_builder = settings::builder();
+
+        let unwind_info = if options.unwind_info { "true" } else { "false" };
+        flag_builder
+            .set("unwind_info", unwind_info)
+            .expect("unwind_info option should be present");
 
         while let Some(Token::Identifier(command)) = self.token() {
             match command {

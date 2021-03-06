@@ -142,6 +142,7 @@
 
 use crate::binemit::{Addend, CodeOffset, CodeSink, Reloc, StackMap};
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode};
+use crate::isa::unwind::UnwindInst;
 use crate::machinst::{BlockIndex, MachInstLabelUse, VCodeConstant, VCodeConstants, VCodeInst};
 use crate::timing;
 use cranelift_entity::{entity_impl, SecondaryMap};
@@ -173,6 +174,8 @@ pub struct MachBuffer<I: VCodeInst> {
     srclocs: SmallVec<[MachSrcLoc; 64]>,
     /// Any stack maps referring to this code.
     stack_maps: SmallVec<[MachStackMap; 8]>,
+    /// Any unwind info at a given location.
+    unwind_info: SmallVec<[(CodeOffset, UnwindInst); 8]>,
     /// The current source location in progress (after `start_srcloc()` and
     /// before `end_srcloc()`).  This is a (start_offset, src_loc) tuple.
     cur_srcloc: Option<(CodeOffset, SourceLoc)>,
@@ -240,6 +243,8 @@ pub struct MachBufferFinalized {
     srclocs: SmallVec<[MachSrcLoc; 64]>,
     /// Any stack maps referring to this code.
     stack_maps: SmallVec<[MachStackMap; 8]>,
+    /// Any unwind info at a given location.
+    pub unwind_info: SmallVec<[(CodeOffset, UnwindInst); 8]>,
 }
 
 static UNKNOWN_LABEL_OFFSET: CodeOffset = 0xffff_ffff;
@@ -299,6 +304,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             call_sites: SmallVec::new(),
             srclocs: SmallVec::new(),
             stack_maps: SmallVec::new(),
+            unwind_info: SmallVec::new(),
             cur_srcloc: None,
             label_offsets: SmallVec::new(),
             label_aliases: SmallVec::new(),
@@ -1200,6 +1206,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             call_sites: self.call_sites,
             srclocs,
             stack_maps: self.stack_maps,
+            unwind_info: self.unwind_info,
         }
     }
 
@@ -1237,6 +1244,11 @@ impl<I: VCodeInst> MachBuffer<I> {
             srcloc,
             opcode,
         });
+    }
+
+    /// Add an unwind record at the current offset.
+    pub fn add_unwind(&mut self, unwind: UnwindInst) {
+        self.unwind_info.push((self.cur_offset(), unwind));
     }
 
     /// Set the `SourceLoc` for code from this offset until the offset at the

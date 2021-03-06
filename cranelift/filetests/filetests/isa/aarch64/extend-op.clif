@@ -1,4 +1,5 @@
 test compile
+set unwind_info=false
 target aarch64
 
 function %f(i8) -> i64 {
@@ -13,6 +14,5 @@ block0(v0: i8):
 ; nextln:  mov fp, sp
 ; nextln:  movz x1, #42
 ; nextln:  add x0, x1, x0, SXTB
-; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret

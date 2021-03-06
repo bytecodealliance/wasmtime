@@ -65,7 +65,6 @@ impl MachBackend for AArch64Backend {
 
         let buffer = vcode.emit();
         let frame_size = vcode.frame_size();
-        let unwind_info = vcode.unwind_info()?;
         let stackslot_offsets = vcode.stackslot_offsets().clone();
 
         let disasm = if want_disasm {
@@ -80,7 +79,6 @@ impl MachBackend for AArch64Backend {
             buffer,
             frame_size,
             disasm,
-            unwind_info,
             value_labels_ranges: Default::default(),
             stackslot_offsets,
         })
@@ -127,11 +125,18 @@ impl MachBackend for AArch64Backend {
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
         use crate::isa::unwind::UnwindInfo;
         use crate::machinst::UnwindInfoKind;
-        Ok(match (result.unwind_info.as_ref(), kind) {
-            (Some(info), UnwindInfoKind::SystemV) => {
-                inst::unwind::systemv::create_unwind_info(info.clone())?.map(UnwindInfo::SystemV)
+        Ok(match kind {
+            UnwindInfoKind::SystemV => {
+                let mapper = self::inst::unwind::systemv::RegisterMapper;
+                Some(UnwindInfo::SystemV(
+                    crate::isa::unwind::systemv::create_unwind_info_from_insts(
+                        &result.buffer.unwind_info[..],
+                        result.buffer.data.len(),
+                        &mapper,
+                    )?,
+                ))
             }
-            (Some(_info), UnwindInfoKind::Windows) => {
+            UnwindInfoKind::Windows => {
                 // TODO: support Windows unwind info on AArch64
                 None
             }
@@ -200,12 +205,11 @@ mod test {
         // mov x29, sp
         // mov x1, #0x1234
         // add w0, w0, w1
-        // mov sp, x29
         // ldp x29, x30, [sp], #16
         // ret
         let golden = vec![
             0xfd, 0x7b, 0xbf, 0xa9, 0xfd, 0x03, 0x00, 0x91, 0x81, 0x46, 0x82, 0xd2, 0x00, 0x00,
-            0x01, 0x0b, 0xbf, 0x03, 0x00, 0x91, 0xfd, 0x7b, 0xc1, 0xa8, 0xc0, 0x03, 0x5f, 0xd6,
+            0x01, 0x0b, 0xfd, 0x7b, 0xc1, 0xa8, 0xc0, 0x03, 0x5f, 0xd6,
         ];
 
         assert_eq!(code, &golden[..]);
@@ -267,14 +271,13 @@ mod test {
         // cbnz	x1, 0x18
         // mov	x1, #0x1234                	// #4660
         // sub	w0, w0, w1
-        // mov	sp, x29
         // ldp	x29, x30, [sp], #16
         // ret
         let golden = vec![
             253, 123, 191, 169, 253, 3, 0, 145, 129, 70, 130, 210, 0, 0, 1, 11, 225, 3, 0, 42, 161,
             0, 0, 181, 129, 70, 130, 210, 1, 0, 1, 11, 225, 3, 1, 42, 161, 255, 255, 181, 225, 3,
-            0, 42, 97, 255, 255, 181, 129, 70, 130, 210, 0, 0, 1, 75, 191, 3, 0, 145, 253, 123,
-            193, 168, 192, 3, 95, 214,
+            0, 42, 97, 255, 255, 181, 129, 70, 130, 210, 0, 0, 1, 75, 253, 123, 193, 168, 192, 3,
+            95, 214,
         ];
 
         assert_eq!(code, &golden[..]);

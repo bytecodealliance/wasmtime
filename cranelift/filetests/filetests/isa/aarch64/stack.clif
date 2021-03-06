@@ -1,4 +1,5 @@
 test compile
+set unwind_info=false
 target aarch64
 
 function %stack_addr_small() -> i64 {
@@ -13,7 +14,7 @@ block0:
 ; nextln: mov fp, sp
 ; nextln: sub sp, sp, #16
 ; nextln: mov x0, sp
-; nextln: mov sp, fp
+; nextln: add sp, sp, #16
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -33,7 +34,9 @@ block0:
 ; nextln: movk w16, #1, LSL #16
 ; nextln: sub sp, sp, x16, UXTX
 ; nextln: mov x0, sp
-; nextln: mov sp, fp
+; nextln: movz w16, #34480
+; nextln: movk w16, #1, LSL #16
+; nextln: add sp, sp, x16, UXTX
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -53,7 +56,7 @@ block0:
 ; nextln: sub sp, sp, #16
 ; nextln: mov x0, sp
 ; nextln: ldr x0, [x0]
-; nextln: mov sp, fp
+; nextln: add sp, sp, #16
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -74,7 +77,9 @@ block0:
 ; nextln: sub sp, sp, x16, UXTX
 ; nextln: mov x0, sp
 ; nextln: ldr x0, [x0]
-; nextln: mov sp, fp
+; nextln: movz w16, #34480
+; nextln: movk w16, #1, LSL #16
+; nextln: add sp, sp, x16, UXTX
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -92,7 +97,7 @@ block0(v0: i64):
 ; nextln: sub sp, sp, #16
 ; nextln: mov x1, sp
 ; nextln: str x0, [x1]
-; nextln: mov sp, fp
+; nextln: add sp, sp, #16
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -113,7 +118,9 @@ block0(v0: i64):
 ; nextln: sub sp, sp, x16, UXTX
 ; nextln: mov x1, sp
 ; nextln: str x0, [x1]
-; nextln: mov sp, fp
+; nextln: movz w16, #34480
+; nextln: movk w16, #1, LSL #16
+; nextln: add sp, sp, x16, UXTX
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 

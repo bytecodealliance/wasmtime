@@ -3050,6 +3050,10 @@ pub(crate) fn emit(
         Inst::ValueLabelMarker { .. } => {
             // Nothing; this is only used to compute debug info.
         }
+
+        Inst::Unwind { ref inst } => {
+            sink.add_unwind(inst.clone());
+        }
     }
 
     state.clear_post_insn();

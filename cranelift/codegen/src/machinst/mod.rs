@@ -63,14 +63,12 @@
 use crate::binemit::{CodeInfo, CodeOffset, StackMap};
 use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, SourceLoc, StackSlot, Type, ValueLabel};
-use crate::isa::unwind::input as unwind_input;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
 use crate::value_label::ValueLabelsRanges;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt::Debug;
-use core::ops::Range;
 use cranelift_entity::PrimaryMap;
 use regalloc::RegUsageCollector;
 use regalloc::{
@@ -303,8 +301,6 @@ pub trait MachInstEmit: MachInst {
     type State: MachInstEmitState<Self>;
     /// Constant information used in `emit` invocations.
     type Info: MachInstEmitInfo;
-    /// Unwind info generator.
-    type UnwindInfo: UnwindInfoGenerator<Self>;
     /// Emit the instruction.
     fn emit(&self, code: &mut MachBuffer<Self>, info: &Self::Info, state: &mut Self::State);
     /// Pretty-print the instruction.
@@ -340,8 +336,6 @@ pub struct MachCompileResult {
     pub frame_size: u32,
     /// Disassembly, if requested.
     pub disasm: Option<String>,
-    /// Unwind info.
-    pub unwind_info: Option<unwind_input::UnwindInfo<Reg>>,
     /// Debug info: value labels to registers/stackslots at code offsets.
     pub value_labels_ranges: ValueLabelsRanges,
     /// Debug info: stackslots to stack pointer offsets.
@@ -431,29 +425,6 @@ pub enum UnwindInfoKind {
     /// Windows X64 Unwind info
     #[cfg(feature = "unwind")]
     Windows,
-}
-
-/// Input data for UnwindInfoGenerator.
-pub struct UnwindInfoContext<'a, Inst: MachInstEmit> {
-    /// Function instructions.
-    pub insts: &'a [Inst],
-    /// Instruction layout: end offsets
-    pub insts_layout: &'a [CodeOffset],
-    /// Length of the function.
-    pub len: CodeOffset,
-    /// Prologue range.
-    pub prologue: Range<u32>,
-    /// Epilogue ranges.
-    pub epilogues: &'a [Range<u32>],
-}
-
-/// UnwindInfo generator/helper.
-pub trait UnwindInfoGenerator<I: MachInstEmit> {
-    /// Creates unwind info based on function signature and
-    /// emitted instructions.
-    fn create_unwind_info(
-        context: UnwindInfoContext<I>,
-    ) -> CodegenResult<Option<unwind_input::UnwindInfo<Reg>>>;
 }
 
 /// Info about an operation that loads or stores from/to the stack.

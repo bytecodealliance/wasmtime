@@ -22,26 +22,41 @@
 //! area on the stack, given by a hidden extra parameter.
 //!
 //! Note that the exact stack layout is up to us. We settled on the
-//! below design based on several requirements. In particular, we need to be
-//! able to generate instructions (or instruction sequences) to access
-//! arguments, stack slots, and spill slots before we know how many spill slots
-//! or clobber-saves there will be, because of our pass structure. We also
-//! prefer positive offsets to negative offsets because of an asymmetry in
-//! some machines' addressing modes (e.g., on AArch64, positive offsets have a
-//! larger possible range without a long-form sequence to synthesize an
-//! arbitrary offset). Finally, it is not allowed to access memory below the
-//! current SP value.
+//! below design based on several requirements. In particular, we need
+//! to be able to generate instructions (or instruction sequences) to
+//! access arguments, stack slots, and spill slots before we know how
+//! many spill slots or clobber-saves there will be, because of our
+//! pass structure. We also prefer positive offsets to negative
+//! offsets because of an asymmetry in some machines' addressing modes
+//! (e.g., on AArch64, positive offsets have a larger possible range
+//! without a long-form sequence to synthesize an arbitrary
+//! offset). We also need clobber-save registers to be "near" the
+//! frame pointer: Windows unwind information requires it to be within
+//! 240 bytes of RBP. Finally, it is not allowed to access memory
+//! below the current SP value.
 //!
-//! We assume that a prologue first pushes the frame pointer (and return address
-//! above that, if the machine does not do that in hardware). We set FP to point
-//! to this two-word frame record. We store all other frame slots below this
-//! two-word frame record, with the stack pointer remaining at or below this
-//! fixed frame storage for the rest of the function. We can then access frame
-//! storage slots using positive offsets from SP. In order to allow codegen for
-//! the latter before knowing how many clobber-saves we have, and also allow it
-//! while SP is being adjusted to set up a call, we implement a "nominal SP"
-//! tracking feature by which a fixup (distance between actual SP and a
-//! "nominal" SP) is known at each instruction.
+//! We assume that a prologue first pushes the frame pointer (and
+//! return address above that, if the machine does not do that in
+//! hardware). We set FP to point to this two-word frame record. We
+//! store all other frame slots below this two-word frame record, with
+//! the stack pointer remaining at or below this fixed frame storage
+//! for the rest of the function. We can then access frame storage
+//! slots using positive offsets from SP. In order to allow codegen
+//! for the latter before knowing how SP might be adjusted around
+//! callsites, we implement a "nominal SP" tracking feature by which a
+//! fixup (distance between actual SP and a "nominal" SP) is known at
+//! each instruction.
+//!
+//! Note that if we ever support dynamic stack-space allocation (for
+//! `alloca`), we will need a way to reference spill slots and stack
+//! slots without "nominal SP", because we will no longer be able to
+//! know a static offset from SP to the slots at any particular
+//! program point. Probably the best solution at that point will be to
+//! revert to using the frame pointer as the reference for all slots,
+//! and creating a "nominal FP" synthetic addressing mode (analogous
+//! to "nominal SP" today) to allow generating spill/reload and
+//! stackslot accesses before we know how large the clobber-saves will
+//! be.
 //!
 //! # Stack Layout
 //!
@@ -60,17 +75,17 @@
 //! FP after prologue -------->  | FP (pushed by prologue)   |
 //!                              +---------------------------+
 //!                              |          ...              |
+//!                              | clobbered callee-saves    |
+//! unwind-frame base     ---->  | (pushed by prologue)      |
+//!                              +---------------------------+
+//!                              |          ...              |
 //!                              | spill slots               |
 //!                              | (accessed via nominal SP) |
 //!                              |          ...              |
 //!                              | stack slots               |
 //!                              | (accessed via nominal SP) |
 //! nominal SP --------------->  | (alloc'd by prologue)     |
-//!                              +---------------------------+
-//!                              |          ...              |
-//!                              | clobbered callee-saves    |
-//! SP at end of prologue ---->  | (pushed by prologue)      |
-//!                              +---------------------------+
+//! (SP at end of prologue)      +---------------------------+
 //!                              | [alignment as needed]     |
 //!                              |          ...              |
 //!                              | args for call             |
@@ -406,10 +421,10 @@ pub trait ABIMachineSpec {
     /// Generate the usual frame-setup sequence for this architecture: e.g.,
     /// `push rbp / mov rbp, rsp` on x86-64, or `stp fp, lr, [sp, #-16]!` on
     /// AArch64.
-    fn gen_prologue_frame_setup() -> SmallInstVec<Self::I>;
+    fn gen_prologue_frame_setup(flags: &settings::Flags) -> SmallInstVec<Self::I>;
 
     /// Generate the usual frame-restore sequence for this architecture.
-    fn gen_epilogue_frame_restore() -> SmallInstVec<Self::I>;
+    fn gen_epilogue_frame_restore(flags: &settings::Flags) -> SmallInstVec<Self::I>;
 
     /// Generate a probestack call.
     fn gen_probestack(_frame_size: u32) -> SmallInstVec<Self::I>;
@@ -429,7 +444,6 @@ pub trait ABIMachineSpec {
         flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
         fixed_frame_storage_size: u32,
-        outgoing_args_size: u32,
     ) -> (u64, SmallVec<[Self::I; 16]>);
 
     /// Generate a clobber-restore sequence. This sequence should perform the
@@ -441,7 +455,6 @@ pub trait ABIMachineSpec {
         flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
         fixed_frame_storage_size: u32,
-        outgoing_args_size: u32,
     ) -> SmallVec<[Self::I; 16]>;
 
     /// Generate a call instruction/sequence. This method is provided one
@@ -563,8 +576,6 @@ pub struct ABICalleeImpl<M: ABIMachineSpec> {
     stackslots: PrimaryMap<StackSlot, u32>,
     /// Total stack size of all stackslots.
     stackslots_size: u32,
-    /// Stack size to be reserved for outgoing arguments.
-    outgoing_args_size: u32,
     /// Clobbered registers, from regalloc.
     clobbered: Set<Writable<RealReg>>,
     /// Total number of spillslots, from regalloc.
@@ -678,7 +689,6 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
             sig,
             stackslots,
             stackslots_size: stack_offset,
-            outgoing_args_size: 0,
             clobbered: Set::empty(),
             spillslots: None,
             fixed_frame_storage_size: 0,
@@ -902,12 +912,6 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         if self.sig.stack_ret_arg.is_some() {
             assert!(maybe_tmp.is_some());
             self.ret_area_ptr = maybe_tmp;
-        }
-    }
-
-    fn accumulate_outgoing_args_size(&mut self, size: u32) {
-        if size > self.outgoing_args_size {
-            self.outgoing_args_size = size;
         }
     }
 
@@ -1244,7 +1248,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let mut insts = smallvec![];
         if !self.call_conv.extends_baldrdash() {
             // set up frame
-            insts.extend(M::gen_prologue_frame_setup().into_iter());
+            insts.extend(M::gen_prologue_frame_setup(&self.flags).into_iter());
         }
 
         let bytes = M::word_bytes();
@@ -1278,30 +1282,25 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
             }
         }
 
-        // N.B.: "nominal SP", which we use to refer to stackslots and
-        // spillslots, is defined to be equal to the stack pointer at this point
-        // in the prologue.
-        //
-        // If we push any clobbers below, we emit a virtual-SP adjustment
-        // meta-instruction so that the nominal SP references behave as if SP
-        // were still at this point. See documentation for
-        // [crate::machinst::abi_impl](this module) for more details on
-        // stackframe layout and nominal SP maintenance.
-
         // Save clobbered registers.
-        let (clobber_size, clobber_insts) = M::gen_clobber_save(
+        let (_, clobber_insts) = M::gen_clobber_save(
             self.call_conv,
             &self.flags,
             &self.clobbered,
             self.fixed_frame_storage_size,
-            self.outgoing_args_size,
         );
         insts.extend(clobber_insts);
 
-        let sp_adj = self.outgoing_args_size as i32 + clobber_size as i32;
-        if sp_adj > 0 {
-            insts.push(M::gen_nominal_sp_adj(sp_adj));
-        }
+        // N.B.: "nominal SP", which we use to refer to stackslots and
+        // spillslots, is defined to be equal to the stack pointer at this point
+        // in the prologue.
+        //
+        // If we push any further data onto the stack in the function
+        // body, we emit a virtual-SP adjustment meta-instruction so
+        // that the nominal SP references behave as if SP were still
+        // at this point. See documentation for
+        // [crate::machinst::abi_impl](this module) for more details
+        // on stackframe layout and nominal SP maintenance.
 
         self.total_frame_size = Some(total_stacksize);
         insts
@@ -1316,7 +1315,6 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
             &self.flags,
             &self.clobbered,
             self.fixed_frame_storage_size,
-            self.outgoing_args_size,
         ));
 
         // N.B.: we do *not* emit a nominal SP adjustment here, because (i) there will be no
@@ -1326,7 +1324,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         // offset for the rest of the body.
 
         if !self.call_conv.extends_baldrdash() {
-            insts.extend(M::gen_epilogue_frame_restore());
+            insts.extend(M::gen_epilogue_frame_restore(&self.flags));
             insts.push(M::gen_ret());
         }
 
@@ -1529,11 +1527,6 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         } else {
             self.sig.args.len()
         }
-    }
-
-    fn accumulate_outgoing_args_size<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
-        let off = self.sig.stack_arg_space + self.sig.stack_ret_space;
-        ctx.abi().accumulate_outgoing_args_size(off as u32);
     }
 
     fn emit_stack_pre_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {

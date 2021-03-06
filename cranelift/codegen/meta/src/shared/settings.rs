@@ -235,6 +235,18 @@ pub(crate) fn define() -> SettingGroup {
         false,
     );
 
+    settings.add_bool(
+        "unwind_info",
+        r#"
+           Generate unwind info. This increases metadata size and compile time,
+           but allows for the debugger to trace frames, is needed for GC tracing
+           that relies on libunwind (such as in Wasmtime), and is
+           unconditionally needed on certain platforms (such as Windows) that
+           must always be able to unwind.
+          "#,
+        true,
+    );
+
     // BaldrMonkey requires that not-yet-relocated function addresses be encoded
     // as all-ones bitpatterns.
     settings.add_bool(

@@ -1,4 +1,5 @@
 test compile
+set unwind_info=false
 target aarch64
 
 function %foo() {
@@ -13,7 +14,6 @@ block0(v0: i64):
 
 ; check:      stp fp, lr, [sp, #-16]!
 ; nextln:     mov fp, sp
-; nextln:     mov sp, fp
 ; nextln:     ldp fp, lr, [sp], #16
 ; nextln:     ret
 
@@ -28,7 +28,6 @@ block0(v0: i64):
 
 ; check:      stp fp, lr, [sp, #-16]!
 ; nextln:     mov fp, sp
-; nextln:     mov sp, fp
 ; nextln:     ldp fp, lr, [sp], #16
 ; nextln:     ret
 
@@ -46,7 +45,6 @@ block0(v0: i64):
 ; nextln:     b.hs 8 ; udf
 ; nextln:     ldr x0
 ; nextln:     blr x0
-; nextln:     mov sp, fp
 ; nextln:     ldp fp, lr, [sp], #16
 ; nextln:     ret
 
@@ -69,7 +67,6 @@ block0(v0: i64):
 ; nextln:     b.hs 8 ; udf
 ; nextln:     ldr x0
 ; nextln:     blr x0
-; nextln:     mov sp, fp
 ; nextln:     ldp fp, lr, [sp], #16
 ; nextln:     ret
 
@@ -86,7 +83,7 @@ block0(v0: i64):
 ; nextln:     subs xzr, sp, x16
 ; nextln:     b.hs 8 ; udf
 ; nextln:     sub sp, sp, #176
-; nextln:     mov sp, fp
+; nextln:     add sp, sp, #176
 ; nextln:     ldp fp, lr, [sp], #16
 ; nextln:     ret
 
@@ -108,7 +105,9 @@ block0(v0: i64):
 ; nextln:     movz w16, #6784
 ; nextln:     movk w16, #6, LSL #16
 ; nextln:     sub sp, sp, x16, UXTX
-; nextln:     mov sp, fp
+; nextln:     movz w16, #6784
+; nextln:     movk w16, #6, LSL #16
+; nextln:     add sp, sp, x16, UXTX
 ; nextln:     ldp fp, lr, [sp], #16
 ; nextln:     ret
 
@@ -130,7 +129,7 @@ block0(v0: i64):
 ; nextln:     subs xzr, sp, x16
 ; nextln:     b.hs 8 ; udf
 ; nextln:     sub sp, sp, #32
-; nextln:     mov sp, fp
+; nextln:     add sp, sp, #32
 ; nextln:     ldp fp, lr, [sp], #16
 ; nextln:     ret
 
@@ -158,7 +157,9 @@ block0(v0: i64):
 ; nextln:     movz w16, #6784
 ; nextln:     movk w16, #6, LSL #16
 ; nextln:     sub sp, sp, x16, UXTX
-; nextln:     mov sp, fp
+; nextln:     movz w16, #6784
+; nextln:     movk w16, #6, LSL #16
+; nextln:     add sp, sp, x16, UXTX
 ; nextln:     ldp fp, lr, [sp], #16
 ; nextln:     ret
 
@@ -178,6 +179,6 @@ block0(v0: i64):
 ; nextln:     subs xzr, sp, x16
 ; nextln:     b.hs 8 ; udf
 ; nextln:     sub sp, sp, #32
-; nextln:     mov sp, fp
+; nextln:     add sp, sp, #32
 ; nextln:     ldp fp, lr, [sp], #16
 ; nextln:     ret
