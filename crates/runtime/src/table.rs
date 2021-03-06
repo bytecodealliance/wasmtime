@@ -6,12 +6,15 @@ use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
 use crate::{Trap, VMExternRef};
 use std::cell::{Cell, RefCell};
 use std::cmp::min;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
+use std::ops::Range;
 use std::ptr;
 use wasmtime_environ::wasm::TableElementType;
-use wasmtime_environ::{ir, TablePlan, TableStyle};
+use wasmtime_environ::{ir, TablePlan};
 
 /// An element going into or coming out of a table.
+///
+/// Table elements are stored as pointers and are default-initialized with `ptr::null_mut`.
 #[derive(Clone, Debug)]
 pub enum TableElement {
     /// A `funcref`.
@@ -20,24 +23,53 @@ pub enum TableElement {
     ExternRef(Option<VMExternRef>),
 }
 
-impl TryFrom<TableElement> for *mut VMCallerCheckedAnyfunc {
-    type Error = ();
-
-    fn try_from(e: TableElement) -> Result<Self, Self::Error> {
-        match e {
-            TableElement::FuncRef(f) => Ok(f),
-            _ => Err(()),
+impl TableElement {
+    /// Consumes the given raw pointer into a table element.
+    ///
+    /// # Safety
+    ///
+    /// This is unsafe as it will *not* clone any externref, leaving the reference count unchanged.
+    ///
+    /// This should only be used if the raw pointer is no longer in use.
+    unsafe fn from_raw(ty: TableElementType, ptr: *mut u8) -> Self {
+        match ty {
+            TableElementType::Func => Self::FuncRef(ptr as _),
+            TableElementType::Val(_) => Self::ExternRef(if ptr.is_null() {
+                None
+            } else {
+                Some(VMExternRef::from_raw(ptr))
+            }),
         }
     }
-}
 
-impl TryFrom<TableElement> for Option<VMExternRef> {
-    type Error = ();
+    /// Clones a table element from the underlying raw pointer.
+    ///
+    /// # Safety
+    ///
+    /// This is unsafe as it will clone any externref, incrementing the reference count.
+    unsafe fn clone_from_raw(ty: TableElementType, ptr: *mut u8) -> Self {
+        match ty {
+            TableElementType::Func => Self::FuncRef(ptr as _),
+            TableElementType::Val(_) => Self::ExternRef(if ptr.is_null() {
+                None
+            } else {
+                Some(VMExternRef::clone_from_raw(ptr))
+            }),
+        }
+    }
 
-    fn try_from(e: TableElement) -> Result<Self, Self::Error> {
-        match e {
-            TableElement::ExternRef(x) => Ok(x),
-            _ => Err(()),
+    /// Consumes a table element into a raw pointer.
+    ///
+    /// # Safety
+    ///
+    /// This is unsafe as it will consume any underlying externref into a raw pointer without modifying
+    /// the reference count.
+    ///
+    /// Use `from_raw` to properly drop any table elements stored as raw pointers.
+    unsafe fn into_raw(self) -> *mut u8 {
+        match self {
+            Self::FuncRef(e) => e as _,
+            Self::ExternRef(e) => e.map(|e| e.into_raw()).unwrap_or(ptr::null_mut()),
         }
     }
 }
@@ -61,106 +93,78 @@ impl From<VMExternRef> for TableElement {
 }
 
 #[derive(Debug)]
-enum TableElements {
-    FuncRefs(Vec<*mut VMCallerCheckedAnyfunc>),
-    ExternRefs(Vec<Option<VMExternRef>>),
-}
-
-// Ideally this should be static assertion that table elements are pointer-sized
-#[inline(always)]
-pub(crate) fn max_table_element_size() -> usize {
-    debug_assert_eq!(
-        std::mem::size_of::<*mut VMCallerCheckedAnyfunc>(),
-        std::mem::size_of::<*const ()>()
-    );
-    debug_assert_eq!(
-        std::mem::size_of::<Option<VMExternRef>>(),
-        std::mem::size_of::<*const ()>()
-    );
-    std::mem::size_of::<*const ()>()
-}
-
-#[derive(Debug)]
 enum TableStorage {
     Static {
-        data: *mut u8,
+        data: *mut *mut u8,
         size: Cell<u32>,
         ty: TableElementType,
         maximum: u32,
     },
     Dynamic {
-        elements: RefCell<TableElements>,
+        elements: RefCell<Vec<*mut u8>>,
+        ty: TableElementType,
         maximum: Option<u32>,
     },
 }
 
 /// Represents an instance's table.
 #[derive(Debug)]
-pub struct Table {
-    storage: TableStorage,
-}
+pub struct Table(TableStorage);
 
 impl Table {
     /// Create a new dynamic (movable) table instance for the specified table plan.
     pub fn new_dynamic(plan: &TablePlan) -> Self {
-        let min = usize::try_from(plan.table.minimum).unwrap();
-        let elements = RefCell::new(match plan.table.ty {
-            TableElementType::Func => TableElements::FuncRefs(vec![ptr::null_mut(); min]),
-            TableElementType::Val(ty) => {
-                debug_assert_eq!(ty, crate::ref_type());
-                TableElements::ExternRefs(vec![None; min])
-            }
-        });
-
-        match plan.style {
-            TableStyle::CallerChecksSignature => Self {
-                storage: TableStorage::Dynamic {
-                    elements,
-                    maximum: plan.table.maximum,
-                },
-            },
-        }
+        let elements = RefCell::new(vec![ptr::null_mut(); plan.table.minimum as usize]);
+        let ty = plan.table.ty.clone();
+        let maximum = plan.table.maximum;
+        Self(TableStorage::Dynamic {
+            elements,
+            ty,
+            maximum,
+        })
     }
 
     /// Create a new static (immovable) table instance for the specified table plan.
-    pub fn new_static(plan: &TablePlan, data: *mut u8, maximum: u32) -> Self {
-        match plan.style {
-            TableStyle::CallerChecksSignature => Self {
-                storage: TableStorage::Static {
-                    data,
-                    size: Cell::new(plan.table.minimum),
-                    ty: plan.table.ty.clone(),
-                    maximum: min(plan.table.maximum.unwrap_or(maximum), maximum),
-                },
-            },
-        }
+    pub fn new_static(plan: &TablePlan, data: *mut *mut u8, maximum: u32) -> Self {
+        let size = Cell::new(plan.table.minimum);
+        let ty = plan.table.ty.clone();
+        let maximum = min(plan.table.maximum.unwrap_or(maximum), maximum);
+        Self(TableStorage::Static {
+            data,
+            size,
+            ty,
+            maximum,
+        })
     }
 
     /// Returns the type of the elements in this table.
     pub fn element_type(&self) -> TableElementType {
-        match &self.storage {
+        match &self.0 {
             TableStorage::Static { ty, .. } => *ty,
-            TableStorage::Dynamic { elements, .. } => match &*elements.borrow() {
-                TableElements::FuncRefs(_) => TableElementType::Func,
-                TableElements::ExternRefs(_) => TableElementType::Val(crate::ref_type()),
-            },
+            TableStorage::Dynamic { ty, .. } => *ty,
+        }
+    }
+
+    /// Returns whether or not the underlying storage of the table is "static".
+    pub(crate) fn is_static(&self) -> bool {
+        if let TableStorage::Static { .. } = &self.0 {
+            true
+        } else {
+            false
         }
     }
 
     /// Returns the number of allocated elements.
     pub fn size(&self) -> u32 {
-        match &self.storage {
+        match &self.0 {
             TableStorage::Static { size, .. } => size.get(),
-            TableStorage::Dynamic { elements, .. } => match &*elements.borrow() {
-                TableElements::FuncRefs(x) => x.len().try_into().unwrap(),
-                TableElements::ExternRefs(x) => x.len().try_into().unwrap(),
-            },
+            TableStorage::Dynamic { elements, .. } => elements.borrow().len().try_into().unwrap(),
         }
     }
 
     /// Returns the maximum number of elements.
     pub fn maximum(&self) -> Option<u32> {
-        match &self.storage {
+        match &self.0 {
             TableStorage::Static { maximum, .. } => Some(*maximum),
             TableStorage::Dynamic { maximum, .. } => maximum.clone(),
         }
@@ -170,31 +174,30 @@ impl Table {
     ///
     /// Returns a trap error on out-of-bounds accesses.
     pub fn fill(&self, dst: u32, val: TableElement, len: u32) -> Result<(), Trap> {
-        let start = dst;
+        let start = dst as usize;
         let end = start
-            .checked_add(len)
+            .checked_add(len as usize)
             .ok_or_else(|| Trap::wasm(ir::TrapCode::TableOutOfBounds))?;
 
-        if end > self.size() {
+        if end > self.size() as usize {
             return Err(Trap::wasm(ir::TrapCode::TableOutOfBounds));
         }
 
-        match val {
-            TableElement::FuncRef(r) => unsafe {
-                self.with_funcrefs_mut(move |elements| {
-                    let elements = elements.unwrap();
-                    elements[start as usize..end as usize].fill(r);
-                });
-            },
-            TableElement::ExternRef(r) => unsafe {
-                self.with_externrefs_mut(move |elements| {
-                    let elements = elements.unwrap();
-                    elements[start as usize..end as usize].fill(r);
-                });
-            },
-        }
+        debug_assert!(self.type_matches(&val));
 
-        Ok(())
+        self.with_elements_mut(|elements| {
+            if let Some((last, elements)) = elements[start..end].split_last_mut() {
+                let ty = self.element_type();
+
+                for e in elements {
+                    Self::set_raw(ty, e, val.clone());
+                }
+
+                Self::set_raw(self.element_type(), last, val);
+            }
+
+            Ok(())
+        })
     }
 
     /// Grow table by the specified amount of elements.
@@ -223,41 +226,34 @@ impl Table {
             }
         }
 
-        match &self.storage {
+        debug_assert!(self.type_matches(&init_value));
+
+        // First resize the storage and then fill with the init value
+        match &self.0 {
             TableStorage::Static { size, .. } => {
                 size.set(new_size);
-                self.fill(old_size, init_value, delta)
-                    .ok()
-                    .map(|_| old_size)
             }
             TableStorage::Dynamic { elements, .. } => {
-                let new_len = usize::try_from(new_size).unwrap();
-
-                match &mut *elements.borrow_mut() {
-                    TableElements::FuncRefs(x) => x.resize(new_len, init_value.try_into().ok()?),
-                    TableElements::ExternRefs(x) => x.resize(new_len, init_value.try_into().ok()?),
-                }
-
-                Some(old_size)
+                let mut elements = elements.borrow_mut();
+                elements.resize(new_size as usize, ptr::null_mut());
             }
         }
+
+        self.fill(old_size, init_value, delta)
+            .expect("table should not be out of bounds");
+
+        Some(old_size)
     }
 
     /// Get reference to the specified element.
     ///
     /// Returns `None` if the index is out of bounds.
     pub fn get(&self, index: u32) -> Option<TableElement> {
-        unsafe {
-            match self.element_type() {
-                TableElementType::Func => self.with_funcrefs(|elements| {
-                    elements.and_then(|e| e.get(index as usize).cloned().map(TableElement::FuncRef))
-                }),
-                TableElementType::Val(_) => self.with_externrefs(|elements| {
-                    elements
-                        .and_then(|e| e.get(index as usize).cloned().map(TableElement::ExternRef))
-                }),
-            }
-        }
+        self.with_elements(|elements| {
+            elements
+                .get(index as usize)
+                .map(|p| unsafe { TableElement::clone_from_raw(self.element_type(), *p) })
+        })
     }
 
     /// Set reference to the specified element.
@@ -267,22 +263,15 @@ impl Table {
     /// Returns an error if `index` is out of bounds or if this table type does
     /// not match the element type.
     pub fn set(&self, index: u32, elem: TableElement) -> Result<(), ()> {
-        unsafe {
-            match self.element_type() {
-                TableElementType::Func => self.with_funcrefs_mut(move |elements| {
-                    let elements = elements.ok_or(())?;
-                    let e = elements.get_mut(index as usize).ok_or(())?;
-                    *e = elem.try_into()?;
-                    Ok(())
-                }),
-                TableElementType::Val(_) => self.with_externrefs_mut(move |elements| {
-                    let elements = elements.ok_or(())?;
-                    let e = elements.get_mut(index as usize).ok_or(())?;
-                    *e = elem.try_into()?;
-                    Ok(())
-                }),
-            }
+        if !self.type_matches(&elem) {
+            return Err(());
         }
+
+        self.with_elements_mut(|elements| {
+            let e = elements.get_mut(index as usize).ok_or(())?;
+            Self::set_raw(self.element_type(), e, elem);
+            Ok(())
+        })
     }
 
     /// Copy `len` elements from `src_table[src_index..]` into `dst_table[dst_index..]`.
@@ -310,49 +299,19 @@ impl Table {
             return Err(Trap::wasm(ir::TrapCode::TableOutOfBounds));
         }
 
-        // Check if the source and destination are the same table
-        // This ensures we don't `borrow` and `borrow_mut` the same underlying RefCell
-        let same_table = ptr::eq(dst_table, src_table);
+        debug_assert!(
+            dst_table.element_type() == src_table.element_type(),
+            "table element type mismatch"
+        );
 
         let src_range = src_index as usize..src_index as usize + len as usize;
         let dst_range = dst_index as usize..dst_index as usize + len as usize;
 
-        unsafe {
-            match dst_table.element_type() {
-                TableElementType::Func => dst_table.with_funcrefs_mut(|dst| {
-                    let dst = dst.unwrap();
-
-                    if same_table {
-                        dst.copy_within(src_range, dst_index as usize);
-                    } else {
-                        src_table.with_funcrefs(|src| {
-                            let src = src.unwrap();
-                            dst[dst_range].copy_from_slice(&src[src_range]);
-                        })
-                    }
-                }),
-                TableElementType::Val(_) => dst_table.with_externrefs_mut(|dst| {
-                    let dst = dst.unwrap();
-
-                    if same_table {
-                        // As there's no `slice::clone_within` because cloning can't be done with memmove, use a loop
-                        if dst_index <= src_index {
-                            for (s, d) in (src_range).zip(dst_range) {
-                                dst[d] = dst[s].clone();
-                            }
-                        } else {
-                            for (s, d) in src_range.rev().zip(dst_range.rev()) {
-                                dst[d] = dst[s].clone();
-                            }
-                        }
-                    } else {
-                        src_table.with_externrefs(|src| {
-                            let src = src.unwrap();
-                            dst[dst_range].clone_from_slice(&src[src_range]);
-                        })
-                    }
-                }),
-            }
+        // Check if the tables are the same as we cannot mutably borrow and also borrow the same `RefCell`
+        if ptr::eq(dst_table, src_table) {
+            Self::copy_elements_within(dst_table, dst_range, src_range);
+        } else {
+            Self::copy_elements(dst_table, src_table, dst_range, src_range);
         }
 
         Ok(())
@@ -360,97 +319,153 @@ impl Table {
 
     /// Return a `VMTableDefinition` for exposing the table to compiled wasm code.
     pub fn vmtable(&self) -> VMTableDefinition {
-        match &self.storage {
+        match &self.0 {
             TableStorage::Static { data, size, .. } => VMTableDefinition {
-                base: *data,
+                base: *data as _,
                 current_elements: size.get(),
             },
-            TableStorage::Dynamic { elements, .. } => match &*elements.borrow() {
-                TableElements::FuncRefs(x) => VMTableDefinition {
-                    base: x.as_ptr() as *const u8 as _,
-                    current_elements: x.len().try_into().unwrap(),
-                },
-                TableElements::ExternRefs(x) => VMTableDefinition {
-                    base: x.as_ptr() as *const u8 as _,
-                    current_elements: x.len().try_into().unwrap(),
-                },
-            },
+            TableStorage::Dynamic { elements, .. } => {
+                let elements = elements.borrow();
+                VMTableDefinition {
+                    base: elements.as_ptr() as _,
+                    current_elements: elements.len().try_into().unwrap(),
+                }
+            }
         }
     }
 
-    unsafe fn with_funcrefs<F, R>(&self, with: F) -> R
-    where
-        F: FnOnce(Option<&[*mut VMCallerCheckedAnyfunc]>) -> R,
-    {
-        match &self.storage {
-            TableStorage::Static { data, size, ty, .. } => match ty {
-                TableElementType::Func => with(Some(std::slice::from_raw_parts(
-                    *data as *const _,
-                    size.get() as usize,
-                ))),
-                _ => with(None),
-            },
-            TableStorage::Dynamic { elements, .. } => match &*elements.borrow() {
-                TableElements::FuncRefs(x) => with(Some(x.as_slice())),
-                _ => with(None),
-            },
+    fn type_matches(&self, val: &TableElement) -> bool {
+        match (&val, self.element_type()) {
+            (TableElement::FuncRef(_), TableElementType::Func) => true,
+            (TableElement::ExternRef(_), TableElementType::Val(_)) => true,
+            _ => false,
         }
     }
 
-    unsafe fn with_funcrefs_mut<F, R>(&self, with: F) -> R
+    fn with_elements<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(Option<&mut [*mut VMCallerCheckedAnyfunc]>) -> R,
+        F: FnOnce(&[*mut u8]) -> R,
     {
-        match &self.storage {
-            TableStorage::Static { data, size, ty, .. } => match ty {
-                TableElementType::Func => with(Some(std::slice::from_raw_parts_mut(
-                    *data as *mut _,
-                    size.get() as usize,
-                ))),
-                _ => with(None),
+        match &self.0 {
+            TableStorage::Static { data, size, .. } => unsafe {
+                f(std::slice::from_raw_parts(*data, size.get() as usize))
             },
-            TableStorage::Dynamic { elements, .. } => match &mut *elements.borrow_mut() {
-                TableElements::FuncRefs(x) => with(Some(x.as_mut_slice())),
-                _ => with(None),
-            },
+            TableStorage::Dynamic { elements, .. } => {
+                let elements = elements.borrow();
+                f(elements.as_slice())
+            }
         }
     }
 
-    unsafe fn with_externrefs<F, R>(&self, with: F) -> R
+    fn with_elements_mut<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(Option<&[Option<VMExternRef>]>) -> R,
+        F: FnOnce(&mut [*mut u8]) -> R,
     {
-        match &self.storage {
-            TableStorage::Static { data, size, ty, .. } => match ty {
-                TableElementType::Val(_) => with(Some(std::slice::from_raw_parts(
-                    *data as *const _,
-                    size.get() as usize,
-                ))),
-                _ => with(None),
+        match &self.0 {
+            TableStorage::Static { data, size, .. } => unsafe {
+                f(std::slice::from_raw_parts_mut(*data, size.get() as usize))
             },
-            TableStorage::Dynamic { elements, .. } => match &*elements.borrow() {
-                TableElements::ExternRefs(x) => with(Some(x.as_slice())),
-                _ => with(None),
-            },
+            TableStorage::Dynamic { elements, .. } => {
+                let mut elements = elements.borrow_mut();
+                f(elements.as_mut_slice())
+            }
         }
     }
 
-    unsafe fn with_externrefs_mut<F, R>(&self, with: F) -> R
-    where
-        F: FnOnce(Option<&mut [Option<VMExternRef>]>) -> R,
-    {
-        match &self.storage {
-            TableStorage::Static { data, size, ty, .. } => match ty {
-                TableElementType::Val(_) => with(Some(std::slice::from_raw_parts_mut(
-                    *data as *mut _,
-                    size.get() as usize,
-                ))),
-                _ => with(None),
-            },
-            TableStorage::Dynamic { elements, .. } => match &mut *elements.borrow_mut() {
-                TableElements::ExternRefs(x) => with(Some(x.as_mut_slice())),
-                _ => with(None),
-            },
+    fn set_raw(ty: TableElementType, e: &mut *mut u8, val: TableElement) {
+        unsafe {
+            // Drop the existing element
+            let _ = TableElement::from_raw(ty, *e);
+            *e = val.into_raw();
         }
+    }
+
+    fn copy_elements(
+        dst_table: &Self,
+        src_table: &Self,
+        dst_range: Range<usize>,
+        src_range: Range<usize>,
+    ) {
+        // This can only be used when copying between different tables
+        debug_assert!(!ptr::eq(dst_table, src_table));
+
+        let ty = dst_table.element_type();
+
+        match ty {
+            TableElementType::Func => {
+                // `funcref` are `Copy`, so just do a mempcy
+                dst_table.with_elements_mut(|dst| {
+                    src_table.with_elements(|src| dst[dst_range].copy_from_slice(&src[src_range]))
+                });
+            }
+            TableElementType::Val(_) => {
+                // We need to clone each `externref`
+                dst_table.with_elements_mut(|dst| {
+                    src_table.with_elements(|src| {
+                        for (s, d) in src_range.zip(dst_range) {
+                            let elem = unsafe { TableElement::clone_from_raw(ty, src[s]) };
+                            Self::set_raw(ty, &mut dst[d], elem);
+                        }
+                    })
+                });
+            }
+        }
+    }
+
+    fn copy_elements_within(table: &Self, dst_range: Range<usize>, src_range: Range<usize>) {
+        let ty = table.element_type();
+
+        match ty {
+            TableElementType::Func => {
+                // `funcref` are `Copy`, so just do a memmove
+                table.with_elements_mut(|dst| dst.copy_within(src_range, dst_range.start));
+            }
+            TableElementType::Val(_) => {
+                // We need to clone each `externref` while handling overlapping ranges
+                table.with_elements_mut(|dst| {
+                    if dst_range.start <= src_range.start {
+                        for (s, d) in src_range.zip(dst_range) {
+                            let elem = unsafe { TableElement::clone_from_raw(ty, dst[s]) };
+                            Self::set_raw(ty, &mut dst[d], elem);
+                        }
+                    } else {
+                        for (s, d) in src_range.rev().zip(dst_range.rev()) {
+                            let elem = unsafe { TableElement::clone_from_raw(ty, dst[s]) };
+                            Self::set_raw(ty, &mut dst[d], elem);
+                        }
+                    }
+                });
+            }
+        }
+    }
+}
+
+impl Drop for Table {
+    fn drop(&mut self) {
+        let ty = self.element_type();
+
+        // funcref tables can skip this
+        if let TableElementType::Func = ty {
+            return;
+        }
+
+        // Properly drop any table elements stored in the table
+        self.with_elements(|elements| {
+            for element in elements.iter() {
+                let _ = unsafe { TableElement::from_raw(ty, *element) };
+            }
+        });
+    }
+}
+
+// The default table representation is an empty funcref table that cannot grow.
+impl Default for Table {
+    fn default() -> Self {
+        Self(TableStorage::Static {
+            data: std::ptr::null_mut(),
+            size: Cell::new(0),
+            ty: TableElementType::Func,
+            maximum: 0,
+        })
     }
 }

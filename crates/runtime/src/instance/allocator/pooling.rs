@@ -11,7 +11,7 @@ use super::{
     initialize_instance, initialize_vmcontext, FiberStackError, InstanceAllocationRequest,
     InstanceAllocator, InstanceHandle, InstantiationError,
 };
-use crate::{instance::Instance, table::max_table_element_size, Memory, Mmap, Table, VMContext};
+use crate::{instance::Instance, Memory, Mmap, Table, VMContext};
 use anyhow::{anyhow, bail, Context, Result};
 use rand::Rng;
 use std::cell::RefCell;
@@ -427,8 +427,12 @@ impl InstancePool {
         let instance = unsafe { &mut *handle.instance };
 
         // Decommit any linear memories that were used
-        for (mem, base) in instance.memories.values().zip(self.memories.get(index)) {
-            let size = (mem.size() * WASM_PAGE_SIZE) as usize;
+        for (memory, base) in instance.memories.values_mut().zip(self.memories.get(index)) {
+            let memory = mem::take(memory);
+            debug_assert!(memory.is_static());
+
+            let size = (memory.size() * WASM_PAGE_SIZE) as usize;
+            drop(memory);
             decommit_memory_pages(base, size).unwrap();
         }
 
@@ -436,13 +440,16 @@ impl InstancePool {
         instance.dropped_data.borrow_mut().clear();
 
         // Decommit any tables that were used
-        let table_element_size = max_table_element_size();
-        for (table, base) in instance.tables.values().zip(self.tables.get(index)) {
+        for (table, base) in instance.tables.values_mut().zip(self.tables.get(index)) {
+            let table = mem::take(table);
+            debug_assert!(table.is_static());
+
             let size = round_up_to_pow2(
-                table.size() as usize * table_element_size,
+                table.size() as usize * mem::size_of::<*mut u8>(),
                 self.tables.page_size,
             );
 
+            drop(table);
             decommit_table_pages(base, size).unwrap();
         }
 
@@ -503,12 +510,12 @@ impl InstancePool {
         for plan in (&module.table_plans.values().as_slice()[module.num_imported_tables..]).iter() {
             let base = tables.next().unwrap();
 
-            commit_table_pages(base, max_elements as usize * max_table_element_size())
+            commit_table_pages(base, max_elements as usize * mem::size_of::<*mut u8>())
                 .map_err(|e| InstantiationError::Resource(e.to_string()))?;
 
             instance
                 .tables
-                .push(Table::new_static(plan, base, max_elements));
+                .push(Table::new_static(plan, base as _, max_elements));
         }
 
         let mut dropped_elements = instance.dropped_elements.borrow_mut();
@@ -646,7 +653,7 @@ impl TablePool {
 
         let table_size = if module_limits.table_elements > 0 {
             round_up_to_pow2(
-                max_table_element_size()
+                mem::size_of::<*mut u8>()
                     .checked_mul(module_limits.table_elements as usize)
                     .ok_or_else(|| anyhow!("table size exceeds addressable memory"))?,
                 page_size,

@@ -9,6 +9,7 @@ use more_asserts::{assert_ge, assert_le};
 use std::cell::{Cell, RefCell};
 use std::cmp::min;
 use std::convert::TryFrom;
+use std::ptr;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
 /// A memory allocator
@@ -184,16 +185,12 @@ enum MemoryStorage {
 }
 
 /// Represents an instantiation of a WebAssembly memory.
-pub struct Memory {
-    storage: MemoryStorage,
-}
+pub struct Memory(MemoryStorage);
 
 impl Memory {
     /// Create a new dynamic (movable) memory instance for the specified plan.
     pub fn new_dynamic(plan: &MemoryPlan, creator: &dyn RuntimeMemoryCreator) -> Result<Self> {
-        Ok(Self {
-            storage: MemoryStorage::Dynamic(creator.new_memory(plan)?),
-        })
+        Ok(Self(MemoryStorage::Dynamic(creator.new_memory(plan)?)))
     }
 
     /// Create a new static (immovable) memory instance for the specified plan.
@@ -207,21 +204,28 @@ impl Memory {
             make_accessible(base, plan.memory.minimum as usize * WASM_PAGE_SIZE as usize)?;
         }
 
-        Ok(Self {
-            storage: MemoryStorage::Static {
-                base,
-                size: Cell::new(plan.memory.minimum),
-                maximum: min(plan.memory.maximum.unwrap_or(maximum), maximum),
-                make_accessible,
-            },
-        })
+        Ok(Self(MemoryStorage::Static {
+            base,
+            size: Cell::new(plan.memory.minimum),
+            maximum: min(plan.memory.maximum.unwrap_or(maximum), maximum),
+            make_accessible,
+        }))
     }
 
     /// Returns the number of allocated wasm pages.
     pub fn size(&self) -> u32 {
-        match &self.storage {
+        match &self.0 {
             MemoryStorage::Static { size, .. } => size.get(),
             MemoryStorage::Dynamic(mem) => mem.size(),
+        }
+    }
+
+    /// Returns whether or not the underlying storage of the memory is "static".
+    pub(crate) fn is_static(&self) -> bool {
+        if let MemoryStorage::Static { .. } = &self.0 {
+            true
+        } else {
+            false
         }
     }
 
@@ -230,7 +234,7 @@ impl Memory {
     /// Returns `None` if memory can't be grown by the specified amount
     /// of wasm pages.
     pub fn grow(&self, delta: u32) -> Option<u32> {
-        match &self.storage {
+        match &self.0 {
             MemoryStorage::Static {
                 base,
                 size,
@@ -264,12 +268,28 @@ impl Memory {
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
     pub fn vmmemory(&self) -> VMMemoryDefinition {
-        match &self.storage {
+        match &self.0 {
             MemoryStorage::Static { base, size, .. } => VMMemoryDefinition {
                 base: *base,
                 current_length: size.get() as usize * WASM_PAGE_SIZE as usize,
             },
             MemoryStorage::Dynamic(mem) => mem.vmmemory(),
         }
+    }
+}
+
+// The default memory representation is an empty memory that cannot grow.
+impl Default for Memory {
+    fn default() -> Self {
+        fn make_accessible(_ptr: *mut u8, _len: usize) -> Result<()> {
+            unreachable!()
+        }
+
+        Self(MemoryStorage::Static {
+            base: ptr::null_mut(),
+            size: Cell::new(0),
+            maximum: 0,
+            make_accessible,
+        })
     }
 }

@@ -351,8 +351,35 @@ impl VMExternRef {
         ptr
     }
 
+    /// Consume this `VMExternRef` into a raw, untyped pointer.
+    ///
+    /// # Safety
+    ///
+    /// This method forgets self, so it is possible to create a leak of the
+    /// underlying reference counted data if not used carefully.
+    ///
+    /// Use `from_raw` to recreate the `VMExternRef`.
+    pub unsafe fn into_raw(self) -> *mut u8 {
+        let ptr = self.0.cast::<u8>().as_ptr();
+        std::mem::forget(self);
+        ptr
+    }
+
     /// Recreate a `VMExternRef` from a pointer returned from a previous call to
-    /// `VMExternRef::as_raw`.
+    /// `as_raw`.
+    ///
+    /// # Safety
+    ///
+    /// Unlike `clone_from_raw`, this does not increment the reference count of the
+    /// underlying data.  It is not safe to continue to use the pointer passed to this
+    /// function.
+    pub unsafe fn from_raw(ptr: *mut u8) -> Self {
+        debug_assert!(!ptr.is_null());
+        VMExternRef(NonNull::new_unchecked(ptr).cast())
+    }
+
+    /// Recreate a `VMExternRef` from a pointer returned from a previous call to
+    /// `as_raw`.
     ///
     /// # Safety
     ///
