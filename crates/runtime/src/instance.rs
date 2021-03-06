@@ -19,7 +19,9 @@ use more_asserts::assert_lt;
 use std::alloc::Layout;
 use std::any::Any;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::hash::Hash;
 use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -545,6 +547,22 @@ impl Instance {
         self.vmctx_plus_offset(self.offsets.vmctx_anyfunc(index))
     }
 
+    fn find_passive_segment<'a, I, D, T>(
+        index: I,
+        index_map: &HashMap<I, usize>,
+        data: &'a Vec<D>,
+        dropped: &RefCell<EntitySet<I>>,
+    ) -> &'a [T]
+    where
+        D: AsRef<[T]>,
+        I: EntityRef + Hash,
+    {
+        match index_map.get(&index) {
+            Some(index) if !dropped.borrow().contains(I::new(*index)) => data[*index].as_ref(),
+            _ => &[],
+        }
+    }
+
     /// The `table.init` operation: initializes a portion of a table with a
     /// passive element.
     ///
@@ -563,25 +581,17 @@ impl Instance {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
 
         let table = self.get_table(table_index);
-        let elem_index = self.module.passive_elements_map.get(&elem_index);
-        let elem = match elem_index {
-            Some(index) => {
-                if self
-                    .dropped_elements
-                    .borrow()
-                    .contains(ElemIndex::new(*index))
-                {
-                    &[]
-                } else {
-                    self.module.passive_elements[*index].as_ref()
-                }
-            }
-            None => &[],
-        };
+
+        let elements = Self::find_passive_segment(
+            elem_index,
+            &self.module.passive_elements_map,
+            &self.module.passive_elements,
+            &self.dropped_elements,
+        );
 
         if src
             .checked_add(len)
-            .map_or(true, |n| n as usize > elem.len())
+            .map_or(true, |n| n as usize > elements.len())
             || dst.checked_add(len).map_or(true, |m| m > table.size())
         {
             return Err(Trap::wasm(ir::TrapCode::TableOutOfBounds));
@@ -590,7 +600,7 @@ impl Instance {
         // TODO(#983): investigate replacing this get/set loop with a `memcpy`.
         for (dst, src) in (dst..dst + len).zip(src..src + len) {
             let elem = self
-                .get_caller_checked_anyfunc(elem[src as usize])
+                .get_caller_checked_anyfunc(elements[src as usize])
                 .map_or(ptr::null_mut(), |f: &VMCallerCheckedAnyfunc| {
                     f as *const VMCallerCheckedAnyfunc as *mut _
                 });
@@ -733,17 +743,13 @@ impl Instance {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-memory-init
 
         let memory = self.get_memory(memory_index);
-        let data_index = self.module.passive_data_map.get(&data_index);
-        let data = match data_index {
-            Some(index) => {
-                if self.dropped_data.borrow().contains(DataIndex::new(*index)) {
-                    &[]
-                } else {
-                    self.module.passive_data[*index].as_ref()
-                }
-            }
-            None => &[],
-        };
+
+        let data = Self::find_passive_segment(
+            data_index,
+            &self.module.passive_data_map,
+            &self.module.passive_data,
+            &self.dropped_data,
+        );
 
         if src
             .checked_add(len)
