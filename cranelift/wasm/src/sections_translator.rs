@@ -401,6 +401,12 @@ pub fn parse_element_section<'data>(
                         ));
                     }
                 };
+                // Check for offset + len overflow
+                if offset.checked_add(segments.len()).is_none() {
+                    return Err(wasm_unsupported!(
+                        "element segment offset and length overflows"
+                    ));
+                }
                 environ.declare_table_elements(
                     TableIndex::from_u32(table_index),
                     base,
@@ -447,6 +453,12 @@ pub fn parse_data_section<'data>(
                         ))
                     }
                 };
+                // Check for offset + len overflow
+                if offset.checked_add(data.len()).is_none() {
+                    return Err(wasm_unsupported!(
+                        "data segment offset and length overflows"
+                    ));
+                }
                 environ.declare_data_initialization(
                     MemoryIndex::from_u32(memory_index),
                     base,
