@@ -445,20 +445,8 @@ impl<T: EntityRef + ReservedValue> EntityList<T> {
         }
     }
 
-    /// Removes the element at position `index` from the list. Potentially linear complexity.
-    pub fn remove(&mut self, index: usize, pool: &mut ListPool<T>) {
-        let len;
-        {
-            let seq = self.as_mut_slice(pool);
-            len = seq.len();
-            debug_assert!(index < len);
-
-            // Copy elements down.
-            for i in index..len - 1 {
-                seq[i] = seq[i + 1];
-            }
-        }
-
+    /// Removes the last element from the list.
+    fn remove_last(&mut self, len: usize, pool: &mut ListPool<T>) {
         // Check if we deleted the last element.
         if len == 1 {
             self.clear(pool);
@@ -477,20 +465,34 @@ impl<T: EntityRef + ReservedValue> EntityList<T> {
         pool.data[block] = T::new(len - 1);
     }
 
+    /// Removes the element at position `index` from the list. Potentially linear complexity.
+    pub fn remove(&mut self, index: usize, pool: &mut ListPool<T>) {
+        let len;
+        {
+            let seq = self.as_mut_slice(pool);
+            len = seq.len();
+            debug_assert!(index < len);
+
+            // Copy elements down.
+            for i in index..len - 1 {
+                seq[i] = seq[i + 1];
+            }
+        }
+
+        self.remove_last(len, pool);
+    }
+
     /// Removes the element at `index` in constant time by switching it with the last element of
     /// the list.
     pub fn swap_remove(&mut self, index: usize, pool: &mut ListPool<T>) {
-        let len = self.len(pool);
+        let seq = self.as_mut_slice(pool);
+        let len = seq.len();
         debug_assert!(index < len);
-        if index == len - 1 {
-            self.remove(index, pool);
-        } else {
-            {
-                let seq = self.as_mut_slice(pool);
-                seq.swap(index, len - 1);
-            }
-            self.remove(len - 1, pool);
+        if index != len - 1 {
+            seq.swap(index, len - 1);
         }
+
+        self.remove_last(len, pool);
     }
 
     /// Grow the list by inserting `count` elements at `index`.
