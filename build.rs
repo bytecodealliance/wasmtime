@@ -192,14 +192,6 @@ fn experimental_x64_should_panic(testsuite: &str, testname: &str, strategy: &str
         ("simd", "simd_i32x4_trunc_sat_f64x2") => return true,
         ("simd", "simd_i64x2_extmul_i32x4") => return true,
         ("simd", "simd_int_to_int_extend") => return true,
-        ("simd", "simd_load16_lane") => return true,
-        ("simd", "simd_load32_lane") => return true,
-        ("simd", "simd_load64_lane") => return true,
-        ("simd", "simd_load8_lane") => return true,
-        ("simd", "simd_store16_lane") => return true,
-        ("simd", "simd_store32_lane") => return true,
-        ("simd", "simd_store64_lane") => return true,
-        ("simd", "simd_store8_lane") => return true,
         ("simd", _) => return false,
         _ => {}
     }
@@ -234,15 +226,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             | ("simd", "simd_i32x4_extmul_i16x8")
             | ("simd", "simd_i32x4_trunc_sat_f64x2")
             | ("simd", "simd_i64x2_extmul_i32x4")
-            | ("simd", "simd_int_to_int_extend")
-            | ("simd", "simd_load16_lane")
-            | ("simd", "simd_load32_lane")
-            | ("simd", "simd_load64_lane")
-            | ("simd", "simd_load8_lane")
-            | ("simd", "simd_store16_lane")
-            | ("simd", "simd_store32_lane")
-            | ("simd", "simd_store64_lane")
-            | ("simd", "simd_store8_lane") => return true,
+            | ("simd", "simd_int_to_int_extend") => return true,
 
             // These are only implemented on x64.
             ("simd", "simd_i64x2_arith2") | ("simd", "simd_boolean") => {
