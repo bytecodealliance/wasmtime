@@ -574,6 +574,11 @@ impl Store {
     /// immediately trap). This function must be called for the store to have
     /// some fuel to allow WebAssembly to execute.
     ///
+    /// Most WebAssembly instructions consume 1 unit of fuel. Some
+    /// instructions, such as `nop`, `drop`, `block`, and `loop`, consume 0
+    /// units, as any execution cost associated with them involves other
+    /// instructions which do consume fuel.
+    ///
     /// Note that at this time when fuel is entirely consumed it will cause
     /// wasm to trap. More usages of fuel are planned for the future.
     ///
