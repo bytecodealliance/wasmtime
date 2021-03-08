@@ -513,6 +513,37 @@ impl<T: EntityRef + ReservedValue> EntityList<T> {
         self.remove_last(len, pool);
     }
 
+    /// Shortens the list down to `len` elements.
+    ///
+    /// Does nothing if the list is already shorter than `len`.
+    pub fn truncate(&mut self, new_len: usize, pool: &mut ListPool<T>) {
+        if new_len == 0 {
+            self.clear(pool);
+            return;
+        }
+
+        match pool.len_of(self) {
+            None => return,
+            Some(len) => {
+                if len <= new_len {
+                    return;
+                }
+
+                let block;
+                let idx = self.index as usize;
+                let sclass = sclass_for_length(len);
+                let new_sclass = sclass_for_length(new_len);
+                if sclass != new_sclass {
+                    block = pool.realloc(idx - 1, sclass, new_sclass, new_len + 1);
+                    self.index = (block + 1) as u32;
+                } else {
+                    block = idx - 1;
+                }
+                pool.data[block] = T::new(new_len);
+            }
+        }
+    }
+
     /// Grow the list by inserting `count` elements at `index`.
     ///
     /// The new elements are not initialized, they will contain whatever happened to be in memory.
@@ -774,5 +805,26 @@ mod tests {
         list1.as_mut_slice(pool)[0] = i4;
         assert_eq!(list1.as_slice(pool), &[i4, i2, i3]);
         assert_eq!(list2.as_slice(pool), &[i1, i2, i3]);
+    }
+
+    #[test]
+    fn truncate() {
+        let pool = &mut ListPool::<Inst>::new();
+
+        let i1 = Inst::new(1);
+        let i2 = Inst::new(2);
+        let i3 = Inst::new(3);
+        let i4 = Inst::new(4);
+
+        let mut list = EntityList::from_slice(&[i1, i2, i3, i4, i1, i2, i3, i4], pool);
+        assert_eq!(list.as_slice(pool), &[i1, i2, i3, i4, i1, i2, i3, i4]);
+        list.truncate(6, pool);
+        assert_eq!(list.as_slice(pool), &[i1, i2, i3, i4, i1, i2]);
+        list.truncate(9, pool);
+        assert_eq!(list.as_slice(pool), &[i1, i2, i3, i4, i1, i2]);
+        list.truncate(2, pool);
+        assert_eq!(list.as_slice(pool), &[i1, i2]);
+        list.truncate(0, pool);
+        assert!(list.is_empty());
     }
 }
