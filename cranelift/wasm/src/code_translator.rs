@@ -1466,6 +1466,30 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let as_vector = builder.ins().scalar_to_vector(type_of(op), state.pop1());
             state.push1(as_vector)
         }
+        Operator::V128Load8Lane { memarg, lane }
+        | Operator::V128Load16Lane { memarg, lane }
+        | Operator::V128Load32Lane { memarg, lane }
+        | Operator::V128Load64Lane { memarg, lane } => {
+            let vector = pop1_with_bitcast(state, type_of(op), builder);
+            translate_load(
+                memarg,
+                ir::Opcode::Load,
+                type_of(op).lane_type(),
+                builder,
+                state,
+                environ,
+            )?;
+            let replacement = state.pop1();
+            state.push1(builder.ins().insertlane(vector, replacement, *lane))
+        }
+        Operator::V128Store8Lane { memarg, lane }
+        | Operator::V128Store16Lane { memarg, lane }
+        | Operator::V128Store32Lane { memarg, lane }
+        | Operator::V128Store64Lane { memarg, lane } => {
+            let vector = pop1_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().extractlane(vector, lane.clone()));
+            translate_store(memarg, ir::Opcode::Store, builder, state, environ)?;
+        }
         Operator::I8x16ExtractLaneS { lane } | Operator::I16x8ExtractLaneS { lane } => {
             let vector = pop1_with_bitcast(state, type_of(op), builder);
             let extracted = builder.ins().extractlane(vector, lane.clone());
@@ -1837,14 +1861,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I64x2ExtendHighI32x4S
         | Operator::I64x2ExtendLowI32x4U
         | Operator::I64x2ExtendHighI32x4U
-        | Operator::V128Load8Lane { .. }
-        | Operator::V128Load16Lane { .. }
-        | Operator::V128Load32Lane { .. }
-        | Operator::V128Load64Lane { .. }
-        | Operator::V128Store8Lane { .. }
-        | Operator::V128Store16Lane { .. }
-        | Operator::V128Store32Lane { .. }
-        | Operator::V128Store64Lane { .. }
         | Operator::I16x8Q15MulrSatS
         | Operator::I16x8ExtMulLowI8x16S
         | Operator::I16x8ExtMulHighI8x16S
@@ -2541,6 +2557,8 @@ fn type_of(operator: &Operator) -> Type {
         Operator::I8x16Shuffle { .. }
         | Operator::I8x16Splat
         | Operator::V128Load8Splat { .. }
+        | Operator::V128Load8Lane { .. }
+        | Operator::V128Store8Lane { .. }
         | Operator::I8x16ExtractLaneS { .. }
         | Operator::I8x16ExtractLaneU { .. }
         | Operator::I8x16ReplaceLane { .. }
@@ -2575,6 +2593,8 @@ fn type_of(operator: &Operator) -> Type {
 
         Operator::I16x8Splat
         | Operator::V128Load16Splat { .. }
+        | Operator::V128Load16Lane { .. }
+        | Operator::V128Store16Lane { .. }
         | Operator::I16x8ExtractLaneS { .. }
         | Operator::I16x8ExtractLaneU { .. }
         | Operator::I16x8ReplaceLane { .. }
@@ -2610,6 +2630,8 @@ fn type_of(operator: &Operator) -> Type {
 
         Operator::I32x4Splat
         | Operator::V128Load32Splat { .. }
+        | Operator::V128Load32Lane { .. }
+        | Operator::V128Store32Lane { .. }
         | Operator::I32x4ExtractLane { .. }
         | Operator::I32x4ReplaceLane { .. }
         | Operator::I32x4Eq
@@ -2642,6 +2664,8 @@ fn type_of(operator: &Operator) -> Type {
 
         Operator::I64x2Splat
         | Operator::V128Load64Splat { .. }
+        | Operator::V128Load64Lane { .. }
+        | Operator::V128Store64Lane { .. }
         | Operator::I64x2ExtractLane { .. }
         | Operator::I64x2ReplaceLane { .. }
         | Operator::I64x2Eq
