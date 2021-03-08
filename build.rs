@@ -111,7 +111,8 @@ fn test_directory(
 
     let testsuite = &extract_name(path);
     for entry in dir_entries.iter() {
-        write_testsuite_tests(out, entry, testsuite, strategy)?;
+        write_testsuite_tests(out, entry, testsuite, strategy, false)?;
+        write_testsuite_tests(out, entry, testsuite, strategy, true)?;
     }
 
     Ok(dir_entries.len())
@@ -148,6 +149,7 @@ fn write_testsuite_tests(
     path: impl AsRef<Path>,
     testsuite: &str,
     strategy: &str,
+    pooling: bool,
 ) -> anyhow::Result<()> {
     let path = path.as_ref();
     let testname = extract_name(path);
@@ -160,14 +162,24 @@ fn write_testsuite_tests(
         )?;
     } else if ignore(testsuite, &testname, strategy) {
         writeln!(out, "#[ignore]")?;
+    } else if pooling {
+        // Ignore on aarch64 due to using QEMU for running tests (limited memory)
+        writeln!(out, r#"#[cfg_attr(target_arch = "aarch64", ignore)]"#)?;
     }
-    writeln!(out, "fn r#{}() {{", &testname)?;
+
+    writeln!(
+        out,
+        "fn r#{}{}() {{",
+        &testname,
+        if pooling { "_pooling" } else { "" }
+    )?;
     writeln!(out, "    let _ = env_logger::try_init();")?;
     writeln!(
         out,
-        "    crate::wast::run_wast(r#\"{}\"#, crate::wast::Strategy::{}).unwrap();",
+        "    crate::wast::run_wast(r#\"{}\"#, crate::wast::Strategy::{}, {}).unwrap();",
         path.display(),
-        strategy
+        strategy,
+        pooling
     )?;
     writeln!(out, "}}")?;
     writeln!(out)?;

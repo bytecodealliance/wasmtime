@@ -11,7 +11,7 @@
   <p>
     <a href="https://github.com/bytecodealliance/wasmtime/actions?query=workflow%3ACI"><img src="https://github.com/bytecodealliance/wasmtime/workflows/CI/badge.svg" alt="build status" /></a>
     <a href="https://bytecodealliance.zulipchat.com/#narrow/stream/217126-wasmtime"><img src="https://img.shields.io/badge/zulip-join_chat-brightgreen.svg" alt="zulip chat" /></a>
-    <img src="https://img.shields.io/badge/rustc-1.37+-green.svg" alt="min rustc" />
+    <img src="https://img.shields.io/badge/rustc-stable+-green.svg" alt="supported rustc stable" />
     <a href="https://docs.rs/wasmtime"><img src="https://docs.rs/wasmtime/badge.svg" alt="Documentation Status" /></a>
   </p>
 

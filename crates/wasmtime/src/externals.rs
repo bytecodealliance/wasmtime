@@ -547,10 +547,13 @@ impl Table {
             bail!("cross-`Store` table copies are not supported");
         }
 
+        if dst_table.ty() != src_table.ty() {
+            bail!("tables do not have the same element type");
+        }
+
         // NB: We must use the `dst_table`'s `wasmtime_handle` for the
         // `dst_table_index` and vice versa for `src_table` since each table can
         // come from different modules.
-
         let dst_table_index = dst_table.wasmtime_table_index();
         let dst_table_index = dst_table.instance.get_defined_table(dst_table_index);
 
@@ -577,6 +580,11 @@ impl Table {
     pub fn fill(&self, dst: u32, val: Val, len: u32) -> Result<()> {
         if !val.comes_from_same_store(&self.instance.store) {
             bail!("cross-`Store` table fills are not supported");
+        }
+
+        // Ensure the fill value is the correct type
+        if self.ty().element() != &val.ty() {
+            bail!("mismatched element fill type");
         }
 
         let table_index = self.wasmtime_table_index();

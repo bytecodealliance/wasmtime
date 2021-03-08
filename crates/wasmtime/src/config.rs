@@ -14,6 +14,257 @@ use wasmtime_environ::settings::{self, Configurable, SetError};
 use wasmtime_environ::{isa, isa::TargetIsa, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
+use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator, PoolingInstanceAllocator};
+
+/// Represents the limits placed on a module for compiling with the pooling instance allocation strategy.
+#[derive(Debug, Copy, Clone)]
+pub struct ModuleLimits {
+    /// The maximum number of imported functions for a module (default is 1000).
+    pub imported_functions: u32,
+
+    /// The maximum number of imported tables for a module (default is 0).
+    pub imported_tables: u32,
+
+    /// The maximum number of imported linear memories for a module (default is 0).
+    pub imported_memories: u32,
+
+    /// The maximum number of imported globals for a module (default is 0).
+    pub imported_globals: u32,
+
+    /// The maximum number of defined types for a module (default is 100).
+    pub types: u32,
+
+    /// The maximum number of defined functions for a module (default is 10000).
+    pub functions: u32,
+
+    /// The maximum number of defined tables for a module (default is 1).
+    pub tables: u32,
+
+    /// The maximum number of defined linear memories for a module (default is 1).
+    pub memories: u32,
+
+    /// The maximum number of defined globals for a module (default is 10).
+    pub globals: u32,
+
+    /// The maximum table elements for any table defined in a module (default is 10000).
+    ///
+    /// If a table's minimum element limit is greater than this value, the module will
+    /// fail to compile.
+    ///
+    /// If a table's maximum element limit is unbounded or greater than this value,
+    /// the maximum will be `table_elements` for the purpose of any `table.grow` instruction.
+    pub table_elements: u32,
+
+    /// The maximum number of pages for any linear memory defined in a module (default is 160).
+    ///
+    /// The default of 160 means at most 10 MiB of host memory may be committed for each instance.
+    ///
+    /// If a memory's minimum page limit is greater than this value, the module will
+    /// fail to compile.
+    ///
+    /// If a memory's maximum page limit is unbounded or greater than this value,
+    /// the maximum will be `memory_pages` for the purpose of any `memory.grow` instruction.
+    ///
+    /// This value cannot exceed any memory reservation size limits placed on instances.
+    pub memory_pages: u32,
+}
+
+impl Default for ModuleLimits {
+    fn default() -> Self {
+        // Use the defaults from the runtime
+        let wasmtime_runtime::ModuleLimits {
+            imported_functions,
+            imported_tables,
+            imported_memories,
+            imported_globals,
+            types,
+            functions,
+            tables,
+            memories,
+            globals,
+            table_elements,
+            memory_pages,
+        } = wasmtime_runtime::ModuleLimits::default();
+
+        Self {
+            imported_functions,
+            imported_tables,
+            imported_memories,
+            imported_globals,
+            types,
+            functions,
+            tables,
+            memories,
+            globals,
+            table_elements,
+            memory_pages,
+        }
+    }
+}
+
+// This exists so we can convert between the public Wasmtime API and the runtime representation
+// without having to export runtime types from the Wasmtime API.
+#[doc(hidden)]
+impl Into<wasmtime_runtime::ModuleLimits> for ModuleLimits {
+    fn into(self) -> wasmtime_runtime::ModuleLimits {
+        let Self {
+            imported_functions,
+            imported_tables,
+            imported_memories,
+            imported_globals,
+            types,
+            functions,
+            tables,
+            memories,
+            globals,
+            table_elements,
+            memory_pages,
+        } = self;
+
+        wasmtime_runtime::ModuleLimits {
+            imported_functions,
+            imported_tables,
+            imported_memories,
+            imported_globals,
+            types,
+            functions,
+            tables,
+            memories,
+            globals,
+            table_elements,
+            memory_pages,
+        }
+    }
+}
+
+/// Represents the limits placed on instances by the pooling instance allocation strategy.
+#[derive(Debug, Copy, Clone)]
+pub struct InstanceLimits {
+    /// The maximum number of concurrent instances supported (default is 1000).
+    pub count: u32,
+
+    /// The maximum size, in bytes, of host address space to reserve for each linear memory of an instance.
+    ///
+    /// Note: this value has important performance ramifications.
+    ///
+    /// On 64-bit platforms, the default for this value will be 6 GiB.  A value of less than 4 GiB will
+    /// force runtime bounds checking for memory accesses and thus will negatively impact performance.
+    /// Any value above 4 GiB will start eliding bounds checks provided the `offset` of the memory access is
+    /// less than (`memory_reservation_size` - 4 GiB).  A value of 8 GiB will completely elide *all* bounds
+    /// checks; consequently, 8 GiB will be the maximum supported value. The default of 6 GiB reserves
+    /// less host address space for each instance, but a memory access with an offset above 2 GiB will incur
+    /// runtime bounds checks.
+    ///
+    /// On 32-bit platforms, the default for this value will be 10 MiB. A 32-bit host has very limited address
+    /// space to reserve for a lot of concurrent instances.  As a result, runtime bounds checking will be used
+    /// for all memory accesses.  For better runtime performance, a 64-bit host is recommended.
+    ///
+    /// This value will be rounded up by the WebAssembly page size (64 KiB).
+    pub memory_reservation_size: u64,
+}
+
+impl Default for InstanceLimits {
+    fn default() -> Self {
+        let wasmtime_runtime::InstanceLimits {
+            count,
+            memory_reservation_size,
+        } = wasmtime_runtime::InstanceLimits::default();
+
+        Self {
+            count,
+            memory_reservation_size,
+        }
+    }
+}
+
+// This exists so we can convert between the public Wasmtime API and the runtime representation
+// without having to export runtime types from the Wasmtime API.
+#[doc(hidden)]
+impl Into<wasmtime_runtime::InstanceLimits> for InstanceLimits {
+    fn into(self) -> wasmtime_runtime::InstanceLimits {
+        let Self {
+            count,
+            memory_reservation_size,
+        } = self;
+
+        wasmtime_runtime::InstanceLimits {
+            count,
+            memory_reservation_size,
+        }
+    }
+}
+
+/// The allocation strategy to use for the pooling instance allocation strategy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PoolingAllocationStrategy {
+    /// Allocate from the next available instance.
+    NextAvailable,
+    /// Allocate from a random available instance.
+    Random,
+}
+
+impl Default for PoolingAllocationStrategy {
+    fn default() -> Self {
+        match wasmtime_runtime::PoolingAllocationStrategy::default() {
+            wasmtime_runtime::PoolingAllocationStrategy::NextAvailable => Self::NextAvailable,
+            wasmtime_runtime::PoolingAllocationStrategy::Random => Self::Random,
+        }
+    }
+}
+
+// This exists so we can convert between the public Wasmtime API and the runtime representation
+// without having to export runtime types from the Wasmtime API.
+#[doc(hidden)]
+impl Into<wasmtime_runtime::PoolingAllocationStrategy> for PoolingAllocationStrategy {
+    fn into(self) -> wasmtime_runtime::PoolingAllocationStrategy {
+        match self {
+            Self::NextAvailable => wasmtime_runtime::PoolingAllocationStrategy::NextAvailable,
+            Self::Random => wasmtime_runtime::PoolingAllocationStrategy::Random,
+        }
+    }
+}
+
+/// Represents the module instance allocation strategy to use.
+#[derive(Clone)]
+pub enum InstanceAllocationStrategy {
+    /// The on-demand instance allocation strategy.
+    ///
+    /// Resources related to a module instance are allocated at instantiation time and
+    /// immediately deallocated when the `Store` referencing the instance is dropped.
+    ///
+    /// This is the default allocation strategy for Wasmtime.
+    OnDemand,
+    /// The pooling instance allocation strategy.
+    ///
+    /// A pool of resources is created in advance and module instantiation reuses resources
+    /// from the pool. Resources are returned to the pool when the `Store` referencing the instance
+    /// is dropped.
+    Pooling {
+        /// The allocation strategy to use.
+        strategy: PoolingAllocationStrategy,
+        /// The module limits to use.
+        module_limits: ModuleLimits,
+        /// The instance limits to use.
+        instance_limits: InstanceLimits,
+    },
+}
+
+impl InstanceAllocationStrategy {
+    /// The default pooling instance allocation strategy.
+    pub fn pooling() -> Self {
+        Self::Pooling {
+            strategy: PoolingAllocationStrategy::default(),
+            module_limits: ModuleLimits::default(),
+            instance_limits: InstanceLimits::default(),
+        }
+    }
+}
+
+impl Default for InstanceAllocationStrategy {
+    fn default() -> Self {
+        Self::OnDemand
+    }
+}
 
 /// Global configuration options used to create an [`Engine`](crate::Engine)
 /// and customize its behavior.
@@ -29,13 +280,18 @@ pub struct Config {
     #[cfg(feature = "cache")]
     pub(crate) cache_config: CacheConfig,
     pub(crate) profiler: Arc<dyn ProfilingAgent>,
-    pub(crate) memory_creator: Option<MemoryCreatorProxy>,
+    pub(crate) instance_allocator: Option<Arc<dyn InstanceAllocator>>,
+    // The default instance allocator is used for instantiating host objects
+    // and for module instantiation when `instance_allocator` is None
+    pub(crate) default_instance_allocator: OnDemandInstanceAllocator,
     pub(crate) max_wasm_stack: usize,
     pub(crate) features: WasmFeatures,
     pub(crate) wasm_backtrace_details_env_used: bool,
     pub(crate) max_instances: usize,
     pub(crate) max_tables: usize,
     pub(crate) max_memories: usize,
+    #[cfg(feature = "async")]
+    pub(crate) async_stack_size: usize,
 }
 
 impl Config {
@@ -73,7 +329,8 @@ impl Config {
             #[cfg(feature = "cache")]
             cache_config: CacheConfig::new_cache_disabled(),
             profiler: Arc::new(NullProfilerAgent),
-            memory_creator: None,
+            instance_allocator: None,
+            default_instance_allocator: OnDemandInstanceAllocator::new(None),
             max_wasm_stack: 1 << 20,
             wasm_backtrace_details_env_used: false,
             features: WasmFeatures {
@@ -85,6 +342,8 @@ impl Config {
             max_instances: 10_000,
             max_tables: 10_000,
             max_memories: 10_000,
+            #[cfg(feature = "async")]
+            async_stack_size: 2 << 20,
         };
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
         return ret;
@@ -159,23 +418,75 @@ impl Config {
         self
     }
 
-    /// Configures the maximum amount of native stack space available to
+    /// Configures the maximum amount of stack space available for
     /// executing WebAssembly code.
     ///
-    /// WebAssembly code currently executes on the native call stack for its own
-    /// call frames. WebAssembly, however, also has well-defined semantics on
-    /// stack overflow. This is intended to be a knob which can help configure
-    /// how much native stack space a wasm module is allowed to consume. Note
-    /// that the number here is not super-precise, but rather wasm will take at
-    /// most "pretty close to this much" stack space.
+    /// WebAssembly has well-defined semantics on stack overflow. This is
+    /// intended to be a knob which can help configure how much stack space
+    /// wasm execution is allowed to consume. Note that the number here is not
+    /// super-precise, but rather wasm will take at most "pretty close to this
+    /// much" stack space.
     ///
     /// If a wasm call (or series of nested wasm calls) take more stack space
     /// than the `size` specified then a stack overflow trap will be raised.
     ///
-    /// By default this option is 1 MB.
-    pub fn max_wasm_stack(&mut self, size: usize) -> &mut Self {
+    /// When the `async` feature is enabled, this value cannot exceed the
+    /// `async_stack_size` option. Be careful not to set this value too close
+    /// to `async_stack_size` as doing so may limit how much stack space
+    /// is available for host functions. Unlike wasm functions that trap
+    /// on stack overflow, a host function that overflows the stack will
+    /// abort the process.
+    ///
+    /// `max_wasm_stack` must be set prior to setting an instance allocation
+    /// strategy.
+    ///
+    /// By default this option is 1 MiB.
+    pub fn max_wasm_stack(&mut self, size: usize) -> Result<&mut Self> {
+        #[cfg(feature = "async")]
+        if size > self.async_stack_size {
+            bail!("wasm stack size cannot exceed the async stack size");
+        }
+
+        if size == 0 {
+            bail!("wasm stack size cannot be zero");
+        }
+
+        if self.instance_allocator.is_some() {
+            bail!(
+                "wasm stack size cannot be modified after setting an instance allocation strategy"
+            );
+        }
+
         self.max_wasm_stack = size;
-        self
+        Ok(self)
+    }
+
+    /// Configures the size of the stacks used for asynchronous execution.
+    ///
+    /// This setting configures the size of the stacks that are allocated for
+    /// asynchronous execution. The value cannot be less than `max_wasm_stack`.
+    ///
+    /// The amount of stack space guaranteed for host functions is
+    /// `async_stack_size - max_wasm_stack`, so take care not to set these two values
+    /// close to one another; doing so may cause host functions to overflow the
+    /// stack and abort the process.
+    ///
+    /// `async_stack_size` must be set prior to setting an instance allocation
+    /// strategy.
+    ///
+    /// By default this option is 2 MiB.
+    #[cfg(feature = "async")]
+    pub fn async_stack_size(&mut self, size: usize) -> Result<&mut Self> {
+        if size < self.max_wasm_stack {
+            bail!("async stack size cannot be less than the maximum wasm stack size");
+        }
+        if self.instance_allocator.is_some() {
+            bail!(
+                "async stack size cannot be modified after setting an instance allocation strategy"
+            );
+        }
+        self.async_stack_size = size;
+        Ok(self)
     }
 
     /// Configures whether the WebAssembly threads proposal will be enabled for
@@ -504,10 +815,49 @@ impl Config {
         Ok(self)
     }
 
-    /// Sets a custom memory creator
+    /// Sets a custom memory creator.
+    ///
+    /// Custom memory creators are used when creating host `Memory` objects or when
+    /// creating instance linear memories for the on-demand instance allocation strategy.
     pub fn with_host_memory(&mut self, mem_creator: Arc<dyn MemoryCreator>) -> &mut Self {
-        self.memory_creator = Some(MemoryCreatorProxy { mem_creator });
+        self.default_instance_allocator =
+            OnDemandInstanceAllocator::new(Some(Arc::new(MemoryCreatorProxy(mem_creator))));
         self
+    }
+
+    /// Sets the instance allocation strategy to use.
+    ///
+    /// When using the pooling instance allocation strategy, all linear memories will be created as "static".
+    ///
+    /// This means the [`Config::static_memory_maximum_size`] and [`Config::static_memory_guard_size`] options
+    /// will be ignored in favor of [`InstanceLimits::memory_reservation_size`] when the pooling instance
+    /// allocation strategy is used.
+    pub fn with_allocation_strategy(
+        &mut self,
+        strategy: InstanceAllocationStrategy,
+    ) -> Result<&mut Self> {
+        self.instance_allocator = match strategy {
+            InstanceAllocationStrategy::OnDemand => None,
+            InstanceAllocationStrategy::Pooling {
+                strategy,
+                module_limits,
+                instance_limits,
+            } => {
+                #[cfg(feature = "async")]
+                let stack_size = self.async_stack_size;
+
+                #[cfg(not(feature = "async"))]
+                let stack_size = 0;
+
+                Some(Arc::new(PoolingInstanceAllocator::new(
+                    strategy.into(),
+                    module_limits.into(),
+                    instance_limits.into(),
+                    stack_size,
+                )?))
+            }
+        };
+        Ok(self)
     }
 
     /// Configures the maximum size, in bytes, where a linear memory is
@@ -726,7 +1076,15 @@ impl Config {
 
     pub(crate) fn build_compiler(&self) -> Compiler {
         let isa = self.target_isa();
-        Compiler::new(isa, self.strategy, self.tunables.clone(), self.features)
+        let mut tunables = self.tunables.clone();
+        self.instance_allocator().adjust_tunables(&mut tunables);
+        Compiler::new(isa, self.strategy, tunables, self.features)
+    }
+
+    pub(crate) fn instance_allocator(&self) -> &dyn InstanceAllocator {
+        self.instance_allocator
+            .as_deref()
+            .unwrap_or(&self.default_instance_allocator)
     }
 }
 

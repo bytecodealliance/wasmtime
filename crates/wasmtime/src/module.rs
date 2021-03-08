@@ -307,15 +307,22 @@ impl Module {
     /// # }
     /// ```
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
-        #[cfg(feature = "cache")]
-        let (main_module, artifacts, types) =
-            ModuleCacheEntry::new("wasmtime", engine.cache_config())
+        const USE_PAGED_MEM_INIT: bool = cfg!(all(feature = "uffd", target_os = "linux"));
+
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "cache")] {
+                let (main_module, artifacts, types) = ModuleCacheEntry::new(
+                    "wasmtime",
+                    engine.cache_config(),
+                )
                 .get_data((engine.compiler(), binary), |(compiler, binary)| {
-                    CompilationArtifacts::build(compiler, binary)
+                    CompilationArtifacts::build(compiler, binary, USE_PAGED_MEM_INIT)
                 })?;
-        #[cfg(not(feature = "cache"))]
-        let (main_module, artifacts, types) =
-            CompilationArtifacts::build(engine.compiler(), binary)?;
+            } else {
+                let (main_module, artifacts, types) =
+                    CompilationArtifacts::build(engine.compiler(), binary, USE_PAGED_MEM_INIT)?;
+            }
+        };
 
         let mut modules = CompiledModule::from_artifacts_list(
             artifacts,
@@ -323,6 +330,12 @@ impl Module {
             &*engine.config().profiler,
         )?;
         let module = modules.remove(main_module);
+
+        // Validate the module can be used with the current allocator
+        engine
+            .config()
+            .instance_allocator()
+            .validate(module.module())?;
 
         Ok(Module {
             inner: Arc::new(ModuleInner {

@@ -3,6 +3,7 @@ use std::cell::Cell;
 use std::io;
 use std::ptr;
 use winapi::shared::minwindef::*;
+use winapi::shared::winerror::ERROR_NOT_SUPPORTED;
 use winapi::um::fibersapi::*;
 use winapi::um::winbase::*;
 
@@ -40,7 +41,7 @@ where
 }
 
 impl Fiber {
-    pub fn new<F, A, B, C>(stack_size: usize, func: F) -> io::Result<Fiber>
+    pub fn new<F, A, B, C>(stack_size: usize, func: F) -> io::Result<Self>
     where
         F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
     {
@@ -61,9 +62,16 @@ impl Fiber {
                 drop(Box::from_raw(state.initial_closure.get().cast::<F>()));
                 Err(io::Error::last_os_error())
             } else {
-                Ok(Fiber { fiber, state })
+                Ok(Self { fiber, state })
             }
         }
+    }
+
+    pub fn new_with_stack<F, A, B, C>(_top_of_stack: *mut u8, _func: F) -> io::Result<Self>
+    where
+        F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
+    {
+        Err(io::Error::from_raw_os_error(ERROR_NOT_SUPPORTED as i32))
     }
 
     pub(crate) fn resume<A, B, C>(&self, result: &Cell<RunResult<A, B, C>>) {

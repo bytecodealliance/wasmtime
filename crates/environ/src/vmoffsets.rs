@@ -50,6 +50,7 @@ fn align(offset: u32, width: u32) -> u32 {
 
 /// This class computes offsets to fields within `VMContext` and other
 /// related structs that JIT code accesses directly.
+#[derive(Debug, Clone, Copy)]
 pub struct VMOffsets {
     /// The size in bytes of a pointer on the target.
     pub pointer_size: u8,

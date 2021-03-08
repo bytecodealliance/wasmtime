@@ -750,7 +750,7 @@ impl VMContext {
     }
 }
 
-///
+/// Trampoline function pointer type.
 pub type VMTrampoline = unsafe extern "C" fn(
     *mut VMContext,        // callee vmctx
     *mut VMContext,        // caller vmctx

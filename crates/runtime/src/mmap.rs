@@ -1,6 +1,7 @@
 //! Low-level abstraction for allocating and managing zero-filled pages
 //! of memory.
 
+use anyhow::{bail, Result};
 use more_asserts::assert_le;
 use more_asserts::assert_lt;
 use std::io;
@@ -38,7 +39,7 @@ impl Mmap {
     }
 
     /// Create a new `Mmap` pointing to at least `size` bytes of page-aligned accessible memory.
-    pub fn with_at_least(size: usize) -> Result<Self, String> {
+    pub fn with_at_least(size: usize) -> Result<Self> {
         let page_size = region::page::size();
         let rounded_size = round_up_to_page_size(size, page_size);
         Self::accessible_reserved(rounded_size, rounded_size)
@@ -48,10 +49,7 @@ impl Mmap {
     /// within a reserved mapping of `mapping_size` bytes. `accessible_size` and `mapping_size`
     /// must be native page-size multiples.
     #[cfg(not(target_os = "windows"))]
-    pub fn accessible_reserved(
-        accessible_size: usize,
-        mapping_size: usize,
-    ) -> Result<Self, String> {
+    pub fn accessible_reserved(accessible_size: usize, mapping_size: usize) -> Result<Self> {
         let page_size = region::page::size();
         assert_le!(accessible_size, mapping_size);
         assert_eq!(mapping_size & (page_size - 1), 0);
@@ -76,7 +74,7 @@ impl Mmap {
                 )
             };
             if ptr as isize == -1_isize {
-                return Err(io::Error::last_os_error().to_string());
+                bail!("mmap failed: {}", io::Error::last_os_error());
             }
 
             Self {
@@ -96,7 +94,7 @@ impl Mmap {
                 )
             };
             if ptr as isize == -1_isize {
-                return Err(io::Error::last_os_error().to_string());
+                bail!("mmap failed: {}", io::Error::last_os_error());
             }
 
             let mut result = Self {
@@ -117,12 +115,13 @@ impl Mmap {
     /// within a reserved mapping of `mapping_size` bytes. `accessible_size` and `mapping_size`
     /// must be native page-size multiples.
     #[cfg(target_os = "windows")]
-    pub fn accessible_reserved(
-        accessible_size: usize,
-        mapping_size: usize,
-    ) -> Result<Self, String> {
+    pub fn accessible_reserved(accessible_size: usize, mapping_size: usize) -> Result<Self> {
         use winapi::um::memoryapi::VirtualAlloc;
         use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_NOACCESS, PAGE_READWRITE};
+
+        if mapping_size == 0 {
+            return Ok(Self::new());
+        }
 
         let page_size = region::page::size();
         assert_le!(accessible_size, mapping_size);
@@ -140,7 +139,7 @@ impl Mmap {
                 )
             };
             if ptr.is_null() {
-                return Err(io::Error::last_os_error().to_string());
+                bail!("VirtualAlloc failed: {}", io::Error::last_os_error());
             }
 
             Self {
@@ -152,7 +151,7 @@ impl Mmap {
             let ptr =
                 unsafe { VirtualAlloc(ptr::null_mut(), mapping_size, MEM_RESERVE, PAGE_NOACCESS) };
             if ptr.is_null() {
-                return Err(io::Error::last_os_error().to_string());
+                bail!("VirtualAlloc failed: {}", io::Error::last_os_error());
             }
 
             let mut result = Self {
@@ -173,7 +172,7 @@ impl Mmap {
     /// `start` and `len` must be native page-size multiples and describe a range within
     /// `self`'s reserved memory.
     #[cfg(not(target_os = "windows"))]
-    pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<(), String> {
+    pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<()> {
         let page_size = region::page::size();
         assert_eq!(start & (page_size - 1), 0);
         assert_eq!(len & (page_size - 1), 0);
@@ -182,15 +181,18 @@ impl Mmap {
 
         // Commit the accessible size.
         let ptr = self.ptr as *const u8;
-        unsafe { region::protect(ptr.add(start), len, region::Protection::READ_WRITE) }
-            .map_err(|e| e.to_string())
+        unsafe {
+            region::protect(ptr.add(start), len, region::Protection::READ_WRITE)?;
+        }
+
+        Ok(())
     }
 
     /// Make the memory starting at `start` and extending for `len` bytes accessible.
     /// `start` and `len` must be native page-size multiples and describe a range within
     /// `self`'s reserved memory.
     #[cfg(target_os = "windows")]
-    pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<(), String> {
+    pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<()> {
         use winapi::ctypes::c_void;
         use winapi::um::memoryapi::VirtualAlloc;
         use winapi::um::winnt::{MEM_COMMIT, PAGE_READWRITE};
@@ -212,7 +214,7 @@ impl Mmap {
         }
         .is_null()
         {
-            return Err(io::Error::last_os_error().to_string());
+            bail!("VirtualAlloc failed: {}", io::Error::last_os_error());
         }
 
         Ok(())
@@ -234,7 +236,7 @@ impl Mmap {
     }
 
     /// Return the allocated memory as a mutable pointer to u8.
-    pub fn as_mut_ptr(&mut self) -> *mut u8 {
+    pub fn as_mut_ptr(&self) -> *mut u8 {
         self.ptr as *mut u8
     }
 
@@ -246,6 +248,11 @@ impl Mmap {
     /// Return whether any memory has been allocated.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    #[allow(dead_code)]
+    pub(crate) unsafe fn from_raw(ptr: usize, len: usize) -> Self {
+        Self { ptr, len }
     }
 }
 

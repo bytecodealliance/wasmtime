@@ -1,6 +1,6 @@
 use crate::module::{
-    Initializer, InstanceSignature, MemoryPlan, Module, ModuleSignature, ModuleType, ModuleUpvar,
-    TableElements, TablePlan, TypeTables,
+    Initializer, InstanceSignature, MemoryInitialization, MemoryInitializer, MemoryPlan, Module,
+    ModuleSignature, ModuleType, ModuleUpvar, TableInitializer, TablePlan, TypeTables,
 };
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
@@ -13,7 +13,6 @@ use cranelift_wasm::{
     ModuleIndex, ModuleTypeIndex, SignatureIndex, Table, TableIndex, TargetEnvironment, TypeIndex,
     WasmError, WasmFuncType, WasmResult,
 };
-use serde::{Deserialize, Serialize};
 use std::collections::{hash_map::Entry, HashMap};
 use std::convert::TryFrom;
 use std::mem;
@@ -59,9 +58,6 @@ pub struct ModuleTranslation<'data> {
 
     /// References to the function bodies.
     pub function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
-
-    /// References to the data initializers.
-    pub data_initializers: Vec<DataInitializer<'data>>,
 
     /// DWARF debug information, if enabled, parsed from the module.
     pub debuginfo: DebugInfoData<'data>,
@@ -684,7 +680,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     fn reserve_table_elements(&mut self, num: u32) -> WasmResult<()> {
         self.result
             .module
-            .table_elements
+            .table_initializers
             .reserve_exact(usize::try_from(num).unwrap());
         Ok(())
     }
@@ -696,12 +692,15 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         offset: usize,
         elements: Box<[FuncIndex]>,
     ) -> WasmResult<()> {
-        self.result.module.table_elements.push(TableElements {
-            table_index,
-            base,
-            offset,
-            elements,
-        });
+        self.result
+            .module
+            .table_initializers
+            .push(TableInitializer {
+                table_index,
+                base,
+                offset,
+                elements,
+            });
         Ok(())
     }
 
@@ -710,11 +709,13 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         elem_index: ElemIndex,
         segments: Box<[FuncIndex]>,
     ) -> WasmResult<()> {
+        let index = self.result.module.passive_elements.len();
+        self.result.module.passive_elements.push(segments);
         let old = self
             .result
             .module
-            .passive_elements
-            .insert(elem_index, segments);
+            .passive_elements_map
+            .insert(elem_index, index);
         debug_assert!(
             old.is_none(),
             "should never get duplicate element indices, that would be a bug in `cranelift_wasm`'s \
@@ -758,9 +759,12 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn reserve_data_initializers(&mut self, num: u32) -> WasmResult<()> {
-        self.result
-            .data_initializers
-            .reserve_exact(usize::try_from(num).unwrap());
+        match &mut self.result.module.memory_initialization {
+            MemoryInitialization::Segmented(initializers) => {
+                initializers.reserve_exact(usize::try_from(num).unwrap())
+            }
+            _ => unreachable!(),
+        }
         Ok(())
     }
 
@@ -771,28 +775,35 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         offset: usize,
         data: &'data [u8],
     ) -> WasmResult<()> {
-        self.result.data_initializers.push(DataInitializer {
-            location: DataInitializerLocation {
-                memory_index,
-                base,
-                offset,
-            },
-            data,
-        });
+        match &mut self.result.module.memory_initialization {
+            MemoryInitialization::Segmented(initializers) => {
+                initializers.push(MemoryInitializer {
+                    memory_index,
+                    base,
+                    offset,
+                    data: data.into(),
+                });
+            }
+            _ => unreachable!(),
+        }
         Ok(())
     }
 
-    fn reserve_passive_data(&mut self, count: u32) -> WasmResult<()> {
-        self.result.module.passive_data.reserve(count as usize);
+    fn reserve_passive_data(&mut self, _count: u32) -> WasmResult<()> {
+        // Note: the count passed in here is the *total* segment count
+        // There is no way to reserve for just the passive segments as they are discovered when iterating the data section entries
+        // Given that the total segment count might be much larger than the passive count, do not reserve
         Ok(())
     }
 
     fn declare_passive_data(&mut self, data_index: DataIndex, data: &'data [u8]) -> WasmResult<()> {
+        let index = self.result.module.passive_data.len();
+        self.result.module.passive_data.push(Arc::from(data));
         let old = self
             .result
             .module
-            .passive_data
-            .insert(data_index, Arc::from(data));
+            .passive_data_map
+            .insert(data_index, index);
         debug_assert!(
             old.is_none(),
             "a module can't have duplicate indices, this would be a cranelift-wasm bug"
@@ -1064,27 +1075,4 @@ pub fn translate_signature(mut sig: ir::Signature, pointer_type: ir::Type) -> ir
     // Prepend the caller vmctx argument.
     sig.params.insert(1, AbiParam::new(pointer_type));
     sig
-}
-
-/// A memory index and offset within that memory where a data initialization
-/// should is to be performed.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct DataInitializerLocation {
-    /// The index of the memory to initialize.
-    pub memory_index: MemoryIndex,
-
-    /// Optionally a globalvar base to initialize at.
-    pub base: Option<GlobalIndex>,
-
-    /// A constant offset to initialize at.
-    pub offset: usize,
-}
-
-/// A data initializer for linear memory.
-pub struct DataInitializer<'data> {
-    /// The location where the initialization is to be performed.
-    pub location: DataInitializerLocation,
-
-    /// The initialization data.
-    pub data: &'data [u8],
 }

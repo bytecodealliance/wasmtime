@@ -18,9 +18,18 @@ use std::task::{Context, Poll};
 use wasmtime_environ::wasm;
 use wasmtime_jit::{CompiledModule, ModuleCode, TypeTables};
 use wasmtime_runtime::{
-    InstanceHandle, RuntimeMemoryCreator, SignalHandler, StackMapRegistry, TrapInfo, VMContext,
+    InstanceAllocator, InstanceHandle, SignalHandler, StackMapRegistry, TrapInfo, VMContext,
     VMExternRef, VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
 };
+
+/// Used to associate instances with the store.
+///
+/// This is needed to track if the instance was allocated expliclty with the default
+/// instance allocator.
+struct StoreInstance {
+    handle: InstanceHandle,
+    use_default_allocator: bool,
+}
 
 /// A `Store` is a collection of WebAssembly instances and host-defined items.
 ///
@@ -63,7 +72,7 @@ pub(crate) struct StoreInner {
     engine: Engine,
     interrupts: Arc<VMInterrupts>,
     signatures: RefCell<SignatureRegistry>,
-    instances: RefCell<Vec<InstanceHandle>>,
+    instances: RefCell<Vec<StoreInstance>>,
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
     externref_activations_table: VMExternRefActivationsTable,
     stack_map_registry: StackMapRegistry,
@@ -254,15 +263,6 @@ impl Store {
         &self.inner.engine
     }
 
-    /// Returns an optional reference to a ['RuntimeMemoryCreator']
-    pub(crate) fn memory_creator(&self) -> Option<&dyn RuntimeMemoryCreator> {
-        self.engine()
-            .config()
-            .memory_creator
-            .as_ref()
-            .map(|x| x as _)
-    }
-
     pub(crate) fn signatures(&self) -> &RefCell<SignatureRegistry> {
         &self.inner.signatures
     }
@@ -383,8 +383,15 @@ impl Store {
         Ok(())
     }
 
-    pub(crate) unsafe fn add_instance(&self, handle: InstanceHandle) -> StoreInstanceHandle {
-        self.inner.instances.borrow_mut().push(handle.clone());
+    pub(crate) unsafe fn add_instance(
+        &self,
+        handle: InstanceHandle,
+        use_default_allocator: bool,
+    ) -> StoreInstanceHandle {
+        self.inner.instances.borrow_mut().push(StoreInstance {
+            handle: handle.clone(),
+            use_default_allocator,
+        });
         StoreInstanceHandle {
             store: self.clone(),
             handle,
@@ -397,7 +404,7 @@ impl Store {
             .instances
             .borrow()
             .iter()
-            .any(|i| i.vmctx_ptr() == handle.vmctx_ptr()));
+            .any(|i| i.handle.vmctx_ptr() == handle.vmctx_ptr()));
         StoreInstanceHandle {
             store: self.clone(),
             handle,
@@ -752,12 +759,14 @@ impl Store {
     /// that the various comments are illuminating as to what's going on here.
     #[cfg(feature = "async")]
     pub(crate) async fn on_fiber<R>(&self, func: impl FnOnce() -> R) -> Result<R, Trap> {
-        debug_assert!(self.is_async());
+        let config = self.inner.engine.config();
 
-        // TODO: allocation of a fiber should be much more abstract where we
-        // shouldn't be allocating huge stacks on every async wasm function call.
+        debug_assert!(self.is_async());
+        debug_assert!(config.async_stack_size > 0);
+
+        type SuspendType = wasmtime_fiber::Suspend<Result<(), Trap>, (), Result<(), Trap>>;
         let mut slot = None;
-        let fiber = wasmtime_fiber::Fiber::new(10 * 1024 * 1024, |keep_going, suspend| {
+        let func = |keep_going, suspend: &SuspendType| {
             // First check and see if we were interrupted/dropped, and only
             // continue if we haven't been.
             keep_going?;
@@ -775,18 +784,46 @@ impl Store {
 
             slot = Some(func());
             Ok(())
-        })
-        .map_err(|e| Trap::from(anyhow::Error::from(e)))?;
+        };
+
+        let (fiber, stack) = match config.instance_allocator().allocate_fiber_stack() {
+            Ok(stack) => {
+                // Use the returned stack and deallocate it when finished
+                (
+                    unsafe {
+                        wasmtime_fiber::Fiber::new_with_stack(stack, func)
+                            .map_err(|e| Trap::from(anyhow::Error::from(e)))?
+                    },
+                    stack,
+                )
+            }
+            Err(wasmtime_runtime::FiberStackError::NotSupported) => {
+                // The allocator doesn't support custom fiber stacks for the current platform
+                // Request that the fiber itself allocate the stack
+                (
+                    wasmtime_fiber::Fiber::new(config.async_stack_size, func)
+                        .map_err(|e| Trap::from(anyhow::Error::from(e)))?,
+                    std::ptr::null_mut(),
+                )
+            }
+            Err(e) => return Err(Trap::from(anyhow::Error::from(e))),
+        };
 
         // Once we have the fiber representing our synchronous computation, we
         // wrap that in a custom future implementation which does the
         // translation from the future protocol to our fiber API.
-        FiberFuture { fiber, store: self }.await?;
+        FiberFuture {
+            fiber,
+            store: self,
+            stack,
+        }
+        .await?;
         return Ok(slot.unwrap());
 
         struct FiberFuture<'a> {
             fiber: wasmtime_fiber::Fiber<'a, Result<(), Trap>, (), Result<(), Trap>>,
             store: &'a Store,
+            stack: *mut u8,
         }
 
         impl Future for FiberFuture<'_> {
@@ -843,15 +880,23 @@ impl Store {
         // completion.
         impl Drop for FiberFuture<'_> {
             fn drop(&mut self) {
-                if self.fiber.done() {
-                    return;
+                if !self.fiber.done() {
+                    let result = self.fiber.resume(Err(Trap::new("future dropped")));
+                    // This resumption with an error should always complete the
+                    // fiber. While it's technically possible for host code to catch
+                    // the trap and re-resume, we'd ideally like to signal that to
+                    // callers that they shouldn't be doing that.
+                    debug_assert!(result.is_ok());
                 }
-                let result = self.fiber.resume(Err(Trap::new("future dropped")));
-                // This resumption with an error should always complete the
-                // fiber. While it's technically possible for host code to catch
-                // the trap and re-resume, we'd ideally like to signal that to
-                // callers that they shouldn't be doing that.
-                debug_assert!(result.is_ok());
+                if !self.stack.is_null() {
+                    unsafe {
+                        self.store
+                            .engine()
+                            .config()
+                            .instance_allocator()
+                            .deallocate_fiber_stack(self.stack)
+                    };
+                }
             }
         }
     }
@@ -974,9 +1019,17 @@ impl fmt::Debug for Store {
 
 impl Drop for StoreInner {
     fn drop(&mut self) {
-        for instance in self.instances.get_mut().iter() {
+        let allocator = self.engine.config().instance_allocator();
+        for instance in self.instances.borrow().iter() {
             unsafe {
-                instance.dealloc();
+                if instance.use_default_allocator {
+                    self.engine
+                        .config()
+                        .default_instance_allocator
+                        .deallocate(&instance.handle);
+                } else {
+                    allocator.deallocate(&instance.handle);
+                }
             }
         }
     }

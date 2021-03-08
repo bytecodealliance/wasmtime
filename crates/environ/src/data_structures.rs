@@ -20,7 +20,7 @@ pub mod isa {
 }
 
 pub mod entity {
-    pub use cranelift_entity::{packed_option, BoxedSlice, EntityRef, PrimaryMap};
+    pub use cranelift_entity::{packed_option, BoxedSlice, EntityRef, EntitySet, PrimaryMap};
 }
 
 pub mod wasm {

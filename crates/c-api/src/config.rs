@@ -61,8 +61,8 @@ pub extern "C" fn wasmtime_config_consume_fuel_set(c: &mut wasm_config_t, enable
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_config_max_wasm_stack_set(c: &mut wasm_config_t, size: usize) {
-    c.config.max_wasm_stack(size);
+pub extern "C" fn wasmtime_config_max_wasm_stack_set(c: &mut wasm_config_t, size: usize) -> bool {
+    c.config.max_wasm_stack(size).is_ok()
 }
 
 #[no_mangle]

@@ -25,7 +25,7 @@ struct CodeMemoryEntry {
 
 impl CodeMemoryEntry {
     fn with_capacity(cap: usize) -> Result<Self, String> {
-        let mmap = ManuallyDrop::new(Mmap::with_at_least(cap)?);
+        let mmap = ManuallyDrop::new(Mmap::with_at_least(cap).map_err(|e| e.to_string())?);
         let registry = ManuallyDrop::new(UnwindRegistry::new(mmap.as_ptr() as usize));
         Ok(Self {
             mmap,

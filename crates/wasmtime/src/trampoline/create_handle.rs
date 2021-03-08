@@ -9,15 +9,15 @@ use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::Module;
 use wasmtime_runtime::{
-    Imports, InstanceHandle, StackMapRegistry, VMExternRefActivationsTable, VMFunctionBody,
-    VMFunctionImport, VMSharedSignatureIndex,
+    Imports, InstanceAllocationRequest, InstanceAllocator, StackMapRegistry,
+    VMExternRefActivationsTable, VMFunctionBody, VMFunctionImport, VMSharedSignatureIndex,
 };
 
 pub(crate) fn create_handle(
     module: Module,
     store: &Store,
     finished_functions: PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-    state: Box<dyn Any>,
+    host_state: Box<dyn Any>,
     func_imports: &[VMFunctionImport],
     shared_signature_id: Option<VMSharedSignatureIndex>,
 ) -> Result<StoreInstanceHandle> {
@@ -26,17 +26,26 @@ pub(crate) fn create_handle(
     let module = Arc::new(module);
 
     unsafe {
-        let handle = InstanceHandle::new(
-            module,
-            &finished_functions,
-            imports,
-            store.memory_creator(),
-            &|_| shared_signature_id.unwrap(),
-            state,
-            store.interrupts(),
-            store.externref_activations_table() as *const VMExternRefActivationsTable as *mut _,
-            store.stack_map_registry() as *const StackMapRegistry as *mut _,
-        )?;
-        Ok(store.add_instance(handle))
+        // Use the default allocator when creating handles associated with host objects
+        // The configured instance allocator should only be used when creating module instances
+        // as we don't want host objects to count towards instance limits.
+        let handle = store
+            .engine()
+            .config()
+            .default_instance_allocator
+            .allocate(InstanceAllocationRequest {
+                module: module.clone(),
+                finished_functions: &finished_functions,
+                imports,
+                lookup_shared_signature: &|_| shared_signature_id.unwrap(),
+                host_state,
+                interrupts: store.interrupts(),
+                externref_activations_table: store.externref_activations_table()
+                    as *const VMExternRefActivationsTable
+                    as *mut _,
+                stack_map_registry: store.stack_map_registry() as *const StackMapRegistry as *mut _,
+            })?;
+
+        Ok(store.add_instance(handle, true))
     }
 }

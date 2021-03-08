@@ -37,9 +37,13 @@ pub mod libcalls;
 pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
-pub use crate::instance::{InstanceHandle, InstantiationError, LinkError, RuntimeInstance};
+pub use crate::instance::{
+    FiberStackError, InstanceAllocationRequest, InstanceAllocator, InstanceHandle, InstanceLimits,
+    InstantiationError, LinkError, ModuleLimits, OnDemandInstanceAllocator,
+    PoolingAllocationStrategy, PoolingInstanceAllocator, RuntimeInstance,
+};
 pub use crate::jit_int::GdbJitImageRegistration;
-pub use crate::memory::{RuntimeLinearMemory, RuntimeMemoryCreator};
+pub use crate::memory::{Memory, RuntimeLinearMemory, RuntimeMemoryCreator};
 pub use crate::mmap::Mmap;
 pub use crate::table::{Table, TableElement};
 pub use crate::traphandlers::{

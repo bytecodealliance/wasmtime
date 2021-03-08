@@ -18,6 +18,7 @@ mod module;
 mod module_linking;
 mod module_serialize;
 mod name;
+mod pooling_allocator;
 mod stack_overflow;
 mod table;
 mod traps;
