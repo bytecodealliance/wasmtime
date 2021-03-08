@@ -5,6 +5,10 @@ fn decommit(addr: *mut u8, len: usize, protect: bool) -> Result<()> {
         return Ok(());
     }
 
+    // By creating a new mapping at the same location, this will discard the
+    // mapping for the pages in the given range.
+    // The new mapping will be to the CoW zero page, so this effectively
+    // zeroes the pages.
     if unsafe {
         libc::mmap(
             addr as _,

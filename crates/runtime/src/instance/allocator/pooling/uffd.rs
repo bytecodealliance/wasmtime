@@ -45,7 +45,11 @@ fn decommit(addr: *mut u8, len: usize) -> Result<()> {
     }
 
     unsafe {
-        // On Linux, this is enough to cause the kernel to initialize the pages to 0 on next access
+        // On Linux, this tells the kernel to discard the backing of the pages in the range.
+        // If the discarded pages are part of a uffd region, then the next access will fault
+        // and the user fault handler will receive the event.
+        // If the pages are not monitored by uffd, the kernel will zero the page on next access,
+        // as if it were mmap'd for the first time.
         if libc::madvise(addr as _, len, libc::MADV_DONTNEED) != 0 {
             bail!(
                 "madvise failed to decommit: {}",
@@ -93,8 +97,6 @@ pub fn decommit_stack_pages(addr: *mut u8, len: usize) -> Result<()> {
 /// With uffd, however, the potentially accessible pages of the each linear memory are made `READ_WRITE` and
 /// the page fault handler will detect an out of bounds access and treat the page, temporarily,
 /// as a guard page.
-///
-/// This me
 pub(super) fn initialize_memory_pool(pool: &MemoryPool) -> Result<()> {
     if pool.memory_size == 0 || pool.max_wasm_pages == 0 {
         return Ok(());

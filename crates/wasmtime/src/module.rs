@@ -307,6 +307,8 @@ impl Module {
     /// # }
     /// ```
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
+        const USE_PAGED_MEM_INIT: bool = cfg!(all(feature = "uffd", target_os = "linux"));
+
         cfg_if::cfg_if! {
             if #[cfg(feature = "cache")] {
                 let (main_module, artifacts, types) = ModuleCacheEntry::new(
@@ -314,27 +316,11 @@ impl Module {
                     engine.cache_config(),
                 )
                 .get_data((engine.compiler(), binary), |(compiler, binary)| {
-                    cfg_if::cfg_if! {
-                        if #[cfg(all(feature = "uffd", target_os = "linux"))] {
-                            let use_paged_mem_init = true;
-                        } else {
-                            let use_paged_mem_init = false;
-                        }
-                    };
-
-                    CompilationArtifacts::build(compiler, binary, use_paged_mem_init)
+                    CompilationArtifacts::build(compiler, binary, USE_PAGED_MEM_INIT)
                 })?;
             } else {
-                cfg_if::cfg_if! {
-                    if #[cfg(all(feature = "uffd", target_os = "linux"))] {
-                        let use_paged_mem_init = true;
-                    } else {
-                        let use_paged_mem_init = false;
-                    }
-                };
-
                 let (main_module, artifacts, types) =
-                    CompilationArtifacts::build(engine.compiler(), binary, use_paged_mem_init)?;
+                    CompilationArtifacts::build(engine.compiler(), binary, USE_PAGED_MEM_INIT)?;
             }
         };
 

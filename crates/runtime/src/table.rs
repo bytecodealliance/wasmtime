@@ -372,11 +372,13 @@ impl Table {
         }
     }
 
-    fn set_raw(ty: TableElementType, e: &mut *mut u8, val: TableElement) {
+    fn set_raw(ty: TableElementType, elem: &mut *mut u8, val: TableElement) {
         unsafe {
-            // Drop the existing element
-            let _ = TableElement::from_raw(ty, *e);
-            *e = val.into_raw();
+            let old = *elem;
+            *elem = val.into_raw();
+
+            // Drop the old element
+            let _ = TableElement::from_raw(ty, old);
         }
     }
 
