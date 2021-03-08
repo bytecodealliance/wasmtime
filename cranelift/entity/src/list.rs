@@ -307,6 +307,24 @@ impl<T: EntityRef + ReservedValue> EntityList<T> {
         self.as_mut_slice(pool).get_mut(index)
     }
 
+    /// Create a deep clone of the list, which does not alias the original list.
+    pub fn deep_clone(&self, pool: &mut ListPool<T>) -> Self {
+        match pool.len_of(self) {
+            None => return Self::new(),
+            Some(len) => {
+                let src = self.index as usize;
+                let block = pool.alloc(sclass_for_length(len));
+                pool.data[block] = T::new(len);
+                pool.data.copy_within(src..src + len, block + 1);
+
+                Self {
+                    index: (block + 1) as u32,
+                    unused: PhantomData,
+                }
+            }
+        }
+    }
+
     /// Removes all elements from the list.
     ///
     /// The memory used by the list is put back in the pool.
@@ -737,5 +755,24 @@ mod tests {
         list.grow_at(3, 1, pool);
         list.as_mut_slice(pool)[3] = i4;
         assert_eq!(list.as_slice(pool), &[i2, i1, i3, i4]);
+    }
+
+    #[test]
+    fn deep_clone() {
+        let pool = &mut ListPool::<Inst>::new();
+
+        let i1 = Inst::new(1);
+        let i2 = Inst::new(2);
+        let i3 = Inst::new(3);
+        let i4 = Inst::new(4);
+
+        let mut list1 = EntityList::from_slice(&[i1, i2, i3], pool);
+        let list2 = list1.deep_clone(pool);
+        assert_eq!(list1.as_slice(pool), &[i1, i2, i3]);
+        assert_eq!(list2.as_slice(pool), &[i1, i2, i3]);
+
+        list1.as_mut_slice(pool)[0] = i4;
+        assert_eq!(list1.as_slice(pool), &[i4, i2, i3]);
+        assert_eq!(list2.as_slice(pool), &[i1, i2, i3]);
     }
 }
