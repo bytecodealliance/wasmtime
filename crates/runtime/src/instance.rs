@@ -69,11 +69,6 @@ pub(crate) struct Instance {
     /// Hosts can store arbitrary per-instance information here.
     host_state: Box<dyn Any>,
 
-    /// Stores linear memory guard page faults for the pooling allocator with uffd enabled.
-    /// These pages need to be reset after the signal handler generates the out-of-bounds trap.
-    #[cfg(all(feature = "uffd", target_os = "linux"))]
-    guard_page_faults: RefCell<Vec<(*mut u8, usize, fn(*mut u8, usize) -> anyhow::Result<()>)>>,
-
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
@@ -383,14 +378,6 @@ impl Instance {
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages.
     pub(crate) fn memory_grow(&self, memory_index: DefinedMemoryIndex, delta: u32) -> Option<u32> {
-        // Reset all guard pages before growing any memory when using the uffd feature.
-        // The uffd feature induces a trap when a fault on a linear memory page is determined to be out-of-bounds.
-        // It does this by temporarily setting the protection level to `NONE` to cause the kernel to signal SIGBUS.
-        // Because instances might still be used after a trap, this resets the page back to the expected protection
-        // level (READ_WRITE) for the uffd implementation.
-        #[cfg(all(feature = "uffd", target_os = "linux"))]
-        self.reset_guard_pages().ok()?;
-
         let result = self
             .memories
             .get(memory_index)
@@ -821,36 +808,6 @@ impl Instance {
             let foreign_table_index = foreign_instance.table_index(foreign_table_def);
             (foreign_table_index, foreign_instance)
         }
-    }
-
-    /// Records a faulted guard page.
-    ///
-    /// This is used to track faulted guard pages that need to be reset.
-    #[cfg(all(feature = "uffd", target_os = "linux"))]
-    pub(crate) fn record_guard_page_fault(
-        &self,
-        page_addr: *mut u8,
-        size: usize,
-        reset: fn(*mut u8, usize) -> anyhow::Result<()>,
-    ) {
-        self.guard_page_faults
-            .borrow_mut()
-            .push((page_addr, size, reset));
-    }
-
-    /// Resets previously faulted guard pages.
-    ///
-    /// This is used to reset the protection of any guard pages that were previously faulted.
-    ///
-    /// Resetting the guard pages is required before growing memory.
-    #[cfg(all(feature = "uffd", target_os = "linux"))]
-    pub(crate) fn reset_guard_pages(&self) -> anyhow::Result<()> {
-        let mut faults = self.guard_page_faults.borrow_mut();
-        for (addr, len, reset) in faults.drain(..) {
-            reset(addr, len)?;
-        }
-
-        Ok(())
     }
 }
 

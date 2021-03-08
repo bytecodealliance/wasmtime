@@ -367,8 +367,6 @@ impl InstancePool {
                     dropped_elements: RefCell::new(EntitySet::new()),
                     dropped_data: RefCell::new(EntitySet::new()),
                     host_state: Box::new(()),
-                    #[cfg(all(feature = "uffd", target_os = "linux"))]
-                    guard_page_faults: RefCell::new(Vec::new()),
                     vmctx: VMContext {},
                 },
             );
@@ -431,9 +429,15 @@ impl InstancePool {
             let memory = mem::take(memory);
             debug_assert!(memory.is_static());
 
+            // Reset any faulted guard pages as the physical memory may be reused for another instance in the future
+            #[cfg(all(feature = "uffd", target_os = "linux"))]
+            memory
+                .reset_guard_pages()
+                .expect("failed to reset guard pages");
+
             let size = (memory.size() * WASM_PAGE_SIZE) as usize;
             drop(memory);
-            decommit_memory_pages(base, size).unwrap();
+            decommit_memory_pages(base, size).expect("failed to decommit linear memory pages");
         }
 
         instance.memories.clear();
@@ -450,7 +454,7 @@ impl InstancePool {
             );
 
             drop(table);
-            decommit_table_pages(base, size).unwrap();
+            decommit_table_pages(base, size).expect("failed to decommit table pages");
         }
 
         instance.tables.clear();
@@ -468,12 +472,6 @@ impl InstancePool {
         max_pages: u32,
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
-
-        // Reset all guard pages before reusing the instance
-        #[cfg(all(feature = "uffd", target_os = "linux"))]
-        instance
-            .reset_guard_pages()
-            .map_err(|e| InstantiationError::Resource(e.to_string()))?;
 
         debug_assert!(instance.memories.is_empty());
 

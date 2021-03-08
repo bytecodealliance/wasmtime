@@ -313,8 +313,12 @@ unsafe fn handle_page_fault(
                 None => {
                     log::trace!("out of bounds memory access at {:p}", addr);
 
-                    // Record the guard page fault with the instance so it can be reset later.
-                    instance.record_guard_page_fault(page_addr, len, reset_guard_page);
+                    // Record the guard page fault so the page protection level can be reset later
+                    instance.memories[memory_index].record_guard_page_fault(
+                        page_addr,
+                        len,
+                        reset_guard_page,
+                    );
                     wake_guard_page_access(&uffd, page_addr, len)?;
                 }
             }

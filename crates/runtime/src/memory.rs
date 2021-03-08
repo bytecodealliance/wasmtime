@@ -180,6 +180,10 @@ enum MemoryStorage {
         size: Cell<u32>,
         maximum: u32,
         make_accessible: fn(*mut u8, usize) -> Result<()>,
+        /// Stores the pages in the linear memory that have faulted as guard pages when using the `uffd` feature.
+        /// These pages need their protection level reset before the memory can grow.
+        #[cfg(all(feature = "uffd", target_os = "linux"))]
+        guard_page_faults: RefCell<Vec<(*mut u8, usize, fn(*mut u8, usize) -> Result<()>)>>,
     },
     Dynamic(Box<dyn RuntimeLinearMemory>),
 }
@@ -209,6 +213,8 @@ impl Memory {
             size: Cell::new(plan.memory.minimum),
             maximum: min(plan.memory.maximum.unwrap_or(maximum), maximum),
             make_accessible,
+            #[cfg(all(feature = "uffd", target_os = "linux"))]
+            guard_page_faults: RefCell::new(Vec::new()),
         }))
     }
 
@@ -242,6 +248,10 @@ impl Memory {
                 make_accessible,
                 ..
             } => {
+                // Reset any faulted guard pages before growing the memory.
+                #[cfg(all(feature = "uffd", target_os = "linux"))]
+                self.reset_guard_pages().ok()?;
+
                 let old_size = size.get();
                 if delta == 0 {
                     return Some(old_size);
@@ -276,6 +286,56 @@ impl Memory {
             MemoryStorage::Dynamic(mem) => mem.vmmemory(),
         }
     }
+
+    /// Records a faulted guard page in a static memory.
+    ///
+    /// This is used to track faulted guard pages that need to be reset for the uffd feature.
+    ///
+    /// This function will panic if called on a dynamic memory.
+    #[cfg(all(feature = "uffd", target_os = "linux"))]
+    pub(crate) fn record_guard_page_fault(
+        &self,
+        page_addr: *mut u8,
+        size: usize,
+        reset: fn(*mut u8, usize) -> Result<()>,
+    ) {
+        match &self.0 {
+            MemoryStorage::Static {
+                guard_page_faults, ..
+            } => {
+                guard_page_faults
+                    .borrow_mut()
+                    .push((page_addr, size, reset));
+            }
+            MemoryStorage::Dynamic(_) => {
+                unreachable!("dynamic memories should not have guard page faults")
+            }
+        }
+    }
+
+    /// Resets the previously faulted guard pages of a static memory.
+    ///
+    /// This is used to reset the protection of any guard pages that were previously faulted.
+    ///
+    /// This function will panic if called on a dynamic memory.
+    #[cfg(all(feature = "uffd", target_os = "linux"))]
+    pub(crate) fn reset_guard_pages(&self) -> Result<()> {
+        match &self.0 {
+            MemoryStorage::Static {
+                guard_page_faults, ..
+            } => {
+                let mut faults = guard_page_faults.borrow_mut();
+                for (addr, len, reset) in faults.drain(..) {
+                    reset(addr, len)?;
+                }
+            }
+            MemoryStorage::Dynamic(_) => {
+                unreachable!("dynamic memories should not have guard page faults")
+            }
+        }
+
+        Ok(())
+    }
 }
 
 // The default memory representation is an empty memory that cannot grow.
@@ -290,6 +350,8 @@ impl Default for Memory {
             size: Cell::new(0),
             maximum: 0,
             make_accessible,
+            #[cfg(all(feature = "uffd", target_os = "linux"))]
+            guard_page_faults: RefCell::new(Vec::new()),
         })
     }
 }

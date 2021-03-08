@@ -602,8 +602,6 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
                 )),
                 dropped_data: RefCell::new(EntitySet::with_capacity(req.module.passive_data.len())),
                 host_state,
-                #[cfg(all(feature = "uffd", target_os = "linux"))]
-                guard_page_faults: RefCell::new(Vec::new()),
                 vmctx: VMContext {},
             };
             let layout = instance.alloc_layout();
