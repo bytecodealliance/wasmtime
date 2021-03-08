@@ -485,7 +485,7 @@ impl InstancePool {
                     max_pages,
                     commit_memory_pages,
                 )
-                .map_err(|e| InstantiationError::Resource(e.to_string()))?,
+                .map_err(InstantiationError::Resource)?,
             );
         }
 
@@ -509,7 +509,7 @@ impl InstancePool {
             let base = tables.next().unwrap();
 
             commit_table_pages(base, max_elements as usize * mem::size_of::<*mut u8>())
-                .map_err(|e| InstantiationError::Resource(e.to_string()))?;
+                .map_err(InstantiationError::Resource)?;
 
             instance
                 .tables
@@ -785,7 +785,7 @@ impl StackPool {
                 .add((index * self.stack_size) + self.page_size);
 
             commit_stack_pages(bottom_of_stack, size_without_guard)
-                .map_err(|e| FiberStackError::Resource(e.to_string()))?;
+                .map_err(FiberStackError::Resource)?;
 
             // The top of the stack should be returned
             Ok(bottom_of_stack.add(size_without_guard))

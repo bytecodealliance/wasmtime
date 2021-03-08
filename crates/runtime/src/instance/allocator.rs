@@ -71,7 +71,7 @@ pub struct LinkError(pub String);
 pub enum InstantiationError {
     /// Insufficient resources available for execution.
     #[error("Insufficient resources: {0}")]
-    Resource(String),
+    Resource(anyhow::Error),
 
     /// A wasm link error occured.
     #[error("Failed to link module")]
@@ -91,7 +91,7 @@ pub enum InstantiationError {
 pub enum FiberStackError {
     /// Insufficient resources available for the request.
     #[error("Insufficient resources: {0}")]
-    Resource(String),
+    Resource(anyhow::Error),
     /// An error for when the allocator doesn't support custom fiber stacks.
     #[error("Custom fiber stacks are not supported by the allocator")]
     NotSupported,
@@ -569,10 +569,8 @@ impl OnDemandInstanceAllocator {
         let mut memories: PrimaryMap<DefinedMemoryIndex, _> =
             PrimaryMap::with_capacity(module.memory_plans.len() - num_imports);
         for plan in &module.memory_plans.values().as_slice()[num_imports..] {
-            memories.push(
-                Memory::new_dynamic(plan, creator)
-                    .map_err(|e| InstantiationError::Resource(e.to_string()))?,
-            );
+            memories
+                .push(Memory::new_dynamic(plan, creator).map_err(InstantiationError::Resource)?);
         }
         Ok(memories)
     }

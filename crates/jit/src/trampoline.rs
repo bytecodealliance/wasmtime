@@ -38,7 +38,9 @@ pub fn make_trampoline(
     assert!(compiled_function.relocations.is_empty());
     let ptr = code_memory
         .allocate_for_function(&compiled_function)
-        .map_err(|message| SetupError::Instantiate(InstantiationError::Resource(message)))?
+        .map_err(|message| {
+            SetupError::Instantiate(InstantiationError::Resource(anyhow::anyhow!(message)))
+        })?
         .as_ptr();
     Ok(unsafe { std::mem::transmute::<*const VMFunctionBody, VMTrampoline>(ptr) })
 }

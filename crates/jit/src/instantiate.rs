@@ -133,9 +133,9 @@ impl CompilationArtifacts {
                 }
 
                 let obj = obj.write().map_err(|_| {
-                    SetupError::Instantiate(InstantiationError::Resource(
-                        "failed to create image memory".to_string(),
-                    ))
+                    SetupError::Instantiate(InstantiationError::Resource(anyhow::anyhow!(
+                        "failed to create image memory"
+                    )))
                 })?;
 
                 Ok(CompilationArtifacts {
@@ -236,7 +236,7 @@ impl CompiledModule {
             &artifacts.unwind_info,
         )
         .map_err(|message| {
-            SetupError::Instantiate(InstantiationError::Resource(format!(
+            SetupError::Instantiate(InstantiationError::Resource(anyhow::anyhow!(
                 "failed to build code memory for functions: {}",
                 message
             )))
