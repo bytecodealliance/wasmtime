@@ -150,14 +150,14 @@ unsafe impl Sync for HostFunc {}
 /// might have an `async` function in Rust, however, which you'd like to make
 /// available from WebAssembly. Wasmtime supports asynchronously calling
 /// WebAssembly through native stack switching. You can get some more
-/// information about [asynchronous stores](Store::new_async), but from the
+/// information about [asynchronous configs](Config::new_async), but from the
 /// perspective of `Func` it's important to know that whether or not your
 /// [`Store`] is asynchronous will dictate whether you call functions through
 /// [`Func::call`] or [`Func::call_async`] (or the wrappers such as
 /// [`Func::get0`] vs [`Func::get0_async`]).
 ///
 /// Note that asynchronous function APIs here are a bit trickier than their
-/// synchronous bretheren. For example [`Func::new_async`] and
+/// synchronous brethren. For example [`Func::new_async`] and
 /// [`Func::wrapN_async`](Func::wrap1_async) take explicit state parameters to
 /// allow you to close over the state in the returned future. It's recommended
 /// that you pass state via these parameters instead of through the closure's
@@ -171,7 +171,7 @@ unsafe impl Sync for HostFunc {}
 ///
 /// # To `Func::call` or to `Func::getN`
 ///
-/// There are four ways to call a `Func`. Half are asynchronus and half are
+/// There are four ways to call a `Func`. Half are asynchronous and half are
 /// synchronous, corresponding to the type of store you're using. Within each
 /// half you've got two choices:
 ///
@@ -609,8 +609,8 @@ impl Func {
     ///
     /// # Panics
     ///
-    /// This function will panic if `store` is not an [asynchronous
-    /// store](Store::new_async).
+    /// This function will panic if `store` is not associated with an [async
+    /// config](Config::new_async).
     ///
     /// # Examples
     ///
@@ -636,7 +636,7 @@ impl Func {
     ///
     /// // Using `new_async` we can hook up into calling our async
     /// // `get_row_count` function.
-    /// let store = Store::new_async(&Engine::default());
+    /// let store = Store::new(&Engine::new(&Config::new_async()));
     /// let get_row_count_type = wasmtime::FuncType::new(
     ///     None,
     ///     Some(wasmtime::ValType::I32),
@@ -965,8 +965,8 @@ impl Func {
     /// asynchronously.
     ///
     /// This function is the same as [`Func::call`] except that it is
-    /// asynchronous. This is only compatible with [asynchronous
-    /// stores](Store::new_async).
+    /// asynchronous. This is only compatible with stores associated with an
+    /// [asynchronous config](Config::new_async).
     ///
     /// It's important to note that the execution of WebAssembly will happen
     /// synchronously in the `poll` method of the future returned from this
@@ -976,7 +976,7 @@ impl Func {
     /// in a "blocking context".
     ///
     /// For more information see the documentation on [asynchronous
-    /// stores](Store::new_async).
+    /// configs](Config::new_async).
     ///
     /// # Panics
     ///

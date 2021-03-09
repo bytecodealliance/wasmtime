@@ -6,8 +6,7 @@ use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use wasmtime::*;
 
 fn async_store() -> Store {
-    let engine = Engine::default();
-    Store::new_async(&engine)
+    Store::new(&Engine::new(&Config::new_async()))
 }
 
 #[test]
@@ -304,8 +303,8 @@ fn dummy_waker() -> Waker {
 
 #[test]
 fn iloop_with_fuel() {
-    let engine = Engine::new(Config::new().consume_fuel(true));
-    let store = Store::new_async(&engine);
+    let engine = Engine::new(Config::new_async().consume_fuel(true));
+    let store = Store::new(&engine);
     store.out_of_fuel_async_yield(1_000, 10);
     let module = Module::new(
         &engine,
@@ -338,8 +337,8 @@ fn iloop_with_fuel() {
 
 #[test]
 fn fuel_eventually_finishes() {
-    let engine = Engine::new(Config::new().consume_fuel(true));
-    let store = Store::new_async(&engine);
+    let engine = Engine::new(Config::new_async().consume_fuel(true));
+    let store = Store::new(&engine);
     store.out_of_fuel_async_yield(u32::max_value(), 10);
     let module = Module::new(
         &engine,
@@ -367,7 +366,7 @@ fn fuel_eventually_finishes() {
 
 #[test]
 fn async_with_pooling_stacks() {
-    let mut config = Config::new();
+    let mut config = Config::new_async();
     config
         .with_allocation_strategy(InstanceAllocationStrategy::Pooling {
             strategy: PoolingAllocationStrategy::NextAvailable,
@@ -384,7 +383,7 @@ fn async_with_pooling_stacks() {
         .expect("pooling allocator created");
 
     let engine = Engine::new(&config);
-    let store = Store::new_async(&engine);
+    let store = Store::new(&engine);
     let func = Func::new_async(
         &store,
         FuncType::new(None, None),

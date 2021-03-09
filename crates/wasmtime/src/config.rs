@@ -321,8 +321,7 @@ macro_rules! generate_wrap_async_host_func {
         ///
         /// # Panics
         ///
-        /// A panic will occur if the store associated with the instance that calls this host
-        /// function is not asynchronous (see [`Store::new_async`](crate::Store::new_async)).
+        /// This method will panic if it is not called on an [async config](Config::new_async).
         #[allow(non_snake_case)]
         #[cfg(feature = "async")]
         #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
@@ -336,12 +335,13 @@ macro_rules! generate_wrap_async_host_func {
             $($args: WasmTy,)*
             R: WasmRet,
         {
+            assert!(self.is_async, "cannot define an asynchronous host function on a synchronous config");
             self.host_funcs.insert(
                 module,
                 name,
                 HostFunc::wrap(&self.default_instance_allocator, move |caller: Caller<'_>, $($args: $args),*| {
                     let store = caller.store().clone();
-                    assert!(store.is_async());
+                    debug_assert!(store.is_async());
                     let mut future = Pin::from(func(caller, $($args),*));
                     match store.block_on(future.as_mut()) {
                         Ok(ret) => ret.into_result(),
@@ -380,12 +380,101 @@ pub struct Config {
     #[cfg(feature = "async")]
     pub(crate) async_stack_size: usize,
     host_funcs: HostFuncMap,
+    is_async: bool,
 }
 
 impl Config {
     /// Creates a new configuration object with the default configuration
     /// specified.
-    pub fn new() -> Config {
+    pub fn new() -> Self {
+        Self::_new(false)
+    }
+
+    /// Creates a new async config.
+    ///
+    /// The returned config can optionally define host functions with `async`.
+    /// Instances created and functions called within the returned `Config`
+    /// *must* be called through their asynchronous APIs, however. For example
+    /// using [`Func::call`](crate::Func::call) will panic when used with the
+    /// returned config.
+    ///
+    /// # Asynchronous Wasm
+    ///
+    /// WebAssembly does not currently have a way to specify at the bytecode
+    /// level what is and isn't async. Host-defined functions, however, may be
+    /// defined as `async`. WebAssembly imports always appear synchronous, which
+    /// gives rise to a bit of an impedance mismatch here. To solve this
+    /// Wasmtime supports "asynchronous configs" which enables calling these
+    /// asynchronous functions in a way that looks synchronous to the executing
+    /// WebAssembly code.
+    ///
+    /// An asynchronous config must always invoke wasm code asynchronously,
+    /// meaning we'll always represent its computation as a
+    /// [`Future`](std::future::Future). The `poll` method of the futures
+    /// returned by Wasmtime will perform the actual work of calling the
+    /// WebAssembly. Wasmtime won't manage its own thread pools or similar,
+    /// that's left up to the embedder.
+    ///
+    /// To implement futures in a way that WebAssembly sees asynchronous host
+    /// functions as synchronous, all async Wasmtime futures will execute on a
+    /// separately allocated native stack from the thread otherwise executing
+    /// Wasmtime. This separate native stack can then be switched to and from.
+    /// Using this whenever an `async` host function returns a future that
+    /// resolves to `Pending` we switch away from the temporary stack back to
+    /// the main stack and propagate the `Pending` status.
+    ///
+    /// In general it's encouraged that the integration with `async` and
+    /// wasmtime is designed early on in your embedding of Wasmtime to ensure
+    /// that it's planned that WebAssembly executes in the right context of your
+    /// application.
+    ///
+    /// # Execution in `poll`
+    ///
+    /// The [`Future::poll`](std::future::Future::poll) method is the main
+    /// driving force behind Rust's futures. That method's own documentation
+    /// states "an implementation of `poll` should strive to return quickly, and
+    /// should not block". This, however, can be at odds with executing
+    /// WebAssembly code as part of the `poll` method itself. If your
+    /// WebAssembly is untrusted then this could allow the `poll` method to take
+    /// arbitrarily long in the worst case, likely blocking all other
+    /// asynchronous tasks.
+    ///
+    /// To remedy this situation you have a two possible ways to solve this:
+    ///
+    /// * First you can spawn futures into a thread pool. Care must be taken for
+    ///   this because Wasmtime futures are not `Send` or `Sync`. If you ensure
+    ///   that the entire state of a `Store` is wrapped up in a single future,
+    ///   though, you can send the whole future at once to a separate thread. By
+    ///   doing this in a thread pool you are relaxing the requirement that
+    ///   `Future::poll` must be fast because your future is executing on a
+    ///   separate thread. This strategy, however, would likely still require
+    ///   some form of cancellation via [`crate::Store::interrupt_handle`] to ensure
+    ///   wasm doesn't take *too* long to execute.
+    ///
+    /// * Alternatively you can enable the
+    ///   [`Config::consume_fuel`](crate::Config::consume_fuel) method as well
+    ///   as [`crate::Store::out_of_fuel_async_yield`] When doing so this will
+    ///   configure Wasmtime futures to yield periodically while they're
+    ///   executing WebAssembly code. After consuming the specified amount of
+    ///   fuel wasm futures will return `Poll::Pending` from their `poll`
+    ///   method, and will get automatically re-polled later. This enables the
+    ///   `Future::poll` method to take roughly a fixed amount of time since
+    ///   fuel is guaranteed to get consumed while wasm is executing. Note that
+    ///   to prevent infinite execution of wasm you'll still need to use
+    ///   [`crate::Store::interrupt_handle`].
+    ///
+    /// In either case special care needs to be taken when integrating
+    /// asynchronous wasm into your application. You should carefully plan where
+    /// WebAssembly will execute and what compute resources will be allotted to
+    /// it. If Wasmtime doesn't support exactly what you'd like just yet, please
+    /// feel free to open an issue!
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub fn new_async() -> Self {
+        Self::_new(true)
+    }
+
+    fn _new(is_async: bool) -> Self {
         let mut flags = settings::builder();
 
         // There are two possible traps for division, and this way
@@ -409,7 +498,7 @@ impl Config {
             .set("enable_probestack", "false")
             .expect("should be valid flag");
 
-        let mut ret = Config {
+        let mut ret = Self {
             tunables: Tunables::default(),
             flags,
             isa_flags: native::builder(),
@@ -433,9 +522,14 @@ impl Config {
             #[cfg(feature = "async")]
             async_stack_size: 2 << 20,
             host_funcs: HostFuncMap::new(),
+            is_async,
         };
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
-        return ret;
+        ret
+    }
+
+    pub(crate) fn is_async(&self) -> bool {
+        self.is_async
     }
 
     /// Configures whether DWARF debug information will be emitted during
@@ -447,7 +541,7 @@ impl Config {
         self
     }
 
-    /// Configures backtraces in `Trap` will parse debuginfo in the wasm file to
+    /// Configures whether backtraces in `Trap` will parse debug info in the wasm file to
     /// have filename/line number information.
     ///
     /// When enabled this will causes modules to retain debugging information
@@ -1191,6 +1285,10 @@ impl Config {
     ///
     /// The callback must be `Send` and `Sync` as it is shared between all engines created
     /// from the `Config`.  For more relaxed bounds, use [`Func::new_async`](crate::Func::new_async) to define the function.
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if it is not called on an [async config](Config::new_async).
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub fn define_host_func_async<F>(&mut self, module: &str, name: &str, ty: FuncType, func: F)
@@ -1204,12 +1302,16 @@ impl Config {
             + Sync
             + 'static,
     {
+        assert!(
+            self.is_async,
+            "cannot define an asynchronous host function on a synchronous config"
+        );
         self.host_funcs.insert(
             module,
             name,
             HostFunc::new(self, ty, move |caller, params, results| {
                 let store = caller.store().clone();
-                assert!(store.is_async());
+                debug_assert!(store.is_async());
                 let mut future = Pin::from(func(caller, params, results));
                 match store.block_on(future.as_mut()) {
                     Ok(Ok(())) => Ok(()),

@@ -92,8 +92,8 @@ impl Instance {
     ///
     /// # Panics
     ///
-    /// This function will panic if called within an asynchronous store
-    /// (created with [`Store::new_async`]).
+    /// This function will panic if called with a store associated with a
+    /// [`asynchronous config`](crate::Config::new_async).
     ///
     /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
@@ -127,11 +127,9 @@ impl Instance {
     ///
     /// # Panics
     ///
-    /// This function will panic if called within a non-asynchronous store
-    /// (created with [`Store::new`]). This is only compatible with asynchronous
-    /// stores created with [`Store::new_async`].
-    ///
-    /// [asynchronous stores]: Store::new_async
+    /// This function will panic if called with a store associated with a [`synchronous
+    /// config`](crate::Config::new). This is only compatible with stores associated with
+    /// an [`asynchronous config`](crate::Config::new_async).
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub async fn new_async(

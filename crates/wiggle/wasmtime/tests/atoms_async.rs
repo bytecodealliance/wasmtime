@@ -117,11 +117,11 @@ fn test_async_host_func() {
 
 #[test]
 fn test_sync_config_host_func() {
-    let mut config = wasmtime::Config::new();
+    let mut config = wasmtime::Config::new_async();
     Atoms::add_to_config(&mut config);
 
     let engine = wasmtime::Engine::new(&config);
-    let store = wasmtime::Store::new_async(&engine);
+    let store = wasmtime::Store::new(&engine);
 
     assert!(Atoms::set_context(&store, Ctx).is_ok());
 
@@ -131,11 +131,11 @@ fn test_sync_config_host_func() {
 
 #[test]
 fn test_async_config_host_func() {
-    let mut config = wasmtime::Config::new();
+    let mut config = wasmtime::Config::new_async();
     Atoms::add_to_config(&mut config);
 
     let engine = wasmtime::Engine::new(&config);
-    let store = wasmtime::Store::new_async(&engine);
+    let store = wasmtime::Store::new(&engine);
 
     assert!(Atoms::set_context(&store, Ctx).is_ok());
 
@@ -178,8 +178,7 @@ fn dummy_waker() -> Waker {
 }
 
 fn async_store() -> wasmtime::Store {
-    let engine = wasmtime::Engine::default();
-    wasmtime::Store::new_async(&engine)
+    wasmtime::Store::new(&wasmtime::Engine::new(&wasmtime::Config::new_async()))
 }
 
 // Wiggle expects the caller to have an exported memory. Wasmtime can only

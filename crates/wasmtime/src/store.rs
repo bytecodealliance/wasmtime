@@ -69,7 +69,6 @@ pub struct Store {
 }
 
 pub(crate) struct StoreInner {
-    is_async: bool,
     engine: Engine,
     /// The map of all host functions registered with this store's signature registry
     host_funcs: RefCell<HashMap<InstanceHandle, Box<VMCallerCheckedAnyfunc>>>,
@@ -130,99 +129,7 @@ impl Hash for HostInfoKey {
 
 impl Store {
     /// Creates a new store to be associated with the given [`Engine`].
-    ///
-    /// Note that this `Store` cannot be used with asynchronous host calls nor
-    /// can it be used to call functions asynchronously. For that you'll want to
-    /// use [`Store::new_async`].
     pub fn new(engine: &Engine) -> Store {
-        Store::_new(engine, false)
-    }
-
-    /// Creates a new async store to be associated with the given [`Engine`].
-    ///
-    /// The returned store can optionally define host functions with `async`.
-    /// Instances created and functions called within the returned `Store`
-    /// *must* be called through their asynchronous APIs, however. For example
-    /// using [`Func::call`](crate::Func::call) will panic in the returned
-    /// store.
-    ///
-    /// # Asynchronous Wasm
-    ///
-    /// WebAssembly does not currently have a way to specify at the bytecode
-    /// level what is and isn't async. Host-defined functions, however, may be
-    /// defined as `async`. WebAssembly imports always appear synchronous, which
-    /// gives rise to a bit of an impedence mismatch here. To solve this
-    /// Wasmtime supports "asynchronous stores" which enables calling these
-    /// asynchronous functions in a way that looks synchronous to the executing
-    /// WebAssembly code.
-    ///
-    /// An asynchronous store must always invoke wasm code asynchronously,
-    /// meaning we'll always represent its computation as a
-    /// [`Future`](std::future::Future). The `poll` method of the futures
-    /// returned by Wasmtime will perform the actual work of calling the
-    /// WebAssembly. Wasmtime won't manage its own thread pools or similar,
-    /// that's left up to the embedder.
-    ///
-    /// To implement futures in a way that WebAssembly sees asynchronous host
-    /// functions as synchronous, all async Wasmtime futures will execute on a
-    /// separately allocated native stack from the thread otherwise executing
-    /// Wasmtime. This separate native stack can then be switched to and from.
-    /// Using this whenever an `async` host function returns a future that
-    /// resolves to `Pending` we switch away from the temporary stack back to
-    /// the main stack and propagate the `Pending` status.
-    ///
-    /// In general it's encouraged that the integration with `async` and
-    /// wasmtime is designed early on in your embedding of Wasmtime to ensure
-    /// that it's planned that WebAssembly executes in the right context of your
-    /// application.
-    ///
-    /// # Execution in `poll`
-    ///
-    /// The [`Future::poll`](std::future::Future::poll) method is the main
-    /// driving force behind Rust's futures. That method's own documentation
-    /// states "an implementation of `poll` should strive to return quickly, and
-    /// should not block". This, however, can be at odds with executing
-    /// WebAssembly code as part of the `poll` method itself. If your
-    /// WebAssembly is untrusted then this could allow the `poll` method to take
-    /// arbitrarily long in the worst case, likely blocking all other
-    /// asynchronous tasks.
-    ///
-    /// To remedy this situation you have a two possible ways to solve this:
-    ///
-    /// * First you can spawn futures into a thread pool. Care must be taken for
-    ///   this because Wasmtime futures are not `Send` or `Sync`. If you ensure
-    ///   that the entire state of a `Store` is wrapped up in a single future,
-    ///   though, you can send the whole future at once to a separate thread. By
-    ///   doing this in a thread pool you are relaxing the requirement that
-    ///   `Future::poll` must be fast because your future is executing on a
-    ///   separate thread. This strategy, however, would likely still require
-    ///   some form of cancellation via [`Store::interrupt_handle`] to ensure
-    ///   wasm doesn't take *too* long to execute.
-    ///
-    /// * Alternatively you can enable the
-    ///   [`Config::consume_fuel`](crate::Config::consume_fuel) method as well
-    ///   as [`Store::out_of_fuel_async_yield`] When doing so this will
-    ///   configure Wasmtime futures to yield periodically while they're
-    ///   executing WebAssembly code. After consuming the specified amount of
-    ///   fuel wasm futures will return `Poll::Pending` from their `poll`
-    ///   method, and will get automatically re-polled later. This enables the
-    ///   `Future::poll` method to take roughly a fixed amount of time since
-    ///   fuel is guaranteed to get consumed while wasm is executing. Note that
-    ///   to prevent infinite execution of wasm you'll still need to use
-    ///   [`Store::interrupt_handle`].
-    ///
-    /// In either case special care needs to be taken when integrating
-    /// asynchronous wasm into your application. You should carefully plan where
-    /// WebAssembly will execute and what compute resources will be allotted to
-    /// it. If Wasmtime doesn't support exactly what you'd like just yet, please
-    /// feel free to open an issue!
-    #[cfg(feature = "async")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
-    pub fn new_async(engine: &Engine) -> Store {
-        Store::_new(engine, true)
-    }
-
-    fn _new(engine: &Engine, is_async: bool) -> Store {
         // Ensure that wasmtime_runtime's signal handlers are configured. Note
         // that at the `Store` level it means we should perform this
         // once-per-thread. Platforms like Unix, however, only require this
@@ -232,7 +139,6 @@ impl Store {
 
         Store {
             inner: Rc::new(StoreInner {
-                is_async,
                 engine: engine.clone(),
                 host_funcs: RefCell::new(HashMap::new()),
                 interrupts: Arc::new(Default::default()),
@@ -266,7 +172,7 @@ impl Store {
             .config()
             .get_host_func(module, name)
             .map(|f| {
-                // This call is safe because we know the funciton is coming from the
+                // This call is safe because we know the function is coming from the
                 // config associated with this store
                 unsafe { f.to_func(self) }
             })
@@ -712,8 +618,8 @@ impl Store {
     /// [`Config::consume_fuel`](crate::Config::consume_fuel) this method will
     /// configure what happens when fuel runs out. Specifically executing
     /// WebAssembly will be suspended and control will be yielded back to the
-    /// caller. This is only suitable with use of [async
-    /// stores](Store::new_async) because only then are futures used and yields
+    /// caller. This is only suitable with use of a store associated with an [async
+    /// config](crate::Config::new_async) because only then are futures used and yields
     /// are possible.
     ///
     /// The purpose of this behavior is to ensure that futures which represent
@@ -737,8 +643,8 @@ impl Store {
     ///
     /// # Panics
     ///
-    /// This method will panic if it is not called on an [async
-    /// store](Store::new_async).
+    /// This method will panic if it is not called on a store associated with an [async
+    /// config](crate::Config::new_async).
     pub fn out_of_fuel_async_yield(&self, injection_count: u32, fuel_to_inject: u64) {
         assert!(self.is_async());
         self.inner.out_of_gas_behavior.set(OutOfGas::InjectFuel {
@@ -748,7 +654,7 @@ impl Store {
     }
 
     pub(crate) fn is_async(&self) -> bool {
-        self.inner.is_async
+        self.inner.engine.config().is_async()
     }
 
     /// Blocks on the asynchronous computation represented by `future` and
