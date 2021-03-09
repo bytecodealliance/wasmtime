@@ -341,6 +341,7 @@ macro_rules! generate_wrap_async_host_func {
                 name,
                 HostFunc::wrap(&self.default_instance_allocator, move |caller: Caller<'_>, $($args: $args),*| {
                     let store = caller.store().clone();
+                    assert!(store.is_async());
                     let mut future = Pin::from(func(caller, $($args),*));
                     match store.block_on(future.as_mut()) {
                         Ok(ret) => ret.into_result(),
@@ -1174,6 +1175,48 @@ impl Config {
     ) {
         self.host_funcs
             .insert(module, name, HostFunc::new(self, ty, func));
+    }
+
+    /// Defines an async host function for the [`Config`] for the given callback.
+    ///
+    /// Use [`Store::get_host_func`](crate::Store::get_host_func) to get a [`Func`](crate::Func) representing the function.
+    ///
+    /// This function is the asynchronous analogue of [`Config::define_host_func`] and much of
+    /// that documentation applies to this as well.
+    ///
+    /// Additionally note that this is quite a dynamic function since signatures
+    /// are not statically known. For performance reasons, it's recommended
+    /// to use `Config::wrap_host_func$N_async` if you can because with statically known
+    /// signatures the engine can optimize the implementation much more.
+    ///
+    /// The callback must be `Send` and `Sync` as it is shared between all engines created
+    /// from the `Config`.  For more relaxed bounds, use [`Func::new_async`](crate::Func::new_async) to define the function.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub fn define_host_func_async<F>(&mut self, module: &str, name: &str, ty: FuncType, func: F)
+    where
+        F: for<'a> Fn(
+                Caller<'a>,
+                &'a [Val],
+                &'a mut [Val],
+            ) -> Box<dyn Future<Output = Result<(), Trap>> + 'a>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.host_funcs.insert(
+            module,
+            name,
+            HostFunc::new(self, ty, move |caller, params, results| {
+                let store = caller.store().clone();
+                assert!(store.is_async());
+                let mut future = Pin::from(func(caller, params, results));
+                match store.block_on(future.as_mut()) {
+                    Ok(Ok(())) => Ok(()),
+                    Ok(Err(trap)) | Err(trap) => Err(trap),
+                }
+            }),
+        );
     }
 
     /// Defines a host function for the [`Config`] from the given Rust closure.
