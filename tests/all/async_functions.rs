@@ -9,6 +9,25 @@ fn async_store() -> Store {
     Store::new(&Engine::new(&Config::new_async()))
 }
 
+fn run_smoke_test(func: &Func) {
+    run(func.call_async(&[])).unwrap();
+    run(func.call_async(&[])).unwrap();
+    let future1 = func.call_async(&[]);
+    let future2 = func.call_async(&[]);
+    run(future2).unwrap();
+    run(future1).unwrap();
+}
+
+fn run_smoke_get0_test(func: &Func) {
+    let func = func.get0_async::<()>().unwrap();
+    run(func()).unwrap();
+    run(func()).unwrap();
+    let future1 = func();
+    let future2 = func();
+    run(future2).unwrap();
+    run(future1).unwrap();
+}
+
 #[test]
 fn smoke() {
     let store = async_store();
@@ -18,12 +37,42 @@ fn smoke() {
         (),
         move |_caller, _state, _params, _results| Box::new(async { Ok(()) }),
     );
-    run(func.call_async(&[])).unwrap();
-    run(func.call_async(&[])).unwrap();
-    let future1 = func.call_async(&[]);
-    let future2 = func.call_async(&[]);
-    run(future2).unwrap();
-    run(future1).unwrap();
+    run_smoke_test(&func);
+    run_smoke_get0_test(&func);
+
+    let func = Func::wrap0_async(&store, (), move |_caller: Caller<'_>, _state| {
+        Box::new(async { Ok(()) })
+    });
+    run_smoke_test(&func);
+    run_smoke_get0_test(&func);
+}
+
+#[test]
+fn smoke_host_func() {
+    let mut config = Config::new_async();
+    config.define_host_func_async(
+        "",
+        "first",
+        FuncType::new(None, None),
+        move |_caller, _params, _results| Box::new(async { Ok(()) }),
+    );
+    config.wrap0_host_func_async("", "second", move |_caller: Caller<'_>| {
+        Box::new(async { Ok(()) })
+    });
+
+    let store = Store::new(&Engine::new(&config));
+
+    let func = store
+        .get_host_func("", "first")
+        .expect("expected host function");
+    run_smoke_test(&func);
+    run_smoke_get0_test(&func);
+
+    let func = store
+        .get_host_func("", "second")
+        .expect("expected host function");
+    run_smoke_test(&func);
+    run_smoke_get0_test(&func);
 }
 
 #[test]
@@ -40,35 +89,53 @@ fn smoke_with_suspension() {
             })
         },
     );
-    run(func.call_async(&[])).unwrap();
-    run(func.call_async(&[])).unwrap();
-    let future1 = func.call_async(&[]);
-    let future2 = func.call_async(&[]);
-    run(future2).unwrap();
-    run(future1).unwrap();
+    run_smoke_test(&func);
+    run_smoke_get0_test(&func);
+
+    let func = Func::wrap0_async(&store, (), move |_caller: Caller<'_>, _state| {
+        Box::new(async {
+            PendingOnce::default().await;
+            Ok(())
+        })
+    });
+    run_smoke_test(&func);
+    run_smoke_get0_test(&func);
 }
 
 #[test]
-fn smoke_get_with_suspension() {
-    let store = async_store();
-    let func = Func::new_async(
-        &store,
+fn smoke_host_func_with_suspension() {
+    let mut config = Config::new_async();
+    config.define_host_func_async(
+        "",
+        "first",
         FuncType::new(None, None),
-        (),
-        move |_caller, _state, _params, _results| {
+        move |_caller, _params, _results| {
             Box::new(async {
                 PendingOnce::default().await;
                 Ok(())
             })
         },
     );
-    let func = func.get0_async::<()>().unwrap();
-    run(func()).unwrap();
-    run(func()).unwrap();
-    let future1 = func();
-    let future2 = func();
-    run(future2).unwrap();
-    run(future1).unwrap();
+    config.wrap0_host_func_async("", "second", move |_caller: Caller<'_>| {
+        Box::new(async {
+            PendingOnce::default().await;
+            Ok(())
+        })
+    });
+
+    let store = Store::new(&Engine::new(&config));
+
+    let func = store
+        .get_host_func("", "first")
+        .expect("expected host function");
+    run_smoke_test(&func);
+    run_smoke_get0_test(&func);
+
+    let func = store
+        .get_host_func("", "second")
+        .expect("expected host function");
+    run_smoke_test(&func);
+    run_smoke_get0_test(&func);
 }
 
 #[test]
@@ -390,10 +457,39 @@ fn async_with_pooling_stacks() {
         (),
         move |_caller, _state, _params, _results| Box::new(async { Ok(()) }),
     );
-    run(func.call_async(&[])).unwrap();
-    run(func.call_async(&[])).unwrap();
-    let future1 = func.call_async(&[]);
-    let future2 = func.call_async(&[]);
-    run(future2).unwrap();
-    run(future1).unwrap();
+
+    run_smoke_test(&func);
+    run_smoke_get0_test(&func);
+}
+
+#[test]
+fn async_host_func_with_pooling_stacks() {
+    let mut config = Config::new_async();
+    config
+        .with_allocation_strategy(InstanceAllocationStrategy::Pooling {
+            strategy: PoolingAllocationStrategy::NextAvailable,
+            module_limits: ModuleLimits {
+                memory_pages: 1,
+                table_elements: 0,
+                ..Default::default()
+            },
+            instance_limits: InstanceLimits {
+                count: 1,
+                memory_reservation_size: 1,
+            },
+        })
+        .expect("pooling allocator created");
+
+    config.define_host_func_async(
+        "",
+        "",
+        FuncType::new(None, None),
+        move |_caller, _params, _results| Box::new(async { Ok(()) }),
+    );
+
+    let store = Store::new(&Engine::new(&config));
+    let func = store.get_host_func("", "").expect("expected host function");
+
+    run_smoke_test(&func);
+    run_smoke_get0_test(&func);
 }

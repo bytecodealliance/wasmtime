@@ -325,7 +325,7 @@ macro_rules! generate_wrap_async_host_func {
         #[allow(non_snake_case)]
         #[cfg(feature = "async")]
         #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
-        pub fn [<wrap_host_func $num _async>]<$($args,)* R>(
+        pub fn [<wrap $num _host_func_async>]<$($args,)* R>(
             &mut self,
             module: &str,
             name: &str,
@@ -1280,7 +1280,7 @@ impl Config {
     ///
     /// Additionally note that this is quite a dynamic function since signatures
     /// are not statically known. For performance reasons, it's recommended
-    /// to use `Config::wrap_host_func$N_async` if you can because with statically known
+    /// to use `Config::wrap$N_host_func_async` if you can because with statically known
     /// signatures the engine can optimize the implementation much more.
     ///
     /// The callback must be `Send` and `Sync` as it is shared between all engines created

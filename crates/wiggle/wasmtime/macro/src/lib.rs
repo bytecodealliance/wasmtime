@@ -282,7 +282,7 @@ fn generate_func(
     }
 
     if is_async {
-        let wrapper = format_ident!("wrap_host_func{}_async", params.len());
+        let wrapper = format_ident!("wrap{}_host_func_async", params.len());
         host_funcs.push(quote! {
             config.#wrapper(
                 stringify!(#module_ident),
