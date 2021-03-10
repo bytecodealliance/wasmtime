@@ -19,8 +19,8 @@ use wasmtime_jit::trampoline::{
 };
 use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle, VMContext,
-    VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
+    Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    OnDemandInstanceAllocator, VMContext, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
 };
 
 struct TrampolineState {
@@ -276,25 +276,22 @@ pub fn create_function(
 
     unsafe {
         Ok((
-            config
-                .default_instance_allocator
-                .allocate(InstanceAllocationRequest {
-                    module: Arc::new(module),
-                    finished_functions: &finished_functions,
-                    imports: Imports::default(),
-                    lookup_shared_signature: &|_| shared_signature_id,
-                    host_state: Box::new(trampoline_state),
-                    interrupts: std::ptr::null(),
-                    externref_activations_table: std::ptr::null_mut(),
-                    stack_map_registry: std::ptr::null_mut(),
-                })?,
+            OnDemandInstanceAllocator::new(None).allocate(InstanceAllocationRequest {
+                module: Arc::new(module),
+                finished_functions: &finished_functions,
+                imports: Imports::default(),
+                lookup_shared_signature: &|_| shared_signature_id,
+                host_state: Box::new(trampoline_state),
+                interrupts: std::ptr::null(),
+                externref_activations_table: std::ptr::null_mut(),
+                stack_map_registry: std::ptr::null_mut(),
+            })?,
             trampoline,
         ))
     }
 }
 
 pub unsafe fn create_raw_function(
-    allocator: &dyn InstanceAllocator,
     func: *mut [VMFunctionBody],
     host_state: Box<dyn Any>,
     shared_signature_id: VMSharedSignatureIndex,
@@ -310,14 +307,16 @@ pub unsafe fn create_raw_function(
         .insert(String::new(), wasm::EntityIndex::Function(func_id));
     finished_functions.push(func);
 
-    Ok(allocator.allocate(InstanceAllocationRequest {
-        module: Arc::new(module),
-        finished_functions: &finished_functions,
-        imports: Imports::default(),
-        lookup_shared_signature: &|_| shared_signature_id,
-        host_state,
-        interrupts: std::ptr::null(),
-        externref_activations_table: std::ptr::null_mut(),
-        stack_map_registry: std::ptr::null_mut(),
-    })?)
+    Ok(
+        OnDemandInstanceAllocator::new(None).allocate(InstanceAllocationRequest {
+            module: Arc::new(module),
+            finished_functions: &finished_functions,
+            imports: Imports::default(),
+            lookup_shared_signature: &|_| shared_signature_id,
+            host_state,
+            interrupts: std::ptr::null(),
+            externref_activations_table: std::ptr::null_mut(),
+            stack_map_registry: std::ptr::null_mut(),
+        })?,
+    )
 }

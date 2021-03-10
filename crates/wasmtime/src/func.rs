@@ -64,11 +64,8 @@ impl HostFunc {
     /// Creates a new host function from wrapping a closure.
     ///
     /// This is analogous to [`Func::wrap`].
-    pub fn wrap<Params, Results>(
-        allocator: &dyn InstanceAllocator,
-        func: impl IntoFunc<Params, Results> + Send + Sync,
-    ) -> Self {
-        let (ty, instance, trampoline) = func.into_func(allocator, None);
+    pub fn wrap<Params, Results>(func: impl IntoFunc<Params, Results> + Send + Sync) -> Self {
+        let (ty, instance, trampoline) = func.into_func(None);
 
         Self {
             ty,
@@ -882,10 +879,7 @@ impl Func {
     /// # }
     /// ```
     pub fn wrap<Params, Results>(store: &Store, func: impl IntoFunc<Params, Results>) -> Func {
-        let (_, instance, trampoline) = func.into_func(
-            &store.engine().config().default_instance_allocator,
-            Some(&mut store.signatures().borrow_mut()),
-        );
+        let (_, instance, trampoline) = func.into_func(Some(&mut store.signatures().borrow_mut()));
 
         let (instance, export) = unsafe {
             let idx = EntityIndex::Function(FuncIndex::from_u32(0));
@@ -1782,7 +1776,6 @@ pub trait IntoFunc<Params, Results> {
     #[doc(hidden)]
     fn into_func(
         self,
-        allocator: &dyn InstanceAllocator,
         registry: Option<&mut SignatureRegistry>,
     ) -> (FuncType, InstanceHandle, VMTrampoline);
 }
@@ -1896,12 +1889,12 @@ macro_rules! impl_into_func {
             $($args: WasmTy,)*
             R: WasmRet,
         {
-            fn into_func(self, allocator: &dyn InstanceAllocator, registry: Option<&mut SignatureRegistry>) -> (FuncType, InstanceHandle, VMTrampoline) {
+            fn into_func(self, registry: Option<&mut SignatureRegistry>) -> (FuncType, InstanceHandle, VMTrampoline) {
                 let f = move |_: Caller<'_>, $($args:$args),*| {
                     self($($args),*)
                 };
 
-                f.into_func(allocator, registry)
+                f.into_func(registry)
             }
         }
 
@@ -1912,7 +1905,7 @@ macro_rules! impl_into_func {
             $($args: WasmTy,)*
             R: WasmRet,
         {
-            fn into_func(self, allocator: &dyn InstanceAllocator, registry: Option<&mut SignatureRegistry>) -> (FuncType, InstanceHandle, VMTrampoline) {
+            fn into_func(self, registry: Option<&mut SignatureRegistry>) -> (FuncType, InstanceHandle, VMTrampoline) {
                 /// This shim is called by Wasm code, constructs a `Caller`,
                 /// calls the wrapped host function, and returns the translated
                 /// result back to Wasm.
@@ -2026,7 +2019,6 @@ macro_rules! impl_into_func {
 
                 let instance = unsafe {
                     crate::trampoline::create_raw_function(
-                        allocator,
                         std::slice::from_raw_parts_mut(
                             wasm_to_host_shim::<F, $($args,)* R> as *mut _,
                             0,

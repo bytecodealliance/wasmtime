@@ -434,20 +434,18 @@ fn fuel_eventually_finishes() {
 #[test]
 fn async_with_pooling_stacks() {
     let mut config = Config::new_async();
-    config
-        .with_allocation_strategy(InstanceAllocationStrategy::Pooling {
-            strategy: PoolingAllocationStrategy::NextAvailable,
-            module_limits: ModuleLimits {
-                memory_pages: 1,
-                table_elements: 0,
-                ..Default::default()
-            },
-            instance_limits: InstanceLimits {
-                count: 1,
-                memory_reservation_size: 1,
-            },
-        })
-        .expect("pooling allocator created");
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
+        strategy: PoolingAllocationStrategy::NextAvailable,
+        module_limits: ModuleLimits {
+            memory_pages: 1,
+            table_elements: 0,
+            ..Default::default()
+        },
+        instance_limits: InstanceLimits {
+            count: 1,
+            memory_reservation_size: 1,
+        },
+    });
 
     let engine = Engine::new(&config);
     let store = Store::new(&engine);
@@ -465,20 +463,18 @@ fn async_with_pooling_stacks() {
 #[test]
 fn async_host_func_with_pooling_stacks() {
     let mut config = Config::new_async();
-    config
-        .with_allocation_strategy(InstanceAllocationStrategy::Pooling {
-            strategy: PoolingAllocationStrategy::NextAvailable,
-            module_limits: ModuleLimits {
-                memory_pages: 1,
-                table_elements: 0,
-                ..Default::default()
-            },
-            instance_limits: InstanceLimits {
-                count: 1,
-                memory_reservation_size: 1,
-            },
-        })
-        .expect("pooling allocator created");
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
+        strategy: PoolingAllocationStrategy::NextAvailable,
+        module_limits: ModuleLimits {
+            memory_pages: 1,
+            table_elements: 0,
+            ..Default::default()
+        },
+        instance_limits: InstanceLimits {
+            count: 1,
+            memory_reservation_size: 1,
+        },
+    });
 
     config.define_host_func_async(
         "",

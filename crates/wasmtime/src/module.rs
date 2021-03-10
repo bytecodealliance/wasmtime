@@ -332,10 +332,7 @@ impl Module {
         let module = modules.remove(main_module);
 
         // Validate the module can be used with the current allocator
-        engine
-            .config()
-            .instance_allocator()
-            .validate(module.module())?;
+        engine.allocator().validate(module.module())?;
 
         Ok(Module {
             inner: Arc::new(ModuleInner {

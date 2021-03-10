@@ -18,8 +18,9 @@ use std::ops::Deref;
 use std::sync::Arc;
 use wasmtime_environ::{entity::PrimaryMap, wasm, Module};
 use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle, StackMapRegistry,
-    VMExternRefActivationsTable, VMFunctionBody, VMFunctionImport, VMSharedSignatureIndex,
+    Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    OnDemandInstanceAllocator, StackMapRegistry, VMExternRefActivationsTable, VMFunctionBody,
+    VMFunctionImport, VMSharedSignatureIndex,
 };
 
 /// A wrapper around `wasmtime_runtime::InstanceHandle` which pairs it with the
@@ -61,13 +62,10 @@ fn create_handle(
     imports.functions = func_imports;
 
     unsafe {
-        // Use the default allocator when creating handles associated with host objects
+        // Use the on-demand allocator when creating handles associated with host objects
         // The configured instance allocator should only be used when creating module instances
         // as we don't want host objects to count towards instance limits.
-        let handle = store
-            .engine()
-            .config()
-            .default_instance_allocator
+        let handle = OnDemandInstanceAllocator::new(store.engine().config().mem_creator.clone())
             .allocate(InstanceAllocationRequest {
                 module: Arc::new(module),
                 finished_functions: &finished_functions,

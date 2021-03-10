@@ -18,18 +18,19 @@ use std::task::{Context, Poll};
 use wasmtime_environ::wasm;
 use wasmtime_jit::{CompiledModule, ModuleCode, TypeTables};
 use wasmtime_runtime::{
-    Export, InstanceAllocator, InstanceHandle, SignalHandler, StackMapRegistry, TrapInfo,
-    VMCallerCheckedAnyfunc, VMContext, VMExternRef, VMExternRefActivationsTable, VMInterrupts,
-    VMSharedSignatureIndex, VMTrampoline,
+    Export, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator, SignalHandler,
+    StackMapRegistry, TrapInfo, VMCallerCheckedAnyfunc, VMContext, VMExternRef,
+    VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex, VMTrampoline,
 };
 
 /// Used to associate instances with the store.
 ///
-/// This is needed to track if the instance was allocated expliclty with the default
+/// This is needed to track if the instance was allocated explicitly with the on-demand
 /// instance allocator.
 struct StoreInstance {
     handle: InstanceHandle,
-    use_default_allocator: bool,
+    // Stores whether or not to use the on-demand allocator to deallocate the instance
+    ondemand: bool,
 }
 
 /// A `Store` is a collection of WebAssembly instances and host-defined items.
@@ -363,11 +364,11 @@ impl Store {
     pub(crate) unsafe fn add_instance(
         &self,
         handle: InstanceHandle,
-        use_default_allocator: bool,
+        ondemand: bool,
     ) -> StoreInstanceHandle {
         self.inner.instances.borrow_mut().push(StoreInstance {
             handle: handle.clone(),
-            use_default_allocator,
+            ondemand,
         });
         StoreInstanceHandle {
             store: self.clone(),
@@ -756,7 +757,7 @@ impl Store {
             Ok(())
         };
 
-        let (fiber, stack) = match config.instance_allocator().allocate_fiber_stack() {
+        let (fiber, stack) = match self.inner.engine.allocator().allocate_fiber_stack() {
             Ok(stack) => {
                 // Use the returned stack and deallocate it when finished
                 (
@@ -862,8 +863,7 @@ impl Store {
                     unsafe {
                         self.store
                             .engine()
-                            .config()
-                            .instance_allocator()
+                            .allocator()
                             .deallocate_fiber_stack(self.stack)
                     };
                 }
@@ -993,14 +993,12 @@ impl fmt::Debug for Store {
 
 impl Drop for StoreInner {
     fn drop(&mut self) {
-        let allocator = self.engine.config().instance_allocator();
+        let allocator = self.engine.allocator();
+        let ondemand = OnDemandInstanceAllocator::new(self.engine.config().mem_creator.clone());
         for instance in self.instances.borrow().iter() {
             unsafe {
-                if instance.use_default_allocator {
-                    self.engine
-                        .config()
-                        .default_instance_allocator
-                        .deallocate(&instance.handle);
+                if instance.ondemand {
+                    ondemand.deallocate(&instance.handle);
                 } else {
                     allocator.deallocate(&instance.handle);
                 }

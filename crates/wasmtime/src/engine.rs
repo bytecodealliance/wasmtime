@@ -3,7 +3,7 @@ use std::sync::Arc;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
 use wasmtime_jit::Compiler;
-use wasmtime_runtime::debug_builtins;
+use wasmtime_runtime::{debug_builtins, InstanceAllocator};
 
 /// An `Engine` which is a global context for compilation and management of wasm
 /// modules.
@@ -35,6 +35,7 @@ pub struct Engine {
 struct EngineInner {
     config: Config,
     compiler: Compiler,
+    allocator: Box<dyn InstanceAllocator>,
 }
 
 impl Engine {
@@ -42,10 +43,12 @@ impl Engine {
     /// configuration settings.
     pub fn new(config: &Config) -> Engine {
         debug_builtins::ensure_exported();
+        let allocator = config.build_allocator();
         Engine {
             inner: Arc::new(EngineInner {
                 config: config.clone(),
-                compiler: config.build_compiler(),
+                compiler: config.build_compiler(allocator.as_ref()),
+                allocator,
             }),
         }
     }
@@ -57,6 +60,10 @@ impl Engine {
 
     pub(crate) fn compiler(&self) -> &Compiler {
         &self.inner.compiler
+    }
+
+    pub(crate) fn allocator(&self) -> &dyn InstanceAllocator {
+        self.inner.allocator.as_ref()
     }
 
     #[cfg(feature = "cache")]

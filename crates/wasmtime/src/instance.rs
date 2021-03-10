@@ -491,9 +491,8 @@ impl<'a> Instantiator<'a> {
         self.store.register_module(&self.cur.module);
 
         unsafe {
-            let config = self.store.engine().config();
-
-            let allocator = config.instance_allocator();
+            let engine = self.store.engine();
+            let allocator = engine.allocator();
 
             let instance = allocator.allocate(InstanceAllocationRequest {
                 module: compiled_module.module().clone(),
@@ -520,7 +519,7 @@ impl<'a> Instantiator<'a> {
             // initialization is successful, we need to keep the instance alive.
             let instance = self.store.add_instance(instance, false);
             allocator
-                .initialize(&instance.handle, config.features.bulk_memory)
+                .initialize(&instance.handle, engine.config().features.bulk_memory)
                 .map_err(|e| -> Error {
                     match e {
                         InstantiationError::Trap(trap) => {

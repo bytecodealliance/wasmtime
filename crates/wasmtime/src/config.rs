@@ -18,7 +18,9 @@ use wasmtime_environ::settings::{self, Configurable, SetError};
 use wasmtime_environ::{isa, isa::TargetIsa, Tunables};
 use wasmtime_jit::{native, CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
-use wasmtime_runtime::{InstanceAllocator, OnDemandInstanceAllocator, PoolingInstanceAllocator};
+use wasmtime_runtime::{
+    InstanceAllocator, OnDemandInstanceAllocator, PoolingInstanceAllocator, RuntimeMemoryCreator,
+};
 
 /// Represents the limits placed on a module for compiling with the pooling instance allocation strategy.
 #[derive(Debug, Copy, Clone)]
@@ -339,7 +341,7 @@ macro_rules! generate_wrap_async_host_func {
             self.host_funcs.insert(
                 module,
                 name,
-                HostFunc::wrap(&self.default_instance_allocator, move |caller: Caller<'_>, $($args: $args),*| {
+                HostFunc::wrap(move |caller: Caller<'_>, $($args: $args),*| {
                     let store = caller.store().clone();
                     debug_assert!(store.is_async());
                     let mut future = Pin::from(func(caller, $($args),*));
@@ -367,10 +369,8 @@ pub struct Config {
     #[cfg(feature = "cache")]
     pub(crate) cache_config: CacheConfig,
     pub(crate) profiler: Arc<dyn ProfilingAgent>,
-    pub(crate) instance_allocator: Option<Arc<dyn InstanceAllocator>>,
-    // The default instance allocator is used for instantiating host objects
-    // and for module instantiation when `instance_allocator` is None
-    pub(crate) default_instance_allocator: OnDemandInstanceAllocator,
+    pub(crate) mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
+    pub(crate) allocation_strategy: InstanceAllocationStrategy,
     pub(crate) max_wasm_stack: usize,
     pub(crate) features: WasmFeatures,
     pub(crate) wasm_backtrace_details_env_used: bool,
@@ -506,8 +506,8 @@ impl Config {
             #[cfg(feature = "cache")]
             cache_config: CacheConfig::new_cache_disabled(),
             profiler: Arc::new(NullProfilerAgent),
-            instance_allocator: None,
-            default_instance_allocator: OnDemandInstanceAllocator::new(None),
+            mem_creator: None,
+            allocation_strategy: InstanceAllocationStrategy::OnDemand,
             max_wasm_stack: 1 << 20,
             wasm_backtrace_details_env_used: false,
             features: WasmFeatures {
@@ -620,9 +620,6 @@ impl Config {
     /// on stack overflow, a host function that overflows the stack will
     /// abort the process.
     ///
-    /// `max_wasm_stack` must be set prior to setting an instance allocation
-    /// strategy.
-    ///
     /// By default this option is 1 MiB.
     pub fn max_wasm_stack(&mut self, size: usize) -> Result<&mut Self> {
         #[cfg(feature = "async")]
@@ -632,12 +629,6 @@ impl Config {
 
         if size == 0 {
             bail!("wasm stack size cannot be zero");
-        }
-
-        if self.instance_allocator.is_some() {
-            bail!(
-                "wasm stack size cannot be modified after setting an instance allocation strategy"
-            );
         }
 
         self.max_wasm_stack = size;
@@ -654,19 +645,11 @@ impl Config {
     /// close to one another; doing so may cause host functions to overflow the
     /// stack and abort the process.
     ///
-    /// `async_stack_size` must be set prior to setting an instance allocation
-    /// strategy.
-    ///
     /// By default this option is 2 MiB.
     #[cfg(feature = "async")]
     pub fn async_stack_size(&mut self, size: usize) -> Result<&mut Self> {
         if size < self.max_wasm_stack {
             bail!("async stack size cannot be less than the maximum wasm stack size");
-        }
-        if self.instance_allocator.is_some() {
-            bail!(
-                "async stack size cannot be modified after setting an instance allocation strategy"
-            );
         }
         self.async_stack_size = size;
         Ok(self)
@@ -1003,8 +986,7 @@ impl Config {
     /// Custom memory creators are used when creating host `Memory` objects or when
     /// creating instance linear memories for the on-demand instance allocation strategy.
     pub fn with_host_memory(&mut self, mem_creator: Arc<dyn MemoryCreator>) -> &mut Self {
-        self.default_instance_allocator =
-            OnDemandInstanceAllocator::new(Some(Arc::new(MemoryCreatorProxy(mem_creator))));
+        self.mem_creator = Some(Arc::new(MemoryCreatorProxy(mem_creator)));
         self
     }
 
@@ -1015,32 +997,9 @@ impl Config {
     /// This means the [`Config::static_memory_maximum_size`] and [`Config::static_memory_guard_size`] options
     /// will be ignored in favor of [`InstanceLimits::memory_reservation_size`] when the pooling instance
     /// allocation strategy is used.
-    pub fn with_allocation_strategy(
-        &mut self,
-        strategy: InstanceAllocationStrategy,
-    ) -> Result<&mut Self> {
-        self.instance_allocator = match strategy {
-            InstanceAllocationStrategy::OnDemand => None,
-            InstanceAllocationStrategy::Pooling {
-                strategy,
-                module_limits,
-                instance_limits,
-            } => {
-                #[cfg(feature = "async")]
-                let stack_size = self.async_stack_size;
-
-                #[cfg(not(feature = "async"))]
-                let stack_size = 0;
-
-                Some(Arc::new(PoolingInstanceAllocator::new(
-                    strategy.into(),
-                    module_limits.into(),
-                    instance_limits.into(),
-                    stack_size,
-                )?))
-            }
-        };
-        Ok(self)
+    pub fn allocation_strategy(&mut self, strategy: InstanceAllocationStrategy) -> &mut Self {
+        self.allocation_strategy = strategy;
+        self
     }
 
     /// Configures the maximum size, in bytes, where a linear memory is
@@ -1335,11 +1294,7 @@ impl Config {
         name: &str,
         func: impl IntoFunc<Params, Results> + Send + Sync,
     ) {
-        self.host_funcs.insert(
-            module,
-            name,
-            HostFunc::wrap(&self.default_instance_allocator, func),
-        );
+        self.host_funcs.insert(module, name, HostFunc::wrap(func));
     }
 
     for_each_function_signature!(generate_wrap_async_host_func);
@@ -1360,17 +1315,40 @@ impl Config {
         self.isa_flags.clone().finish(settings::Flags::new(flags))
     }
 
-    pub(crate) fn build_compiler(&self) -> Compiler {
+    pub(crate) fn build_compiler(&self, allocator: &dyn InstanceAllocator) -> Compiler {
         let isa = self.target_isa();
         let mut tunables = self.tunables.clone();
-        self.instance_allocator().adjust_tunables(&mut tunables);
+        allocator.adjust_tunables(&mut tunables);
         Compiler::new(isa, self.strategy, tunables, self.features)
     }
 
-    pub(crate) fn instance_allocator(&self) -> &dyn InstanceAllocator {
-        self.instance_allocator
-            .as_deref()
-            .unwrap_or(&self.default_instance_allocator)
+    pub(crate) fn build_allocator(&self) -> Box<dyn InstanceAllocator> {
+        match self.allocation_strategy {
+            InstanceAllocationStrategy::OnDemand => {
+                Box::new(OnDemandInstanceAllocator::new(self.mem_creator.clone()))
+            }
+            InstanceAllocationStrategy::Pooling {
+                strategy,
+                module_limits,
+                instance_limits,
+            } => {
+                #[cfg(feature = "async")]
+                let stack_size = self.async_stack_size;
+
+                #[cfg(not(feature = "async"))]
+                let stack_size = 0;
+
+                Box::new(
+                    PoolingInstanceAllocator::new(
+                        strategy.into(),
+                        module_limits.into(),
+                        instance_limits.into(),
+                        stack_size,
+                    )
+                    .expect("failed to create pooling instance allocator"),
+                )
+            }
+        }
     }
 }
 
