@@ -1657,7 +1657,8 @@ fn wasm_ty_roundtrip() -> Result<(), anyhow::Error> {
     let foo = instance
         .get_func("foo")
         .unwrap()
-        .typed::<(i32, u32, f32, i64, u64, f64), ()>()?;
+        .typed::<(i32, u32, f32, i64, u64, f64), ()>()?
+        .clone();
     foo.call((-1, 1, 2.0, -3, 3, 4.0))?;
     Ok(())
 }
