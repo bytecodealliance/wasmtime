@@ -199,11 +199,6 @@ unsafe impl Sync for HostFunc {}
 ///   This eschews runtime checks as much as possible to get into wasm as fast
 ///   as possible.
 ///
-/// Unfortunately a limitation of the code generation backend right now means
-/// that [`TypedFunc`] cannot be used with wasm funtions that have 2 or more return
-/// values. We hope to fix this in the future, but for now wasm functions with
-/// 2 or more return values need to use the "dynamically typed" APIs.
-///
 /// # Examples
 ///
 /// One way to get a `Func` is from an [`Instance`] after you've instantiated
@@ -1034,9 +1029,8 @@ impl Func {
     /// no parameters.
     ///
     /// The `Results` type parameter is used to describe the results of the
-    /// function. At this time multi-value functions are not supported, so
-    /// `Results` can only be a bare type (like `i32`) or `()` to signify no
-    /// types are returned.
+    /// function. This behaves the same way as `Params`, but just for the
+    /// results of the function.
     ///
     /// Translation between Rust types and WebAssembly types looks like:
     ///
@@ -1095,6 +1089,19 @@ impl Func {
     /// # fn foo(add: &Func) -> anyhow::Result<()> {
     /// let typed = add.typed::<(i32, i64), f32>()?;
     /// assert_eq!(typed.call((1, 2))?, 3.0);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// and similarly if a function has multiple results you can bind that too
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn foo(add_with_overflow: &Func) -> anyhow::Result<()> {
+    /// let typed = add_with_overflow.typed::<(u32, u32), (u32, i32)>()?;
+    /// let (result, overflow) = typed.call((u32::max_value(), 2))?;
+    /// assert_eq!(result, 1);
+    /// assert_eq!(overflow, 1);
     /// # Ok(())
     /// # }
     /// ```

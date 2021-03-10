@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use std::marker;
 use std::mem::{self, MaybeUninit};
 use std::ptr;
-use wasmtime_runtime::{VMContext, VMFunctionBody};
+use wasmtime_runtime::{VMContext, VMFunctionBody, VMTrampoline};
 
 /// A statically typed WebAssembly function.
 ///
@@ -97,6 +97,7 @@ where
         }
 
         let anyfunc = self.func.export.anyfunc.as_ref();
+        let trampoline = self.func.trampoline;
         let params = MaybeUninit::new(params);
         let mut ret = MaybeUninit::uninit();
         let mut called = false;
@@ -106,6 +107,7 @@ where
             let params = ptr::read(params.as_ptr());
             let result = params.invoke::<Results>(
                 weak_store,
+                trampoline,
                 anyfunc.func_ptr.as_ptr(),
                 anyfunc.vmctx,
                 ptr::null_mut(),
@@ -278,6 +280,7 @@ pub unsafe trait WasmParams {
     unsafe fn invoke<R: WasmResults>(
         self,
         store: WeakStore<'_>,
+        trampoline: VMTrampoline,
         func: *const VMFunctionBody,
         vmctx1: *mut VMContext,
         vmctx2: *mut VMContext,
@@ -299,11 +302,12 @@ where
     unsafe fn invoke<R: WasmResults>(
         self,
         store: WeakStore<'_>,
+        trampoline: VMTrampoline,
         func: *const VMFunctionBody,
         vmctx1: *mut VMContext,
         vmctx2: *mut VMContext,
     ) -> R {
-        <(T,)>::invoke((self,), store, func, vmctx1, vmctx2)
+        <(T,)>::invoke((self,), store, trampoline, func, vmctx1, vmctx2)
     }
 }
 
@@ -335,20 +339,66 @@ macro_rules! impl_wasm_params {
             unsafe fn invoke<R: WasmResults>(
                 self,
                 store: WeakStore<'_>,
+                trampoline: VMTrampoline,
                 func: *const VMFunctionBody,
                 vmctx1: *mut VMContext,
                 vmctx2: *mut VMContext,
             ) -> R {
-                let fnptr = mem::transmute::<
-                    *const VMFunctionBody,
-                    unsafe extern "C" fn(
-                        *mut VMContext,
-                        *mut VMContext,
-                        $($t::Abi,)*
-                    ) -> R::Abi,
-                >(func);
-                let ($($t,)*) = self;
-                R::from_abi(fnptr(vmctx1, vmctx2, $($t.into_abi(store),)*), store)
+                // Some signatures can go directly into JIT code which uses the
+                // default platform ABI, but basically only those without
+                // multiple return values. With multiple return values we can't
+                // natively in Rust call such a function because there's no way
+                // to model it (yet).
+                //
+                // To work around that we use the trampoline which passes
+                // arguments/values via the stack which allows us to match the
+                // expected ABI. Note that this branch, using the trampoline,
+                // is slower as a result and has an extra indirect function
+                // call as well. In the future if this is a problem we should
+                // consider updating JIT code to use an ABI we can call from
+                // Rust itself.
+                if R::uses_trampoline() {
+                    R::with_space(|space1| {
+                        // Figure out whether the parameters or the results
+                        // require more space, and use the bigger one as where
+                        // to store arguments and load return values from.
+                        let mut space2 = [0; $n];
+                        let space = if space1.len() < space2.len() {
+                            space2.as_mut_ptr()
+                        } else {
+                            space1.as_mut_ptr()
+                        };
+
+                        // ... store the ABI for all values into our storage
+                        // area...
+                        let ($($t,)*) = self;
+                        let mut _n = 0;
+                        $(
+                            *space.add(_n).cast::<$t::Abi>() = $t.into_abi(store);
+                            _n += 1;
+                        )*
+
+                        // ... make the indirect call through the trampoline
+                        // which will read from `space` and also write all the
+                        // results to `space`...
+                        trampoline(vmctx1, vmctx2, func, space);
+
+                        // ... and then we can decode all the return values
+                        // from `space`.
+                        R::from_storage(space, store)
+                    })
+                } else {
+                    let fnptr = mem::transmute::<
+                        *const VMFunctionBody,
+                        unsafe extern "C" fn(
+                            *mut VMContext,
+                            *mut VMContext,
+                            $($t::Abi,)*
+                        ) -> R::Abi,
+                    >(func);
+                    let ($($t,)*) = self;
+                    R::from_abi(fnptr(vmctx1, vmctx2, $($t.into_abi(store),)*), store)
+                }
             }
         }
     };
@@ -362,21 +412,82 @@ for_each_function_signature!(impl_wasm_params);
 /// This is currently only implemented for `()` and for bare types that can be
 /// returned. This is not yet implemented for tuples because a multi-value
 /// `TypedFunc` is not currently supported.
-pub trait WasmResults: WasmParams {
+pub unsafe trait WasmResults: WasmParams {
     #[doc(hidden)]
     type Abi;
     #[doc(hidden)]
     unsafe fn from_abi(abi: Self::Abi, store: WeakStore<'_>) -> Self;
+    #[doc(hidden)]
+    fn uses_trampoline() -> bool;
+    // Provides a stack-allocated array with enough space to store all these
+    // result values.
+    //
+    // It'd be nice if we didn't have to have this API and could do something
+    // with const-generics (or something like that), but I couldn't figure it
+    // out. If a future Rust explorer is able to get something like `const LEN:
+    // usize` working that'd be great!
+    #[doc(hidden)]
+    fn with_space<R>(_: impl FnOnce(&mut [u128]) -> R) -> R;
+    #[doc(hidden)]
+    unsafe fn from_storage(ptr: *const u128, store: WeakStore<'_>) -> Self;
 }
 
-impl WasmResults for () {
-    type Abi = ();
-    unsafe fn from_abi(_abi: (), _store: WeakStore<'_>) {}
-}
-
-impl<T: WasmTy> WasmResults for T {
-    type Abi = T::Abi;
+unsafe impl<T: WasmTy> WasmResults for T {
+    type Abi = <(T,) as WasmResults>::Abi;
     unsafe fn from_abi(abi: Self::Abi, store: WeakStore<'_>) -> Self {
-        <T as WasmTy>::from_abi(abi, store)
+        <(T,) as WasmResults>::from_abi(abi, store).0
+    }
+    fn uses_trampoline() -> bool {
+        <(T,) as WasmResults>::uses_trampoline()
+    }
+    fn with_space<R>(f: impl FnOnce(&mut [u128]) -> R) -> R {
+        <(T,) as WasmResults>::with_space(f)
+    }
+    unsafe fn from_storage(ptr: *const u128, store: WeakStore<'_>) -> Self {
+        <(T,) as WasmResults>::from_storage(ptr, store).0
     }
 }
+
+#[doc(hidden)]
+pub enum Void {}
+
+macro_rules! impl_wasm_results {
+    ($n:tt $($t:ident)*) => {
+        #[allow(non_snake_case, unused_variables)]
+        unsafe impl<$($t: WasmTy,)*> WasmResults for ($($t,)*) {
+            type Abi = impl_wasm_results!(@abi $n $($t)*);
+            unsafe fn from_abi(abi: Self::Abi, store: WeakStore<'_>) -> Self {
+                impl_wasm_results!(@from_abi abi store $n $($t)*)
+            }
+            fn uses_trampoline() -> bool {
+                $n > 1
+            }
+            fn with_space<R>(f: impl FnOnce(&mut [u128]) -> R) -> R {
+                f(&mut [0; $n])
+            }
+            unsafe fn from_storage(ptr: *const u128, store: WeakStore<'_>) -> Self {
+                let mut _n = 0;
+                $(
+                    let $t = $t::from_abi(*ptr.add(_n).cast::<$t::Abi>(), store);
+                    _n += 1;
+                )*
+                ($($t,)*)
+            }
+        }
+    };
+
+    // 0/1 return values we can use natively, everything else isn't expressible
+    // and won't be used so define the abi type to Void.
+    (@abi 0) => (());
+    (@abi 1 $t:ident) => ($t::Abi);
+    (@abi $($t:tt)*) => (Void);
+
+    (@from_abi $abi:ident $store:ident 0) => (());
+    (@from_abi $abi:ident $store:ident 1 $t:ident) => (($t::from_abi($abi, $store),));
+    (@from_abi $abi:ident $store:ident $($t:tt)*) => ({
+        debug_assert!(false);
+        match $abi {}
+    });
+}
+
+for_each_function_signature!(impl_wasm_results);

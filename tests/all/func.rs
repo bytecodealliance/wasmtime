@@ -549,3 +549,35 @@ fn trampolines_always_valid() -> anyhow::Result<()> {
     func.call(&[])?;
     Ok(())
 }
+
+#[test]
+fn typed_multiple_results() -> anyhow::Result<()> {
+    let store = Store::default();
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (func (export "f0") (result i32 i64)
+                    i32.const 0
+                    i64.const 1)
+                (func (export "f1") (param i32 i32 i32) (result f32 f64)
+                    f32.const 2
+                    f64.const 3)
+            )
+
+        "#,
+    )?;
+    let instance = Instance::new(&store, &module, &[])?;
+    let f0 = instance.get_func("f0").unwrap();
+    assert!(f0.typed::<(), ()>().is_err());
+    assert!(f0.typed::<(), (i32, f32)>().is_err());
+    assert!(f0.typed::<(), i32>().is_err());
+    assert_eq!(f0.typed::<(), (i32, i64)>()?.call(())?, (0, 1));
+
+    let f1 = instance.get_func("f1").unwrap();
+    assert_eq!(
+        f1.typed::<(i32, i32, i32), (f32, f64)>()?.call((1, 2, 3))?,
+        (2., 3.)
+    );
+    Ok(())
+}
