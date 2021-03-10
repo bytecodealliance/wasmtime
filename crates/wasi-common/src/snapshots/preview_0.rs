@@ -749,8 +749,8 @@ impl<'a> wasi_unstable::WasiUnstable for WasiCtx {
                 types::SubscriptionU::Clock(clocksub) => match clocksub.id {
                     types::Clockid::Monotonic => {
                         let clock = self.clocks.monotonic.deref();
-                        let precision = Duration::from_micros(clocksub.precision);
-                        let duration = Duration::from_micros(clocksub.timeout);
+                        let precision = Duration::from_nanos(clocksub.precision);
+                        let duration = Duration::from_nanos(clocksub.timeout);
                         let deadline = if clocksub
                             .flags
                             .contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME)
