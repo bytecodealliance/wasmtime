@@ -633,7 +633,7 @@ impl Func {
     ///
     /// // Using `new_async` we can hook up into calling our async
     /// // `get_row_count` function.
-    /// let store = Store::new(&Engine::new(&Config::new_async()));
+    /// let store = Store::new(&Engine::new(&Config::new_async())?);
     /// let get_row_count_type = wasmtime::FuncType::new(
     ///     None,
     ///     Some(wasmtime::ValType::I32),

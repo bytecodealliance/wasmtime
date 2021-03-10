@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
 fn interruptable_store() -> Store {
-    let engine = Engine::new(Config::new().interruptable(true));
+    let engine = Engine::new(Config::new().interruptable(true)).unwrap();
     Store::new(&engine)
 }
 

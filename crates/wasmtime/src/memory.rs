@@ -566,7 +566,7 @@ mod tests {
         let mut cfg = Config::new();
         cfg.static_memory_maximum_size(0)
             .dynamic_memory_guard_size(0);
-        let store = Store::new(&Engine::new(&cfg));
+        let store = Store::new(&Engine::new(&cfg).unwrap());
         let ty = MemoryType::new(Limits::new(1, None));
         let mem = Memory::new(&store, ty);
         assert_eq!(mem.wasmtime_export.memory.offset_guard_size, 0);

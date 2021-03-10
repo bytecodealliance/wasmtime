@@ -83,7 +83,7 @@ fn drop_delayed() -> Result<()> {
 
     assert_eq!(HITS.load(SeqCst), 0);
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let module = Module::new(&engine, &wat::parse_str(r#"(import "" "" (func))"#)?)?;
 
     let store = Store::new(&engine);
@@ -138,7 +138,7 @@ fn signatures_match() -> Result<()> {
         },
     );
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let store = Store::new(&engine);
 
     let f = store
@@ -271,7 +271,7 @@ fn import_works() -> Result<()> {
         },
     );
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let module = Module::new(&engine, &wasm)?;
 
     let store = Store::new(&engine);
@@ -314,7 +314,7 @@ fn trap_smoke() -> Result<()> {
     let mut config = Config::default();
     config.wrap_host_func("", "", || -> Result<(), Trap> { Err(Trap::new("test")) });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let store = Store::new(&engine);
 
     let f = store.get_host_func("", "").expect("should be defined");
@@ -339,7 +339,7 @@ fn trap_import() -> Result<()> {
     let mut config = Config::default();
     config.wrap_host_func("", "", || -> Result<(), Trap> { Err(Trap::new("foo")) });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let module = Module::new(&engine, &wasm)?;
     let store = Store::new(&engine);
 
@@ -367,7 +367,7 @@ fn new_from_signature() -> Result<()> {
     let ty = FuncType::new(Some(ValType::I32), Some(ValType::F64));
     config.define_host_func("", "f2", ty, |_, _, _| panic!());
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let store = Store::new(&engine);
 
     let f = store.get_host_func("", "f1").expect("func defined");
@@ -403,7 +403,7 @@ fn call_wrapped_func() -> Result<()> {
 
     config.wrap_host_func("", "f5", || 4.0f64);
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let store = Store::new(&engine);
 
     let f = store.get_host_func("", "f1").expect("func defined");
@@ -444,7 +444,7 @@ fn func_return_nothing() -> Result<()> {
 
     config.define_host_func("", "", ty, |_, _, _| Ok(()));
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let store = Store::new(&engine);
     let f = store.get_host_func("", "").expect("func defined");
     let err = f.call(&[]).unwrap_err().downcast::<Trap>()?;
@@ -485,7 +485,7 @@ fn call_via_funcref() -> Result<()> {
         x + y
     });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let module = Module::new(&engine, &wasm)?;
     let store = Store::new(&engine);
     let instance = Instance::new(&store, &module, &[])?;
@@ -534,7 +534,7 @@ fn store_with_context() -> Result<()> {
         ctx.called.set(true);
     });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let store = Store::new(&engine);
     assert!(store.get::<Ctx>().is_none());
     assert!(store
@@ -572,7 +572,7 @@ fn wasi_imports_missing_context() -> Result<()> {
         "#,
     )?;
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let module = Module::new(&engine, wasm)?;
     let store = Store::new(&engine);
     let linker = Linker::new(&store);
@@ -603,7 +603,7 @@ fn wasi_imports() -> Result<()> {
         "#,
     )?;
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let module = Module::new(&engine, wasm)?;
     let store = Store::new(&engine);
     assert!(Wasi::set_context(&store, WasiCtxBuilder::new().build()?).is_ok());

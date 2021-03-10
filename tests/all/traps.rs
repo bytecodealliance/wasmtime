@@ -526,7 +526,7 @@ fn parse_dwarf_info() -> Result<()> {
     );
     let mut config = Config::new();
     config.wasm_backtrace_details(WasmBacktraceDetails::Enable);
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let store = Store::new(&engine);
     let module = Module::new(&engine, &wasm)?;
     let mut linker = Linker::new(&store);
@@ -561,7 +561,7 @@ fn parse_dwarf_info() -> Result<()> {
 fn no_hint_even_with_dwarf_info() -> Result<()> {
     let mut config = Config::new();
     config.wasm_backtrace_details(WasmBacktraceDetails::Disable);
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let store = Store::new(&engine);
     let module = Module::new(
         &engine,

@@ -359,7 +359,7 @@ mod tests {
         let mut config = Config::default();
         config.wasm_module_linking(true);
         config.wasm_multi_memory(true);
-        let engine = wasmtime::Engine::new(&config);
+        let engine = wasmtime::Engine::new(&config).unwrap();
         Store::new(&engine)
     }
 

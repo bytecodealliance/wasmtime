@@ -4,7 +4,7 @@ use wasmtime::*;
 fn engine() -> Engine {
     let mut config = Config::new();
     config.wasm_module_linking(true);
-    Engine::new(&config)
+    Engine::new(&config).unwrap()
 }
 
 #[test]
@@ -191,7 +191,7 @@ fn limit_instances() -> Result<()> {
     let mut config = Config::new();
     config.wasm_module_linking(true);
     config.max_instances(10);
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let module = Module::new(
         &engine,
         r#"
@@ -232,7 +232,7 @@ fn limit_memories() -> Result<()> {
     config.wasm_module_linking(true);
     config.wasm_multi_memory(true);
     config.max_memories(10);
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let module = Module::new(
         &engine,
         r#"
@@ -267,7 +267,7 @@ fn limit_tables() -> Result<()> {
     let mut config = Config::new();
     config.wasm_module_linking(true);
     config.max_tables(10);
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let module = Module::new(
         &engine,
         r#"

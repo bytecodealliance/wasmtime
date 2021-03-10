@@ -1322,11 +1322,11 @@ impl Config {
         Compiler::new(isa, self.strategy, tunables, self.features)
     }
 
-    pub(crate) fn build_allocator(&self) -> Box<dyn InstanceAllocator> {
+    pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator>> {
         match self.allocation_strategy {
-            InstanceAllocationStrategy::OnDemand => {
-                Box::new(OnDemandInstanceAllocator::new(self.mem_creator.clone()))
-            }
+            InstanceAllocationStrategy::OnDemand => Ok(Box::new(OnDemandInstanceAllocator::new(
+                self.mem_creator.clone(),
+            ))),
             InstanceAllocationStrategy::Pooling {
                 strategy,
                 module_limits,
@@ -1338,15 +1338,12 @@ impl Config {
                 #[cfg(not(feature = "async"))]
                 let stack_size = 0;
 
-                Box::new(
-                    PoolingInstanceAllocator::new(
-                        strategy.into(),
-                        module_limits.into(),
-                        instance_limits.into(),
-                        stack_size,
-                    )
-                    .expect("failed to create pooling instance allocator"),
-                )
+                Ok(Box::new(PoolingInstanceAllocator::new(
+                    strategy.into(),
+                    module_limits.into(),
+                    instance_limits.into(),
+                    stack_size,
+                )?))
             }
         }
     }

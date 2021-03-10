@@ -229,7 +229,7 @@ fn get_host_function() -> Result<()> {
     let mut config = Config::default();
     config.wrap_host_func("mod", "f1", || {});
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let module = Module::new(&engine, r#"(module (import "mod" "f1" (func)))"#)?;
     let store = Store::new(&engine);
 
@@ -244,7 +244,7 @@ fn shadowing_host_function() -> Result<()> {
     let mut config = Config::default();
     config.wrap_host_func("mod", "f1", || {});
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let store = Store::new(&engine);
 
     let mut linker = Linker::new(&store);

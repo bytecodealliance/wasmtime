@@ -5,13 +5,13 @@ fn caches_across_engines() {
     let mut c = Config::new();
     c.cranelift_clear_cpu_flags();
 
-    let bytes = Module::new(&Engine::new(&c), "(module)")
+    let bytes = Module::new(&Engine::new(&c).unwrap(), "(module)")
         .unwrap()
         .serialize()
         .unwrap();
 
     let res = Module::deserialize(
-        &Engine::new(&Config::new().cranelift_clear_cpu_flags()),
+        &Engine::new(&Config::new().cranelift_clear_cpu_flags()).unwrap(),
         &bytes,
     );
     assert!(res.is_ok());
@@ -22,7 +22,8 @@ fn caches_across_engines() {
             &Config::new()
                 .cranelift_clear_cpu_flags()
                 .cranelift_nan_canonicalization(true),
-        ),
+        )
+        .unwrap(),
         &bytes,
     );
     assert!(res.is_err());
@@ -33,7 +34,8 @@ fn caches_across_engines() {
             &Config::new()
                 .cranelift_clear_cpu_flags()
                 .cranelift_opt_level(OptLevel::None),
-        ),
+        )
+        .unwrap(),
         &bytes,
     );
     assert!(res.is_err());
@@ -46,7 +48,8 @@ fn caches_across_engines() {
                     .cranelift_clear_cpu_flags()
                     .cranelift_other_flag("has_sse3", "true")
                     .unwrap()
-            }),
+            })
+            .unwrap(),
             &bytes,
         );
         assert!(res.is_err());

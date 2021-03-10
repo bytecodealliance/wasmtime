@@ -9,7 +9,7 @@ fn main() -> Result<()> {
     println!("Initializing...");
     let mut config = Config::new();
     config.wasm_reference_types(true);
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let store = Store::new(&engine);
 
     println!("Compiling module...");

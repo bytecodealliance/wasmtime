@@ -30,6 +30,6 @@ pub extern "C" fn wasm_engine_new() -> Box<wasm_engine_t> {
 pub extern "C" fn wasm_engine_new_with_config(c: Box<wasm_config_t>) -> Box<wasm_engine_t> {
     let config = c.config;
     Box::new(wasm_engine_t {
-        engine: Engine::new(&config),
+        engine: Engine::new(&config).unwrap(),
     })
 }

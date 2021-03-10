@@ -6,7 +6,7 @@ use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use wasmtime::*;
 
 fn async_store() -> Store {
-    Store::new(&Engine::new(&Config::new_async()))
+    Store::new(&Engine::new(&Config::new_async()).unwrap())
 }
 
 fn run_smoke_test(func: &Func) {
@@ -60,7 +60,7 @@ fn smoke_host_func() {
         Box::new(async { Ok(()) })
     });
 
-    let store = Store::new(&Engine::new(&config));
+    let store = Store::new(&Engine::new(&config).unwrap());
 
     let func = store
         .get_host_func("", "first")
@@ -123,7 +123,7 @@ fn smoke_host_func_with_suspension() {
         })
     });
 
-    let store = Store::new(&Engine::new(&config));
+    let store = Store::new(&Engine::new(&config).unwrap());
 
     let func = store
         .get_host_func("", "first")
@@ -370,7 +370,7 @@ fn dummy_waker() -> Waker {
 
 #[test]
 fn iloop_with_fuel() {
-    let engine = Engine::new(Config::new_async().consume_fuel(true));
+    let engine = Engine::new(Config::new_async().consume_fuel(true)).unwrap();
     let store = Store::new(&engine);
     store.out_of_fuel_async_yield(1_000, 10);
     let module = Module::new(
@@ -404,7 +404,7 @@ fn iloop_with_fuel() {
 
 #[test]
 fn fuel_eventually_finishes() {
-    let engine = Engine::new(Config::new_async().consume_fuel(true));
+    let engine = Engine::new(Config::new_async().consume_fuel(true)).unwrap();
     let store = Store::new(&engine);
     store.out_of_fuel_async_yield(u32::max_value(), 10);
     let module = Module::new(
@@ -447,7 +447,7 @@ fn async_with_pooling_stacks() {
         },
     });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config).unwrap();
     let store = Store::new(&engine);
     let func = Func::new_async(
         &store,
@@ -483,7 +483,7 @@ fn async_host_func_with_pooling_stacks() {
         move |_caller, _params, _results| Box::new(async { Ok(()) }),
     );
 
-    let store = Store::new(&Engine::new(&config));
+    let store = Store::new(&Engine::new(&config).unwrap());
     let func = store.get_host_func("", "").expect("expected host function");
 
     run_smoke_test(&func);

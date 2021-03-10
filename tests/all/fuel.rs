@@ -48,7 +48,7 @@ fn run() -> Result<()> {
 fn fuel_consumed(wasm: &[u8]) -> u64 {
     let mut config = Config::new();
     config.consume_fuel(true);
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config).unwrap();
     let module = Module::new(&engine, wasm).unwrap();
     let store = Store::new(&engine);
     store.add_fuel(u64::max_value()).unwrap();
@@ -110,7 +110,7 @@ fn iloop() {
     fn iloop_aborts(wat: &str) {
         let mut config = Config::new();
         config.consume_fuel(true);
-        let engine = Engine::new(&config);
+        let engine = Engine::new(&config).unwrap();
         let module = Module::new(&engine, wat).unwrap();
         let store = Store::new(&engine);
         store.add_fuel(10_000).unwrap();

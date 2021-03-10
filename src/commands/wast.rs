@@ -34,7 +34,7 @@ impl WastCommand {
         }
 
         let config = self.common.config()?;
-        let store = Store::new(&Engine::new(&config));
+        let store = Store::new(&Engine::new(&config)?);
         let mut wast_context = WastContext::new(store);
 
         wast_context

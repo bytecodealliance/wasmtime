@@ -44,7 +44,7 @@ pub(crate) fn ref_types_module(
     let mut config = Config::new();
     config.wasm_reference_types(true);
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let store = Store::new(&engine);
 
     let module = Module::new(&engine, source)?;

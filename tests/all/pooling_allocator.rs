@@ -17,7 +17,7 @@ fn successful_instantiation() -> Result<()> {
         },
     });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let module = Module::new(&engine, r#"(module (memory 1) (table 10 funcref))"#)?;
 
     // Module should instantiate
@@ -43,7 +43,7 @@ fn memory_limit() -> Result<()> {
         },
     });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
 
     // Module should fail to validate because the minimum is greater than the configured limit
     match Module::new(&engine, r#"(module (memory 4))"#) {
@@ -105,7 +105,7 @@ fn memory_init() -> Result<()> {
         },
     });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
 
     let module = Module::new(
         &engine,
@@ -143,7 +143,7 @@ fn memory_guard_page_trap() -> Result<()> {
         },
     });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
 
     let module = Module::new(
         &engine,
@@ -198,7 +198,7 @@ fn memory_zeroed() -> Result<()> {
         },
     });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
 
     let module = Module::new(&engine, r#"(module (memory (export "m") 1))"#)?;
 
@@ -241,7 +241,7 @@ fn table_limit() -> Result<()> {
         },
     });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
 
     // Module should fail to validate because the minimum is greater than the configured limit
     match Module::new(&engine, r#"(module (table 31 funcref))"#) {
@@ -309,7 +309,7 @@ fn table_init() -> Result<()> {
         },
     });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
 
     let module = Module::new(
         &engine,
@@ -359,7 +359,7 @@ fn table_zeroed() -> Result<()> {
         },
     });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
 
     let module = Module::new(&engine, r#"(module (table (export "t") 10 funcref))"#)?;
 
@@ -401,7 +401,7 @@ fn instantiation_limit() -> Result<()> {
         },
     });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let module = Module::new(&engine, r#"(module)"#)?;
 
     // Instantiate to the limit

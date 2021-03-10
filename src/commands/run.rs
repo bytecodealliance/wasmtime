@@ -137,7 +137,7 @@ impl RunCommand {
         if self.wasm_timeout.is_some() {
             config.interruptable(true);
         }
-        let engine = Engine::new(&config);
+        let engine = Engine::new(&config)?;
         let store = Store::new(&engine);
 
         // Make wasi available by default.

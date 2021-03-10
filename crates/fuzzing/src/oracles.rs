@@ -90,7 +90,7 @@ pub fn instantiate_with_config(
         Timeout::Fuel(_) => true,
         _ => false,
     });
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config).unwrap();
     let store = Store::new(&engine);
 
     let mut timeout_state = SignalOnDrop::default();
@@ -143,7 +143,7 @@ pub fn instantiate_with_config(
 pub fn compile(wasm: &[u8], strategy: Strategy) {
     crate::init_fuzzing();
 
-    let engine = Engine::new(&crate::fuzz_default_config(strategy).unwrap());
+    let engine = Engine::new(&crate::fuzz_default_config(strategy).unwrap()).unwrap();
     log_wasm(wasm);
     let _ = Module::new(&engine, wasm);
 }
@@ -180,7 +180,7 @@ pub fn differential_execution(
     log_wasm(&wasm);
 
     for config in &configs {
-        let engine = Engine::new(config);
+        let engine = Engine::new(config).unwrap();
         let store = Store::new(&engine);
 
         let module = Module::new(&engine, &wasm).unwrap();
@@ -320,7 +320,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
             ApiCall::EngineNew => {
                 log::trace!("creating engine");
                 assert!(engine.is_none());
-                engine = Some(Engine::new(config.as_ref().unwrap()));
+                engine = Some(Engine::new(config.as_ref().unwrap()).unwrap());
             }
 
             ApiCall::StoreNew => {
@@ -416,7 +416,7 @@ pub fn spectest(fuzz_config: crate::generators::Config, test: crate::generators:
     let mut config = fuzz_config.to_wasmtime();
     config.wasm_reference_types(false);
     config.wasm_bulk_memory(false);
-    let store = Store::new(&Engine::new(&config));
+    let store = Store::new(&Engine::new(&config).unwrap());
     if fuzz_config.consume_fuel {
         store.add_fuel(u64::max_value()).unwrap();
     }
@@ -439,7 +439,7 @@ pub fn table_ops(
     {
         let mut config = fuzz_config.to_wasmtime();
         config.wasm_reference_types(true);
-        let engine = Engine::new(&config);
+        let engine = Engine::new(&config).unwrap();
         let store = Store::new(&engine);
         if fuzz_config.consume_fuel {
             store.add_fuel(u64::max_value()).unwrap();
@@ -554,7 +554,7 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
     // Instantiate wasmtime module and instance.
     let mut wasmtime_config = config.to_wasmtime();
     wasmtime_config.cranelift_nan_canonicalization(true);
-    let wasmtime_engine = Engine::new(&wasmtime_config);
+    let wasmtime_engine = Engine::new(&wasmtime_config).unwrap();
     let wasmtime_store = Store::new(&wasmtime_engine);
     if config.consume_fuel {
         wasmtime_store.add_fuel(u64::max_value()).unwrap();

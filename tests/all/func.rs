@@ -156,7 +156,7 @@ fn import_works() -> Result<()> {
     )?;
     let mut config = Config::new();
     config.wasm_reference_types(true);
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let store = Store::new(&engine);
     let module = Module::new(&engine, &wasm)?;
     let instance = Instance::new(
@@ -459,7 +459,7 @@ fn return_cross_store_value() -> anyhow::Result<()> {
     )?;
     let mut config = Config::new();
     config.wasm_reference_types(true);
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let module = Module::new(&engine, &wasm)?;
 
     let store1 = Store::new(&engine);
@@ -485,7 +485,7 @@ fn return_cross_store_value() -> anyhow::Result<()> {
 fn pass_cross_store_arg() -> anyhow::Result<()> {
     let mut config = Config::new();
     config.wasm_reference_types(true);
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
 
     let store1 = Store::new(&engine);
     let store2 = Store::new(&engine);

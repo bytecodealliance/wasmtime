@@ -470,7 +470,7 @@ impl Store {
     /// # fn main() -> Result<()> {
     /// // Enable interruptable code via `Config` and then create an interrupt
     /// // handle which we'll use later to interrupt running code.
-    /// let engine = Engine::new(Config::new().interruptable(true));
+    /// let engine = Engine::new(Config::new().interruptable(true))?;
     /// let store = Store::new(&engine);
     /// let interrupt_handle = store.interrupt_handle()?;
     ///
