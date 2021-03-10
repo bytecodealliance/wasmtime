@@ -1,7 +1,7 @@
 test legalizer
 set enable_probestack=false
 set enable_jump_tables=false
-target x86_64
+target x86_64 legacy
 
 ; Test that when jump_tables_enables is false, all jump tables are eliminated.
 ; regex: V=v\d+

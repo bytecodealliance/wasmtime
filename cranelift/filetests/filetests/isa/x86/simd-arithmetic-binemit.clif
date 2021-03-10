@@ -1,6 +1,6 @@
 test binemit
 set enable_simd
-target x86_64 skylake
+target x86_64 legacy skylake
 
 function %arithmetic_i8x16(i8x16, i8x16) {
 block0(v0: i8x16 [%xmm6], v1: i8x16 [%xmm2]):

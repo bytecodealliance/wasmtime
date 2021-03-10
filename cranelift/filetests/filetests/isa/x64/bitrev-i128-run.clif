@@ -1,6 +1,5 @@
 test run
-target x86_64
-feature "experimental_x64"
+target x86_64 machinst
 
 function %reverse_bits_zero() -> b1 {
 block0:

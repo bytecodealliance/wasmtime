@@ -1,7 +1,7 @@
 test unwind
 set opt_level=speed_and_size
 set is_pic
-target x86_64 haswell
+target x86_64 legacy haswell
 
 ; check the unwind information with a function with no args
 function %no_args() system_v {

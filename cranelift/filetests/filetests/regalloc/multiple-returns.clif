@@ -1,5 +1,5 @@
 test regalloc
-target x86_64
+target x86_64 legacy
 
 ; Return the same value twice. This needs a copy so that each value can be
 ; allocated its own register.

@@ -1,5 +1,5 @@
 test compile
-target x86_64 haswell
+target x86_64 legacy haswell
 
 ;; `b1` return values need to be legalized into bytes so that they can be stored
 ;; in memory.

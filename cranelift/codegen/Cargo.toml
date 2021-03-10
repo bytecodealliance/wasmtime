@@ -63,8 +63,14 @@ unwind = ["gimli"]
 x86 = []
 arm64 = []
 riscv = []
-x64 = [] # New work-in-progress codegen backend for x86_64 based on the new isel.
 arm32 = [] # Work-in-progress codegen backend for ARM.
+
+# Stub feature that does nothing, for Cargo-features compatibility: the new
+# backend is the default now.
+experimental_x64 = []
+
+# Make the old x86 backend the default.
+old-x86-backend = []
 
 # Option to enable all architectures.
 all-arch = [

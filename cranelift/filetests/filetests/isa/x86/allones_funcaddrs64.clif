@@ -2,7 +2,7 @@
 test binemit
 set opt_level=speed_and_size
 set emit_all_ones_funcaddrs
-target x86_64 haswell
+target x86_64 legacy haswell
 
 ; The binary encodings can be verified with the command:
 ;

@@ -286,7 +286,7 @@ jobs:
     # Test debug (DWARF) related functionality on new backend.
     - run: |
         sudo apt-get update && sudo apt-get install -y gdb lldb
-        cargo test --features experimental_x64 test_debug_dwarf -- --ignored --test-threads 1 --test debug::
+        cargo test test_debug_dwarf -- --ignored --test-threads 1 --test debug::
       if: matrix.os == 'ubuntu-latest'
       env:
         RUST_BACKTRACE: 1
@@ -309,10 +309,9 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
-  # Perform all tests (debug mode) for `wasmtime` with the experimental x64
-  # backend.
+  # Perform all tests (debug mode) for `wasmtime` with the old x86 backend.
   test_x64:
-    name: Test x64 new backend
+    name: Test old x86 backend
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -328,38 +327,8 @@ jobs:
     - run: rustup target add wasm32-wasi
     - run: rustup target add wasm32-unknown-unknown
 
-    # Run the x64 CI script.
-    - run: ./ci/run-experimental-x64-ci.sh
-      env:
-        RUST_BACKTRACE: 1
-
-  # Perform tests on the new x64 backend on Windows as well.
-  test_x64_win:
-    name: Test x64 new backend on Windows
-    runs-on: windows-latest
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        submodules: true
-    - uses: ./.github/actions/install-rust
-    - uses: ./.github/actions/define-llvm-env
-
-    - name: Install libclang
-      # Note: libclang is pre-installed on the macOS and linux images.
-      if: matrix.os == 'windows-latest'
-      run: |
-        curl https://releases.llvm.org/9.0.0/LLVM-9.0.0-win64.exe -o llvm-installer.exe
-        7z x llvm-installer.exe -oC:/llvm-binary
-        echo LIBCLANG_PATH=C:/llvm-binary/bin/libclang.dll >> $GITHUB_ENV
-        echo C:/llvm-binary/bin >> $GITHUB_PATH
-
-    # Install wasm32 targets in order to build various tests throughout the
-    # repo.
-    - run: rustup target add wasm32-wasi
-    - run: rustup target add wasm32-unknown-unknown
-
-    # Run the x64 CI script.
-    - run: ./ci/run-experimental-x64-ci.sh
+    # Run the old x86 backend CI (we will eventually remove this).
+    - run: ./ci/run-old-x86-ci.sh
       env:
         RUST_BACKTRACE: 1
 

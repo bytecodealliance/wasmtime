@@ -1,6 +1,6 @@
 test run
 set enable_simd
-target x86_64 skylake
+target x86_64 legacy skylake
 
 function %splat_i64x2() -> b1 {
 block0:

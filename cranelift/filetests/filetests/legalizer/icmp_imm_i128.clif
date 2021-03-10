@@ -1,5 +1,5 @@
 test legalizer
-target x86_64
+target x86_64 legacy
 
 function %icmp_imm_i128(i128) -> i8 {
 block0(v0: i128):

@@ -1,6 +1,6 @@
 ; Binary emission of 32-bit floating point code.
 test binemit
-target i686 haswell
+target i686 legacy haswell
 
 ; The binary encodings can be verified with the command:
 ;

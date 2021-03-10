@@ -1,7 +1,7 @@
 ; Test the custom legalizations.
 test legalizer
-target i686
-target x86_64
+target i686 legacy
+target x86_64 legacy
 
 ; regex: V=v\d+
 ; regex: BB=block\d+

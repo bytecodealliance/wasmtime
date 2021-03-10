@@ -1,6 +1,6 @@
 test legalizer
 set enable_simd
-target x86_64 skylake
+target x86_64 legacy skylake
 
 function %bnot_b32x4(b32x4) -> b32x4 {
 ; check: const0 = 0xffffffffffffffffffffffffffffffff

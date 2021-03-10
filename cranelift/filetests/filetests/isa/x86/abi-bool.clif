@@ -1,5 +1,5 @@
 test compile
-target x86_64 haswell
+target x86_64 legacy haswell
 
 function %foo(i64, i64, i64, i32) -> b1 system_v {
 block3(v0: i64, v1: i64, v2: i64, v3: i32):

@@ -8,9 +8,7 @@ use log::warn;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "x64")]
 use crate::binemit::CodeOffset;
-#[cfg(feature = "x64")]
 use crate::isa::unwind::UnwindInst;
 
 /// Maximum (inclusive) size of a "small" stack allocation
@@ -334,10 +332,8 @@ impl UnwindInfo {
     }
 }
 
-#[cfg(feature = "x64")]
 const UNWIND_RBP_REG: u8 = 5;
 
-#[cfg(feature = "x64")]
 pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<regalloc::Reg>>(
     insts: &[(CodeOffset, UnwindInst)],
 ) -> CodegenResult<UnwindInfo> {

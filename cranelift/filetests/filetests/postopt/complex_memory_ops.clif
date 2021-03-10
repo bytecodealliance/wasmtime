@@ -1,5 +1,5 @@
 test postopt
-target x86_64
+target x86_64 legacy
 
 function %dual_loads(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):

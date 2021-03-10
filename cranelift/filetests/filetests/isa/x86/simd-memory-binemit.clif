@@ -1,6 +1,6 @@
 test binemit
 set enable_simd
-target x86_64 skylake
+target x86_64 legacy skylake
 
 function %load_store_simple(i64) {
 block0(v0: i64 [%rax]):

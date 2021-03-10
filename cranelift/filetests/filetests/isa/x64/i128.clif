@@ -1,7 +1,6 @@
 test compile
 set enable_llvm_abi_extensions=true
-target x86_64
-feature "experimental_x64"
+target x86_64 machinst
 
 function %f0(i128, i128) -> i128 {
 ; check:   pushq   %rbp

@@ -1,7 +1,7 @@
 ; Test legalization of a non-colocated call in 64-bit non-PIC mode.
 test legalizer
 set opt_level=speed_and_size
-target x86_64 haswell
+target x86_64 legacy haswell
 
 function %call() {
     fn0 = %foo()

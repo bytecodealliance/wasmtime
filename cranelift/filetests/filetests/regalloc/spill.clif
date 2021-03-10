@@ -12,7 +12,7 @@ test regalloc
 ; regex: V=v\d+
 ; regex: WS=\s+
 
-target riscv32 enable_e
+target riscv32 legacy enable_e
 
 ; In straight-line code, the first value defined is spilled.
 ; That is in order:

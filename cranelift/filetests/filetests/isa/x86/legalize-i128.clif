@@ -1,6 +1,6 @@
 ; Test the legalization of i128 instructions on x86_64.
 test legalizer
-target x86_64 haswell
+target x86_64 legacy haswell
 
 ; regex: V=v\d+
 

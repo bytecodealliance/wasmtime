@@ -1,5 +1,5 @@
 test regalloc
-target i686
+target i686 legacy
 
 ; regex: V=v\d+
 ; regex: BB=block\d+

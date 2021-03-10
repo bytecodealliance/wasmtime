@@ -1,6 +1,5 @@
 test compile
-target x86_64
-feature "experimental_x64"
+target x86_64 machinst
 
 ;; From: https://github.com/bytecodealliance/wasmtime/issues/2670
 

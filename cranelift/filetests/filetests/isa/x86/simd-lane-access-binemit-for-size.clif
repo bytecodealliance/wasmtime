@@ -1,7 +1,7 @@
 test binemit
 set opt_level=speed_and_size
 set enable_simd
-target x86_64
+target x86_64 legacy
 
 ;; These scalar_to_vector tests avoid the use of REX prefixes with the speed_and_size optimization flag.
 

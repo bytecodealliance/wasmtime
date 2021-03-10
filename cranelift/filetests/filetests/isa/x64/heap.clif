@@ -1,6 +1,5 @@
 test compile
-target x86_64
-feature "experimental_x64"
+target x86_64 machinst
 
 function %f(i32, i64 vmctx) -> i64 {
     gv0 = vmctx

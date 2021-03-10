@@ -1,6 +1,6 @@
 test legalizer
 
-target x86_64
+target x86_64 legacy
 
 function %br_icmp(i64) fast {
 block0(v0: i64):

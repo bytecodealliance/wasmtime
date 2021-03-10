@@ -1,6 +1,6 @@
 test legalizer
 set enable_heap_access_spectre_mitigation=false
-target x86_64
+target x86_64 legacy
 
 ; Test legalization for various forms of heap addresses.
 ; regex: BB=block\d+

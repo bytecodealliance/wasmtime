@@ -1,6 +1,6 @@
 test legalizer
 set enable_simd
-target x86_64 skylake
+target x86_64 legacy skylake
 
 function %ineg_i32x4() -> b1 {
 ; check:  const0 = 0x00000001000000010000000100000001

@@ -1,6 +1,6 @@
 test shrink
 set opt_level=speed_and_size
-target x86_64
+target x86_64 legacy
 
 function %test_multiple_uses(i32 [%rdi]) -> i32 {
 block0(v0: i32 [%rdi]):

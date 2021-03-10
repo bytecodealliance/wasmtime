@@ -1,5 +1,5 @@
 test regalloc
-target i686 haswell
+target i686 legacy haswell
 
 function %pr165() system_v {
 block0:

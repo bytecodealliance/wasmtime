@@ -1,6 +1,6 @@
 test run
 set enable_simd
-target x86_64 skylake
+target x86_64 legacy skylake
 
 function %iadd_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0:i32x4, v1:i32x4):

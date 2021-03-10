@@ -93,9 +93,12 @@ wasi-nn = ["wasmtime-wasi-nn"]
 uffd = ["wasmtime/uffd"]
 all-arch = ["wasmtime/all-arch"]
 
-# Try the experimental, work-in-progress new x86_64 backend. This is not stable
-# as of June 2020.
-experimental_x64 = ["wasmtime-jit/experimental_x64"]
+# Stub feature that does nothing, for Cargo-features compatibility: the new
+# backend is the default now.
+experimental_x64 = []
+
+# Use the old x86 backend.
+old-x86-backend = ["wasmtime-jit/old-x86-backend"]
 
 [badges]
 maintenance = { status = "actively-developed" }

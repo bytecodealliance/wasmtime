@@ -1,5 +1,5 @@
 test postopt
-target i686
+target i686 legacy
 
 ; Test that compare+branch sequences are folded effectively on x86.
 

@@ -30,4 +30,3 @@ anyhow = "1.0.32"
 [features]
 enable-peepmatic = []
 experimental_arm32 = []
-experimental_x64 = []

@@ -1,5 +1,5 @@
 test compile
-target x86_64
+target x86_64 legacy
 
 function u0:0() -> f32 system_v {
 block0:

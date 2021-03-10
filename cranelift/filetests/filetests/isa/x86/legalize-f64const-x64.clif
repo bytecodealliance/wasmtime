@@ -1,6 +1,6 @@
 ; Test the legalization of f64const.
 test legalizer
-target x86_64
+target x86_64 legacy
 
 ; regex: V=v\d+
 

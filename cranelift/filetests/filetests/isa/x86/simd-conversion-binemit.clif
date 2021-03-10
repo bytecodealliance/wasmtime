@@ -1,6 +1,6 @@
 test binemit
 set enable_simd
-target x86_64 nehalem
+target x86_64 legacy nehalem
 
 ; Ensure raw_bitcast emits no instructions.
 function %raw_bitcast_i16x8_to_b32x4() {

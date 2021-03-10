@@ -1,7 +1,7 @@
 ; binary emission of x86-32 code.
 test binemit
 set opt_level=speed_and_size
-target i686 haswell
+target i686 legacy haswell
 
 ; The binary encodings can be verified with the command:
 ;
