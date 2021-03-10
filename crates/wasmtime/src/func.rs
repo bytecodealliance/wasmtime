@@ -147,7 +147,7 @@ unsafe impl Sync for HostFunc {}
 /// might have an `async` function in Rust, however, which you'd like to make
 /// available from WebAssembly. Wasmtime supports asynchronously calling
 /// WebAssembly through native stack switching. You can get some more
-/// information about [asynchronous configs](Config::new_async), but from the
+/// information about [asynchronous configs](Config::async_support), but from the
 /// perspective of `Func` it's important to know that whether or not your
 /// [`Store`] is asynchronous will dictate whether you call functions through
 /// [`Func::call`] or [`Func::call_async`] (or the wrappers such as
@@ -351,7 +351,7 @@ macro_rules! generate_get_methods {
             $($args: WasmTy,)*
             R: WasmTy,
         {
-            assert!(!self.store().is_async(), concat!("must use `get", $num, "_async` on synchronous stores"));
+            assert!(!self.store().async_support(), concat!("cannot use `get", $num, "` when async support is enabled on the config"));
             self.[<_get $num>]::<$($args,)* R>()
         }
 
@@ -374,7 +374,7 @@ macro_rules! generate_get_methods {
             $($args: WasmTy + 'static,)*
             R: WasmTy + 'static,
         {
-            assert!(self.store().is_async(), concat!("must use `get", $num, "` on synchronous stores"));
+            assert!(self.store().async_support(), concat!("cannot use `get", $num, "_async` without enabling async support on the config"));
 
             // TODO: ideally we wouldn't box up the future here but could
             // instead name the future returned by `on_fiber`.  Unfortunately
@@ -500,7 +500,7 @@ macro_rules! generate_wrap_async_func {
             $($args: WasmTy,)*
             R: WasmRet,
         {
-            assert!(store.is_async());
+            assert!(store.async_support(), concat!("cannot use `wrap", $num, "_async` without enabling async support on the config"));
             Func::wrap(store, move |caller: Caller<'_>, $($args: $args),*| {
                 let store = caller.store().clone();
                 let mut future = Pin::from(func(caller, &state, $($args),*));
@@ -607,7 +607,7 @@ impl Func {
     /// # Panics
     ///
     /// This function will panic if `store` is not associated with an [async
-    /// config](Config::new_async).
+    /// config](Config::async_support).
     ///
     /// # Examples
     ///
@@ -633,7 +633,7 @@ impl Func {
     ///
     /// // Using `new_async` we can hook up into calling our async
     /// // `get_row_count` function.
-    /// let store = Store::new(&Engine::new(&Config::new_async())?);
+    /// let store = Store::new(&Engine::new(Config::new().async_support(true))?);
     /// let get_row_count_type = wasmtime::FuncType::new(
     ///     None,
     ///     Some(wasmtime::ValType::I32),
@@ -662,7 +662,10 @@ impl Func {
             ) -> Box<dyn Future<Output = Result<(), Trap>> + 'a>
             + 'static,
     {
-        assert!(store.is_async());
+        assert!(
+            store.async_support(),
+            "cannot use `new_async` without enabling async support in the config"
+        );
         Func::new(store, ty, move |caller, params, results| {
             let store = caller.store().clone();
             let mut future = Pin::from(func(caller, &state, params, results));
@@ -949,8 +952,8 @@ impl Func {
     /// initiates a panic.
     pub fn call(&self, params: &[Val]) -> Result<Box<[Val]>> {
         assert!(
-            !self.store().is_async(),
-            "must use `call_async` on asynchronous stores",
+            !self.store().async_support(),
+            "must use `call_async` when async support is enabled on the config",
         );
         self._call(params)
     }
@@ -960,7 +963,7 @@ impl Func {
     ///
     /// This function is the same as [`Func::call`] except that it is
     /// asynchronous. This is only compatible with stores associated with an
-    /// [asynchronous config](Config::new_async).
+    /// [asynchronous config](Config::async_support).
     ///
     /// It's important to note that the execution of WebAssembly will happen
     /// synchronously in the `poll` method of the future returned from this
@@ -970,7 +973,7 @@ impl Func {
     /// in a "blocking context".
     ///
     /// For more information see the documentation on [asynchronous
-    /// configs](Config::new_async).
+    /// configs](Config::async_support).
     ///
     /// # Panics
     ///
@@ -980,8 +983,8 @@ impl Func {
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub async fn call_async(&self, params: &[Val]) -> Result<Box<[Val]>> {
         assert!(
-            self.store().is_async(),
-            "must use `call` on synchronous stores",
+            self.store().async_support(),
+            "cannot use `call_async` without enabling async support in the config",
         );
         let result = self.store().on_fiber(|| self._call(params)).await??;
         Ok(result)

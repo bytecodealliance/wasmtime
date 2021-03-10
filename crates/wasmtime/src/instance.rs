@@ -93,15 +93,15 @@ impl Instance {
     /// # Panics
     ///
     /// This function will panic if called with a store associated with a
-    /// [`asynchronous config`](crate::Config::new_async).
+    /// [`asynchronous config`](crate::Config::async_support).
     ///
     /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     /// [`ExternType`]: crate::ExternType
     pub fn new(store: &Store, module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
         assert!(
-            !store.is_async(),
-            "cannot instantiate synchronously within an asynchronous store"
+            !store.async_support(),
+            "cannot use `new` when async support is enabled on the config"
         );
 
         // NB: this is the same code as `Instance::new_async`. It's intentionally
@@ -129,7 +129,7 @@ impl Instance {
     ///
     /// This function will panic if called with a store associated with a [`synchronous
     /// config`](crate::Config::new). This is only compatible with stores associated with
-    /// an [`asynchronous config`](crate::Config::new_async).
+    /// an [`asynchronous config`](crate::Config::async_support).
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub async fn new_async(
@@ -138,8 +138,8 @@ impl Instance {
         imports: &[Extern],
     ) -> Result<Instance, Error> {
         assert!(
-            store.is_async(),
-            "cannot instantiate asynchronously within a synchronous store"
+            store.async_support(),
+            "cannot use `new_async` without enabling async support on the config"
         );
 
         // NB: this is the same code as `Instance::new`. It's intentionally

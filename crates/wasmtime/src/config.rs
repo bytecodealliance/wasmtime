@@ -323,7 +323,7 @@ macro_rules! generate_wrap_async_host_func {
         ///
         /// # Panics
         ///
-        /// This method will panic if it is not called on an [async config](Config::new_async).
+        /// This method will panic if it is not called on an [async config](Config::async_support).
         #[allow(non_snake_case)]
         #[cfg(feature = "async")]
         #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
@@ -337,13 +337,13 @@ macro_rules! generate_wrap_async_host_func {
             $($args: WasmTy,)*
             R: WasmRet,
         {
-            assert!(self.is_async, "cannot define an asynchronous host function on a synchronous config");
+            assert!(self.async_support, concat!("cannot use `wrap", $num, "_host_func_async` without enabling async support on the config"));
             self.host_funcs.insert(
                 module,
                 name,
                 HostFunc::wrap(move |caller: Caller<'_>, $($args: $args),*| {
                     let store = caller.store().clone();
-                    debug_assert!(store.is_async());
+                    debug_assert!(store.async_support());
                     let mut future = Pin::from(func(caller, $($args),*));
                     match store.block_on(future.as_mut()) {
                         Ok(ret) => ret.into_result(),
@@ -380,23 +380,72 @@ pub struct Config {
     #[cfg(feature = "async")]
     pub(crate) async_stack_size: usize,
     host_funcs: HostFuncMap,
-    is_async: bool,
+    pub(crate) async_support: bool,
 }
 
 impl Config {
     /// Creates a new configuration object with the default configuration
     /// specified.
     pub fn new() -> Self {
-        Self::_new(false)
+        let mut flags = settings::builder();
+
+        // There are two possible traps for division, and this way
+        // we get the proper one if code traps.
+        flags
+            .enable("avoid_div_traps")
+            .expect("should be valid flag");
+
+        // Invert cranelift's default-on verification to instead default off.
+        flags
+            .set("enable_verifier", "false")
+            .expect("should be valid flag");
+
+        // Turn on cranelift speed optimizations by default
+        flags
+            .set("opt_level", "speed")
+            .expect("should be valid flag");
+
+        // We don't use probestack as a stack limit mechanism
+        flags
+            .set("enable_probestack", "false")
+            .expect("should be valid flag");
+
+        let mut ret = Self {
+            tunables: Tunables::default(),
+            flags,
+            isa_flags: native::builder(),
+            strategy: CompilationStrategy::Auto,
+            #[cfg(feature = "cache")]
+            cache_config: CacheConfig::new_cache_disabled(),
+            profiler: Arc::new(NullProfilerAgent),
+            mem_creator: None,
+            allocation_strategy: InstanceAllocationStrategy::OnDemand,
+            max_wasm_stack: 1 << 20,
+            wasm_backtrace_details_env_used: false,
+            features: WasmFeatures {
+                reference_types: true,
+                bulk_memory: true,
+                multi_value: true,
+                ..WasmFeatures::default()
+            },
+            max_instances: 10_000,
+            max_tables: 10_000,
+            max_memories: 10_000,
+            #[cfg(feature = "async")]
+            async_stack_size: 2 << 20,
+            host_funcs: HostFuncMap::new(),
+            async_support: false,
+        };
+        ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
+        ret
     }
 
-    /// Creates a new async config.
+    /// Whether or not to enable support for asynchronous functions in Wasmtime.
     ///
-    /// The returned config can optionally define host functions with `async`.
-    /// Instances created and functions called within the returned `Config`
-    /// *must* be called through their asynchronous APIs, however. For example
-    /// using [`Func::call`](crate::Func::call) will panic when used with the
-    /// returned config.
+    /// When enabled, the config can optionally define host functions with `async`.
+    /// Instances created and functions called with this `Config` *must* be called
+    /// through their asynchronous APIs, however. For example using
+    /// [`Func::call`](crate::Func::call) will panic when used with this config.
     ///
     /// # Asynchronous Wasm
     ///
@@ -470,66 +519,9 @@ impl Config {
     /// feel free to open an issue!
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
-    pub fn new_async() -> Self {
-        Self::_new(true)
-    }
-
-    fn _new(is_async: bool) -> Self {
-        let mut flags = settings::builder();
-
-        // There are two possible traps for division, and this way
-        // we get the proper one if code traps.
-        flags
-            .enable("avoid_div_traps")
-            .expect("should be valid flag");
-
-        // Invert cranelift's default-on verification to instead default off.
-        flags
-            .set("enable_verifier", "false")
-            .expect("should be valid flag");
-
-        // Turn on cranelift speed optimizations by default
-        flags
-            .set("opt_level", "speed")
-            .expect("should be valid flag");
-
-        // We don't use probestack as a stack limit mechanism
-        flags
-            .set("enable_probestack", "false")
-            .expect("should be valid flag");
-
-        let mut ret = Self {
-            tunables: Tunables::default(),
-            flags,
-            isa_flags: native::builder(),
-            strategy: CompilationStrategy::Auto,
-            #[cfg(feature = "cache")]
-            cache_config: CacheConfig::new_cache_disabled(),
-            profiler: Arc::new(NullProfilerAgent),
-            mem_creator: None,
-            allocation_strategy: InstanceAllocationStrategy::OnDemand,
-            max_wasm_stack: 1 << 20,
-            wasm_backtrace_details_env_used: false,
-            features: WasmFeatures {
-                reference_types: true,
-                bulk_memory: true,
-                multi_value: true,
-                ..WasmFeatures::default()
-            },
-            max_instances: 10_000,
-            max_tables: 10_000,
-            max_memories: 10_000,
-            #[cfg(feature = "async")]
-            async_stack_size: 2 << 20,
-            host_funcs: HostFuncMap::new(),
-            is_async,
-        };
-        ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
-        ret
-    }
-
-    pub(crate) fn is_async(&self) -> bool {
-        self.is_async
+    pub fn async_support(&mut self, enable: bool) -> &mut Self {
+        self.async_support = enable;
+        self
     }
 
     /// Configures whether DWARF debug information will be emitted during
@@ -1247,7 +1239,7 @@ impl Config {
     ///
     /// # Panics
     ///
-    /// This method will panic if it is not called on an [async config](Config::new_async).
+    /// This method will panic if it is not called on an [async config](Config::async_support).
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub fn define_host_func_async<F>(&mut self, module: &str, name: &str, ty: FuncType, func: F)
@@ -1262,15 +1254,15 @@ impl Config {
             + 'static,
     {
         assert!(
-            self.is_async,
-            "cannot define an asynchronous host function on a synchronous config"
+            self.async_support,
+            "cannot use `define_host_func_async` without enabling async support on the config"
         );
         self.host_funcs.insert(
             module,
             name,
             HostFunc::new(self, ty, move |caller, params, results| {
                 let store = caller.store().clone();
-                debug_assert!(store.is_async());
+                debug_assert!(store.async_support());
                 let mut future = Pin::from(func(caller, params, results));
                 match store.block_on(future.as_mut()) {
                     Ok(Ok(())) => Ok(()),

@@ -620,7 +620,7 @@ impl Store {
     /// configure what happens when fuel runs out. Specifically executing
     /// WebAssembly will be suspended and control will be yielded back to the
     /// caller. This is only suitable with use of a store associated with an [async
-    /// config](crate::Config::new_async) because only then are futures used and yields
+    /// config](crate::Config::async_support) because only then are futures used and yields
     /// are possible.
     ///
     /// The purpose of this behavior is to ensure that futures which represent
@@ -645,17 +645,20 @@ impl Store {
     /// # Panics
     ///
     /// This method will panic if it is not called on a store associated with an [async
-    /// config](crate::Config::new_async).
+    /// config](crate::Config::async_support).
     pub fn out_of_fuel_async_yield(&self, injection_count: u32, fuel_to_inject: u64) {
-        assert!(self.is_async());
+        assert!(
+            self.async_support(),
+            "cannot use `out_of_fuel_async_yield` without enabling async support in the config"
+        );
         self.inner.out_of_gas_behavior.set(OutOfGas::InjectFuel {
             injection_count,
             fuel_to_inject,
         });
     }
 
-    pub(crate) fn is_async(&self) -> bool {
-        self.inner.engine.config().is_async()
+    pub(crate) fn async_support(&self) -> bool {
+        self.inner.engine.config().async_support
     }
 
     /// Blocks on the asynchronous computation represented by `future` and
@@ -683,7 +686,7 @@ impl Store {
         &self,
         mut future: Pin<&mut dyn Future<Output = T>>,
     ) -> Result<T, Trap> {
-        debug_assert!(self.is_async());
+        debug_assert!(self.async_support());
 
         // Take our current `Suspend` context which was configured as soon as
         // our fiber started. Note that we must load it at the front here and
@@ -732,7 +735,7 @@ impl Store {
     pub(crate) async fn on_fiber<R>(&self, func: impl FnOnce() -> R) -> Result<R, Trap> {
         let config = self.inner.engine.config();
 
-        debug_assert!(self.is_async());
+        debug_assert!(self.async_support());
         debug_assert!(config.async_stack_size > 0);
 
         type SuspendType = wasmtime_fiber::Suspend<Result<(), Trap>, (), Result<(), Trap>>;

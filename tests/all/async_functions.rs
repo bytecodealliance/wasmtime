@@ -6,7 +6,7 @@ use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use wasmtime::*;
 
 fn async_store() -> Store {
-    Store::new(&Engine::new(&Config::new_async()).unwrap())
+    Store::new(&Engine::new(Config::new().async_support(true)).unwrap())
 }
 
 fn run_smoke_test(func: &Func) {
@@ -49,7 +49,8 @@ fn smoke() {
 
 #[test]
 fn smoke_host_func() {
-    let mut config = Config::new_async();
+    let mut config = Config::new();
+    config.async_support(true);
     config.define_host_func_async(
         "",
         "first",
@@ -104,7 +105,8 @@ fn smoke_with_suspension() {
 
 #[test]
 fn smoke_host_func_with_suspension() {
-    let mut config = Config::new_async();
+    let mut config = Config::new();
+    config.async_support(true);
     config.define_host_func_async(
         "",
         "first",
@@ -370,7 +372,7 @@ fn dummy_waker() -> Waker {
 
 #[test]
 fn iloop_with_fuel() {
-    let engine = Engine::new(Config::new_async().consume_fuel(true)).unwrap();
+    let engine = Engine::new(Config::new().async_support(true).consume_fuel(true)).unwrap();
     let store = Store::new(&engine);
     store.out_of_fuel_async_yield(1_000, 10);
     let module = Module::new(
@@ -404,7 +406,7 @@ fn iloop_with_fuel() {
 
 #[test]
 fn fuel_eventually_finishes() {
-    let engine = Engine::new(Config::new_async().consume_fuel(true)).unwrap();
+    let engine = Engine::new(Config::new().async_support(true).consume_fuel(true)).unwrap();
     let store = Store::new(&engine);
     store.out_of_fuel_async_yield(u32::max_value(), 10);
     let module = Module::new(
@@ -433,7 +435,8 @@ fn fuel_eventually_finishes() {
 
 #[test]
 fn async_with_pooling_stacks() {
-    let mut config = Config::new_async();
+    let mut config = Config::new();
+    config.async_support(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
         module_limits: ModuleLimits {
@@ -462,7 +465,8 @@ fn async_with_pooling_stacks() {
 
 #[test]
 fn async_host_func_with_pooling_stacks() {
-    let mut config = Config::new_async();
+    let mut config = Config::new();
+    config.async_support(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
         module_limits: ModuleLimits {
