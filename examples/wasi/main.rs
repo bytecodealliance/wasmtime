@@ -37,7 +37,7 @@ fn main() -> Result<()> {
     // Instantiate our module with the imports we've created, and run it.
     let module = Module::from_file(store.engine(), "target/wasm32-wasi/debug/wasi.wasm")?;
     linker.module("", &module)?;
-    linker.get_default("")?.get0::<()>()?()?;
+    linker.get_default("")?.typed::<(), ()>()?.call(())?;
 
     Ok(())
 }

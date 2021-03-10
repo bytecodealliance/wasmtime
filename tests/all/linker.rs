@@ -96,8 +96,8 @@ fn function_interposition() -> Result<()> {
     }
     let instance = linker.instantiate(&module)?;
     let func = instance.get_export("green").unwrap().into_func().unwrap();
-    let func = func.get0::<i32>()?;
-    assert_eq!(func()?, 112);
+    let func = func.typed::<(), i32>()?;
+    assert_eq!(func.call(())?, 112);
     Ok(())
 }
 
@@ -129,8 +129,8 @@ fn function_interposition_renamed() -> Result<()> {
     }
     let instance = linker.instantiate(&module)?;
     let func = instance.get_func("export").unwrap();
-    let func = func.get0::<i32>()?;
-    assert_eq!(func()?, 112);
+    let func = func.typed::<(), i32>()?;
+    assert_eq!(func.call(())?, 112);
     Ok(())
 }
 
@@ -158,8 +158,8 @@ fn module_interposition() -> Result<()> {
     }
     let instance = linker.instantiate(&module)?;
     let func = instance.get_export("export").unwrap().into_func().unwrap();
-    let func = func.get0::<i32>()?;
-    assert_eq!(func()?, 112);
+    let func = func.typed::<(), i32>()?;
+    assert_eq!(func.call(())?, 112);
     Ok(())
 }
 

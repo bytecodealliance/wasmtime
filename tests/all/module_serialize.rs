@@ -23,8 +23,9 @@ fn test_module_serialize_simple() -> Result<()> {
     let run = instance
         .get_func("run")
         .ok_or(anyhow::format_err!("failed to find `run` function export"))?
-        .get0::<i32>()?;
-    let result = run()?;
+        .typed::<(), i32>()?
+        .clone();
+    let result = run.call(())?;
 
     assert_eq!(42, result);
     Ok(())

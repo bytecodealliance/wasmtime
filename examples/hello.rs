@@ -37,11 +37,12 @@ fn main() -> Result<()> {
     let run = instance
         .get_func("run")
         .ok_or(anyhow::format_err!("failed to find `run` function export"))?
-        .get0::<()>()?;
+        .typed::<(), ()>()?
+        .clone();
 
     // And last but not least we can call it!
     println!("Calling export...");
-    run()?;
+    run.call(())?;
 
     println!("Done.");
     Ok(())

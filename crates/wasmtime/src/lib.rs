@@ -52,10 +52,11 @@
 //!     let hello = instance
 //!         .get_func("hello")
 //!         .ok_or(anyhow::format_err!("failed to find `hello` function export"))?
-//!         .get0::<()>()?;
+//!         .typed::<(), ()>()?
+//!         .clone();
 //!
 //!     // And finally we can call the wasm as if it were a Rust function!
-//!     hello()?;
+//!     hello.call(())?;
 //!
 //!     Ok(())
 //! }
@@ -262,8 +263,8 @@
 //!     "#,
 //! )?;
 //! let instance = Instance::new(&store, &module, &[log_str.into()])?;
-//! let foo = instance.get_func("foo").unwrap().get0::<()>()?;
-//! foo()?;
+//! let foo = instance.get_func("foo").unwrap().typed::<(), ()>()?.clone();
+//! foo.call(())?;
 //! # Ok(())
 //! # }
 //! ```

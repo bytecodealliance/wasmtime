@@ -41,8 +41,8 @@ fn main() -> Result<()> {
 
     println!("Calling `externref` func...");
     let func = instance.get_func("func").unwrap();
-    let func = func.get1::<Option<ExternRef>, Option<ExternRef>>()?;
-    let ret = func(Some(externref.clone()))?;
+    let func = func.typed::<Option<ExternRef>, Option<ExternRef>>()?;
+    let ret = func.call(Some(externref.clone()))?;
     assert!(ret.is_some());
     assert!(ret.unwrap().ptr_eq(&externref));
 

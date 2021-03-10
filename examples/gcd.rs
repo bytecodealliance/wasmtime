@@ -18,8 +18,9 @@ fn main() -> Result<()> {
     let gcd = instance
         .get_func("gcd")
         .ok_or(anyhow::format_err!("failed to find `gcd` function export"))?
-        .get2::<i32, i32, i32>()?;
+        .typed::<(i32, i32), i32>()?
+        .clone();
 
-    println!("gcd(6, 27) = {}", gcd(6, 27)?);
+    println!("gcd(6, 27) = {}", gcd.call((6, 27))?);
     Ok(())
 }

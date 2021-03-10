@@ -482,7 +482,8 @@ impl Store {
     /// let run = instance
     ///     .get_func("run")
     ///     .ok_or(anyhow::format_err!("failed to find `run` function export"))?
-    ///     .get0::<()>()?;
+    ///     .typed::<(), ()>()?
+    ///     .clone();
     ///
     /// // Spin up a thread to send us an interrupt in a second
     /// std::thread::spawn(move || {
@@ -490,7 +491,7 @@ impl Store {
     ///     interrupt_handle.interrupt();
     /// });
     ///
-    /// let trap = run().unwrap_err();
+    /// let trap = run.call(()).unwrap_err();
     /// assert!(trap.to_string().contains("wasm trap: interrupt"));
     /// # Ok(())
     /// # }
