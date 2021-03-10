@@ -279,7 +279,7 @@ impl Default for InstanceAllocationStrategy {
 struct HostFuncMap {
     index_map: HashMap<Arc<str>, usize>,
     strings: Vec<Arc<str>>,
-    funcs: HashMap<(usize, usize), Arc<HostFunc>>,
+    funcs: HashMap<(usize, usize), (Arc<HostFunc>, bool)>,
 }
 
 impl HostFuncMap {
@@ -291,9 +291,9 @@ impl HostFuncMap {
         }
     }
 
-    fn insert(&mut self, module: &str, name: &str, func: HostFunc) {
+    fn insert(&mut self, module: &str, name: &str, async_required: bool, func: HostFunc) {
         let key = (self.intern_str(module), self.intern_str(name));
-        self.funcs.insert(key, Arc::new(func));
+        self.funcs.insert(key, (Arc::new(func), async_required));
     }
 
     fn get(&self, module: &str, name: &str) -> Option<&HostFunc> {
@@ -301,7 +301,7 @@ impl HostFuncMap {
             self.index_map.get(module).cloned()?,
             self.index_map.get(name).cloned()?,
         );
-        self.funcs.get(&key).map(AsRef::as_ref)
+        self.funcs.get(&key).map(|f| f.0.as_ref())
     }
 
     fn intern_str(&mut self, string: &str) -> usize {
@@ -314,6 +314,10 @@ impl HostFuncMap {
         self.index_map.insert(string, idx);
         idx
     }
+
+    fn async_required(&self) -> bool {
+        self.funcs.values().any(|f| f.1)
+    }
 }
 
 macro_rules! generate_wrap_async_host_func {
@@ -321,9 +325,8 @@ macro_rules! generate_wrap_async_host_func {
         /// Same as [`Config::wrap_host_func`], except the closure asynchronously produces
         /// its result. For more information see the [`Func`](crate::Func) documentation.
         ///
-        /// # Panics
-        ///
-        /// This method will panic if it is not called on an [async config](Config::async_support).
+        /// Note: creating an engine will fail if an async host function is defined and
+        /// [async support](Config::async_support) is not enabled.
         #[allow(non_snake_case)]
         #[cfg(feature = "async")]
         #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
@@ -337,10 +340,11 @@ macro_rules! generate_wrap_async_host_func {
             $($args: WasmTy,)*
             R: WasmRet,
         {
-            assert!(self.async_support, concat!("cannot use `wrap", $num, "_host_func_async` without enabling async support on the config"));
+            // Defer the check for async support until engine creation time to not introduce an order dependency
             self.host_funcs.insert(
                 module,
                 name,
+                true,
                 HostFunc::wrap(move |caller: Caller<'_>, $($args: $args),*| {
                     let store = caller.store().clone();
                     debug_assert!(store.async_support());
@@ -816,7 +820,7 @@ impl Config {
         Ok(self)
     }
 
-    /// Creates a default profiler based on the profiling strategy choosen
+    /// Creates a default profiler based on the profiling strategy chosen.
     ///
     /// Profiler creation calls the type's default initializer where the purpose is
     /// really just to put in place the type used for profiling.
@@ -1219,7 +1223,7 @@ impl Config {
         func: impl Fn(Caller<'_>, &[Val], &mut [Val]) -> Result<(), Trap> + Send + Sync + 'static,
     ) {
         self.host_funcs
-            .insert(module, name, HostFunc::new(self, ty, func));
+            .insert(module, name, false, HostFunc::new(self, ty, func));
     }
 
     /// Defines an async host function for the [`Config`] for the given callback.
@@ -1237,9 +1241,8 @@ impl Config {
     /// The callback must be `Send` and `Sync` as it is shared between all engines created
     /// from the `Config`.  For more relaxed bounds, use [`Func::new_async`](crate::Func::new_async) to define the function.
     ///
-    /// # Panics
-    ///
-    /// This method will panic if it is not called on an [async config](Config::async_support).
+    /// Note: creating an engine will fail if an async host function is defined and [async support](Config::async_support)
+    /// is not enabled.
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub fn define_host_func_async<F>(&mut self, module: &str, name: &str, ty: FuncType, func: F)
@@ -1253,13 +1256,11 @@ impl Config {
             + Sync
             + 'static,
     {
-        assert!(
-            self.async_support,
-            "cannot use `define_host_func_async` without enabling async support on the config"
-        );
+        // Defer the check for async support until engine creation time to not introduce an order dependency
         self.host_funcs.insert(
             module,
             name,
+            true,
             HostFunc::new(self, ty, move |caller, params, results| {
                 let store = caller.store().clone();
                 debug_assert!(store.async_support());
@@ -1286,7 +1287,8 @@ impl Config {
         name: &str,
         func: impl IntoFunc<Params, Results> + Send + Sync,
     ) {
-        self.host_funcs.insert(module, name, HostFunc::wrap(func));
+        self.host_funcs
+            .insert(module, name, false, HostFunc::wrap(func));
     }
 
     for_each_function_signature!(generate_wrap_async_host_func);
@@ -1305,6 +1307,18 @@ impl Config {
         let mut flags = self.flags.clone();
         flags.set("enable_safepoints", "true").unwrap();
         self.isa_flags.clone().finish(settings::Flags::new(flags))
+    }
+
+    pub(crate) fn validate(&self) -> Result<()> {
+        // This is used to validate that the config is internally consistent prior to
+        // creating an engine using this config.
+
+        // Check that there isn't a host function defined that requires async support enabled
+        if self.host_funcs.async_required() && !self.async_support {
+            bail!("an async host function cannot be defined without async support enabled in the config");
+        }
+
+        Ok(())
     }
 
     pub(crate) fn build_compiler(&self, allocator: &dyn InstanceAllocator) -> Compiler {

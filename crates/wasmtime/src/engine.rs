@@ -44,6 +44,7 @@ impl Engine {
     /// configuration settings.
     pub fn new(config: &Config) -> Result<Engine> {
         debug_builtins::ensure_exported();
+        config.validate()?;
         let allocator = config.build_allocator()?;
         Ok(Engine {
             inner: Arc::new(EngineInner {

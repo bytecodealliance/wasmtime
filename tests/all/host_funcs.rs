@@ -5,6 +5,25 @@ use wasmtime::*;
 use wasmtime_wasi::Wasi;
 
 #[test]
+fn async_required() {
+    let mut config = Config::default();
+    config.define_host_func_async(
+        "",
+        "",
+        FuncType::new(None, None),
+        move |_caller, _params, _results| Box::new(async { Ok(()) }),
+    );
+
+    assert_eq!(
+        Engine::new(&config)
+            .map_err(|e| e.to_string())
+            .err()
+            .unwrap(),
+        "an async host function cannot be defined without async support enabled in the config"
+    );
+}
+
+#[test]
 fn wrap_func() {
     let mut config = Config::default();
 
