@@ -156,7 +156,7 @@ unsafe impl Sync for HostFunc {}
 /// perspective of `Func` it's important to know that whether or not your
 /// [`Store`] is asynchronous will dictate whether you call functions through
 /// [`Func::call`] or [`Func::call_async`] (or the typed wrappers such as
-/// [`Typed::call`] vs [`Typed::call_async`]).
+/// [`TypedFunc::call`] vs [`TypedFunc::call_async`]).
 ///
 /// Note that asynchronous function APIs here are a bit trickier than their
 /// synchronous brethren. For example [`Func::new_async`] and
@@ -191,16 +191,16 @@ unsafe impl Sync for HostFunc {}
 ///
 /// * Statically typed - if you statically know the type signature of the wasm
 ///   function you're calling, then you'll want to use the [`Func::typed`]
-///   method to acquire an instance of [`Typed`]. This structure is static proof
+///   method to acquire an instance of [`TypedFunc`]. This structure is static proof
 ///   that the underlying wasm function has the ascripted type, and type
-///   validation is only done once up-front. The [`Typed::call`] and
-///   [`Typed::call_async`] methods are much more efficient than [`Func::call`]
+///   validation is only done once up-front. The [`TypedFunc::call`] and
+///   [`TypedFunc::call_async`] methods are much more efficient than [`Func::call`]
 ///   and [`Func::call_async`] because the type signature is statically known.
 ///   This eschews runtime checks as much as possible to get into wasm as fast
 ///   as possible.
 ///
 /// Unfortunately a limitation of the code generation backend right now means
-/// that [`Typed`] cannot be used with wasm funtions that have 2 or more return
+/// that [`TypedFunc`] cannot be used with wasm funtions that have 2 or more return
 /// values. We hope to fix this in the future, but for now wasm functions with
 /// 2 or more return values need to use the "dynamically typed" APIs.
 ///
@@ -1017,7 +1017,7 @@ impl Func {
     /// This function serves as an alternative to [`Func::call`] and
     /// [`Func::call_async`]. This method performs a static type check (using
     /// the `Params` and `Results` type parameters on the underlying wasm
-    /// function. If the type check passes then a `Typed` object is returned,
+    /// function. If the type check passes then a `TypedFunc` object is returned,
     /// otherwise an error is returned describing the typecheck failure.
     ///
     /// The purpose of this relative to [`Func::call`] is that it's much more
@@ -1053,10 +1053,10 @@ impl Func {
     ///
     /// (note that this mapping is the same as that of [`Func::wrap`]).
     ///
-    /// Note that once the [`Typed`] return value is acquired you'll use either
-    /// [`Typed::call`] or [`Typed::call_async`] as necessary to actually invoke
+    /// Note that once the [`TypedFunc`] return value is acquired you'll use either
+    /// [`TypedFunc::call`] or [`TypedFunc::call_async`] as necessary to actually invoke
     /// the function. This method does not invoke any WebAssembly code, it
-    /// simply performs a typecheck before returning the [`Typed`] value.
+    /// simply performs a typecheck before returning the [`TypedFunc`] value.
     ///
     /// # Errors
     ///
@@ -1098,7 +1098,7 @@ impl Func {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn typed<Params, Results>(&self) -> Result<&Typed<Params, Results>>
+    pub fn typed<Params, Results>(&self) -> Result<&TypedFunc<Params, Results>>
     where
         Params: WasmParams,
         Results: WasmResults,
@@ -1124,17 +1124,17 @@ impl Func {
     ///
     /// This function only safe to call if `typed` would otherwise return `Ok`
     /// for the same `Params` and `Results` specified. If `typed` would return
-    /// an error then the returned `Typed` is memory unsafe to invoke.
-    pub unsafe fn typed_unchecked<Params, Results>(&self) -> &Typed<Params, Results>
+    /// an error then the returned `TypedFunc` is memory unsafe to invoke.
+    pub unsafe fn typed_unchecked<Params, Results>(&self) -> &TypedFunc<Params, Results>
     where
         Params: WasmParams,
         Results: WasmResults,
     {
         assert_eq!(
-            mem::size_of::<Typed<Params, Results>>(),
+            mem::size_of::<TypedFunc<Params, Results>>(),
             mem::size_of_val(self)
         );
-        &*(self as *const Func as *const Typed<Params, Results>)
+        &*(self as *const Func as *const TypedFunc<Params, Results>)
     }
 }
 

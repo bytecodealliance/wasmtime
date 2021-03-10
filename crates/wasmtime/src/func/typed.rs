@@ -9,27 +9,27 @@ use wasmtime_runtime::{VMContext, VMFunctionBody};
 /// A statically typed WebAssembly function.
 ///
 /// Values of this type represent statically type-checked WebAssembly functions.
-/// The function within a [`Typed`] is statically known to have `Params` as its
+/// The function within a [`TypedFunc`] is statically known to have `Params` as its
 /// parameters and `Results` as its results.
 ///
 /// This structure is created via [`Func::typed`] or [`Func::typed_unchecked`].
 /// For more documentation about this see those methods.
 #[repr(transparent)]
-pub struct Typed<Params, Results> {
+pub struct TypedFunc<Params, Results> {
     _a: marker::PhantomData<fn(Params) -> Results>,
     func: Func,
 }
 
-impl<Params, Results> Clone for Typed<Params, Results> {
-    fn clone(&self) -> Typed<Params, Results> {
-        Typed {
+impl<Params, Results> Clone for TypedFunc<Params, Results> {
+    fn clone(&self) -> TypedFunc<Params, Results> {
+        TypedFunc {
             _a: marker::PhantomData,
             func: self.func.clone(),
         }
     }
 }
 
-impl<Params, Results> Typed<Params, Results>
+impl<Params, Results> TypedFunc<Params, Results>
 where
     Params: WasmParams,
     Results: WasmResults,
@@ -139,6 +139,7 @@ pub unsafe trait WasmTy {
     #[doc(hidden)]
     type Abi: Copy;
     #[doc(hidden)]
+    #[inline]
     fn typecheck(ty: crate::ValType) -> Result<()> {
         if ty == Self::valtype() {
             Ok(())
@@ -263,7 +264,7 @@ unsafe impl WasmTy for Option<Func> {
     }
 }
 
-/// A trait used for [`Func::typed`] and with [`Typed`] to represent the set of
+/// A trait used for [`Func::typed`] and with [`TypedFunc`] to represent the set of
 /// parameters for wasm functions.
 ///
 /// This is implemented for bare types that can be passed to wasm as well as
@@ -355,12 +356,12 @@ macro_rules! impl_wasm_params {
 
 for_each_function_signature!(impl_wasm_params);
 
-/// A trait used for [`Func::typed`] and with [`Typed`] to represent the set of
+/// A trait used for [`Func::typed`] and with [`TypedFunc`] to represent the set of
 /// results for wasm functions.
 ///
 /// This is currently only implemented for `()` and for bare types that can be
 /// returned. This is not yet implemented for tuples because a multi-value
-/// `Typed` is not currently supported.
+/// `TypedFunc` is not currently supported.
 pub trait WasmResults: WasmParams {
     #[doc(hidden)]
     type Abi;
