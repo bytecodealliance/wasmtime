@@ -2,7 +2,45 @@
 
 --------------------------------------------------------------------------------
 
+## 0.25.0
+
+Not yet released
+
+### Added
+
+* An implementation of a pooling instance allocator, optionally backed by
+  `userfaultfd` on Linux, was added to improve the performance of embeddings
+  that instantiate a large number of instances continuously.
+  [#2518](https://github.com/bytecodealliance/wasmtime/pull/2518)
+
+* Host functions can now be defined on `Config` to share the function across all
+  `Store` objects connected to an `Engine`. This can improve the time it takes
+  to instantiate instances in a short-lived `Store`.
+  [#2625](https://github.com/bytecodealliance/wasmtime/pull/2625)
+
+* The `Store` object now supports having typed values attached to it which can
+  be retrieved from host functions.
+  [#2625](https://github.com/bytecodealliance/wasmtime/pull/2625)
+
+* The `wiggle` code generator now supports `async` host functions.
+  [#2701](https://github.com/bytecodealliance/wasmtime/pull/2701)
+
+### Changed
+
+* The `Func::getN{,_async}` APIs have all been removed in favor of a new
+  `Func::typed` API which should be more compact in terms of API surface area as
+  well as more flexible in how it can be used.
+  [#2719](https://github.com/bytecodealliance/wasmtime/pull/2719)
+
+### Fixed
+
+* Interepretation of timestamps in `poll_oneoff` for WASI have been fixed to
+  correctly use nanoseconds instead of microseconds.
+  [#2717](https://github.com/bytecodealliance/wasmtime/pull/2717)
+
 ## 0.24.0
+
+Released 2021-03-04.
 
 ### Added
 
